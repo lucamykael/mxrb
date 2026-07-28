@@ -2,25 +2,26 @@
 
 require_relative "mxrb/version"
 require_relative "mxrb/errors"
-require_relative "mxrb/schema/tables"
+require_relative "mxrb/io/bson_codec"
 require_relative "mxrb/io/mpr_file"
-require_relative "mxrb/model/project"
 require_relative "mxrb/model/unit"
-require_relative "mxrb/model/module"
-require_relative "mxrb/model/entity"
 require_relative "mxrb/model/attribute"
 require_relative "mxrb/model/association"
-require_relative "mxrb/model/page"
+require_relative "mxrb/model/entity"
+require_relative "mxrb/model/domain_model"
 require_relative "mxrb/model/microflow"
+require_relative "mxrb/model/page"
+require_relative "mxrb/model/module"
+require_relative "mxrb/model/project"
 require_relative "mxrb/dsl/builder"
 
 module Mxrb
-  # Open an existing .mpr file for reading/writing.
+  # Open an existing .mpr file.
   #
   #   Mxrb.open("MyApp.mpr") { |p| puts p.modules.map(&:name) }
   #
-  def self.open(path, &block)
-    project = Model::Project.open(path)
+  def self.open(path, readonly: true, &block)
+    project = Model::Project.open(path, readonly: readonly)
     return project unless block
 
     begin
@@ -30,7 +31,7 @@ module Mxrb
     end
   end
 
-  # Define a new project via the Ruby DSL and write it to disk.
+  # Define a new project via the Ruby DSL.
   #
   #   Mxrb.define("MyApp.mpr") do
   #     mendix_version "10.18.0"

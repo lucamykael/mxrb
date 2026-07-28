@@ -4,59 +4,84 @@ require_relative "unit"
 
 module Mxrb
   module Model
+    # $Type: Projects$Module
+    # ContainmentName: "Modules"
     class Module < Unit
-      unit_type "Mxmodels.Projects.Module"
+      attr_reader :name, :sort_index, :from_app_store,
+                  :app_store_guid, :app_store_version, :export_level
 
-      attr_accessor :name
-
-      def decode(blob)
-        # Contents blob for a Module is a binary structure.
-        # For now we extract the name from a known offset pattern.
-        # Will be replaced with full deserializer once format is mapped.
-        @name = extract_string(blob) || "UnknownModule"
-        @_raw = blob
+      def decode(doc)
+        @name              = doc["Name"]
+        @sort_index        = doc["SortIndex"]
+        @from_app_store    = doc["FromAppStore"] == true
+        @app_store_guid    = doc["AppStoreGuid"]
+        @app_store_version = doc["AppStoreVersion"]
+        @export_level      = doc["ExportLevel"] || "Hidden"
       end
 
-      def encode
-        @_raw || ""
+      def to_bson
+        {
+          "$ID"          => @id,
+          "$Type"        => "Projects$Module",
+          "Name"         => @name,
+          "SortIndex"    => @sort_index || 0,
+          "FromAppStore" => @from_app_store || false,
+          "ExportLevel"  => @export_level || "Hidden",
+        }
       end
 
-      # ── Children ────────────────────────────────────────────────────────
+      # ── Children (resolved from Unit table by ContainerID) ────────────
 
-      def entities
-        @entities ||= @mpr.units_of_type("Mxmodels.DomainModels.Entity")
-                          .select { _1["ContainerID"] == @id }
-                          .map { Entity.new(_1, @mpr) }
+      def domain_model
+        @domain_model ||= begin
+          raws = @mpr.units_by_containment("DomainModel").select { _1["ContainerID"] == @id }
+          raws.empty? ? nil : DomainModel.new(raws.first, @mpr)
+        end
       end
+
+      def entities    = domain_model&.entities    || []
+      def associations = domain_model&.associations || []
 
       def pages
-        @pages ||= @mpr.units_of_type("Mxmodels.Pages.Page")
-                       .select { _1["ContainerID"] == @id }
-                       .map { Page.new(_1, @mpr) }
+        @pages ||= document_units
+                   .select { |u| u[:type]&.start_with?("Pages$") }
+                   .map { Page.new(_1[:raw], @mpr) }
       end
 
       def microflows
-        @microflows ||= @mpr.units_of_type("Mxmodels.Microflows.Microflow")
-                            .select { _1["ContainerID"] == @id }
-                            .map { Microflow.new(_1, @mpr) }
+        @microflows ||= document_units
+                        .select { |u| u[:type] == "Microflows$Microflow" }
+                        .map { Microflow.new(_1[:raw], @mpr) }
       end
 
       def inspect
-        "#<Mxrb::Module id=#{@id} name=#{@name.inspect} " \
-          "entities=#{entities.size} pages=#{pages.size} microflows=#{microflows.size}>"
+        "#<Mxrb::Module name=#{@name.inspect} entities=#{entities.size} " \
+          "pages=#{pages.size} microflows=#{microflows.size}>"
       end
 
       private
 
-      # Heuristic: UTF-8 strings in Mendix blobs are often preceded by
-      # a 2-byte little-endian length. This is a best-effort extractor
-      # for exploration; proper decoding comes from the serializer layer.
-      def extract_string(blob)
-        return nil unless blob.is_a?(String) && blob.length > 4
+      # Documents live in ContainmentName = "Documents" recursively under this module.
+      # We do a simple two-pass: direct Documents children + Documents inside Folders.
+      def document_units
+        @document_units ||= begin
+          direct    = children_with_containment("Documents")
+          folders   = children_with_containment("Folders")
+          in_folder = folders.flat_map { children_by_parent_id(_1["UnitID"], "Documents") }
+          (direct + in_folder).map do |raw|
+            doc  = @mpr.parse_contents(raw)
+            type = doc["$Type"]
+            { raw: raw, type: type }
+          end
+        end
+      end
 
-        # Try to find a length-prefixed UTF-8 string in the first 128 bytes
-        slice = blob.b[0, 128]
-        slice.scan(/\x00{0,3}([\x20-\x7e]{3,64})/).flatten.first
+      def children_with_containment(name)
+        @mpr.units_by_containment(name).select { _1["ContainerID"] == @id }
+      end
+
+      def children_by_parent_id(parent_id, containment)
+        @mpr.children_of(parent_id).select { _1["ContainmentName"] == containment }
       end
     end
   end

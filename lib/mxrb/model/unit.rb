@@ -1,49 +1,48 @@
 # frozen_string_literal: true
 
+require_relative "../io/bson_codec"
+
 module Mxrb
   module Model
-    # Base class for all Mendix artefacts backed by a Unit row.
-    # Subclasses declare their UnitType and implement #decode / #encode
-    # to convert the raw Contents blob to/from Ruby attributes.
+    # Base for all Mendix artefacts.
+    # Each subclass maps to a unit row whose Contents BSON has a specific $Type.
     class Unit
-      attr_reader :id, :container_id, :containment_name, :mpr
-
-      def self.unit_type(name = nil)
-        @unit_type = name if name
-        @unit_type
-      end
+      attr_reader :id, :container_id, :containment_name, :mpr, :bson_type
 
       def initialize(raw, mpr)
         @id               = raw["UnitID"]
         @container_id     = raw["ContainerID"]
         @containment_name = raw["ContainmentName"]
         @mpr              = mpr
-        @contents_raw     = raw["Contents"]
-        decode(@contents_raw) if @contents_raw
+        doc               = mpr.parse_contents(raw)
+        @bson_type        = doc["$Type"] || doc["\$Type"]
+        decode(doc)
       end
 
-      # Subclasses override this to parse the blob
-      def decode(_blob); end
-
-      # Subclasses override this to produce the blob
-      def encode
-        raise NotImplementedError, "#{self.class}#encode not implemented"
-      end
+      # Subclasses implement these
+      def decode(_doc); end
+      def to_bson;      raise NotImplementedError, "#{self.class}#to_bson not implemented"; end
 
       def save!
-        blob = encode
+        doc = to_bson
         if @id
-          @mpr.update_unit(@id, blob)
+          @mpr.update_unit(@id, doc)
         else
+          raise "Cannot insert without container_id" unless @container_id
           @id = @mpr.insert_unit(
-            container_id:     @container_id,
+            container_uuid:   @container_id,
             containment_name: @containment_name,
-            type_name:        self.class.unit_type,
-            contents:         blob
+            contents_doc:     doc
           )
         end
         self
       end
+
+      protected
+
+      # Helpers for BSON field extraction
+      def extract_id(val) = IO::BsonCodec.extract_id(val)
+      def parse_array(arr) = IO::BsonCodec.parse_array(arr)[:items]
     end
   end
 end
