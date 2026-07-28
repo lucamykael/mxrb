@@ -1,0 +1,74 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/mxrb"
+
+command = ARGV.shift
+
+case command
+when "inspect"
+  path = ARGV.shift or abort "Usage: mxrb inspect <file.mpr>"
+  Mxrb.open(path) do |p|
+    puts "Project : #{p.name}"
+    puts "Version : #{p.mendix_version}"
+    puts "Tables  : #{p.tables.join(', ')}"
+    puts ""
+    puts "Unit types found:"
+    p.unit_types.sort.each { puts "  #{_1}" }
+    puts ""
+    puts "All units:"
+    p.all_units.each do |u|
+      puts "  [#{u['UnitID']}] #{u['TypeName']} (container=#{u['ContainerID']}, name=#{u['ContainmentName']})"
+    end
+  end
+
+when "dump-unit"
+  path = ARGV.shift or abort "Usage: mxrb dump-unit <file.mpr> <unit_id>"
+  id   = ARGV.shift&.to_i or abort "Usage: mxrb dump-unit <file.mpr> <unit_id>"
+  Mxrb.open(path) do |p|
+    u = p.raw_unit(id)
+    abort "Unit #{id} not found" unless u
+    puts "UnitID           : #{u['UnitID']}"
+    puts "ContainerID      : #{u['ContainerID']}"
+    puts "ContainmentName  : #{u['ContainmentName']}"
+    puts "TypeName         : #{u['TypeName']}"
+    puts "ContentsHash     : #{u['ContentsHash']}"
+    puts "Contents (hex)   :"
+    blob = u["Contents"]
+    if blob
+      blob.b.bytes.each_slice(16).with_index do |row, i|
+        hex  = row.map { "%02x" % _1 }.join(" ")
+        asc  = row.map { _1.between?(32, 126) ? _1.chr : "." }.join
+        printf "  %04x  %-48s  %s\n", i * 16, hex, asc
+      end
+    else
+      puts "  (empty)"
+    end
+  end
+
+when "sql"
+  path = ARGV.shift or abort "Usage: mxrb sql <file.mpr> \"SELECT ...\""
+  sql  = ARGV.shift or abort "Usage: mxrb sql <file.mpr> \"SELECT ...\""
+  Mxrb.open(path) do |p|
+    rows = p.query(sql)
+    rows.each { puts _1.inspect }
+    puts "(#{rows.size} rows)"
+  end
+
+when "modules"
+  path = ARGV.shift or abort "Usage: mxrb modules <file.mpr>"
+  Mxrb.open(path) do |p|
+    p.modules.each { puts _1.inspect }
+  end
+
+else
+  puts <<~USAGE
+    mxrb — Pure-Ruby Mendix .mpr toolkit
+
+    Commands:
+      inspect    <file.mpr>               Full unit dump (exploration)
+      dump-unit  <file.mpr> <unit_id>     Hex dump of a unit's Contents blob
+      sql        <file.mpr> "SELECT …"    Run raw SQL against the .mpr SQLite
+      modules    <file.mpr>               List all modules
+  USAGE
+end
