@@ -184,6 +184,21 @@ MXRB_COVERAGE=1 bundle exec rspec
 It writes `coverage/coverage.json`, requires 100% line coverage, and reports
 branch coverage separately for visibility.
 
+## Ruby module marketplace
+
+```sh
+mxrb module search
+mxrb module search security
+mxrb module add shared-kernel
+mxrb module add ./local-package --target ./exported-project
+```
+
+Catalogs are JSON files loaded from the gem, a local path or HTTPS through
+`--registry`. Packages contain `mxrb-module.json`; sources may be built in,
+local directories or Git repositories. Installation uses a staging directory,
+rejects unsafe paths and writes `.mxrb/modules.lock.json` with version, source,
+ref and a SHA-256 digest of installed files.
+
 ## Native baseline and editable deep structures
 
 `mxrb export` writes `.mxrb/native_units.json` with the original BSON payloads

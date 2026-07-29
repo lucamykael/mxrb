@@ -15,6 +15,7 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - renomeação segura com prévia;
 - lint e avaliações executáveis de modelo;
 - testes funcionais de microflows localmente ou em Docker.
+- busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
 
 ## Requisitos
 
@@ -26,6 +27,8 @@ bundle install
 bundle exec mxrb validate App.mpr
 bundle exec mxrb export App.mpr app-ruby
 bundle exec mxrb compare original.mpr reconstruido.mpr
+bundle exec mxrb module search
+bundle exec mxrb module add shared-kernel
 ```
 
 ## Ruby DSL
