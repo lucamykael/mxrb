@@ -20,12 +20,6 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 - Lokale oder Docker-Ausführung von `mx check`, MxBuild und Runtime.
 - Striktes Gate mit 100 % Zeilenabdeckung.
 
-## Nächste Schritte
-
-1. Ruby-Assertions für Rückgabewerte und persistierten Zustand.
-2. Optionale MCP- und Studio-Pro-Adapter.
-3. Katalog-, Marketplace- und Umgebungsautomatisierung als Ruby-Bibliotheken.
-
 ## Beispiel
 
 ```ruby

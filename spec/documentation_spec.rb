@@ -22,6 +22,12 @@ RSpec.describe "localized documentation" do
     )
   end
 
+  it "keeps only the language selector outside locale directories" do
+    root_documents = root.join("docs").glob("*.md").map(&:basename).map(&:to_s)
+
+    expect(root_documents).to eq(["README.md"])
+  end
+
   it "does not contain broken relative Markdown links" do
     markdown = [
       root.glob("README*.md"),
@@ -39,5 +45,29 @@ RSpec.describe "localized documentation" do
     end
 
     expect(broken).to be_empty, "broken documentation links:\n#{broken.join("\n")}"
+  end
+
+  it "does not publish internal workflow or continuation instructions" do
+    markdown = [
+      root.glob("README*.md"),
+      root.join("docs").glob("**/*.md")
+    ].flatten
+    patterns = [
+      /\b(?:AI|IA|LLM)\b/i,
+      /\b(?:agent|agente|prompt|handoff)\b/i,
+      /ai[-_ ]?memory/i,
+      /artificial intelligence|inteligência artificial|künstliche intelligenz/i,
+      %r{\A[#]{1,6}\s+(?:next steps|próximas etapas|nächste schritte)\b}i,
+      /\b(?:next layer|próxima camada|nächste ebene)\b/i,
+      /\b(?:explicit next step|próximo passo explícito)\b/i
+    ]
+    matches = markdown.flat_map do |source|
+      source.each_line.with_index(1).filter_map do |line, number|
+        "#{source.relative_path_from(root)}:#{number}: #{line.strip}" \
+          if patterns.any? { line.match?(_1) }
+      end
+    end
+
+    expect(matches).to be_empty, "AI traces found:\n#{matches.join("\n")}"
   end
 end
