@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/writing.md) · **English** · [Deutsch](../de-DE/writing.md)
 
-Para a estrutura completa de módulos, camadas e round-trip, consulte
+For the complete module, layer and round-trip structure, see
 [project architecture](architecture.md).
 
 `mxrb generate` evaluates a Ruby definition and creates or updates the target
@@ -401,10 +401,10 @@ behavior, but they are not part of the mxrb runtime or regression workflow.
 
 See the [validation matrix](validation-matrix.md) for the public-project
 round-trip matrix and the exact confidence boundary of the current engine.
-# Análise semântica em Ruby
+# Semantic analysis in Ruby
 
-O MXRB não exige uma linguagem de consulta própria. Um MPR aberto expõe o índice
-semântico diretamente como objetos Ruby:
+MXRB does not require a separate query language. An opened MPR exposes its
+semantic index directly as Ruby objects:
 
 ```ruby
 Mxrb.open("app.mpr") do |project|
@@ -426,12 +426,13 @@ Mxrb.open("app.mpr") do |project|
 end
 ```
 
-As mesmas operações têm comandos de conveniência: `mxrb refs`, `mxrb callers`,
-`mxrb callees` e `mxrb impact`. A API Ruby é a fonte de verdade.
+The same operations have convenience commands: `mxrb refs`, `mxrb callers`,
+`mxrb callees` and `mxrb impact`. The Ruby API is the source of truth.
 
-## Renomeação profunda
+## Deep rename
 
-A escrita exige abertura explícita e pode ser revisada antes de tocar no MPR:
+Writing requires an explicitly writable project and can be reviewed before
+touching the MPR:
 
 ```ruby
 Mxrb.open("app.mpr", readonly: false) do |project|
@@ -445,17 +446,17 @@ Mxrb.open("app.mpr", readonly: false) do |project|
 end
 ```
 
-O plano atualiza a declaração e as referências profundas, inclusive membros no
-formato Mendix `Sales.Order/Number`. Depois da aplicação, o índice do projeto é
-reconstruído automaticamente.
+The plan updates the declaration and deep references, including Mendix member
+paths such as `Sales.Order/Number`. The project index is rebuilt automatically
+after applying it.
 
-Na CLI, a operação equivalente apenas mostra a prévia:
+The equivalent CLI command only shows a preview:
 
 ```sh
 bundle exec mxrb rename app.mpr Sales.Order Invoice
 ```
 
-Para escrever:
+To write:
 
 ```sh
 bundle exec mxrb rename app.mpr Sales.Order Invoice --apply
@@ -489,9 +490,9 @@ The CLI equivalent is
 `mxrb move app.mpr Sales.Process Sales.Automation [--apply]`. Folder cycles,
 cross-module moves and non-container targets are rejected before writing.
 
-## Lint e acoplamento
+## Lint and coupling
 
-O relatório semântico é um objeto Ruby:
+The semantic report is a Ruby object:
 
 ```ruby
 report = Mxrb.open("app.mpr", &:analyze)
@@ -505,7 +506,7 @@ report.module_dependencies.each do |dependency|
 end
 ```
 
-Regras específicas do projeto também são Ruby:
+Project-specific rules are Ruby as well:
 
 ```ruby
 public_name_rule = lambda do |_project, index|
@@ -528,13 +529,13 @@ Mxrb.open("app.mpr") do |project|
 end
 ```
 
-Na CLI, `mxrb lint app.mpr` mostra os diagnósticos e `mxrb report app.mpr`
-resume referências e acoplamento entre módulos.
+In the CLI, `mxrb lint app.mpr` shows diagnostics and
+`mxrb report app.mpr` summarizes references and coupling between modules.
 
-## Diff semântico para Git
+## Semantic diff for Git
 
-`Mxrb.diff` retorna mudanças tipadas sem expor UUIDs e coordenadas visuais
-instáveis:
+`Mxrb.diff` returns typed changes without exposing unstable UUIDs and visual
+coordinates:
 
 ```ruby
 result = Mxrb.diff("main.mpr", "feature.mpr")
@@ -544,18 +545,18 @@ result.changes.each do |change|
 end
 ```
 
-Cada `Mxrb::Compare::Change` informa `operation`, `path`, `before` e `after`.
-Também há filtros prontos em `result.added`, `result.removed` e
+Each `Mxrb::Compare::Change` provides `operation`, `path`, `before` and `after`.
+Convenience filters are available through `result.added`, `result.removed` and
 `result.changed`.
 
 ```sh
 bundle exec mxrb diff main.mpr feature.mpr
 ```
 
-O comando termina com status zero quando os snapshots são semanticamente
-idênticos e status um quando há diferenças.
+The command exits with status zero when the snapshots are semantically
+identical and status one when differences exist.
 
-## Navegação estrutural
+## Structural navigation
 
 ```ruby
 Mxrb.open("app.mpr") do |project|
@@ -567,7 +568,7 @@ Mxrb.open("app.mpr") do |project|
 end
 ```
 
-Na CLI:
+In the CLI:
 
 ```sh
 bundle exec mxrb find app.mpr order
