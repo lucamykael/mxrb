@@ -8,8 +8,21 @@ RSpec.describe Mxrb::Functional do
     Mxrb.define(path) do
       mendix_version "11.12.1"
       self.module :Demo do
+        entity :Record do
+          string :Name
+        end
         microflow :Noop do
           log_message "noop"
+        end
+        microflow :Setup do
+          log_message "setup"
+        end
+        microflow :Cleanup do
+          log_message "cleanup"
+        end
+        microflow :ReturnsBool do
+          return_type :Boolean
+          return_value "true"
         end
         microflow :WithInput do
           parameter :Value, type: :String
@@ -71,7 +84,42 @@ RSpec.describe Mxrb::Functional do
       .to raise_error(ArgumentError, /qualified/)
     expect { suite.microflow("bad", call: "Demo.Noop", timeout: 0) }
       .to raise_error(ArgumentError, /positive/)
+    expect do
+      suite.microflow("bad hook", call: "Demo.Noop", before: "Setup")
+    end.to raise_error(ArgumentError, /hook/)
+    expect do
+      suite.microflow(
+        "bad count", call: "Demo.Noop",
+        expect: { count: { entity: "Record", equals: -1 } }
+      )
+    end.to raise_error(ArgumentError, /qualified entity/)
+    expect do
+      suite.microflow(
+        "bad count", call: "Demo.Noop",
+        expect: { count: { entity: "Demo.Record", equals: -1 } }
+      )
+    end.to raise_error(ArgumentError, /non-negative/)
     expect(suite.definition).to be_empty
+  end
+
+  it "loads return, persisted-count, setup and cleanup expectations" do
+    suite = described_class::Suite.new
+    suite.microflow(
+      "assertions", call: "Demo.ReturnsBool",
+      before: { call: "Demo.Setup" }, after: "Demo.Cleanup",
+      expect: {
+        return: "true",
+        count: { entity: "Demo.Record", xpath: "[Name = 'x']", equals: 0 }
+      }
+    )
+    test = suite.definition.tests.first
+
+    expect(test.expected_return).to eq("true")
+    expect(test.setup.target).to eq("Demo.Setup")
+    expect(test.cleanup.target).to eq("Demo.Cleanup")
+    expect(test.counts.first.to_h).to eq(
+      entity: "Demo.Record", xpath: "[Name = 'x']", equals: 0
+    )
   end
 
   it "instruments a disposable MPR with wrappers and an after-startup runner" do
@@ -111,6 +159,15 @@ RSpec.describe Mxrb::Functional do
     expect { described_class::Instrumenter.new(@path, mismatch).instrument! }
       .to raise_error(Mxrb::FunctionalTestError, /arguments mismatch/)
 
+    missing_entity = described_class::Suite.new.tap do |suite|
+      suite.microflow(
+        "count", call: "Demo.Noop",
+        expect: { count: { entity: "Demo.Missing", equals: 0 } }
+      )
+    end.definition
+    expect { described_class::Instrumenter.new(@path, missing_entity).instrument! }
+      .to raise_error(Mxrb::FunctionalTestError, /entity Demo.Missing/)
+
     no_settings = File.join(File.dirname(@path), "NoSettings.mpr")
     Mxrb.define(no_settings) do
       mendix_version "11.12.1"
@@ -149,6 +206,54 @@ RSpec.describe Mxrb::Functional do
     expect(result.failures.map(&:name)).to eq(["second"])
     expect(result.failures.first.message).to eq("microflow failed")
     expect(described_class::LogParser.new.parse("nothing")).not_to be_passed
+  end
+
+  it "instruments return and persisted-count assertions with hooks" do
+    definition = described_class::Suite.new.tap do |suite|
+      suite.microflow(
+        "asserted", call: "Demo.ReturnsBool",
+        before: "Demo.Setup", after: "Demo.Cleanup",
+        expect: {
+          return: "true",
+          count: { entity: "Demo.Record", equals: 0 }
+        }
+      )
+    end.definition
+
+    described_class::Instrumenter.new(@path, definition).instrument!
+    Mxrb.open(@path) do |project|
+      flow = project.microflows.find { _1.name == "Test_001" }
+      types = flow.objects.filter_map { _1.dig("Action", "$Type") }
+      expect(types).to include(
+        "Microflows$MicroflowCallAction",
+        "Microflows$RetrieveAction",
+        "Microflows$AggregateAction"
+      )
+      expect(flow.objects.any? { _1["$Type"] == "Microflows$ExclusiveSplit" })
+        .to be(false)
+      return_value = flow.objects.find { _1["$Type"] == "Microflows$EndEvent" }
+                          .fetch("ReturnValue")
+      expect(return_value).to include("$mxrb_actual", "$mxrb_count_1")
+    end
+    expect(Mxrb.validate(@path)).to be_valid
+  end
+
+  it "writes JSON and JUnit reports with escaped failures" do
+    result = described_class::Result.new([
+      described_class::TestResult.new("works", true, "passed"),
+      described_class::TestResult.new("bad <case>", false, "failed & stopped")
+    ].freeze, true)
+    execution = Mxrb::Runtime::Execution.new(result, "", "", "", 1.25)
+    json = File.join(File.dirname(@path), "result.json")
+    junit = File.join(File.dirname(@path), "result.xml")
+    reporter = described_class::Reporter.new
+
+    expect(reporter.write_json(execution, json)).to eq(json)
+    expect(reporter.write_junit(execution, junit)).to eq(junit)
+    expect(JSON.parse(File.read(json))).to include("passed" => false, "elapsed" => 1.25)
+    expect(File.read(junit)).to include(
+      'tests="2"', 'failures="1"', "bad &lt;case&gt;", "failed &amp; stopped"
+    )
   end
 end
 
