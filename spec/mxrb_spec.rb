@@ -771,6 +771,81 @@ RSpec.describe Mxrb do
       end
     end
 
+    it "exports every native payload as editable Ruby without losing its baseline" do
+      root = File.dirname(@mpr_path)
+      source = File.join(root, "native_edit_source.mpr")
+      exported = File.join(root, "native_edit_ruby")
+      rebuilt = File.join(root, "native_edit_rebuilt.mpr")
+      Mxrb.define(source) do
+        mendix_version "10.17.0"
+        self.module(:Sales) {}
+      end
+
+      mpr = Mxrb::IO::MprFile.open(source)
+      module_id = mpr.units_by_containment("Modules").first.fetch("UnitID")
+      mpr.insert_unit(
+        container_uuid: module_id,
+        containment_name: "Documents",
+        contents_doc: {
+          "$Type" => "Constants$Constant",
+          "Name" => "Endpoint",
+          "Value" => "before",
+          "Extra" => { "Nested" => true },
+          "Blob" => BSON::Binary.new("native-bytes")
+        }
+      )
+      mpr.close
+
+      Mxrb::Exporter.new(source, exported).export!
+      ruby_path = File.join(exported, ".mxrb", "native_units.rb")
+      source_code = File.read(ruby_path)
+      expect(source_code).to include("native_unit ", '"Constants$Constant"', "bson_binary(")
+      File.write(ruby_path, source_code.sub('"Value" => "before"', '"Value" => "after"'))
+
+      begin
+        ENV["MXRB_OUTPUT_PATH"] = rebuilt
+        load File.join(exported, "project.rb")
+      ensure
+        ENV.delete("MXRB_OUTPUT_PATH")
+      end
+
+      expect(Mxrb.validate(rebuilt)).to be_valid
+      Mxrb.open(rebuilt) do |project|
+        constant = project.all_units.find do |unit|
+          project.parse_bson(unit)["$Type"] == "Constants$Constant"
+        end
+        doc = project.parse_bson(constant)
+        expect(doc["Value"]).to eq("after")
+        expect(doc.dig("Extra", "Nested")).to be(true)
+        expect(doc["Blob"].data).to eq("native-bytes")
+      end
+    end
+
+    it "creates a new generic native unit directly from Ruby" do
+      path = File.join(File.dirname(@mpr_path), "native_ruby_create.mpr")
+      unit_id = SecureRandom.uuid
+      Mxrb.define(path) do
+        native_unit(
+          unit_id,
+          container_id: SecureRandom.uuid,
+          containment: "ProjectDocuments",
+          deep_structure: {
+            "$ID" => unit_id,
+            "$Type" => "Settings$CustomSettings",
+            "Name" => "RubySettings",
+            "Enabled" => true
+          }
+        )
+      end
+
+      expect(Mxrb.validate(path)).to be_valid
+      Mxrb.open(path) do |project|
+        doc = project.all_units.map { project.parse_bson(_1) }
+                     .find { _1["$Type"] == "Settings$CustomSettings" }
+        expect(doc).to include("Name" => "RubySettings", "Enabled" => true)
+      end
+    end
+
     it "creates the Studio Pro v2 SQLite schema for new v2 targets" do
       dir = File.dirname(@mpr_path)
       path = File.join(dir, "new_v2.mpr")

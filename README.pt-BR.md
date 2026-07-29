@@ -10,7 +10,7 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - leitura e escrita profunda de MPR v1/v2;
 - exportação de projetos para Ruby editável;
 - geração idempotente por DSL Ruby;
-- preservação de units nativas ainda sem abstração concisa;
+- edição profunda em Ruby de toda unit nativa, com baseline sem perdas;
 - comparação, diff semântico, referências e análise de impacto;
 - renomeação segura com prévia;
 - movimentação de units entre pastas do mesmo módulo com prévia;

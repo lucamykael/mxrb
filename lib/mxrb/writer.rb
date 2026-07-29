@@ -98,6 +98,9 @@ module Mxrb
     def apply(mpr)
       root_id = mpr.root_unit.fetch("UnitID")
       native_units = load_native_units(@definition[:native_units_path])
+      native_units = apply_native_unit_overrides(
+        native_units, @definition.fetch(:native_unit_overrides, [])
+      )
       apply_native_project_units(mpr, root_id, native_units)
       @definition.fetch(:modules).each_with_index do |mod, index|
         raw_module = find_named(mpr, "Modules", root_id, mod.fetch(:name))
@@ -124,6 +127,26 @@ module Mxrb
       JSON.parse(File.read(path)).fetch("units", []).map do |unit|
         unit.merge("doc" => IO::BsonCodec.parse(Base64.strict_decode64(unit.fetch("contents"))))
       end
+    end
+
+    def apply_native_unit_overrides(native_units, overrides)
+      by_id = native_units.to_h { [_1["unit_id"], _1] }
+      overrides.each do |override|
+        attributes = override.transform_keys(&:to_s)
+        unit_id = attributes.fetch("unit_id")
+        current = by_id[unit_id]
+        replacement = (current || {}).merge(attributes)
+        replacement["name"] =
+          replacement.fetch("doc")["Name"] || replacement.fetch("doc")["name"] || ""
+        replacement["type"] = replacement.fetch("doc")["$Type"]
+        if current
+          current.replace(replacement)
+        else
+          native_units << replacement
+          by_id[unit_id] = replacement
+        end
+      end
+      native_units
     end
 
     def apply_native_project_units(mpr, root_id, native_units)
