@@ -1,0 +1,105 @@
+# frozen_string_literal: true
+
+module Mxrb
+  module Semantic
+    class MovePlan
+      attr_reader :source, :target, :before_container, :containment_name
+
+      def initialize(project:, source:, target:, before_container:, containment_name:)
+        @project = project
+        @source = source
+        @target = target
+        @before_container = before_container
+        @containment_name = containment_name
+        @applied = false
+      end
+
+      def after_container = target.unit_id
+      def empty? = before_container == after_container
+      def applied? = @applied
+
+      def apply!
+        raise ArgumentError, "move plan was already applied" if applied?
+
+        unless empty?
+          @project.mpr.transaction do
+            @project.mpr.relocate_unit(
+              source.unit_id,
+              container_uuid: after_container,
+              containment_name:
+            )
+          end
+        end
+        @project.refresh!
+        @applied = true
+        self
+      end
+    end
+
+    class Mover
+      EMBEDDED_KINDS = %i[module entity attribute association].freeze
+      CONTAINER_KINDS = %i[module folder].freeze
+
+      def initialize(project)
+        @project = project
+      end
+
+      def plan(name, to:)
+        source = resolve(name)
+        target = resolve(to)
+        validate_kinds(source, target)
+        validate_module(source, target)
+
+        raw = @project.raw_unit(source.unit_id)
+        raise ArgumentError, "#{source.qualified_name} is not a movable unit" unless raw
+        if descendant_ids(source.unit_id).include?(target.unit_id)
+          raise ArgumentError, "cannot move #{source.qualified_name} into its descendant"
+        end
+
+        MovePlan.new(
+          project: @project,
+          source:,
+          target:,
+          before_container: raw.fetch("ContainerID"),
+          containment_name: raw.fetch("ContainmentName")
+        )
+      end
+
+      private
+
+      def resolve(name)
+        artifact = @project.find_artifact(name)
+        return artifact if artifact
+
+        matches = @project.semantic_index.find_all(name)
+        raise KeyError, "unknown Mendix artifact #{name.inspect}" if matches.empty?
+        raise ArgumentError, "ambiguous Mendix artifact #{name.inspect}" if matches.size > 1
+
+        matches.first
+      end
+
+      def validate_kinds(source, target)
+        if EMBEDDED_KINDS.include?(source.kind)
+          raise ArgumentError, "#{source.kind} cannot be moved as a standalone unit"
+        end
+        return if CONTAINER_KINDS.include?(target.kind)
+
+        raise ArgumentError, "#{target.qualified_name} is not a module or folder"
+      end
+
+      def validate_module(source, target)
+        return if source.module_name == target.module_name
+
+        raise ArgumentError,
+              "moving between modules requires an explicit cross-module refactor"
+      end
+
+      def descendant_ids(unit_id)
+        direct = @project.children_of(unit_id)
+        direct.flat_map do |child|
+          [child.fetch("UnitID"), *descendant_ids(child.fetch("UnitID"))]
+        end
+      end
+    end
+  end
+end

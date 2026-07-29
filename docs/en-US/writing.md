@@ -470,6 +470,19 @@ end
 units. Adding `--apply` writes only when both collections are empty. Embedded
 entities, attributes and associations require a typed domain-model mutation.
 
+## Safe move
+
+Move a standalone unit between folders in its current module:
+
+```ruby
+plan = project.plan_move("Sales.Process", to: "Sales.Automation")
+plan.apply!
+```
+
+The CLI equivalent is
+`mxrb move app.mpr Sales.Process Sales.Automation [--apply]`. Folder cycles,
+cross-module moves and non-container targets are rejected before writing.
+
 ## Lint e acoplamento
 
 O relatório semântico é um objeto Ruby:

@@ -17,6 +17,7 @@ remain optional external gates for compatibility and functional execution.
 - compare structural snapshots and produce typed semantic diffs;
 - inspect references, callers, callees and transitive impact;
 - rename artifacts with a preview before applying changes;
+- move standalone units between folders in the same module with a preview;
 - remove standalone units only after reference and child-unit safety checks;
 - run static analysis and executable model evaluations in Ruby;
 - execute functional microflow tests locally or in disposable containers.

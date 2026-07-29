@@ -477,6 +477,21 @@ RSpec.describe Mxrb do
 
       mpr.update_unit(module_id, { "$Type" => "Projects$Module", "Name" => "Updated" })
       expect(mpr.parse_contents(mpr.unit(module_id))["Name"]).to eq("Updated")
+      folder_id = mpr.insert_unit(
+        container_uuid: module_id,
+        containment_name: "Folders",
+        contents_doc: { "$Type" => "Projects$Folder", "Name" => "Parent" }
+      )
+      nested_id = mpr.insert_unit(
+        container_uuid: folder_id,
+        containment_name: "Folders",
+        contents_doc: { "$Type" => "Projects$Folder", "Name" => "Nested" }
+      )
+      mpr.relocate_unit(
+        nested_id, container_uuid: module_id, containment_name: "Folders"
+      )
+      expect(mpr.unit(nested_id)["ContainerID"]).to eq(module_id)
+      expect(mpr.parse_contents(mpr.unit(nested_id))["Name"]).to eq("Nested")
       expect(Dir.glob(File.join(contents_dir, "**", "*.tmp-*"))).to be_empty
       mpr.close
     end
@@ -1729,6 +1744,67 @@ RSpec.describe Mxrb do
         expect { project.remove!("Sales.Order") }
           .to raise_error(ArgumentError, /typed domain-model mutation/)
         expect { project.plan_remove("Sales.Missing") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+
+      expect(Mxrb.validate(path)).to be_valid
+    end
+
+    it "previews and applies same-module unit moves without changing references" do
+      path = File.join(File.dirname(@mpr_path), "semantic_move.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.17.0"
+        self.module :Sales do
+          entity :Order
+          microflow :Target
+          microflow(:Caller) { call_microflow "Sales.Target" }
+        end
+        self.module(:Other) {}
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        sales = project.find_artifact("Sales")
+        flows_id = project.mpr.insert_unit(
+          container_uuid: sales.unit_id,
+          containment_name: "Folders",
+          contents_doc: {
+            "$Type" => "Projects$Folder", "Name" => "Flows"
+          }
+        )
+        nested_id = project.mpr.insert_unit(
+          container_uuid: flows_id,
+          containment_name: "Folders",
+          contents_doc: {
+            "$Type" => "Projects$Folder", "Name" => "Nested"
+          }
+        )
+        project.refresh!
+
+        plan = project.plan_move("Sales.Target", to: "Sales.Flows")
+        expect(plan).not_to be_empty
+        expect(plan.before_container).to eq(sales.unit_id)
+        expect(plan.after_container).to eq(flows_id)
+        plan.apply!
+        expect(plan).to be_applied
+        expect(project.raw_unit(plan.source.unit_id)["ContainerID"]).to eq(flows_id)
+        expect(project.callers_of("Sales.Target").map(&:qualified_name)).to eq(["Sales.Caller"])
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+
+        unchanged = project.plan_move("Sales.Target", to: "Sales.Flows")
+        expect(unchanged).to be_empty
+        unchanged.apply!
+        expect(unchanged).to be_applied
+
+        expect { project.plan_move("Sales.Flows", to: "Sales.Nested") }
+          .to raise_error(ArgumentError, /descendant/)
+        expect(project.raw_unit(nested_id)["ContainerID"]).to eq(flows_id)
+        expect { project.move!("Sales.Target", to: "Other") }
+          .to raise_error(ArgumentError, /between modules/)
+        expect { project.plan_move("Sales.Target", to: "Sales.Caller") }
+          .to raise_error(ArgumentError, /not a module or folder/)
+        expect { project.plan_move("Sales.Order", to: "Sales.Flows") }
+          .to raise_error(ArgumentError, /cannot be moved/)
+        expect { project.plan_move("Sales.Missing", to: "Sales.Flows") }
           .to raise_error(KeyError, /unknown Mendix artifact/)
       end
 

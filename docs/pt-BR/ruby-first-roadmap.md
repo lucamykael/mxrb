@@ -85,6 +85,23 @@ Elementos embutidos no domínio exigem sua mutação tipada. Na CLI,
 `mxrb remove app.mpr Sales.FluxoSemUso` mostra a prévia e `--apply` só grava
 um plano seguro.
 
+## Movimentação segura no módulo
+
+Units independentes podem ser movidas para um módulo ou pasta sem alterar seu
+nome qualificado nem suas referências:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plano = project.plan_move("Sales.Processar", to: "Sales.Automacao")
+  plano.apply!
+end
+```
+
+O plano preserva o tipo nativo de contenção e bloqueia elementos embutidos do
+domínio, destinos que não são containers, ciclos de pastas e movimentos entre
+módulos. `mxrb move app.mpr Sales.Processar Sales.Automacao` mostra os IDs dos
+containers; `--apply` executa a transação.
+
 ## Análise estática
 
 ```ruby
