@@ -29,7 +29,8 @@ microflows/nanoflows. UUIDs e coordenadas visuais são normalizados.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby
-editáveis. Conteúdo desconhecido é preservado no baseline nativo.
+editáveis. Toda unit nativa mantém o baseline JSON e também é expandida em
+`.mxrb/native_units.rb`, inclusive conteúdo sem DSL concisa.
 
 ## Validação oficial 11.12.1
 
@@ -37,8 +38,8 @@ editáveis. Conteúdo desconhecido é preservado no baseline nativo.
 - `mx check` terminou com **0 erros**;
 - original e reconstruído: **23 warnings, 1 depreciação e 6 recomendações**;
 - `mxbuild --target=package`: **BUILD SUCCEEDED**;
-- MDA final: 11.941.205 bytes, SHA-256
-  `8effd1b0816a29b819d8f159e4a143bbf308c4c0b2e8bced7e9f53ca0f487658`.
+- MDA atual: 11.941.148 bytes, SHA-256
+  `fc4fb7a2ea2b4ad7cdb0fcd3296a5dbb5c4d148371aad997ab0032d2c5c0cf33`.
 
 ## Validação oficial Mendix 5–9
 
@@ -56,18 +57,23 @@ um limite explícito.
 
 ## Índice semântico
 
-Os seis MPRs produziram **1.773 artefatos** e **3.330 referências**. Consultas
+Os seis MPRs produziram **1.772 artefatos** e **3.330 referências**. Consultas
 de referências, callers, callees, impacto, lint e diff tipado foram exercitadas
 sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 104 exemplos, zero falhas;
-- 100% das linhas: 4.477/4.477;
+- 112 exemplos, zero falhas;
+- 100% das linhas: 4.613/4.613;
 - cobertura de branches reportada separadamente;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
-- testes funcionais Sudoku: 3/3 no Docker em 37,92 s.
+- testes funcionais Sudoku: 3/3 no Docker em 39,52 s.
 
-O escopo funcional atual verifica conclusão e tratamento de exceções. Asserções
-de retorno e estado persistido não estão incluídas.
+Asserções Ruby verificam retorno e contagens XPath persistidas: Games 1/2/3 e
+Cells 81/162/243. JUnit XML é apenas relatório opcional gerado em Ruby.
+
+`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 13,733 s.
+`script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing
+determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`
+atômicos, inclusive valores binários.

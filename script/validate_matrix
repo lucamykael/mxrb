@@ -1,0 +1,77 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "json"
+require "tmpdir"
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require_relative "../lib/mxrb"
+
+fixtures_root = File.expand_path(
+  ENV.fetch("MXRB_FIXTURES_ROOT", "../../mxrb-fixtures"), __dir__
+)
+output_path = ARGV.shift
+fixtures = {
+  "QueryApiBlogPost" => "QueryApiBlogPost/QueryApiBlogPost.mpr",
+  "Sudoku" => "mxcli-sudoku/Sudoku/Sudoku.mpr",
+  "FirstMedix App" => "MendixApp/FirstMedix App.mpr",
+  "ConnectorKitDemo" => "ConnectorKitDemo/ConnectorKitDemo.mpr",
+  "TreeviewDemo" => "TreeViewAndGridView/test_5_21_4/TreeviewDemo.mpr",
+  "GridViewPlayground" => "TreeViewAndGridView/test_6_10_8/GridViewPlayground.mpr"
+}
+
+results = fixtures.map do |name, relative_path|
+  source = File.join(fixtures_root, relative_path)
+  raise "#{source}: fixture not found" unless File.file?(source)
+
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  original = Mxrb.validate(source)
+  raise "#{name}: original validation failed" unless original.valid?
+
+  details = Mxrb.open(source) do |project|
+    {
+      mendix: project.mendix_version,
+      format: project.format_version,
+      units: project.all_units.size,
+      artifacts: project.semantic_index.artifacts.size,
+      references: project.semantic_index.references.size
+    }
+  end
+
+  Dir.mktmpdir("mxrb-matrix-") do |directory|
+    exported = File.join(directory, "ruby")
+    rebuilt = File.join(directory, File.basename(source))
+    Mxrb::Exporter.new(source, exported).export!
+    begin
+      ENV["MXRB_OUTPUT_PATH"] = rebuilt
+      load File.join(exported, "project.rb")
+    ensure
+      ENV.delete("MXRB_OUTPUT_PATH")
+    end
+
+    rebuilt_validation = Mxrb.validate(rebuilt)
+    comparison = Mxrb.compare(source, rebuilt)
+    raise "#{name}: rebuilt validation failed" unless rebuilt_validation.valid?
+    raise "#{name}: #{comparison.differences.first}" unless comparison.identical?
+  end
+
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  row = details.merge(name:, result: "pass", elapsed_seconds: elapsed.round(3))
+  warn format("[mxrb] %-20s pass %7.3fs", name, elapsed)
+  row
+end
+
+payload = {
+  generated_at: Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+  fixtures_root:,
+  totals: {
+    fixtures: results.size,
+    units: results.sum { _1.fetch(:units) },
+    artifacts: results.sum { _1.fetch(:artifacts) },
+    references: results.sum { _1.fetch(:references) },
+    elapsed_seconds: results.sum { _1.fetch(:elapsed_seconds) }.round(3)
+  },
+  fixtures: results
+}
+json = JSON.pretty_generate(payload)
+output_path ? File.write(output_path, "#{json}\n") : puts(json)
