@@ -225,6 +225,15 @@ when "test"
   abort "#{definition_path}: file not found" unless File.file?(definition_path)
   plan_only = ARGV.delete("--plan")
   docker = ARGV.delete("--docker")
+  report_option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a path" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  json_report = report_option.call("--json")
+  junit_report = report_option.call("--junit")
 
   definition = Mxrb.functional_definition(definition_path)
   plan = Mxrb.runtime_plan(path)
@@ -248,6 +257,9 @@ when "test"
     end
     puts "[mxrb] #{execution.result.tests.count(&:passed?)}/" \
          "#{execution.result.tests.size} passed in #{format('%.2f', execution.elapsed)}s"
+    reporter = Mxrb::Functional::Reporter.new
+    reporter.write_json(execution, json_report) if json_report
+    reporter.write_junit(execution, junit_report) if junit_report
     exit 1 unless execution.passed?
   end
 
@@ -362,5 +374,7 @@ else
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
                  --docker                  Run mxbuild/runtime in disposable containers
                  --plan                    Show toolchain and Docker execution plan
+                 --json PATH               Write a machine-readable result
+                 --junit PATH              Write a JUnit-compatible result
   USAGE
 end

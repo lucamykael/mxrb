@@ -40,12 +40,22 @@ Execute com `mxrb evaluate App.mpr evaluation.rb`.
 ## Testes funcionais
 
 ```ruby
-microflow "cria pedido", call: "Sales.ACT_CreateOrder"
+microflow "cria pedido",
+          call: "Sales.ACT_CreateOrder",
+          before: { call: "Sales.TEST_Preparar" },
+          after: { call: "Sales.TEST_Limpar" },
+          expect: {
+            return: "true",
+            count: { entity: "Sales.Order", xpath: "[Status = 'Open']", equals: 1 }
+          }
 ```
 
 Use `mxrb test App.mpr functional_test.rb`; acrescente `--docker` para executar
 JDK, MxBuild e Runtime em containers descartáveis. Não há JUnit nem MDL. O MPR
 original nunca é alterado.
+Use `--json resultado.json` e/ou `--junit resultado.xml` para relatórios de CI.
+JUnit é apenas o formato XML de intercâmbio neste caso; o MXRB o grava
+diretamente em Ruby, sem instalar ou executar o framework Java JUnit.
 
 ## Cobertura
 

@@ -30,12 +30,22 @@ Bewertungen sind Ruby mit Checks wie `artifact`, `no_call_cycles` und eigenen
 Blöcken. Funktionstests verwenden ebenfalls Ruby:
 
 ```ruby
-microflow "erstellt Bestellung", call: "Sales.ACT_CreateOrder"
+microflow "erstellt Bestellung",
+          call: "Sales.ACT_CreateOrder",
+          before: { call: "Sales.TEST_Prepare" },
+          after: { call: "Sales.TEST_Cleanup" },
+          expect: {
+            return: "true",
+            count: { entity: "Sales.Order", xpath: "[Status = 'Open']", equals: 1 }
+          }
 ```
 
 `mxrb test App.mpr functional_test.rb --docker` führt Check, Build und Runtime
 in wegwerfbaren Containern aus. JUnit und MDL sind nicht nötig; das Original-MPR
 wird nie verändert.
+`--json ergebnis.json` und `--junit ergebnis.xml` erzeugen CI-Berichte. JUnit
+ist hier nur das XML-Austauschformat; MXRB schreibt es direkt in Ruby und
+installiert oder startet kein Java-JUnit-Framework.
 
 ## Native Baseline
 
