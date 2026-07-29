@@ -105,8 +105,8 @@ MxBuild 11.12.1:
 - diagnostic parity: both original and rebuilt produced exactly **23 warnings,
   1 deprecation and 6 best-practice recommendations**;
 - `mxbuild --target=package`: **BUILD SUCCEEDED** and created a 12 MB MDA;
-- final regression MDA: 11,941,205 bytes, SHA-256
-  `8effd1b0816a29b819d8f159e4a143bbf308c4c0b2e8bced7e9f53ca0f487658`.
+- current regression MDA: 11,941,148 bytes, SHA-256
+  `fc4fb7a2ea2b4ad7cdb0fcd3296a5dbb5c4d148371aad997ab0032d2c5c0cf33`.
 
 This validation exposed and drove the fixes listed above. The six-project MXRB
 matrix was rerun from fresh targets after the fixes and all six v1/v2
@@ -157,10 +157,10 @@ run. This is not proof of full compatibility with every Mendix metamodel
 version, and unknown `.mxunit` encodings continue to be rejected rather than
 guessed.
 
-Units outside the implemented domain/flow/page surfaces still use
-`.mxrb/native_units.json` as their lossless baseline. Within flow bodies and
-page/widget trees in this matrix, content is now represented in editable Ruby,
-either by concise typed DSL or by a complete structured Ruby hash.
+Every native unit retains `.mxrb/native_units.json` as its lossless baseline
+and is also expanded into editable `native_unit` hashes in
+`.mxrb/native_units.rb`. Concise typed DSLs overlay that complete Ruby
+representation where available.
 
 ## Ruby semantic index
 
@@ -175,8 +175,8 @@ matrix. This exercises `find_artifact`, `references_to`, `references_from`,
 | 7.5 | ConnectorKitDemo | 246 | 416 |
 | 7.17 | QueryApiBlogPost | 251 | 401 |
 | 9.6.1 | FirstMedix App | 409 | 656 |
-| 11.12.1 | Sudoku | 495 | 817 |
-| **Total** | **6 projects** | **1,773** | **3,330** |
+| 11.12.1 | Sudoku | 494 | 817 |
+| **Total** | **6 projects** | **1,772** | **3,330** |
 
 Static analysis was calibrated on the same matrix:
 
@@ -202,8 +202,8 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The suite contains 104 examples and passes with 100.00% line coverage
-(4,477/4,477 executable library lines). Branch coverage is recorded separately.
+The suite contains 112 examples and passes with 100.00% line coverage
+(4,613/4,613 executable library lines). Branch coverage is recorded separately.
 Run the enforced gate with:
 
 ```sh
@@ -223,7 +223,7 @@ Sudoku 11.12.1 fixture through both MXRB runtime paths:
 | Executor | Official gates | Runtime result | Elapsed |
 |---|---|---|---:|
 | Local disposable workspace | `mx check`: 0 errors; portable `mxbuild`: succeeded | 3/3 passed | 34.16 s |
-| Docker disposable workspace | JDK 21 + ICU builder; portable `mxbuild`: succeeded | 3/3 passed | 37.92 s |
+| Docker disposable workspace | JDK 21 + ICU builder; portable `mxbuild`: succeeded | 3/3 passed | 39.52 s |
 
 The cases invoke `Sudoku.ACT_NewEasy`, `ACT_NewMedium` and `ACT_NewHard`.
 The official runtime created an ephemeral HSQLDB, ran the generated
@@ -231,6 +231,19 @@ The official runtime created an ephemeral HSQLDB, ran the generated
 `DONE`. Both executors stopped the runtime immediately afterwards. The source
 MPR was copied before instrumentation and remained unchanged.
 
-The current scope verifies runtime completion and exception handling. It does
-not include assertions over returned values, persisted state or end-to-end UI
-behavior.
+Ruby assertions now verify return expressions and persisted XPath counts. The
+Docker run confirmed Game counts 1/2/3 and Cell counts 81/162/243 after the
+three cases. JUnit XML remains an optional Ruby-written CI report, not a Java
+test dependency. End-to-end browser behavior remains outside this runtime
+suite.
+
+## Reproducibility and performance
+
+`script/validate_matrix` reruns all six disposable round trips and emits JSON
+evidence. The current run covered 1,506 units in 13.733 seconds with zero
+semantic differences. `script/benchmark` measured the Sudoku pipeline on Ruby
+4.0.5: validation 0.2257 s, semantic indexing 0.7624 s, export 2.5101 s,
+generation 2.4659 s and comparison 0.8822 s, totaling 6.8463 s.
+
+Deterministic fuzz tests additionally round-trip 250 nested BSON documents and
+50 atomic `.mxunit` files, including binary values, arrays and nested hashes.

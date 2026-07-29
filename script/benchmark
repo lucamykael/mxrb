@@ -1,0 +1,56 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "benchmark"
+require "json"
+require "tmpdir"
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require_relative "../lib/mxrb"
+
+fixture = File.expand_path(
+  ENV.fetch(
+    "MXRB_BENCHMARK_MPR",
+    "../../mxrb-fixtures/mxcli-sudoku/Sudoku/Sudoku.mpr"
+  ),
+  __dir__
+)
+raise "#{fixture}: benchmark fixture not found" unless File.file?(fixture)
+
+measurements = {}
+measure = lambda do |name, &block|
+  result = nil
+  elapsed = Benchmark.realtime { result = block.call }
+  measurements[name] = elapsed.round(4)
+  result
+end
+
+measure.call(:validate) { Mxrb.validate(fixture) }
+measure.call(:semantic_index) do
+  Mxrb.open(fixture) do |project|
+    project.semantic_index.artifacts.size + project.semantic_index.references.size
+  end
+end
+
+Dir.mktmpdir("mxrb-benchmark-") do |directory|
+  exported = File.join(directory, "ruby")
+  rebuilt = File.join(directory, File.basename(fixture))
+  measure.call(:export) { Mxrb::Exporter.new(fixture, exported).export! }
+  measure.call(:generate) do
+    begin
+      ENV["MXRB_OUTPUT_PATH"] = rebuilt
+      load File.join(exported, "project.rb")
+    ensure
+      ENV.delete("MXRB_OUTPUT_PATH")
+    end
+  end
+  result = measure.call(:compare) { Mxrb.compare(fixture, rebuilt) }
+  raise result.differences.first unless result.identical?
+end
+
+payload = {
+  fixture:,
+  ruby: RUBY_DESCRIPTION,
+  measurements_seconds: measurements,
+  total_seconds: measurements.values.sum.round(4)
+}
+puts JSON.pretty_generate(payload)
