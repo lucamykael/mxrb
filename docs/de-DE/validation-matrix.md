@@ -22,7 +22,8 @@ Original-MPR → validate → export → generate → validate → compare
 Der Vergleich umfasst Metadaten, Security, Unit-Baum, Entitäten,
 Zugriffsregeln, Beziehungen, Seiten, Widgets, Events, Menüs und vollständige
 Microflow-/Nanoflow-Körper. 264 Flow-Körper und 1.304 Seitenknoten aus 25 Typen
-sind als bearbeitbares Ruby repräsentiert.
+sind als bearbeitbares Ruby repräsentiert. Jede native Unit besitzt zusätzlich
+einen vollständigen bearbeitbaren Eintrag in `.mxrb/native_units.rb`.
 
 ## Offizielle Gates
 
@@ -33,12 +34,21 @@ Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro.
 
 ## Semantik, Tests und Runtime
 
-- 1.773 Artefakte und 3.330 Referenzen;
-- 104 Beispiele, keine Fehler;
-- 100 % Zeilenabdeckung (4.477/4.477);
+- 1.772 Artefakte und 3.330 Referenzen;
+- 112 Beispiele, keine Fehler;
+- 100 % Zeilenabdeckung (4.613/4.613);
 - Branch-Abdeckung wird separat ausgewiesen;
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
+
+Ruby-Assertions prüfen Rückgabewerte und persistierte XPath-Anzahlen. Der
+Docker-Lauf bestätigte Games 1/2/3 und Cells 81/162/243; JUnit XML ist nur ein
+in Ruby erzeugtes CI-Format.
+
+`script/validate_matrix` prüfte 1.506 Units in sechs Round-Trips in 13,733 s.
+`script/benchmark` maß 6,8463 s für die vollständige Sudoku-Pipeline.
+Deterministisches Fuzzing deckt 250 BSON-Dokumente und 50 atomare
+`.mxunit`-Dateien einschließlich Binärwerten ab.
 
 Die Matrix beweist die geprüften Szenarien, nicht universelle Kompatibilität
 mit jedem Mendix-Metamodell. Unbekannte `.mxunit`-Kodierungen werden abgelehnt.
