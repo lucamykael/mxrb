@@ -1697,6 +1697,44 @@ RSpec.describe Mxrb do
       expect(Mxrb.validate(path)).to be_valid
     end
 
+    it "previews, blocks, and applies reference-safe unit removal" do
+      path = File.join(File.dirname(@mpr_path), "semantic_remove.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.17.0"
+        self.module :Sales do
+          entity :Order
+          microflow :Unused
+          microflow :Target
+          microflow(:Caller) { call_microflow "Sales.Target" }
+        end
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        unused = project.plan_remove("Sales.Unused")
+        expect(unused).to be_safe
+        expect(unused).not_to be_applied
+        expect(unused.incoming).to be_empty
+        expect(unused.children).to be_empty
+
+        unused.apply!
+        expect(unused).to be_applied
+        expect(project.find_artifact("Sales.Unused")).to be_nil
+        expect { unused.apply! }.to raise_error(ArgumentError, /already applied/)
+
+        target = project.plan_remove("Sales.Target")
+        expect(target).not_to be_safe
+        expect(target.incoming.map { _1.source.qualified_name }).to eq(["Sales.Caller"])
+        expect { target.apply! }.to raise_error(ArgumentError, /incoming reference/)
+
+        expect { project.remove!("Sales.Order") }
+          .to raise_error(ArgumentError, /typed domain-model mutation/)
+        expect { project.plan_remove("Sales.Missing") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+
+      expect(Mxrb.validate(path)).to be_valid
+    end
+
     it "reports call cycles, unreferenced artifacts, and module coupling as Ruby data" do
       artifact = lambda do |id, qualified_name, module_name|
         Mxrb::Semantic::Artifact.new(

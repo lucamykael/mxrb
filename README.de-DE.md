@@ -13,6 +13,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - Erhalt nativer Units ohne kompakte Abstraktion;
 - Vergleich, semantischer Diff, Referenzen und Impact-Analyse;
 - sichere Umbenennung mit Vorschau;
+- Entfernen eigenständiger Units nach Referenz- und Kind-Unit-Prüfung;
 - Lint und ausführbare Modellbewertungen;
 - funktionale Microflow-Tests lokal oder in Docker.
 - Suche und Installation wiederverwendbarer Ruby-Module mit SHA-256-Lock.
