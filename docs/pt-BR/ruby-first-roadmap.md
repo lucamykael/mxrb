@@ -9,7 +9,8 @@ Ruby é a única linguagem pública do MXRB.
 - O modelo Mendix é lido, criado, alterado e analisado por APIs e DSLs Ruby.
 - A CLI é apenas uma camada fina sobre essas APIs.
 - Não haverá MDL, parser de uma linguagem paralela ou sintaxe própria concorrendo com Ruby.
-- Recursos preservados que ainda não tenham uma abstração de alto nível continuam disponíveis sem perda e podem ganhar APIs Ruby progressivamente.
+- Recursos sem abstração concisa continuam sem perdas e editáveis nos Hashes
+  Ruby gerados por `native_unit`.
 - Studio Pro e MxBuild são validadores externos importantes, mas não são dependências do núcleo Ruby.
 
 ## Capacidades

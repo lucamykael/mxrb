@@ -210,15 +210,21 @@ ref and a SHA-256 digest of installed files.
 ## Native baseline and editable deep structures
 
 `mxrb export` writes `.mxrb/native_units.json` with the original BSON payloads
-as a lossless baseline, and
+as a lossless baseline and `.mxrb/native_units.rb` with every payload expanded
+as editable Ruby. The generated project loads both:
 `project.rb` loads it with:
 
 ```ruby
 native_units File.join(__dir__, ".mxrb", "native_units.json")
+evaluate File.join(__dir__, ".mxrb", "native_units.rb")
 ```
 
-The native manifest keeps units outside the current DSL intact, including
-images, constants, datasets, services, project settings and templates.
+Each Ruby entry uses `native_unit` and `deep_structure` to expose all BSON
+fields, including binary values through `bson_binary`. Editing this Ruby hash
+overrides the baseline before typed writers run. Images, constants, datasets,
+services, project settings, templates and newly introduced Mendix unit types
+therefore remain both lossless and directly editable even without a concise
+typed abstraction.
 Microflow/nanoflow bodies and page/widget trees have an additional editable
 representation described below.
 

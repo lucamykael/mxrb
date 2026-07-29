@@ -112,6 +112,26 @@ module Mxrb
         File.join(@output_dir, ".mxrb", "native_units.json"),
         JSON.pretty_generate("format_version" => project.format_version.to_s, "units" => units)
       )
+      source = project.all_units.filter_map do |unit|
+        doc = project.parse_bson(unit)
+        next if doc["$Type"].to_s.empty? || doc["$Type"] == "Projects$Project"
+
+        native_unit_source(project, unit, doc)
+      end
+      write(
+        File.join(@output_dir, ".mxrb", "native_units.rb"),
+        "# frozen_string_literal: true\n\n#{source.join("\n")}"
+      )
+    end
+
+    def native_unit_source(project, unit, doc)
+      <<~RUBY
+        native_unit #{ruby(unit.fetch("UnitID"))},
+                    container_id: #{ruby(unit.fetch("ContainerID"))},
+                    containment: #{ruby(unit.fetch("ContainmentName"))},
+                    module_name: #{ruby(module_name_for(project, unit))},
+                    deep_structure: #{native_ruby(doc, 20)}
+      RUBY
     end
 
     def module_name_for(project, unit)
@@ -298,6 +318,7 @@ module Mxrb
         Mxrb.define(output) do
           mendix_version #{ruby(project.mendix_version || "10.18.0")}
           native_units File.join(__dir__, ".mxrb", "native_units.json")
+          evaluate File.join(__dir__, ".mxrb", "native_units.rb")
           evaluate File.join(__dir__, "app", "security", "security.rb")
       #{module_loads}
         end

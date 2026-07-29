@@ -49,9 +49,13 @@ installiert oder startet kein Java-JUnit-Framework.
 
 ## Native Baseline
 
-Der Export schreibt `.mxrb/native_units.json`. Nicht typisierte Units bleiben
-vollständig erhalten. `body_fingerprint` verwendet unveränderte native Graphen
-exakt wieder und regeneriert sie nach Ruby-Änderungen.
+Der Export schreibt `.mxrb/native_units.json` als verlustfreie Baseline und
+`.mxrb/native_units.rb` mit jedem BSON-Payload als bearbeitbaren Ruby-Hash.
+`native_unit`, `deep_structure` und `bson_binary` machen auch Bilder,
+Konstanten, Datensätze, Dienste, Einstellungen, Vorlagen und neue Mendix-Typen
+direkt bearbeitbar. Ruby-Änderungen überlagern die Baseline vor den typisierten
+Writes. `body_fingerprint` verwendet unveränderte native Graphen exakt wieder
+und regeneriert sie nach Ruby-Änderungen.
 
 ## Ruby-Modul-Marketplace
 

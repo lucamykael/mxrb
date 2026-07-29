@@ -197,6 +197,7 @@ module Mxrb
         @modules           = []
         @security          = nil
         @native_units_path = nil
+        @native_unit_overrides = []
       end
 
       def mendix_version(v)
@@ -217,6 +218,22 @@ module Mxrb
 
       def native_units(path)
         @native_units_path = path
+      end
+
+      def native_unit(unit_id, container_id:, containment:, deep_structure:, module_name: nil)
+        raise ArgumentError, "deep_structure requires a Hash" unless deep_structure.is_a?(Hash)
+
+        @native_unit_overrides << {
+          unit_id: unit_id.to_s,
+          container_id: container_id.to_s,
+          containment: containment.to_s,
+          module: module_name&.to_s,
+          doc: deep_structure
+        }
+      end
+
+      def bson_binary(base64, subtype: :generic)
+        BSON::Binary.new(Base64.strict_decode64(base64), subtype)
       end
 
       def evaluate(path)
@@ -242,7 +259,8 @@ module Mxrb
           version: @mendix_version,
           modules: @modules.map(&:to_h),
           security: @security,
-          native_units_path: @native_units_path
+          native_units_path: @native_units_path,
+          native_unit_overrides: @native_unit_overrides
         }
       end
     end
