@@ -70,4 +70,15 @@ RSpec.describe "localized documentation" do
 
     expect(matches).to be_empty, "AI traces found:\n#{matches.join("\n")}"
   end
+
+  it "does not mix Portuguese prose into the English writing guide" do
+    prose = root.join("docs", "en-US", "writing.md").read.lines.drop(3).join
+    portuguese = /
+      [ãõç]|
+      \b(?:uma|mesmas|renomeação|escrita|plano|operação|acoplamento|
+      relatório|regras|mudanças|navegação|idênticos|diferenças)\b
+    /ix
+
+    expect(prose).not_to match(portuguese)
+  end
 end
