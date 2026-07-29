@@ -42,3 +42,15 @@ Beim Entfernen blockieren eingehende Referenzen und Kind-Units den Plan.
 Eingebettete Domain-Modellelemente benötigen ihre typisierte Mutation. Die CLI
 zeigt mit `mxrb remove app.mpr Sales.UnusedFlow` nur die Vorschau; `--apply`
 schreibt ausschließlich einen sicheren Plan.
+
+Eigenständige Units können innerhalb desselben Moduls in ein Modul oder einen
+Ordner verschoben werden:
+
+```ruby
+plan = project.plan_move("Sales.Process", to: "Sales.Automation")
+plan.apply!
+```
+
+Der Plan bewahrt den nativen Containment-Typ und blockiert Domain-
+Modellelemente, ungültige Container, Ordnerzyklen und modulübergreifende
+Verschiebungen. `mxrb move` zeigt eine Vorschau; erst `--apply` schreibt.

@@ -108,10 +108,12 @@ project.callers_of("Sales.Process")
 project.impact_of("Sales.Order")
 project.plan_rename("Sales.Order", to: "Invoice")
 project.plan_remove("Sales.FluxoSemUso")
+project.plan_move("Sales.Processar", to: "Sales.Automacao")
 project.analyze
 ```
 
-Na CLI, use `refs`, `callers`, `callees`, `impact`, `rename`, `remove`, `lint`,
-`report`, `diff`, `find`, `describe` e `tree`. Renomeações e remoções apenas
+Na CLI, use `refs`, `callers`, `callees`, `impact`, `rename`, `remove`, `move`,
+`lint`, `report`, `diff`, `find`, `describe` e `tree`. Refatorações apenas
 mostram a prévia, salvo quando `--apply` é informado. A remoção é bloqueada se
-houver referências recebidas ou units filhas.
+houver referências recebidas ou units filhas; movimentos ficam no mesmo
+módulo e rejeitam ciclos de pastas.

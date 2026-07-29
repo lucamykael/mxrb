@@ -200,6 +200,19 @@ module Mxrb
         FileUtils.rm_f(MxunitCodec.path_for(contents_dir, uuid)) if @format_version == :v2
       end
 
+      def relocate_unit(uuid, container_uuid:, containment_name:)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        @db.execute(
+          "UPDATE Unit SET ContainerID = ?, ContainmentName = ? WHERE UnitID = ?",
+          [
+            BsonCodec.uuid_to_blob(container_uuid),
+            containment_name.to_s,
+            BsonCodec.uuid_to_blob(uuid)
+          ]
+        )
+      end
+
       def transaction(&)
         @db.transaction(&)
       end

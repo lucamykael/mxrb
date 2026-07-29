@@ -147,6 +147,22 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     expect { blocked.apply! }.to raise_error(ArgumentError, /1 child unit/)
   end
 
+  it "covers move ambiguity and unique semantic fallback resolution" do
+    flow = Mxrb::Semantic::Artifact.new(
+      "unit:flow", "Sales.Flow", :microflow, "Sales", "Flow", "flow", [], {}.freeze
+    )
+    duplicate = Mxrb::Semantic::Artifact.new(
+      "unit:other", "Sales.Flow", :page, "Sales", "Flow", "other", [], {}.freeze
+    )
+    index = double("move index", find_all: [flow, duplicate])
+    mover = Mxrb::Semantic::Mover.new(
+      double("move project", find_artifact: nil, semantic_index: index)
+    )
+    expect { mover.send(:resolve, "Sales.Flow") }.to raise_error(ArgumentError, /ambiguous/)
+    allow(index).to receive(:find_all).and_return([flow])
+    expect(mover.send(:resolve, "Sales.Flow")).to eq(flow)
+  end
+
   it "covers exporter formatting and fallback helpers" do
     exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
     expect(exporter.send(:flow_location, "DS_List")).to eq(%w[application queries])
@@ -533,6 +549,13 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     file.instance_variable_set(:@readonly, true)
     expect { file.delete_unit("00112233-4455-6677-8899-aabbccddeeff") }
       .to raise_error(Mxrb::ReadOnlyError)
+    expect do
+      file.relocate_unit(
+        "00112233-4455-6677-8899-aabbccddeeff",
+        container_uuid: "11112233-4455-6677-8899-aabbccddeeff",
+        containment_name: "Documents"
+      )
+    end.to raise_error(Mxrb::ReadOnlyError)
 
     Dir.mktmpdir do |dir|
       uuid = "00112233-4455-6677-8899-aabbccddeeff"
@@ -544,6 +567,17 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       expect(db).to receive(:execute).with("DELETE FROM Unit WHERE UnitID = ?", [kind_of(String)])
       writable.instance_variable_set(:@db, db)
       expect(writable.delete_unit(uuid)).to be_an(Array)
+      expect(db).to receive(:execute).with(
+        "UPDATE Unit SET ContainerID = ?, ContainmentName = ? WHERE UnitID = ?",
+        [kind_of(String), "Documents", kind_of(String)]
+      )
+      expect(
+        writable.relocate_unit(
+          uuid,
+          container_uuid: "11112233-4455-6677-8899-aabbccddeeff",
+          containment_name: :Documents
+        )
+      ).to be_nil
     end
 
     unopened = Mxrb::IO::MprFile.allocate
