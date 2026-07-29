@@ -1,8 +1,28 @@
 # frozen_string_literal: true
 
+require "cgi"
+require "json"
+
 module Mxrb
   module Functional
-    TestCase = Data.define(:name, :target, :arguments, :timeout)
+    Hook = Data.define(:target, :arguments)
+    CountExpectation = Data.define(:entity, :xpath, :equals)
+    TestCase = Data.define(
+      :name, :target, :arguments, :timeout,
+      :expected_return, :counts, :setup, :cleanup
+    ) do
+      class << self
+        alias data_new new
+
+        def new(name, target, arguments, timeout, expected_return = nil,
+                counts = [].freeze, setup = nil, cleanup = nil)
+          data_new(
+            name, target, arguments, timeout,
+            expected_return, counts, setup, cleanup
+          )
+        end
+      end
+    end
     Definition = Data.define(:tests) do
       def empty? = tests.empty?
     end
@@ -24,7 +44,8 @@ module Mxrb
         @tests = []
       end
 
-      def microflow(name, call:, pass: {}, timeout: 60)
+      def microflow(name, call:, pass: {}, timeout: 60, expect: {},
+                    before: nil, after: nil)
         label = name.to_s.strip
         target = call.to_s.strip
         raise ArgumentError, "functional test name cannot be empty" if label.empty?
@@ -34,7 +55,13 @@ module Mxrb
         raise ArgumentError, "functional test timeout must be positive" unless timeout.to_f.positive?
 
         arguments = pass.to_h.transform_keys(&:to_s).transform_values(&:to_s).freeze
-        @tests << TestCase.new(label, target, arguments, timeout.to_f)
+        expectations = expect.to_h
+        expected_return = expectations[:return] || expectations["return"]
+        counts = normalize_counts(expectations[:count] || expectations["count"])
+        @tests << TestCase.new(
+          label, target, arguments, timeout.to_f, expected_return&.to_s,
+          counts, normalize_hook(before), normalize_hook(after)
+        )
         self
       end
 
@@ -45,6 +72,39 @@ module Mxrb
 
       def definition
         Definition.new(@tests.dup.freeze)
+      end
+
+      private
+
+      def normalize_hook(value)
+        return unless value
+
+        options = value.is_a?(Hash) ? value : { call: value }
+        target = (options[:call] || options["call"]).to_s
+        unless target.match?(/\A[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\z/)
+          raise ArgumentError, "functional hook must call a qualified microflow"
+        end
+        arguments = (options[:pass] || options["pass"] || {}).to_h
+          .transform_keys(&:to_s).transform_values(&:to_s).freeze
+        Hook.new(target, arguments)
+      end
+
+      def normalize_counts(value)
+        values = value.is_a?(Array) ? value : [value]
+        values.compact.map do |item|
+          options = item.to_h
+          entity = (options[:entity] || options["entity"]).to_s
+          equals = options.key?(:equals) ? options[:equals] : options["equals"]
+          unless entity.match?(/\A[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\z/)
+            raise ArgumentError, "count expectation requires a qualified entity"
+          end
+          raise ArgumentError, "count expectation requires a non-negative integer" unless
+            equals.is_a?(Integer) && equals >= 0
+
+          CountExpectation.new(
+            entity, (options[:xpath] || options["xpath"])&.to_s, equals
+          )
+        end.freeze
       end
     end
 
@@ -80,43 +140,77 @@ module Mxrb
       def validate_targets!
         Mxrb.open(@path) do |project|
           @definition.tests.each do |test|
-            artifact = project.find_artifact(test.target, kind: :microflow)
-            raise FunctionalTestError, "microflow #{test.target} not found" unless artifact
-
-            raw = project.raw_unit(artifact.unit_id)
-            doc = project.parse_bson(raw)
-            collection = doc["MicroflowParameterCollection"] || doc["Parameters"] || {}
-            parameter_docs = collection.is_a?(Hash) ?
-              IO::BsonCodec.parse_array(collection["Parameters"])[:items] : []
-            parameter_docs += IO::BsonCodec.parse_array(
-              doc.dig("ObjectCollection", "Objects")
-            )[:items].select { _1["$Type"] == "Microflows$MicroflowParameter" }
-            parameters = parameter_docs.filter_map do |parameter|
-              parameter["Name"] || parameter["name"] if parameter.is_a?(Hash)
-            end
-            supplied = test.arguments.keys
-            unknown = supplied - parameters
-            missing = parameters - supplied
-            unless unknown.empty? && missing.empty?
-              raise FunctionalTestError,
-                    "microflow #{test.target} arguments mismatch " \
-                    "(missing: #{missing.join(', ')}, unknown: #{unknown.join(', ')})"
+            validate_call!(project, test.target, test.arguments)
+            validate_call!(project, test.setup.target, test.setup.arguments) if test.setup
+            validate_call!(project, test.cleanup.target, test.cleanup.arguments) if test.cleanup
+            test.counts.each do |expectation|
+              unless project.find_artifact(expectation.entity, kind: :entity)
+                raise FunctionalTestError, "entity #{expectation.entity} not found"
+              end
             end
           end
           project.mendix_version
         end
       end
 
+      def validate_call!(project, target, arguments)
+        artifact = project.find_artifact(target, kind: :microflow)
+        raise FunctionalTestError, "microflow #{target} not found" unless artifact
+
+        doc = project.parse_bson(project.raw_unit(artifact.unit_id))
+        collection = doc["MicroflowParameterCollection"] || doc["Parameters"] || {}
+        parameter_docs = collection.is_a?(Hash) ?
+          IO::BsonCodec.parse_array(collection["Parameters"])[:items] : []
+        parameter_docs += IO::BsonCodec.parse_array(
+          doc.dig("ObjectCollection", "Objects")
+        )[:items].select { _1["$Type"] == "Microflows$MicroflowParameter" }
+        parameters = parameter_docs.filter_map do |parameter|
+          parameter["Name"] || parameter["name"] if parameter.is_a?(Hash)
+        end
+        unknown = arguments.keys - parameters
+        missing = parameters - arguments.keys
+        return if unknown.empty? && missing.empty?
+
+        raise FunctionalTestError,
+              "microflow #{target} arguments mismatch " \
+              "(missing: #{missing.join(', ')}, unknown: #{unknown.join(', ')})"
+      end
+
       def build_module
         mod = Dsl::ModuleBuilder.new(MODULE_NAME)
         tests = @definition.tests
         wrapper_names = tests.each_index.map { wrapper_name(_1) }
+        emit_hook = lambda do |flow, hook|
+          flow.call_microflow(hook.target, pass: hook.arguments) if hook
+        end
         tests.each_with_index do |test, index|
           mod.microflow(wrapper_name(index), kind: :test) do
             return_type :Boolean
-            call_microflow test.target, pass: test.arguments
-            return_value "true"
-            rescue_all { return_value "false" }
+            emit_hook.call(self, test.setup)
+            call_microflow(
+              test.target, pass: test.arguments,
+              as: (test.expected_return ? :mxrb_actual : nil)
+            )
+            conditions = []
+            conditions << "$mxrb_actual = #{test.expected_return}" if test.expected_return
+            test.counts.each_with_index do |expectation, count_index|
+              list = :"mxrb_items_#{count_index + 1}"
+              count = :"mxrb_count_#{count_index + 1}"
+              retrieve_objects expectation.entity, as: list, xpath: expectation.xpath
+              aggregate list, function: :count, as: count
+              conditions << "$#{count} = #{expectation.equals}"
+            end
+            if conditions.empty?
+              emit_hook.call(self, test.cleanup)
+              return_value "true"
+            else
+              emit_hook.call(self, test.cleanup)
+              return_value "(#{conditions.join(' and ')})"
+            end
+            rescue_all do
+              emit_hook.call(self, test.cleanup)
+              return_value "false"
+            end
           end
         end
         mod.microflow(RUNNER_NAME, kind: :test) do
@@ -170,6 +264,43 @@ module Mxrb
           TestResult.new(match[2], passed, passed ? "passed" : "microflow failed")
         end
         Result.new(tests.freeze, text.include?("[MXRB_TEST] DONE"))
+      end
+    end
+
+    class Reporter
+      def write_json(execution, path)
+        payload = {
+          passed: execution.passed?,
+          finished: execution.result.finished?,
+          elapsed: execution.elapsed,
+          tests: execution.result.tests.map do |test|
+            { name: test.name, passed: test.passed?, message: test.message }
+          end
+        }
+        File.write(path, JSON.pretty_generate(payload) << "\n")
+        path
+      end
+
+      def write_junit(execution, path)
+        tests = execution.result.tests
+        failures = tests.count(&:failed?)
+        cases = tests.map do |test|
+          name = CGI.escapeHTML(test.name)
+          if test.passed?
+            %(  <testcase name="#{name}"/>)
+          else
+            message = CGI.escapeHTML(test.message)
+            %(  <testcase name="#{name}"><failure message="#{message}"/></testcase>)
+          end
+        end.join("\n")
+        xml = <<~XML
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuite name="mxrb" tests="#{tests.size}" failures="#{failures}" time="#{execution.elapsed}">
+          #{cases}
+          </testsuite>
+        XML
+        File.write(path, xml)
+        path
       end
     end
   end

@@ -131,9 +131,14 @@ each selected microflow completes without an unhandled runtime exception:
 
 ```ruby
 # functional_test.rb
-microflow "creates an order", call: "Sales.ACT_CreateOrder"
-microflow "recalculates a total", call: "Sales.ACT_Recalculate",
-          pass: { Order: "$Order" }, timeout: 90
+microflow "creates an order",
+          call: "Sales.ACT_CreateOrder",
+          before: { call: "Sales.TEST_Prepare" },
+          after: { call: "Sales.TEST_Cleanup" },
+          expect: {
+            return: "true",
+            count: { entity: "Sales.Order", xpath: "[Status = 'Open']", equals: 1 }
+          }
 ```
 
 The `pass:` values are Mendix expressions and must supply every parameter of
@@ -171,6 +176,9 @@ bundle exec mxrb test App.mpr functional_test.rb --plan
 before runtime startup. The process stops at `[MXRB_TEST] DONE`, terminates the
 runtime and returns a failing exit status if any case failed, compilation
 failed, the suite did not finish or its aggregate timeout expired.
+Use `--json result.json` and/or `--junit result.xml` for CI reports. JUnit is
+only the XML interchange format here; MXRB writes it directly in Ruby and does
+not install or execute the Java JUnit framework.
 
 ## Test coverage
 
