@@ -30,12 +30,6 @@ Ruby is MXRB's only public language.
 - Local or Docker execution of `mx check`, portable MxBuild and Runtime.
 - A strict 100% library line-coverage gate.
 
-## Next steps
-
-1. Add Ruby assertions over functional-test return values and persisted state.
-2. Add optional adapters such as MCP and Studio Pro integration.
-3. Expand catalog, Marketplace and environment automation as Ruby libraries.
-
 ## Semantic API
 
 ```ruby

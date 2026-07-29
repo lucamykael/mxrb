@@ -202,7 +202,7 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The suite contains 92 examples and passes with 100.00% line coverage
+The suite contains 94 examples and passes with 100.00% line coverage
 (4,279/4,279 executable library lines). Branch coverage is recorded separately
 and currently measures 82.77% (1,427/1,724); it is not presented as 100%.
 Run the enforced gate with:
@@ -232,6 +232,6 @@ The official runtime created an ephemeral HSQLDB, ran the generated
 `DONE`. Both executors stopped the runtime immediately afterwards. The source
 MPR was copied before instrumentation and remained unchanged.
 
-This proves runtime completion and exception handling for the current slice.
-Assertions over returned values and persisted state remain an explicit next
-step; the result is not represented as broader end-to-end UI coverage.
+The current scope verifies runtime completion and exception handling. It does
+not include assertions over returned values, persisted state or end-to-end UI
+behavior.

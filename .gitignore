@@ -4,4 +4,3 @@ Gemfile.lock
 *.mpr
 tmp/
 coverage/
-docs/AI_MEMORY_HANDOFF.md

@@ -34,7 +34,7 @@ Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro.
 ## Semantik, Tests und Runtime
 
 - 1.773 Artefakte und 3.330 Referenzen;
-- 92 Beispiele, keine Fehler;
+- 94 Beispiele, keine Fehler;
 - 100 % Zeilenabdeckung (4.279/4.279);
 - 82,77 % Branch-Abdeckung;
 - Sudoku-Modellbewertung: 7/7;
