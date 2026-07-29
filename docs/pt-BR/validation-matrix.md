@@ -62,12 +62,12 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 92 exemplos, zero falhas;
+- 94 exemplos, zero falhas;
 - 100% das linhas: 4.279/4.279;
 - branches: 82,77% (1.427/1.724);
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 37,92 s.
 
-O teste funcional atual prova conclusão e tratamento de exceções; asserções de
-retorno e estado persistido são a próxima camada.
+O escopo funcional atual verifica conclusão e tratamento de exceções. Asserções
+de retorno e estado persistido não estão incluídas.

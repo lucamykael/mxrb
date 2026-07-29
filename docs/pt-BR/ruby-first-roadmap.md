@@ -36,13 +36,6 @@ Ruby é a única linguagem pública do MXRB.
   automática da família Java do projeto.
 - Gate nativo de 100% de cobertura de linhas para a biblioteca.
 
-### Próximas etapas
-
-1. Expandir os testes funcionais Ruby com asserções sobre retornos e estado,
-   mantendo o runtime apenas como executor.
-2. Adaptadores opcionais, como MCP e integração com Studio Pro, sem introduzir outra linguagem.
-3. Automação de catálogo, Marketplace e ambientes como bibliotecas Ruby.
-
 ## API semântica
 
 ```ruby

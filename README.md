@@ -22,7 +22,7 @@ remain optional external gates for compatibility and functional execution.
 
 The public validation matrix currently covers Mendix 5.21 through 11.12,
 including v1/v2 round trips and official MxBuild checks. See
-[the validation matrix](docs/VALIDATION_MATRIX.md) for the exact evidence and
+[the validation matrix](docs/en-US/validation-matrix.md) for the exact evidence and
 confidence boundaries.
 
 ## Requirements
@@ -108,8 +108,8 @@ bundle exec mxrb test Shop.mpr functional_test.rb --docker
 
 The source project is copied before instrumentation. `mx check`, the portable
 package, runtime database and uploaded files are discarded after execution.
-The current functional slice proves microflow completion and exception
-handling; assertions over return values and persisted state are the next layer.
+The current functional scope verifies microflow completion and exception
+handling. Assertions over return values and persisted state are not included.
 
 ## Development
 
