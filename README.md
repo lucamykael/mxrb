@@ -13,7 +13,7 @@ remain optional external gates for compatibility and functional execution.
 - read and write MPR v1 and v2 projects;
 - export complete projects into editable Ruby;
 - generate idempotent MPRs from a Ruby DSL;
-- preserve native units that do not yet have a concise typed abstraction;
+- expose every native unit as editable deep Ruby while retaining a lossless baseline;
 - compare structural snapshots and produce typed semantic diffs;
 - inspect references, callers, callees and transitive impact;
 - rename artifacts with a preview before applying changes;

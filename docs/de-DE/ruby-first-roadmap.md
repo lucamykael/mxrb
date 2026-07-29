@@ -12,6 +12,7 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 
 - Tiefes Lesen und Schreiben von MPR v1/v2.
 - Export in bearbeitbare Ruby-Projekte.
+- Bearbeitbare `native_unit`-Hashes für jede native BSON-Struktur.
 - Generierung, Integritätsprüfung, Vergleich und typisierter Diff.
 - Semantischer Index, Referenzen, Caller/Callee und Impact.
 - Sichere Umbenennung mit Vorschau.

@@ -81,9 +81,13 @@ SHA-256 dos arquivos instalados.
 
 ## Baseline nativo e estruturas profundas
 
-`mxrb export` grava `.mxrb/native_units.json`. Units fora da DSL concisa são
-preservadas integralmente. Corpos de flow possuem `body_fingerprint`: o grafo
-nativo é reutilizado quando o Ruby não mudou e regenerado após uma edição.
+`mxrb export` grava `.mxrb/native_units.json` como baseline sem perdas e
+`.mxrb/native_units.rb` com cada payload BSON expandido em Hashes Ruby
+editáveis. Entradas `native_unit` expõem todos os campos de imagens, constantes,
+datasets, serviços, configurações, templates e tipos futuros; valores binários
+usam `bson_binary`. Alterações nesse Ruby sobrepõem o baseline antes das escritas
+tipadas. Corpos de flow possuem `body_fingerprint`: o grafo nativo é reutilizado
+quando o Ruby não mudou e regenerado após uma edição.
 
 A DSL cobre criação/alteração/retrieve/commit/delete, chamadas de microflow,
 Java, JavaScript, nanoflow e app service, páginas, REST, listas, decisões,

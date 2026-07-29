@@ -10,7 +10,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - tiefes Lesen und Schreiben von MPR v1/v2;
 - Export in bearbeitbare Ruby-Projekte;
 - idempotente Generierung mit Ruby-DSL;
-- Erhalt nativer Units ohne kompakte Abstraktion;
+- tiefe Ruby-Bearbeitung jeder nativen Unit mit verlustfreier Baseline;
 - Vergleich, semantischer Diff, Referenzen und Impact-Analyse;
 - sichere Umbenennung mit Vorschau;
 - Verschieben eigenständiger Units zwischen Ordnern desselben Moduls;
