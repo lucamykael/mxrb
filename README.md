@@ -1,5 +1,7 @@
 # MXRB
 
+**English** · [Português](README.pt-BR.md) · [Deutsch](README.de-DE.md)
+
 MXRB is a Ruby-first toolkit for reading, writing, exporting, validating and
 testing Mendix project models (`.mpr`) without using MDL or `mxcli`.
 
@@ -120,8 +122,9 @@ The enforced suite currently has 100% line coverage. Branch coverage is
 reported separately and is not represented as 100%.
 
 Architecture and deeper writing guidance are available in
-[docs/writing.md](docs/writing.md) and
-[docs/RUBY_FIRST_ROADMAP.md](docs/RUBY_FIRST_ROADMAP.md).
+[the English documentation](docs/en-US/README.md). The complete documentation
+is also available in [Portuguese](docs/pt-BR/README.md) and
+[German](docs/de-DE/README.md).
 
 ## License
 
