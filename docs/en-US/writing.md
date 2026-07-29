@@ -455,6 +455,21 @@ Para escrever:
 bundle exec mxrb rename app.mpr Sales.Order Invoice --apply
 ```
 
+## Safe removal
+
+Removal is also previewed before writing:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plan = project.plan_remove("Sales.UnusedFlow")
+  plan.apply! if plan.safe?
+end
+```
+
+`mxrb remove app.mpr Sales.UnusedFlow` reports incoming references and child
+units. Adding `--apply` writes only when both collections are empty. Embedded
+entities, attributes and associations require a typed domain-model mutation.
+
 ## Lint e acoplamento
 
 O relatório semântico é um objeto Ruby:

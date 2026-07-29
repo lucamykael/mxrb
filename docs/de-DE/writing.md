@@ -76,6 +76,7 @@ erzeugt MXRB automatisch `mprcontents/*.mxunit`.
 
 ## Semantische Werkzeuge
 
-CLI-Befehle: `refs`, `callers`, `callees`, `impact`, `rename`, `lint`,
-`report`, `diff`, `find`, `describe` und `tree`. Umbenennungen schreiben erst
-mit `--apply`.
+CLI-Befehle: `refs`, `callers`, `callees`, `impact`, `rename`, `remove`,
+`lint`, `report`, `diff`, `find`, `describe` und `tree`. Umbenennungen und
+Entfernungen schreiben erst mit `--apply`; eingehende Referenzen oder
+Kind-Units blockieren eine Entfernung.

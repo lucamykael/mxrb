@@ -13,6 +13,7 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - preservação de units nativas ainda sem abstração concisa;
 - comparação, diff semântico, referências e análise de impacto;
 - renomeação segura com prévia;
+- remoção de units independentes com verificação de referências e filhos;
 - lint e avaliações executáveis de modelo;
 - testes funcionais de microflows localmente ou em Docker.
 - busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
