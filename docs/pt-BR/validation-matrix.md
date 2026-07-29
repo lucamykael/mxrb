@@ -62,9 +62,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 94 exemplos, zero falhas;
-- 100% das linhas: 4.279/4.279;
-- branches: 82,77% (1.427/1.724);
+- 101 exemplos, zero falhas;
+- 100% das linhas: 4.405/4.405;
+- cobertura de branches reportada separadamente;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 37,92 s.

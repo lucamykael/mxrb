@@ -259,6 +259,40 @@ when "functional-instrument"
   instrumenter = Mxrb::Functional::Instrumenter.new(path, definition).instrument!
   puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
 
+when "module"
+  action = ARGV.shift or abort "Usage: mxrb module <search|add> ..."
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  registry = option.call("--registry")
+  catalog = Mxrb::Marketplace::Catalog.new(registry)
+  case action
+  when "search"
+    query = ARGV.shift
+    entries = catalog.search(query)
+    entries.each do |entry|
+      puts "#{entry.name}\t#{entry.version}\t#{entry.description}"
+    end
+    puts "[mxrb] #{entries.size} module(s)"
+  when "add"
+    identifier = ARGV.shift or
+      abort "Usage: mxrb module add <name|directory> [--target DIR] [--registry SOURCE]"
+    target = option.call("--target") || Dir.pwd
+    installation = Mxrb::Marketplace::Installer.new(
+      target: target, catalog: catalog
+    ).install(identifier)
+    puts "[mxrb] Installed #{installation.entry.name} " \
+         "#{installation.entry.version} as #{installation.module_name}"
+    puts "[mxrb] #{installation.destination}"
+    puts "[mxrb] SHA-256 #{installation.digest}"
+  else
+    abort "Unknown module action #{action.inspect}; use search or add"
+  end
+
 when "describe"
   path = ARGV.shift or abort "Usage: mxrb describe <file.mpr> <qualified-name>"
   name = ARGV.shift or abort "Usage: mxrb describe <file.mpr> <qualified-name>"
@@ -323,6 +357,8 @@ else
       describe   <file.mpr> <name>         Show incoming and outgoing references
       tree       <file.mpr> [module]       Browse the semantic structure
       evaluate   <file.mpr> <eval.rb>      Run Ruby model evaluations
+      module search [query]                Search the Ruby module marketplace
+             add <name|directory>          Install a module and write its lockfile
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
                  --docker                  Run mxbuild/runtime in disposable containers
                  --plan                    Show toolchain and Docker execution plan

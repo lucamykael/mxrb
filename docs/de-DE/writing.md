@@ -43,6 +43,21 @@ Der Export schreibt `.mxrb/native_units.json`. Nicht typisierte Units bleiben
 vollständig erhalten. `body_fingerprint` verwendet unveränderte native Graphen
 exakt wieder und regeneriert sie nach Ruby-Änderungen.
 
+## Ruby-Modul-Marketplace
+
+```sh
+mxrb module search
+mxrb module search security
+mxrb module add shared-kernel
+mxrb module add ./lokales-paket --target ./exportiertes-projekt
+```
+
+JSON-Kataloge kommen aus der Gem, von einem lokalen Pfad oder über HTTPS mit
+`--registry`. Pakete besitzen `mxrb-module.json` und können eingebaut, lokal
+oder Git-basiert sein. Die Installation nutzt Staging, lehnt unsichere Pfade ab
+und schreibt Version, Quelle, Ref und SHA-256 nach
+`.mxrb/modules.lock.json`.
+
 ## Seiten, Navigation, Security und MPR v2
 
 Core-Widgets haben kompakte Methoden; importierte Seiten bieten zusätzlich

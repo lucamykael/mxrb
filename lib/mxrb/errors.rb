@@ -10,4 +10,5 @@ module Mxrb
   ValidationError    = Class.new(Error)
   FunctionalTestError = Class.new(Error)
   ToolchainError      = Class.new(Error)
+  MarketplaceError    = Class.new(Error)
 end

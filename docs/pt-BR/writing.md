@@ -54,6 +54,21 @@ bundle exec rspec
 MXRB_COVERAGE=1 bundle exec rspec
 ```
 
+## Marketplace de módulos Ruby
+
+```sh
+mxrb module search
+mxrb module search security
+mxrb module add shared-kernel
+mxrb module add ./pacote-local --target ./projeto-exportado
+```
+
+Catálogos JSON podem vir da gem, de um caminho local ou de HTTPS com
+`--registry`. Pacotes possuem `mxrb-module.json` e podem ser embutidos,
+diretórios locais ou repositórios Git. A instalação usa staging, rejeita
+caminhos inseguros e grava `.mxrb/modules.lock.json` com versão, origem, ref e
+SHA-256 dos arquivos instalados.
+
 ## Baseline nativo e estruturas profundas
 
 `mxrb export` grava `.mxrb/native_units.json`. Units fora da DSL concisa são
