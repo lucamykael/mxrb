@@ -1,0 +1,9 @@
+{
+  "name": "shared-kernel",
+  "module_name": "SharedKernel",
+  "version": "1.0.0",
+  "files": [
+    "module.rb",
+    "domain"
+  ]
+}

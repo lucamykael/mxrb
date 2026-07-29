@@ -16,7 +16,7 @@ Gem::Specification.new do |s|
   s.required_ruby_version = ">= 4.0"
 
   s.files = Dir[
-    "lib/**/*.rb", "bin/*", "docker/**/*", "docs/**/*.md",
+    "lib/**/*.rb", "bin/*", "docker/**/*", "docs/**/*.md", "marketplace/**/*",
     "examples/**/*.rb", "README*.md", "LICENSE"
   ]
   s.executables = ["mxrb"]

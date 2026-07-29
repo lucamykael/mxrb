@@ -19,6 +19,7 @@ remain optional external gates for compatibility and functional execution.
 - rename artifacts with a preview before applying changes;
 - run static analysis and executable model evaluations in Ruby;
 - execute functional microflow tests locally or in disposable containers.
+- search and install reusable Ruby modules with a locked SHA-256 digest.
 
 The public validation matrix currently covers Mendix 5.21 through 11.12,
 including v1/v2 round trips and official MxBuild checks. See
@@ -65,6 +66,8 @@ bundle exec mxrb generate shop.rb
 bundle exec mxrb validate Shop.mpr
 bundle exec mxrb export Shop.mpr exported-shop
 bundle exec mxrb compare original.mpr rebuilt.mpr
+bundle exec mxrb module search
+bundle exec mxrb module add shared-kernel
 ```
 
 ## Model evaluations

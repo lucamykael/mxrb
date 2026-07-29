@@ -1,0 +1,10 @@
+{
+  "modules": [
+    {
+      "name": "shared-kernel",
+      "version": "1.0.0",
+      "description": "Minimal shared-kernel module for an MXRB project",
+      "source": "builtin:shared-kernel"
+    }
+  ]
+}

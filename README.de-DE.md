@@ -15,6 +15,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - sichere Umbenennung mit Vorschau;
 - Lint und ausführbare Modellbewertungen;
 - funktionale Microflow-Tests lokal oder in Docker.
+- Suche und Installation wiederverwendbarer Ruby-Module mit SHA-256-Lock.
 
 ## Voraussetzungen
 
@@ -26,6 +27,8 @@ bundle install
 bundle exec mxrb validate App.mpr
 bundle exec mxrb export App.mpr app-ruby
 bundle exec mxrb compare original.mpr rebuilt.mpr
+bundle exec mxrb module search
+bundle exec mxrb module add shared-kernel
 ```
 
 ## Ruby-DSL
