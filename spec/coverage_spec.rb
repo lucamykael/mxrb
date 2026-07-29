@@ -117,6 +117,36 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       .to raise_error(ArgumentError, /must return/)
   end
 
+  it "covers removal resolution and structural safety guards" do
+    flow = Mxrb::Semantic::Artifact.new(
+      "unit:flow", "Sales.Flow", :microflow, "Sales", "Flow", "flow", [], {}.freeze
+    )
+    duplicate = Mxrb::Semantic::Artifact.new(
+      "unit:other", "Sales.Flow", :page, "Sales", "Flow", "other", [], {}.freeze
+    )
+    index = double("removal index", find_all: [flow, duplicate])
+    project = double("removal project", find_artifact: nil, semantic_index: index)
+    remover = Mxrb::Semantic::Remover.new(project)
+    expect { remover.plan("Sales.Flow") }.to raise_error(ArgumentError, /ambiguous/)
+    allow(index).to receive(:find_all).and_return([flow])
+    expect(remover.send(:resolve, "Sales.Flow")).to eq(flow)
+
+    allow(project).to receive(:find_artifact).and_return(flow)
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { remover.plan("Sales.Flow") }.to raise_error(ArgumentError, /not a removable unit/)
+
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "flow")
+    self_reference = Mxrb::Semantic::Reference.new(
+      flow, flow, :calls, ["Microflow"], "Sales.Flow"
+    )
+    allow(project).to receive(:references_to).and_return([self_reference])
+    allow(project).to receive(:children_of).and_return(["child"])
+    blocked = remover.plan("Sales.Flow")
+    expect(blocked.incoming).to be_empty
+    expect(blocked).not_to be_safe
+    expect { blocked.apply! }.to raise_error(ArgumentError, /1 child unit/)
+  end
+
   it "covers exporter formatting and fallback helpers" do
     exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
     expect(exporter.send(:flow_location, "DS_List")).to eq(%w[application queries])

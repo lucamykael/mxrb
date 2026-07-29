@@ -170,6 +170,25 @@ when "rename"
   puts "[mxrb] #{apply ? 'Renamed' : 'Preview'}: #{plan.changes.size} changes " \
        "in #{plan.affected_units.size} units"
 
+when "remove"
+  path = ARGV.shift or abort "Usage: mxrb remove <file.mpr> <qualified-name> [--apply]"
+  name = ARGV.shift or abort "Usage: mxrb remove <file.mpr> <qualified-name> [--apply]"
+  apply = ARGV.delete("--apply")
+  begin
+    plan = Mxrb.open(path, readonly: !apply) do |project|
+      project.plan_remove(name).tap { _1.apply! if apply }
+    end
+  rescue KeyError, ArgumentError => e
+    warn "[mxrb] error: #{e.message}"
+    exit 1
+  end
+  puts "Artifact            : #{plan.artifact.qualified_name} (#{plan.artifact.kind})"
+  puts "Incoming references : #{plan.incoming.size}"
+  plan.incoming.each { puts "  #{_1.source.qualified_name}\t#{_1.relation}" }
+  puts "Child units         : #{plan.children.size}"
+  puts "[mxrb] #{apply ? 'Removed' : plan.safe? ? 'Safe removal preview' : 'Blocked removal'}"
+  exit 1 unless plan.safe?
+
 when "lint", "report"
   path = ARGV.shift or abort "Usage: mxrb #{command} <file.mpr>"
   report = Mxrb.open(path, &:analyze)
@@ -363,6 +382,8 @@ else
       impact     <file.mpr> <name>        Find transitive dependents
       rename     <mpr> <old> <new>         Preview a safe model-wide rename
                  --apply                   Apply the previewed rename
+      remove     <mpr> <name>              Preview a reference-safe unit removal
+                 --apply                   Apply only when no refs/children exist
       lint       <file.mpr>                Ruby semantic diagnostics
       report     <file.mpr>                Coupling and reference summary
       find       <file.mpr> <text>         Search artifacts by name

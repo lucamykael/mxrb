@@ -107,9 +107,11 @@ project.references_to("Sales.Order")
 project.callers_of("Sales.Process")
 project.impact_of("Sales.Order")
 project.plan_rename("Sales.Order", to: "Invoice")
+project.plan_remove("Sales.FluxoSemUso")
 project.analyze
 ```
 
-Na CLI, use `refs`, `callers`, `callees`, `impact`, `rename`, `lint`, `report`,
-`diff`, `find`, `describe` e `tree`. Renomeações apenas mostram a prévia, salvo
-quando `--apply` é informado.
+Na CLI, use `refs`, `callers`, `callees`, `impact`, `rename`, `remove`, `lint`,
+`report`, `diff`, `find`, `describe` e `tree`. Renomeações e remoções apenas
+mostram a prévia, salvo quando `--apply` é informado. A remoção é bloqueada se
+houver referências recebidas ou units filhas.

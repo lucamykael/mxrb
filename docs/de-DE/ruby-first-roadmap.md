@@ -15,6 +15,7 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 - Generierung, Integritätsprüfung, Vergleich und typisierter Diff.
 - Semantischer Index, Referenzen, Caller/Callee und Impact.
 - Sichere Umbenennung mit Vorschau.
+- Sichere Entfernung eigenständiger Units mit Vorschau.
 - Statische Analyse und ausführbare Modellbewertungen.
 - Funktionale Microflow-Tests ohne JUnit.
 - Lokale oder Docker-Ausführung von `mx check`, MxBuild und Runtime.
@@ -28,9 +29,16 @@ Mxrb.open("app.mpr") do |project|
   project.callers_of("Sales.Recalculate")
   project.impact_of("Sales.Order")
   project.plan_rename("Sales.Order", to: "Invoice")
+  plan = project.plan_remove("Sales.UnusedFlow")
+  plan.apply! if plan.safe?
   project.analyze
 end
 ```
 
 Bewertungsdateien sind gewöhnliches Ruby und werden mit
 `mxrb evaluate app.mpr evaluation.rb` ausgeführt.
+
+Beim Entfernen blockieren eingehende Referenzen und Kind-Units den Plan.
+Eingebettete Domain-Modellelemente benötigen ihre typisierte Mutation. Die CLI
+zeigt mit `mxrb remove app.mpr Sales.UnusedFlow` nur die Vorschau; `--apply`
+schreibt ausschließlich einen sicheren Plan.

@@ -57,6 +57,22 @@ end
 
 The CLI previews by default; `--apply` is required to write.
 
+## Safe removal
+
+Standalone units such as microflows and pages can be inspected before removal:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plan = project.plan_remove("Sales.UnusedFlow")
+  plan.apply! if plan.safe?
+end
+```
+
+The plan is blocked while incoming references or child units exist. Embedded
+domain-model elements require their typed domain-model mutation instead. The
+CLI follows the same rule: `mxrb remove app.mpr Sales.UnusedFlow` previews and
+`--apply` writes only a safe plan.
+
 ## Static analysis
 
 ```ruby

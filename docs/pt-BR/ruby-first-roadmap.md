@@ -68,6 +68,23 @@ end
 Na CLI, `mxrb rename app.mpr Sales.Order Invoice` apenas mostra a prévia.
 Acrescente `--apply` para efetivar a alteração.
 
+## Remoção segura
+
+Units independentes, como microflows e páginas, podem ser inspecionadas antes
+da remoção:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plano = project.plan_remove("Sales.FluxoSemUso")
+  plano.apply! if plano.safe?
+end
+```
+
+O plano é bloqueado enquanto houver referências recebidas ou units filhas.
+Elementos embutidos no domínio exigem sua mutação tipada. Na CLI,
+`mxrb remove app.mpr Sales.FluxoSemUso` mostra a prévia e `--apply` só grava
+um plano seguro.
+
 ## Análise estática
 
 ```ruby
