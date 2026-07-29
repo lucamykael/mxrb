@@ -1,0 +1,102 @@
+# MXRB: Ruby above all
+
+[Português](../pt-BR/ruby-first-roadmap.md) · **English** · [Deutsch](../de-DE/ruby-first-roadmap.md)
+
+## Architectural principle
+
+Ruby is MXRB's only public language.
+
+- Mendix models are read, created, changed and analyzed through Ruby APIs and DSLs.
+- The CLI is a thin layer over those APIs.
+- MXRB will not introduce MDL or a competing parser/language.
+- Unsupported high-level structures remain losslessly preserved and may gain
+  progressive Ruby abstractions.
+- Studio Pro and MxBuild are important external validators, not dependencies of
+  the Ruby core.
+
+## Available capabilities
+
+- Deep MPR v1/v2 reading and writing.
+- Export to editable Ruby projects.
+- Generation, integrity validation and structural comparison.
+- Semantic indexing of modules, entities, members and documents.
+- References, callers, callees and transitive impact queries.
+- Safe model-wide rename with preview.
+- Static analysis of cycles, missing targets and module coupling.
+- Typed semantic diff.
+- Search, description and structural tree navigation.
+- Executable Ruby model evaluations with severity and scores.
+- Functional microflow tests without JUnit.
+- Local or Docker execution of `mx check`, portable MxBuild and Runtime.
+- A strict 100% library line-coverage gate.
+
+## Next steps
+
+1. Add Ruby assertions over functional-test return values and persisted state.
+2. Add optional adapters such as MCP and Studio Pro integration.
+3. Expand catalog, Marketplace and environment automation as Ruby libraries.
+
+## Semantic API
+
+```ruby
+Mxrb.open("app.mpr") do |project|
+  order = project.find_artifact("Sales.Order")
+  refs = project.references_to(order)
+  callers = project.callers_of("Sales.Recalculate")
+  callees = project.callees_of("Sales.Checkout")
+  impact = project.impact_of("Sales.Order")
+end
+```
+
+Results are immutable Ruby objects: `Mxrb::Semantic::Artifact`,
+`Mxrb::Semantic::Reference` and `Mxrb::Semantic::Impact`.
+
+## Safe rename
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plan = project.plan_rename("Sales.Order", to: "Invoice")
+  plan.changes.each { puts _1.inspect }
+  plan.apply!
+end
+```
+
+The CLI previews by default; `--apply` is required to write.
+
+## Static analysis
+
+```ruby
+report = Mxrb.open("app.mpr", &:analyze)
+report.errors.each { warn _1.message }
+report.call_cycles.each { puts _1.artifacts.map(&:qualified_name) }
+```
+
+Absent targets in an existing module are errors. External contracts are
+warnings, and `System.*` references are recognized as platform references.
+
+## Typed diff and navigation
+
+```ruby
+result = Mxrb.diff("before.mpr", "after.mpr")
+result.added.each { puts _1.path }
+project.search_artifacts("checkout", kind: :microflow)
+project.describe_artifact("Sales.Checkout")
+```
+
+CLI equivalents include `diff`, `find`, `describe` and `tree`.
+
+## Model evaluations
+
+```ruby
+result = Mxrb.open("app.mpr") do |project|
+  project.evaluate do
+    artifact "Sales.Order", kind: :entity
+    no_call_cycles
+    no_missing_internal_references
+    maximum_unreferenced 20, severity: :warning
+  end
+end
+```
+
+Evaluation files are ordinary Ruby and run with
+`mxrb evaluate app.mpr evaluation.rb`.

@@ -1,5 +1,7 @@
 # MXRB validation matrix
 
+[Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
+
 Last updated: 2026-07-29.
 
 The matrix exercises this pipeline using only MXRB:
