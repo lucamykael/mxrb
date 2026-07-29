@@ -3,3 +3,5 @@ Gemfile.lock
 *.gem
 *.mpr
 tmp/
+coverage/
+docs/AI_MEMORY_HANDOFF.md

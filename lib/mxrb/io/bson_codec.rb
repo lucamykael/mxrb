@@ -87,13 +87,37 @@ module Mxrb
 
       # Serialize a Ruby Hash → BSON bytes.
       def self.serialize(doc)
-        bson_doc = BSON::Document.new(doc)
+        bson_doc = BSON::Document.new(storage_value(doc))
         buf = BSON::ByteBuffer.new
         bson_doc.to_bson(buf)
         buf.get_bytes(buf.length)
       rescue => e
         raise SerializationError, "BSON serialize error: #{e.message}"
       end
+
+      UUID_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+      BINARY_UUID_KEYS = %w[
+        $ID ChildPointer CloseButtonPointer DefaultButtonPointer
+        DefaultPagePointer DestinationPointer GUID OriginPointer ParentPointer
+        StableId TypeParameterPointer TypePointer
+      ].freeze
+
+      def self.storage_value(value, key = nil)
+        if BINARY_UUID_KEYS.include?(key) &&
+            value.is_a?(String) && value.match?(UUID_PATTERN)
+          return BSON::Binary.new(uuid_to_blob(value), :generic)
+        end
+
+        case value
+        when Hash
+          value.to_h { |child_key, child| [child_key, storage_value(child, child_key.to_s)] }
+        when Array
+          value.map { storage_value(_1) }
+        else
+          value
+        end
+      end
+      private_class_method :storage_value
 
       # ── ContentHash ────────────────────────────────────────────────────────
 

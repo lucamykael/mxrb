@@ -22,18 +22,22 @@ module Mxrb
 
         assoc_docs   = parse_array(doc["associations"] || doc["Associations"])
         @associations = assoc_docs.map { Association.from_bson(_1, @id, @mpr) }
+        cross_docs = parse_array(doc["crossAssociations"] || doc["CrossAssociations"])
+        @cross_associations = cross_docs.map { Association.from_bson(_1, @id, @mpr) }
       end
 
       def entities     = @entities     || []
-      def associations = @associations || []
+      def local_associations = @associations || []
+      def cross_associations = @cross_associations || []
+      def associations = local_associations + cross_associations
 
       def to_bson
         {
           "$ID"           => @id,
           "$Type"         => "DomainModels$DomainModel",
           "entities"      => IO::BsonCodec.build_array(@entities.map(&:to_bson)),
-          "associations"  => IO::BsonCodec.build_array(@associations.map(&:to_bson)),
-          "crossAssociations" => IO::BsonCodec.build_array([]),
+          "associations"  => IO::BsonCodec.build_array(local_associations.map(&:to_bson)),
+          "crossAssociations" => IO::BsonCodec.build_array(cross_associations.map(&:to_bson)),
           "annotations"   => IO::BsonCodec.build_array([]),
           "documentation" => @documentation || "",
         }

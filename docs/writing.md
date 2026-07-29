@@ -1,0 +1,517 @@
+# Writing projects
+
+Para a estrutura completa de módulos, camadas e round-trip, consulte
+[ARQUITETURA_DE_PROJETO.md](ARQUITETURA_DE_PROJETO.md).
+
+`mxrb generate` evaluates a Ruby definition and creates or updates the target
+MPR. Existing modules, entities, attributes, associations, pages and
+microflows are matched by name, so applying the same definition repeatedly
+does not duplicate them.
+
+```ruby
+# shop.rb
+Mxrb.define("Shop.mpr") do
+  mendix_version "10.17.0"
+
+  self.module :Sales do
+    entity :Customer do
+      string :Name, required: true, length: 200
+    end
+
+    entity :Order do
+      decimal :Total, default: 0
+      association :Customer
+    end
+
+    page :OrderList do
+      title "Orders"
+      layout "Atlas_Default"
+      allowed_roles "Sales.User"
+    end
+
+    microflow :CreateOrder do
+      parameter :Order, type: :Order
+      return_type :Order
+      allowed_roles "Sales.User"
+    end
+  end
+end
+```
+
+Apply it using the path in the definition:
+
+```sh
+bundle exec mxrb generate shop.rb
+```
+
+Or override the output path:
+
+```sh
+bundle exec mxrb generate shop.rb output/Shop.mpr
+```
+
+## Integrity validation
+
+Run the internal integrity check after generation or round-trip work:
+
+```sh
+bundle exec mxrb validate path/to/App.mpr
+```
+
+For MPR v1, the validator reads unit contents directly from the SQLite
+`Unit.Contents` column and checks the unit tree, content hashes, and
+`$ID`/`$Type` identity. For MPR v2, it performs the same checks against the
+external `.mxunit` payloads in `mprcontents/`.
+
+Compare two MPRs structurally without external tooling:
+
+```sh
+bundle exec mxrb compare original.mpr rebuilt.mpr
+```
+
+The comparator reports differences in project metadata, security roles, unit
+tree, modules, entities (including native attribute metadata and access rules),
+associations, pages/widgets/events, menus, microflows, nanoflows and allowed
+module roles. Microflow and nanoflow bodies are normalized before comparison:
+volatile UUIDs and canvas coordinates are ignored, while objects, actions,
+properties and control-flow edges remain part of the snapshot.
+
+For external Mendix validation on Linux, use the `mx` and `mxbuild` binaries
+matching the exact model version:
+
+```sh
+mx check App.mpr --warnings --deprecations --best-practice --json check.json
+mxbuild \
+  --java-home=/path/to/jdk-21 \
+  --java-exe-path=/path/to/jdk-21/bin/java \
+  --target=package \
+  --output=App.mda \
+  --write-errors=mxbuild-errors.json \
+  App.mpr
+```
+
+Compare the diagnostic JSON with the original project, not merely the exit
+code: `mx check` combines warnings, deprecations and recommendations into a
+nonzero status even when there are zero errors.
+
+## Ruby model evaluations
+
+Model expectations live in ordinary Ruby files:
+
+```ruby
+# evaluation.rb
+artifact "Sales.Order", kind: :entity
+reference from: "Sales.Order_Overview", to: "Sales.Order"
+no_call_cycles
+no_missing_internal_references
+maximum_unreferenced 20, severity: :warning
+forbid_dependency from: :Domain, to: :Presentation
+
+check "orders expose a status attribute" do |project|
+  project.find_artifact("Sales.Order.Status", kind: :attribute) != nil
+end
+```
+
+Run them with:
+
+```sh
+bundle exec mxrb evaluate path/to/App.mpr evaluation.rb
+```
+
+Error checks produce a failing exit status; warning checks affect the score but
+do not fail the command. See `examples/sudoku_evaluation.rb` for an executable
+example validated against the public Sudoku fixture.
+
+## Functional microflow tests
+
+Runtime tests are ordinary Ruby files. The first functional slice verifies that
+each selected microflow completes without an unhandled runtime exception:
+
+```ruby
+# functional_test.rb
+microflow "creates an order", call: "Sales.ACT_CreateOrder"
+microflow "recalculates a total", call: "Sales.ACT_Recalculate",
+          pass: { Order: "$Order" }, timeout: 90
+```
+
+The `pass:` values are Mendix expressions and must supply every parameter of
+the target microflow. MXRB validates the names before compilation. No JUnit,
+Java test module or MDL is involved: MXRB generates a temporary `MxrbTests`
+module, executes it as the after-startup microflow and parses its structured
+runtime log back into immutable Ruby results.
+
+Run locally with the exact Mendix toolchain and Java selected by the project:
+
+```sh
+JAVA_HOME=/path/to/zulu-21 \
+  bundle exec mxrb test App.mpr functional_test.rb
+```
+
+Or keep JDK, MxBuild and runtime execution inside containers:
+
+```sh
+bundle exec mxrb test App.mpr functional_test.rb --docker
+```
+
+Docker mode builds one lightweight builder image per Java family and reuses it
+for compatible Mendix versions. The exact Mendix toolchain is mounted
+read-only because it is version-specific and licensed separately. The source
+project is never changed: instrumentation, portable package, HSQLDB and
+uploaded-file storage live in a temporary copy that is deleted after the run.
+
+Inspect version selection and the planned container mounts without executing:
+
+```sh
+bundle exec mxrb test App.mpr functional_test.rb --plan
+```
+
+`mx check` and `mxbuild --target=portable-app-package` are mandatory gates
+before runtime startup. The process stops at `[MXRB_TEST] DONE`, terminates the
+runtime and returns a failing exit status if any case failed, compilation
+failed, the suite did not finish or its aggregate timeout expired.
+
+## Test coverage
+
+The default suite runs with `bundle exec rspec`. The strict line-coverage gate
+uses Ruby's native `Coverage` API:
+
+```sh
+MXRB_COVERAGE=1 bundle exec rspec
+```
+
+It writes `coverage/coverage.json`, requires 100% line coverage, and reports
+branch coverage separately for visibility.
+
+## Native baseline and editable deep structures
+
+`mxrb export` writes `.mxrb/native_units.json` with the original BSON payloads
+as a lossless baseline, and
+`project.rb` loads it with:
+
+```ruby
+native_units File.join(__dir__, ".mxrb", "native_units.json")
+```
+
+The native manifest keeps units outside the current DSL intact, including
+images, constants, datasets, services, project settings and templates.
+Microflow/nanoflow bodies and page/widget trees have an additional editable
+representation described below.
+
+Every flow body in the current public matrix is exported as typed Ruby. The
+exporter records a canonical `body_fingerprint`: if the body is unchanged,
+MXRB reuses the exact native graph; if the Ruby body changes, the fingerprint
+no longer matches and the writer regenerates that graph. The fingerprint line
+is generated bookkeeping and normally should not be edited by hand.
+
+Editable flow activities currently include:
+
+```ruby
+create_object "Sales.Order", as: :order
+change_object :order, set: { Status: "'Open'" }
+retrieve_objects "Sales.Order", as: :orders, xpath: "[Active = true]", limit: 100
+commit :order, with_events: false
+delete :order
+call_microflow "Sales.Process", as: :result, pass: { Order: :order }
+create_variable :message, type: :string, value: "'Created'"
+change_variable :message, to: "'Updated'"
+show_message "Done", type: :information, blocking: true
+log_message "Completed", level: :info, node: "'MXRB'"
+decision "$order/Total > 100" do
+  on(true) { call_microflow "Sales.ApplyDiscount" }
+end
+loop_over :orders, as: :order do
+  commit :order
+end
+rescue_all { log_message "Failed", level: :error }
+return_value :result
+```
+
+The DSL also covers database/association retrieval and sorting, Java,
+JavaScript, nanoflow and app-service calls, show/close page, REST calls,
+aggregates, casts, rollback, list operations, validation feedback, boolean and
+multi-value decisions, inheritance/type decisions, iterators, while loops,
+error/continue events, annotations and nested flows.
+
+For MPR v2 exports, the manifest records the source format and `mxrb generate`
+creates `mprcontents/*.mxunit` automatically for the rebuilt project.
+
+## Page widgets
+
+New pages and pages composed only of core controls use concise methods:
+`text_box`, `number_input`, `check_box`, `date_picker`,
+`reference_selector`, `drop_down`, `button`, `text`, `container`, `snippet`,
+`tab_control`/`tab_page`, and `data_grid`/`column` with search bar and toolbar.
+
+Every imported page also exports its complete page internals as a structured
+Ruby hash:
+
+```ruby
+page :Dashboard do
+  title "Dashboard"
+  deep_structure({
+    "FormCall" => {
+      "$Type" => "Forms$LayoutCall",
+      "Arguments" => [
+        2,
+        {
+          "$Type" => "Forms$FormCallArgument",
+          "Widgets" => [
+            3,
+            {
+              "$Type" => "CustomWidgets$CustomWidget",
+              "Name" => "Map",
+              "Object" => { "Zoom" => 12 }
+            }
+          ]
+        }
+      ]
+    }
+  })
+end
+```
+
+The concise declarations remain an architectural/readability view; when
+`deep_structure` is present, edit that hash for storage-level page changes.
+It is intentionally verbose but not opaque: every property can be inspected
+and changed as Ruby data. BSON binary values appear as
+`bson_binary("...", subtype: :generic)`. The deep structure is authoritative
+when present, so edits are written instead of being overwritten by the native
+baseline.
+
+Imported menu documents follow the same rule: concise `item` declarations are
+emitted for readability and dependency analysis, while their complete native
+caption/action/translation structure remains editable and authoritative.
+
+Buttons can call microflows/nanoflows or native page actions:
+
+```ruby
+button :saveButton, caption: "Save" do
+  on_click action: :save_changes
+end
+```
+
+Supported native actions are `:save_changes`, `:cancel_changes`, `:delete`,
+and `:close_page`.
+
+## Navigation and security
+
+Menu documents are exported as module-level presentation navigation:
+
+```ruby
+menu :Submenu do
+  item "Accounts", page: "Administration.Account_Overview"
+end
+```
+
+Project security user roles are exported at `app/security/security.rb`:
+
+```ruby
+security do
+  security_level "CheckEverything"
+  user_role :Administrator, module_roles: ["System.Administrator"], admin: true
+end
+```
+
+Module security roles are exported per module at `modules/<Module>/security/security.rb`:
+
+```ruby
+module_role :User
+module_role :Administrator, description: "Full module access"
+```
+
+Page, microflow and nanoflow access can be edited with `allowed_roles`, using
+qualified module role names:
+
+```ruby
+page :Account_Overview do
+  allowed_roles "Administration.Administrator"
+end
+
+microflow :ChangeMyPassword do
+  allowed_roles "Administration.Administrator", "Administration.User"
+  allow_concurrent_execution false
+  mark_as_used true
+  excluded false
+end
+```
+
+`allow_concurrent_execution`, `mark_as_used` and `excluded` are exported
+explicitly for every imported microflow/nanoflow. They are editable booleans,
+so reference/example flows that are intentionally excluded are not silently
+reactivated during regeneration.
+
+Entity access rules support `create`, `delete`, `read`, `write` and `xpath`.
+Rules that cannot be represented completely—particularly legacy rules without
+resolvable role names—remain native as a complete collection rather than being
+partially exported.
+
+Attribute round-trip preserves version-specific key casing and native details
+that are not yet first-class DSL options, including string length, enumeration
+references, date localization and calculated-value definitions. `float` and
+`binary` are accepted attribute types in addition to the existing types.
+
+## MPR v2
+
+When an `mprcontents/` directory exists beside the MPR, unit contents are read
+and written at:
+
+```text
+mprcontents/aa/bb/aabbccdd-....mxunit
+```
+
+Writes use a temporary file followed by an atomic rename, while SQLite keeps
+`Contents` null and stores the content hash. The current codec accepts BSON
+unit payloads. Mendix `.mxunit` encodings that are not BSON are rejected
+explicitly; they are never silently replaced.
+
+External tools such as `mxcli`
+can still be useful as a manual comparison oracle when researching Studio Pro
+behavior, but they are not part of the mxrb runtime or regression workflow.
+
+See [VALIDATION_MATRIX.md](VALIDATION_MATRIX.md) for the public-project
+round-trip matrix and the exact confidence boundary of the current engine.
+# Análise semântica em Ruby
+
+O MXRB não exige uma linguagem de consulta própria. Um MPR aberto expõe o índice
+semântico diretamente como objetos Ruby:
+
+```ruby
+Mxrb.open("app.mpr") do |project|
+  project.references_to("Sales.Order").each do |reference|
+    puts "#{reference.source.qualified_name} (#{reference.relation})"
+  end
+
+  project.callers_of("Sales.Recalculate").each do |caller|
+    puts caller.qualified_name
+  end
+
+  project.callees_of("Sales.Checkout").each do |callee|
+    puts callee.qualified_name
+  end
+
+  project.impact_of("Sales.Order").artifacts.each do |affected|
+    puts affected.qualified_name
+  end
+end
+```
+
+As mesmas operações têm comandos de conveniência: `mxrb refs`, `mxrb callers`,
+`mxrb callees` e `mxrb impact`. A API Ruby é a fonte de verdade.
+
+## Renomeação profunda
+
+A escrita exige abertura explícita e pode ser revisada antes de tocar no MPR:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plan = project.plan_rename("Sales.Order", to: "Invoice")
+
+  plan.changes.each do |change|
+    puts "#{change.path.join(".")}: #{change.before} -> #{change.after}"
+  end
+
+  plan.apply!
+end
+```
+
+O plano atualiza a declaração e as referências profundas, inclusive membros no
+formato Mendix `Sales.Order/Number`. Depois da aplicação, o índice do projeto é
+reconstruído automaticamente.
+
+Na CLI, a operação equivalente apenas mostra a prévia:
+
+```sh
+bundle exec mxrb rename app.mpr Sales.Order Invoice
+```
+
+Para escrever:
+
+```sh
+bundle exec mxrb rename app.mpr Sales.Order Invoice --apply
+```
+
+## Lint e acoplamento
+
+O relatório semântico é um objeto Ruby:
+
+```ruby
+report = Mxrb.open("app.mpr", &:analyze)
+
+report.diagnostics.each do |diagnostic|
+  puts "#{diagnostic.severity}: #{diagnostic.message}"
+end
+
+report.module_dependencies.each do |dependency|
+  puts "#{dependency.from} -> #{dependency.to}: #{dependency.references.size}"
+end
+```
+
+Regras específicas do projeto também são Ruby:
+
+```ruby
+public_name_rule = lambda do |_project, index|
+  index.artifacts.filter_map do |artifact|
+    next unless artifact.kind == :microflow
+    next if artifact.name.match?(/\A[A-Z]/)
+
+    Mxrb::Semantic::Diagnostic.new(
+      :public_name,
+      :warning,
+      "microflow must start with uppercase: #{artifact.qualified_name}",
+      [artifact],
+      {}
+    )
+  end
+end
+
+Mxrb.open("app.mpr") do |project|
+  report = project.analyze(rules: [public_name_rule])
+end
+```
+
+Na CLI, `mxrb lint app.mpr` mostra os diagnósticos e `mxrb report app.mpr`
+resume referências e acoplamento entre módulos.
+
+## Diff semântico para Git
+
+`Mxrb.diff` retorna mudanças tipadas sem expor UUIDs e coordenadas visuais
+instáveis:
+
+```ruby
+result = Mxrb.diff("main.mpr", "feature.mpr")
+
+result.changes.each do |change|
+  puts "#{change.operation} #{change.path.join(".")}"
+end
+```
+
+Cada `Mxrb::Compare::Change` informa `operation`, `path`, `before` e `after`.
+Também há filtros prontos em `result.added`, `result.removed` e
+`result.changed`.
+
+```sh
+bundle exec mxrb diff main.mpr feature.mpr
+```
+
+O comando termina com status zero quando os snapshots são semanticamente
+idênticos e status um quando há diferenças.
+
+## Navegação estrutural
+
+```ruby
+Mxrb.open("app.mpr") do |project|
+  matches = project.search_artifacts("order", kind: :microflow)
+  details = project.describe_artifact("Sales.CreateOrder")
+
+  details.incoming.each { puts "from #{_1.source.qualified_name}" }
+  details.outgoing.each { puts "to #{_1.target.qualified_name}" }
+end
+```
+
+Na CLI:
+
+```sh
+bundle exec mxrb find app.mpr order
+bundle exec mxrb describe app.mpr Sales.CreateOrder
+bundle exec mxrb tree app.mpr Sales
+```

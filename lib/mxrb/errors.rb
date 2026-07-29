@@ -7,4 +7,7 @@ module Mxrb
   SchemaError        = Class.new(Error)
   ReadOnlyError      = Class.new(Error)
   SerializationError = Class.new(Error)
+  ValidationError    = Class.new(Error)
+  FunctionalTestError = Class.new(Error)
+  ToolchainError      = Class.new(Error)
 end

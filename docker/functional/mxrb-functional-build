@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+project_name=$1
+java_home=${JAVA_HOME:-/opt/java/openjdk}
+
+mkdir -p /workspace/project /output
+cp -a /input/. /workspace/project/
+project=/workspace/project/$project_name
+
+check_status=0
+/opt/mendix/modeler/mx check "$project" --warnings --json /workspace/mx-check.json \
+  || check_status=$?
+if [ "$check_status" -ne 0 ] && [ "$check_status" -ne 2 ]; then
+  exit "$check_status"
+fi
+
+/opt/mendix/modeler/mxbuild \
+  "--java-home=$java_home" \
+  "--java-exe-path=$java_home/bin/java" \
+  --target=portable-app-package \
+  --output=/output/runtime.zip \
+  "$project"

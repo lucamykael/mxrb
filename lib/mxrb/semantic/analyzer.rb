@@ -1,0 +1,212 @@
+# frozen_string_literal: true
+
+module Mxrb
+  module Semantic
+    Diagnostic = Data.define(:rule, :severity, :message, :artifacts, :metadata)
+    CallCycle = Data.define(:artifacts, :references)
+    ModuleDependency = Data.define(:from, :to, :references, :source_artifacts)
+
+    Report = Data.define(
+      :diagnostics, :unreferenced, :unresolved_references, :call_cycles,
+      :module_dependencies
+    ) do
+      def errors = diagnostics.select { _1.severity == :error }
+      def warnings = diagnostics.select { _1.severity == :warning }
+      def valid? = errors.empty?
+    end
+
+    # Static analysis for an opened Mendix project. The result is plain,
+    # immutable Ruby data and can be filtered or extended without a query DSL.
+    class Analyzer
+      DEFAULT_UNREFERENCED_KINDS = %i[microflow nanoflow workflow page].freeze
+
+      def initialize(project)
+        @project = project
+        @index = project.semantic_index
+      end
+
+      def analyze(unreferenced_kinds: DEFAULT_UNREFERENCED_KINDS, rules: [])
+        cycles = call_cycles
+        unreferenced = unreferenced_artifacts(unreferenced_kinds)
+        unresolved = unresolved_references
+        diagnostics = cycle_diagnostics(cycles) +
+                      unresolved_diagnostics(unresolved) +
+                      unreferenced_diagnostics(unreferenced) +
+                      custom_diagnostics(rules)
+        Report.new(
+          diagnostics.sort_by { [_1.severity == :error ? 0 : 1, _1.message] }.freeze,
+          unreferenced.freeze,
+          unresolved.freeze,
+          cycles.freeze,
+          module_dependencies.freeze
+        )
+      end
+
+      private
+
+      def unreferenced_artifacts(kinds)
+        selected_kinds = kinds.map(&:to_sym)
+        incoming = @index.references.each_with_object(Set.new) { |ref, ids| ids << ref.target.id }
+        @index.artifacts.select do |artifact|
+          selected_kinds.include?(artifact.kind) &&
+            !incoming.include?(artifact.id) &&
+            !entry_point?(artifact)
+        end.sort_by(&:qualified_name)
+      end
+
+      def entry_point?(artifact)
+        artifact.metadata[:excluded] == true ||
+          artifact.metadata[:mark_as_used] == true ||
+          artifact.metadata[:exposed] == true
+      end
+
+      def unresolved_references
+        return [] unless @index.respond_to?(:unresolved_references)
+
+        @index.unresolved_references.reject do |reference|
+          platform_reference?(reference) || reference.source.metadata[:excluded] == true
+        end.sort_by do |reference|
+          [reference.source.qualified_name, reference.path, reference.qualified_name]
+        end
+      end
+
+      def platform_reference?(reference)
+        reference.qualified_name.start_with?("System.")
+      end
+
+      def call_cycles
+        call_references = @index.references.select { _1.relation == :calls }
+        adjacency = Hash.new { |hash, key| hash[key] = [] }
+        artifacts = {}
+        call_references.each do |reference|
+          adjacency[reference.source.id] << reference.target.id
+          artifacts[reference.source.id] = reference.source
+          artifacts[reference.target.id] = reference.target
+        end
+
+        strongly_connected(adjacency, artifacts.keys).filter_map do |ids|
+          cyclic = ids.length > 1 || adjacency[ids.first].include?(ids.first)
+          next unless cyclic
+
+          id_set = ids.to_set
+          references = call_references.select do |reference|
+            id_set.include?(reference.source.id) && id_set.include?(reference.target.id)
+          end
+          CallCycle.new(
+            ids.map { artifacts.fetch(_1) }.sort_by(&:qualified_name).freeze,
+            references.freeze
+          )
+        end.sort_by { _1.artifacts.map(&:qualified_name) }
+      end
+
+      def strongly_connected(adjacency, nodes)
+        index = 0
+        indexes = {}
+        low_links = {}
+        stack = []
+        on_stack = Set.new
+        components = []
+
+        visit = lambda do |node|
+          indexes[node] = index
+          low_links[node] = index
+          index += 1
+          stack << node
+          on_stack << node
+
+          adjacency[node].each do |target|
+            unless indexes.key?(target)
+              visit.call(target)
+              low_links[node] = [low_links[node], low_links[target]].min
+              next
+            end
+            low_links[node] = [low_links[node], indexes[target]].min if on_stack.include?(target)
+          end
+
+          return unless low_links[node] == indexes[node]
+
+          component = []
+          loop do
+            member = stack.pop
+            on_stack.delete(member)
+            component << member
+            break if member == node
+          end
+          components << component
+        end
+
+        nodes.each { visit.call(_1) unless indexes.key?(_1) }
+        components
+      end
+
+      def module_dependencies
+        grouped = @index.references.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |ref, groups|
+          from = ref.source.module_name
+          to = ref.target.module_name
+          groups[[from, to]] << ref if from && to && from != to
+        end
+
+        grouped.map do |(from, to), references|
+          ModuleDependency.new(
+            from, to, references.freeze,
+            references.map(&:source).uniq(&:id).sort_by(&:qualified_name).freeze
+          )
+        end.sort_by { [_1.from, _1.to] }
+      end
+
+      def cycle_diagnostics(cycles)
+        cycles.map do |cycle|
+          names = cycle.artifacts.map(&:qualified_name)
+          Diagnostic.new(
+            :call_cycle, :error,
+            "call cycle: #{names.join(' -> ')} -> #{names.first}",
+            cycle.artifacts, { references: cycle.references.size }.freeze
+          )
+        end
+      end
+
+      def unreferenced_diagnostics(artifacts)
+        artifacts.map do |artifact|
+          Diagnostic.new(
+            :unreferenced, :warning,
+            "unreferenced #{artifact.kind}: #{artifact.qualified_name}",
+            [artifact].freeze, {}.freeze
+          )
+        end
+      end
+
+      def unresolved_diagnostics(references)
+        references.map do |reference|
+          external = external_reference?(reference)
+          Diagnostic.new(
+            external ? :external_reference : :unresolved_reference,
+            external ? :warning : :error,
+            "#{reference.source.qualified_name} references #{external ? 'external' : 'missing'} " \
+            "#{reference.qualified_name} at #{reference.path.join('.')}",
+            [reference.source].freeze,
+            {
+              target: reference.qualified_name,
+              expected_kinds: reference.expected_kinds,
+              path: reference.path
+            }.freeze
+          )
+        end
+      end
+
+      def external_reference?(reference)
+        target_module = reference.qualified_name.split(".").first
+        @index.artifacts.none? { _1.module_name == target_module }
+      end
+
+      def custom_diagnostics(rules)
+        rules.flat_map do |rule|
+          diagnostics = Array(rule.call(@project, @index))
+          unless diagnostics.all? { _1.is_a?(Diagnostic) }
+            raise ArgumentError, "custom semantic rules must return Mxrb::Semantic::Diagnostic"
+          end
+          diagnostics
+        end
+      end
+    end
+  end
+end

@@ -38,6 +38,33 @@ module Mxrb
       def raw_unit(uuid) = @mpr.unit(uuid)
       def children_of(uuid) = @mpr.children_of(uuid)
       def parse_bson(raw)   = @mpr.parse_contents(raw)
+      def architecture_definition = @mpr.architecture_definition
+
+      # ── Semantic analysis ───────────────────────────────────────────────
+
+      def semantic_index = (@semantic_index ||= Semantic::Index.new(self))
+      def find_artifact(name, kind: nil) = semantic_index.find(name, kind: kind)
+      def search_artifacts(query, **filters) = semantic_index.search(query, **filters)
+      def describe_artifact(name) = semantic_index.describe(name)
+      def references_to(name) = semantic_index.references_to(name)
+      def references_from(name) = semantic_index.references_from(name)
+      def callers_of(name) = semantic_index.callers_of(name)
+      def callees_of(name) = semantic_index.callees_of(name)
+      def impact_of(name, transitive: true) =
+        semantic_index.impact_of(name, transitive: transitive)
+      def plan_rename(name, to:) = Semantic::Renamer.new(self).plan(name, to: to)
+      def rename!(name, to:) = plan_rename(name, to: to).apply!
+      def analyze(**options) = Semantic::Analyzer.new(self).analyze(**options)
+      alias lint analyze
+      def evaluate(&block)
+        Evaluation::Suite.new(self).tap { _1.instance_eval(&block) }.run
+      end
+
+      def refresh!
+        @modules = nil
+        @semantic_index = nil
+        self
+      end
 
       def close = @mpr.close
 

@@ -7,10 +7,15 @@ Gem::Specification.new do |s|
   s.description = "mxrb reads and writes Mendix .mpr files (SQLite3) directly, providing a Ruby DSL to define entities, pages, microflows and modules without any dependency on the official mxcli tooling."
   s.authors     = ["Lucas Moura"]
   s.license     = "MIT"
+  s.homepage    = "https://github.com/lucamykael/mxrb"
+  s.metadata    = {
+    "source_code_uri" => s.homepage,
+    "documentation_uri" => "#{s.homepage}/tree/main/docs"
+  }
 
   s.required_ruby_version = ">= 4.0"
 
-  s.files = Dir["lib/**/*.rb", "bin/*", "README.md"]
+  s.files = Dir["lib/**/*.rb", "bin/*", "docker/**/*", "docs/**/*.md", "examples/**/*.rb", "README.md"]
   s.executables = ["mxrb"]
   s.require_paths = ["lib"]
 

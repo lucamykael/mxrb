@@ -3,6 +3,7 @@
 require_relative "mxrb/version"
 require_relative "mxrb/errors"
 require_relative "mxrb/io/bson_codec"
+require_relative "mxrb/io/mxunit_codec"
 require_relative "mxrb/io/mpr_file"
 require_relative "mxrb/model/unit"
 require_relative "mxrb/model/attribute"
@@ -11,9 +12,25 @@ require_relative "mxrb/model/entity"
 require_relative "mxrb/model/domain_model"
 require_relative "mxrb/model/microflow"
 require_relative "mxrb/model/page"
+require_relative "mxrb/model/menu"
 require_relative "mxrb/model/module"
 require_relative "mxrb/model/project"
 require_relative "mxrb/dsl/builder"
+require_relative "mxrb/architecture/graph"
+require_relative "mxrb/architecture/validator"
+require_relative "mxrb/integrity/validator"
+require_relative "mxrb/semantic/index"
+require_relative "mxrb/semantic/renamer"
+require_relative "mxrb/semantic/analyzer"
+require_relative "mxrb/evaluation"
+require_relative "mxrb/functional"
+require_relative "mxrb/runtime/toolchain"
+require_relative "mxrb/runtime/docker_workspace"
+require_relative "mxrb/runtime/executor"
+require_relative "mxrb/runtime/docker_executor"
+require_relative "mxrb/compare"
+require_relative "mxrb/writer"
+require_relative "mxrb/exporter"
 
 module Mxrb
   # Open an existing .mpr file.
@@ -44,6 +61,23 @@ module Mxrb
   #   end
   #
   def self.define(path, &block)
-    Dsl::Builder.new(path).tap { _1.instance_eval(&block) }.build!
+    output = ENV.fetch("MXRB_OUTPUT_PATH", path)
+    Dsl::Builder.new(output).tap { _1.instance_eval(&block) }.build!
+  end
+
+  def self.validate(path)
+    Integrity::Validator.new(path).validate
+  end
+
+  def self.evaluate(path, &block)
+    open(path) { _1.evaluate(&block) }
+  end
+
+  def self.functional_definition(path)
+    Functional::Suite.new.evaluate(path).definition
+  end
+
+  def self.runtime_plan(path, **options)
+    Runtime::Toolchain.new(path, **options).plan
   end
 end

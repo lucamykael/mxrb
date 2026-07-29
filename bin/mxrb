@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative "../lib/mxrb"
+require "shellwords"
 
 command = ARGV.shift
 
@@ -14,27 +15,28 @@ when "inspect"
     puts "Tables  : #{p.tables.join(', ')}"
     puts ""
     puts "Unit types found:"
-    p.unit_types.sort.each { puts "  #{_1}" }
+    p.all_units.filter_map { p.parse_bson(_1)["$Type"] }.sort.uniq.each { puts "  #{_1}" }
     puts ""
     puts "All units:"
     p.all_units.each do |u|
-      puts "  [#{u['UnitID']}] #{u['TypeName']} (container=#{u['ContainerID']}, name=#{u['ContainmentName']})"
+      type = p.parse_bson(u)["$Type"]
+      puts "  [#{u['UnitID']}] #{type} (container=#{u['ContainerID']}, name=#{u['ContainmentName']})"
     end
   end
 
 when "dump-unit"
   path = ARGV.shift or abort "Usage: mxrb dump-unit <file.mpr> <unit_id>"
-  id   = ARGV.shift&.to_i or abort "Usage: mxrb dump-unit <file.mpr> <unit_id>"
+  id   = ARGV.shift or abort "Usage: mxrb dump-unit <file.mpr> <unit_id>"
   Mxrb.open(path) do |p|
     u = p.raw_unit(id)
     abort "Unit #{id} not found" unless u
     puts "UnitID           : #{u['UnitID']}"
     puts "ContainerID      : #{u['ContainerID']}"
     puts "ContainmentName  : #{u['ContainmentName']}"
-    puts "TypeName         : #{u['TypeName']}"
+    puts "TypeName         : #{p.parse_bson(u)['$Type']}"
     puts "ContentsHash     : #{u['ContentsHash']}"
     puts "Contents (hex)   :"
-    blob = u["Contents"]
+    blob = p.mpr.content_bytes(u)
     if blob
       blob.b.bytes.each_slice(16).with_index do |row, i|
         hex  = row.map { "%02x" % _1 }.join(" ")
@@ -61,6 +63,240 @@ when "modules"
     p.modules.each { puts _1.inspect }
   end
 
+when "generate"
+  source = ARGV.shift or abort "Usage: mxrb generate <definition.rb> [file.mpr]"
+  target = ARGV.shift
+  abort "#{source}: file not found" unless File.file?(source)
+  if target
+    ENV["MXRB_OUTPUT_PATH"] = File.expand_path(target)
+  end
+  load File.expand_path(source)
+  puts "[mxrb] Generated #{target || 'project from definition'}"
+
+when "export"
+  source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
+  output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
+  destination = Mxrb::Exporter.new(source, output).export!
+  puts "[mxrb] Exported Ruby project to #{destination}"
+
+when "validate"
+  path = ARGV.shift or abort "Usage: mxrb validate <file.mpr>"
+  result = Mxrb.validate(path)
+  result.warnings.each { warn "[mxrb] warning: #{_1}" }
+  if result.valid?
+    puts "[mxrb] OK"
+  else
+    result.errors.each { warn "[mxrb] error: #{_1}" }
+    exit 1
+  end
+
+when "compare"
+  left = ARGV.shift or abort "Usage: mxrb compare <left.mpr> <right.mpr>"
+  right = ARGV.shift or abort "Usage: mxrb compare <left.mpr> <right.mpr>"
+  result = Mxrb.compare(left, right)
+  if result.identical?
+    puts "[mxrb] OK"
+  else
+    result.differences.each { puts "[mxrb] diff: #{_1}" }
+    exit 1
+  end
+
+when "diff"
+  left = ARGV.shift or abort "Usage: mxrb diff <left.mpr> <right.mpr>"
+  right = ARGV.shift or abort "Usage: mxrb diff <left.mpr> <right.mpr>"
+  result = Mxrb.diff(left, right)
+  result.changes.each do |change|
+    puts "#{change.operation}\t#{change.path.join('.')}\t" \
+         "#{change.before.inspect}\t=>\t#{change.after.inspect}"
+  end
+  exit 1 unless result.identical?
+
+when "refs", "callers", "callees", "impact"
+  path = ARGV.shift or abort "Usage: mxrb #{command} <file.mpr> <qualified-name>"
+  name = ARGV.shift or abort "Usage: mxrb #{command} <file.mpr> <qualified-name>"
+  begin
+    Mxrb.open(path) do |project|
+      case command
+      when "refs"
+        project.references_to(name).each do |reference|
+          puts [
+            reference.source.qualified_name,
+            reference.source.kind,
+            reference.relation,
+            reference.path.join(".")
+          ].join("\t")
+        end
+      when "callers"
+        project.callers_of(name).each do |artifact|
+          puts "#{artifact.qualified_name}\t#{artifact.kind}"
+        end
+      when "callees"
+        project.callees_of(name).each do |artifact|
+          puts "#{artifact.qualified_name}\t#{artifact.kind}"
+        end
+      when "impact"
+        project.impact_of(name).artifacts.each do |artifact|
+          puts "#{artifact.qualified_name}\t#{artifact.kind}"
+        end
+      end
+    end
+  rescue KeyError, ArgumentError => e
+    warn "[mxrb] error: #{e.message}"
+    exit 1
+  end
+
+when "rename"
+  path = ARGV.shift or abort "Usage: mxrb rename <file.mpr> <old-name> <new-name> [--apply]"
+  old_name = ARGV.shift or abort "Usage: mxrb rename <file.mpr> <old-name> <new-name> [--apply]"
+  new_name = ARGV.shift or abort "Usage: mxrb rename <file.mpr> <old-name> <new-name> [--apply]"
+  apply = ARGV.delete("--apply")
+  begin
+    plan = Mxrb.open(path, readonly: !apply) do |project|
+      project.plan_rename(old_name, to: new_name).tap { _1.apply! if apply }
+    end
+  rescue KeyError, ArgumentError => e
+    warn "[mxrb] error: #{e.message}"
+    exit 1
+  end
+  plan.changes.each do |change|
+    puts [
+      change.unit_id,
+      change.path.join("."),
+      change.before.inspect,
+      "=>",
+      change.after.inspect
+    ].join("\t")
+  end
+  puts "[mxrb] #{apply ? 'Renamed' : 'Preview'}: #{plan.changes.size} changes " \
+       "in #{plan.affected_units.size} units"
+
+when "lint", "report"
+  path = ARGV.shift or abort "Usage: mxrb #{command} <file.mpr>"
+  report = Mxrb.open(path, &:analyze)
+  if command == "lint"
+    report.diagnostics.each do |diagnostic|
+      puts "[#{diagnostic.severity}] #{diagnostic.rule}: #{diagnostic.message}"
+    end
+  else
+    puts "Artifacts not referenced : #{report.unreferenced.size}"
+    puts "Unresolved references     : #{report.unresolved_references.size}"
+    puts "Call cycles              : #{report.call_cycles.size}"
+    puts "Cross-module dependencies: #{report.module_dependencies.size}"
+    report.module_dependencies.each do |dependency|
+      puts [
+        dependency.from,
+        "->",
+        dependency.to,
+        "#{dependency.references.size} references",
+        "#{dependency.source_artifacts.size} artifacts"
+      ].join("\t")
+    end
+  end
+  puts "[mxrb] #{report.errors.size} errors, #{report.warnings.size} warnings"
+  exit 1 unless report.valid?
+
+when "find"
+  path = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
+  query = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
+  Mxrb.open(path) do |project|
+    project.search_artifacts(query).each do |artifact|
+      puts "#{artifact.qualified_name}\t#{artifact.kind}"
+    end
+  end
+
+when "evaluate"
+  path = ARGV.shift or abort "Usage: mxrb evaluate <file.mpr> <evaluation.rb>"
+  definition = ARGV.shift or abort "Usage: mxrb evaluate <file.mpr> <evaluation.rb>"
+  abort "#{definition}: file not found" unless File.file?(definition)
+  result = Mxrb.open(path) do |project|
+    Mxrb::Evaluation::Suite.new(project).evaluate(definition).run
+  end
+  result.checks.each do |check|
+    status = check.passed? ? "pass" : check.severity
+    puts "[#{status}] #{check.name}: #{check.message}"
+  end
+  puts "[mxrb] score #{format('%.2f', result.score)}% " \
+       "(#{result.checks.count(&:passed?)}/#{result.checks.size})"
+  exit 1 unless result.passed?
+
+when "test"
+  path = ARGV.shift or abort "Usage: mxrb test <file.mpr> <functional_test.rb> [--plan]"
+  definition_path = ARGV.shift or abort "Usage: mxrb test <file.mpr> <functional_test.rb> [--plan]"
+  abort "#{definition_path}: file not found" unless File.file?(definition_path)
+  plan_only = ARGV.delete("--plan")
+  docker = ARGV.delete("--docker")
+
+  definition = Mxrb.functional_definition(definition_path)
+  plan = Mxrb.runtime_plan(path)
+  if plan_only
+    workspace = Mxrb::Runtime::DockerWorkspace.new(path, plan)
+    puts "Mendix       : #{plan.mendix_version}"
+    puts "Java         : #{plan.java_version}"
+    puts "JDK builder  : #{plan.jdk_package}"
+    puts "JRE runtime  : #{plan.jre_package}"
+    puts "Toolchain    : #{plan.toolchain_path} (#{plan.available? ? 'available' : 'missing'})"
+    puts "Tests        : #{definition.tests.size}"
+    definition.tests.each { puts "  #{_1.name} -> #{_1.target}" }
+    puts "Builder argv : #{Shellwords.join(workspace.builder_command(definition_path))}"
+  else
+    executor = docker ? Mxrb::Runtime::DockerExecutor : Mxrb::Runtime::Executor
+    execution = executor.new(
+      path, definition, plan: plan, output: $stdout
+    ).run
+    execution.result.tests.each do |test|
+      puts "[#{test.passed? ? 'pass' : 'fail'}] #{test.name}: #{test.message}"
+    end
+    puts "[mxrb] #{execution.result.tests.count(&:passed?)}/" \
+         "#{execution.result.tests.size} passed in #{format('%.2f', execution.elapsed)}s"
+    exit 1 unless execution.passed?
+  end
+
+when "functional-instrument"
+  path = ARGV.shift or abort "Usage: mxrb functional-instrument <writable.mpr> <functional_test.rb>"
+  definition_path = ARGV.shift or
+    abort "Usage: mxrb functional-instrument <writable.mpr> <functional_test.rb>"
+  definition = Mxrb.functional_definition(definition_path)
+  instrumenter = Mxrb::Functional::Instrumenter.new(path, definition).instrument!
+  puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
+
+when "describe"
+  path = ARGV.shift or abort "Usage: mxrb describe <file.mpr> <qualified-name>"
+  name = ARGV.shift or abort "Usage: mxrb describe <file.mpr> <qualified-name>"
+  begin
+    Mxrb.open(path) do |project|
+      details = project.describe_artifact(name)
+      puts "#{details.artifact.qualified_name}\t#{details.artifact.kind}"
+      puts "Incoming:"
+      details.incoming.each do |reference|
+        puts "  #{reference.source.qualified_name}\t#{reference.relation}"
+      end
+      puts "Outgoing:"
+      details.outgoing.each do |reference|
+        puts "  #{reference.target.qualified_name}\t#{reference.relation}"
+      end
+    end
+  rescue KeyError, ArgumentError => e
+    warn "[mxrb] error: #{e.message}"
+    exit 1
+  end
+
+when "tree"
+  path = ARGV.shift or abort "Usage: mxrb tree <file.mpr> [module]"
+  selected_module = ARGV.shift
+  Mxrb.open(path) do |project|
+    artifacts = project.semantic_index.artifacts
+    artifacts = artifacts.select { _1.module_name == selected_module } if selected_module
+    artifacts.group_by(&:module_name).sort_by { |module_name, _| module_name.to_s }
+             .each do |module_name, module_artifacts|
+      puts module_name || "(project)"
+      module_artifacts.reject { _1.kind == :module }.group_by(&:kind)
+                      .sort_by { |kind, _| kind.to_s }.each do |kind, items|
+        puts "  #{kind}"
+        items.sort_by(&:qualified_name).each { puts "    #{_1.qualified_name}" }
+      end
+    end
+  end
+
 else
   puts <<~USAGE
     mxrb — Pure-Ruby Mendix .mpr toolkit
@@ -70,5 +306,25 @@ else
       dump-unit  <file.mpr> <unit_id>     Hex dump of a unit's Contents blob
       sql        <file.mpr> "SELECT …"    Run raw SQL against the .mpr SQLite
       modules    <file.mpr>               List all modules
+      generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
+      export     <file.mpr> <directory>   Convert an MPR to editable Ruby
+      validate   <file.mpr>               Check MPR structure, hashes and v2 contents
+      compare    <left.mpr> <right.mpr>   Compare structural MPR snapshots
+      diff       <left.mpr> <right.mpr>   Print typed semantic changes
+      refs       <file.mpr> <name>        Find references to a Mendix artifact
+      callers    <file.mpr> <name>        List callers of a callable artifact
+      callees    <file.mpr> <name>        List artifacts called by a callable artifact
+      impact     <file.mpr> <name>        Find transitive dependents
+      rename     <mpr> <old> <new>         Preview a safe model-wide rename
+                 --apply                   Apply the previewed rename
+      lint       <file.mpr>                Ruby semantic diagnostics
+      report     <file.mpr>                Coupling and reference summary
+      find       <file.mpr> <text>         Search artifacts by name
+      describe   <file.mpr> <name>         Show incoming and outgoing references
+      tree       <file.mpr> [module]       Browse the semantic structure
+      evaluate   <file.mpr> <eval.rb>      Run Ruby model evaluations
+      test       <file.mpr> <test.rb>      Run isolated functional runtime tests
+                 --docker                  Run mxbuild/runtime in disposable containers
+                 --plan                    Show toolchain and Docker execution plan
   USAGE
 end

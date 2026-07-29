@@ -22,7 +22,7 @@ module Mxrb
       OWNERS        = %i[Default Both].freeze
       STORAGE_FMTS  = %i[Column Table].freeze
 
-      def self.from_bson(doc)
+      def self.from_bson(doc, _domain_model_id = nil, _mpr = nil)
         a                  = new
         a.id               = IO::BsonCodec.extract_id(doc["$ID"] || doc["\$ID"])
         a.name             = doc["Name"] || doc["name"]

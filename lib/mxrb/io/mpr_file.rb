@@ -2,7 +2,9 @@
 
 require "sqlite3"
 require "securerandom"
+require "json"
 require_relative "bson_codec"
+require_relative "mxunit_codec"
 
 module Mxrb
   module IO
@@ -46,9 +48,9 @@ module Mxrb
         @project_name ||= begin
           # Name lives in the root Unit's BSON ($QualifiedName or Name field)
           root = root_unit
-          return nil unless root && root["Contents"]
+          return nil unless root
 
-          doc = BsonCodec.parse(root["Contents"])
+          doc = parse_contents(root)
           doc["Name"] || doc["name"] || File.basename(@path, ".mpr")
         end
       end
@@ -59,7 +61,7 @@ module Mxrb
       def root_unit
         @root_unit ||= begin
           row = @db.get_first_row(
-            "SELECT UnitID, ContainerID, ContainmentName, ContentsHash, Contents FROM Unit " \
+            "SELECT #{unit_select_columns} FROM Unit " \
             "WHERE UnitID = ContainerID LIMIT 1"
           )
           row ? raw_to_hash(row) : nil
@@ -69,7 +71,7 @@ module Mxrb
       # All units with a given ContainmentName.
       def units_by_containment(name)
         @db.execute(
-          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash, Contents FROM Unit " \
+          "SELECT #{unit_select_columns} FROM Unit " \
           "WHERE ContainmentName = ?",
           [name]
         ).map { raw_to_hash(_1) }
@@ -79,7 +81,7 @@ module Mxrb
       def children_of(parent_uuid)
         blob = BsonCodec.uuid_to_blob(parent_uuid)
         @db.execute(
-          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash, Contents FROM Unit " \
+          "SELECT #{unit_select_columns} FROM Unit " \
           "WHERE ContainerID = ? AND UnitID != ContainerID",
           [blob]
         ).map { raw_to_hash(_1) }
@@ -89,7 +91,7 @@ module Mxrb
       def unit(uuid)
         blob = BsonCodec.uuid_to_blob(uuid)
         row  = @db.get_first_row(
-          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash, Contents FROM Unit WHERE UnitID = ?",
+          "SELECT #{unit_select_columns} FROM Unit WHERE UnitID = ?",
           [blob]
         )
         row ? raw_to_hash(row) : nil
@@ -98,16 +100,44 @@ module Mxrb
       # All units (for exploration / reverse engineering).
       def all_units
         @db.execute(
-          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash, Contents FROM Unit"
+          "SELECT #{unit_select_columns} FROM Unit"
         ).map { raw_to_hash(_1) }
       end
 
       # Parse BSON from a raw unit hash.
       def parse_contents(raw_unit)
         blob = raw_unit["Contents"]
+        if (blob.nil? || blob.empty?) && @format_version == :v2
+          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+          return {} unless File.file?(unit_path)
+          return MxunitCodec.read(unit_path)
+        end
         return {} if blob.nil? || blob.empty?
 
         BsonCodec.parse(blob)
+      end
+
+      def content_bytes(raw_unit)
+        blob = raw_unit["Contents"]
+        if (blob.nil? || blob.empty?) && @format_version == :v2
+          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+          return nil unless File.file?(unit_path)
+
+          return File.binread(unit_path)
+        end
+        blob
+      end
+
+      def content_path(raw_unit)
+        return nil unless @format_version == :v2
+
+        MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+      end
+
+      def content_files
+        return [] unless @format_version == :v2 && File.directory?(contents_dir)
+
+        Dir.glob(File.join(contents_dir, "**", "*.mxunit")).sort
       end
 
       # ── Writes ────────────────────────────────────────────────────────────
@@ -116,17 +146,29 @@ module Mxrb
       def insert_unit(container_uuid:, containment_name:, contents_doc:)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
-        uuid         = SecureRandom.uuid
+        uuid         = BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
+        contents_doc = contents_doc.merge("$ID" => uuid) unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
         unit_blob    = BsonCodec.uuid_to_blob(uuid)
         parent_blob  = BsonCodec.uuid_to_blob(container_uuid)
         bson_bytes   = BsonCodec.serialize(contents_doc)
         hash         = BsonCodec.contents_hash(bson_bytes)
-
+        stored_bytes = @format_version == :v2 ? nil : bson_bytes
+        columns = %w[UnitID ContainerID ContainmentName TreeConflict ContentsHash]
+        values = [unit_blob, parent_blob, containment_name, 0, hash]
+        if (conflicts = conflicts_column)
+          columns << conflicts
+          values << ""
+        end
+        if contents_column?
+          columns << "Contents"
+          values << stored_bytes
+        end
+        placeholders = (["?"] * columns.length).join(", ")
         @db.execute(
-          "INSERT INTO Unit (UnitID, ContainerID, ContainmentName, ContentsHash, Contents) " \
-          "VALUES (?, ?, ?, ?, ?)",
-          [unit_blob, parent_blob, containment_name, hash, bson_bytes]
+          "INSERT INTO Unit (#{columns.join(', ')}) VALUES (#{placeholders})",
+          values
         )
+        write_v2_unit(uuid, bson_bytes) if @format_version == :v2
         uuid
       end
 
@@ -138,15 +180,24 @@ module Mxrb
         bson_bytes = BsonCodec.serialize(contents_doc)
         hash       = BsonCodec.contents_hash(bson_bytes)
 
-        @db.execute(
-          "UPDATE Unit SET Contents = ?, ContentsHash = ? WHERE UnitID = ?",
-          [bson_bytes, hash, blob]
-        )
+        if contents_column?
+          @db.execute(
+            "UPDATE Unit SET Contents = ?, ContentsHash = ? WHERE UnitID = ?",
+            [@format_version == :v2 ? nil : bson_bytes, hash, blob]
+          )
+        else
+          @db.execute(
+            "UPDATE Unit SET ContentsHash = ? WHERE UnitID = ?",
+            [hash, blob]
+          )
+        end
+        write_v2_unit(uuid, bson_bytes) if @format_version == :v2
       end
 
       def delete_unit(uuid)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
         @db.execute("DELETE FROM Unit WHERE UnitID = ?", [BsonCodec.uuid_to_blob(uuid)])
+        FileUtils.rm_f(MxunitCodec.path_for(contents_dir, uuid)) if @format_version == :v2
       end
 
       def transaction(&)
@@ -165,6 +216,29 @@ module Mxrb
 
       def query(sql, *binds)
         @db.execute(sql, *binds)
+      end
+
+      # mxrb-only architecture metadata for concepts without a native Mendix
+      # unit (ports/repositories) or bindings awaiting a concrete widget tree.
+      def architecture_definition
+        return nil unless tables.include?("_MxrbArchitecture")
+        json = @db.get_first_value("SELECT Definition FROM _MxrbArchitecture WHERE ID = 1")
+        json && JSON.parse(json, symbolize_names: true)
+      end
+
+      def write_architecture_definition(definition)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbArchitecture (
+            ID INTEGER PRIMARY KEY CHECK (ID = 1),
+            Version INTEGER NOT NULL,
+            Definition TEXT NOT NULL
+          )
+        SQL
+        @db.execute(
+          "INSERT OR REPLACE INTO _MxrbArchitecture (ID, Version, Definition) VALUES (1, 1, ?)",
+          [JSON.generate(definition)]
+        )
       end
 
       def close
@@ -188,8 +262,35 @@ module Mxrb
 
       # MPR v2 stores unit contents in mprcontents/ folder next to the .mpr.
       def detect_format
-        dir = File.join(File.dirname(@path), "mprcontents")
-        File.directory?(dir) ? :v2 : :v1
+        File.directory?(contents_dir) ? :v2 : :v1
+      end
+
+      def contents_dir
+        File.join(File.dirname(@path), "mprcontents")
+      end
+
+      def unit_columns
+        @unit_columns ||= table_info("Unit").map { _1["name"] || _1[:name] }
+      end
+
+      def contents_column?
+        unit_columns.include?("Contents")
+      end
+
+      def conflicts_column
+        return "ContentsConflicts" if unit_columns.include?("ContentsConflicts")
+        return "ContentsConflict" if unit_columns.include?("ContentsConflict")
+
+        nil
+      end
+
+      def unit_select_columns
+        contents = contents_column? ? "Contents" : "NULL AS Contents"
+        "UnitID, ContainerID, ContainmentName, ContentsHash, #{contents}"
+      end
+
+      def write_v2_unit(uuid, bytes)
+        MxunitCodec.write_atomic(MxunitCodec.path_for(contents_dir, uuid), bytes)
       end
 
       def raw_to_hash(row)

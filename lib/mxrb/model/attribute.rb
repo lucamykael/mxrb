@@ -5,13 +5,14 @@ require "securerandom"
 module Mxrb
   module Model
     # Attributes are embedded in Entity BSON — NOT separate Unit rows.
-    # $Type: DomainModels$Attribute (read) / DomainModels$AttributeImpl (write)
+    # $Type: DomainModels$Attribute
     class Attribute
       # Maps DSL symbol → Mendix storage type name
       TYPE_MAP = {
         string:      "DomainModels$StringAttributeType",
         integer:     "DomainModels$IntegerAttributeType",
         long:        "DomainModels$LongAttributeType",
+        float:       "DomainModels$FloatAttributeType",
         decimal:     "DomainModels$DecimalAttributeType",
         boolean:     "DomainModels$BooleanAttributeType",
         datetime:    "DomainModels$DateTimeAttributeType",
@@ -49,7 +50,7 @@ module Mxrb
       def to_bson
         {
           "$ID"             => @id || SecureRandom.uuid,
-          "$Type"           => "DomainModels$AttributeImpl",
+          "$Type"           => "DomainModels$Attribute",
           "name"            => @name,
           "documentation"   => @documentation || "",
           "dataStorageGuid" => @data_storage_guid || SecureRandom.uuid,

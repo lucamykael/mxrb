@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "coverage_helper"
 require "mxrb"
 
 RSpec.configure do |config|
@@ -13,4 +14,5 @@ RSpec.configure do |config|
   config.filter_run_when_matching :focus
   config.warnings = true
   config.order = :random
+  config.after(:suite) { MxrbCoverage.report } if defined?(MxrbCoverage)
 end

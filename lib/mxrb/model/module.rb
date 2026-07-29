@@ -44,7 +44,7 @@ module Mxrb
 
       def pages
         @pages ||= document_units
-                   .select { |u| u[:type]&.start_with?("Pages$") }
+                   .select { |u| %w[Pages$Page Forms$Page].include?(u[:type]) }
                    .map { Page.new(_1[:raw], @mpr) }
       end
 
@@ -52,6 +52,32 @@ module Mxrb
         @microflows ||= document_units
                         .select { |u| u[:type] == "Microflows$Microflow" }
                         .map { Microflow.new(_1[:raw], @mpr) }
+      end
+
+      def nanoflows
+        @nanoflows ||= document_units
+                       .select { |u| u[:type] == "Microflows$Nanoflow" }
+                       .map { Microflow.new(_1[:raw], @mpr) }
+      end
+
+      def menus
+        @menus ||= document_units
+                   .select { |u| u[:type] == "Menus$MenuDocument" }
+                   .map { Menu.new(_1[:raw], @mpr) }
+      end
+
+      def module_roles
+        @module_roles ||= begin
+          raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
+          if raw
+            doc = @mpr.parse_contents(raw)
+            parse_array(doc["ModuleRoles"]).map do |role|
+              { name: role["Name"], description: role["Description"].to_s }
+            end
+          else
+            []
+          end
+        end
       end
 
       def inspect
@@ -65,10 +91,7 @@ module Mxrb
       # We do a simple two-pass: direct Documents children + Documents inside Folders.
       def document_units
         @document_units ||= begin
-          direct    = children_with_containment("Documents")
-          folders   = children_with_containment("Folders")
-          in_folder = folders.flat_map { children_by_parent_id(_1["UnitID"], "Documents") }
-          (direct + in_folder).map do |raw|
+          collect_documents(@id).map do |raw|
             doc  = @mpr.parse_contents(raw)
             type = doc["$Type"]
             { raw: raw, type: type }
@@ -80,8 +103,17 @@ module Mxrb
         @mpr.units_by_containment(name).select { _1["ContainerID"] == @id }
       end
 
-      def children_by_parent_id(parent_id, containment)
-        @mpr.children_of(parent_id).select { _1["ContainmentName"] == containment }
+      def collect_documents(parent_id)
+        @mpr.children_of(parent_id).flat_map do |raw|
+          case raw["ContainmentName"]
+          when "Documents"
+            [raw]
+          when "Folders"
+            collect_documents(raw.fetch("UnitID"))
+          else
+            []
+          end
+        end
       end
     end
   end

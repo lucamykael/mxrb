@@ -21,11 +21,18 @@ module Mxrb
         @excluded                   = doc["Excluded"] == true
         @allowed_module_roles       = parse_array(doc["AllowedModuleRoles"])
         @parameters                 = extract_parameters(doc)
-        @return_type                = doc["MicroflowReturnType"] || doc["ReturnType"]
+        return_doc                  = doc["MicroflowReturnType"] || doc["ReturnType"]
+        @return_type                = return_doc.is_a?(Hash) ? return_doc["Type"] : return_doc
 
         obj_col = doc["ObjectCollection"] || {}
         @objects = parse_array(obj_col["Objects"] || obj_col["objects"] || obj_col)
-        @flows   = parse_array(obj_col["Flows"]   || obj_col["flows"]   || [])
+        # Mendix stores all sequence flows (including flows inside looped
+        # activities) at document level. Older MXRB-generated documents used
+        # ObjectCollection/Flows, so keep that as a compatibility fallback.
+        @flows   = parse_array(
+          doc["Flows"] || doc["flows"] ||
+          obj_col["Flows"] || obj_col["flows"] || []
+        )
       end
 
       def to_bson
@@ -42,6 +49,7 @@ module Mxrb
           "MicroflowParameterCollection" => serialize_parameters,
           "MicroflowReturnType"       => @return_type || default_void_return,
           "ObjectCollection"          => serialize_object_collection,
+          "Flows"                     => IO::BsonCodec.build_array(@flows || []),
         }
       end
 
@@ -78,7 +86,6 @@ module Mxrb
           "$ID"     => SecureRandom.uuid,
           "$Type"   => "Microflows$MicroflowObjectCollection",
           "Objects" => IO::BsonCodec.build_array(@objects || []),
-          "Flows"   => IO::BsonCodec.build_array(@flows   || []),
         }
       end
     end
