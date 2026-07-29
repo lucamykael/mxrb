@@ -189,6 +189,23 @@ when "remove"
   puts "[mxrb] #{apply ? 'Removed' : plan.safe? ? 'Safe removal preview' : 'Blocked removal'}"
   exit 1 unless plan.safe?
 
+when "move"
+  path = ARGV.shift or abort "Usage: mxrb move <file.mpr> <name> <container> [--apply]"
+  name = ARGV.shift or abort "Usage: mxrb move <file.mpr> <name> <container> [--apply]"
+  container = ARGV.shift or abort "Usage: mxrb move <file.mpr> <name> <container> [--apply]"
+  apply = ARGV.delete("--apply")
+  begin
+    plan = Mxrb.open(path, readonly: !apply) do |project|
+      project.plan_move(name, to: container).tap { _1.apply! if apply }
+    end
+  rescue KeyError, ArgumentError => e
+    warn "[mxrb] error: #{e.message}"
+    exit 1
+  end
+  puts "Artifact  : #{plan.source.qualified_name} (#{plan.source.kind})"
+  puts "Container : #{plan.before_container} -> #{plan.after_container}"
+  puts "[mxrb] #{apply ? 'Moved' : plan.empty? ? 'Already in container' : 'Move preview'}"
+
 when "lint", "report"
   path = ARGV.shift or abort "Usage: mxrb #{command} <file.mpr>"
   report = Mxrb.open(path, &:analyze)
@@ -384,6 +401,8 @@ else
                  --apply                   Apply the previewed rename
       remove     <mpr> <name>              Preview a reference-safe unit removal
                  --apply                   Apply only when no refs/children exist
+      move       <mpr> <name> <container>  Preview a same-module unit move
+                 --apply                   Move into a module or folder
       lint       <file.mpr>                Ruby semantic diagnostics
       report     <file.mpr>                Coupling and reference summary
       find       <file.mpr> <text>         Search artifacts by name

@@ -73,6 +73,23 @@ domain-model elements require their typed domain-model mutation instead. The
 CLI follows the same rule: `mxrb remove app.mpr Sales.UnusedFlow` previews and
 `--apply` writes only a safe plan.
 
+## Safe same-module move
+
+Standalone units can move to a module or folder without changing their
+qualified name or references:
+
+```ruby
+Mxrb.open("app.mpr", readonly: false) do |project|
+  plan = project.plan_move("Sales.Process", to: "Sales.Automation")
+  plan.apply!
+end
+```
+
+The plan preserves the native containment type and blocks embedded
+domain-model elements, non-container targets, folder cycles and cross-module
+moves. `mxrb move app.mpr Sales.Process Sales.Automation` previews the exact
+container IDs; `--apply` performs the transaction.
+
 ## Static analysis
 
 ```ruby

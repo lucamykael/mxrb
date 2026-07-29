@@ -56,6 +56,8 @@ module Mxrb
       def rename!(name, to:) = plan_rename(name, to: to).apply!
       def plan_remove(name) = Semantic::Remover.new(self).plan(name)
       def remove!(name) = plan_remove(name).apply!
+      def plan_move(name, to:) = Semantic::Mover.new(self).plan(name, to: to)
+      def move!(name, to:) = plan_move(name, to: to).apply!
       def analyze(**options) = Semantic::Analyzer.new(self).analyze(**options)
       alias lint analyze
       def evaluate(&block)
