@@ -40,6 +40,8 @@ module Mxrb
         if type_doc.is_a?(Hash)
           storage_type = type_doc["$Type"] || type_doc["\$Type"]
           a.type = REVERSE_TYPE_MAP[storage_type] || :string
+        else
+          a.type = :string
         end
 
         a.raw_value_doc = doc["value"] || doc["Value"]

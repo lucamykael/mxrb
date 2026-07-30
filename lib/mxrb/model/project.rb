@@ -58,6 +58,11 @@ module Mxrb
       def remove!(name) = plan_remove(name).apply!
       def plan_move(name, to:) = Semantic::Mover.new(self).plan(name, to: to)
       def move!(name, to:) = plan_move(name, to: to).apply!
+      def plan_extract(name, as:, object_ids:) =
+        Semantic::Extractor.new(self).plan(name, as: as, object_ids: object_ids)
+      def extract!(name, as:, object_ids:) = plan_extract(name, as: as, object_ids: object_ids).apply!
+      def plan_inline(name, calling:) = Semantic::Inliner.new(self).plan(name, calling: calling)
+      def inline!(name, calling:) = plan_inline(name, calling: calling).apply!
       def analyze(**options) = Semantic::Analyzer.new(self).analyze(**options)
       alias lint analyze
       def evaluate(&block)

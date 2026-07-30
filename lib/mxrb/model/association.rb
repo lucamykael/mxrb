@@ -57,7 +57,7 @@ module Mxrb
 
       def inspect
         "#<Mxrb::Association name=#{@name.inspect} type=#{@association_type} " \
-          "from=#{@from_entity_id&.slice(0, 8)} to=#{@to_entity_id&.slice(0, 8)}>"
+          "from=#{@from_entity_id.to_s.slice(0, 8)} to=#{@to_entity_id.to_s.slice(0, 8)}>"
       end
 
       private
