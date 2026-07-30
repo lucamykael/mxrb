@@ -5478,29 +5478,52 @@ RSpec.describe Mxrb do
   end
 
   describe "version upgrade/downgrade" do
-    it "updates the Mendix version stored in _MetaData" do
+    it "regenerates BSON structure and persists the new version" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "Versioned.mpr")
-        Mxrb.define(path) { mendix_version "10.18.0" }
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow(:Hello) { log_message "hi" } }
+        end
         Mxrb.open(path, readonly: false) do |project|
           expect(project.mendix_version).to eq("10.18.0")
-          project.upgrade_to!("10.21.0")
+          result = project.upgrade_to!("10.21.0")
+          expect(result).to be(project)
           expect(project.mendix_version).to eq("10.21.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("Hello")
         end
-        # persists across re-open
+        # version persists across re-open and BSON is intact
         Mxrb.open(path) do |project|
           expect(project.mendix_version).to eq("10.21.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("Hello")
         end
       end
     end
 
-    it "downgrade_to! is an alias for upgrade_to!" do
+    it "is idempotent — can be called multiple times" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Idempotent.mpr")
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow(:F) }
+        end
+        Mxrb.open(path, readonly: false) do |project|
+          project.migrate_to!("10.21.0")
+          project.migrate_to!("10.21.0")
+          project.migrate_to!("10.18.0")
+          expect(project.mendix_version).to eq("10.18.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("F")
+        end
+      end
+    end
+
+    it "downgrade_to! is an alias for migrate_to!" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "Down.mpr")
         Mxrb.define(path) { mendix_version "10.18.0" }
         Mxrb.open(path, readonly: false) do |project|
-          project.downgrade_to!("9.6.1")
-          expect(project.mendix_version).to eq("9.6.1")
+          project.downgrade_to!("10.6.1")
+          expect(project.mendix_version).to eq("10.6.1")
         end
       end
     end
@@ -5511,6 +5534,35 @@ RSpec.describe Mxrb do
         Mxrb.define(path) { mendix_version "10.18.0" }
         Mxrb.open(path, readonly: false) do |project|
           expect { project.upgrade_to!("") }.to raise_error(ArgumentError, /version/)
+        end
+      end
+    end
+
+    it "raises ArgumentError when MPR has no MXRB architecture definition" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Raw.mpr")
+        # Create a minimal MPR without architecture definition by using Writer directly
+        # then manually open it (no architecture_definition stored)
+        definition = { version: "10.18.0", modules: [] }
+        Mxrb::Writer.new(path, definition).write!
+        # Remove the _MxrbArchitecture row so it looks like a non-MXRB project
+        db = SQLite3::Database.new(path)
+        db.execute("DROP TABLE IF EXISTS _MxrbArchitecture")
+        db.close
+        Mxrb.open(path, readonly: false) do |project|
+          expect { project.migrate_to!("10.21.0") }
+            .to raise_error(ArgumentError, /no MXRB architecture definition/)
+        end
+      end
+    end
+
+    it "raises ArgumentError when project is opened read-only" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Readonly.mpr")
+        Mxrb.define(path) { mendix_version "10.18.0" }
+        Mxrb.open(path, readonly: true) do |project|
+          expect { project.migrate_to!("10.21.0") }
+            .to raise_error(ArgumentError, /read-only/)
         end
       end
     end

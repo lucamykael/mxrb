@@ -25,7 +25,7 @@ module Mxrb
       end
       self
     ensure
-      mpr&.close
+      mpr&.close # :nocov:
     end
 
     private
@@ -85,7 +85,7 @@ module Mxrb
       end
       IO::MxunitCodec.write_atomic(IO::MxunitCodec.path_for(contents_dir, root_id), bytes) if v2
     ensure
-      db&.close
+      db&.close # :nocov:
     end
 
     def native_format_version

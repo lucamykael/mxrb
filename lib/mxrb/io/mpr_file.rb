@@ -22,6 +22,8 @@ module Mxrb
     class MprFile
       attr_reader :path, :format_version
 
+      def readonly? = @readonly
+
       def initialize(path, readonly: false)
         @path     = File.expand_path(path)
         @readonly = readonly

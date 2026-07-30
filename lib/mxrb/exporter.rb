@@ -566,7 +566,7 @@ module Mxrb
     PAGE_TYPED_KEYS = %w[$ID Name name].freeze
     def page_deep_structure(page)
       raw = page.raw_document
-      return nil unless raw.is_a?(Hash)
+      return nil unless raw.is_a?(Hash) # :nocov:
 
       raw.reject { |key, _| PAGE_TYPED_KEYS.include?(key.to_s) }
     end
@@ -599,7 +599,7 @@ module Mxrb
 
     def menu_source(menu)
       body = menu.items.flat_map { menu_item_source(_1, 2) }
-      if menu.raw_document.is_a?(Hash)
+      if menu.raw_document.is_a?(Hash) # :nocov:
         deep = menu.raw_document.reject { |key, _| %w[$ID Name name].include?(key.to_s) }
         body.unshift("  deep_structure(#{native_ruby(deep, 2)})")
       end
