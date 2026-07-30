@@ -63,6 +63,7 @@ module Mxrb
         export_app_structure
         export_native_units(project)
         export_security(project)
+        export_architecture_contracts
         mods = project.modules
         if parallel && mods.size > 1
           threads = mods.map { |mod| Thread.new { export_module(mod) } }
@@ -159,6 +160,19 @@ module Mxrb
       doc = project_security_doc(project)
       source = doc ? security_source(doc) : "# frozen_string_literal: true\n"
       write(File.join(@output_dir, "app", "security", "security.rb"), source)
+    end
+
+    def export_architecture_contracts
+      navigation = @architecture&.fetch(:navigation, nil)
+      design_system = @architecture&.fetch(:design_system, nil)
+      write(
+        File.join(@output_dir, "app", "navigation", "navigation.rb"),
+        navigation_source(navigation)
+      )
+      write(
+        File.join(@output_dir, "app", "design_system", "design_system.rb"),
+        design_system_source(design_system)
+      )
     end
 
     def export_module_scaffolding(root)
@@ -326,6 +340,8 @@ module Mxrb
           native_units File.join(__dir__, ".mxrb", "native_units.json")
           evaluate File.join(__dir__, ".mxrb", "native_units.rb")
           evaluate File.join(__dir__, "app", "security", "security.rb")
+          evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
+          evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
       #{module_loads}
         end
       RUBY
@@ -361,12 +377,78 @@ module Mxrb
         args << "admin: true" if admin
         "  user_role #{args.join(', ')}"
       end
+      options = []
+      options << "  admin_user_role #{ruby(doc["AdminUserRole"])}" unless doc["AdminUserRole"].to_s.empty?
+      options << "  demo_users #{doc["EnableDemoUsers"] == true}"
+      guest = "  guest_access #{doc["EnableGuestAccess"] == true}"
+      guest += ", role: #{ruby(doc["GuestUserRole"])}" unless doc["GuestUserRole"].to_s.empty?
+      options << guest
+      options << "  sign_in_microflow #{ruby(doc["SignInMicroflow"])}" unless doc["SignInMicroflow"].to_s.empty?
+      password = doc["PasswordPolicySettings"]
+      if password.is_a?(Hash)
+        known = {
+          "MinimumLength" => :minimum_length,
+          "RequireDigit" => :require_digit,
+          "RequireMixedCase" => :require_mixed_case,
+          "RequireSymbol" => :require_symbol
+        }
+        policy = password.each_with_object({}) do |(key, value), result|
+          next if %w[$ID $Type].include?(key)
+
+          result[known.fetch(key, key.to_sym)] = value
+        end
+        options << "  password_policy(**#{ruby(policy)})"
+      end
       <<~RUBY
         # frozen_string_literal: true
 
         security do
           security_level #{ruby(level)}
       #{roles.join("\n")}
+      #{options.join("\n")}
+        end
+      RUBY
+    end
+
+    def navigation_source(navigation)
+      return "# frozen_string_literal: true\n" unless navigation
+
+      profiles = navigation.fetch(:profiles, []).map do |profile|
+        args = [
+          symbol(profile.fetch(:name)),
+          "home_page: #{ruby(profile.fetch(:home_page))}"
+        ]
+        args << "sign_in_page: #{ruby(profile[:sign_in_page])}" if profile[:sign_in_page]
+        args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
+        args << "role_homes: #{ruby(profile[:role_homes])}" unless profile.fetch(:role_homes, {}).empty?
+        args << "offline: true" if profile[:offline]
+        "  profile #{args.join(', ')}"
+      end
+      <<~RUBY
+        # frozen_string_literal: true
+
+        navigation do
+      #{profiles.join("\n")}
+        end
+      RUBY
+    end
+
+    def design_system_source(design_system)
+      return "# frozen_string_literal: true\n" unless design_system
+
+      lines = design_system.fetch(:tokens, []).map do |token|
+        args = [symbol(token.fetch(:name))]
+        args << "value: #{ruby(token[:value])}" unless token[:value].nil?
+        "  #{token.fetch(:kind)} #{args.join(', ')}"
+      end
+      lines.concat(design_system.fetch(:layouts, []).map { "  layout #{ruby(_1)}" })
+      lines.concat(design_system.fetch(:components, []).map { "  component #{ruby(_1)}" })
+      lines.concat(design_system.fetch(:accessibility, []).map { "  accessibility #{ruby(_1)}" })
+      <<~RUBY
+        # frozen_string_literal: true
+
+        design_system do
+      #{lines.join("\n")}
         end
       RUBY
     end
@@ -534,6 +616,7 @@ module Mxrb
         options = []
         options << "implementation: #{symbol(repository[:implementation])}" if repository[:implementation]
         options << "public: true" if repository[:public]
+        options << "documentation: #{ruby(repository[:documentation])}" unless repository[:documentation].to_s.empty?
         "repository #{symbol(repository.fetch(:name))}#{options.empty? ? '' : ", #{options.join(', ')}"}"
       end.join("\n") + "\n"
     end
@@ -572,7 +655,7 @@ module Mxrb
     PAGE_TYPED_KEYS = %w[$ID Name name].freeze
     def page_deep_structure(page)
       raw = page.raw_document
-      return nil unless raw.is_a?(Hash) # :nocov:
+      return nil unless raw.is_a?(Hash)
 
       raw.reject { |key, _| PAGE_TYPED_KEYS.include?(key.to_s) }
     end
@@ -605,7 +688,7 @@ module Mxrb
 
     def menu_source(menu)
       body = menu.items.flat_map { menu_item_source(_1, 2) }
-      if menu.raw_document.is_a?(Hash) # :nocov:
+      if menu.raw_document.is_a?(Hash)
         deep = menu.raw_document.reject { |key, _| %w[$ID Name name].include?(key.to_s) }
         body.unshift("  deep_structure(#{native_ruby(deep, 2)})")
       end
@@ -748,9 +831,6 @@ module Mxrb
                            .group_by { _1["OriginPointer"] }.any? { |_origin, items| items.size > 1 }
 
       by_id = objects.to_h { [_1["$ID"], _1] }
-      return false unless local_flows.all? do |flow|
-        by_id.key?(flow["OriginPointer"]) && by_id.key?(flow["DestinationPointer"])
-      end
 
       objects.all? do |object|
         case object["$Type"]
@@ -915,7 +995,7 @@ module Mxrb
       value
     end
 
-    def linearize_flow(cursor, fwd, err, by_id, graph_flows, seen, lines, indent, stop_at) # rubocop:disable Metrics/ParameterLists
+    def linearize_flow(cursor, fwd, err, by_id, graph_flows, seen, lines, indent, stop_at)
       while cursor && cursor != stop_at
         break if seen[cursor]
         seen[cursor] = true
@@ -1076,7 +1156,7 @@ module Mxrb
       sets = starts.compact.map { reachable_merge_ids(_1, fwd, by_id) }
       return nil if sets.empty?
 
-      sets.reduce { |common, ids| common & ids }&.first
+      sets.reduce { |common, ids| common & ids }.first
     end
 
     def reachable_merge_ids(start_id, fwd, by_id)
@@ -1101,14 +1181,15 @@ module Mxrb
       when "Microflows$CreateObjectAction", "Microflows$CreateChangeAction"
         legacy = action["$Type"] == "Microflows$CreateChangeAction"
         members = member_specs(action[legacy ? "Items" : "Members"])
-        set_arg = members.empty? || members.any? { _1[:association] } ?
+        has_associations = members.any? { !_1[:association].to_s.empty? }
+        set_arg = members.empty? || has_associations ?
           "" : ", set: { #{members_dsl(members)} }"
         variable = legacy ? action["VariableName"] : action["OutputVariableName"]
         commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
         commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
         refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
         command = "#{pad}create_object #{ruby(action["Entity"])}, as: :#{variable}#{set_arg}#{commit_a}#{refresh_a}"
-        members.any? { _1[:association] } ? member_block(command, members, indent) : command
+        has_associations ? member_block(command, members, indent) : command
       when "Microflows$ChangeObjectAction", "Microflows$ChangeAction"
         legacy = action["$Type"] == "Microflows$ChangeAction"
         members = member_specs(action[legacy ? "Items" : "Members"])
@@ -1116,10 +1197,11 @@ module Mxrb
         commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
         commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
         refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
-        set_arg = members.empty? || members.any? { _1[:association] } ?
+        has_associations = members.any? { !_1[:association].to_s.empty? }
+        set_arg = members.empty? || has_associations ?
           "" : ", set: { #{members_dsl(members)} }"
         command = "#{pad}change_object :#{variable}#{set_arg}#{commit_a}#{refresh_a}"
-        members.any? { _1[:association] } ? member_block(command, members, indent) : command
+        has_associations ? member_block(command, members, indent) : command
       when "Microflows$RetrieveAction"
         src      = action["RetrieveSource"] || {}
         variable = action["ResultVariableName"] || action["ResultListName"]

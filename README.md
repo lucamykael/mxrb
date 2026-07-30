@@ -23,8 +23,11 @@ remain optional external gates for compatibility and functional execution.
 - execute functional microflow tests locally or in disposable containers.
 - search and install reusable Ruby modules with a locked SHA-256 digest.
 
-The public validation matrix currently covers Mendix 5.21 through 11.12,
-including v1/v2 round trips and official MxBuild checks. See
+The public validation matrix currently covers structural v1/v2 round trips
+from Mendix 5.21 through 11.12 and official MxBuild checks where the native
+toolchain is supported. Exact Mendix 5 validation still depends on
+Windows/Studio Pro and is a documented MXRB limitation; it is not part of the
+automated direct toolchain gate. See
 [the validation matrix](docs/en-US/validation-matrix.md) for the exact evidence and
 confidence boundaries.
 
@@ -70,6 +73,9 @@ bundle exec mxrb export Shop.mpr exported-shop
 bundle exec mxrb compare original.mpr rebuilt.mpr
 bundle exec mxrb module search
 bundle exec mxrb module add shared-kernel
+bundle exec mxrb cache status Shop.mpr
+bundle exec mxrb cache warm Shop.mpr
+bundle exec mxrb cache clear Shop.mpr
 ```
 
 ## Model evaluations
@@ -113,18 +119,20 @@ bundle exec mxrb test Shop.mpr functional_test.rb --docker
 
 The source project is copied before instrumentation. `mx check`, the portable
 package, runtime database and uploaded files are discarded after execution.
-The current functional scope verifies microflow completion and exception
-handling. Assertions over return values and persisted state are not included.
+The functional scope verifies completion, exception handling, return values
+and persisted state through entity/XPath count assertions.
 
 ## Development
 
 ```sh
 bundle exec rspec
 MXRB_COVERAGE=1 bundle exec rspec
+bundle exec ruby script/branch_report.rb
+bundle exec rubocop
 ```
 
-The enforced suite currently has 100% line coverage. Branch coverage is
-reported separately and is not represented as 100%.
+The enforced suite currently has 100% line and branch coverage. The branch
+report lists any regression by source file and line.
 
 Architecture and deeper writing guidance are available in
 [the English documentation](docs/en-US/README.md). The complete documentation

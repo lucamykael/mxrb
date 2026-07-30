@@ -81,6 +81,15 @@ erzeugt MXRB automatisch `mprcontents/*.mxunit`.
 ## Semantische Werkzeuge
 
 CLI-Befehle: `refs`, `callers`, `callees`, `impact`, `rename`, `remove`,
-`move`, `lint`, `report`, `diff`, `find`, `describe` und `tree`.
+`move`, `lint`, `report`, `diff`, `find`, `describe` und `tree`. Das eingebaute
+Lint prüft Zugriffsregeln persistenter Entitäten, Rollen von Seiten/Flows,
+Dokumentation öffentlicher Verträge, Navigationsziele und doppelte
+Modulrollenzuordnungen. `mxrb cache status|warm|clear app.mpr` liefert
+Cache-Metriken und Wartung.
 Refactorings schreiben erst mit `--apply`; Verschiebungen bleiben im selben
 Modul und verhindern Ordnerzyklen.
+
+Bei `readonly: false` speichert der erste Aufbau einen kompakten,
+fingerprint-basierten semantischen Index im MPR. Spätere Öffnungen verwenden
+ihn nur, solange Inhalte und Containment unverändert sind. Schreibgeschützte
+Projekte können einen vorhandenen Cache lesen, erstellen ihn aber nicht.

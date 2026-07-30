@@ -30,14 +30,16 @@ einen vollständigen bearbeitbaren Eintrag in `.mxrb/native_units.rb`.
 Sudoku 11.12.1: **0 Fehler** in `mx check`, identische 23 Warnungen,
 1 Deprecation und 6 Empfehlungen; MxBuild erfolgreich. Mendix 6.10 baute
 Original und Rekonstruktion erfolgreich. 7.x und 9.6 zeigten diagnostische
-Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro.
+Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro eine
+ausdrückliche MXRB-Einschränkung und gehört nicht zum direkten automatischen
+Gate.
 
 ## Semantik, Tests und Runtime
 
 - 1.772 Artefakte und 3.330 Referenzen;
-- 112 Beispiele, keine Fehler;
-- 100 % Zeilenabdeckung (4.613/4.613);
-- Branch-Abdeckung wird separat ausgewiesen;
+- 432 Beispiele, keine Fehler;
+- 100 % Zeilenabdeckung (5.744/5.744);
+- 100 % Branch-Abdeckung (2.190/2.190);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

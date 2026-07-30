@@ -28,7 +28,7 @@ Ruby is MXRB's only public language.
 - Executable Ruby model evaluations with severity and scores.
 - Functional microflow tests without JUnit.
 - Local or Docker execution of `mx check`, portable MxBuild and Runtime.
-- A strict 100% library line-coverage gate.
+- A strict 100% library line-and-branch coverage gate.
 
 ## Semantic API
 
@@ -44,6 +44,20 @@ end
 
 Results are immutable Ruby objects: `Mxrb::Semantic::Artifact`,
 `Mxrb::Semantic::Reference` and `Mxrb::Semantic::Impact`.
+
+Writable projects persist a fingerprinted semantic-index cache in the MPR.
+Read-only opens may reuse that cache but never modify the project.
+Use `mxrb cache status`, `warm` and `clear` for metrics and maintenance; writes
+use an upsert before stale-entry cleanup so readers never observe an empty
+replacement window.
+
+Exact native Mendix 5 validation remains dependent on Windows/Studio Pro and
+is an explicit MXRB limitation. Structural round-trip coverage and validation
+through the official 6.10 converter do not replace that direct gate.
+
+Navigation profiles and design-system tokens are currently MXRB architecture
+contracts stored in the lossless project metadata. They round-trip as typed
+Ruby, but do not yet rewrite the native Mendix navigation/theme documents.
 
 ## Safe rename
 

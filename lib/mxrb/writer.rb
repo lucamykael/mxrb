@@ -25,7 +25,7 @@ module Mxrb
       end
       self
     ensure
-      mpr&.close # :nocov:
+      mpr&.close
     end
 
     private
@@ -85,7 +85,7 @@ module Mxrb
       end
       IO::MxunitCodec.write_atomic(IO::MxunitCodec.path_for(contents_dir, root_id), bytes) if v2
     ensure
-      db&.close # :nocov:
+      db&.close
     end
 
     def native_format_version
@@ -229,6 +229,15 @@ module Mxrb
         }
         if security[:security_level]
           editable["SecurityLevel"] = doc.fetch("SecurityLevel")
+        end
+        {
+          demo_users_enabled: "EnableDemoUsers",
+          guest_access_enabled: "EnableGuestAccess",
+          guest_user_role: "GuestUserRole",
+          sign_in_microflow: "SignInMicroflow",
+          password_policy: "PasswordPolicySettings"
+        }.each do |definition_key, native_key|
+          editable[native_key] = doc.fetch(native_key) unless security[definition_key].nil?
         end
         doc = existing.merge(editable)
         doc["$ID"] = existing["$ID"] || raw.fetch("UnitID")
@@ -935,6 +944,23 @@ module Mxrb
 
     def project_security_doc(security)
       roles = security.fetch(:user_roles, []).map { user_role_doc(_1) }
+      password_policy = {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Security$PasswordPolicySettings",
+        "MinimumLength" => 6,
+        "RequireDigit" => true,
+        "RequireMixedCase" => true,
+        "RequireSymbol" => false
+      }
+      security.fetch(:password_policy, {}).to_h.each do |key, value|
+        native_key = {
+          minimum_length: "MinimumLength",
+          require_digit: "RequireDigit",
+          require_mixed_case: "RequireMixedCase",
+          require_symbol: "RequireSymbol"
+        }.fetch(key.to_sym, key.to_s)
+        password_policy[native_key] = value
+      end
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Security$ProjectSecurity",
@@ -942,23 +968,16 @@ module Mxrb
         "CheckSecurity" => true,
         "AdminUserName" => "MxAdmin",
         "AdminPassword" => "1",
-        "AdminUserRole" => roles.first&.fetch("Name", ""),
-        "EnableDemoUsers" => false,
-        "EnableGuestAccess" => false,
-        "GuestUserRole" => "",
-        "SignInMicroflow" => "",
+        "AdminUserRole" => security[:admin_user_role] || roles.first&.fetch("Name", "") || "",
+        "EnableDemoUsers" => security.fetch(:demo_users_enabled, false) == true,
+        "EnableGuestAccess" => security.fetch(:guest_access_enabled, false) == true,
+        "GuestUserRole" => security[:guest_user_role].to_s,
+        "SignInMicroflow" => security[:sign_in_microflow].to_s,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
         "DemoUsers" => IO::BsonCodec.build_array([], marker: 2),
         "FileDocumentAccess" => access_container("Security$FileDocumentAccessRuleContainer"),
         "ImageAccess" => access_container("Security$ImageAccessRuleContainer"),
-        "PasswordPolicySettings" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Security$PasswordPolicySettings",
-          "MinimumLength" => 6,
-          "RequireDigit" => true,
-          "RequireMixedCase" => true,
-          "RequireSymbol" => false
-        }
+        "PasswordPolicySettings" => password_policy
       }
     end
 
@@ -1047,7 +1066,7 @@ module Mxrb
         "Style" => ""
       }
       options = widget.fetch(:options, {})
-      doc["AttributePath"] = options[:attribute]&.to_s if options[:attribute]
+      doc["AttributePath"] = options[:attribute].to_s if options[:attribute]
       doc["LabelText"] = text_doc(options[:caption]) if input_widget?(type) && options.key?(:caption)
       doc["Caption"] = text_doc(options[:caption]) if type == :button
       doc["Caption"] = text_doc(options[:caption]) if type == :text

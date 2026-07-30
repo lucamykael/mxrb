@@ -3410,7 +3410,7 @@ RSpec.describe Mxrb do
       target = File.join(@ec_dir, "proj_emptydep")
       installer = Mxrb::Marketplace::Installer.new(target: target)
       installer.install(@pkg)
-      inst = installer.install(pkg_empty_dep)
+      installer.install(pkg_empty_dep)
       lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
       expect(lock.dig("modules", "WidgetEmpty", "dependencies")).to eq(["mymod"])
     end
@@ -5000,7 +5000,7 @@ RSpec.describe Mxrb do
       Dir.mktmpdir do |dir|
         fake_mpr = File.join(dir, "fake.mpr")
         File.write(fake_mpr, "this is not sqlite")
-        expect { Mxrb::IO::MprFile.open(fake_mpr) { } }.to raise_error(Mxrb::NotMprError)
+        expect { Mxrb::IO::MprFile.open(fake_mpr) {} }.to raise_error(Mxrb::NotMprError)
       end
     end
   end
