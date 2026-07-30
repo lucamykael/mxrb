@@ -3024,6 +3024,22 @@ RSpec.describe Mxrb do
         expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
       end
     end
+
+    it "changes uses singular 'activity' when inlining a single-activity microflow" do
+      path = File.join(File.dirname(@mpr_path), "inline_singular.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) { call_microflow "Sales.Step" }
+          microflow(:Step)        { call_microflow "Sales.Work" }
+          microflow(:Work)
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.Step")
+        expect(plan.changes.last).to include("1 inlined activity")
+      end
+    end
   end
 
   # ── Marketplace update and remove ──────────────────────────────────────────

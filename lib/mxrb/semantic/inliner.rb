@@ -29,9 +29,10 @@ module Mxrb
 
       def changes
         count = @inner_objects.size
+        suffix = count == 1 ? "y" : "ies"
         [
           "inline #{@called_name} into #{@source.qualified_name}",
-          "replace call_microflow activity with #{count} inlined activit#{count == 1 ? 'y' : 'ies'}"
+          "replace call_microflow activity with #{count} inlined activit#{suffix}"
         ]
       end
 

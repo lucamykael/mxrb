@@ -243,13 +243,10 @@ module Mxrb
           selected.include?(_1["OriginPointer"]) && !selected.include?(_1["DestinationPointer"])
         end
 
-        if entry_flows.size != 1
+        if entry_flows.size != 1 || exit_flows.size != 1
           raise ArgumentError,
-                "selection must have exactly one entry point (found #{entry_flows.size})"
-        end
-        if exit_flows.size != 1
-          raise ArgumentError,
-                "selection must have exactly one exit point (found #{exit_flows.size})"
+                "selection must have exactly one entry point (found #{entry_flows.size}) " \
+                "and one exit point (found #{exit_flows.size})"
         end
 
         inner_objects = all_objects.select { selected.include?(_1["$ID"]) }
