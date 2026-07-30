@@ -51,6 +51,15 @@ module Mxrb
       def parse_bson(raw)   = @mpr.parse_contents(raw)
       def architecture_definition = @mpr.architecture_definition
 
+      # ── Native OQL inspection ───────────────────────────────────────────
+
+      def oql_queries = (@oql_catalog ||= Oql::Catalog.new(self)).queries
+      def oql? = !oql_queries.empty?
+      def oql_sql_views(dialect: :postgresql)
+        translator = Oql::Translator.new(dialect:)
+        oql_queries.map { translator.translate(_1) }.freeze
+      end
+
       # ── Semantic analysis ───────────────────────────────────────────────
 
       def semantic_index = (@semantic_index ||= Semantic::Index.new(self))
@@ -156,6 +165,7 @@ module Mxrb
         @semantic_index = nil
         @navigation = nil
         @design_system = nil
+        @oql_catalog = nil
         self
       end
 
