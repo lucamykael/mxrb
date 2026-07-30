@@ -35,7 +35,7 @@ module Mxrb
         File.binwrite(temporary, bytes)
         File.rename(temporary, path)
       ensure
-        FileUtils.rm_f(temporary) if defined?(temporary)
+        FileUtils.rm_f(temporary) if temporary
       end
     end
   end

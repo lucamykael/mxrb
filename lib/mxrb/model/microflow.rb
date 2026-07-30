@@ -22,7 +22,7 @@ module Mxrb
         @allowed_module_roles       = parse_array(doc["AllowedModuleRoles"])
         @parameters                 = extract_parameters(doc)
         return_doc                  = doc["MicroflowReturnType"] || doc["ReturnType"]
-        @return_type                = return_doc.is_a?(Hash) ? return_doc["Type"] : return_doc
+        @return_type                = return_doc.is_a?(Hash) ? (return_doc["$Type"] || return_doc["Type"]) : return_doc
 
         obj_col = doc["ObjectCollection"] || {}
         @objects = parse_array(obj_col["Objects"] || obj_col["objects"] || obj_col)
@@ -54,14 +54,21 @@ module Mxrb
       end
 
       def inspect
-        "#<Mxrb::Microflow name=#{@name.inspect} objects=#{@objects&.size} flows=#{@flows&.size}>"
+        "#<Mxrb::Microflow name=#{@name.inspect} objects=#{@objects.size} flows=#{@flows.size}>"
       end
 
       private
 
       def extract_parameters(doc)
         pc = doc["MicroflowParameterCollection"] || doc["Parameters"] || {}
-        pc.is_a?(Hash) ? parse_array(pc["Parameters"] || []) : []
+        if pc.is_a?(Hash) && (pc["Parameters"] || !pc.empty?)
+          list = parse_array(pc["Parameters"] || [])
+          return list unless list.empty?
+        end
+        # MXRB writer embeds parameters inside ObjectCollection.Objects
+        obj_col = doc["ObjectCollection"] || {}
+        all_objects = parse_array(obj_col["Objects"] || obj_col["objects"] || obj_col)
+        all_objects.select { |o| o.is_a?(Hash) && (o["$Type"] || o["\$Type"]) == "Microflows$MicroflowParameter" }
       end
 
       def serialize_parameters

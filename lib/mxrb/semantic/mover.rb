@@ -36,6 +36,45 @@ module Mxrb
       end
     end
 
+    # Cross-module move: relocates a unit AND renames its qualified name across
+    # the project so that all references stay consistent.
+    class CrossModuleMovePlan
+      attr_reader :source, :target, :before_container, :rename_changes
+
+      def initialize(project:, source:, target:, rename_plan:, before_container:, containment_name:)
+        @project = project
+        @source = source
+        @target = target
+        @rename_plan = rename_plan
+        @before_container = before_container
+        @containment_name = containment_name
+        @applied = false
+      end
+
+      def after_container = target.unit_id
+      def empty? = false
+      def rename_changes = @rename_plan.changes
+      def applied? = @applied
+
+      def apply!
+        raise ArgumentError, "cross-module move plan was already applied" if applied?
+
+        @project.mpr.transaction do
+          @rename_plan.documents.each do |unit_id, doc|
+            @project.mpr.update_unit(unit_id, doc)
+          end
+          @project.mpr.relocate_unit(
+            @source.unit_id,
+            container_uuid: @target.unit_id,
+            containment_name: @containment_name
+          )
+        end
+        @project.refresh!
+        @applied = true
+        self
+      end
+    end
+
     class Mover
       EMBEDDED_KINDS = %i[module entity attribute association].freeze
       CONTAINER_KINDS = %i[module folder].freeze
@@ -48,7 +87,6 @@ module Mxrb
         source = resolve(name)
         target = resolve(to)
         validate_kinds(source, target)
-        validate_module(source, target)
 
         raw = @project.raw_unit(source.unit_id)
         raise ArgumentError, "#{source.qualified_name} is not a movable unit" unless raw
@@ -56,16 +94,33 @@ module Mxrb
           raise ArgumentError, "cannot move #{source.qualified_name} into its descendant"
         end
 
-        MovePlan.new(
+        if source.module_name != target.module_name
+          plan_cross_module(source, target, raw)
+        else
+          MovePlan.new(
+            project: @project,
+            source:,
+            target:,
+            before_container: raw.fetch("ContainerID"),
+            containment_name: raw.fetch("ContainmentName")
+          )
+        end
+      end
+
+      private
+
+      def plan_cross_module(source, target, raw)
+        new_name = "#{target.module_name}.#{source.name}"
+        rename_plan = Renamer.new(@project).plan(source.qualified_name, to: new_name, cross_module: true)
+        CrossModuleMovePlan.new(
           project: @project,
           source:,
           target:,
+          rename_plan:,
           before_container: raw.fetch("ContainerID"),
           containment_name: raw.fetch("ContainmentName")
         )
       end
-
-      private
 
       def resolve(name)
         artifact = @project.find_artifact(name)
@@ -85,13 +140,6 @@ module Mxrb
         return if CONTAINER_KINDS.include?(target.kind)
 
         raise ArgumentError, "#{target.qualified_name} is not a module or folder"
-      end
-
-      def validate_module(source, target)
-        return if source.module_name == target.module_name
-
-        raise ArgumentError,
-              "moving between modules requires an explicit cross-module refactor"
       end
 
       def descendant_ids(unit_id)

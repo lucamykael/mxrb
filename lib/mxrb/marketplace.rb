@@ -50,6 +50,11 @@ module Mxrb
           raise(MarketplaceError, "module #{name.inspect} was not found in the catalog")
       end
 
+      def find_version(name, version)
+        entries.find { _1.name == name.to_s && _1.version == version.to_s } ||
+          raise(MarketplaceError, "module #{name.inspect} version #{version.inspect} was not found in the catalog")
+      end
+
       private
 
       def read_source
@@ -74,39 +79,108 @@ module Mxrb
         @catalog = catalog
       end
 
-      def install(identifier)
-        entry, source = resolve(identifier)
+      def install(identifier, version: nil)
+        install_package(identifier, version: version, replace: false)
+      end
+
+      def update(identifier, version: nil)
+        installed_module_name = resolve_installed_module_name(identifier)
+        install_package(
+          identifier,
+          version: version,
+          replace: true,
+          installed_module_name: installed_module_name
+        )
+      end
+
+      def remove(identifier)
+        module_name = resolve_installed_module_name(identifier)
+        destination = File.join(@target, "modules", module_name)
+        FileUtils.rm_rf(destination) if File.exist?(destination)
+        remove_from_lock(module_name)
+        module_name
+      end
+
+      private
+
+      def install_package(identifier, version:, replace:, installed_module_name: nil)
+        entry, source = resolve(identifier, version: version)
         Dir.mktmpdir("mxrb-module-") do |workspace|
           package = materialize(source, entry, workspace)
           manifest = load_manifest(package)
           module_name = valid_name(manifest.fetch("module_name"))
           destination = File.join(@target, "modules", module_name)
-          raise MarketplaceError, "module destination already exists: #{destination}" if File.exist?(destination)
+          if installed_module_name && module_name != installed_module_name
+            raise MarketplaceError,
+                  "module update cannot change its name from #{installed_module_name.inspect} to #{module_name.inspect}"
+          end
+          if File.exist?(destination) && !replace
+            raise MarketplaceError, "module destination already exists: #{destination}"
+          end
 
           files = package_files(package, manifest)
           staging = File.join(@target, ".mxrb", "staging", "#{module_name}-#{Process.pid}")
+          backup = nil
           FileUtils.mkdir_p(staging)
           files.each { copy_entry(package, staging, _1) }
+          if replace && File.exist?(destination)
+            backup = File.join(@target, ".mxrb", "backup", "#{module_name}-#{Process.pid}")
+            FileUtils.mkdir_p(File.dirname(backup))
+            FileUtils.mv(destination, backup)
+          end
           FileUtils.mkdir_p(File.dirname(destination))
           FileUtils.mv(staging, destination)
+          FileUtils.rm_rf(backup) if backup
+          backup = nil
           digest = tree_digest(destination)
           write_lock(entry, module_name, digest)
           Installation.new(entry, module_name, destination, digest)
+        rescue StandardError
+          FileUtils.mv(backup, destination) if backup && File.exist?(backup) && !File.exist?(destination)
+          raise
         ensure
           FileUtils.rm_rf(staging) if staging && File.exist?(staging)
+          FileUtils.rm_rf(backup) if backup && File.exist?(backup)
         end
       rescue KeyError, JSON::ParserError => e
         raise MarketplaceError, "invalid module manifest: #{e.message}"
       end
 
-      private
-
-      def resolve(identifier)
+      def resolve(identifier, version: nil)
         path = File.expand_path(identifier.to_s)
         return [local_entry(path), path] if File.directory?(path)
 
-        entry = @catalog.find(identifier)
+        entry = version ? @catalog.find_version(identifier, version) : @catalog.find(identifier)
         [entry, entry.source]
+      end
+
+      def resolve_installed_module_name(identifier)
+        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        raise MarketplaceError, "no modules are installed (lock file missing)" unless File.file?(lock_path)
+
+        lock = JSON.parse(File.read(lock_path))
+        locked = lock.fetch("modules", {})
+        entry = locked.find { |_name, info| info["package"] == identifier.to_s }
+        unless entry
+          candidates = locked.select { |name, _| name.downcase == identifier.to_s.downcase }
+          entry = candidates.first
+        end
+        raise MarketplaceError, "module #{identifier.inspect} is not installed" unless entry
+
+        entry.first
+      end
+
+      def remove_from_lock(module_name)
+        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        return unless File.file?(lock_path)
+
+        lock = JSON.parse(File.read(lock_path))
+        lock.fetch("modules", {}).delete(module_name)
+        temporary = "#{lock_path}.tmp-#{Process.pid}"
+        File.write(temporary, JSON.pretty_generate(lock) << "\n")
+        File.rename(temporary, lock_path)
+      ensure
+        FileUtils.rm_f(temporary) if defined?(temporary) && temporary && File.exist?(temporary)
       end
 
       def local_entry(path)
