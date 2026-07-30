@@ -7,7 +7,7 @@ module Mxrb
     # Immutable preview plus the prepared BSON documents needed for an explicit
     # apply. Construct plans through Project#plan_rename.
     class RenamePlan
-      attr_reader :source, :target, :changes
+      attr_reader :source, :target, :changes, :documents
 
       def initialize(project:, source:, target:, changes:, documents:)
         @project = project
@@ -43,9 +43,9 @@ module Mxrb
         @project = project
       end
 
-      def plan(source_name, to:)
+      def plan(source_name, to:, cross_module: false)
         source = resolve(source_name)
-        target = qualified_target(source, to)
+        target = qualified_target(source, to, cross_module: cross_module)
         reject_collision(source, target)
 
         changes = []
@@ -77,7 +77,7 @@ module Mxrb
         raise ArgumentError, "ambiguous Mendix artifact #{name.inspect} (#{kinds})"
       end
 
-      def qualified_target(source, value)
+      def qualified_target(source, value, cross_module: false)
         requested = value.to_s
         raise ArgumentError, "new name cannot be empty" if requested.empty?
         unless requested.match?(/\A[A-Za-z_][A-Za-z0-9_.]*\z/)
@@ -94,7 +94,7 @@ module Mxrb
         unless target.split(".").length == old_parts.length
           raise ArgumentError, "#{source.kind} rename must keep its qualification depth"
         end
-        if old_parts.length > 1 && target.split(".")[0...-1] != old_parts[0...-1]
+        if !cross_module && old_parts.length > 1 && target.split(".")[0...-1] != old_parts[0...-1]
           raise ArgumentError, "#{source.kind} rename cannot move the artifact to another container"
         end
         target

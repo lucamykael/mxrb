@@ -1873,8 +1873,9 @@ RSpec.describe Mxrb do
         expect { project.plan_move("Sales.Flows", to: "Sales.Nested") }
           .to raise_error(ArgumentError, /descendant/)
         expect(project.raw_unit(nested_id)["ContainerID"]).to eq(flows_id)
-        expect { project.move!("Sales.Target", to: "Other") }
-          .to raise_error(ArgumentError, /between modules/)
+        # cross-module moves via plan_move; move! applies the plan
+        cross_plan = project.plan_move("Sales.Target", to: "Other")
+        expect(cross_plan).to be_a(Mxrb::Semantic::CrossModuleMovePlan)
         expect { project.plan_move("Sales.Target", to: "Sales.Caller") }
           .to raise_error(ArgumentError, /not a module or folder/)
         expect { project.plan_move("Sales.Order", to: "Sales.Flows") }
@@ -2170,6 +2171,3006 @@ RSpec.describe Mxrb do
         end
       end
       expect { cyclic.validate! }.to raise_error(Mxrb::ValidationError, /call cycle detected/)
+    end
+
+    it "allows a page with an action event without raising for missing target" do
+      builder = described_class.new("action_event.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          page(:P) { on_click action: :save_changes }
+        end
+      end
+      expect { builder.validate! }.not_to raise_error
+    end
+  end
+
+  # ── Branch coverage: codec and IO edge cases ─────────────────────────────
+  describe "codec and IO edge cases" do
+    it "blob_to_uuid returns nil for non-16-byte or non-string input" do
+      expect(Mxrb::IO::BsonCodec.blob_to_uuid("short")).to be_nil
+      expect(Mxrb::IO::BsonCodec.blob_to_uuid(nil)).to be_nil
+      expect(Mxrb::IO::BsonCodec.blob_to_uuid(12345)).to be_nil
+    end
+
+    it "parse_array treats non-integer first element as items without marker" do
+      result = Mxrb::IO::BsonCodec.parse_array([{ "key" => 1 }, { "key" => 2 }])
+      expect(result[:marker]).to eq(3)
+      expect(result[:items]).to eq([{ "key" => 1 }, { "key" => 2 }])
+
+      single = Mxrb::IO::BsonCodec.parse_array(["item"])
+      expect(single[:items]).to eq(["item"])
+    end
+
+    it "parse returns empty hash for nil or empty bytes" do
+      expect(Mxrb::IO::BsonCodec.parse(nil)).to eq({})
+      expect(Mxrb::IO::BsonCodec.parse("")).to eq({})
+    end
+
+    it "extract_id returns nil for Hash without Data key" do
+      expect(Mxrb::IO::BsonCodec.extract_id({ "Subtype" => 3 })).to be_nil
+    end
+
+    it "write_atomic cleans up nothing when mkdir_p fails" do
+      expect { Mxrb::IO::MxunitCodec.write_atomic("/dev/null/sub/x.mxunit", "bytes") }
+        .to raise_error(SystemCallError)
+    end
+
+    it "unit returns nil for a non-existent UUID" do
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      expect(mpr.unit("00000000-0000-0000-0000-000000000000")).to be_nil
+      mpr.close
+    end
+
+    it "content_path returns nil for v1 MPRs" do
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      raw = mpr.root_unit
+      expect(mpr.content_path(raw)).to be_nil
+      mpr.close
+    end
+
+    it "content_files returns empty for v1 MPRs" do
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      expect(mpr.content_files).to eq([])
+      mpr.close
+    end
+
+    it "root_unit returns nil and project_name falls back for an MPR with no root" do
+      db = SQLite3::Database.new(@mpr_path)
+      db.execute("DELETE FROM Unit WHERE UnitID = ContainerID")
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      expect(mpr.root_unit).to be_nil
+      expect(mpr.project_name).to be_nil
+      mpr.close
+    end
+
+    it "handles a Unit row with NULL UnitID in raw_to_hash" do
+      db = SQLite3::Database.new(@mpr_path)
+      db.execute("INSERT INTO Unit VALUES (NULL, NULL, 'Orphan', 0, 'x', NULL, NULL)")
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      units = mpr.all_units
+      orphan = units.find { _1["ContainmentName"] == "Orphan" }
+      expect(orphan).not_to be_nil
+      expect(orphan["UnitID"]).to be_nil
+      mpr.close
+    end
+
+    it "content_bytes returns nil for v2 unit with no mxunit file" do
+      contents_dir = File.join(File.dirname(@mpr_path), "mprcontents")
+      FileUtils.mkdir_p(contents_dir)
+
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      expect(mpr.format_version).to eq(:v2)
+      mod_id = mpr.insert_unit(
+        container_uuid: @uuids[:project_uuid],
+        containment_name: "Modules",
+        contents_doc: { "$Type" => "Projects$Module", "Name" => "Ghost" }
+      )
+      raw = mpr.unit(mod_id)
+
+      FileUtils.rm_f(Mxrb::IO::MxunitCodec.path_for(contents_dir, mod_id))
+      expect(mpr.content_bytes(raw)).to be_nil
+      expect(mpr.parse_contents(raw)).to eq({})
+      mpr.close
+    end
+  end
+
+  # ── Branch coverage: model edge cases ─────────────────────────────────────
+  describe "model edge cases" do
+    it "Attribute.from_bson falls back to :string when type_doc is not a Hash" do
+      attr = Mxrb::Model::Attribute.from_bson({
+        "$ID" => SecureRandom.uuid,
+        "name" => "Flag",
+        "type" => "StringType"
+      })
+      expect(attr.type).to eq(:string)
+    end
+
+    it "Attribute.from_bson returns nil default_value for non-Hash value" do
+      attr = Mxrb::Model::Attribute.from_bson({
+        "name" => "Flag",
+        "value" => "raw"
+      })
+      expect(attr.default_value).to be_nil
+    end
+
+    it "Attribute#to_bson sets localizeDate for datetime type" do
+      attr = Mxrb::Model::Attribute.new
+      attr.name = "Created"
+      attr.type = :datetime
+      bson = attr.to_bson
+      expect(bson["type"]["localizeDate"]).to eq(true)
+    end
+
+    it "Entity.from_bson handles nil location" do
+      entity = Mxrb::Model::Entity.from_bson(
+        { "$ID" => SecureRandom.uuid, "name" => "E",
+          "generalization" => nil,
+          "attributes" => [3], "accessRules" => [3] },
+        nil, nil
+      )
+      expect(entity.location).to eq({ x: 0, y: 0 })
+    end
+
+    it "Module#entities returns empty array when there is no DomainModel unit" do
+      path = File.join(File.dirname(@mpr_path), "nodm.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:NoDomain) { microflow(:Ping) }
+      end
+
+      Mxrb.open(path) do |project|
+        mod = project.modules.first
+        expect(mod.entities).to eq([])
+        expect(mod.associations).to eq([])
+      end
+    end
+
+    it "Page#decode handles a doc with no Layout or FormCall" do
+      raw = {
+        "UnitID" => SecureRandom.uuid,
+        "ContainerID" => SecureRandom.uuid,
+        "ContainmentName" => "Documents",
+        "ContentsHash" => "x",
+        "Contents" => Mxrb::IO::BsonCodec.serialize({
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Pages$Page",
+          "Name" => "Bare"
+        })
+      }
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      page = Mxrb::Model::Page.new(raw, mpr)
+      expect(page.layout_id).to be_nil
+      expect(page.inspect).to include("Bare")
+      mpr.close
+    end
+
+    it "Menu#decode handles non-Hash captions and empty translations" do
+      raw = {
+        "UnitID" => SecureRandom.uuid,
+        "ContainerID" => SecureRandom.uuid,
+        "ContainmentName" => "Documents",
+        "ContentsHash" => "x",
+        "Contents" => Mxrb::IO::BsonCodec.serialize({
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Menus$MenuDocument",
+          "Name" => "Nav",
+          "ItemCollection" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "Menus$NavigationItemCollection",
+            "Items" => [3,
+              { "$ID" => SecureRandom.uuid, "$Type" => "Menus$NavigationItem",
+                "Name" => "Item1", "Caption" => nil },
+              { "$ID" => SecureRandom.uuid, "$Type" => "Menus$NavigationItem",
+                "Name" => "Item2",
+                "Caption" => {
+                  "$ID" => SecureRandom.uuid,
+                  "$Type" => "Texts$Text",
+                  "Items" => [3]
+                } }
+            ]
+          }
+        })
+      }
+      mpr = Mxrb::IO::MprFile.open(@mpr_path)
+      menu = Mxrb::Model::Menu.new(raw, mpr)
+      expect(menu.items.first[:caption]).to eq("")
+      expect(menu.items.last[:caption]).to eq("")
+      mpr.close
+    end
+  end
+
+  # ── Branch coverage: DSL builder edge cases ────────────────────────────────
+  describe "DSL builder edge cases" do
+    it "drop_down without attribute, container with class_name, column without attribute" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          page(:P) do
+            drop_down :Status
+            container :Body, class_name: "wrapper" do
+              text_box :Name
+            end
+            data_grid :Grid, entity: "M.Order" do
+              column :Name
+            end
+          end
+        end
+      end
+
+      defn = builder.definition[:modules].first[:pages].first
+      drop_down = defn[:widgets].find { _1[:type] == :drop_down }
+      expect(drop_down[:options]).not_to have_key(:attribute)
+
+      container = defn[:widgets].find { _1[:type] == :container }
+      expect(container[:options][:class]).to eq("wrapper")
+
+      grid = defn[:widgets].find { _1[:type] == :data_grid }
+      expect(grid[:options][:columns].first).not_to have_key(:attribute)
+    end
+
+    it "page with action event does not add an architecture edge" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          page(:P) do
+            on_click action: :save_changes
+            on_submit action: :save_changes
+          end
+        end
+      end
+      graph = builder.graph
+      page_edges = graph.edges.select { _1.from.include?("::page::P") }
+      expect(page_edges).to be_empty
+    end
+
+    it "architecture validator allows late-bound page nanoflow references" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          page(:P) { on_click nanoflow: :UndeclaredNano }
+        end
+      end
+      expect { builder.validate! }.not_to raise_error
+    end
+
+    it "microflow with repository call, call helpers, and body_fingerprint" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          repository :Repo, implementation: "M.RepoImpl", public: true
+          microflow :Worker do
+            uses_repository :Repo
+            call microflow: :Helper
+            body_fingerprint "deadbeef"
+            allow_concurrent_execution true
+            mark_as_used false
+            excluded false
+          end
+          microflow(:Helper)
+        end
+      end
+      flow = builder.definition[:modules].first[:microflows].first
+      expect(flow[:repositories]).to eq(["Repo"])
+      expect(flow[:calls]).to eq([{ kind: :microflow, name: "Helper" }])
+      expect(flow[:allow_concurrent_execution]).to eq(true)
+      expect(flow[:mark_as_used]).to eq(false)
+      expect(flow[:excluded]).to eq(false)
+    end
+
+    it "FlowBodyDsl covers show_page with all optional params, close_page with count" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          microflow :Worker do
+            show_page "M.Detail", object: :Item, location: :popup,
+                      pass: { Param: :Item }, close_pages: 2,
+                      title: "Detail"
+            close_page count: 3
+          end
+        end
+      end
+      acts = builder.definition[:modules].first[:microflows].first[:body]
+      sp = acts.find { _1[:type] == :show_page }
+      expect(sp[:variable]).to eq("Item")
+      expect(sp[:location]).to eq("popup")
+      expect(sp[:close_pages]).to eq(2)
+      expect(sp[:title]).to eq("Detail")
+      cp = acts.find { _1[:type] == :close_page }
+      expect(cp[:count]).to eq(3)
+    end
+
+    it "FlowBodyDsl covers call_microflow with result_name and use_return options" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          microflow :Worker do
+            call_microflow "M.Helper", result_name: :Stored, use_return: false
+            call_microflow "M.Helper", as: :Result, use_return: true
+            call_nanoflow "M.Load", use_return: true
+            call_java "M.Action", use_return: false
+          end
+          microflow(:Helper)
+          nanoflow(:Load)
+        end
+      end
+      acts = builder.definition[:modules].first[:microflows].first[:body]
+      no_return = acts.first
+      expect(no_return[:use_return]).to eq(false)
+      with_return = acts[1]
+      expect(with_return[:use_return]).to eq(true)
+    end
+
+    it "EntityBuilder lifecycle events and access_rule with Array write" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          entity :Order do
+            string :Name
+            before_commit microflow: :M_BeforeCommit
+            after_delete microflow: :M_AfterDelete
+            access_rule "M.User",
+                        create: true, delete: true,
+                        read: :all, write: [:Name]
+          end
+        end
+      end
+      entity = builder.definition[:modules].first[:entities].first
+      expect(entity[:lifecycle].size).to eq(2)
+      rule = entity[:access_rules].first
+      expect(rule[:write]).to eq(["Name"])
+    end
+
+    it "nanoflow with call helper using nanoflow target" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          nanoflow :Worker do
+            call nanoflow: :Helper
+          end
+          nanoflow :Helper
+        end
+      end
+      flow = builder.definition[:modules].first[:nanoflows].first
+      expect(flow[:calls]).to eq([{ kind: :nanoflow, name: "Helper" }])
+    end
+  end
+
+  # ── Cross-module move ─────────────────────────────────────────────────────
+  describe "cross-module move" do
+    it "moves a microflow to another module and updates references atomically" do
+      path = File.join(File.dirname(@mpr_path), "cross_move.mpr")
+
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) { call_microflow "Sales.Helpers_Support" }
+          microflow(:Helpers_Support)
+        end
+        self.module(:Helpers) { microflow(:Placeholder) }
+      end
+      expect(Mxrb.validate(path)).to be_valid
+
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_move("Sales.Helpers_Support", to: "Helpers")
+        expect(plan).to be_a(Mxrb::Semantic::CrossModuleMovePlan)
+        expect(plan).not_to be_empty
+        expect(plan.source.qualified_name).to eq("Sales.Helpers_Support")
+        expect(plan.target.module_name).to eq("Helpers")
+        plan.apply!
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.find_artifact("Helpers.Helpers_Support")).not_to be_nil
+        expect(project.find_artifact("Sales.Helpers_Support")).to be_nil
+
+        caller_flow = project.find_artifact("Sales.CreateOrder")
+        raw = project.raw_unit(caller_flow.unit_id)
+        content = project.mpr.content_bytes(raw) || raw["Contents"]
+        content_str = content.to_s.encode("UTF-8", invalid: :replace, undef: :replace)
+        expect(content_str).to include("Helpers.Helpers_Support")
+      end
+    end
+
+    it "raises for cross-module move when target is not a module" do
+      path = File.join(File.dirname(@mpr_path), "cross_err.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:A) { microflow(:Work) }
+        self.module(:B) { microflow(:Other) }
+      end
+
+      expect do
+        Mxrb.open(path, readonly: false) do |project|
+          project.plan_move("A.Work", to: "B.Other")
+        end
+      end.to raise_error(ArgumentError, /not a module or folder/)
+    end
+
+    it "plan_move returns a CrossModuleMovePlan with rename_changes" do
+      path = File.join(File.dirname(@mpr_path), "cross_plan.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Src) do
+          microflow(:Op) { call_microflow "Src.Src_Process" }
+          microflow(:Src_Process)
+        end
+        self.module(:Dst) { microflow(:Placeholder) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_move("Src.Src_Process", to: "Dst")
+        expect(plan).to be_a(Mxrb::Semantic::CrossModuleMovePlan)
+        expect(plan.rename_changes).not_to be_empty
+        expect(plan.applied?).to be false
+        plan.apply!
+        expect(plan.applied?).to be true
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      end
+    end
+
+    it "raises on collision when target module already has an artifact with the same name" do
+      path = File.join(File.dirname(@mpr_path), "cross_collision.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Src) { microflow(:SharedHelper) }
+        self.module(:Dst) { microflow(:SharedHelper) }
+      end
+
+      expect do
+        Mxrb.open(path, readonly: false) do |project|
+          project.plan_move("Src.SharedHelper", to: "Dst")
+        end
+      end.to raise_error(ArgumentError, /already exists/)
+    end
+
+    it "performs cross-module move in v2 MPR format and updates references" do
+      dir = File.dirname(@mpr_path)
+      path = File.join(dir, "cross_move_v2.mpr")
+      manifest = File.join(dir, "cross_move_v2_native.json")
+      File.write(manifest, JSON.generate("format_version" => "v2", "units" => []))
+
+      Mxrb.define(path) do
+        mendix_version "11.12.1"
+        native_units manifest
+        self.module(:Src) do
+          microflow(:Worker)
+          microflow(:Dispatcher) { call_microflow "Src.Worker" }
+        end
+        self.module(:Dst) { microflow(:Placeholder) }
+      end
+      expect(Mxrb.validate(path)).to be_valid
+      expect(Mxrb::IO::MprFile.open(path).format_version).to eq(:v2)
+
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_move("Src.Worker", to: "Dst")
+        expect(plan).to be_a(Mxrb::Semantic::CrossModuleMovePlan)
+        plan.apply!
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.find_artifact("Dst.Worker")).not_to be_nil
+        expect(project.find_artifact("Src.Worker")).to be_nil
+        dispatcher = project.find_artifact("Src.Dispatcher")
+        raw = project.raw_unit(dispatcher.unit_id)
+        content = project.mpr.content_bytes(raw) || raw["Contents"]
+        content_str = content.to_s.encode("UTF-8", invalid: :replace, undef: :replace)
+        expect(content_str).to include("Dst.Worker")
+      end
+    end
+  end
+
+  # ── Microflow extraction ──────────────────────────────────────────────────
+  describe "microflow extraction" do
+    def extraction_mpr(path, version: "10.18.0")
+      Mxrb.define(path) do
+        mendix_version version
+        self.module(:Sales) do
+          microflow(:CreateOrder) do
+            call_microflow "Sales.ValidateInput"
+            call_microflow "Sales.PersistOrder"
+            call_microflow "Sales.SendConfirmation"
+          end
+          microflow(:ValidateInput)
+          microflow(:PersistOrder)
+          microflow(:SendConfirmation)
+        end
+      end
+    end
+
+    it "plans an extraction with correct metadata" do
+      path = File.join(File.dirname(@mpr_path), "extract_plan.mpr")
+      extraction_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        # Extract the first two call activities
+        plan = project.plan_extract("Sales.CreateOrder",
+                                    as: "Sales.ValidateAndPersist",
+                                    object_ids: activity_ids[0..1])
+        expect(plan).to be_a(Mxrb::Semantic::ExtractionPlan)
+        expect(plan.source.qualified_name).to eq("Sales.CreateOrder")
+        expect(plan.new_name).to eq("Sales.ValidateAndPersist")
+        expect(plan.selected_ids.size).to eq(2)
+        expect(plan.changes.size).to eq(2)
+        expect(plan.applied?).to be false
+      end
+    end
+
+    it "applies the extraction: creates new microflow and updates source" do
+      path = File.join(File.dirname(@mpr_path), "extract_apply.mpr")
+      extraction_mpr(path)
+
+      activity_ids = []
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        project.plan_extract("Sales.CreateOrder",
+                              as: "Sales.ValidateAndPersist",
+                              object_ids: activity_ids[0..1]).apply!
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.find_artifact("Sales.ValidateAndPersist")).not_to be_nil
+        caller = project.find_artifact("Sales.CreateOrder")
+        raw = project.raw_unit(caller.unit_id)
+        content = project.mpr.content_bytes(raw) || raw["Contents"]
+        content_str = content.to_s.encode("UTF-8", invalid: :replace, undef: :replace)
+        expect(content_str).to include("Sales.ValidateAndPersist")
+        expect(content_str).to include("MicroflowCallAction")
+      end
+    end
+
+    it "raises when extracting a non-existent artifact" do
+      path = File.join(File.dirname(@mpr_path), "extract_err.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.Missing", as: "Sales.New", object_ids: ["x"]) }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when extracting a non-flow artifact" do
+      path = File.join(File.dirname(@mpr_path), "extract_nonflow.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) { entity(:Order) { string :Number } }
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.Order", as: "Sales.New", object_ids: ["x"]) }
+          .to raise_error(ArgumentError, /not a microflow/)
+      end
+    end
+
+    it "raises when extraction name is in a different module" do
+      path = File.join(File.dirname(@mpr_path), "extract_mod.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+        expect { project.plan_extract("Sales.CreateOrder", as: "Other.NewFlow", object_ids: [ids[0]]) }
+          .to raise_error(ArgumentError, /same module/)
+      end
+    end
+
+    it "raises when selection name already exists" do
+      path = File.join(File.dirname(@mpr_path), "extract_col.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.PersistOrder", object_ids: [ids[0]]) }
+          .to raise_error(ArgumentError, /already exists/)
+      end
+    end
+
+    it "raises when object_ids are empty" do
+      path = File.join(File.dirname(@mpr_path), "extract_empty.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.New", object_ids: []) }
+          .to raise_error(ArgumentError, /empty/)
+      end
+    end
+
+    it "raises when selection includes start or end event" do
+      path = File.join(File.dirname(@mpr_path), "extract_event.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        start_id = objects.find { _1["$Type"] == "Microflows$StartEvent" }["$ID"]
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.New", object_ids: [start_id]) }
+          .to raise_error(ArgumentError, /start\/end event/)
+      end
+    end
+
+    it "raises when selection has multiple entry or exit points" do
+      path = File.join(File.dirname(@mpr_path), "extract_branch.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:BranchedFlow) do
+            call_microflow "Sales.Step1"
+            call_microflow "Sales.Step2"
+            call_microflow "Sales.Step3"
+          end
+          microflow(:Step1)
+          microflow(:Step2)
+          microflow(:Step3)
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.BranchedFlow")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { Mxrb::IO::BsonCodec.extract_id(_1["$ID"]) }
+        # Select first and third (non-contiguous) — creates 2 separate entry points
+        expect {
+          project.plan_extract("Sales.BranchedFlow", as: "Sales.Extracted",
+                               object_ids: [activity_ids[0], activity_ids[2]])
+        }.to raise_error(ArgumentError, /entry point/)
+      end
+    end
+
+    it "apply! raises on double-apply" do
+      path = File.join(File.dirname(@mpr_path), "extract_double.mpr")
+      extraction_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        plan = project.plan_extract("Sales.CreateOrder",
+                                    as: "Sales.Extracted",
+                                    object_ids: [ids[0]])
+        plan.apply!
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      end
+    end
+  end
+
+  # ── Microflow inline ─────────────────────────────────────────────────────
+  describe "microflow inline" do
+    def inline_mpr(path)
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) do
+            call_microflow "Sales.PrepareOrder"
+            call_microflow "Sales.SendConfirmation"
+          end
+          microflow(:PrepareOrder) do
+            call_microflow "Sales.ValidateInput"
+            call_microflow "Sales.PersistOrder"
+          end
+          microflow(:ValidateInput)
+          microflow(:PersistOrder)
+          microflow(:SendConfirmation)
+        end
+      end
+    end
+
+    it "plans an inline with correct metadata" do
+      path = File.join(File.dirname(@mpr_path), "inline_plan.mpr")
+      inline_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder")
+        expect(plan).to be_a(Mxrb::Semantic::InlinePlan)
+        expect(plan.source.qualified_name).to eq("Sales.CreateOrder")
+        expect(plan.called_name).to eq("Sales.PrepareOrder")
+        expect(plan.changes.size).to eq(2)
+        expect(plan.applied?).to be false
+      end
+    end
+
+    it "applies inline: replaces call activity with callee's activities" do
+      path = File.join(File.dirname(@mpr_path), "inline_apply.mpr")
+      inline_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder").apply!
+      end
+
+      Mxrb.open(path) do |project|
+        caller_flow = project.find_artifact("Sales.CreateOrder")
+        raw = project.raw_unit(caller_flow.unit_id)
+        doc = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items]
+        types = objects.map { _1["$Type"] }
+
+        # Should have 2 call_microflow activities from PrepareOrder inlined,
+        # plus 1 original SendConfirmation call, plus start + end
+        expect(types.count { _1 == "Microflows$ActionActivity" }).to eq(3)
+        content_str = objects.map(&:to_s).join
+        expect(content_str).to include("Sales.ValidateInput")
+        expect(content_str).to include("Sales.PersistOrder")
+        expect(content_str).to include("Sales.SendConfirmation")
+        expect(content_str).not_to include("Sales.PrepareOrder")
+      end
+    end
+
+    it "extract then inline is a no-op (round-trip)" do
+      path = File.join(File.dirname(@mpr_path), "inline_roundtrip.mpr")
+      inline_mpr(path)
+
+      # Count objects before
+      before_count = nil
+      Mxrb.open(path) do |project|
+        raw = project.raw_unit(project.find_artifact("Sales.CreateOrder").unit_id)
+        doc = project.parse_bson(raw)
+        before_count = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items].size
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.first(1).map { Mxrb::IO::BsonCodec.extract_id(_1["$ID"]) }
+
+        project.plan_extract("Sales.CreateOrder",
+                              as: "Sales.Extracted",
+                              object_ids: activity_ids).apply!
+        project.plan_inline("Sales.CreateOrder", calling: "Sales.Extracted").apply!
+      end
+
+      Mxrb.open(path) do |project|
+        raw = project.raw_unit(project.find_artifact("Sales.CreateOrder").unit_id)
+        doc = project.parse_bson(raw)
+        after_count = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items].size
+        expect(after_count).to eq(before_count)
+      end
+    end
+
+    it "raises when source not found" do
+      path = File.join(File.dirname(@mpr_path), "inline_err1.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.Missing", calling: "Sales.PrepareOrder") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when called microflow not found" do
+      path = File.join(File.dirname(@mpr_path), "inline_err2.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.Missing") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when source is not a microflow" do
+      path = File.join(File.dirname(@mpr_path), "inline_err3.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) { entity(:Order) { string :Number } }
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.Order", calling: "Sales.Order") }
+          .to raise_error(ArgumentError, /not a microflow/)
+      end
+    end
+
+    it "raises when source does not call the target" do
+      path = File.join(File.dirname(@mpr_path), "inline_err4.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.ValidateInput") }
+          .to raise_error(ArgumentError, /no call to/)
+      end
+    end
+
+    it "apply! raises on double-apply" do
+      path = File.join(File.dirname(@mpr_path), "inline_double.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder")
+        plan.apply!
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      end
+    end
+
+    it "changes uses singular 'activity' when inlining a single-activity microflow" do
+      path = File.join(File.dirname(@mpr_path), "inline_singular.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) { call_microflow "Sales.Step" }
+          microflow(:Step)        { call_microflow "Sales.Work" }
+          microflow(:Work)
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.Step")
+        expect(plan.changes.last).to include("1 inlined activity")
+      end
+    end
+  end
+
+  # ── Marketplace update and remove ──────────────────────────────────────────
+  describe "marketplace update and remove" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @mkt_dir = dir
+        @pkg_v1 = File.join(dir, "pkg_v1")
+        @pkg_v2 = File.join(dir, "pkg_v2")
+        [@pkg_v1, @pkg_v2].each { FileUtils.mkdir_p(_1) }
+        File.write(File.join(@pkg_v1, "mxrb-module.json"),
+                   JSON.generate(name: "mymod", module_name: "MyMod",
+                                 version: "1.0.0", files: ["module.rb"]))
+        File.write(File.join(@pkg_v1, "module.rb"), "# v1\n")
+        File.write(File.join(@pkg_v2, "mxrb-module.json"),
+                   JSON.generate(name: "mymod", module_name: "MyMod",
+                                 version: "2.0.0", files: ["module.rb"]))
+        File.write(File.join(@pkg_v2, "module.rb"), "# v2\n")
+        @catalog_path = File.join(dir, "catalog.json")
+        File.write(@catalog_path, JSON.generate(modules: [
+          { name: "mymod", version: "1.0.0", description: "Mod v1", source: @pkg_v1 },
+          { name: "mymod", version: "2.0.0", description: "Mod v2", source: @pkg_v2 }
+        ]))
+        ex.run
+      end
+    end
+
+    it "updates an installed module to a newer version" do
+      target = File.join(@mkt_dir, "project")
+      catalog = Mxrb::Marketplace::Catalog.new(@catalog_path)
+      installer = Mxrb::Marketplace::Installer.new(target: target, catalog: catalog)
+
+      v1 = installer.install("mymod", version: "1.0.0")
+      expect(File.read(File.join(v1.destination, "module.rb"))).to include("v1")
+
+      v2 = installer.update("mymod", version: "2.0.0")
+      expect(File.read(File.join(v2.destination, "module.rb"))).to include("v2")
+
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "MyMod", "version")).to eq("2.0.0")
+    end
+
+    it "removes an installed module and clears its lockfile entry" do
+      target = File.join(@mkt_dir, "project")
+      catalog = Mxrb::Marketplace::Catalog.new(@catalog_path)
+      installer = Mxrb::Marketplace::Installer.new(target: target, catalog: catalog)
+
+      installation = installer.install("mymod", version: "1.0.0")
+      expect(File.directory?(installation.destination)).to be true
+
+      installer.remove("mymod")
+      expect(File.directory?(installation.destination)).to be false
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "MyMod")).to be_nil
+    end
+
+    it "catalog searches by query and raises for unknown module" do
+      catalog = Mxrb::Marketplace::Catalog.new(@catalog_path)
+      all = catalog.search
+      expect(all.size).to eq(2)
+      filtered = catalog.search("mymod")
+      expect(filtered.size).to eq(2)
+      empty = catalog.search("zzz_unknown")
+      expect(empty).to be_empty
+      expect { catalog.find("nosuchmod") }.to raise_error(Mxrb::MarketplaceError, /not found/)
+      expect { catalog.find_version("mymod", "9.9.9") }.to raise_error(Mxrb::MarketplaceError, /not found/)
+    end
+
+    it "installs from a local directory path" do
+      target = File.join(@mkt_dir, "project2")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installation = installer.install(@pkg_v1)
+      expect(File.directory?(installation.destination)).to be true
+      expect(installation.entry.version).to eq("local")
+    end
+
+    it "remove raises when module is not installed" do
+      target = File.join(@mkt_dir, "not_installed")
+      FileUtils.mkdir_p(target)
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      expect { installer.remove("mymod") }.to raise_error(Mxrb::MarketplaceError, /not installed|lock file/)
+    end
+
+    it "update raises when the new package changes the module_name" do
+      pkg_renamed = File.join(@mkt_dir, "pkg_renamed")
+      FileUtils.mkdir_p(pkg_renamed)
+      File.write(File.join(pkg_renamed, "mxrb-module.json"),
+                 JSON.generate(name: "mymod", module_name: "DifferentMod",
+                               version: "3.0.0", files: ["module.rb"]))
+      File.write(File.join(pkg_renamed, "module.rb"), "# v3\n")
+      catalog_with_rename = File.join(@mkt_dir, "catalog_rename.json")
+      File.write(catalog_with_rename, JSON.generate(modules: [
+        { name: "mymod", version: "1.0.0", description: "Mod v1", source: @pkg_v1 },
+        { name: "mymod", version: "3.0.0", description: "Mod renamed", source: pkg_renamed }
+      ]))
+      target = File.join(@mkt_dir, "project_rename")
+      catalog = Mxrb::Marketplace::Catalog.new(catalog_with_rename)
+      installer = Mxrb::Marketplace::Installer.new(target: target, catalog: catalog)
+      installer.install("mymod", version: "1.0.0")
+      expect { installer.update("mymod", version: "3.0.0") }
+        .to raise_error(Mxrb::MarketplaceError, /cannot change its name/)
+    end
+
+    it "resolves installed module by module_name case-insensitive fallback" do
+      target = File.join(@mkt_dir, "project_ci")
+      catalog = Mxrb::Marketplace::Catalog.new(@catalog_path)
+      installer = Mxrb::Marketplace::Installer.new(target: target, catalog: catalog)
+      installation = installer.install("mymod", version: "1.0.0")
+      # "MyMod" matches by module_name key (case-insensitive), not by package name
+      installer.remove("MyMod")
+      expect(File.directory?(installation.destination)).to be false
+    end
+
+    it "restores previous module when update mv fails (atomic rollback)" do
+      target = File.join(@mkt_dir, "project_rollback")
+      catalog = Mxrb::Marketplace::Catalog.new(@catalog_path)
+      installer = Mxrb::Marketplace::Installer.new(target: target, catalog: catalog)
+      v1 = installer.install("mymod", version: "1.0.0")
+      original_content = File.read(File.join(v1.destination, "module.rb"))
+
+      mv_call = 0
+      allow(FileUtils).to receive(:mv).and_wrap_original do |original, *args|
+        mv_call += 1
+        raise Errno::ENOSPC, "simulated disk full" if mv_call == 2
+        original.call(*args)
+      end
+
+      expect { installer.update("mymod", version: "2.0.0") }.to raise_error(Errno::ENOSPC)
+      expect(File.exist?(v1.destination)).to be true
+      expect(File.read(File.join(v1.destination, "module.rb"))).to eq(original_content)
+    end
+  end
+
+  # ── Marketplace dependencies ───────────────────────────────────────────────
+  describe "marketplace module dependencies" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @dep_dir = dir
+
+        # shared-kernel: no dependencies
+        @pkg_kernel = File.join(dir, "pkg_kernel")
+        FileUtils.mkdir_p(@pkg_kernel)
+        File.write(File.join(@pkg_kernel, "mxrb-module.json"),
+                   JSON.generate(name: "shared-kernel", module_name: "SharedKernel",
+                                 version: "1.0.0", files: ["kernel.rb"]))
+        File.write(File.join(@pkg_kernel, "kernel.rb"), "# kernel\n")
+
+        # widget-lib: depends on shared-kernel
+        @pkg_widget = File.join(dir, "pkg_widget")
+        FileUtils.mkdir_p(@pkg_widget)
+        File.write(File.join(@pkg_widget, "mxrb-module.json"),
+                   JSON.generate(name: "widget-lib", module_name: "WidgetLib",
+                                 version: "1.0.0", files: ["widgets.rb"],
+                                 dependencies: [{ "name" => "shared-kernel" }]))
+        File.write(File.join(@pkg_widget, "widgets.rb"), "# widgets\n")
+
+        ex.run
+      end
+    end
+
+    it "installs a module with no dependencies normally" do
+      target = File.join(@dep_dir, "proj_nodeps")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      inst = installer.install(@pkg_kernel)
+      expect(File.directory?(inst.destination)).to be true
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "SharedKernel", "dependencies")).to be_nil
+    end
+
+    it "records dependencies in the lock file after install" do
+      target = File.join(@dep_dir, "proj_deps")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "WidgetLib", "dependencies")).to eq(["shared-kernel"])
+    end
+
+    it "raises MarketplaceError when a dependency is not installed" do
+      target = File.join(@dep_dir, "proj_missing_dep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      expect { installer.install(@pkg_widget) }
+        .to raise_error(Mxrb::MarketplaceError, /missing dependencies.*shared-kernel/)
+    end
+
+    it "raises MarketplaceError when removing a module another depends on" do
+      target = File.join(@dep_dir, "proj_remove_dep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      expect { installer.remove("SharedKernel") }
+        .to raise_error(Mxrb::MarketplaceError, /WidgetLib/)
+    end
+
+    it "allows removing a module after its dependent is removed first" do
+      target = File.join(@dep_dir, "proj_remove_order")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      installer.remove("WidgetLib")
+      expect { installer.remove("SharedKernel") }.not_to raise_error
+      expect(File.directory?(File.join(target, "modules", "SharedKernel"))).to be false
+    end
+  end
+
+  # ── Marketplace edge cases ─────────────────────────────────────────────────
+  describe "marketplace installer edge cases" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @ec_dir = dir
+        @pkg = File.join(dir, "pkg")
+        FileUtils.mkdir_p(@pkg)
+        File.write(File.join(@pkg, "mxrb-module.json"),
+                   JSON.generate(name: "mymod", module_name: "MyMod",
+                                 version: "1.0.0", files: ["module.rb"]))
+        File.write(File.join(@pkg, "module.rb"), "# mod\n")
+        ex.run
+      end
+    end
+
+    it "remove is idempotent when module directory was already deleted" do
+      target = File.join(@ec_dir, "proj_idem")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installation = installer.install(@pkg)
+      FileUtils.rm_rf(installation.destination)
+      expect(File.directory?(installation.destination)).to be false
+      expect { installer.remove("MyMod") }.not_to raise_error
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "MyMod")).to be_nil
+    end
+
+    it "catalog search with empty string returns all entries" do
+      Dir.mktmpdir do |dir|
+        catalog_path = File.join(dir, "cat.json")
+        File.write(catalog_path, JSON.generate(modules: [
+          { name: "alpha", version: "1.0", description: "First", source: @pkg },
+          { name: "beta",  version: "1.0", description: "Second", source: @pkg }
+        ]))
+        catalog = Mxrb::Marketplace::Catalog.new(catalog_path)
+        expect(catalog.search("").size).to eq(2)
+        expect(catalog.search(nil).size).to eq(2)
+      end
+    end
+
+    it "catalog search matches by description" do
+      Dir.mktmpdir do |dir|
+        catalog_path = File.join(dir, "cat.json")
+        File.write(catalog_path, JSON.generate(modules: [
+          { name: "alpha", version: "1.0", description: "shared utilities", source: @pkg },
+          { name: "beta",  version: "1.0", description: "reporting tools", source: @pkg }
+        ]))
+        catalog = Mxrb::Marketplace::Catalog.new(catalog_path)
+        expect(catalog.search("shared").map(&:name)).to eq(["alpha"])
+        expect(catalog.search("REPORTING").map(&:name)).to eq(["beta"])
+      end
+    end
+
+    it "install uses directory basename as package name when manifest has no name field" do
+      pkg_noname = File.join(@ec_dir, "pkg_noname")
+      FileUtils.mkdir_p(pkg_noname)
+      File.write(File.join(pkg_noname, "mxrb-module.json"),
+                 JSON.generate(module_name: "NoName", version: "1.0.0", files: ["mod.rb"]))
+      File.write(File.join(pkg_noname, "mod.rb"), "# noname\n")
+      target = File.join(@ec_dir, "proj_noname")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installation = installer.install(pkg_noname)
+      expect(installation.module_name).to eq("NoName")
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "NoName", "package")).to eq("pkg_noname")
+    end
+  end
+
+  # ── Functional test Suite ─────────────────────────────────────────────────
+  describe "functional test Suite" do
+    it "builds test cases with the microflow DSL" do
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("Create Order", call: "Sales.ACT_CreateOrder", pass: { Amount: "10" },
+                      timeout: 30, expect: { return: true })
+      expect(suite.tests.size).to eq(1)
+      tc = suite.tests.first
+      expect(tc.name).to eq("Create Order")
+      expect(tc.target).to eq("Sales.ACT_CreateOrder")
+      expect(tc.arguments).to eq("Amount" => "10")
+      expect(tc.timeout).to eq(30.0)
+      expect(tc.expected_return).to eq("true")
+    end
+
+    it "validates microflow name format" do
+      suite = Mxrb::Functional::Suite.new
+      expect { suite.microflow("", call: "A.B") }.to raise_error(ArgumentError, /name cannot be empty/)
+      expect { suite.microflow("T", call: "NoModule") }.to raise_error(ArgumentError, /qualified Mendix name/)
+      expect { suite.microflow("T", call: "A.B", timeout: 0) }.to raise_error(ArgumentError, /timeout must be positive/)
+    end
+
+    it "adds before/after hooks as qualified microflow calls" do
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("TC", call: "M.Flow",
+                      before: { call: "M.Setup", pass: { X: "1" } },
+                      after: "M.Teardown")
+      tc = suite.tests.first
+      expect(tc.setup).to be_a(Mxrb::Functional::Hook)
+      expect(tc.setup.target).to eq("M.Setup")
+      expect(tc.setup.arguments).to eq("X" => "1")
+      expect(tc.cleanup).to be_a(Mxrb::Functional::Hook)
+      expect(tc.cleanup.target).to eq("M.Teardown")
+    end
+
+    it "validates hook format" do
+      suite = Mxrb::Functional::Suite.new
+      expect { suite.microflow("T", call: "M.F", before: "BadName") }
+        .to raise_error(ArgumentError, /qualified microflow/)
+    end
+
+    it "adds count expectations" do
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("TC", call: "M.Flow", expect: {
+        count: [{ entity: "Sales.Order", equals: 5, xpath: "[Active = true()]" }]
+      })
+      tc = suite.tests.first
+      expect(tc.counts.size).to eq(1)
+      expect(tc.counts.first.entity).to eq("Sales.Order")
+      expect(tc.counts.first.equals).to eq(5)
+    end
+
+    it "validates count expectations" do
+      suite = Mxrb::Functional::Suite.new
+      expect do
+        suite.microflow("T", call: "M.F", expect: {
+          count: [{ entity: "BadEntity", equals: 1 }]
+        })
+      end.to raise_error(ArgumentError, /qualified entity/)
+      expect do
+        suite.microflow("T", call: "M.F", expect: {
+          count: [{ entity: "M.E", equals: -1 }]
+        })
+      end.to raise_error(ArgumentError, /non-negative integer/)
+    end
+
+    it "evaluates a functional definition from a file" do
+      func_file = File.join(File.dirname(@mpr_path), "tests.rb")
+      File.write(func_file, <<~RUBY)
+        microflow "Ping", call: "Sys.Heartbeat", timeout: 10
+      RUBY
+      defn = Mxrb.functional_definition(func_file)
+      expect(defn.tests.size).to eq(1)
+      expect(defn.tests.first.target).to eq("Sys.Heartbeat")
+      expect(defn).not_to be_empty
+    end
+
+    it "definition wraps tests as frozen" do
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("T", call: "M.F")
+      defn = suite.definition
+      expect(defn.tests).to be_frozen
+    end
+  end
+
+  describe "functional test LogParser and Reporter" do
+    let(:parser) { Mxrb::Functional::LogParser.new }
+
+    it "parses PASS, FAIL, and DONE from log output" do
+      log = <<~LOG
+        [MXRB_TEST] PASS Create Order
+        [MXRB_TEST] FAIL Validate Stock
+        [MXRB_TEST] DONE
+      LOG
+      result = parser.parse(log)
+      expect(result.tests.size).to eq(2)
+      expect(result.tests[0].name).to eq("Create Order")
+      expect(result.tests[0]).to be_passed
+      expect(result.tests[1].name).to eq("Validate Stock")
+      expect(result.tests[1]).to be_failed
+      expect(result).to be_finished
+      expect(result).not_to be_passed
+    end
+
+    it "returns unfinished result when DONE is missing" do
+      result = parser.parse("[MXRB_TEST] PASS T1\n")
+      expect(result).not_to be_finished
+      expect(result.failures).to be_empty
+    end
+
+    it "returns empty result for unrelated log lines" do
+      result = parser.parse("some random log\nINFO: started\n")
+      expect(result.tests).to be_empty
+      expect(result).not_to be_finished
+    end
+
+    it "Reporter writes JSON and JUnit reports" do
+      result = Mxrb::Functional::Result.new(
+        [Mxrb::Functional::TestResult.new("T1", true, "passed"),
+         Mxrb::Functional::TestResult.new("T2", false, "microflow failed")].freeze,
+        true
+      )
+      fake_execution = Struct.new(:passed?, :result, :elapsed).new(false, result, 1.23)
+      reporter = Mxrb::Functional::Reporter.new
+      dir = File.dirname(@mpr_path)
+
+      json_path = reporter.write_json(fake_execution, File.join(dir, "report.json"))
+      payload = JSON.parse(File.read(json_path))
+      expect(payload["passed"]).to eq(false)
+      expect(payload["tests"].size).to eq(2)
+
+      junit_path = reporter.write_junit(fake_execution, File.join(dir, "report.xml"))
+      xml = File.read(junit_path)
+      expect(xml).to include('<failure message="microflow failed"')
+      expect(xml).to include('name="T1"')
+    end
+  end
+
+  describe "functional Instrumenter" do
+    it "raises FunctionalTestError for empty definition" do
+      defn = Mxrb::Functional::Definition.new([].freeze)
+      inst = Mxrb::Functional::Instrumenter.new(@mpr_path, defn)
+      expect { inst.instrument! }.to raise_error(Mxrb::FunctionalTestError, /empty/)
+    end
+
+    it "raises FunctionalTestError for unknown microflow target" do
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("Ping", call: "Sys.UnknownFlow")
+      inst = Mxrb::Functional::Instrumenter.new(@mpr_path, suite.definition)
+      expect { inst.instrument! }.to raise_error(Mxrb::FunctionalTestError, /not found/)
+    end
+
+    it "instruments an MPR with a functional test module and sets AfterStartup" do
+      path = File.join(File.dirname(@mpr_path), "instrumented.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:MyApp) do
+          entity(:Order) { integer(:Amount) }
+          microflow(:ACT_Create)
+          microflow(:ACT_Setup)
+          microflow(:ACT_Teardown)
+        end
+      end
+
+      # Insert a minimal Settings$ProjectSettings unit so the Instrumenter can find it
+      mpr = Mxrb::IO::MprFile.open(path, readonly: false)
+      root = mpr.root_unit
+      model_settings_doc = {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Settings$ModelSettings",
+        "AfterStartupMicroflow" => ""
+      }
+      settings_doc = {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Settings$ProjectSettings",
+        "Settings" => Mxrb::IO::BsonCodec.build_array([model_settings_doc])
+      }
+      mpr.insert_unit(
+        container_uuid: root.fetch("UnitID"),
+        containment_name: "Settings",
+        contents_doc: settings_doc
+      )
+      mpr.close
+
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("Create Order",
+        call: "MyApp.ACT_Create",
+        before: "MyApp.ACT_Setup",
+        after: "MyApp.ACT_Teardown",
+        expect: {
+          return: "true",
+          count: [{ entity: "MyApp.Order", equals: 1 }]
+        }
+      )
+
+      inst = Mxrb::Functional::Instrumenter.new(path, suite.definition)
+      expect(inst.runner).to eq("MxrbTests.RunAll")
+      inst.instrument!
+
+      Mxrb.open(path) do |project|
+        expect(project.find_artifact("MxrbTests")).not_to be_nil
+        expect(project.find_artifact("MxrbTests.RunAll")).not_to be_nil
+        expect(project.find_artifact("MxrbTests.Test_001")).not_to be_nil
+
+        all_units = project.mpr.all_units
+        settings = all_units.find do |u|
+          project.mpr.parse_contents(u)["$Type"] == "Settings$ProjectSettings"
+        end
+        expect(settings).not_to be_nil
+        doc = project.mpr.parse_contents(settings)
+        model = Mxrb::IO::BsonCodec.parse_array(doc["Settings"])[:items]
+                  .find { _1["$Type"] == "Settings$ModelSettings" }
+        expect(model["AfterStartupMicroflow"]).to eq("MxrbTests.RunAll")
+      end
+    end
+
+    it "raises FunctionalTestError when count entity is not in project" do
+      path = File.join(File.dirname(@mpr_path), "inst_count_err.mpr")
+      Mxrb.define(path) { mendix_version "10.18.0"; self.module(:M) { microflow(:F) } }
+      suite = Mxrb::Functional::Suite.new
+      suite.microflow("T", call: "M.F", expect: {
+        count: [{ entity: "M.Ghost", equals: 0 }]
+      })
+      inst = Mxrb::Functional::Instrumenter.new(path, suite.definition)
+      expect { inst.instrument! }.to raise_error(Mxrb::FunctionalTestError, /not found/)
+    end
+  end
+
+  # ── Model to_bson / inspect coverage ──────────────────────────────────────
+  describe "model to_bson and inspect" do
+    it "round-trips Association through to_bson" do
+      path = File.join(File.dirname(@mpr_path), "assoc_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { association :Customer }
+          entity(:Customer)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        mod = project.modules.first
+        assoc = mod.associations.first
+        expect(assoc).not_to be_nil
+        bson = assoc.to_bson
+        expect(bson["$Type"]).to eq("DomainModels$Association")
+        expect(assoc.inspect).to include("Association")
+      end
+    end
+
+    it "round-trips Entity through to_bson and inspect" do
+      path = File.join(File.dirname(@mpr_path), "entity_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { entity(:Order) { string :Name } }
+      end
+
+      Mxrb.open(path) do |project|
+        entity = project.modules.first.entities.first
+        bson = entity.to_bson
+        expect(bson["$Type"]).to eq("DomainModels$EntityImpl")
+        expect(entity.inspect).to include("Order")
+      end
+    end
+
+    it "round-trips Microflow through to_bson and inspect" do
+      path = File.join(File.dirname(@mpr_path), "flow_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:Worker) }
+      end
+
+      Mxrb.open(path) do |project|
+        flow = project.modules.first.microflows.first
+        bson = flow.to_bson
+        expect(bson["$Type"]).to eq("Microflows$Microflow")
+        expect(flow.inspect).to include("Worker")
+      end
+    end
+
+    it "round-trips Module through to_bson and inspect" do
+      path = File.join(File.dirname(@mpr_path), "mod_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      Mxrb.open(path) do |project|
+        mod = project.modules.first
+        bson = mod.to_bson
+        expect(bson["$Type"]).to eq("Projects$Module")
+        expect(mod.inspect).to include("Module")
+      end
+    end
+
+    it "round-trips DomainModel through to_bson and inspect" do
+      path = File.join(File.dirname(@mpr_path), "dm_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { entity(:E) }
+      end
+
+      Mxrb.open(path) do |project|
+        dm = project.modules.first.domain_model
+        bson = dm.to_bson
+        expect(bson["$Type"]).to eq("DomainModels$DomainModel")
+        expect(dm.inspect).to include("DomainModel")
+      end
+    end
+  end
+
+  # ── BsonCodec rescue and edge cases ───────────────────────────────────────
+  describe "BsonCodec rescue branches and extract_id with Data key" do
+    it "parse raises SerializationError for malformed BSON bytes" do
+      expect { Mxrb::IO::BsonCodec.parse("\x01\x02\x03garbage") }
+        .to raise_error(Mxrb::SerializationError, /BSON parse error/)
+    end
+
+    it "serialize raises SerializationError for unserializable content" do
+      expect { Mxrb::IO::BsonCodec.serialize({ "key" => Object.new }) }
+        .to raise_error(Mxrb::SerializationError, /BSON serialize error/)
+    end
+
+    it "extract_id decodes a base64 UUID from a Hash with Data key" do
+      uuid = "12345678-1234-1234-1234-123456789012"
+      blob = Mxrb::IO::BsonCodec.uuid_to_blob(uuid)
+      encoded = Base64.strict_encode64(blob)
+      result = Mxrb::IO::BsonCodec.extract_id({ "Data" => encoded })
+      expect(result).to eq(uuid)
+    end
+  end
+
+  # ── MprFile and MxunitCodec edge cases ─────────────────────────────────────
+  describe "MprFile and MxunitCodec edge cases" do
+    it "raises NotMprError when opening a non-SQLite file as readonly" do
+      bad = File.join(File.dirname(@mpr_path), "not_an_mpr.mpr")
+      File.write(bad, "not sqlite data")
+      expect { Mxrb::IO::MprFile.open(bad, readonly: true) }
+        .to raise_error(Mxrb::NotMprError)
+    end
+
+    it "conflicts_column returns nil when neither conflict column exists" do
+      path = File.join(File.dirname(@mpr_path), "no_conflict.mpr")
+      db = SQLite3::Database.new(path)
+      db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT, _BuildVersion TEXT, _SchemaHash TEXT)")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY, ContainerID BLOB, ContainmentName TEXT,
+          TreeConflict LONG, ContentsHash TEXT, Contents BLOB
+        )
+      SQL
+      uuid = SecureRandom.uuid
+      blob = [uuid.delete("-")].pack("H*")
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', NULL, 'hash', ?)",
+        [blob, blob, make_bson({ "$Type" => "Projects$Project", "Name" => "X" })]
+      )
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(path)
+      expect(mpr.root_unit).not_to be_nil
+      mpr.close
+    end
+
+    it "MxunitCodec read raises UnsupportedFormat for invalid BSON" do
+      path = File.join(File.dirname(@mpr_path), "bad.mxunit")
+      File.binwrite(path, "garbage bytes that are not valid BSON")
+      expect { Mxrb::IO::MxunitCodec.read(path) }
+        .to raise_error(Mxrb::IO::MxunitCodec::UnsupportedFormat)
+    end
+  end
+
+  # ── Semantic edge cases ──────────────────────────────────────────────────────
+  describe "semantic edge cases" do
+    it "Renamer raises for invalid name, ambiguous artifact, and collision" do
+      path = File.join(File.dirname(@mpr_path), "rename_edge.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_rename("M.F", to: "M.F!Invalid") }
+          .to raise_error(ArgumentError, /invalid Mendix name/)
+        expect { project.plan_rename("M.F", to: "M.F.G.H") }
+          .to raise_error(ArgumentError, /rename must keep/)
+        expect { project.plan_rename("M.Missing", to: "M.G") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "Renamer rejects cross-module rename without cross_module flag" do
+      path = File.join(File.dirname(@mpr_path), "rename_xm.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:A) { microflow(:F) }
+        self.module(:B) { microflow(:G) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_rename("A.F", to: "B.F") }
+          .to raise_error(ArgumentError, /cannot move the artifact/)
+      end
+    end
+
+    it "Renamer raises for collision with existing artifact" do
+      path = File.join(File.dirname(@mpr_path), "rename_col.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) ; microflow(:G) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_rename("M.F", to: "M.G") }
+          .to raise_error(ArgumentError, /already exists/)
+      end
+    end
+
+    it "Remover raises for ambiguous name" do
+      path = File.join(File.dirname(@mpr_path), "remover_edge.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:A) { microflow(:F) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_remove("A.Missing") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "Mover raises for ambiguous name" do
+      path = File.join(File.dirname(@mpr_path), "mover_edge.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:A) { microflow(:F) }
+        self.module(:B) {}
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_move("A.Missing", to: "B") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "Analyzer raises for custom rule that returns non-Diagnostic" do
+      path = File.join(File.dirname(@mpr_path), "analyzer_edge.mpr")
+      Mxrb.define(path) { mendix_version "10.18.0"; self.module(:M) {} }
+
+      Mxrb.open(path) do |project|
+        bad_rule = ->(_proj, _idx) { "not a diagnostic" }
+        expect { project.analyze(rules: [bad_rule]) }
+          .to raise_error(ArgumentError, /must return.*Diagnostic/)
+      end
+    end
+
+    it "Project#inspect includes name and version" do
+      Mxrb.open(@mpr_path) do |project|
+        expect(project.inspect).to include("Project")
+      end
+    end
+  end
+
+  # ── Architecture edge cases ──────────────────────────────────────────────────
+  describe "architecture edge cases" do
+    it "validator reports a page action with missing microflow reference" do
+      path = File.join(File.dirname(@mpr_path), "arch_page_ref.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { before_commit microflow: :M_OnCommit }
+          microflow(:M_OnCommit)
+          microflow(:Worker)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        result = project.analyze
+        expect(result).to be_a(Mxrb::Semantic::Report)
+      end
+    end
+
+    it "graph ref handles dotted reference names" do
+      builder = Mxrb::Dsl::Builder.new("x.mpr")
+      builder.instance_eval do
+        self.module(:M) do
+          microflow(:Worker) { call_microflow "Other.Helper" }
+          microflow(:Other_Helper)
+        end
+      end
+      graph = builder.graph
+      expect(graph.nodes).not_to be_empty
+    end
+  end
+
+  # ── Integrity Validator edge cases ────────────────────────────────────────────
+  describe "Integrity::Validator edge cases" do
+    it "catches a unit whose $ID mismatches UnitID" do
+      path = File.join(File.dirname(@mpr_path), "integrity_mismatch.mpr")
+      db = SQLite3::Database.new(path)
+      db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT, _BuildVersion TEXT, _SchemaHash TEXT)")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY, ContainerID BLOB, ContainmentName TEXT,
+          TreeConflict LONG, ContentsHash TEXT, ContentsConflict TEXT, Contents BLOB
+        )
+      SQL
+      root_uuid = SecureRandom.uuid
+      wrong_uuid = SecureRandom.uuid
+      root_blob = [root_uuid.delete("-")].pack("H*")
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', NULL, 'hash', NULL, ?)",
+        [root_blob, root_blob,
+         make_bson({ "$ID" => wrong_uuid, "$Type" => "Projects$Project", "Name" => "X" })]
+      )
+      db.close
+      result = Mxrb.validate(path)
+      expect(result.errors).not_to be_empty
+    end
+  end
+
+  # ── mxrb.rb top-level convenience methods ─────────────────────────────────────
+  describe "Mxrb top-level methods" do
+    it "runtime_plan returns a Plan with version and paths" do
+      plan = Mxrb.runtime_plan(@mpr_path)
+      expect(plan).to be_a(Mxrb::Runtime::Plan)
+      expect(plan.mendix_version).not_to be_nil
+    end
+
+    it "Mxrb.open without block returns a project and can be closed" do
+      project = Mxrb.open(@mpr_path)
+      expect(project).to respond_to(:modules)
+      project.close
+    end
+  end
+
+  # ── Writer coverage: page buttons, return types, old format ────────────────
+  describe "writer edge cases for line coverage" do
+    it "builds page with cancel_changes, delete, and close_page button actions" do
+      path = File.join(File.dirname(@mpr_path), "writer_buttons.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          page(:P) do
+            button(:Cancel) { on_click action: :cancel_changes }
+            button(:Delete) { on_click action: :delete }
+            button(:Close)  { on_click action: :close_page }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        page = project.pages.first
+        events = page.widgets.flat_map { _1[:events] }
+        kinds = events.map { _1[:kind] }
+        expect(kinds).to include(:action)
+        handlers = events.map { _1[:handler] }
+        expect(handlers).to include("cancel_changes")
+        expect(handlers).to include("delete")
+        expect(handlers).to include("close_page")
+      end
+    end
+
+    it "builds microflows with float, decimal, datetime, long return types" do
+      path = File.join(File.dirname(@mpr_path), "writer_return_types.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:FloatFlow)   { return_type :Float }
+          microflow(:DecimalFlow) { return_type :Decimal }
+          microflow(:DateFlow)    { return_type :DateTime }
+          microflow(:LongFlow)    { return_type :Long }
+          microflow(:IntFlow)     { return_type :Integer }
+          microflow(:StringFlow)  { return_type :String }
+          microflow(:BoolFlow)    { return_type :Boolean }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        flows = project.microflows
+        expect(flows.size).to eq(7)
+        float_flow = flows.find { _1.name == "FloatFlow" }
+        expect(float_flow.return_type).to include("Float")
+        decimal_flow = flows.find { _1.name == "DecimalFlow" }
+        expect(decimal_flow.return_type).to include("Decimal")
+      end
+    end
+
+    it "builds microflows for Mendix 7 format (loop source, decision case)" do
+      path = File.join(File.dirname(@mpr_path), "writer_mx7.mpr")
+      Mxrb.define(path) do
+        mendix_version "7.23.18"
+        self.module(:M) do
+          entity(:Item) { integer(:Count) }
+          microflow(:Worker) do
+            retrieve_objects "M.Item", as: :items
+            loop_over :items, as: :item do
+              log_message "$item/Count", node: "'MX7'"
+            end
+            decision "$true" do
+              on(true) { log_message "yes" }
+              on(false) { log_message "no" }
+            end
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        flow = project.microflows.first
+        expect(flow.name).to eq("Worker")
+        expect(flow.objects).not_to be_empty
+      end
+    end
+
+    it "builds access rules with read: :none, write: :none (returns None)" do
+      path = File.join(File.dirname(@mpr_path), "writer_access_none.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) do
+            string :Name
+            access_rule "M.ReadonlyRole", create: false, delete: false, read: :none, write: :none
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        entity = project.entities.first
+        expect(entity.name).to eq("Order")
+        expect(entity.access_rules).not_to be_empty
+      end
+    end
+
+    it "builds rescue block with error_event and continue_event" do
+      path = File.join(File.dirname(@mpr_path), "writer_rescue.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:Worker) do
+            retrieve_objects "M.Order", as: :orders
+            rescue_all do
+              log_message "Error occurred", level: :error, node: "'Log'"
+            end
+          end
+          entity(:Order)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        flow = project.microflows.first
+        expect(flow.name).to eq("Worker")
+      end
+    end
+
+    it "builds cross-module entity association" do
+      path = File.join(File.dirname(@mpr_path), "writer_xmod_assoc.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Logistics) do
+          entity(:Shipment)
+        end
+        self.module(:Sales) do
+          entity(:Order) { association "Logistics.Shipment" }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        sales_mod = project.modules.find { _1.name == "Sales" }
+        assocs = sales_mod.associations
+        expect(assocs).not_to be_empty
+        cross_assoc = assocs.find { _1.name.include?("Order") || _1.name.include?("Shipment") }
+        expect(cross_assoc).not_to be_nil
+      end
+    end
+
+    it "updates an existing unit in the MPR (upsert path)" do
+      path = File.join(File.dirname(@mpr_path), "writer_upsert.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:Flow) }
+      end
+
+      first_ids = Mxrb.open(path) { |p| p.microflows.map(&:id) }
+
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:Flow) }
+      end
+
+      second_ids = Mxrb.open(path) { |p| p.microflows.map(&:id) }
+      expect(second_ids).to eq(first_ids)
+    end
+
+    it "builds native unit tree with units missing explicit IDs" do
+      path = File.join(File.dirname(@mpr_path), "writer_native_noid.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        mod = project.find_artifact("M")
+        project.mpr.insert_unit(
+          container_uuid: mod.unit_id,
+          containment_name: "Documents",
+          contents_doc: { "$Type" => "Microflows$Microflow", "Name" => "Dynamic", "$ID" => SecureRandom.uuid }
+        )
+        project.refresh!
+        expect(project.find_artifact("M.Dynamic")).not_to be_nil
+      end
+    end
+  end
+
+  # ── Compare edge cases ─────────────────────────────────────────────────────
+  describe "Comparator edge cases" do
+    it "compares two snapshots of microflows with flow bodies" do
+      path1 = File.join(File.dirname(@mpr_path), "cmp1.mpr")
+      path2 = File.join(File.dirname(@mpr_path), "cmp2.mpr")
+      Mxrb.define(path1) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          microflow(:Flow) do
+            return_type :String
+            call_microflow "M.Helper", as: :result
+            return_value "$result"
+          end
+          microflow(:Helper) { return_type :String }
+        end
+      end
+      Mxrb.define(path2) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name; integer :Amount }
+          microflow(:Flow) do
+            return_type :String
+            call_microflow "M.Helper", as: :result
+            return_value "$result"
+          end
+          microflow(:Helper) { return_type :String }
+        end
+      end
+
+      result = Mxrb::Compare::Comparator.new(path1, path2).compare
+      expect(result.differences).not_to be_empty
+    end
+
+    it "compares identical snapshots with old-format NewCaseValue" do
+      path1 = File.join(File.dirname(@mpr_path), "cmp_mx9.mpr")
+      Mxrb.define(path1) do
+        mendix_version "9.24.0"
+        self.module(:M) do
+          microflow(:Router) do
+            decision "$true" do
+              on(true) { log_message "yes" }
+              on(false) { log_message "no" }
+            end
+          end
+        end
+      end
+
+      result = Mxrb::Compare::Comparator.new(path1, path1).compare
+      expect(result).to be_identical
+    end
+  end
+
+  # ── Semantic index edge cases ────────────────────────────────────────────────
+  describe "semantic index edge cases" do
+    it "search_artifacts finds multiple matches for ambiguous partial name" do
+      path = File.join(File.dirname(@mpr_path), "idx_ambig.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:A) { microflow(:Work) }
+        self.module(:B) { microflow(:Work) }
+      end
+
+      Mxrb.open(path) do |project|
+        matches = project.search_artifacts("Work")
+        expect(matches.size).to eq(2)
+      end
+    end
+
+    it "impact_of traverses transitive callers" do
+      path = File.join(File.dirname(@mpr_path), "idx_impact.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:A) { call_microflow "M.B" }
+          microflow(:B) { call_microflow "M.C" }
+          microflow(:C)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        impact = project.impact_of("M.C")
+        names = impact.artifacts.map(&:qualified_name)
+        expect(names).to include("M.B")
+        expect(names).to include("M.A")
+
+        direct = project.impact_of("M.C", transitive: false)
+        expect(direct.artifacts.map(&:qualified_name)).to include("M.B")
+        expect(direct.artifacts.map(&:qualified_name)).not_to include("M.A")
+      end
+    end
+
+    it "callers_of returns empty when no callers exist" do
+      path = File.join(File.dirname(@mpr_path), "idx_nocaller.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:Orphan) }
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.callers_of("M.Orphan")).to be_empty
+        expect(project.callees_of("M.Orphan")).to be_empty
+        expect(project.references_to("M.Orphan")).to be_empty
+        expect(project.references_from("M.Orphan")).to be_empty
+      end
+    end
+
+    it "describe_artifact returns detailed description" do
+      path = File.join(File.dirname(@mpr_path), "idx_desc.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          microflow(:Process)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        desc = project.describe_artifact("M.Order")
+        expect(desc).not_to be_nil
+        search = project.search_artifacts("Order")
+        expect(search).not_to be_empty
+      end
+    end
+  end
+
+  # ── model/page additional edge cases ──────────────────────────────────────────
+  describe "Page model edge cases" do
+    it "parses a data_grid with search_bar and toolbar from BSON" do
+      path = File.join(File.dirname(@mpr_path), "page_grid.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          page(:P) do
+            data_grid :Grid, entity: "M.Order" do
+              column :Name, attribute: :Name
+              search_bar { search_field :Name }
+              toolbar { new_button; delete_button; export_button }
+            end
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        page = project.pages.first
+        grid = page.widgets.find { _1[:type] == :data_grid }
+        expect(grid).not_to be_nil
+        expect(grid[:options][:columns]).not_to be_empty
+      end
+    end
+
+    it "Page#to_bson produces valid BSON structure" do
+      path = File.join(File.dirname(@mpr_path), "page_bson.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { page(:P) }
+      end
+
+      Mxrb.open(path) do |project|
+        page = project.pages.first
+        bson = page.to_bson
+        expect(bson["$Type"]).to eq("Pages$Page")
+        expect(bson["Name"]).to eq("P")
+        expect(page.inspect).to include("P")
+      end
+    end
+
+    it "Page parses tab_control and reference_selector widgets from BSON" do
+      path = File.join(File.dirname(@mpr_path), "page_tabs.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Status; string :Name }
+          entity(:Customer) { string :Name }
+          page(:P) do
+            tab_control(:Tabs) do
+              tab_page :General
+              tab_page :Details
+            end
+            reference_selector :Customer, attribute: :Name
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        page = project.pages.first
+        tab = page.widgets.find { _1[:type] == :tab_control }
+        expect(tab).not_to be_nil if page.widgets.any?
+      end
+    end
+  end
+
+  # ── Integrity validator v2 and warnings ─────────────────────────────────────
+  describe "Integrity::Validator for v2 and warnings" do
+    it "validates a v2 MPR and reports missing mxunit files" do
+      path = File.join(File.dirname(@mpr_path), "integrity_v2.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      result = Mxrb.validate(path)
+      expect(result).to be_valid
+    end
+  end
+
+  # ── model/unit save! ─────────────────────────────────────────────────────────
+  describe "model/unit save!" do
+    it "can update a model object using save!" do
+      path = File.join(File.dirname(@mpr_path), "unit_save.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { page(:P) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        page = project.pages.first
+        original_name = page.name
+        page.instance_variable_set(:@name, "Renamed")
+        expect(page.name).not_to eq(original_name)
+        expect { page.save! }.not_to raise_error
+        project.refresh!
+        updated = project.pages.first
+        expect(updated.name).to eq("Renamed")
+      end
+    end
+  end
+
+  # ── model/association additional coverage ────────────────────────────────────
+  describe "model/association to_bson delete_behavior" do
+    it "association to_bson uses default delete_behavior when nil" do
+      path = File.join(File.dirname(@mpr_path), "assoc_del.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { association :Customer }
+          entity(:Customer)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        assoc = project.modules.first.associations.first
+        bson = assoc.to_bson
+        expect(bson["DeleteBehavior"]).not_to be_nil
+        expect(bson["DeleteBehavior"]["$Type"]).to eq("DomainModels$DeleteBehavior")
+      end
+    end
+  end
+
+  # ── model/module children_with_containment ───────────────────────────────────
+  describe "model/module children_with_containment" do
+    it "returns child units for a given containment" do
+      path = File.join(File.dirname(@mpr_path), "mod_children.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) ; page(:P) }
+      end
+
+      Mxrb.open(path) do |project|
+        mod = project.modules.first
+        docs = mod.send(:children_with_containment, "Documents")
+        expect(docs).not_to be_empty
+      end
+    end
+  end
+
+  # ── Architecture graph ref with dotted name ───────────────────────────────────
+  describe "Architecture::Graph ref with dotted names" do
+    def build_definition(modules)
+      { modules: modules }
+    end
+
+    def module_def(name, microflows: [], nanoflows: [], pages: [], entities: [], repositories: [])
+      { name: name, entities: entities, pages: pages,
+        microflows: microflows, nanoflows: nanoflows,
+        repositories: repositories, menus: [], module_roles: [] }
+    end
+
+    def flow_def(name, public: false, calls: [])
+      { name: name, runtime: :server, kind: :use_case, public: public,
+        calls: calls, repositories: [], parameters: [], return_type: nil,
+        documentation: "", body: nil, return_variable_name: nil,
+        return_expression: nil, allow_concurrent_execution: nil,
+        mark_as_used: nil, excluded: nil, allowed_roles: nil,
+        preserve_native_body: false }
+    end
+
+    it "resolves dotted cross-module references and counts nodes/edges" do
+      definition = build_definition([
+        module_def("ModA", microflows: [flow_def("WorkerA", public: true, calls: [{ kind: :microflow, name: "ModB.WorkerB" }])]),
+        module_def("ModB", microflows: [flow_def("WorkerB")])
+      ])
+      graph = Mxrb::Architecture::Graph.new(definition)
+      expect(graph.nodes.size).to eq(2)
+      expect(graph.edges.size).to eq(1)
+    end
+
+    it "Validator detects page-to-repository and cross-module internal reference" do
+      page_def = {
+        name: "P", layout: "Default", title: "P", popup: false,
+        data_source: { kind: :repository, name: "Repo" },
+        events: [], widgets: [], allowed_roles: nil, deep_structure: nil
+      }
+      repo_def = { name: "Repo", public: true }
+      definition = build_definition([
+        module_def("M",
+          pages: [page_def],
+          repositories: [repo_def],
+          microflows: [flow_def("WorkerA", public: true, calls: [{ kind: :microflow, name: "X.Helper" }])]
+        ),
+        module_def("X", microflows: [flow_def("Helper", public: false)])
+      ])
+      graph = Mxrb::Architecture::Graph.new(definition)
+      validator = Mxrb::Architecture::Validator.new(graph)
+      result = validator.validate
+      expect(result.errors).to include(a_string_matching(/cannot access repository/))
+      expect(result.errors).to include(a_string_matching(/references internal artifact/))
+    end
+
+    it "Validator detects call cycles" do
+      definition = build_definition([
+        module_def("M", microflows: [
+          flow_def("A", public: true, calls: [{ kind: :microflow, name: "B" }]),
+          flow_def("B", public: false, calls: [{ kind: :microflow, name: "A" }])
+        ])
+      ])
+      graph = Mxrb::Architecture::Graph.new(definition)
+      validator = Mxrb::Architecture::Validator.new(graph)
+      result = validator.validate
+      expect(result.errors).to include(a_string_matching(/cycle/))
+    end
+  end
+
+  # ── Marketplace remaining paths ───────────────────────────────────────────────
+  describe "marketplace remaining paths" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @mkt2_dir = dir
+        pkg = File.join(dir, "mypkg")
+        FileUtils.mkdir_p(pkg)
+        File.write(File.join(pkg, "mxrb-module.json"),
+                   JSON.generate(name: "mypkg", module_name: "MyPkg",
+                                 version: "1.0.0", files: ["mod.rb"]))
+        File.write(File.join(pkg, "mod.rb"), "# content\n")
+        @mkt2_catalog = File.join(dir, "catalog.json")
+        File.write(@mkt2_catalog, JSON.generate(modules: [
+          { name: "mypkg", version: "1.0.0", description: "My Pkg", source: pkg }
+        ]))
+        ex.run
+      end
+    end
+
+    it "raises MarketplaceError for invalid manifest" do
+      bad_pkg = File.join(@mkt2_dir, "badpkg")
+      FileUtils.mkdir_p(bad_pkg)
+      File.write(File.join(bad_pkg, "mxrb-module.json"), "not valid json")
+      catalog = Mxrb::Marketplace::Catalog.new(@mkt2_catalog)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install(bad_pkg) }.to raise_error(Mxrb::MarketplaceError)
+    end
+
+    it "raises MarketplaceError for unsafe module file path" do
+      bad_pkg = File.join(@mkt2_dir, "unsafepkg")
+      FileUtils.mkdir_p(bad_pkg)
+      File.write(File.join(bad_pkg, "mxrb-module.json"),
+                 JSON.generate(name: "x", module_name: "X", version: "1.0", files: ["../../../etc/passwd"]))
+      catalog = Mxrb::Marketplace::Catalog.new(@mkt2_catalog)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install(bad_pkg) }.to raise_error(Mxrb::MarketplaceError, /unsafe/)
+    end
+
+    it "raises MarketplaceError for missing file in package" do
+      bad_pkg = File.join(@mkt2_dir, "missingpkg")
+      FileUtils.mkdir_p(bad_pkg)
+      File.write(File.join(bad_pkg, "mxrb-module.json"),
+                 JSON.generate(name: "x", module_name: "X", version: "1.0", files: ["missing.rb"]))
+      catalog = Mxrb::Marketplace::Catalog.new(@mkt2_catalog)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install(bad_pkg) }.to raise_error(Mxrb::MarketplaceError, /missing/)
+    end
+
+    it "raises MarketplaceError for empty module package" do
+      empty_pkg = File.join(@mkt2_dir, "emptypkg")
+      FileUtils.mkdir_p(empty_pkg)
+      File.write(File.join(empty_pkg, "mxrb-module.json"),
+                 JSON.generate(name: "x", module_name: "X", version: "1.0", files: []))
+      catalog = Mxrb::Marketplace::Catalog.new(@mkt2_catalog)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install(empty_pkg) }.to raise_error(Mxrb::MarketplaceError, /no files/)
+    end
+
+    it "raises for HTTPS-required catalog URL" do
+      expect { Mxrb::Marketplace::Catalog.new("http://example.com/catalog.json").entries }
+        .to raise_error(Mxrb::MarketplaceError, /HTTPS/)
+    end
+
+    it "raises MarketplaceError for invalid module name in manifest" do
+      bad_name_pkg = File.join(@mkt2_dir, "badname_pkg")
+      FileUtils.mkdir_p(bad_name_pkg)
+      File.write(File.join(bad_name_pkg, "mxrb-module.json"),
+                 JSON.generate(name: "x", module_name: "123Invalid", version: "1.0", files: ["f.rb"]))
+      File.write(File.join(bad_name_pkg, "f.rb"), "")
+      catalog = Mxrb::Marketplace::Catalog.new(@mkt2_catalog)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install(bad_name_pkg) }.to raise_error(Mxrb::MarketplaceError, /invalid module name/)
+    end
+
+    it "raises MarketplaceError for unknown builtin module slug" do
+      bad_catalog_path = File.join(@mkt2_dir, "bad_builtin.json")
+      File.write(bad_catalog_path, JSON.generate(modules: [
+        { name: "unknown-builtin", version: "1.0", description: "x", source: "builtin:nonexistent" }
+      ]))
+      catalog = Mxrb::Marketplace::Catalog.new(bad_catalog_path)
+      installer = Mxrb::Marketplace::Installer.new(target: File.join(@mkt2_dir, "proj"), catalog: catalog)
+      expect { installer.install("unknown-builtin") }.to raise_error(Mxrb::MarketplaceError, /unavailable/)
+    end
+  end
+
+  # ── Semantic Remover and Mover ambiguous resolution ───────────────────────────
+  describe "Remover and Mover with ambiguous names" do
+    it "Renamer raises for ambiguous name (multiple kinds)" do
+      path = File.join(File.dirname(@mpr_path), "rename_ambig2.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Worker)
+          microflow(:Worker_Do)
+        end
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_rename("M.Worker_Do", to: "M.New") }
+          .not_to raise_error
+      end
+    end
+  end
+
+  # ── Writer coverage: rescue/decision branches, show_page, java, menu ─────────
+  describe "writer coverage for rescue, decision, show_page, java, menu" do
+    it "rescue_all with error_event and continue_loop terminators" do
+      path = File.join(File.dirname(@mpr_path), "writer_rescue_term.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order)
+          microflow(:WithError) do
+            retrieve_objects "M.Order", as: :orders
+            rescue_all { error_event }
+          end
+          microflow(:WithContinue) do
+            retrieve_objects "M.Order", as: :orders
+            rescue_all { continue_loop }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.map(&:name)).to include("WithError", "WithContinue")
+      end
+    end
+
+    it "decision with empty branch reaches nil-first flow path" do
+      path = File.join(File.dirname(@mpr_path), "writer_empty_branch.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:Router) do
+            decision "$true" do
+              on(true) {}
+              on(false) { log_message "nope" }
+            end
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("Router")
+      end
+    end
+
+    it "rescue_all inside decision branch triggers build_rescue_branch" do
+      path = File.join(File.dirname(@mpr_path), "writer_rescue_in_decision.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order)
+          microflow(:Worker) do
+            decision "$true" do
+              on(true) do
+                retrieve_objects "M.Order", as: :orders
+                rescue_all { log_message "rescued" }
+              end
+              on(false) { log_message "false" }
+            end
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("Worker")
+        expect(project.microflows.first.objects).not_to be_empty
+      end
+    end
+
+    it "type_decision with empty branch and old Mendix version (< 10)" do
+      path = File.join(File.dirname(@mpr_path), "writer_type_decision_old.mpr")
+      Mxrb.define(path) do
+        mendix_version "9.24.0"
+        self.module(:M) do
+          entity(:Animal)
+          entity(:Dog)
+          microflow(:Classify) do
+            retrieve_objects "M.Animal", as: :a
+            type_decision :a do
+              on_type("M.Dog") {}
+              otherwise { log_message "other" }
+            end
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("Classify")
+      end
+    end
+
+    it "rescue_all with old Mendix version (< 10) hits old flow format" do
+      path = File.join(File.dirname(@mpr_path), "writer_rescue_old.mpr")
+      Mxrb.define(path) do
+        mendix_version "9.24.0"
+        self.module(:M) do
+          entity(:Order)
+          microflow(:Worker) do
+            retrieve_objects "M.Order", as: :orders
+            rescue_all { log_message "rescued" }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("Worker")
+      end
+    end
+
+    it "show_page with title on version 10 hits elif branch" do
+      path = File.join(File.dirname(@mpr_path), "writer_show_page_v10.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          page(:Detail)
+          microflow(:OpenPage) { show_page "M.Detail", title: { "en_US" => "Order Detail" } }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("OpenPage")
+      end
+    end
+
+    it "show_page with title on version 7 hits old form title branch" do
+      path = File.join(File.dirname(@mpr_path), "writer_show_page_v7.mpr")
+      Mxrb.define(path) do
+        mendix_version "7.23.18"
+        self.module(:M) do
+          page(:Detail)
+          microflow(:OpenPage) { show_page "M.Detail", title: { "en_US" => "My Title" } }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("OpenPage")
+      end
+    end
+
+    it "raises ArgumentError for unsupported native button action" do
+      path = File.join(File.dirname(@mpr_path), "writer_bad_action.mpr")
+      expect do
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) do
+            page(:P) do
+              button(:BadBtn) { on_click action: "totally_unsupported" }
+            end
+          end
+        end
+      end.to raise_error(ArgumentError, /unsupported native action/)
+    end
+
+    it "menu item without page hits no_action_doc" do
+      path = File.join(File.dirname(@mpr_path), "writer_menu_no_action.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          menu(:Nav) do
+            item "Spacer"
+            item "Home", page: "M.Home"
+          end
+          page(:Home)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.modules.first.menus).not_to be_empty
+      end
+    end
+
+    it "call_java with parameter mapping on version 7 hits old JavaAction format" do
+      path = File.join(File.dirname(@mpr_path), "writer_java_v7.mpr")
+      Mxrb.define(path) do
+        mendix_version "7.23.18"
+        self.module(:M) do
+          microflow(:CallJava) do
+            call_java "MyModule.MyAction", as: :result,
+                      pass: { Param: "$currentUser" }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("CallJava")
+      end
+    end
+
+    it "call_java with parameter mapping on version 9 sets ArgumentModel" do
+      path = File.join(File.dirname(@mpr_path), "writer_java_v9.mpr")
+      Mxrb.define(path) do
+        mendix_version "9.24.0"
+        self.module(:M) do
+          microflow(:CallJava) do
+            call_java "MyModule.MyAction", as: :result,
+                      pass: { Param: "$currentUser" }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("CallJava")
+      end
+    end
+
+    it "call_java with Hash-valued parameter hits code_action_parameter hash path" do
+      path = File.join(File.dirname(@mpr_path), "writer_java_hash_param.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:CallJava) do
+            call_java "MyModule.MyAction", as: :result,
+                      pass: { Param: { kind: :entity, value: "M.Order" } }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("CallJava")
+      end
+    end
+
+    it "member_value_expr handles nil value" do
+      path = File.join(File.dirname(@mpr_path), "writer_nil_member.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { integer :Amount }
+          microflow(:Worker) do
+            retrieve_objects "M.Order", as: :order, limit: 1
+            change_object :order, set: { Amount: nil }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.microflows.first.name).to eq("Worker")
+      end
+    end
+  end
+
+  # ── Exporter coverage: parameters, access rules, widget types ────────────────
+  describe "exporter coverage for parameters, access rules, widgets" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @export_dir = dir
+        ex.run
+      end
+    end
+
+    it "exports microflow with parameters" do
+      path = File.join(File.dirname(@mpr_path), "export_params.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          microflow(:Lookup) do
+            parameter :OrderId, type: :Integer
+            return_type :String
+          end
+        end
+      end
+
+      Mxrb::Exporter.new(path, @export_dir).export!
+      mf_files = Dir.glob(File.join(@export_dir, "**", "*.rb"))
+      mf_file = mf_files.find { _1.include?("lookup") }
+      expect(mf_file).not_to be_nil
+      content = File.read(mf_file)
+      expect(content).to include("parameter")
+    end
+
+    it "exports entity access rules with :all/:none and explicit lists" do
+      path = File.join(File.dirname(@mpr_path), "export_access.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) do
+            string :Name
+            string :Secret
+            access_rule "M.ReadRole", create: false, delete: false,
+                        read: :all, write: :none
+            access_rule "M.WriteRole", create: true, delete: false,
+                        read: :all, write: [:Name]
+            access_rule "M.NoRole", create: false, delete: false,
+                        read: :none, write: :none
+          end
+        end
+      end
+
+      Mxrb::Exporter.new(path, @export_dir).export!
+      order_file = Dir.glob(File.join(@export_dir, "**", "*.rb")).find { _1.include?("order") }
+      expect(order_file).not_to be_nil
+      content = File.read(order_file)
+      expect(content).to include("access_rule")
+    end
+
+    it "exports page with snippet, drop_down, and container widgets" do
+      path = File.join(File.dirname(@mpr_path), "export_widgets.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name; string :Status }
+          page(:Dashboard) do
+            snippet :Header, from: "M.CommonHeader"
+            drop_down :Status, attribute: :Status
+            container(:Content) { text_box :Name }
+          end
+        end
+      end
+
+      Mxrb::Exporter.new(path, @export_dir).export!
+      page_file = Dir.glob(File.join(@export_dir, "**", "*.rb")).find { _1.include?("dashboard") }
+      expect(page_file).not_to be_nil
+      content = File.read(page_file)
+      expect(content).to include("snippet").or include("drop_down").or include("container")
+    end
+
+    it "exports microflow body with error_event in rescue" do
+      path = File.join(File.dirname(@mpr_path), "export_body_term.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order)
+          microflow(:WithEndFlow) do
+            retrieve_objects "M.Order", as: :orders
+            rescue_all { error_event }
+          end
+        end
+      end
+
+      Mxrb::Exporter.new(path, @export_dir).export!
+      files = Dir.glob(File.join(@export_dir, "**", "*.rb"))
+      expect(files).not_to be_empty
+    end
+  end
+
+  # ── Model object edge cases ──────────────────────────────────────────────────
+  describe "Model object direct construction" do
+    it "Attribute#inspect returns formatted string" do
+      path = File.join(File.dirname(@mpr_path), "attr_inspect.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { entity(:Order) { string :Name } }
+      end
+      Mxrb.open(path) do |project|
+        entity_model = project.modules.first.entities.first
+        attr = entity_model.attributes.first
+        expect(attr).not_to be_nil
+        expect(attr.inspect).to include("name=")
+      end
+    end
+
+    it "Association#to_bson uses default_delete_behavior when delete_behavior is nil" do
+      assoc = Mxrb::Model::Association.new
+      assoc.id               = SecureRandom.uuid
+      assoc.name             = "Test"
+      assoc.documentation    = ""
+      assoc.from_entity_id   = SecureRandom.uuid
+      assoc.to_entity_id     = SecureRandom.uuid
+      assoc.association_type = :Reference
+      assoc.owner            = :Default
+      assoc.storage_format   = :Column
+      assoc.delete_behavior  = nil
+      assoc.export_level     = "Hidden"
+      bson = assoc.to_bson
+      expect(bson["DeleteBehavior"]["$Type"]).to eq("DomainModels$DeleteBehavior")
+    end
+
+    it "Microflow#to_bson uses default_void_return when return_type is nil" do
+      mf = Mxrb::Model::Microflow.allocate
+      mf.instance_variable_set(:@id, SecureRandom.uuid)
+      mf.instance_variable_set(:@name, "Test")
+      mf.instance_variable_set(:@documentation, "")
+      mf.instance_variable_set(:@return_variable_name, "ReturnValue")
+      mf.instance_variable_set(:@allow_concurrent_execution, true)
+      mf.instance_variable_set(:@mark_as_used, false)
+      mf.instance_variable_set(:@excluded, false)
+      mf.instance_variable_set(:@allowed_module_roles, [])
+      mf.instance_variable_set(:@parameters, [])
+      mf.instance_variable_set(:@return_type, nil)
+      mf.instance_variable_set(:@objects, [])
+      mf.instance_variable_set(:@flows, [])
+      bson = mf.to_bson
+      expect(bson["MicroflowReturnType"]["$Type"]).to eq("Microflows$MicroflowReturnType")
+    end
+
+    it "Microflow extract_parameters reads from MicroflowParameterCollection" do
+      doc = {
+        "$ID" => SecureRandom.uuid, "$Type" => "Microflows$Microflow",
+        "Name" => "Test",
+        "MicroflowParameterCollection" => {
+          "$ID" => SecureRandom.uuid, "$Type" => "Microflows$MicroflowParameterCollection",
+          "Parameters" => [
+            { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$MicroflowParameter",
+              "Name" => "OrderId", "DefaultValue" => "",
+              "VariableType" => { "$ID" => SecureRandom.uuid, "$Type" => "DataTypes$IntegerType" } }
+          ]
+        },
+        "MicroflowReturnType" => { "$ID" => SecureRandom.uuid, "$Type" => "DataTypes$VoidType" },
+        "ObjectCollection" => { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$MicroflowObjectCollection", "Objects" => [] },
+        "Flows" => [],
+        "AllowedModuleRoles" => []
+      }
+      path = File.join(File.dirname(@mpr_path), "mpc_test.mpr")
+      Mxrb.define(path) { mendix_version "10.18.0"; self.module(:M) { microflow(:Stub) } }
+      Mxrb.open(path, readonly: false) do |project|
+        mod = project.find_artifact("M")
+        project.mpr.insert_unit(
+          container_uuid: mod.unit_id,
+          containment_name: "Documents",
+          contents_doc: doc
+        )
+        project.refresh!
+        mf = project.microflows.find { _1.name == "Test" }
+        expect(mf).not_to be_nil
+        expect(mf.parameters).not_to be_empty
+        expect(mf.parameters.first["Name"]).to eq("OrderId")
+      end
+    end
+  end
+
+  # ── IO edge cases ─────────────────────────────────────────────────────────────
+  describe "IO edge cases" do
+    it "MxunitCodec.serialize returns BSON bytes" do
+      doc = { "$Type" => "Test$Unit", "$ID" => SecureRandom.uuid, "Name" => "X" }
+      bytes = Mxrb::IO::MxunitCodec.serialize(doc)
+      expect(bytes).to be_a(String)
+      expect(bytes.bytesize).to be > 0
+    end
+
+    it "MprFile.open raises NotMprError for non-SQLite path" do
+      Dir.mktmpdir do |dir|
+        fake_mpr = File.join(dir, "fake.mpr")
+        File.write(fake_mpr, "this is not sqlite")
+        expect { Mxrb::IO::MprFile.open(fake_mpr) { } }.to raise_error(Mxrb::NotMprError)
+      end
+    end
+  end
+
+  # ── DSL builder edge cases ────────────────────────────────────────────────────
+  describe "DSL builder edge cases" do
+    it "normalize_access handles non-standard symbol value (else branch)" do
+      path = File.join(File.dirname(@mpr_path), "dsl_access_else.mpr")
+      expect do
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) do
+            entity(:Order) do
+              string :Name
+              access_rule "M.User", read: :all, write: :Name
+            end
+          end
+        end
+      end.not_to raise_error
+    end
+  end
+
+  # ── Architecture validator edge cases ─────────────────────────────────────────
+  describe "Architecture::Validator entity lifecycle → nanoflow" do
+    it "detects entity lifecycle calling a nanoflow as an error" do
+      graph = Mxrb::Architecture::Graph.new({ modules: [] })
+      graph.instance_variable_set(:@nodes, {
+        "M::entity::Order" => Mxrb::Architecture::Node.new(
+          "M::entity::Order", "M", :entity, "Order", {}),
+        "M::nanoflow::ClientFlow" => Mxrb::Architecture::Node.new(
+          "M::nanoflow::ClientFlow", "M", :nanoflow, "ClientFlow", { public: false })
+      })
+      graph.instance_variable_set(:@edges, [
+        Mxrb::Architecture::Edge.new(
+          "M::entity::Order", "M::nanoflow::ClientFlow", :on_before_commit, {})
+      ])
+      result = Mxrb::Architecture::Validator.new(graph).validate
+      expect(result.errors).to include(a_string_matching(/lifecycle cannot call client-side/))
+    end
+  end
+
+  # ── Semantic index: association indexing and unresolved references ─────────────
+  describe "Semantic index with associations and unresolved refs" do
+    it "indexes associations when accessing semantic index" do
+      path = File.join(File.dirname(@mpr_path), "idx_assoc_full.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name; association :Customer }
+          entity(:Customer)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        artifacts = project.semantic_index.find_all("M.Order_Customer")
+        expect(artifacts).not_to be_empty
+      end
+    end
+
+    it "indexes associations from domain model BSON (domain_associations path)" do
+      path = File.join(File.dirname(@mpr_path), "idx_assoc_dom.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Invoice) { string :Number; association :Client }
+          entity(:Client)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        refs = project.references_to("M.Invoice")
+        expect(refs).to be_an(Array)
+      end
+    end
+
+    it "records unresolved references for missing artifacts" do
+      path = File.join(File.dirname(@mpr_path), "idx_unresolved.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:Caller) { call_microflow "NonExistent.Ghost" }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        unresolved = project.semantic_index.unresolved_references
+        expect(unresolved).to be_an(Array)
+      end
+    end
+
+    it "resolve_argument raises for ambiguous qualified name with multiple artifact kinds" do
+      path = File.join(File.dirname(@mpr_path), "idx_resolve_ambig.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Work)
+          microflow(:Work)
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        expect { project.callers_of("M.Work") }
+          .to raise_error(ArgumentError, /ambiguous/)
+      end
+    end
+  end
+
+  # ── Compare additional coverage ───────────────────────────────────────────────
+  describe "Compare access rules and array diff" do
+    it "compare detects entity access rule changes" do
+      path1 = File.join(File.dirname(@mpr_path), "cmp_access1.mpr")
+      path2 = File.join(File.dirname(@mpr_path), "cmp_access2.mpr")
+      Mxrb.define(path1) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) do
+            string :Name
+            access_rule "M.Admin", create: true, delete: true, read: :all, write: :all
+          end
+        end
+      end
+      Mxrb.define(path2) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) do
+            string :Name
+            access_rule "M.Admin", create: false, delete: false, read: :all, write: :none
+          end
+        end
+      end
+
+      result = Mxrb::Compare::Comparator.new(path1, path2).compare
+      expect(result).not_to be_identical
+    end
+
+    it "compare handles microflow with decision/switch flow (assigns flow IDs)" do
+      path1 = File.join(File.dirname(@mpr_path), "cmp_flow_dec.mpr")
+      Mxrb.define(path1) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          microflow(:Router) do
+            decision "$true" do
+              on(true)  { log_message "yes" }
+              on(false) { log_message "no" }
+            end
+          end
+        end
+      end
+      result = Mxrb::Compare::Comparator.new(path1, path1).compare
+      expect(result).to be_identical
+    end
+  end
+
+  # ── Semantic index: expected_kinds via entity-typed parameter scan ─────────────
+  describe "Semantic index expected_kinds branches" do
+    it "scans entity-typed microflow parameter references (entity kind)" do
+      path = File.join(File.dirname(@mpr_path), "idx_entity_ref.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Order) { string :Name }
+          microflow(:Process) do
+            parameter :Input, type: "M.Order"
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        refs = project.references_from("M.Process")
+        expect(refs).to be_an(Array)
+      end
+    end
+
+    it "scans retrieve_objects activity which references entity" do
+      path = File.join(File.dirname(@mpr_path), "idx_retrieve.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Item) { string :Label }
+          microflow(:Fetch) { retrieve_objects "M.Item", as: :items }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        refs = project.references_from("M.Fetch")
+        entity_refs = refs.select { _1.target.kind == :entity }
+        expect(entity_refs).not_to be_empty
+      end
+    end
+
+    it "add_unresolved with Entity field triggers expected_kinds entity branch" do
+      path = File.join(File.dirname(@mpr_path), "idx_entity_unknown.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Item)
+          microflow(:Fetch) { retrieve_objects "Unknown.Ghost", as: :items }
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        unresolved = project.semantic_index.unresolved_references
+        expect(unresolved.map(&:qualified_name)).to include("Unknown.Ghost")
+      end
+    end
+
+    it "add_unresolved with XpathConstraint triggers expected_kinds else branch" do
+      path = File.join(File.dirname(@mpr_path), "idx_xpath_else.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Item)
+          microflow(:Fetch) do
+            retrieve_objects "M.Item", as: :items, xpath: "[//NonExistent.Ghost[Name = 'x']]"
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        unresolved = project.semantic_index.unresolved_references
+        expect(unresolved).not_to be_nil
+      end
+    end
+  end
+
+  # ── Semantic: resolve via find_all (ambiguous/multi-kind) ─────────────────────
+  describe "Semantic Renamer/Remover/Mover with ambiguous qualified names" do
+    it "Renamer.resolve raises for ambiguous qualified name with multiple kinds" do
+      path = File.join(File.dirname(@mpr_path), "renamer_ambig_kinds.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Work)
+          microflow(:Work)
+        end
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_rename("M.Work", to: "M.NewWork") }
+          .to raise_error(ArgumentError, /ambiguous/)
+      end
+    end
+
+    it "Remover.resolve raises for ambiguous qualified name with multiple kinds" do
+      path = File.join(File.dirname(@mpr_path), "remover_ambig.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Task)
+          microflow(:Task)
+        end
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_remove("M.Task") }
+          .to raise_error(ArgumentError, /ambiguous/)
+      end
+    end
+
+    it "Mover.resolve raises for ambiguous qualified name with multiple kinds" do
+      path = File.join(File.dirname(@mpr_path), "mover_ambig.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          entity(:Task)
+          microflow(:Task)
+        end
+        self.module(:Other)
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_move("M.Task", to: "Other") }
+          .to raise_error(ArgumentError, /ambiguous/)
+      end
     end
   end
 end

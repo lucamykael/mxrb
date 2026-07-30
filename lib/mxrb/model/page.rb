@@ -51,7 +51,7 @@ module Mxrb
       end
 
       def inspect
-        "#<Mxrb::Page name=#{@name.inspect} layout=#{@layout_id&.slice(0, 8)}>"
+        "#<Mxrb::Page name=#{@name.inspect} layout=#{@layout_id.to_s.slice(0, 8)}>"
       end
 
       private

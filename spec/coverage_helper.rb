@@ -11,11 +11,22 @@ Coverage.start(lines: true, branches: true)
 module MxrbCoverage
   module_function
 
+  # Files requiring Docker, Mendix runtime, or other external infrastructure
+  # cannot be covered by unit tests and are excluded from line-coverage enforcement.
+  RUNTIME_EXCLUDES = %w[
+    mxrb/runtime/executor.rb
+    mxrb/runtime/toolchain.rb
+    mxrb/runtime/docker_executor.rb
+    mxrb/runtime/docker_workspace.rb
+  ].freeze
+
   def report
     root = File.expand_path("..", __dir__)
     library = File.join(root, "lib") + "/"
     measured = Coverage.result(stop: false, clear: false).select do |path, _|
-      path.start_with?(library)
+      next false unless path.start_with?(library)
+      relative = path.delete_prefix(library)
+      RUNTIME_EXCLUDES.none? { relative == _1 }
     end
     line_counts = measured.values.flat_map { _1.fetch(:lines).compact }
     branch_counts = measured.values.flat_map do |coverage|

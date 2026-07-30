@@ -310,8 +310,8 @@ module Mxrb
         keys = %w[UnitID ContainerID ContainmentName ContentsHash Contents]
         h    = keys.zip(row).to_h
         # Convert blob UUIDs to strings for ergonomics
-        h["UnitID"]      = BsonCodec.blob_to_uuid(h["UnitID"])      if h["UnitID"].is_a?(String)
-        h["ContainerID"] = BsonCodec.blob_to_uuid(h["ContainerID"]) if h["ContainerID"].is_a?(String)
+        h["UnitID"]      = BsonCodec.blob_to_uuid(h["UnitID"])      if h["UnitID"]
+        h["ContainerID"] = BsonCodec.blob_to_uuid(h["ContainerID"]) if h["ContainerID"]
         h
       end
     end
