@@ -19,6 +19,10 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - testes funcionais de microflows localmente ou em Docker.
 - busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
 
+A matriz preserva estruturalmente projetos Mendix 5.21–11.12. A validação
+nativa exata do Mendix 5 ainda depende de Windows/Studio Pro e é uma limitação
+explícita do MXRB; ela não faz parte do gate automatizado direto.
+
 ## Requisitos
 
 Ruby 4.0+, SQLite3 e, para gates oficiais, o toolchain Mendix exato. O modo
@@ -31,6 +35,9 @@ bundle exec mxrb export App.mpr app-ruby
 bundle exec mxrb compare original.mpr reconstruido.mpr
 bundle exec mxrb module search
 bundle exec mxrb module add shared-kernel
+bundle exec mxrb cache status App.mpr
+bundle exec mxrb cache warm App.mpr
+bundle exec mxrb cache clear App.mpr
 ```
 
 ## Ruby DSL
@@ -66,16 +73,20 @@ bundle exec mxrb test Shop.mpr functional_test.rb --docker
 
 Não há JUnit ou MDL. A instrumentação, o pacote, o banco e os uploads existem
 somente na cópia descartável; o projeto original não é alterado.
+As asserções cobrem retorno do microflow e estado persistido por contagens
+de entidade/XPath.
 
 ## Desenvolvimento
 
 ```sh
 bundle exec rspec
 MXRB_COVERAGE=1 bundle exec rspec
+bundle exec ruby script/branch_report.rb
+bundle exec rubocop
 ```
 
-A suíte exige 100% de cobertura de linhas. A cobertura de branches é reportada
-separadamente.
+A suíte exige 100% de cobertura de linhas e branches. O relatório de branches
+lista qualquer regressão por arquivo e linha.
 
 Consulte a [documentação completa em português](docs/pt-BR/README.md).
 

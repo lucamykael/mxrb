@@ -836,8 +836,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
     parameterized = double(
       name: "Typed", parameters: [
-        { "Name" => "Value", "VariableType" => "String" }, "opaque"
-      ],
+                       { "Name" => "Value", "VariableType" => "String" }, "opaque"
+                     ],
       return_type: nil, documentation: "", allow_concurrent_execution: true,
       mark_as_used: false, excluded: false, allowed_module_roles: [],
       objects: [], flows: []
@@ -1879,5 +1879,1193 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       expect(result).to be_a(Hash)
       mpr.close
     end
+  end
+
+  it "covers remaining small defensive branches without suppressing coverage" do
+    missing_source = Mxrb::Architecture::Graph.allocate
+    missing_source.instance_variable_set(:@nodes, {})
+    missing_source.instance_variable_set(
+      :@edges,
+      [Mxrb::Architecture::Edge.new("missing", "M::nanoflow::Late", :calls, {})]
+    )
+    result = Mxrb::Architecture::Validator.new(missing_source).validate
+    expect(result.errors).to include(/references missing/)
+
+    menu = Mxrb::Dsl::MenuBuilder.new("Navigation")
+    expect { menu.deep_structure("invalid") }
+      .to raise_error(ArgumentError, /requires a Hash/)
+
+    page = Mxrb::Dsl::PageBuilder.new("Page")
+    page.on_click(target: :Button, action: :save)
+    expect(page.to_h[:events]).to include(
+      event: :on_click, target: "Button", kind: :action, handler: "save"
+    )
+
+    rescue_builder = Mxrb::Dsl::FlowBuilder.new(
+      "Flow", runtime: :server, kind: :microflow, public: false
+    )
+    rescue_builder.rescue_all
+    expect(rescue_builder.to_h[:body].last).to eq(type: :rescue_all, activities: [])
+    branch_builder = Mxrb::Dsl::BranchBuilder.new
+    branch_builder.rescue_all
+    expect(branch_builder.activities.last).to eq(type: :rescue_all, activities: [])
+
+    decision = Mxrb::Dsl::DecisionBuilder.new("condition")
+    decision.on(:otherwise)
+    expect(decision.to_h[:branches]).to include(otherwise: [])
+
+    unchanged = Object.new
+    batch = Mxrb::Semantic::BatchPlan.new(project: double, plans: [unchanged])
+    expect(batch.changes).to eq([])
+
+    legacy_index = double(artifacts: [], references: [])
+    analyzer = Mxrb::Semantic::Analyzer.new(double(semantic_index: legacy_index))
+    expect(analyzer.analyze.unresolved_references).to eq([])
+
+    graph_analyzer = Mxrb::Semantic::Analyzer.allocate
+    components = graph_analyzer.send(
+      :strongly_connected,
+      { "a" => ["b"], "b" => [], "c" => ["b"] },
+      %w[a b c]
+    )
+    expect(components.flatten).to contain_exactly("a", "b", "c")
+
+    source = Mxrb::Semantic::Artifact.new(
+      "unit:source", "M.Old", :microflow, "M", "Old", "source", [], {}
+    )
+    project = double(mpr: double, refresh!: true)
+    rename_plan = Mxrb::Semantic::RenamePlan.new(
+      project:, source:, target: "M.New", changes: [], documents: {}
+    )
+    rename_plan.instance_variable_set(:@applied, true)
+    expect { rename_plan.apply! }.to raise_error(ArgumentError, /already applied/)
+
+    renamer = Mxrb::Semantic::Renamer.allocate
+    expect(
+      renamer.send(
+        :transformed_string, "Other", source:, target: "M.New",
+        target_object: true, field: "Name"
+      )
+    ).to eq("Other")
+  end
+
+  it "covers MPR read-only mutation guards" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "readonly.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow :Flow }
+      end
+
+      mpr = Mxrb::IO::MprFile.open(path, readonly: true)
+      expect {
+        mpr.insert_unit(
+          container_uuid: SecureRandom.uuid,
+          containment_name: "Documents",
+          contents_doc: { "$Type" => "Test$Unit" }
+        )
+      }.to raise_error(Mxrb::ReadOnlyError)
+      expect { mpr.backup!(File.join(dir, "backup.mpr")) }
+        .to raise_error(Mxrb::ReadOnlyError)
+      expect { mpr.restore_from!(File.join(dir, "backup.mpr")) }
+        .to raise_error(Mxrb::ReadOnlyError)
+      mpr.close
+    end
+  end
+
+  it "covers comparison traversal branches and removes impossible root state" do
+    comparator = Mxrb::Compare::Comparator.allocate
+    nested = { "$ID" => "nested", "$Type" => "Microflows$ActionActivity" }
+    unreachable = {
+      "$ID" => "unreachable", "$Type" => "Microflows$ActionActivity",
+      "ObjectCollection" => { "Objects" => [3, nested] }
+    }
+    ids = {}
+    comparator.send(
+      :assign_flow_ids,
+      [{ "$ID" => "start", "$Type" => "Microflows$StartEvent" }, unreachable],
+      [],
+      ids
+    )
+    expect(ids).to include("nested")
+
+    cyclic_ids = {}
+    comparator.send(
+      :assign_flow_ids,
+      [
+        {
+          "$ID" => "a", "$Type" => "Microflows$ActionActivity",
+          "ObjectCollection" => {
+            "Objects" => [3, { "$ID" => "inside", "$Type" => "Microflows$ActionActivity" }]
+          }
+        },
+        { "$ID" => "b", "$Type" => "Microflows$ActionActivity" }
+      ],
+      [
+        { "OriginPointer" => "a", "DestinationPointer" => "b" },
+        { "OriginPointer" => "b", "DestinationPointer" => "a" }
+      ],
+      cyclic_ids
+    )
+    expect(cyclic_ids).to include("inside")
+  end
+
+  it "covers domain mutation plan guards before any write occurs" do
+    mpr = double("domain mpr")
+    allow(mpr).to receive(:transaction).and_yield
+    project = double("domain project", mpr:)
+    common = {
+      project:, module_name: "M", entity_name: "Entity",
+      entity_id: "entity-id", domain_unit_id: "domain-id"
+    }
+
+    add = Mxrb::Semantic::AddAttributePlan.new(
+      **common, attribute_def: { name: "Added", type: :string }
+    )
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { add.apply! }.to raise_error(ArgumentError, /domain model unit not found/)
+
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain-id")
+    allow(project).to receive(:parse_bson).and_return("entities" => [3])
+    expect { add.apply! }.to raise_error(ArgumentError, /not found in domain model/)
+
+    add.instance_variable_set(:@applied, true)
+    expect { add.apply! }.to raise_error(ArgumentError, /already applied/)
+
+    remove = Mxrb::Semantic::RemoveAttributePlan.new(
+      **common, attribute_name: "Missing", incoming: []
+    )
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { remove.apply! }.to raise_error(ArgumentError, /domain model unit not found/)
+
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain-id")
+    allow(project).to receive(:parse_bson).and_return("entities" => [3])
+    expect { remove.apply! }.to raise_error(ArgumentError, /entity not found/)
+
+    allow(project).to receive(:parse_bson).and_return(
+      "entities" => [3, {
+        "$ID" => "entity-id", "name" => "Entity",
+        "attributes" => [3, { "name" => "Present" }]
+      }]
+    )
+    expect { remove.apply! }.to raise_error(ArgumentError, /attribute "Missing" not found/)
+
+    remove.instance_variable_set(:@applied, true)
+    expect { remove.apply! }.to raise_error(ArgumentError, /already applied/)
+
+    change = Mxrb::Semantic::ChangeAttributePlan.new(
+      **common, attribute_name: "Missing", updates: { documentation: "new" }
+    )
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { change.apply! }.to raise_error(ArgumentError, /domain model unit not found/)
+
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain-id")
+    allow(project).to receive(:parse_bson).and_return("entities" => [3])
+    expect { change.apply! }.to raise_error(ArgumentError, /entity not found/)
+
+    allow(project).to receive(:parse_bson).and_return(
+      "entities" => [3, {
+        "$ID" => "entity-id", "name" => "Entity",
+        "attributes" => [3, { "Name" => "Present" }]
+      }]
+    )
+    expect { change.apply! }.to raise_error(ArgumentError, /attribute "Missing" not found/)
+
+    change.instance_variable_set(:@applied, true)
+    expect { change.apply! }.to raise_error(ArgumentError, /already applied/)
+
+    add_entity = Mxrb::Semantic::AddEntityPlan.new(
+      project:, module_name: "M", domain_unit_id: "domain-id",
+      entity_def: { name: "Added", attributes: [] }
+    )
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { add_entity.apply! }.to raise_error(ArgumentError, /domain model unit not found/)
+    add_entity.instance_variable_set(:@applied, true)
+    expect { add_entity.apply! }.to raise_error(ArgumentError, /already applied/)
+
+    remove_entity = Mxrb::Semantic::RemoveEntityPlan.new(
+      **common, incoming: []
+    )
+    allow(project).to receive(:raw_unit).and_return(nil)
+    expect { remove_entity.apply! }.to raise_error(ArgumentError, /domain model unit not found/)
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain-id")
+    allow(project).to receive(:parse_bson).and_return(
+      "Entities" => [3, { "$ID" => "another-id", "Name" => "Other" }]
+    )
+    expect { remove_entity.apply! }.to raise_error(ArgumentError, /not found/)
+    remove_entity.instance_variable_set(:@applied, true)
+    expect { remove_entity.apply! }.to raise_error(ArgumentError, /already applied/)
+  end
+
+  it "covers uppercase domain payloads and optional mutation updates" do
+    mpr = double("domain mpr")
+    allow(mpr).to receive(:transaction).and_yield
+    allow(mpr).to receive(:update_unit)
+    project = double("domain project", mpr:, refresh!: true)
+
+    existing = Mxrb::Model::Attribute.new
+    existing.id = "attribute-id"
+    existing.name = "Changed"
+    existing.type = :string
+    other = Mxrb::Model::Attribute.new
+    other.id = "other-id"
+    other.name = "Other"
+    other.type = :string
+    domain = {
+      "Entities" => [3, {
+        "$ID" => "entity-id", "Name" => "Entity",
+        "Attributes" => [3, existing.to_bson, other.to_bson]
+      }]
+    }
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain-id")
+    allow(project).to receive(:parse_bson).and_return(domain)
+
+    change = Mxrb::Semantic::ChangeAttributePlan.new(
+      project:, module_name: "M", entity_name: "Entity",
+      entity_id: "entity-id", domain_unit_id: "domain-id",
+      attribute_name: "Changed", updates: { documentation: "Documented" }
+    )
+    expect(change.apply!).to be_applied
+
+    added = Mxrb::Semantic::AddEntityPlan.new(
+      project:, module_name: "M", domain_unit_id: "domain-id",
+      entity_def: {
+        name: "Added", attributes: [{ name: "Name", type: :string }],
+        non_persistent: false
+      }
+    )
+    expect(added.apply!).to be_applied
+
+    expect(domain).to have_key("Entities")
+    expect(domain).not_to have_key("entities")
+
+    entity_doc = {
+      "Attributes" => [3, { "Name" => "Old" }]
+    }
+    Mxrb::Semantic::DomainMutator.put_attributes(entity_doc, [{ "Name" => "New" }])
+    expect(entity_doc).to have_key("Attributes")
+
+    domain_doc = {
+      "Entities" => [3,
+        { "$ID" => "keep", "Name" => "Keep" },
+        { "$ID" => "replace", "Name" => "Old" }]
+    }
+    replacement = { "$ID" => "replace", "Name" => "New" }
+    Mxrb::Semantic::DomainMutator.put_entity(domain_doc, "replace", replacement)
+    entities = Mxrb::Semantic::DomainMutator.extract_entities(domain_doc)
+    expect(entities.map { _1["Name"] }).to eq(%w[Keep New])
+  end
+
+  it "covers domain mutator resolution and optional reference branches" do
+    no_module = Mxrb::Semantic::DomainMutator.new(double(modules: []))
+    expect { no_module.send(:resolve_module, "Missing") }.to raise_error(KeyError)
+    expect { no_module.send(:resolve_entity, "invalid") }.to raise_error(ArgumentError)
+    expect { no_module.send(:resolve_entity, "Missing.Entity") }.to raise_error(KeyError)
+
+    module_without_domain = double(name: "M", domain_model: nil, entities: [])
+    missing_domain = Mxrb::Semantic::DomainMutator.new(
+      double(modules: [module_without_domain])
+    )
+    expect { missing_domain.send(:resolve_module, "M") }.to raise_error(ArgumentError)
+    expect { missing_domain.send(:resolve_entity, "M.Entity") }.to raise_error(ArgumentError)
+
+    domain = double(id: "domain-id")
+    mod = double(name: "M", domain_model: domain, entities: [])
+    missing_entity = Mxrb::Semantic::DomainMutator.new(double(modules: [mod]))
+    expect { missing_entity.send(:resolve_entity, "M.Entity") }.to raise_error(KeyError)
+
+    entity = double(name: "Entity", id: "entity-id")
+    project = double(modules: [double(name: "M", domain_model: domain, entities: [entity])])
+    allow(project).to receive(:find_artifact).and_return(nil)
+    mutator = Mxrb::Semantic::DomainMutator.new(project)
+    expect(mutator.plan_remove_attribute("M.Entity/Name").incoming).to eq([])
+    expect(mutator.plan_remove_entity("M.Entity").incoming).to eq([])
+    expect(
+      mutator.plan_change_attribute("M.Entity/Name", documentation: "new").updates
+    ).to eq(documentation: "new")
+  end
+
+  it "removes an entity from an uppercase domain payload" do
+    mpr = double("domain mpr")
+    allow(mpr).to receive(:transaction).and_yield
+    allow(mpr).to receive(:update_unit)
+    project = double("domain project", mpr:, refresh!: true)
+    domain = {
+      "Entities" => [3,
+        { "$ID" => "remove", "Name" => "Remove" },
+        { "$ID" => "keep", "Name" => "Keep" }]
+    }
+    allow(project).to receive(:raw_unit).and_return("UnitID" => "domain")
+    allow(project).to receive(:parse_bson).and_return(domain)
+    plan = Mxrb::Semantic::RemoveEntityPlan.new(
+      project:, module_name: "M", entity_name: "Remove",
+      entity_id: "remove", domain_unit_id: "domain", incoming: []
+    )
+    expect(plan.apply!).to be_applied
+    expect(Mxrb::Semantic::DomainMutator.extract_entities(domain).map { _1["Name"] })
+      .to eq(["Keep"])
+  end
+
+  it "covers semantic extraction with a structured BSON identifier" do
+    start_id = "start"
+    action_id = "action"
+    end_id = "end"
+    structured_id = Object.new
+    allow(Mxrb::IO::BsonCodec).to receive(:extract_id).and_call_original
+    allow(Mxrb::IO::BsonCodec).to receive(:extract_id).with(structured_id).and_return(action_id)
+
+    source = Mxrb::Semantic::Artifact.new(
+      "unit:flow", "M.Flow", :microflow, "M", "Flow", "flow", [], {}
+    )
+    document = {
+      "ObjectCollection" => {
+        "Objects" => [3,
+          { "$ID" => start_id, "$Type" => "Microflows$StartEvent" },
+          { "$ID" => action_id, "$Type" => "Microflows$ActionActivity" },
+          { "$ID" => end_id, "$Type" => "Microflows$EndEvent" }]
+      },
+      "Flows" => [3,
+        { "OriginPointer" => start_id, "DestinationPointer" => action_id },
+        { "OriginPointer" => action_id, "DestinationPointer" => end_id }]
+    }
+    project = double(
+      find_artifact: nil, raw_unit: { "UnitID" => "flow" }, parse_bson: document
+    )
+    allow(project).to receive(:find_artifact).with("M.Flow").and_return(source)
+    plan = Mxrb::Semantic::Extractor.new(project).plan(
+      "M.Flow", as: "M.Extracted", object_ids: [structured_id]
+    )
+    expect(plan.selected_ids).to eq(Set[action_id])
+    opaque_id = Object.new
+    expect {
+      Mxrb::Semantic::Extractor.new(project).plan(
+        "M.Flow", as: "M.Extracted", object_ids: [opaque_id]
+      )
+    }.to raise_error(ArgumentError, /unknown object IDs/)
+  end
+
+  it "covers GitHub annotation paths with files, lines, and unsupported changes" do
+    change_class = Mxrb::Compare::Change
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, "modules", "M", "logic", "flow.rb")
+      FileUtils.mkdir_p(File.dirname(file))
+      File.write(file, "microflow :Flow\n")
+      result = double(changes: [
+        change_class.new(:changed, [:modules, "M", :microflows, "Flow"], "old", "new")
+      ])
+      annotator = Mxrb::Github::Annotator.new(result, exported_dir: dir)
+      annotation = annotator.annotations.first
+      expect(annotation.file).to eq(file)
+      expect(annotation.line).to eq(1)
+      output = StringIO.new
+      annotator.print_actions_annotations(out: output)
+      expect(output.string).to include("file=#{file}", ",line=1")
+
+      path_without_artifact = [:modules, "M", :microflows]
+      expect(annotator.send(:exported_file, path_without_artifact, "M"))
+        .to end_with("/logic/microflows.rb")
+      expect(annotator.send(:exported_file, [:modules, "M", :unknown, "X"], "M")).to be_nil
+      expect(annotator.send(:find_line_in_file, file, "Absent")).to be_nil
+    end
+
+    unsupported = change_class.new(:moved, [:other], nil, nil)
+    annotator = Mxrb::Github::Annotator.new(double(changes: [unsupported]))
+    expect(annotator.annotations.first.message).to be_nil
+    expect(annotator.comment_body).to include("ℹ️ Moved")
+  end
+
+  it "covers integrity failures through isolated validator inputs" do
+    validator = Mxrb::Integrity::Validator.allocate
+    validator.instance_variable_set(:@errors, [])
+    validator.instance_variable_set(:@warnings, [])
+
+    validator.instance_variable_set(:@units, [])
+    validator.send(:validate_root)
+    expect(validator.instance_variable_get(:@errors)).to include(/expected exactly one root/)
+
+    unit = { "UnitID" => "unit", "ContainerID" => "unit", "ContentsHash" => "hash" }
+    mpr = double(content_bytes: "bytes", tables: [], table_info: [])
+    validator.instance_variable_set(:@mpr, mpr)
+    validator.instance_variable_set(:@units, [unit])
+    allow(validator).to receive(:validate_hash)
+    allow(validator).to receive(:parse_unit).and_return(nil)
+    validator.send(:validate_contents)
+    validator.send(:require_table, "Unit")
+    validator.send(:require_unit_column, "UnitID")
+    errors = validator.instance_variable_get(:@errors).join("\n")
+    expect(errors).to include("missing Unit table", "missing Unit.UnitID column")
+  end
+
+  it "inserts into an MPR schema without a conflicts column" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "minimal.mpr")
+      db = SQLite3::Database.new(path)
+      db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT)")
+      db.execute("INSERT INTO _MetaData VALUES ('10.18.0')")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY,
+          ContainerID BLOB,
+          ContainmentName TEXT,
+          TreeConflict LONG,
+          ContentsHash TEXT,
+          Contents BLOB
+        )
+      SQL
+      root = SecureRandom.uuid
+      root_blob = Mxrb::IO::BsonCodec.uuid_to_blob(root)
+      root_doc = { "$ID" => root, "$Type" => "Projects$Project", "Name" => "Minimal" }
+      bytes = Mxrb::IO::BsonCodec.serialize(root_doc)
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', 0, ?, ?)",
+        [root_blob, root_blob, Mxrb::IO::BsonCodec.contents_hash(bytes), bytes]
+      )
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(path, readonly: false)
+      inserted = mpr.insert_unit(
+        container_uuid: root, containment_name: "Documents",
+        contents_doc: { "$Type" => "Test$Document", "Name" => "Child" }
+      )
+      expect(mpr.all_units.map { _1["UnitID"] }).to include(inserted)
+      mpr.close
+    end
+  end
+
+  it "covers semantic index construction and graph edge cases" do
+    no_cache_mpr = double("no cache mpr")
+    allow(no_cache_mpr).to receive(:write_index_cache)
+    project = double(
+      mpr: no_cache_mpr, modules: [], all_units: []
+    )
+    allow(project).to receive(:query).and_raise(SQLite3::Exception, "no hash")
+    index = Mxrb::Semantic::Index.new(project)
+    expect(index.artifacts).to eq([])
+    expect(no_cache_mpr).not_to have_received(:write_index_cache)
+
+    artifact = Mxrb::Semantic::Artifact.new(
+      "unit:flow", "M.Flow", :microflow, "M", "Flow", "flow", [], {}
+    )
+    index = Mxrb::Semantic::Index.allocate
+    index.send(:reset_state)
+    index.instance_variable_get(:@artifacts) << artifact
+    index.instance_variable_get(:@by_id)[artifact.id] = artifact
+    index.instance_variable_get(:@by_name)[artifact.qualified_name] << artifact
+
+    expect(index.search(/M\.Flow/)).to eq([artifact])
+    expect(index.send(:add_artifact, **artifact.to_h)).to equal(artifact)
+    expect(index.send(:relation_for, ["Unknown"], artifact)).to eq(:references)
+    expect(
+      index.send(
+        :ancestor_module,
+        { "ContainerID" => "missing" },
+        {},
+        {}
+      )
+    ).to be_nil
+
+    duplicate_reference = Mxrb::Semantic::Reference.new(
+      artifact, artifact, :references, ["Other"], "M.Flow"
+    )
+    index.instance_variable_set(:@references, [duplicate_reference])
+    expect(index.impact_of(artifact).artifacts).to eq([])
+
+    index.instance_variable_set(:@documents, [
+      [artifact, { "Other" => "Flow" }]
+    ])
+    index.instance_variable_get(:@by_name)["Flow"] << artifact
+    index.instance_variable_set(:@references, [])
+    index.instance_variable_set(:@unresolved_references, [])
+    index.send(:scan_documents)
+    expect(index.references.size).to eq(1)
+  end
+
+  it "indexes incomplete domain models defensively" do
+    attribute = double(id: "attribute", name: "Name")
+    entity = double(
+      id: "entity", name: "Entity", qualified_name: "",
+      attributes: [attribute]
+    )
+    association = double(
+      id: "association", name: "Link",
+      from_entity_id: "missing-from", to_entity_id: "missing-to"
+    )
+    mod = double(
+      id: "module", name: "M", domain_model: nil,
+      entities: [entity], associations: [association]
+    )
+    project = double(modules: [mod])
+    index = Mxrb::Semantic::Index.allocate
+    index.send(:reset_state)
+    index.instance_variable_set(:@project, project)
+    index.send(:index_modules_and_domain_models)
+    expect(index.find("M.Entity", kind: :entity).unit_id).to be_nil
+    expect(index.find("M.Entity.Name", kind: :attribute).unit_id).to be_nil
+    metadata = index.find("M.Link", kind: :association).metadata
+    expect(metadata.values_at(:from, :to)).to eq([nil, nil])
+  end
+
+  it "ignores domain documents whose objects are absent from the model projection" do
+    domain = double(id: "domain")
+    mod = double(
+      id: "module", name: "M", domain_model: domain,
+      entities: [], associations: []
+    )
+    project = double(modules: [mod])
+    allow(project).to receive(:raw_unit).with("domain").and_return("UnitID" => "domain")
+    allow(project).to receive(:parse_bson).and_return(
+      "entities" => [3, { "$ID" => "missing-entity" }],
+      "associations" => [3, { "$ID" => "missing-association" }]
+    )
+    index = Mxrb::Semantic::Index.allocate
+    index.send(:reset_state)
+    index.instance_variable_set(:@project, project)
+    index.send(:index_modules_and_domain_models)
+    expect(index.instance_variable_get(:@documents)).to eq([])
+  end
+
+  it "covers exporter scaffolding, domain, flow, page, and menu fallbacks" do
+    Dir.mktmpdir do |dir|
+      exporter = Mxrb::Exporter.new("input.mpr", dir)
+      root = File.join(dir, "modules", "M")
+      exporter.send(:export_module_scaffolding, root)
+      security_path = File.join(root, "security", "security.rb")
+      original = File.read(security_path)
+      exporter.send(:export_module_scaffolding, root)
+      expect(File.read(security_path)).to eq(original)
+
+      missing_target = double(
+        to_entity_id: "Missing.Entity", association_type: :reference, name: "Link"
+      )
+      entity = double(
+        name: "Entity", attributes: [], persistable: true, documentation: "",
+        access_rules: [{ roles: [], default_rights: "None", members: [] }]
+      )
+      mod = double(entities: [])
+      source = exporter.send(:entity_source, entity, mod, [missing_target])
+      expect(source).to include("Missing.Entity")
+      expect(source).not_to include("access_rule")
+
+      expect(
+        exporter.send(:reconstruct_access, "ReadWrite", [], "ReadOnly", nil)
+      ).to eq(:all)
+      expect(exporter.send(:access_rule_source, roles: [], members: [])).to be_nil
+
+      flow = double(
+        name: "Flow", parameters: [{ "Name" => "OnlyName" }],
+        return_type: nil, documentation: "",
+        allow_concurrent_execution: false, mark_as_used: false, excluded: false,
+        allowed_module_roles: [], objects: [], flows: []
+      )
+      expect(exporter.send(:microflow_source, flow)).not_to include("parameter")
+
+      page = double(
+        name: "Page", layout_id: nil, title: "", popup_width: 0, popup_height: 0,
+        allowed_module_roles: [], data_source: nil, widgets: []
+      )
+      allow(exporter).to receive(:page_deep_structure).with(page).and_return(nil)
+      page_source = exporter.send(:page_source, page)
+      expect(page_source).not_to include("layout ", "deep_structure")
+      metadata = {
+        events: [{ event: :on_click, target: "Button", kind: :microflow, handler: "M.Flow" }],
+        widgets: []
+      }
+      expect(exporter.send(:page_source, page, metadata)).to include("target: :Button")
+
+      expect(exporter.send(:menu_item_source, { caption: "Item" }, 2).first)
+        .to eq('  item "Item"')
+
+      menu = double(
+        id: "menu", name: "Menu", items: [{ caption: "Item" }],
+        raw_document: nil
+      )
+      mod_with_menu = double(menus: [menu])
+      exporter.send(:export_menus, root, mod_with_menu)
+      expect(File.read(File.join(root, "presentation", "presentation.rb")))
+        .to include("menus")
+    end
+  end
+
+  it "covers exporter widget option and rejection branches" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    snippet = exporter.send(
+      :render_widget,
+      { type: :snippet, name: "Same", options: { snippet: "Same" } },
+      2
+    )
+    expect(snippet.first).to eq('  snippet "Same"')
+
+    drop_down = exporter.send(
+      :render_widget,
+      { type: :drop_down, name: "Choice", options: {} },
+      2
+    )
+    expect(drop_down.first).to eq("  drop_down :Choice")
+
+    grid = exporter.send(
+      :render_widget,
+      {
+        type: :data_grid, name: "Grid",
+        options: {
+          columns: [{ name: "Name" }],
+          tabs: [{ name: "Tab" }],
+          toolbar: { buttons: [
+            { type: :unknown },
+            { type: :search }
+          ] }
+        }
+      },
+      2
+    )
+    expect(grid.join("\n")).to include("column :Name", "tab_page :Tab", "search_button")
+    expect(grid.join("\n")).not_to include("unknown")
+
+    disconnected = [
+      { "$ID" => "a", "$Type" => "Microflows$ActionActivity", "Action" => {
+        "$Type" => "Microflows$DeleteAction"
+      } },
+      { "$ID" => "b", "$Type" => "Microflows$EndEvent" }
+    ]
+    expect(exporter.send(:editable_flow_body?, disconnected, [])).to be(false)
+    expect(
+      exporter.send(
+        :editable_flow_body?,
+        [{ "$ID" => "x", "$Type" => "Microflows$Unsupported" }],
+        [],
+        nested: true
+      )
+    ).to be(false)
+
+    start = { "$ID" => "start", "$Type" => "Microflows$StartEvent" }
+    ending = { "$ID" => "end", "$Type" => "Microflows$EndEvent" }
+    annotation_flow = {
+      "$Type" => "Microflows$UnsupportedFlow",
+      "OriginPointer" => "start", "DestinationPointer" => "end"
+    }
+    expect(exporter.send(:editable_flow_body?, [start, ending], [annotation_flow])).to be(false)
+
+    action = {
+      "$ID" => "action", "$Type" => "Microflows$ActionActivity",
+      "Action" => { "$Type" => "Microflows$DeleteAction" }
+    }
+    duplicate_errors = [
+      {
+        "$Type" => "Microflows$SequenceFlow", "OriginPointer" => "start",
+        "DestinationPointer" => "action"
+      },
+      {
+        "$Type" => "Microflows$SequenceFlow", "OriginPointer" => "action",
+        "DestinationPointer" => "end", "IsErrorHandler" => true
+      },
+      {
+        "$Type" => "Microflows$SequenceFlow", "OriginPointer" => "action",
+        "DestinationPointer" => "start", "IsErrorHandler" => true
+      }
+    ]
+    expect(
+      exporter.send(:editable_flow_body?, [start, action, ending], duplicate_errors)
+    ).to be(false)
+
+    bad_loop = {
+      "$ID" => "loop", "$Type" => "Microflows$LoopedActivity",
+      "LoopSource" => { "$Type" => "Microflows$UnsupportedLoop" },
+      "ObjectCollection" => { "Objects" => [3] }
+    }
+    expect(exporter.send(:editable_flow_body?, [bad_loop], [], nested: true)).to be(false)
+    expect(exporter.send(:editable_action?, "$Type" => "Microflows$Unsupported")).to be(false)
+    expect(
+      exporter.send(
+        :decision_shape_editable?,
+        { "$ID" => "split", "SplitCondition" => {} },
+        [],
+        {}
+      )
+    ).to be(false)
+    expect(exporter.send(:body_dsl_lines, [], [])).to eq([])
+    expect(
+      exporter.send(
+        :body_dsl_lines,
+        [{ "$ID" => "orphan", "$Type" => "Microflows$ActionActivity" }],
+        [{ "$Type" => "Microflows$AnnotationFlow" }],
+        2
+      )
+    ).to eq([])
+  end
+
+  it "covers exporter linearization termination and action fallbacks" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    lines = []
+    exporter.send(
+      :linearize_flow, "seen", {}, {},
+      { "seen" => { "$ID" => "seen", "$Type" => "Microflows$StartEvent" } },
+      {}, { "seen" => true }, lines, 2, nil
+    )
+    expect(lines).to eq([])
+
+    exporter.send(
+      :linearize_flow, "missing", {}, {}, {}, {}, {}, lines, 2, nil
+    )
+    expect(lines).to eq([])
+
+    unsupported_action = {
+      "$ID" => "action", "$Type" => "Microflows$ActionActivity",
+      "Action" => { "$Type" => "Microflows$Unsupported" }
+    }
+    exporter.send(
+      :linearize_flow, "action", {}, {}, { "action" => unsupported_action },
+      {}, {}, lines, 2, nil
+    )
+    expect(lines).to eq([])
+
+    %w[
+      Microflows$StartEvent
+      Microflows$ExclusiveMerge
+      Microflows$LoopedActivity
+      Microflows$Annotation
+    ].each do |type|
+      object = { "$ID" => "node", "$Type" => type }
+      object["LoopSource"] = {
+        "$Type" => "Microflows$IterableList",
+        "ListVariableName" => "Items", "VariableName" => "Items"
+      } if type == "Microflows$LoopedActivity"
+      object["ObjectCollection"] = { "Objects" => [3] } if type == "Microflows$LoopedActivity"
+      branch_lines = []
+      exporter.send(
+        :linearize_flow, "node", {}, {}, { "node" => object },
+        {}, {}, branch_lines, 2, nil
+      )
+      expect(branch_lines).to be_a(Array)
+    end
+
+    expect(exporter.send(:find_common_merge_node, [], {}, {})).to be_nil
+    expect(exporter.send(:action_dsl_line, { "Action" => { "$Type" => "Unknown" } }, 2))
+      .to be_nil
+  end
+
+  it "covers exporter architecture metadata absence and nil collections" do
+    Dir.mktmpdir do |dir|
+      exporter = Mxrb::Exporter.new("input.mpr", dir)
+      flow = double(
+        id: "flow", name: "Flow", parameters: [], return_type: nil,
+        documentation: "", allow_concurrent_execution: true,
+        mark_as_used: false, excluded: false, allowed_module_roles: [],
+        objects: [], flows: []
+      )
+      mod = double(name: "M", microflows: [flow], nanoflows: [flow])
+      allow(exporter).to receive(:architecture_module).and_return(nil)
+      root = File.join(dir, "nil-architecture")
+      FileUtils.mkdir_p(File.join(root, "presentation"))
+      File.write(File.join(root, "presentation", "presentation.rb"), "")
+      exporter.send(:export_microflows, root, mod)
+      exporter.send(:export_nanoflows, root, mod)
+
+      allow(exporter).to receive(:architecture_module).and_return(
+        microflows: nil, nanoflows: nil, repositories: []
+      )
+      root = File.join(dir, "nil-collections")
+      FileUtils.mkdir_p(File.join(root, "presentation"))
+      File.write(File.join(root, "presentation", "presentation.rb"), "")
+      exporter.send(:export_microflows, root, mod)
+      exporter.send(:export_nanoflows, root, mod)
+      expect(Dir.glob(File.join(dir, "**", "*.rb"))).not_to be_empty
+    end
+  end
+
+  it "covers exporter editable body with an unavailable fingerprint" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    start = { "$ID" => "start", "$Type" => "Microflows$StartEvent" }
+    ending = { "$ID" => "end", "$Type" => "Microflows$EndEvent", "ReturnValue" => "" }
+    flow_edge = {
+      "$Type" => "Microflows$SequenceFlow",
+      "OriginPointer" => "start", "DestinationPointer" => "end"
+    }
+    flow = double(
+      name: "Flow", parameters: [], return_type: nil, documentation: "",
+      allow_concurrent_execution: true, mark_as_used: false, excluded: false,
+      allowed_module_roles: [], objects: [start, ending], flows: [flow_edge]
+    )
+    allow(exporter).to receive(:flow_body_fingerprint).and_return(nil)
+    expect(exporter.send(:microflow_source, flow)).not_to include("body_fingerprint")
+    expect(exporter.send(:editable_flow_body?, [start, ending], [])).to be(false)
+  end
+
+  it "covers exporter action options in both native and legacy shapes" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    line = lambda do |action|
+      exporter.send(:action_dsl_line, { "Action" => action }, 2)
+    end
+
+    attribute_member = [3, {
+      "Attribute" => "Name", "Value" => { "Value" => "'value'" }
+    }]
+    created = line.call(
+      "$Type" => "Microflows$CreateObjectAction",
+      "Entity" => "M.Entity", "OutputVariableName" => "Object",
+      "Members" => attribute_member
+    )
+    expect(created).to include("create_object", "set:")
+
+    changed = line.call(
+      "$Type" => "Microflows$ChangeObjectAction",
+      "Variable" => "Object", "Members" => attribute_member
+    )
+    expect(changed).to include("change_object", "set:")
+
+    retrieved = line.call(
+      "$Type" => "Microflows$RetrieveAction",
+      "ResultVariableName" => "Items",
+      "RetrieveSource" => {
+        "$Type" => "Microflows$DatabaseRetrieveSource", "Entity" => "M.Entity",
+        "Range" => {
+          "$Type" => "Microflows$CustomRange", "LimitExpression" => ""
+        }
+      }
+    )
+    expect(retrieved).not_to include("limit:")
+
+    committed = line.call(
+      "$Type" => "Microflows$CommitObjectsAction",
+      "Variable" => "Object", "CommitWithoutEvents" => false
+    )
+    expect(committed).to eq("  commit :Object")
+
+    message = line.call(
+      "$Type" => "Microflows$ShowMessageAction",
+      "Type" => "Warning", "Template" => {}
+    )
+    expect(message).to include("type: :warning")
+
+    log = line.call(
+      "$Type" => "Microflows$LogMessageAction",
+      "Level" => "Error", "MessageTemplate" => { "Text" => "failure" }
+    )
+    expect(log).to include("level: :error")
+
+    page = line.call(
+      "$Type" => "Microflows$ShowFormAction",
+      "FormObjectVariable" => "Object",
+      "FormSettings" => { "Form" => "M.Page", "Location" => "Popup" }
+    )
+    expect(page).to include("object: :Object", "location: :popup")
+
+    feedback = line.call(
+      "$Type" => "Microflows$ValidationFeedbackAction",
+      "ValidationVariableName" => "Object",
+      "Attribute" => "", "Association" => "",
+      "FeedbackTemplate" => {}, "ErrorHandlingType" => "Rollback"
+    )
+    expect(feedback).not_to include("attribute:", "association:")
+  end
+
+  it "covers exporter REST defaults and low-level serialization boundaries" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    minimal_rest = exporter.send(
+      :rest_call_line,
+      "  ",
+      {
+        "HttpConfiguration" => {
+          "HttpMethod" => "Get",
+          "CustomLocationTemplate" => { "Text" => "https://example.invalid" }
+        },
+        "RequestHandling" => {},
+        "ResultHandling" => {},
+        "ErrorResultHandlingType" => "None",
+        "ErrorHandlingType" => "Rollback"
+      }
+    )
+    expect(minimal_rest).not_to include(
+      "location_parameters:", "headers:", "request_mapping:", "request_variable:",
+      "result_mapping:", "as:", "result_entity:", "timeout:", "commit:"
+    )
+
+    call = exporter.send(
+      :call_action_line, "  ", "call_java", "M.Action", nil, [], false
+    )
+    expect(call).to eq('  call_java "M.Action"')
+    expect(exporter.send(:translated_text, "Items" => [3])).to eq("")
+
+    members = exporter.send(
+      :member_specs,
+      [3,
+        { "Attribute" => "Name", "Value" => { "Value" => "x" } },
+        { "Attribute" => "", "Association" => "", "Value" => "ignored" }]
+    )
+    expect(members).to eq([
+      { attribute: "Name", association: "", value: "x", operation: "Set" }
+    ])
+    block = exporter.send(
+      :member_block,
+      "change_object :Object",
+      [{ attribute: "", association: "M.Link", value: "$Other", operation: "Set" }],
+      2
+    )
+    expect(block).not_to include("operation:")
+    expect(exporter.send(:ruby_val, nil)).to eq("nil")
+  end
+
+  it "closes the final exporter access and action branches" do
+    exporter = Mxrb::Exporter.new("input.mpr", Dir.mktmpdir)
+    expect(
+      exporter.send(:reconstruct_access, "ReadWrite", [], "Unsupported", nil)
+    ).to eq(:none)
+
+    association_member = [3, {
+      "Association" => "M.Entity_Link", "Value" => "$Other", "Type" => "Add"
+    }]
+    changed = exporter.send(
+      :action_dsl_line,
+      {
+        "Action" => {
+          "$Type" => "Microflows$ChangeObjectAction",
+          "Variable" => "Object", "Members" => association_member
+        }
+      },
+      2
+    )
+    expect(changed).to include("set_association")
+
+    empty_message = exporter.send(
+      :action_dsl_line,
+      { "Action" => { "$Type" => "Microflows$ShowMessageAction", "Template" => {} } },
+      2
+    )
+    expect(empty_message).not_to include("type:")
+    empty_log = exporter.send(
+      :action_dsl_line,
+      { "Action" => { "$Type" => "Microflows$LogMessageAction", "MessageTemplate" => {} } },
+      2
+    )
+    expect(empty_log).not_to include("level:")
+  end
+
+  it "covers writer preservation and document defaults that protect native data" do
+    writer = Mxrb::Writer.new("writer.mpr", version: "11.12.1", modules: [])
+
+    raw = { "UnitID" => "security", "ContainmentName" => "ProjectDocuments" }
+    existing = {
+      "$ID" => "security", "$Type" => "Security$ProjectSecurity",
+      "SecurityLevel" => "Production", "NativeOnly" => true
+    }
+    mpr = double
+    allow(mpr).to receive(:children_of).and_return([raw])
+    allow(mpr).to receive(:parse_contents).and_return(existing)
+    expect(mpr).to receive(:update_unit).with(
+      "security",
+      hash_including("SecurityLevel" => "Production", "NativeOnly" => true)
+    )
+    writer.send(:write_project_security, mpr, "root", user_roles: [])
+
+    source = {
+      "ObjectCollection" => {
+        "Objects" => [3, {
+          "$ID" => "old", "$Type" => "Microflows$ActionActivity",
+          "Action" => { "$Type" => "Microflows$DeleteAction" }
+        }]
+      },
+      "Flows" => [3]
+    }
+    target = {
+      "ObjectCollection" => {
+        "Objects" => [3, {
+          "$ID" => "new", "$Type" => "Microflows$EndEvent"
+        }]
+      },
+      "Flows" => [3]
+    }
+    writer.send(:preserve_flow_auxiliary_objects, target, source)
+    expect(target.dig("ObjectCollection", "Objects", 1, "$ID")).to eq("new")
+    expect(
+      writer.send(
+        :flow_edge_signature,
+        { "OriginPointer" => "a", "DestinationPointer" => "b" }
+      ).last(2)
+    ).to eq([nil, nil])
+
+    previous = {
+      "$ID" => "entity", "attributes" => [3], "accessRules" => [3],
+      "eventHandlers" => [3], "indexes" => [3]
+    }
+    entity = {
+      name: "Entity", documentation: "", attributes: [],
+      access_rules: nil, lifecycle: nil, persistable: true
+    }
+    doc = writer.send(:entity_doc, entity, "M", previous, 0)
+    expect(doc).not_to have_key("generalization")
+    expect(writer.send(:lifecycle_doc, event: :validate, handler: "M.Validate"))
+      .to include("Event" => "Validate")
+
+    page = {
+      name: "Page", layout: "Atlas", title: "Page", popup: false,
+      allowed_roles: nil,
+      widgets: [{ type: :button, name: "Run", options: { caption: "Run" } }],
+      events: [{ target: "Run", event: :on_click, kind: :microflow, handler: "M.Flow" }]
+    }
+    page_doc = writer.send(:page_doc, page)
+    button = Mxrb::IO::BsonCodec.parse_array(page_doc["Widgets"])[:items].first
+    expect(button.keys).to include("Action")
+    expect(writer.send(:project_security_doc, user_roles: [])["AdminUserRole"]).to eq("")
+  end
+
+  it "covers writer graph roots, terminal branches, and rescue boundaries" do
+    writer = Mxrb::Writer.new("writer.mpr", version: "11.12.1", modules: [])
+    objects = []
+    flows = []
+    loop_activity = { type: :loop_over, variable: "Items", iterator: "Item", activities: [] }
+    expect(
+      writer.send(:process_activity, loop_activity, nil, objects, flows, 0, 0).first
+    ).not_to be_nil
+
+    decision = {
+      type: :decision, condition: "$ok",
+      branches: {
+        true => [{ type: :return_event, expression: "" }],
+        false => [{ type: :return_event, expression: "" }]
+      }
+    }
+    result = writer.send(:process_decision, decision, nil, [], [], 0, 0)
+    expect(result.first).to be_nil
+
+    branch_objects = []
+    branch_flows = []
+    branch = writer.send(
+      :process_decision_branch,
+      [
+        { type: :return_event, expression: "" },
+        { type: :create_variable, variable: "unreachable", value: "" }
+      ],
+      "split", true, branch_objects, branch_flows, 0, 0
+    )
+    expect(branch).to include(terminal: true)
+
+    sequential_objects = []
+    sequential_flows = []
+    writer.send(
+      :process_decision_branch,
+      [
+        { type: :create_variable, variable: "first", value: "" },
+        { type: :create_variable, variable: "second", value: "" }
+      ],
+      "split", false, sequential_objects, sequential_flows, 0, 0
+    )
+    expect(sequential_flows.size).to eq(2)
+
+    no_origin_objects = []
+    no_origin_flows = []
+    writer.send(:build_rescue_branch, nil, [], no_origin_objects, no_origin_flows, 0, 0)
+    writer.send(
+      :build_rescue_branch,
+      "missing",
+      [{ type: :create_variable, variable: "one", value: "" }],
+      no_origin_objects, no_origin_flows, 0, 0
+    )
+    expect(no_origin_flows).not_to be_empty
+
+    rescue_writer = Mxrb::Writer.new("writer.mpr", version: "11.12.1", modules: [])
+    allow(rescue_writer).to receive(:process_activity).and_return([nil, 1])
+    rescue_writer.send(
+      :build_rescue_branch,
+      "origin",
+      [{ type: :noop }],
+      [{ "$ID" => "origin" }],
+      [],
+      0,
+      0
+    )
+
+    inheritance = {
+      type: :inheritance_decision, variable: "Object",
+      branches: {
+        "M.A" => [{ type: :return_event, expression: "" }],
+        nil => [{ type: :return_event, expression: "" }]
+      }
+    }
+    expect(
+      writer.send(:process_inheritance_decision, inheritance, nil, [], [], 0, 0).first
+    ).to be_nil
+
+    mixed = inheritance.merge(
+      branches: {
+        "M.A" => [{ type: :return_event, expression: "" }],
+        nil => [{ type: :create_variable, variable: "x", value: "" }]
+      }
+    )
+    mixed_objects = []
+    mixed_flows = []
+    expect(
+      writer.send(
+        :process_inheritance_decision, mixed, nil,
+        mixed_objects, mixed_flows, 0, 0
+      ).first
+    ).not_to be_nil
+
+    loop_doc = writer.send(
+      :loop_activity_doc,
+      {
+        type: :loop_over, variable: "Items", iterator: "Item",
+        activities: [
+          { type: :return_event, expression: "" },
+          { type: :create_variable, variable: "unreachable", value: "" }
+        ]
+      },
+      "loop", 0, 0, []
+    )
+    expect(loop_doc["$Type"]).to eq("Microflows$LoopedActivity")
+
+    flow = writer.send(:sequence_flow_doc, "a", "b")
+    writer.send(:set_flow_case, flow, "Value", kind: :enumeration)
+    cases = Mxrb::IO::BsonCodec.parse_array(flow["CaseValues"])[:items]
+    expect(cases.first["$Type"]).to eq("Microflows$EnumerationCase")
+  end
+
+  it "covers writer version-specific calls, empty titles, and native variable types" do
+    writer8 = Mxrb::Writer.new("writer.mpr", version: "8.18.0", modules: [])
+    call = writer8.send(
+      :activity_action_doc,
+      type: :call_microflow, name: "M.Flow",
+      variable: nil, mappings: [], use_return: false
+    )
+    expect(call.dig("MicroflowCall", "Queue")).to eq("")
+
+    writer7 = Mxrb::Writer.new("writer.mpr", version: "7.23.0", modules: [])
+    form = writer7.send(
+      :show_form_action_doc,
+      page: "M.Page", title: nil, location: :content, mappings: []
+    )
+    expect(form.dig("FormSettings", "FormTitle")).to be_nil
+    expect(writer7.send(:page_title_template_doc, nil)).to be_nil
+    expect(
+      writer7.send(:variable_type_doc, "DataTypes$StringType")["$Type"]
+    ).to eq("DataTypes$StringType")
+  end
+
+  it "closes writer branches for objectless and chained rescue activities" do
+    objectless = Mxrb::Writer.new("writer.mpr", version: "11.12.1", modules: [])
+    allow(objectless).to receive(:process_activity).and_return([nil, 1])
+    flows = []
+    result = objectless.send(
+      :process_decision_branch,
+      [{ type: :noop }],
+      "split", true, [], flows, 0, 0
+    )
+    expect(result[:first]).to be_nil
+    expect(flows.first["DestinationPointer"]).to be_nil
+
+    writer = Mxrb::Writer.new("writer.mpr", version: "11.12.1", modules: [])
+    objects = [{
+      "$ID" => "origin", "$Type" => "Microflows$ActionActivity",
+      "Action" => { "$Type" => "Microflows$DeleteAction" }
+    }]
+    rescue_flows = []
+    writer.send(
+      :build_rescue_branch,
+      "origin",
+      [
+        { type: :create_variable, variable: "first", value: "" },
+        { type: :create_variable, variable: "second", value: "" }
+      ],
+      objects, rescue_flows, 0, 0
+    )
+    expect(rescue_flows.size).to eq(2)
+    expect(rescue_flows.count { _1["IsErrorHandler"] }).to eq(1)
   end
 end

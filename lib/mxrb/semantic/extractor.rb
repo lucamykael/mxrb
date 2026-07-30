@@ -54,7 +54,7 @@ module Mxrb
 
       def find_module_unit_id
         mod = @project.modules.find { _1.name == @source.module_name }
-        raise ArgumentError, "cannot find module #{@source.module_name.inspect}" unless mod # :nocov:
+        raise ArgumentError, "cannot find module #{@source.module_name.inspect}" unless mod
 
         mod.id
       end

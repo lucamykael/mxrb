@@ -338,6 +338,30 @@ RSpec.describe Mxrb::Runtime do
     expect(runtime.join(" ")).to include(
       "source=mxrb-package", "18080:8080", "18090:8090", "runtime:image"
     )
+    expect(workspace.send(:bind_mount, "/source", "/target", readonly: false))
+      .to eq("type=bind,source=/source,target=/target")
+  end
+
+  it "ignores missing and invalid Java settings before using the fallback" do
+    toolchain = described_class::Toolchain.allocate
+    project = double
+    allow(project).to receive(:all_units).and_return(
+      [{ "id" => "without-model" }, { "id" => "invalid-java" }]
+    )
+    allow(project).to receive(:parse_bson) do |raw|
+      if raw["id"] == "without-model"
+        { "$Type" => "Settings$ProjectSettings", "Settings" => [2] }
+      else
+        {
+          "$Type" => "Settings$ProjectSettings",
+          "Settings" => [2, {
+            "$Type" => "Settings$ModelSettings", "JavaMajorVersion" => "invalid"
+          }]
+        }
+      end
+    end
+
+    expect(toolchain.send(:configured_java, project)).to be_nil
   end
 end
 
@@ -490,6 +514,7 @@ RSpec.describe Mxrb::Runtime::Executor do
   it "handles completed and disappearing runtime processes and simple clocks" do
     finished = instance_double(Process::Waiter, alive?: false, join: nil)
     expect(@executor.send(:terminate, finished)).to be_nil
+    expect(@executor.send(:terminate, nil)).to be_nil
 
     thread = instance_double(Process::Waiter, alive?: true, pid: 123, join: nil)
     allow(Process).to receive(:kill).and_raise(Errno::ESRCH)
@@ -501,6 +526,37 @@ RSpec.describe Mxrb::Runtime::Executor do
       @project, @definition, plan: @plan, java_home: @java, clock: clock
     )
     expect(executor.send(:monotonic_time)).to eq(42)
+  end
+
+  it "handles closed runtime streams, select timeouts, and forced termination" do
+    stdin = instance_double(IO, close: nil)
+    stream = instance_double(IO)
+    thread = instance_double(Process::Waiter, alive?: false, join: nil)
+    allow(Open3).to receive(:popen2e).and_yield(stdin, stream, thread)
+
+    allow(IO).to receive(:select).and_return(nil)
+    expect {
+      @executor.send(:collect_runtime, {}, ["runtime"], @dir)
+    }.to raise_error(Mxrb::FunctionalTestError, /timed out/)
+
+    allow(IO).to receive(:select).and_return([stream])
+    allow(stream).to receive(:gets).and_return(nil)
+    expect(@executor.send(:collect_runtime, {}, ["runtime"], @dir)).to eq("")
+
+    stubborn = instance_double(Process::Waiter, pid: 321, join: nil)
+    allow(stubborn).to receive(:alive?).and_return(true, true)
+    expect(Process).to receive(:kill).with("TERM", 321)
+    expect(Process).to receive(:kill).with("KILL", 321)
+    @executor.send(:terminate, stubborn)
+  end
+
+  it "collects successful runtime output without a streaming observer" do
+    script = File.join(@dir, "quiet-runtime")
+    File.write(script, "#!/bin/sh\nprintf '[MXRB_TEST] DONE\\n'\n")
+    FileUtils.chmod(0o755, script)
+
+    expect(@executor.send(:collect_runtime, {}, [script], @dir))
+      .to include("[MXRB_TEST] DONE")
   end
 end
 

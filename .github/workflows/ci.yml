@@ -30,3 +30,6 @@ jobs:
         env:
           MXRB_COVERAGE: "1"
         run: bundle exec rspec
+
+      - name: Run gradual Ruby quality gate
+        run: bundle exec rubocop

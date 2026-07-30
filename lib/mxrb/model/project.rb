@@ -43,6 +43,20 @@ module Mxrb
       # ── Semantic analysis ───────────────────────────────────────────────
 
       def semantic_index = (@semantic_index ||= Semantic::Index.new(self))
+      def semantic_cache_info
+        @mpr.index_cache_info(
+          current_fingerprint: Semantic::Index.fingerprint(self)
+        )
+      end
+      def warm_semantic_cache!
+        semantic_index
+        semantic_cache_info
+      end
+      def clear_semantic_cache!
+        removed = @mpr.clear_index_cache!
+        @semantic_index = nil
+        removed
+      end
       def find_artifact(name, kind: nil) = semantic_index.find(name, kind: kind)
       def search_artifacts(query, **filters) = semantic_index.search(query, **filters)
       def describe_artifact(name) = semantic_index.describe(name)

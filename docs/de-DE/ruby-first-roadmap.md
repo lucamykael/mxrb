@@ -39,6 +39,22 @@ end
 Bewertungsdateien sind gewöhnliches Ruby und werden mit
 `mxrb evaluate app.mpr evaluation.rb` ausgeführt.
 
+Schreibbare Projekte speichern einen fingerprint-basierten Cache des
+semantischen Index im MPR. Schreibgeschützte Öffnungen dürfen ihn
+wiederverwenden, verändern das Projekt jedoch nie.
+`mxrb cache status`, `warm` und `clear` liefern Metriken und Wartung. Beim
+Ersetzen wird zuerst per Upsert geschrieben und erst danach ein veralteter
+Eintrag entfernt.
+
+Die exakte native Mendix-5-Validierung bleibt von Windows/Studio Pro abhängig
+und ist eine ausdrückliche MXRB-Einschränkung. Struktureller Round-trip und der
+offizielle 6.10-Konverter ersetzen dieses direkte Gate nicht.
+
+Navigationsprofile und Design-System-Tokens sind derzeit MXRB-
+Architekturverträge in den verlustfreien Projektmetadaten. Sie durchlaufen den
+typisierten Ruby-Round-trip, schreiben native Mendix-Navigations- oder
+Theme-Dokumente aber noch nicht um.
+
 Beim Entfernen blockieren eingehende Referenzen und Kind-Units den Plan.
 Eingebettete Domain-Modellelemente benötigen ihre typisierte Mutation. Die CLI
 zeigt mit `mxrb remove app.mpr Sales.UnusedFlow` nur die Vorschau; `--apply`

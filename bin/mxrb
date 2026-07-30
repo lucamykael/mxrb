@@ -231,6 +231,39 @@ when "lint", "report"
   puts "[mxrb] #{report.errors.size} errors, #{report.warnings.size} warnings"
   exit 1 unless report.valid?
 
+when "cache"
+  action = ARGV.shift or abort "Usage: mxrb cache <status|warm|clear> <file.mpr> [--json]"
+  path = ARGV.shift or abort "Usage: mxrb cache <status|warm|clear> <file.mpr> [--json]"
+  json = ARGV.delete("--json")
+  readonly = action == "status"
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  result = Mxrb.open(path, readonly:) do |project|
+    case action
+    when "status"
+      project.semantic_cache_info
+    when "warm"
+      project.warm_semantic_cache!
+    when "clear"
+      removed = project.clear_semantic_cache!
+      project.semantic_cache_info.merge(removed:)
+    else
+      abort "Unknown cache action #{action.inspect}; use status, warm or clear"
+    end
+  end
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  payload = result.merge(elapsed_seconds: elapsed.round(6))
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    puts "Present     : #{payload[:present]}"
+    puts "Current hit : #{payload[:hit]}"
+    puts "Entries     : #{payload[:entries]}"
+    puts "Bytes       : #{payload[:bytes]}"
+    puts "Fingerprint : #{payload[:current_fingerprint] || '(unavailable)'}"
+    puts "Removed     : #{payload[:removed]}" if payload.key?(:removed)
+    puts "Elapsed     : #{format('%.6f', payload[:elapsed_seconds])}s"
+  end
+
 when "find"
   path = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
   query = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
@@ -405,6 +438,9 @@ else
                  --apply                   Move into a module or folder
       lint       <file.mpr>                Ruby semantic diagnostics
       report     <file.mpr>                Coupling and reference summary
+      cache status <file.mpr> [--json]     Inspect semantic cache health and size
+            warm <file.mpr> [--json]       Build or refresh the semantic cache
+           clear <file.mpr> [--json]       Remove semantic cache entries
       find       <file.mpr> <text>         Search artifacts by name
       describe   <file.mpr> <name>         Show incoming and outgoing references
       tree       <file.mpr> [module]       Browse the semantic structure

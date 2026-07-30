@@ -182,15 +182,16 @@ not install or execute the Java JUnit framework.
 
 ## Test coverage
 
-The default suite runs with `bundle exec rspec`. The strict line-coverage gate
+The default suite runs with `bundle exec rspec`. The strict coverage gate
 uses Ruby's native `Coverage` API:
 
 ```sh
 MXRB_COVERAGE=1 bundle exec rspec
 ```
 
-It writes `coverage/coverage.json`, requires 100% line coverage, and reports
-branch coverage separately for visibility.
+It writes `coverage/coverage.json` and requires 100% line and branch coverage.
+`bundle exec ruby script/branch_report.rb` lists an uncovered branch by source
+file and line. `bundle exec rubocop` is the gradual static-quality gate.
 
 ## Ruby module marketplace
 
@@ -429,6 +430,12 @@ end
 The same operations have convenience commands: `mxrb refs`, `mxrb callers`,
 `mxrb callees` and `mxrb impact`. The Ruby API is the source of truth.
 
+When a project is opened with `readonly: false`, the first semantic-index build
+stores a compact cache in the MPR. Later opens reuse it while unit contents and
+containment remain unchanged. Semantic mutations invalidate the in-memory index,
+and the persisted fingerprint prevents stale results after edits or moves.
+Read-only projects can consume an existing cache but never create one.
+
 ## Deep rename
 
 Writing requires an explicitly writable project and can be reviewed before
@@ -531,6 +538,19 @@ end
 
 In the CLI, `mxrb lint app.mpr` shows diagnostics and
 `mxrb report app.mpr` summarizes references and coupling between modules.
+Built-in lint rules also cover persistent entities without access rules,
+secured pages/flows without roles, undocumented public contracts, missing
+navigation targets and duplicate module-role mappings. Custom Ruby rules are
+appended to these checks.
+
+The semantic index is fingerprinted and can be inspected or maintained without
+guessing its state:
+
+```sh
+mxrb cache status app.mpr
+mxrb cache warm app.mpr --json
+mxrb cache clear app.mpr
+```
 
 ## Semantic diff for Git
 

@@ -53,7 +53,6 @@ module Mxrb
       end
 
       # Posts a Markdown summary comment to a GitHub PR via the `gh` CLI.
-      # :nocov:
       def post_pr_comment!(pr_number:, repo: @repo)
         raise ArgumentError, "repo required (org/name)" unless repo
         raise ArgumentError, "pr_number required" unless pr_number
@@ -65,7 +64,6 @@ module Mxrb
 
         out.strip
       end
-      # :nocov:
 
       # Returns the comment body Markdown string without posting it.
       def comment_body
@@ -121,14 +119,12 @@ module Mxrb
         type_idx      = path.index(type_segment)
         artifact_name = path[type_idx + 1]&.to_s&.downcase || path.last.to_s.downcase
 
-        case layer
-        when "domain"
-          File.join(@exported_dir, "modules", module_name, "domain", "model.rb")
-        when "logic"
-          File.join(@exported_dir, "modules", module_name, "logic", "#{artifact_name}.rb")
-        when "presentation"
-          File.join(@exported_dir, "modules", module_name, "presentation", "#{artifact_name}.rb")
-        end
+        relative_path = {
+          "domain" => ["domain", "model.rb"],
+          "logic" => ["logic", "#{artifact_name}.rb"],
+          "presentation" => ["presentation", "#{artifact_name}.rb"]
+        }.fetch(layer)
+        File.join(@exported_dir, "modules", module_name, *relative_path)
       end
 
       def find_line_in_file(file, label)
