@@ -56,14 +56,20 @@ module Mxrb
       @output_dir = File.expand_path(output_dir)
     end
 
-    def export!
+    def export!(parallel: true)
       FileUtils.mkdir_p(@output_dir)
       Mxrb.open(@mpr_path) do |project|
         @architecture = project.architecture_definition
         export_app_structure
         export_native_units(project)
         export_security(project)
-        project.modules.each { export_module(_1) }
+        mods = project.modules
+        if parallel && mods.size > 1
+          threads = mods.map { |mod| Thread.new { export_module(mod) } }
+          threads.each(&:join)
+        else
+          mods.each { export_module(_1) }
+        end
         write_project(project)
       end
       @output_dir

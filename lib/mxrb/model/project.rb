@@ -65,6 +65,33 @@ module Mxrb
       def inline!(name, calling:) = plan_inline(name, calling: calling).apply!
       def analyze(**options) = Semantic::Analyzer.new(self).analyze(**options)
       alias lint analyze
+
+      # ── Domain model mutation ───────────────────────────────────────────────
+
+      def plan_add_attribute(entity, name:, type: :string, **opts) =
+        Semantic::DomainMutator.new(self).plan_add_attribute(entity, name: name, type: type, **opts)
+      def add_attribute!(entity, name:, type: :string, **opts) =
+        plan_add_attribute(entity, name: name, type: type, **opts).apply!
+
+      def plan_remove_attribute(attribute) =
+        Semantic::DomainMutator.new(self).plan_remove_attribute(attribute)
+      def remove_attribute!(attribute) = plan_remove_attribute(attribute).apply!
+
+      def plan_change_attribute(attribute, **updates) =
+        Semantic::DomainMutator.new(self).plan_change_attribute(attribute, **updates)
+      def change_attribute!(attribute, **updates) = plan_change_attribute(attribute, **updates).apply!
+
+      def plan_add_entity(mod, name:, **opts) =
+        Semantic::DomainMutator.new(self).plan_add_entity(mod, name: name, **opts)
+      def add_entity!(mod, name:, **opts) = plan_add_entity(mod, name: name, **opts).apply!
+
+      def plan_remove_entity(entity) =
+        Semantic::DomainMutator.new(self).plan_remove_entity(entity)
+      def remove_entity!(entity) = plan_remove_entity(entity).apply!
+
+      # ── Batch plan ──────────────────────────────────────────────────────────
+
+      def batch_plan(plans) = Semantic::BatchPlan.new(project: self, plans: Array(plans))
       def evaluate(&block)
         Evaluation::Suite.new(self).tap { _1.instance_eval(&block) }.run
       end
