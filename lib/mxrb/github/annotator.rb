@@ -53,6 +53,7 @@ module Mxrb
       end
 
       # Posts a Markdown summary comment to a GitHub PR via the `gh` CLI.
+      # :nocov:
       def post_pr_comment!(pr_number:, repo: @repo)
         raise ArgumentError, "repo required (org/name)" unless repo
         raise ArgumentError, "pr_number required" unless pr_number
@@ -64,6 +65,7 @@ module Mxrb
 
         out.strip
       end
+      # :nocov:
 
       # Returns the comment body Markdown string without posting it.
       def comment_body
@@ -101,20 +103,24 @@ module Mxrb
       end
 
       def infer_module(change)
-        @result.changes.each do |c|
-          next unless c.path.first == "modules" && c.path.size > 1
-          return c.path[1] if change.path.join.include?(c.path[1].to_s)
-        end
+        path = change.path
+        # Compare paths are [:modules, "ModuleName", :kind, "Name"]
+        return path[1].to_s if path.first.to_s == "modules" && path.size > 1
+
         nil
       end
 
       def exported_file(path, module_name)
         return nil unless @exported_dir && module_name
 
-        layer = LAYER_MAP[path.first.to_s]
-        return nil unless layer
+        # Find the first path segment that maps to a layer
+        type_segment = path.find { LAYER_MAP.key?(_1.to_s) }
+        return nil unless type_segment
 
-        artifact_name = path.last.to_s.downcase
+        layer         = LAYER_MAP[type_segment.to_s]
+        type_idx      = path.index(type_segment)
+        artifact_name = path[type_idx + 1]&.to_s&.downcase || path.last.to_s.downcase
+
         case layer
         when "domain"
           File.join(@exported_dir, "modules", module_name, "domain", "model.rb")
@@ -128,7 +134,7 @@ module Mxrb
       def find_line_in_file(file, label)
         return nil unless file && File.file?(file.to_s)
 
-        File.each_line(file).with_index(1) do |line, n|
+        File.foreach(file).with_index(1) do |line, n|
           return n if line.include?(label)
         end
         nil

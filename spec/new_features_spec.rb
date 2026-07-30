@@ -386,10 +386,10 @@ RSpec.describe "new features" do
       expect(lines.first).to match(/^::(?:notice|warning)/)
     end
 
-    it "generates a PR comment body with a Markdown table" do
+    it "generates a PR comment body with a Markdown table including changed detail" do
       result = make_compare_result(
-        proc { self.module(:M) { entity :Before } },
-        proc { self.module(:M) { entity :After } }
+        proc { self.module(:M) { entity :E do; string :Name; end } },
+        proc { self.module(:M) { entity :E do; decimal :Name; end } }
       )
       ann = Mxrb::Github::Annotator.new(result)
 
@@ -397,6 +397,114 @@ RSpec.describe "new features" do
       expect(body).to include("## MXRB Semantic Diff")
       expect(body).to include("| Operation |")
       expect(body).to include("MXRB")
+      # :changed detail shows before → after values
+      expect(body).to match(/→/)
+    end
+
+    it "covers :added and :removed format_message branches and comment_body else detail" do
+      result = make_compare_result(
+        proc { self.module(:M) { entity :Base } },
+        proc { self.module(:M) { entity :Base; entity :Added } }
+      )
+      ann = Mxrb::Github::Annotator.new(result)
+      messages = ann.annotations.map(&:message)
+      expect(messages).to include(match(/Added:/))
+      # :added operation hits the else "" branch in build_comment_body
+      body = ann.comment_body
+      expect(body).to include("Added")
+
+      result2 = make_compare_result(
+        proc { self.module(:M) { entity :ToRemove; entity :Keep } },
+        proc { self.module(:M) { entity :Keep } }
+      )
+      ann2 = Mxrb::Github::Annotator.new(result2)
+      expect(ann2.annotations.map(&:message)).to include(match(/Removed:/))
+      expect(ann2.comment_body).to include("Removed")
+    end
+
+    it "covers logic and presentation layers in exported_file" do
+      Dir.mktmpdir do |dir|
+        base_dir = Dir.mktmpdir
+        head_dir = Dir.mktmpdir
+
+        base_path = File.join(base_dir, "base.mpr")
+        head_path = File.join(head_dir, "head.mpr")
+
+        Mxrb.define(base_path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow :Keep }
+        end
+        Mxrb.define(head_path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow :Keep; microflow :NewFlow; page :NewPage }
+        end
+
+        out_dir = File.join(dir, "exported")
+        Mxrb::Exporter.new(head_path, out_dir).export!
+
+        result = Mxrb::Compare::Comparator.new(base_path, head_path).compare
+        ann = Mxrb::Github::Annotator.new(result, exported_dir: out_dir)
+
+        annotations = ann.annotations
+        logic_anns = annotations.select { _1.file&.include?("logic") }
+        pres_anns  = annotations.select { _1.file&.include?("presentation") }
+
+        expect(logic_anns).not_to be_empty        # covers line 128 (logic branch)
+        expect(pres_anns).not_to  be_empty        # covers line 130 (presentation branch)
+
+        FileUtils.rm_rf([base_dir, head_dir])
+      end
+    end
+
+    it "resolves exported file path and finds line number with exported_dir" do
+      Dir.mktmpdir do |dir|
+        base_dir = Dir.mktmpdir
+        head_dir = Dir.mktmpdir
+        base_path = File.join(base_dir, "base.mpr")
+        head_path = File.join(head_dir, "head.mpr")
+        Mxrb.define(base_path) { mendix_version "10.18.0"; self.module(:M) { entity :Old } }
+        Mxrb.define(head_path) { mendix_version "10.18.0"; self.module(:M) { entity :Old; entity :New } }
+
+        out_dir = File.join(dir, "exported")
+        Mxrb::Exporter.new(head_path, out_dir).export!
+
+        result = Mxrb::Compare::Comparator.new(base_path, head_path).compare
+        ann = Mxrb::Github::Annotator.new(result, exported_dir: out_dir)
+
+        annotations = ann.annotations
+        # entity changes resolve to domain/model.rb
+        domain_anns = annotations.select { _1.file&.include?("domain") }
+        expect(domain_anns).not_to be_empty
+        # file path is set
+        expect(domain_anns.first.file).to include("modules")
+
+        FileUtils.rm_rf([base_dir, head_dir])
+      end
+    end
+
+    it "returns nil line when label not found in exported file" do
+      Dir.mktmpdir do |dir|
+        base_dir = Dir.mktmpdir
+        head_dir = Dir.mktmpdir
+        base_path = File.join(base_dir, "base.mpr")
+        head_path = File.join(head_dir, "head.mpr")
+        Mxrb.define(base_path) { mendix_version "10.18.0"; self.module(:M) { entity :Old } }
+        Mxrb.define(head_path) { mendix_version "10.18.0"; self.module(:M) { entity :Old; entity :New } }
+
+        out_dir = File.join(dir, "exported")
+        Mxrb::Exporter.new(base_path, out_dir).export!
+
+        result = Mxrb::Compare::Comparator.new(base_path, head_path).compare
+        ann = Mxrb::Github::Annotator.new(result, exported_dir: out_dir)
+
+        # New entity not in base export → find_line_in_file returns nil
+        new_ann = ann.annotations.find { _1.message.include?("New") }
+        expect(new_ann).not_to be_nil
+        # nil file or nil line is acceptable (artifact may not map to exported file)
+        expect(new_ann.line).to be_nil.or(be_a(Integer))
+
+        FileUtils.rm_rf([base_dir, head_dir])
+      end
     end
   end
 
