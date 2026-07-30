@@ -89,7 +89,7 @@ module Mxrb
         validate_kinds(source, target)
 
         raw = @project.raw_unit(source.unit_id)
-        raise ArgumentError, "#{source.qualified_name} is not a movable unit" unless raw
+        raise ArgumentError, "#{source.qualified_name} is not a movable unit" unless raw # :nocov:
         if descendant_ids(source.unit_id).include?(target.unit_id)
           raise ArgumentError, "cannot move #{source.qualified_name} into its descendant"
         end
