@@ -7,14 +7,15 @@ module Mxrb
     # Immutable preview plus the prepared BSON documents needed for an explicit
     # apply. Construct plans through Project#plan_rename.
     class RenamePlan
-      attr_reader :source, :target, :changes, :documents
+      attr_reader :source, :target, :changes, :documents, :architecture
 
-      def initialize(project:, source:, target:, changes:, documents:)
+      def initialize(project:, source:, target:, changes:, documents:, architecture: nil)
         @project = project
         @source = source
         @target = target
         @changes = changes.freeze
         @documents = documents.freeze
+        @architecture = architecture
         @applied = false
       end
 
@@ -27,6 +28,7 @@ module Mxrb
 
         @project.mpr.transaction do
           @documents.each { |unit_id, document| @project.mpr.update_unit(unit_id, document) }
+          @project.mpr.write_architecture_definition(@architecture) if @architecture
         end
         @project.refresh!
         @applied = true
@@ -58,9 +60,16 @@ module Mxrb
           )
           documents[raw.fetch("UnitID")] = transformed unless transformed.equal?(original)
         end
+        original_architecture = @project.architecture_definition
+        architecture = if original_architecture
+                         transform(
+                           original_architecture, source:, target:, unit_id: "architecture",
+                           target_unit: false, changes:
+                         )
+                       end
 
         RenamePlan.new(
-          project: @project, source:, target:, changes:, documents:
+          project: @project, source:, target:, changes:, documents:, architecture:
         )
       end
 

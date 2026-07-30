@@ -1,0 +1,379 @@
+# frozen_string_literal: true
+
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength
+
+require 'spec_helper'
+require 'tmpdir'
+
+RSpec.describe 'native navigation and design systems' do
+  def define_native_project(path)
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:App) do
+        module_role :User
+        page(:Home) { allowed_roles :User }
+        page(:Login) { allowed_roles :User }
+        microflow(:Dashboard) { allowed_roles :User }
+      end
+      security do
+        security_level :CheckEverything
+        user_role :User, module_roles: ['App.User']
+      end
+      navigation do
+        profile :Responsive, home_page: 'App.Home', sign_in_page: 'App.Login',
+                             app_icon: 'icon.png', app_title: 'Application' do
+          title :nl_NL, 'Applicatie'
+          home_for :User, microflow: 'App.Dashboard'
+          item 'Home', page: 'App.Home', icon: 'home' do
+            item(
+              { en_US: 'Dashboard', nl_NL: 'Overzicht' },
+              microflow: 'App.Dashboard'
+            )
+            item 'Group'
+          end
+        end
+      end
+      design_system do
+        color :foreground, value: '#777777'
+        color :background, value: '#ffffff'
+        theme :dark, inherits: :default do
+          color :foreground, value: '#ffffff'
+        end
+        contrast foreground: :foreground, background: :background, level: :aaa
+        forbid_literal_colors
+      end
+    end
+  end
+
+  it 'writes, reads, indexes and renames native navigation' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'app.mpr')
+      define_native_project(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        profile = project.navigation.profiles.fetch(0)
+        expect(profile).to have_attributes(
+          name: 'Responsive', home_page: 'App.Home', sign_in_page: 'App.Login',
+          app_icon: 'icon.png'
+        )
+        expect(profile.app_title).to eq('en_US' => 'Application', 'nl_NL' => 'Applicatie')
+        expect(profile.role_homes).to eq([
+                                           { role: 'User', microflow: 'App.Dashboard' }
+                                         ])
+        expect(profile.menu_items.dig(0, :items, 0, :microflow)).to eq('App.Dashboard')
+        expect(profile.menu_items.dig(0, :items, 1, :page)).to be_nil
+
+        navigation = project.find_artifact('Project.Navigation')
+        expect(navigation.kind).to eq(:navigation_document)
+        expect(project.references_from(navigation).map { _1.target.qualified_name })
+          .to include('App.Home', 'App.Login', 'App.Dashboard')
+        expect(project.plan_remove('App.Home')).not_to be_safe
+        expect(project.analyze.diagnostics.map(&:rule))
+          .not_to include(:inaccessible_navigation_home)
+
+        plan = project.plan_rename('App.Home', to: 'Landing')
+        expect(plan.changes.map(&:unit_id)).to include('architecture')
+        plan.apply!
+        expect(project.navigation.profiles.fetch(0).home_page).to eq('App.Landing')
+        expect(project.architecture_definition.dig(
+                 :navigation, :profiles, 0, :home_page
+               )).to eq('App.Landing')
+      end
+    end
+  end
+
+  it 'exports and safely reconstructs project assets and rich contracts' do
+    Dir.mktmpdir do |dir|
+      source_dir = File.join(dir, 'source')
+      FileUtils.mkdir_p(File.join(source_dir, 'theme', 'web'))
+      path = File.join(source_dir, 'app.mpr')
+      define_native_project(path)
+      File.write(
+        File.join(source_dir, 'theme', 'web', '_theme-dark.scss'),
+        ":root.theme-dark { --foreground: #fff; }\n"
+      )
+      exported = File.join(dir, 'ruby')
+      rebuilt = File.join(dir, 'rebuilt', 'app.mpr')
+
+      Mxrb::Exporter.new(path, exported).export!
+      expect(File.read(File.join(exported, 'app', 'navigation', 'navigation.rb')))
+        .to include('home_for', 'item "Home"', 'Applicatie')
+      manifest = JSON.parse(File.read(File.join(exported, '.mxrb', 'assets.json')))
+      expect(manifest.fetch('files').first).to include(
+        'path' => 'theme/web/_theme-dark.scss'
+      )
+
+      begin
+        ENV['MXRB_OUTPUT_PATH'] = rebuilt
+        load File.join(exported, 'project.rb')
+      ensure
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+      expect(File.binread(File.join(File.dirname(rebuilt), 'theme', 'web', '_theme-dark.scss')))
+        .to eq(File.binread(File.join(source_dir, 'theme', 'web', '_theme-dark.scss')))
+      expect(Mxrb.compare(path, rebuilt)).to be_identical
+    end
+  end
+
+  it 'scans tokens, catalogs, contrast and previews atomic literal migrations' do
+    Dir.mktmpdir do |dir|
+      theme = File.join(dir, 'theme', 'web')
+      catalog = File.join(dir, 'themesource', 'atlas', 'web')
+      FileUtils.mkdir_p([theme, catalog])
+      File.write(
+        File.join(theme, '_theme-dark.scss'),
+        "// --ignored: #000;\n$brand: #123456;\n" \
+        ":root { --ok: #fff; --broken: var(--missing); }\n"
+      )
+      File.write(File.join(catalog, 'design-properties.json'), '{"name":"Atlas"}')
+      system = Mxrb::Model::DesignSystem.new(dir)
+
+      expect(system.themes).to eq(['dark'])
+      expect(system.tokens.map(&:name)).to contain_exactly('$brand', '--ok', '--broken')
+      expect(system.catalogs.values.first).to eq('name' => 'Atlas')
+      expect(system.unresolved_references.first.fetch(:reference)).to eq('--missing')
+      expect(system.literal_colors.size).to eq(2)
+      expect(system.contrast_ratio('#000', '#ffffff')).to eq(21.0)
+      expect { system.contrast_ratio('red', '#fff') }
+        .to raise_error(ArgumentError, /three- or six-digit/)
+
+      plan = system.plan_literal_migration('#123456' => 'var(--brand)')
+      expect(plan.changes.first.occurrences).to eq(1)
+      expect(plan).not_to be_empty
+      plan.apply!
+      expect(File.read(File.join(theme, '_theme-dark.scss'))).to include('var(--brand)')
+      expect(plan).to be_applied
+      expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      expect(system.plan_literal_migration('#abcdef' => 'var(--none)')).to be_empty
+    end
+  end
+
+  it 'parses legacy profiles and malformed design catalogs defensively' do
+    legacy = Mxrb::Model::Navigation.new(
+      'DesktopProfile' => {
+        '$Type' => 'Navigation$NavigationProfile',
+        'HomePage' => { 'Page' => '' },
+        'ApplicationTitle' => 'Legacy'
+      }
+    )
+    expect(legacy.profiles.first.name).to eq('Desktop')
+    expect(legacy.profiles.first.home_page).to be_nil
+    expect(legacy.profiles.first.app_title).to be_empty
+    profile = Mxrb::Model::NavigationProfile.new(
+      'Name' => 'Bare',
+      'MenuItemCollection' => {
+        'Items' => Mxrb::IO::BsonCodec.build_array([
+                                                     { 'Caption' => nil, 'Action' => 'unknown', 'Items' => [] }
+                                                   ])
+      }
+    )
+    expect(profile.menu_items.first).to include(caption: {}, items: [])
+    expect(Mxrb::Model::NavigationProfile.new('Name' => 'Empty').menu_items).to be_empty
+
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'themesource', 'bad', 'design-properties.json')
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, '{')
+      expect(Mxrb::Model::DesignSystem.new(dir).catalogs.values).to eq([nil])
+    end
+  end
+
+  it 'updates an existing legacy navigation document without modernizing its shape' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'legacy.mpr')
+      define_native_project(path)
+      definition = nil
+      Mxrb.open(path, readonly: false) do |project|
+        raw = project.all_units.find do |unit|
+          project.parse_bson(unit)['$Type'] == 'Navigation$NavigationDocument'
+        end
+        modern = project.parse_bson(raw)
+        profile = Mxrb::IO::BsonCodec.parse_array(modern.delete('Profiles'))[:items].first
+        project.mpr.update_unit(raw.fetch('UnitID'), modern.merge('DesktopProfile' => profile))
+        definition = project.architecture_definition
+        definition[:navigation][:profiles][0][:name] = 'Desktop'
+        definition[:navigation][:profiles][0][:kind] = 'Legacy'
+      end
+
+      Mxrb::Writer.new(path, definition).write!
+      Mxrb.open(path) do |project|
+        doc = project.navigation.raw_document
+        expect(doc).not_to have_key('Profiles')
+        expect(doc.dig('DesktopProfile', 'Kind')).to eq('Legacy')
+      end
+    end
+  end
+
+  it 'covers the complete optional navigation and theme DSL surface' do
+    navigation = Mxrb::Dsl::NavigationBuilder.new
+    navigation.profile(
+      :Native, home_microflow: :App_Dashboard, kind: :Native,
+               app_title: { pt_BR: 'Aplicativo' }
+    ) do
+      home_for :User, page: :App_Home
+      item 'Parent' do
+        item 'Nested' do
+          item 'Leaf'
+        end
+      end
+    end
+    navigation.profile(:Simple, home_page: 'App.Home') { item 'Direct' }
+    profile = navigation.to_h.fetch(:profiles).first
+    expect(profile).to include(
+      home_page: nil, home_microflow: 'App_Dashboard', kind: 'Native',
+      app_title: { 'pt_BR' => 'Aplicativo' }
+    )
+
+    design = Mxrb::Dsl::DesignSystemBuilder.new
+    design.theme(:plain)
+    design.theme(:tokens) { spacing :unset }
+    definition = design.to_h
+    expect(definition.dig(:themes, 0, :inherits)).to be_nil
+    expect(definition.dig(:themes, 1, :tokens, 0, :value)).to be_nil
+
+    exporter = Mxrb::Exporter.new('unused.mpr', Dir.mktmpdir)
+    source = exporter.send(
+      :navigation_source,
+      profiles: [{
+        name: 'Native', home_page: nil, home_microflow: 'App.Dashboard',
+        role_homes: [{ role: 'User', page: 'App.Home' }, { role: 'Guest' }],
+        kind: 'Native', app_title: {}, items: []
+      }]
+    )
+    expect(source).to include(
+      'home_microflow: "App.Dashboard"', 'kind: "Native"',
+      'home_for "User", page: "App.Home"'
+    )
+    design_source = exporter.send(
+      :design_system_source,
+      tokens: [], layouts: [], components: [], accessibility: [],
+      themes: [
+        { name: 'plain', inherits: nil, tokens: [{ kind: :spacing, name: 'unset', value: nil }] }
+      ],
+      contrast_pairs: [], forbid_literal_colors: false
+    )
+    expect(design_source).to include('theme "plain"', 'spacing :unset')
+  end
+
+  it 'rejects stale migrations and unsafe or corrupted asset manifests' do
+    Dir.mktmpdir do |dir|
+      theme = File.join(dir, 'theme')
+      FileUtils.mkdir_p(theme)
+      source = File.join(theme, 'tokens.scss')
+      File.write(source, '$brand: #123456;')
+      plan = Mxrb::Model::DesignSystem.new(dir)
+                                      .plan_literal_migration('#123456' => 'var(--brand)')
+      File.write(source, '$brand: #abcdef;')
+      expect { plan.apply! }.to raise_error(Mxrb::SerializationError, /changed after preview/)
+
+      [
+        ['../escape.scss', Digest::SHA256.hexdigest('x'), /unsafe/],
+        ['theme/missing.scss', Digest::SHA256.hexdigest('x'), /missing/],
+        ['theme/tokens.scss', Digest::SHA256.hexdigest('wrong'), /checksum/]
+      ].each_with_index do |(relative, checksum, message), index|
+        manifest = File.join(dir, "manifest-#{index}.json")
+        File.write(
+          manifest,
+          JSON.generate('files' => [{ 'path' => relative, 'sha256' => checksum }])
+        )
+        builder = Mxrb::Dsl::Builder.new(File.join(dir, "out-#{index}", 'app.mpr'))
+        builder.project_assets(manifest, root: dir)
+        expect { builder.build! }.to raise_error(Mxrb::SerializationError, message)
+      end
+
+      manifest = File.join(dir, 'same.json')
+      File.write(
+        manifest,
+        JSON.generate(
+          'files' => [{
+            'path' => 'theme/tokens.scss',
+            'sha256' => Digest::SHA256.file(source).hexdigest
+          }]
+        )
+      )
+      builder = Mxrb::Dsl::Builder.new(File.join(dir, 'same.mpr'))
+      builder.project_assets(manifest, root: dir)
+      expect { builder.build! }.not_to raise_error
+    end
+  end
+
+  it 'reports navigation and design-system integrity diagnostics' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'lint.mpr')
+      Mxrb.define(path) do
+        mendix_version '10.18.0'
+        self.module(:App) do
+          module_role :User
+          page(:Home) { allowed_roles 'App.User' }
+        end
+        security { user_role :Known }
+        navigation do
+          profile :Duplicate
+          profile :Duplicate, home_page: 'App.Home',
+                              role_homes: { Missing: 'App.Home' } do
+            home_for :Known, page: 'App.Home'
+          end
+        end
+        design_system do
+          color :foreground, value: '#777777'
+          color :background, value: '#ffffff'
+          theme(:dark) { color :accent, value: '#000000' }
+          contrast foreground: :foreground, background: :background, level: :aaa
+          contrast foreground: '#000000', background: '#ffffff'
+          contrast foreground: 'red', background: '#fff'
+          forbid_literal_colors
+        end
+      end
+      theme = File.join(dir, 'theme')
+      FileUtils.mkdir_p(theme)
+      File.write(
+        File.join(theme, 'tokens.scss'),
+        ":root { --literal: #123456; --broken: var(--absent); }\n"
+      )
+
+      Mxrb.open(path) do |project|
+        rules = project.analyze.diagnostics.map(&:rule)
+        expect(rules).to include(
+          :duplicate_navigation_profile,
+          :navigation_profile_without_home,
+          :unknown_navigation_role,
+          :inaccessible_navigation_home,
+          :unresolved_design_token,
+          :insufficient_color_contrast,
+          :invalid_contrast_color,
+          :literal_design_color
+        )
+        analyzer = Mxrb::Semantic::Analyzer.new(project)
+        details = analyzer.send(
+          :navigation_diagnostics,
+          navigation: {
+            profiles: [{
+              name: 'Array', home_microflow: 'App.Missing',
+              role_homes: [{ role: 'Known', microflow: 'App.Missing' }]
+            }]
+          },
+          security: { user_roles: [{ name: 'Known' }] }
+        )
+        expect(details.map(&:rule)).to include(:missing_navigation_target)
+      end
+    end
+  end
+
+  it 'renames projects without optional architecture metadata' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'plain.mpr')
+      Mxrb.define(path) do
+        mendix_version '10.18.0'
+        self.module(:App) { page :Home }
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        project.query('DROP TABLE _MxrbArchitecture')
+        plan = project.plan_rename('App.Home', to: 'Landing')
+        expect(plan.architecture).to be_nil
+        plan.apply!
+        expect(project.find_artifact('App.Landing')).not_to be_nil
+      end
+    end
+  end
+end
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength

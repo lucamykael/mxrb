@@ -46,14 +46,15 @@ wiederverwenden, verändern das Projekt jedoch nie.
 Ersetzen wird zuerst per Upsert geschrieben und erst danach ein veralteter
 Eintrag entfernt.
 
-Die exakte native Mendix-5-Validierung bleibt von Windows/Studio Pro abhängig
-und ist eine ausdrückliche MXRB-Einschränkung. Struktureller Round-trip und der
-offizielle 6.10-Konverter ersetzen dieses direkte Gate nicht.
+Die exakte native Mendix-5-Validierung bleibt von Windows/Studio Pro abhängig.
+Sie ist als entfernte Legacy-Einschränkung dokumentiert und kein aktuelles
+Auslieferungs-Gate.
 
-Navigationsprofile und Design-System-Tokens sind derzeit MXRB-
-Architekturverträge in den verlustfreien Projektmetadaten. Sie durchlaufen den
-typisierten Ruby-Round-trip, schreiben native Mendix-Navigations- oder
-Theme-Dokumente aber noch nicht um.
+Navigationsprofile lesen und schreiben jetzt native Mendix-Dokumente,
+einschließlich rollenbasierter Startziele und rekursiver Menüs. Theme- und
+Quell-Assets durchlaufen den Round-trip mit einem Prüfsummenmanifest;
+Design-Tokens bieten Inventar, Lint, Kontrastmetriken und eine
+Preview-basierte Migration literaler Werte.
 
 Beim Entfernen blockieren eingehende Referenzen und Kind-Units den Plan.
 Eingebettete Domain-Modellelemente benötigen ihre typisierte Mutation. Die CLI

@@ -11,6 +11,15 @@ module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
   # stable key, making repeated `mxrb generate` runs idempotent.
   class Writer
+    LEGACY_NAVIGATION_PROFILES = {
+      "Desktop" => "DesktopProfile",
+      "Tablet" => "TabletProfile",
+      "Phone" => "PhoneProfile",
+      "OfflinePhone" => "OfflinePhoneProfile",
+      "HybridPhone" => "HybridPhoneProfile6",
+      "HybridTablet" => "HybridTabletProfile6"
+    }.freeze
+
     def initialize(path, definition)
       @path = File.expand_path(path)
       @definition = definition
@@ -23,12 +32,49 @@ module Mxrb
         apply(mpr)
         mpr.write_architecture_definition(@definition)
       end
+      materialize_project_assets
       self
     ensure
       mpr&.close
     end
 
     private
+
+    def materialize_project_assets
+      assets = @definition[:project_assets]
+      return unless assets
+
+      manifest = JSON.parse(File.read(assets.fetch(:manifest)))
+      source_root = File.realpath(assets.fetch(:root))
+      target_root = File.dirname(@path)
+      manifest.fetch("files").each do |entry|
+        temporary = nil
+        relative = safe_asset_path(entry.fetch("path"))
+        source = File.join(source_root, relative)
+        target = File.join(target_root, relative)
+        raise SerializationError, "project asset is missing: #{relative}" unless File.file?(source)
+        raise SerializationError, "project asset checksum mismatch: #{relative}" unless
+          Digest::SHA256.file(source).hexdigest == entry.fetch("sha256")
+        next if File.expand_path(source) == File.expand_path(target)
+
+        FileUtils.mkdir_p(File.dirname(target))
+        temporary = "#{target}.mxrb-#{Process.pid}"
+        FileUtils.cp(source, temporary)
+        FileUtils.mv(temporary, target)
+      ensure
+        FileUtils.rm_f(temporary) if temporary
+      end
+    end
+
+    def safe_asset_path(value)
+      path = Pathname.new(value.to_s)
+      clean = path.cleanpath.to_s
+      if path.absolute? || clean == ".." || clean.start_with?("../")
+        raise SerializationError, "unsafe project asset path: #{value}"
+      end
+
+      clean
+    end
 
     def create_project!
       FileUtils.mkdir_p(File.dirname(@path))
@@ -119,6 +165,7 @@ module Mxrb
         write_documents(mpr, module_id, mod)
       end
       write_project_security(mpr, root_id, @definition[:security]) if @definition[:security]
+      write_project_navigation(mpr, root_id, @definition[:navigation]) if @definition[:navigation]
     end
 
     def load_native_units(path)
@@ -245,6 +292,160 @@ module Mxrb
       else
         mpr.insert_unit(container_uuid: root_id, containment_name: "ProjectDocuments", contents_doc: doc)
       end
+    end
+
+    def write_project_navigation(mpr, root_id, navigation)
+      raw = mpr.children_of(root_id).find do |unit|
+        mpr.parse_contents(unit)["$Type"] == "Navigation$NavigationDocument"
+      end
+      existing = raw ? mpr.parse_contents(raw) : {}
+      doc = if legacy_navigation?(existing)
+              legacy_navigation_doc(existing, navigation)
+            else
+              modern_navigation_doc(existing, navigation)
+            end
+      if raw
+        mpr.update_unit(raw.fetch("UnitID"), doc)
+      else
+        mpr.insert_unit(
+          container_uuid: root_id, containment_name: "ProjectDocuments", contents_doc: doc
+        )
+      end
+    end
+
+    def legacy_navigation?(document)
+      !document.key?("Profiles") &&
+        LEGACY_NAVIGATION_PROFILES.values.any? { document[_1].is_a?(Hash) }
+    end
+
+    def legacy_navigation_doc(existing, navigation)
+      navigation.fetch(:profiles, []).each_with_object(existing.dup) do |profile, document|
+        key = LEGACY_NAVIGATION_PROFILES.fetch(profile.fetch(:name).to_s)
+        document[key] = navigation_profile_doc(profile, previous: existing[key])
+      end
+    end
+
+    def modern_navigation_doc(existing, navigation)
+      existing_profiles = array_items(existing["Profiles"]).to_h { [_1["Name"].to_s, _1] }
+      profiles = navigation.fetch(:profiles, []).map do |profile|
+        navigation_profile_doc(profile, previous: existing_profiles[profile.fetch(:name).to_s])
+      end
+      existing.merge(
+        "$ID" => existing["$ID"] || SecureRandom.uuid,
+        "$Type" => "Navigation$NavigationDocument",
+        "Profiles" => IO::BsonCodec.build_array(profiles)
+      )
+    end
+
+    def navigation_profile_doc(profile, previous: nil)
+      previous ||= {}
+      role_homes = profile.fetch(:role_homes, {}).map do |role, page|
+        { role: role.to_s, page: page.to_s }
+      end + profile.fetch(:role_home_details, [])
+      editable = {
+        "Name" => profile.fetch(:name).to_s,
+        "HomePage" => navigation_home_doc(profile[:home_page], profile[:home_microflow]),
+        "HomeItems" => IO::BsonCodec.build_array(role_homes.map { navigation_role_home_doc(_1) }),
+        "Menu" => navigation_menu_doc(profile.fetch(:items, []))
+      }
+      if !profile[:kind].to_s.empty?
+        editable["Kind"] = profile[:kind]
+      elsif profile[:offline]
+        editable["Kind"] = "Offline"
+      elsif previous.empty?
+        editable["Kind"] = "Responsive"
+      end
+      editable["AppIcon"] = profile[:app_icon] unless profile[:app_icon].nil?
+      unless profile.fetch(:app_title, {}).empty?
+        editable["AppTitle"] = translated_text_doc(profile.fetch(:app_title))
+      end
+      if profile[:sign_in_page]
+        editable["LoginPageSettings"] = {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Navigation$LoginPageSettings",
+          "Form" => profile.fetch(:sign_in_page)
+        }
+      end
+      previous.merge(editable).merge(
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Navigation$NavigationProfile"
+      )
+    end
+
+    def navigation_home_doc(page, microflow)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Navigation$HomePage",
+        "Page" => page,
+        "Microflow" => microflow
+      }
+    end
+
+    def navigation_role_home_doc(home)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Navigation$RoleBasedHomePage",
+        "UserRole" => home.fetch(:role).to_s,
+        "Page" => home[:page],
+        "Microflow" => home[:microflow]
+      }
+    end
+
+    def navigation_menu_doc(items)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Menus$MenuItemCollection",
+        "Items" => IO::BsonCodec.build_array(items.map { navigation_menu_item_doc(_1) })
+      }
+    end
+
+    def navigation_menu_item_doc(item)
+      action = if item[:page]
+                 form_action_doc(item.fetch(:page))
+               elsif item[:microflow]
+                 navigation_microflow_action_doc(item.fetch(:microflow))
+               else
+                 { "$ID" => SecureRandom.uuid, "$Type" => "Forms$NoAction" }
+               end
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Menus$MenuItem",
+        "Caption" => translated_text_doc(item.fetch(:caption)),
+        "Action" => action,
+        "Icon" => item[:icon] && {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$GlyphIcon", "Code" => item[:icon]
+        },
+        "Items" => IO::BsonCodec.build_array(
+          item.fetch(:items, []).map { navigation_menu_item_doc(_1) }
+        )
+      }
+    end
+
+    def navigation_microflow_action_doc(microflow)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Forms$MicroflowAction",
+        "MicroflowSettings" => {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Forms$MicroflowSettings",
+          "Microflow" => microflow
+        }
+      }
+    end
+
+    def translated_text_doc(translations)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Texts$Text",
+        "Translations" => IO::BsonCodec.build_array(translations.map do |locale, value|
+          {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "Texts$Translation",
+            "LanguageCode" => locale.to_s,
+            "Text" => value.to_s
+          }
+        end)
+      }
     end
 
     def write_module_security(mpr, module_id, mod)

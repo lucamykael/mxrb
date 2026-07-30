@@ -210,7 +210,8 @@ module Mxrb
           secured_artifact_diagnostics(security) +
           public_contract_diagnostics(definition) +
           navigation_diagnostics(definition) +
-          duplicate_role_diagnostics(definition)
+          duplicate_role_diagnostics(definition) +
+          design_system_diagnostics(definition)
       end
 
       def project_security
@@ -279,23 +280,153 @@ module Mxrb
       end
 
       def navigation_diagnostics(definition)
-        profiles = Array(definition.dig(:navigation, :profiles))
-        profiles.flat_map do |profile|
-          targets = {
-            home_page: profile[:home_page],
-            sign_in_page: profile[:sign_in_page],
-            menu: profile[:menu]
-          }
-          targets.merge!(profile.fetch(:role_homes, {}).transform_keys { "role_home:#{_1}" })
-          targets.filter_map do |field, target|
-            next if target.to_s.empty? || @index.find(target)
+        fallback = @project.navigation.to_h[:profiles] if @project.respond_to?(:navigation)
+        profiles = Array(definition.dig(:navigation, :profiles) || fallback)
+        duplicate_names = profiles.map { _1[:name].to_s }.tally
+        diagnostics = profiles.filter_map do |profile|
+          next unless duplicate_names.fetch(profile[:name].to_s) > 1
 
-            Diagnostic.new(
-              :missing_navigation_target, :error,
-              "navigation profile #{profile[:name]} references missing #{field}: #{target}",
-              [].freeze, { profile: profile[:name], field:, target: }.freeze
-            )
+          duplicate_names[profile[:name].to_s] = 0
+          Diagnostic.new(
+            :duplicate_navigation_profile, :error,
+            "duplicate navigation profile: #{profile[:name]}",
+            [].freeze, { profile: profile[:name] }.freeze
+          )
+        end
+        diagnostics + profiles.flat_map { profile_navigation_diagnostics(_1, definition) }
+      end
+
+      def profile_navigation_diagnostics(profile, definition)
+        targets = navigation_targets(profile)
+        missing = targets.filter_map do |field, target|
+          next if target.to_s.empty? || @index.find(target)
+
+          Diagnostic.new(
+            :missing_navigation_target, :error,
+            "navigation profile #{profile[:name]} references missing #{field}: #{target}",
+            [].freeze, { profile: profile[:name], field:, target: }.freeze
+          )
+        end
+        missing +
+          navigation_home_diagnostics(profile) +
+          navigation_role_diagnostics(profile, definition) +
+          navigation_role_access_diagnostics(profile, definition)
+      end
+
+      def navigation_targets(profile)
+        targets = profile.values_at(:home_page, :home_microflow, :sign_in_page, :menu)
+                         .then { %i[home_page home_microflow sign_in_page menu].zip(_1).to_h }
+        role_homes = profile.fetch(:role_homes, {})
+        homes = role_homes.is_a?(Hash) ? role_homes.map { |role, page| { role:, page: } } : role_homes
+        homes += Array(profile[:role_home_details])
+        homes.each { targets["role_home:#{_1[:role]}"] = _1[:page] || _1[:microflow] }
+        targets
+      end
+
+      def navigation_home_diagnostics(profile)
+        return [] if profile[:home_page] || profile[:home_microflow]
+
+        [Diagnostic.new(
+          :navigation_profile_without_home, :error,
+          "navigation profile has no default home: #{profile[:name]}",
+          [].freeze, { profile: profile[:name] }.freeze
+        )]
+      end
+
+      def navigation_role_diagnostics(profile, definition)
+        known = Array(definition.dig(:security, :user_roles)).map { _1[:name].to_s }
+        role_homes = profile.fetch(:role_homes, {})
+        roles = if role_homes.is_a?(Hash)
+                  role_homes.keys
+                else
+                  role_homes.map { _1[:role] }
+                end
+        roles += Array(profile[:role_home_details]).map { _1[:role] }
+        roles.uniq.filter_map do |role|
+          next if known.include?(role.to_s)
+
+          Diagnostic.new(
+            :unknown_navigation_role, :error,
+            "navigation profile #{profile[:name]} uses unknown user role: #{role}",
+            [].freeze, { profile: profile[:name], role: role.to_s }.freeze
+          )
+        end
+      end
+
+      def navigation_role_access_diagnostics(profile, definition)
+        roles = Array(definition.dig(:security, :user_roles)).to_h do |role|
+          [role[:name].to_s, Array(role[:module_roles]).map(&:to_s)]
+        end
+        navigation_role_homes(profile).filter_map do |home|
+          target = @index.find(home[:page] || home[:microflow])
+          allowed = target && Array(target.metadata[:allowed_roles])
+          next if !target || allowed.empty? || !roles.key?(home[:role].to_s)
+
+          qualified = allowed.map do |role|
+            role.include?('.') ? role : "#{target.module_name}.#{role}"
           end
+          next unless (qualified & roles.fetch(home[:role].to_s)).empty?
+
+          Diagnostic.new(
+            :inaccessible_navigation_home, :error,
+            "user role #{home[:role]} cannot access navigation home #{target.qualified_name}",
+            [target].freeze, { role: home[:role].to_s, target: target.qualified_name }.freeze
+          )
+        end
+      end
+
+      def navigation_role_homes(profile)
+        homes = profile.fetch(:role_homes, {})
+        homes = homes.map { |role, page| { role:, page: } } if homes.is_a?(Hash)
+        homes + Array(profile[:role_home_details])
+      end
+
+      def design_system_diagnostics(definition)
+        return [] unless @project.respond_to?(:design_system)
+
+        diagnostics = @project.design_system.unresolved_references.map do |entry|
+          token = entry.fetch(:token)
+          Diagnostic.new(
+            :unresolved_design_token, :error,
+            "#{token.path}:#{token.line} references missing design token #{entry.fetch(:reference)}",
+            [].freeze, entry.freeze
+          )
+        end
+        diagnostics.concat(contrast_diagnostics(definition))
+        return diagnostics unless definition.dig(:design_system, :forbid_literal_colors)
+
+        diagnostics + @project.design_system.literal_colors.map do |token|
+          Diagnostic.new(
+            :literal_design_color, :warning,
+            "#{token.path}:#{token.line} uses literal color #{token.value}",
+            [].freeze, { token: token.name, value: token.value }.freeze
+          )
+        end
+      end
+
+      def contrast_diagnostics(definition)
+        design = definition[:design_system] || {}
+        tokens = Array(design[:tokens]) +
+                 Array(design[:themes]).flat_map { Array(_1[:tokens]) }
+        values = tokens.to_h { [_1[:name].to_s, _1[:value].to_s] }
+        Array(design[:contrast_pairs]).filter_map do |pair|
+          foreground = values.fetch(pair[:foreground].to_s, pair[:foreground].to_s)
+          background = values.fetch(pair[:background].to_s, pair[:background].to_s)
+          ratio = @project.design_system.contrast_ratio(foreground, background)
+          required = pair[:level].to_s.downcase == "aaa" ? 7.0 : 4.5
+          next if ratio >= required
+
+          Diagnostic.new(
+            :insufficient_color_contrast, :error,
+            "color contrast #{ratio}:1 is below #{pair[:level].to_s.upcase} (#{required}:1)",
+            [].freeze, pair.merge(ratio:, required:).freeze
+          )
+        rescue ArgumentError
+          Diagnostic.new(
+            :invalid_contrast_color, :error,
+            "contrast pair uses a non-hex color: #{foreground} / #{background}",
+            [].freeze, pair.freeze
+          )
         end
       end
 

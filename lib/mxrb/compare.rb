@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+
 module Mxrb
   module Compare
     Change = Data.define(:operation, :path, :before, :after) do
@@ -42,9 +44,21 @@ module Mxrb
               format_version: project.format_version
             },
             security: security_summary(project),
+            navigation: normalize_hash(project.navigation.to_h),
+            design_assets: design_asset_summary(project),
             units: unit_summary(project),
             modules: project.modules.sort_by(&:name).map { module_summary(_1) }
           }
+        end
+      end
+
+      def design_asset_summary(project)
+        root = File.dirname(project.mpr.path)
+        Model::DesignSystem::ASSET_DIRECTORIES.flat_map do |directory|
+          Dir.glob(File.join(root, directory, "**", "*"))
+        end.select { File.file?(_1) && !File.symlink?(_1) }.sort.to_h do |path|
+          relative = Pathname.new(path).relative_path_from(Pathname.new(root)).to_s
+          [relative, Digest::SHA256.file(path).hexdigest]
         end
       end
 

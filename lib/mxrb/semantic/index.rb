@@ -242,10 +242,17 @@ module Mxrb
           next if type.empty? || type == "Projects$Module" || type.include?("DomainModel")
 
           name = doc["Name"] || doc["name"]
+          name = "Navigation" if name.to_s.empty? && type == "Navigation$NavigationDocument"
           next if name.to_s.empty?
 
           module_name = ancestor_module(raw, units_by_id, module_by_id)
-          qualified = module_name ? "#{module_name}.#{name}" : name.to_s
+          qualified = if type == "Navigation$NavigationDocument"
+                        "Project.Navigation"
+                      elsif module_name
+                        "#{module_name}.#{name}"
+                      else
+                        name.to_s
+                      end
           artifact = add_artifact(
             id: "unit:#{raw['UnitID']}", qualified_name: qualified,
             kind: kind_for(type), module_name: module_name, name: name.to_s,
