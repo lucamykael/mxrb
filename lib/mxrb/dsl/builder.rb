@@ -200,6 +200,7 @@ module Mxrb
         @design_system     = nil
         @native_units_path = nil
         @native_unit_overrides = []
+        @project_assets = nil
       end
 
       def mendix_version(v)
@@ -232,6 +233,13 @@ module Mxrb
 
       def native_units(path)
         @native_units_path = path
+      end
+
+      def project_assets(manifest, root:)
+        @project_assets = {
+          manifest: File.expand_path(manifest),
+          root: File.expand_path(root)
+        }
       end
 
       def native_unit(unit_id, container_id:, containment:, deep_structure:, module_name: nil)
@@ -275,6 +283,7 @@ module Mxrb
           security: @security,
           navigation: @navigation,
           design_system: @design_system,
+          project_assets: @project_assets,
           native_units_path: @native_units_path,
           native_unit_overrides: @native_unit_overrides
         }
@@ -348,20 +357,109 @@ module Mxrb
         @profiles = []
       end
 
-      def profile(name, home_page:, sign_in_page: nil, menu: nil,
-                  role_homes: {}, offline: false)
-        @profiles << {
-          name: name.to_s,
-          home_page: home_page.to_s,
-          sign_in_page: sign_in_page&.to_s,
-          menu: menu&.to_s,
-          role_homes: role_homes.to_h.transform_keys(&:to_s).transform_values(&:to_s),
-          offline: offline == true
-        }
+      def profile(name, home_page: nil, home_microflow: nil, sign_in_page: nil,
+                  menu: nil, role_homes: {}, offline: false, kind: nil,
+                  app_title: nil, app_icon: nil, &block)
+        profile = NavigationProfileBuilder.new(
+          name, home_page:, home_microflow:, sign_in_page:, menu:, role_homes:,
+                offline:, kind:, app_title:, app_icon:
+        )
+        profile.instance_eval(&block) if block
+        @profiles << profile.to_h
       end
 
       def to_h
         { profiles: @profiles }
+      end
+    end
+
+    class NavigationProfileBuilder
+      def initialize(name, **options)
+        @name = name.to_s
+        @home_page = optional_string(options, :home_page)
+        @home_microflow = optional_string(options, :home_microflow)
+        @sign_in_page = optional_string(options, :sign_in_page)
+        @menu = optional_string(options, :menu)
+        @offline = options[:offline] == true
+        @kind = optional_string(options, :kind)
+        @app_icon = optional_string(options, :app_icon)
+        @app_title = normalize_translations(options[:app_title])
+        @role_homes = options.fetch(:role_homes, {}).to_h.transform_keys(&:to_s)
+                             .transform_values(&:to_s)
+        @role_home_details = []
+        @items = []
+      end
+
+      def title(locale, text)
+        @app_title[locale.to_s] = text.to_s
+      end
+
+      def home_for(role, page: nil, microflow: nil)
+        @role_home_details << {
+          role: role.to_s, page: page&.to_s, microflow: microflow&.to_s
+        }.compact
+      end
+
+      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, &block)
+        builder = NavigationMenuItemBuilder.new(
+          caption, page:, microflow:, icon:, translations:
+        )
+        builder.instance_eval(&block) if block
+        @items << builder.to_h
+      end
+
+      def to_h
+        {
+          name: @name, home_page: @home_page, home_microflow: @home_microflow,
+          sign_in_page: @sign_in_page, menu: @menu, role_homes: @role_homes,
+          role_home_details: @role_home_details, offline: @offline, kind: @kind,
+          app_title: @app_title, app_icon: @app_icon, items: @items
+        }
+      end
+
+      private
+
+      def optional_string(options, key)
+        options[key]&.to_s
+      end
+
+      def normalize_translations(value)
+        return {} if value.nil?
+        return value.to_h.transform_keys(&:to_s).transform_values(&:to_s) if value.respond_to?(:to_h)
+
+        { "en_US" => value.to_s }
+      end
+    end
+
+    class NavigationMenuItemBuilder
+      def initialize(caption, page: nil, microflow: nil, icon: nil, translations: {})
+        @caption = normalize_caption(caption)
+        @caption.merge!(translations.to_h.transform_keys(&:to_s).transform_values(&:to_s))
+        @page = page&.to_s
+        @microflow = microflow&.to_s
+        @icon = icon
+        @items = []
+      end
+
+      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, &block)
+        child = self.class.new(caption, page:, microflow:, icon:, translations:)
+        child.instance_eval(&block) if block
+        @items << child.to_h
+      end
+
+      def to_h
+        {
+          caption: @caption, page: @page, microflow: @microflow,
+          icon: @icon, items: @items
+        }
+      end
+
+      private
+
+      def normalize_caption(caption)
+        return { "en_US" => caption.to_s } unless caption.respond_to?(:to_h)
+
+        caption.to_h.transform_keys(&:to_s).transform_values(&:to_s)
       end
     end
 
@@ -370,9 +468,12 @@ module Mxrb
 
       def initialize
         @tokens = []
+        @themes = []
         @layouts = []
         @components = []
         @accessibility = []
+        @contrast_pairs = []
+        @forbid_literal_colors = false
       end
 
       TOKEN_KINDS.each do |kind|
@@ -393,12 +494,46 @@ module Mxrb
         @accessibility << rule.to_s
       end
 
+      def theme(name, inherits: nil, &block)
+        builder = DesignThemeBuilder.new(name, inherits:)
+        builder.instance_eval(&block) if block
+        @themes << builder.to_h
+      end
+
+      def contrast(foreground:, background:, level: :aa)
+        @contrast_pairs << {
+          foreground: foreground.to_s, background: background.to_s, level: level.to_s
+        }
+      end
+
+      def forbid_literal_colors(value = true)
+        @forbid_literal_colors = value == true
+      end
+
       def to_h
         {
           tokens: @tokens, layouts: @layouts,
-          components: @components, accessibility: @accessibility
+          components: @components, accessibility: @accessibility,
+          themes: @themes, contrast_pairs: @contrast_pairs,
+          forbid_literal_colors: @forbid_literal_colors
         }
       end
+    end
+
+    class DesignThemeBuilder
+      def initialize(name, inherits: nil)
+        @name = name.to_s
+        @inherits = inherits&.to_s
+        @tokens = []
+      end
+
+      DesignSystemBuilder::TOKEN_KINDS.each do |kind|
+        define_method(kind) do |name, value: nil|
+          @tokens << { kind:, name: name.to_s, value: value&.to_s }
+        end
+      end
+
+      def to_h = { name: @name, inherits: @inherits, tokens: @tokens }
     end
 
     class EnumerationBuilder

@@ -143,7 +143,8 @@ RSpec.describe "typed project contracts" do
       expect(builder.definition).to include(
         navigation: { profiles: [] },
         design_system: {
-          tokens: [], layouts: [], components: [], accessibility: []
+          tokens: [], layouts: [], components: [], accessibility: [],
+          themes: [], contrast_pairs: [], forbid_literal_colors: false
         }
       )
       expect(builder.definition.dig(:security, :sign_in_microflow)).to be_nil

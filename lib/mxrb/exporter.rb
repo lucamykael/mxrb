@@ -3,6 +3,7 @@
 require "base64"
 require "fileutils"
 require "json"
+require "digest"
 
 module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
@@ -61,9 +62,10 @@ module Mxrb
       Mxrb.open(@mpr_path) do |project|
         @architecture = project.architecture_definition
         export_app_structure
+        export_project_assets
         export_native_units(project)
         export_security(project)
-        export_architecture_contracts
+        export_architecture_contracts(project)
         mods = project.modules
         if parallel && mods.size > 1
           threads = mods.map { |mod| Thread.new { export_module(mod) } }
@@ -95,8 +97,33 @@ module Mxrb
     def export_app_structure
       %w[
         app/security app/navigation app/design_system
-        resources themesource widgets javasource
+        theme resources themesource widgets javasource javascriptsource
       ].each { write(File.join(@output_dir, _1, ".keep"), "") }
+    end
+
+    def export_project_assets
+      source_root = File.dirname(@mpr_path)
+      files = Model::DesignSystem::ASSET_DIRECTORIES.flat_map do |directory|
+        root = File.join(source_root, directory)
+        next [] unless File.directory?(root)
+
+        Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
+      end.select { File.file?(_1) && !File.symlink?(_1) }.sort
+      entries = files.map do |source|
+        relative = Pathname.new(source).relative_path_from(Pathname.new(source_root)).to_s
+        target = File.join(@output_dir, relative)
+        FileUtils.mkdir_p(File.dirname(target))
+        FileUtils.cp(source, target)
+        {
+          "path" => relative,
+          "size" => File.size(source),
+          "sha256" => Digest::SHA256.file(source).hexdigest
+        }
+      end
+      write(
+        File.join(@output_dir, ".mxrb", "assets.json"),
+        JSON.pretty_generate("version" => 1, "files" => entries)
+      )
     end
 
     def export_native_units(project)
@@ -162,8 +189,9 @@ module Mxrb
       write(File.join(@output_dir, "app", "security", "security.rb"), source)
     end
 
-    def export_architecture_contracts
+    def export_architecture_contracts(project)
       navigation = @architecture&.fetch(:navigation, nil)
+      navigation ||= project.navigation.to_h unless project.navigation.empty?
       design_system = @architecture&.fetch(:design_system, nil)
       write(
         File.join(@output_dir, "app", "navigation", "navigation.rb"),
@@ -338,6 +366,7 @@ module Mxrb
         Mxrb.define(output) do
           mendix_version #{ruby(project.mendix_version || "10.18.0")}
           native_units File.join(__dir__, ".mxrb", "native_units.json")
+          project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
           evaluate File.join(__dir__, ".mxrb", "native_units.rb")
           evaluate File.join(__dir__, "app", "security", "security.rb")
           evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
@@ -413,17 +442,7 @@ module Mxrb
     def navigation_source(navigation)
       return "# frozen_string_literal: true\n" unless navigation
 
-      profiles = navigation.fetch(:profiles, []).map do |profile|
-        args = [
-          symbol(profile.fetch(:name)),
-          "home_page: #{ruby(profile.fetch(:home_page))}"
-        ]
-        args << "sign_in_page: #{ruby(profile[:sign_in_page])}" if profile[:sign_in_page]
-        args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
-        args << "role_homes: #{ruby(profile[:role_homes])}" unless profile.fetch(:role_homes, {}).empty?
-        args << "offline: true" if profile[:offline]
-        "  profile #{args.join(', ')}"
-      end
+      profiles = navigation.fetch(:profiles, []).flat_map { navigation_profile_source(_1) }
       <<~RUBY
         # frozen_string_literal: true
 
@@ -431,6 +450,39 @@ module Mxrb
       #{profiles.join("\n")}
         end
       RUBY
+    end
+
+    def navigation_profile_source(profile)
+      args = [symbol(profile.fetch(:name))]
+      args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
+      args << "home_microflow: #{ruby(profile[:home_microflow])}" if profile[:home_microflow]
+      args << "sign_in_page: #{ruby(profile[:sign_in_page])}" if profile[:sign_in_page]
+      args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
+      role_homes = profile.fetch(:role_homes, {})
+      args << "role_homes: #{ruby(role_homes)}" if role_homes.is_a?(Hash) && !role_homes.empty?
+      args << "offline: true" if profile[:offline]
+      args << "kind: #{ruby(profile[:kind])}" unless profile[:kind].to_s.empty?
+      args << "app_icon: #{ruby(profile[:app_icon])}" if profile[:app_icon]
+      body = navigation_profile_body(profile, role_homes)
+      return ["  profile #{args.join(', ')}"] if body.empty?
+
+      ["  profile #{args.join(', ')} do", *body, "  end"]
+    end
+
+    def navigation_profile_body(profile, role_homes)
+      details = role_homes.is_a?(Array) ? role_homes : profile.fetch(:role_home_details, [])
+      titles = profile.fetch(:app_title, {}).map do |locale, text|
+        "    title #{ruby(locale)}, #{ruby(text)}"
+      end
+      homes = details.map do |home|
+        options = []
+        options << "page: #{ruby(home[:page])}" if home[:page]
+        options << "microflow: #{ruby(home[:microflow])}" if home[:microflow]
+        suffix = options.empty? ? "" : ", #{options.join(', ')}"
+        "    home_for #{ruby(home.fetch(:role))}#{suffix}"
+      end
+      items = profile.fetch(:items, []).flat_map { navigation_item_source(_1, 4) }
+      titles + homes + items
     end
 
     def design_system_source(design_system)
@@ -444,6 +496,22 @@ module Mxrb
       lines.concat(design_system.fetch(:layouts, []).map { "  layout #{ruby(_1)}" })
       lines.concat(design_system.fetch(:components, []).map { "  component #{ruby(_1)}" })
       lines.concat(design_system.fetch(:accessibility, []).map { "  accessibility #{ruby(_1)}" })
+      design_system.fetch(:themes, []).each do |theme|
+        args = [ruby(theme.fetch(:name))]
+        args << "inherits: #{ruby(theme[:inherits])}" if theme[:inherits]
+        lines << "  theme #{args.join(', ')} do"
+        theme.fetch(:tokens, []).each do |token|
+          token_args = [symbol(token.fetch(:name))]
+          token_args << "value: #{ruby(token[:value])}" unless token[:value].nil?
+          lines << "    #{token.fetch(:kind)} #{token_args.join(', ')}"
+        end
+        lines << "  end"
+      end
+      design_system.fetch(:contrast_pairs, []).each do |pair|
+        lines << "  contrast foreground: #{ruby(pair.fetch(:foreground))}, " \
+                 "background: #{ruby(pair.fetch(:background))}, level: #{symbol(pair.fetch(:level))}"
+      end
+      lines << "  forbid_literal_colors" if design_system[:forbid_literal_colors]
       <<~RUBY
         # frozen_string_literal: true
 
@@ -451,6 +519,24 @@ module Mxrb
       #{lines.join("\n")}
         end
       RUBY
+    end
+
+    def navigation_item_source(item, indent)
+      pad = " " * indent
+      caption = item.fetch(:caption)
+      primary = caption["en_US"] || caption[:en_US] || caption.values.first || ""
+      translations = caption.reject { |locale, _| locale.to_s == "en_US" }
+      args = [ruby(primary)]
+      args << "page: #{ruby(item[:page])}" if item[:page]
+      args << "microflow: #{ruby(item[:microflow])}" if item[:microflow]
+      args << "icon: #{ruby(item[:icon])}" if item[:icon]
+      args << "translations: #{ruby(translations)}" unless translations.empty?
+      children = item.fetch(:items, [])
+      return ["#{pad}item #{args.join(', ')}"] if children.empty?
+
+      ["#{pad}item #{args.join(', ')} do",
+       *children.flat_map { navigation_item_source(_1, indent + 2) },
+       "#{pad}end"]
     end
 
     def entity_source(entity, mod, associations, metadata = nil)
