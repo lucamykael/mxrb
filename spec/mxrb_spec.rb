@@ -2878,6 +2878,32 @@ RSpec.describe Mxrb do
         expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
       end
     end
+
+    it "changes uses singular 'activity' when extracting one object" do
+      path = File.join(File.dirname(@mpr_path), "extract_singular.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items]
+        id = Mxrb::IO::BsonCodec.extract_id(
+          objects.find { |o| o["$Type"] == "Microflows$ActionActivity" }["$ID"]
+        )
+        plan = project.plan_extract("Sales.CreateOrder", as: "Sales.Single", object_ids: [id])
+        expect(plan.changes.first).to include("1 activity")
+      end
+    end
+
+    it "raises when object_ids contains unknown IDs" do
+      path = File.join(File.dirname(@mpr_path), "extract_unknown.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        fake_id = SecureRandom.uuid
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.New", object_ids: [fake_id]) }
+          .to raise_error(ArgumentError, /unknown object IDs/)
+      end
+    end
   end
 
   # ── Microflow inline ─────────────────────────────────────────────────────
@@ -3038,6 +3064,38 @@ RSpec.describe Mxrb do
       Mxrb.open(path, readonly: false) do |project|
         plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.Step")
         expect(plan.changes.last).to include("1 inlined activity")
+      end
+    end
+
+    it "raises when called artifact is not a microflow" do
+      path = File.join(File.dirname(@mpr_path), "inline_notflow.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) { call_microflow "Sales.PrepareOrder" }
+          microflow(:PrepareOrder) { call_microflow "Sales.Work" }
+          microflow(:Work)
+          entity(:Order) { string :Number }
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.Order") }
+          .to raise_error(ArgumentError, /not a microflow/)
+      end
+    end
+
+    it "raises when called microflow has no start event (empty/malformed unit)" do
+      path = File.join(File.dirname(@mpr_path), "inline_empty.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) { call_microflow "Sales.EmptyFlow" }
+          microflow(:EmptyFlow)
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.EmptyFlow") }
+          .to raise_error(ArgumentError, /no start event/)
       end
     end
   end
@@ -3309,6 +3367,52 @@ RSpec.describe Mxrb do
       expect(installation.module_name).to eq("NoName")
       lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
       expect(lock.dig("modules", "NoName", "package")).to eq("pkg_noname")
+    end
+
+    it "accepts dependencies declared as plain strings (not hashes)" do
+      pkg_str_dep = File.join(@ec_dir, "pkg_strdep")
+      FileUtils.mkdir_p(pkg_str_dep)
+      # dep as plain string instead of { "name" => "..." }
+      File.write(File.join(pkg_str_dep, "mxrb-module.json"),
+                 JSON.generate(name: "widget-str", module_name: "WidgetStr",
+                               version: "1.0.0", files: ["w.rb"],
+                               dependencies: ["mymod"]))
+      File.write(File.join(pkg_str_dep, "w.rb"), "# widget\n")
+      target = File.join(@ec_dir, "proj_strdep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg)  # install "mymod" first
+      inst = installer.install(pkg_str_dep)
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "WidgetStr", "dependencies")).to eq(["mymod"])
+      expect(inst.module_name).to eq("WidgetStr")
+    end
+
+    it "raises when trying to update a module not in the lock" do
+      target = File.join(@ec_dir, "proj_notinstalled")
+      FileUtils.mkdir_p(target)
+      lock_dir = File.join(target, ".mxrb")
+      FileUtils.mkdir_p(lock_dir)
+      File.write(File.join(lock_dir, "modules.lock.json"),
+                 JSON.generate("modules" => {}))
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      expect { installer.update(@pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /not installed/)
+    end
+
+    it "ignores empty dependency names in manifest" do
+      pkg_empty_dep = File.join(@ec_dir, "pkg_emptydep")
+      FileUtils.mkdir_p(pkg_empty_dep)
+      File.write(File.join(pkg_empty_dep, "mxrb-module.json"),
+                 JSON.generate(name: "widget-empty", module_name: "WidgetEmpty",
+                               version: "1.0.0", files: ["w.rb"],
+                               dependencies: [{ "name" => "" }, "mymod"]))
+      File.write(File.join(pkg_empty_dep, "w.rb"), "# widget\n")
+      target = File.join(@ec_dir, "proj_emptydep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg)
+      inst = installer.install(pkg_empty_dep)
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "WidgetEmpty", "dependencies")).to eq(["mymod"])
     end
   end
 

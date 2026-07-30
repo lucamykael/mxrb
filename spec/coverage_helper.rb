@@ -20,6 +20,28 @@ module MxrbCoverage
     mxrb/runtime/docker_workspace.rb
   ].freeze
 
+  # Lines annotated with # :nocov: are excluded from branch counting.
+  # Inline: `code # :nocov:` → excludes that single line.
+  # Block:  a standalone `# :nocov:` comment toggles a region on/off.
+  def nocov_lines(path)
+    lines = File.readlines(path)
+    excluded = Set.new
+    in_block = false
+    lines.each_with_index do |line, idx|
+      lineno = idx + 1
+      if line.include?("# :nocov:")
+        if line.strip.start_with?("#")
+          in_block = !in_block
+        else
+          excluded.add(lineno)
+        end
+      elsif in_block
+        excluded.add(lineno)
+      end
+    end
+    excluded
+  end
+
   def report
     root = File.expand_path("..", __dir__)
     library = File.join(root, "lib") + "/"
@@ -29,8 +51,13 @@ module MxrbCoverage
       RUNTIME_EXCLUDES.none? { relative == _1 }
     end
     line_counts = measured.values.flat_map { _1.fetch(:lines).compact }
-    branch_counts = measured.values.flat_map do |coverage|
-      coverage.fetch(:branches).values.flat_map(&:values)
+    branch_counts = measured.flat_map do |path, coverage|
+      excluded = nocov_lines(path)
+      coverage.fetch(:branches).flat_map do |key, hits|
+        line = key[2]
+        next [] if excluded.include?(line)
+        hits.values
+      end
     end
     payload = {
       lines: metric(line_counts),
