@@ -5277,4 +5277,402 @@ RSpec.describe Mxrb do
       end
     end
   end
+
+  describe "typed DSL: enumerations" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @enum_path = File.join(dir, "EnumTest.mpr")
+        Mxrb.define(@enum_path) do
+          mendix_version "10.18.0"
+          self.module(:App) do
+            enumeration(:Status) do
+              value :Active, caption: "Active"
+              value :Inactive, caption: "Inactive"
+            end
+            enumeration(:Priority) do
+              documentation "Priority level"
+              value :Low
+              value :Medium
+              value :High
+            end
+          end
+        end
+        ex.run
+      end
+    end
+
+    it "creates enumeration units under the module" do
+      Mxrb.open(@enum_path) do |project|
+        artifact = project.find_artifact("App.Status")
+        expect(artifact).not_to be_nil
+        expect(artifact.kind).to eq(:enumeration)
+      end
+    end
+
+    it "creates multiple enumerations" do
+      Mxrb.open(@enum_path) do |project|
+        expect(project.find_artifact("App.Priority")).not_to be_nil
+      end
+    end
+
+    it "embeds enumeration values in the BSON document" do
+      Mxrb.open(@enum_path) do |project|
+        raw  = project.raw_unit(project.find_artifact("App.Status").unit_id)
+        doc  = project.parse_bson(raw)
+        vals = Mxrb::IO::BsonCodec.parse_array(doc["Values"])[:items]
+        expect(vals.map { _1["Name"] }).to contain_exactly("Active", "Inactive")
+      end
+    end
+
+    it "stores documentation on enumeration" do
+      Mxrb.open(@enum_path) do |project|
+        raw = project.raw_unit(project.find_artifact("App.Priority").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["Documentation"]).to eq("Priority level")
+      end
+    end
+
+    it "is idempotent on re-apply" do
+      Mxrb.define(@enum_path) do
+        mendix_version "10.18.0"
+        self.module(:App) do
+          enumeration(:Status) { value :Active; value :Inactive }
+          enumeration(:Priority) { value :Low; value :Medium; value :High }
+        end
+      end
+      Mxrb.open(@enum_path) do |project|
+        expect(project.find_artifact("App.Status")).not_to be_nil
+        expect(project.find_artifact("App.Priority")).not_to be_nil
+      end
+    end
+  end
+
+  describe "typed DSL: constants" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @const_path = File.join(dir, "ConstTest.mpr")
+        Mxrb.define(@const_path) do
+          mendix_version "10.18.0"
+          self.module(:Cfg) do
+            constant(:MaxRetries, type: :integer, value: 3)
+            constant(:ApiEndpoint, type: :string, value: "https://example.com")
+            constant(:EnableFeature, type: :boolean, value: true)
+          end
+        end
+        ex.run
+      end
+    end
+
+    it "creates constant document units" do
+      Mxrb.open(@const_path) do |project|
+        art = project.find_artifact("Cfg.MaxRetries")
+        expect(art).not_to be_nil
+        expect(art.kind).to eq(:constant)
+      end
+    end
+
+    it "stores the correct type in the BSON document" do
+      Mxrb.open(@const_path) do |project|
+        raw = project.raw_unit(project.find_artifact("Cfg.MaxRetries").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["Type"]["$Type"]).to eq("DataTypes$IntegerType")
+        expect(doc["DefaultValue"]).to eq("3")
+      end
+    end
+
+    it "stores string constant correctly" do
+      Mxrb.open(@const_path) do |project|
+        raw = project.raw_unit(project.find_artifact("Cfg.ApiEndpoint").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["Type"]["$Type"]).to eq("DataTypes$StringType")
+        expect(doc["DefaultValue"]).to eq("https://example.com")
+      end
+    end
+
+    it "raises on unsupported constant type" do
+      Dir.mktmpdir do |dir|
+        expect {
+          Mxrb.define(File.join(dir, "Bad.mpr")) do
+            mendix_version "10.18.0"
+            self.module(:X) { constant(:Bad, type: :long, value: 1) }
+          end
+        }.to raise_error(ArgumentError, /unsupported constant type/)
+      end
+    end
+
+    it "is idempotent on re-apply" do
+      Mxrb.define(@const_path) do
+        mendix_version "10.18.0"
+        self.module(:Cfg) do
+          constant(:MaxRetries, type: :integer, value: 5)
+        end
+      end
+      Mxrb.open(@const_path) do |project|
+        raw = project.raw_unit(project.find_artifact("Cfg.MaxRetries").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["DefaultValue"]).to eq("5")
+      end
+    end
+  end
+
+  describe "typed DSL: scheduled events" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @sched_path = File.join(dir, "SchedTest.mpr")
+        Mxrb.define(@sched_path) do
+          mendix_version "10.18.0"
+          self.module(:Tasks) do
+            microflow(:Cleanup) { log_message "cleanup" }
+            scheduled_event(:DailyCleanup, microflow: "Tasks.Cleanup",
+                            interval: 1, unit: :days)
+            scheduled_event(:HourlySync, microflow: "Tasks.Cleanup",
+                            interval: 2, unit: :hours, enabled: false)
+          end
+        end
+        ex.run
+      end
+    end
+
+    it "creates scheduled event document units" do
+      Mxrb.open(@sched_path) do |project|
+        art = project.find_artifact("Tasks.DailyCleanup")
+        expect(art).not_to be_nil
+        expect(art.kind).to eq(:scheduled_event)
+      end
+    end
+
+    it "stores interval and type in BSON" do
+      Mxrb.open(@sched_path) do |project|
+        raw = project.raw_unit(project.find_artifact("Tasks.DailyCleanup").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["IntervalType"]).to eq("Day")
+        expect(doc["Interval"]).to eq(1)
+        expect(doc["Microflow"]).to eq("Tasks.Cleanup")
+        expect(doc["Enabled"]).to eq(true)
+      end
+    end
+
+    it "stores disabled scheduled event" do
+      Mxrb.open(@sched_path) do |project|
+        raw = project.raw_unit(project.find_artifact("Tasks.HourlySync").unit_id)
+        doc = project.parse_bson(raw)
+        expect(doc["IntervalType"]).to eq("Hour")
+        expect(doc["Interval"]).to eq(2)
+        expect(doc["Enabled"]).to eq(false)
+      end
+    end
+
+    it "raises on unsupported interval unit" do
+      Dir.mktmpdir do |dir|
+        expect {
+          Mxrb.define(File.join(dir, "Bad.mpr")) do
+            mendix_version "10.18.0"
+            self.module(:X) do
+              microflow(:Foo) { log_message "x" }
+              scheduled_event(:E, microflow: "X.Foo", interval: 1, unit: :fortnights)
+            end
+          end
+        }.to raise_error(ArgumentError, /unsupported scheduled event unit/)
+      end
+    end
+  end
+
+  describe "version upgrade/downgrade" do
+    it "regenerates BSON structure and persists the new version" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Versioned.mpr")
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow(:Hello) { log_message "hi" } }
+        end
+        Mxrb.open(path, readonly: false) do |project|
+          expect(project.mendix_version).to eq("10.18.0")
+          result = project.upgrade_to!("10.21.0")
+          expect(result).to be(project)
+          expect(project.mendix_version).to eq("10.21.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("Hello")
+        end
+        # version persists across re-open and BSON is intact
+        Mxrb.open(path) do |project|
+          expect(project.mendix_version).to eq("10.21.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("Hello")
+        end
+      end
+    end
+
+    it "is idempotent — can be called multiple times" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Idempotent.mpr")
+        Mxrb.define(path) do
+          mendix_version "10.18.0"
+          self.module(:M) { microflow(:F) }
+        end
+        Mxrb.open(path, readonly: false) do |project|
+          project.migrate_to!("10.21.0")
+          project.migrate_to!("10.21.0")
+          project.migrate_to!("10.18.0")
+          expect(project.mendix_version).to eq("10.18.0")
+          expect(project.modules.first.microflows.map(&:name)).to include("F")
+        end
+      end
+    end
+
+    it "downgrade_to! is an alias for migrate_to!" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Down.mpr")
+        Mxrb.define(path) { mendix_version "10.18.0" }
+        Mxrb.open(path, readonly: false) do |project|
+          project.downgrade_to!("10.6.1")
+          expect(project.mendix_version).to eq("10.6.1")
+        end
+      end
+    end
+
+    it "raises ArgumentError for empty version string" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "V.mpr")
+        Mxrb.define(path) { mendix_version "10.18.0" }
+        Mxrb.open(path, readonly: false) do |project|
+          expect { project.upgrade_to!("") }.to raise_error(ArgumentError, /version/)
+        end
+      end
+    end
+
+    it "raises ArgumentError when MPR has no MXRB architecture definition" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Raw.mpr")
+        # Create a minimal MPR without architecture definition by using Writer directly
+        # then manually open it (no architecture_definition stored)
+        definition = { version: "10.18.0", modules: [] }
+        Mxrb::Writer.new(path, definition).write!
+        # Remove the _MxrbArchitecture row so it looks like a non-MXRB project
+        db = SQLite3::Database.new(path)
+        db.execute("DROP TABLE IF EXISTS _MxrbArchitecture")
+        db.close
+        Mxrb.open(path, readonly: false) do |project|
+          expect { project.migrate_to!("10.21.0") }
+            .to raise_error(ArgumentError, /no MXRB architecture definition/)
+        end
+      end
+    end
+
+    it "raises ArgumentError when project is opened read-only" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "Readonly.mpr")
+        Mxrb.define(path) { mendix_version "10.18.0" }
+        Mxrb.open(path, readonly: true) do |project|
+          expect { project.migrate_to!("10.21.0") }
+            .to raise_error(ArgumentError, /read-only/)
+        end
+      end
+    end
+  end
+
+  describe "marketplace version compatibility" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @compat_dir = dir
+        @pkg = File.join(dir, "verpkg")
+        FileUtils.mkdir_p(@pkg)
+        File.write(File.join(@pkg, "mod.rb"), "# content\n")
+        ex.run
+      end
+    end
+
+    def make_installer(target_dir)
+      Mxrb::Marketplace::Installer.new(target: target_dir)
+    end
+
+    def write_manifest(pkg, extra = {})
+      manifest = { "name" => "verpkg", "module_name" => "VPkg",
+                   "version" => "1.0.0", "files" => ["mod.rb"] }.merge(extra)
+      File.write(File.join(pkg, "mxrb-module.json"), JSON.generate(manifest))
+    end
+
+    def make_project_mpr(dir, version: "10.18.0")
+      path = File.join(dir, "Proj.mpr")
+      Mxrb.define(path) { mendix_version version }
+      path
+    end
+
+    it "installs without error when mendix_version is absent from manifest" do
+      target = File.join(@compat_dir, "proj1")
+      write_manifest(@pkg)
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "installs when project version satisfies major.x constraint" do
+      target = File.join(@compat_dir, "proj2")
+      make_project_mpr(target)
+      write_manifest(@pkg, "mendix_version" => "10.x")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "rejects when major version does not match major.x constraint" do
+      target = File.join(@compat_dir, "proj3")
+      make_project_mpr(target, version: "9.24.0")
+      write_manifest(@pkg, "mendix_version" => "10.x")
+      expect { make_installer(target).install(@pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /Mendix 10\.x/)
+    end
+
+    it "installs when project version satisfies >= constraint" do
+      target = File.join(@compat_dir, "proj4")
+      make_project_mpr(target, version: "10.21.0")
+      write_manifest(@pkg, "mendix_version" => ">= 10.18.0")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "rejects when project version below >= constraint" do
+      target = File.join(@compat_dir, "proj5")
+      make_project_mpr(target, version: "9.6.0")
+      write_manifest(@pkg, "mendix_version" => ">= 10.18.0")
+      expect { make_installer(target).install(@pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /requires Mendix/)
+    end
+
+    it "installs when project version satisfies ~> constraint" do
+      target = File.join(@compat_dir, "proj6")
+      make_project_mpr(target, version: "10.21.3")
+      write_manifest(@pkg, "mendix_version" => "~> 10.18")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "rejects when project version violates ~> constraint" do
+      target = File.join(@compat_dir, "proj7")
+      make_project_mpr(target, version: "11.0.0")
+      write_manifest(@pkg, "mendix_version" => "~> 10.18")
+      expect { make_installer(target).install(@pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /requires Mendix/)
+    end
+
+    it "skips check when no .mpr file found in target" do
+      target = File.join(@compat_dir, "proj8")
+      FileUtils.mkdir_p(target)
+      write_manifest(@pkg, "mendix_version" => "10.x")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "installs when project version matches plain prefix constraint" do
+      target = File.join(@compat_dir, "proj9")
+      make_project_mpr(target, version: "10.18.5")
+      write_manifest(@pkg, "mendix_version" => "10.18")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+
+    it "rejects when project version does not match plain prefix constraint" do
+      target = File.join(@compat_dir, "proj10")
+      make_project_mpr(target, version: "10.21.0")
+      write_manifest(@pkg, "mendix_version" => "10.18")
+      expect { make_installer(target).install(@pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /requires Mendix/)
+    end
+
+    it "installs when project version exactly satisfies >= constraint" do
+      target = File.join(@compat_dir, "proj11")
+      make_project_mpr(target, version: "10.18.0")
+      write_manifest(@pkg, "mendix_version" => ">= 10.18.0")
+      expect { make_installer(target).install(@pkg) }.not_to raise_error
+    end
+  end
 end

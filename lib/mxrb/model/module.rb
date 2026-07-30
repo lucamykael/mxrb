@@ -66,6 +66,24 @@ module Mxrb
                    .map { Menu.new(_1[:raw], @mpr) }
       end
 
+      def enumerations
+        @enumerations ||= document_units
+                          .select { |u| u[:type] == "Enumerations$Enumeration" }
+                          .map { unit_to_doc(_1) }
+      end
+
+      def constants
+        @constants ||= document_units
+                       .select { |u| u[:type] == "Constants$Constant" }
+                       .map { unit_to_doc(_1) }
+      end
+
+      def scheduled_events
+        @scheduled_events ||= document_units
+                              .select { |u| u[:type] == "ScheduledEvents$ScheduledEvent" }
+                              .map { unit_to_doc(_1) }
+      end
+
       def module_roles
         @module_roles ||= begin
           raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
@@ -86,6 +104,10 @@ module Mxrb
       end
 
       private
+
+      def unit_to_doc(unit_hash)
+        @mpr.parse_contents(unit_hash[:raw])
+      end
 
       # Documents live in ContainmentName = "Documents" recursively under this module.
       # We do a simple two-pass: direct Documents children + Documents inside Folders.

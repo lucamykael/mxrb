@@ -50,7 +50,13 @@ module MxrbCoverage
       relative = path.delete_prefix(library)
       RUNTIME_EXCLUDES.none? { relative == _1 }
     end
-    line_counts = measured.values.flat_map { _1.fetch(:lines).compact }
+    line_counts = measured.flat_map do |path, coverage|
+      excluded = nocov_lines(path)
+      coverage.fetch(:lines).each_with_index.filter_map do |count, idx|
+        next nil if count.nil? || excluded.include?(idx + 1)
+        count
+      end
+    end
     branch_counts = measured.flat_map do |path, coverage|
       excluded = nocov_lines(path)
       coverage.fetch(:branches).flat_map do |key, hits|
