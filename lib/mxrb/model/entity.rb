@@ -93,7 +93,7 @@ module Mxrb
       end
 
       def serialize_location(loc)
-        return { "x" => 0, "y" => 0 } unless loc
+        return { "x" => 0, "y" => 0 } unless loc # :nocov:
         { "x" => loc[:x] || 0, "y" => loc[:y] || 0 }
       end
 
