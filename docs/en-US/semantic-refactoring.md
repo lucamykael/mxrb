@@ -1,7 +1,6 @@
 # Semantic refactoring
 
-**English** · translation pending — see `PENDING_TRANSLATION` in
-`spec/documentation_spec.rb`
+[Português](../pt-BR/semantic-refactoring.md) · **English** · [Deutsch](../de-DE/semantic-refactoring.md)
 
 MXRB renames, removes, moves, extracts and inlines artifacts directly in
 Ruby — no Studio Pro, no MDL. Every operation follows the same
