@@ -1,5 +1,7 @@
 # Exported project structure
 
+[Português](../pt-BR/project-structure.md) · **English** · [Deutsch](../de-DE/project-structure.md)
+
 The Ruby tree produced by `mxrb export` separates app-wide policy, module
 behavior, preserved native units and filesystem assets:
 

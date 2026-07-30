@@ -1,7 +1,6 @@
 # Architectural patterns
 
-**English** · translation pending — see `PENDING_TRANSLATION` in
-`spec/documentation_spec.rb`
+[Português](../pt-BR/architectural-patterns.md) · **English** · [Deutsch](../de-DE/architectural-patterns.md)
 
 This page collects the engineering patterns MXRB applies consistently. They
 explain *why* the public API looks the way it does and what guarantees each
