@@ -1,7 +1,6 @@
 # Conventions
 
-**English** · translation pending — see `PENDING_TRANSLATION` in
-`spec/documentation_spec.rb`
+[Português](../pt-BR/conventions.md) · **English** · [Deutsch](../de-DE/conventions.md)
 
 Conventions that hold across the MXRB codebase, its tests and its
 documentation. Some are enforced mechanically; the rest are enforced in
@@ -57,15 +56,9 @@ review. Writing-style guidance for exported projects lives in
 - Public documentation ships in three locales with identical file sets:
   `docs/pt-BR`, `docs/en-US`, `docs/de-DE`, plus root READMEs per language.
   `docs/README.md` is only the language selector.
-- English-first pages that have not been translated yet are allowed **only**
-  when registered in the `PENDING_TRANSLATION` constant in
-  `spec/documentation_spec.rb`, which also lists the exact pending pt-BR and
-  de-DE files as a TODO. Once translated, the page moves into the shared set.
-  Placeholder translations are not committed.
 - `spec/documentation_spec.rb` enforces, for every Markdown file in the
   repository:
-  - locale file-set parity (shared set, plus registered pending pages in
-    en-US only);
+  - locale file-set parity across all three languages;
   - no broken relative links;
   - no internal workflow traces (tool-continuation notes, model or tooling
     references) — public docs describe the project, not the process that

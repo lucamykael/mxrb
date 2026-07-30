@@ -10,21 +10,9 @@ RSpec.describe "localized documentation" do
   # Documents that must exist, with the same file names, in every locale.
   shared_documents = %w[
     README.md architecture.md architectural-standard.md
-    ruby-first-roadmap.md validation-matrix.md writing.md
-  ].sort.freeze
-
-  # English-first documents that are allowed to exist only under docs/en-US.
-  # Every entry here is a promise to translate it, not a loophole.
-  # TODO: write the pt-BR and de-DE versions of each page listed below and
-  # then move it into SHARED_DOCUMENTS:
-  # - docs/pt-BR/project-structure.md      and docs/de-DE/project-structure.md
-  # - docs/pt-BR/architectural-patterns.md and docs/de-DE/architectural-patterns.md
-  # - docs/pt-BR/semantic-refactoring.md   and docs/de-DE/semantic-refactoring.md
-  # - docs/pt-BR/design-system.md          and docs/de-DE/design-system.md
-  # - docs/pt-BR/conventions.md            and docs/de-DE/conventions.md
-  pending_translation = %w[
     project-structure.md architectural-patterns.md semantic-refactoring.md
-    design-system.md conventions.md
+    design-system.md conventions.md ruby-first-roadmap.md
+    validation-matrix.md writing.md
   ].sort.freeze
 
   it "keeps the same document set in every locale" do
@@ -35,26 +23,13 @@ RSpec.describe "localized documentation" do
 
     expect(sets.fetch("pt-BR")).to eq(shared_documents), sets.inspect
     expect(sets.fetch("de-DE")).to eq(shared_documents), sets.inspect
-    expect(sets.fetch("en-US")).to eq((shared_documents + pending_translation).sort), sets.inspect
+    expect(sets.fetch("en-US")).to eq(shared_documents), sets.inspect
   end
 
-  it "keeps pending-translation pages registered and out of other locales" do
-    en_us = root.join("docs", "en-US").glob("*.md").map(&:basename).map(&:to_s)
+  it "does not leave registered translation placeholders" do
+    text = locales.flat_map { root.join("docs", _1).glob("*.md") }.map(&:read).join("\n")
 
-    unregistered = en_us - shared_documents - pending_translation
-    expect(unregistered).to be_empty,
-                            "unregistered en-US-only pages: #{unregistered.join(', ')}; " \
-                            "add them to PENDING_TRANSLATION with a translation TODO " \
-                            "or translate them into every locale"
-
-    %w[pt-BR de-DE].each do |locale|
-      leaked = root.join("docs", locale)
-                   .glob("*.md").map(&:basename).map(&:to_s) & pending_translation
-      expect(leaked).to be_empty,
-                        "#{locale} contains pages registered as pending translation: " \
-                        "#{leaked.join(', ')}; remove the placeholder or drop the " \
-                        "entry from PENDING_TRANSLATION"
-    end
+    expect(text).not_to match(/translation pending|PENDING_TRANSLATION/)
   end
 
   it "keeps only the language selector outside locale directories" do

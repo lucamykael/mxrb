@@ -1,20 +1,10 @@
 # Navigation and design system
 
-**English** · translation pending — see `PENDING_TRANSLATION` in
-`spec/documentation_spec.rb`
+[Português](../pt-BR/design-system.md) · **English** · [Deutsch](../de-DE/design-system.md)
 
-> Status: incremental construction. The navigation document reader and the
-> design-token tooling described below exist in the current codebase and are
-> covered by tests, while the full native round trip (writing navigation
-> profiles and design properties back into Mendix documents) is still being
-> built. As with every MXRB surface, structures without a typed writer remain
-> preserved losslessly in the native baseline — nothing is dropped while the
-> typed API grows.
-
-This page describes the native navigation and design-system direction: what
-works today, the guidelines the typed APIs are built around, and what is
-planned. It follows the same Ruby-first principles as the rest of the
-toolkit.
+Navigation and design-system round trips are part of the current typed
+surface. Native profiles, filesystem assets and design-token quality tooling
+are covered by the public test and fixture matrix.
 
 ## Native navigation
 
@@ -53,10 +43,9 @@ Coverage and behavior:
   `references_from`, rename and remove plans already account for navigation
   targets.
 
-Planned increments: typed writing of profiles, home pages per role, menus and
-translations back into the native document, with references kept consistent
-across rename/move/remove and diff/lint. Until then the baseline keeps the
-original document intact.
+The same structures can be declared in the Ruby DSL and written back to the
+native navigation document. Rename, remove, diff and lint operate on those
+references, including user-role access to role-specific homes.
 
 ## Design tokens from real stylesheets
 
@@ -132,24 +121,14 @@ Guarantees:
 
 ## Themes, resources and unknown structures
 
-Mendix themes, images and design properties that do not yet have a typed
-Ruby API remain in the lossless native baseline and can still be edited as
-deep Ruby hashes through `.mxrb/native_units.rb`. That is the standing MXRB
-rule: preservation first, concise typed APIs second, never data loss in
-between.
+Themes, images, widgets, resources and Java sources are copied through
+`.mxrb/assets.json`. Every entry has a relative path, size and SHA-256 digest;
+reconstruction rejects traversal, missing files and checksum mismatches.
+Unknown model units remain in the lossless native baseline.
 
-## Roadmap
+## Validation status
 
-Framed as incremental work, in rough order:
-
-1. Typed writing of navigation profiles, role home pages, menus and
-   translations, integrated with rename/move/remove, diff and lint.
-2. Native design properties and tokens as first-class DSL declarations, with
-   themes and CSS/SCSS output generated from semantic Ruby intent.
-3. Deeper accessibility checks and literal detection wired into lint rules.
-4. Atomic design migration with rollback composed into batch plans.
-5. Fixtures and multi-version matrix evidence for navigation and design
-   round trips.
-
-The [Ruby-first roadmap](ruby-first-roadmap.md) tracks these against the
-rest of the planned surface.
+The typed navigation writer, asset manifest, contrast/literal lint and atomic
+migration are implemented. Structural round trips pass the six-fixture matrix,
+including modern `Profiles` and preserved legacy navigation shapes. See the
+[validation matrix](validation-matrix.md) for the current evidence.
