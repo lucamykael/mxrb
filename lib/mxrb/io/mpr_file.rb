@@ -44,6 +44,18 @@ module Mxrb
         end
       end
 
+      def update_version!(version)
+        version_str = version.to_s
+        # Try new-style column first, fall back to old-style
+        begin
+          @db.execute("UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?",
+                      [version_str, version_str])
+        rescue SQLite3::Exception # :nocov:
+          @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str]) # :nocov:
+        end
+        @mendix_version = version_str
+      end
+
       def project_name
         @project_name ||= begin
           # Name lives in the root Unit's BSON ($QualifiedName or Name field)

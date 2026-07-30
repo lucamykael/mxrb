@@ -291,20 +291,94 @@ module Mxrb
       end
     end
 
-    class ModuleBuilder
-      attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
-                  :associations, :menus, :module_roles
+    class EnumerationBuilder
+      attr_reader :name
 
       def initialize(name)
-        @name         = name.to_s
-        @entities     = []
-        @pages        = []
-        @microflows   = []
-        @nanoflows    = []
-        @repositories = []
-        @associations = []
-        @menus        = []
-        @module_roles = []
+        @name   = name.to_s
+        @values = []
+        @doc    = ""
+      end
+
+      def value(name, caption: nil)
+        @values << { name: name.to_s, caption: caption&.to_s }
+      end
+
+      def documentation(d) = (@doc = d)
+
+      def to_h
+        { name: @name, values: @values, documentation: @doc }
+      end
+    end
+
+    class ConstantBuilder
+      CONSTANT_TYPES = {
+        string: "DataTypes$StringType", integer: "DataTypes$IntegerType",
+        boolean: "DataTypes$BooleanType", decimal: "DataTypes$DecimalType",
+        datetime: "DataTypes$DateTimeType"
+      }.freeze
+
+      attr_reader :name
+
+      def initialize(name, type:, value: nil)
+        @name  = name.to_s
+        @type  = type.to_sym
+        @value = value
+        @doc   = ""
+      end
+
+      def documentation(d) = (@doc = d)
+
+      def to_h
+        { name: @name, type: @type, value: @value, documentation: @doc }
+      end
+    end
+
+    class ScheduledEventBuilder
+      INTERVAL_UNITS = {
+        milliseconds: "Millisecond", seconds: "Second", minutes: "Minute",
+        hours: "Hour", days: "Day", weeks: "Week", months: "Month", years: "Year"
+      }.freeze
+
+      attr_reader :name
+
+      def initialize(name, microflow:, interval: 1, unit: :days, enabled: true)
+        @name      = name.to_s
+        @microflow = microflow.to_s
+        @interval  = interval.to_i
+        @unit      = unit.to_sym
+        @enabled   = enabled
+        @doc       = ""
+      end
+
+      def documentation(d) = (@doc = d)
+
+      def to_h
+        {
+          name: @name, microflow: @microflow, interval: @interval,
+          unit: @unit, enabled: @enabled, documentation: @doc
+        }
+      end
+    end
+
+    class ModuleBuilder
+      attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
+                  :associations, :menus, :module_roles, :enumerations, :constants,
+                  :scheduled_events
+
+      def initialize(name)
+        @name             = name.to_s
+        @entities         = []
+        @pages            = []
+        @microflows       = []
+        @nanoflows        = []
+        @repositories     = []
+        @associations     = []
+        @menus            = []
+        @module_roles     = []
+        @enumerations     = []
+        @constants        = []
+        @scheduled_events = []
       end
 
       def entity(name, &block)
@@ -349,6 +423,26 @@ module Mxrb
         @repositories << { name: name.to_s, implementation: implementation&.to_s, public: public }
       end
 
+      def enumeration(name, &block)
+        eb = EnumerationBuilder.new(name)
+        eb.instance_eval(&block) if block
+        @enumerations << eb.to_h
+      end
+
+      def constant(name, type:, value: nil, &block)
+        cb = ConstantBuilder.new(name, type: type, value: value)
+        cb.instance_eval(&block) if block
+        @constants << cb.to_h
+      end
+
+      def scheduled_event(name, microflow:, interval: 1, unit: :days, enabled: true, &block)
+        sb = ScheduledEventBuilder.new(
+          name, microflow: microflow, interval: interval, unit: unit, enabled: enabled
+        )
+        sb.instance_eval(&block) if block
+        @scheduled_events << sb.to_h
+      end
+
       def evaluate(path)
         instance_eval(File.read(path), path, 1)
       end
@@ -357,7 +451,9 @@ module Mxrb
         {
           name: @name, entities: @entities, pages: @pages,
           microflows: @microflows, nanoflows: @nanoflows,
-          repositories: @repositories, menus: @menus, module_roles: @module_roles
+          repositories: @repositories, menus: @menus, module_roles: @module_roles,
+          enumerations: @enumerations, constants: @constants,
+          scheduled_events: @scheduled_events
         }
       end
     end

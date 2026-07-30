@@ -69,6 +69,18 @@ module Mxrb
         Evaluation::Suite.new(self).tap { _1.instance_eval(&block) }.run
       end
 
+      def upgrade_to!(version)
+        v = version.to_s
+        raise ArgumentError, "version must be a non-empty string" if v.empty?
+
+        @mpr.transaction { @mpr.update_version!(v) }
+        self
+      end
+
+      def downgrade_to!(version)
+        upgrade_to!(version)
+      end
+
       def refresh!
         @modules = nil
         @semantic_index = nil

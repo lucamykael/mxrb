@@ -324,6 +324,15 @@ module Mxrb
       mod.fetch(:menus, []).each do |menu|
         upsert_document(mpr, module_id, existing[menu.fetch(:name)], menu_doc(menu))
       end
+      mod.fetch(:enumerations, []).each do |enum|
+        upsert_document(mpr, module_id, existing[enum.fetch(:name)], enumeration_doc(enum))
+      end
+      mod.fetch(:constants, []).each do |constant|
+        upsert_document(mpr, module_id, existing[constant.fetch(:name)], constant_doc(constant))
+      end
+      mod.fetch(:scheduled_events, []).each do |event|
+        upsert_document(mpr, module_id, existing[event.fetch(:name)], scheduled_event_doc(event))
+      end
     end
 
     def upsert_document(mpr, module_id, raw, doc)
@@ -851,6 +860,76 @@ module Mxrb
           "$Type" => "Menus$MenuItemCollection",
           "Items" => IO::BsonCodec.build_array(menu.fetch(:items, []).map { menu_item_doc(_1) })
         }
+      }
+    end
+
+    CONSTANT_TYPE_MAP = {
+      string: "DataTypes$StringType", integer: "DataTypes$IntegerType",
+      boolean: "DataTypes$BooleanType", decimal: "DataTypes$DecimalType",
+      datetime: "DataTypes$DateTimeType"
+    }.freeze
+
+    SCHEDULED_EVENT_INTERVAL_MAP = {
+      milliseconds: "Millisecond", seconds: "Second", minutes: "Minute",
+      hours: "Hour", days: "Day", weeks: "Week", months: "Month", years: "Year"
+    }.freeze
+
+    def enumeration_doc(enum)
+      values = Array(enum.fetch(:values, [])).map do |val|
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Enumerations$EnumerationValue",
+          "Name" => val.fetch(:name),
+          "Caption" => { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text", "Translations" => [] },
+          "Image" => "",
+          "ExportLevel" => "Hidden"
+        }.tap { |v| v["Caption"]["Translations"] = [{ "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation", "LanguageCode" => "en_US", "Text" => val[:caption] || val.fetch(:name) }] }
+      end
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Enumerations$Enumeration",
+        "Name" => enum.fetch(:name),
+        "Documentation" => enum.fetch(:documentation, ""),
+        "ExportLevel" => "Hidden",
+        "Values" => IO::BsonCodec.build_array(values)
+      }
+    end
+
+    def constant_doc(constant)
+      type_sym = constant.fetch(:type).to_sym
+      type_str = CONSTANT_TYPE_MAP.fetch(type_sym) do
+        raise ArgumentError, "unsupported constant type #{type_sym.inspect}; " \
+                             "use one of: #{CONSTANT_TYPE_MAP.keys.join(', ')}"
+      end
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Constants$Constant",
+        "Name" => constant.fetch(:name),
+        "Documentation" => constant.fetch(:documentation, ""),
+        "ExportLevel" => "Hidden",
+        "Type" => { "$ID" => SecureRandom.uuid, "$Type" => type_str },
+        "DefaultValue" => constant.fetch(:value, "").to_s
+      }
+    end
+
+    def scheduled_event_doc(event)
+      unit_sym = event.fetch(:unit).to_sym
+      interval_type = SCHEDULED_EVENT_INTERVAL_MAP.fetch(unit_sym) do
+        raise ArgumentError, "unsupported scheduled event unit #{unit_sym.inspect}; " \
+                             "use one of: #{SCHEDULED_EVENT_INTERVAL_MAP.keys.join(', ')}"
+      end
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "ScheduledEvents$ScheduledEvent",
+        "Name" => event.fetch(:name),
+        "Documentation" => event.fetch(:documentation, ""),
+        "ExportLevel" => "Hidden",
+        "Microflow" => event.fetch(:microflow),
+        "StartDatetime" => "2000-01-01T00:00:00",
+        "TimeZone" => "",
+        "Enabled" => event.fetch(:enabled, true),
+        "IntervalType" => interval_type,
+        "Interval" => event.fetch(:interval, 1)
       }
     end
 

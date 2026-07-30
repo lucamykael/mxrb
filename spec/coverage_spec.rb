@@ -879,4 +879,257 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     allow(project).to receive(:raw_unit).with("parent").and_return(nil)
     expect(exporter.send(:native_descendant_of?, project, "child", "other")).to be(false)
   end
+
+  it "covers Page parser branches for malformed widgets" do
+    doc = {
+      "$ID" => "page-id",
+      "$Type" => "Pages$Page",
+      "Name" => "Malformed",
+      "Widgets" => [3,
+        "not-a-hash",
+        {
+          "$Type" => "Pages$DataGrid",
+          "Name" => "Grid",
+          "Columns" => [3, { "Name" => "Col" }],
+          "SearchBar" => "not-a-hash",
+          "ToolBar" => "not-a-hash"
+        },
+        {
+          "$Type" => "Pages$DataGrid",
+          "Name" => "EmptyGrid",
+          "Columns" => [3, { "Name" => "Col" }],
+          "SearchBar" => { "SearchFields" => [3, {}] },
+          "ToolBar" => { "Buttons" => [3, { "$Type" => "Pages$UnknownButton" }] }
+        },
+        {
+          "$Type" => "Pages$DataView",
+          "Name" => "BadSource",
+          "DataSource" => "not-a-hash",
+          "Widgets" => [3]
+        }
+      ]
+    }
+    page = Mxrb::Model::Page.new(
+      { "UnitID" => "page-id", "ContainmentName" => "Documents" },
+      double(parse_contents: doc)
+    )
+    expect(page.widgets.map { _1[:type] }).to include(:data_grid)
+
+    expect(page.send(:parse_search_bar, "not-a-hash")).to be_nil
+    expect(page.send(:parse_toolbar, "not-a-hash")).to be_nil
+    expect(page.send(:parse_action, "$Type" => "Pages$CallNanoflowClientAction")).to be_nil
+    expect(page.send(:parse_action, "$Type" => "Pages$MicroflowClientAction")).to be_nil
+    expect(page.send(:parse_action, "$Type" => "Pages$SaveChangesClientAction")).not_to be_nil
+    expect(page.send(:parse_action, "$Type" => "Pages$ClosePageClientAction")).not_to be_nil
+    expect(page.send(:parse_action, "$Type" => "Pages$UnknownAction")).to be_nil
+  end
+
+  it "covers MprFile readonly guards and format edge cases" do
+    Dir.mktmpdir do |dir|
+      readonly = Mxrb::IO::MprFile.allocate
+      readonly.instance_variable_set(:@readonly, true)
+      expect { readonly.insert_unit(container_uuid: SecureRandom.uuid, containment_name: "X", contents_doc: {}) }
+        .to raise_error(Mxrb::ReadOnlyError)
+      expect { readonly.update_unit(SecureRandom.uuid, {}) }
+        .to raise_error(Mxrb::ReadOnlyError)
+      expect { readonly.write_architecture_definition({}) }
+        .to raise_error(Mxrb::ReadOnlyError)
+
+      no_meta = File.join(dir, "no_meta.mpr")
+      db = SQLite3::Database.new(no_meta)
+      db.execute("CREATE TABLE _MetaData (_BuildVersion TEXT)")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY, ContainerID BLOB, ContainmentName TEXT,
+          TreeConflict LONG, ContentsHash TEXT, ContentsConflict TEXT, Contents BLOB
+        )
+      SQL
+      uuid = SecureRandom.uuid
+      blob = [uuid.delete("-")].pack("H*")
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', NULL, 'hash', NULL, ?)",
+        [blob, blob, Mxrb::IO::BsonCodec.serialize({ "$Type" => "Projects$Project", "Name" => "X" })]
+      )
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(no_meta)
+      expect(mpr.mendix_version).to be_nil
+      mpr.close
+
+      empty = File.join(dir, "empty.mpr")
+      File.write(empty, "")
+      expect { Mxrb::IO::MprFile.open(empty) }.to raise_error(Mxrb::NotMprError)
+
+      no_unit = File.join(dir, "no_unit.mpr")
+      db = SQLite3::Database.new(no_unit)
+      db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT)")
+      db.close
+      expect { Mxrb::IO::MprFile.open(no_unit) }.to raise_error(Mxrb::NotMprError, /Unit table missing/)
+    end
+  end
+
+  it "covers MprFile v2 content paths" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "v2.mpr")
+      db = SQLite3::Database.new(path)
+      db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT)")
+      db.execute("INSERT INTO _MetaData VALUES ('10.18.0')")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY, ContainerID BLOB, ContainmentName TEXT,
+          TreeConflict LONG, ContentsHash TEXT, Contents BLOB
+        )
+      SQL
+      uuid = SecureRandom.uuid
+      blob = Mxrb::IO::BsonCodec.uuid_to_blob(uuid)
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', NULL, 'hash', NULL)",
+        [blob, blob]
+      )
+      db.close
+      Dir.mkdir(File.join(dir, "mprcontents"))
+
+      mpr = Mxrb::IO::MprFile.open(path)
+      raw = mpr.unit(uuid)
+      expect(mpr.parse_contents(raw)).to eq({})
+      expect(mpr.content_bytes(raw)).to be_nil
+      mpr.close
+    end
+  end
+
+  it "covers MprFile version update and Project upgrade/downgrade" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "version.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        expect(project.mendix_version).to eq("10.18.0")
+        project.upgrade_to!("10.20.0")
+        expect(project.mendix_version).to eq("10.20.0")
+        project.downgrade_to!("10.18.0")
+        expect(project.mendix_version).to eq("10.18.0")
+        expect { project.upgrade_to!("") }.to raise_error(ArgumentError)
+      end
+    end
+  end
+
+  it "covers new DSL builders: enumeration, constant, scheduled event" do
+    builder = Mxrb::Dsl::Builder.new("x.mpr")
+    builder.instance_eval do
+      self.module(:M) do
+        enumeration :Status do
+          value :Open, caption: "Open"
+          value :Closed
+          documentation "Status enum"
+        end
+        constant :MaxItems, type: :integer, value: 10 do
+          documentation "Maximum items"
+        end
+        scheduled_event :Cleanup, microflow: "M.Cleanup", interval: 2, unit: :hours do
+          documentation "Cleanup job"
+        end
+      end
+    end
+    definition = builder.send(:definition)
+    expect(definition[:modules].first[:enumerations]).not_to be_empty
+    expect(definition[:modules].first[:constants]).not_to be_empty
+    expect(definition[:modules].first[:scheduled_events]).not_to be_empty
+
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "typed.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          enumeration :Status do
+            value :Open, caption: "Open"
+            value :Closed
+          end
+          constant :MaxItems, type: :integer, value: 10
+          scheduled_event :Cleanup, microflow: "M.Cleanup", interval: 2, unit: :hours
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        mod = project.modules.first
+        expect(mod.enumerations).not_to be_empty
+        expect(mod.constants).not_to be_empty
+        expect(mod.scheduled_events).not_to be_empty
+      end
+    end
+
+    writer = Mxrb::Writer.new("x.mpr", version: "10.18.0", modules: [])
+    expect { writer.send(:constant_doc, { name: "X", type: :unknown, value: 1 }) }
+      .to raise_error(ArgumentError, /unsupported constant type/)
+    expect { writer.send(:scheduled_event_doc, { name: "X", microflow: "M.X", unit: :unknown }) }
+      .to raise_error(ArgumentError, /unsupported scheduled event unit/)
+  end
+
+  it "covers marketplace Mendix version compatibility" do
+    Dir.mktmpdir do |dir|
+      Mxrb.define(File.join(dir, "project.mpr")) do
+        mendix_version "10.18.0"
+        self.module(:M) { microflow(:F) }
+      end
+
+      incompatible_pkg = File.join(dir, "incompat_pkg")
+      FileUtils.mkdir_p(incompatible_pkg)
+      File.write(File.join(incompatible_pkg, "mxrb-module.json"), JSON.dump(
+        "name" => "WidgetLib", "module_name" => "WidgetLib",
+        "version" => "1.0.0", "files" => [], "mendix_version" => "11.x"
+      ))
+
+      installer = Mxrb::Marketplace::Installer.new(target: dir)
+      expect { installer.install(incompatible_pkg) }
+        .to raise_error(Mxrb::MarketplaceError, /requires Mendix 11\.x/)
+
+      compatible_pkg = File.join(dir, "compat_pkg")
+      FileUtils.mkdir_p(compatible_pkg)
+      File.write(File.join(compatible_pkg, "mod.rb"), "# compatible\n")
+      File.write(File.join(compatible_pkg, "mxrb-module.json"), JSON.dump(
+        "name" => "WidgetLib2", "module_name" => "WidgetLib2",
+        "version" => "1.0.0", "files" => ["mod.rb"], "mendix_version" => ">= 10.0.0"
+      ))
+
+      expect { installer.install(compatible_pkg) }.not_to raise_error
+    end
+  end
+
+  it "covers MprFile update_version! fallback and marketplace version detection failure" do
+    Dir.mktmpdir do |dir|
+      legacy = File.join(dir, "legacy.mpr")
+      db = SQLite3::Database.new(legacy)
+      db.execute("CREATE TABLE _MetaData (MendixVersion TEXT, _BuildVersion TEXT)")
+      db.execute("INSERT INTO _MetaData VALUES ('10.0.0', '123')")
+      db.execute(<<~SQL)
+        CREATE TABLE Unit (
+          UnitID BLOB PRIMARY KEY, ContainerID BLOB, ContainmentName TEXT,
+          TreeConflict LONG, ContentsHash TEXT, Contents BLOB
+        )
+      SQL
+      uuid = SecureRandom.uuid
+      blob = [uuid.delete("-")].pack("H*")
+      db.execute(
+        "INSERT INTO Unit VALUES (?, ?, 'App', NULL, 'hash', ?)",
+        [blob, blob, Mxrb::IO::BsonCodec.serialize({ "$Type" => "Projects$Project", "Name" => "X" })]
+      )
+      db.close
+
+      mpr = Mxrb::IO::MprFile.open(legacy, readonly: false)
+      mpr.update_version!("10.18.0")
+      expect(mpr.mendix_version).to eq("10.18.0")
+      mpr.close
+
+      bad_mpr = File.join(dir, "bad.mpr")
+      File.write(bad_mpr, "not a valid SQLite file")
+      File.write(File.join(dir, "bad.mxrb-module.json"), JSON.dump(
+        "name" => "Bad", "module_name" => "Bad", "version" => "1.0.0",
+        "files" => [], "mendix_version" => ">= 10.0.0"
+      ))
+      installer = Mxrb::Marketplace::Installer.new(target: dir)
+      expect { installer.install(File.join(dir, "bad")) }.not_to raise_error
+    end
+  end
 end

@@ -395,6 +395,8 @@ module Mxrb
           "Layout" => :layout,
           "Snippet" => :snippet,
           "Enumeration" => :enumeration,
+          "Constant" => :constant,
+          "ScheduledEvent" => :scheduled_event,
           "MenuDocument" => :menu,
           "JavaAction" => :java_action,
           "JavaScriptAction" => :javascript_action,
