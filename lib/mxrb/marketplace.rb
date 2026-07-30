@@ -95,6 +95,7 @@ module Mxrb
 
       def remove(identifier)
         module_name = resolve_installed_module_name(identifier)
+        validate_no_dependents!(module_name)
         destination = File.join(@target, "modules", module_name)
         FileUtils.rm_rf(destination) if File.exist?(destination)
         remove_from_lock(module_name)
@@ -118,6 +119,11 @@ module Mxrb
             raise MarketplaceError, "module destination already exists: #{destination}"
           end
 
+          manifest_name = manifest["name"].to_s
+          canonical_entry = manifest_name.empty? ? entry : Entry.new(
+            manifest_name, entry.version, entry.description, entry.source, entry.ref
+          )
+          validate_dependencies!(manifest)
           files = package_files(package, manifest)
           staging = File.join(@target, ".mxrb", "staging", "#{module_name}-#{Process.pid}")
           backup = nil
@@ -133,7 +139,7 @@ module Mxrb
           FileUtils.rm_rf(backup) if backup
           backup = nil
           digest = tree_digest(destination)
-          write_lock(entry, module_name, digest)
+          write_lock(canonical_entry, module_name, digest, dependencies: declared_dependencies(manifest))
           Installation.new(entry, module_name, destination, digest)
         rescue StandardError
           FileUtils.mv(backup, destination) if backup && File.exist?(backup) && !File.exist?(destination)
@@ -258,13 +264,55 @@ module Mxrb
         digest.hexdigest
       end
 
-      def write_lock(entry, module_name, digest)
+      def declared_dependencies(manifest)
+        Array(manifest["dependencies"]).map do |dep|
+          name = dep.is_a?(Hash) ? dep["name"].to_s : dep.to_s
+          name unless name.empty?
+        end.compact
+      end
+
+      def validate_dependencies!(manifest)
+        deps = declared_dependencies(manifest)
+        return if deps.empty?
+
+        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        installed_packages = if File.file?(lock_path)
+          JSON.parse(File.read(lock_path)).fetch("modules", {}).values.map { _1["package"] }
+        else
+          []
+        end
+        missing = deps.reject { |dep| installed_packages.include?(dep) }
+        return if missing.empty?
+
+        raise MarketplaceError,
+              "missing dependencies: #{missing.join(', ')} — install them first"
+      end
+
+      def validate_no_dependents!(module_name)
+        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        return unless File.file?(lock_path)
+
+        lock = JSON.parse(File.read(lock_path))
+        package_name = lock.dig("modules", module_name, "package")
+        return unless package_name
+
+        dependents = lock.fetch("modules", {}).filter_map do |name, info|
+          name if name != module_name && Array(info["dependencies"]).include?(package_name)
+        end
+        return if dependents.empty?
+
+        raise MarketplaceError,
+              "cannot remove #{module_name.inspect}: #{dependents.join(', ')} depend on it"
+      end
+
+      def write_lock(entry, module_name, digest, dependencies: [])
         lock_path = File.join(@target, ".mxrb", "modules.lock.json")
         FileUtils.mkdir_p(File.dirname(lock_path))
         lock = File.file?(lock_path) ? JSON.parse(File.read(lock_path)) : { "modules" => {} }
         lock["modules"][module_name] = {
           "package" => entry.name, "version" => entry.version,
-          "source" => entry.source, "ref" => entry.ref, "sha256" => digest
+          "source" => entry.source, "ref" => entry.ref, "sha256" => digest,
+          "dependencies" => dependencies.empty? ? nil : dependencies
         }.compact
         temporary = "#{lock_path}.tmp-#{Process.pid}"
         File.write(temporary, JSON.pretty_generate(lock) << "\n")

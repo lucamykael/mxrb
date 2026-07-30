@@ -2663,6 +2663,223 @@ RSpec.describe Mxrb do
     end
   end
 
+  # ── Microflow extraction ──────────────────────────────────────────────────
+  describe "microflow extraction" do
+    def extraction_mpr(path, version: "10.18.0")
+      Mxrb.define(path) do
+        mendix_version version
+        self.module(:Sales) do
+          microflow(:CreateOrder) do
+            call_microflow "Sales.ValidateInput"
+            call_microflow "Sales.PersistOrder"
+            call_microflow "Sales.SendConfirmation"
+          end
+          microflow(:ValidateInput)
+          microflow(:PersistOrder)
+          microflow(:SendConfirmation)
+        end
+      end
+    end
+
+    it "plans an extraction with correct metadata" do
+      path = File.join(File.dirname(@mpr_path), "extract_plan.mpr")
+      extraction_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        # Extract the first two call activities
+        plan = project.plan_extract("Sales.CreateOrder",
+                                    as: "Sales.ValidateAndPersist",
+                                    object_ids: activity_ids[0..1])
+        expect(plan).to be_a(Mxrb::Semantic::ExtractionPlan)
+        expect(plan.source.qualified_name).to eq("Sales.CreateOrder")
+        expect(plan.new_name).to eq("Sales.ValidateAndPersist")
+        expect(plan.selected_ids.size).to eq(2)
+        expect(plan.changes.size).to eq(2)
+        expect(plan.applied?).to be false
+      end
+    end
+
+    it "applies the extraction: creates new microflow and updates source" do
+      path = File.join(File.dirname(@mpr_path), "extract_apply.mpr")
+      extraction_mpr(path)
+
+      activity_ids = []
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        project.plan_extract("Sales.CreateOrder",
+                              as: "Sales.ValidateAndPersist",
+                              object_ids: activity_ids[0..1]).apply!
+      end
+
+      Mxrb.open(path) do |project|
+        expect(project.find_artifact("Sales.ValidateAndPersist")).not_to be_nil
+        caller = project.find_artifact("Sales.CreateOrder")
+        raw = project.raw_unit(caller.unit_id)
+        content = project.mpr.content_bytes(raw) || raw["Contents"]
+        content_str = content.to_s.encode("UTF-8", invalid: :replace, undef: :replace)
+        expect(content_str).to include("Sales.ValidateAndPersist")
+        expect(content_str).to include("MicroflowCallAction")
+      end
+    end
+
+    it "raises when extracting a non-existent artifact" do
+      path = File.join(File.dirname(@mpr_path), "extract_err.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.Missing", as: "Sales.New", object_ids: ["x"]) }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when extracting a non-flow artifact" do
+      path = File.join(File.dirname(@mpr_path), "extract_nonflow.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) { entity(:Order) { string :Number } }
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.Order", as: "Sales.New", object_ids: ["x"]) }
+          .to raise_error(ArgumentError, /not a microflow/)
+      end
+    end
+
+    it "raises when extraction name is in a different module" do
+      path = File.join(File.dirname(@mpr_path), "extract_mod.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+        expect { project.plan_extract("Sales.CreateOrder", as: "Other.NewFlow", object_ids: [ids[0]]) }
+          .to raise_error(ArgumentError, /same module/)
+      end
+    end
+
+    it "raises when selection name already exists" do
+      path = File.join(File.dirname(@mpr_path), "extract_col.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.PersistOrder", object_ids: [ids[0]]) }
+          .to raise_error(ArgumentError, /already exists/)
+      end
+    end
+
+    it "raises when object_ids are empty" do
+      path = File.join(File.dirname(@mpr_path), "extract_empty.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.New", object_ids: []) }
+          .to raise_error(ArgumentError, /empty/)
+      end
+    end
+
+    it "raises when selection includes start or end event" do
+      path = File.join(File.dirname(@mpr_path), "extract_event.mpr")
+      extraction_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        start_id = objects.find { _1["$Type"] == "Microflows$StartEvent" }["$ID"]
+        expect { project.plan_extract("Sales.CreateOrder", as: "Sales.New", object_ids: [start_id]) }
+          .to raise_error(ArgumentError, /start\/end event/)
+      end
+    end
+
+    it "raises when selection has multiple entry or exit points" do
+      path = File.join(File.dirname(@mpr_path), "extract_branch.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:BranchedFlow) do
+            call_microflow "Sales.Step1"
+            call_microflow "Sales.Step2"
+            call_microflow "Sales.Step3"
+          end
+          microflow(:Step1)
+          microflow(:Step2)
+          microflow(:Step3)
+        end
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.BranchedFlow")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { Mxrb::IO::BsonCodec.extract_id(_1["$ID"]) }
+        # Select first and third (non-contiguous) — creates 2 separate entry points
+        expect {
+          project.plan_extract("Sales.BranchedFlow", as: "Sales.Extracted",
+                               object_ids: [activity_ids[0], activity_ids[2]])
+        }.to raise_error(ArgumentError, /entry point/)
+      end
+    end
+
+    it "apply! raises on double-apply" do
+      path = File.join(File.dirname(@mpr_path), "extract_double.mpr")
+      extraction_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          doc["ObjectCollection"]["Objects"]
+        )[:items]
+        ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.map { _1["$ID"] }
+
+        plan = project.plan_extract("Sales.CreateOrder",
+                                    as: "Sales.Extracted",
+                                    object_ids: [ids[0]])
+        plan.apply!
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      end
+    end
+  end
+
   # ── Marketplace update and remove ──────────────────────────────────────────
   describe "marketplace update and remove" do
     around do |ex|
@@ -2791,6 +3008,145 @@ RSpec.describe Mxrb do
       expect { installer.update("mymod", version: "2.0.0") }.to raise_error(Errno::ENOSPC)
       expect(File.exist?(v1.destination)).to be true
       expect(File.read(File.join(v1.destination, "module.rb"))).to eq(original_content)
+    end
+  end
+
+  # ── Marketplace dependencies ───────────────────────────────────────────────
+  describe "marketplace module dependencies" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @dep_dir = dir
+
+        # shared-kernel: no dependencies
+        @pkg_kernel = File.join(dir, "pkg_kernel")
+        FileUtils.mkdir_p(@pkg_kernel)
+        File.write(File.join(@pkg_kernel, "mxrb-module.json"),
+                   JSON.generate(name: "shared-kernel", module_name: "SharedKernel",
+                                 version: "1.0.0", files: ["kernel.rb"]))
+        File.write(File.join(@pkg_kernel, "kernel.rb"), "# kernel\n")
+
+        # widget-lib: depends on shared-kernel
+        @pkg_widget = File.join(dir, "pkg_widget")
+        FileUtils.mkdir_p(@pkg_widget)
+        File.write(File.join(@pkg_widget, "mxrb-module.json"),
+                   JSON.generate(name: "widget-lib", module_name: "WidgetLib",
+                                 version: "1.0.0", files: ["widgets.rb"],
+                                 dependencies: [{ "name" => "shared-kernel" }]))
+        File.write(File.join(@pkg_widget, "widgets.rb"), "# widgets\n")
+
+        ex.run
+      end
+    end
+
+    it "installs a module with no dependencies normally" do
+      target = File.join(@dep_dir, "proj_nodeps")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      inst = installer.install(@pkg_kernel)
+      expect(File.directory?(inst.destination)).to be true
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "SharedKernel", "dependencies")).to be_nil
+    end
+
+    it "records dependencies in the lock file after install" do
+      target = File.join(@dep_dir, "proj_deps")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "WidgetLib", "dependencies")).to eq(["shared-kernel"])
+    end
+
+    it "raises MarketplaceError when a dependency is not installed" do
+      target = File.join(@dep_dir, "proj_missing_dep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      expect { installer.install(@pkg_widget) }
+        .to raise_error(Mxrb::MarketplaceError, /missing dependencies.*shared-kernel/)
+    end
+
+    it "raises MarketplaceError when removing a module another depends on" do
+      target = File.join(@dep_dir, "proj_remove_dep")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      expect { installer.remove("SharedKernel") }
+        .to raise_error(Mxrb::MarketplaceError, /WidgetLib/)
+    end
+
+    it "allows removing a module after its dependent is removed first" do
+      target = File.join(@dep_dir, "proj_remove_order")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installer.install(@pkg_kernel)
+      installer.install(@pkg_widget)
+      installer.remove("WidgetLib")
+      expect { installer.remove("SharedKernel") }.not_to raise_error
+      expect(File.directory?(File.join(target, "modules", "SharedKernel"))).to be false
+    end
+  end
+
+  # ── Marketplace edge cases ─────────────────────────────────────────────────
+  describe "marketplace installer edge cases" do
+    around do |ex|
+      Dir.mktmpdir do |dir|
+        @ec_dir = dir
+        @pkg = File.join(dir, "pkg")
+        FileUtils.mkdir_p(@pkg)
+        File.write(File.join(@pkg, "mxrb-module.json"),
+                   JSON.generate(name: "mymod", module_name: "MyMod",
+                                 version: "1.0.0", files: ["module.rb"]))
+        File.write(File.join(@pkg, "module.rb"), "# mod\n")
+        ex.run
+      end
+    end
+
+    it "remove is idempotent when module directory was already deleted" do
+      target = File.join(@ec_dir, "proj_idem")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installation = installer.install(@pkg)
+      FileUtils.rm_rf(installation.destination)
+      expect(File.directory?(installation.destination)).to be false
+      expect { installer.remove("MyMod") }.not_to raise_error
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "MyMod")).to be_nil
+    end
+
+    it "catalog search with empty string returns all entries" do
+      Dir.mktmpdir do |dir|
+        catalog_path = File.join(dir, "cat.json")
+        File.write(catalog_path, JSON.generate(modules: [
+          { name: "alpha", version: "1.0", description: "First", source: @pkg },
+          { name: "beta",  version: "1.0", description: "Second", source: @pkg }
+        ]))
+        catalog = Mxrb::Marketplace::Catalog.new(catalog_path)
+        expect(catalog.search("").size).to eq(2)
+        expect(catalog.search(nil).size).to eq(2)
+      end
+    end
+
+    it "catalog search matches by description" do
+      Dir.mktmpdir do |dir|
+        catalog_path = File.join(dir, "cat.json")
+        File.write(catalog_path, JSON.generate(modules: [
+          { name: "alpha", version: "1.0", description: "shared utilities", source: @pkg },
+          { name: "beta",  version: "1.0", description: "reporting tools", source: @pkg }
+        ]))
+        catalog = Mxrb::Marketplace::Catalog.new(catalog_path)
+        expect(catalog.search("shared").map(&:name)).to eq(["alpha"])
+        expect(catalog.search("REPORTING").map(&:name)).to eq(["beta"])
+      end
+    end
+
+    it "install uses directory basename as package name when manifest has no name field" do
+      pkg_noname = File.join(@ec_dir, "pkg_noname")
+      FileUtils.mkdir_p(pkg_noname)
+      File.write(File.join(pkg_noname, "mxrb-module.json"),
+                 JSON.generate(module_name: "NoName", version: "1.0.0", files: ["mod.rb"]))
+      File.write(File.join(pkg_noname, "mod.rb"), "# noname\n")
+      target = File.join(@ec_dir, "proj_noname")
+      installer = Mxrb::Marketplace::Installer.new(target: target)
+      installation = installer.install(pkg_noname)
+      expect(installation.module_name).to eq("NoName")
+      lock = JSON.parse(File.read(File.join(target, ".mxrb", "modules.lock.json")))
+      expect(lock.dig("modules", "NoName", "package")).to eq("pkg_noname")
     end
   end
 
