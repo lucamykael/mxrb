@@ -20,6 +20,8 @@ remain optional external gates for compatibility and functional execution.
 - read and write native navigation profiles, role homes and recursive menus;
 - preserve theme, widget, resource and Java assets with SHA-256 manifests;
 - inventory design tokens, check contrast and preview atomic literal migration;
+- discover native OQL and render safe logical SQL views only when OQL exists;
+- materialize an isolated, Runtime-synchronized PostgreSQL for direct SQL inspection;
 - move standalone units between folders in the same module with a preview;
 - remove standalone units only after reference and child-unit safety checks;
 - run static analysis and executable model evaluations in Ruby;
@@ -79,7 +81,16 @@ bundle exec mxrb module add shared-kernel
 bundle exec mxrb cache status Shop.mpr
 bundle exec mxrb cache warm Shop.mpr
 bundle exec mxrb cache clear Shop.mpr
+bundle exec mxrb oql Shop.mpr --dialect postgresql
+bundle exec mxrb db up Shop.mpr
+bundle exec mxrb db sql Shop.mpr 'SELECT * FROM "sales$order" LIMIT 20'
 ```
+
+The MPR stores the model, not application data. `db up` builds the exact
+portable Runtime and lets it synchronize an isolated PostgreSQL volume.
+Database access is loopback-only and uses a read-only analyst role unless
+`--write` is explicitly requested. See
+[OQL and local SQL access](docs/en-US/oql-sql.md).
 
 ## Model evaluations
 

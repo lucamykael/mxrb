@@ -16,6 +16,8 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - movimentação de units entre pastas do mesmo módulo com prévia;
 - remoção de units independentes com verificação de referências e filhos;
 - lint e avaliações executáveis de modelo;
+- descoberta de OQL nativo e visão SQL lógica somente quando o projeto contém OQL;
+- PostgreSQL isolado e sincronizado pelo Runtime para consultas SQL diretas;
 - testes funcionais de microflows localmente ou em Docker.
 - busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
 
@@ -38,7 +40,16 @@ bundle exec mxrb module add shared-kernel
 bundle exec mxrb cache status App.mpr
 bundle exec mxrb cache warm App.mpr
 bundle exec mxrb cache clear App.mpr
+bundle exec mxrb oql App.mpr --dialect postgresql
+bundle exec mxrb db up App.mpr
+bundle exec mxrb db sql App.mpr 'SELECT * FROM "sales$order" LIMIT 20'
 ```
+
+O MPR armazena o modelo, não os dados da aplicação. `db up` compila o Runtime
+portátil exato e permite que ele sincronize um volume PostgreSQL isolado. O
+acesso é restrito a loopback e usa um papel somente leitura, salvo quando
+`--write` é solicitado explicitamente. Consulte
+[OQL e acesso SQL local](docs/pt-BR/oql-sql.md).
 
 ## Ruby DSL
 

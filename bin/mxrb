@@ -264,6 +264,90 @@ when "cache"
     puts "Elapsed     : #{format('%.6f', payload[:elapsed_seconds])}s"
   end
 
+when "oql"
+  path = ARGV.shift or abort "Usage: mxrb oql <file.mpr> [--dialect ansi|postgresql|sql_server] [--json]"
+  json = ARGV.delete("--json")
+  dialect_index = ARGV.index("--dialect")
+  dialect = if dialect_index
+              abort "--dialect requires a value" unless ARGV[dialect_index + 1]
+              ARGV.slice!(dialect_index, 2).last.to_sym
+            else
+              :postgresql
+            end
+  begin
+    views = Mxrb.open(path) { _1.oql_sql_views(dialect:) }
+  rescue ArgumentError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  if json
+    puts JSON.pretty_generate(
+      views.map do |view|
+        {
+          name: view.query.qualified_name, kind: view.query.kind, oql: view.query.oql,
+          sql: view.sql, dialect: view.dialect, confidence: view.confidence,
+          parameters: view.parameters, warnings: view.warnings
+        }
+      end
+    )
+  elsif views.empty?
+    puts "[mxrb] No native OQL found"
+  else
+    views.each_with_index do |view, index|
+      puts "" unless index.zero?
+      puts "#{view.query.qualified_name} (#{view.query.kind})"
+      puts "OQL:"
+      puts view.query.oql
+      puts "SQL (#{view.dialect}, #{view.confidence}):"
+      puts(view.sql || "(not generated)")
+      view.warnings.each { warn "[mxrb] warning: #{_1}" }
+    end
+  end
+
+when "db"
+  action = ARGV.shift or
+    abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|shell> <file.mpr>"
+  path = ARGV.shift or abort "Usage: mxrb db #{action} <file.mpr>"
+  port_index = ARGV.index("--port")
+  port = if port_index
+           abort "--port requires a value" unless ARGV[port_index + 1]
+           ARGV.slice!(port_index, 2).last
+         else
+           55_432
+         end
+  workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:)
+  case action
+  when "up", "sync"
+    info = action == "sync" ? workspace.sync : workspace.up
+    puts "[mxrb] PostgreSQL and Mendix Runtime started"
+    puts "Host     : #{info.host}:#{info.port}"
+    puts "Database : #{info.database}"
+    puts "Role     : #{info.reader_user} (read-only)"
+  when "down"
+    workspace.down
+    puts "[mxrb] Runtime and PostgreSQL stopped; the data volume was preserved"
+  when "destroy"
+    abort "db destroy requires --yes" unless ARGV.delete("--yes")
+    workspace.destroy(confirm: true)
+    puts "[mxrb] Removed the isolated containers, volume, network, and local state"
+  when "status"
+    info = workspace.status
+    puts "Running  : #{info.running}"
+    puts "Database : #{info.database_container}"
+    puts "Runtime  : #{info.runtime_container}"
+    puts "State    : #{info.state_dir}"
+  when "url"
+    puts workspace.connection_url
+  when "sql"
+    sql = ARGV.shift or abort "Usage: mxrb db sql <file.mpr> \"SELECT ...\" [--write]"
+    write = ARGV.delete("--write")
+    puts workspace.query(sql, write:)
+  when "shell"
+    write = ARGV.delete("--write")
+    exec(*workspace.shell_command(write:))
+  else
+    abort "Unknown db action #{action.inspect}; use up, sync, down, destroy, status, url, sql or shell"
+  end
+
 when "find"
   path = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
   query = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
@@ -441,6 +525,17 @@ else
       cache status <file.mpr> [--json]     Inspect semantic cache health and size
             warm <file.mpr> [--json]       Build or refresh the semantic cache
            clear <file.mpr> [--json]       Remove semantic cache entries
+      oql        <file.mpr> [--json]        Show native OQL and a read-only SQL view
+                 --dialect DIALECT          ansi, postgresql (default), or sql_server
+      db up      <file.mpr> [--port PORT]   Build, synchronize and expose local PostgreSQL
+         sync    <file.mpr> [--port PORT]   Rebuild and synchronize the retained database
+         down    <file.mpr>                 Stop containers while preserving all data
+         destroy <file.mpr> --yes           Remove isolated containers, data, and state
+         status  <file.mpr>                 Show isolated database/runtime status
+         url     <file.mpr> [--port PORT]   Print the read-only PostgreSQL connection URL
+         sql     <file.mpr> "SELECT …"      Execute SQL as the read-only analyst role
+                 --write                    Explicitly use the Runtime owner role
+         shell   <file.mpr> [--write]       Open psql (read-only by default)
       find       <file.mpr> <text>         Search artifacts by name
       describe   <file.mpr> <name>         Show incoming and outgoing references
       tree       <file.mpr> [module]       Browse the semantic structure

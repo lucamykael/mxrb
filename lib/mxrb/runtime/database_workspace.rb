@@ -1,0 +1,403 @@
+# frozen_string_literal: true
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'securerandom'
+
+module Mxrb
+  module Runtime
+    DatabaseInfo = Data.define(
+      :project_id, :state_dir, :database_container, :runtime_container,
+      :host, :port, :database, :reader_user, :running, :model_fingerprint
+    )
+
+    # Materializes a private PostgreSQL database for one MPR. The Mendix Runtime
+    # owns schema synchronization; analyst access uses a separate read-only role.
+    # rubocop:disable Metrics/ClassLength
+    class DatabaseWorkspace
+      POSTGRES_IMAGE = 'postgres:13-alpine'
+      DATABASE = 'mxrb'
+      OWNER = 'mxrb_runtime'
+      READER = 'mxrb_reader'
+
+      def initialize(project_path, state_dir: nil, port: 55_432, runner: nil, sleeper: nil)
+        @project_path = File.expand_path(project_path)
+        @project_id = Digest::SHA256.hexdigest(@project_path)[0, 12]
+        @state_dir = File.expand_path(state_dir || default_state_dir)
+        @port = Integer(port)
+        @runner = runner || method(:capture)
+        @sleeper = sleeper || Kernel.method(:sleep)
+        @plan = Toolchain.new(@project_path).plan
+      end
+
+      def up(force_build: false)
+        validate!
+        prepare_state
+        refresh_runtime_package(force_build)
+        ensure_network!
+        ensure_database!
+        configure_reader!
+        restart_runtime!
+        wait_for_runtime!
+        configure_reader!
+        info(running: true)
+      end
+
+      def sync = up(force_build: true)
+
+      def down
+        stop_container(runtime_container)
+        stop_container(database_container)
+        info(running: false)
+      end
+
+      def destroy(confirm: false)
+        raise ArgumentError, 'destroy requires explicit confirmation' unless confirm
+
+        remove_container(runtime_container)
+        remove_container(database_container)
+        remove_owned_resource('volume', database_volume)
+        remove_owned_resource('network', network_name)
+        FileUtils.rm_rf(@state_dir)
+        info(running: false)
+      end
+
+      def status
+        info(running: container_running?(database_container) && container_running?(runtime_container))
+      end
+
+      # Keeping the transaction envelope next to role selection makes the
+      # read-only default auditable.
+      # rubocop:disable Metrics/MethodLength
+      def query(sql, write: false)
+        raise ArgumentError, 'SQL must not be empty' if sql.to_s.strip.empty?
+        raise ArgumentError, 'SQL contains a NUL byte' if sql.include?("\0")
+
+        configure_reader! unless write
+        role = write ? OWNER : READER
+        command = [
+          'docker', 'exec', database_container,
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
+          '--username', role, '--dbname', DATABASE
+        ]
+        command.concat(['--command', 'BEGIN READ ONLY']) unless write
+        command.concat(['--command', sql])
+        command.concat(['--command', 'COMMIT']) unless write
+        run!(*command)
+      end
+      # rubocop:enable Metrics/MethodLength
+
+      def shell_command(write: false)
+        role = write ? OWNER : READER
+        [
+          'docker', 'exec', '-it', database_container,
+          'psql', '--no-psqlrc', '--username', role, '--dbname', DATABASE
+        ].freeze
+      end
+
+      def connection_url
+        secret = credentials.fetch('reader_password')
+        "postgresql://#{READER}:#{secret}@127.0.0.1:#{@port}/#{DATABASE}"
+      end
+
+      private
+
+      def refresh_runtime_package(force)
+        return unless force || stale_runtime?
+
+        remove_container(runtime_container)
+        build_runtime!
+      end
+
+      def validate!
+        raise ArgumentError, "#{@project_path}: file not found" unless File.file?(@project_path)
+        raise ToolchainError, "Mendix toolchain #{@plan.toolchain_path} is unavailable" unless @plan.available?
+
+        run!('docker', 'version', '--format', '{{.Server.Version}}')
+      end
+
+      def prepare_state
+        FileUtils.mkdir_p(@state_dir)
+        File.chmod(0o700, @state_dir)
+        credentials
+      end
+
+      def credentials
+        @credentials ||= if File.file?(credentials_path)
+                           JSON.parse(File.read(credentials_path))
+                         else
+                           create_credentials
+                         end
+      end
+
+      def create_credentials
+        values = {
+          'owner_password' => SecureRandom.hex(24),
+          'reader_password' => SecureRandom.hex(24),
+          'admin_password' => SecureRandom.hex(24)
+        }
+        FileUtils.mkdir_p(@state_dir)
+        File.write(credentials_path, JSON.pretty_generate(values))
+        File.chmod(0o600, credentials_path)
+        values
+      end
+
+      def stale_runtime?
+        !File.file?(runtime_marker) ||
+          JSON.parse(File.read(runtime_marker)).fetch('fingerprint') != model_fingerprint
+      rescue JSON::ParserError, KeyError
+        true
+      end
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def build_runtime!
+        ensure_builder_image!
+        FileUtils.rm_rf(runtime_dir)
+        FileUtils.mkdir_p(build_dir)
+        FileUtils.rm_f(File.join(build_dir, 'runtime.zip'))
+        run!(
+          'docker', 'run', '--rm',
+          '--mount', bind_mount(File.dirname(@project_path), '/input', readonly: true),
+          '--mount', bind_mount(@plan.toolchain_path, '/opt/mendix', readonly: true),
+          '--mount', bind_mount(build_dir, '/output', readonly: false),
+          '--tmpfs', '/workspace:exec,size=8g',
+          @plan.builder_image, File.basename(@project_path)
+        )
+        FileUtils.mkdir_p(runtime_dir)
+        run!('unzip', '-q', File.join(build_dir, 'runtime.zip'), '-d', runtime_dir)
+        File.write(runtime_marker, JSON.generate('fingerprint' => model_fingerprint))
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def ensure_builder_image!
+        return if successful?('docker', 'image', 'inspect', @plan.builder_image)
+
+        context = File.expand_path('../../../docker/functional', __dir__)
+        run!(
+          'docker', 'build', '--build-arg', "JAVA_VERSION=#{@plan.java_version}",
+          '-f', File.join(context, 'Dockerfile.builder'),
+          '-t', @plan.builder_image, context
+        )
+      end
+
+      def ensure_network!
+        if successful?('docker', 'network', 'inspect', network_name)
+          assert_owned_resource!('network', network_name)
+          return
+        end
+
+        run!('docker', 'network', 'create', '--label', ownership_label, network_name)
+      end
+
+      def ensure_database!
+        if container_exists?(database_container)
+          assert_owned_container!(database_container)
+          run!('docker', 'start', database_container) unless container_running?(database_container)
+        else
+          create_database_container!
+        end
+        wait_for_database!
+      end
+
+      def create_database_container!
+        ensure_database_volume!
+        run!(
+          'docker', 'run', '-d', '--name', database_container,
+          '--label', ownership_label, '--network', network_name,
+          '--mount', "type=volume,source=#{database_volume},target=/var/lib/postgresql/data",
+          '-p', "127.0.0.1:#{@port}:5432",
+          '-e', "POSTGRES_DB=#{DATABASE}", '-e', "POSTGRES_USER=#{OWNER}",
+          '-e', "POSTGRES_PASSWORD=#{credentials.fetch('owner_password')}",
+          POSTGRES_IMAGE
+        )
+      end
+
+      def ensure_database_volume!
+        if successful?('docker', 'volume', 'inspect', database_volume)
+          assert_owned_resource!('volume', database_volume)
+        else
+          run!('docker', 'volume', 'create', '--label', ownership_label, database_volume)
+        end
+      end
+
+      def wait_for_database!
+        30.times do
+          return if successful?(
+            'docker', 'exec', database_container,
+            'pg_isready', '--username', OWNER, '--dbname', DATABASE
+          )
+
+          @sleeper.call(1)
+        end
+        raise ToolchainError, 'PostgreSQL did not become ready'
+      end
+
+      def wait_for_runtime!
+        120.times do
+          output, status = run_command('docker', 'logs', runtime_container)
+          return if status.success? && output.include?('Mendix Runtime successfully started')
+          raise ToolchainError, "Mendix Runtime stopped during synchronization:\n#{output}" \
+            unless container_running?(runtime_container)
+
+          @sleeper.call(1)
+        end
+        raise ToolchainError, 'Mendix Runtime schema synchronization timed out'
+      end
+
+      # The grants form one atomic security policy and intentionally stay together.
+      # rubocop:disable Metrics/MethodLength
+      def configure_reader!
+        password = credentials.fetch('reader_password')
+        sql = <<~SQL
+          DO $mxrb$ BEGIN
+            CREATE ROLE #{READER} LOGIN PASSWORD '#{password}';
+          EXCEPTION WHEN duplicate_object THEN
+            ALTER ROLE #{READER} LOGIN PASSWORD '#{password}';
+          END $mxrb$;
+          ALTER ROLE #{READER} SET default_transaction_read_only = on;
+          GRANT CONNECT ON DATABASE #{DATABASE} TO #{READER};
+          GRANT USAGE ON SCHEMA public TO #{READER};
+          GRANT SELECT ON ALL TABLES IN SCHEMA public TO #{READER};
+          GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO #{READER};
+          ALTER DEFAULT PRIVILEGES FOR ROLE #{OWNER} IN SCHEMA public
+            GRANT SELECT ON TABLES TO #{READER};
+          ALTER DEFAULT PRIVILEGES FOR ROLE #{OWNER} IN SCHEMA public
+            GRANT SELECT ON SEQUENCES TO #{READER};
+        SQL
+        run!(
+          'docker', 'exec', database_container,
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
+          '--username', OWNER, '--dbname', DATABASE, '--command', sql
+        )
+      end
+      # rubocop:enable Metrics/MethodLength
+
+      # Runtime database settings stay adjacent so no credential or safety
+      # override can be omitted from one execution path.
+      # rubocop:disable Metrics/MethodLength
+      def restart_runtime!
+        remove_container(runtime_container)
+        secret = credentials
+        run!(
+          'docker', 'run', '-d', '--name', runtime_container,
+          '--label', ownership_label, '--network', network_name,
+          '--mount', bind_mount(runtime_dir, '/mendix', readonly: false),
+          '-e', 'HOME=/tmp', '-e', "M2EE_ADMIN_PASS=#{secret.fetch('admin_password')}",
+          '-e', "RUNTIME_ADMINUSER_PASSWORD=#{secret.fetch('admin_password')}",
+          '-e', 'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL',
+          '-e', "RUNTIME_PARAMS_DATABASEHOST=#{database_container}:5432",
+          '-e', "RUNTIME_PARAMS_DATABASENAME=#{DATABASE}",
+          '-e', "RUNTIME_PARAMS_DATABASEUSERNAME=#{OWNER}",
+          '-e', "RUNTIME_PARAMS_DATABASEPASSWORD=#{secret.fetch('owner_password')}",
+          '-e', 'RUNTIME_PARAMS_DATABASEUSESSL=false',
+          '-w', '/mendix', @plan.runtime_image, './bin/start', 'etc/Default'
+        )
+      end
+      # rubocop:enable Metrics/MethodLength
+
+      def stop_container(name)
+        return unless container_running?(name)
+
+        assert_owned_container!(name)
+        run!('docker', 'stop', name)
+      end
+
+      def remove_container(name)
+        return unless container_exists?(name)
+
+        assert_owned_container!(name)
+        run!('docker', 'rm', '-f', name)
+      end
+
+      def container_exists?(name)
+        successful?('docker', 'container', 'inspect', name)
+      end
+
+      def container_running?(name)
+        output, = run_command('docker', 'container', 'inspect', '--format', '{{.State.Running}}', name)
+        output.strip == 'true'
+      end
+
+      def assert_owned_container!(name)
+        assert_owned_resource!('container', name, '.Config.Labels')
+      end
+
+      def assert_owned_resource!(kind, name, labels_path = '.Labels')
+        output = run!(
+          'docker', kind, 'inspect', '--format',
+          "{{ index #{labels_path} \"mxrb.project\" }}", name
+        )
+        return if output.strip == @project_id
+
+        raise ToolchainError, "refusing to modify unowned Docker #{kind} #{name}"
+      end
+
+      def remove_owned_resource(kind, name)
+        return unless successful?('docker', kind, 'inspect', name)
+
+        assert_owned_resource!(kind, name)
+        run!('docker', kind, 'rm', name)
+      end
+
+      def successful?(*command)
+        _output, status = run_command(*command)
+        status.success?
+      end
+
+      def run!(*command)
+        output, status = run_command(*command)
+        raise ToolchainError, "#{command.first} failed:\n#{output}" unless status.success?
+
+        output
+      end
+
+      def run_command(*command)
+        result = @runner.call(*command)
+        return [result[0].to_s + result[1].to_s, result[2]] if result.length == 3
+
+        [result[0].to_s, result[1]]
+      end
+
+      def capture(*command)
+        Open3.capture3(*command)
+      end
+
+      def info(running:)
+        DatabaseInfo.new(
+          @project_id, @state_dir, database_container, runtime_container,
+          '127.0.0.1', @port, DATABASE, READER, running, model_fingerprint
+        )
+      end
+
+      def model_fingerprint
+        @model_fingerprint ||= Mxrb.open(@project_path) do |project|
+          Semantic::Index.fingerprint(project)
+        end
+      end
+
+      def bind_mount(source, target, readonly:)
+        values = ['type=bind', "source=#{source}", "target=#{target}"]
+        values << 'readonly' if readonly
+        values.join(',')
+      end
+
+      def default_state_dir
+        root = ENV['XDG_STATE_HOME'] || File.join(Dir.home, '.local', 'state')
+        File.join(root, 'mxrb', 'databases', @project_id)
+      end
+
+      def credentials_path = File.join(@state_dir, 'credentials.json')
+      def runtime_marker = File.join(@state_dir, 'runtime.json')
+      def runtime_dir = File.join(@state_dir, 'runtime')
+      def build_dir = File.join(@state_dir, 'build')
+      def network_name = "mxrb-#{@project_id}"
+      def database_container = "mxrb-#{@project_id}-postgres"
+      def runtime_container = "mxrb-#{@project_id}-runtime"
+      def database_volume = "mxrb-#{@project_id}-data"
+      def ownership_label = "mxrb.project=#{@project_id}"
+    end
+    # rubocop:enable Metrics/ClassLength
+  end
+end
