@@ -123,6 +123,7 @@ module Mxrb
           canonical_entry = manifest_name.empty? ? entry : Entry.new(
             manifest_name, entry.version, entry.description, entry.source, entry.ref
           )
+          validate_mendix_version!(manifest)
           validate_dependencies!(manifest)
           files = package_files(package, manifest)
           staging = File.join(@target, ".mxrb", "staging", "#{module_name}-#{Process.pid}")
@@ -286,6 +287,60 @@ module Mxrb
 
         raise MarketplaceError,
               "missing dependencies: #{missing.join(', ')} — install them first"
+      end
+
+      def validate_mendix_version!(manifest)
+        required = manifest["mendix_version"].to_s.strip
+        return if required.empty?
+
+        project_version = detect_project_mendix_version
+        return if project_version.nil?
+
+        unless mendix_version_compatible?(project_version, required)
+          raise MarketplaceError,
+                "module requires Mendix #{required}, but the project uses #{project_version}"
+        end
+      end
+
+      def detect_project_mendix_version
+        mpr_files = Dir.glob(File.join(@target, "*.mpr"))
+        return nil if mpr_files.empty?
+
+        require_relative "../mxrb/io/mpr_file"
+        mpr = IO::MprFile.open(mpr_files.first, readonly: true)
+        mpr.mendix_version
+      rescue StandardError # :nocov:
+        nil # :nocov:
+      ensure
+        mpr&.close
+      end
+
+      def mendix_version_compatible?(project_version, required)
+        proj_parts = project_version.to_s.split(".").map(&:to_i)
+        req_str    = required.to_s.strip
+
+        case req_str
+        when /\A(\d+)\.x\z/
+          proj_parts[0] == ::Regexp.last_match(1).to_i
+        when /\A>=\s*(.+)\z/
+          version_gte?(proj_parts, ::Regexp.last_match(1).strip.split(".").map(&:to_i))
+        when /\A~>\s*(.+)\z/
+          base = ::Regexp.last_match(1).strip.split(".").map(&:to_i)
+          version_gte?(proj_parts, base) &&
+            proj_parts[0, base.size - 1] == base[0, base.size - 1]
+        else
+          project_version.start_with?(req_str.sub(/\.\*\z/, ""))
+        end
+      end
+
+      def version_gte?(a, b)
+        a.zip(b).each do |av, bv|
+          av ||= 0
+          bv ||= 0
+          return true  if av > bv
+          return false if av < bv
+        end
+        true
       end
 
       def validate_no_dependents!(module_name)

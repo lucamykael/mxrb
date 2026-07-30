@@ -11,4 +11,5 @@ module Mxrb
   FunctionalTestError = Class.new(Error)
   ToolchainError      = Class.new(Error)
   MarketplaceError    = Class.new(Error)
+  BatchError          = Class.new(Error)
 end

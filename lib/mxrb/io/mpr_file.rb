@@ -22,6 +22,8 @@ module Mxrb
     class MprFile
       attr_reader :path, :format_version
 
+      def readonly? = @readonly
+
       def initialize(path, readonly: false)
         @path     = File.expand_path(path)
         @readonly = readonly
@@ -42,6 +44,18 @@ module Mxrb
           row ||= @db.get_first_row("SELECT MendixVersion FROM _MetaData LIMIT 1") rescue nil
           row&.first
         end
+      end
+
+      def update_version!(version)
+        version_str = version.to_s
+        # Try new-style column first, fall back to old-style
+        begin
+          @db.execute("UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?",
+                      [version_str, version_str])
+        rescue SQLite3::Exception # :nocov:
+          @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str]) # :nocov:
+        end
+        @mendix_version = version_str
       end
 
       def project_name
@@ -215,6 +229,30 @@ module Mxrb
 
       def transaction(&)
         @db.transaction(&)
+      end
+
+      # Creates a consistent point-in-time backup using SQLite's VACUUM INTO.
+      # Falls back to a WAL checkpoint + file copy on older SQLite versions.
+      def backup!(dest_path)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        FileUtils.rm_f(dest_path)
+        @db.execute("VACUUM INTO ?", [dest_path])
+      rescue SQLite3::Exception
+        @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil # :nocov:
+        FileUtils.cp(@path, dest_path)                        # :nocov:
+      end
+
+      # Restores the database from a backup file, replacing the current contents.
+      # Closes and reopens the underlying SQLite connection.
+      def restore_from!(backup_path)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        @db.close
+        FileUtils.cp(backup_path, @path)
+        @db             = open_db
+        @mendix_version = nil
+        @format_version = detect_format
       end
 
       # ── Exploration helpers ───────────────────────────────────────────────
