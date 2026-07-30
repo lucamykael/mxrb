@@ -2880,6 +2880,152 @@ RSpec.describe Mxrb do
     end
   end
 
+  # ── Microflow inline ─────────────────────────────────────────────────────
+  describe "microflow inline" do
+    def inline_mpr(path)
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) do
+          microflow(:CreateOrder) do
+            call_microflow "Sales.PrepareOrder"
+            call_microflow "Sales.SendConfirmation"
+          end
+          microflow(:PrepareOrder) do
+            call_microflow "Sales.ValidateInput"
+            call_microflow "Sales.PersistOrder"
+          end
+          microflow(:ValidateInput)
+          microflow(:PersistOrder)
+          microflow(:SendConfirmation)
+        end
+      end
+    end
+
+    it "plans an inline with correct metadata" do
+      path = File.join(File.dirname(@mpr_path), "inline_plan.mpr")
+      inline_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder")
+        expect(plan).to be_a(Mxrb::Semantic::InlinePlan)
+        expect(plan.source.qualified_name).to eq("Sales.CreateOrder")
+        expect(plan.called_name).to eq("Sales.PrepareOrder")
+        expect(plan.changes.size).to eq(2)
+        expect(plan.applied?).to be false
+      end
+    end
+
+    it "applies inline: replaces call activity with callee's activities" do
+      path = File.join(File.dirname(@mpr_path), "inline_apply.mpr")
+      inline_mpr(path)
+
+      Mxrb.open(path, readonly: false) do |project|
+        project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder").apply!
+      end
+
+      Mxrb.open(path) do |project|
+        caller_flow = project.find_artifact("Sales.CreateOrder")
+        raw = project.raw_unit(caller_flow.unit_id)
+        doc = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items]
+        types = objects.map { _1["$Type"] }
+
+        # Should have 2 call_microflow activities from PrepareOrder inlined,
+        # plus 1 original SendConfirmation call, plus start + end
+        expect(types.count { _1 == "Microflows$ActionActivity" }).to eq(3)
+        content_str = objects.map(&:to_s).join
+        expect(content_str).to include("Sales.ValidateInput")
+        expect(content_str).to include("Sales.PersistOrder")
+        expect(content_str).to include("Sales.SendConfirmation")
+        expect(content_str).not_to include("Sales.PrepareOrder")
+      end
+    end
+
+    it "extract then inline is a no-op (round-trip)" do
+      path = File.join(File.dirname(@mpr_path), "inline_roundtrip.mpr")
+      inline_mpr(path)
+
+      # Count objects before
+      before_count = nil
+      Mxrb.open(path) do |project|
+        raw = project.raw_unit(project.find_artifact("Sales.CreateOrder").unit_id)
+        doc = project.parse_bson(raw)
+        before_count = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items].size
+      end
+
+      Mxrb.open(path, readonly: false) do |project|
+        flow = project.find_artifact("Sales.CreateOrder")
+        raw  = project.raw_unit(flow.unit_id)
+        doc  = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items]
+        activity_ids = objects.reject { |o|
+          %w[Microflows$StartEvent Microflows$EndEvent].include?(o["$Type"])
+        }.first(1).map { Mxrb::IO::BsonCodec.extract_id(_1["$ID"]) }
+
+        project.plan_extract("Sales.CreateOrder",
+                              as: "Sales.Extracted",
+                              object_ids: activity_ids).apply!
+        project.plan_inline("Sales.CreateOrder", calling: "Sales.Extracted").apply!
+      end
+
+      Mxrb.open(path) do |project|
+        raw = project.raw_unit(project.find_artifact("Sales.CreateOrder").unit_id)
+        doc = project.parse_bson(raw)
+        after_count = Mxrb::IO::BsonCodec.parse_array(doc["ObjectCollection"]["Objects"])[:items].size
+        expect(after_count).to eq(before_count)
+      end
+    end
+
+    it "raises when source not found" do
+      path = File.join(File.dirname(@mpr_path), "inline_err1.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.Missing", calling: "Sales.PrepareOrder") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when called microflow not found" do
+      path = File.join(File.dirname(@mpr_path), "inline_err2.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.Missing") }
+          .to raise_error(KeyError, /unknown Mendix artifact/)
+      end
+    end
+
+    it "raises when source is not a microflow" do
+      path = File.join(File.dirname(@mpr_path), "inline_err3.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:Sales) { entity(:Order) { string :Number } }
+      end
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.Order", calling: "Sales.Order") }
+          .to raise_error(ArgumentError, /not a microflow/)
+      end
+    end
+
+    it "raises when source does not call the target" do
+      path = File.join(File.dirname(@mpr_path), "inline_err4.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.ValidateInput") }
+          .to raise_error(ArgumentError, /no call to/)
+      end
+    end
+
+    it "apply! raises on double-apply" do
+      path = File.join(File.dirname(@mpr_path), "inline_double.mpr")
+      inline_mpr(path)
+      Mxrb.open(path, readonly: false) do |project|
+        plan = project.plan_inline("Sales.CreateOrder", calling: "Sales.PrepareOrder")
+        plan.apply!
+        expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
+      end
+    end
+  end
+
   # ── Marketplace update and remove ──────────────────────────────────────────
   describe "marketplace update and remove" do
     around do |ex|

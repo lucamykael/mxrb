@@ -61,6 +61,8 @@ module Mxrb
       def plan_extract(name, as:, object_ids:) =
         Semantic::Extractor.new(self).plan(name, as: as, object_ids: object_ids)
       def extract!(name, as:, object_ids:) = plan_extract(name, as: as, object_ids: object_ids).apply!
+      def plan_inline(name, calling:) = Semantic::Inliner.new(self).plan(name, calling: calling)
+      def inline!(name, calling:) = plan_inline(name, calling: calling).apply!
       def analyze(**options) = Semantic::Analyzer.new(self).analyze(**options)
       alias lint analyze
       def evaluate(&block)
