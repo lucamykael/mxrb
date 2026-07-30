@@ -4,8 +4,18 @@
 
 - [Project architecture](architecture.md)
 - [Architectural standard](architectural-standard.md)
+- [Project structure](project-structure.md)
+- [Architectural patterns](architectural-patterns.md)
+- [Semantic refactoring](semantic-refactoring.md)
+- [Navigation and design system](design-system.md)
+- [Conventions](conventions.md)
 - [Ruby-first roadmap](ruby-first-roadmap.md)
 - [Validation matrix](validation-matrix.md)
 - [Writing projects](writing.md)
+- [Exported project structure](project-structure.md)
+- [Architectural patterns](architectural-patterns.md)
+- [Semantic refactoring](semantic-refactoring.md)
+- [Navigation and design systems](design-system.md)
+- [Conventions](conventions.md)
 
 [Back to the project README](../../README.md)

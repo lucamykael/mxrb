@@ -17,6 +17,9 @@ remain optional external gates for compatibility and functional execution.
 - compare structural snapshots and produce typed semantic diffs;
 - inspect references, callers, callees and transitive impact;
 - rename artifacts with a preview before applying changes;
+- read and write native navigation profiles, role homes and recursive menus;
+- preserve theme, widget, resource and Java assets with SHA-256 manifests;
+- inventory design tokens, check contrast and preview atomic literal migration;
 - move standalone units between folders in the same module with a preview;
 - remove standalone units only after reference and child-unit safety checks;
 - run static analysis and executable model evaluations in Ruby;
@@ -26,8 +29,8 @@ remain optional external gates for compatibility and functional execution.
 The public validation matrix currently covers structural v1/v2 round trips
 from Mendix 5.21 through 11.12 and official MxBuild checks where the native
 toolchain is supported. Exact Mendix 5 validation still depends on
-Windows/Studio Pro and is a documented MXRB limitation; it is not part of the
-automated direct toolchain gate. See
+Windows/Studio Pro and remains a documented legacy limitation, but it is not a
+current delivery gate. See
 [the validation matrix](docs/en-US/validation-matrix.md) for the exact evidence and
 confidence boundaries.
 

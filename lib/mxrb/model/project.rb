@@ -29,6 +29,17 @@ module Mxrb
       def pages       = modules.flat_map(&:pages)
       def microflows  = modules.flat_map(&:microflows)
 
+      def navigation
+        @navigation ||= begin
+          raw = all_units.find { parse_bson(_1)["$Type"] == "Navigation$NavigationDocument" }
+          Navigation.new(raw && parse_bson(raw))
+        end
+      end
+
+      def design_system = (@design_system ||= DesignSystem.new(File.dirname(@mpr.path)))
+      def plan_design_token_migration(replacements) =
+        design_system.plan_literal_migration(replacements)
+
       # ── Low-level exploration ───────────────────────────────────────────
 
       def all_units   = @mpr.all_units
@@ -143,6 +154,8 @@ module Mxrb
       def refresh!
         @modules = nil
         @semantic_index = nil
+        @navigation = nil
+        @design_system = nil
         self
       end
 

@@ -41,13 +41,14 @@ Projetos graváveis mantêm um cache do índice semântico identificado por
 fingerprint. `mxrb cache status`, `warm` e `clear` expõem métricas e manutenção;
 a troca usa upsert antes da limpeza da entrada antiga.
 
-A validação nativa exata do Mendix 5 continua dependente de Windows/Studio Pro
-e é uma limitação explícita do MXRB. Round-trip estrutural e o conversor oficial
-6.10 não substituem esse gate direto.
+A validação nativa exata do Mendix 5 continua dependente de Windows/Studio Pro.
+Ela fica documentada como limitação legada remota e não é um gate atual de
+entrega.
 
-Perfis de navegação e tokens de design system são, por enquanto, contratos de
-arquitetura MXRB preservados nos metadados lossless. Eles fazem round-trip em
-Ruby tipado, mas ainda não reescrevem documentos nativos de navegação/tema.
+Perfis de navegação agora leem e escrevem documentos nativos Mendix, incluindo
+homes por papel e menus recursivos. Assets de tema e código fazem round-trip
+com manifesto de checksums; tokens possuem inventário, lint, métricas de
+contraste e migração de literais com preview.
 
 ## API semântica
 

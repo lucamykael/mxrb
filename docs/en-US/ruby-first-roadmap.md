@@ -51,13 +51,14 @@ Use `mxrb cache status`, `warm` and `clear` for metrics and maintenance; writes
 use an upsert before stale-entry cleanup so readers never observe an empty
 replacement window.
 
-Exact native Mendix 5 validation remains dependent on Windows/Studio Pro and
-is an explicit MXRB limitation. Structural round-trip coverage and validation
-through the official 6.10 converter do not replace that direct gate.
+Exact native Mendix 5 validation remains dependent on Windows/Studio Pro. It
+is documented as a remote legacy limitation and is not a current delivery
+gate.
 
-Navigation profiles and design-system tokens are currently MXRB architecture
-contracts stored in the lossless project metadata. They round-trip as typed
-Ruby, but do not yet rewrite the native Mendix navigation/theme documents.
+Navigation profiles now read and write native Mendix navigation documents,
+including role homes and recursive menus. Theme and source assets round-trip
+through a checksum manifest; design-system tokens support inventory, lint,
+contrast metrics and preview-first literal migration.
 
 ## Safe rename
 
