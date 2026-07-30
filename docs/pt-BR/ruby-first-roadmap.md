@@ -35,7 +35,19 @@ Ruby é a única linguagem pública do MXRB.
   descartável e executados pelo runtime Mendix sem JUnit.
 - Execução local ou Docker de `mx check`, pacote portátil e runtime, com seleção
   automática da família Java do projeto.
-- Gate nativo de 100% de cobertura de linhas para a biblioteca.
+- Gate nativo de 100% de cobertura de linhas e branches para a biblioteca.
+
+Projetos graváveis mantêm um cache do índice semântico identificado por
+fingerprint. `mxrb cache status`, `warm` e `clear` expõem métricas e manutenção;
+a troca usa upsert antes da limpeza da entrada antiga.
+
+A validação nativa exata do Mendix 5 continua dependente de Windows/Studio Pro
+e é uma limitação explícita do MXRB. Round-trip estrutural e o conversor oficial
+6.10 não substituem esse gate direto.
+
+Perfis de navegação e tokens de design system são, por enquanto, contratos de
+arquitetura MXRB preservados nos metadados lossless. Eles fazem round-trip em
+Ruby tipado, mas ainda não reescrevem documentos nativos de navegação/tema.
 
 ## API semântica
 
@@ -55,6 +67,10 @@ end
 
 Os resultados são objetos Ruby imutáveis: `Mxrb::Semantic::Artifact`,
 `Mxrb::Semantic::Reference` e `Mxrb::Semantic::Impact`.
+
+Projetos abertos para escrita persistem no MPR um cache do índice semântico com
+fingerprint. Aberturas somente leitura podem reutilizá-lo, mas nunca alteram o
+projeto.
 
 Uma renomeação é sempre inspecionável antes da escrita:
 

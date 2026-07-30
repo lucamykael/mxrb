@@ -202,8 +202,9 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The suite contains 112 examples and passes with 100.00% line coverage
-(4,613/4,613 executable library lines). Branch coverage is recorded separately.
+The current suite contains 432 examples and passes with 100.00% line coverage
+(5,744/5,744 executable library lines) and 100.00% branch coverage
+(2,190/2,190 branches).
 Run the enforced gate with:
 
 ```sh

@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "digest"
+require "json"
+
 module Mxrb
   module Semantic
     Artifact = Data.define(
@@ -21,6 +24,11 @@ module Mxrb
     # Builds a semantic index directly from an opened MPR. Ruby is the public
     # API; the CLI only formats these results.
     class Index
+      CACHE_VERSION = 2
+      CACHE_METADATA_KEYS = %i[
+        allowed_roles bson_type documentation excluded exposed from mark_as_used to
+      ].freeze
+
       FIELD_RELATIONS = {
         "microflow" => :calls,
         "nanoflow" => :calls,
@@ -43,15 +51,34 @@ module Mxrb
 
       attr_reader :artifacts, :references, :unresolved_references
 
+      def self.fingerprint(project)
+        rows = project.query(
+          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash " \
+          "FROM Unit ORDER BY UnitID"
+        )
+        digest = Digest::SHA256.new
+        digest << CACHE_VERSION.to_s
+        rows.each do |row|
+          row.each do |value|
+            bytes = value.to_s.b
+            digest << [bytes.bytesize].pack("Q>") << bytes
+          end
+        end
+        digest.hexdigest
+      rescue StandardError
+        nil
+      end
+
       def initialize(project)
         @project = project
-        @artifacts = []
-        @references = []
-        @unresolved_references = []
-        @by_id = {}
-        @by_name = Hash.new { |hash, key| hash[key] = [] }
-        @documents = []
-        build
+        reset_state
+        fingerprint = compute_fingerprint
+        json = fingerprint && @project.mpr.read_index_cache(fingerprint)
+        unless json && restore_from_cache(json)
+          reset_state
+          build
+          @project.mpr.write_index_cache(fingerprint, serialize_to_cache) if fingerprint
+        end
       end
 
       def find(name, kind: nil)
@@ -224,6 +251,8 @@ module Mxrb
             kind: kind_for(type), module_name: module_name, name: name.to_s,
             unit_id: raw["UnitID"], path: [], metadata: {
               bson_type: type,
+              documentation: (doc["Documentation"] || doc["documentation"]).to_s,
+              allowed_roles: semantic_array(doc["AllowedModuleRoles"] || doc["AllowedRoles"]),
               excluded: doc["Excluded"] == true,
               mark_as_used: doc["MarkAsUsed"] == true,
               exposed: exposed_document?(doc)
@@ -412,6 +441,10 @@ module Mxrb
         end
       end
 
+      def semantic_array(value)
+        Mxrb::IO::BsonCodec.parse_array(value)[:items].map(&:to_s).freeze
+      end
+
       def domain_entities(doc)
         Mxrb::IO::BsonCodec.parse_array(doc["entities"] || doc["Entities"])[:items]
       end
@@ -421,6 +454,100 @@ module Mxrb
         cross = doc["crossAssociations"] || doc["CrossAssociations"]
         Mxrb::IO::BsonCodec.parse_array(local)[:items] +
           Mxrb::IO::BsonCodec.parse_array(cross)[:items]
+      end
+
+      # ── Index cache ──────────────────────────────────────────────────────────
+
+      def reset_state
+        @artifacts            = []
+        @references           = []
+        @unresolved_references = []
+        @by_id                = {}
+        @by_name              = Hash.new { |hash, key| hash[key] = [] }
+        @documents            = []
+      end
+
+      def compute_fingerprint
+        self.class.fingerprint(@project)
+      end
+
+      def serialize_to_cache
+        JSON.generate(
+          version: CACHE_VERSION,
+          artifacts: @artifacts.map { |a|
+            { id: a.id, qualified_name: a.qualified_name, kind: a.kind.to_s,
+              module_name: a.module_name, name: a.name, unit_id: a.unit_id, path: a.path,
+              metadata: a.metadata.slice(*CACHE_METADATA_KEYS) }
+          },
+          references: @references.map { |r|
+            { source_id: r.source.id, target_id: r.target.id,
+              relation: r.relation.to_s, path: r.path, value: r.value }
+          },
+          unresolved: @unresolved_references.map { |u|
+            { source_id: u.source.id, qualified_name: u.qualified_name,
+              expected_kinds: u.expected_kinds.map(&:to_s), path: u.path, value: u.value }
+          }
+        )
+      end
+
+      def restore_from_cache(json)
+        data = JSON.parse(json, symbolize_names: true)
+        raise TypeError, "unsupported semantic index cache" unless data[:version] == CACHE_VERSION
+
+        data.fetch(:artifacts).each do |a|
+          artifact = Artifact.new(
+            id: a.fetch(:id), qualified_name: a.fetch(:qualified_name),
+            kind: a.fetch(:kind).to_sym,
+            module_name: a[:module_name], name: a[:name], unit_id: a[:unit_id],
+            path: Array(a[:path]), metadata: a.fetch(:metadata, {})
+          )
+          @artifacts << artifact
+          @by_id[artifact.id] = artifact
+          @by_name[artifact.qualified_name] << artifact
+        end
+        hydrate_cached_domain_metadata
+        data.fetch(:references).each do |r|
+          source = @by_id[r[:source_id]]
+          target = @by_id[r[:target_id]]
+          raise TypeError, "invalid cached reference" unless source && target
+
+          @references << Reference.new(source, target, r[:relation].to_sym,
+                                       Array(r[:path]), r[:value])
+        end
+        data.fetch(:unresolved).each do |u|
+          source = @by_id[u[:source_id]]
+          raise TypeError, "invalid cached unresolved reference" unless source
+
+          @unresolved_references << UnresolvedReference.new(
+            source, u[:qualified_name],
+            u[:expected_kinds].map(&:to_sym).freeze,
+            Array(u[:path]), u[:value]
+          )
+        end
+        @artifacts.freeze
+        @references.freeze
+        @unresolved_references.freeze
+        true
+      rescue JSON::ParserError, KeyError, TypeError, NoMethodError
+        false
+      end
+
+      def hydrate_cached_domain_metadata
+        @project.modules.each do |mod|
+          mod.entities.each do |entity|
+            entity_artifact = @by_id.fetch("entity:#{entity.id}")
+            entity_artifact.metadata[:model] = entity
+            entity.attributes.each do |attribute|
+              attribute_artifact = @by_id.fetch("attribute:#{attribute.id}")
+              attribute_artifact.metadata[:model] = attribute
+              attribute_artifact.metadata[:entity] = entity_artifact
+            end
+          end
+          mod.associations.each do |association|
+            artifact = @by_id.fetch("association:#{association.id}")
+            artifact.metadata[:model] = association
+          end
+        end
       end
     end
   end

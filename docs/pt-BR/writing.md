@@ -117,7 +117,11 @@ project.analyze
 ```
 
 Na CLI, use `refs`, `callers`, `callees`, `impact`, `rename`, `remove`, `move`,
-`lint`, `report`, `diff`, `find`, `describe` e `tree`. Refatorações apenas
+`lint`, `report`, `diff`, `find`, `describe` e `tree`. O lint nativo verifica
+acesso de entidades persistentes, papéis de páginas/flows, documentação de
+contratos públicos, alvos de navegação e mapeamentos duplicados de module role.
+Use `mxrb cache status|warm|clear app.mpr` para métricas e manutenção do índice.
+Refatorações apenas
 mostram a prévia, salvo quando `--apply` é informado. A remoção é bloqueada se
 houver referências recebidas ou units filhas; movimentos ficam no mesmo
 módulo e rejeitam ciclos de pastas.

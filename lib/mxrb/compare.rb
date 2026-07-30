@@ -80,11 +80,11 @@ module Mxrb
           doc = project.parse_bson(unit)
           {
             containment: unit["ContainmentName"].to_s,
-            container_root: unit["ContainerID"] == unit["UnitID"],
+            container_root: false,
             type: doc["$Type"].to_s,
             name: doc["Name"] || doc["name"] || ""
           }
-        end.compact.sort_by { [_1[:containment], _1[:container_root] ? 0 : 1, _1[:type], _1[:name]] }
+        end.compact.sort_by { [_1[:containment], 1, _1[:type], _1[:name]] }
       end
 
       def module_summary(mod)
@@ -241,7 +241,7 @@ module Mxrb
           end
           edges.each do |edge|
             target = objects.find { _1["$ID"] == edge["DestinationPointer"] }
-            queue << target if target
+            queue << target
           end
         end
         objects.each do |object|

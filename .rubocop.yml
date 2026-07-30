@@ -1,0 +1,12 @@
+inherit_from: .rubocop_todo.yml
+
+AllCops:
+  NewCops: disable
+  TargetRubyVersion: 4.0
+  Include:
+    - "**/*.rb"
+    - "bin/mxrb"
+    - "script/*"
+  Exclude:
+    - "coverage/**/*"
+    - "vendor/**/*"

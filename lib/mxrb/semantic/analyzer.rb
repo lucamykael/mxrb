@@ -32,6 +32,7 @@ module Mxrb
         diagnostics = cycle_diagnostics(cycles) +
                       unresolved_diagnostics(unresolved) +
                       unreferenced_diagnostics(unreferenced) +
+                      quality_diagnostics +
                       custom_diagnostics(rules)
         Report.new(
           diagnostics.sort_by { [_1.severity == :error ? 0 : 1, _1.message] }.freeze,
@@ -196,6 +197,121 @@ module Mxrb
       def external_reference?(reference)
         target_module = reference.qualified_name.split(".").first
         @index.artifacts.none? { _1.module_name == target_module }
+      end
+
+      def quality_diagnostics
+        security = project_security
+        definition = if @project.respond_to?(:architecture_definition)
+                       @project.architecture_definition || {}
+                     else
+                       {}
+                     end
+        persistent_access_diagnostics(security) +
+          secured_artifact_diagnostics(security) +
+          public_contract_diagnostics(definition) +
+          navigation_diagnostics(definition) +
+          duplicate_role_diagnostics(definition)
+      end
+
+      def project_security
+        return nil unless @project.respond_to?(:all_units) && @project.respond_to?(:parse_bson)
+
+        raw = @project.all_units.find do |unit|
+          @project.parse_bson(unit)["$Type"] == "Security$ProjectSecurity"
+        end
+        raw && @project.parse_bson(raw)
+      end
+
+      def strict_security?(security)
+        security && security["SecurityLevel"] == "CheckEverything"
+      end
+
+      def persistent_access_diagnostics(security)
+        return [] unless strict_security?(security)
+
+        @index.artifacts.filter_map do |artifact|
+          next unless artifact.kind == :entity
+
+          entity = artifact.metadata[:model]
+          next unless entity
+          next unless entity.persistable != false && Array(entity.access_rules).empty?
+
+          Diagnostic.new(
+            :persistent_entity_without_access, :warning,
+            "persistent entity has no access rules: #{artifact.qualified_name}",
+            [artifact].freeze, {}.freeze
+          )
+        end
+      end
+
+      def secured_artifact_diagnostics(security)
+        return [] unless strict_security?(security)
+
+        @index.artifacts.filter_map do |artifact|
+          next unless %i[page microflow nanoflow].include?(artifact.kind)
+          next if artifact.metadata[:excluded] == true
+          next unless Array(artifact.metadata[:allowed_roles]).empty?
+
+          Diagnostic.new(
+            :secured_artifact_without_roles, :warning,
+            "secured #{artifact.kind} has no allowed module roles: #{artifact.qualified_name}",
+            [artifact].freeze, {}.freeze
+          )
+        end
+      end
+
+      def public_contract_diagnostics(definition)
+        Array(definition[:modules]).flat_map do |mod|
+          %i[microflows nanoflows repositories].flat_map do |collection|
+            Array(mod[collection]).filter_map do |item|
+              next unless item[:public] == true
+              next unless item[:documentation].to_s.empty?
+
+              artifact = @index.find("#{mod[:name]}.#{item[:name]}")
+              Diagnostic.new(
+                :public_contract_without_documentation, :warning,
+                "public contract has no documentation: #{mod[:name]}.#{item[:name]}",
+                Array(artifact).freeze, { kind: collection.to_s.sub(/s\z/, "").to_sym }.freeze
+              )
+            end
+          end
+        end
+      end
+
+      def navigation_diagnostics(definition)
+        profiles = Array(definition.dig(:navigation, :profiles))
+        profiles.flat_map do |profile|
+          targets = {
+            home_page: profile[:home_page],
+            sign_in_page: profile[:sign_in_page],
+            menu: profile[:menu]
+          }
+          targets.merge!(profile.fetch(:role_homes, {}).transform_keys { "role_home:#{_1}" })
+          targets.filter_map do |field, target|
+            next if target.to_s.empty? || @index.find(target)
+
+            Diagnostic.new(
+              :missing_navigation_target, :error,
+              "navigation profile #{profile[:name]} references missing #{field}: #{target}",
+              [].freeze, { profile: profile[:name], field:, target: }.freeze
+            )
+          end
+        end
+      end
+
+      def duplicate_role_diagnostics(definition)
+        roles = Array(definition.dig(:security, :user_roles))
+        roles.filter_map do |role|
+          module_roles = Array(role[:module_roles])
+          duplicates = module_roles.tally.select { |_name, count| count > 1 }.keys.sort
+          next if duplicates.empty?
+
+          Diagnostic.new(
+            :duplicate_module_role, :warning,
+            "user role #{role[:name]} maps duplicate module roles: #{duplicates.join(', ')}",
+            [].freeze, { user_role: role[:name], module_roles: duplicates.freeze }.freeze
+          )
+        end
       end
 
       def custom_diagnostics(rules)

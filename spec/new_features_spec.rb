@@ -510,6 +510,197 @@ RSpec.describe "new features" do
 
   # ── MprFile backup/restore ──────────────────────────────────────────────────
 
+  # ── Semantic index cache ─────────────────────────────────────────────────────
+
+  describe "Semantic::Index cache" do
+    it "writes cache on first open and hits it on second open" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) do
+            entity :Other
+            entity :Cached do
+              string :Name
+              association :Other
+            end
+            microflow :CachedFlow do
+              mark_as_used
+              retrieve_objects "Unknown.Missing", as: :missing
+            end
+          end
+        end
+
+        # First open (read-write) — builds and writes cache
+        Mxrb.open(path, readonly: false) do |project|
+          idx = project.semantic_index
+          expect(idx.find("M.Cached", kind: :entity)).not_to be_nil
+          expect(idx.find("M.CachedFlow", kind: :microflow)).not_to be_nil
+        end
+
+        # Verify _MxrbIndexCache table was created
+        db = SQLite3::Database.new(path)
+        db.results_as_hash = true
+        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").map { _1["name"] }
+        expect(tables).to include("_MxrbIndexCache")
+        row = db.get_first_row("SELECT Fingerprint, IndexData FROM _MxrbIndexCache LIMIT 1")
+        expect(row).not_to be_nil
+        expect(row["IndexData"]).to include("Cached")
+        db.close
+
+        # Second open — should hit cache (same result)
+        Mxrb.open(path, readonly: false) do |project|
+          expect(project.mpr).to receive(:read_index_cache).and_call_original
+          idx = project.semantic_index
+          entity = idx.find("M.Cached", kind: :entity)
+          flow = idx.find("M.CachedFlow", kind: :microflow)
+          attribute = idx.find("M.Cached.Name", kind: :attribute)
+          association = idx.find("M.Cached_Other", kind: :association)
+          expect(entity.metadata[:model].name).to eq("Cached")
+          expect(attribute.metadata[:model].name).to eq("Name")
+          expect(attribute.metadata[:entity]).to equal(entity)
+          expect(association.metadata[:model].name).to eq("Cached_Other")
+          expect(association.metadata.values_at(:from, :to))
+            .to contain_exactly("M.Cached", "M.Other")
+          expect(flow.metadata[:mark_as_used]).to be(true)
+          expect(idx.unresolved_references.map(&:qualified_name)).to include("Unknown.Missing")
+          # All artifacts should be present from cache
+          expect(idx.artifacts.map(&:name)).to include("Cached", "CachedFlow")
+        end
+      end
+    end
+
+    it "invalidates cache when project is mutated" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) { entity :E }
+        end
+
+        # Prime the cache
+        Mxrb.open(path, readonly: false) { |p| p.semantic_index }
+
+        # Mutate — should write new cache with updated fingerprint
+        Mxrb.open(path, readonly: false) do |project|
+          project.add_entity!("M", name: :NewEntity)
+          idx = project.semantic_index  # rebuilt after refresh!
+          expect(idx.find("M.NewEntity", kind: :entity)).not_to be_nil
+        end
+
+        # Re-open — cache should reflect mutation
+        Mxrb.open(path, readonly: false) do |project|
+          idx = project.semantic_index
+          expect(idx.find("M.NewEntity", kind: :entity)).not_to be_nil
+        end
+      end
+    end
+
+    it "invalidates cache when unit containment changes without changing contents" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:First) { microflow :Moved }
+          self.module(:Second)
+        end
+
+        Mxrb.open(path, readonly: false) { |project| project.semantic_index }
+
+        Mxrb.open(path, readonly: false) do |project|
+          flow = project.find_artifact("First.Moved", kind: :microflow)
+          second = project.modules.find { _1.name == "Second" }
+          project.mpr.relocate_unit(
+            flow.unit_id, container_uuid: second.id, containment_name: "Microflows"
+          )
+        end
+
+        Mxrb.open(path, readonly: false) do |project|
+          expect(project.find_artifact("First.Moved", kind: :microflow)).to be_nil
+          expect(project.find_artifact("Second.Moved", kind: :microflow)).not_to be_nil
+        end
+      end
+    end
+
+    it "rebuilds and replaces a corrupt cache entry" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) do
+            entity :Recovered
+            microflow :Use do
+              retrieve_objects "M.Recovered", as: :found
+              retrieve_objects "Unknown.Missing", as: :missing
+            end
+          end
+        end
+        Mxrb.open(path, readonly: false) { |project| project.semantic_index }
+
+        db = SQLite3::Database.new(path)
+        valid = JSON.parse(db.get_first_value("SELECT IndexData FROM _MxrbIndexCache"))
+        db.close
+        bad_reference = JSON.parse(JSON.generate(valid))
+        bad_reference.fetch("references").first["source_id"] = "missing"
+        bad_unresolved = JSON.parse(JSON.generate(valid))
+        bad_unresolved.fetch("unresolved").first["source_id"] = "missing"
+        bad_payloads = [
+          "{",
+          JSON.generate(version: 0, artifacts: [], references: [], unresolved: []),
+          JSON.generate(version: 1, artifacts: [], references: [], unresolved: []),
+          JSON.generate(bad_reference),
+          JSON.generate(bad_unresolved)
+        ]
+        bad_payloads.each do |payload|
+          db = SQLite3::Database.new(path)
+          db.execute("UPDATE _MxrbIndexCache SET IndexData = ?", [payload])
+          db.close
+
+          Mxrb.open(path, readonly: false) do |project|
+            expect(project.find_artifact("M.Recovered", kind: :entity)).not_to be_nil
+          end
+        end
+
+        db = SQLite3::Database.new(path)
+        repaired = db.get_first_value("SELECT IndexData FROM _MxrbIndexCache")
+        expect { JSON.parse(repaired) }.not_to raise_error
+        db.close
+      end
+    end
+
+    it "does not write cache when opened read-only" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) { self.module(:M) { entity :E } }
+
+        Mxrb.open(path, readonly: true) do |project|
+          project.semantic_index  # should build but not persist
+        end
+
+        db = SQLite3::Database.new(path)
+        tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").map { _1.first }
+        expect(tables).not_to include("_MxrbIndexCache")
+        db.close
+      end
+    end
+
+    it "cached index supports references_to and impact_of" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) do
+            entity :Product do; string :Name; end
+            microflow :Use do; retrieve_objects "M.Product", as: :items; end
+          end
+        end
+
+        # Prime cache
+        Mxrb.open(path, readonly: false) { |p| p.semantic_index }
+
+        # Use from cache
+        Mxrb.open(path, readonly: false) do |project|
+          idx = project.semantic_index
+          product = idx.find("M.Product", kind: :entity)
+          expect(product).not_to be_nil
+          refs = idx.references_to(product)
+          expect(refs).not_to be_empty
+          impact = project.impact_of("M.Product")
+          expect(impact.artifacts).not_to be_empty
+        end
+      end
+    end
+  end
+
   describe "MprFile#backup! and restore_from!" do
     it "creates a backup and restores it" do
       Dir.mktmpdir do |dir|

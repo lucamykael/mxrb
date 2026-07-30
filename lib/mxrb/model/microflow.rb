@@ -63,7 +63,7 @@ module Mxrb
         pc = doc["MicroflowParameterCollection"] || doc["Parameters"] || {}
         if pc.is_a?(Hash) && (pc["Parameters"] || !pc.empty?)
           list = parse_array(pc["Parameters"] || [])
-          return list unless list.empty? # :nocov:
+          return list unless list.empty?
         end
         # MXRB writer embeds parameters inside ObjectCollection.Objects
         obj_col = doc["ObjectCollection"] || {}

@@ -145,8 +145,8 @@ module Mxrb
         call_id    = call_activity["$ID"]
         entry_flow = all_flows.find { _1["DestinationPointer"] == call_id }
         exit_flow  = all_flows.find { _1["OriginPointer"]      == call_id }
-        raise ArgumentError, "cannot find entry flow for call activity" unless entry_flow # :nocov:
-        raise ArgumentError, "cannot find exit flow for call activity"  unless exit_flow  # :nocov:
+        raise ArgumentError, "cannot find entry flow for call activity" unless entry_flow
+        raise ArgumentError, "cannot find exit flow for call activity"  unless exit_flow
 
         called_raw = @project.raw_unit(called.unit_id)
         called_doc = @project.parse_bson(called_raw)
@@ -157,13 +157,13 @@ module Mxrb
         start_event = called_objects.find { _1["$Type"] == "Microflows$StartEvent" }
         end_event   = called_objects.find { _1["$Type"] == "Microflows$EndEvent"   }
         raise ArgumentError, "#{calling.inspect} has no start event" unless start_event
-        raise ArgumentError, "#{calling.inspect} has no end event"   unless end_event  # :nocov:
+        raise ArgumentError, "#{calling.inspect} has no end event" unless end_event
 
         start_id = start_event["$ID"]
         end_id   = end_event["$ID"]
 
         inner_objects = called_objects.reject { [start_id, end_id].include?(_1["$ID"]) }
-        raise ArgumentError, "#{calling.inspect} has no activities to inline" if inner_objects.empty? # :nocov:
+        raise ArgumentError, "#{calling.inspect} has no activities to inline" if inner_objects.empty?
 
         inner_flows = called_flows.reject do |f|
           [start_id, end_id].include?(f["OriginPointer"]) ||
@@ -172,8 +172,8 @@ module Mxrb
 
         start_to_first = called_flows.find { _1["OriginPointer"]      == start_id }
         last_to_end    = called_flows.find { _1["DestinationPointer"] == end_id   }
-        raise ArgumentError, "cannot resolve first activity in #{calling.inspect}"  unless start_to_first # :nocov:
-        raise ArgumentError, "cannot resolve last activity in #{calling.inspect}"   unless last_to_end    # :nocov:
+        raise ArgumentError, "cannot resolve first activity in #{calling.inspect}" unless start_to_first
+        raise ArgumentError, "cannot resolve last activity in #{calling.inspect}" unless last_to_end
 
         # Synthesise entry/exit flows that point at the actual first/last inlined objects
         synthetic_entry = entry_flow.merge("DestinationPointer" => start_to_first["DestinationPointer"])

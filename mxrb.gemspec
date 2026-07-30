@@ -27,6 +27,7 @@ Gem::Specification.new do |s|
   s.add_dependency "base64",     "~> 0.2"
   s.add_dependency "bigdecimal", "~> 3.1"
 
-  s.add_development_dependency "rspec",   "~> 3.13"
-  s.add_development_dependency "rubocop", "~> 1.65"
+  s.add_development_dependency "benchmark", "~> 0.5"
+  s.add_development_dependency "rspec",     "~> 3.13"
+  s.add_development_dependency "rubocop",   "~> 1.65"
 end

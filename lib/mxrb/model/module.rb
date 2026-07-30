@@ -40,7 +40,7 @@ module Mxrb
       end
 
       def entities    = domain_model&.entities    || []
-      def associations = domain_model&.associations || [] # :nocov:
+      def associations = domain_model&.associations || []
 
       def pages
         @pages ||= document_units

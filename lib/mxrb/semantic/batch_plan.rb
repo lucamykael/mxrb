@@ -43,7 +43,7 @@ module Mxrb
           idx = @plans.index { !_1.applied? }.to_i + 1
           raise BatchError, "batch failed at plan #{idx} of #{@plans.size}: #{error.message}"
         ensure
-          FileUtils.rm_f(backup_path) rescue nil # :nocov:
+          FileUtils.rm_f(backup_path) rescue nil
         end
         self
       end

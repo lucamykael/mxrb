@@ -196,6 +196,8 @@ module Mxrb
         @mendix_version    = "10.18.0"
         @modules           = []
         @security          = nil
+        @navigation        = nil
+        @design_system     = nil
         @native_units_path = nil
         @native_unit_overrides = []
       end
@@ -214,6 +216,18 @@ module Mxrb
         builder = SecurityBuilder.new
         builder.instance_eval(&block) if block
         @security = builder.to_h
+      end
+
+      def navigation(&block)
+        builder = NavigationBuilder.new
+        builder.instance_eval(&block) if block
+        @navigation = builder.to_h
+      end
+
+      def design_system(&block)
+        builder = DesignSystemBuilder.new
+        builder.instance_eval(&block) if block
+        @design_system = builder.to_h
       end
 
       def native_units(path)
@@ -259,6 +273,8 @@ module Mxrb
           version: @mendix_version,
           modules: @modules.map(&:to_h),
           security: @security,
+          navigation: @navigation,
+          design_system: @design_system,
           native_units_path: @native_units_path,
           native_unit_overrides: @native_unit_overrides
         }
@@ -269,6 +285,12 @@ module Mxrb
       def initialize
         @user_roles = []
         @security_level = nil
+        @admin_user_role = nil
+        @demo_users_enabled = nil
+        @guest_access_enabled = nil
+        @guest_user_role = nil
+        @sign_in_microflow = nil
+        @password_policy = nil
       end
 
       # Mendix stores the project security mode as an enum-like string such as
@@ -286,8 +308,96 @@ module Mxrb
         }
       end
 
+      def admin_user_role(name)
+        @admin_user_role = name.to_s
+      end
+
+      def demo_users(enabled = true)
+        @demo_users_enabled = enabled == true
+      end
+
+      def guest_access(enabled = true, role: nil)
+        @guest_access_enabled = enabled == true
+        @guest_user_role = role&.to_s
+      end
+
+      def sign_in_microflow(name)
+        @sign_in_microflow = name&.to_s
+      end
+
+      def password_policy(**options)
+        @password_policy = options.transform_keys(&:to_sym)
+      end
+
       def to_h
-        { user_roles: @user_roles, security_level: @security_level }
+        {
+          user_roles: @user_roles,
+          security_level: @security_level,
+          admin_user_role: @admin_user_role,
+          demo_users_enabled: @demo_users_enabled,
+          guest_access_enabled: @guest_access_enabled,
+          guest_user_role: @guest_user_role,
+          sign_in_microflow: @sign_in_microflow,
+          password_policy: @password_policy
+        }
+      end
+    end
+
+    class NavigationBuilder
+      def initialize
+        @profiles = []
+      end
+
+      def profile(name, home_page:, sign_in_page: nil, menu: nil,
+                  role_homes: {}, offline: false)
+        @profiles << {
+          name: name.to_s,
+          home_page: home_page.to_s,
+          sign_in_page: sign_in_page&.to_s,
+          menu: menu&.to_s,
+          role_homes: role_homes.to_h.transform_keys(&:to_s).transform_values(&:to_s),
+          offline: offline == true
+        }
+      end
+
+      def to_h
+        { profiles: @profiles }
+      end
+    end
+
+    class DesignSystemBuilder
+      TOKEN_KINDS = %i[color spacing radius typography breakpoint].freeze
+
+      def initialize
+        @tokens = []
+        @layouts = []
+        @components = []
+        @accessibility = []
+      end
+
+      TOKEN_KINDS.each do |kind|
+        define_method(kind) do |name, value: nil|
+          @tokens << { kind:, name: name.to_s, value: value&.to_s }
+        end
+      end
+
+      def layout(name)
+        @layouts << name.to_s
+      end
+
+      def component(name)
+        @components << name.to_s
+      end
+
+      def accessibility(rule)
+        @accessibility << rule.to_s
+      end
+
+      def to_h
+        {
+          tokens: @tokens, layouts: @layouts,
+          components: @components, accessibility: @accessibility
+        }
       end
     end
 
@@ -419,8 +529,11 @@ module Mxrb
         microflow(name, kind: :query, public: public, &block)
       end
 
-      def repository(name, implementation: nil, public: false)
-        @repositories << { name: name.to_s, implementation: implementation&.to_s, public: public }
+      def repository(name, implementation: nil, public: false, documentation: "")
+        @repositories << {
+          name: name.to_s, implementation: implementation&.to_s,
+          public: public, documentation: documentation.to_s
+        }
       end
 
       def enumeration(name, &block)

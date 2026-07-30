@@ -52,8 +52,8 @@ module Mxrb
         begin
           @db.execute("UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?",
                       [version_str, version_str])
-        rescue SQLite3::Exception # :nocov:
-          @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str]) # :nocov:
+        rescue SQLite3::Exception
+          @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str])
         end
         @mendix_version = version_str
       end
@@ -239,8 +239,8 @@ module Mxrb
         FileUtils.rm_f(dest_path)
         @db.execute("VACUUM INTO ?", [dest_path])
       rescue SQLite3::Exception
-        @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil # :nocov:
-        FileUtils.cp(@path, dest_path)                        # :nocov:
+        @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil
+        FileUtils.cp(@path, dest_path)
       end
 
       # Restores the database from a backup file, replacing the current contents.
@@ -268,6 +268,83 @@ module Mxrb
       def query(sql, *binds)
         @db.execute(sql, *binds)
       end
+
+      # ── Semantic index cache ──────────────────────────────────────────────────
+
+      # Returns the cached index JSON if the fingerprint matches, nil otherwise.
+      def read_index_cache(fingerprint)
+        return nil unless tables.include?("_MxrbIndexCache")
+
+        @db.get_first_value(
+          "SELECT IndexData FROM _MxrbIndexCache WHERE Fingerprint = ?", [fingerprint]
+        )
+      rescue SQLite3::Exception
+        nil
+      end
+
+      # Persists the index JSON keyed by fingerprint. No-op when read-only or on error.
+      def write_index_cache(fingerprint, json)
+        return if @readonly || json.nil?
+
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbIndexCache (
+            Fingerprint TEXT PRIMARY KEY,
+            IndexData   TEXT NOT NULL
+          )
+        SQL
+        @db.execute(
+          "INSERT INTO _MxrbIndexCache (Fingerprint, IndexData) VALUES (?, ?) " \
+          "ON CONFLICT(Fingerprint) DO UPDATE SET IndexData = excluded.IndexData",
+          [fingerprint, json]
+        )
+        @db.execute(
+          "DELETE FROM _MxrbIndexCache WHERE Fingerprint <> ?", [fingerprint]
+        )
+      rescue SQLite3::Exception
+        nil
+      end
+
+      # Returns cache size and fingerprints without parsing the cached payload.
+      def index_cache_info(current_fingerprint: nil)
+        unless tables.include?("_MxrbIndexCache")
+          return {
+            present: false, entries: 0, bytes: 0,
+            fingerprints: [].freeze, current_fingerprint:,
+            hit: false
+          }.freeze
+        end
+
+        rows = @db.execute(
+          "SELECT Fingerprint, LENGTH(IndexData) FROM _MxrbIndexCache ORDER BY Fingerprint"
+        )
+        fingerprints = rows.map { _1[0].to_s }.freeze
+        {
+          present: !rows.empty?,
+          entries: rows.size,
+          bytes: rows.sum { _1[1].to_i },
+          fingerprints:,
+          current_fingerprint:,
+          hit: current_fingerprint && fingerprints.include?(current_fingerprint)
+        }.freeze
+      rescue SQLite3::Exception
+        {
+          present: false, entries: 0, bytes: 0,
+          fingerprints: [].freeze, current_fingerprint:,
+          hit: false
+        }.freeze
+      end
+
+      # Clears cached semantic data while preserving the cache table.
+      def clear_index_cache!
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        return 0 unless tables.include?("_MxrbIndexCache")
+
+        count = @db.get_first_value("SELECT COUNT(*) FROM _MxrbIndexCache").to_i
+        @db.execute("DELETE FROM _MxrbIndexCache")
+        count
+      end
+
+      # ── Architecture metadata ─────────────────────────────────────────────────
 
       # mxrb-only architecture metadata for concepts without a native Mendix
       # unit (ports/repositories) or bindings awaiting a concrete widget tree.

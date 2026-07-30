@@ -147,7 +147,7 @@ module Mxrb
           raise
         ensure
           FileUtils.rm_rf(staging) if staging && File.exist?(staging)
-          FileUtils.rm_rf(backup) if backup && File.exist?(backup) # :nocov:
+          FileUtils.rm_rf(backup) if backup && File.exist?(backup)
         end
       rescue KeyError, JSON::ParserError => e
         raise MarketplaceError, "invalid module manifest: #{e.message}"
@@ -179,7 +179,7 @@ module Mxrb
 
       def remove_from_lock(module_name)
         lock_path = File.join(@target, ".mxrb", "modules.lock.json")
-        return unless File.file?(lock_path) # :nocov:
+        return unless File.file?(lock_path)
 
         lock = JSON.parse(File.read(lock_path))
         lock.fetch("modules", {}).delete(module_name)
@@ -187,7 +187,7 @@ module Mxrb
         File.write(temporary, JSON.pretty_generate(lock) << "\n")
         File.rename(temporary, lock_path)
       ensure
-        FileUtils.rm_f(temporary) if defined?(temporary) && temporary && File.exist?(temporary) # :nocov:
+        FileUtils.rm_f(temporary) if defined?(temporary) && temporary && File.exist?(temporary)
       end
 
       def local_entry(path)
@@ -200,7 +200,7 @@ module Mxrb
 
         destination = File.join(workspace, "repository")
         command = ["git", "clone", "--depth", "1"]
-        command += ["--branch", entry.ref] if entry.ref # :nocov:
+        command += ["--branch", entry.ref] if entry.ref
         command += [source, destination]
         output, status = Open3.capture2e(*command)
         raise MarketplaceError, "could not fetch #{entry.name}: #{output}" unless status.success?
@@ -309,8 +309,8 @@ module Mxrb
         require_relative "../mxrb/io/mpr_file"
         mpr = IO::MprFile.open(mpr_files.first, readonly: true)
         mpr.mendix_version
-      rescue StandardError # :nocov:
-        nil # :nocov:
+      rescue StandardError
+        nil
       ensure
         mpr&.close
       end
@@ -345,11 +345,11 @@ module Mxrb
 
       def validate_no_dependents!(module_name)
         lock_path = File.join(@target, ".mxrb", "modules.lock.json")
-        return unless File.file?(lock_path) # :nocov:
+        return unless File.file?(lock_path)
 
         lock = JSON.parse(File.read(lock_path))
         package_name = lock.dig("modules", module_name, "package")
-        return unless package_name # :nocov:
+        return unless package_name
 
         dependents = lock.fetch("modules", {}).filter_map do |name, info|
           name if name != module_name && Array(info["dependencies"]).include?(package_name)
@@ -373,7 +373,7 @@ module Mxrb
         File.write(temporary, JSON.pretty_generate(lock) << "\n")
         File.rename(temporary, lock_path)
       ensure
-        FileUtils.rm_f(temporary) if temporary && File.exist?(temporary) # :nocov:
+        FileUtils.rm_f(temporary) if temporary && File.exist?(temporary)
       end
     end
   end
