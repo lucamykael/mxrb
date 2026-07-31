@@ -19,19 +19,29 @@ and compares that result with the current MPR; `check` fails on model drift.
 
 ## Official and community Mendix Marketplace
 
-The official web Marketplace does not expose a complete stable public PAT
-download flow. MXRB therefore keeps three capabilities explicit:
+MXRB uses the documented Mendix Marketplace Content API. Create a PAT with the
+`mx:marketplace-content:read` scope, then authenticate once:
 
 ```sh
-mxrb marketplace search CommunityCommons
-mxrb marketplace pull CommunityCommons
+mxrb marketplace login
+mxrb marketplace search "Community Commons"
+mxrb marketplace show 170
+mxrb marketplace versions 170 --mendix-version 11.12.1
+mxrb marketplace pull 170 --mpr MyApp.mpr
+mxrb marketplace pull 170@3.4.0 --mpr MyApp.mpr
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr MyApp.mpr
-mxrb marketplace pull CommunityCommons --mpr MyApp.mpr
+mxrb marketplace audit --target . --mendix-version 11.12.1
 mxrb marketplace list
 mxrb marketplace verify
-mxrb marketplace login
 ```
+
+Official search includes public content and company-private content visible to
+the PAT owner. Filters include `--private`, `--public`, `--approved`, and
+`--published-since YYYY-MM-DD`. `show` exposes publisher, component type,
+support category, license, privacy, company approval, and latest release.
+`versions` exposes compatibility, release notes, and regular, vulnerable, or
+security-fix status including CVE/CWE identifiers.
 
 With `--mpr`, MXRB reads the package's `package.xml` and embedded
 `project.mpr`, then imports the complete module unit tree directly through
@@ -41,8 +51,13 @@ the package cache plus module identity are recorded in the marketplace
 lockfile. Pure-Ruby imports require package and target model versions to
 match.
 
-`pull` resolves public GitHub releases; `import` accepts a previously downloaded
-MPK/ZIP. Both extract safely, refuse replacement, and lock source, version, and
-SHA-256. `login` stores the PAT outside the project with mode `0600`; it is a
-foundation for future authenticated support and is not currently used by
-`pull`. Ruby packages remain under the separate `mxrb module search/add` flow.
+Official `pull` is the default. It asks the API for the newest release compatible
+with the target MPR, downloads its `downloadURL`, and refuses a release marked
+vulnerable unless `--allow-vulnerable` is explicit. The lock records Content ID,
+Version ID, visibility, approval and security state; `audit` checks it for known
+vulnerabilities and updates. `github:` remains the public fallback, and `import`
+accepts a local MPK/ZIP. `login` validates the PAT before storing it outside the
+project with mode `0600`.
+
+The PAT is sent only to `marketplace-api.mendix.com`; cross-host download
+redirects do not receive it. See the [Mendix Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).

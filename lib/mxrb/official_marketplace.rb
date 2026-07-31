@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'date'
 require 'fileutils'
 require 'json'
 require 'net/http'
@@ -13,6 +14,10 @@ module Mxrb
   # Installer for official/community Mendix packages, separate from Ruby modules.
   module OfficialMarketplace
     Package = Data.define(:name, :version, :source, :download_url, :repository)
+    OfficialPackage = Data.define(
+      :name, :version, :source, :download_url, :repository, :content_id, :version_id,
+      :content_type, :version_type, :security_issues, :private, :company_approved
+    )
     Installation = Data.define(:package, :destination, :sha256)
     ModuleInstallation = Data.define(
       :package, :destination, :sha256, :module_name, :module_id, :units, :files, :archive
@@ -121,30 +126,39 @@ module Mxrb
         @github_token = github_token.to_s
       end
 
-      def json(url)
-        JSON.parse(get(url, accept: 'application/vnd.github+json'))
+      def json(url, authorization: default_authorization)
+        JSON.parse(get(url, accept: 'application/json', authorization:))
       rescue JSON::ParserError => e
         raise MarketplaceError, "invalid JSON response: #{e.message}"
       end
 
-      def download(url, destination)
-        File.binwrite(destination, get(url, accept: 'application/octet-stream'))
+      def download(url, destination, authorization: default_authorization)
+        File.binwrite(destination, get(url, accept: 'application/octet-stream', authorization:))
         destination
       end
 
       private
 
-      def get(url, accept:, redirects: 5)
+      def get(url, accept:, redirects: 5, authorization: default_authorization,
+              authorization_host: nil)
         raise MarketplaceError, 'too many marketplace redirects' if redirects.negative?
 
         uri = https_uri(url)
-        response = perform(uri, accept)
-        return get(URI.join(uri, response['location']).to_s, accept:, redirects: redirects - 1) \
-          if response.is_a?(Net::HTTPRedirection)
+        authorization_host ||= uri.host
+        scoped_authorization = authorization if uri.host == authorization_host
+        response = perform(uri, accept, scoped_authorization)
+        return response_body(response) unless response.is_a?(Net::HTTPRedirection)
 
-        response_body(response)
+        options = { accept:, redirects: redirects - 1, authorization:, authorization_host: }
+        follow_redirect(uri, response, options)
       rescue URI::InvalidURIError, SocketError, SystemCallError => e
         raise MarketplaceError, "marketplace request failed: #{e.message}"
+      end
+
+      def follow_redirect(uri, response, options)
+        get(
+          URI.join(uri, response['location']).to_s, **options
+        )
       end
 
       def https_uri(url)
@@ -153,12 +167,16 @@ module Mxrb
         end
       end
 
-      def perform(uri, accept)
+      def perform(uri, accept, authorization = default_authorization)
         request = Net::HTTP::Get.new(uri)
         request['Accept'] = accept
         request['User-Agent'] = "mxrb/#{Mxrb::VERSION}"
-        request['Authorization'] = "Bearer #{@github_token}" unless @github_token.empty?
+        request['Authorization'] = authorization unless authorization.to_s.empty?
         Net::HTTP.start(uri.host, uri.port, use_ssl: true) { _1.request(request) }
+      end
+
+      def default_authorization
+        "Bearer #{@github_token}" unless @github_token.empty?
       end
 
       def response_body(response)
@@ -171,6 +189,8 @@ module Mxrb
         response.body
       end
     end
+
+    require_relative 'official_marketplace/content_api'
 
     # Resolves known names or explicit github:org/repo releases.
     class GitHubResolver
@@ -250,6 +270,33 @@ module Mxrb
         end
       end
 
+      def pull_official(identifier, version: nil, mendix_version: nil,
+                        allow_vulnerable: false, api: ContentApi.new)
+        mpr = @mpr
+        raise MarketplaceError, 'official Marketplace module pull requires --mpr FILE.mpr' unless mpr
+
+        mendix_version ||= detect_mendix_version(mpr)
+        package = api.resolve(identifier, version:, mendix_version:, allow_vulnerable:)
+        validate_official_package!(package)
+        download_official(package, mpr, api)
+      end
+
+      def download_official(package, mpr, api)
+        Dir.mktmpdir('mxrb-marketplace-') do |dir|
+          archive = api.download(
+            package.version_id, File.join(dir, 'package.mpk'), download_url: package.download_url
+          )
+          import_module(archive, package, mpr)
+        end
+      end
+
+      def validate_official_package!(package)
+        return if package.content_type == 'Module'
+
+        raise MarketplaceError,
+              "Marketplace content #{package.name.inspect} is #{package.content_type}, not a Module"
+      end
+
       def import(path, name: nil, mpr: @mpr)
         source = File.expand_path(path)
         raise MarketplaceError, "package not found: #{source}" unless File.file?(source)
@@ -261,14 +308,17 @@ module Mxrb
 
       private
 
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def detect_mendix_version(mpr)
+        file = IO::MprFile.open(mpr, readonly: true)
+        file.mendix_version
+      ensure
+        file&.close
+      end
+
       def import_module(archive, package, mpr)
         relative_target_path(mpr)
         result = ModulePackageImporter.new(archive, mpr, target_root: @target).import!
-        resolved = Package.new(
-          result.module_name, result.package_version, package.source,
-          package.download_url, package.repository
-        )
+        resolved = resolved_package(package, result)
         sha256 = Digest::SHA256.file(archive).hexdigest
         cached = cache_package(archive, resolved, sha256)
         write_module_lock(resolved, mpr, result, cached, sha256)
@@ -277,7 +327,17 @@ module Mxrb
           result.units, result.files, cached
         )
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def resolved_package(package, result)
+        version = result.package_version.to_s.empty? ? package.version : result.package_version
+        values = { name: result.module_name, version: }
+        return package.with(**values) if package.respond_to?(:content_id)
+
+        Package.new(
+          values.fetch(:name), values.fetch(:version), package.source,
+          package.download_url, package.repository
+        )
+      end
 
       def cache_package(archive, package, sha256)
         version = package.version.to_s.gsub(/[^A-Za-z0-9_.-]/, '_')
@@ -299,8 +359,19 @@ module Mxrb
           'repository' => package.repository, 'sha256' => digest,
           'destination' => relative_target_path(mpr), 'archive' => relative_target_path(cached),
           'module_id' => result.module_id, 'units' => result.units, 'files' => result.files
-        }.compact
+        }.merge(official_lock_metadata(package)).compact
         write_lock_atomically(path, lock)
+      end
+
+      def official_lock_metadata(package)
+        return {} unless package.respond_to?(:content_id)
+
+        {
+          'content_id' => package.content_id, 'version_id' => package.version_id,
+          'content_type' => package.content_type, 'version_type' => package.version_type,
+          'security_issues' => package.security_issues, 'private' => package.private,
+          'company_approved' => package.company_approved
+        }
       end
 
       def relative_target_path(path)
@@ -399,7 +470,7 @@ module Mxrb
           'version' => package.version, 'source' => package.source,
           'repository' => package.repository, 'sha256' => digest,
           'destination' => destination.delete_prefix("#{@target}/")
-        }.compact
+        }.merge(official_lock_metadata(package)).compact
       end
 
       def write_lock_atomically(path, lock)

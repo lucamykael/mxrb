@@ -808,12 +808,24 @@ when "functional-instrument"
 
 when "marketplace"
   marketplace_usage = <<~USAGE
-    Usage: mxrb marketplace <login|search|pull|import|list|verify> ...
+    Usage: mxrb marketplace <login|search|show|versions|pull|import|audit|list|verify> ...
 
+      marketplace login [--no-verify]
+          Store and validate a Mendix PAT with mx:marketplace-content:read.
+      marketplace search NAME [--private|--public] [--approved] [--published-since DATE]
+          Search public and company-private content through the official Content API.
+      marketplace show <NAME|CONTENT_ID>
+          Show publisher, type, support, license, privacy, approval, and latest version.
+      marketplace versions <NAME|CONTENT_ID> [--mendix-version VERSION]
+          List releases, compatibility, notes, and vulnerability/security-fix metadata.
       marketplace import FILE.mpk --mpr FILE.mpr
           Import an official Mendix module package directly with Ruby/SQLite/BSON.
-      marketplace pull NAME --mpr FILE.mpr [--source github]
-          Download a public module release and import it directly into the MPR.
+      marketplace pull NAME[@VERSION] --mpr FILE.mpr [--mendix-version VERSION]
+          Download from the official Marketplace and import directly into the MPR.
+      marketplace pull github:ORG/REPO --mpr FILE.mpr
+          Use a public GitHub release instead of the official Marketplace.
+      marketplace audit [--target DIR] [--mendix-version VERSION]
+          Check locked official components for updates and known vulnerabilities.
       marketplace list|verify [--target DIR]
           Inspect or verify .mxrb/marketplace.lock.json and cached packages.
 
@@ -838,20 +850,76 @@ when "marketplace"
     print 'Mendix PAT: '
     token = ENV['MXRB_MENDIX_PAT'] || $stdin.noecho(&:gets)
     puts
+    Mxrb::OfficialMarketplace::ContentApi.new(pat: token).search(limit: 1) \
+      unless ARGV.delete('--no-verify')
     path = Mxrb::OfficialMarketplace::Credentials.new.save_pat(token)
-    puts "[mxrb] Credentials saved to #{path}"
+    puts "[mxrb] Mendix Marketplace credentials saved to #{path}"
   when 'search'
     query = ARGV.shift or abort 'Usage: mxrb marketplace search <query>'
-    results = Mxrb::OfficialMarketplace::GitHubResolver.new.search(query)
-    results.each { puts "#{_1[:name]}\t#{_1[:repository]}\t#{_1[:description]}" }
+    source = option.call('--source') || 'official'
+    if source == 'github'
+      results = Mxrb::OfficialMarketplace::GitHubResolver.new.search(query)
+      results.each { puts "#{_1[:name]}\t#{_1[:repository]}\t#{_1[:description]}" }
+    else
+      abort "Unknown Marketplace source #{source.inspect}" unless source == 'official'
+
+      private_flag = ARGV.delete('--private')
+      public_flag = ARGV.delete('--public')
+      abort '--private and --public are mutually exclusive' if private_flag && public_flag
+      private_filter = true if private_flag
+      private_filter = false if public_flag
+      approved = true if ARGV.delete('--approved')
+      results = Mxrb::OfficialMarketplace::ContentApi.new.search(
+        name: query, private: private_filter, approved:,
+        published_since: option.call('--published-since'), limit: option.call('--limit') || 10
+      )
+      results.each do |item|
+        latest = item.fetch('latestVersion', {})
+        visibility = item['isPrivate'] ? 'private' : 'public' # rubocop:disable Metrics/BlockNesting
+        puts [item['contentId'], latest['name'], latest['versionNumber'], item['type'],
+              item['publisher'], visibility].join("\t")
+      end
+      puts "[mxrb] #{results.size} official Marketplace result(s)"
+    end
+  when 'show'
+    identifier = ARGV.shift or abort 'Usage: mxrb marketplace show <name|content_id>'
+    puts JSON.pretty_generate(Mxrb::OfficialMarketplace::ContentApi.new.find(identifier))
+  when 'versions'
+    identifier = ARGV.shift or abort 'Usage: mxrb marketplace versions <name|content_id>'
+    api = Mxrb::OfficialMarketplace::ContentApi.new
+    content = api.find(identifier)
+    mendix_version = option.call('--mendix-version')
+    published_since = option.call('--published-since')
+    versions = if mendix_version
+                 api.versions(content.fetch('contentId'), mendix_version:, published_since:)
+               else
+                 api.all_versions(content.fetch('contentId'), published_since:)
+               end
+    versions.each do |entry|
+      issues = Array(entry['vulnerabilities']) + Array(entry['fixedSecurityIssues'])
+      puts [entry['versionId'], entry['versionNumber'], entry['minSupportedMendixVersion'],
+            entry['versionType'], issues.filter_map { _1['code'] }.join(','),
+            entry['publicationDate']].join("\t")
+      puts "  #{entry['releaseNotes']}" unless entry['releaseNotes'].to_s.empty?
+    end
+    puts "[mxrb] #{versions.size} version(s)"
   when 'pull'
     identifier = ARGV.shift or
-      abort 'Usage: mxrb marketplace pull <name|github:org/repo> [--mpr FILE] [--target DIR]'
-    source = option.call('--source') || 'github'
-    abort 'Only the GitHub source is currently resolvable; use marketplace import for local MPK' \
-      unless source == 'github'
+      abort 'Usage: mxrb marketplace pull <name[@version]|github:org/repo> [--mpr FILE]'
+    source = option.call('--source') || (identifier.start_with?('github:') ? 'github' : 'official')
     name, version = identifier.split('@', 2)
-    result = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).pull(name, version:)
+    installer = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:)
+    allow_vulnerable = !ARGV.delete('--allow-vulnerable').nil?
+    result = case source
+             when 'official'
+               installer.pull_official(
+                 name, version:, mendix_version: option.call('--mendix-version'), allow_vulnerable:
+               )
+             when 'github'
+               installer.pull(name, version:)
+             else
+               abort "Unknown Marketplace source #{source.inspect}"
+             end
     puts "[mxrb] Installed #{result.package.name} #{result.package.version}"
     puts "[mxrb] #{result.destination}"
     puts "[mxrb] Imported #{result.units} MPR units without Studio Pro" if result.respond_to?(:units)
@@ -869,6 +937,18 @@ when "marketplace"
     packages = Mxrb::OfficialMarketplace.lock(target).fetch('packages')
     packages.each { |name, entry| puts "#{name}\t#{entry['version']}\t#{entry['source']}" }
     puts "[mxrb] #{packages.size} package(s)"
+  when 'audit'
+    results = Mxrb::OfficialMarketplace::SecurityAuditor.new(target:).audit(
+      mendix_version: option.call('--mendix-version')
+    )
+    results.each do |result|
+      state = result.version_type == 'Unknown' ? 'unknown' : 'vulnerable'
+      state = result.outdated ? 'update' : 'ok' if result.valid
+      puts [state, result.name, result.installed_version, result.latest_version,
+            result.version_type, result.issues.join(',')].join("\t")
+    end
+    puts "[mxrb] #{results.size} official Marketplace package(s) audited"
+    exit 1 unless results.all?(&:valid)
   when 'verify'
     results = Mxrb::OfficialMarketplace.verify(target)
     results.each { |name, result| puts "#{result[:valid] ? 'ok' : 'changed'}\t#{name}" }
@@ -1094,10 +1174,13 @@ else
       module search [query]                Search the Ruby module marketplace
              add <name|directory>          Install a module and write its lockfile
              new <name> [--target DIR]     Scaffold and connect an application module
-      marketplace login                   Store a Mendix PAT with owner-only permissions
-                  search <query>           Search known/open-source Mendix repositories
-                  pull <name|github:o/r>   Download a public release [--mpr FILE]
+      marketplace login                   Validate/store a scoped Mendix PAT
+                  search <name>            Search the official Content API
+                  show <name|content-id>   Show official component metadata
+                  versions <name|id>       List compatibility and security metadata
+                  pull <name|id|github:o/r> Download/import a release [--mpr FILE]
                   import <file.mpk>        Import a module directly [--mpr FILE]
+                  audit                    Check locked updates and vulnerabilities
                   list|verify              Inspect or verify locked official packages
       scaffold list [--target DIR]         List generators and registered scaffolds
                destroy <kind:name>         Remove an unchanged registered scaffold

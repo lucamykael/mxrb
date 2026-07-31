@@ -183,25 +183,27 @@ Esta família será separada de `mxrb module`, que instala módulos Ruby do
 catálogo interno. O formato previsto é:
 
 ```sh
-mxrb marketplace search CommunityCommons
-mxrb marketplace pull CommunityCommons --source github
+mxrb marketplace search "Community Commons"
+mxrb marketplace show 170
+mxrb marketplace versions 170 --mendix-version 11.12.1
+mxrb marketplace pull 170 --mpr App.mpr
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr App.mpr
 mxrb marketplace login
-mxrb marketplace pull CommunityCommons@3.4.0
+mxrb marketplace audit
 ```
 
 Capacidades entregues:
 
-1. GitHub: resolver releases públicas, baixar `.mpk` ou arquivo da release,
+1. API oficial: pesquisar conteúdo público/privado, resolver versões compatíveis,
+   baixar pelo `downloadURL` e auditar vulnerabilidades e atualizações.
+2. GitHub: resolver releases públicas, baixar `.mpk` ou arquivo da release,
    extrair com proteção contra caminhos inseguros e registrar versão, origem e
    checksum em lockfile.
-2. MPK local: ler o MPR interno e importar diretamente todas as units e assets
+3. MPK local: ler o MPR interno e importar diretamente todas as units e assets
    no MPR de destino via Ruby/SQLite/BSON, sem ferramentas Mendix.
-3. PAT Mendix: armazenar o token em `~/.config/mxrb/credentials` com permissões
-   restritas e automatizar resolução/download somente depois de validar os
-   endpoints reais da plataforma autenticada.
+4. PAT Mendix: validar e armazenar com permissões restritas, exigindo o escopo
+   `mx:marketplace-content:read` e enviando-o somente ao host oficial da API.
 
-GitHub não cobre módulos sem fonte ou release pública; MPK local ainda exige o
-download manual. A rota PAT pretende ampliar a cobertura, mas não assumirá uma
-API pública ou contratos de endpoint não confirmados.
+GitHub não cobre módulos sem fonte ou release pública; MPK local continua útil
+como rota offline. A integração oficial usa somente o contrato OpenAPI publicado.

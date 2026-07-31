@@ -313,5 +313,30 @@ RSpec.describe Mxrb::OfficialMarketplace::ModulePackageImporter do
     expect(result.module_name).to eq('MarketplaceModule')
     expect(Mxrb.validate(@target)).to be_valid
   end
+
+  it 'downloads an official Content API release and preserves its identity in the lock' do
+    package = Mxrb::OfficialMarketplace::OfficialPackage.new(
+      'Marketplace Module', '2.3.0', :mendix,
+      'https://marketplace-api.mendix.com/v1/versions/version-id/download',
+      'content:170', 170, 'version-id', 'Module', 'SecurityFix', ['CVE-2026-1'], false, true
+    )
+    api = instance_double(Mxrb::OfficialMarketplace::ContentApi, resolve: package)
+    allow(api).to receive(:download) do |_version_id, destination, **|
+      FileUtils.cp(@package, destination)
+      destination
+    end
+
+    root = File.dirname(@target)
+    installer = Mxrb::OfficialMarketplace::Installer.new(target: root, mpr: @target)
+    result = installer.pull_official('170', api:)
+    expect(result).to have_attributes(module_name: 'MarketplaceModule', units: 4)
+    expect(result.package).to have_attributes(content_id: 170, version_id: 'version-id')
+    lock = Mxrb::OfficialMarketplace.lock(root).dig('packages', 'MarketplaceModule')
+    expect(lock).to include(
+      'content_id' => 170, 'version_id' => 'version-id',
+      'version_type' => 'SecurityFix', 'security_issues' => ['CVE-2026-1']
+    )
+    expect(Mxrb.validate(@target)).to be_valid
+  end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength, Metrics/ParameterLists
