@@ -13,5 +13,7 @@
 - [Ruby-first roadmap](ruby-first-roadmap.md)
 - [Validation matrix](validation-matrix.md)
 - [Writing projects](writing.md)
+- [Project scaffolds](scaffolds.md)
+- [Entity DSL](entity-dsl.md)
 
 [Back to the project README](../../README.md)

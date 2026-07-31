@@ -10,9 +10,9 @@ module Mxrb
     NAME = /\A[A-Za-z][A-Za-z0-9_-]*\z/
     COMPOUND_SUFFIXES = %w[service clinic portal demo api app kit].freeze
 
-    def initialize(name)
+    def initialize(name, subject: :project)
       @dir_name = name.to_s
-      raise ArgumentError, 'project name must be snake_case or PascalCase' unless NAME.match?(@dir_name)
+      raise ArgumentError, "#{subject} name must be snake_case or PascalCase" unless NAME.match?(@dir_name)
 
       @module_name = to_pascal_case(@dir_name)
       @mpr_name = "#{@module_name}.mpr"
@@ -38,14 +38,25 @@ module Mxrb
       write(root, 'Gemfile', gemfile)
       write(root, 'project.rb', project_rb)
       module_root = File.join(root, 'modules', @module_name)
+      write_module_scaffold(module_root)
+    end
+
+    def write_module_scaffold(module_root)
       write(module_root, 'module.rb', module_rb)
       write(File.join(module_root, 'domain'), 'model.rb', model_rb)
+      write(File.join(module_root, 'application'), 'application.rb', application_rb)
+      write(File.join(module_root, 'domain', 'entities'), '.keep', '')
     end
 
     def relative_files
+      module_prefix = File.join('modules', @module_name)
+      ['Gemfile', 'project.rb', *relative_module_files.map { File.join(module_prefix, _1) }]
+    end
+
+    def relative_module_files
       [
-        'Gemfile', 'project.rb', File.join('modules', @module_name, 'module.rb'),
-        File.join('modules', @module_name, 'domain', 'model.rb')
+        'module.rb', File.join('domain', 'model.rb'),
+        File.join('application', 'application.rb'), File.join('domain', 'entities', '.keep')
       ]
     end
 
@@ -54,7 +65,9 @@ module Mxrb
       return parts.map { capitalize(_1) }.join if parts.length > 1
       return capitalize(value) unless value == value.downcase
 
-      compound_parts(value).map { capitalize(_1) }.join
+      stem = value.sub(/\d+\z/, '')
+      digits = value.delete_prefix(stem)
+      compound_parts(stem).map { capitalize(_1) }.join + digits
     end
 
     def compound_parts(value)
@@ -64,9 +77,7 @@ module Mxrb
       [*compound_parts(value.delete_suffix(suffix)), suffix]
     end
 
-    def capitalize(value)
-      value[0].upcase + value[1..]
-    end
+    def capitalize(value) = value[0].upcase + value[1..]
 
     def write(directory, name, content)
       FileUtils.mkdir_p(directory)
@@ -107,6 +118,7 @@ module Mxrb
 
         self.module :#{@module_name} do
           evaluate File.join(__dir__, "domain", "model.rb")
+          evaluate File.join(__dir__, "application", "application.rb")
         end
       RUBY
     end
@@ -115,9 +127,18 @@ module Mxrb
       <<~RUBY
         # frozen_string_literal: true
 
-        # entity :Example do
-        #   string :Name, required: true
-        # end
+        evaluate_dir File.join(__dir__, "enumerations")
+        evaluate_dir File.join(__dir__, "entities")
+      RUBY
+    end
+
+    def application_rb
+      <<~RUBY
+        # frozen_string_literal: true
+
+        evaluate_dir File.join(__dir__, "use_cases")
+        evaluate_dir File.join(__dir__, "validations")
+        evaluate_dir File.join(__dir__, "queries")
       RUBY
     end
   end

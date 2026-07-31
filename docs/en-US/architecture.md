@@ -53,10 +53,23 @@ It must not depend on presentation or infrastructure details.
 
 ```ruby
 entity :Order do
-  string :Number, required: true
+  string :Number, documentation: "Stable order number"
   decimal :Total, default: 0
-  association :Customer
+  association "Sales.Customer", name: "Order_Customer"
 end
+```
+
+Association cardinality follows the Mendix type/owner model:
+
+```ruby
+# 1:N (default): Reference + Default
+association "Sales.Customer", name: "Order_Customer"
+
+# 1:1: Reference + Both
+association "Sales.Profile", name: "Customer_Profile", owner: :Both
+
+# N:N: ReferenceSet + Default
+association "Sales.Tag", name: "Order_Tags", type: :ReferenceSet
 ```
 
 ### `application/`

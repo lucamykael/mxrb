@@ -142,3 +142,16 @@ end
 
 Evaluation files are ordinary Ruby and run with
 `mxrb evaluate app.mpr evaluation.rb`.
+
+## Planned: official Mendix Marketplace
+
+This command family will remain separate from `mxrb module`, which installs
+Ruby modules from the internal catalog. Planned commands include
+`marketplace search`, GitHub-backed `marketplace pull`, local
+`marketplace import FILE.mpk`, and later PAT-backed `marketplace login/pull`.
+
+Delivery order is: public GitHub releases with a provenance/checksum lockfile;
+safe local MPK import; then PAT support after the authenticated platform
+endpoints have been verified. GitHub cannot cover private or unpublished
+modules, local MPK still requires a manual download, and PAT support will not
+assume undocumented endpoint contracts.

@@ -903,6 +903,7 @@ module Mxrb
       else
         { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
       end
+      type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
       previous_value = previous&.dig(value_key)
       value_doc = if previous_value && !attr.key?(:default)
         previous_value
@@ -998,7 +999,7 @@ module Mxrb
         "ParentID" => from_id,
         "ChildID" => to_id,
         "Type" => association.fetch(:type).to_s,
-        "Owner" => "Default",
+        "Owner" => association.fetch(:owner, :Default).to_s,
         "StorageFormat" => association.fetch(:type) == :ReferenceSet ? "Table" : "Column",
         "DeleteBehavior" => previous&.dig("DeleteBehavior") || {
           "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$DeleteBehavior",
