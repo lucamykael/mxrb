@@ -203,6 +203,29 @@ when "generate"
   load File.expand_path(source)
   puts "[mxrb] Generated #{target || 'project from definition'}"
 
+when "widgets"
+  widgets_usage = <<~USAGE
+    Usage: mxrb widgets sync <definition.rb> <file.mpr>
+
+    Generate the project, load schemas from .mpk files in widgets/, and
+    regenerate Data Grid 2, Combo Box, and other pluggable widget properties.
+  USAGE
+  action = ARGV.shift
+  if action.nil? || %w[-h --help help].include?(action)
+    puts widgets_usage
+    exit(action.nil? ? 1 : 0)
+  end
+  abort "Unknown widgets action #{action.inspect}; use sync" unless action == "sync"
+  if %w[-h --help].include?(ARGV.first)
+    puts widgets_usage
+    exit 0
+  end
+  source = ARGV.shift or abort "Usage: mxrb widgets sync <definition.rb> <file.mpr>"
+  target = ARGV.shift or abort "Usage: mxrb widgets sync <definition.rb> <file.mpr>"
+  result = Mxrb::WidgetSynchronizer.new(source, target).sync!
+  puts "[mxrb] Synchronized widget schemas with #{result.mx_path}"
+  puts "[mxrb] Generated #{result.project}"
+
 when "export"
   source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
   output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
@@ -984,6 +1007,7 @@ else
       init       <project_name>           Scaffold a new Ruby-first Mendix project
                  --mxrb-path DIR          Use a local MXRB checkout in the Gemfile
       generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
+      widgets sync <definition.rb> <mpr>  Synchronize pluggable widget schemas
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
       compare    <left.mpr> <right.mpr>   Compare structural MPR snapshots

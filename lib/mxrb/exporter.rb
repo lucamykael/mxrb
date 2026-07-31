@@ -859,6 +859,22 @@ module Mxrb
         return ["#{pad}snippet #{args.join(', ')}"]
       end
 
+      if type == :native_widget
+        return [
+          "#{pad}native_widget #{symbol(widget.fetch(:name))},",
+          "#{child_pad}type: #{ruby(options.fetch(:native_type))},",
+          "#{child_pad}deep_structure: #{native_ruby(options.fetch(:deep_structure), indent + 2)}"
+        ]
+      end
+
+      if type == :pluggable_widget
+        args = [symbol(widget.fetch(:name)), "widget_id: #{ruby(options.fetch(:widget_id))}"]
+        args << "widget_name: #{ruby(options[:widget_name])}" if options[:widget_name]
+        args << "properties: #{native_ruby(options[:properties])}" if options[:properties]
+        args << "class_name: #{ruby(options[:class])}" if options[:class]
+        return ["#{pad}pluggable_widget #{args.join(', ')}"]
+      end
+
       # drop_down
       if type == :drop_down
         args = [symbol(widget.fetch(:name))]
@@ -886,6 +902,10 @@ module Mxrb
       args << "attribute: #{symbol(options[:attribute])}" if options[:attribute]
       args << "caption: #{ruby(options[:caption])}" if options.key?(:caption) && !options[:caption].nil?
       args << "entity: #{ruby(options[:entity])}" if options[:entity]
+      args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
+      if type == :reference_selector && options[:display_attribute]
+        args << "display_attribute: #{ruby(options[:display_attribute])}"
+      end
 
       widget_body = []
       Array(options[:columns]).each do |column|
@@ -897,7 +917,14 @@ module Mxrb
       Array(options[:tabs]).each do |tab|
         tab_args = [symbol(tab.fetch(:name))]
         tab_args << "caption: #{ruby(tab[:caption])}" if tab.key?(:caption) && !tab[:caption].nil?
-        widget_body << "#{child_pad}tab_page #{tab_args.join(', ')}"
+        tab_widgets = Array(tab[:widgets])
+        if tab_widgets.empty?
+          widget_body << "#{child_pad}tab_page #{tab_args.join(', ')}"
+        else
+          widget_body << "#{child_pad}tab_page #{tab_args.join(', ')} do"
+          widget_body.concat(tab_widgets.flat_map { render_widget(_1, indent + 4) })
+          widget_body << "#{child_pad}end"
+        end
       end
 
       if (sb = options[:search_bar])

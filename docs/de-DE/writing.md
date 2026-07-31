@@ -106,9 +106,20 @@ und schreibt Version, Quelle, Ref und SHA-256 nach
 
 ## Seiten, Navigation, Security und MPR v2
 
-Core-Widgets haben kompakte Methoden; importierte Seiten bieten zusätzlich
-`deep_structure({...})`. Menüs und Security sind bearbeitbar. Bei MPR v2
-erzeugt MXRB automatisch `mprcontents/*.mxunit`.
+Core-Widgets haben kompakte Methoden, einschließlich `text_area` und Widgets
+innerhalb einer `tab_page`. Sie verwenden das moderne Forms-Modell von Mendix
+11. `data_grid` erzeugt Data Grid 2; `drop_down` und `reference_selector`
+erzeugen Combo Box Widgets.
+
+Pluggable Widgets benötigen ihre `.mpk`-Pakete im Projektverzeichnis
+`widgets/`. Danach synchronisiert
+`bundle exec mxrb widgets sync project.rb MeineApp.mpr` das versionsabhängige
+Schema und wendet die Ruby-Eigenschaften an. Weitere MPKs lassen sich mit
+`pluggable_widget` deklarieren. Unbekannte importierte Widgets bleiben als
+`native_widget` mit editierbarer `deep_structure` vollständig erhalten.
+Importierte Seiten bieten ebenfalls `deep_structure({...})`. Menüs und
+Security sind bearbeitbar. Bei MPR v2 erzeugt MXRB automatisch
+`mprcontents/*.mxunit`.
 
 ## Semantische Werkzeuge
 
