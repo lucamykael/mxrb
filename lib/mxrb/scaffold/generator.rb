@@ -87,6 +87,20 @@ module Mxrb
         @transaction.write(path, insert_before_closing(source, line, path)) unless source.include?(line)
       end
 
+      def connect_project_security(module_name)
+        path = project_path('project.rb')
+        source = @transaction.content(path)
+        return if source.match?(/^\s*security do\s*$/)
+
+        lines = source.lines
+        version = lines.index { _1.match?(/^\s*mendix_version\s+/) }
+        raise ArgumentError, "#{path}: mendix_version not found" unless version
+
+        block = Templates.render(:project_security, module_name:, name: nil)
+        lines.insert(version + 1, "\n#{block.lines.map { "  #{_1}" }.join}")
+        @transaction.write(path, lines.join)
+      end
+
       def insert_before_closing(source, line, path)
         lines = source.lines
         closing = lines.rindex { _1.strip == 'end' }

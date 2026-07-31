@@ -190,6 +190,17 @@ Or keep JDK, MxBuild and runtime execution inside containers:
 bundle exec mxrb test App.mpr functional_test.rb --docker
 ```
 
+For the Ruby model Runtime, with no Java, `mx`, or `mxbuild`, use:
+
+```sh
+bundle exec mxrb test App.mpr functional_test.rb --native
+```
+
+Native mode currently interprets the core data path (create/change/retrieve,
+commit/delete, variables, decisions, microflow calls, aggregates and logging)
+in a transactional in-memory store. Unsupported Java, REST, UI and connector
+activities fail explicitly and roll back the test case.
+
 Docker mode builds one lightweight builder image per Java family and reuses it
 for compatible Mendix versions. The exact Mendix toolchain is mounted
 read-only because it is version-specific and licensed separately. The source
@@ -202,8 +213,8 @@ Inspect version selection and the planned container mounts without executing:
 bundle exec mxrb test App.mpr functional_test.rb --plan
 ```
 
-`mx check` and `mxbuild --target=portable-app-package` are mandatory gates
-before runtime startup. The process stops at `[MXRB_TEST] DONE`, terminates the
+The Java executor still uses `mxbuild --target=portable-app-package`; the
+native executor does not. Both stop at `[MXRB_TEST] DONE`, terminate the
 runtime and returns a failing exit status if any case failed, compilation
 failed, the suite did not finish or its aggregate timeout expired.
 Use `--json result.json` and/or `--junit result.xml` for CI reports. JUnit is
