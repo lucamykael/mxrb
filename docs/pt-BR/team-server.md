@@ -44,3 +44,10 @@ pós-processamento e metadados de revisão adicionados pelo Studio Pro. O MXRB
 valida estruturalmente cada MPR após clone e pull, mas commits externos ainda
 podem não conter metadados exigidos pelo deploy no Mendix Cloud. O compilador e
 runtime próprios do MXRB não dependem desses metadados de Cloud.
+
+## Aceitação real
+
+O repositório `a9e4af8a-2776-4b10-a471-8c42df8f5f43` foi consultado pela App
+Repository API e clonado por HTTPS. O MXRB validou `MyFirstModule.mpr`, detectou
+a branch `main` e confirmou que o remote permaneceu sem PAT embutido. O arquivo
+temporário usado na aceitação foi destruído ao final.

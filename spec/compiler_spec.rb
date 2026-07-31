@@ -23,7 +23,12 @@ RSpec.describe Mxrb::Compiler do
     {
       'model/model.mdp' => 'compiled-model',
       'model/metadata.json' => JSON.generate(
-        'RuntimeVersion' => runtime_version, 'ProjectName' => 'Clinic', 'JavaVersion' => 21
+        'RuntimeVersion' => runtime_version, 'ProjectName' => 'Clinic', 'JavaVersion' => 21,
+        'ScheduledEvents' => [{ 'Name' => 'Clinic.Cleanup' }],
+        'Constants' => [
+          { 'Name' => 'Clinic.Api-Url', 'DefaultValue' => "a\\\"b\n" },
+          { 'Name' => '', 'DefaultValue' => 'ignored' }
+        ]
       ),
       'model/bundles/project.jar' => 'jar',
       'web/index.html' => '<main>Clinic</main>',
@@ -37,6 +42,26 @@ RSpec.describe Mxrb::Compiler do
       File.binwrite(path, content)
     end
     deployment
+  end
+  # rubocop:enable Metrics/MethodLength
+
+  # rubocop:disable Metrics/MethodLength
+  def create_runtime(root)
+    runtime = File.join(root, 'mendix', 'runtime')
+    {
+      'launcher/runtimelauncher.jar' => 'launcher',
+      'bundles/runtime.jar' => 'runtime',
+      'lib/linux/native.so' => 'native',
+      'pad/bin/start.hbs' => "\xEF\xBB\xBF{{!-- comment --}}\n#!/bin/sh\necho {{DefaultConfig}}\n",
+      'pad/bin/start.bat.hbs' => "echo {{DefaultConfig}}\r\n",
+      'pad/etc/example.conf' => 'example',
+      'pad/etc/variables.conf' => 'variables'
+    }.each do |relative, content|
+      path = File.join(runtime, relative)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.binwrite(path, content)
+    end
+    runtime
   end
   # rubocop:enable Metrics/MethodLength
 
@@ -179,6 +204,88 @@ RSpec.describe Mxrb::Compiler do
       )
       expect(inspect_status).to be_success
       expect(JSON.parse(inspection)).to include('files' => 8)
+    end
+  end
+
+  it 'builds a deterministic executable portable Runtime without external commands' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root)
+      deployment = create_deployment(root)
+      FileUtils.mkdir_p(File.join(deployment, 'run'))
+      File.write(File.join(deployment, 'run', 'component.xml'), '<component/>')
+      runtime = create_runtime(root)
+      first = File.join(root, 'runtime-one.zip')
+      second = File.join(root, 'runtime-two.zip')
+      packager = described_class::PortablePackager.new(
+        mpr, deployment:, mendix_home: File.dirname(runtime)
+      )
+      result = packager.pack(output: first)
+      described_class::PortablePackager.new(
+        mpr, deployment:, mendix_home: runtime
+      ).pack(output: second)
+
+      expect(result.mendix_version).to eq('11.12.1')
+      expect(Digest::SHA256.file(first).hexdigest).to eq(Digest::SHA256.file(second).hexdigest)
+      Zip::File.open(first) do |zip|
+        names = zip.map(&:name)
+        expect(names).to include(
+          'app/model/model.mdp', 'app/run/component.xml',
+          'lib/runtime/launcher/runtimelauncher.jar', 'bin/start',
+          'etc/configurations/Default.conf', 'app/data/database/'
+        )
+        start = zip.read('bin/start')
+        expect(start).to include('#!/bin/sh', 'echo Default')
+        expect(start).not_to include('{{', "\xEF\xBB\xBF")
+        expect(zip.get_entry('bin/start').unix_perms).to eq(0o755)
+        expect(zip.read('etc/StudioPro.conf')).to include(
+          'ScheduledEventExecution = "SPECIFIED"', 'Clinic.Cleanup', 'levels {}'
+        )
+        expect(zip.read('etc/constants/defaults.conf')).to include('"Clinic.Api-Url"', '\\n')
+        expect(zip.read('etc/constants/variables.conf')).to include(
+          '${?CONSTANTS_CLINIC_API_URL}'
+        )
+      end
+      expect(described_class::PortableConfiguration.new({}).files.fetch('etc/StudioPro.conf'))
+        .to include('ScheduledEventExecution = "NONE"')
+    end
+  end
+
+  it 'reports portable package inputs and supports explicit overwrite' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root)
+      runtime = create_runtime(root)
+      missing = described_class::PortablePackager.new(
+        mpr, deployment: File.join(root, 'absent'), mendix_home: runtime
+      )
+      expect { missing.pack(output: File.join(root, 'missing.zip')) }
+        .to raise_error(Mxrb::CompilationError, /deployment directory not found/)
+
+      deployment = create_deployment(root)
+      FileUtils.rm_f(File.join(runtime, 'launcher', 'runtimelauncher.jar'))
+      packager = described_class::PortablePackager.new(mpr, deployment:, mendix_home: runtime)
+      expect { packager.pack(output: File.join(root, 'bad.zip')) }
+        .to raise_error(Mxrb::CompilationError, /Runtime is incomplete.*runtimelauncher/)
+      File.write(File.join(runtime, 'launcher', 'runtimelauncher.jar'), 'launcher')
+      output = File.join(root, 'runtime.zip')
+      packager.pack(output:)
+      expect { packager.pack(output:) }.to raise_error(Mxrb::CompilationError, /already exists/)
+      expect { packager.pack(output:, force: true) }.not_to raise_error
+    end
+  end
+
+  it 'exposes portable packaging through the CLI' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root)
+      create_deployment(root)
+      runtime = create_runtime(root)
+      output = File.join(root, 'runtime.zip')
+      stdout, stderr, status = Open3.capture3(
+        RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'portable', mpr,
+        '--output', output, '--mendix-home', runtime
+      )
+      expect(status).to be_success, stderr
+      expect(stdout).to include('Packed portable Runtime', output)
+      expect(File).to exist(output)
     end
   end
 end

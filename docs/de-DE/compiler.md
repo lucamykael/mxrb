@@ -15,3 +15,12 @@ von Domänenmetadaten, Microflows, Frontend-Bundles, Java-Artefakten und der
 portablen Runtime bleibt als Folgestufe explizit offen. Das von MXRB geschriebene
 VetClinic-MDA wurde von Runtime 11.12.1 akzeptiert, synchronisierte 675
 Datenbankoperationen und lieferte HTTP 200.
+
+`mxrb portable App.mpr --output build/runtime.zip` kombiniert die installierte
+versionsgleiche Runtime, generierte Konfiguration und Konstanten sowie das
+materialisierte Deployment ohne Aufruf von `mx` oder `mxbuild`. Das
+VetClinic-Paket enthielt 4.384 Dateien, synchronisierte 675 Datenbankoperationen
+und lieferte HTTP 200. Strukturelle Funktionstests verwenden jetzt
+`Mxrb.validate`; die Instrumentierung benötigt weiterhin die native
+Materialisierung geänderter Microflows, bevor auch ihr Build `mxbuild` ablösen
+kann.

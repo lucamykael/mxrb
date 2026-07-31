@@ -263,6 +263,29 @@ when "pack"
   puts "[mxrb] SHA-256 #{result.sha256}"
   puts "[mxrb] #{result.path}"
 
+when "portable"
+  path = ARGV.shift or abort "Usage: mxrb portable <file.mpr> --output runtime.zip [options]"
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  output = option.call("--output") || File.join(
+    File.dirname(File.expand_path(path)), "build", "runtime.zip"
+  )
+  deployment = option.call("--deployment")
+  mendix_home = option.call("--mendix-home")
+  force = ARGV.delete("--force") ? true : false
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  result = Mxrb::Compiler::PortablePackager.new(
+    path, deployment:, mendix_home:
+  ).pack(output:, force:)
+  puts "[mxrb] Packed portable Runtime with #{result.files} files for Mendix #{result.mendix_version}"
+  puts "[mxrb] SHA-256 #{result.sha256}"
+  puts "[mxrb] #{result.path}"
+
 when "mda"
   action = ARGV.shift or abort "Usage: mxrb mda <inspect|compare> ..."
   case action
@@ -1312,6 +1335,8 @@ else
       generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
       pack       <file.mpr>                Build an MDA from a materialized deployment
                  --output FILE [--force]   Pure Ruby container writer; never calls mx/mxbuild
+      portable   <file.mpr>                Build an executable portable Runtime ZIP
+                 --output FILE             Uses installed Runtime files; never calls mx/mxbuild
       mda inspect|compare <file.mda>       Inspect or diff MDA contents and metadata
       widgets sync <definition.rb> <mpr>  Synchronize pluggable widget schemas
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby

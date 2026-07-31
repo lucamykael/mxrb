@@ -8,7 +8,7 @@ module Mxrb
       :builder_image, :runtime_image
     ) do
       def available?
-        File.executable?(mx_path) && File.executable?(mxbuild_path)
+        File.executable?(mxbuild_path)
       end
     end
 
