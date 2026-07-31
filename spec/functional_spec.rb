@@ -411,7 +411,7 @@ RSpec.describe Mxrb::Runtime::Executor do
   it "validates the official toolchain and Java home" do
     expect { @executor.send(:validate_environment!) }.not_to raise_error
 
-    missing_plan = @plan.with(mx_path: File.join(@dir, "missing"))
+    missing_plan = @plan.with(mxbuild_path: File.join(@dir, "missing"))
     executor = described_class.new(
       @project, @definition, plan: missing_plan, java_home: @java
     )
@@ -434,33 +434,17 @@ RSpec.describe Mxrb::Runtime::Executor do
     expect(File.read(File.join(root, "project", ".hidden"))).to eq("kept")
   end
 
-  it "accepts warning-only checks and reports malformed or error diagnostics" do
-    report_root = Dir.mktmpdir(dir: @dir)
-    report = File.join(report_root, "mx-check.json")
-    allow(@executor).to receive(:capture).and_return(["ok", Status.new(true)])
-    expect(@executor.send(:check, @project, report_root)).to eq("ok")
-
-    allow(@executor).to receive(:capture).and_return(["warnings", Status.new(false)])
-    File.write(report, JSON.generate([{ "severity" => "warning" }]))
-    expect(@executor.send(:check, @project, report_root)).to eq("warnings")
-
-    File.write(
-      report,
-      JSON.generate([{ "children" => [
-        { "severity" => "error", "Message" => "broken" },
-        { "severity" => "error", "detail" => "fallback" }
-      ] }])
+  it "uses native MXRB validation and reports warnings and errors" do
+    valid = Mxrb::Integrity::Result.new(errors: [], warnings: ["notice"])
+    allow(Mxrb).to receive(:validate).with(@project).and_return(valid)
+    expect(@executor.send(:check, @project, @dir)).to include(
+      "MXRB native validation passed", "warning: notice"
     )
-    expect { @executor.send(:check, @project, report_root) }
-      .to raise_error(Mxrb::FunctionalTestError, /2 error.*broken/)
 
-    File.write(report, "{")
-    expect(@executor.send(:check_errors, report).first).to match(/invalid/)
-    FileUtils.rm_f(report)
-    expect(@executor.send(:check_errors, report)).to eq(
-      ["mx check failed without a diagnostic report"]
-    )
-    expect(@executor.send(:diagnostic_errors, "text")).to eq([])
+    invalid = Mxrb::Integrity::Result.new(errors: ["broken"], warnings: [])
+    allow(Mxrb).to receive(:validate).with(@project).and_return(invalid)
+    expect { @executor.send(:check, @project, @dir) }
+      .to raise_error(Mxrb::FunctionalTestError, /1 error.*broken/)
   end
 
   it "builds and unpacks portable applications with actionable failures" do
@@ -601,7 +585,7 @@ RSpec.describe Mxrb::Runtime::DockerExecutor do
   end
 
   it "reports unavailable toolchains and builder image failures" do
-    missing = @plan.with(mx_path: File.join(@dir, "missing"))
+    missing = @plan.with(mxbuild_path: File.join(@dir, "missing"))
     executor = described_class.new(
       @project, @definition, plan: missing, java_home: nil
     )
@@ -622,7 +606,10 @@ RSpec.describe Mxrb::Runtime::DockerExecutor do
     package = @executor.send(:build, @project, @dir)
     expect(package).to eq(File.join(@dir, "runtime.zip"))
     expect(@executor.send(:build_output, package)).to eq("built")
-    expect(@executor.send(:check, @project, @dir)).to include("Docker")
+    allow(Mxrb).to receive(:validate).and_return(
+      Mxrb::Integrity::Result.new(errors: [], warnings: [])
+    )
+    expect(@executor.send(:check, @project, @dir)).to include("native validation")
 
     allow(@executor).to receive(:capture)
       .and_return(["bad Docker build", DockerStatus.new(false)])

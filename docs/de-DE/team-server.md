@@ -20,3 +20,8 @@ Lesen benötigt `mx:modelrepository:repo:read`, Push zusätzlich
 gesamte Studio-Pro-Nachbearbeitung und Revisionsmetadaten. MXRB validiert
 MPR-Dateien nach Clone und Pull, kann aber keine Mendix-Cloud-Revisionsmetadaten
 erzeugen.
+
+Das Repository `a9e4af8a-2776-4b10-a471-8c42df8f5f43` wurde über die App
+Repository API abgefragt und per HTTPS geklont. MXRB validierte
+`MyFirstModule.mpr`, erkannte `main` und bestätigte eine Remote-URL ohne PAT.
+Die temporäre Zugangsdaten-Datei wurde anschließend zerstört.

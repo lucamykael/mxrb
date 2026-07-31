@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require "json"
 require "open3"
 require "tmpdir"
 
@@ -68,43 +67,14 @@ module Mxrb
         File.join(destination, File.basename(@project_path))
       end
 
-      def check(project, root)
-        report = File.join(root, "mx-check.json")
-        output, status = capture(
-          @plan.mx_path, "check", project, "--warnings", "--json", report
-        )
-        return output if status.success?
-
-        errors = check_errors(report)
-        return output if errors.empty?
-
-        raise FunctionalTestError,
-              "mx check found #{errors.size} error(s): #{errors.first}"
-      end
-
-      def check_errors(report)
-        return ["mx check failed without a diagnostic report"] unless File.file?(report)
-
-        documents = JSON.parse(File.read(report))
-        Array(documents).flat_map { diagnostic_errors(_1) }
-      rescue JSON::ParserError => e
-        ["invalid mx check report: #{e.message}"]
-      end
-
-      def diagnostic_errors(value)
-        case value
-        when Array
-          value.flat_map { diagnostic_errors(_1) }
-        when Hash
-          own = value["severity"].to_s.casecmp?("error") ? [diagnostic_message(value)] : []
-          own + value.values.flat_map { diagnostic_errors(_1) }
-        else
-          []
+      def check(project, _root)
+        result = Mxrb.validate(project)
+        unless result.valid?
+          raise FunctionalTestError,
+                "MXRB validation found #{result.errors.size} error(s): #{result.errors.first}"
         end
-      end
 
-      def diagnostic_message(diagnostic)
-        diagnostic["message"] || diagnostic["Message"] || diagnostic.inspect
+        (["MXRB native validation passed"] + result.warnings.map { "warning: #{_1}" }).join("\n")
       end
 
       def build(project, root)

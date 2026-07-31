@@ -36,6 +36,23 @@ abaixo esteja concluída.
 Os adapters atuais reconhecem Mendix 9.x, 10.x e 11.x. A versão de
 `model/metadata.json` deve corresponder exatamente à versão do MPR.
 
+## Pacote portátil sem mxbuild
+
+```bash
+mxrb portable Clinic.mpr --output build/runtime.zip
+```
+
+O comando combina o deployment materializado com a distribuição instalada da
+mesma versão do Runtime, gera scripts e configurações, constantes e diretórios
+de dados, e escreve o ZIP deterministicamente. Ele não executa `mx` nem
+`mxbuild`. No VetClinic, o pacote de 4.384 arquivos iniciou o Runtime 11.12.1,
+sincronizou 675 operações de banco e respondeu HTTP 200.
+
+O gate estrutural dos testes funcionais também usa `Mxrb.validate`; a chamada
+separada a `mx check` foi removida. A instrumentação funcional altera
+microflows, portanto ainda depende da futura materialização nativa desses
+artefatos antes que seu build possa abandonar `mxbuild`.
+
 ## Estágios seguintes
 
 O container MDA não é o compilador completo. Os artefatos abaixo ainda precisam
