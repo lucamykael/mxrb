@@ -10,6 +10,7 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - leitura e escrita profunda de MPR v1/v2;
 - exportação de projetos para Ruby editável;
 - geração idempotente por DSL Ruby;
+- scaffold de projeto novo com módulo principal em PascalCase;
 - edição profunda em Ruby de toda unit nativa, com baseline sem perdas;
 - comparação, diff semântico, referências e análise de impacto;
 - renomeação segura com prévia;
@@ -18,6 +19,7 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - lint e avaliações executáveis de modelo;
 - descoberta de OQL nativo e visão SQL lógica somente quando o projeto contém OQL;
 - PostgreSQL isolado e sincronizado pelo Runtime para consultas SQL diretas;
+- análise de planos PostgreSQL/SQL Server e workload cumulativo PostgreSQL;
 - testes funcionais de microflows localmente ou em Docker.
 - busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
 
@@ -32,6 +34,7 @@ local precisa do Java compatível; o modo Docker fornece JDK e Runtime.
 
 ```sh
 bundle install
+bundle exec mxrb init vet_clinic
 bundle exec mxrb validate App.mpr
 bundle exec mxrb export App.mpr app-ruby
 bundle exec mxrb compare original.mpr reconstruido.mpr

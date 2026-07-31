@@ -68,6 +68,58 @@ bundle exec mxrb analyze --oql "SELECT * FROM Sales.Order"
 bundle exec mxrb analyze --sql "SELECT * FROM sales$order" --json
 ```
 
+## Plano real e performance do banco
+
+A análise estática não prova qual caminho o otimizador escolherá. No workspace
+PostgreSQL materializado, o MXRB também consulta o planner real em JSON e cruza
+as relações do plano com `pg_indexes`:
+
+```sh
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM \"sales$order\" WHERE status = 'Open'"
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM \"sales$order\" WHERE status = 'Open'" --analyze --json
+```
+
+O modo padrão usa `EXPLAIN` e não executa a consulta. `--analyze` é explícito
+porque usa `EXPLAIN ANALYZE`; a consulta é executada com o papel read-only e
+inclui tempos e buffers. O relatório distingue scans sequenciais pequenos, que
+podem ser ótimos, de scans grandes; também sinaliza muitas linhas descartadas
+pelo filtro, estimativa de cardinalidade divergente, nested loops volumosos e
+sorts que foram para disco. Índices existentes são mostrados como evidência,
+mas o MXRB não inventa `CREATE INDEX` sem conhecer seletividade e workload.
+
+O workload cumulativo do PostgreSQL também pode ser inspecionado:
+
+```sh
+bundle exec mxrb db workload Shop.mpr --limit 50
+bundle exec mxrb db workload Shop.mpr --limit 50 --json
+```
+
+O workspace habilita `pg_stat_statements` e `track_io_timing`. O relatório
+ordena fingerprints por custo acumulado e analisa latência média, cache hit,
+I/O, blocos temporários e linhas por chamada. Estatísticas de tabelas revelam
+pressão de scans sequenciais; índices não únicos grandes e sem scans observados
+também são sinalizados. Como essas métricas são cumulativas desde o reset, uma
+remoção de índice nunca é sugerida sem confirmar janela e workload reais.
+
+Para um deployment SQL Server, a conexão é explícita e usa `sqlcmd`:
+
+```sh
+export MXRB_SQLSERVER_PASSWORD='segredo'
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM dbo.[Order] WHERE Status = 'Open'" \
+  --engine sql_server --server db.example:1433 \
+  --database Shop --user mxrb_analyst --json
+```
+
+O modo estimado usa `SHOWPLAN_XML`; `--analyze` usa `STATISTICS XML` e executa
+somente um `SELECT`/`WITH`. O parser detecta table/clustered scans grandes,
+nested loops volumosos, spills para tempdb, divergência de cardinalidade e
+hints de missing index. Esses hints permanecem hipóteses do otimizador, não
+DDL automático. A senha vai em `SQLCMDPASSWORD`, nunca em argv. O engine não é
+inferido do MPR porque pertence à configuração do deployment.
+
 ## PostgreSQL local materializado
 
 O MPR contém o modelo da aplicação, não um snapshot dos dados. O Runtime Mendix
@@ -127,11 +179,17 @@ Ela remove apenas recursos com o rótulo de propriedade correspondente do MXRB.
   repositório e com modo `0600`.
 - `db sql`, `db shell` e `db url` usam `mxrb_reader`, cujas transações e
   configuração do papel são somente leitura.
+- `mxrb_reader` recebe `pg_read_all_stats` no workspace isolado para correlacionar
+  fingerprints do Runtime; isso não concede escrita em dados da aplicação.
 - `--write` seleciona explicitamente o papel proprietário do Runtime. Escritas
   diretas podem violar invariantes Mendix e devem ser excepcionais.
-- O MXRB nunca conecta esse fluxo a um banco remoto já existente.
+- O workspace PostgreSQL nunca aponta para banco remoto existente. A análise
+  SQL Server é uma conexão de deployment separada e explícita; use um login
+  somente leitura com permissão de SHOWPLAN. A senha fica em variável de
+  ambiente e keywords de mutação são rejeitadas, inclusive em CTEs.
 
 O toolchain Mendix exato e o daemon Docker precisam estar disponíveis.
+Para planos SQL Server, `sqlcmd` precisa estar instalado.
 Sincronizações de esquema podem alterar ou rejeitar dados existentes quando o
 modelo muda; faça backup de volumes locais valiosos antes de migrações de risco.
 

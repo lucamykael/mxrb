@@ -5,6 +5,22 @@
 `mxrb generate` wertet Ruby aus und erstellt oder aktualisiert ein MPR
 idempotent anhand stabiler Mendix-Namen.
 
+Ein leeres Verzeichnis kann direkt initialisiert werden:
+
+```sh
+mxrb init vet_clinic
+cd vet_clinic
+bundle install
+bundle exec mxrb generate project.rb
+bundle exec mxrb validate VetClinic.mpr
+```
+
+`init` akzeptiert snake_case oder PascalCase und erstellt `Gemfile`,
+`project.rb` sowie das Hauptmodul unter `modules/VetClinic`. Das Scaffold
+enthält nur Anwendungscode: `System` ist im Runtime implizit, Administration
+und Atlas sind Marketplace-Module. Bei einem vorhandenen Verzeichnis bricht
+der Befehl ohne Änderungen ab.
+
 ```ruby
 Mxrb.define("Shop.mpr") do
   mendix_version "11.12.1"

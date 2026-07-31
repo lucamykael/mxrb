@@ -37,8 +37,7 @@ module Mxrb
         validate!
         prepare_state
         refresh_runtime_package(force_build)
-        ensure_network!
-        ensure_database!
+        prepare_database!
         configure_reader!
         restart_runtime!
         wait_for_runtime!
@@ -90,16 +89,8 @@ module Mxrb
       end
       # rubocop:enable Metrics/MethodLength
 
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       def query_rows(sql)
-        source = sql.to_s
-        raise ArgumentError, 'SQL contains a NUL byte' if source.include?("\0")
-
-        statement = source.strip
-        raise ArgumentError, 'SQL must not be empty' if statement.empty?
-        unless statement.match?(/\A(?:SELECT|WITH)\b/i) && !statement.include?(';')
-          raise ArgumentError, 'online queries must be one read-only SELECT or WITH statement'
-        end
+        statement = read_only_statement(sql)
 
         configure_reader!
         output = run!(
@@ -110,7 +101,29 @@ module Mxrb
         )
         CSV.parse(output, headers: true).map(&:to_h).freeze
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      # Uses PostgreSQL's machine-readable planner output. ANALYZE is opt-in
+      # because it executes the SELECT, although the analyst role remains in a
+      # read-only transaction and cannot mutate application data.
+      def explain(sql, analyze: false)
+        statement = read_only_statement(sql)
+        configure_reader!
+        payload = JSON.parse(run_explain(statement, analyze).strip)
+        Oql::PlanAnalyzer.new(indexes: index_catalog).analyze(payload, analyzed: analyze)
+      rescue JSON::ParserError => e
+        raise ToolchainError, "PostgreSQL returned invalid EXPLAIN JSON: #{e.message}"
+      end
+
+      def workload(limit: 20)
+        maximum = Integer(limit)
+        raise ArgumentError, 'workload limit must be between 1 and 1000' unless (1..1000).cover?(maximum)
+
+        Oql::WorkloadAnalyzer.new.analyze(
+          query_rows: workload_queries(maximum),
+          table_rows: workload_tables,
+          index_rows: workload_indexes
+        )
+      end
 
       def shell_command(write: false)
         role = write ? OWNER : READER
@@ -126,6 +139,49 @@ module Mxrb
       end
 
       private
+
+      def prepare_database!
+        ensure_network!
+        ensure_database!
+        configure_monitoring!
+      end
+
+      def run_explain(statement, analyze)
+        run!(
+          'docker', 'exec', database_container,
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
+          '--username', READER, '--dbname', DATABASE, '--tuples-only', '--no-align', '--quiet',
+          '--command', explain_sql(statement, analyze)
+        )
+      end
+
+      def read_only_statement(sql)
+        source = sql.to_s
+        raise ArgumentError, 'SQL contains a NUL byte' if source.include?("\0")
+
+        statement = source.strip
+        raise ArgumentError, 'SQL must not be empty' if statement.empty?
+        unless statement.match?(/\A(?:SELECT|WITH)\b/i) && !statement.include?(';')
+          raise ArgumentError, 'online queries must be one read-only SELECT or WITH statement'
+        end
+
+        statement
+      end
+
+      def explain_sql(statement, analyze)
+        options = ['FORMAT JSON', 'COSTS TRUE', 'VERBOSE TRUE', 'SETTINGS TRUE']
+        options.concat(['ANALYZE TRUE', 'BUFFERS TRUE', 'TIMING TRUE']) if analyze
+        "EXPLAIN (#{options.join(', ')}) #{statement}"
+      end
+
+      def index_catalog
+        query_rows(<<~SQL)
+          SELECT schemaname, tablename, indexname, indexdef
+          FROM pg_indexes
+          WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+          ORDER BY schemaname, tablename, indexname
+        SQL
+      end
 
       def refresh_runtime_package(force)
         return unless force || stale_runtime?
@@ -222,9 +278,21 @@ module Mxrb
           create_database_container!
         end
         wait_for_database!
+        ensure_application_database!
       end
 
-      def create_database_container!
+      def ensure_application_database!
+        exists = run!(
+          'docker', 'exec', database_container, 'psql', '--no-psqlrc', '--tuples-only',
+          '--no-align', '--username', OWNER, '--dbname', 'postgres', '--command',
+          "SELECT 1 FROM pg_database WHERE datname = '#{DATABASE}'"
+        ).strip == '1'
+        return if exists
+
+        run!('docker', 'exec', database_container, 'createdb', '--username', OWNER, DATABASE)
+      end
+
+      def create_database_container! # rubocop:disable Metrics/MethodLength
         ensure_database_volume!
         run!(
           'docker', 'run', '-d', '--name', database_container,
@@ -233,7 +301,9 @@ module Mxrb
           '-p', "127.0.0.1:#{@port}:5432",
           '-e', "POSTGRES_DB=#{DATABASE}", '-e', "POSTGRES_USER=#{OWNER}",
           '-e', "POSTGRES_PASSWORD=#{credentials.fetch('owner_password')}",
-          POSTGRES_IMAGE
+          POSTGRES_IMAGE, 'postgres',
+          '-c', 'shared_preload_libraries=pg_stat_statements',
+          '-c', 'track_io_timing=on'
         )
       end
 
@@ -257,6 +327,78 @@ module Mxrb
         raise ToolchainError, 'PostgreSQL did not become ready'
       end
 
+      def configure_monitoring!
+        ensure_statistics_preload!
+        ensure_io_timing!
+        database_owner_sql('CREATE EXTENSION IF NOT EXISTS pg_stat_statements')
+      end
+
+      def ensure_statistics_preload!
+        libraries = database_scalar('SHOW shared_preload_libraries').split(',').map(&:strip)
+        return if libraries.include?('pg_stat_statements')
+
+        value = (libraries.reject(&:empty?) + ['pg_stat_statements']).join(',')
+        database_owner_sql("ALTER SYSTEM SET shared_preload_libraries = '#{value}'")
+        run!('docker', 'restart', database_container)
+        wait_for_database!
+      end
+
+      def ensure_io_timing!
+        return if database_scalar('SHOW track_io_timing') == 'on'
+
+        database_owner_sql('ALTER SYSTEM SET track_io_timing = on')
+        database_owner_sql('SELECT pg_reload_conf()')
+      end
+
+      def database_scalar(sql)
+        run!(
+          'docker', 'exec', database_container, 'psql', '--no-psqlrc', '--tuples-only',
+          '--no-align', '--username', OWNER, '--dbname', DATABASE, '--command', sql
+        ).strip
+      end
+
+      def database_owner_sql(sql)
+        run!(
+          'docker', 'exec', database_container, 'psql', '--no-psqlrc',
+          '--set', 'ON_ERROR_STOP=1', '--username', OWNER, '--dbname', DATABASE,
+          '--command', sql
+        )
+      end
+
+      def workload_queries(limit) # rubocop:disable Metrics/MethodLength
+        query_rows(<<~SQL)
+          SELECT queryid::text, calls, total_exec_time, mean_exec_time, rows,
+                 shared_blks_hit, shared_blks_read, temp_blks_written,
+                 blk_read_time, blk_write_time, query
+          FROM pg_stat_statements
+          WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+            AND query NOT ILIKE '%pg_stat_statements%'
+            AND query ~* '^[[:space:]]*(SELECT|WITH)([[:space:]]|$)'
+          ORDER BY total_exec_time DESC
+          LIMIT #{limit}
+        SQL
+      end
+
+      def workload_tables
+        query_rows(<<~SQL)
+          SELECT schemaname, relname, seq_scan, seq_tup_read, idx_scan, n_live_tup,
+                 last_analyze, last_autoanalyze
+          FROM pg_stat_user_tables
+          ORDER BY seq_tup_read DESC
+        SQL
+      end
+
+      def workload_indexes
+        query_rows(<<~SQL)
+          SELECT s.schemaname, s.relname, s.indexrelname, s.idx_scan,
+                 s.idx_tup_read, s.idx_tup_fetch, pg_relation_size(s.indexrelid) AS index_bytes,
+                 i.indisunique, i.indisprimary
+          FROM pg_stat_user_indexes s
+          JOIN pg_index i ON i.indexrelid = s.indexrelid
+          ORDER BY index_bytes DESC
+        SQL
+      end
+
       def wait_for_runtime!
         120.times do
           output, status = run_command('docker', 'logs', runtime_container)
@@ -272,8 +414,12 @@ module Mxrb
       # The grants form one atomic security policy and intentionally stay together.
       # rubocop:disable Metrics/MethodLength
       def configure_reader!
+        return if @reader_configured
+
         password = credentials.fetch('reader_password')
         sql = <<~SQL
+          BEGIN;
+          SELECT pg_advisory_xact_lock(hashtext('mxrb.configure_reader'));
           DO $mxrb$ BEGIN
             CREATE ROLE #{READER} LOGIN PASSWORD '#{password}';
           EXCEPTION WHEN duplicate_object THEN
@@ -284,16 +430,19 @@ module Mxrb
           GRANT USAGE ON SCHEMA public TO #{READER};
           GRANT SELECT ON ALL TABLES IN SCHEMA public TO #{READER};
           GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO #{READER};
+          GRANT pg_read_all_stats TO #{READER};
           ALTER DEFAULT PRIVILEGES FOR ROLE #{OWNER} IN SCHEMA public
             GRANT SELECT ON TABLES TO #{READER};
           ALTER DEFAULT PRIVILEGES FOR ROLE #{OWNER} IN SCHEMA public
             GRANT SELECT ON SEQUENCES TO #{READER};
+          COMMIT;
         SQL
         run!(
           'docker', 'exec', database_container,
           'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
           '--username', OWNER, '--dbname', DATABASE, '--command', sql
         )
+        @reader_configured = true
       end
       # rubocop:enable Metrics/MethodLength
 

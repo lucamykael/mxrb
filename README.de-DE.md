@@ -10,6 +10,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - tiefes Lesen und Schreiben von MPR v1/v2;
 - Export in bearbeitbare Ruby-Projekte;
 - idempotente Generierung mit Ruby-DSL;
+- Scaffold für neue Projekte mit PascalCase-Hauptmodul;
 - tiefe Ruby-Bearbeitung jeder nativen Unit mit verlustfreier Baseline;
 - Vergleich, semantischer Diff, Referenzen und Impact-Analyse;
 - sichere Umbenennung mit Vorschau;
@@ -18,6 +19,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - Lint und ausführbare Modellbewertungen;
 - Erkennung von nativem OQL und logische SQL-Ansicht nur bei vorhandenem OQL;
 - isolierte, durch das Runtime synchronisierte PostgreSQL für direkte SQL-Abfragen;
+- Analyse von PostgreSQL-/SQL-Server-Plänen und kumulativem PostgreSQL-Workload;
 - funktionale Microflow-Tests lokal oder in Docker.
 - Suche und Installation wiederverwendbarer Ruby-Module mit SHA-256-Lock.
 

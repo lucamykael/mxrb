@@ -70,6 +70,62 @@ bundle exec mxrb analyze --oql "SELECT * FROM Sales.Order"
 bundle exec mxrb analyze --sql "SELECT * FROM sales$order" --json
 ```
 
+## Reale Pläne und Datenbank-Performance
+
+Eine statische Analyse kann nicht beweisen, welchen Pfad der Optimierer wählt.
+Im materialisierten PostgreSQL-Workspace fragt MXRB deshalb auch den realen
+Planner im JSON-Format ab und verknüpft Planrelationen mit `pg_indexes`:
+
+```sh
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM \"sales$order\" WHERE status = 'Open'"
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM \"sales$order\" WHERE status = 'Open'" --analyze --json
+```
+
+Der Standardmodus verwendet `EXPLAIN` und führt die Abfrage nicht aus.
+`--analyze` ist explizit, weil es `EXPLAIN ANALYZE` verwendet; die Abfrage läuft
+mit der schreibgeschützten Rolle und liefert Zeiten und Buffer. Der Bericht
+unterscheidet kleine, möglicherweise optimale sequenzielle Scans von großen
+Scans. Außerdem meldet er viele verworfene Filterzeilen, abweichende
+Kardinalitätsschätzungen, Nested Loops mit hohem Volumen und Sortierungen auf
+Festplatte. Vorhandene Indizes dienen als Evidenz; MXRB erfindet ohne
+Selektivitäts- und Workload-Daten keine `CREATE INDEX`-Anweisungen.
+
+Auch der kumulative PostgreSQL-Workload kann untersucht werden:
+
+```sh
+bundle exec mxrb db workload Shop.mpr --limit 50
+bundle exec mxrb db workload Shop.mpr --limit 50 --json
+```
+
+Der Workspace aktiviert `pg_stat_statements` und `track_io_timing`. Der Bericht
+ordnet Query-Fingerprints nach kumulativem Aufwand und analysiert mittlere
+Latenz, Cache-Hits, I/O, temporäre Blöcke und Zeilen pro Aufruf.
+Tabellenstatistiken zeigen sequenziellen Scan-Druck; große nicht eindeutige
+Indizes ohne beobachtete Scans werden ebenfalls gemeldet. Da diese Werte seit
+dem Statistik-Reset kumulativ sind, wird eine Indexentfernung nie ohne Prüfung
+des realen Zeitfensters und Workloads empfohlen.
+
+Für ein SQL-Server-Deployment wird die Verbindung explizit mit `sqlcmd`
+angegeben:
+
+```sh
+export MXRB_SQLSERVER_PASSWORD='geheim'
+bundle exec mxrb db explain Shop.mpr \
+  "SELECT * FROM dbo.[Order] WHERE Status = 'Open'" \
+  --engine sql_server --server db.example:1433 \
+  --database Shop --user mxrb_analyst --json
+```
+
+Der geschätzte Modus nutzt `SHOWPLAN_XML`; `--analyze` verwendet `STATISTICS
+XML` und führt nur ein `SELECT`/`WITH` aus. Der Parser erkennt große Table- und
+Clustered-Scans, Nested Loops mit hohem Volumen, tempdb-Spills,
+Kardinalitätsabweichungen und Missing-Index-Hinweise. Diese Hinweise bleiben
+Optimierer-Hypothesen und werden nicht automatisch als DDL ausgeführt. Das
+Passwort wird über `SQLCMDPASSWORD` und nie per argv übertragen. Der Engine-Typ
+wird nicht aus der MPR abgeleitet, da er zur Deployment-Konfiguration gehört.
+
 ## Materialisierte lokale PostgreSQL-Datenbank
 
 Eine MPR enthält das Anwendungsmodell, nicht einen Snapshot der
@@ -132,13 +188,20 @@ Entfernt werden nur Ressourcen mit dem passenden MXRB-Eigentümer-Label.
   XDG-Zustandsverzeichnis und haben den Modus `0600`.
 - `db sql`, `db shell` und `db url` verwenden `mxrb_reader`; Rolle und
   Transaktionen sind standardmäßig schreibgeschützt.
+- `mxrb_reader` erhält im isolierten Workspace `pg_read_all_stats`, damit
+  Runtime-Fingerprints korreliert werden können; dies erlaubt keine Datenänderung.
 - `--write` wählt ausdrücklich die Eigentümerrolle des Runtime. Direkte
   Schreibzugriffe können Mendix-Invarianten verletzen und sollten Ausnahmen
   bleiben.
-- MXRB verbindet diesen Ablauf nie mit einer vorhandenen entfernten Datenbank.
+- Der PostgreSQL-Workspace zeigt nie auf eine bestehende entfernte Datenbank.
+  Die SQL-Server-Plananalyse ist eine separate, explizite Deployment-Verbindung;
+  dafür sollte ein Read-only-Login mit SHOWPLAN-Berechtigung verwendet werden.
+  Das Passwort bleibt in einer Umgebungsvariable und mutierende Schlüsselwörter,
+  auch in schreibenden CTEs, werden abgelehnt.
 
-Das exakte Mendix-Toolchain und der Docker-Daemon müssen verfügbar sein. Eine
-Schemasynchronisierung kann bei Modelländerungen vorhandene Daten ändern oder
+Das exakte Mendix-Toolchain und der Docker-Daemon müssen verfügbar sein. Für
+SQL-Server-Pläne wird zusätzlich `sqlcmd` benötigt. Eine Schemasynchronisierung
+kann bei Modelländerungen vorhandene Daten ändern oder
 ablehnen. Wertvolle lokale Volumes sollten vor riskanten Migrationen gesichert
 werden.
 

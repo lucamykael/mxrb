@@ -5,6 +5,21 @@
 `mxrb generate` avalia uma definição Ruby e cria ou atualiza o MPR. Nomes
 Mendix são chaves estáveis, portanto reaplicar a definição não duplica units.
 
+Para iniciar em uma pasta vazia:
+
+```sh
+mxrb init vet_clinic
+cd vet_clinic
+bundle install
+bundle exec mxrb generate project.rb
+bundle exec mxrb validate VetClinic.mpr
+```
+
+`init` aceita snake_case ou PascalCase, cria `Gemfile`, `project.rb` e o módulo
+principal em `modules/VetClinic`. O scaffold inclui somente código próprio: o
+módulo `System` é implícito no Runtime; Administration e Atlas são módulos de
+marketplace. O comando aborta sem alterar nada quando o diretório já existe.
+
 ```ruby
 Mxrb.define("Shop.mpr") do
   mendix_version "11.12.1"
