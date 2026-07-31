@@ -111,13 +111,18 @@ RSpec.describe Mxrb::Scaffold::Generator do
       root = project_in(dir)
       functional = scaffold(root, :functional_test, 'ScaffoldApp.ACT_CreateAnimal')
       evaluation = scaffold(root, :evaluation, 'architecture')
-      scaffold(root, :design)
+      design = scaffold(root, :design)
       ci = scaffold(root, :ci, 'github')
 
       definition = Mxrb.functional_definition(functional.files.fetch(0))
       expect(definition.tests.first.target).to eq('ScaffoldApp.ACT_CreateAnimal')
       expect(File.read(evaluation.files.fetch(0))).to include('no_call_cycles')
       expect(File.read(ci.files.fetch(0))).to include('ruby/setup-ruby@v1', 'bundle exec rspec')
+      expect(design.files.map { File.basename(_1) }).to include(
+        'design_system.rb', 'main.scss', 'settings.json'
+      )
+      expect(File.read(File.join(root, 'theme', 'web', 'settings.json')))
+        .to include('theme.compiled.css')
 
       load File.join(root, 'project.rb')
       mpr = File.join(root, 'ScaffoldApp.mpr')

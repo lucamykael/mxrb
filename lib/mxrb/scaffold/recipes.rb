@@ -105,9 +105,20 @@ module Mxrb
         ensure_project
         abort 'Usage: mxrb design init' unless @name.empty?
 
-        path = project_path('app', 'design_system', 'design_system.rb')
-        @transaction.create(path, Templates.render(:design_system, module_name: nil, name: nil))
+        design_assets.each do |parts, template|
+          @transaction.create(
+            project_path(*parts), Templates.render(template, module_name: nil, name: nil)
+          )
+        end
         connect_project_file('app', 'design_system', 'design_system.rb')
+      end
+
+      def design_assets
+        {
+          %w[app design_system design_system.rb] => :design_system,
+          %w[theme web main.scss] => :theme_main,
+          %w[theme web settings.json] => :theme_settings
+        }
       end
 
       def scaffold_ci

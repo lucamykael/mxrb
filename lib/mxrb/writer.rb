@@ -699,8 +699,7 @@ module Mxrb
         unless generated["__mxrb_deep_structure_declared"]
           preserve_keys(merged, existing, %w[
             AllowedRoles Appearance Autofocus CanvasHeight CanvasWidth
-            Excluded FormCall MarkAsUsed Parameters PopupCloseAction PopupHeight
-            PopupResizable PopupWidth Title Variables
+            Excluded MarkAsUsed Parameters PopupCloseAction Variables
           ])
         end
         preserve_allowed_roles(merged, existing, generated)
@@ -1543,18 +1542,19 @@ module Mxrb
         return snippet_call_doc(widget)
       end
 
+      options = widget.fetch(:options, {})
       doc = {
         "$ID" => SecureRandom.uuid,
         "$Type" => widget_storage_type(type),
         "Name" => widget.fetch(:name),
+        "Appearance" => appearance_doc(options.fetch(:class, "")),
         "Class" => "",
         "Style" => ""
       }
-      options = widget.fetch(:options, {})
       doc["AttributePath"] = options[:attribute].to_s if options[:attribute]
       doc["LabelText"] = text_doc(options[:caption]) if input_widget?(type) && options.key?(:caption)
       doc["Caption"] = text_doc(options[:caption]) if type == :button
-      doc["Caption"] = text_doc(options[:caption]) if type == :text
+      doc["Content"] = client_template_doc(options[:caption]) if type == :text
       doc["LabelText"] = text_doc(options[:caption] || "") if type == :drop_down
 
       if type == :data_grid
@@ -1657,7 +1657,7 @@ module Mxrb
         data_grid:          "Forms$DataGrid",
         tab_control:        "Forms$TabControl",
         drop_down:          "Forms$DropDownWidget",
-        container:          "Forms$Container"
+        container:          "Forms$DivContainer"
       }.fetch(type.to_sym)
     end
 
@@ -2885,6 +2885,24 @@ module Mxrb
           { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
             "LanguageCode" => "en_US", "Text" => text }
         ]) }
+    end
+
+    def client_template_doc(text)
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$ClientTemplate",
+        "Fallback" => text_doc(""),
+        "Parameters" => IO::BsonCodec.build_array([], marker: 2),
+        "Template" => text_doc(text.to_s)
+      }
+    end
+
+    def appearance_doc(class_name = "")
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$Appearance",
+        "Class" => class_name.to_s,
+        "DesignProperties" => IO::BsonCodec.build_array([]),
+        "DynamicClasses" => "", "Style" => ""
+      }
     end
 
     def array_items(value)
