@@ -125,6 +125,8 @@ RSpec.describe Mxrb::OfficialMarketplace::ContentApi do
       .to raise_error(Mxrb::MarketplaceError, /version "99.0.0"/)
     expect { api.resolve('170', mendix_version: '10.0.0') }
       .to raise_error(Mxrb::MarketplaceError, /compatible with Mendix/)
+    expect { api.resolve('170') }
+      .to raise_error(Mxrb::MarketplaceError, /a published version/)
   end
 
   it 'blocks vulnerable releases by default and exposes security fix metadata' do
@@ -137,6 +139,11 @@ RSpec.describe Mxrb::OfficialMarketplace::ContentApi do
     )
     allow(client).to receive(:json).and_return(content, { 'items' => [vulnerable] })
     expect { api.resolve('170') }.to raise_error(Mxrb::MarketplaceError, /CVE-2026-1234/)
+
+    allow(client).to receive(:json).and_return(
+      content, { 'items' => [version(type: 'Vulnerable')] }
+    )
+    expect { api.resolve('170') }.to raise_error(Mxrb::MarketplaceError, /marked vulnerable;/)
 
     allow(client).to receive(:json).and_return(content, { 'items' => [vulnerable] })
     expect(api.resolve('170', allow_vulnerable: true).version_type).to eq('Vulnerable')
@@ -242,6 +249,23 @@ RSpec.describe Mxrb::OfficialMarketplace::Installer, 'official Content API' do
     allow(installer).to receive(:detect_mendix_version).and_return('11.12.1')
     expect { installer.pull_official('10', api:) }
       .to raise_error(Mxrb::MarketplaceError, /not a Module/)
+  end
+
+  it 'closes safely when target Mendix version detection cannot open the MPR' do
+    installer = described_class.new(target: Dir.pwd)
+    allow(Mxrb::IO::MprFile).to receive(:open).and_raise(Mxrb::Error, 'invalid MPR')
+    expect { installer.send(:detect_mendix_version, 'missing.mpr') }
+      .to raise_error(Mxrb::Error, /invalid MPR/)
+  end
+
+  it 'keeps the resolved Marketplace version when a package manifest omits it' do
+    package = Mxrb::OfficialMarketplace::OfficialPackage.new(
+      'Display Name', '1.2.3', :mendix, nil, 'content:10', 10, 'version-id',
+      'Module', 'Regular', [], false, true
+    )
+    result = double(module_name: 'ModuleName', package_version: '')
+    resolved = described_class.new(target: Dir.pwd).send(:resolved_package, package, result)
+    expect(resolved).to have_attributes(name: 'ModuleName', version: '1.2.3')
   end
 end
 # rubocop:enable Metrics/BlockLength

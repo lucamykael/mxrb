@@ -275,7 +275,7 @@ module Mxrb
         mpr = @mpr
         raise MarketplaceError, 'official Marketplace module pull requires --mpr FILE.mpr' unless mpr
 
-        mendix_version ||= detect_mendix_version(mpr) if mpr
+        mendix_version ||= detect_mendix_version(mpr)
         package = api.resolve(identifier, version:, mendix_version:, allow_vulnerable:)
         validate_official_package!(package)
         download_official(package, mpr, api)

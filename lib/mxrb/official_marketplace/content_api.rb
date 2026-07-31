@@ -163,8 +163,6 @@ module Mxrb
 
       def version_key(value)
         [value['publicationDate'].to_s, Gem::Version.new(normalize_version(value['versionNumber']))]
-      rescue ArgumentError
-        [value['publicationDate'].to_s, Gem::Version.new('0')]
       end
 
       def normalize_version(value)
