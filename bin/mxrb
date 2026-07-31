@@ -243,6 +243,56 @@ when "validate"
     exit 1
   end
 
+when "pack"
+  path = ARGV.shift or abort "Usage: mxrb pack <file.mpr> --output FILE.mda [--deployment DIR] [--force]"
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  output = option.call("--output") || File.join(
+    File.dirname(File.expand_path(path)), "build", "#{File.basename(path, '.mpr')}.mda"
+  )
+  deployment = option.call("--deployment")
+  force = ARGV.delete("--force") ? true : false
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  result = Mxrb::Compiler::Packager.new(path, deployment:).pack(output:, force:)
+  puts "[mxrb] Packed #{result.files} files for Mendix #{result.mendix_version}"
+  puts "[mxrb] SHA-256 #{result.sha256}"
+  puts "[mxrb] #{result.path}"
+
+when "mda"
+  action = ARGV.shift or abort "Usage: mxrb mda <inspect|compare> ..."
+  case action
+  when "inspect"
+    path = ARGV.shift or abort "Usage: mxrb mda inspect <file.mda> [--json]"
+    json = ARGV.delete("--json")
+    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+    result = Mxrb::Compiler::Mda.inspect(path)
+    if json
+      puts JSON.pretty_generate(
+        path: result.path, sha256: result.sha256, roots: result.roots,
+        files: result.files.size, metadata: result.metadata
+      )
+    else
+      puts "Runtime       : #{result.metadata['RuntimeVersion']}"
+      puts "Project       : #{result.metadata['ProjectName']}"
+      puts "Files         : #{result.files.size}"
+      puts "Roots         : #{result.roots.join(', ')}"
+      puts "SHA-256       : #{result.sha256}"
+    end
+  when "compare"
+    left = ARGV.shift or abort "Usage: mxrb mda compare <left.mda> <right.mda>"
+    right = ARGV.shift or abort "Usage: mxrb mda compare <left.mda> <right.mda>"
+    differences = Mxrb::Compiler::Mda.compare(left, right)
+    differences.each { puts "#{_1.status}\t#{_1.path}" }
+    puts "[mxrb] #{differences.size} difference(s)"
+  else
+    abort "Unknown mda action #{action.inspect}; use inspect or compare"
+  end
+
 when "compare"
   left = ARGV.shift or abort "Usage: mxrb compare <left.mpr> <right.mpr>"
   right = ARGV.shift or abort "Usage: mxrb compare <left.mpr> <right.mpr>"
@@ -806,6 +856,99 @@ when "functional-instrument"
   instrumenter = Mxrb::Functional::Instrumenter.new(path, definition).instrument!
   puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
 
+when "team-server"
+  usage = <<~USAGE
+    Usage: mxrb team-server <login|info|branches|commits|clone|status|fetch|pull|push> ...
+
+      team-server login --pat-file FILE
+          Store only FILE's absolute path; the PAT is never copied into MXRB.
+      team-server info APP_ID [--pat-file FILE]
+      team-server branches APP_ID [--pat-file FILE]
+      team-server commits APP_ID BRANCH [--pat-file FILE]
+          Query the official App Repository API.
+      team-server clone APP_ID|URL TARGET [--branch NAME] [--depth N] [--pat-file FILE]
+          Clone through Git HTTPS and validate every root MPR with MXRB.
+      team-server status|fetch|pull PATH [--pat-file FILE]
+      team-server push PATH [--remote NAME] [--branch NAME] [--pat-file FILE]
+
+    Authentication:
+      Recommended: --pat-file FILE or MXRB_TEAM_SERVER_PAT_FILE=/absolute/path/.env
+      FILE may be plain text, JSON, or .env with MXRB_TEAM_SERVER_PAT=...
+      Without a PAT file Git operations use the user's configured Git credential helper.
+      Required scopes: mx:modelrepository:repo:read (read) and
+      mx:modelrepository:repo:write (push).
+
+    PAT values are passed via a temporary GIT_ASKPASS helper. They are never
+    embedded in repository URLs, command arguments, or .git/config.
+  USAGE
+  action = ARGV.shift
+  if action.nil? || %w[-h --help help].include?(action)
+    puts usage
+    exit(action.nil? ? 1 : 0)
+  end
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  pat_file = option.call("--pat-file")
+  credentials = Mxrb::TeamServer::Credentials.new(pat_file:)
+  repository = Mxrb::TeamServer::Repository.new(credentials:)
+  api = -> { Mxrb::TeamServer::Api.new(credentials:) }
+  begin
+    case action
+    when "login"
+      abort "Usage: mxrb team-server login --pat-file FILE" unless pat_file && ARGV.empty?
+      path = credentials.configure_pat_file(pat_file)
+      puts "[mxrb] Stored Team Server PAT file reference in #{path}"
+      puts "[mxrb] The PAT remains in #{File.expand_path(pat_file)} and is read only for requests."
+    when "info"
+      app_id = ARGV.shift or abort "Usage: mxrb team-server info APP_ID [--pat-file FILE]"
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      puts JSON.pretty_generate(api.call.info(app_id))
+    when "branches"
+      app_id = ARGV.shift or abort "Usage: mxrb team-server branches APP_ID [--pat-file FILE]"
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      puts JSON.pretty_generate(api.call.branches(app_id))
+    when "commits"
+      app_id = ARGV.shift or abort "Usage: mxrb team-server commits APP_ID BRANCH [--pat-file FILE]"
+      branch = ARGV.shift or abort "Usage: mxrb team-server commits APP_ID BRANCH [--pat-file FILE]"
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      puts JSON.pretty_generate(api.call.commits(app_id, branch))
+    when "clone"
+      source = ARGV.shift or abort "Usage: mxrb team-server clone APP_ID|URL TARGET [options]"
+      target = ARGV.shift or abort "Usage: mxrb team-server clone APP_ID|URL TARGET [options]"
+      branch = option.call("--branch")
+      depth = option.call("--depth")
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      result = repository.clone(source, target:, branch:, depth:)
+      puts "[mxrb] Cloned #{result.repository_url} to #{result.root}"
+      result.mpr_files.each { puts "[mxrb] Valid MPR: #{_1}" }
+    when "status", "fetch", "pull"
+      root = ARGV.shift || Dir.pwd
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      result = repository.public_send(action, root)
+      puts(result.respond_to?(:output) ? result.output : result)
+    when "push"
+      root = ARGV.shift || Dir.pwd
+      remote = option.call("--remote") || "origin"
+      branch = option.call("--branch")
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      result = repository.push(root, remote:, branch:)
+      puts result.output
+    else
+      abort "Unknown team-server action #{action.inspect}"
+    end
+  rescue Mxrb::TeamServerError => e
+    warn "[mxrb] Team Server: #{e.message}"
+    if e.message.match?(/Username|auth/i)
+      warn "[mxrb] Configure a PAT file with: mxrb team-server login --pat-file FILE"
+    end
+    exit 1
+  end
+
 when "marketplace"
   marketplace_usage = <<~USAGE
     Usage: mxrb marketplace <login|search|show|versions|pull|import|audit|list|verify> ...
@@ -1167,6 +1310,9 @@ else
       init       <project_name>           Scaffold a new Ruby-first Mendix project
                  --mxrb-path DIR          Use a local MXRB checkout in the Gemfile
       generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
+      pack       <file.mpr>                Build an MDA from a materialized deployment
+                 --output FILE [--force]   Pure Ruby container writer; never calls mx/mxbuild
+      mda inspect|compare <file.mda>       Inspect or diff MDA contents and metadata
       widgets sync <definition.rb> <mpr>  Synchronize pluggable widget schemas
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
@@ -1239,6 +1385,9 @@ else
                   import <file.mpk>        Import a module directly [--mpr FILE]
                   audit                    Check locked updates and vulnerabilities
                   list|verify              Inspect or verify locked official packages
+      team-server clone APP_ID|URL TARGET Clone and validate a Mendix Team Server app
+                  info|branches|commits    Query the official App Repository API
+                  status|fetch|pull|push    Synchronize through Git without mx
       scaffold list [--target DIR]         List generators and registered scaffolds
                destroy <kind:name>         Remove an unchanged registered scaffold
       entity new Module.Name              Scaffold a domain entity (--help for details)
