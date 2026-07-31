@@ -39,6 +39,7 @@ module Mxrb
         @root = File.expand_path(root)
         @changes = changes.freeze
         @digests = changes.to_h { [_1.path, Digest::SHA256.hexdigest(_1.before)] }.freeze
+        @after_digests = changes.to_h { [_1.path, Digest::SHA256.hexdigest(_1.after)] }.freeze
         @applied = false
       end
 
@@ -48,25 +49,77 @@ module Mxrb
       def apply!
         raise ArgumentError, 'design migration plan was already applied' if @applied
 
-        @changes.each { apply_change(_1) }
+        verify_changes!(@digests, 'changed after preview')
+        replace_all!(fallback: :before, &:after)
         @applied = true
+        self
+      end
+
+      # Restores the previewed contents when a surrounding batch fails.
+      def rollback!
+        return self unless @applied
+
+        verify_changes!(@after_digests, 'changed after migration')
+        replace_all!(fallback: :after, &:before)
+        @applied = false
         self
       end
 
       private
 
-      def apply_change(change)
-        temporary = nil
-        target = File.join(@root, change.path)
-        unless Digest::SHA256.file(target).hexdigest == @digests.fetch(change.path)
-          raise SerializationError, "design asset changed after preview: #{change.path}"
+      def verify_changes!(digests, reason)
+        @changes.each do |change|
+          target = File.join(@root, change.path)
+          unless File.file?(target) && Digest::SHA256.file(target).hexdigest == digests.fetch(change.path)
+            raise SerializationError, "design asset #{reason}: #{change.path}"
+          end
         end
+      end
 
-        temporary = "#{target}.mxrb-#{Process.pid}"
-        File.binwrite(temporary, change.after)
-        FileUtils.mv(temporary, target)
+      def replace_all!(fallback:)
+        staged = {}
+        staged = stage_changes { yield(_1) }
+        commit_staged!(staged, fallback)
       ensure
-        FileUtils.rm_f(temporary) if temporary
+        staged.each_value { FileUtils.rm_f(_1) }
+      end
+
+      def stage_changes
+        @changes.to_h do |change|
+          temporary = temporary_path(change.path)
+          File.binwrite(temporary, yield(change))
+          [change.path, temporary]
+        end
+      end
+
+      def commit_staged!(staged, fallback)
+        committed = []
+        @changes.each do |change|
+          FileUtils.mv(staged.fetch(change.path), File.join(@root, change.path))
+          committed << change
+        end
+      rescue StandardError
+        restore_committed!(committed, fallback)
+        raise
+      end
+
+      def restore_committed!(committed, fallback)
+        committed.reverse_each do |change|
+          target = File.join(@root, change.path)
+          temporary = "#{target}.mxrb-rollback-#{Process.pid}-#{staged_suffix(change.path)}"
+          File.binwrite(temporary, change.public_send(fallback))
+          FileUtils.mv(temporary, target)
+        ensure
+          FileUtils.rm_f(temporary)
+        end
+      end
+
+      def staged_suffix(path)
+        Digest::SHA256.hexdigest(path)[0, 12]
+      end
+
+      def temporary_path(path)
+        "#{File.join(@root, path)}.mxrb-#{Process.pid}-#{staged_suffix(path)}"
       end
     end
   end

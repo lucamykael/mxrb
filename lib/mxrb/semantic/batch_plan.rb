@@ -38,14 +38,30 @@ module Mxrb
           @plans.each(&:apply!)
           @applied = true
         rescue => error
+          idx = @plans.index { !_1.applied? }.to_i + 1
+          rollback_errors = rollback_applied_plans
           @project.mpr.restore_from!(backup_path)
           @project.refresh!
-          idx = @plans.index { !_1.applied? }.to_i + 1
-          raise BatchError, "batch failed at plan #{idx} of #{@plans.size}: #{error.message}"
+          detail = rollback_errors.empty? ? "" : "; rollback failed: #{rollback_errors.join(', ')}"
+          raise BatchError,
+                "batch failed at plan #{idx} of #{@plans.size}: #{error.message}#{detail}"
         ensure
           FileUtils.rm_f(backup_path) rescue nil
         end
         self
+      end
+
+      private
+
+      def rollback_applied_plans
+        @plans.reverse_each.filter_map do |plan|
+          next unless plan.respond_to?(:rollback!) && plan.applied?
+
+          plan.rollback!
+          nil
+        rescue StandardError => error
+          "#{plan.class}: #{error.message}"
+        end
       end
     end
   end

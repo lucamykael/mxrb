@@ -4,6 +4,49 @@
 require_relative "../lib/mxrb"
 require "shellwords"
 
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+def render_plan_report(report, json:)
+  payload = {
+    engine: report.engine, analyzed: report.analyzed, total_cost: report.total_cost,
+    planning_time_ms: report.planning_time_ms, execution_time_ms: report.execution_time_ms,
+    clean: report.clean?, findings: report.findings.map(&:to_h)
+  }
+  return puts(JSON.pretty_generate(payload)) if json
+
+  puts "Engine         : #{report.engine}"
+  puts "Mode           : #{report.analyzed ? 'actual' : 'estimated'}"
+  puts "Total cost     : #{report.total_cost}"
+  report.findings.each do |finding|
+    puts "[#{finding.severity.to_s.upcase}] #{finding.rule}: #{finding.relation || finding.node_type}"
+    puts "  #{finding.message}"
+    puts "  #{finding.suggestion}"
+  end
+  puts "[mxrb] No plan findings" if report.findings.empty?
+end
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+def render_workload_report(report, json:)
+  payload = {
+    engine: report.engine, clean: report.clean?,
+    queries: report.queries.map(&:to_h), table_stats: report.table_stats,
+    index_stats: report.index_stats, findings: report.findings.map(&:to_h)
+  }
+  return puts(JSON.pretty_generate(payload)) if json
+
+  report.queries.each do |query|
+    puts "#{query.query_id}\t#{query.calls} calls\t#{query.total_time_ms.round(3)} ms total\t" \
+         "#{query.mean_time_ms.round(3)} ms mean"
+  end
+  report.findings.each do |finding|
+    puts "[#{finding.severity.to_s.upcase}] #{finding.rule}: #{finding.subject}"
+    puts "  #{finding.message}"
+    puts "  #{finding.suggestion}"
+  end
+  puts "[mxrb] No workload findings" if report.findings.empty?
+end
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
 command = ARGV.shift
 
 case command
@@ -418,8 +461,16 @@ when "design"
 
 when "db"
   action = ARGV.shift or
-    abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|shell> <file.mpr>"
+    abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|explain|workload|shell> <file.mpr>"
   path = ARGV.shift or abort "Usage: mxrb db #{action} <file.mpr>"
+  option = lambda do |name, fallback = nil|
+    index = ARGV.index(name)
+    next fallback unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  engine = option.call("--engine", "postgresql").to_sym
   port_index = ARGV.index("--port")
   port = if port_index
            abort "--port requires a value" unless ARGV[port_index + 1]
@@ -427,7 +478,18 @@ when "db"
          else
            55_432
          end
-  workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:)
+  if engine == :sql_server
+    abort "--engine sql_server is supported only by db explain" unless action == "explain"
+
+    workspace = Mxrb::Runtime::SqlServerDatabase.new(
+      server: option.call("--server"), database: option.call("--database"),
+      user: option.call("--user"), sqlcmd: option.call("--sqlcmd", "sqlcmd")
+    )
+  elsif engine == :postgresql
+    workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:)
+  else
+    abort "Unsupported database engine #{engine.inspect}; use postgresql or sql_server"
+  end
   case action
   when "up", "sync"
     info = action == "sync" ? workspace.sync : workspace.up
@@ -454,11 +516,25 @@ when "db"
     sql = ARGV.shift or abort "Usage: mxrb db sql <file.mpr> \"SELECT ...\" [--write]"
     write = ARGV.delete("--write")
     puts workspace.query(sql, write:)
+  when "explain"
+    sql = ARGV.shift or
+      abort "Usage: mxrb db explain <file.mpr> \"SELECT ...\" [--analyze] [--json]"
+    analyze = ARGV.delete("--analyze") == "--analyze"
+    json = ARGV.delete("--json") == "--json"
+    report = workspace.explain(sql, analyze:)
+    render_plan_report(report, json:)
+  when "workload"
+    abort "db workload currently requires PostgreSQL" unless engine == :postgresql
+
+    limit = option.call("--limit", 20)
+    json = ARGV.delete("--json") == "--json"
+    render_workload_report(workspace.workload(limit:), json:)
   when "shell"
     write = ARGV.delete("--write")
     exec(*workspace.shell_command(write:))
   else
-    abort "Unknown db action #{action.inspect}; use up, sync, down, destroy, status, url, sql or shell"
+    abort "Unknown db action #{action.inspect}; " \
+          "use up, sync, down, destroy, status, url, sql, explain, workload or shell"
   end
 
 when "serve"
@@ -671,6 +747,19 @@ when "tree"
     end
   end
 
+when "init"
+  name = ARGV.shift or abort "Usage: mxrb init <project_name>"
+  begin
+    result = Mxrb::Initializer.new(name).scaffold
+  rescue ArgumentError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  result.files.each { puts "  create  #{_1}" }
+  puts "\nDone. Next steps:"
+  puts "  cd #{result.root}"
+  puts "  bundle install"
+  puts "  bundle exec mxrb generate project.rb"
+
 else
   puts <<~USAGE
     mxrb — Pure-Ruby Mendix .mpr toolkit
@@ -680,6 +769,7 @@ else
       dump-unit  <file.mpr> <unit_id>     Hex dump of a unit's Contents blob
       sql        <file.mpr> "SELECT …"    Run raw SQL against the .mpr SQLite
       modules    <file.mpr>               List all modules
+      init       <project_name>           Scaffold a new Ruby-first Mendix project
       generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
@@ -717,6 +807,15 @@ else
          url     <file.mpr> [--port PORT]   Print the read-only PostgreSQL connection URL
          sql     <file.mpr> "SELECT …"      Execute SQL as the read-only analyst role
                  --write                    Explicitly use the Runtime owner role
+         explain <file.mpr> "SELECT …"      Inspect PostgreSQL plan and index findings
+                 --analyze                  Execute the read-only query with buffers/timing
+                 --json                     Emit a machine-readable plan report
+                 --engine sql_server        Use an explicit SQL Server deployment
+                 --server HOST --database DB --user USER
+                                            Read password from MXRB_SQLSERVER_PASSWORD
+                 --sqlcmd PATH              Override the sqlcmd executable
+         workload <file.mpr> [--limit N]    Rank pg_stat_statements and schema pressure
+                 --json                     Emit queries, table/index stats, and findings
          shell   <file.mpr> [--write]       Open psql (read-only by default)
       serve      <file.mpr> [--port 4567]   Serve read-only SQL/OQL over loopback HTTP
                  --db-port PORT             Runtime PostgreSQL host port (default 55432)

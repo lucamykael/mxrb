@@ -13,6 +13,7 @@ remain optional external gates for compatibility and functional execution.
 - read and write MPR v1 and v2 projects;
 - export complete projects into editable Ruby;
 - generate idempotent MPRs from a Ruby DSL;
+- scaffold a new Ruby-first project with its PascalCase application module;
 - expose every native unit as editable deep Ruby while retaining a lossless baseline;
 - compare structural snapshots and produce typed semantic diffs;
 - inspect references, callers, callees and transitive impact;
@@ -22,6 +23,7 @@ remain optional external gates for compatibility and functional execution.
 - inventory design tokens, check contrast and preview atomic literal migration;
 - discover native OQL and render safe logical SQL views only when OQL exists;
 - materialize an isolated, Runtime-synchronized PostgreSQL for direct SQL inspection;
+- analyze PostgreSQL/SQL Server plans and rank cumulative PostgreSQL workload pressure;
 - move standalone units between folders in the same module with a preview;
 - remove standalone units only after reference and child-unit safety checks;
 - run static analysis and executable model evaluations in Ruby;
