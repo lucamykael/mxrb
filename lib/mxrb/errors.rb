@@ -12,6 +12,7 @@ module Mxrb
   ToolchainError      = Class.new(Error)
   CompilationError    = Class.new(Error)
   TeamServerError     = Class.new(Error)
+  NativeRuntimeError  = Class.new(Error)
   MarketplaceError    = Class.new(Error)
   BatchError          = Class.new(Error)
 end

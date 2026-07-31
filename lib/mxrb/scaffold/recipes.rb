@@ -81,6 +81,7 @@ module Mxrb
         path = module_path(module_name, 'security', 'security.rb')
         @transaction.create(path, Templates.render(:security, module_name:, name: nil))
         connect_module_aggregator(module_name, 'security', 'security.rb')
+        connect_project_security(module_name)
       end
 
       def scaffold_functional_test

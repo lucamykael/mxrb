@@ -25,6 +25,7 @@ module Mxrb
         version = Mxrb.open(@mpr_path, &:mendix_version)
         adapter = Adapter.for(version)
         metadata = adapter.validate_deployment!(@deployment)
+        adapter.validate_freshness!(@mpr_path, @deployment)
         files, directories = inventory
         write_atomically(output_path, files, directories)
         package_result(output_path, version, metadata)

@@ -65,6 +65,9 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect do
         scaffold(root, :presentation, 'ScaffoldApp')
       end.to raise_error(SystemExit, /already initialized/)
+      expect(File.read(File.join(root, 'project.rb'))).to include(
+        'security_level "CheckEverything"', 'ScaffoldApp.Administrator'
+      )
 
       load File.join(root, 'project.rb')
       Mxrb.open(File.join(root, 'ScaffoldApp.mpr')) do |project|
@@ -72,7 +75,24 @@ RSpec.describe Mxrb::Scaffold::Generator do
         expect(mod.pages.map(&:name)).to contain_exactly('Home', 'AnimalOverview')
         expect(mod.nanoflows.map(&:name)).to eq(['NAN_OpenAnimal'])
         expect(mod.module_roles.map { _1[:name] }).to eq(%w[User Administrator])
+        expect(project.architecture_definition.dig(:security, :security_level)).to eq('CheckEverything')
       end
+    end
+  end
+
+  it 'does not duplicate project security and diagnoses malformed project definitions' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      scaffold(root, :security, 'ScaffoldApp')
+      generator = described_class.new(:security, 'ScaffoldApp', target: root)
+      expect { generator.send(:connect_project_security, 'ScaffoldApp') }.not_to raise_error
+
+      malformed = File.join(dir, 'malformed')
+      FileUtils.mkdir_p(malformed)
+      File.write(File.join(malformed, 'project.rb'), "Mxrb.define('App.mpr') do\nend\n")
+      generator = described_class.new(:security, 'App', target: malformed)
+      expect { generator.send(:connect_project_security, 'App') }
+        .to raise_error(ArgumentError, /mendix_version not found/)
     end
   end
 

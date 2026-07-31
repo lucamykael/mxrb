@@ -833,6 +833,8 @@ when "test"
   abort "#{definition_path}: file not found" unless File.file?(definition_path)
   plan_only = ARGV.delete("--plan")
   docker = ARGV.delete("--docker")
+  native = ARGV.delete("--native")
+  abort "--native and --docker are mutually exclusive" if native && docker
   report_option = lambda do |name|
     index = ARGV.index(name)
     next unless index
@@ -856,7 +858,13 @@ when "test"
     definition.tests.each { puts "  #{_1.name} -> #{_1.target}" }
     puts "Builder argv : #{Shellwords.join(workspace.builder_command(definition_path))}"
   else
-    executor = docker ? Mxrb::Runtime::DockerExecutor : Mxrb::Runtime::Executor
+    executor = if native
+                 Mxrb::Runtime::Native::Executor
+               elsif docker
+                 Mxrb::Runtime::DockerExecutor
+               else
+                 Mxrb::Runtime::Executor
+               end
     execution = executor.new(
       path, definition, plan: plan, output: $stdout
     ).run
@@ -1436,6 +1444,7 @@ else
       design init                         Initialize design-system Ruby
       ci init github                      Scaffold GitHub Actions
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
+                 --native                  Use the Ruby model Runtime; no Java/mxbuild
                  --docker                  Run mxbuild/runtime in disposable containers
                  --plan                    Show toolchain and Docker execution plan
                  --json PATH               Write a machine-readable result

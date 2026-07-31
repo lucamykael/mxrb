@@ -96,6 +96,17 @@ module Mxrb
         RUBY
       end
 
+      def project_security(module_name, _name)
+        <<~RUBY
+          security do
+            security_level "CheckEverything"
+            user_role :User, module_roles: ["#{module_name}.User"]
+            user_role :Administrator,
+                      module_roles: ["#{module_name}.Administrator"], admin: true
+          end
+        RUBY
+      end
+
       def scheduled_event(module_name, name)
         <<~RUBY
           # frozen_string_literal: true

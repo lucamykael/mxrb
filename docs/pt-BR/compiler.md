@@ -15,6 +15,8 @@ mxrb mda compare official.mda build/Clinic.mda
 datas normalizadas. Por enquanto ele exige um diretório `deployment/` já
 materializado. Essa exigência é verificada explicitamente; o comando nunca
 chama o toolchain Mendix como fallback.
+O empacotamento também aborta quando `model/model.mdp` é mais antigo que o MPR,
+evitando combinar uma definição Ruby alterada com artefatos compilados antigos.
 
 O deployment deve conter, no mínimo:
 
@@ -47,6 +49,10 @@ mesma versão do Runtime, gera scripts e configurações, constantes e diretóri
 de dados, e escreve o ZIP deterministicamente. Ele não executa `mx` nem
 `mxbuild`. No VetClinic, o pacote de 4.384 arquivos iniciou o Runtime 11.12.1,
 sincronizou 675 operações de banco e respondeu HTTP 200.
+
+A configuração portátil inclui a chave obrigatória do servidor administrativo.
+O boot de produção também exige segurança `CheckEverything`; para projetos
+novos, `mxrb security init App` agora conecta essa configuração no `project.rb`.
 
 O gate estrutural dos testes funcionais também usa `Mxrb.validate`; a chamada
 separada a `mx check` foi removida. A instrumentação funcional altera

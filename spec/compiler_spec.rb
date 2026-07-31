@@ -103,6 +103,12 @@ RSpec.describe Mxrb::Compiler do
         .to raise_error(Mxrb::CompilationError, /targets Mendix 10\.24\.0/)
 
       deployment = create_deployment(root)
+      File.utime(Time.now + 60, Time.now + 60, mpr)
+      expect { described_class::Packager.new(mpr, deployment:).pack(output: File.join(root, 'old.mda')) }
+        .to raise_error(Mxrb::CompilationError, /deployment is stale/)
+      File.utime(Time.now - 60, Time.now - 60, mpr)
+
+      deployment = create_deployment(root)
       packager = described_class::Packager.new(mpr, deployment:)
       FileUtils.mkdir_p(File.join(deployment, 'run'))
       File.write(File.join(deployment, 'run', 'secret.txt'), 'runtime state')
@@ -244,6 +250,7 @@ RSpec.describe Mxrb::Compiler do
         expect(zip.read('etc/constants/variables.conf')).to include(
           '${?CONSTANTS_CLINIC_API_URL}'
         )
+        expect(zip.read('etc/configurations/Default.conf')).to include('adminPassword = ""')
       end
       expect(described_class::PortableConfiguration.new({}).files.fetch('etc/StudioPro.conf'))
         .to include('ScheduledEventExecution = "NONE"')
