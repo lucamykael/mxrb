@@ -87,7 +87,11 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       )
       expect(commands.flatten).to include(
         a_string_starting_with('POSTGRES_PASSWORD='),
-        'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL'
+        'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL',
+        a_string_including(
+          "pg_advisory_xact_lock(hashtext('mxrb.configure_reader'))",
+          'GRANT pg_read_all_stats TO mxrb_reader'
+        )
       )
       credentials = File.join(info.state_dir, 'credentials.json')
       expect(File.stat(credentials).mode & 0o777).to eq(0o600)
@@ -226,6 +230,154 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
         .to raise_error(ArgumentError, /read-only SELECT/)
       expect { subject.query_rows('SELECT 1; SELECT 2') }
         .to raise_error(ArgumentError, /read-only SELECT/)
+    end
+  end
+
+  it 'explains read-only queries with optional execution and real index metadata' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        output = if command.last.start_with?('EXPLAIN')
+                   JSON.generate([{ 'Plan' => {
+                     'Node Type' => 'Seq Scan', 'Schema' => 'public',
+                     'Relation Name' => 'shop$product', 'Plan Rows' => 2_000,
+                     'Total Cost' => 2_000
+                   } }])
+                 elsif command.any? { _1.include?('FROM pg_indexes') }
+                   "schemaname,tablename,indexname,indexdef\n" \
+                     "public,shop$product,product_name_idx,CREATE INDEX product_name_idx\n"
+                 else
+                   ''
+                 end
+        [output, '', status(true)]
+      end
+
+      report = subject.explain('SELECT * FROM shop$product')
+      expect(report).to have_attributes(engine: :postgresql, analyzed: false)
+      expect(report.findings.first.indexes.first.fetch(:name)).to eq('product_name_idx')
+      explain = commands.find { _1.last.start_with?('EXPLAIN') }.last
+      expect(explain).to include('FORMAT JSON', 'SETTINGS TRUE')
+      expect(explain).not_to include('ANALYZE TRUE')
+
+      expect(subject.explain('WITH products AS (SELECT 1) SELECT * FROM products', analyze: true))
+        .to be_analyzed
+      expect(commands.reverse.find { _1.last.start_with?('EXPLAIN') }.last)
+        .to include('ANALYZE TRUE', 'BUFFERS TRUE', 'TIMING TRUE')
+    end
+  end
+
+  it 'rejects invalid explain JSON without hiding the database boundary' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        output = command.last.start_with?('EXPLAIN') ? 'not-json' : ''
+        [output, '', status(true)]
+      end
+
+      expect { subject.explain('SELECT 1') }
+        .to raise_error(Mxrb::ToolchainError, /invalid EXPLAIN JSON/)
+      expect { subject.explain('UPDATE products SET name = NULL') }
+        .to raise_error(ArgumentError, /read-only SELECT/)
+    end
+  end
+
+  it 'reports cumulative query, table, and index workload statistics' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        sql = command.last
+        output = if sql.include?('FROM pg_stat_statements')
+                   'queryid,calls,total_exec_time,mean_exec_time,rows,shared_blks_hit,' \
+                     "shared_blks_read,temp_blks_written,blk_read_time,blk_write_time,query\n" \
+                     "1,2,2000,1000,20,10,90,1,3,2,SELECT 1\n"
+                 elsif sql.include?('FROM pg_stat_user_tables')
+                   "schemaname,relname,seq_scan,seq_tup_read,idx_scan,n_live_tup\n" \
+                     "public,product,20,200000,1,1000\n"
+                 elsif sql.include?('FROM pg_stat_user_indexes')
+                   'schemaname,relname,indexrelname,idx_scan,idx_tup_read,idx_tup_fetch,' \
+                     "index_bytes,indisunique,indisprimary\n" \
+                     "public,product,old_idx,0,0,0,2000000,f,f\n"
+                 else
+                   ''
+                 end
+        [output, '', status(true)]
+      end
+
+      report = subject.workload(limit: '10')
+      expect(report.queries.first.query_id).to eq('1')
+      expect(report.findings.map(&:rule)).to include(
+        :high_cumulative_time, :table_sequential_pressure, :unused_large_index
+      )
+      expect { subject.workload(limit: 0) }.to raise_error(ArgumentError, /between 1 and 1000/)
+      expect { subject.workload(limit: 'many') }.to raise_error(ArgumentError, /invalid value/)
+      expect(commands.flatten).to include(
+        a_string_including("query ~* '^[[:space:]]*(SELECT|WITH)")
+      )
+    end
+  end
+
+  it 'enables PostgreSQL statistics safely and avoids unnecessary restarts' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      values = { 'SHOW shared_preload_libraries' => '', 'SHOW track_io_timing' => 'off' }
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        [values.fetch(command.last, ''), '', status(true)]
+      end
+      subject.send(:configure_monitoring!)
+      expect(commands.flatten).to include(
+        "ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements'",
+        'restart', 'ALTER SYSTEM SET track_io_timing = on',
+        'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+      )
+
+      commands.clear
+      values = {
+        'SHOW shared_preload_libraries' => 'auto_explain, pg_stat_statements',
+        'SHOW track_io_timing' => 'on'
+      }
+      subject.send(:configure_monitoring!)
+      expect(commands.flatten).not_to include('restart', 'ALTER SYSTEM SET track_io_timing = on')
+      expect(commands).to include(include('CREATE EXTENSION IF NOT EXISTS pg_stat_statements'))
+
+      commands.clear
+      values = {
+        'SHOW shared_preload_libraries' => 'auto_explain',
+        'SHOW track_io_timing' => 'on'
+      }
+      subject.send(:configure_monitoring!)
+      expect(commands.flatten).to include(
+        "ALTER SYSTEM SET shared_preload_libraries = 'auto_explain,pg_stat_statements'"
+      )
+    end
+  end
+
+  it 'creates the application database when an owned retained volume predates it' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      exists = false
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        output = if command.last.include?('SELECT 1 FROM pg_database')
+                   exists ? '1' : ''
+                 else
+                   ''
+                 end
+        [output, '', status(true)]
+      end
+
+      subject.send(:ensure_application_database!)
+      expect(commands).to include(include('createdb', '--username', 'mxrb_runtime', 'mxrb'))
+      exists = true
+      commands.clear
+      subject.send(:ensure_application_database!)
+      expect(commands.flatten).not_to include('createdb')
     end
   end
 

@@ -10,6 +10,21 @@ MPR. Existing modules, entities, attributes, associations, pages and
 microflows are matched by name, so applying the same definition repeatedly
 does not duplicate them.
 
+Start from an empty directory with:
+
+```sh
+mxrb init vet_clinic
+cd vet_clinic
+bundle install
+bundle exec mxrb generate project.rb
+bundle exec mxrb validate VetClinic.mpr
+```
+
+`init` accepts snake_case or PascalCase and creates `Gemfile`, `project.rb`,
+and the main `modules/VetClinic` module. The scaffold contains application code
+only: `System` is implicit in the Runtime, while Administration and Atlas are
+marketplace modules. The command aborts without changing an existing directory.
+
 ```ruby
 # shop.rb
 Mxrb.define("Shop.mpr") do

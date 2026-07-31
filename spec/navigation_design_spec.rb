@@ -431,6 +431,71 @@ RSpec.describe 'native navigation and design systems' do
     end
   end
 
+  it 'rolls back every stylesheet when a multi-file migration fails' do
+    Dir.mktmpdir do |dir|
+      theme = File.join(dir, 'theme', 'web')
+      FileUtils.mkdir_p(theme)
+      first = File.join(theme, 'first.scss')
+      second = File.join(theme, 'second.scss')
+      File.write(first, '$first: #123456;')
+      File.write(second, '$second: #123456;')
+      plan = Mxrb::Model::DesignSystem.new(dir)
+                                      .plan_literal_migration('#123456' => 'var(--brand)')
+      expect(plan.rollback!).to equal(plan)
+      moves = 0
+      allow(FileUtils).to receive(:mv).and_wrap_original do |method, source, target|
+        rollback = source.include?('rollback')
+        moves += 1 unless rollback
+        raise IOError, 'simulated replace failure' if !rollback && moves == 2
+
+        method.call(source, target)
+      end
+
+      expect { plan.apply! }.to raise_error(IOError, /simulated replace failure/)
+      expect(File.read(first)).to eq('$first: #123456;')
+      expect(File.read(second)).to eq('$second: #123456;')
+      expect(plan).not_to be_applied
+      expect(Dir.glob(File.join(theme, '*.mxrb-*'))).to be_empty
+    end
+  end
+
+  it 'composes asset and MPR plans with rollback across both stores' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'app.mpr')
+      define_native_project(path)
+      source = File.join(dir, 'theme', 'web', 'custom.scss')
+      FileUtils.mkdir_p(File.dirname(source))
+      File.write(source, '$legacy: #123456;')
+
+      Mxrb.open(path, readonly: false) do |project|
+        asset_plan = project.plan_design_token_migration('#123456' => 'var(--brand)')
+        model_plan = project.plan_rename('App.Home', to: 'Landing')
+        failing_plan = Object.new
+        failing_plan.define_singleton_method(:apply!) { raise 'simulated batch failure' }
+        failing_plan.define_singleton_method(:applied?) { false }
+
+        batch = project.batch_plan([asset_plan, model_plan, failing_plan])
+        expect { batch.apply! }.to raise_error(Mxrb::BatchError, /simulated batch failure/)
+
+        expect(File.read(source)).to eq('$legacy: #123456;')
+        expect(asset_plan).not_to be_applied
+        expect(project.find_artifact('App.Home')).not_to be_nil
+        expect(project.find_artifact('App.Landing')).to be_nil
+
+        reversible = Object.new
+        reversible.define_singleton_method(:apply!) { @applied = true }
+        reversible.define_singleton_method(:applied?) { @applied == true }
+        reversible.define_singleton_method(:rollback!) { raise 'simulated rollback failure' }
+        failing_plan = Object.new
+        failing_plan.define_singleton_method(:apply!) { raise 'second batch failure' }
+        failing_plan.define_singleton_method(:applied?) { false }
+
+        expect { project.batch_plan([reversible, failing_plan]).apply! }
+          .to raise_error(Mxrb::BatchError, /rollback failed.*simulated rollback failure/)
+      end
+    end
+  end
+
   it 'reports navigation and design-system integrity diagnostics' do
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'lint.mpr')
