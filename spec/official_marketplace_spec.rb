@@ -24,6 +24,8 @@ RSpec.describe Mxrb::OfficialMarketplace do
       expect(credentials.pat).to eq('token')
       expect(File.stat(path).mode & 0o777).to eq(0o600)
       expect { credentials.save_pat(' ') }.to raise_error(Mxrb::MarketplaceError, /must not be empty/)
+      File.write(path, '[]')
+      expect { credentials.pat }.to raise_error(Mxrb::MarketplaceError, /expected a JSON object/)
       File.write(path, '{broken')
       expect { credentials.pat }.to raise_error(Mxrb::MarketplaceError, /invalid credentials/)
     end
@@ -73,10 +75,25 @@ RSpec.describe Mxrb::OfficialMarketplace do
       expect { credentials.configure_pat_file(env) }
         .to raise_error(Mxrb::MarketplaceError, /MXRB_MENDIX_PAT not found/)
 
+      env = File.join(dir, 'marketplace.env')
+      File.write(env, "export MXRB_MENDIX_PAT=x\n")
+      expect(credentials.configure_pat_file(env)).to eq(credentials.path)
+      expect(credentials.pat).to eq('x')
+
       json = File.join(dir, 'secret.json')
       File.write(json, '{}')
       expect { credentials.configure_pat_file(json) }
         .to raise_error(Mxrb::MarketplaceError, /must contain/)
+      File.write(json, '[]')
+      expect { credentials.configure_pat_file(json) }
+        .to raise_error(Mxrb::MarketplaceError, /must contain/)
+
+      unreadable = File.join(dir, 'unreadable.pat')
+      File.write(unreadable, 'token')
+      allow(File).to receive(:binread).and_call_original
+      allow(File).to receive(:binread).with(unreadable).and_raise(Errno::EACCES, unreadable)
+      expect { credentials.configure_pat_file(unreadable) }
+        .to raise_error(Mxrb::MarketplaceError, /cannot read Mendix PAT file/)
     end
   end
 
