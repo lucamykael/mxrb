@@ -15,5 +15,7 @@
 - [Writing projects](writing.md)
 - [Project scaffolds](scaffolds.md)
 - [Entity DSL](entity-dsl.md)
+- [Operations, lifecycle, and Marketplace](platform-operations.md)
+- [VetClinic end-to-end acceptance](vetclinic-acceptance.md)
 
 [Back to the project README](../../README.md)

@@ -106,7 +106,7 @@ module Mxrb
       def text_translations(text)
         return {} unless text.is_a?(Hash)
 
-        translations = items(text['Translations']).to_h do |translation|
+        translations = items(text['Translations'] || text['Items']).to_h do |translation|
           [translation['LanguageCode'].to_s, translation['Text'].to_s]
         end
         translations.reject { |_locale, value| value.empty? }

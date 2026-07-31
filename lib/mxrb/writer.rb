@@ -121,7 +121,11 @@ module Mxrb
         )
       end
       root_id = SecureRandom.uuid
-      doc = { "$ID" => root_id, "$Type" => "Projects$Project", "Name" => File.basename(@path, ".mpr") }
+      doc = {
+        "$ID" => root_id,
+        "$Type" => "Projects$Project",
+        "IsSystemProject" => false
+      }
       bytes = IO::BsonCodec.serialize(doc)
       blob = IO::BsonCodec.uuid_to_blob(root_id)
       contents_dir = File.join(File.dirname(@path), "mprcontents")
@@ -150,12 +154,22 @@ module Mxrb
     end
 
     def apply(mpr)
-      root_id = mpr.root_unit.fetch("UnitID")
+      root = mpr.root_unit
+      root_id = root.fetch("UnitID")
+      root_doc = mpr.parse_contents(root)
+      root_doc = {
+        "$ID" => root_doc["$ID"] || root_id,
+        "$Type" => "Projects$Project",
+        "IsSystemProject" => false
+      }
+      mpr.update_unit(root_id, root_doc)
       native_units = load_native_units(@definition[:native_units_path])
       native_units = apply_native_unit_overrides(
         native_units, @definition.fetch(:native_unit_overrides, [])
       )
       apply_native_project_units(mpr, root_id, native_units)
+      apply_default_project_units(mpr, root_id)
+      ensure_project_documents(mpr, root_id)
       @definition.fetch(:modules).each_with_index do |mod, index|
         raw_module = find_named(mpr, "Modules", root_id, mod.fetch(:name))
         existing_module = raw_module ? mpr.parse_contents(raw_module) : native_module_doc(native_units, mod.fetch(:name))
@@ -168,6 +182,7 @@ module Mxrb
 
         mpr.update_unit(module_id, module_doc) if raw_module
         apply_native_module_units(mpr, module_id, mod.fetch(:name), native_units)
+        write_native_documents(mpr, module_id, mod)
         write_module_security(mpr, module_id, mod) if mod.key?(:module_roles)
         write_domain_model(mpr, module_id, mod)
         write_documents(mpr, module_id, mod)
@@ -209,6 +224,43 @@ module Mxrb
       apply_native_unit_tree(mpr, root_id, units)
     end
 
+    def ensure_project_documents(mpr, root_id)
+      documents = [
+        ['ProjectDocuments', modern_navigation_doc({}, profiles: [])],
+        ['ProjectDocuments', project_security_doc({})]
+      ]
+      existing_types = mpr.children_of(root_id).map { mpr.parse_contents(_1)['$Type'] }
+      documents.each do |containment, doc|
+        next if existing_types.include?(doc.fetch('$Type'))
+
+        mpr.insert_unit(container_uuid: root_id, containment_name: containment, contents_doc: doc)
+      end
+      security_unit = mpr.children_of(root_id).find do |unit|
+        mpr.parse_contents(unit)['$Type'] == 'Security$ProjectSecurity'
+      end
+      return unless security_unit &&
+                    array_items(mpr.parse_contents(security_unit)['UserRoles']).empty?
+
+      write_project_security(mpr, root_id, {})
+    end
+
+    def apply_default_project_units(mpr, root_id)
+      path = File.join(__dir__, 'templates', 'project', "#{@definition.fetch(:version)}.json")
+      return unless File.file?(path)
+
+      existing = mpr.children_of(root_id).map { mpr.parse_contents(_1)['$Type'] }
+      units = load_native_units(path).reject { existing.include?(_1.fetch('type')) }
+      units.each do |unit|
+        next unless unit.fetch('type') == 'Settings$ProjectSettings'
+
+        array_items(unit.dig('doc', 'Settings')).each do |setting|
+          setting['EnableNewStringBehavior'] = true \
+            if setting['$Type'] == 'Forms$WebUIProjectSettingsPart'
+        end
+      end
+      apply_native_unit_tree(mpr, root_id, units)
+    end
+
     def native_module_doc(native_units, module_name)
       native_units.find do |unit|
         unit["containment"] == "Modules" &&
@@ -219,6 +271,15 @@ module Mxrb
     def apply_native_module_units(mpr, module_id, module_name, native_units)
       units = native_units.select { _1["module"] == module_name }
       apply_native_unit_tree(mpr, module_id, units)
+    end
+
+    def write_native_documents(mpr, module_id, mod)
+      mod.fetch(:native_documents, []).each do |document|
+        upsert_native_unit(
+          mpr, module_id,
+          'containment' => document.fetch(:containment), 'doc' => document.fetch(:doc)
+        )
+      end
     end
 
     def apply_native_unit_tree(mpr, target_root_id, units)
@@ -257,8 +318,11 @@ module Mxrb
         end
       end
       if existing
-        preserved = mpr.parse_contents(existing).merge(doc)
-        preserved["$ID"] = mpr.parse_contents(existing)["$ID"] || existing.fetch("UnitID")
+        current = mpr.parse_contents(existing)
+        preserved = {
+          "$ID" => current["$ID"] || existing.fetch("UnitID"),
+          "$Type" => doc["$Type"]
+        }.merge(current).merge(doc)
         mpr.update_unit(existing.fetch("UnitID"), preserved)
         existing.fetch("UnitID")
       else
@@ -341,7 +405,7 @@ module Mxrb
       existing.merge(
         "$ID" => existing["$ID"] || SecureRandom.uuid,
         "$Type" => "Navigation$NavigationDocument",
-        "Profiles" => IO::BsonCodec.build_array(profiles)
+        "Profiles" => IO::BsonCodec.build_array(profiles, marker: 2)
       )
     end
 
@@ -354,7 +418,11 @@ module Mxrb
         "Name" => profile.fetch(:name).to_s,
         "HomePage" => navigation_home_doc(profile[:home_page], profile[:home_microflow]),
         "HomeItems" => IO::BsonCodec.build_array(role_homes.map { navigation_role_home_doc(_1) }),
-        "Menu" => navigation_menu_doc(profile.fetch(:items, []))
+        "Menu" => navigation_menu_doc(profile.fetch(:items, [])),
+        "OfflineEntityConfigs" => IO::BsonCodec.build_array([], marker: 3),
+        "ProgressiveWebAppSettings" => nil,
+        "NotFoundHomepage" => nil,
+        "ThrowPartialSyncError" => true
       }
       if !profile[:kind].to_s.empty?
         editable["Kind"] = profile[:kind]
@@ -370,22 +438,32 @@ module Mxrb
       if profile[:sign_in_page]
         editable["LoginPageSettings"] = {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Navigation$LoginPageSettings",
-          "Form" => profile.fetch(:sign_in_page)
+          "$Type" => "Forms$FormSettings",
+          "Form" => profile.fetch(:sign_in_page),
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "TitleOverride" => nil
+        }
+      elsif previous.empty?
+        editable["LoginPageSettings"] = {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Forms$FormSettings",
+          "Form" => "",
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "TitleOverride" => nil
         }
       end
-      previous.merge(editable).merge(
+      {
         "$ID" => previous["$ID"] || SecureRandom.uuid,
         "$Type" => previous["$Type"] || "Navigation$NavigationProfile"
-      )
+      }.merge(previous).merge(editable)
     end
 
     def navigation_home_doc(page, microflow)
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Navigation$HomePage",
-        "Page" => page,
-        "Microflow" => microflow
+        "Microflow" => microflow.to_s,
+        "Page" => page.to_s
       }
     end
 
@@ -445,7 +523,7 @@ module Mxrb
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Texts$Text",
-        "Translations" => IO::BsonCodec.build_array(translations.map do |locale, value|
+        "Items" => IO::BsonCodec.build_array(translations.map do |locale, value|
           {
             "$ID" => SecureRandom.uuid,
             "$Type" => "Texts$Translation",
@@ -482,10 +560,16 @@ module Mxrb
         [entity["name"] || entity["Name"], entity]
       end
 
+      access_associations = association_access_by_entity(mod)
       entities = mod.fetch(:entities).map.with_index do |entity, index|
-        entity_doc(entity, mod.fetch(:name), existing_entities[entity.fetch(:name)], index)
+        entity_doc(
+          entity, mod.fetch(:name), existing_entities[entity.fetch(:name)], index,
+          access_associations: access_associations.fetch(entity.fetch(:name), [])
+        )
       end
-      entity_ids = entities.to_h { |entity| [entity.fetch("name"), entity.fetch("$ID")] }
+      entity_ids = entities.to_h do |entity|
+        [entity['name'] || entity.fetch('Name'), entity.fetch('$ID')]
+      end
       @all_entity_ids ||= {}
       entity_ids.each { |name, id| @all_entity_ids["#{mod.fetch(:name)}.#{name}"] = id }
       existing_associations = array_items(existing[associations_key]).to_h do |association|
@@ -524,6 +608,20 @@ module Mxrb
       end
     end
 
+    def association_access_by_entity(mod)
+      module_name = mod.fetch(:name)
+      mod.fetch(:entities).each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |entity, result|
+        entity.fetch(:associations, []).each do |association|
+          result[entity.fetch(:name)] << association.fetch(:name)
+          next unless association.fetch(:owner, :Default).to_sym == :Both &&
+                      association.fetch(:type).to_sym == :Reference
+
+          target_module, target_name = association.fetch(:target).split('.', 2)
+          result[target_name] << association.fetch(:name) if target_module == module_name
+        end
+      end
+    end
+
     def write_documents(mpr, module_id, mod)
       existing = documents_by_name(mpr, module_id)
 
@@ -553,7 +651,10 @@ module Mxrb
       end
     end
 
-    def upsert_document(mpr, module_id, raw, doc)
+    def upsert_document(mpr, module_id, candidates, doc)
+      raw = Array(candidates).find do |candidate|
+        mpr.parse_contents(candidate)["$Type"] == doc["$Type"]
+      end
       if raw
         existing = mpr.parse_contents(raw)
         doc = merge_existing_document(existing, doc)
@@ -667,6 +768,12 @@ module Mxrb
           Microflows$Annotation
           Microflows$MicroflowParameter
         ].include?(object["$Type"])
+        if object["$Type"] == 'Microflows$MicroflowParameter' &&
+           generated_objects.any? do |generated|
+             generated["$Type"] == object["$Type"] && generated["Name"] == object["Name"]
+           end
+          next
+        end
 
         generated_objects.insert([index, generated_objects.size].min, object)
       end
@@ -819,8 +926,8 @@ module Mxrb
     end
 
     def documents_by_name(mpr, module_id)
-      collect_documents(mpr, module_id).to_h do |raw|
-        [mpr.parse_contents(raw)["Name"], raw]
+      collect_documents(mpr, module_id).group_by do |raw|
+        mpr.parse_contents(raw)["Name"]
       end
     end
 
@@ -838,23 +945,32 @@ module Mxrb
     end
 
     def module_doc(name, index, previous: nil)
-      (previous || {}).merge(
-        "$ID" => previous&.fetch("$ID", nil) || SecureRandom.uuid,
-        "$Type" => previous&.fetch("$Type", nil) || "Projects$Module",
+      current = previous || {}
+      current.merge(
+        "$ID" => current["$ID"] || SecureRandom.uuid,
+        "$Type" => current["$Type"] || "Projects$ModuleImpl",
+        "AppStoreGuid" => current.fetch("AppStoreGuid", ""),
+        "AppStoreVersion" => current.fetch("AppStoreVersion", ""),
+        "AppStoreVersionGuid" => current.fetch("AppStoreVersionGuid", ""),
+        "FromAppStore" => current.fetch("FromAppStore", false),
         "Name" => name,
-        "SortIndex" => previous&.fetch("SortIndex", index) || index,
-        "FromAppStore" => previous&.fetch("FromAppStore", false) || false,
-        "ExportLevel" => previous&.fetch("ExportLevel", "Hidden") || "Hidden"
-      )
+        "NewSortIndex" => current.fetch("NewSortIndex", index.to_f)
+      ).tap do |doc|
+        doc.delete('SortIndex')
+        doc.delete('ExportLevel')
+      end
     end
 
-    def entity_doc(entity, module_name, previous, index)
+    def entity_doc(entity, module_name, previous, index, access_associations: [])
       id = previous&.dig("$ID") || SecureRandom.uuid
       attrs_key = native_key(previous, "attributes", "Attributes")
       rules_key = native_key(previous, "accessRules", "AccessRules")
       events_key = native_key(previous, "eventHandlers", "EventHandlers")
       indexes_key = native_key(previous, "indexes", "Indexes")
-      generalization_key = native_key(previous, "generalization", "Generalization")
+      validation_key = native_key(previous, "validationRules", "ValidationRules")
+      generalization_key = native_existing_key(
+        previous, 'generalization', 'Generalization', 'maybeGeneralization', 'MaybeGeneralization'
+      ) || 'MaybeGeneralization'
       previous_attrs = array_items(previous&.dig(attrs_key)).to_h do |attribute|
         [attribute["name"] || attribute["Name"], attribute]
       end
@@ -864,28 +980,50 @@ module Mxrb
       rules_declared = !entity[:access_rules].nil?
       access_rules = if rules_declared
         IO::BsonCodec.build_array(
-          entity.fetch(:access_rules).map { access_rule_doc(_1, module_name, entity.fetch(:name)) }
+          entity.fetch(:access_rules).map do |rule|
+            access_rule_doc(
+              rule, module_name, entity.fetch(:name),
+              attributes: entity.fetch(:attributes).map { _1.fetch(:name) },
+              associations: access_associations
+            )
+          end
         )
       else
         previous&.dig(rules_key) || IO::BsonCodec.build_array([])
       end
       doc = (previous || {}).merge(
         "$ID" => id, "$Type" => "DomainModels$EntityImpl",
-        "$QualifiedName" => "#{module_name}.#{entity.fetch(:name)}",
-        "name" => entity.fetch(:name), "documentation" => entity.fetch(:documentation, ""),
-        "dataStorageGuid" => previous&.dig("dataStorageGuid") || SecureRandom.uuid,
-        "location" => previous&.dig("location") || { "x" => (index % 4) * 220, "y" => (index / 4) * 160 },
-        "source" => previous&.dig("source"), "exportLevel" => previous&.dig("exportLevel") || "Hidden"
+        "Name" => entity.fetch(:name), "Documentation" => entity.fetch(:documentation, ""),
+        "GUID" => previous&.dig("GUID") || SecureRandom.uuid,
+        "Location" => previous&.dig("Location") || "#{(index % 4) * 220};#{(index / 4) * 160}",
+        "Image" => previous&.fetch("Image", "") || "",
+        "IsRemote" => previous&.fetch("IsRemote", false) || false,
+        "RemoteSource" => previous&.fetch("RemoteSource", "") || ""
       )
       doc[attrs_key] = IO::BsonCodec.build_array(attrs)
       doc[rules_key] = access_rules
-      doc[indexes_key] ||= IO::BsonCodec.build_array([])
+      doc[validation_key] = validation_rules_doc(
+        entity, module_name, previous&.dig(validation_key)
+      )
+      if entity[:indexes].nil?
+        doc[indexes_key] ||= IO::BsonCodec.build_array([])
+      else
+        doc[indexes_key] = IO::BsonCodec.build_array(
+          entity.fetch(:indexes).map { index_doc(_1, module_name, entity.fetch(:name)) }
+        )
+      end
       if entity[:lifecycle].nil?
         doc[events_key] ||= IO::BsonCodec.build_array([])
       else
         doc[events_key] = IO::BsonCodec.build_array(entity.fetch(:lifecycle).map { lifecycle_doc(_1) })
       end
-      if previous.nil? || previous.key?(generalization_key)
+      if entity[:generalization]
+        doc[generalization_key] = generalization_doc(entity.fetch(:generalization))
+      elsif entity[:system_members]
+        doc[generalization_key] = no_generalization(
+          entity.fetch(:persistable, true), **entity.fetch(:system_members)
+        )
+      elsif previous.nil? || previous.key?(generalization_key)
         doc[generalization_key] ||= no_generalization(entity.fetch(:persistable, true))
       end
       doc
@@ -893,8 +1031,8 @@ module Mxrb
 
     def attribute_doc(attr, previous)
       storage_type = Model::Attribute::TYPE_MAP.fetch(attr.fetch(:type))
-      type_key = native_existing_key(previous, "type", "Type", "newType", "NewType") || "type"
-      value_key = native_existing_key(previous, "value", "Value") || "value"
+      type_key = native_existing_key(previous, "type", "Type", "newType", "NewType") || "NewType"
+      value_key = native_existing_key(previous, "value", "Value") || "Value"
       name_key = native_key(previous, "name", "Name")
       documentation_key = native_key(previous, "documentation", "Documentation")
       previous_type = previous&.dig(type_key)
@@ -904,6 +1042,14 @@ module Mxrb
         { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
       end
       type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
+      if attr[:length]
+        length_key = native_key(previous_type, 'length', 'Length')
+        type_doc = type_doc.merge(length_key => Integer(attr[:length]))
+      end
+      if attr.key?(:localize_date)
+        localize_key = native_key(previous_type, 'localizeDate', 'LocalizeDate')
+        type_doc = type_doc.merge(localize_key => (attr[:localize_date] == true))
+      end
       previous_value = previous&.dig(value_key)
       value_doc = if previous_value && !attr.key?(:default)
         previous_value
@@ -915,14 +1061,13 @@ module Mxrb
       else
         {
           "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$StoredValue",
-          "defaultValue" => attr.fetch(:default, "").to_s
+          "DefaultValue" => attr.fetch(:default, "").to_s
         }
       end
       doc = (previous || {}).merge(
         "$ID" => previous&.dig("$ID") || SecureRandom.uuid,
         "$Type" => "DomainModels$Attribute",
-        "dataStorageGuid" => previous&.dig("dataStorageGuid") || SecureRandom.uuid,
-        "exportLevel" => previous&.dig("exportLevel") || "Hidden"
+        "GUID" => previous&.dig("GUID") || SecureRandom.uuid
       )
       doc[name_key] = attr.fetch(:name)
       doc[documentation_key] = attr.fetch(:documentation, "")
@@ -932,11 +1077,11 @@ module Mxrb
     end
 
     def native_key(hash, lower, upper)
-      return lower unless hash
+      return upper unless hash
       return lower if hash.key?(lower)
       return upper if hash.key?(upper)
 
-      lower
+      upper
     end
 
     def native_existing_key(hash, *keys)
@@ -945,22 +1090,89 @@ module Mxrb
       keys.find { hash.key?(_1) }
     end
 
-    def no_generalization(persistable)
+    def no_generalization(persistable, owner: false, created_date: false,
+                          changed_date: false, changed_by: false)
       { "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$NoGeneralization",
-        "persistable" => persistable, "hasChangedDate" => false,
-        "hasCreatedDate" => false, "hasOwner" => false, "hasChangedBy" => false }
+        "Persistable" => persistable, "HasChangedDateAttr" => changed_date,
+        "HasCreatedDateAttr" => created_date, "HasOwnerAttr" => owner,
+        "HasChangedByAttr" => changed_by }
     end
 
-    def access_rule_doc(rule, module_name, entity_name)
+    def generalization_doc(target)
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$Generalization',
+        'Generalization' => target.to_s
+      }
+    end
+
+    def validation_rules_doc(entity, module_name, previous)
+      existing = array_items(previous)
+      declarations = entity.fetch(:attributes).select do |attribute|
+        attribute.key?(:required) || attribute.key?(:unique)
+      end
+      return previous || IO::BsonCodec.build_array([]) if declarations.empty?
+
+      declared_names = declarations.map { _1.fetch(:name) }
+      kept = existing.reject do |rule|
+        declared_names.include?(rule['Attribute'].to_s.split('.').last) &&
+          rule.dig('RuleInfo', '$Type').to_s.match?(/(?:Required|Unique)RuleInfo\z/)
+      end
+      generated = declarations.flat_map do |attribute|
+        %i[required unique].filter_map do |kind|
+          validation_rule_doc(module_name, entity.fetch(:name), attribute.fetch(:name), kind) \
+            if attribute[kind] == true
+        end
+      end
+      IO::BsonCodec.build_array(kept + generated)
+    end
+
+    def validation_rule_doc(module_name, entity_name, attribute_name, kind)
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$ValidationRule',
+        'Attribute' => "#{module_name}.#{entity_name}.#{attribute_name}",
+        'Message' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Text',
+          'Items' => IO::BsonCodec.build_array([{
+            '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Translation',
+            'LanguageCode' => 'en_US',
+            'Text' => "#{attribute_name} #{kind == :required ? 'is required' : 'must be unique'}"
+          }])
+        },
+        'RuleInfo' => {
+          '$ID' => SecureRandom.uuid,
+          '$Type' => "DomainModels$#{kind.to_s.capitalize}RuleInfo"
+        }
+      }
+    end
+
+    def index_doc(index, module_name, entity_name)
+      members = index.fetch(:attributes).zip(index.fetch(:ascending)).map do |attribute, ascending|
+        {
+          '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$IndexedAttribute',
+          'Type' => 'Normal', 'Attribute' => "#{module_name}.#{entity_name}.#{attribute}",
+          'Association' => nil, 'Ascending' => ascending
+        }
+      end
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$EntityIndex',
+        'DataStorageGuid' => SecureRandom.uuid,
+        'IndexedAttributes' => IO::BsonCodec.build_array(members),
+        'IncludeInOffline' => index.fetch(:include_offline, false)
+      }
+    end
+
+    def access_rule_doc(rule, module_name, entity_name, attributes: [], associations: [])
       read = rule.fetch(:read, :none)
       write = rule.fetch(:write, :none)
       default_rights = access_default_rights(read, write)
-      members = access_member_docs(read, write, module_name, entity_name)
+      members = access_member_docs(
+        read, write, module_name, entity_name, attributes:, associations:
+      )
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "DomainModels$EntityAccessRule",
+        "$Type" => "DomainModels$AccessRule",
         "Documentation" => "",
-        "ModuleRoles" => IO::BsonCodec.build_array(rule.fetch(:roles), marker: 1),
+        "AllowedModuleRoles" => IO::BsonCodec.build_array(rule.fetch(:roles), marker: 1),
         "AllowCreate" => rule.fetch(:create, false),
         "AllowDelete" => rule.fetch(:delete, false),
         "DefaultMemberAccessRights" => default_rights,
@@ -975,39 +1187,58 @@ module Mxrb
       "None"
     end
 
-    def access_member_docs(read, write, module_name, entity_name)
+    def access_member_docs(read, write, module_name, entity_name, attributes: [], associations: [])
       explicit_writes = write.is_a?(Array) ? write.map(&:to_s) : []
       explicit_reads  = read.is_a?(Array)  ? read.map(&:to_s)  : []
-      all_members = (explicit_reads + explicit_writes).uniq
+      all_members = (attributes + associations + explicit_reads + explicit_writes).map(&:to_s).uniq
       all_members.map do |member|
-        rights = explicit_writes.include?(member) ? "ReadWrite" : "ReadOnly"
+        rights = if write == :all || explicit_writes.include?(member)
+                   'ReadWrite'
+                 elsif read == :all || explicit_reads.include?(member)
+                   'ReadOnly'
+                 else
+                   'None'
+                 end
+        association = associations.map(&:to_s).include?(member)
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "DomainModels$MemberAccess",
-          "Attribute" => "#{module_name}.#{entity_name}/#{member}",
+          "Association" => association ? "#{module_name}.#{member}" : "",
+          "Attribute" => association ? "" : "#{module_name}.#{entity_name}.#{member}",
           "AccessRights" => rights
         }
       end
     end
 
     def association_doc(association, from_id:, to_id:, previous:)
-      (previous || {}).merge(
+      doc = (previous || {}).merge(
         "$ID" => previous&.dig("$ID") || SecureRandom.uuid,
         "$Type" => "DomainModels$Association",
         "Name" => association.fetch(:name),
-        "Documentation" => "",
-        "ParentID" => from_id,
-        "ChildID" => to_id,
+        "Documentation" => association.fetch(:documentation, ''),
+        "ParentPointer" => from_id,
+        "ChildPointer" => to_id,
+        "ParentConnection" => "0;50",
+        "ChildConnection" => "100;50",
+        "GUID" => previous&.dig("GUID") || SecureRandom.uuid,
         "Type" => association.fetch(:type).to_s,
         "Owner" => association.fetch(:owner, :Default).to_s,
-        "StorageFormat" => association.fetch(:type) == :ReferenceSet ? "Table" : "Column",
-        "DeleteBehavior" => previous&.dig("DeleteBehavior") || {
-          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$DeleteBehavior",
-          "parentDeleteBehavior" => "NoAction", "childDeleteBehavior" => "NoAction",
-          "parentErrorMessage" => nil, "childErrorMessage" => nil
-        },
-        "ExportLevel" => "Hidden"
+        "StorageFormat" => association.fetch(:type) == :ReferenceSet ? "Table" : "Column"
       )
+      behavior = previous&.dig('DeleteBehavior') || previous&.dig('deleteBehavior') || {}
+      parent_key = native_key(behavior, 'parentDeleteBehavior', 'ParentDeleteBehavior')
+      child_key = native_key(behavior, 'childDeleteBehavior', 'ChildDeleteBehavior')
+      parent_error_key = native_key(behavior, 'parentErrorMessage', 'ParentErrorMessage')
+      child_error_key = native_key(behavior, 'childErrorMessage', 'ChildErrorMessage')
+      behavior = behavior.merge(
+        '$ID' => behavior['$ID'] || SecureRandom.uuid,
+        '$Type' => 'DomainModels$DeleteBehavior',
+        parent_key => association.fetch(:parent_delete, :DeleteMeButKeepReferences).to_s,
+        child_key => association.fetch(:child_delete, :DeleteMeButKeepReferences).to_s,
+        parent_error_key => behavior[parent_error_key], child_error_key => behavior[child_error_key]
+      )
+      doc[native_key(previous, 'deleteBehavior', 'DeleteBehavior')] = behavior
+      doc
     end
 
     def lifecycle_doc(callback)
@@ -1046,8 +1277,17 @@ module Mxrb
         widgets
       end
       roles_declared = !page[:allowed_roles].nil?
-      doc = { "$ID" => SecureRandom.uuid, "$Type" => "Pages$Page", "Name" => page.fetch(:name),
-        "Documentation" => "", "Url" => "", "Layout" => page.fetch(:layout),
+      form_call = {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$LayoutCall",
+        "Arguments" => IO::BsonCodec.build_array([{
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$FormCallArgument",
+          "Parameter" => "#{page.fetch(:layout)}.Main",
+          "Widgets" => IO::BsonCodec.build_array(content, marker: 2)
+        }], marker: 2),
+        "Form" => page.fetch(:layout)
+      }
+      doc = { "$ID" => SecureRandom.uuid, "$Type" => "Forms$Page", "Name" => page.fetch(:name),
+        "Documentation" => "", "Url" => "", "FormCall" => form_call,
         "Title" => text_doc(page.fetch(:title)), "MarkAsUsed" => false, "Excluded" => false,
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
         "__mxrb_allowed_roles_declared" => roles_declared,
@@ -1055,8 +1295,7 @@ module Mxrb
         "Parameters" => IO::BsonCodec.build_array([]),
         "PopupWidth" => page.fetch(:popup) ? 600 : 0,
         "PopupHeight" => page.fetch(:popup) ? 400 : 0,
-        "PopupResizable" => page.fetch(:popup), "ExportLevel" => "Hidden",
-        "Widgets" => IO::BsonCodec.build_array(content) }
+        "PopupResizable" => page.fetch(:popup), "ExportLevel" => "Hidden" }
       doc
     end
 
@@ -1099,10 +1338,15 @@ module Mxrb
           "$ID" => SecureRandom.uuid,
           "$Type" => "Enumerations$EnumerationValue",
           "Name" => val.fetch(:name),
-          "Caption" => { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text", "Translations" => [] },
+          "Caption" => { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text", "Items" => [] },
           "Image" => "",
           "ExportLevel" => "Hidden"
-        }.tap { |v| v["Caption"]["Translations"] = [{ "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation", "LanguageCode" => "en_US", "Text" => val[:caption] || val.fetch(:name) }] }
+        }.tap do |value|
+          value["Caption"]["Items"] = IO::BsonCodec.build_array([{
+            "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
+            "LanguageCode" => "en_US", "Text" => val[:caption] || val.fetch(:name)
+          }])
+        end
       end
       {
         "$ID" => SecureRandom.uuid,
@@ -1144,16 +1388,43 @@ module Mxrb
         "Documentation" => event.fetch(:documentation, ""),
         "ExportLevel" => "Hidden",
         "Microflow" => event.fetch(:microflow),
-        "StartDatetime" => "2000-01-01T00:00:00",
-        "TimeZone" => "",
+        "StartDateTime" => Time.utc(2000, 1, 1),
+        "TimeZone" => "UTC",
+        "Schedule" => scheduled_event_schedule_doc(event),
+        "OnOverlap" => "SkipNext",
         "Enabled" => event.fetch(:enabled, true),
         "IntervalType" => interval_type,
         "Interval" => event.fetch(:interval, 1)
       }
     end
 
+    def scheduled_event_schedule_doc(event)
+      interval = Integer(event.fetch(:interval, 1))
+      case event.fetch(:unit).to_sym
+      when :minutes
+        { '$ID' => SecureRandom.uuid, '$Type' => 'ScheduledEvents$MinuteSchedule',
+          'Multiplier' => interval }
+      when :hours
+        { '$ID' => SecureRandom.uuid, '$Type' => 'ScheduledEvents$HourSchedule',
+          'Multiplier' => interval, 'MinuteOffset' => 0 }
+      when :days
+        raise ArgumentError, 'day schedules support interval: 1' unless interval == 1
+
+        { '$ID' => SecureRandom.uuid, '$Type' => 'ScheduledEvents$DaySchedule',
+          'HourOfDay' => 0, 'MinuteOfHour' => 0 }
+      else
+        raise ArgumentError, 'modern schedules support minutes, hours, or days'
+      end
+    end
+
     def project_security_doc(security)
-      roles = security.fetch(:user_roles, []).map { user_role_doc(_1) }
+      role_definitions = security.fetch(:user_roles, [])
+      if role_definitions.empty?
+        role_definitions = [
+          { name: "Administrator", admin: true, module_roles: [] }
+        ]
+      end
+      roles = role_definitions.map { user_role_doc(_1) }
       password_policy = {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Security$PasswordPolicySettings",
@@ -1178,11 +1449,13 @@ module Mxrb
         "CheckSecurity" => true,
         "AdminUserName" => "MxAdmin",
         "AdminPassword" => "1",
-        "AdminUserRole" => security[:admin_user_role] || roles.first&.fetch("Name", "") || "",
+        "AdminUserRole" => security[:admin_user_role] || roles.first.fetch("Name"),
         "EnableDemoUsers" => security.fetch(:demo_users_enabled, false) == true,
         "EnableGuestAccess" => security.fetch(:guest_access_enabled, false) == true,
         "GuestUserRole" => security[:guest_user_role].to_s,
         "SignInMicroflow" => security[:sign_in_microflow].to_s,
+        "StrictMode" => false,
+        "StrictPageUrlCheck" => true,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
         "DemoUsers" => IO::BsonCodec.build_array([], marker: 2),
         "FileDocumentAccess" => access_container("Security$FileDocumentAccessRuleContainer"),
@@ -1246,13 +1519,15 @@ module Mxrb
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Forms$FormAction",
+        "DisabledDuringExecution" => false,
         "FormSettings" => {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$FormSettings",
           "Form" => page.to_s,
-          "FormTitle" => nil,
-          "Location" => "Popup"
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "TitleOverride" => nil
         },
+        "NumberOfPagesToClose2" => "",
         "PagesForSpecializations" => IO::BsonCodec.build_array([], marker: 2)
       }
     end
@@ -1308,11 +1583,11 @@ module Mxrb
     def snippet_call_doc(widget)
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Pages$SnippetCall",
+        "$Type" => "Forms$SnippetCall",
         "Name" => widget.fetch(:name),
         "SnippetSettings" => {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$SnippetSettings",
+          "$Type" => "Forms$SnippetSettings",
           "Snippet" => widget.dig(:options, :snippet).to_s
         }
       }
@@ -1322,11 +1597,11 @@ module Mxrb
       fields = Array(search_bar[:fields]).map do |field|
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$AttributeSearchField",
+          "$Type" => "Forms$AttributeSearchField",
           "Name" => "searchField_#{field[:attribute]}",
           "AttributeRef" => {
             "$ID" => SecureRandom.uuid,
-            "$Type" => "Pages$AttributeRef",
+            "$Type" => "Forms$AttributeRef",
             "Attribute" => field[:attribute].to_s
           },
           "Label" => text_doc(field[:caption] || field[:attribute].to_s),
@@ -1336,20 +1611,20 @@ module Mxrb
       end
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Pages$SearchBar",
+        "$Type" => "Forms$SearchBar",
         "SearchFields" => IO::BsonCodec.build_array(fields)
       }
     end
 
     def toolbar_doc(toolbar)
       type_map = {
-        new:    "Pages$GridNewButton",
-        delete: "Pages$GridDeleteButton",
-        search: "Pages$GridSearchButton",
-        export: "Pages$GridExportToExcelButton"
+        new:    "Forms$GridNewButton",
+        delete: "Forms$GridDeleteButton",
+        search: "Forms$GridSearchButton",
+        export: "Forms$GridExportToExcelButton"
       }
       buttons = Array(toolbar[:buttons]).map do |btn|
-        bson_type = type_map.fetch(btn[:type].to_sym, "Pages$GridNewButton")
+        bson_type = type_map.fetch(btn[:type].to_sym, "Forms$GridNewButton")
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => bson_type,
@@ -1361,7 +1636,7 @@ module Mxrb
       end
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Pages$GridToolBar",
+        "$Type" => "Forms$GridToolBar",
         "Buttons" => IO::BsonCodec.build_array(buttons)
       }
     end
@@ -1372,17 +1647,17 @@ module Mxrb
 
     def widget_storage_type(type)
       {
-        button:             "Pages$ActionButton",
-        text_box:           "Pages$TextBox",
-        number_input:       "Pages$TextBox",
-        check_box:          "Pages$CheckBox",
-        date_picker:        "Pages$DatePicker",
-        reference_selector: "Pages$ReferenceSelector",
-        text:               "Pages$DynamicText",
-        data_grid:          "Pages$DataGrid",
-        tab_control:        "Pages$TabControl",
-        drop_down:          "Pages$DropDownWidget",
-        container:          "Pages$Container"
+        button:             "Forms$ActionButton",
+        text_box:           "Forms$TextBox",
+        number_input:       "Forms$TextBox",
+        check_box:          "Forms$CheckBox",
+        date_picker:        "Forms$DatePicker",
+        reference_selector: "Forms$ReferenceSelector",
+        text:               "Forms$DynamicText",
+        data_grid:          "Forms$DataGrid",
+        tab_control:        "Forms$TabControl",
+        drop_down:          "Forms$DropDownWidget",
+        container:          "Forms$Container"
       }.fetch(type.to_sym)
     end
 
@@ -1390,7 +1665,7 @@ module Mxrb
       Array(columns).map do |column|
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$DataGridColumn",
+          "$Type" => "Forms$DataGridColumn",
           "Name" => column.fetch(:name),
           "AttributePath" => column[:attribute]&.to_s,
           "Caption" => text_doc(column[:caption].to_s),
@@ -1404,7 +1679,7 @@ module Mxrb
     def data_grid_source(entity)
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Pages$NewGridDatabaseSource",
+        "$Type" => "Forms$NewGridDatabaseSource",
         "Entity" => entity.to_s
       }
     end
@@ -1413,7 +1688,7 @@ module Mxrb
       Array(tabs).map do |tab|
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$TabPage",
+          "$Type" => "Forms$TabPage",
           "Name" => tab.fetch(:name),
           "Caption" => text_doc(tab[:caption].to_s),
           "Widgets" => IO::BsonCodec.build_array([], marker: 2)
@@ -1436,17 +1711,17 @@ module Mxrb
       when :nanoflow
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$CallNanoflowClientAction",
+          "$Type" => "Forms$CallNanoflowClientAction",
           "Nanoflow" => event.fetch(:handler),
           "DisabledDuringExecution" => true
         }
       else
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$MicroflowClientAction",
+          "$Type" => "Forms$MicroflowClientAction",
           "MicroflowSettings" => {
             "$ID" => SecureRandom.uuid,
-            "$Type" => "Pages$MicroflowSettings",
+            "$Type" => "Forms$MicroflowSettings",
             "Microflow" => event.fetch(:handler),
             "FormValidations" => "All"
           },
@@ -1460,26 +1735,26 @@ module Mxrb
       when "save_changes"
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$SaveChangesClientAction",
+          "$Type" => "Forms$SaveChangesClientAction",
           "ClosePage" => true,
           "SyncAutomatically" => false
         }
       when "cancel_changes"
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$CancelChangesClientAction",
+          "$Type" => "Forms$CancelChangesClientAction",
           "ClosePage" => true
         }
       when "delete"
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$DeleteClientAction",
+          "$Type" => "Forms$DeleteClientAction",
           "ClosePage" => false
         }
       when "close_page"
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Pages$ClosePageClientAction"
+          "$Type" => "Forms$ClosePageClientAction"
         }
       else
         raise ArgumentError, "unsupported native action #{handler.inspect}"
@@ -1489,15 +1764,15 @@ module Mxrb
     def data_view_doc(source, widgets)
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Pages$DataView",
+        "$Type" => "Forms$DataView",
         "Name" => "dataView",
         "DataSource" => {
           "$ID" => SecureRandom.uuid,
           "$Type" => source.fetch(:kind).to_sym == :nanoflow ?
-            "Pages$NanoflowSource" : "Pages$MicroflowSource",
+            "Forms$NanoflowSource" : "Forms$MicroflowSource",
           "MicroflowSettings" => {
             "$ID" => SecureRandom.uuid,
-            "$Type" => "Pages$MicroflowSettings",
+            "$Type" => "Forms$MicroflowSettings",
             "Microflow" => source.fetch(:name)
           }
         },
@@ -1523,22 +1798,14 @@ module Mxrb
       mark_as_used = flow[:mark_as_used]
       excluded = flow[:excluded]
 
-      graph = body_declared ? build_microflow_graph(
-        flow[:body],
-        flow[:return_expression] || flow[:return_variable_name]
-      ) :
-                              { objects: [], flows: [] }
-      object_collection = if body_declared
-        {
-          "$ID" => stable_id(flow_name, "object_collection"), "$Type" => "Microflows$MicroflowObjectCollection",
-          "Objects" => IO::BsonCodec.build_array(params + graph[:objects])
-        }
-      else
-        {
-          "$ID" => stable_id(flow_name, "object_collection"), "$Type" => "Microflows$MicroflowObjectCollection",
-          "Objects" => IO::BsonCodec.build_array(params)
-        }
-      end
+      graph = build_microflow_graph(
+        flow[:body], flow[:return_expression] || flow[:return_variable_name]
+      )
+      object_collection = {
+        "$ID" => stable_id(flow_name, "object_collection"),
+        "$Type" => "Microflows$MicroflowObjectCollection",
+        "Objects" => IO::BsonCodec.build_array(params + graph[:objects])
+      }
 
       { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$Microflow",
         "Name" => flow_name, "Documentation" => flow.fetch(:documentation, ""),
@@ -2002,7 +2269,8 @@ module Mxrb
           "Commit" => commit,
           "Entity" => activity[:entity], "ErrorHandlingType" => "Rollback",
           "Items" => IO::BsonCodec.build_array(
-            Array(activity[:members]).map { change_action_item_doc(_1) }, marker: 2
+            Array(activity[:members]).map { change_action_item_doc(_1, entity: activity[:entity]) },
+            marker: 2
           ),
           "RefreshInClient" => activity[:refresh] == true,
           "VariableName" => activity[:variable] }
@@ -2580,10 +2848,14 @@ module Mxrb
       { "$ID" => SecureRandom.uuid, "$Type" => native_type }
     end
 
-    def change_action_item_doc(member)
+    def change_action_item_doc(member, entity: nil)
+      attribute = member[:attribute].to_s
+      if entity && !attribute.empty? && !attribute.include?('.') && !attribute.include?('/')
+        attribute = "#{entity}.#{attribute}"
+      end
       { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ChangeActionItem",
         "Association" => member[:association].to_s,
-        "Attribute" => member[:attribute].to_s,
+        "Attribute" => attribute,
         "Type" => mendix_enum(member[:operation] || "Set"),
         "Value" => member_value_expr(member[:value]),
         "ValueModel" => no_expression_doc }
@@ -2603,13 +2875,13 @@ module Mxrb
       microflow_doc(flow).merge(
         "$Type" => "Microflows$Nanoflow",
         "AllowConcurrentExecution" => nil,
-        "UseListParameterByReference" => false
+        "UseListParameterByReference" => true
       ).compact
     end
 
     def text_doc(text)
       { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text",
-        "Translations" => IO::BsonCodec.build_array([
+        "Items" => IO::BsonCodec.build_array([
           { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
             "LanguageCode" => "en_US", "Text" => text }
         ]) }

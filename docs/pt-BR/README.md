@@ -15,5 +15,7 @@
 - [Criação e edição de projetos](writing.md)
 - [Scaffolds de projeto](scaffolds.md)
 - [DSL de entidades](entity-dsl.md)
+- [Operação, lifecycle e Marketplace](platform-operations.md)
+- [Aceitação end-to-end do VetClinic](vetclinic-acceptance.md)
 
 [Voltar ao README do projeto](../../README.pt-BR.md)

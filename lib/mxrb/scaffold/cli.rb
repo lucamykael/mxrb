@@ -17,7 +17,9 @@ module Mxrb
         return show_help if help?
 
         validate_action!
-        result = Generator.new(kind, scaffold_name, target: target).scaffold
+        @dry_run = @argv.delete('--dry-run') ? true : false
+        @json = @argv.delete('--json') ? true : false
+        result = Generator.new(kind, scaffold_name, target: target, dry_run: @dry_run).scaffold
         render(result)
       rescue ArgumentError => e
         abort "[mxrb] error: #{e.message}"
@@ -64,8 +66,16 @@ module Mxrb
 
       def kind = @command.tr('-', '_').to_sym
 
-      def render(result)
-        result.files.each { @output.puts "  create  #{_1}" }
+      def render(result) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        if @json
+          return @output.puts JSON.pretty_generate(
+            kind: result.kind, name: result.name, dry_run: result.dry_run,
+            files: result.files, updated: result.updated
+          )
+        end
+
+        prefix = result.dry_run ? 'would create' : 'create'
+        result.files.each { @output.puts "  #{prefix}  #{_1}" }
         result.updated.each { @output.puts "  update  #{_1}" }
         return if QUIET_COMMANDS.include?(@command)
 

@@ -612,10 +612,10 @@ module Mxrb
       end
     end
 
-    class ModuleBuilder
+    class ModuleBuilder # rubocop:disable Metrics/ClassLength
       attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
                   :associations, :menus, :module_roles, :enumerations, :constants,
-                  :scheduled_events
+                  :scheduled_events, :native_documents
 
       def initialize(name)
         @name             = name.to_s
@@ -630,6 +630,7 @@ module Mxrb
         @enumerations     = []
         @constants        = []
         @scheduled_events = []
+        @native_documents = []
       end
 
       def entity(name, &block)
@@ -697,6 +698,57 @@ module Mxrb
         @scheduled_events << sb.to_h
       end
 
+      def native_document(name, type:, deep_structure:, containment: 'Documents')
+        raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
+
+        @native_documents << {
+          name: name.to_s, type: type.to_s, containment: containment.to_s,
+          doc: { '$Type' => type.to_s, 'Name' => name.to_s }.merge(deep_structure)
+        }
+      end
+
+      # Minimal native responsive layout with a single Main placeholder.
+      def layout(name = :ApplicationLayout)
+        appearance = lambda do |class_name = ''|
+          {
+            '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Appearance',
+            'Class' => class_name, 'DesignProperties' => IO::BsonCodec.build_array([]),
+            'DynamicClasses' => '', 'Style' => ''
+          }
+        end
+        placeholder = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Placeholder',
+          'Appearance' => appearance.call, 'Name' => 'Main', 'TabIndex' => 0
+        }
+        center = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
+          'Appearance' => appearance.call('region-content'),
+          'Size' => 200, 'SizeMode' => 'Auto',
+          'ToggleMode' => 'None',
+          'Widgets' => IO::BsonCodec.build_array([placeholder], marker: 2)
+        }
+        container = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainer',
+          'Alignment' => 'Center', 'Bottom' => nil, 'CenterRegion' => center,
+          'Appearance' => appearance.call, 'LayoutMode' => 'Headline', 'Left' => nil,
+          'Name' => 'scrollContainer1', 'Right' => nil, 'ScrollBehavior' => 'PerRegion',
+          'NativeHideScrollbars' => false, 'TabIndex' => 0, 'Top' => nil,
+          'Width' => 960, 'WidthMode' => 'Auto'
+        }
+        content = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$WebLayoutContent',
+          'LayoutCall' => nil, 'LayoutType' => 'Responsive',
+          'Widgets' => IO::BsonCodec.build_array([container], marker: 2)
+        }
+        native_document(
+          name, type: 'Forms$Layout', deep_structure: {
+            'Appearance' => appearance.call, 'CanvasHeight' => 600,
+            'CanvasWidth' => 800, 'Content' => content, 'Documentation' => '',
+            'Excluded' => false, 'ExportLevel' => 'Hidden'
+          }
+        )
+      end
+
       def evaluate(path)
         instance_eval(File.read(path), path, 1)
       end
@@ -713,7 +765,7 @@ module Mxrb
           microflows: @microflows, nanoflows: @nanoflows,
           repositories: @repositories, menus: @menus, module_roles: @module_roles,
           enumerations: @enumerations, constants: @constants,
-          scheduled_events: @scheduled_events
+          scheduled_events: @scheduled_events, native_documents: @native_documents
         }
       end
     end
@@ -748,10 +800,15 @@ module Mxrb
       end
     end
 
-    class EntityBuilder
+    class EntityBuilder # rubocop:disable Metrics/ClassLength
       ATTR_TYPES = %i[string integer long float decimal boolean datetime autonumber hashstring binary enum].freeze
       ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
       ASSOCIATION_OWNERS = %i[Default Both].freeze
+      CARDINALITIES = {
+        many_to_one: %i[Reference Default],
+        one_to_one: %i[Reference Both],
+        many_to_many: %i[ReferenceSet Default]
+      }.freeze
 
       attr_reader :name
 
@@ -763,6 +820,9 @@ module Mxrb
         @associations = []
         @lifecycle    = nil
         @access_rules = nil
+        @generalization = nil
+        @system_members = nil
+        @indexes = nil
       end
 
       ATTR_TYPES.each do |type|
@@ -774,7 +834,40 @@ module Mxrb
       def non_persistent!  = (@persistable = false)
       def documentation(d) = (@doc = d)
 
-      def association(target, type: :Reference, owner: :Default, name: nil)
+      def generalizes(entity)
+        @generalization = entity.to_s
+      end
+
+      def system_members(owner: false, created_date: false, changed_date: false, changed_by: false)
+        @system_members = {
+          owner: owner, created_date: created_date,
+          changed_date: changed_date, changed_by: changed_by
+        }
+      end
+
+      def index(*attributes, include_offline: false, ascending: true)
+        members = attributes.flatten.map(&:to_s)
+        raise ArgumentError, 'index requires at least one attribute' if members.empty?
+
+        @indexes ||= []
+        directions = Array(ascending)
+        if directions.size != 1 && directions.size != members.size
+          raise ArgumentError, 'ascending must be one boolean or one value per indexed attribute'
+        end
+        directions *= members.size if directions.size == 1
+        @indexes << {
+          attributes: members, ascending: directions.map { _1 == true },
+          include_offline: include_offline == true
+        }
+      end
+
+      def association(target, type: :Reference, owner: :Default, name: nil, cardinality: nil,
+                      documentation: '', parent_delete: :NoAction, child_delete: :NoAction)
+        if cardinality
+          type, owner = CARDINALITIES.fetch(cardinality.to_sym) do
+            raise ArgumentError, 'cardinality must be :many_to_one, :one_to_one, or :many_to_many'
+          end
+        end
         type = type.to_sym
         owner = owner.to_sym
         unless ASSOCIATION_TYPES.include?(type)
@@ -786,7 +879,10 @@ module Mxrb
           name: (name || "#{@name}_#{target}").to_s,
           target: target.to_s,
           type: type,
-          owner: owner
+          owner: owner,
+          documentation: documentation.to_s,
+          parent_delete: parent_delete.to_sym,
+          child_delete: child_delete.to_sym
         }
       end
 
@@ -814,7 +910,8 @@ module Mxrb
         {
           name: @name, persistable: @persistable, documentation: @doc,
           attributes: @attributes, associations: @associations, lifecycle: @lifecycle,
-          access_rules: @access_rules
+          access_rules: @access_rules, generalization: @generalization,
+          system_members: @system_members, indexes: @indexes
         }
       end
 

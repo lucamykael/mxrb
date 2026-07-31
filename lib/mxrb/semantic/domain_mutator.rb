@@ -222,7 +222,7 @@ module Mxrb
           end
           entity.instance_variable_set(:@attributes, attrs)
 
-          entities_key = doc.key?("entities") ? "entities" : "Entities"
+          entities_key = DomainMutator.entities_key(doc)
           doc[entities_key] = IO::BsonCodec.build_array(entities + [entity.to_bson])
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
@@ -270,7 +270,7 @@ module Mxrb
           entities.reject! { IO::BsonCodec.extract_id(_1["$ID"] || _1["\$ID"]) == @entity_id }
           raise ArgumentError, "entity #{@entity_name.inspect} not found" if entities.size == before_size
 
-          entities_key = doc.key?("entities") ? "entities" : "Entities"
+          entities_key = DomainMutator.entities_key(doc)
           doc[entities_key] = IO::BsonCodec.build_array(entities)
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
@@ -357,6 +357,10 @@ module Mxrb
         IO::BsonCodec.parse_array(doc["entities"] || doc["Entities"])[:items]
       end
 
+      def self.entities_key(doc)
+        doc.key?("entities") ? "entities" : "Entities"
+      end
+
       def self.extract_attributes(entity_doc)
         IO::BsonCodec.parse_array(entity_doc["attributes"] || entity_doc["Attributes"])[:items]
       end
@@ -367,7 +371,7 @@ module Mxrb
       end
 
       def self.put_entity(domain_doc, entity_id, updated_entity_doc)
-        key      = domain_doc.key?("entities") ? "entities" : "Entities"
+        key      = entities_key(domain_doc)
         entities = IO::BsonCodec.parse_array(domain_doc[key])[:items]
         updated  = entities.map do |e|
           IO::BsonCodec.extract_id(e["$ID"] || e["\$ID"]) == entity_id ? updated_entity_doc : e
