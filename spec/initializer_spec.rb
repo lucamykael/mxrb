@@ -10,7 +10,8 @@ RSpec.describe Mxrb::Initializer do
     Dir.mktmpdir do |dir|
       result = described_class.new('vet_clinic').scaffold(into: dir)
       expected = [
-        'Gemfile', 'project.rb', 'modules/VetClinic/module.rb',
+        'Gemfile', '.gitignore', '.env.example', 'project.rb',
+        'modules/VetClinic/module.rb',
         'modules/VetClinic/domain/model.rb',
         'modules/VetClinic/application/application.rb',
         'modules/VetClinic/domain/entities/.keep',
@@ -20,35 +21,39 @@ RSpec.describe Mxrb::Initializer do
       expect(result.root).to eq(File.join(dir, 'vet_clinic'))
       expect(result.files).to eq(expected)
       expect(result.files).to all(satisfy { File.file?(_1) })
-      expect(File.read(expected[1])).to include(
+      expect(File.read(expected[0])).to include('gem "dotenv", "~> 3.0"')
+      expect(File.read(expected[1])).to include('.env', '!.env.example')
+      expect(File.read(expected[2])).to include('MXRB_MENDIX_PAT=')
+      expect(File.read(expected[3])).to include(
+        'require "dotenv/load"',
         'Mxrb.define', 'mendix_version "11.12.1"',
         'home_page: "VetClinic.Home"', 'app_title: "VetClinic"',
         'modules", "VetClinic", "module.rb"'
       )
-      expect(File.read(expected[2])).to include(
+      expect(File.read(expected[4])).to include(
         'self.module :VetClinic', 'domain", "model.rb"',
         'application", "application.rb"', 'presentation", "presentation.rb"'
       )
-      expect(File.read(expected[3])).to include(
+      expect(File.read(expected[5])).to include(
         'evaluate_dir File.join(__dir__, "enumerations")',
         'evaluate_dir File.join(__dir__, "entities")'
       )
-      expect(File.read(expected[4])).to include(
+      expect(File.read(expected[6])).to include(
         'evaluate_dir File.join(__dir__, "use_cases")',
         'evaluate_dir File.join(__dir__, "validations")',
         'evaluate_dir File.join(__dir__, "queries")'
       )
-      expect(File.read(expected[5])).to be_empty
-      expect(File.read(expected[6])).to include(
+      expect(File.read(expected[7])).to be_empty
+      expect(File.read(expected[8])).to include(
         'layout :ApplicationLayout',
         'evaluate_dir File.join(__dir__, "pages")',
         'evaluate_dir File.join(__dir__, "client_actions")'
       )
-      expect(File.read(expected[7])).to include(
+      expect(File.read(expected[9])).to include(
         'page :Home', 'title "VetClinic"', 'layout "VetClinic.ApplicationLayout"'
       )
 
-      load expected[1]
+      load expected[3]
       mpr = File.join(result.root, 'VetClinic.mpr')
       expect(Mxrb.validate(mpr)).to be_valid
       expect(Mxrb.open(mpr) { _1.modules.map(&:name) }).to eq(['VetClinic'])
@@ -103,6 +108,7 @@ RSpec.describe Mxrb::Initializer do
       expect(stderr).to be_empty
       expect(stdout).to include(
         'create', 'my_app/Gemfile', 'my_app/project.rb',
+        'my_app/.gitignore', 'my_app/.env.example',
         'my_app/modules/MyApp/module.rb',
         'my_app/modules/MyApp/application/application.rb',
         'my_app/modules/MyApp/domain/entities/.keep',

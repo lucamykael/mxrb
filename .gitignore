@@ -1,4 +1,7 @@
 .bundle/
+.env
+.env.*
+!.env.example
 Gemfile.lock
 *.gem
 *.mpr

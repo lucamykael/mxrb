@@ -39,6 +39,8 @@ module Mxrb
 
     def write_scaffold(root)
       write(root, 'Gemfile', gemfile)
+      write(root, '.gitignore', gitignore)
+      write(root, '.env.example', env_example)
       write(root, 'project.rb', project_rb)
       module_root = File.join(root, 'modules', @module_name)
       write_module_scaffold(module_root)
@@ -55,7 +57,8 @@ module Mxrb
 
     def relative_files
       module_prefix = File.join('modules', @module_name)
-      ['Gemfile', 'project.rb', *relative_module_files.map { File.join(module_prefix, _1) }]
+      ['Gemfile', '.gitignore', '.env.example', 'project.rb',
+       *relative_module_files.map { File.join(module_prefix, _1) }]
     end
 
     def relative_module_files
@@ -97,7 +100,24 @@ module Mxrb
         source "https://rubygems.org"
 
         #{gem_declaration}
+        gem "dotenv", "~> 3.0"
       RUBY
+    end
+
+    def gitignore
+      <<~TEXT
+        # Local environment and secrets. Commit only .env.example with blank values.
+        .env
+        .env.*
+        !.env.example
+      TEXT
+    end
+
+    def env_example
+      <<~TEXT
+        # Copy to .env and keep real values local. Never commit secrets.
+        MXRB_MENDIX_PAT=
+      TEXT
     end
 
     def gem_declaration
@@ -110,6 +130,7 @@ module Mxrb
       <<~RUBY
         # frozen_string_literal: true
 
+        require "dotenv/load"
         require "mxrb"
 
         output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, "#{@mpr_name}"))
