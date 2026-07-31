@@ -25,7 +25,8 @@ O MXRB usa a Marketplace Content API documentada pela Mendix. Crie um PAT com
 o escopo `mx:marketplace-content:read` e autentique uma vez:
 
 ```sh
-mxrb marketplace login
+cp .env.example .env
+mxrb marketplace login --pat-file .env
 mxrb marketplace search "Community Commons"
 mxrb marketplace show 170
 mxrb marketplace versions 170 --mendix-version 11.12.1
@@ -65,12 +66,24 @@ ZIP de repositórios Ruby-first.
 `GITHUB_TOKEN` é opcional para elevar o limite da API pública.
 
 ```sh
-mxrb marketplace login
+cp .env.example .env
+# edite .env e defina MXRB_MENDIX_PAT sem versionar o arquivo
+mxrb marketplace login --pat-file .env
 ```
 
-Login valida e salva o PAT em `~/.config/mxrb/credentials` (ou
-`$XDG_CONFIG_HOME/mxrb/credentials`) com permissão `0600`. Esta é a fundação
-da integração oficial. O token só é enviado aos hosts oficiais exatos
+Por padrão recomendado, o login valida o PAT e salva **somente o caminho
+absoluto** do `.env` em `~/.config/mxrb/credentials` (ou
+`$XDG_CONFIG_HOME/mxrb/credentials`). O MXRB não copia, move, altera permissões
+nem reescreve o arquivo apontado; ele o lê quando uma operação oficial precisa
+autenticar. Scaffolds novos já ignoram `.env` e geram `.env.example` sem segredo.
+
+Quem preferir armazenamento gerenciado pode executar
+`mxrb marketplace login --store-pat`. Antes de pedir o PAT, o comando informa
+que gravará JSON no arquivo global com permissão `0600`. Também é possível usar
+`MXRB_MENDIX_PAT_FILE=/caminho/.env` sem persistir configuração. Consulte
+`mxrb marketplace login --help` para os formatos e precedência.
+
+O token só é enviado aos hosts oficiais exatos
 `marketplace-api.mendix.com` e `marketplace.mendix.com`; ele é removido em
 redirects para qualquer outro host. Consulte a
 [Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).

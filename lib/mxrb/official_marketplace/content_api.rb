@@ -238,7 +238,8 @@ module Mxrb
       end
 
       def missing_pat_message
-        'Mendix PAT not found; run `mxrb marketplace login` with scope mx:marketplace-content:read'
+        'Mendix PAT not found; run `mxrb marketplace login --help` and configure a PAT file ' \
+          'or Ruby .env with scope mx:marketplace-content:read'
       end
     end # rubocop:enable Metrics/ClassLength
 
