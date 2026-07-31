@@ -177,7 +177,7 @@ abort result.errors.map(&:message).join("\n") unless result.passed?
 Arquivos de avaliação são Ruby comum e rodam com
 `mxrb evaluate app.mpr evaluation.rb`; não existe linguagem de regras paralela.
 
-## Planejado: Marketplace oficial Mendix
+## Marketplace oficial Mendix
 
 Esta família será separada de `mxrb module`, que instala módulos Ruby do
 catálogo interno. O formato previsto é:
@@ -186,18 +186,18 @@ catálogo interno. O formato previsto é:
 mxrb marketplace search CommunityCommons
 mxrb marketplace pull CommunityCommons --source github
 mxrb marketplace pull github:mendix/CommunityCommons
-mxrb marketplace import ./CommunityCommons.mpk
+mxrb marketplace import ./CommunityCommons.mpk --mpr App.mpr
 mxrb marketplace login
 mxrb marketplace pull CommunityCommons@3.4.0
 ```
 
-A implementação será incremental:
+Capacidades entregues:
 
 1. GitHub: resolver releases públicas, baixar `.mpk` ou arquivo da release,
    extrair com proteção contra caminhos inseguros e registrar versão, origem e
    checksum em lockfile.
-2. MPK local: importar um pacote obtido pelo usuário, detectar o módulo e
-   instalá-lo em `modules/`, sem rede.
+2. MPK local: ler o MPR interno e importar diretamente todas as units e assets
+   no MPR de destino via Ruby/SQLite/BSON, sem ferramentas Mendix.
 3. PAT Mendix: armazenar o token em `~/.config/mxrb/credentials` com permissões
    restritas e automatizar resolução/download somente depois de validar os
    endpoints reais da plataforma autenticada.

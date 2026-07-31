@@ -807,7 +807,23 @@ when "functional-instrument"
   puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
 
 when "marketplace"
-  action = ARGV.shift or abort "Usage: mxrb marketplace <login|search|pull|import|list|verify> ..."
+  marketplace_usage = <<~USAGE
+    Usage: mxrb marketplace <login|search|pull|import|list|verify> ...
+
+      marketplace import FILE.mpk --mpr FILE.mpr
+          Import an official Mendix module package directly with Ruby/SQLite/BSON.
+      marketplace pull NAME --mpr FILE.mpr [--source github]
+          Download a public module release and import it directly into the MPR.
+      marketplace list|verify [--target DIR]
+          Inspect or verify .mxrb/marketplace.lock.json and cached packages.
+
+    Module import does not invoke mx, mxcli, Studio Pro, or the Model SDK.
+  USAGE
+  action = ARGV.shift
+  if action.nil? || %w[-h --help help].include?(action)
+    puts marketplace_usage
+    exit(action.nil? ? 1 : 0)
+  end
   option = lambda do |name|
     index = ARGV.index(name)
     next unless index
@@ -815,7 +831,8 @@ when "marketplace"
     abort "#{name} requires a value" unless ARGV[index + 1]
     ARGV.slice!(index, 2).last
   end
-  target = option.call('--target') || Dir.pwd
+  mpr = option.call('--mpr')
+  target = option.call('--target') || (mpr ? File.dirname(File.expand_path(mpr)) : Dir.pwd)
   case action
   when 'login'
     print 'Mendix PAT: '
@@ -828,19 +845,25 @@ when "marketplace"
     results = Mxrb::OfficialMarketplace::GitHubResolver.new.search(query)
     results.each { puts "#{_1[:name]}\t#{_1[:repository]}\t#{_1[:description]}" }
   when 'pull'
-    identifier = ARGV.shift or abort 'Usage: mxrb marketplace pull <name|github:org/repo> [--target DIR]'
+    identifier = ARGV.shift or
+      abort 'Usage: mxrb marketplace pull <name|github:org/repo> [--mpr FILE] [--target DIR]'
     source = option.call('--source') || 'github'
     abort 'Only the GitHub source is currently resolvable; use marketplace import for local MPK' \
       unless source == 'github'
     name, version = identifier.split('@', 2)
-    result = Mxrb::OfficialMarketplace::Installer.new(target:).pull(name, version:)
+    result = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).pull(name, version:)
     puts "[mxrb] Installed #{result.package.name} #{result.package.version}"
     puts "[mxrb] #{result.destination}"
+    puts "[mxrb] Imported #{result.units} MPR units without Studio Pro" if result.respond_to?(:units)
     puts "[mxrb] SHA-256 #{result.sha256}"
   when 'import'
-    path = ARGV.shift or abort 'Usage: mxrb marketplace import <file.mpk> [--target DIR]'
-    result = Mxrb::OfficialMarketplace::Installer.new(target:).import(path, name: option.call('--name'))
+    path = ARGV.shift or
+      abort 'Usage: mxrb marketplace import <file.mpk> [--mpr FILE] [--target DIR]'
+    result = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).import(
+      path, name: option.call('--name')
+    )
     puts "[mxrb] Imported #{result.package.name} into #{result.destination}"
+    puts "[mxrb] #{result.units} MPR units written without Studio Pro" if result.respond_to?(:units)
     puts "[mxrb] SHA-256 #{result.sha256}"
   when 'list'
     packages = Mxrb::OfficialMarketplace.lock(target).fetch('packages')
@@ -1073,8 +1096,8 @@ else
              new <name> [--target DIR]     Scaffold and connect an application module
       marketplace login                   Store a Mendix PAT with owner-only permissions
                   search <query>           Search known/open-source Mendix repositories
-                  pull <name|github:o/r>   Install a GitHub release and update the lockfile
-                  import <file.mpk>        Safely install a local MPK archive
+                  pull <name|github:o/r>   Download a public release [--mpr FILE]
+                  import <file.mpk>        Import a module directly [--mpr FILE]
                   list|verify              Inspect or verify locked official packages
       scaffold list [--target DIR]         List generators and registered scaffolds
                destroy <kind:name>         Remove an unchanged registered scaffold
