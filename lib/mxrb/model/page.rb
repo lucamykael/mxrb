@@ -60,6 +60,8 @@ module Mxrb
       def extract_text(obj)
         return obj if obj.is_a?(String)
         return "" unless obj.is_a?(Hash)
+        return extract_text(obj["Template"]) if obj["$Type"] == "Forms$ClientTemplate"
+
         translations = parse_array(obj["Translations"] || obj["Items"] || obj["translations"] || [])
         translation = translations.first
         return "" unless translation.is_a?(Hash)
@@ -100,11 +102,11 @@ module Mxrb
                         options: { snippet: snippet_ref }, events: [] }
             next
           end
-          if %w[Pages$Container Forms$Container].include?(type)
+          if %w[Pages$Container Forms$Container Forms$DivContainer].include?(type)
             children = []
             parse_widgets(parse_array(widget["Widgets"]), children)
             target << { type: :container, name: widget["Name"] || "container",
-                        options: {}, children: children, events: [] }
+                        options: container_options(widget), children: children, events: [] }
             next
           end
           if layout_container?(widget)
@@ -162,6 +164,11 @@ module Mxrb
           attribute: attribute_path(widget),
           caption: widget_caption(widget, widget_type)
         }.compact
+      end
+
+      def container_options(widget)
+        class_name = widget.dig("Appearance", "Class") || widget["Class"]
+        class_name.to_s.empty? ? {} : { class: class_name }
       end
 
       def attribute_path(widget)

@@ -641,7 +641,7 @@ RSpec.describe Mxrb do
       expect(flow_doc["MarkAsUsed"]).to eq(true)
       expect(flow_doc["Excluded"]).to eq(true)
       page_doc = mpr.parse_contents(mpr.unit(page_id))
-      expect(page_doc["Title"]["Items"][1]["Text"]).to eq("Keep Title")
+      expect(page_doc["Title"]["Items"][1]["Text"]).to eq("Generated Title")
       expect(page_doc["Parameters"][1]["Name"]).to eq("Customer")
       expect(page_doc["Excluded"]).to eq(true)
       expect(mpr.unit(flow_id)["Contents"]).to be_nil
@@ -1191,7 +1191,7 @@ RSpec.describe Mxrb do
         widgets = argument["Widgets"]
 
         container = widgets[1]
-        expect(container["$Type"]).to eq("Forms$Container")
+        expect(container["$Type"]).to eq("Forms$DivContainer")
         expect(container["Class"]).to eq("mx-box")
         children = container["Widgets"]
         expect(children[1]["$Type"]).to eq("Forms$TextBox")

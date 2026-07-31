@@ -53,6 +53,49 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
       .to eq(deep['Widgets'])
   end
 
+  it 'replaces modern typed page content while preserving unsupported metadata' do
+    existing = {
+      '$ID' => 'page', '$Type' => 'Forms$Page',
+      'FormCall' => { 'Form' => 'Ui.OldLayout' },
+      'Title' => { 'Items' => [3, { 'Text' => 'Old title' }] },
+      'PopupWidth' => 300, 'Parameters' => [3, { 'Name' => 'Context' }],
+      'Appearance' => { 'Class' => 'native-page' }, 'MarkAsUsed' => true
+    }
+    generated = {
+      '$ID' => 'new', '$Type' => 'Forms$Page',
+      'FormCall' => { 'Form' => 'Ui.ApplicationLayout' },
+      'Title' => { 'Items' => [3, { 'Text' => 'New title' }] },
+      'PopupWidth' => 0, '__mxrb_deep_structure_declared' => false
+    }
+
+    merged = writer.send(:merge_existing_document, existing, generated)
+
+    expect(merged.dig('FormCall', 'Form')).to eq('Ui.ApplicationLayout')
+    expect(merged.dig('Title', 'Items', 1, 'Text')).to eq('New title')
+    expect(merged['PopupWidth']).to eq(0)
+    expect(merged).to include(
+      'Parameters' => existing['Parameters'],
+      'Appearance' => existing['Appearance'], 'MarkAsUsed' => true
+    )
+  end
+
+  it 'writes modern visible text content and div containers' do
+    text = writer.send(
+      :widget_doc,
+      type: :text, name: 'heading', options: { caption: 'Visible heading' }, events: []
+    )
+    container = writer.send(
+      :widget_doc,
+      type: :container, name: 'card', options: { class: 'dashboard-card' }, children: [], events: []
+    )
+
+    expect(text).to include('$Type' => 'Forms$DynamicText')
+    expect(text.dig('Content', '$Type')).to eq('Forms$ClientTemplate')
+    expect(text.dig('Content', 'Template', 'Items', 1, 'Text')).to eq('Visible heading')
+    expect(container).to include('$Type' => 'Forms$DivContainer')
+    expect(container.dig('Appearance', 'Class')).to eq('dashboard-card')
+  end
+
   it 'does not duplicate existing parameters generated with the same name' do
     parameter = {
       '$ID' => 'old', '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Animal'

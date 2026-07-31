@@ -54,6 +54,10 @@ module Mxrb
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
             # allowed_roles "Module.User"
+
+            container :pageHeader, class_name: "mxrb-page-header" do
+              text :pageTitle, caption: "#{humanize(name)}"
+            end
           end
         RUBY
       end
@@ -184,6 +188,55 @@ module Mxrb
             forbid_literal_colors false
           end
         RUBY
+      end
+
+      def theme_main(_module_name, _name)
+        <<~SCSS
+          @import "custom-variables";
+
+          :root {
+            color: #17324d;
+            background: #f4f7fb;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          }
+
+          body {
+            margin: 0;
+            background: #f4f7fb;
+          }
+
+          .region-content {
+            box-sizing: border-box;
+            width: min(100%, 1120px);
+            min-height: 100vh;
+            margin: 0 auto;
+            padding: 48px 24px;
+          }
+
+          .mxrb-page-header {
+            margin-bottom: 24px;
+            padding: 28px 32px;
+            color: #fff;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #087f8c, #0b5d75);
+            box-shadow: 0 16px 40px rgb(20 73 94 / 18%);
+          }
+
+          .mxrb-page-header .mx-text {
+            display: block;
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 750;
+            letter-spacing: -0.04em;
+          }
+        SCSS
+      end
+
+      def theme_settings(_module_name, _name)
+        <<~JSON
+          {
+            "cssFiles": ["theme.compiled.css"]
+          }
+        JSON
       end
 
       def github_workflow(_module_name, _name)

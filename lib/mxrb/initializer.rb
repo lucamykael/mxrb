@@ -178,6 +178,10 @@ module Mxrb
         page :Home do
           title "#{@module_name}"
           layout "#{@module_name}.ApplicationLayout"
+
+          container :pageHeader, class_name: "mxrb-page-header" do
+            text :pageTitle, caption: "#{@module_name}"
+          end
         end
       RUBY
     end
