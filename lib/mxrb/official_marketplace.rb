@@ -256,6 +256,8 @@ module Mxrb
 
     # Safely extracts GitHub or local MPK archives into the target project.
     class Installer # rubocop:disable Metrics/ClassLength
+      ATLAS_VARIABLES_IMPORT = '@import "../../themesource/atlas_core/web/variables";'
+
       def initialize(target:, client: HttpClient.new, mpr: nil)
         @target = File.expand_path(target)
         @client = client
@@ -315,9 +317,10 @@ module Mxrb
         file&.close
       end
 
-      def import_module(archive, package, mpr)
+      def import_module(archive, package, mpr) # rubocop:disable Metrics/MethodLength
         relative_target_path(mpr)
-        result = ModulePackageImporter.new(archive, mpr, target_root: @target).import!
+        result = module_importer(archive, mpr, package).import!
+        ensure_atlas_theme_variables
         resolved = resolved_package(package, result)
         sha256 = Digest::SHA256.file(archive).hexdigest
         cached = cache_package(archive, resolved, sha256)
@@ -328,8 +331,27 @@ module Mxrb
         )
       end
 
+      def module_importer(archive, mpr, package)
+        ModulePackageImporter.new(
+          archive, mpr, target_root: @target, allow_model_upgrade: package.source == :mendix
+        )
+      end
+
+      def ensure_atlas_theme_variables
+        atlas = File.join(@target, 'themesource', 'atlas_core', 'web', '_variables.scss')
+        return unless File.file?(atlas)
+
+        custom = File.join(@target, 'theme', 'web', 'custom-variables.scss')
+        content = File.file?(custom) ? File.read(custom) : ''
+        return if content.include?(ATLAS_VARIABLES_IMPORT)
+
+        FileUtils.mkdir_p(File.dirname(custom))
+        File.write(custom, [content.rstrip, ATLAS_VARIABLES_IMPORT, ''].reject(&:empty?).join("\n\n"))
+      end
+
       def resolved_package(package, result)
-        version = result.package_version.to_s.empty? ? package.version : result.package_version
+        manifest_version = result.package_version.to_s
+        version = manifest_version.empty? || manifest_version == 'unknown' ? package.version : manifest_version
         values = { name: result.module_name, version: }
         return package.with(**values) if package.respond_to?(:content_id)
 

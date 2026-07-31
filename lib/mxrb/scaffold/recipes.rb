@@ -116,7 +116,9 @@ module Mxrb
       def design_assets
         {
           %w[app design_system design_system.rb] => :design_system,
+          %w[theme web custom-variables.scss] => :theme_custom_variables,
           %w[theme web main.scss] => :theme_main,
+          %w[theme web exclusion-variables.scss] => :theme_exclusion_variables,
           %w[theme web settings.json] => :theme_settings
         }
       end

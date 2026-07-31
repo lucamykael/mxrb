@@ -165,6 +165,26 @@ RSpec.describe Mxrb::OfficialMarketplace::ContentApi do
     expect(client).to have_received(:download).with(
       'https://signed-storage.example/package.mpk', '/tmp/package.mpk', authorization: nil
     )
+    api.download(
+      '123e4567-e89b-12d3-a456-426614174000', '/tmp/package.mpk',
+      download_url: 'https://marketplace.mendix.com/content/package.mpk'
+    )
+    expect(client).to have_received(:download).with(
+      'https://marketplace.mendix.com/content/package.mpk', '/tmp/package.mpk',
+      authorization: 'MxToken secret'
+    )
+  end
+
+  it 'accepts the lowercase downloadUrl returned by the live API and checks minimum compatibility' do
+    live = version
+    live['downloadUrl'] = live.delete('downloadURL')
+    allow(client).to receive(:json).and_return(content, { 'items' => [live] })
+    expect(api.resolve('170', mendix_version: '11.12.1').download_url).to eq(live['downloadUrl'])
+
+    incompatible = version(minSupportedMendixVersion: '12.0.0')
+    allow(client).to receive(:json).and_return(content, { 'items' => [incompatible] })
+    expect { api.resolve('170', mendix_version: '11.12.1') }
+      .to raise_error(Mxrb::MarketplaceError, /requires Mendix 12.0.0/)
   end
 
   it 'paginates every release page' do

@@ -116,6 +116,44 @@ RSpec.describe Mxrb::OfficialMarketplace::ModulePackageImporter do
       .to raise_error(Mxrb::MarketplaceError, /manifest version/)
   end
 
+  it 'allows only an explicitly trusted forward model upgrade' do
+    old_source = File.join(@dir, 'old-source.mpr')
+    create_project(old_source, module_name: :LegacyModule, version: '10.18.0')
+    package = create_package(
+      File.join(@dir, 'LegacyModule.mpk'), old_source,
+      module_name: 'LegacyModule', model_version: '10.18.0'
+    )
+    expect { described_class.new(package, @target).import! }
+      .to raise_error(Mxrb::MarketplaceError, /requires matching model versions/)
+    result = described_class.new(package, @target, allow_model_upgrade: true).import!
+    expect(result).to have_attributes(source_version: '10.18.0', target_version: '11.12.1')
+
+    old_target = File.join(@dir, 'old-target.mpr')
+    create_project(old_target, module_name: :OldHost, version: '10.18.0')
+    expect { described_class.new(@package, old_target, allow_model_upgrade: true).import! }
+      .to raise_error(Mxrb::MarketplaceError, /requires matching model versions/)
+  end
+
+  it 'connects Atlas legacy Sass variables without overwriting project customizations' do
+    root = File.dirname(@target)
+    installer = Mxrb::OfficialMarketplace::Installer.new(target: root, mpr: @target)
+    expect(installer.send(:ensure_atlas_theme_variables)).to be_nil
+
+    atlas = File.join(root, 'themesource', 'atlas_core', 'web', '_variables.scss')
+    FileUtils.mkdir_p(File.dirname(atlas))
+    File.write(atlas, '$brand-primary: blue !default;')
+    custom = File.join(root, 'theme', 'web', 'custom-variables.scss')
+    expect { installer.send(:ensure_atlas_theme_variables) }.to change { File.exist?(custom) }.to(true)
+    import = Mxrb::OfficialMarketplace::Installer::ATLAS_VARIABLES_IMPORT
+    expect(File.read(custom)).to eq(import)
+    installer.send(:ensure_atlas_theme_variables)
+    expect(File.read(custom).scan(import).size).to eq(1)
+
+    File.write(custom, "\$project-color: red;\n")
+    installer.send(:ensure_atlas_theme_variables)
+    expect(File.read(custom)).to include('$project-color: red;', import)
+  end
+
   it 'rejects malformed packages and protected or missing declared files' do
     missing_xml = File.join(@dir, 'missing-xml.mpk')
     Zip::File.open(missing_xml, create: true) { _1.add('project.mpr', @source) }

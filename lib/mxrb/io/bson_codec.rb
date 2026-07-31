@@ -97,7 +97,7 @@ module Mxrb
 
       UUID_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
       BINARY_UUID_KEYS = %w[
-        $ID ChildPointer CloseButtonPointer DefaultButtonPointer
+        $ID ChildPointer CloseButtonPointer DataStorageGuid DefaultButtonPointer
         DefaultPagePointer DestinationPointer GUID OriginPointer ParentPointer
         StableId TypeParameterPointer TypePointer
       ].freeze
