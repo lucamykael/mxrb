@@ -45,12 +45,13 @@ RSpec.describe Mxrb::Initializer do
       )
       expect(File.read(expected[7])).to be_empty
       expect(File.read(expected[8])).to include(
-        'layout :ApplicationLayout',
+        'layout :ApplicationLayout, title: "VetClinic"',
         'evaluate_dir File.join(__dir__, "pages")',
         'evaluate_dir File.join(__dir__, "client_actions")'
       )
       expect(File.read(expected[9])).to include(
-        'page :Home', 'title "VetClinic"', 'layout "VetClinic.ApplicationLayout"'
+        'page :Home', 'title "VetClinic"', 'layout "VetClinic.ApplicationLayout"',
+        'class_name: "mxrb-dashboard-grid"', 'caption: "Model your business"'
       )
 
       load expected[3]
@@ -59,7 +60,32 @@ RSpec.describe Mxrb::Initializer do
       expect(Mxrb.open(mpr) { _1.modules.map(&:name) }).to eq(['VetClinic'])
       expect(Mxrb.open(mpr) { _1.navigation.profiles.map(&:name) }).to eq(['Responsive'])
       expect(Mxrb.open(mpr) { _1.navigation.profiles.first.home_page }).to eq('VetClinic.Home')
+      layout = Mxrb.open(mpr) { _1.find_artifact('VetClinic.ApplicationLayout') }
+      expect(layout).not_to be_nil
     end
+  end
+
+  it 'builds a self-contained application shell with responsive navigation' do
+    builder = Mxrb::Dsl::ModuleBuilder.new('VetClinic')
+    builder.layout(:ApplicationLayout, title: 'VetClinic')
+    layout = builder.to_h.fetch(:native_documents).first.fetch(:doc)
+    scroll_container = Mxrb::IO::BsonCodec
+                       .parse_array(layout.dig('Content', 'Widgets')).fetch(:items).first
+
+    expect(scroll_container.dig('Left', '$Type')).to eq('Forms$ScrollContainerRegion')
+    expect(scroll_container.dig('Left', 'ToggleMode')).to eq('ShrinkContentInitiallyClosed')
+    navigation = Mxrb::IO::BsonCodec
+                 .parse_array(scroll_container.dig('Left', 'Widgets')).fetch(:items).first
+    expect(navigation.fetch('$Type')).to eq('Forms$NavigationTree')
+    expect(navigation.dig('MenuSource', 'NavigationProfile')).to eq('Responsive')
+
+    topbar = Mxrb::IO::BsonCodec
+             .parse_array(scroll_container.dig('Top', 'Widgets')).fetch(:items).first
+    topbar_widgets = Mxrb::IO::BsonCodec
+                     .parse_array(topbar.fetch('Widgets')).fetch(:items)
+    expect(topbar_widgets.map { _1.fetch('$Type') }).to eq(
+      %w[Forms$SidebarToggleButton Forms$DynamicText]
+    )
   end
 
   it 'normalizes snake case and common lowercase compounds while preserving PascalCase' do
