@@ -39,7 +39,6 @@ module Mxrb
         Mxrb.open(path) do |project|
           {
             project: {
-              name: project.name,
               mendix_version: project.mendix_version,
               format_version: project.format_version
             },

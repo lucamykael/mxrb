@@ -5,17 +5,20 @@ require 'tmpdir'
 
 module Mxrb
   # Creates the minimum editable Ruby project accepted by `mxrb generate`.
+  # rubocop:disable Metrics/ClassLength
   class Initializer
     Result = Data.define(:root, :files)
     NAME = /\A[A-Za-z][A-Za-z0-9_-]*\z/
     COMPOUND_SUFFIXES = %w[service clinic portal demo api app kit].freeze
 
-    def initialize(name, subject: :project)
+    def initialize(name, subject: :project, mxrb_path: nil)
       @dir_name = name.to_s
       raise ArgumentError, "#{subject} name must be snake_case or PascalCase" unless NAME.match?(@dir_name)
 
       @module_name = to_pascal_case(@dir_name)
       @mpr_name = "#{@module_name}.mpr"
+      @mxrb_path = File.expand_path(mxrb_path) if mxrb_path
+      raise ArgumentError, "mxrb path does not exist: #{@mxrb_path}" if @mxrb_path && !File.directory?(@mxrb_path)
     end
 
     def scaffold(into: Dir.pwd)
@@ -46,6 +49,8 @@ module Mxrb
       write(File.join(module_root, 'domain'), 'model.rb', model_rb)
       write(File.join(module_root, 'application'), 'application.rb', application_rb)
       write(File.join(module_root, 'domain', 'entities'), '.keep', '')
+      write(File.join(module_root, 'presentation'), 'presentation.rb', presentation_rb)
+      write(File.join(module_root, 'presentation', 'pages'), 'home.rb', home_rb)
     end
 
     def relative_files
@@ -56,7 +61,8 @@ module Mxrb
     def relative_module_files
       [
         'module.rb', File.join('domain', 'model.rb'),
-        File.join('application', 'application.rb'), File.join('domain', 'entities', '.keep')
+        File.join('application', 'application.rb'), File.join('domain', 'entities', '.keep'),
+        File.join('presentation', 'presentation.rb'), File.join('presentation', 'pages', 'home.rb')
       ]
     end
 
@@ -90,10 +96,14 @@ module Mxrb
 
         source "https://rubygems.org"
 
-        gem "mxrb"
-        # For local development against a cloned MXRB repository:
-        # gem "mxrb", path: "../mxrb"
+        #{gem_declaration}
       RUBY
+    end
+
+    def gem_declaration
+      return 'gem "mxrb"' unless @mxrb_path
+
+      %(gem "mxrb", path: #{@mxrb_path.inspect})
     end
 
     def project_rb
@@ -107,6 +117,12 @@ module Mxrb
         Mxrb.define(output) do
           mendix_version "11.12.1"
 
+          navigation do
+            profile :Responsive,
+                    home_page: "#{@module_name}.Home",
+                    app_title: "#{@module_name}"
+          end
+
           evaluate File.join(__dir__, "modules", "#{@module_name}", "module.rb")
         end
       RUBY
@@ -119,6 +135,7 @@ module Mxrb
         self.module :#{@module_name} do
           evaluate File.join(__dir__, "domain", "model.rb")
           evaluate File.join(__dir__, "application", "application.rb")
+          evaluate File.join(__dir__, "presentation", "presentation.rb")
         end
       RUBY
     end
@@ -141,5 +158,29 @@ module Mxrb
         evaluate_dir File.join(__dir__, "queries")
       RUBY
     end
+
+    def presentation_rb
+      <<~RUBY
+        # frozen_string_literal: true
+
+        layout :ApplicationLayout
+
+        evaluate_dir File.join(__dir__, "pages")
+        evaluate_dir File.join(__dir__, "snippets")
+        evaluate_dir File.join(__dir__, "client_actions")
+      RUBY
+    end
+
+    def home_rb
+      <<~RUBY
+        # frozen_string_literal: true
+
+        page :Home do
+          title "#{@module_name}"
+          layout "#{@module_name}.ApplicationLayout"
+        end
+      RUBY
+    end
   end
+  # rubocop:enable Metrics/ClassLength
 end

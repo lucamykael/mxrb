@@ -3,6 +3,7 @@
 
 require_relative "../lib/mxrb"
 require "shellwords"
+require "io/console"
 
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
 def render_plan_report(report, json:)
@@ -47,11 +48,95 @@ def render_workload_report(report, json:)
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
+def render_index_advice(advice, json:) # rubocop:disable Metrics/AbcSize
+  payload = {
+    candidates: advice.candidates.map(&:to_h), redundant_indexes: advice.redundant_indexes
+  }
+  return puts(JSON.pretty_generate(payload)) if json
+
+  advice.candidates.each do |candidate|
+    puts "[#{candidate.confidence.to_s.upcase}] #{candidate.relation}(#{candidate.columns.join(', ')})"
+    puts "  #{candidate.reason} Queries: #{candidate.query_ids.join(', ')}"
+  end
+  advice.redundant_indexes.each { puts "[WARNING] overlapping indexes: #{_1.join(' and ')}" }
+  puts '[mxrb] No evidence-backed index candidates' if advice.candidates.empty?
+end
+
 SCAFFOLD_COMMANDS = (Mxrb::Scaffold::Help::COMMANDS.keys - ["design"]).freeze
 
 command = ARGV.shift
 
 case command
+when 'doctor'
+  json = ARGV.delete('--json')
+  root = ARGV.shift || Dir.pwd
+  report = Mxrb::Doctor.new(root).run
+  if json
+    puts JSON.pretty_generate(root: report.root, valid: report.valid?, checks: report.checks.map(&:to_h))
+  else
+    report.checks.each { puts "[#{_1.status.to_s.upcase}] #{_1.name}: #{_1.message}" }
+    puts "[mxrb] #{report.errors.size} error(s), #{report.warnings.size} warning(s)"
+  end
+  exit 1 unless report.valid?
+
+when 'benchmark'
+  path = ARGV.shift or abort 'Usage: mxrb benchmark <file.mpr> [--iterations N] [--json]'
+  index = ARGV.index('--iterations')
+  iterations = index ? ARGV.slice!(index, 2).last : 3
+  abort '--iterations requires a value' if index && iterations.nil?
+  json = ARGV.delete('--json')
+  result = Mxrb::Benchmark.new(path, iterations:).run
+  if json
+    puts JSON.pretty_generate(result.to_h)
+  else
+    puts "Units            : #{result.units}"
+    puts "Open average     : #{result.open_seconds}s"
+    puts "Index average    : #{result.index_seconds}s"
+    puts "Validate average : #{result.validate_seconds}s"
+  end
+
+when 'project'
+  action = ARGV.shift or abort 'Usage: mxrb project inspect [DIR] [--json]'
+  abort "Unknown project action #{action.inspect}" unless action == 'inspect'
+  json = ARGV.delete('--json')
+  payload = Mxrb::ProjectLifecycle.new(ARGV.shift || Dir.pwd).inspect
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    payload.each { |key, value| puts "#{key}: #{Array(value).join(', ')}" }
+  end
+
+when 'upgrade'
+  version_index = ARGV.index('--mendix')
+  abort 'Usage: mxrb upgrade --mendix VERSION [--target DIR] [--apply]' unless version_index
+  version = ARGV.slice!(version_index, 2).last
+  abort '--mendix requires a value' unless version
+  target_index = ARGV.index('--target')
+  target = target_index ? ARGV.slice!(target_index, 2).last : Dir.pwd
+  abort '--target requires a value' if target_index && target.nil?
+  apply = ARGV.delete('--apply') ? true : false
+  result = Mxrb::ProjectLifecycle.new(target).upgrade(version, apply:)
+  puts "[mxrb] #{apply ? 'Updated' : 'Preview'} #{result.path}: #{result.from} -> #{result.to}"
+
+when 'migrate'
+  action = ARGV.shift or abort 'Usage: mxrb migrate <check|plan> [DIR] [--json]'
+  json = ARGV.delete('--json')
+  result = Mxrb::ProjectLifecycle.new(ARGV.shift || Dir.pwd).migration_plan
+  payload = {
+    clean: result.clean?, added: result.diff.added.map(&:to_h),
+    removed: result.diff.removed.map(&:to_h), changed: result.diff.changed.map(&:to_h)
+  }
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    puts "Added: #{payload[:added].size}"
+    puts "Removed: #{payload[:removed].size}"
+    puts "Changed: #{payload[:changed].size}"
+    puts "[mxrb] #{result.clean? ? 'No model drift' : 'Model drift detected'}"
+  end
+  exit 1 if action == 'check' && !result.clean?
+  abort "Unknown migrate action #{action.inspect}" unless %w[check plan].include?(action)
+
 when "inspect"
   path = ARGV.shift or abort "Usage: mxrb inspect <file.mpr>"
   Mxrb.open(path) do |p|
@@ -468,7 +553,7 @@ when "design"
 
 when "db"
   action = ARGV.shift or
-    abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|explain|workload|shell> <file.mpr>"
+    abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|explain|workload|indexes|shell> <file.mpr>"
   path = ARGV.shift or abort "Usage: mxrb db #{action} <file.mpr>"
   option = lambda do |name, fallback = nil|
     index = ARGV.index(name)
@@ -486,7 +571,9 @@ when "db"
            55_432
          end
   if engine == :sql_server
-    abort "--engine sql_server is supported only by db explain" unless action == "explain"
+    unless %w[explain workload].include?(action)
+      abort "--engine sql_server is supported only by db explain and db workload"
+    end
 
     workspace = Mxrb::Runtime::SqlServerDatabase.new(
       server: option.call("--server"), database: option.call("--database"),
@@ -531,17 +618,31 @@ when "db"
     report = workspace.explain(sql, analyze:)
     render_plan_report(report, json:)
   when "workload"
-    abort "db workload currently requires PostgreSQL" unless engine == :postgresql
-
     limit = option.call("--limit", 20)
+    save = option.call('--save')
+    compare = option.call('--compare')
     json = ARGV.delete("--json") == "--json"
-    render_workload_report(workspace.workload(limit:), json:)
+    report = workspace.workload(limit:)
+    File.write(save, Mxrb::Oql::WorkloadBaseline.dump(report)) if save
+    comparison = Mxrb::Oql::WorkloadBaseline.compare(report, compare) if compare
+    render_workload_report(report, json:)
+    unless json
+      comparison&.deltas&.each do |delta|
+        puts "[DELTA] #{delta.query_id} #{delta.metric}: #{delta.change_percent}%"
+      end
+    end
+  when "indexes"
+    abort 'db indexes currently requires PostgreSQL' unless engine == :postgresql
+
+    limit = option.call('--limit', 50)
+    json = ARGV.delete('--json') == '--json'
+    render_index_advice(workspace.index_advice(limit:), json:)
   when "shell"
     write = ARGV.delete("--write")
     exec(*workspace.shell_command(write:))
   else
     abort "Unknown db action #{action.inspect}; " \
-          "use up, sync, down, destroy, status, url, sql, explain, workload or shell"
+          "use up, sync, down, destroy, status, url, sql, explain, workload, indexes or shell"
   end
 
 when "serve"
@@ -682,6 +783,54 @@ when "functional-instrument"
   instrumenter = Mxrb::Functional::Instrumenter.new(path, definition).instrument!
   puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
 
+when "marketplace"
+  action = ARGV.shift or abort "Usage: mxrb marketplace <login|search|pull|import|list|verify> ..."
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  target = option.call('--target') || Dir.pwd
+  case action
+  when 'login'
+    print 'Mendix PAT: '
+    token = ENV['MXRB_MENDIX_PAT'] || $stdin.noecho(&:gets)
+    puts
+    path = Mxrb::OfficialMarketplace::Credentials.new.save_pat(token)
+    puts "[mxrb] Credentials saved to #{path}"
+  when 'search'
+    query = ARGV.shift or abort 'Usage: mxrb marketplace search <query>'
+    results = Mxrb::OfficialMarketplace::GitHubResolver.new.search(query)
+    results.each { puts "#{_1[:name]}\t#{_1[:repository]}\t#{_1[:description]}" }
+  when 'pull'
+    identifier = ARGV.shift or abort 'Usage: mxrb marketplace pull <name|github:org/repo> [--target DIR]'
+    source = option.call('--source') || 'github'
+    abort 'Only the GitHub source is currently resolvable; use marketplace import for local MPK' \
+      unless source == 'github'
+    name, version = identifier.split('@', 2)
+    result = Mxrb::OfficialMarketplace::Installer.new(target:).pull(name, version:)
+    puts "[mxrb] Installed #{result.package.name} #{result.package.version}"
+    puts "[mxrb] #{result.destination}"
+    puts "[mxrb] SHA-256 #{result.sha256}"
+  when 'import'
+    path = ARGV.shift or abort 'Usage: mxrb marketplace import <file.mpk> [--target DIR]'
+    result = Mxrb::OfficialMarketplace::Installer.new(target:).import(path, name: option.call('--name'))
+    puts "[mxrb] Imported #{result.package.name} into #{result.destination}"
+    puts "[mxrb] SHA-256 #{result.sha256}"
+  when 'list'
+    packages = Mxrb::OfficialMarketplace.lock(target).fetch('packages')
+    packages.each { |name, entry| puts "#{name}\t#{entry['version']}\t#{entry['source']}" }
+    puts "[mxrb] #{packages.size} package(s)"
+  when 'verify'
+    results = Mxrb::OfficialMarketplace.verify(target)
+    results.each { |name, result| puts "#{result[:valid] ? 'ok' : 'changed'}\t#{name}" }
+    exit 1 unless results.values.all? { _1[:valid] }
+  else
+    abort "Unknown marketplace action #{action.inspect}"
+  end
+
 when "module"
   action = ARGV.shift or abort "Usage: mxrb module <new|search|add> ..."
   option = lambda do |name|
@@ -730,6 +879,34 @@ when "module"
     abort "Unknown module action #{action.inspect}; use new, search, or add"
   end
 
+when 'scaffold'
+  action = ARGV.shift or abort 'Usage: mxrb scaffold <list|destroy> ...'
+  target_index = ARGV.index('--target')
+  target = if target_index
+             abort '--target requires a value' unless ARGV[target_index + 1]
+             ARGV.slice!(target_index, 2).last
+           else
+             Dir.pwd
+           end
+  case action
+  when 'list'
+    puts "command\tdestination"
+    Mxrb::Scaffold::Help::COMMANDS.each do |name, (_usage, _description, destination)|
+      puts "#{name}\t#{destination}"
+    end
+    registry = Mxrb::Scaffold::Registry.new(target).entries
+    unless registry.empty?
+      puts "\nregistered scaffold\tfiles"
+      registry.each { |key, entry| puts "#{key}\t#{entry.fetch('files').size}" }
+    end
+  when 'destroy'
+    key = ARGV.shift or abort 'Usage: mxrb scaffold destroy <kind:name> [--target DIR]'
+    removal = Mxrb::Scaffold::Registry.new(target).remove(key)
+    removal.files.each { puts "  remove  #{_1}" }
+  else
+    abort "Unknown scaffold action #{action.inspect}; use list or destroy"
+  end
+
 when *SCAFFOLD_COMMANDS
   Mxrb::Scaffold::CLI.new(command, ARGV).run
 
@@ -772,9 +949,13 @@ when "tree"
   end
 
 when "init"
-  name = ARGV.shift or abort "Usage: mxrb init <project_name>"
+  name = ARGV.shift or abort "Usage: mxrb init <project_name> [--mxrb-path DIR]"
+  path_index = ARGV.index('--mxrb-path')
+  mxrb_path = path_index ? ARGV.slice!(path_index, 2).last : nil
+  abort '--mxrb-path requires a value' if path_index && mxrb_path.nil?
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
   begin
-    result = Mxrb::Initializer.new(name).scaffold
+    result = Mxrb::Initializer.new(name, mxrb_path:).scaffold
   rescue ArgumentError => e
     abort "[mxrb] error: #{e.message}"
   end
@@ -789,11 +970,19 @@ else
     mxrb — Pure-Ruby Mendix .mpr toolkit
 
     Commands:
+      doctor     [DIR] [--json]           Check project files and local toolchain
+      benchmark <file.mpr>                Measure open, index and validation time
+                 --iterations N --json    Configure repetitions or emit JSON
+      project inspect [DIR] [--json]      Inventory version, modules, MPRs and scaffolds
+      upgrade --mendix VERSION            Preview a project.rb version upgrade
+                 [--target DIR] --apply   Apply the version change transactionally
+      migrate check|plan [DIR] [--json]   Compare project.rb output with the current MPR
       inspect    <file.mpr>               Full unit dump (exploration)
       dump-unit  <file.mpr> <unit_id>     Hex dump of a unit's Contents blob
       sql        <file.mpr> "SELECT …"    Run raw SQL against the .mpr SQLite
       modules    <file.mpr>               List all modules
       init       <project_name>           Scaffold a new Ruby-first Mendix project
+                 --mxrb-path DIR          Use a local MXRB checkout in the Gemfile
       generate   <definition.rb> [mpr]    Apply a Ruby DSL definition
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
@@ -840,6 +1029,10 @@ else
                  --sqlcmd PATH              Override the sqlcmd executable
          workload <file.mpr> [--limit N]    Rank pg_stat_statements and schema pressure
                  --json                     Emit queries, table/index stats, and findings
+                 --save FILE                Save a workload performance baseline
+                 --compare FILE             Report regressions against a saved baseline
+         indexes <file.mpr> [--limit N]     Advise evidence-backed PostgreSQL indexes
+                 --json                     Emit candidates and overlaps as JSON
          shell   <file.mpr> [--write]       Open psql (read-only by default)
       serve      <file.mpr> [--port 4567]   Serve read-only SQL/OQL over loopback HTTP
                  --db-port PORT             Runtime PostgreSQL host port (default 55432)
@@ -854,6 +1047,13 @@ else
       module search [query]                Search the Ruby module marketplace
              add <name|directory>          Install a module and write its lockfile
              new <name> [--target DIR]     Scaffold and connect an application module
+      marketplace login                   Store a Mendix PAT with owner-only permissions
+                  search <query>           Search known/open-source Mendix repositories
+                  pull <name|github:o/r>   Install a GitHub release and update the lockfile
+                  import <file.mpk>        Safely install a local MPK archive
+                  list|verify              Inspect or verify locked official packages
+      scaffold list [--target DIR]         List generators and registered scaffolds
+               destroy <kind:name>         Remove an unchanged registered scaffold
       entity new Module.Name              Scaffold a domain entity (--help for details)
       enumeration new Module.Name         Scaffold an enumeration
       use-case new Module.Name            Scaffold an application use case

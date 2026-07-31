@@ -31,6 +31,8 @@ module Mxrb
       OPTIONS = <<~HELP
         Options:
           --target DIR   Project root (default: current directory)
+          --dry-run      Preview paths and aggregator updates without writing
+          --json         Render the result as JSON
           --help         Show this help
 
         Documentation:

@@ -83,5 +83,23 @@ RSpec.describe Mxrb::Runtime::SqlServerDatabase do
       '-C', '-b', '-h', '-1', '-W', '-y', '0', '-Q', a_string_including('SHOWPLAN_XML')
     )
   end
+
+  it 'collects read-only workload snapshots from SQL Server DMVs' do
+    responses = [
+      '[{"query_hash":"0x1","query_text":"SELECT 1","execution_count":1,' \
+        '"total_elapsed_time":2000000,"total_rows":1,"total_logical_reads":1,' \
+        '"total_physical_reads":0}]',
+      '[{"relation":"dbo.Product","user_scans":100,"user_seeks":1}]',
+      '[{"index_name":"Old","user_scans":0,"user_seeks":0,"index_bytes":2000000}]'
+    ]
+    runner = ->(*) { [responses.shift, '', status(true)] }
+    database = described_class.new(
+      server: 'db', database: 'Shop', user: 'analyst', password: 'secret', runner:
+    )
+    report = database.workload(limit: 10)
+    expect(report.engine).to eq(:sql_server)
+    expect(report.findings.map(&:rule)).to include(:sql_server_expensive_query)
+    expect { database.workload(limit: 0) }.to raise_error(ArgumentError, /between 1 and 1000/)
+  end
 end
 # rubocop:enable Metrics/BlockLength

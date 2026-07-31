@@ -89,16 +89,12 @@ module Mxrb
       end
       # rubocop:enable Metrics/MethodLength
 
-      def query_rows(sql)
+      def query_rows(sql, params: {})
         statement = read_only_statement(sql)
+        statement, variables = bind_parameters(statement, params)
 
         configure_reader!
-        output = run!(
-          'docker', 'exec', database_container,
-          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
-          '--username', READER, '--dbname', DATABASE,
-          '--csv', '--quiet', '--command', "COPY (#{statement}) TO STDOUT WITH CSV HEADER"
-        )
+        output = run!(*query_rows_command(statement, variables))
         CSV.parse(output, headers: true).map(&:to_h).freeze
       end
 
@@ -125,6 +121,10 @@ module Mxrb
         )
       end
 
+      def index_advice(limit: 50)
+        Oql::IndexAdvisor.new.analyze(workload(limit:))
+      end
+
       def shell_command(write: false)
         role = write ? OWNER : READER
         [
@@ -139,6 +139,51 @@ module Mxrb
       end
 
       private
+
+      def bind_parameters(statement, params)
+        values = params.to_h.transform_keys(&:to_s)
+        return [statement, []] if values.empty?
+
+        validate_parameter_names!(values, statement)
+        bound = statement.gsub(/(?<!:):([A-Za-z][A-Za-z0-9_]*)/) do
+          name = Regexp.last_match(1)
+          values[name].nil? ? 'NULL' : ":'mxrb_#{name}'"
+        end
+        [bound, parameter_arguments(values)]
+      end
+
+      def validate_parameter_names!(values, statement)
+        invalid = values.keys.reject { _1.match?(/\A[A-Za-z][A-Za-z0-9_]*\z/) }
+        expected = statement.scan(/(?<!:):([A-Za-z][A-Za-z0-9_]*)/).flatten.uniq
+        parameter_error!('invalid parameter names', invalid)
+        parameter_error!('missing query parameter', expected - values.keys)
+        parameter_error!('unused query parameters', values.keys - expected)
+      end
+
+      def parameter_error!(label, names)
+        raise ArgumentError, "#{label}: #{names.join(', ')}" unless names.empty?
+      end
+
+      def parameter_arguments(values)
+        values.reject { |_name, value| value.nil? }.flat_map do |name, value|
+          raise ArgumentError, "unsupported parameter value for #{name}" unless parameter_scalar?(value)
+
+          ['--set', "mxrb_#{name}=#{value}"]
+        end
+      end
+
+      def parameter_scalar?(value)
+        value.is_a?(String) || value.is_a?(Numeric) || value == true || value == false
+      end
+
+      def query_rows_command(statement, variables)
+        [
+          'docker', 'exec', database_container,
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1', *variables,
+          '--username', READER, '--dbname', DATABASE,
+          '--csv', '--quiet', '--command', "COPY (#{statement}) TO STDOUT WITH CSV HEADER"
+        ]
+      end
 
       def prepare_database!
         ensure_network!
@@ -392,7 +437,7 @@ module Mxrb
         query_rows(<<~SQL)
           SELECT s.schemaname, s.relname, s.indexrelname, s.idx_scan,
                  s.idx_tup_read, s.idx_tup_fetch, pg_relation_size(s.indexrelid) AS index_bytes,
-                 i.indisunique, i.indisprimary
+                 i.indisunique, i.indisprimary, pg_get_indexdef(s.indexrelid) AS indexdef
           FROM pg_stat_user_indexes s
           JOIN pg_index i ON i.indexrelid = s.indexrelid
           ORDER BY index_bytes DESC

@@ -6,10 +6,11 @@ module Mxrb
   module Model
     # Entities are embedded in the DomainModel BSON — NOT separate Unit rows.
     # $Type: DomainModels$Entity (read) / DomainModels$EntityImpl (write)
-    class Entity
+    class Entity # rubocop:disable Metrics/ClassLength
       attr_accessor :id, :name, :qualified_name, :documentation,
                     :persistable, :location, :data_storage_guid,
-                    :export_level, :generalization, :access_rules
+                    :export_level, :generalization, :access_rules, :indexes,
+                    :system_members
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
       def self.from_bson(doc, _domain_model_id, mpr)
@@ -23,13 +24,23 @@ module Mxrb
         e.location           = parse_location(doc["location"] || doc["Location"])
 
         # Persistable lives inside generalization.NoGeneralization.persistable
-        gen = doc["generalization"] || doc["Generalization"] || doc["maybeGeneralization"]
+        gen = doc["generalization"] || doc["Generalization"] ||
+              doc["maybeGeneralization"] || doc["MaybeGeneralization"]
         e.generalization = gen
-        e.persistable = gen.is_a?(Hash) ? (gen["persistable"] != false) : true
+        persistable = if gen.is_a?(Hash)
+                        gen.fetch('persistable', gen.fetch('Persistable', true))
+                      else
+                        true
+                      end
+        e.persistable = persistable != false
+        e.system_members = parse_system_members(gen)
 
         # Attributes (embedded array with marker)
         attr_arr   = IO::BsonCodec.parse_array(doc["attributes"] || doc["Attributes"])[:items]
         e.instance_variable_set(:@attributes, attr_arr.map { Attribute.from_bson(_1) })
+        rules = IO::BsonCodec.parse_array(doc['validationRules'] || doc['ValidationRules'])[:items]
+        apply_validation_rules(e.attributes, rules)
+        e.indexes = IO::BsonCodec.parse_array(doc['indexes'] || doc['Indexes'])[:items]
 
         # Access rules (embedded array with marker 3)
         rule_arr = IO::BsonCodec.parse_array(doc["accessRules"] || doc["AccessRules"])[:items]
@@ -39,6 +50,12 @@ module Mxrb
       end
 
       def attributes = @attributes || []
+
+      def generalization_target
+        return unless @generalization.is_a?(Hash)
+
+        @generalization['generalization'] || @generalization['Generalization']
+      end
 
       def to_bson
         {
@@ -68,14 +85,45 @@ module Mxrb
 
       private
 
+      def self.apply_validation_rules(attributes, rules)
+        by_name = attributes.to_h { [_1.name, _1] }
+        rules.each do |rule|
+          attribute = by_name[rule['Attribute'].to_s.split('.').last]
+          next unless attribute
+
+          kind = rule.dig('RuleInfo', '$Type').to_s
+          attribute.required = true if kind.end_with?('RequiredRuleInfo')
+          attribute.unique = true if kind.end_with?('UniqueRuleInfo')
+        end
+      end
+
+      def self.parse_system_members(generalization)
+        return {} unless generalization.is_a?(Hash)
+
+        {
+          owner: generalization['hasOwner'] == true || generalization['HasOwnerAttr'] == true,
+          created_date: generalization.values_at(
+            'hasCreatedDate', 'HasCreatedDateAttr'
+          ).include?(true),
+          changed_date: generalization.values_at(
+            'hasChangedDate', 'HasChangedDateAttr'
+          ).include?(true),
+          changed_by: generalization.values_at(
+            'hasChangedBy', 'HasChangedByAttr'
+          ).include?(true)
+        }
+      end
+
       def self.parse_access_rule(doc)
-        roles = IO::BsonCodec.parse_array(doc["ModuleRoles"])[:items]
+        roles = IO::BsonCodec.parse_array(doc["ModuleRoles"] || doc["AllowedModuleRoles"])[:items]
         default_rights = doc["DefaultMemberAccessRights"] || "None"
         member_items = IO::BsonCodec.parse_array(doc["MemberAccesses"])[:items]
         members = member_items.map do |m|
-          attr_ref = m["Attribute"] || m["Association"]
-          kind = m.key?("Association") ? :association : :attribute
-          { name: attr_ref.to_s.split("/").last, rights: m["AccessRights"] || "None", kind: kind }
+          association_ref = m["Association"].to_s
+          attr_ref = association_ref.empty? ? m["Attribute"] : association_ref
+          kind = association_ref.empty? ? :attribute : :association
+          { name: attr_ref.to_s.split(%r{[/.]}).last,
+            rights: m["AccessRights"] || "None", kind: kind }
         end
         {
           roles: roles,
@@ -88,6 +136,10 @@ module Mxrb
       end
 
       def self.parse_location(loc)
+        if loc.is_a?(String)
+          x, y = loc.split(';', 2).map(&:to_i)
+          return { x: x, y: y }
+        end
         return { x: 0, y: 0 } unless loc.is_a?(Hash)
         { x: loc["x"] || loc[:x] || 0, y: loc["y"] || loc[:y] || 0 }
       end

@@ -12,7 +12,7 @@ module Mxrb
 
       def decode(doc)
         @name              = doc["Name"]
-        @sort_index        = doc["SortIndex"]
+        @sort_index        = doc["SortIndex"] || doc["NewSortIndex"]
         @from_app_store    = doc["FromAppStore"] == true
         @app_store_guid    = doc["AppStoreGuid"]
         @app_store_version = doc["AppStoreVersion"]

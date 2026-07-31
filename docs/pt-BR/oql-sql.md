@@ -94,6 +94,9 @@ O workload cumulativo do PostgreSQL também pode ser inspecionado:
 ```sh
 bundle exec mxrb db workload Shop.mpr --limit 50
 bundle exec mxrb db workload Shop.mpr --limit 50 --json
+bundle exec mxrb db workload Shop.mpr --save .mxrb/workload.json
+bundle exec mxrb db workload Shop.mpr --compare .mxrb/workload.json
+bundle exec mxrb db indexes Shop.mpr --limit 50
 ```
 
 O workspace habilita `pg_stat_statements` e `track_io_timing`. O relatório
@@ -102,6 +105,10 @@ I/O, blocos temporários e linhas por chamada. Estatísticas de tabelas revelam
 pressão de scans sequenciais; índices não únicos grandes e sem scans observados
 também são sinalizados. Como essas métricas são cumulativas desde o reset, uma
 remoção de índice nunca é sugerida sem confirmar janela e workload reais.
+O baseline permite comparar custo acumulado e latência entre execuções; o
+advisor cruza queries, filtros, estatísticas de tabelas e índices existentes.
+Ele retorna candidatos com evidência e confiança, além de sobreposições, mas
+não aplica DDL automaticamente.
 
 Para um deployment SQL Server, a conexão é explícita e usa `sqlcmd`:
 
@@ -111,6 +118,8 @@ bundle exec mxrb db explain Shop.mpr \
   "SELECT * FROM dbo.[Order] WHERE Status = 'Open'" \
   --engine sql_server --server db.example:1433 \
   --database Shop --user mxrb_analyst --json
+bundle exec mxrb db workload Shop.mpr --engine sql_server \
+  --server db.example:1433 --database Shop --user mxrb_analyst --limit 50
 ```
 
 O modo estimado usa `SHOWPLAN_XML`; `--analyze` usa `STATISTICS XML` e executa

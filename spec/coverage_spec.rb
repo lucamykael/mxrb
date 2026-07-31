@@ -274,7 +274,7 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     )
     expect(page.widgets.map { _1[:type] })
       .to contain_exactly(:check_box, :date_picker, :reference_selector, :text)
-    expect(page.to_bson["$Type"]).to eq("Pages$Page")
+    expect(page.to_bson["$Type"]).to eq("Forms$Page")
     expect(page.inspect).to include("LegacyPage")
   end
 
@@ -501,7 +501,7 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       popup: false, widgets: [{ type: :button, name: "Run", caption: "Run" }],
       events: [{ target: "Missing", event: :click, kind: :microflow, handler: "Sales.Run" }]
     }
-    expect(writer.send(:page_doc, event_page)["$Type"]).to eq("Pages$Page")
+    expect(writer.send(:page_doc, event_page)["$Type"]).to eq("Forms$Page")
     expect(writer.send(:no_action_doc)["$Type"]).to eq("Forms$NoAction")
 
     graph = writer.send(
@@ -2902,9 +2902,11 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       events: [{ target: "Run", event: :on_click, kind: :microflow, handler: "M.Flow" }]
     }
     page_doc = writer.send(:page_doc, page)
-    button = Mxrb::IO::BsonCodec.parse_array(page_doc["Widgets"])[:items].first
+    argument = Mxrb::IO::BsonCodec.parse_array(page_doc.dig("FormCall", "Arguments"))[:items].first
+    button = Mxrb::IO::BsonCodec.parse_array(argument["Widgets"])[:items].first
     expect(button.keys).to include("Action")
-    expect(writer.send(:project_security_doc, user_roles: [])["AdminUserRole"]).to eq("")
+    expect(writer.send(:project_security_doc, user_roles: [])["AdminUserRole"])
+      .to eq("Administrator")
   end
 
   it "covers writer graph roots, terminal branches, and rescue boundaries" do

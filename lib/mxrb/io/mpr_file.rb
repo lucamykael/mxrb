@@ -22,12 +22,17 @@ module Mxrb
     class MprFile
       attr_reader :path, :format_version
 
+      def write_stats
+        @write_stats ||= { inserted: 0, updated: 0, skipped: 0, deleted: 0 }
+      end
+
       def readonly? = @readonly
 
       def initialize(path, readonly: false)
         @path     = File.expand_path(path)
         @readonly = readonly
         @db       = open_db
+        @write_stats = { inserted: 0, updated: 0, skipped: 0, deleted: 0 }
         validate!
         @format_version = detect_format
       end
@@ -160,8 +165,10 @@ module Mxrb
       def insert_unit(container_uuid:, containment_name:, contents_doc:)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
-        uuid         = BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
-        contents_doc = contents_doc.merge("$ID" => uuid) unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
+        uuid = BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
+        unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
+          contents_doc = { "$ID" => uuid }.merge(contents_doc)
+        end
         unit_blob    = BsonCodec.uuid_to_blob(uuid)
         parent_blob  = BsonCodec.uuid_to_blob(container_uuid)
         bson_bytes   = BsonCodec.serialize(contents_doc)
@@ -183,6 +190,7 @@ module Mxrb
           values
         )
         write_v2_unit(uuid, bson_bytes) if @format_version == :v2
+        write_stats[:inserted] += 1
         uuid
       end
 
@@ -193,6 +201,11 @@ module Mxrb
         blob       = BsonCodec.uuid_to_blob(uuid)
         bson_bytes = BsonCodec.serialize(contents_doc)
         hash       = BsonCodec.contents_hash(bson_bytes)
+        current = unit(uuid)
+        if current && current['ContentsHash'] == hash
+          write_stats[:skipped] += 1
+          return false
+        end
 
         if contents_column?
           @db.execute(
@@ -206,12 +219,16 @@ module Mxrb
           )
         end
         write_v2_unit(uuid, bson_bytes) if @format_version == :v2
+        write_stats[:updated] += 1
+        true
       end
 
       def delete_unit(uuid)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
         @db.execute("DELETE FROM Unit WHERE UnitID = ?", [BsonCodec.uuid_to_blob(uuid)])
-        FileUtils.rm_f(MxunitCodec.path_for(contents_dir, uuid)) if @format_version == :v2
+        removed = FileUtils.rm_f(MxunitCodec.path_for(contents_dir, uuid)) if @format_version == :v2
+        write_stats[:deleted] += 1
+        removed
       end
 
       def relocate_unit(uuid, container_uuid:, containment_name:)

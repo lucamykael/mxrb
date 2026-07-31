@@ -85,7 +85,9 @@ RSpec.describe Mxrb::Oql do
         domain = project.modules.first.domain_model
         raw = project.raw_unit(domain.id)
         document = project.parse_bson(raw)
-        entity = Mxrb::IO::BsonCodec.parse_array(document.fetch('entities'))[:items].first
+        entity = Mxrb::IO::BsonCodec.parse_array(
+          document['entities'] || document.fetch('Entities')
+        )[:items].first
         entity['$Type'] = 'DomainModels$ViewEntity'
         entity['OqlQuery'] = 'SELECT Name FROM Shop.Product'
         project.mpr.update_unit(domain.id, document)

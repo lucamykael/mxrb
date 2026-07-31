@@ -14,6 +14,7 @@ module Mxrb
 
       def decode(doc)
         @raw_document        = doc
+        @storage_type        = doc["$Type"] || "Forms$Page"
         @name                = doc["Name"] || doc["name"]
         @documentation       = doc["Documentation"] || doc["documentation"] || ""
         @url                 = doc["Url"] || doc["URL"] || doc["url"] || ""
@@ -33,7 +34,7 @@ module Mxrb
       def to_bson
         {
           "$ID"                => @id,
-          "$Type"              => "Pages$Page",
+          "$Type"              => @storage_type,
           "Name"               => @name,
           "Documentation"      => @documentation || "",
           "Url"                => @url || "",
@@ -93,13 +94,13 @@ module Mxrb
             target << tab_control_widget(widget)
             next
           end
-          if type == "Pages$SnippetCall"
+          if %w[Pages$SnippetCall Forms$SnippetCall].include?(type)
             snippet_ref = widget.dig("SnippetSettings", "Snippet").to_s
             target << { type: :snippet, name: widget["Name"] || "snippet",
                         options: { snippet: snippet_ref }, events: [] }
             next
           end
-          if type == "Pages$Container"
+          if %w[Pages$Container Forms$Container].include?(type)
             children = []
             parse_widgets(parse_array(widget["Widgets"]), children)
             target << { type: :container, name: widget["Name"] || "container",
@@ -208,9 +209,13 @@ module Mxrb
         return nil unless tb.is_a?(Hash)
         type_map = {
           "Pages$GridNewButton"              => :new,
+          "Forms$GridNewButton"              => :new,
           "Pages$GridDeleteButton"           => :delete,
+          "Forms$GridDeleteButton"           => :delete,
           "Pages$GridSearchButton"           => :search,
-          "Pages$GridExportToExcelButton"    => :export
+          "Forms$GridSearchButton"           => :search,
+          "Pages$GridExportToExcelButton"    => :export,
+          "Forms$GridExportToExcelButton"    => :export
         }
         buttons = parse_array(tb["Buttons"]).filter_map do |btn|
           t = type_map[btn["$Type"]]

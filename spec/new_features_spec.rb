@@ -113,7 +113,7 @@ RSpec.describe "new features" do
 
         Mxrb::Exporter.new(source, exported).export!
         owner_source = Dir.glob(File.join(exported, "**", "owner.rb")).fetch(0)
-        expect(File.read(owner_source)).to include("owner: :Both")
+        expect(File.read(owner_source)).to include("cardinality: :one_to_one")
 
         begin
           ENV["MXRB_OUTPUT_PATH"] = rebuilt

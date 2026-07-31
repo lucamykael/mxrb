@@ -33,7 +33,7 @@ module Mxrb
         RUBY
       end
 
-      def use_case(_module_name, name) = flow(name, 'Application use case')
+      def use_case(_module_name, name) = flow(name, 'Application use case', entry_point: true)
       def validation(_module_name, name) = flow(name, 'Application validation')
 
       def query(_module_name, name)
@@ -41,17 +41,18 @@ module Mxrb
           # frozen_string_literal: true
 
           query :#{name} do
+            mark_as_used
           end
         RUBY
       end
 
-      def page(_module_name, name)
+      def page(module_name, name)
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
-            layout "Atlas_Default"
+            layout "#{module_name}.ApplicationLayout"
             # allowed_roles "Module.User"
           end
         RUBY
@@ -62,6 +63,7 @@ module Mxrb
           # frozen_string_literal: true
 
           nanoflow :#{name} do
+            mark_as_used
           end
         RUBY
       end
@@ -75,7 +77,7 @@ module Mxrb
       end
 
       def repository_implementation(_module_name, name)
-        flow("#{name}Implementation", 'Infrastructure repository adapter')
+        flow("#{name}Implementation", 'Infrastructure repository adapter', entry_point: true)
       end
 
       def security(module_name, _name)
@@ -110,7 +112,7 @@ module Mxrb
         RUBY
       end
 
-      def integration(_module_name, name) = flow(name, 'Infrastructure integration adapter')
+      def integration(_module_name, name) = flow(name, 'Infrastructure integration adapter', entry_point: true)
 
       def published_rest(_module_name, name)
         <<~RUBY
@@ -119,6 +121,8 @@ module Mxrb
           # Handler scaffold. Publishing the REST document currently remains a
           # native Studio Pro/baseline operation; this microflow is editable Ruby.
           microflow :#{name}, kind: :infrastructure, public: true do
+            documentation "Published REST handler #{humanize(name)}"
+            mark_as_used
           end
         RUBY
       end
@@ -128,6 +132,7 @@ module Mxrb
           # frozen_string_literal: true
 
           microflow :#{name}, kind: :infrastructure do
+            mark_as_used
             # call_rest method: :get, location: "https://api.example.test/resource"
           end
         RUBY
@@ -140,6 +145,7 @@ module Mxrb
           # Adapter scaffold. Define the Java Action in the native baseline,
           # then uncomment and qualify the call below.
           microflow :#{name}, kind: :infrastructure do
+            mark_as_used
             # call_java "Module.JavaActionName"
           end
         RUBY
@@ -207,6 +213,8 @@ module Mxrb
         <<~RUBY
           # frozen_string_literal: true
 
+          layout :ApplicationLayout
+
           evaluate_dir File.join(__dir__, "pages")
           evaluate_dir File.join(__dir__, "client_actions")
         RUBY
@@ -223,12 +231,13 @@ module Mxrb
         RUBY
       end
 
-      def flow(name, description)
+      def flow(name, description, entry_point: false)
         <<~RUBY
           # frozen_string_literal: true
 
           # #{description}
           microflow :#{name} do
+          #{entry_point ? '  mark_as_used' : ''}
           end
         RUBY
       end

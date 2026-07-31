@@ -381,7 +381,7 @@ RSpec.describe Mxrb do
         security_doc = project.all_units.map { project.parse_bson(_1) }.find { _1["$Type"] == "Security$ProjectSecurity" }
         expect(security_doc["SecurityLevel"]).to eq("CheckEverything")
         expect(security_doc["UserRoles"][1]["Name"]).to eq("Administrator")
-        expect(project.all_units.size).to eq(8)
+        expect(project.all_units.size).to eq(9)
       end
     end
 
@@ -431,19 +431,24 @@ RSpec.describe Mxrb do
       mpr = Mxrb::IO::MprFile.open(source)
       raw = mpr.units_by_containment("DomainModel").first
       doc = mpr.parse_contents(raw)
-      entities = Mxrb::IO::BsonCodec.parse_array(doc.delete("entities"))[:items]
+      entities = Mxrb::IO::BsonCodec.parse_array(
+        doc.delete("entities") || doc.delete("Entities")
+      )[:items]
       entity = entities.first
-      attributes = Mxrb::IO::BsonCodec.parse_array(entity.delete("attributes"))[:items]
+      attributes = Mxrb::IO::BsonCodec.parse_array(
+        entity.delete("attributes") || entity.delete("Attributes")
+      )[:items]
       attribute = attributes.first
-      native_type = attribute.delete("type")
+      native_type = attribute.delete("type") || attribute.delete("NewType")
       native_type["Length"] = 123
-      native_value = attribute.delete("value")
-      native_value["DefaultValue"] = native_value.delete("defaultValue")
+      native_value = attribute.delete("value") || attribute.delete("Value")
+      default_value = native_value.delete("defaultValue") || native_value.delete("DefaultValue")
+      native_value["DefaultValue"] = default_value
       attribute["NewType"] = native_type
       attribute["Value"] = native_value
-      entity["Attributes"] = Mxrb::IO::BsonCodec.build_array(attributes)
-      entity["AccessRules"] = entity.delete("accessRules")
-      doc["Entities"] = Mxrb::IO::BsonCodec.build_array(entities)
+      entity["attributes"] = Mxrb::IO::BsonCodec.build_array(attributes)
+      entity["accessRules"] = entity.delete("accessRules") || entity.delete("AccessRules")
+      doc["entities"] = Mxrb::IO::BsonCodec.build_array(entities)
       mpr.update_unit(raw.fetch("UnitID"), doc)
       mpr.close
 
@@ -624,7 +629,7 @@ RSpec.describe Mxrb do
       expect(Mxrb.validate(path)).to be_valid
 
       mpr = Mxrb::IO::MprFile.open(path, readonly: true)
-      expect(mpr.query("SELECT COUNT(*) FROM Unit").first.first).to eq(6)
+      expect(mpr.query("SELECT COUNT(*) FROM Unit").first.first).to eq(11)
       raw_module = mpr.units_by_containment("Modules").first
       module_doc = mpr.parse_contents(raw_module)
       expect(Mxrb::IO::BsonCodec.extract_id(module_doc["$ID"])).to eq(module_id)
@@ -881,13 +886,13 @@ RSpec.describe Mxrb do
         %w[UnitID ContainerID ContainmentName TreeConflict ContentsHash ContentsConflicts]
       )
       expect(metadata.first(3)).to eq([2, "11.12.1", "11.12.1"])
-      expect(unit_state).to eq([3, 0, 0, "", ""])
+      expect(unit_state).to eq([8, 0, 0, "", ""])
       expect(root_containment).to eq("")
       expect(Mxrb.validate(path)).to be_valid
       Mxrb.open(path) do |project|
         domain = project.mpr.units_by_containment("DomainModel").first
-        entity = project.parse_bson(domain)["entities"][1]
-        expect(entity["attributes"][1]["$Type"]).to eq("DomainModels$Attribute")
+        entity = project.parse_bson(domain)["Entities"][1]
+        expect(entity["Attributes"][1]["$Type"]).to eq("DomainModels$Attribute")
       end
     end
 
@@ -1001,8 +1006,8 @@ RSpec.describe Mxrb do
         metadata = project.architecture_definition
         expect(metadata[:modules].first[:repositories].first[:name]).to eq("OrderRepository")
         raw_domain = project.mpr.units_by_containment("DomainModel").first
-        entity_doc = project.parse_bson(raw_domain)["entities"][1]
-        handler = entity_doc["eventHandlers"][1]
+        entity_doc = project.parse_bson(raw_domain)["Entities"][1]
+        handler = entity_doc["EventHandlers"][1]
         expect(handler["$Type"]).to eq("DomainModels$EventHandler")
         expect(handler["Event"]).to eq("Commit")
         expect(handler["Moment"]).to eq("Before")
@@ -1010,15 +1015,18 @@ RSpec.describe Mxrb do
           project.parse_bson(_1)["Name"] == "OrderEdit"
         }
         page_doc = project.parse_bson(raw_page)
-        data_view = page_doc["Widgets"][1]
+        argument = Mxrb::IO::BsonCodec.parse_array(
+          page_doc.dig("FormCall", "Arguments")
+        )[:items].first
+        data_view = argument["Widgets"][1]
         text_box = data_view["Widgets"][1]
         save_button = data_view["Widgets"][2]
-        expect(data_view["$Type"]).to eq("Pages$DataView")
-        expect(data_view["DataSource"]["$Type"]).to eq("Pages$MicroflowSource")
-        expect(text_box["$Type"]).to eq("Pages$TextBox")
-        expect(text_box["LabelText"]["Translations"][1]["Text"]).to eq("Quantity")
-        expect(text_box["OnChangeAction"]["$Type"]).to eq("Pages$CallNanoflowClientAction")
-        expect(save_button["Action"]["$Type"]).to eq("Pages$SaveChangesClientAction")
+        expect(data_view["$Type"]).to eq("Forms$DataView")
+        expect(data_view["DataSource"]["$Type"]).to eq("Forms$MicroflowSource")
+        expect(text_box["$Type"]).to eq("Forms$TextBox")
+        expect(text_box["LabelText"]["Items"][1]["Text"]).to eq("Quantity")
+        expect(text_box["OnChangeAction"]["$Type"]).to eq("Forms$CallNanoflowClientAction")
+        expect(save_button["Action"]["$Type"]).to eq("Forms$SaveChangesClientAction")
       end
 
       exported = File.join(File.dirname(@mpr_path), "graph_ruby")
@@ -1086,7 +1094,7 @@ RSpec.describe Mxrb do
         expect(admin_rule[:create]).to eq(true)
         expect(admin_rule[:delete]).to eq(true)
         expect(admin_rule[:default_rights]).to eq("ReadWrite")
-        expect(admin_rule[:members]).to be_empty
+        expect(admin_rule[:members].map { _1[:rights] }).to all(eq("ReadWrite"))
       end
 
       # Re-applying is idempotent
@@ -1177,21 +1185,24 @@ RSpec.describe Mxrb do
           project.parse_bson(_1)["Name"] == "WidgetPage"
         }
         page_doc = project.parse_bson(raw_page)
-        widgets = page_doc["Widgets"]
+        argument = Mxrb::IO::BsonCodec.parse_array(
+          page_doc.dig("FormCall", "Arguments")
+        )[:items].first
+        widgets = argument["Widgets"]
 
         container = widgets[1]
-        expect(container["$Type"]).to eq("Pages$Container")
+        expect(container["$Type"]).to eq("Forms$Container")
         expect(container["Class"]).to eq("mx-box")
         children = container["Widgets"]
-        expect(children[1]["$Type"]).to eq("Pages$TextBox")
-        expect(children[2]["$Type"]).to eq("Pages$ActionButton")
+        expect(children[1]["$Type"]).to eq("Forms$TextBox")
+        expect(children[2]["$Type"]).to eq("Forms$ActionButton")
 
         drop_down = widgets[2]
-        expect(drop_down["$Type"]).to eq("Pages$DropDownWidget")
+        expect(drop_down["$Type"]).to eq("Forms$DropDownWidget")
         expect(drop_down["AttributePath"]).to eq("Status")
 
         snippet = widgets[3]
-        expect(snippet["$Type"]).to eq("Pages$SnippetCall")
+        expect(snippet["$Type"]).to eq("Forms$SnippetCall")
         expect(snippet["SnippetSettings"]["Snippet"]).to eq("Ui.HelpText")
       end
 
@@ -1241,18 +1252,21 @@ RSpec.describe Mxrb do
           project.parse_bson(_1)["Name"] == "OrderList"
         }
         page_doc = project.parse_bson(raw_page)
-        grid = page_doc["Widgets"][1]
-        expect(grid["$Type"]).to eq("Pages$DataGrid")
+        argument = Mxrb::IO::BsonCodec.parse_array(
+          page_doc.dig("FormCall", "Arguments")
+        )[:items].first
+        grid = argument["Widgets"][1]
+        expect(grid["$Type"]).to eq("Forms$DataGrid")
 
         search_bar = grid["SearchBar"]
-        expect(search_bar["$Type"]).to eq("Pages$SearchBar")
-        expect(search_bar["SearchFields"][1]["$Type"]).to eq("Pages$AttributeSearchField")
+        expect(search_bar["$Type"]).to eq("Forms$SearchBar")
+        expect(search_bar["SearchFields"][1]["$Type"]).to eq("Forms$AttributeSearchField")
         expect(search_bar["SearchFields"][1]["AttributeRef"]["Attribute"]).to eq("Name")
 
         toolbar = grid["ToolBar"]
-        expect(toolbar["$Type"]).to eq("Pages$GridToolBar")
-        expect(toolbar["Buttons"][1]["$Type"]).to eq("Pages$GridNewButton")
-        expect(toolbar["Buttons"][2]["$Type"]).to eq("Pages$GridDeleteButton")
+        expect(toolbar["$Type"]).to eq("Forms$GridToolBar")
+        expect(toolbar["Buttons"][1]["$Type"]).to eq("Forms$GridNewButton")
+        expect(toolbar["Buttons"][2]["$Type"]).to eq("Forms$GridDeleteButton")
       end
 
       Mxrb.open(path) do |project|
@@ -3094,6 +3108,15 @@ RSpec.describe Mxrb do
         end
       end
       Mxrb.open(path, readonly: false) do |project|
+        empty_flow = project.find_artifact("Sales.EmptyFlow", kind: :microflow)
+        raw = project.raw_unit(empty_flow.unit_id)
+        document = project.parse_bson(raw)
+        objects = Mxrb::IO::BsonCodec.parse_array(
+          document.dig("ObjectCollection", "Objects")
+        )[:items].reject { _1["$Type"] == "Microflows$StartEvent" }
+        document["ObjectCollection"]["Objects"] = Mxrb::IO::BsonCodec.build_array(objects)
+        project.mpr.update_unit(raw.fetch("UnitID"), document)
+        project.refresh!
         expect { project.plan_inline("Sales.CreateOrder", calling: "Sales.EmptyFlow") }
           .to raise_error(ArgumentError, /no start event/)
       end
@@ -4292,7 +4315,7 @@ RSpec.describe Mxrb do
       Mxrb.open(path) do |project|
         page = project.pages.first
         bson = page.to_bson
-        expect(bson["$Type"]).to eq("Pages$Page")
+        expect(bson["$Type"]).to eq("Forms$Page")
         expect(bson["Name"]).to eq("P")
         expect(page.inspect).to include("P")
       end

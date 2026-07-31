@@ -36,7 +36,7 @@ RSpec.describe Mxrb::Oql::Server do
     oql = server.execute('oql' => 'SELECT Product.Name FROM Shop.Product Product')
     expect(oql[:ok]).to be true
     expect(oql[:warnings]).to include(/logical table/)
-    expect(workspace).to have_received(:query_rows).with(include('"shop$product"'))
+    expect(workspace).to have_received(:query_rows).with(include('"shop$product"'), params: {})
   end
 
   it 'returns structured client and query errors' do
@@ -50,8 +50,16 @@ RSpec.describe Mxrb::Oql::Server do
       ok: false, error: include(code: 'invalid_request', message: /read-only/)
     )
     expect(server.execute('oql' => 'SELECT * FROM Shop.Product WHERE Name = $name')).to include(
-      ok: false, error: include(code: 'invalid_request', message: /parameterized/)
+      ok: false, error: include(code: 'invalid_request', message: /params must match/)
     )
+
+    parameterized = server.execute(
+      'oql' => 'SELECT * FROM Shop.Product WHERE Name = $name',
+      'params' => { 'name' => 'Widget' }
+    )
+    expect(parameterized).to include(ok: true, row_count: 1)
+    expect(workspace).to have_received(:query_rows)
+      .with(include(':name'), params: { 'name' => 'Widget' })
 
     allow(workspace).to receive(:query_rows).and_raise(Mxrb::ToolchainError, 'database unavailable')
     expect(server.execute('sql' => 'SELECT 1')).to include(
