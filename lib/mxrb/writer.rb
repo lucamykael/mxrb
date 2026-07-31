@@ -669,6 +669,7 @@ module Mxrb
     end
 
     def merge_existing_document(existing, generated)
+      hydrate_pluggable_widgets!(generated, existing)
       merged = existing.merge(generated)
       case existing["$Type"]
       when "Microflows$Microflow", "Microflows$Nanoflow"
@@ -716,6 +717,211 @@ module Mxrb
       doc.delete("__mxrb_allow_concurrent_execution_declared")
       doc.delete("__mxrb_mark_as_used_declared")
       doc.delete("__mxrb_excluded_declared")
+      strip_nested_internal_keys(doc)
+      doc
+    end
+
+    def strip_nested_internal_keys(value)
+      case value
+      when Hash
+        value.delete_if { |key, _| key.to_s.start_with?("__mxrb_") }
+        value.each_value { strip_nested_internal_keys(_1) }
+      when Array
+        value.each { strip_nested_internal_keys(_1) }
+      end
+    end
+
+    def hydrate_pluggable_widgets!(generated, existing)
+      existing_widgets = custom_widgets(existing).to_h { [_1["Name"], _1] }
+      custom_widgets(generated).each do |widget|
+        options = widget.delete("__mxrb_widget_options")
+        baseline = existing_widgets[widget["Name"]]
+        next unless options && compatible_widget_baseline?(widget, baseline)
+
+        widget["Type"] = baseline["Type"]
+        widget["Object"] = baseline["Object"]
+        configure_data_grid2!(widget, options) if widget.dig("Type", "WidgetId") == data_grid2_descriptor[:id]
+        configure_combo_box!(widget, options) if widget.dig("Type", "WidgetId") == combo_box_descriptor[:id]
+        configure_pluggable_widget!(widget, options) if options[:__kind].to_sym == :pluggable_widget
+      end
+    end
+
+    def configure_pluggable_widget!(widget, options)
+      properties = custom_widget_properties(widget)
+      options.fetch(:properties, {}).each do |key, configured|
+        value = properties.dig(key.to_s, "Value")
+        next unless value
+
+        if configured.is_a?(Hash)
+          value.merge!(stringify_keys(configured))
+        elsif !configured.nil?
+          value["PrimitiveValue"] = configured.to_s
+        end
+      end
+    end
+
+    def stringify_keys(value)
+      case value
+      when Hash then value.to_h { |key, item| [key.to_s, stringify_keys(item)] }
+      when Array then value.map { stringify_keys(_1) }
+      else value
+      end
+    end
+
+    def custom_widgets(value, found = [])
+      case value
+      when Hash
+        found << value if value["$Type"] == "CustomWidgets$CustomWidget"
+        value.each_value { custom_widgets(_1, found) }
+      when Array
+        value.each { custom_widgets(_1, found) }
+      end
+      found
+    end
+
+    def compatible_widget_baseline?(generated, baseline)
+      return false unless baseline.is_a?(Hash)
+      return false unless generated.dig("Type", "WidgetId") == baseline.dig("Type", "WidgetId")
+
+      array_items(baseline.dig("Type", "ObjectType", "PropertyTypes")).any?
+    end
+
+    def configure_data_grid2!(widget, options)
+      properties = custom_widget_properties(widget)
+      if options[:entity] && properties["datasource"]
+        properties["datasource"]["Value"]["DataSource"] = custom_xpath_source_doc(options[:entity])
+      end
+      return unless properties["columns"] && options[:columns]
+
+      column_type = properties["columns"].dig("ValueType", "ObjectType")
+      columns = Array(options[:columns]).map { data_grid2_column_doc(column_type, _1) }
+      properties["columns"]["Value"]["Objects"] = IO::BsonCodec.build_array(columns, marker: 2)
+    end
+
+    def configure_combo_box!(widget, options)
+      properties = custom_widget_properties(widget)
+      set_widget_primitive(properties, "source", "context")
+      widget["LabelTemplate"] = client_template_doc(options[:caption])
+      if options[:__kind].to_sym == :drop_down
+        set_widget_primitive(properties, "optionsSourceType", "enumeration")
+        if properties["attributeEnumeration"]
+          properties.dig("attributeEnumeration", "Value")["AttributeRef"] =
+            attribute_ref_doc(options[:attribute])
+        end
+      else
+        set_widget_primitive(properties, "optionsSourceType", "association")
+        if properties["attributeAssociation"] && options[:attribute]
+          properties.dig("attributeAssociation", "Value")["EntityRef"] =
+            indirect_entity_ref_doc(options[:attribute])
+        end
+        if properties["optionsSourceAssociationDataSource"] && options[:attribute]
+          properties.dig("optionsSourceAssociationDataSource", "Value")["DataSource"] =
+            custom_xpath_source_doc(association_destination(options[:attribute]))
+        end
+        if properties["optionsSourceAssociationCaptionAttribute"] && options[:display_attribute]
+          properties.dig("optionsSourceAssociationCaptionAttribute", "Value")["AttributeRef"] =
+            attribute_ref_doc(options[:display_attribute])
+        end
+      end
+    end
+
+    def set_widget_primitive(properties, key, value)
+      properties.dig(key, "Value")["PrimitiveValue"] = value if properties[key]
+    end
+
+    def indirect_entity_ref_doc(association)
+      destination = association_destination(association)
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$IndirectEntityRef",
+        "Steps" => IO::BsonCodec.build_array([{
+          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$EntityRefStep",
+          "Association" => association.to_s, "DestinationEntity" => destination
+        }], marker: 2)
+      }
+    end
+
+    def association_destination(name)
+      @definition.fetch(:modules, []).each do |mod|
+        mod.fetch(:entities, []).each do |entity|
+          association = entity.fetch(:associations, []).find do |candidate|
+            candidate[:name].to_s == name.to_s ||
+              "#{mod[:name]}.#{candidate[:name]}" == name.to_s
+          end
+          return association[:target].to_s if association
+        end
+      end
+      ""
+    end
+
+    def custom_widget_properties(widget)
+      types = array_items(widget.dig("Type", "ObjectType", "PropertyTypes")).to_h do |type|
+        [IO::BsonCodec.extract_id(type["$ID"]), type]
+      end
+      array_items(widget.dig("Object", "Properties")).to_h do |property|
+        type = types[IO::BsonCodec.extract_id(property["TypePointer"])]
+        [type && type["PropertyKey"], property.merge("ValueType" => type && type["ValueType"])]
+      end.compact
+    end
+
+    def custom_xpath_source_doc(entity)
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidgetXPathSource",
+        "EntityRef" => {
+          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$DirectEntityRef",
+          "Entity" => entity.to_s
+        },
+        "ForceFullObjects" => false,
+        "SortBar" => {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$GridSortBar",
+          "SortItems" => IO::BsonCodec.build_array([], marker: 2)
+        },
+        "SourceVariable" => nil, "XPathConstraint" => ""
+      }
+    end
+
+    def data_grid2_column_doc(object_type, column)
+      overrides = {
+        "showContentAs" => { "PrimitiveValue" => "attribute" },
+        "attribute" => { "AttributeRef" => attribute_ref_doc(column[:attribute]) },
+        "header" => { "TextTemplate" => client_template_doc(column[:caption] || column[:name]) }
+      }
+      custom_widget_object_doc(object_type, overrides)
+    end
+
+    def custom_widget_object_doc(object_type, overrides = {})
+      properties = array_items(object_type["PropertyTypes"]).map do |property_type|
+        value = custom_widget_value_doc(property_type.fetch("ValueType"))
+        value.merge!(overrides.fetch(property_type["PropertyKey"], {}))
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$WidgetProperty",
+          "TypePointer" => property_type.fetch("$ID"), "Value" => value
+        }
+      end
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$WidgetObject",
+        "Properties" => IO::BsonCodec.build_array(properties, marker: 2),
+        "TypePointer" => object_type.fetch("$ID")
+      }
+    end
+
+    def custom_widget_value_doc(value_type)
+      doc = {
+        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$WidgetValue",
+        "Action" => no_action_doc(disabled: true), "AttributeRef" => nil, "DataSource" => nil,
+        "EntityRef" => nil, "Expression" => "", "Form" => "", "Icon" => nil,
+        "Image" => "", "Microflow" => "", "Nanoflow" => "",
+        "Objects" => IO::BsonCodec.build_array([], marker: 2),
+        "PrimitiveValue" => "", "Selection" => "None",
+        "SourceVariable" => nil, "TextTemplate" => nil, "TranslatableValue" => nil,
+        "TypePointer" => value_type.fetch("$ID"),
+        "Widgets" => IO::BsonCodec.build_array([], marker: 2), "XPathConstraint" => ""
+      }
+      default = value_type["DefaultValue"].to_s
+      case value_type["Type"]
+      when "Expression"   then doc["Expression"] = default
+      when "TextTemplate" then doc["TextTemplate"] = client_template_doc(default)
+      else doc["PrimitiveValue"] = default
+      end
       doc
     end
 
@@ -1531,8 +1737,11 @@ module Mxrb
       }
     end
 
-    def no_action_doc
-      { "$ID" => SecureRandom.uuid, "$Type" => "Forms$NoAction" }
+    def no_action_doc(disabled: false)
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$NoAction",
+        "DisabledDuringExecution" => disabled
+      }
     end
 
     def widget_doc(widget)
@@ -1540,6 +1749,24 @@ module Mxrb
 
       if type == :snippet
         return snippet_call_doc(widget)
+      end
+      return pluggable_widget_doc(widget, data_grid2_descriptor) if type == :data_grid
+      if %i[drop_down reference_selector].include?(type)
+        return pluggable_widget_doc(widget, combo_box_descriptor)
+      end
+      if type == :pluggable_widget
+        options = widget.fetch(:options)
+        return pluggable_widget_doc(widget, {
+          id: options.fetch(:widget_id), name: options.fetch(:widget_name),
+          studio_category: "Custom", studio_pro_category: "Custom"
+        })
+      end
+      if type == :native_widget
+        options = widget.fetch(:options)
+        return deep_copy(options.fetch(:deep_structure)).merge(
+          "$ID" => SecureRandom.uuid, "$Type" => options.fetch(:native_type),
+          "Name" => widget.fetch(:name)
+        )
       end
 
       options = widget.fetch(:options, {})
@@ -1555,17 +1782,12 @@ module Mxrb
       doc["LabelText"] = text_doc(options[:caption]) if input_widget?(type) && options.key?(:caption)
       doc["Caption"] = text_doc(options[:caption]) if type == :button
       doc["Content"] = client_template_doc(options[:caption]) if type == :text
-      doc["LabelText"] = text_doc(options[:caption] || "") if type == :drop_down
-
-      if type == :data_grid
-        doc["Columns"] = IO::BsonCodec.build_array(data_grid_columns(options[:columns]), marker: 2)
-        doc["DataSource"] = data_grid_source(options[:entity]) if options[:entity]
-        doc["SearchBar"] = search_bar_doc(options[:search_bar]) if options[:search_bar]
-        doc["ToolBar"] = toolbar_doc(options[:toolbar]) if options[:toolbar]
-      end
+      doc.merge!(modern_widget_properties(type, options))
 
       if type == :tab_control
-        doc["TabPages"] = IO::BsonCodec.build_array(tab_pages(options[:tabs]))
+        pages = tab_pages(options[:tabs])
+        doc["TabPages"] = IO::BsonCodec.build_array(pages)
+        doc["DefaultPagePointer"] = pages.first&.fetch("$ID", nil)
       end
 
       if type == :container
@@ -1580,69 +1802,32 @@ module Mxrb
       doc
     end
 
+    def deep_copy(value)
+      case value
+      when Hash then value.to_h { |key, item| [key, deep_copy(item)] }
+      when Array then value.map { deep_copy(_1) }
+      else value
+      end
+    end
+
     def snippet_call_doc(widget)
       {
         "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$SnippetCall",
+        "$Type" => "Forms$SnippetCallWidget",
         "Name" => widget.fetch(:name),
-        "SnippetSettings" => {
+        "Appearance" => appearance_doc, "TabIndex" => 0,
+        "FormCall" => {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$SnippetSettings",
-          "Snippet" => widget.dig(:options, :snippet).to_s
+          "$Type" => "Forms$SnippetCall",
+          "Form" => widget.dig(:options, :snippet).to_s,
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2)
         }
-      }
-    end
-
-    def search_bar_doc(search_bar)
-      fields = Array(search_bar[:fields]).map do |field|
-        {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$AttributeSearchField",
-          "Name" => "searchField_#{field[:attribute]}",
-          "AttributeRef" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Forms$AttributeRef",
-            "Attribute" => field[:attribute].to_s
-          },
-          "Label" => text_doc(field[:caption] || field[:attribute].to_s),
-          "DefaultValue" => "",
-          "Placeholder" => text_doc("")
-        }
-      end
-      {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$SearchBar",
-        "SearchFields" => IO::BsonCodec.build_array(fields)
-      }
-    end
-
-    def toolbar_doc(toolbar)
-      type_map = {
-        new:    "Forms$GridNewButton",
-        delete: "Forms$GridDeleteButton",
-        search: "Forms$GridSearchButton",
-        export: "Forms$GridExportToExcelButton"
-      }
-      buttons = Array(toolbar[:buttons]).map do |btn|
-        bson_type = type_map.fetch(btn[:type].to_sym, "Forms$GridNewButton")
-        {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => bson_type,
-          "Caption" => text_doc(btn[:caption].to_s),
-          "Class" => "",
-          "Style" => "",
-          "ButtonStyle" => "Default"
-        }
-      end
-      {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$GridToolBar",
-        "Buttons" => IO::BsonCodec.build_array(buttons)
       }
     end
 
     def input_widget?(type)
-      %i[text_box number_input check_box date_picker reference_selector drop_down].include?(type.to_sym)
+      %i[text_box number_input text_area check_box date_picker]
+        .include?(type.to_sym)
     end
 
     def widget_storage_type(type)
@@ -1650,37 +1835,159 @@ module Mxrb
         button:             "Forms$ActionButton",
         text_box:           "Forms$TextBox",
         number_input:       "Forms$TextBox",
+        text_area:          "Forms$TextArea",
         check_box:          "Forms$CheckBox",
         date_picker:        "Forms$DatePicker",
-        reference_selector: "Forms$ReferenceSelector",
         text:               "Forms$DynamicText",
-        data_grid:          "Forms$DataGrid",
         tab_control:        "Forms$TabControl",
-        drop_down:          "Forms$DropDownWidget",
         container:          "Forms$DivContainer"
       }.fetch(type.to_sym)
     end
 
-    def data_grid_columns(columns)
-      Array(columns).map do |column|
+    def data_grid2_descriptor
+      {
+        id: "com.mendix.widget.web.datagrid.Datagrid", name: "Data grid 2",
+        studio_category: "Data Containers", studio_pro_category: "Data containers"
+      }
+    end
+
+    def combo_box_descriptor
+      {
+        id: "com.mendix.widget.web.combobox.Combobox", name: "Combo box",
+        studio_category: "Input Widgets", studio_pro_category: "Input widgets"
+      }
+    end
+
+    def pluggable_widget_doc(widget, descriptor)
+      object_type_id = SecureRandom.uuid
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidget",
+        "Appearance" => appearance_doc(widget.dig(:options, :class).to_s),
+        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
+        "Editable" => "Always", "LabelTemplate" => nil, "Name" => widget.fetch(:name),
+        "Object" => {
+          "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$WidgetObject",
+          "Properties" => IO::BsonCodec.build_array([], marker: 2),
+          "TypePointer" => object_type_id
+        },
+        "TabIndex" => 0,
+        "Type" => {
+          "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidgetType",
+          "HelpUrl" => "",
+          "ObjectType" => {
+            "$ID" => object_type_id, "$Type" => "CustomWidgets$WidgetObjectType",
+            "PropertyTypes" => IO::BsonCodec.build_array([], marker: 2)
+          },
+          "OfflineCapable" => true, "StudioCategory" => descriptor.fetch(:studio_category),
+          "StudioProCategory" => descriptor.fetch(:studio_pro_category),
+          "SupportedPlatform" => "Web", "WidgetDescription" => "",
+          "WidgetId" => descriptor.fetch(:id), "WidgetName" => descriptor.fetch(:name),
+          "WidgetNeedsEntityContext" => false, "WidgetPluginWidget" => true
+        },
+        "__mxrb_widget_options" => widget.fetch(:options, {}).merge(__kind: widget.fetch(:type))
+      }
+    end
+
+    def modern_widget_properties(type, options)
+      case type.to_sym
+      when :text
         {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$DataGridColumn",
-          "Name" => column.fetch(:name),
-          "AttributePath" => column[:attribute]&.to_s,
-          "Caption" => text_doc(column[:caption].to_s),
-          "Class" => "",
-          "Style" => "",
-          "Editable" => false
-        }.compact
+          "ConditionalVisibilitySettings" => nil, "NativeAccessibilitySettings" => nil,
+          "NativeTextStyle" => "Text", "RenderMode" => "Text", "TabIndex" => 0
+        }
+      when :container
+        {
+          "ConditionalVisibilitySettings" => nil, "NativeAccessibilitySettings" => nil,
+          "OnClickAction" => no_action_doc(disabled: true), "RenderMode" => "Div",
+          "ScreenReaderHidden" => false, "TabIndex" => 0
+        }
+      when :button
+        {
+          "Action" => no_action_doc(disabled: true), "AriaRole" => "Button", "ButtonStyle" => "Default",
+          "CaptionTemplate" => client_template_doc(options[:caption]),
+          "ConditionalVisibilitySettings" => nil, "Icon" => nil,
+          "NativeAccessibilitySettings" => nil, "RenderType" => "Button", "TabIndex" => 0,
+          "Tooltip" => text_doc("")
+        }
+      when :text_box, :number_input then text_box_properties(options)
+      when :text_area               then text_area_properties(options)
+      when :check_box                then check_box_properties(options)
+      when :date_picker              then date_picker_properties(options)
+      when :tab_control
+        {
+          "ActivePageAttributeRef" => nil, "ActivePageOnChangeAction" => no_action_doc,
+          "ActivePageSourceVariable" => nil, "ConditionalVisibilitySettings" => nil,
+          "TabIndex" => 0
+        }
+      else {}
       end
     end
 
-    def data_grid_source(entity)
+    def text_box_properties(options)
+      editable_widget_properties(options).merge(
+        "Autocomplete" => true, "AutocompletePurpose" => "On", "AutoFocus" => false,
+        "FormattingInfo" => formatting_info_doc, "InputMask" => "", "IsPasswordBox" => false,
+        "KeyboardType" => "Default", "MaxLengthCode" => -1,
+        "OnEnterKeyPressAction" => no_action_doc, "PlaceholderTemplate" => client_template_doc(""),
+        "SubmitBehaviour" => "OnEndEditing", "SubmitOnInputDelay" => 300
+      )
+    end
+
+    def text_area_properties(options)
+      editable_widget_properties(options).merge(
+        "AutoFocus" => false, "CounterMessage" => text_doc(""),
+        "MaxLengthCode" => -1, "NumberOfLines" => options.fetch(:lines, 5),
+        "PlaceholderTemplate" => client_template_doc("")
+      )
+    end
+
+    def check_box_properties(options)
+      editable_widget_properties(options).merge(
+        "LabelPosition" => "Default", "NativeRenderMode" => "Switch"
+      )
+    end
+
+    def date_picker_properties(options)
+      editable_widget_properties(options).merge(
+        "AutoFocus" => false, "FormattingInfo" => formatting_info_doc,
+        "PlaceholderTemplate" => client_template_doc("")
+      )
+    end
+
+    def editable_widget_properties(options)
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$NewGridDatabaseSource",
-        "Entity" => entity.to_s
+        "AriaRequired" => false, "AttributeRef" => attribute_ref_doc(options[:attribute]),
+        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
+        "Editable" => "Always", "LabelTemplate" => client_template_doc(options[:caption]),
+        "NativeAccessibilitySettings" => nil,
+        "OnChangeAction" => no_action_doc, "OnEnterAction" => no_action_doc,
+        "OnLeaveAction" => no_action_doc, "ReadOnlyStyle" => "Inherit",
+        "ScreenReaderLabel" => nil, "SourceVariable" => nil, "TabIndex" => 0,
+        "Validation" => widget_validation_doc
+      }
+    end
+
+    def attribute_ref_doc(attribute)
+      return nil unless attribute
+
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$AttributeRef",
+        "Attribute" => attribute.to_s, "EntityRef" => nil
+      }
+    end
+
+    def formatting_info_doc
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$FormattingInfo",
+        "CustomDateFormat" => "", "DateFormat" => "Date", "DecimalPrecision" => 2,
+        "EnumFormat" => "Text", "GroupDigits" => false
+      }
+    end
+
+    def widget_validation_doc
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$WidgetValidation",
+        "Expression" => "", "Message" => text_doc("")
       }
     end
 
@@ -1691,7 +1998,9 @@ module Mxrb
           "$Type" => "Forms$TabPage",
           "Name" => tab.fetch(:name),
           "Caption" => text_doc(tab[:caption].to_s),
-          "Widgets" => IO::BsonCodec.build_array([], marker: 2)
+          "Widgets" => IO::BsonCodec.build_array(
+            Array(tab[:widgets]).map { widget_doc(_1) }, marker: 2
+          )
         }
       end
     end
@@ -1713,17 +2022,24 @@ module Mxrb
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$CallNanoflowClientAction",
           "Nanoflow" => event.fetch(:handler),
-          "DisabledDuringExecution" => true
+          "ConfirmationInfo" => nil, "DisabledDuringExecution" => true,
+          "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "ProgressBar" => "None", "ProgressMessage" => nil
         }
       else
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$MicroflowClientAction",
+          "$Type" => "Forms$MicroflowAction",
           "MicroflowSettings" => {
             "$ID" => SecureRandom.uuid,
             "$Type" => "Forms$MicroflowSettings",
             "Microflow" => event.fetch(:handler),
-            "FormValidations" => "All"
+            "Asynchronous" => false, "ConfirmationInfo" => nil,
+            "FormValidations" => "All",
+            "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
+            "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+            "ProgressBar" => "None", "ProgressMessage" => nil
           },
           "DisabledDuringExecution" => true
         }
@@ -1736,6 +2052,7 @@ module Mxrb
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$SaveChangesClientAction",
+          "DisabledDuringExecution" => true,
           "ClosePage" => true,
           "SyncAutomatically" => false
         }
@@ -1743,18 +2060,21 @@ module Mxrb
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$CancelChangesClientAction",
+          "DisabledDuringExecution" => true,
           "ClosePage" => true
         }
       when "delete"
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$DeleteClientAction",
-          "ClosePage" => false
+          "ClosePage" => false, "DisabledDuringExecution" => true,
+          "SourceVariable" => nil
         }
       when "close_page"
         {
           "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$ClosePageClientAction"
+          "$Type" => "Forms$ClosePageClientAction",
+          "DisabledDuringExecution" => true, "NumberOfPagesToClose" => ""
         }
       else
         raise ArgumentError, "unsupported native action #{handler.inspect}"
@@ -1766,17 +2086,38 @@ module Mxrb
         "$ID" => SecureRandom.uuid,
         "$Type" => "Forms$DataView",
         "Name" => "dataView",
-        "DataSource" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => source.fetch(:kind).to_sym == :nanoflow ?
-            "Forms$NanoflowSource" : "Forms$MicroflowSource",
-          "MicroflowSettings" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Forms$MicroflowSettings",
-            "Microflow" => source.fetch(:name)
-          }
-        },
-        "Widgets" => IO::BsonCodec.build_array(widgets)
+        "Appearance" => appearance_doc, "ConditionalEditabilitySettings" => nil,
+        "ConditionalVisibilitySettings" => nil, "DataSource" => data_view_source_doc(source),
+        "Editability" => "Always", "FooterWidgets" => IO::BsonCodec.build_array([], marker: 2),
+        "LabelWidth" => 0, "NoEntityMessage" => text_doc(""), "ReadOnlyStyle" => "Control",
+        "ShowFooter" => false, "TabIndex" => 0,
+        "Widgets" => IO::BsonCodec.build_array(widgets, marker: 2)
+      }
+    end
+
+    def data_view_source_doc(source)
+      if source.fetch(:kind).to_sym == :nanoflow
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$NanoflowSource",
+          "ForceFullObjects" => false, "Nanoflow" => source.fetch(:name),
+          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2)
+        }
+      else
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$MicroflowSource",
+          "ForceFullObjects" => false,
+          "MicroflowSettings" => client_microflow_settings_doc(source.fetch(:name))
+        }
+      end
+    end
+
+    def client_microflow_settings_doc(name)
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$MicroflowSettings",
+        "Asynchronous" => false, "ConfirmationInfo" => nil, "FormValidations" => "All",
+        "Microflow" => name, "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
+        "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+        "ProgressBar" => "None", "ProgressMessage" => nil
       }
     end
 

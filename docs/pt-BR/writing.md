@@ -125,8 +125,25 @@ loops, eventos de erro e rescue.
 
 ## Páginas, navegação e segurança
 
-Controles core possuem métodos concisos; toda página importada também expõe
-`deep_structure({...})`. Menus combinam DSL curta e estrutura profunda.
+Controles core possuem métodos concisos: `text`, `text_box`, `number_input`,
+`text_area`, `check_box`, `date_picker`, `button`, `container`, `snippet` e
+`tab_control` com widgets dentro de cada `tab_page`. Esses controles usam o
+modelo Forms moderno do Mendix 11. `data_grid` gera Data Grid 2; `drop_down` e
+`reference_selector` geram Combo Box.
+
+Widgets pluggable precisam dos `.mpk` em `widgets/`. Depois de instalar os
+pacotes, sincronize o schema específico da versão e aplique as propriedades
+Ruby com:
+
+```bash
+bundle exec mxrb widgets sync project.rb MeuApp.mpr
+```
+
+Para outros MPKs existe `pluggable_widget`, com widget id e mapa de
+propriedades. Widgets importados ainda desconhecidos são preservados como
+`native_widget` e `deep_structure`, sem perder configuração no ciclo
+export/generate. Toda página importada também expõe `deep_structure({...})`.
+Menus combinam DSL curta e estrutura profunda.
 Project roles, module roles e `allowed_roles` são editáveis em Ruby.
 
 ## MPR v2
