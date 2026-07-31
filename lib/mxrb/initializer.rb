@@ -184,7 +184,7 @@ module Mxrb
       <<~RUBY
         # frozen_string_literal: true
 
-        layout :ApplicationLayout
+        layout :ApplicationLayout, title: "#{@module_name}"
 
         evaluate_dir File.join(__dir__, "pages")
         evaluate_dir File.join(__dir__, "snippets")
@@ -202,6 +202,28 @@ module Mxrb
 
           container :pageHeader, class_name: "mxrb-page-header" do
             text :pageTitle, caption: "#{@module_name}"
+            text :pageSubtitle,
+                 caption: "A Ruby-first Mendix application, ready to grow."
+          end
+
+          container :dashboard, class_name: "mxrb-dashboard-grid" do
+            container :domainCard, class_name: "mxrb-card" do
+              text :domainEyebrow, caption: "DOMAIN"
+              text :domainTitle, caption: "Model your business"
+              text :domainCopy, caption: "Add entities, enumerations and associations using the mxrb DSL."
+            end
+
+            container :logicCard, class_name: "mxrb-card" do
+              text :logicEyebrow, caption: "LOGIC"
+              text :logicTitle, caption: "Build application flows"
+              text :logicCopy, caption: "Keep use cases, validations and queries organized by convention."
+            end
+
+            container :experienceCard, class_name: "mxrb-card" do
+              text :experienceEyebrow, caption: "EXPERIENCE"
+              text :experienceTitle, caption: "Ship a polished UI"
+              text :experienceCopy, caption: "Create pages, snippets and client actions without manual wiring."
+            end
           end
         end
       RUBY

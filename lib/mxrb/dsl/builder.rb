@@ -754,8 +754,10 @@ module Mxrb
         }
       end
 
-      # Minimal native responsive layout with a single Main placeholder.
-      def layout(name = :ApplicationLayout)
+      # Native responsive application shell. It deliberately uses only Mendix
+      # core widgets, so generated projects do not depend on Atlas Core merely
+      # to display their navigation.
+      def layout(name = :ApplicationLayout, title: nil, navigation: :Responsive)
         appearance = lambda do |class_name = ''|
           {
             '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Appearance',
@@ -767,6 +769,76 @@ module Mxrb
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Placeholder',
           'Appearance' => appearance.call, 'Name' => 'Main', 'TabIndex' => 0
         }
+        text = lambda do |value|
+          {
+            '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Text',
+            'Items' => IO::BsonCodec.build_array([
+                                                   {
+                                                     '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Translation',
+                                                     'LanguageCode' => 'en_US', 'Text' => value.to_s
+                                                   }
+                                                 ])
+          }
+        end
+        client_template = lambda do |value|
+          {
+            '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ClientTemplate',
+            'Fallback' => text.call(''),
+            'Parameters' => IO::BsonCodec.build_array([], marker: 2),
+            'Template' => text.call(value)
+          }
+        end
+        no_action = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NoAction',
+          'DisabledDuringExecution' => true
+        }
+        navigation_tree = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationTree',
+          'Appearance' => appearance.call('mxrb-navigation'),
+          'MenuSource' => {
+            '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationSource',
+            'NavigationProfile' => navigation.to_s
+          },
+          'Name' => 'navigationTree1', 'TabIndex' => 0
+        }
+        left = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
+          'Appearance' => appearance.call('region-sidebar'),
+          'Size' => 264, 'SizeMode' => 'Pixels',
+          'ToggleMode' => 'ShrinkContentInitiallyClosed',
+          'Widgets' => IO::BsonCodec.build_array([navigation_tree], marker: 2)
+        }
+        sidebar_toggle = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$SidebarToggleButton',
+          'Appearance' => appearance.call('mxrb-sidebar-toggle'),
+          'ButtonStyle' => 'Primary', 'CaptionTemplate' => client_template.call('Menu'),
+          'ConditionalVisibilitySettings' => nil, 'Icon' => nil,
+          'Name' => 'sidebarToggle1', 'RenderType' => 'Button', 'TabIndex' => 0,
+          'Tooltip' => text.call('Toggle navigation')
+        }
+        brand = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DynamicText',
+          'Appearance' => appearance.call('mxrb-brand'), 'Class' => '',
+          'ConditionalVisibilitySettings' => nil,
+          'Content' => client_template.call(title || name.to_s),
+          'Name' => 'applicationTitle', 'NativeAccessibilitySettings' => nil,
+          'NativeTextStyle' => 'Text', 'RenderMode' => 'Text', 'Style' => '',
+          'TabIndex' => 0
+        }
+        topbar_content = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DivContainer',
+          'Appearance' => appearance.call('mxrb-topbar'),
+          'ConditionalVisibilitySettings' => nil, 'Name' => 'topbarContent',
+          'OnClickAction' => no_action, 'RenderMode' => 'Div',
+          'ScreenReaderHidden' => false, 'TabIndex' => 0,
+          'Widgets' => IO::BsonCodec.build_array([sidebar_toggle, brand], marker: 2)
+        }
+        top = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
+          'Appearance' => appearance.call('region-topbar'),
+          'Size' => 72, 'SizeMode' => 'Pixels', 'ToggleMode' => 'None',
+          'Widgets' => IO::BsonCodec.build_array([topbar_content], marker: 2)
+        }
         center = {
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
           'Appearance' => appearance.call('region-content'),
@@ -777,9 +849,9 @@ module Mxrb
         container = {
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainer',
           'Alignment' => 'Center', 'Bottom' => nil, 'CenterRegion' => center,
-          'Appearance' => appearance.call, 'LayoutMode' => 'Headline', 'Left' => nil,
+          'Appearance' => appearance.call, 'LayoutMode' => 'Headline', 'Left' => left,
           'Name' => 'scrollContainer1', 'Right' => nil, 'ScrollBehavior' => 'PerRegion',
-          'NativeHideScrollbars' => false, 'TabIndex' => 0, 'Top' => nil,
+          'NativeHideScrollbars' => false, 'TabIndex' => 0, 'Top' => top,
           'Width' => 960, 'WidthMode' => 'Auto'
         }
         content = {
@@ -789,7 +861,7 @@ module Mxrb
         }
         native_document(
           name, type: 'Forms$Layout', deep_structure: {
-            'Appearance' => appearance.call, 'CanvasHeight' => 600,
+            'Appearance' => appearance.call('mxrb-application-shell'), 'CanvasHeight' => 600,
             'CanvasWidth' => 800, 'Content' => content, 'Documentation' => '',
             'Excluded' => false, 'ExportLevel' => 'Hidden'
           }
