@@ -30,6 +30,8 @@ remain optional external gates for compatibility and functional execution.
 - execute functional microflow tests locally or in disposable containers.
 - search and install reusable Ruby modules with a locked SHA-256 digest.
 - write, inspect and compare deterministic MDA containers without invoking `mxbuild`;
+- assemble executable portable Runtime ZIPs from materialized deployments and
+  installed version-matched Runtime files without invoking `mx` or `mxbuild`;
 - clone, inspect and synchronize official Team Server Git repositories while
   keeping PAT values in user-managed files.
 
@@ -90,6 +92,7 @@ bundle exec mxrb oql Shop.mpr --dialect postgresql
 bundle exec mxrb db up Shop.mpr
 bundle exec mxrb db sql Shop.mpr 'SELECT * FROM "sales$order" LIMIT 20'
 bundle exec mxrb pack Shop.mpr --output build/Shop.mda
+bundle exec mxrb portable Shop.mpr --output build/runtime.zip
 bundle exec mxrb team-server clone APP_ID ./shop --pat-file /secure/team-server.env
 ```
 
@@ -138,8 +141,10 @@ Or build and run inside disposable containers:
 bundle exec mxrb test Shop.mpr functional_test.rb --docker
 ```
 
-The source project is copied before instrumentation. `mx check`, the portable
-package, runtime database and uploaded files are discarded after execution.
+The source project is copied before instrumentation. Structural validation is
+performed natively by MXRB. The instrumented functional build still requires
+materializing changed microflows; that build, runtime database and uploaded
+files are discarded after execution.
 The functional scope verifies completion, exception handling, return values
 and persisted state through entity/XPath count assertions.
 

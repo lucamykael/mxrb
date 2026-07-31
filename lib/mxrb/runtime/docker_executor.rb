@@ -36,9 +36,6 @@ module Mxrb
         raise ToolchainError, "could not build #{@plan.builder_image}:\n#{output}" unless status.success?
       end
 
-      # mx check is performed in the builder immediately before mxbuild.
-      def check(_project, _root) = "performed in Docker builder"
-
       def build(project, root)
         output, status = capture(
           "docker", "run", "--rm",
