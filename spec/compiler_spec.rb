@@ -87,6 +87,35 @@ RSpec.describe Mxrb::Compiler do
     end
   end
 
+  it 'reports incomplete deployments, invalid metadata, overwrite, and symlinks' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root)
+      missing = File.join(root, 'missing')
+      expect { described_class::Packager.new(mpr, deployment: missing).pack(output: File.join(root, 'a.mda')) }
+        .to raise_error(Mxrb::CompilationError, /directory not found/)
+
+      deployment = create_deployment(root)
+      output = File.join(root, 'a.mda')
+      packager = described_class::Packager.new(mpr, deployment:)
+      FileUtils.rm_f(File.join(deployment, 'web', 'index.html'))
+      expect { packager.pack(output:) }.to raise_error(Mxrb::CompilationError, %r{missing web/index.html})
+      deployment = create_deployment(root)
+      packager = described_class::Packager.new(mpr, deployment:)
+      packager.pack(output:)
+      expect { packager.pack(output:) }.to raise_error(Mxrb::CompilationError, /already exists/)
+      expect { packager.pack(output:, force: true) }.not_to raise_error
+
+      File.write(File.join(deployment, 'model', 'metadata.json'), '{')
+      expect { packager.pack(output:, force: true) }.to raise_error(Mxrb::CompilationError, /invalid model/)
+      File.write(File.join(deployment, 'model', 'metadata.json'), '{}')
+      expect { packager.pack(output:, force: true) }.to raise_error(Mxrb::CompilationError, /invalid model/)
+
+      create_deployment(root)
+      File.symlink(File.join(deployment, 'web', 'index.html'), File.join(deployment, 'web', 'linked.html'))
+      expect { packager.pack(output:, force: true) }.to raise_error(Mxrb::CompilationError, /symlink/)
+    end
+  end
+
   it 'compares MDA entries by content rather than zip metadata' do
     Dir.mktmpdir do |root|
       mpr = create_project(root)
@@ -98,6 +127,38 @@ RSpec.describe Mxrb::Compiler do
       described_class::Packager.new(mpr, deployment:).pack(output: right)
 
       expect(described_class::Mda.compare(left, right).map(&:path)).to eq(['web/index.html'])
+    end
+  end
+
+  it 'inspects directories and reports added, removed, equal, and unsafe MDA entries' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root)
+      deployment = create_deployment(root)
+      left = File.join(root, 'left.mda')
+      right = File.join(root, 'right.mda')
+      described_class::Packager.new(mpr, deployment:).pack(output: left)
+      FileUtils.rm_f(File.join(deployment, 'native', 'package.json'))
+      File.write(File.join(deployment, 'web', 'new.js'), 'new')
+      described_class::Packager.new(mpr, deployment:).pack(output: right)
+      differences = described_class::Mda.compare(left, right).to_h { [_1.path, _1.status] }
+      expect(differences).to include('native/package.json' => :removed, 'web/new.js' => :added)
+      expect(described_class::Mda.compare(left, left)).to be_empty
+      expect(described_class::Mda.inspect(left).entries).to include(have_attributes(directory: true))
+
+      no_metadata = File.join(root, 'no-metadata.mda')
+      Zip::File.open(no_metadata, create: true) { _1.get_output_stream('web/index.html') { |io| io.write('x') } }
+      expect { described_class::Mda.inspect(no_metadata) }.to raise_error(Mxrb::CompilationError, /no model/)
+
+      invalid_metadata = File.join(root, 'invalid-metadata.mda')
+      Zip::File.open(invalid_metadata, create: true) do |zip|
+        zip.get_output_stream('model/metadata.json') { |io| io.write('{') }
+      end
+      expect { described_class::Mda.inspect(invalid_metadata) }.to raise_error(Mxrb::CompilationError, /invalid MDA/)
+      expect { described_class::Mda.inspect(File.join(root, 'absent.mda')) }
+        .to raise_error(Mxrb::CompilationError, /invalid MDA/)
+      expect { described_class::Mda.safe_path('../secret') }.to raise_error(Mxrb::CompilationError, /unsafe/)
+      expect { described_class::Mda.safe_path('.') }.to raise_error(Mxrb::CompilationError, /unsafe/)
+      expect(described_class::Mda.safe_path('web\\index.html')).to eq('web/index.html')
     end
   end
 
