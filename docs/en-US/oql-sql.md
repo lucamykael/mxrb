@@ -42,6 +42,32 @@ Always verify physical table and column names against the database created by
 the exact Mendix Runtime. Association-path joins are reported as unsupported
 until Runtime storage metadata can prove the correct join.
 
+## Dialect-aware analysis
+
+`Oql::Analyzer` detects cost and portability patterns in the original source,
+preserves the triggering fragment for highlighting, and returns actionable
+alternatives for PostgreSQL, SQL Server, and ANSI:
+
+```ruby
+report = Mxrb::Oql::Analyzer.new(dialect: :postgresql)
+                            .analyze_source("SELECT * FROM Sales.Order")
+report.findings.each { puts "#{_1.rule}: #{_1.suggestions[:postgresql]}" }
+
+reports = Mxrb.open("Shop.mpr") { _1.oql_analysis(dialect: :postgresql) }
+```
+
+Rules cover leading and both-sided wildcards, prefix searches,
+`LOWER`/`UPPER`/`CAST` in `WHERE`, Cartesian products, and `SELECT *`.
+Findings are `hint`, `warning`, or `error`; `clean?` means no errors.
+
+The CLI handles native OQL plus both OQL and SQL ad-hoc sources:
+
+```sh
+bundle exec mxrb analyze Shop.mpr --dialect postgresql
+bundle exec mxrb analyze --oql "SELECT * FROM Sales.Order"
+bundle exec mxrb analyze --sql "SELECT * FROM sales$order" --json
+```
+
 ## Materialized local PostgreSQL
 
 An MPR contains the application model, not an application-data snapshot. The
@@ -67,6 +93,22 @@ bundle exec mxrb db down Shop.mpr
 `db down` stops the containers but preserves the PostgreSQL volume. A later
 `db up` reuses both the package cache and the data. The host port defaults to
 `127.0.0.1:55432` and can be changed with `--port`.
+
+Local tools can access the same workspace through a JSON HTTP endpoint:
+
+```sh
+bundle exec mxrb serve Shop.mpr --port 4567
+curl -X POST http://127.0.0.1:4567/query \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"SELECT * FROM \"sales$order\" LIMIT 20"}'
+```
+
+The body accepts exactly one `sql` or `oql` field. Ad-hoc OQL passes through
+the safe PostgreSQL translator; parameterized queries and anything other than
+one `SELECT`/`WITH` statement are rejected. Responses include `rows`,
+`row_count`, `elapsed_ms`, warnings, or a structured error. The server binds
+only to loopback, uses `mxrb_reader`, and prepares the workspace by default;
+`--no-up` reuses an already-running workspace.
 
 Permanent cleanup is intentionally explicit:
 

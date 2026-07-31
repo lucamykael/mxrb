@@ -25,6 +25,7 @@ Refactoring decisions start from the semantic index:
 ```ruby
 project.find_artifact("Sales.Order", kind: :entity)
 project.search_artifacts("order", kind: :microflow)
+project.semantic_search_artifacts("create a customer order", limit: 5)
 project.references_to("Sales.Order")
 project.references_from("Sales.Order_Overview")
 project.callers_of("Sales.Recalculate")
@@ -35,6 +36,37 @@ project.impact_of("Sales.Order").artifacts
 `impact_of` is transitive by default; pass `transitive: false` for direct
 dependents only. CLI: `mxrb find`, `mxrb refs`, `mxrb callers`,
 `mxrb callees`, `mxrb impact`.
+
+Semantic search always has a deterministic Ruby backend. Installing the
+optional `sqlite-vec` gem enables a fingerprinted KNN cache inside writable
+MPRs; read-only projects and platforms without the native extension keep the
+same API and rank in memory. The first accelerated call populates the vector
+table before recording its backend, dimension and model fingerprint, so an
+empty or stale index is never treated as ready.
+Use `mxrb find app.mpr "customer order" --semantic` for the legacy adapter.
+The dedicated command also exposes the backend, result limit, and cosine
+distance:
+
+```sh
+bundle exec mxrb search "payment" App.mpr
+bundle exec mxrb search "create order" App.mpr --backend onnx --limit 5
+```
+
+Tabular output contains rank, distance, qualified name, and kind; `--json`
+provides the same fields for automation.
+
+For local ONNX development, enable the optional dependency group with
+`BUNDLE_WITH=onnx bundle install`. `backend: :onnx` and the automatic backend
+then use Informers' documented `embedding` pipeline with
+`sentence-transformers/all-MiniLM-L6-v2`. CI sets `MXRB_ONNX=1` in its
+dedicated job and runs a real 384-dimensional model smoke test; ordinary test
+and gem installations do not download the model.
+
+The native sqlite-vec smoke test uses its own supported-platform dependency
+file: `BUNDLE_GEMFILE=Gemfile.sqlite-vec bundle install`, followed by
+`MXRB_SQLITE_VEC=1 BUNDLE_GEMFILE=Gemfile.sqlite-vec bundle exec rspec
+spec/semantic_search_spec.rb`. This keeps unsupported architectures out of the
+main lockfile while CI still exercises the actual extension.
 
 ## Rename
 

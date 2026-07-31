@@ -3068,4 +3068,77 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     expect(rescue_flows.size).to eq(2)
     expect(rescue_flows.count { _1["IsErrorHandler"] }).to eq(1)
   end
+
+  it "covers sqlite-vec storage helpers and validation boundaries" do
+    db = instance_double(SQLite3::Database)
+    mpr = Mxrb::IO::MprFile.allocate
+    mpr.instance_variable_set(:@db, db)
+    mpr.instance_variable_set(:@readonly, false)
+    sqlite_vec = Class.new do
+      def self.load(db) = db.load_extension("/tmp/sqlite-vec-test.so")
+    end
+    stub_const("SqliteVec", sqlite_vec)
+    allow(mpr).to receive(:require).with("sqlite_vec").and_return(true)
+    allow(db).to receive(:enable_load_extension)
+    allow(db).to receive(:load_extension)
+    allow(db).to receive(:execute).and_return([])
+
+    expect(mpr.load_vec_extension!).to be(true)
+    expect(mpr.load_vec_extension!).to be(true)
+    expect(db).to have_received(:load_extension).once
+    expect(db).to have_received(:enable_load_extension).with(false).once
+
+    expect(mpr.ensure_vec_table!("_MxrbVecIndex", 3)).to eq([])
+    expect(mpr.ensure_vec_meta_table!("_MxrbVecMeta")).to eq([])
+    expect(mpr.write_vec_meta!("_MxrbVecMeta", "tfidf", 3, "fingerprint")).to eq([])
+    expect(mpr.vec_upsert("_MxrbVecIndex", "artifact", "[0,1,0]")).to eq([])
+    allow(db).to receive(:execute).and_return([["artifact", 0.25]])
+    expect(mpr.vec_knn("_MxrbVecIndex", "[0,1,0]", 2))
+      .to eq([{ id: "artifact", distance: 0.25 }])
+    allow(db).to receive(:transaction).and_yield.and_return(:committed)
+    expect { |block| mpr.vec_transaction(&block) }.to yield_control
+    allow(db).to receive(:execute).and_return([])
+    expect(mpr.vec_drop_index!("_MxrbVecIndex", "_MxrbVecMeta")).to eq([])
+
+    expect { mpr.ensure_vec_table!("bad; DROP TABLE Unit", 3) }
+      .to raise_error(ArgumentError, /invalid vector table/)
+    expect { mpr.ensure_vec_table!("_MxrbVecIndex", 0) }
+      .to raise_error(ArgumentError, /dimension must be positive/)
+
+    mpr.instance_variable_set(:@readonly, true)
+    expect { mpr.ensure_vec_meta_table!("_MxrbVecMeta") }
+      .to raise_error(Mxrb::ReadOnlyError)
+  end
+
+  it "covers vector metadata absence, legacy schema, and extension cleanup" do
+    db = instance_double(SQLite3::Database)
+    mpr = Mxrb::IO::MprFile.allocate
+    mpr.instance_variable_set(:@db, db)
+    mpr.instance_variable_set(:@readonly, false)
+    allow(mpr).to receive(:tables).and_return([], ["_MxrbVecMeta"])
+    expect(mpr.vec_meta("_MxrbVecMeta")).to be_nil
+
+    allow(db).to receive(:get_first_row).and_return(
+      nil, ["tfidf", 512, "fingerprint"]
+    )
+    expect(mpr.vec_meta("_MxrbVecMeta")).to be_nil
+    expect(mpr.vec_meta("_MxrbVecMeta")).to eq(
+      backend: "tfidf", dimension: 512, fingerprint: "fingerprint"
+    )
+    allow(db).to receive(:get_first_row).and_raise(SQLite3::SQLException)
+    expect(mpr.vec_meta("_MxrbVecMeta")).to be_nil
+
+    failing = Mxrb::IO::MprFile.allocate
+    failing.instance_variable_set(:@db, db)
+    failing.instance_variable_set(:@readonly, false)
+    allow(failing).to receive(:require).with("sqlite_vec").and_return(true)
+    stub_const(
+      "SqliteVec",
+      Class.new { def self.load(db) = db.load_extension("/tmp/missing.so") }
+    )
+    allow(db).to receive(:enable_load_extension)
+    allow(db).to receive(:load_extension).and_raise(SQLite3::SQLException)
+    expect { failing.load_vec_extension! }.to raise_error(SQLite3::SQLException)
+    expect(db).to have_received(:enable_load_extension).with(false)
+  end
 end

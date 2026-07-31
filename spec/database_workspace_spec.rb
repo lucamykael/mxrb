@@ -205,6 +205,30 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
     end
   end
 
+  it 'returns structured rows for one read-only online query' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        copy = command.any? { _1.start_with?('COPY (SELECT') }
+        output = copy ? "name,count\nWidget,2\n" : ''
+        [output, '', status(true)]
+      end
+
+      expected = [{ 'name' => 'Widget', 'count' => '2' }]
+      expect(subject.query_rows('SELECT name, count FROM products')).to eq(expected)
+      expect(commands.last).to include('--csv', '--quiet', 'mxrb_reader')
+      expect(commands.last.last).to include('COPY (SELECT name, count FROM products)')
+      expect { subject.query_rows(' ') }.to raise_error(ArgumentError, /must not be empty/)
+      expect { subject.query_rows("SELECT\0") }.to raise_error(ArgumentError, /NUL/)
+      expect { subject.query_rows('DELETE FROM products') }
+        .to raise_error(ArgumentError, /read-only SELECT/)
+      expect { subject.query_rows('SELECT 1; SELECT 2') }
+        .to raise_error(ArgumentError, /read-only SELECT/)
+    end
+  end
+
   it 'provides read-only connection and shell details without exposing owner credentials' do
     Dir.mktmpdir do |dir|
       path = make_project(dir)

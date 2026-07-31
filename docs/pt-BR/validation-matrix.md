@@ -57,15 +57,15 @@ um limite explícito.
 
 ## Índice semântico
 
-Os seis MPRs produziram **1.772 artefatos** e **3.330 referências**. Consultas
+Os seis MPRs produziram **1.778 artefatos** e **3.387 referências**. Consultas
 de referências, callers, callees, impacto, lint e diff tipado foram exercitadas
 sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 442 exemplos, zero falhas;
-- 100% das linhas: 5.744/5.744;
-- 100% dos branches: 2.190/2.190;
+- 510 exemplos, zero falhas;
+- 100% das linhas: 7.062/7.062;
+- 100% dos branches: 2.626/2.626;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.
@@ -73,7 +73,7 @@ sem MDL.
 Asserções Ruby verificam retorno e contagens XPath persistidas: Games 1/2/3 e
 Cells 81/162/243. JUnit XML é apenas relatório opcional gerado em Ruby.
 
-`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 13,733 s.
+`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 14,760 s.
 `script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing
 determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`
 atômicos, inclusive valores binários.

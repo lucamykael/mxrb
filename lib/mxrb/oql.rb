@@ -14,6 +14,18 @@ module Mxrb
       def supported? = !sql.nil?
     end
 
+    Finding = Data.define(:rule, :severity, :fragment, :message, :suggestions)
+
+    AnalysisReport = Data.define(:query, :findings) do
+      def clean? = findings.none? { _1.severity == :error }
+      def warnings? = findings.any? { _1.severity == :warning }
+
+      def for_dialect(dialect)
+        key = dialect.to_sym
+        findings.map { [_1, _1.suggestions[key]] }.freeze
+      end
+    end
+
     # Finds OQL-bearing native model elements without treating arbitrary strings as queries.
     class Catalog
       def initialize(project)
@@ -139,6 +151,15 @@ module Mxrb
         new.send(:tokenize, source).filter_map do |token|
           token.text.delete_prefix('$') if token.type == :parameter
         end.uniq.freeze
+      end
+
+      def translate_source(source, name: 'AdHoc')
+        text = source.to_s
+        query = Query.new(
+          'adhoc', name, name, :oql, text.freeze, nil, [].freeze,
+          'Oql$AdHoc', self.class.parameters(text)
+        )
+        translate(query)
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
@@ -399,3 +420,5 @@ module Mxrb
     # rubocop:enable Metrics/ClassLength
   end
 end
+
+require_relative 'oql/analyzer'

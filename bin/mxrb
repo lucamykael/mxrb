@@ -303,6 +303,119 @@ when "oql"
     end
   end
 
+when "analyze"
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  dialect = (option.call("--dialect") || "postgresql").to_sym
+  sql_source = option.call("--sql")
+  oql_source = option.call("--oql")
+  abort "Use only one of --sql or --oql" if sql_source && oql_source
+  json = ARGV.delete("--json")
+  begin
+    analyzer = Mxrb::Oql::Analyzer.new(dialect:)
+    reports = if sql_source
+                [analyzer.analyze_sql(sql_source)]
+              elsif oql_source
+                [analyzer.analyze_source(oql_source)]
+              else
+                path = ARGV.shift or
+                  abort "Usage: mxrb analyze <file.mpr> [--dialect DIALECT] [--json]"
+                Mxrb.open(path) { _1.oql_analysis(dialect:) }
+              end
+  rescue ArgumentError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  payload = reports.map do |report|
+    {
+      name: report.query.qualified_name, kind: report.query.kind, source: report.query.oql,
+      clean: report.clean?, warnings: report.warnings?,
+      findings: report.findings.map do |finding|
+        {
+          rule: finding.rule, severity: finding.severity, fragment: finding.fragment,
+          message: finding.message, suggestions: finding.suggestions,
+          selected_suggestion: finding.suggestions[dialect]
+        }
+      end
+    }
+  end
+  if json
+    puts JSON.pretty_generate(payload)
+  elsif payload.all? { _1[:findings].empty? }
+    puts "[mxrb] No analysis findings"
+  else
+    dialect_name = { postgresql: "PostgreSQL", sql_server: "SQL Server", ansi: "ANSI" }
+    reports.each do |report|
+      report.for_dialect(dialect).each do |finding, suggestion|
+        puts "#{report.query.qualified_name}  [#{finding.severity.to_s.upcase}] #{finding.rule}"
+        puts "  #{report.query.kind.to_s.upcase}: #{finding.fragment}"
+        puts "  #{finding.message}"
+        puts "  #{dialect_name.fetch(dialect)} -> #{suggestion}"
+      end
+    end
+  end
+
+when "design"
+  action = ARGV.shift or abort "Usage: mxrb design <scan|migrate> ..."
+  path = ARGV.shift or abort "Usage: mxrb design #{action} <file.mpr> ..."
+  json = ARGV.delete("--json")
+  case action
+  when "scan"
+    design = Mxrb.open(path, &:design_system)
+    payload = {
+      tokens: design.tokens.map do |token|
+        {
+          name: token.name, value: token.value, kind: token.kind, theme: token.theme,
+          path: token.path, line: token.line
+        }
+      end,
+      themes: design.themes, catalogs: design.catalogs,
+      unresolved_references: design.unresolved_references.map do |entry|
+        { token: entry[:token].name, reference: entry[:reference] }
+      end,
+      literal_colors: design.literal_colors.map(&:name)
+    }
+    if json
+      puts JSON.pretty_generate(payload)
+    else
+      puts "name\tvalue\tkind\ttheme\tlocation"
+      design.tokens.each do |token|
+        puts [
+          token.name, token.value, token.kind, token.theme || "-", "#{token.path}:#{token.line}"
+        ].join("\t")
+      end
+      puts "[mxrb] #{design.tokens.size} tokens, #{design.themes.size} themes, " \
+           "#{design.literal_colors.size} literal colors, " \
+           "#{design.unresolved_references.size} unresolved references"
+    end
+  when "migrate"
+    literal = ARGV.shift or
+      abort "Usage: mxrb design migrate <file.mpr> <literal> <token> [--apply] [--json]"
+    token = ARGV.shift or
+      abort "Usage: mxrb design migrate <file.mpr> <literal> <token> [--apply] [--json]"
+    apply = ARGV.delete("--apply")
+    plan = Mxrb.open(path) { _1.plan_design_token_migration(literal => token) }
+    plan.apply! if apply
+    payload = {
+      applied: plan.applied?,
+      changes: plan.changes.map { { path: _1.path, occurrences: _1.occurrences } },
+      occurrences: plan.changes.sum(&:occurrences)
+    }
+    if json
+      puts JSON.pretty_generate(payload)
+    else
+      plan.changes.each { puts "#{_1.path}\t#{_1.occurrences} replacements" }
+      label = apply ? "Applied" : "Preview" # rubocop:disable Metrics/BlockNesting
+      puts "[mxrb] #{label}: #{payload[:occurrences]} replacements in #{plan.changes.size} files"
+    end
+  else
+    abort "Unknown design action #{action.inspect}; use scan or migrate"
+  end
+
 when "db"
   action = ARGV.shift or
     abort "Usage: mxrb db <up|sync|down|destroy|status|url|sql|shell> <file.mpr>"
@@ -348,11 +461,73 @@ when "db"
     abort "Unknown db action #{action.inspect}; use up, sync, down, destroy, status, url, sql or shell"
   end
 
+when "serve"
+  path = ARGV.shift or abort "Usage: mxrb serve <file.mpr> [--port PORT] [--db-port PORT] [--no-up]"
+  option = lambda do |name, fallback|
+    index = ARGV.index(name)
+    next fallback unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  port = option.call("--port", 4567)
+  database_port = option.call("--db-port", 55_432)
+  prepare = !ARGV.delete("--no-up")
+  server = Mxrb::Oql::Server.new(path, port:, database_port:)
+  puts "[mxrb] Read-only query server: http://127.0.0.1:#{port}/query"
+  puts "[mxrb] Accepts POST JSON with an sql or oql field"
+  trap("INT") { Thread.new { server.shutdown } }
+  server.start(prepare:)
+
+when "search"
+  query = ARGV.shift or
+    abort "Usage: mxrb search <text> <file.mpr> [--backend auto|tfidf|onnx] [--limit N]"
+  path = ARGV.shift or
+    abort "Usage: mxrb search <text> <file.mpr> [--backend auto|tfidf|onnx] [--limit N]"
+  option = lambda do |name, fallback|
+    index = ARGV.index(name)
+    next fallback unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  backend = option.call("--backend", "auto").to_sym
+  limit = option.call("--limit", 10)
+  json = ARGV.delete("--json")
+  begin
+    hits = Mxrb.open(path) { _1.semantic_search_hits(query, backend:, limit:) }
+  rescue ArgumentError, LoadError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  if json
+    puts JSON.pretty_generate(
+      hits.each_with_index.map do |hit, index|
+        {
+          rank: index + 1, qualified_name: hit.artifact.qualified_name,
+          kind: hit.artifact.kind, distance: hit.distance
+        }
+      end
+    )
+  else
+    puts "rank\tdistance\tqualified_name\tkind"
+    hits.each_with_index do |hit, index|
+      puts [
+        index + 1, format("%.6f", hit.distance), hit.artifact.qualified_name, hit.artifact.kind
+      ].join("\t")
+    end
+  end
+
 when "find"
-  path = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
-  query = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text>"
+  path = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text> [--semantic]"
+  query = ARGV.shift or abort "Usage: mxrb find <file.mpr> <text> [--semantic]"
+  semantic = ARGV.delete("--semantic")
   Mxrb.open(path) do |project|
-    project.search_artifacts(query).each do |artifact|
+    results = if semantic
+                project.semantic_search_artifacts(query)
+              else
+                project.search_artifacts(query)
+              end
+    results.each do |artifact|
       puts "#{artifact.qualified_name}\t#{artifact.kind}"
     end
   end
@@ -527,6 +702,13 @@ else
            clear <file.mpr> [--json]       Remove semantic cache entries
       oql        <file.mpr> [--json]        Show native OQL and a read-only SQL view
                  --dialect DIALECT          ansi, postgresql (default), or sql_server
+      analyze    <file.mpr> [--json]        Analyze every native OQL query
+                 --sql "SELECT ..."         Analyze ad-hoc SQL instead of an MPR
+                 --oql "SELECT ..."         Analyze ad-hoc OQL instead of an MPR
+                 --dialect DIALECT          Dialect-specific actionable suggestions
+      design scan <file.mpr> [--json]       Inventory CSS and SCSS design tokens
+             migrate <mpr> <literal> <token> Preview a literal-to-token migration
+                 --apply                    Apply the asset migration atomically
       db up      <file.mpr> [--port PORT]   Build, synchronize and expose local PostgreSQL
          sync    <file.mpr> [--port PORT]   Rebuild and synchronize the retained database
          down    <file.mpr>                 Stop containers while preserving all data
@@ -536,6 +718,12 @@ else
          sql     <file.mpr> "SELECT …"      Execute SQL as the read-only analyst role
                  --write                    Explicitly use the Runtime owner role
          shell   <file.mpr> [--write]       Open psql (read-only by default)
+      serve      <file.mpr> [--port 4567]   Serve read-only SQL/OQL over loopback HTTP
+                 --db-port PORT             Runtime PostgreSQL host port (default 55432)
+                 --no-up                    Reuse an already-running database workspace
+      search     <text> <file.mpr>          Semantic search with ranked distances
+                 --backend NAME             auto, tfidf, or onnx
+                 --limit N                  Maximum results (default 10)
       find       <file.mpr> <text>         Search artifacts by name
       describe   <file.mpr> <name>         Show incoming and outgoing references
       tree       <file.mpr> [module]       Browse the semantic structure

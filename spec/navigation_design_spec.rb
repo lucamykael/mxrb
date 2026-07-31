@@ -99,8 +99,8 @@ RSpec.describe 'native navigation and design systems' do
       expect(File.read(File.join(exported, 'app', 'navigation', 'navigation.rb')))
         .to include('home_for', 'item "Home"', 'Applicatie')
       manifest = JSON.parse(File.read(File.join(exported, '.mxrb', 'assets.json')))
-      expect(manifest.fetch('files').first).to include(
-        'path' => 'theme/web/_theme-dark.scss'
+      expect(manifest.fetch('files')).to include(
+        include('path' => 'theme/web/_theme-dark.scss')
       )
 
       begin
@@ -145,6 +145,140 @@ RSpec.describe 'native navigation and design systems' do
       expect(plan).to be_applied
       expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
       expect(system.plan_literal_migration('#abcdef' => 'var(--none)')).to be_empty
+    end
+  end
+
+  it 'exposes design token scanning and preview/apply migration through the CLI' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'design.mpr')
+      define_native_project(path)
+      source = File.join(dir, 'theme', 'web', 'custom.scss')
+      FileUtils.mkdir_p(File.dirname(source))
+      File.write(source, '$legacy: #123456;')
+      command = [RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'design']
+
+      stdout, stderr, status = Open3.capture3(*command, 'scan', path, '--json')
+      payload = JSON.parse(stdout)
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(payload.fetch('tokens').map { _1.fetch('name') }).to include('$legacy')
+
+      stdout, stderr, status = Open3.capture3(
+        *command, 'migrate', path, '#123456', 'var(--brand)', '--json'
+      )
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(JSON.parse(stdout)).to include('applied' => false, 'occurrences' => 1)
+      expect(File.read(source)).to include('#123456')
+
+      stdout, stderr, status = Open3.capture3(
+        *command, 'migrate', path, '#123456', 'var(--brand)', '--apply'
+      )
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to include('[mxrb] Applied: 1 replacements')
+      expect(File.read(source)).to include('var(--brand)')
+    end
+  end
+
+  it 'materializes typed tokens into an imported stylesheet and Studio design properties' do
+    Dir.mktmpdir do |dir|
+      theme = File.join(dir, 'theme', 'web')
+      FileUtils.mkdir_p(theme)
+      File.binwrite(File.join(theme, 'main.scss'), '@import "base";')
+      definition = {
+        tokens: [
+          { kind: :color, name: :primaryColor, value: '#3366ff' },
+          { kind: :spacing, name: '--content-gap', value: '1rem' },
+          { kind: :typography, name: '$font-body', value: '"Inter", sans-serif' },
+          { kind: :radius, name: :unset, value: nil }
+        ],
+        themes: [
+          {
+            name: :base, inherits: nil,
+            tokens: [{ kind: :color, name: :surface, value: '#ffffff' }]
+          },
+          {
+            name: :'Dark Mode', inherits: :base,
+            tokens: [{ kind: :color, name: :surface, value: '#111111' }]
+          },
+          { name: :empty, inherits: nil, tokens: [] }
+        ]
+      }
+
+      materializer = Mxrb::Model::DesignMaterializer.new(dir, definition)
+      expect(materializer.materialize!).to equal(materializer)
+      expect(materializer.materialize!).to equal(materializer)
+
+      main = File.binread(File.join(theme, 'main.scss'))
+      stylesheet = File.binread(File.join(theme, '_mxrb-design-system.scss'))
+      catalog = JSON.parse(
+        File.binread(File.join(dir, 'themesource', 'mxrb', 'web', 'design-properties.json'))
+      )
+      expect(main).to eq("@import \"base\";\n@import \"mxrb-design-system\";\n")
+      expect(stylesheet).to include(
+        '--color-primary-color: #3366ff;',
+        '--content-gap: 1rem;',
+        '--font-body: "Inter", sans-serif;',
+        ':root[data-mxrb-theme="dark-mode"], .mxrb-theme-dark-mode',
+        '--color-surface: #111111;'
+      )
+      expect(stylesheet.scan('--color-surface:').size).to eq(2)
+      expect(stylesheet).not_to include('--radius-unset')
+      expect(catalog.fetch('Widget')).to eq([
+                                              {
+                                                'category' => 'MXRB design system',
+                                                'name' => 'Primary Color',
+                                                'type' => 'ColorPicker',
+                                                'property' => '--color-primary-color'
+                                              }
+                                            ])
+      expect(Mxrb::Model::DesignSystem.new(dir).tokens.map(&:name)).to include(
+        '--color-primary-color', '--content-gap', '--font-body'
+      )
+    end
+  end
+
+  it 'handles empty/external themes and rejects ambiguous token definitions' do
+    Dir.mktmpdir do |dir|
+      empty = Mxrb::Model::DesignMaterializer.new(dir, tokens: [], themes: [])
+      expect(empty.materialize!).to equal(empty)
+      expect(File).not_to exist(File.join(dir, 'theme'))
+
+      missing_parent = {
+        tokens: [],
+        themes: [{ name: :dark, inherits: :missing, tokens: [] }]
+      }
+      cycle = {
+        tokens: [],
+        themes: [
+          { name: :a, inherits: :b, tokens: [] },
+          { name: :b, inherits: :a, tokens: [] }
+        ]
+      }
+      unsafe = {
+        tokens: [{ kind: :color, name: :bad, value: '#fff;' }],
+        themes: []
+      }
+      blank = {
+        tokens: [{ kind: :color, name: :bad, value: ' ' }],
+        themes: []
+      }
+      invalid_name = {
+        tokens: [{ kind: :color, name: '!!!', value: '#fff' }],
+        themes: []
+      }
+
+      expect(Mxrb::Model::DesignMaterializer.new(dir, missing_parent).materialize!)
+        .to be_a(Mxrb::Model::DesignMaterializer)
+      expect { Mxrb::Model::DesignMaterializer.new(dir, cycle).materialize! }
+        .to raise_error(Mxrb::SerializationError, /inheritance cycle/)
+      expect { Mxrb::Model::DesignMaterializer.new(dir, unsafe).materialize! }
+        .to raise_error(Mxrb::SerializationError, /unsafe.*value/)
+      expect { Mxrb::Model::DesignMaterializer.new(dir, blank).materialize! }
+        .to raise_error(Mxrb::SerializationError, /unsafe.*value/)
+      expect { Mxrb::Model::DesignMaterializer.new(dir, invalid_name).materialize! }
+        .to raise_error(Mxrb::SerializationError, /invalid.*name/)
     end
   end
 

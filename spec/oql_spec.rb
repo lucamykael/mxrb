@@ -234,6 +234,14 @@ RSpec.describe Mxrb::Oql do
       .to raise_error(ArgumentError, /unsupported SQL dialect/)
   end
 
+  it 'translates an ad-hoc OQL source with the same safe subset' do
+    view = described_class::Translator.new.translate_source(
+      'SELECT Product.Name FROM Shop.Product Product'
+    )
+    expect(view.query.qualified_name).to eq('AdHoc')
+    expect(view.sql).to include('"shop$product"', '"name"')
+  end
+
   it 'offers deterministic CLI text and JSON only for discovered OQL' do
     Dir.mktmpdir do |dir|
       empty = project_with_query(dir)

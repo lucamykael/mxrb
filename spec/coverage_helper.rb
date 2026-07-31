@@ -28,7 +28,10 @@ module MxrbCoverage
         line_data = coverage.fetch(:lines)
         counts = line_data.compact
         details = metric(counts).merge(
-          missed_lines: line_data.each_index.select { |index| line_data[index] == 0 }.map { _1 + 1 }
+          missed_lines: line_data.each_index.select { |index| line_data[index] == 0 }.map { _1 + 1 },
+          missed_branches: coverage.fetch(:branches).flat_map do |branch, hits|
+            hits.filter_map { |target, count| { branch:, target: } if count.zero? }
+          end
         )
         [path.delete_prefix(library), details]
       end

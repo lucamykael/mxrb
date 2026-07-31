@@ -39,6 +39,10 @@ MxBuild bleiben die offiziellen Plattform-Gates.
 
 ## Supportgrenze
 
-Domain-, Flow-, Seiten-, Menü-, Security- und Semantikflächen sind typisiert
-bearbeitbar. Weitere Units bleiben im nativen Baseline erhalten, bis eine
-Ruby-API existiert.
+Domain-, Microflow-, Nanoflow-, Seiten-, Menü-, Security- und native
+Navigationsflächen sind typisiert bearbeitbar. Theme- und Code-Assets
+verwenden ein Manifest mit Prüfsummen; Designsystem-Tokens und -Richtlinien
+besitzen einen typisierten Ruby-Vertrag. Workflows, Integrationen,
+veröffentlichte APIs und Widgets ohne kompakte API bleiben über tiefes Ruby
+und das native Baseline bearbeitbar, benötigen aber noch spezifische
+typisierte DSLs.
