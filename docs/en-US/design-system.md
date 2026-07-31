@@ -67,6 +67,20 @@ design.catalogs      # themesource/**/design-properties.json contents
 Each `DesignToken` is an immutable value with `name`, `value`, `kind`
 (`:css_custom_property` or `:scss_variable`), `theme`, `path` and `line`.
 
+## Materializing the Ruby contract
+
+Tokens declared through the Ruby `design_system` DSL are written to real theme
+assets during generation. MXRB owns
+`theme/web/_mxrb-design-system.scss`, adds one idempotent import to
+`theme/web/main.scss`, and publishes color tokens as Studio `ColorPicker`
+entries in `themesource/mxrb/web/design-properties.json`.
+
+Global tokens become CSS custom properties. Named themes become
+`data-mxrb-theme`/`.mxrb-theme-*` selectors; inheritance is resolved before
+writing and child values override parent values. Existing `main.scss` content
+is preserved. Invalid names, inheritance cycles, and values that could escape
+the generated CSS declaration are rejected before writing.
+
 ## Guidelines the tooling enforces
 
 ### Prefer tokens over literals
@@ -119,6 +133,20 @@ Guarantees:
 - each file is written through a temporary file plus atomic rename;
 - a plan applies once; re-applying raises.
 
+The same workflows are exposed by the CLI:
+
+```sh
+bundle exec mxrb design scan App.mpr
+bundle exec mxrb design scan App.mpr --json
+bundle exec mxrb design migrate App.mpr '#3366ff' 'var(--brand-primary)'
+bundle exec mxrb design migrate App.mpr '#3366ff' 'var(--brand-primary)' --apply
+```
+
+`scan` prints each token's name, value, kind, theme, and source location, plus
+literal-color and unresolved-reference totals. `migrate` remains a preview
+until `--apply` is supplied. Contrast pairs declared in the Ruby contract are
+checked by `mxrb lint` against their configured WCAG level.
+
 ## Themes, resources and unknown structures
 
 Themes, images, widgets, resources and Java sources are copied through
@@ -128,7 +156,8 @@ Unknown model units remain in the lossless native baseline.
 
 ## Validation status
 
-The typed navigation writer, asset manifest, contrast/literal lint and atomic
-migration are implemented. Structural round trips pass the six-fixture matrix,
-including modern `Profiles` and preserved legacy navigation shapes. See the
-[validation matrix](validation-matrix.md) for the current evidence.
+The typed navigation writer, design-system materializer, asset manifest,
+contrast/literal lint and atomic migration are implemented. Structural round
+trips pass the six-fixture matrix, including modern `Profiles` and preserved
+legacy navigation shapes. See the [validation matrix](validation-matrix.md)
+for the current evidence.

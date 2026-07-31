@@ -33,3 +33,43 @@ jobs:
 
       - name: Run gradual Ruby quality gate
         run: bundle exec rubocop
+
+  onnx:
+    name: onnx
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_WITH: onnx
+      MXRB_ONNX: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+
+      - name: Run real ONNX semantic-search smoke test
+        run: bundle exec rspec spec/semantic_search_spec.rb
+
+  sqlite-vec:
+    name: sqlite-vec
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: Gemfile.sqlite-vec
+      MXRB_SQLITE_VEC: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+
+      - name: Run real sqlite-vec semantic-search smoke test
+        run: bundle exec rspec spec/semantic_search_spec.rb

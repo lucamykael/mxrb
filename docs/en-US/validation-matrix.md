@@ -170,13 +170,13 @@ matrix. This exercises `find_artifact`, `references_to`, `references_from`,
 
 | Mendix | Project | Artifacts | References |
 |---|---|---:|---:|
-| 5.21 | TreeviewDemo | 241 | 771 |
-| 6.10 | GridViewPlayground | 131 | 269 |
-| 7.5 | ConnectorKitDemo | 246 | 416 |
-| 7.17 | QueryApiBlogPost | 251 | 401 |
-| 9.6.1 | FirstMedix App | 409 | 656 |
-| 11.12.1 | Sudoku | 494 | 817 |
-| **Total** | **6 projects** | **1,772** | **3,330** |
+| 5.21 | TreeviewDemo | 242 | 786 |
+| 6.10 | GridViewPlayground | 132 | 274 |
+| 7.5 | ConnectorKitDemo | 247 | 429 |
+| 7.17 | QueryApiBlogPost | 252 | 414 |
+| 9.6.1 | FirstMedix App | 410 | 665 |
+| 11.12.1 | Sudoku | 495 | 819 |
+| **Total** | **6 projects** | **1,778** | **3,387** |
 
 Static analysis was calibrated on the same matrix:
 
@@ -202,9 +202,9 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 442 examples and passes with 100.00% line coverage
-(6,221/6,221 executable library lines) and 100.00% branch coverage
-(2,352/2,352 branches).
+The current suite contains 510 examples and passes with 100.00% line coverage
+(7,062/7,062 executable library lines) and 100.00% branch coverage
+(2,626/2,626 branches).
 Run the enforced gate with:
 
 ```sh
@@ -241,7 +241,7 @@ suite.
 ## Reproducibility and performance
 
 `script/validate_matrix` reruns all six disposable round trips and emits JSON
-evidence. The current run covered 1,506 units in 13.733 seconds with zero
+evidence. The current run covered 1,506 units in 14.760 seconds with zero
 semantic differences. `script/benchmark` measured the Sudoku pipeline on Ruby
 4.0.5: validation 0.2257 s, semantic indexing 0.7624 s, export 2.5101 s,
 generation 2.4659 s and comparison 0.8822 s, totaling 6.8463 s.

@@ -33,12 +33,20 @@ module Mxrb
         mpr.write_architecture_definition(@definition)
       end
       materialize_project_assets
+      materialize_design_system
       self
     ensure
       mpr&.close
     end
 
     private
+
+    def materialize_design_system
+      design_system = @definition[:design_system]
+      return unless design_system
+
+      Model::DesignMaterializer.new(File.dirname(@path), design_system).materialize!
+    end
 
     def materialize_project_assets
       assets = @definition[:project_assets]
