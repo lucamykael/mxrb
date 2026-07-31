@@ -26,8 +26,15 @@ Gem::Specification.new do |s|
   s.add_dependency "bson",    "~> 5.2"
   s.add_dependency "base64",     "~> 0.2"
   s.add_dependency "bigdecimal", "~> 3.1"
+  s.add_dependency "csv",        "~> 3.3"
+  s.add_dependency "webrick",    "~> 1.9"
 
   s.add_development_dependency "benchmark", "~> 0.5"
   s.add_development_dependency "rspec",     "~> 3.13"
   s.add_development_dependency "rubocop",   "~> 1.65"
+
+  # Optional: semantic vector search. Install to enable Index#semantic_search
+  # with sqlite-vec KNN. The native gem does not publish every architecture
+  # represented in this project's lockfile, so it remains an explicit extra.
+  # Informers/ONNX development support lives in Gemfile's optional onnx group.
 end

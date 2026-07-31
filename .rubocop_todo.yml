@@ -397,6 +397,7 @@ Metrics/BlockLength:
     - 'spec/marketplace_spec.rb'
     - 'spec/mxrb_spec.rb'
     - 'spec/new_features_spec.rb'
+    - 'spec/semantic_search_spec.rb'
 
 # Offense count: 2
 # Configuration parameters: CountBlocks, CountModifierForms, Max.

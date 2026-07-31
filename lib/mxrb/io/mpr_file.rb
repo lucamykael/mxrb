@@ -344,6 +344,101 @@ module Mxrb
         count
       end
 
+      # ── Vector index (sqlite-vec) ─────────────────────────────────────────────
+
+      # Loads the optional sqlite-vec extension into the active connection.
+      def load_vec_extension!
+        return true if @vec_loaded
+
+        require "sqlite_vec"
+        @db.enable_load_extension(true)
+        begin
+          SqliteVec.load(@db)
+        ensure
+          @db.enable_load_extension(false)
+        end
+        @vec_loaded = true
+      end
+
+      def ensure_vec_table!(table, dimension)
+        ensure_vector_write!
+        identifier = vector_identifier(table)
+        size = Integer(dimension)
+        raise ArgumentError, "vector dimension must be positive" unless size.positive?
+
+        @db.execute(<<~SQL)
+          CREATE VIRTUAL TABLE IF NOT EXISTS #{identifier}
+          USING vec0(artifact_id TEXT PRIMARY KEY, embedding FLOAT[#{size}])
+        SQL
+      end
+
+      def ensure_vec_meta_table!(table)
+        ensure_vector_write!
+        identifier = vector_identifier(table)
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS #{identifier} (
+            ID INTEGER PRIMARY KEY CHECK (ID = 1),
+            Backend TEXT NOT NULL,
+            Dimension INTEGER NOT NULL,
+            Fingerprint TEXT NOT NULL
+          )
+        SQL
+      end
+
+      def write_vec_meta!(table, backend, dimension, fingerprint)
+        ensure_vector_write!
+        identifier = vector_identifier(table)
+        @db.execute(
+          "INSERT OR REPLACE INTO #{identifier} " \
+          "(ID, Backend, Dimension, Fingerprint) VALUES (1, ?, ?, ?)",
+          [backend, dimension, fingerprint]
+        )
+      end
+
+      def vec_meta(table)
+        name = table.to_s
+        return nil unless tables.include?(name)
+
+        identifier = vector_identifier(name)
+        row = @db.get_first_row(
+          "SELECT Backend, Dimension, Fingerprint FROM #{identifier} WHERE ID = 1"
+        )
+        return nil unless row
+
+        { backend: row[0], dimension: row[1], fingerprint: row[2] }
+      rescue SQLite3::Exception
+        nil
+      end
+
+      def vec_upsert(table, artifact_id, json_vec)
+        ensure_vector_write!
+        identifier = vector_identifier(table)
+        @db.execute(
+          "INSERT INTO #{identifier}(artifact_id, embedding) VALUES (?, ?)",
+          [artifact_id, json_vec]
+        )
+      end
+
+      def vec_knn(table, json_vec, limit)
+        identifier = vector_identifier(table)
+        @db.execute(
+          "SELECT artifact_id, distance FROM #{identifier} " \
+          "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+          [json_vec, Integer(limit)]
+        ).map { { id: _1[0], distance: _1[1] } }
+      end
+
+      def vec_transaction(&)
+        ensure_vector_write!
+        @db.transaction(&)
+      end
+
+      def vec_drop_index!(vec_table, meta_table)
+        ensure_vector_write!
+        @db.execute("DROP TABLE IF EXISTS #{vector_identifier(vec_table)}")
+        @db.execute("DROP TABLE IF EXISTS #{vector_identifier(meta_table)}")
+      end
+
       # ── Architecture metadata ─────────────────────────────────────────────────
 
       # mxrb-only architecture metadata for concepts without a native Mendix
@@ -374,6 +469,18 @@ module Mxrb
       end
 
       private
+
+      def ensure_vector_write!
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+      end
+
+      def vector_identifier(value)
+        name = value.to_s
+        raise ArgumentError, "invalid vector table name: #{value.inspect}" \
+          unless name.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+
+        name
+      end
 
       def open_db
         mode = @readonly ? SQLite3::Constants::Open::READONLY : SQLite3::Constants::Open::READWRITE

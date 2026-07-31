@@ -44,6 +44,32 @@ exakten Mendix Runtime geprüft werden. Assoziationspfad-Joins gelten als nicht
 unterstützt, solange Runtime-Speichermetadaten den korrekten Join nicht
 beweisen können.
 
+## Dialektabhängige Analyse
+
+`Oql::Analyzer` erkennt Kosten- und Portabilitätsmuster im Originaltext,
+bewahrt das auslösende Fragment für Hervorhebungen und liefert konkrete
+Alternativen für PostgreSQL, SQL Server und ANSI:
+
+```ruby
+report = Mxrb::Oql::Analyzer.new(dialect: :postgresql)
+                            .analyze_source("SELECT * FROM Sales.Order")
+report.findings.each { puts "#{_1.rule}: #{_1.suggestions[:postgresql]}" }
+
+reports = Mxrb.open("Shop.mpr") { _1.oql_analysis(dialect: :postgresql) }
+```
+
+Regeln erfassen führende und beidseitige Wildcards, Präfixsuchen,
+`LOWER`/`UPPER`/`CAST` in `WHERE`, kartesische Produkte und `SELECT *`.
+Findings sind `hint`, `warning` oder `error`; `clean?` bedeutet keine Fehler.
+
+Die CLI verarbeitet natives OQL sowie Ad-hoc-Quellen in OQL und SQL:
+
+```sh
+bundle exec mxrb analyze Shop.mpr --dialect postgresql
+bundle exec mxrb analyze --oql "SELECT * FROM Sales.Order"
+bundle exec mxrb analyze --sql "SELECT * FROM sales$order" --json
+```
+
 ## Materialisierte lokale PostgreSQL-Datenbank
 
 Eine MPR enthält das Anwendungsmodell, nicht einen Snapshot der
@@ -71,6 +97,23 @@ bundle exec mxrb db down Shop.mpr
 `db down` stoppt die Container, bewahrt aber das PostgreSQL-Volume. Ein
 späteres `db up` verwendet Paket-Cache und Daten erneut. Der Standard-Port ist
 `127.0.0.1:55432` und kann mit `--port` geändert werden.
+
+Lokale Werkzeuge können denselben Workspace über JSON HTTP abfragen:
+
+```sh
+bundle exec mxrb serve Shop.mpr --port 4567
+curl -X POST http://127.0.0.1:4567/query \
+  -H 'Content-Type: application/json' \
+  -d '{"sql":"SELECT * FROM \"sales$order\" LIMIT 20"}'
+```
+
+Der Body akzeptiert genau ein Feld `sql` oder `oql`. Ad-hoc-OQL durchläuft den
+sicheren PostgreSQL-Übersetzer; parametrisierte Abfragen und alles außer einer
+einzelnen `SELECT`-/`WITH`-Anweisung werden abgelehnt. Antworten enthalten
+`rows`, `row_count`, `elapsed_ms`, Warnungen oder einen strukturierten Fehler.
+Der Server bindet nur an Loopback, verwendet `mxrb_reader` und bereitet den
+Workspace standardmäßig vor; `--no-up` verwendet einen bereits laufenden
+Workspace.
 
 Die dauerhafte Bereinigung ist absichtlich explizit:
 

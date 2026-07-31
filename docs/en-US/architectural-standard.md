@@ -81,6 +81,9 @@ checks. Official `mx check` and MxBuild remain final platform gates.
 
 ## 12. Current support boundary
 
-Typed domain, flow, page, menu, security and semantic surfaces are editable.
-Other units are retained in the native baseline. Preservation is not data
-loss; it is the compatibility mechanism until a typed Ruby API is added.
+Typed domain, microflow and nanoflow, page, menu, security, and native
+navigation surfaces are editable. Theme and code assets use a checksummed
+manifest; design-system tokens and policies have a typed Ruby contract.
+Workflows, integrations, published APIs, and widgets without a concise API
+remain editable through deep Ruby and the native baseline, but still need
+specific typed DSLs.

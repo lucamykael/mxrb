@@ -2,6 +2,7 @@
 
 require "digest"
 require "json"
+require_relative "vec_store"
 
 module Mxrb
   module Semantic
@@ -20,6 +21,7 @@ module Mxrb
       def empty? = artifacts.empty?
     end
     ArtifactDetails = Data.define(:artifact, :incoming, :outgoing)
+    SemanticSearchHit = Data.define(:artifact, :distance)
 
     # Builds a semantic index directly from an opened MPR. Ruby is the public
     # API; the CLI only formats these results.
@@ -72,12 +74,12 @@ module Mxrb
       def initialize(project)
         @project = project
         reset_state
-        fingerprint = compute_fingerprint
-        json = fingerprint && @project.mpr.read_index_cache(fingerprint)
+        @fingerprint = compute_fingerprint
+        json = @fingerprint && @project.mpr.read_index_cache(@fingerprint)
         unless json && restore_from_cache(json)
           reset_state
           build
-          @project.mpr.write_index_cache(fingerprint, serialize_to_cache) if fingerprint
+          @project.mpr.write_index_cache(@fingerprint, serialize_to_cache) if @fingerprint
         end
       end
 
@@ -100,6 +102,31 @@ module Mxrb
             (!kind || artifact.kind == kind.to_sym) &&
             (!module_name || artifact.module_name == module_name.to_s)
         end.sort_by { [_1.module_name.to_s, _1.kind.to_s, _1.qualified_name] }
+      end
+
+      # Semantic similarity search with optional sqlite-vec acceleration.
+      def semantic_search(query, limit: 10, backend: :auto)
+        semantic_search_hits(query, limit:, backend:).map(&:artifact).freeze
+      end
+      alias semantic_search_artifacts semantic_search
+
+      def semantic_search_hits(query, limit: 10, backend: :auto)
+        size = Integer(limit)
+        raise ArgumentError, "semantic search limit must be positive" unless size.positive?
+
+        embedder = semantic_embedder(backend)
+        store = vec_store(embedder)
+        return ruby_semantic_hits(query, embedder, size) unless store
+
+        begin
+          store.rebuild!(@artifacts) unless store.compatible?
+          store.search(query, limit: size).filter_map do |hit|
+            artifact = @by_id[hit[:id]]
+            SemanticSearchHit.new(artifact, cosine_distance(hit[:distance])) if artifact
+          end.freeze
+        rescue SQLite3::Exception, LoadError
+          ruby_semantic_hits(query, embedder, size)
+        end
       end
 
       def describe(artifact)
@@ -162,6 +189,16 @@ module Mxrb
       end
 
       private
+
+      def ruby_semantic_hits(query, embedder, limit)
+        Embedder.rank_with_distance(@artifacts, query, embedder:, limit:).map do |ranked|
+          SemanticSearchHit.new(ranked.artifact, ranked.distance)
+        end.freeze
+      end
+
+      # sqlite-vec returns Euclidean distance. Embeddings are normalized, so
+      # d² / 2 is the equivalent cosine distance used by the Ruby fallback.
+      def cosine_distance(euclidean) = (Float(euclidean)**2) / 2.0
 
       def build
         index_modules_and_domain_models
@@ -472,6 +509,21 @@ module Mxrb
         @by_id                = {}
         @by_name              = Hash.new { |hash, key| hash[key] = [] }
         @documents            = []
+        @vec_store = nil
+        @semantic_embedders = {}
+      end
+
+      def semantic_embedder(backend)
+        @semantic_embedders[backend] ||= Embedder.build(backend:)
+      end
+
+      def vec_store(embedder)
+        return nil if @project.mpr.readonly? || !@fingerprint || !VecStore.available?
+        return @vec_store if @vec_store&.backend == embedder.backend
+
+        @vec_store = VecStore.new(@project.mpr, embedder:, fingerprint: @fingerprint)
+      rescue SQLite3::Exception, LoadError
+        nil
       end
 
       def compute_fingerprint

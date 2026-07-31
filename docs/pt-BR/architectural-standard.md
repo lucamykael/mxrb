@@ -506,10 +506,12 @@ O futuro `mxrb lint` deve verificar:
 
 ## 12. Limite do suporte atual
 
-Esta especificação define o formato-alvo. O writer/exporter atual cobre
-entidades, atributos, associações, páginas e microflows básicos. Navigation,
-security completo, nanoflows, design-system metadata e demais units ainda
-precisam de modelos BSON e DSL próprios antes de terem round-trip garantido.
+Esta especificação define o formato-alvo. O writer/exporter atual cobre domínio,
+microflows e nanoflows, páginas, menus, security e navigation nativa. Assets de
+tema e código usam manifesto com checksum; tokens e políticas do design system
+possuem contrato Ruby tipado. Workflows, integrações, APIs publicadas e widgets
+sem API concisa continuam editáveis pelo Ruby profundo e pelo baseline nativo,
+mas ainda precisam de DSLs tipadas específicas.
 
 Até isso ocorrer, gere sobre uma cópia do MPR original para preservar units
 desconhecidas.

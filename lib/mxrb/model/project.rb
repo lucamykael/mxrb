@@ -59,6 +59,10 @@ module Mxrb
         translator = Oql::Translator.new(dialect:)
         oql_queries.map { translator.translate(_1) }.freeze
       end
+      def oql_analysis(dialect: :postgresql)
+        analyzer = Oql::Analyzer.new(dialect:)
+        oql_queries.map { analyzer.analyze(_1) }.freeze
+      end
 
       # ── Semantic analysis ───────────────────────────────────────────────
 
@@ -79,6 +83,10 @@ module Mxrb
       end
       def find_artifact(name, kind: nil) = semantic_index.find(name, kind: kind)
       def search_artifacts(query, **filters) = semantic_index.search(query, **filters)
+      def semantic_search_artifacts(query, **options) =
+        semantic_index.semantic_search_artifacts(query, **options)
+      def semantic_search_hits(query, **options) =
+        semantic_index.semantic_search_hits(query, **options)
       def describe_artifact(name) = semantic_index.describe(name)
       def references_to(name) = semantic_index.references_to(name)
       def references_from(name) = semantic_index.references_from(name)

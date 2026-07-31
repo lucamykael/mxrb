@@ -20,7 +20,7 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 - Statische Analyse und ausführbare Modellbewertungen.
 - Funktionale Microflow-Tests ohne JUnit.
 - Lokale oder Docker-Ausführung von `mx check`, MxBuild und Runtime.
-- Striktes Gate mit 100 % Zeilenabdeckung.
+- Striktes Gate mit 100 % Zeilen- und Branch-Abdeckung.
 
 ## Beispiel
 

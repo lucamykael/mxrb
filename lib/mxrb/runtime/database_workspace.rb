@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'csv'
 require 'fileutils'
 require 'json'
 require 'open3'
@@ -88,6 +89,28 @@ module Mxrb
         run!(*command)
       end
       # rubocop:enable Metrics/MethodLength
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def query_rows(sql)
+        source = sql.to_s
+        raise ArgumentError, 'SQL contains a NUL byte' if source.include?("\0")
+
+        statement = source.strip
+        raise ArgumentError, 'SQL must not be empty' if statement.empty?
+        unless statement.match?(/\A(?:SELECT|WITH)\b/i) && !statement.include?(';')
+          raise ArgumentError, 'online queries must be one read-only SELECT or WITH statement'
+        end
+
+        configure_reader!
+        output = run!(
+          'docker', 'exec', database_container,
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
+          '--username', READER, '--dbname', DATABASE,
+          '--csv', '--quiet', '--command', "COPY (#{statement}) TO STDOUT WITH CSV HEADER"
+        )
+        CSV.parse(output, headers: true).map(&:to_h).freeze
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def shell_command(write: false)
         role = write ? OWNER : READER
