@@ -7,12 +7,16 @@ require 'net/http'
 require 'tmpdir'
 require 'uri'
 require 'zip'
+require_relative 'official_marketplace/module_package_importer'
 
 module Mxrb
   # Installer for official/community Mendix packages, separate from Ruby modules.
   module OfficialMarketplace
     Package = Data.define(:name, :version, :source, :download_url, :repository)
     Installation = Data.define(:package, :destination, :sha256)
+    ModuleInstallation = Data.define(
+      :package, :destination, :sha256, :module_name, :module_id, :units, :files, :archive
+    )
 
     CATALOG = {
       'CommunityCommons' => 'mendix/CommunityCommons',
@@ -39,10 +43,43 @@ module Mxrb
     def self.verify(target)
       root = File.expand_path(target)
       lock(root).fetch('packages').to_h do |name, entry|
-        destination = File.join(root, entry.fetch('destination'))
-        actual = File.directory?(destination) ? tree_digest(destination) : nil
-        [name, { valid: actual == entry['sha256'], expected: entry['sha256'], actual: }]
+        result = entry['kind'] == 'module' ? verify_module(root, name, entry) : verify_tree(root, entry)
+        [name, result]
       end
+    end
+
+    def self.verify_tree(root, entry)
+      destination = File.join(root, entry.fetch('destination'))
+      actual = File.directory?(destination) ? tree_digest(destination) : nil
+      { valid: actual == entry['sha256'], expected: entry['sha256'], actual: }
+    end
+
+    def self.verify_module(root, name, entry) # rubocop:disable Metrics/AbcSize
+      archive = File.join(root, entry.fetch('archive'))
+      actual = File.file?(archive) ? Digest::SHA256.file(archive).hexdigest : nil
+      mpr_path = File.join(root, entry.fetch('destination'))
+      present = module_present?(mpr_path, name, entry['module_id'])
+      files_present = Array(entry['files']).all? { File.file?(File.join(root, _1)) }
+      {
+        valid: actual == entry['sha256'] && present && files_present,
+        expected: entry['sha256'], actual:, module_present: present, files_present:
+      }
+    end
+
+    def self.module_present?(mpr_path, name, module_id)
+      return false unless File.file?(mpr_path)
+
+      mpr = IO::MprFile.open(mpr_path, readonly: true)
+      unit = module_id ? mpr.unit(module_id) : module_by_name(mpr, name)
+      unit && mpr.parse_contents(unit)['Name'] == name
+    rescue Error, SQLite3::Exception
+      false
+    ensure
+      mpr&.close
+    end
+
+    def self.module_by_name(mpr, name)
+      mpr.units_by_containment('Modules').find { mpr.parse_contents(_1)['Name'] == name }
     end
 
     # Stores the Mendix PAT outside projects with owner-only permissions.
@@ -198,30 +235,81 @@ module Mxrb
     end
 
     # Safely extracts GitHub or local MPK archives into the target project.
-    class Installer
-      def initialize(target:, client: HttpClient.new)
+    class Installer # rubocop:disable Metrics/ClassLength
+      def initialize(target:, client: HttpClient.new, mpr: nil)
         @target = File.expand_path(target)
         @client = client
+        @mpr = mpr && File.expand_path(mpr)
       end
 
-      def pull(identifier, version: nil)
+      def pull(identifier, version: nil, mpr: @mpr)
         package = GitHubResolver.new(client: @client).resolve(identifier, version:)
         Dir.mktmpdir('mxrb-marketplace-') do |dir|
           archive = @client.download(package.download_url, File.join(dir, 'package.zip'))
-          install_archive(archive, package)
+          mpr ? import_module(archive, package, mpr) : install_archive(archive, package)
         end
       end
 
-      def import(path, name: nil)
+      def import(path, name: nil, mpr: @mpr)
         source = File.expand_path(path)
         raise MarketplaceError, "package not found: #{source}" unless File.file?(source)
 
         package_name = valid_name(name || File.basename(source, File.extname(source)))
         package = Package.new(package_name, 'local', :mpk, source, nil)
-        install_archive(source, package)
+        mpr ? import_module(source, package, mpr) : install_archive(source, package)
       end
 
       private
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def import_module(archive, package, mpr)
+        relative_target_path(mpr)
+        result = ModulePackageImporter.new(archive, mpr, target_root: @target).import!
+        resolved = Package.new(
+          result.module_name, result.package_version, package.source,
+          package.download_url, package.repository
+        )
+        sha256 = Digest::SHA256.file(archive).hexdigest
+        cached = cache_package(archive, resolved, sha256)
+        write_module_lock(resolved, mpr, result, cached, sha256)
+        ModuleInstallation.new(
+          resolved, File.expand_path(mpr), sha256, result.module_name, result.module_id,
+          result.units, result.files, cached
+        )
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def cache_package(archive, package, sha256)
+        version = package.version.to_s.gsub(/[^A-Za-z0-9_.-]/, '_')
+        destination = File.join(@target, '.mxrb', 'marketplace', "#{package.name}-#{version}.mpk")
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(archive, destination) unless File.expand_path(archive) == destination
+        raise MarketplaceError, 'cached marketplace package checksum mismatch' unless
+          Digest::SHA256.file(destination).hexdigest == sha256
+
+        destination
+      end
+
+      def write_module_lock(package, mpr, result, cached, digest) # rubocop:disable Metrics/AbcSize
+        path = File.join(@target, '.mxrb', 'marketplace.lock.json')
+        FileUtils.mkdir_p(File.dirname(path))
+        lock = OfficialMarketplace.lock(@target)
+        lock['packages'][package.name] = {
+          'kind' => 'module', 'version' => package.version, 'source' => package.source,
+          'repository' => package.repository, 'sha256' => digest,
+          'destination' => relative_target_path(mpr), 'archive' => relative_target_path(cached),
+          'module_id' => result.module_id, 'units' => result.units, 'files' => result.files
+        }.compact
+        write_lock_atomically(path, lock)
+      end
+
+      def relative_target_path(path)
+        absolute = File.expand_path(path)
+        prefix = "#{@target}#{File::SEPARATOR}"
+        raise MarketplaceError, "path is outside marketplace target: #{absolute}" unless absolute.start_with?(prefix)
+
+        absolute.delete_prefix(prefix)
+      end
 
       # Transaction boundary intentionally keeps rollback and cleanup together.
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity

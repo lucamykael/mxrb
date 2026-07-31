@@ -26,11 +26,19 @@ Der offizielle Web-Marketplace bietet keinen vollständigen stabilen
 mxrb marketplace search CommunityCommons
 mxrb marketplace pull CommunityCommons
 mxrb marketplace pull github:mendix/CommunityCommons
-mxrb marketplace import ./CommunityCommons.mpk
+mxrb marketplace import ./CommunityCommons.mpk --mpr MeineApp.mpr
+mxrb marketplace pull CommunityCommons --mpr MeineApp.mpr
 mxrb marketplace list
 mxrb marketplace verify
 mxrb marketplace login
 ```
+
+Mit `--mpr` liest MXRB `package.xml` und die eingebettete `project.mpr` und
+importiert den vollständigen Modulbaum direkt über Ruby/SQLite/BSON. Dabei
+werden weder `mx` noch `mxcli`, Studio Pro oder das Model SDK ausgeführt. IDs
+bleiben erhalten, deklarierte Assets werden transaktional installiert und
+Paketcache sowie Modulidentität im Lockfile gespeichert. Für den reinen
+Ruby-Import müssen Paket und Ziel dieselbe Mendix-Modellversion verwenden.
 
 `pull` löst öffentliche GitHub-Releases auf; `import` verarbeitet ein bereits
 geladenes MPK/ZIP. Beide entpacken sicher, überschreiben nichts und sperren
