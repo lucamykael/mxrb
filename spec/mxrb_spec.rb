@@ -4086,7 +4086,7 @@ RSpec.describe Mxrb do
 
     it "builds cross-module entity association" do
       path = File.join(File.dirname(@mpr_path), "writer_xmod_assoc.mpr")
-      Mxrb.define(path) do
+      definition = proc do
         mendix_version "10.18.0"
         self.module(:Logistics) do
           entity(:Shipment)
@@ -4095,6 +4095,8 @@ RSpec.describe Mxrb do
           entity(:Order) { association "Logistics.Shipment" }
         end
       end
+      Mxrb.define(path, &definition)
+      Mxrb.define(path, &definition)
 
       Mxrb.open(path) do |project|
         sales_mod = project.modules.find { _1.name == "Sales" }
@@ -4102,6 +4104,9 @@ RSpec.describe Mxrb do
         expect(assocs).not_to be_empty
         cross_assoc = assocs.find { _1.name.include?("Order") || _1.name.include?("Shipment") }
         expect(cross_assoc).not_to be_nil
+        expect(cross_assoc.to_entity_id).to eq('Logistics.Shipment')
+        expect(sales_mod.domain_model.local_associations).to be_empty
+        expect(sales_mod.domain_model.cross_associations.size).to eq(1)
       end
     end
 

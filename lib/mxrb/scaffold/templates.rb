@@ -231,12 +231,26 @@ module Mxrb
         SCSS
       end
 
+      def theme_custom_variables(_module_name, _name)
+        <<~SCSS
+          // Project-specific Sass variables belong here. When Atlas Core is
+          // installed, mxrb marketplace adds its legacy variable definitions.
+        SCSS
+      end
+
       def theme_settings(_module_name, _name)
         <<~JSON
           {
             "cssFiles": ["theme.compiled.css"]
           }
         JSON
+      end
+
+      def theme_exclusion_variables(_module_name, _name)
+        <<~SCSS
+          // Atlas Core imports this file. Add Sass variables here to exclude
+          // optional Atlas components from the compiled theme.
+        SCSS
       end
 
       def github_workflow(_module_name, _name)

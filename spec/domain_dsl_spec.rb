@@ -56,14 +56,24 @@ RSpec.describe 'complete domain DSL' do
       expect(entity.indexes.size).to eq(2)
       compound = entity.indexes.last
       members = Mxrb::IO::BsonCodec.parse_array(
-        compound['attributes'] || compound['IndexedAttributes']
+        compound['attributes'] || compound['Attributes'] || compound['IndexedAttributes']
       )[:items]
-      expect(members.map { _1['attribute'] || _1['Attribute'] }).to eq(
-        %w[Clinic.Animal.Name Clinic.Animal.BirthDate]
-      )
+      expect(members.map { (_1['attribute'] || _1['Attribute']).split('.').last })
+        .to eq(%w[Name BirthDate])
       expect(members.map { _1['ascending'].nil? ? _1['Ascending'] : _1['ascending'] })
         .to eq([true, false])
       expect(compound['includeInOffline'] || compound['IncludeInOffline']).to be(true)
+
+      Mxrb::IO::MprFile.open(path) do |mpr|
+        domain = mpr.parse_contents(mpr.units_by_containment('DomainModel').first)
+        stored = Mxrb::IO::BsonCodec.parse_array(domain['Entities'])[:items].first
+        index = Mxrb::IO::BsonCodec.parse_array(stored['Indexes'])[:items].last
+        indexed = Mxrb::IO::BsonCodec.parse_array(index['Attributes'])
+        expect(index['GUID']).to eq(index['$ID'])
+        expect(indexed[:marker]).to eq(2)
+        expect(indexed[:items]).to all(include('AttributePointer', 'AssociationPointer'))
+        expect(indexed[:items]).not_to include(include('Attribute'))
+      end
     end
   end
 
@@ -131,6 +141,21 @@ RSpec.describe 'complete domain DSL' do
     expect { builder.index }.to raise_error(ArgumentError, /at least one/)
     expect { builder.index(:Name, :Status, ascending: [true, false, true]) }
       .to raise_error(ArgumentError, /ascending/)
+  end
+
+  it 'normalizes both legacy and pointer-based index members defensively' do
+    attribute = Struct.new(:id, :name).new('attribute-id', 'Name')
+    indexes = [{ 'Attributes' => [2,
+                                  { 'Attribute' => 'Clinic.Animal.Legacy' },
+                                  { 'AttributePointer' => 'attribute-id' },
+                                  { 'AttributePointer' => 'missing-id' }] }]
+    normalized = Mxrb::Model::Entity.send(
+      :normalize_indexes, indexes, [attribute], 'Clinic.Animal'
+    )
+    members = Mxrb::IO::BsonCodec.parse_array(normalized.first['Attributes'])[:items]
+    expect(members.map { _1['Attribute'] }).to eq(
+      ['Clinic.Animal.Legacy', 'Clinic.Animal.Name', nil]
+    )
   end
 
   it 'writes native layouts and fully qualified create-object members' do
