@@ -72,3 +72,17 @@ plan.apply!
 Der Plan bewahrt den nativen Containment-Typ und blockiert Domain-
 Modellelemente, ungültige Container, Ordnerzyklen und modulübergreifende
 Verschiebungen. `mxrb move` zeigt eine Vorschau; erst `--apply` schreibt.
+
+## Geplant: offizieller Mendix Marketplace
+
+Diese Befehlsfamilie bleibt von `mxrb module`, dem Installer für interne
+Ruby-Module, getrennt. Vorgesehen sind `marketplace search`, GitHub-basiertes
+`marketplace pull`, lokales `marketplace import DATEI.mpk` und später
+PAT-basiertes `marketplace login/pull`.
+
+Die Reihenfolge ist: öffentliche GitHub-Releases mit Herkunfts- und
+Prüfsummen-Lockfile; sicherer lokaler MPK-Import; danach PAT-Unterstützung,
+sobald die authentifizierten Plattform-Endpunkte geprüft sind. GitHub deckt
+private oder unveröffentlichte Module nicht ab, der lokale MPK-Weg erfordert
+einen manuellen Download, und PAT-Unterstützung setzt keine undokumentierten
+Endpoint-Verträge voraus.

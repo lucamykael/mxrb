@@ -20,12 +20,27 @@ principal em `modules/VetClinic`. O scaffold inclui somente código próprio: o
 módulo `System` é implícito no Runtime; Administration e Atlas são módulos de
 marketplace. O comando aborta sem alterar nada quando o diretório já existe.
 
+Para adicionar outro módulo de aplicação a partir da raiz do projeto:
+
+```sh
+mxrb module new appointments
+```
+
+O comando cria `modules/Appointments`, reutiliza o mesmo scaffold de
+domain/application e conecta o `module.rb` no `project.rb`. A operação aborta
+atomicamente se o módulo já existir ou se o arquivo de projeto não puder ser
+atualizado. Use `--target DIR` ao executar fora da raiz do projeto.
+
+Os scaffolds de artefatos, apresentação, infraestrutura, testes, design e CI
+estão no [catálogo de scaffolds](scaffolds.md). Para entidades, consulte a
+[referência completa da DSL](entity-dsl.md).
+
 ```ruby
 Mxrb.define("Shop.mpr") do
   mendix_version "11.12.1"
   self.module :Sales do
     entity :Order do
-      string :Number, required: true
+      string :Number, documentation: "Número estável do pedido"
       decimal :Total, default: 0
     end
   end

@@ -2435,7 +2435,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       expect(File.read(security_path)).to eq(original)
 
       missing_target = double(
-        to_entity_id: "Missing.Entity", association_type: :reference, name: "Link"
+        to_entity_id: "Missing.Entity", association_type: :reference,
+        owner: :Default, name: "Link"
       )
       entity = double(
         name: "Entity", attributes: [], persistable: true, documentation: "",

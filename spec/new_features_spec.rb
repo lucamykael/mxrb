@@ -15,6 +15,130 @@ RSpec.describe "new features" do
     path
   end
 
+  describe "evaluate_dir" do
+    it "loads all Ruby files into the project builder" do
+      Dir.mktmpdir do |dir|
+        definitions = File.join(dir, "modules")
+        FileUtils.mkdir_p(definitions)
+        File.write(File.join(definitions, "shop.rb"), "self.module(:Shop) { entity :Product }\n")
+        File.write(File.join(definitions, "sales.rb"), "self.module(:Sales) { entity :Order }\n")
+
+        path = make_project(dir) { evaluate_dir(definitions) }
+
+        expect(Mxrb.open(path) { _1.modules.map(&:name) }).to eq(%w[Sales Shop])
+      end
+    end
+
+    it "silently skips a directory that does not exist" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          evaluate_dir(File.join(dir, "missing"))
+          self.module(:Shop) { evaluate_dir(File.join(dir, "missing")) }
+        end
+
+        expect(Mxrb.validate(path)).to be_valid
+      end
+    end
+
+    it "loads module definitions in deterministic alphabetical order" do
+      Dir.mktmpdir do |dir|
+        definitions = File.join(dir, "entities")
+        FileUtils.mkdir_p(definitions)
+        File.write(File.join(definitions, "b_entity.rb"), "entity :B\n")
+        File.write(File.join(definitions, "a_entity.rb"), "entity :A\n")
+
+        path = make_project(dir) do
+          self.module(:Shop) { evaluate_dir(definitions) }
+        end
+
+        names = Mxrb.open(path) { _1.modules.first.entities.map(&:name) }
+        expect(names).to eq(%w[A B])
+      end
+    end
+  end
+
+  describe "enumeration attributes" do
+    it "writes the qualified enumeration reference into the attribute type" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:VetClinic) do
+            enumeration(:Species) { value :Dog; value :Cat }
+            entity(:Animal) { enum :Kind, enumeration: "VetClinic.Species" }
+          end
+        end
+
+        attribute = Mxrb.open(path) { _1.modules.first.entities.first.attributes.first }
+        expect(attribute.raw_type_doc).to include(
+          "$Type" => "DomainModels$EnumerationAttributeType",
+          "Enumeration" => "VetClinic.Species"
+        )
+      end
+    end
+  end
+
+  # ── Association ownership ─────────────────────────────────────────────────
+
+  describe "association ownership" do
+    it "writes and reopens a one-to-one association as Reference owned by Both" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:VetClinic) do
+            entity :Owner do
+              association "VetClinic.Profile", name: "Owner_Profile", owner: :Both
+            end
+            entity :Profile
+          end
+        end
+
+        association = Mxrb.open(path) { _1.modules.first.associations.fetch(0) }
+        expect(association.association_type).to eq(:Reference)
+        expect(association.owner).to eq(:Both)
+        expect(association.storage_format).to eq(:Column)
+        expect(Mxrb.validate(path)).to be_valid
+      end
+    end
+
+    it "exports one-to-one ownership and preserves it on rebuild" do
+      Dir.mktmpdir do |dir|
+        source = make_project(dir) do
+          self.module(:VetClinic) do
+            entity :Owner do
+              association :Profile, name: "Owner_Profile", owner: :Both
+            end
+            entity :Profile
+          end
+        end
+        exported = File.join(dir, "exported")
+        rebuilt = File.join(dir, "rebuilt.mpr")
+
+        Mxrb::Exporter.new(source, exported).export!
+        owner_source = Dir.glob(File.join(exported, "**", "owner.rb")).fetch(0)
+        expect(File.read(owner_source)).to include("owner: :Both")
+
+        begin
+          ENV["MXRB_OUTPUT_PATH"] = rebuilt
+          load File.join(exported, "project.rb")
+        ensure
+          ENV.delete("MXRB_OUTPUT_PATH")
+        end
+        association = Mxrb.open(rebuilt) { _1.modules.first.associations.fetch(0) }
+        expect(association.owner).to eq(:Both)
+      end
+    end
+
+    it "keeps one-to-many as the default and rejects unsupported values" do
+      builder = Mxrb::Dsl::EntityBuilder.new(:Order)
+      builder.association(:Customer)
+      expect(builder.to_h.fetch(:associations).fetch(0)).to include(
+        type: :Reference, owner: :Default
+      )
+      expect { builder.association(:Customer, type: :Unknown) }
+        .to raise_error(ArgumentError, /association type/)
+      expect { builder.association(:Customer, owner: :Unknown) }
+        .to raise_error(ArgumentError, /association owner/)
+    end
+  end
+
   # ── Domain Mutation — AddAttribute ─────────────────────────────────────────
 
   describe "plan_add_attribute" do

@@ -31,6 +31,19 @@ modules/Sales/
 Abfragen und Jobs. `presentation` enthält Seiten und clientseitige Nanoflows.
 `infrastructure` enthält Integrationen, Dienste und Adapter.
 
+Die Kardinalität folgt dem Mendix-Modell aus Typ und Eigentümer:
+
+```ruby
+# 1:N (Standard): Reference + Default
+association "Sales.Customer", name: "Order_Customer"
+
+# 1:1: Reference + Both
+association "Sales.Profile", name: "Customer_Profile", owner: :Both
+
+# N:N: ReferenceSet + Default
+association "Sales.Tag", name: "Order_Tags", type: :ReferenceSet
+```
+
 ## Abhängigkeitsregel
 
 ```text

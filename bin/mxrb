@@ -47,6 +47,8 @@ def render_workload_report(report, json:)
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
+SCAFFOLD_COMMANDS = (Mxrb::Scaffold::Help::COMMANDS.keys - ["design"]).freeze
+
 command = ARGV.shift
 
 case command
@@ -404,6 +406,11 @@ when "analyze"
 
 when "design"
   action = ARGV.shift or abort "Usage: mxrb design <scan|migrate> ..."
+  if ["init", "--help"].include?(action)
+    ARGV.unshift(action)
+    Mxrb::Scaffold::CLI.new("design", ARGV).run
+    exit 0
+  end
   path = ARGV.shift or abort "Usage: mxrb design #{action} <file.mpr> ..."
   json = ARGV.delete("--json")
   case action
@@ -676,7 +683,7 @@ when "functional-instrument"
   puts "[mxrb] Instrumented #{definition.tests.size} tests; runner #{instrumenter.runner}"
 
 when "module"
-  action = ARGV.shift or abort "Usage: mxrb module <search|add> ..."
+  action = ARGV.shift or abort "Usage: mxrb module <new|search|add> ..."
   option = lambda do |name|
     index = ARGV.index(name)
     next unless index
@@ -684,10 +691,22 @@ when "module"
     abort "#{name} requires a value" unless ARGV[index + 1]
     ARGV.slice!(index, 2).last
   end
-  registry = option.call("--registry")
-  catalog = Mxrb::Marketplace::Catalog.new(registry)
   case action
+  when "new"
+    name = ARGV.shift or abort "Usage: mxrb module new <name> [--target DIR]"
+    target = option.call("--target") || Dir.pwd
+    begin
+      result = Mxrb::ModuleInitializer.new(name).scaffold(into: target)
+    rescue ArgumentError => e
+      abort "[mxrb] error: #{e.message}"
+    end
+    result.files.each { puts "  create  #{_1}" }
+    puts "  update  #{result.project_file}"
+    puts "\nDone. Run:"
+    puts "  bundle exec mxrb generate project.rb"
   when "search"
+    registry = option.call("--registry")
+    catalog = Mxrb::Marketplace::Catalog.new(registry)
     query = ARGV.shift
     entries = catalog.search(query)
     entries.each do |entry|
@@ -695,6 +714,8 @@ when "module"
     end
     puts "[mxrb] #{entries.size} module(s)"
   when "add"
+    registry = option.call("--registry")
+    catalog = Mxrb::Marketplace::Catalog.new(registry)
     identifier = ARGV.shift or
       abort "Usage: mxrb module add <name|directory> [--target DIR] [--registry SOURCE]"
     target = option.call("--target") || Dir.pwd
@@ -706,8 +727,11 @@ when "module"
     puts "[mxrb] #{installation.destination}"
     puts "[mxrb] SHA-256 #{installation.digest}"
   else
-    abort "Unknown module action #{action.inspect}; use search or add"
+    abort "Unknown module action #{action.inspect}; use new, search, or add"
   end
+
+when *SCAFFOLD_COMMANDS
+  Mxrb::Scaffold::CLI.new(command, ARGV).run
 
 when "describe"
   path = ARGV.shift or abort "Usage: mxrb describe <file.mpr> <qualified-name>"
@@ -829,6 +853,27 @@ else
       evaluate   <file.mpr> <eval.rb>      Run Ruby model evaluations
       module search [query]                Search the Ruby module marketplace
              add <name|directory>          Install a module and write its lockfile
+             new <name> [--target DIR]     Scaffold and connect an application module
+      entity new Module.Name              Scaffold a domain entity (--help for details)
+      enumeration new Module.Name         Scaffold an enumeration
+      use-case new Module.Name            Scaffold an application use case
+      validation new Module.Name          Scaffold a validation flow
+      query new Module.Name               Scaffold a query flow
+      functional-test new Module.Flow     Scaffold a runtime functional test
+      evaluation new Name                 Scaffold static model evaluations
+      presentation init Module            Initialize presentation directories
+      page new Module.Name                Scaffold a page
+      nanoflow new Module.Name            Scaffold a client nanoflow
+      repository new Module.Name          Scaffold a repository port and adapter
+      security init Module                Scaffold module roles
+      scheduled-event new Module.Name     Scaffold an event and handler
+      constant new Module.Name            Scaffold a module constant
+      integration new Module.Name         Scaffold an integration adapter
+      published-rest new Module.Name      Scaffold a published REST handler
+      consumed-rest new Module.Name       Scaffold a consumed REST adapter
+      java-action new Module.Name         Scaffold a Java Action adapter
+      design init                         Initialize design-system Ruby
+      ci init github                      Scaffold GitHub Actions
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
                  --docker                  Run mxbuild/runtime in disposable containers
                  --plan                    Show toolchain and Docker execution plan

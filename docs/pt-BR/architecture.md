@@ -99,8 +99,21 @@ evaluate File.join(__dir__, "entities", "order.rb")
 # domain/entities/order.rb
 entity :Order do
   decimal :Total, default: 0
-  association :Customer
+  association "Sales.Customer", name: "Order_Customer"
 end
+```
+
+A cardinalidade segue o modelo de tipo/proprietário do Mendix:
+
+```ruby
+# 1:N (padrão): Reference + Default
+association "Sales.Customer", name: "Order_Customer"
+
+# 1:1: Reference + Both
+association "Sales.Profile", name: "Customer_Profile", owner: :Both
+
+# N:N: ReferenceSet + Default
+association "Sales.Tag", name: "Order_Tags", type: :ReferenceSet
 ```
 
 ### `application/`

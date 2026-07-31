@@ -25,6 +25,21 @@ and the main `modules/VetClinic` module. The scaffold contains application code
 only: `System` is implicit in the Runtime, while Administration and Atlas are
 marketplace modules. The command aborts without changing an existing directory.
 
+Add another application module from the project root with:
+
+```sh
+mxrb module new appointments
+```
+
+The command creates `modules/Appointments`, reuses the same domain/application
+scaffold, and connects its `module.rb` in `project.rb`. It aborts atomically if
+the module already exists or the project file cannot be updated. Use
+`--target DIR` when running outside the project root.
+
+Artifact, presentation, infrastructure, test, design, and CI generators are
+listed in the [scaffold catalog](scaffolds.md). See the complete
+[entity DSL reference](entity-dsl.md) for entity files.
+
 ```ruby
 # shop.rb
 Mxrb.define("Shop.mpr") do
@@ -32,12 +47,12 @@ Mxrb.define("Shop.mpr") do
 
   self.module :Sales do
     entity :Customer do
-      string :Name, required: true, length: 200
+      string :Name, documentation: "Customer display name"
     end
 
     entity :Order do
       decimal :Total, default: 0
-      association :Customer
+      association "Sales.Customer", name: "Order_Customer"
     end
 
     page :OrderList do

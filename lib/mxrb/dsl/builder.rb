@@ -262,6 +262,12 @@ module Mxrb
         instance_eval(File.read(path), path, 1)
       end
 
+      def evaluate_dir(dir)
+        return unless File.directory?(dir)
+
+        Dir[File.join(dir, '*.rb')].sort.each { |path| evaluate(path) }
+      end
+
       def build!
         validate!
         Writer.new(@path, definition).write!
@@ -695,6 +701,12 @@ module Mxrb
         instance_eval(File.read(path), path, 1)
       end
 
+      def evaluate_dir(dir)
+        return unless File.directory?(dir)
+
+        Dir[File.join(dir, '*.rb')].sort.each { |path| evaluate(path) }
+      end
+
       def to_h
         {
           name: @name, entities: @entities, pages: @pages,
@@ -738,6 +750,8 @@ module Mxrb
 
     class EntityBuilder
       ATTR_TYPES = %i[string integer long float decimal boolean datetime autonumber hashstring binary enum].freeze
+      ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
+      ASSOCIATION_OWNERS = %i[Default Both].freeze
 
       attr_reader :name
 
@@ -760,11 +774,19 @@ module Mxrb
       def non_persistent!  = (@persistable = false)
       def documentation(d) = (@doc = d)
 
-      def association(target, type: :Reference, name: nil)
+      def association(target, type: :Reference, owner: :Default, name: nil)
+        type = type.to_sym
+        owner = owner.to_sym
+        unless ASSOCIATION_TYPES.include?(type)
+          raise ArgumentError, "association type must be Reference or ReferenceSet"
+        end
+        raise ArgumentError, "association owner must be Default or Both" unless ASSOCIATION_OWNERS.include?(owner)
+
         @associations << {
           name: (name || "#{@name}_#{target}").to_s,
           target: target.to_s,
-          type: type.to_sym
+          type: type,
+          owner: owner
         }
       end
 
