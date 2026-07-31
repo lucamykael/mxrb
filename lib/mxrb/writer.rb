@@ -3001,7 +3001,7 @@ module Mxrb
 
     def retrieve_range_doc(activity)
       limit = activity[:limit]
-      if limit && !limit.to_s.match?(/\A\d+\z/)
+      if limit
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Microflows$CustomRange",

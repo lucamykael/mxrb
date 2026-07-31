@@ -215,11 +215,17 @@ module Mxrb
             raise NativeRuntimeError, "unsupported retrieve source #{source['$Type']}"
           end
 
+          xpath = source['XpathConstraint'].to_s
+          raise NativeRuntimeError, "native XPath retrieve is not implemented: #{xpath}" unless xpath.empty?
+
+          sortings = items(source.dig('NewSortings', 'Sortings'))
+          raise NativeRuntimeError, 'native retrieve sorting is not implemented' unless sortings.empty?
+
           values = store.retrieve(source['Entity'].to_s)
           range = source['Range'] || {}
           limit = @expression.evaluate(range['LimitExpression'], variables)
           values = values.first(limit) if limit.is_a?(Integer) && limit.positive?
-          variables[action['ResultVariableName'].to_s] = values
+          variables[action['ResultVariableName'].to_s] = range['SingleObject'] == true ? values.first : values
         end
 
         def action_aggregate(action, variables)
@@ -344,6 +350,10 @@ module Mxrb
             failures << "return #{actual.inspect}, expected #{expected.inspect}" unless actual == expected
           end
           test.counts.each do |expectation|
+            if expectation.xpath && !expectation.xpath.empty?
+              raise NativeRuntimeError, "native XPath count is not implemented: #{expectation.xpath}"
+            end
+
             actual_count = interpreter.store.count(expectation.entity)
             unless actual_count == expectation.equals
               failures << "#{expectation.entity} count #{actual_count}, expected #{expectation.equals}"
