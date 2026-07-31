@@ -61,7 +61,7 @@ Mxrb.define("Shop.mpr") do
   mendix_version "11.12.1"
   self.module :Sales do
     entity :Order do
-      string :Number, required: true
+      string :Number, documentation: "Stabile Bestellnummer"
       decimal :Total, default: 0
     end
   end

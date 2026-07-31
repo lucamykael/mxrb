@@ -1,0 +1,77 @@
+# frozen_string_literal: true
+
+module Mxrb
+  module Scaffold
+    # Parses and renders the conventional scaffold subcommands.
+    class CLI
+      INIT_COMMANDS = %w[presentation security design ci].freeze
+      QUIET_COMMANDS = %w[ci evaluation functional-test].freeze
+
+      def initialize(command, argv, output: $stdout)
+        @command = command
+        @argv = argv
+        @output = output
+      end
+
+      def run
+        return show_help if help?
+
+        validate_action!
+        result = Generator.new(kind, scaffold_name, target: target).scaffold
+        render(result)
+      rescue ArgumentError => e
+        abort "[mxrb] error: #{e.message}"
+      end
+
+      private
+
+      def help?
+        @argv.first == '--help' || @argv.delete('--help')
+      end
+
+      def show_help
+        @output.puts Help.text(@command)
+      end
+
+      def validate_action!
+        action = @argv.shift
+        abort Help.text(@command) unless action == expected_action
+      end
+
+      def expected_action
+        INIT_COMMANDS.include?(@command) ? 'init' : 'new'
+      end
+
+      def scaffold_name
+        return nil if @command == 'design'
+
+        @scaffold_name ||= @argv.shift || abort(Help.text(@command))
+      end
+
+      def target
+        value = extract_option('--target') || Dir.pwd
+        abort "Unknown arguments: #{@argv.join(' ')}" unless @argv.empty?
+        value
+      end
+
+      def extract_option(name)
+        index = @argv.index(name)
+        return unless index
+
+        abort "#{name} requires a value" unless @argv[index + 1]
+        @argv.slice!(index, 2).last
+      end
+
+      def kind = @command.tr('-', '_').to_sym
+
+      def render(result)
+        result.files.each { @output.puts "  create  #{_1}" }
+        result.updated.each { @output.puts "  update  #{_1}" }
+        return if QUIET_COMMANDS.include?(@command)
+
+        @output.puts "\nDone. Run:"
+        @output.puts '  bundle exec mxrb generate project.rb'
+      end
+    end
+  end
+end

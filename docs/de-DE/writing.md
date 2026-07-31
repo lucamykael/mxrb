@@ -21,12 +21,28 @@ enthält nur Anwendungscode: `System` ist im Runtime implizit, Administration
 und Atlas sind Marketplace-Module. Bei einem vorhandenen Verzeichnis bricht
 der Befehl ohne Änderungen ab.
 
+Ein weiteres Anwendungsmodul wird im Projektstamm so hinzugefügt:
+
+```sh
+mxrb module new appointments
+```
+
+Der Befehl erstellt `modules/Appointments`, verwendet dasselbe Domain- und
+Application-Scaffold und bindet dessen `module.rb` in `project.rb` ein. Wenn
+das Modul bereits existiert oder die Projektdatei nicht sicher aktualisiert
+werden kann, wird der Vorgang atomar abgebrochen. Außerhalb des Projektstamms
+kann `--target DIR` verwendet werden.
+
+Artefakt-, Präsentations-, Infrastruktur-, Test-, Design- und CI-Generatoren
+sind im [Scaffold-Katalog](scaffolds.md) aufgeführt. Für Entitäten gilt die
+vollständige [Entitäten-DSL](entity-dsl.md).
+
 ```ruby
 Mxrb.define("Shop.mpr") do
   mendix_version "11.12.1"
   self.module :Sales do
     entity :Order do
-      string :Number, required: true
+      string :Number, documentation: "Stabile Bestellnummer"
       decimal :Total, default: 0
     end
   end

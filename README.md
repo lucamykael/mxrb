@@ -60,7 +60,7 @@ Mxrb.define("Shop.mpr") do
 
   self.module :Sales do
     entity :Order do
-      string :Number, required: true
+      string :Number, documentation: "Stable order number"
       decimal :Total, default: 0
     end
 

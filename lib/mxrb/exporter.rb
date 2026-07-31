@@ -548,7 +548,10 @@ module Mxrb
       end
       assocs = associations.map do |assoc|
         target = mod.entities.find { _1.id == assoc.to_entity_id }&.name || assoc.to_entity_id
-        "  association #{symbol(target)}, type: #{symbol(assoc.association_type)}, name: #{ruby(assoc.name)}"
+        options = ["type: #{symbol(assoc.association_type)}"]
+        options << "owner: #{symbol(assoc.owner)}" if assoc.owner && assoc.owner != :Default
+        options << "name: #{ruby(assoc.name)}"
+        "  association #{symbol(target)}, #{options.join(', ')}"
       end
       flags = []
       flags << "  non_persistent!" unless entity.persistable
