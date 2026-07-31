@@ -29,6 +29,9 @@ remain optional external gates for compatibility and functional execution.
 - run static analysis and executable model evaluations in Ruby;
 - execute functional microflow tests locally or in disposable containers.
 - search and install reusable Ruby modules with a locked SHA-256 digest.
+- write, inspect and compare deterministic MDA containers without invoking `mxbuild`;
+- clone, inspect and synchronize official Team Server Git repositories while
+  keeping PAT values in user-managed files.
 
 The public validation matrix currently covers structural v1/v2 round trips
 from Mendix 5.21 through 11.12 and official MxBuild checks where the native
@@ -86,6 +89,8 @@ bundle exec mxrb cache clear Shop.mpr
 bundle exec mxrb oql Shop.mpr --dialect postgresql
 bundle exec mxrb db up Shop.mpr
 bundle exec mxrb db sql Shop.mpr 'SELECT * FROM "sales$order" LIMIT 20'
+bundle exec mxrb pack Shop.mpr --output build/Shop.mda
+bundle exec mxrb team-server clone APP_ID ./shop --pat-file /secure/team-server.env
 ```
 
 The MPR stores the model, not application data. `db up` builds the exact
