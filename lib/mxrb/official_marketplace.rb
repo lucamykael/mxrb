@@ -87,21 +87,51 @@ module Mxrb
       mpr.units_by_containment('Modules').find { mpr.parse_contents(_1)['Name'] == name }
     end
 
-    # Stores the Mendix PAT outside projects with owner-only permissions.
+    # Resolves a user-owned PAT file. Embedding the PAT remains an explicit,
+    # backwards-compatible opt-in for users who prefer MXRB-managed storage.
     class Credentials
-      def initialize(path: nil)
+      attr_reader :path
+
+      def initialize(path: nil, pat_file: ENV['MXRB_MENDIX_PAT_FILE'])
         base = ENV['XDG_CONFIG_HOME'].to_s
         base = File.join(Dir.home, '.config') if base.empty?
         @path = path || File.join(base, 'mxrb', 'credentials')
+        @pat_file = expand_pat_file(pat_file)
+      end
+
+      def configure_pat_file(source)
+        @pat_file = expand_pat_file(source)
+        raise MarketplaceError, 'Mendix PAT file path must not be empty' unless @pat_file
+
+        read_pat_file(@pat_file)
+        write_config('mendix_pat_file' => @pat_file)
       end
 
       def save_pat(token)
         value = token.to_s.strip
         raise MarketplaceError, 'Mendix PAT must not be empty' if value.empty?
 
+        @pat_file = nil
+        write_config('mendix_pat' => value)
+      end
+
+      def pat
+        return read_pat_file(@pat_file) if @pat_file
+        return unless File.file?(@path)
+
+        config = read_config
+        source = expand_pat_file(config['mendix_pat_file'])
+        return read_pat_file(source) if source
+
+        config['mendix_pat']
+      end
+
+      private
+
+      def write_config(config)
         FileUtils.mkdir_p(File.dirname(@path), mode: 0o700)
         temporary = "#{@path}.tmp-#{Process.pid}"
-        File.binwrite(temporary, JSON.generate('mendix_pat' => value) << "\n")
+        File.binwrite(temporary, JSON.generate(config) << "\n")
         File.chmod(0o600, temporary)
         File.rename(temporary, @path)
         @path
@@ -109,12 +139,54 @@ module Mxrb
         FileUtils.rm_f(temporary) if defined?(temporary) && temporary && File.exist?(temporary)
       end
 
-      def pat
-        return unless File.file?(@path)
+      def read_config
+        value = JSON.parse(File.binread(@path))
+        raise MarketplaceError, 'invalid credentials file: expected a JSON object' unless value.is_a?(Hash)
 
-        JSON.parse(File.binread(@path))['mendix_pat']
+        value
       rescue JSON::ParserError => e
         raise MarketplaceError, "invalid credentials file: #{e.message}"
+      end
+
+      def expand_pat_file(value)
+        source = value.to_s.strip
+        source.empty? ? nil : File.expand_path(source)
+      end
+
+      def read_pat_file(source)
+        raise MarketplaceError, "Mendix PAT file not found: #{source}" unless File.file?(source)
+
+        raw = File.binread(source).strip
+        value = pat_from_file_contents(raw, source)
+        raise MarketplaceError, "Mendix PAT file is empty: #{source}" if value.empty?
+
+        value
+      rescue SystemCallError => e
+        raise MarketplaceError, "cannot read Mendix PAT file #{source}: #{e.message}"
+      end
+
+      def pat_from_file_contents(raw, source)
+        return pat_from_env(raw, source) if env_file?(source) || raw.match?(/^\s*(?:export\s+)?MXRB_MENDIX_PAT\s*=/)
+
+        value = JSON.parse(raw)
+        return value['mendix_pat'].to_s.strip if value.is_a?(Hash) && value.key?('mendix_pat')
+
+        raise MarketplaceError, 'JSON Mendix PAT file must contain "mendix_pat"'
+      rescue JSON::ParserError
+        raw
+      end
+
+      def env_file?(source)
+        File.basename(source).start_with?('.env')
+      end
+
+      def pat_from_env(raw, source)
+        line = raw.lines.reverse.find { _1.match?(/^\s*(?:export\s+)?MXRB_MENDIX_PAT\s*=/) }
+        raise MarketplaceError, "MXRB_MENDIX_PAT not found in #{source}" unless line
+
+        value = line.sub(/^\s*(?:export\s+)?MXRB_MENDIX_PAT\s*=\s*/, '').strip
+        value = value[1...-1] if value.length >= 2 && %w[' "].include?(value[0]) && value[-1] == value[0]
+        value.strip
       end
     end
 

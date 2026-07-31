@@ -810,8 +810,10 @@ when "marketplace"
   marketplace_usage = <<~USAGE
     Usage: mxrb marketplace <login|search|show|versions|pull|import|audit|list|verify> ...
 
-      marketplace login [--no-verify]
-          Store and validate a Mendix PAT with mx:marketplace-content:read.
+      marketplace login --pat-file FILE [--no-verify]
+          Recommended: store only a path and read the PAT from FILE or a Ruby .env.
+      marketplace login --store-pat [--no-verify]
+          Explicit opt-in: store the PAT in MXRB's own credentials file.
       marketplace search NAME [--private|--public] [--approved] [--published-since DATE]
           Search public and company-private content through the official Content API.
       marketplace show <NAME|CONTENT_ID>
@@ -831,10 +833,37 @@ when "marketplace"
 
     Module import does not invoke mx, mxcli, Studio Pro, or the Model SDK.
   USAGE
+  marketplace_login_usage = <<~USAGE
+    Usage:
+      mxrb marketplace login --pat-file FILE [--no-verify]  # recommended
+      mxrb marketplace login --store-pat [--no-verify]      # explicit opt-in
+
+    The recommended mode stores only FILE's absolute path in
+    $XDG_CONFIG_HOME/mxrb/credentials (default: ~/.config/mxrb/credentials).
+    MXRB does not copy, move, chmod, or rewrite FILE. It reads the PAT only when
+    an official Marketplace operation needs authentication.
+
+    FILE may be plain text, JSON with {"mendix_pat":"..."}, or a Ruby .env with:
+      MXRB_MENDIX_PAT=your_pat
+
+    --store-pat stores {"mendix_pat":"..."} directly in MXRB's credentials
+    file with mode 0600. The command shows the destination before prompting.
+
+    Environment-only alternative (nothing is persisted by login):
+      MXRB_MENDIX_PAT_FILE=/absolute/path/.env mxrb marketplace search NAME
+
+    A direct MXRB_MENDIX_PAT value remains supported and takes precedence, but
+    can be exposed through shell history/process environments. Required scope:
+    mx:marketplace-content:read.
+  USAGE
   action = ARGV.shift
   if action.nil? || %w[-h --help help].include?(action)
     puts marketplace_usage
     exit(action.nil? ? 1 : 0)
+  end
+  if action == 'login' && ARGV.any? { %w[-h --help help].include?(_1) }
+    puts marketplace_login_usage
+    exit 0
   end
   option = lambda do |name|
     index = ARGV.index(name)
@@ -848,13 +877,37 @@ when "marketplace"
   begin
     case action
     when 'login'
-      print 'Mendix PAT: '
-      token = ENV['MXRB_MENDIX_PAT'] || $stdin.noecho(&:gets)
-      puts
-      Mxrb::OfficialMarketplace::ContentApi.new(pat: token).search(limit: 1) \
-        unless ARGV.delete('--no-verify')
-      path = Mxrb::OfficialMarketplace::Credentials.new.save_pat(token)
-      puts "[mxrb] Mendix Marketplace credentials saved to #{path}"
+      pat_file = option.call('--pat-file')
+      store_pat = ARGV.delete('--store-pat')
+      no_verify = ARGV.delete('--no-verify')
+      abort '--pat-file and --store-pat are mutually exclusive' if pat_file && store_pat
+      unless ARGV.empty?
+        abort "Unknown marketplace login option(s): #{ARGV.join(' ')}\n\n#{marketplace_login_usage}"
+      end
+      unless pat_file || store_pat
+        warn marketplace_login_usage
+        exit 1
+      end
+
+      credentials = Mxrb::OfficialMarketplace::Credentials.new
+      if pat_file
+        secret_path = File.expand_path(pat_file)
+        path = credentials.configure_pat_file(secret_path)
+        Mxrb::OfficialMarketplace::ContentApi.new(pat: credentials.pat).search(limit: 1) unless no_verify
+        puts "[mxrb] PAT file reference saved to #{path}"
+        puts "[mxrb] Secret remains in #{secret_path}; MXRB reads it only for Marketplace requests."
+      else
+        puts '[mxrb] Explicit managed-secret mode selected.'
+        puts "[mxrb] Destination: #{credentials.path}"
+        puts '[mxrb] Format: JSON field "mendix_pat"; file mode: 0600.'
+        puts '[mxrb] Recommended alternative: marketplace login --pat-file PATH'
+        print 'Mendix PAT: '
+        token = ENV['MXRB_MENDIX_PAT'] || $stdin.noecho(&:gets)
+        puts
+        Mxrb::OfficialMarketplace::ContentApi.new(pat: token).search(limit: 1) unless no_verify
+        path = credentials.save_pat(token)
+        puts "[mxrb] PAT stored by MXRB at #{path}"
+      end
     when 'search'
       query = ARGV.shift or abort 'Usage: mxrb marketplace search <query>'
       source = option.call('--source') || 'official'
@@ -1178,7 +1231,7 @@ else
       module search [query]                Search the Ruby module marketplace
              add <name|directory>          Install a module and write its lockfile
              new <name> [--target DIR]     Scaffold and connect an application module
-      marketplace login                   Validate/store a scoped Mendix PAT
+      marketplace login --pat-file FILE   Reference a PAT file (--help for secure modes)
                   search <name>            Search the official Content API
                   show <name|content-id>   Show official component metadata
                   versions <name|id>       List compatibility and security metadata

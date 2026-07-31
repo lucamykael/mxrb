@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'open3'
 require 'tmpdir'
 require 'zip'
 
@@ -23,8 +24,112 @@ RSpec.describe Mxrb::OfficialMarketplace do
       expect(credentials.pat).to eq('token')
       expect(File.stat(path).mode & 0o777).to eq(0o600)
       expect { credentials.save_pat(' ') }.to raise_error(Mxrb::MarketplaceError, /must not be empty/)
+      File.write(path, '[]')
+      expect { credentials.pat }.to raise_error(Mxrb::MarketplaceError, /expected a JSON object/)
       File.write(path, '{broken')
       expect { credentials.pat }.to raise_error(Mxrb::MarketplaceError, /invalid credentials/)
+    end
+  end
+
+  it 'stores only an absolute PAT-file reference and reads plaintext, JSON, and .env secrets' do
+    Dir.mktmpdir do |dir|
+      config = File.join(dir, 'config', 'credentials')
+      secret = File.join(dir, 'marketplace.pat')
+      File.write(secret, " first-token\n")
+      File.chmod(0o640, secret)
+      credentials = described_class::Credentials.new(path: config)
+
+      expect(credentials.configure_pat_file(secret)).to eq(config)
+      expect(JSON.parse(File.read(config))).to eq('mendix_pat_file' => File.expand_path(secret))
+      expect(File.read(config)).not_to include('first-token')
+      expect(File.stat(secret).mode & 0o777).to eq(0o640)
+      expect(credentials.pat).to eq('first-token')
+
+      File.write(secret, %({"mendix_pat":"json-token"}\n))
+      expect(credentials.pat).to eq('json-token')
+
+      env = File.join(dir, '.env')
+      File.write(env, "OTHER=value\nMXRB_MENDIX_PAT='env-token'\n")
+      expect(credentials.configure_pat_file(env)).to eq(config)
+      expect(described_class::Credentials.new(path: config).pat).to eq('env-token')
+    end
+  end
+
+  it 'validates referenced PAT files without modifying or silently accepting bad formats' do
+    Dir.mktmpdir do |dir|
+      credentials = described_class::Credentials.new(path: File.join(dir, 'credentials'))
+      expect { credentials.configure_pat_file(' ') }
+        .to raise_error(Mxrb::MarketplaceError, /must not be empty/)
+
+      missing = File.join(dir, 'missing.pat')
+      expect { credentials.configure_pat_file(missing) }
+        .to raise_error(Mxrb::MarketplaceError, /not found/)
+
+      empty = File.join(dir, 'empty.pat')
+      File.write(empty, '')
+      expect { credentials.configure_pat_file(empty) }
+        .to raise_error(Mxrb::MarketplaceError, /empty/)
+
+      env = File.join(dir, '.env')
+      File.write(env, 'OTHER=value')
+      expect { credentials.configure_pat_file(env) }
+        .to raise_error(Mxrb::MarketplaceError, /MXRB_MENDIX_PAT not found/)
+
+      env = File.join(dir, 'marketplace.env')
+      File.write(env, "export MXRB_MENDIX_PAT=x\n")
+      expect(credentials.configure_pat_file(env)).to eq(credentials.path)
+      expect(credentials.pat).to eq('x')
+
+      json = File.join(dir, 'secret.json')
+      File.write(json, '{}')
+      expect { credentials.configure_pat_file(json) }
+        .to raise_error(Mxrb::MarketplaceError, /must contain/)
+      File.write(json, '[]')
+      expect { credentials.configure_pat_file(json) }
+        .to raise_error(Mxrb::MarketplaceError, /must contain/)
+
+      unreadable = File.join(dir, 'unreadable.pat')
+      File.write(unreadable, 'token')
+      allow(File).to receive(:binread).and_call_original
+      allow(File).to receive(:binread).with(unreadable).and_raise(Errno::EACCES, unreadable)
+      expect { credentials.configure_pat_file(unreadable) }
+        .to raise_error(Mxrb::MarketplaceError, /cannot read Mendix PAT file/)
+    end
+  end
+
+  it 'documents and executes both marketplace login storage modes' do
+    executable = File.expand_path('../bin/mxrb', __dir__)
+    Dir.mktmpdir do |dir|
+      env = File.join(dir, '.env')
+      File.write(env, "MXRB_MENDIX_PAT=file-token\n")
+      process_env = { 'XDG_CONFIG_HOME' => File.join(dir, 'config') }
+
+      stdout, stderr, status = Open3.capture3(
+        process_env, RbConfig.ruby, executable, 'marketplace', 'login',
+        '--pat-file', env, '--no-verify'
+      )
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to include('PAT file reference saved', 'Secret remains in')
+      stored = File.join(dir, 'config', 'mxrb', 'credentials')
+      expect(JSON.parse(File.read(stored))).to eq('mendix_pat_file' => env)
+      expect(File.read(stored)).not_to include('file-token')
+
+      stdout, stderr, status = Open3.capture3(
+        process_env.merge('MXRB_MENDIX_PAT' => 'managed-token'), RbConfig.ruby, executable,
+        'marketplace', 'login', '--store-pat', '--no-verify'
+      )
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to include('Explicit managed-secret mode', 'mode: 0600', 'Destination:')
+      expect(JSON.parse(File.read(stored))).to eq('mendix_pat' => 'managed-token')
+
+      stdout, stderr, status = Open3.capture3(
+        process_env, RbConfig.ruby, executable, 'marketplace', 'login', '--help'
+      )
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to include('--pat-file FILE', '--store-pat', 'MXRB_MENDIX_PAT_FILE')
     end
   end
 

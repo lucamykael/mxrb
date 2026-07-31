@@ -189,7 +189,7 @@ mxrb marketplace versions 170 --mendix-version 11.12.1
 mxrb marketplace pull 170 --mpr App.mpr
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr App.mpr
-mxrb marketplace login
+mxrb marketplace login --pat-file .env
 mxrb marketplace audit
 ```
 

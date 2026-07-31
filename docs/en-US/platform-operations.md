@@ -23,7 +23,9 @@ MXRB uses the documented Mendix Marketplace Content API. Create a PAT with the
 `mx:marketplace-content:read` scope, then authenticate once:
 
 ```sh
-mxrb marketplace login
+cp .env.example .env
+# Set MXRB_MENDIX_PAT in .env; never commit the file.
+mxrb marketplace login --pat-file .env
 mxrb marketplace search "Community Commons"
 mxrb marketplace show 170
 mxrb marketplace versions 170 --mendix-version 11.12.1
@@ -35,6 +37,17 @@ mxrb marketplace audit --target . --mendix-version 11.12.1
 mxrb marketplace list
 mxrb marketplace verify
 ```
+
+The recommended login mode stores only the absolute `.env` path in
+`~/.config/mxrb/credentials` (or `$XDG_CONFIG_HOME/mxrb/credentials`). MXRB
+does not copy, move, chmod, or rewrite the referenced file; it reads it when an
+official Marketplace operation needs authentication. New scaffolds ignore
+`.env` and provide a secret-free `.env.example`.
+
+`mxrb marketplace login --store-pat` is an explicit managed-storage opt-in;
+the command displays its JSON destination and `0600` mode before prompting.
+`MXRB_MENDIX_PAT_FILE=/path/.env` works without persisting a reference. Run
+`mxrb marketplace login --help` for accepted formats and precedence.
 
 Official search includes public content and company-private content visible to
 the PAT owner. Filters include `--private`, `--public`, `--approved`, and
