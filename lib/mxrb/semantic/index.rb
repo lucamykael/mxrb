@@ -26,7 +26,7 @@ module Mxrb
     # Builds a semantic index directly from an opened MPR. Ruby is the public
     # API; the CLI only formats these results.
     class Index
-      CACHE_VERSION = 2
+      CACHE_VERSION = 3
       CACHE_METADATA_KEYS = %i[
         allowed_roles bson_type documentation excluded exposed from mark_as_used to
       ].freeze
@@ -238,6 +238,8 @@ module Mxrb
           end
 
           mod.associations.each do |association|
+            from_entity = entity_by_id[association.from_entity_id]
+            to_entity = entity_by_id[association.to_entity_id]
             add_artifact(
               id: "association:#{association.id}",
               qualified_name: "#{mod.name}.#{association.name}", kind: :association,
@@ -245,8 +247,8 @@ module Mxrb
               path: ["associations", association.name],
               metadata: {
                 model: association,
-                from: entity_by_id[association.from_entity_id]&.qualified_name,
-                to: entity_by_id[association.to_entity_id]&.qualified_name
+                from: qualified_entity_name(mod, from_entity),
+                to: qualified_entity_name(mod, to_entity)
               }
             )
           end
@@ -276,7 +278,8 @@ module Mxrb
         units.each do |raw|
           doc = @project.parse_bson(raw)
           type = doc["$Type"].to_s
-          next if type.empty? || type == "Projects$Module" || type.include?("DomainModel")
+          next if type.empty? || %w[Projects$Module Projects$ModuleImpl].include?(type) ||
+                  type.include?("DomainModel")
 
           name = doc["Name"] || doc["name"]
           name = "Navigation" if name.to_s.empty? && type == "Navigation$NavigationDocument"
@@ -347,6 +350,13 @@ module Mxrb
         @unresolved_references << UnresolvedReference.new(
           source, candidate, kinds.freeze, path.map(&:to_s).freeze, value
         )
+      end
+
+      def qualified_entity_name(mod, entity)
+        return unless entity
+        return entity.qualified_name unless entity.qualified_name.to_s.empty?
+
+        "#{mod.name}.#{entity.name}"
       end
 
       def semantic_name?(candidate)

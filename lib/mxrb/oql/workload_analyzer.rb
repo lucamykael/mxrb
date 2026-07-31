@@ -24,6 +24,20 @@ module Mxrb
       LARGE_UNUSED_INDEX_BYTES = 1_048_576
       HEAVY_SEQ_ROWS = 100_000
 
+      DEFAULT_THRESHOLDS = {
+        total_time_ms: TOTAL_TIME_MS, mean_time_ms: MEAN_TIME_MS,
+        min_buffer_blocks: MIN_BUFFER_BLOCKS, min_cache_hit_ratio: MIN_CACHE_HIT_RATIO,
+        high_rows_per_call: HIGH_ROWS_PER_CALL,
+        large_unused_index_bytes: LARGE_UNUSED_INDEX_BYTES, heavy_seq_rows: HEAVY_SEQ_ROWS
+      }.freeze
+
+      def initialize(**thresholds)
+        unknown = thresholds.keys - DEFAULT_THRESHOLDS.keys
+        raise ArgumentError, "unknown workload thresholds: #{unknown.join(', ')}" unless unknown.empty?
+
+        @thresholds = DEFAULT_THRESHOLDS.merge(thresholds).freeze
+      end
+
       def analyze(query_rows:, table_rows:, index_rows:)
         queries = query_rows.map { query_entry(_1) }.freeze
         findings = [
@@ -57,7 +71,7 @@ module Mxrb
       end
 
       def cumulative_time(entry)
-        return unless entry.total_time_ms >= TOTAL_TIME_MS
+        return unless entry.total_time_ms >= threshold(:total_time_ms)
 
         query_finding(
           :high_cumulative_time, entry,
@@ -67,7 +81,7 @@ module Mxrb
       end
 
       def slow_mean(entry)
-        return unless entry.mean_time_ms >= MEAN_TIME_MS
+        return unless entry.mean_time_ms >= threshold(:mean_time_ms)
 
         query_finding(
           :high_mean_time, entry, 'Mean execution time exceeds 100 ms.',
@@ -77,7 +91,8 @@ module Mxrb
 
       def low_cache_hit(entry)
         blocks = entry.shared_hits + entry.shared_reads
-        return unless blocks >= MIN_BUFFER_BLOCKS && entry.cache_hit_ratio < MIN_CACHE_HIT_RATIO
+        return unless blocks >= threshold(:min_buffer_blocks) &&
+                      entry.cache_hit_ratio < threshold(:min_cache_hit_ratio)
 
         query_finding(
           :low_cache_hit, entry, 'A significant share of shared blocks came from storage.',
@@ -95,7 +110,7 @@ module Mxrb
       end
 
       def high_rows(entry)
-        return if entry.calls.zero? || entry.rows / entry.calls < HIGH_ROWS_PER_CALL
+        return if entry.calls.zero? || entry.rows / entry.calls < threshold(:high_rows_per_call)
 
         query_finding(
           :high_rows_per_call, entry, 'The query returns or processes many rows per call.',
@@ -119,7 +134,7 @@ module Mxrb
         seq_rows = integer(row['seq_tup_read'])
         seq_scans = integer(row['seq_scan'])
         index_scans = integer(row['idx_scan'])
-        return unless seq_rows >= HEAVY_SEQ_ROWS && seq_scans > index_scans
+        return unless seq_rows >= threshold(:heavy_seq_rows) && seq_scans > index_scans
 
         WorkloadFinding.new(
           :table_sequential_pressure, :warning, qualified(row, 'relname'),
@@ -134,7 +149,7 @@ module Mxrb
         return if truthy?(row['indisunique']) || truthy?(row['indisprimary'])
 
         size = integer(row['index_bytes'])
-        return unless integer(row['idx_scan']).zero? && size >= LARGE_UNUSED_INDEX_BYTES
+        return unless integer(row['idx_scan']).zero? && size >= threshold(:large_unused_index_bytes)
 
         WorkloadFinding.new(
           :unused_large_index, :warning, qualified(row, 'indexrelname'),
@@ -154,6 +169,7 @@ module Mxrb
 
       def integer(value) = value.to_i
       def float(value) = value.to_f
+      def threshold(name) = @thresholds.fetch(name)
     end # rubocop:enable Metrics/ClassLength
   end
 end

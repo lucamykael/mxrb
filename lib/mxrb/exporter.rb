@@ -544,18 +544,54 @@ module Mxrb
         options = []
         options << "default: #{ruby(attr.default_value)}" unless attr.default_value.nil? || attr.default_value == ""
         options << "documentation: #{ruby(attr.documentation)}" unless attr.documentation.to_s.empty?
+        options << "length: #{attr.length}" unless attr.length.nil?
+        options << "localize_date: #{attr.localize_date}" unless attr.localize_date.nil?
+        options << "enumeration: #{ruby(attr.enumeration)}" unless attr.enumeration.to_s.empty?
+        options << 'required: true' if attr.required
+        options << 'unique: true' if attr.unique
         "  #{attr.type || :string} #{symbol(attr.name)}#{options.empty? ? '' : ", #{options.join(', ')}"}"
       end
       assocs = associations.map do |assoc|
         target = mod.entities.find { _1.id == assoc.to_entity_id }&.name || assoc.to_entity_id
-        options = ["type: #{symbol(assoc.association_type)}"]
-        options << "owner: #{symbol(assoc.owner)}" if assoc.owner && assoc.owner != :Default
+        qualified_target = target.to_s.include?('.') ? target : "#{mod.name}.#{target}"
+        cardinality = association_cardinality(assoc)
+        options = ["cardinality: #{symbol(cardinality)}"]
         options << "name: #{ruby(assoc.name)}"
-        "  association #{symbol(target)}, #{options.join(', ')}"
+        documentation = assoc.respond_to?(:documentation) ? assoc.documentation : nil
+        options << "documentation: #{ruby(documentation)}" unless documentation.to_s.empty?
+        parent_delete = assoc.respond_to?(:parent_delete_behavior) ?
+          assoc.parent_delete_behavior : :NoAction
+        child_delete = assoc.respond_to?(:child_delete_behavior) ?
+          assoc.child_delete_behavior : :NoAction
+        options << "parent_delete: #{symbol(parent_delete)}" unless parent_delete == :NoAction
+        options << "child_delete: #{symbol(child_delete)}" unless child_delete == :NoAction
+        "  association #{ruby(qualified_target)}, #{options.join(', ')}"
       end
       flags = []
       flags << "  non_persistent!" unless entity.persistable
       flags << "  documentation #{ruby(entity.documentation)}" unless entity.documentation.to_s.empty?
+      generalization = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
+      flags << "  generalizes #{ruby(generalization)}" if generalization
+      system_members = entity.respond_to?(:system_members) ? entity.system_members : {}
+      system_options = system_members.to_h.select { |_key, value| value }
+      unless system_options.empty?
+        flags << "  system_members #{system_options.map { |key, value| "#{key}: #{value}" }.join(', ')}"
+      end
+      indexes = entity.respond_to?(:indexes) ? entity.indexes : []
+      Array(indexes).each do |index|
+        indexed = IO::BsonCodec.parse_array(
+          index['attributes'] || index['Attributes'] || index['IndexedAttributes']
+        )[:items]
+        members = indexed.filter_map { _1['attribute'] || _1['Attribute'] }.map { _1.to_s.split('.').last }
+        next if members.empty?
+
+        directions = indexed.map { |member| member.fetch('ascending', member.fetch('Ascending', true)) }
+        options = []
+        options << "ascending: #{ruby(directions)}" unless directions.all?
+        include_offline = index['includeInOffline'] || index['IncludeInOffline']
+        options << 'include_offline: true' if include_offline
+        flags << "  index #{members.map { symbol(_1) }.join(', ')}#{options.empty? ? '' : ", #{options.join(', ')}"}"
+      end
       metadata&.fetch(:lifecycle, [])&.each do |callback|
         flags << "  #{callback.fetch(:event)} microflow: #{symbol(callback.fetch(:handler))}"
       end
@@ -571,6 +607,13 @@ module Mxrb
       #{(attrs + assocs + flags + access_lines).join("\n")}
         end
       RUBY
+    end
+
+    def association_cardinality(association)
+      return :many_to_many if association.association_type == :ReferenceSet
+      return :one_to_one if association.owner == :Both
+
+      :many_to_one
     end
 
     def access_rule_source(rule)

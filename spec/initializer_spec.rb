@@ -6,25 +6,28 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe Mxrb::Initializer do
-  it 'creates the six-file scaffold and generates a valid MPR' do
+  it 'creates a buildable scaffold with a default navigation home' do
     Dir.mktmpdir do |dir|
       result = described_class.new('vet_clinic').scaffold(into: dir)
       expected = [
         'Gemfile', 'project.rb', 'modules/VetClinic/module.rb',
         'modules/VetClinic/domain/model.rb',
         'modules/VetClinic/application/application.rb',
-        'modules/VetClinic/domain/entities/.keep'
+        'modules/VetClinic/domain/entities/.keep',
+        'modules/VetClinic/presentation/presentation.rb',
+        'modules/VetClinic/presentation/pages/home.rb'
       ].map { File.join(result.root, _1) }
       expect(result.root).to eq(File.join(dir, 'vet_clinic'))
       expect(result.files).to eq(expected)
       expect(result.files).to all(satisfy { File.file?(_1) })
       expect(File.read(expected[1])).to include(
         'Mxrb.define', 'mendix_version "11.12.1"',
+        'home_page: "VetClinic.Home"', 'app_title: "VetClinic"',
         'modules", "VetClinic", "module.rb"'
       )
       expect(File.read(expected[2])).to include(
         'self.module :VetClinic', 'domain", "model.rb"',
-        'application", "application.rb"'
+        'application", "application.rb"', 'presentation", "presentation.rb"'
       )
       expect(File.read(expected[3])).to include(
         'evaluate_dir File.join(__dir__, "enumerations")',
@@ -36,11 +39,21 @@ RSpec.describe Mxrb::Initializer do
         'evaluate_dir File.join(__dir__, "queries")'
       )
       expect(File.read(expected[5])).to be_empty
+      expect(File.read(expected[6])).to include(
+        'layout :ApplicationLayout',
+        'evaluate_dir File.join(__dir__, "pages")',
+        'evaluate_dir File.join(__dir__, "client_actions")'
+      )
+      expect(File.read(expected[7])).to include(
+        'page :Home', 'title "VetClinic"', 'layout "VetClinic.ApplicationLayout"'
+      )
 
       load expected[1]
       mpr = File.join(result.root, 'VetClinic.mpr')
       expect(Mxrb.validate(mpr)).to be_valid
       expect(Mxrb.open(mpr) { _1.modules.map(&:name) }).to eq(['VetClinic'])
+      expect(Mxrb.open(mpr) { _1.navigation.profiles.map(&:name) }).to eq(['Responsive'])
+      expect(Mxrb.open(mpr) { _1.navigation.profiles.first.home_page }).to eq('VetClinic.Home')
     end
   end
 
@@ -93,9 +106,24 @@ RSpec.describe Mxrb::Initializer do
         'my_app/modules/MyApp/module.rb',
         'my_app/modules/MyApp/application/application.rb',
         'my_app/modules/MyApp/domain/entities/.keep',
+        'my_app/modules/MyApp/presentation/pages/home.rb',
         'cd ', 'bundle exec mxrb generate project.rb'
       )
       expect(File).to exist(File.join(dir, 'my_app', 'modules', 'MyApp', 'domain', 'model.rb'))
+    end
+  end
+
+  it 'can pin the generated Gemfile to a local MXRB checkout through the CLI' do
+    command = [RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'init', 'local_app',
+               '--mxrb-path', File.expand_path('..', __dir__)]
+    Dir.mktmpdir do |dir|
+      _stdout, stderr, status = Open3.capture3(*command, chdir: dir)
+
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(File.read(File.join(dir, 'local_app', 'Gemfile'))).to include(
+        %(gem "mxrb", path: "#{File.expand_path('..', __dir__)}")
+      )
     end
   end
 
@@ -105,7 +133,8 @@ RSpec.describe Mxrb::Initializer do
       result = Mxrb::ModuleInitializer.new('appointments').scaffold(into: project.root)
       expected = [
         'module.rb', 'domain/model.rb', 'application/application.rb',
-        'domain/entities/.keep'
+        'domain/entities/.keep', 'presentation/presentation.rb',
+        'presentation/pages/home.rb'
       ].map { File.join(result.root, _1) }
 
       expect(result.root).to eq(File.join(project.root, 'modules', 'Appointments'))

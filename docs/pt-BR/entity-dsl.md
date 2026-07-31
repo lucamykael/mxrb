@@ -8,7 +8,8 @@ bloco do módulo. Por isso, a declaração usa somente o nome local:
 ```ruby
 entity :Animal do
   documentation "Animal atendido pela clínica"
-  string :Name, default: "", documentation: "Nome de exibição"
+  string :Name, required: true, unique: true, length: 120,
+                default: "", documentation: "Nome de exibição"
   integer :Age, default: 0
   long :ExternalId
   float :Weight
@@ -24,9 +25,10 @@ end
 
 Os tipos disponíveis são `string`, `integer`, `long`, `float`, `decimal`,
 `boolean`, `datetime`, `autonumber`, `hashstring`, `binary` e `enum`. As opções
-gravadas atualmente são `default:`, `documentation:` e, para `enum`,
-`enumeration:`. A enumeração é declarada separadamente com `enumeration`; um
-atributo de enum usa `enum`, não `enumeration`.
+comuns são `default:`, `documentation:`, `required:` e `unique:`. Strings
+também aceitam `length:`; `enum` exige `enumeration:`. A enumeração é declarada
+separadamente com `enumeration`; um atributo de enum usa `enum`, não
+`enumeration`.
 
 ```ruby
 enumeration :AnimalSpecies do
@@ -59,6 +61,33 @@ end
 
 `type:` aceita `:Reference` (padrão) ou `:ReferenceSet`; `owner:` aceita
 `:Default` (padrão) ou `:Both`.
+
+## Índices, membros do sistema e generalização
+
+```ruby
+entity :Animal do
+  string :Name, required: true
+  datetime :BirthDate
+
+  index :IX_Animal_Name, attributes: [:Name]
+  index :IX_Animal_BirthDate_Name, attributes: %i[BirthDate Name]
+
+  created_date :CreatedAt
+  changed_date :ChangedAt
+  owner :Owner
+  changed_by :ChangedBy
+end
+
+entity :VetUser do
+  generalization "System.User"
+  string :Registration
+end
+```
+
+Índices são declarados dentro da entidade e podem ser compostos; a ordem de
+`attributes:` é preservada. `created_date`, `changed_date`, `owner` e
+`changed_by` mapeiam os membros de sistema Mendix. `generalization` recebe a
+entidade base qualificada.
 
 ## Persistência, eventos e acesso
 

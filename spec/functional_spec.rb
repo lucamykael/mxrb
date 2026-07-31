@@ -134,7 +134,9 @@ RSpec.describe Mxrb::Functional do
         doc = project.parse_bson(raw)
         doc if doc["$Type"] == "Settings$ProjectSettings"
       end.first
-      model = Mxrb::IO::BsonCodec.parse_array(settings["Settings"])[:items].first
+      model = Mxrb::IO::BsonCodec.parse_array(settings["Settings"])[:items].find do |part|
+        part["$Type"] == "Settings$ModelSettings"
+      end
       expect(model["AfterStartupMicroflow"]).to eq("MxrbTests.RunAll")
     end
     expect(Mxrb.validate(@path)).to be_valid
@@ -177,20 +179,10 @@ RSpec.describe Mxrb::Functional do
       described_class::TestCase.new("noop", "Demo.Noop", {}.freeze, 1.0)
     ].freeze)
     expect { described_class::Instrumenter.new(no_settings, valid).instrument! }
-      .to raise_error(Mxrb::FunctionalTestError, /project settings/)
-
-    mpr = Mxrb::IO::MprFile.open(no_settings)
-    mpr.insert_unit(
-      container_uuid: mpr.root_unit.fetch("UnitID"),
-      containment_name: "ProjectDocuments",
-      contents_doc: {
-        "$ID" => SecureRandom.uuid, "$Type" => "Settings$ProjectSettings",
-        "Settings" => [2]
-      }
-    )
-    mpr.close
-    expect { described_class::Instrumenter.new(no_settings, valid).instrument! }
-      .to raise_error(Mxrb::FunctionalTestError, /model settings/)
+      .not_to raise_error
+    Mxrb.open(no_settings) do |project|
+      expect(project.find_artifact("MxrbTests.RunAll", kind: :microflow)).not_to be_nil
+    end
   end
 
   it "parses structured runtime logs into Ruby results" do

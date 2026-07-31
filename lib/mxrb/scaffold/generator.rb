@@ -3,26 +3,43 @@
 module Mxrb
   module Scaffold
     # Creates conventional Ruby-first artifacts and connects missing aggregators.
+    # rubocop:disable Metrics/ClassLength
     class Generator
       include Recipes
 
-      Result = Data.define(:root, :files, :updated)
+      Result = Data.define(:root, :files, :updated, :kind, :name, :dry_run)
       IDENTIFIER = /\A[A-Za-z][A-Za-z0-9_]*\z/
+      RESERVED_ENTITY_NAMES = %w[Owner ChangedBy CreatedDate ChangedDate].freeze
 
-      def initialize(kind, name = nil, target: Dir.pwd)
+      def initialize(kind, name = nil, target: Dir.pwd, dry_run: false)
         @kind = kind.to_sym
         @name = name.to_s
         @root = File.expand_path(target)
         @transaction = Transaction.new
+        @dry_run = dry_run
       end
 
       def scaffold
         send("scaffold_#{@kind}")
-        @transaction.commit
-        Result.new(@root, @transaction.created.freeze, @transaction.updated.freeze)
+        registry = stage_registry unless @dry_run
+        @transaction.commit unless @dry_run
+        Result.new(
+          @root, visible(@transaction.created, registry), visible(@transaction.updated, registry),
+          @kind, @name, @dry_run
+        )
       end
 
       private
+
+      def stage_registry
+        Registry.stage(
+          @transaction, root: @root, key: "#{@kind}:#{@name}", files: @transaction.created.dup
+        )
+      end
+
+      def visible(paths, registry)
+        paths.reject { _1 == registry }.freeze
+      end
 
       def ensure_presentation(module_name)
         ensure_module(module_name)
@@ -96,7 +113,13 @@ module Mxrb
         parts = @name.split('.', 2)
         raise ArgumentError, 'name must be qualified as Module.Artifact' unless parts.size == 2
 
-        [identifier(parts.first, label: 'module'), identifier(parts.last, label: 'artifact')]
+        module_name = identifier(parts.first, label: 'module')
+        artifact_name = identifier(parts.last, label: 'artifact')
+        if @kind == :entity && RESERVED_ENTITY_NAMES.include?(artifact_name)
+          raise ArgumentError, "entity name #{artifact_name.inspect} is reserved by Mendix"
+        end
+
+        [module_name, artifact_name]
       end
 
       def module_only = identifier(@name, label: 'module')
@@ -126,5 +149,6 @@ module Mxrb
         "evaluate File.join(__dir__, #{quoted})"
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end

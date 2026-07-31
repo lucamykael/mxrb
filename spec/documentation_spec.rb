@@ -13,6 +13,7 @@ RSpec.describe "localized documentation" do
     project-structure.md architectural-patterns.md semantic-refactoring.md
     design-system.md conventions.md ruby-first-roadmap.md
     validation-matrix.md writing.md oql-sql.md scaffolds.md entity-dsl.md
+    platform-operations.md vetclinic-acceptance.md
   ].sort.freeze
 
   it "keeps the same document set in every locale" do

@@ -53,7 +53,11 @@ RSpec.describe Mxrb::Scaffold::Generator do
       scaffold(root, :nanoflow, 'ScaffoldApp.NAN_OpenAnimal')
       scaffold(root, :security, 'ScaffoldApp')
 
-      expect(presentation.files.size).to eq(4)
+      expect(presentation.files.size).to eq(3)
+      expect(File.read(File.join(root, 'modules/ScaffoldApp/presentation/presentation.rb')))
+        .to include('layout :ApplicationLayout')
+      expect(File.read(File.join(root, 'modules/ScaffoldApp/presentation/pages/animal_overview.rb')))
+        .to include('layout "ScaffoldApp.ApplicationLayout"')
       module_source = File.read(File.join(root, 'modules/ScaffoldApp/module.rb'))
       expect(module_source).to include(
         'presentation", "presentation.rb"', 'security", "security.rb"'
@@ -65,7 +69,7 @@ RSpec.describe Mxrb::Scaffold::Generator do
       load File.join(root, 'project.rb')
       Mxrb.open(File.join(root, 'ScaffoldApp.mpr')) do |project|
         mod = project.modules.first
-        expect(mod.pages.map(&:name)).to eq(['AnimalOverview'])
+        expect(mod.pages.map(&:name)).to contain_exactly('Home', 'AnimalOverview')
         expect(mod.nanoflows.map(&:name)).to eq(['NAN_OpenAnimal'])
         expect(mod.module_roles.map { _1[:name] }).to eq(%w[User Administrator])
       end

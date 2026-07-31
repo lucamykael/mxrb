@@ -28,6 +28,7 @@ Gem::Specification.new do |s|
   s.add_dependency "bigdecimal", "~> 3.1"
   s.add_dependency "csv",        "~> 3.3"
   s.add_dependency "rexml",      "~> 3.3"
+  s.add_dependency "rubyzip",    "~> 3.0"
   s.add_dependency "webrick",    "~> 1.9"
 
   s.add_development_dependency "benchmark", "~> 0.5"

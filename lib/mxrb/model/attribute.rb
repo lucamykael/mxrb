@@ -25,7 +25,8 @@ module Mxrb
       REVERSE_TYPE_MAP = TYPE_MAP.invert.freeze
 
       attr_accessor :id, :name, :documentation, :type, :default_value,
-                    :data_storage_guid, :export_level, :raw_type_doc, :raw_value_doc
+                    :data_storage_guid, :export_level, :raw_type_doc, :raw_value_doc,
+                    :length, :localize_date, :enumeration, :required, :unique
 
       def self.from_bson(doc)
         a                   = new
@@ -40,6 +41,13 @@ module Mxrb
         if type_doc.is_a?(Hash)
           storage_type = type_doc["$Type"] || type_doc["\$Type"]
           a.type = REVERSE_TYPE_MAP[storage_type] || :string
+          a.length = type_doc['length'] || type_doc['Length']
+          a.localize_date = if type_doc.key?('localizeDate')
+                              type_doc['localizeDate']
+                            else
+                              type_doc['LocalizeDate']
+                            end
+          a.enumeration = type_doc['enumeration'] || type_doc['Enumeration']
         else
           a.type = :string
         end

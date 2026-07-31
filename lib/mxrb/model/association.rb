@@ -28,8 +28,12 @@ module Mxrb
         a.name             = doc["Name"] || doc["name"]
         a.documentation    = doc["Documentation"] || doc["documentation"] || ""
         # ParentID = FROM entity (counter-intuitive — see class comment)
-        a.from_entity_id   = IO::BsonCodec.extract_id(doc["ParentID"] || doc["parentId"])
-        a.to_entity_id     = IO::BsonCodec.extract_id(doc["ChildID"]  || doc["childId"])
+        a.from_entity_id   = IO::BsonCodec.extract_id(
+          doc["ParentPointer"] || doc["ParentID"] || doc["parentId"]
+        )
+        a.to_entity_id = IO::BsonCodec.extract_id(
+          doc["ChildPointer"] || doc["ChildID"] || doc["childId"]
+        )
         a.association_type = (doc["Type"] || doc["type"] || "Reference").to_sym
         a.owner            = (doc["Owner"] || doc["owner"] || "Default").to_sym
         a.storage_format   = (doc["StorageFormat"] || "Column").to_sym
@@ -60,7 +64,21 @@ module Mxrb
           "from=#{@from_entity_id.to_s.slice(0, 8)} to=#{@to_entity_id.to_s.slice(0, 8)}>"
       end
 
+      def parent_delete_behavior
+        behavior_value('parentDeleteBehavior', 'ParentDeleteBehavior')
+      end
+
+      def child_delete_behavior
+        behavior_value('childDeleteBehavior', 'ChildDeleteBehavior')
+      end
+
       private
+
+      def behavior_value(lower, upper)
+        return :NoAction unless @delete_behavior.is_a?(Hash)
+
+        (@delete_behavior[lower] || @delete_behavior[upper] || 'NoAction').to_sym
+      end
 
       def default_delete_behavior
         {

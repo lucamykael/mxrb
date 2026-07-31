@@ -66,7 +66,11 @@ module Mxrb
       def scaffold_presentation
         module_name = module_only
         aggregator = module_path(module_name, 'presentation', 'presentation.rb')
-        abort "#{aggregator}: presentation already initialized" if @transaction.content(aggregator)
+        keep_files = %w[pages snippets client_actions].map do |directory|
+          module_path(module_name, 'presentation', directory, '.keep')
+        end
+        initialized = @transaction.content(aggregator) && keep_files.all? { @transaction.content(_1) }
+        abort "#{aggregator}: presentation already initialized" if initialized
 
         ensure_presentation(module_name)
       end

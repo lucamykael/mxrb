@@ -40,8 +40,8 @@ module Mxrb
       # rubocop:disable Metrics/MethodLength
       def execute(payload)
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        sql, warnings = query_sql(payload)
-        rows = @workspace.query_rows(sql)
+        sql, warnings, params = query_sql(payload)
+        rows = @workspace.query_rows(sql, params:)
         {
           ok: true, rows:, row_count: rows.size, elapsed_ms: elapsed_ms(started),
           warnings:
@@ -85,14 +85,25 @@ module Mxrb
         sql = payload['sql']
         oql = payload['oql']
         raise ArgumentError, 'provide exactly one of sql or oql' if sql.to_s.empty? == oql.to_s.empty?
-        return [sql, []] unless sql.to_s.empty?
 
+        params = payload.fetch('params', {})
+        raise ArgumentError, 'params must be a JSON object' unless params.is_a?(Hash)
+
+        return [sql, [], {}] unless sql.to_s.empty?
+
+        translate_oql(oql, params)
+      end
+
+      def translate_oql(oql, params)
         view = Translator.new(dialect: :postgresql).translate_source(oql)
         raise ArgumentError, view.warnings.join('; ') unless view.supported?
-        raise ArgumentError, 'parameterized OQL is not supported by the HTTP endpoint' \
-          unless view.parameters.empty?
 
-        [view.sql, view.warnings]
+        expected = view.parameters.map(&:to_s).sort
+        provided = params.keys.map(&:to_s).sort
+        raise ArgumentError, "params must match OQL parameters: #{expected.join(', ')}" \
+          unless provided == expected
+
+        [view.sql, view.warnings, params]
       end
       # rubocop:enable Metrics/AbcSize
 
