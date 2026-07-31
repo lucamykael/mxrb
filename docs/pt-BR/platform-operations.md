@@ -28,15 +28,25 @@ download por PAT. Por isso, o MXRB separa três capacidades:
 mxrb marketplace search CommunityCommons
 mxrb marketplace pull CommunityCommons
 mxrb marketplace pull github:mendix/CommunityCommons
-mxrb marketplace import ./CommunityCommons.mpk
+mxrb marketplace import ./CommunityCommons.mpk --mpr VetClinic.mpr
+mxrb marketplace pull CommunityCommons --mpr VetClinic.mpr
 mxrb marketplace list
 mxrb marketplace verify
 ```
 
-`pull` resolve releases públicas do GitHub; `import` aceita um MPK/ZIP já
-baixado. Ambos extraem com proteção contra path traversal, recusam substituir
-o módulo e registram versão, origem e SHA-256 em
-`.mxrb/marketplace.lock.json`. `verify` detecta arquivos ausentes ou alterados.
+`pull` resolve releases públicas do GitHub; `import` aceita um MPK oficial já
+baixado. Com `--mpr`, o MXRB lê `package.xml` e o `project.mpr` interno, importa
+a árvore completa de units diretamente via Ruby/SQLite/BSON e instala os
+assets declarados. Não executa `mx`, `mxcli`, Studio Pro nem Model SDK. A
+operação preserva IDs, usa transação, restaura assets em falhas, recusa módulo
+duplicado e exige a mesma versão de modelo Mendix — conversão entre versões
+continuaria exigindo um conversor de metamodelo.
+
+O pacote fica em `.mxrb/marketplace/` e versão, origem, SHA-256, module ID,
+units, MPR e assets ficam registrados em `.mxrb/marketplace.lock.json`.
+`verify` confere simultaneamente cache, presença do módulo no MPR e assets.
+Sem `--mpr`, o comportamento legado continua disponível para extrair arquivos
+ZIP de repositórios Ruby-first.
 `GITHUB_TOKEN` é opcional para elevar o limite da API pública.
 
 ```sh

@@ -26,11 +26,20 @@ download flow. MXRB therefore keeps three capabilities explicit:
 mxrb marketplace search CommunityCommons
 mxrb marketplace pull CommunityCommons
 mxrb marketplace pull github:mendix/CommunityCommons
-mxrb marketplace import ./CommunityCommons.mpk
+mxrb marketplace import ./CommunityCommons.mpk --mpr MyApp.mpr
+mxrb marketplace pull CommunityCommons --mpr MyApp.mpr
 mxrb marketplace list
 mxrb marketplace verify
 mxrb marketplace login
 ```
+
+With `--mpr`, MXRB reads the package's `package.xml` and embedded
+`project.mpr`, then imports the complete module unit tree directly through
+Ruby/SQLite/BSON. It does not invoke `mx`, `mxcli`, Studio Pro, or the Model
+SDK. IDs are preserved, declared assets are installed transactionally, and
+the package cache plus module identity are recorded in the marketplace
+lockfile. Pure-Ruby imports require package and target model versions to
+match.
 
 `pull` resolves public GitHub releases; `import` accepts a previously downloaded
 MPK/ZIP. Both extract safely, refuse replacement, and lock source, version, and
