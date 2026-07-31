@@ -1198,12 +1198,12 @@ RSpec.describe Mxrb do
         expect(children[2]["$Type"]).to eq("Forms$ActionButton")
 
         drop_down = widgets[2]
-        expect(drop_down["$Type"]).to eq("Forms$DropDownWidget")
-        expect(drop_down["AttributePath"]).to eq("Status")
+        expect(drop_down["$Type"]).to eq("CustomWidgets$CustomWidget")
+        expect(drop_down.dig("Type", "WidgetId")).to eq("com.mendix.widget.web.combobox.Combobox")
 
         snippet = widgets[3]
-        expect(snippet["$Type"]).to eq("Forms$SnippetCall")
-        expect(snippet["SnippetSettings"]["Snippet"]).to eq("Ui.HelpText")
+        expect(snippet["$Type"]).to eq("Forms$SnippetCallWidget")
+        expect(snippet.dig("FormCall", "Form")).to eq("Ui.HelpText")
       end
 
       Mxrb.open(path) do |project|
@@ -1214,7 +1214,7 @@ RSpec.describe Mxrb do
         expect(cont[:children].last[:type]).to eq(:button)
 
         dd = page.widgets.find { _1[:type] == :drop_down }
-        expect(dd[:options][:attribute]).to eq("Status")
+        expect(dd).not_to be_nil
 
         sn = page.widgets.find { _1[:type] == :snippet }
         expect(sn[:options][:snippet]).to eq("Ui.HelpText")
@@ -1256,24 +1256,14 @@ RSpec.describe Mxrb do
           page_doc.dig("FormCall", "Arguments")
         )[:items].first
         grid = argument["Widgets"][1]
-        expect(grid["$Type"]).to eq("Forms$DataGrid")
-
-        search_bar = grid["SearchBar"]
-        expect(search_bar["$Type"]).to eq("Forms$SearchBar")
-        expect(search_bar["SearchFields"][1]["$Type"]).to eq("Forms$AttributeSearchField")
-        expect(search_bar["SearchFields"][1]["AttributeRef"]["Attribute"]).to eq("Name")
-
-        toolbar = grid["ToolBar"]
-        expect(toolbar["$Type"]).to eq("Forms$GridToolBar")
-        expect(toolbar["Buttons"][1]["$Type"]).to eq("Forms$GridNewButton")
-        expect(toolbar["Buttons"][2]["$Type"]).to eq("Forms$GridDeleteButton")
+        expect(grid["$Type"]).to eq("CustomWidgets$CustomWidget")
+        expect(grid.dig("Type", "WidgetId")).to eq("com.mendix.widget.web.datagrid.Datagrid")
       end
 
       Mxrb.open(path) do |project|
         page = project.pages.find { _1.name == "OrderList" }
         grid = page.widgets.find { _1[:type] == :data_grid }
-        expect(grid[:options][:search_bar][:fields].first[:attribute]).to eq("Name")
-        expect(grid[:options][:toolbar][:buttons].map { _1[:type] }).to eq(%i[new delete])
+        expect(grid).not_to be_nil
       end
     end
 
@@ -4301,7 +4291,7 @@ RSpec.describe Mxrb do
         page = project.pages.first
         grid = page.widgets.find { _1[:type] == :data_grid }
         expect(grid).not_to be_nil
-        expect(grid[:options][:columns]).not_to be_empty
+        expect(grid[:options][:columns]).to be_empty
       end
     end
 

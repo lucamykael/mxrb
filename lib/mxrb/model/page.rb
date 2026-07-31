@@ -88,6 +88,10 @@ module Mxrb
             parse_widgets(child_widgets(widget), target)
             next
           end
+          if type == "CustomWidgets$CustomWidget"
+            target << pluggable_widget(widget)
+            next
+          end
           if %w[Pages$DataGrid Forms$DataGrid].include?(type)
             target << data_grid_widget(widget)
             next
@@ -96,8 +100,10 @@ module Mxrb
             target << tab_control_widget(widget)
             next
           end
-          if %w[Pages$SnippetCall Forms$SnippetCall].include?(type)
-            snippet_ref = widget.dig("SnippetSettings", "Snippet").to_s
+          if %w[Pages$SnippetCall Forms$SnippetCall Forms$SnippetCallWidget].include?(type)
+            snippet_ref = (
+              widget.dig("SnippetSettings", "Snippet") || widget.dig("FormCall", "Form")
+            ).to_s
             target << { type: :snippet, name: widget["Name"] || "snippet",
                         options: { snippet: snippet_ref }, events: [] }
             next
@@ -114,7 +120,10 @@ module Mxrb
             parse_form_call_arguments(widget["Arguments"], target)
             next
           end
-          next unless supported_widget?(type)
+          unless supported_widget?(type)
+            target << native_widget(widget)
+            next
+          end
 
           events = {
             "OnChangeAction" => :on_change,
@@ -145,6 +154,8 @@ module Mxrb
           :button
         when "Pages$TextBox", "Forms$TextBox"
           :text_box
+        when "Pages$TextArea", "Forms$TextArea"
+          :text_area
         when "Pages$CheckBox", "Forms$CheckBox"
           :check_box
         when "Pages$DatePicker", "Forms$DatePicker"
@@ -154,16 +165,18 @@ module Mxrb
           :reference_selector
         when "Pages$DynamicText", "Forms$DynamicText", "Pages$Label", "Forms$Label"
           :text
-        when "Pages$DropDownWidget", "Forms$DropDownWidget"
+        when "Pages$DropDownWidget", "Forms$DropDownWidget", "Forms$DropDown"
           :drop_down
         end
       end
 
       def widget_options(widget, widget_type)
-        {
+        options = {
           attribute: attribute_path(widget),
           caption: widget_caption(widget, widget_type)
         }.compact
+        options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
+        options
       end
 
       def container_options(widget)
@@ -181,6 +194,7 @@ module Mxrb
         extract_text(
           widget["Caption"] ||
           widget["LabelText"] ||
+          widget["LabelTemplate"] ||
           widget.dig("CaptionTemplate", "Template")
         )
       end
@@ -197,6 +211,78 @@ module Mxrb
         options[:search_bar] = parse_search_bar(widget["SearchBar"]) if widget["SearchBar"].is_a?(Hash)
         options[:toolbar]    = parse_toolbar(widget["ToolBar"])       if widget["ToolBar"].is_a?(Hash)
         { type: :data_grid, name: widget["Name"], options: options, events: [] }
+      end
+
+      def pluggable_widget(widget)
+        case widget.dig("Type", "WidgetId")
+        when "com.mendix.widget.web.datagrid.Datagrid" then data_grid2_widget(widget)
+        when "com.mendix.widget.web.combobox.Combobox"  then combo_box_widget(widget)
+        else native_widget(widget)
+        end
+      end
+
+      def native_widget(widget)
+        deep = widget.reject { |key, _| %w[$ID $Type Name].include?(key.to_s) }
+        {
+          type: :native_widget, name: widget["Name"] || "widget",
+          options: { native_type: widget["$Type"], deep_structure: deep }, events: []
+        }
+      end
+
+      def data_grid2_widget(widget)
+        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        entity = properties.dig("datasource", "DataSource", "EntityRef", "Entity")
+        column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
+                      &.dig("ValueType", "ObjectType")
+        columns = parse_array(properties.dig("columns", "Objects")).map do |object|
+          values = custom_property_map(object, column_type)
+          {
+            name: extract_text(values.dig("header", "TextTemplate")),
+            attribute: values.dig("attribute", "AttributeRef", "Attribute"),
+            caption: extract_text(values.dig("header", "TextTemplate"))
+          }.compact
+        end
+        {
+          type: :data_grid, name: widget["Name"],
+          options: { entity: entity, columns: columns }.compact, events: []
+        }
+      end
+
+      def combo_box_widget(widget)
+        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        association = parse_array(properties.dig("attributeAssociation", "EntityRef", "Steps"))
+                      .first&.fetch("Association", nil)
+        reference = properties.dig("optionsSourceType", "PrimitiveValue") == "association"
+        attribute = if reference
+          association
+        else
+          properties.dig("attributeEnumeration", "AttributeRef", "Attribute")
+        end
+        options = {
+          attribute: attribute, caption: extract_text(widget["LabelTemplate"])
+        }.compact
+        if reference
+          options[:display_attribute] = properties.dig(
+            "optionsSourceAssociationCaptionAttribute", "AttributeRef", "Attribute"
+          )
+        end
+        { type: reference ? :reference_selector : :drop_down,
+          name: widget["Name"], options: options.compact, events: [] }
+      end
+
+      def custom_property_map(object, object_type)
+        return {} unless object.is_a?(Hash) && object_type.is_a?(Hash)
+
+        types = parse_array(object_type["PropertyTypes"]).to_h do |type|
+          [IO::BsonCodec.extract_id(type["$ID"]), type["PropertyKey"]]
+        end
+        parse_array(object["Properties"]).to_h do |property|
+          [types[IO::BsonCodec.extract_id(property["TypePointer"])], property["Value"]]
+        end.compact
+      end
+
+      def custom_property_type(object_type, key)
+        parse_array(object_type && object_type["PropertyTypes"]).find { _1["PropertyKey"] == key }
       end
 
       def parse_search_bar(sb)
@@ -234,9 +320,12 @@ module Mxrb
 
       def tab_control_widget(widget)
         tabs = parse_array(widget["TabPages"]).map do |tab|
+          widgets = []
+          parse_widgets(parse_array(tab["Widgets"]), widgets)
           {
             name: tab["Name"],
-            caption: extract_text(tab["Caption"])
+            caption: extract_text(tab["Caption"]),
+            widgets: widgets
           }.compact
         end
         {

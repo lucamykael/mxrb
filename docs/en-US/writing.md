@@ -300,9 +300,24 @@ creates `mprcontents/*.mxunit` automatically for the rebuilt project.
 ## Page widgets
 
 New pages and pages composed only of core controls use concise methods:
-`text_box`, `number_input`, `check_box`, `date_picker`,
+`text_box`, `number_input`, `text_area`, `check_box`, `date_picker`,
 `reference_selector`, `drop_down`, `button`, `text`, `container`, `snippet`,
-`tab_control`/`tab_page`, and `data_grid`/`column` with search bar and toolbar.
+`tab_control`/`tab_page`, and `data_grid`/`column`. Tab pages may contain the
+same nested widgets as containers. Inputs, actions and containers are written
+using the Mendix 11 modern Forms model. `data_grid` emits Data Grid 2, while
+`drop_down` and `reference_selector` emit Combo Box widgets.
+
+Pluggable widgets need their `.mpk` packages in the project's `widgets/`
+directory. Synchronize their version-specific schemas and apply the Ruby
+properties in one command:
+
+```bash
+bundle exec mxrb widgets sync project.rb MyApp.mpr
+```
+
+Use `pluggable_widget` for another MPK by widget id and property map. Imported
+widgets that MXRB does not recognize are emitted as `native_widget` with an
+editable `deep_structure`, so export/generate preserves every native property.
 
 Every imported page also exports its complete page internals as a structured
 Ruby hash:

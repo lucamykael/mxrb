@@ -17,6 +17,12 @@ module Mxrb
         _add_widget(:number_input, name, attribute: attribute, caption: caption, &block)
       end
 
+      def text_area(name, attribute: nil, caption: nil, lines: 5, &block)
+        _add_widget(
+          :text_area, name, attribute: attribute, caption: caption, lines: lines, &block
+        )
+      end
+
       def check_box(name, attribute: nil, caption: nil, &block)
         _add_widget(:check_box, name, attribute: attribute, caption: caption, &block)
       end
@@ -25,8 +31,11 @@ module Mxrb
         _add_widget(:date_picker, name, attribute: attribute, caption: caption, &block)
       end
 
-      def reference_selector(name, attribute: nil, caption: nil, &block)
-        _add_widget(:reference_selector, name, attribute: attribute, caption: caption, &block)
+      def reference_selector(name, attribute: nil, caption: nil, display_attribute: nil, &block)
+        _add_widget(
+          :reference_selector, name, attribute: attribute, caption: caption,
+                                     display_attribute: display_attribute, &block
+        )
       end
 
       def text(name, caption: nil, &block)
@@ -67,6 +76,26 @@ module Mxrb
         _widget_list << cb.to_h
       end
 
+      def pluggable_widget(name, widget_id:, widget_name: nil, properties: {}, class_name: nil)
+        _widget_list << {
+          type: :pluggable_widget, name: name.to_s,
+          options: {
+            widget_id: widget_id.to_s, widget_name: (widget_name || name).to_s,
+            properties: properties, class: class_name
+          }.compact,
+          events: []
+        }
+      end
+
+      def native_widget(name, type:, deep_structure:)
+        raise ArgumentError, "deep_structure requires a Hash" unless deep_structure.is_a?(Hash)
+
+        _widget_list << {
+          type: :native_widget, name: name.to_s,
+          options: { native_type: type.to_s, deep_structure: deep_structure }, events: []
+        }
+      end
+
       private
 
       def _add_widget(type, name, **options, &block)
@@ -93,8 +122,10 @@ module Mxrb
         @columns << { name: name.to_s, attribute: attribute&.to_s, caption: caption }.compact
       end
 
-      def tab_page(name, caption: nil)
-        @tabs << { name: name.to_s, caption: caption || name.to_s }
+      def tab_page(name, caption: nil, &block)
+        tab = TabPageBuilder.new(name, caption: caption)
+        tab.instance_eval(&block) if block
+        @tabs << tab.to_h
       end
 
       def search_bar(&block)
@@ -125,6 +156,22 @@ module Mxrb
         options[:toolbar]    = @toolbar    if @toolbar
         { type: @type, name: @name, options: options, events: @events }
       end
+    end
+
+    class TabPageBuilder
+      include WidgetDsl
+
+      def initialize(name, caption: nil)
+        @name = name.to_s
+        @caption = caption || name.to_s
+        @widgets = []
+      end
+
+      def to_h = { name: @name, caption: @caption, widgets: @widgets }
+
+      private
+
+      def _widget_list = @widgets
     end
 
     class SearchBarBuilder
