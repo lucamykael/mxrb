@@ -75,14 +75,12 @@ Verschiebungen. `mxrb move` zeigt eine Vorschau; erst `--apply` schreibt.
 
 ## Offizieller Mendix Marketplace
 
-Diese Befehlsfamilie bleibt von `mxrb module`, dem Installer für interne
-Ruby-Module, getrennt. Verfügbar sind `marketplace search`, GitHub-basiertes
-`marketplace pull`, lokales `marketplace import DATEI.mpk --mpr DATEI.mpr`
-und sichere PAT-Speicherung.
+Diese Befehlsfamilie bleibt von `mxrb module` getrennt. Die dokumentierte
+Marketplace Content API unterstützt authentifizierte Suche, Details,
+kompatible Versionen, direkten Download, private Unternehmensinhalte und
+Sicherheitsaudits. GitHub und lokale MPKs bleiben Fallbacks.
 
 Lokale MPKs werden vollständig und ohne Mendix-Werkzeuge direkt über
-Ruby/SQLite/BSON in das Ziel-MPR importiert. PAT-basierter Download folgt erst,
-sobald öffentliche authentifizierte Plattform-Endpunkte dokumentiert sind. GitHub deckt
-private oder unveröffentlichte Module nicht ab, der lokale MPK-Weg erfordert
-einen manuellen Download, und PAT-Unterstützung setzt keine undokumentierten
-Endpoint-Verträge voraus.
+Ruby/SQLite/BSON in das Ziel-MPR importiert. Das PAT benötigt
+`mx:marketplace-content:read`. Verwundbare Releases werden standardmäßig
+abgelehnt; Content-/Version-IDs und Sicherheitsdaten stehen im Lockfile.
