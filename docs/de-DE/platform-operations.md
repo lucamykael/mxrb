@@ -19,19 +19,26 @@ und vergleicht es mit dem aktuellen MPR; `check` schlägt bei Modelldrift fehl.
 
 ## Offizieller und Community-Mendix-Marketplace
 
-Der offizielle Web-Marketplace bietet keinen vollständigen stabilen
-öffentlichen PAT-Downloadablauf. MXRB trennt deshalb folgende Funktionen:
+MXRB verwendet die dokumentierte Mendix Marketplace Content API. Das PAT
+benötigt den Scope `mx:marketplace-content:read`:
 
 ```sh
-mxrb marketplace search CommunityCommons
-mxrb marketplace pull CommunityCommons
+mxrb marketplace login
+mxrb marketplace search "Community Commons"
+mxrb marketplace show 170
+mxrb marketplace versions 170 --mendix-version 11.12.1
+mxrb marketplace pull 170 --mpr MeineApp.mpr
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr MeineApp.mpr
-mxrb marketplace pull CommunityCommons --mpr MeineApp.mpr
+mxrb marketplace audit --target . --mendix-version 11.12.1
 mxrb marketplace list
 mxrb marketplace verify
-mxrb marketplace login
 ```
+
+Die offizielle Suche umfasst öffentliche und unternehmensprivate Inhalte.
+`show` liefert Herausgeber, Typ, Support, Lizenz, Sichtbarkeit und Freigabe;
+`versions` liefert Kompatibilität, Release Notes sowie Sicherheitsstatus und
+CVE/CWE-Kennungen.
 
 Mit `--mpr` liest MXRB `package.xml` und die eingebettete `project.mpr` und
 importiert den vollständigen Modulbaum direkt über Ruby/SQLite/BSON. Dabei
@@ -40,8 +47,10 @@ bleiben erhalten, deklarierte Assets werden transaktional installiert und
 Paketcache sowie Modulidentität im Lockfile gespeichert. Für den reinen
 Ruby-Import müssen Paket und Ziel dieselbe Mendix-Modellversion verwenden.
 
-`pull` löst öffentliche GitHub-Releases auf; `import` verarbeitet ein bereits
-geladenes MPK/ZIP. Beide entpacken sicher, überschreiben nichts und sperren
-Quelle, Version und SHA-256. `login` speichert den PAT außerhalb des Projekts
-mit Modus `0600`; `pull` nutzt ihn derzeit nicht. Ruby-Pakete bleiben im
-separaten Ablauf `mxrb module search/add`.
+Der offizielle `pull` ist Standard, wählt eine zum Ziel-MPR kompatible Version
+und blockiert bekannte verwundbare Versionen ohne `--allow-vulnerable`.
+`github:` bleibt als Fallback erhalten, `import` verarbeitet lokale MPKs.
+Content ID, Version ID und Sicherheitsstatus werden gesperrt; `audit` prüft
+Updates und Schwachstellen. `login` validiert und speichert das PAT außerhalb
+des Projekts mit Modus `0600`. Das PAT wird nur an
+`marketplace-api.mendix.com` gesendet.

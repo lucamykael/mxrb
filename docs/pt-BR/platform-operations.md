@@ -21,29 +21,42 @@ resultante com o MPR atual; `check` retorna erro quando existe drift.
 
 ## Marketplace Mendix oficial e comunitário
 
-O Marketplace web oficial não oferece um fluxo público completo e estável de
-download por PAT. Por isso, o MXRB separa três capacidades:
+O MXRB usa a Marketplace Content API documentada pela Mendix. Crie um PAT com
+o escopo `mx:marketplace-content:read` e autentique uma vez:
 
 ```sh
-mxrb marketplace search CommunityCommons
-mxrb marketplace pull CommunityCommons
+mxrb marketplace login
+mxrb marketplace search "Community Commons"
+mxrb marketplace show 170
+mxrb marketplace versions 170 --mendix-version 11.12.1
+mxrb marketplace pull 170 --mpr VetClinic.mpr
+mxrb marketplace pull 170@3.4.0 --mpr VetClinic.mpr
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr VetClinic.mpr
-mxrb marketplace pull CommunityCommons --mpr VetClinic.mpr
+mxrb marketplace audit --target . --mendix-version 11.12.1
 mxrb marketplace list
 mxrb marketplace verify
 ```
 
-`pull` resolve releases públicas do GitHub; `import` aceita um MPK oficial já
-baixado. Com `--mpr`, o MXRB lê `package.xml` e o `project.mpr` interno, importa
+Busca oficial inclui conteúdo público e conteúdo privado da empresa visível ao
+dono do PAT. Os filtros incluem `--private`, `--public`, `--approved` e
+`--published-since AAAA-MM-DD`. `show` apresenta publicador, tipo, suporte,
+licença, privacidade e aprovação. `versions` apresenta compatibilidade, release
+notes e estados `Regular`, `Vulnerable` e `SecurityFix`, incluindo CVE/CWE.
+
+`pull` oficial é o padrão: seleciona pela API a versão mais recente compatível
+com o MPR, usa o `downloadURL` e bloqueia versões vulneráveis, salvo uso explícito
+de `--allow-vulnerable`. `github:` continua como fallback e `import` aceita um
+MPK local. Com `--mpr`, o MXRB lê `package.xml` e o `project.mpr` interno, importa
 a árvore completa de units diretamente via Ruby/SQLite/BSON e instala os
 assets declarados. Não executa `mx`, `mxcli`, Studio Pro nem Model SDK. A
 operação preserva IDs, usa transação, restaura assets em falhas, recusa módulo
 duplicado e exige a mesma versão de modelo Mendix — conversão entre versões
 continuaria exigindo um conversor de metamodelo.
 
-O pacote fica em `.mxrb/marketplace/` e versão, origem, SHA-256, module ID,
-units, MPR e assets ficam registrados em `.mxrb/marketplace.lock.json`.
+O pacote fica em `.mxrb/marketplace/` e versão, origem, Content ID, Version ID,
+estado de segurança, SHA-256, module ID, units, MPR e assets ficam registrados
+em `.mxrb/marketplace.lock.json`. `audit` consulta atualizações e vulnerabilidades.
 `verify` confere simultaneamente cache, presença do módulo no MPR e assets.
 Sem `--mpr`, o comportamento legado continua disponível para extrair arquivos
 ZIP de repositórios Ruby-first.
@@ -53,10 +66,11 @@ ZIP de repositórios Ruby-first.
 mxrb marketplace login
 ```
 
-Login salva o PAT em `~/.config/mxrb/credentials` (ou
+Login valida e salva o PAT em `~/.config/mxrb/credentials` (ou
 `$XDG_CONFIG_HOME/mxrb/credentials`) com permissão `0600`. Esta é a fundação
-segura para uma integração autenticada futura; o comando `pull` atual não usa
-o PAT para fingir uma API oficial que não foi confirmada.
+da integração oficial. O token só é enviado para `marketplace-api.mendix.com` e
+é removido em redirects para storage externo. Consulte a
+[Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).
 
 Há dois marketplaces distintos: `mxrb module search/add` instala módulos Ruby
 reutilizáveis do ecossistema MXRB; `mxrb marketplace ...` instala pacotes
