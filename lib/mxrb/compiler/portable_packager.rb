@@ -72,7 +72,7 @@ module Mxrb
       def default_configuration
         <<~CONF
           runtime.params { DatabaseType = HSQLDB, DatabaseName = default }
-          admin { port = 8090, addresses = [ localhost ] }
+          admin { adminPassword = "", port = 8090, addresses = [ localhost ] }
           runtime {
             http { port = 8080, addresses = [ "*" ] }
             params { ApplicationRootUrl = "http://localhost:8080/" }
@@ -224,7 +224,9 @@ module Mxrb
         output_path = File.expand_path(output)
         validate_output!(output_path, force:)
         version = Mxrb.open(@mpr_path, &:mendix_version)
-        metadata = Adapter.for(version).validate_deployment!(@deployment)
+        adapter = Adapter.for(version)
+        metadata = adapter.validate_deployment!(@deployment)
+        adapter.validate_freshness!(@mpr_path, @deployment)
         runtime = runtime_root(version)
         validate_runtime!(runtime)
         PortableArchiveWriter.new(@deployment, runtime, metadata).write(output_path)

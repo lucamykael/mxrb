@@ -81,8 +81,11 @@ microflow "cria pedido",
 ```
 
 Use `mxrb test App.mpr functional_test.rb`; acrescente `--docker` para executar
-JDK, MxBuild e Runtime em containers descartáveis. Não há JUnit nem MDL. O MPR
-original nunca é alterado.
+JDK, MxBuild e Runtime em containers descartáveis. Use `--native` para executar
+o grafo do microflow no Runtime de modelo em Ruby, sem Java, `mx` ou `mxbuild`.
+O modo nativo cobre CRUD, variáveis, decisões, chamadas, agregações e logs em
+uma store transacional; Java, REST, UI e conectores ainda falham explicitamente
+e fazem rollback. Não há JUnit nem MDL. O MPR original nunca é alterado.
 Use `--json resultado.json` e/ou `--junit resultado.xml` para relatórios de CI.
 JUnit é apenas o formato XML de intercâmbio neste caso; o MXRB o grava
 diretamente em Ruby, sem instalar ou executar o framework Java JUnit.

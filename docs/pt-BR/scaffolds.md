@@ -26,7 +26,7 @@ o hash criado pelo gerador, protegendo edições posteriores.
 | `mxrb presentation init App` | Pastas e agregador de apresentação |
 | `mxrb page new App.CustomerOverview` | Página com layout, título e roles comentados |
 | `mxrb nanoflow new App.NAN_OpenCustomer` | Nanoflow cliente |
-| `mxrb security init App` | Papéis e orientação para regras de acesso |
+| `mxrb security init App` | Papéis, `CheckEverything` no projeto e orientação de acesso |
 | `mxrb integration new App.PetApi` | Adaptador de integração |
 | `mxrb published-rest new App.CustomersApi` | Handler editável para REST publicado |
 | `mxrb consumed-rest new App.ExternalPets` | Adaptador REST consumido |

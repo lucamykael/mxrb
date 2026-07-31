@@ -45,6 +45,14 @@ module Mxrb
         raise CompilationError, "invalid model/metadata.json: #{e.message}"
       end
 
+      def validate_freshness!(mpr_path, root)
+        compiled_model = File.join(root, 'model', 'model.mdp')
+        return if File.mtime(compiled_model) >= File.mtime(mpr_path)
+
+        raise CompilationError,
+              "deployment is stale: #{compiled_model} is older than #{File.expand_path(mpr_path)}"
+      end
+
       def validate_required_files!(root)
         missing = REQUIRED_FILES.reject { File.file?(File.join(root, _1)) }
         return if missing.empty?

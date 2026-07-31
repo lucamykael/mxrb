@@ -9,6 +9,8 @@ This first stage requires an already materialized `deployment/` containing
 `web/index.html`. It never invokes `mx`, `mxbuild`, Studio Pro, or the Model SDK
 as a fallback. Only the official `model`, `web`, `native`, `sass`, and `tmp`
 roots are archived; Runtime and Gradle working directories are excluded.
+Packaging also stops when `model/model.mdp` is older than the MPR, preventing a
+changed Ruby model from being combined with stale compiled artifacts.
 
 Adapters currently cover Mendix 9.x, 10.x, and 11.x. Native materialization of
 domain metadata, microflows, frontend bundles, Java artifacts, and the portable
@@ -23,3 +25,7 @@ deployment without invoking `mx` or `mxbuild`. VetClinic's package contained
 Functional structural checks now use `Mxrb.validate`; functional instrumentation
 still needs native microflow materialization before its build can stop using
 `mxbuild`.
+
+The portable configuration includes the required admin setting. A production
+boot also requires project security level `CheckEverything`; `mxrb security
+init App` now connects that project-level security declaration for new apps.
