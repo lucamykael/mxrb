@@ -4820,7 +4820,13 @@ RSpec.describe Mxrb do
       end
 
       Mxrb.open(path) do |project|
-        expect(project.microflows.first.name).to eq("Worker")
+        flow = project.microflows.first
+        expect(flow.name).to eq("Worker")
+        source = flow.objects.find { _1.dig("Action", "$Type") == "Microflows$RetrieveAction" }
+                     .dig("Action", "RetrieveSource")
+        expect(source["Range"]).to include(
+          "$Type" => "Microflows$CustomRange", "LimitExpression" => "1"
+        )
       end
     end
   end

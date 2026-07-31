@@ -184,6 +184,21 @@ RSpec.describe Mxrb::Runtime::Native do
     expect do
       @interpreter.send(:action_retrieve, { 'RetrieveSource' => { '$Type' => 'Microflows$AssociationSource' } }, {})
     end.to raise_error(Mxrb::NativeRuntimeError, /unsupported retrieve source/)
+    expect do
+      @interpreter.send(:action_retrieve, {
+        'RetrieveSource' => {
+          '$Type' => 'Microflows$DatabaseRetrieveSource', 'XpathConstraint' => '[Name = 1]'
+        }
+      }, {})
+    end.to raise_error(Mxrb::NativeRuntimeError, /XPath retrieve/)
+    expect do
+      @interpreter.send(:action_retrieve, {
+        'RetrieveSource' => {
+          '$Type' => 'Microflows$DatabaseRetrieveSource',
+          'NewSortings' => { 'Sortings' => [{ 'SortOrder' => 'Ascending' }] }
+        }
+      }, {})
+    end.to raise_error(Mxrb::NativeRuntimeError, /sorting/)
   end
 
   it 'handles lower-level graph cases, mutations, templates, and collection encodings' do
@@ -213,6 +228,10 @@ RSpec.describe Mxrb::Runtime::Native do
         'bad count', 'Clinic.Child', {}, 1.0, nil,
         [Mxrb::Functional::CountExpectation.new('Clinic.Animal', nil, 2)]
       ),
+      Mxrb::Functional::TestCase.new(
+        'xpath count', 'Clinic.Child', {}, 1.0, nil,
+        [Mxrb::Functional::CountExpectation.new('Clinic.Animal', '[Name = 1]', 0)]
+      ),
       Mxrb::Functional::TestCase.new('runtime error', 'Clinic.Missing', {}, 1.0)
     ].freeze)
     calls = 0
@@ -223,9 +242,10 @@ RSpec.describe Mxrb::Runtime::Native do
       calls.to_f
     end
     execution = described_class::Executor.new(@mpr, definition, clock:).run
-    expect(execution.result.tests.map(&:passed?)).to eq([true, false, false])
+    expect(execution.result.tests.map(&:passed?)).to eq([true, false, false, false])
     expect(execution.result.tests[1].message).to include('count 0, expected 2')
-    expect(execution.result.tests[2].message).to include('not found')
+    expect(execution.result.tests[2].message).to include('XPath count is not implemented')
+    expect(execution.result.tests[3].message).to include('not found')
     expect(execution.elapsed).to eq(1.0)
   end
 
@@ -241,6 +261,10 @@ RSpec.describe Mxrb::Runtime::Native do
     2.times { @interpreter.store.create('Clinic.Animal') }
     @interpreter.send(:action_retrieve, retrieve, variables)
     expect(variables['animals'].size).to eq(1)
+    retrieve['RetrieveSource']['Range'] = { 'SingleObject' => true }
+    retrieve['ResultVariableName'] = 'animal'
+    @interpreter.send(:action_retrieve, retrieve, variables)
+    expect(variables['animal']).to be_a(described_class::ObjectValue)
 
     variables['animals'].first.members['Age'] = 4
     aggregate = {
