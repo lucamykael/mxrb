@@ -166,10 +166,11 @@ module Mxrb
         :source_version, :target_version
       )
 
-      def initialize(package_path, mpr_path, target_root: nil)
+      def initialize(package_path, mpr_path, target_root: nil, allow_model_upgrade: false)
         @package_path = File.expand_path(package_path)
         @mpr_path = File.expand_path(mpr_path)
         @target_root = File.expand_path(target_root || File.dirname(@mpr_path))
+        @allow_model_upgrade = allow_model_upgrade
       end
 
       def import!
@@ -249,10 +250,19 @@ module Mxrb
                 "module manifest version #{package_version} does not match package MPR #{source.mendix_version}"
         end
         return if source.mendix_version == target.mendix_version
+        return if @allow_model_upgrade && forward_version?(source.mendix_version, target.mendix_version)
 
         raise MarketplaceError,
               "module uses Mendix #{source.mendix_version}, target uses #{target.mendix_version}; " \
               'pure-Ruby import requires matching model versions'
+      end
+
+      def forward_version?(source, target)
+        Gem::Version.new(numeric_version(target)) >= Gem::Version.new(numeric_version(source))
+      end
+
+      def numeric_version(value)
+        value.to_s[/\A\d+(?:\.\d+){0,3}/] || '0'
       end
 
       def package_units(source, module_name) # rubocop:disable Metrics/MethodLength

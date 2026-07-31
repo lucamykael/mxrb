@@ -48,16 +48,19 @@ With `--mpr`, MXRB reads the package's `package.xml` and embedded
 Ruby/SQLite/BSON. It does not invoke `mx`, `mxcli`, Studio Pro, or the Model
 SDK. IDs are preserved, declared assets are installed transactionally, and
 the package cache plus module identity are recorded in the marketplace
-lockfile. Pure-Ruby imports require package and target model versions to
-match.
+lockfile. Compatible official packages may be imported forward into the
+project's newer model version; local and GitHub imports still require an exact
+model-version match. Installing Atlas Core also connects its legacy Sass
+variables without replacing project customizations.
 
 Official `pull` is the default. It asks the API for the newest release compatible
-with the target MPR, downloads its `downloadURL`, and refuses a release marked
+with the target MPR, follows the download URL returned by the API, and refuses a release marked
 vulnerable unless `--allow-vulnerable` is explicit. The lock records Content ID,
 Version ID, visibility, approval and security state; `audit` checks it for known
 vulnerabilities and updates. `github:` remains the public fallback, and `import`
 accepts a local MPK/ZIP. `login` validates the PAT before storing it outside the
 project with mode `0600`.
 
-The PAT is sent only to `marketplace-api.mendix.com`; cross-host download
-redirects do not receive it. See the [Mendix Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).
+The PAT is sent only to the exact official hosts `marketplace-api.mendix.com`
+and `marketplace.mendix.com`; redirects to any other host do not receive it.
+See the [Mendix Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).

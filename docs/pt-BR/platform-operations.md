@@ -45,14 +45,16 @@ licença, privacidade e aprovação. `versions` apresenta compatibilidade, relea
 notes e estados `Regular`, `Vulnerable` e `SecurityFix`, incluindo CVE/CWE.
 
 `pull` oficial é o padrão: seleciona pela API a versão mais recente compatível
-com o MPR, usa o `downloadURL` e bloqueia versões vulneráveis, salvo uso explícito
+com o MPR, usa a URL de download retornada pela API e bloqueia versões vulneráveis, salvo uso explícito
 de `--allow-vulnerable`. `github:` continua como fallback e `import` aceita um
 MPK local. Com `--mpr`, o MXRB lê `package.xml` e o `project.mpr` interno, importa
 a árvore completa de units diretamente via Ruby/SQLite/BSON e instala os
 assets declarados. Não executa `mx`, `mxcli`, Studio Pro nem Model SDK. A
-operação preserva IDs, usa transação, restaura assets em falhas, recusa módulo
-duplicado e exige a mesma versão de modelo Mendix — conversão entre versões
-continuaria exigindo um conversor de metamodelo.
+operação preserva IDs, usa transação, restaura assets em falhas e recusa módulo
+duplicado. Pacotes oficiais compatíveis podem avançar para a versão mais nova
+do modelo do projeto; imports locais/GitHub continuam exigindo versão idêntica.
+Quando Atlas Core é instalado, o MXRB conecta suas variáveis Sass legadas sem
+sobrescrever as customizações do projeto.
 
 O pacote fica em `.mxrb/marketplace/` e versão, origem, Content ID, Version ID,
 estado de segurança, SHA-256, module ID, units, MPR e assets ficam registrados
@@ -68,8 +70,9 @@ mxrb marketplace login
 
 Login valida e salva o PAT em `~/.config/mxrb/credentials` (ou
 `$XDG_CONFIG_HOME/mxrb/credentials`) com permissão `0600`. Esta é a fundação
-da integração oficial. O token só é enviado para `marketplace-api.mendix.com` e
-é removido em redirects para storage externo. Consulte a
+da integração oficial. O token só é enviado aos hosts oficiais exatos
+`marketplace-api.mendix.com` e `marketplace.mendix.com`; ele é removido em
+redirects para qualquer outro host. Consulte a
 [Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).
 
 Há dois marketplaces distintos: `mxrb module search/add` instala módulos Ruby

@@ -172,12 +172,16 @@ RSpec.describe 'modern page widgets' do
     baseline = schema_widget(
       'com.mendix.widget.web.datagrid.Datagrid',
       { datasource: { type: 'DataSource' },
-        columns: { type: 'Object', object_type: column_type } },
+        columns: { type: 'Object', object_type: column_type },
+        loadMoreButtonCaption: { type: 'TextTemplate' },
+        singleSelectionColumnLabel: { type: 'TextTemplate' },
+        clearSelectionButtonLabel: { type: 'TextTemplate' },
+        filterSectionTitle: { type: 'TextTemplate' } },
       name: 'Grid'
     )
     generated = writer.send(:pluggable_widget_doc, {
       type: :data_grid, name: 'Grid', events: [],
-      options: { entity: 'Ui.Item', columns: [{ name: 'Name', attribute: 'Ui.Item.Name' }] }
+      options: { entity: 'Ui.Item', columns: [{ name: 'Name', attribute: 'Name' }] }
     }, writer.send(:data_grid2_descriptor))
 
     writer.send(:hydrate_pluggable_widgets!, { 'Widgets' => [generated] }, 'Widgets' => [baseline])
@@ -186,6 +190,21 @@ RSpec.describe 'modern page widgets' do
     expect(Mxrb::IO::BsonCodec.parse_array(properties.dig('columns', 'Value', 'Objects'))[:items].size).to eq(1)
     parsed = Mxrb::Model::Page.allocate.send(:data_grid2_widget, generated)
     expect(parsed.dig(:options, :columns, 0, :attribute)).to eq('Ui.Item.Name')
+    expect(properties.dig('loadMoreButtonCaption', 'Value', 'TextTemplate')).to be_nil
+    expect(properties.dig('filterSectionTitle', 'Value', 'TextTemplate', '$Type'))
+      .to eq('Forms$ClientTemplate')
+    qualified = writer.send(
+      :data_grid2_column_doc, column_type,
+      { name: 'Name', attribute: 'Ui.Item.Name' }, entity: 'Ui.Item'
+    )
+    column_values = Mxrb::IO::BsonCodec.parse_array(qualified['Properties'])[:items]
+    attribute_value = column_values.find { _1['TypePointer'] == 'attribute' }
+    expect(attribute_value.dig('Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Name')
+    text_value = writer.send(
+      :custom_widget_value_doc,
+      '$ID' => 'required-text', 'Type' => 'TextTemplate', 'DefaultValue' => '', 'Required' => true
+    )
+    expect(text_value.dig('TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
   end
 
   it 'hydrates Combo Box enumeration and association modes' do

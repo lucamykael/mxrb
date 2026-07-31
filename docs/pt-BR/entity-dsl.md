@@ -69,25 +69,22 @@ entity :Animal do
   string :Name, required: true
   datetime :BirthDate
 
-  index :IX_Animal_Name, attributes: [:Name]
-  index :IX_Animal_BirthDate_Name, attributes: %i[BirthDate Name]
+  index :Name
+  index :BirthDate, :Name
 
-  created_date :CreatedAt
-  changed_date :ChangedAt
-  owner :Owner
-  changed_by :ChangedBy
+  system_members owner: true, created_date: true,
+                 changed_date: true, changed_by: true
 end
 
 entity :VetUser do
-  generalization "System.User"
+  generalizes "System.User"
   string :Registration
 end
 ```
 
-Índices são declarados dentro da entidade e podem ser compostos; a ordem de
-`attributes:` é preservada. `created_date`, `changed_date`, `owner` e
-`changed_by` mapeiam os membros de sistema Mendix. `generalization` recebe a
-entidade base qualificada.
+Índices são declarados dentro da entidade passando os atributos na ordem
+desejada. `system_members` habilita os membros de sistema Mendix.
+`generalizes` recebe a entidade base qualificada.
 
 ## Persistência, eventos e acesso
 

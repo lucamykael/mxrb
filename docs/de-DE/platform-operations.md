@@ -44,13 +44,16 @@ Mit `--mpr` liest MXRB `package.xml` und die eingebettete `project.mpr` und
 importiert den vollständigen Modulbaum direkt über Ruby/SQLite/BSON. Dabei
 werden weder `mx` noch `mxcli`, Studio Pro oder das Model SDK ausgeführt. IDs
 bleiben erhalten, deklarierte Assets werden transaktional installiert und
-Paketcache sowie Modulidentität im Lockfile gespeichert. Für den reinen
-Ruby-Import müssen Paket und Ziel dieselbe Mendix-Modellversion verwenden.
+Paketcache sowie Modulidentität im Lockfile gespeichert. Kompatible offizielle
+Pakete dürfen in eine neuere Modellversion des Projekts importiert werden;
+lokale und GitHub-Imports erfordern weiterhin eine identische Modellversion.
+Bei Atlas Core werden außerdem die Legacy-Sass-Variablen verbunden, ohne
+Projektanpassungen zu überschreiben.
 
 Der offizielle `pull` ist Standard, wählt eine zum Ziel-MPR kompatible Version
 und blockiert bekannte verwundbare Versionen ohne `--allow-vulnerable`.
 `github:` bleibt als Fallback erhalten, `import` verarbeitet lokale MPKs.
 Content ID, Version ID und Sicherheitsstatus werden gesperrt; `audit` prüft
 Updates und Schwachstellen. `login` validiert und speichert das PAT außerhalb
-des Projekts mit Modus `0600`. Das PAT wird nur an
-`marketplace-api.mendix.com` gesendet.
+des Projekts mit Modus `0600`. Das PAT wird nur an die exakten offiziellen
+Hosts `marketplace-api.mendix.com` und `marketplace.mendix.com` gesendet.

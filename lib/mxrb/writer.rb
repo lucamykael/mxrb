@@ -11,6 +11,14 @@ module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
   # stable key, making repeated `mxrb generate` runs idempotent.
   class Writer
+    GLYPH_ICON_CODES = {
+      'home' => 57_377, 'pets' => 57_349, 'heart' => 57_349,
+      'calendar' => 57_609, 'calendar_today' => 57_609,
+      'user' => 57_352, 'search' => 57_347, 'settings' => 57_369,
+      'trash' => 57_376, 'file' => 57_378, 'time' => 57_379,
+      'shopping_cart' => 57_622
+    }.freeze
+
     LEGACY_NAVIGATION_PROFILES = {
       "Desktop" => "DesktopProfile",
       "Tablet" => "TabletProfile",
@@ -498,13 +506,20 @@ module Mxrb
         "$Type" => "Menus$MenuItem",
         "Caption" => translated_text_doc(item.fetch(:caption)),
         "Action" => action,
-        "Icon" => item[:icon] && {
-          "$ID" => SecureRandom.uuid, "$Type" => "Forms$GlyphIcon", "Code" => item[:icon]
-        },
+        "Icon" => glyph_icon_doc(item[:icon]),
         "Items" => IO::BsonCodec.build_array(
           item.fetch(:items, []).map { navigation_menu_item_doc(_1) }
         )
       }
+    end
+
+    def glyph_icon_doc(icon)
+      return unless icon
+
+      code = icon.is_a?(Integer) ? icon : GLYPH_ICON_CODES[icon.to_s.downcase]
+      raise ArgumentError, "unsupported navigation icon #{icon.inspect}" unless code
+
+      { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$GlyphIcon', 'Code' => code }
     end
 
     def navigation_microflow_action_doc(microflow)
@@ -575,20 +590,35 @@ module Mxrb
       existing_associations = array_items(existing[associations_key]).to_h do |association|
         [association["Name"], association]
       end
+      existing_cross_associations = array_items(existing[cross_associations_key]).to_h do |association|
+        [association["Name"], association]
+      end
       associations = existing_associations.values
+      cross_associations = existing_cross_associations.values
       mod.fetch(:entities).flat_map do |entity|
         entity.fetch(:associations, []).map do |association|
-          generated = association_doc(
-            association,
-            from_id: entity_ids.fetch(entity.fetch(:name)),
-            to_id: entity_ids.fetch(association.fetch(:target)) {
-              @all_entity_ids.fetch(association.fetch(:target)) {
+          target_module, target_name = association_target(association.fetch(:target), mod.fetch(:name))
+          if target_module == mod.fetch(:name)
+            generated = association_doc(
+              association,
+              from_id: entity_ids.fetch(entity.fetch(:name)),
+              to_id: entity_ids.fetch(target_name) {
                 raise ArgumentError, "unknown association target #{association.fetch(:target).inspect}"
-              }
-            },
-            previous: existing_associations[association.fetch(:name)]
-          )
-          associations = associations.reject { _1["Name"] == generated["Name"] } + [generated]
+              },
+              previous: existing_associations[association.fetch(:name)]
+            )
+            associations = associations.reject { _1["Name"] == generated["Name"] } + [generated]
+            cross_associations = cross_associations.reject { _1["Name"] == generated["Name"] }
+          else
+            generated = cross_association_doc(
+              association,
+              from_id: entity_ids.fetch(entity.fetch(:name)),
+              target: "#{target_module}.#{target_name}",
+              previous: existing_cross_associations[association.fetch(:name)]
+            )
+            cross_associations = cross_associations.reject { _1["Name"] == generated["Name"] } + [generated]
+            associations = associations.reject { _1["Name"] == generated["Name"] }
+          end
         end
       end
 
@@ -598,7 +628,7 @@ module Mxrb
       )
       doc[entities_key] = IO::BsonCodec.build_array(entities)
       doc[associations_key] = IO::BsonCodec.build_array(associations)
-      doc[cross_associations_key] ||= IO::BsonCodec.build_array([])
+      doc[cross_associations_key] = IO::BsonCodec.build_array(cross_associations)
       doc[annotations_key] ||= IO::BsonCodec.build_array([])
 
       if raw
@@ -606,6 +636,11 @@ module Mxrb
       else
         mpr.insert_unit(container_uuid: module_id, containment_name: "DomainModel", contents_doc: doc)
       end
+    end
+
+    def association_target(target, default_module)
+      value = target.to_s
+      value.include?('.') ? value.split('.', 2) : [default_module, value]
     end
 
     def association_access_by_entity(mod)
@@ -735,6 +770,8 @@ module Mxrb
       existing_widgets = custom_widgets(existing).to_h { [_1["Name"], _1] }
       custom_widgets(generated).each do |widget|
         options = widget.delete("__mxrb_widget_options")
+        next if options && complete_widget_definition?(widget)
+
         baseline = existing_widgets[widget["Name"]]
         next unless options && compatible_widget_baseline?(widget, baseline)
 
@@ -786,15 +823,27 @@ module Mxrb
       array_items(baseline.dig("Type", "ObjectType", "PropertyTypes")).any?
     end
 
+    def complete_widget_definition?(widget)
+      array_items(widget.dig('Type', 'ObjectType', 'PropertyTypes')).any?
+    end
+
     def configure_data_grid2!(widget, options)
       properties = custom_widget_properties(widget)
+      %w[loadMoreButtonCaption singleSelectionColumnLabel clearSelectionButtonLabel].each do |key|
+        properties.dig(key, 'Value')['TextTemplate'] = nil if properties[key]
+      end
+      if properties['filterSectionTitle']
+        properties.dig('filterSectionTitle', 'Value')['TextTemplate'] = empty_client_template_doc
+      end
       if options[:entity] && properties["datasource"]
         properties["datasource"]["Value"]["DataSource"] = custom_xpath_source_doc(options[:entity])
       end
       return unless properties["columns"] && options[:columns]
 
       column_type = properties["columns"].dig("ValueType", "ObjectType")
-      columns = Array(options[:columns]).map { data_grid2_column_doc(column_type, _1) }
+      columns = Array(options[:columns]).map do |column|
+        data_grid2_column_doc(column_type, column, entity: options[:entity])
+      end
       properties["columns"]["Value"]["Objects"] = IO::BsonCodec.build_array(columns, marker: 2)
     end
 
@@ -879,11 +928,15 @@ module Mxrb
       }
     end
 
-    def data_grid2_column_doc(object_type, column)
+    def data_grid2_column_doc(object_type, column, entity: nil)
+      attribute = column[:attribute]
+      attribute = "#{entity}.#{attribute}" if entity && attribute && !attribute.include?('.')
       overrides = {
         "showContentAs" => { "PrimitiveValue" => "attribute" },
-        "attribute" => { "AttributeRef" => attribute_ref_doc(column[:attribute]) },
-        "header" => { "TextTemplate" => client_template_doc(column[:caption] || column[:name]) }
+        "attribute" => { "AttributeRef" => attribute_ref_doc(attribute) },
+        "header" => { "TextTemplate" => client_template_doc(column[:caption] || column[:name]) },
+        "tooltip" => { "TextTemplate" => empty_client_template_doc },
+        "filter" => { "TextTemplate" => empty_client_template_doc }
       }
       custom_widget_object_doc(object_type, overrides)
     end
@@ -919,7 +972,8 @@ module Mxrb
       default = value_type["DefaultValue"].to_s
       case value_type["Type"]
       when "Expression"   then doc["Expression"] = default
-      when "TextTemplate" then doc["TextTemplate"] = client_template_doc(default)
+      when "TextTemplate"
+        doc["TextTemplate"] = client_template_doc(default) if value_type['Required'] || !default.empty?
       else doc["PrimitiveValue"] = default
       end
       doc
@@ -1182,6 +1236,7 @@ module Mxrb
       attrs = entity.fetch(:attributes).map do |attr|
         attribute_doc(attr, previous_attrs[attr.fetch(:name)])
       end
+      attribute_ids = attrs.to_h { [_1['Name'] || _1.fetch('name'), _1.fetch('$ID')] }
       rules_declared = !entity[:access_rules].nil?
       access_rules = if rules_declared
         IO::BsonCodec.build_array(
@@ -1214,7 +1269,7 @@ module Mxrb
         doc[indexes_key] ||= IO::BsonCodec.build_array([])
       else
         doc[indexes_key] = IO::BsonCodec.build_array(
-          entity.fetch(:indexes).map { index_doc(_1, module_name, entity.fetch(:name)) }
+          entity.fetch(:indexes).map { index_doc(_1, attribute_ids:) }
         )
       end
       if entity[:lifecycle].nil?
@@ -1350,20 +1405,29 @@ module Mxrb
       }
     end
 
-    def index_doc(index, module_name, entity_name)
+    def index_doc(index, attribute_ids:)
       members = index.fetch(:attributes).zip(index.fetch(:ascending)).map do |attribute, ascending|
         {
           '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$IndexedAttribute',
-          'Type' => 'Normal', 'Attribute' => "#{module_name}.#{entity_name}.#{attribute}",
-          'Association' => nil, 'Ascending' => ascending
+          'Type' => 'Normal',
+          'AttributePointer' => binary_uuid(attribute_ids.fetch(attribute)),
+          'AssociationPointer' => binary_uuid('00000000-0000-0000-0000-000000000000'),
+          'Ascending' => ascending
         }
       end
+      id = SecureRandom.uuid
       {
-        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$EntityIndex',
-        'DataStorageGuid' => SecureRandom.uuid,
-        'IndexedAttributes' => IO::BsonCodec.build_array(members),
+        '$ID' => id, '$Type' => 'DomainModels$EntityIndex',
+        'GUID' => id,
+        'Attributes' => IO::BsonCodec.build_array(members, marker: 2),
         'IncludeInOffline' => index.fetch(:include_offline, false)
       }
+    end
+
+    def binary_uuid(value)
+      return value if value.is_a?(BSON::Binary)
+
+      BSON::Binary.new(IO::BsonCodec.uuid_to_blob(value), :generic)
     end
 
     def access_rule_doc(rule, module_name, entity_name, attributes: [], associations: [])
@@ -1443,6 +1507,20 @@ module Mxrb
         parent_error_key => behavior[parent_error_key], child_error_key => behavior[child_error_key]
       )
       doc[native_key(previous, 'deleteBehavior', 'DeleteBehavior')] = behavior
+      doc
+    end
+
+    def cross_association_doc(association, from_id:, target:, previous:)
+      doc = association_doc(
+        association, from_id:, to_id: nil, previous:
+      ).merge(
+        '$Type' => 'DomainModels$CrossAssociation',
+        'Child' => target,
+        'ParentPointer' => from_id
+      )
+      doc.delete('ChildPointer')
+      doc.delete('ParentConnection')
+      doc.delete('ChildConnection')
       doc
     end
 
@@ -1859,19 +1937,17 @@ module Mxrb
     end
 
     def pluggable_widget_doc(widget, descriptor)
-      object_type_id = SecureRandom.uuid
-      {
-        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidget",
-        "Appearance" => appearance_doc(widget.dig(:options, :class).to_s),
-        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
-        "Editable" => "Always", "LabelTemplate" => nil, "Name" => widget.fetch(:name),
-        "Object" => {
+      definition = WidgetPackage.find(File.dirname(@path), descriptor.fetch(:id))
+      if definition
+        type, object = WidgetPackage.template(definition)
+      else
+        object_type_id = SecureRandom.uuid
+        object = {
           "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$WidgetObject",
           "Properties" => IO::BsonCodec.build_array([], marker: 2),
           "TypePointer" => object_type_id
-        },
-        "TabIndex" => 0,
-        "Type" => {
+        }
+        type = {
           "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidgetType",
           "HelpUrl" => "",
           "ObjectType" => {
@@ -1883,9 +1959,23 @@ module Mxrb
           "SupportedPlatform" => "Web", "WidgetDescription" => "",
           "WidgetId" => descriptor.fetch(:id), "WidgetName" => descriptor.fetch(:name),
           "WidgetNeedsEntityContext" => false, "WidgetPluginWidget" => true
-        },
+        }
+      end
+      doc = {
+        "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidget",
+        "Appearance" => appearance_doc(widget.dig(:options, :class).to_s),
+        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
+        "Editable" => "Always", "LabelTemplate" => nil, "Name" => widget.fetch(:name),
+        "Object" => object,
+        "TabIndex" => 0,
+        "Type" => type,
         "__mxrb_widget_options" => widget.fetch(:options, {}).merge(__kind: widget.fetch(:type))
       }
+      options = doc.fetch('__mxrb_widget_options')
+      configure_data_grid2!(doc, options) if descriptor.fetch(:id) == data_grid2_descriptor[:id]
+      configure_combo_box!(doc, options) if descriptor.fetch(:id) == combo_box_descriptor[:id]
+      configure_pluggable_widget!(doc, options) if widget.fetch(:type) == :pluggable_widget
+      doc
     end
 
     def modern_widget_properties(type, options)
@@ -2133,7 +2223,7 @@ module Mxrb
           "VariableType" => microflow_data_type_doc(param.fetch(:type), module_name) }
       end
       roles_declared  = !flow[:allowed_roles].nil?
-      body_declared   = !flow[:body].nil?
+      body_declared   = !flow[:body].nil? || !flow[:return_expression].nil?
       return_var_name = flow[:return_variable_name] || "ReturnValue"
       allow_concurrent = flow[:allow_concurrent_execution]
       mark_as_used = flow[:mark_as_used]
@@ -2670,10 +2760,12 @@ module Mxrb
         major = @definition.fetch(:version).to_s.split(".").first.to_i
         result_name = activity[:result_name] || activity[:variable].to_s
         mappings = Array(activity[:mappings]).map do |m|
+          parameter = m[:param].to_s
+          parameter = "#{activity[:name]}.#{parameter}" unless parameter.include?('.')
           mapping = {
             "$ID" => SecureRandom.uuid,
             "$Type" => "Microflows$MicroflowCallParameterMapping",
-            "Parameter" => m[:param],
+            "Parameter" => parameter,
             "Argument" => member_value_expr(m[:value])
           }
           mapping["ArgumentModel"] = no_expression_doc if major.between?(6, 10)
@@ -3234,6 +3326,21 @@ module Mxrb
         "Fallback" => text_doc(""),
         "Parameters" => IO::BsonCodec.build_array([], marker: 2),
         "Template" => text_doc(text.to_s)
+      }
+    end
+
+    def empty_client_template_doc
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ClientTemplate',
+        'Fallback' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Text',
+          'Items' => IO::BsonCodec.build_array([])
+        },
+        'Parameters' => IO::BsonCodec.build_array([], marker: 2),
+        'Template' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Text',
+          'Items' => IO::BsonCodec.build_array([])
+        }
       }
     end
 

@@ -31,9 +31,12 @@ module Mxrb
         a.from_entity_id   = IO::BsonCodec.extract_id(
           doc["ParentPointer"] || doc["ParentID"] || doc["parentId"]
         )
-        a.to_entity_id = IO::BsonCodec.extract_id(
-          doc["ChildPointer"] || doc["ChildID"] || doc["childId"]
-        )
+        child = doc['Child'] || doc["ChildPointer"] || doc["ChildID"] || doc["childId"]
+        a.to_entity_id = if child.is_a?(String) && child.include?('.')
+                           child
+                         else
+                           IO::BsonCodec.extract_id(child)
+                         end
         a.association_type = (doc["Type"] || doc["type"] || "Reference").to_sym
         a.owner            = (doc["Owner"] || doc["owner"] || "Default").to_sym
         a.storage_format   = (doc["StorageFormat"] || "Column").to_sym

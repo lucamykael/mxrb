@@ -40,7 +40,8 @@ module Mxrb
         e.instance_variable_set(:@attributes, attr_arr.map { Attribute.from_bson(_1) })
         rules = IO::BsonCodec.parse_array(doc['validationRules'] || doc['ValidationRules'])[:items]
         apply_validation_rules(e.attributes, rules)
-        e.indexes = IO::BsonCodec.parse_array(doc['indexes'] || doc['Indexes'])[:items]
+        raw_indexes = IO::BsonCodec.parse_array(doc['indexes'] || doc['Indexes'])[:items]
+        e.indexes = normalize_indexes(raw_indexes, e.attributes, e.qualified_name)
 
         # Access rules (embedded array with marker 3)
         rule_arr = IO::BsonCodec.parse_array(doc["accessRules"] || doc["AccessRules"])[:items]
@@ -94,6 +95,20 @@ module Mxrb
           kind = rule.dig('RuleInfo', '$Type').to_s
           attribute.required = true if kind.end_with?('RequiredRuleInfo')
           attribute.unique = true if kind.end_with?('UniqueRuleInfo')
+        end
+      end
+
+      def self.normalize_indexes(indexes, attributes, qualified_name)
+        names_by_id = attributes.to_h { [_1.id, _1.name] }
+        indexes.each do |index|
+          members = IO::BsonCodec.parse_array(index['Attributes'])[:items]
+          members.each do |member|
+            next if member['Attribute'] || member['attribute']
+
+            id = IO::BsonCodec.extract_id(member['AttributePointer'])
+            name = names_by_id[id]
+            member['Attribute'] = [qualified_name, name].compact.join('.') if name
+          end
         end
       end
 

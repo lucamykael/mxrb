@@ -119,7 +119,8 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect(File.read(evaluation.files.fetch(0))).to include('no_call_cycles')
       expect(File.read(ci.files.fetch(0))).to include('ruby/setup-ruby@v1', 'bundle exec rspec')
       expect(design.files.map { File.basename(_1) }).to include(
-        'design_system.rb', 'main.scss', 'settings.json'
+        'design_system.rb', 'custom-variables.scss', 'main.scss',
+        'exclusion-variables.scss', 'settings.json'
       )
       expect(File.read(File.join(root, 'theme', 'web', 'settings.json')))
         .to include('theme.compiled.css')

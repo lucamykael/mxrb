@@ -5,6 +5,7 @@ module Mxrb
     # Client and resolver for the documented Mendix Marketplace Content API.
     class ContentApi # rubocop:disable Metrics/ClassLength
       BASE_URL = 'https://marketplace-api.mendix.com/v1'
+      AUTHORIZED_HOSTS = %w[marketplace-api.mendix.com marketplace.mendix.com].freeze
       CONTENT_LIMIT = 100
       VERSION_LIMIT = 20
       MENDIX_VERSION = /\A(?:\d{1,3}|1000)(?:\.(?:\d{1,3}|1000)){0,2}\z/
@@ -61,6 +62,7 @@ module Mxrb
       def resolve(identifier, version: nil, mendix_version: nil, allow_vulnerable: false)
         selected_content = find(identifier)
         selected_version = resolve_version(selected_content.fetch('contentId'), version, mendix_version)
+        ensure_compatible!(selected_version, mendix_version) if mendix_version
         reject_vulnerable!(selected_version) unless allow_vulnerable
         package(selected_content, selected_version)
       end
@@ -69,8 +71,8 @@ module Mxrb
         identifier = uuid_filter(version_id)
         url = download_url || "#{BASE_URL}/versions/#{identifier}/download"
         uri = URI.parse(url)
-        api_host = URI.parse(BASE_URL).host
-        @client.download(url, destination, authorization: uri.host == api_host ? authorization : nil)
+        trusted = AUTHORIZED_HOSTS.include?(uri.host)
+        @client.download(url, destination, authorization: trusted ? authorization : nil)
       end
 
       def all_versions(content_id, published_since: nil)
@@ -118,7 +120,7 @@ module Mxrb
       def package(content, version)
         OfficialPackage.new(
           version['name'] || content.dig('latestVersion', 'name') || "Content#{content['contentId']}",
-          version.fetch('versionNumber'), :mendix, version['downloadURL'],
+          version.fetch('versionNumber'), :mendix, version['downloadURL'] || version['downloadUrl'],
           "content:#{content.fetch('contentId')}", content.fetch('contentId'),
           version.fetch('versionId'), content.fetch('type'), version['versionType'] || 'Regular',
           security_codes(version), content['isPrivate'], content['isCompanyApproved']
@@ -133,6 +135,15 @@ module Mxrb
         raise MarketplaceError,
               "Marketplace version #{version['versionNumber']} is marked vulnerable#{suffix}; " \
               'select a security fix or pass --allow-vulnerable'
+      end
+
+      def ensure_compatible!(version, mendix_version)
+        minimum = version['minSupportedMendixVersion'].to_s
+        compatible = !minimum.empty? && Gem::Version.new(mendix_version) >= Gem::Version.new(minimum)
+        return if compatible
+
+        raise MarketplaceError,
+              "Marketplace version #{version['versionNumber']} requires Mendix #{minimum} or newer"
       end
 
       def security_codes(version)

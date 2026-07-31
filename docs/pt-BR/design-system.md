@@ -15,6 +15,11 @@ navigation do
 end
 ```
 
+Ícones de navegação aceitos: `home`, `pets`/`heart`, `calendar`/
+`calendar_today`, `user`, `search`, `settings`, `trash`, `file`, `time` e
+`shopping_cart`. Também é possível informar diretamente um código Glyphicons
+inteiro válido do Mendix; nomes desconhecidos falham durante a geração.
+
 `project.design_system` inventaria propriedades CSS, variáveis Sass, temas e
 catálogos `design-properties.json`. O lint encontra tokens ausentes, cores
 literais e contratos de contraste abaixo do nível WCAG declarado.
