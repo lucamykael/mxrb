@@ -8,7 +8,10 @@ module Mxrb
 
     # Read-only inventory and quality metrics for Mendix theme assets.
     class DesignSystem
-      ASSET_DIRECTORIES = %w[theme themesource resources widgets javasource javascriptsource].freeze
+      ASSET_DIRECTORIES = %w[
+        theme theme-cache themesource resources widgets javasource javascriptsource
+        userlib vendorlib
+      ].freeze
       CSS_TOKEN = /(?<name>--[A-Za-z0-9_-]+)\s*:\s*(?<value>[^;{}]+);/
       SCSS_TOKEN = /(?<name>\$[A-Za-z0-9_-]+)\s*:\s*(?<value>[^;{}]+);/
 

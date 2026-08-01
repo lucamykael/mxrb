@@ -261,6 +261,85 @@ RSpec.describe 'modern page widgets' do
       .to raise_error(ArgumentError, /requires a Hash/)
   end
 
+  it 'reconstructs BSON values in native widgets nested inside containers and tabs' do
+    encoded = Base64.strict_encode64("\x01\x02".b)
+    page = Mxrb::Dsl::PageBuilder.new(:P)
+    page.instance_eval do
+      container :Outer do
+        native_widget :Nested, type: 'Vendor$Nested', deep_structure: {
+          '$ID' => bson_binary(encoded, subtype: :uuid)
+        }
+      end
+      tab_control :Tabs do
+        tab_page :General do
+          native_widget :Tabbed, type: 'Vendor$Tabbed', deep_structure: {
+            '$ID' => bson_binary(encoded, subtype: :uuid)
+          }
+        end
+      end
+    end
+
+    widgets = page.to_h.fetch(:widgets)
+    nested = widgets.first.fetch(:children).first.dig(:options, :deep_structure, '$ID')
+    tabbed = widgets.last.dig(:options, :tabs, 0, :widgets, 0, :options, :deep_structure, '$ID')
+    expect(nested).to be_a(BSON::Binary)
+    expect(tabbed).to be_a(BSON::Binary)
+    expect(nested.type).to eq(:uuid)
+    expect(tabbed.type).to eq(:uuid)
+  end
+
+  it 'retains explicit association storage and exact member access overrides' do
+    entity = Mxrb::Dsl::EntityBuilder.new(:Account)
+    entity.association 'System.User', name: :Account_User, storage_format: :Table
+    entity.access_rule 'M.User', default_rights: 'ReadWrite', members: [
+      { name: 'Secret', rights: 'None', kind: :attribute }
+    ]
+    definition = entity.to_h
+
+    expect(definition.dig(:associations, 0, :storage_format)).to eq(:Table)
+    expect(definition.dig(:access_rules, 0, :default_rights)).to eq('ReadWrite')
+    expect(definition.dig(:access_rules, 0, :members, 0)).to include(
+      name: 'Secret', rights: 'None', kind: :attribute
+    )
+
+    project = Mxrb::Dsl::Builder.new('/tmp/platform-reference.mpr')
+    project.instance_eval do
+      self.module(:M) { entity(:Token) { association 'System.User' } }
+    end
+    expect(project.validate!).to be_valid
+  end
+
+  it 'exports BSON date-time values as executable Ruby with nanosecond precision' do
+    value = Time.at(1_541_030_400, 123_000_000, :nanosecond).utc
+    source = Mxrb::Exporter.allocate.send(:native_ruby, value)
+
+    expect(source).to eq('Time.at(1541030400, 123000000, :nanosecond).utc')
+    expect(eval(source)).to eq(value) # rubocop:disable Security/Eval
+  end
+
+  it 'exports native parameter types and expression-based list operations as executable DSL' do
+    exporter = Mxrb::Exporter.allocate
+    action = {
+      'Action' => {
+        '$Type' => 'Microflows$ListOperationsAction', 'ResultVariableName' => 'Found',
+        'NewOperation' => {
+          '$Type' => 'Microflows$FindByExpression', 'ListName' => 'Items',
+          'Expression' => '$currentObject/Name = $Name'
+        }
+      }
+    }
+    line = exporter.send(:action_dsl_line, action, 2)
+    expect(line).to include(
+      'list_operation :find_by_expression, :Items',
+      'expression: "$currentObject/Name = $Name"', 'as: :Found'
+    )
+
+    flow = Mxrb::Dsl::FlowBuilder.new(:Find, runtime: nil, kind: :microflow, public: false)
+    type = { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'System.HttpMessage' }
+    flow.parameter :Message, type: type
+    expect(flow.to_h.dig(:parameters, 0, :type)).to eq(type)
+  end
+
   it 'handles legacy and malformed widget metadata defensively' do
     page = Mxrb::Model::Page.allocate
     expect(page.send(:widget_type, 'Forms$DropDown')).to eq(:drop_down)
@@ -318,22 +397,17 @@ RSpec.describe 'modern page widgets' do
     expect(tabs).to include('tab_page :Empty', 'tab_page :Full do', 'text :Help')
   end
 
-  it 'runs generate and the official widget update twice' do
+  it 'runs the native MPK-backed generator twice to settle widget schemas' do
     Dir.mktmpdir do |dir|
       definition = File.join(dir, 'project.rb')
       File.write(definition, "# test\n")
       synchronizer = Mxrb::WidgetSynchronizer.new(definition, File.join(dir, 'app.mpr'))
-      plan = Struct.new(:mx_path).new(RbConfig.ruby)
-      allow(Mxrb::Runtime::Toolchain).to receive(:new).and_return(
-        instance_double(Mxrb::Runtime::Toolchain, plan: plan)
-      )
       allow(synchronizer).to receive(:generate)
-      allow(synchronizer).to receive(:update_widgets!)
 
       result = synchronizer.sync!
       expect(synchronizer).to have_received(:generate).twice
-      expect(synchronizer).to have_received(:update_widgets!).with(RbConfig.ruby).twice
       expect(result.project).to eq(File.join(dir, 'app.mpr'))
+      expect(result.mx_path).to eq('native MPK schemas')
     end
   end
   it 'restores output paths and reports synchronizer failures' do
@@ -351,19 +425,8 @@ RSpec.describe 'modern page widgets' do
       synchronizer.send(:generate)
       expect(ENV).not_to have_key('MXRB_OUTPUT_PATH')
 
-      allow(synchronizer).to receive(:system).and_return(true, false)
-      expect { synchronizer.send(:update_widgets!, RbConfig.ruby) }.not_to raise_error
-      expect { synchronizer.send(:update_widgets!, RbConfig.ruby) }
-        .to raise_error(Mxrb::Error, /synchronization failed/)
       expect { Mxrb::WidgetSynchronizer.new('missing.rb', 'missing.mpr').sync! }
         .to raise_error(ArgumentError, /definition not found/)
-
-      missing_toolchain = Mxrb::WidgetSynchronizer.new(definition, File.join(dir, 'missing.mpr'))
-      allow(missing_toolchain).to receive(:generate)
-      allow(Mxrb::Runtime::Toolchain).to receive(:new).and_return(
-        instance_double(Mxrb::Runtime::Toolchain, plan: Struct.new(:mx_path).new('/not/executable'))
-      )
-      expect { missing_toolchain.sync! }.to raise_error(ArgumentError, /toolchain not found/)
     ensure
       ENV.delete('MXRB_OUTPUT_PATH')
     end

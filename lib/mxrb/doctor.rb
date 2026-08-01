@@ -24,7 +24,7 @@ module Mxrb
       DoctorReport.new(@root, [
         ruby_check, project_check, modules_check, aggregators_check,
         mpr_check, executable_check('bundle'), executable_check('java'),
-        executable_check('docker', warning: true), mxbuild_check
+        executable_check('docker', warning: true), runtime_check
       ].freeze)
     end
 
@@ -93,11 +93,19 @@ module Mxrb
       candidates.compact.uniq
     end
 
-    def mxbuild_check
-      configured = ENV['MXRB_MXBUILD'].to_s
-      paths = [configured, File.join(Dir.home, '.local', 'share', 'mendix')].reject(&:empty?)
-      found = paths.any? { File.file?(_1) || Dir.glob(File.join(_1, '**', 'mxbuild')).any? }
-      DoctorCheck.new(:mxbuild, found ? :ok : :warning, found ? 'available' : 'not found')
+    def runtime_check
+      configured = ENV['MXRB_MENDIX_HOME'].to_s
+      roots = [configured, File.join(Dir.home, '.local', 'share', 'mendix')].reject(&:empty?)
+      candidates = roots.flat_map { runtime_candidates(_1) }.uniq
+      found = candidates.find do |root|
+        Runtime::RUNTIME_REQUIRED_FILES.all? { File.file?(File.join(root, _1)) }
+      end
+      DoctorCheck.new(:runtime, found ? :ok : :warning, found || 'not found')
+    end
+
+    def runtime_candidates(root)
+      direct = File.basename(root) == 'runtime' ? root : File.join(root, 'runtime')
+      [direct] + Dir.glob(File.join(root, '*', 'runtime'))
     end
 
     def file_check(name, path, label)

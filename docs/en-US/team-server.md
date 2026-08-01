@@ -5,10 +5,15 @@ Repository API without `mx`, Studio Pro, or the Model SDK:
 
 ```sh
 mxrb team-server login --pat-file /secure/team-server.env
+mxrb team-server projects --pat-file /secure/team-server.env
 mxrb team-server clone APP_ID ./app
 mxrb team-server branches APP_ID
 mxrb team-server pull ./app
 ```
+
+`projects` paginates the official Projects API and returns every company-owned
+project. Credentials remain scoped to the same HTTPS host; the client upgrades
+the service's advertised HTTP redirect only when it targets that same HSTS host.
 
 The recommended mode stores only the absolute PAT file path. Plain text, JSON,
 and `.env` files containing `MXRB_TEAM_SERVER_PAT` are supported. The PAT is

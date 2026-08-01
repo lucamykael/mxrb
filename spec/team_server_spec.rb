@@ -198,6 +198,65 @@ RSpec.describe Mxrb::TeamServer do
     end
   end
 
+  it 'lists every Projects API page and rejects hostile pagination URLs' do
+    Dir.mktmpdir do |root|
+      pages = [
+        { 'items' => [{ 'projectId' => 'one' }],
+          'links' => { 'next' => 'https://projects-api.home.mendix.com/v2/accounts/account/projects?offset=1' } },
+        { 'items' => [{ 'projectId' => 'two' }], 'links' => {} }
+      ]
+      client = Class.new do
+        attr_reader :calls
+
+        def initialize(pages)
+          @pages = pages
+          @calls = []
+        end
+
+        def json(url, authorization:)
+          @calls << [url, authorization]
+          @pages.shift
+        end
+      end.new(pages)
+      projects = described_class::ProjectsApi.new(credentials: credentials(root), client:).all
+      expect(projects.map { _1['projectId'] }).to eq(%w[one two])
+      expect(client.calls).to all(include(a_string_matching(%r{\Ahttps://projects-api\.home\.mendix\.com/}),
+                                          'MxToken secret-token'))
+
+      hostile = instance_double(Mxrb::OfficialMarketplace::HttpClient)
+      allow(hostile).to receive(:json).and_return(
+        'items' => [], 'links' => { 'next' => 'https://evil.example/v2/projects' }
+      )
+      expect do
+        described_class::ProjectsApi.new(credentials: credentials(root), client: hostile).all
+      end.to raise_error(Mxrb::TeamServerError, /unsafe Projects API/)
+    end
+  end
+
+  it 'fails closed for missing credentials, invalid pages, client errors, and pagination loops' do
+    empty = described_class::Credentials.new(path: File.join(Dir.tmpdir, 'mxrb-no-projects-pat'))
+    expect { described_class::ProjectsApi.new(credentials: empty).all }
+      .to raise_error(Mxrb::TeamServerError, /requires --pat-file/)
+
+    client = instance_double(Mxrb::OfficialMarketplace::HttpClient)
+    allow(client).to receive(:json).and_raise(Mxrb::MarketplaceError, 'offline')
+    expect { described_class::ProjectsApi.new(credentials: credentials(Dir.mktmpdir), client:).all }
+      .to raise_error(Mxrb::TeamServerError, 'offline')
+
+    api = described_class::ProjectsApi.new(credentials: empty, client:)
+    expect { api.send(:valid_url, 'https://%') }
+      .to raise_error(Mxrb::TeamServerError, /unsafe Projects API/)
+
+    stub_const('Mxrb::TeamServer::ProjectsApi::MAX_PAGES', 1)
+    loop_client = instance_double(Mxrb::OfficialMarketplace::HttpClient)
+    allow(loop_client).to receive(:json).and_return(
+      'items' => [], 'links' => { 'next' => described_class::ProjectsApi::BASE }
+    )
+    expect do
+      described_class::ProjectsApi.new(credentials: credentials(Dir.mktmpdir), client: loop_client).all
+    end.to raise_error(Mxrb::TeamServerError, /safety limit/)
+  end
+
   it 'supports unauthenticated Git helpers and every repository operation' do
     Dir.mktmpdir do |root|
       git = File.join(root, 'app')

@@ -19,10 +19,10 @@ module Mxrb
 
       def self.for(version)
         major = version.to_s.split('.').first.to_i
-        klass = { 9 => V9, 10 => V10, 11 => V11 }[major]
+        klass = { 6 => V6, 7 => V7, 9 => V9, 11 => V11 }[major]
         unless klass
           raise UnsupportedVersion,
-                "native compilation supports Mendix 9.x through 11.x; got #{version}"
+                "audited native compilation supports Mendix 6.x, 7.x, 9.x, and 11.x; got #{version}"
         end
 
         klass.new(version)
@@ -70,9 +70,20 @@ module Mxrb
         target == actual
       end
 
-      class V9 < Adapter; end
-      class V10 < Adapter; end
-      class V11 < Adapter; end
+      def web_profiles = [:dojo]
+
+      class V6 < Adapter; end
+      class V7 < Adapter; end
+
+      # Hybrid Dojo client with the React-wrapper bridge introduced in Mendix 9.
+      class V9 < Adapter
+        def web_profiles = %i[dojo react_wrapper]
+      end
+
+      # Current fully React web client contract.
+      class V11 < Adapter
+        def web_profiles = [:react]
+      end
     end
   end
 end

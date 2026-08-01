@@ -66,11 +66,17 @@ RSpec.describe Mxrb::Compiler do
   # rubocop:enable Metrics/MethodLength
 
   it 'selects explicit compiler adapters by Mendix major version' do
+    expect(described_class::Adapter.for('6.10.8')).to be_a(described_class::Adapter::V6)
+    expect(described_class::Adapter.for('7.2.3')).to be_a(described_class::Adapter::V7)
     expect(described_class::Adapter.for('9.24.0')).to be_a(described_class::Adapter::V9)
-    expect(described_class::Adapter.for('10.21.0')).to be_a(described_class::Adapter::V10)
     expect(described_class::Adapter.for('11.12.1')).to be_a(described_class::Adapter::V11)
+    expect(described_class::Adapter.for('7.17.0').web_profiles).to eq([:dojo])
+    expect(described_class::Adapter.for('9.24.0').web_profiles).to eq(%i[dojo react_wrapper])
+    expect(described_class::Adapter.for('11.12.1').web_profiles).to eq([:react])
     expect { described_class::Adapter.for('8.18.0') }
-      .to raise_error(Mxrb::UnsupportedVersion, /9\.x through 11\.x/)
+      .to raise_error(Mxrb::UnsupportedVersion, /6\.x, 7\.x, 9\.x, and 11\.x/)
+    expect { described_class::Adapter.for('10.21.0') }
+      .to raise_error(Mxrb::UnsupportedVersion, /audited native compilation/)
   end
 
   it 'packs a deterministic MDA without invoking an external toolchain' do

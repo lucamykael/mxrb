@@ -213,10 +213,11 @@ Inspect version selection and the planned container mounts without executing:
 bundle exec mxrb test App.mpr functional_test.rb --plan
 ```
 
-The Java executor still uses `mxbuild --target=portable-app-package`; the
-native executor does not. Both stop at `[MXRB_TEST] DONE`, terminate the
-runtime and returns a failing exit status if any case failed, compilation
-failed, the suite did not finish or its aggregate timeout expired.
+The Java executor now builds the deployment, `project.jar`, web bundles, and
+portable Runtime package through MXRB's native compiler; it does not invoke
+`mx` or `mxbuild`. Both execution modes stop at `[MXRB_TEST] DONE`, terminate
+the Runtime, and return a failing exit status if any case failed, compilation
+failed, the suite did not finish, or its aggregate timeout expired.
 Use `--json result.json` and/or `--junit result.xml` for CI reports. JUnit is
 only the XML interchange format here; MXRB writes it directly in Ruby and does
 not install or execute the Java JUnit framework.

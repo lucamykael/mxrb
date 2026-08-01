@@ -1,75 +1,89 @@
-# Compilador e formato MDA
+# Compilador nativo, Runtime e formato MDA
 
-O `mxrb` possui um pipeline de compilação versionado que não executa `mx`,
-`mxbuild`, `mxcli`, Studio Pro ou o Model SDK de forma implícita.
+O pipeline funcional do MXRB não executa `mx`, `mxbuild`, `mxcli`, Studio Pro
+ou Model SDK. Esses programas podem continuar sendo usados como gates externos
+de compatibilidade, mas não são dependências do build, do banco ou dos testes
+funcionais.
 
-## Primeiro estágio: container MDA
+## Build do zero
+
+`DeploymentMaterializer` cria um `deployment/` inexistente a partir dos
+templates da versão instalada e executa 12 estágios: segurança, constantes,
+domain model, artefatos, traduções, textos de sistema, filas de sistema, modelo
+cliente, actions, settings, microflows e índice de projeto/módulos. Ele também
+gera `metadata.json`, dependências e o `model.mdp` em ordem BSON aceita pelo
+Runtime.
+
+O bootstrap possui seeds e catálogos auditados para 6.10.8, 7.5.0, 7.17.0,
+9.6.1.29396 e 11.12.1. As famílias 6.x, 7.x, 9.x e 11.x selecionam o seed
+compatível; 5.x, 8.x e 10.x falham fechadas por ainda não terem seed auditado.
+Esse agrupamento vale para o schema do compilador. A Runtime deve sempre ter o
+mesmo patch exato do MPR.
+
+`ProjectJarBuilder` encontra o JDK por `MXRB_JAVA_HOME`, `JAVA_HOME`, asdf ou
+mise, compila `javasource/**/*.java` com as bibliotecas do Runtime e do projeto
+e escreve um `project.jar` OSGi determinístico. No VetClinic foram compilados
+183 fontes em 249 classes.
+
+`WebBundleBuilder` seleciona Dojo em 6/7, Dojo com React wrapper em 9 e React
+em 11. No React, gera entrypoint e módulos, expande `.mpk` e chama diretamente
+o Node/Rspack da versão. O Data Grid 2 é compilado no subconjunto com
+fonte XPath e colunas de atributo, incluindo `operations.json`, datasource e
+tipos dos atributos. Tipos ou combinações ainda não traduzidos recebem um
+fallback DOM e ficam registrados em `web/mxrb-pages.json`; o manifesto do
+VetClinic ficou vazio.
+
+No Dojo, o Data Grid 1 cobre fontes database, XPath e microflow, pesquisa,
+ordenação, paginação, seleção e botões auditados. Outros widgets visuais são
+registrados por página em `web/mxrb-legacy-pages.json`; não são declarados como
+renderizados. Esse manifesto evita que XML servido seja confundido com página
+visualmente completa.
+
+## MDA e pacote portátil
 
 ```bash
 mxrb pack Clinic.mpr --output build/Clinic.mda
 mxrb mda inspect build/Clinic.mda
-mxrb mda compare official.mda build/Clinic.mda
-```
-
-`pack` escreve o ZIP MDA inteiramente em Ruby, em ordem determinística e com
-datas normalizadas. Por enquanto ele exige um diretório `deployment/` já
-materializado. Essa exigência é verificada explicitamente; o comando nunca
-chama o toolchain Mendix como fallback.
-O empacotamento também aborta quando `model/model.mdp` é mais antigo que o MPR,
-evitando combinar uma definição Ruby alterada com artefatos compilados antigos.
-
-O deployment deve conter, no mínimo:
-
-- `model/model.mdp`
-- `model/metadata.json`
-- `model/bundles/project.jar`
-- `web/index.html`
-
-Somente as raízes oficiais `model`, `web`, `native`, `sass` e `tmp` entram no
-MDA. Diretórios de trabalho do Runtime e do Gradle, como `data`, `log`, `run`,
-`build` e `.gradle`, são ignorados deliberadamente.
-
-No teste de aceitação com VetClinic, o MDA escrito pelo MXRB foi extraído sobre
-uma distribuição limpa do Runtime 11.12.1, criou/sincronizou 675 comandos de
-banco e respondeu HTTP 200. Isso valida o container e os artefatos já
-materializados; não significa que a materialização nativa das cinco etapas
-abaixo esteja concluída.
-
-Os adapters atuais reconhecem Mendix 9.x, 10.x e 11.x. A versão de
-`model/metadata.json` deve corresponder exatamente à versão do MPR.
-
-## Pacote portátil sem mxbuild
-
-```bash
 mxrb portable Clinic.mpr --output build/runtime.zip
 ```
 
-O comando combina o deployment materializado com a distribuição instalada da
-mesma versão do Runtime, gera scripts e configurações, constantes e diretórios
-de dados, e escreve o ZIP deterministicamente. Ele não executa `mx` nem
-`mxbuild`. No VetClinic, o pacote de 4.384 arquivos iniciou o Runtime 11.12.1,
-sincronizou 675 operações de banco e respondeu HTTP 200.
+O MDA e o ZIP portátil são determinísticos. O pacote portátil combina o
+deployment nativo com o Runtime instalado da mesma versão, configurações,
+constantes e scripts. Somente as raízes oficiais entram no MDA; diretórios de
+trabalho como `data`, `log`, `run`, `build` e `.gradle` são excluídos.
 
-A configuração portátil inclui a chave obrigatória do servidor administrativo.
-O boot de produção também exige segurança `CheckEverything`; para projetos
-novos, `mxrb security init App` agora conecta essa configuração no `project.rb`.
+## Evidência de regressão
 
-O gate estrutural dos testes funcionais também usa `Mxrb.validate`; a chamada
-separada a `mx check` foi removida. A instrumentação funcional altera
-microflows, portanto ainda depende da futura materialização nativa desses
-artefatos antes que seu build possa abandonar `mxbuild`.
+```bash
+script/runtime_boot_regression App.mpr /caminho/inexistente/deployment \
+  ~/.local/share/mendix/11.12.1
+```
 
-## Estágios seguintes
+O teste trabalha em diretório temporário, cria o deployment, compila Java e
+web, empacota, inicia o Runtime e exige HTTP 200 para `/`, `dist/index.js` e
+cada bundle de página. Também verifica shutdown limpo. O transcript e o SHA-256
+ficam em `tmp/runtime-boot-evidence.log`. Quando Chromium está instalado, o
+teste importa todos os módulos e instancia os factories que não exigem sessão.
+O bundle do Data Grid é importado e avaliado; seu factory consulta a sessão do
+cliente e, por isso, exige um teste autenticado para ser instanciado.
 
-O container MDA não é o compilador completo. Os artefatos abaixo ainda precisam
-ser materializados nativamente antes que um projeto novo dispense totalmente o
-`mxbuild`:
+Em 1º de agosto de 2026, o VetClinic 11.12.1 partiu de deployment inexistente,
+executou 675 comandos de sincronização de banco, ativou as filas `System`,
+agendou `VetClinic.Cleanup`, respondeu 200 nos quatro bundles de página e
+encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
 
-1. `model/model.mdp` e metadados de persistência;
-2. operações e metadados de microflows;
-3. páginas, layouts, nanoflows e bundle React/Dojo;
-4. `project.jar`, Java Actions e dependências;
-5. imagem portátil do Runtime para os testes funcionais.
+## Limites explícitos
 
-Cada estágio usa dispatch por versão. Recursos não implementados devem produzir
-um erro de compilação claro; não existe fallback silencioso para `mx`/`mxbuild`.
+- os 12 estágios e a geração web limpa foram validados em 6.10.8, 7.5.0,
+  7.17.0, 9.6.1.29396 e 11.12.1;
+- o boot nativo exato foi provado em 11.12.1. As distribuições 6/7/9 instaladas
+  têm os bundles exatos, mas não PAD/launcher; `db up` falha fechado em vez de
+  substituir pelo launcher Java 21 da versão 11;
+- Data Grid 1 está coberto, mas os demais widgets Dojo continuam explicitamente
+  pendentes no manifesto legado;
+- Data Grid 2 está coberto para datasource XPath e colunas de atributo; outros
+  widgets e combinações de propriedades usam fallback audível no manifesto;
+- bundles web nativos são gerados; o pipeline React Native ainda depende dos
+  assets de template/projeto existentes;
+- `mx` e `mxbuild` não são fallbacks. Um recurso sem compilador produz erro ou
+  entrada no manifesto de suporte.

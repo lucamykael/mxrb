@@ -15,8 +15,12 @@ RSpec.describe 'platform expansion services' do
           evaluate_dir File.join(__dir__, "missing")
         RUBY
         File.write(File.join(dir, 'broken.mpr'), 'not sqlite')
-        mxbuild = File.join(dir, 'mxbuild')
-        File.write(mxbuild, '')
+        runtime = File.join(dir, 'runtime')
+        Mxrb::Runtime::RUNTIME_REQUIRED_FILES.each do |relative|
+          path = File.join(runtime, relative)
+          FileUtils.mkdir_p(File.dirname(path))
+          File.write(path, 'runtime')
+        end
 
         failed = instance_double(Process::Status, success?: false)
         passed = instance_double(Process::Status, success?: true)
@@ -25,13 +29,13 @@ RSpec.describe 'platform expansion services' do
 
           ['', '', command.to_s.include?('java') ? passed : failed]
         end
-        stub_const('ENV', ENV.to_h.merge('JAVA_HOME' => dir, 'MXRB_MXBUILD' => mxbuild))
+        stub_const('ENV', ENV.to_h.merge('JAVA_HOME' => dir, 'MXRB_MENDIX_HOME' => runtime))
         report = described_class.new(File.join(dir, 'broken.mpr'), runner:).run
         expect(report.valid?).to be(false)
         expect(report.errors.map(&:name)).to include(:mpr, :bundle)
         expect(report.warnings.map(&:name)).to include(:aggregators, :docker)
         expect(report.checks.find { _1.name == :java }).to be_ok
-        expect(report.checks.find { _1.name == :mxbuild }).to be_ok
+        expect(report.checks.find { _1.name == :runtime }).to be_ok
       end
     end
 
@@ -41,10 +45,10 @@ RSpec.describe 'platform expansion services' do
         runner = ->(*_args) { ['', '', failed] }
         stub_const('RUBY_VERSION', '3.3.0')
         allow(Dir).to receive(:home).and_return(dir)
-        stub_const('ENV', ENV.to_h.merge('JAVA_HOME' => '', 'MXRB_MXBUILD' => ''))
+        stub_const('ENV', ENV.to_h.merge('JAVA_HOME' => '', 'MXRB_MENDIX_HOME' => ''))
         report = described_class.new(dir, runner:).run
         expect(report.errors.map(&:name)).to include(:ruby, :project, :modules, :bundle, :java)
-        expect(report.warnings.map(&:name)).to include(:mpr, :docker, :mxbuild)
+        expect(report.warnings.map(&:name)).to include(:mpr, :docker, :runtime)
         expect(report.errors).not_to be_empty
       end
     end

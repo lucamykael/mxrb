@@ -12,10 +12,13 @@
 - [Convenções](conventions.md)
 - [Roadmap Ruby-first](ruby-first-roadmap.md)
 - [Matriz de validação](validation-matrix.md)
+- [Compilador nativo e Runtime](compiler.md)
+- [Relatório de qualidade do build e Runtime](native-runtime-quality-report.md)
 - [Criação e edição de projetos](writing.md)
 - [Scaffolds de projeto](scaffolds.md)
 - [DSL de entidades](entity-dsl.md)
 - [Operação, lifecycle e Marketplace](platform-operations.md)
+- [Avaliação de integração das APIs Mendix](platform-api-integration.md)
 - [Aceitação end-to-end do VetClinic](vetclinic-acceptance.md)
 
 [Voltar ao README do projeto](../../README.pt-BR.md)
