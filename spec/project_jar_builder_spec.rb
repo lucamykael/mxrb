@@ -179,7 +179,7 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
 end
 # rubocop:enable Metrics/BlockLength
 
-RSpec.describe Mxrb::Runtime::JavaLocator do
+RSpec.describe Mxrb::Runtime::JavaLocator do # rubocop:disable Metrics/BlockLength
   it 'prefers configured homes and rejects homes without Java' do
     Dir.mktmpdir do |dir|
       allow(ENV).to receive(:[]).with('MXRB_JAVA_HOME').and_return(nil)
@@ -197,7 +197,16 @@ RSpec.describe Mxrb::Runtime::JavaLocator do
   end
 
   it 'discovers only matching asdf and mise installations' do
-    allow(Dir).to receive(:home).and_return(@root || Dir.home)
-    expect(described_class.installed('987654')).to eq([])
+    Dir.mktmpdir do |root|
+      matching = [
+        File.join(root, '.asdf/installs/java/temurin-987654.1'),
+        File.join(root, '.local/share/mise/installs/java/corretto-987654_2')
+      ]
+      matching.each { FileUtils.mkdir_p(_1) }
+      FileUtils.mkdir_p(File.join(root, '.asdf/installs/java/temurin-17'))
+      allow(Dir).to receive(:home).and_return(root)
+
+      expect(described_class.installed('987654')).to eq(matching.sort.reverse)
+    end
   end
-end
+end # rubocop:enable Metrics/BlockLength
