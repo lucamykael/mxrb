@@ -182,6 +182,8 @@ end
 RSpec.describe Mxrb::Runtime::JavaLocator do
   it 'prefers configured homes and rejects homes without Java' do
     Dir.mktmpdir do |dir|
+      allow(ENV).to receive(:[]).with('MXRB_JAVA_HOME').and_return(nil)
+      allow(ENV).to receive(:[]).with('JAVA_HOME').and_return(nil)
       missing = File.join(dir, 'missing')
       valid = File.join(dir, 'valid')
       FileUtils.mkdir_p(File.join(valid, 'bin'))
