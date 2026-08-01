@@ -30,6 +30,42 @@ subset, including `operations.json`, datasource, and attribute types.
 Untranslated types or property combinations receive a DOM fallback and are
 recorded in `web/mxrb-pages.json`; VetClinic's manifest is empty.
 
+The React compiler also materializes containers, text and headings, responsive
+grids/columns, and open/create buttons. Bootstrap injects
+`theme.compiled.css`, the manifest, and `themesource/*/public` assets, so a
+homepage containing a `LayoutGrid` no longer renders blank. To add Ruby content:
+
+Parameter-backed `DataView` forms now render editable `TextBox` fields plus
+Save/Cancel actions. Create passes the new object's GUID through `openForm2`;
+commit/rollback operations are registered with the project user roles derived
+from each page's allowed module roles. Runtime authorization is preserved
+instead of bypassed.
+
+For local developer Runtime sessions, mxrb also versions dynamic page imports,
+content-hashes the patched React Client chunk, and gives Rspack's self-import
+the same cache token as the entrypoint. This prevents Mendix's long-lived
+static-resource responses from restoring an obsolete blank page after a native
+rebuild.
+
+```ruby
+Mxrb.define("App.mpr") do
+  mendix_version "11.12.1"
+  self.module(:App) do
+    layout :Shell
+    page(:Home) do
+      layout "App.Shell"
+      title "My application"
+      container(:main, class_name: "container") do
+        text :welcome, caption: "Content created with mxrb"
+      end
+    end
+  end
+end
+```
+
+Existing projects can be exported, changed in the DSL, and regenerated.
+Unsupported widgets remain visible in the support manifest.
+
 The Dojo path compiles Data Grid 1 database, XPath, and microflow sources plus
 audited search, sorting, paging, selection, and buttons. Every other visible
 widget is recorded per page in `web/mxrb-legacy-pages.json` and is not claimed
@@ -77,8 +113,9 @@ cleanly. The `ACT Create Animal` functional test then passed.
   instead of substituting the Java-21 launcher from 11;
 - Data Grid 1 is covered while other Dojo widgets remain explicit manifest
   findings;
-- Data Grid 2 is covered for XPath datasource and attribute columns; other
-  widgets and property combinations use the manifest-recorded fallback;
+- Data Grid 2 is covered for XPath datasource and attribute columns. React edit
+  forms cover parameter-backed DataView/TextBox and Save/Cancel; other widgets
+  and property combinations use the manifest-recorded fallback;
 - native web bundles are generated; React Native still relies on existing
   version-template and project assets;
 - `mx` and `mxbuild` are never fallbacks. Unsupported input produces a clear

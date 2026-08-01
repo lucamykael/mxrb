@@ -53,7 +53,9 @@ RSpec.describe Mxrb::Compiler::DeploymentBootstrapper do
     {
       'userlib/app.jar' => 'user', 'vendorlib/vendor.jar' => 'vendor',
       'resources/app.txt' => 'resource', 'theme/web/favicon.ico' => 'icon',
-      'theme-cache/web/theme.compiled.css' => 'css'
+      'theme-cache/web/theme.compiled.css' => 'css',
+      'themesource/atlas_core/public/resources/switcher-toggle.png' => 'switcher',
+      'themesource/atlas_core/public/resources/fonts/poppins/Poppins-Regular.ttf' => 'font'
     }.each do |relative, content|
       path = File.join(@root, relative)
       FileUtils.mkdir_p(File.dirname(path))
@@ -74,6 +76,8 @@ RSpec.describe Mxrb::Compiler::DeploymentBootstrapper do
       File.join(deployment, 'model', 'lib', 'userlib', 'app.jar'),
       File.join(deployment, 'model', 'lib', 'userlib', 'vendor.jar'),
       File.join(deployment, 'web', 'theme.compiled.css'),
+      File.join(deployment, 'web', 'resources', 'switcher-toggle.png'),
+      File.join(deployment, 'web', 'resources', 'fonts', 'poppins', 'Poppins-Regular.ttf'),
       File.join(deployment, 'web', 'img', 'Demo$Assets$Logo.png')
     ]
     expect(expected).to all(satisfy { File.exist?(_1) })

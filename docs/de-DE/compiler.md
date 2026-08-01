@@ -32,6 +32,43 @@ und Attributtypen. Noch nicht übersetzte Typen oder Eigenschaftskombinationen
 erhalten einen DOM-Fallback in `web/mxrb-pages.json`; das VetClinic-Manifest ist
 leer.
 
+Der React-Compiler materialisiert außerdem Container, Texte und Überschriften,
+responsive Grids/Spalten sowie Buttons zum Öffnen und Erzeugen. Der Bootstrap
+bindet `theme.compiled.css`, das Manifest und Assets aus
+`themesource/*/public` ein; eine Homepage mit `LayoutGrid` bleibt nicht leer.
+Ruby-Inhalte lassen sich so ergänzen:
+
+Parametergestützte `DataView`-Formulare rendern nun editierbare `TextBox`-Felder
+sowie Save/Cancel-Aktionen. Create übergibt die GUID des neuen Objekts über
+`openForm2`; Commit-/Rollback-Operationen werden mit den Projektbenutzerrollen
+registriert, die aus den erlaubten Modulrollen der Seite abgeleitet werden.
+Damit bleibt die Runtime-Autorisierung erhalten und wird nicht umgangen.
+
+In lokalen Runtime-Sitzungen im Developer-Modus versioniert mxrb außerdem
+dynamische Seitenimporte, versieht den korrigierten React-Client-Chunk mit
+einem Inhalts-Hash und gibt dem Rspack-Selbstimport dasselbe Cache-Token wie
+dem Entry-Point. Dadurch können langlebige statische Mendix-Antworten nach
+einem nativen Rebuild keine veraltete leere Seite wiederherstellen.
+
+```ruby
+Mxrb.define("App.mpr") do
+  mendix_version "11.12.1"
+  self.module(:App) do
+    layout :Shell
+    page(:Home) do
+      layout "App.Shell"
+      title "Meine Anwendung"
+      container(:main, class_name: "container") do
+        text :welcome, caption: "Mit mxrb erzeugter Inhalt"
+      end
+    end
+  end
+end
+```
+
+Bestehende Projekte können exportiert, in der DSL geändert und neu erzeugt
+werden. Nicht unterstützte Widgets bleiben im Support-Manifest sichtbar.
+
 Der Dojo-Pfad kompiliert Data Grid 1 mit Datenbank-, XPath- und
 Microflow-Quellen sowie auditierten Such-, Sortier-, Paging-, Auswahl- und
 Button-Verträgen. Alle anderen sichtbaren Widgets werden pro Seite in
@@ -81,8 +118,9 @@ Seitenbundles und fuhr sauber herunter. Danach bestand der Funktionstest
   aus Version 11 einzusetzen;
 - Data Grid 1 ist abgedeckt, andere Dojo-Widgets bleiben explizite
   Manifestbefunde;
-- Data Grid 2 ist für XPath-Datenquellen und Attributspalten abgedeckt; andere
-  Widgets und Eigenschaftskombinationen verwenden den erfassten Fallback;
+- Data Grid 2 ist für XPath-Datenquellen und Attributspalten abgedeckt.
+  React-Formulare decken parametergestützte DataView/TextBox sowie Save/Cancel
+  ab; andere Widgets und Eigenschaftskombinationen verwenden den erfassten Fallback;
 - native Web-Bundles werden erzeugt; React Native verwendet weiterhin
   bestehende Versions-Template- und Projektassets;
 - `mx` und `mxbuild` sind niemals Fallbacks. Nicht unterstützte Eingaben führen

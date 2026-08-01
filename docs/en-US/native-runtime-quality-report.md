@@ -12,7 +12,7 @@ Date: August 1, 2026.
 - web profiles are Dojo on 6/7, hybrid Dojo/React on 9, and React on 11;
 - Projects API inventoried 130 accessible apps. Three real Git projects (`MyFirstModule`, `LearnNow Trainning Management`, and `SLATaskApp`) passed validate → export → generate → validate → compare;
 - `MyFirstModule` was regenerated as exact 11.12.1 without proprietary builders. Runtime synchronized 655 database operations, created the active `mx` administrator, served the React shell and styled login publicly on `127.0.0.1:18080`, and exposed the expected domain tables;
-- final QA: 813 examples, zero failures, 100% lines (12,777/12,777), 100% branches (4,520/4,520), and clean RuboCop across 205 files.
+- final QA: 821 examples, zero failures, 100% lines (12,981/12,981), 100% branches (4,607/4,607), and clean RuboCop across 205 files.
 
 ## Corrections from the improvement report
 
@@ -21,6 +21,15 @@ Date: August 1, 2026.
 - OQL view source compilation, generalized entity persistence flags, demo-user role arrays, system texts, and exact association storage/access rights;
 - stable PostgreSQL readiness, public loopback Runtime port (`--runtime-port`), environment-backed admin password, and active admin creation;
 - self-contained login resources, rendered template placeholders, cache busting, and styled/i18n login shell;
+- Atlas CSS, manifest, and public-asset hydration; the real Team Server
+  homepage now renders actionable React grids, headings, and buttons;
+- React developer-mode page imports carry the session cache token; the patched
+  client chunk is content-hashed and Rspack's self-import shares the entrypoint
+  token, eliminating stale blank-homepage reloads without disabling cache;
+- real browser clicks verified Home → Courses → Add → Save. Parameter-backed
+  DataView/TextBox forms render and persist values; create passes GUIDs through
+  `openForm2`, while commit/rollback authorization is derived from page module
+  roles. PostgreSQL confirmed the four saved QA values;
 - template/image/ZIP traversal and unsafe identifier protection, plus symlink rejection for native inputs;
 - comparison normalizes absent Runtime boolean defaults, restoring exact legacy round trips.
 

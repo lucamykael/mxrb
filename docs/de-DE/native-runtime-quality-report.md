@@ -12,7 +12,7 @@ Datum: 1. August 2026.
 - Webprofile: Dojo in 6/7, Dojo/React-Hybrid in 9 und React in 11;
 - Projects API inventarisierte 130 Apps. Drei echte Git-Projekte (`MyFirstModule`, `LearnNow Trainning Management`, `SLATaskApp`) bestanden validate → export → generate → validate → compare;
 - `MyFirstModule` wurde ohne proprietäre Builder als exaktes 11.12.1 erzeugt. Runtime synchronisierte 655 Operationen, erstellte den aktiven Admin `mx`, lieferte React-Shell und gestaltetes Login auf `127.0.0.1:18080` und zeigte die erwarteten Tabellen;
-- finale QA: 813 Beispiele, null Fehler, 100% Zeilen (12.777/12.777), 100% Branches (4.520/4.520) und RuboCop ohne Verstöße in 205 Dateien.
+- finale QA: 821 Beispiele, null Fehler, 100% Zeilen (12.981/12.981), 100% Branches (4.607/4.607) und RuboCop ohne Verstöße in 205 Dateien.
 
 ## Korrekturen aus dem Verbesserungsbericht
 
@@ -21,6 +21,15 @@ Datum: 1. August 2026.
 - OQL-Quellen, geerbte Persistenzflags, Demo-User-Rollen, Systemtexte und exakte Association-Storage/Access-Rechte;
 - stabile PostgreSQL-Bereitschaft, öffentliche Loopback-Portoption (`--runtime-port`), Admin-Passwort aus Umgebung und Admin-Erstellung;
 - eigenständige Login-Ressourcen, gerenderte Platzhalter, Cache-Busting, Stil und i18n;
+- Einbindung von Atlas-CSS, Manifest und öffentlichen Assets; die echte
+  Team-Server-Homepage rendert nun bedienbare React-Grids, Überschriften und Buttons;
+- Seitenimporte im Developer-Modus tragen das Sitzungs-Cache-Token; der
+  korrigierte Client-Chunk erhält einen Inhalts-Hash und der Rspack-Selbstimport
+  teilt das Entry-Point-Token, sodass keine veraltete leere Homepage geladen wird;
+- echte Browserklicks bestätigten Home → Courses → Add → Save. Parametergestützte
+  DataView/TextBox-Formulare rendern und speichern Werte; Create übergibt die GUID
+  über `openForm2`, während die Commit-/Rollback-Autorisierung aus den Modulrollen
+  der Seite abgeleitet wird. PostgreSQL bestätigte die vier gespeicherten QA-Werte;
 - Schutz vor Traversal, unsicheren Bezeichnern und Symlinks in nativen Eingaben;
 - Vergleich normalisiert fehlende boolesche Runtime-Defaults und erhält exakte Legacy-Round-trips.
 

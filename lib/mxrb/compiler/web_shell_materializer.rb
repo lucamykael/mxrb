@@ -1,12 +1,20 @@
 # frozen_string_literal: true
 
 require 'fileutils'
+require 'digest'
 
 module Mxrb
   module Compiler
     # Completes web templates normally hydrated by Studio Pro's proprietary build stage.
-    class WebShellMaterializer
+    class WebShellMaterializer # rubocop:disable Metrics/ClassLength
+      CACHE_REVISION = 5
       PLACEHOLDER = /\{\{[a-z0-9_-]+\}\}/i
+      DYNAMIC_PAGE_CACHE = /
+        (?:\(0,[A-Za-z0-9$_.]+\)\(\))\.getConfig\("isDevModeEnabled"\)\?"":
+        `\?\$\{((?:\(0,[A-Za-z0-9$_.]+\)\(\))\.getConfig\("cachebust"\))\}`
+      /x
+      SELF_IMPORT = %r{import\*as\s+(?<binding>[A-Za-z_$][A-Za-z0-9_$]*)\s+from"\./(?<asset>[A-Za-z0-9_.-]+\.js)";
+                        e\.C\(\k<binding>\),}x
 
       def initialize(web, version:)
         @web = File.expand_path(web)
@@ -17,22 +25,97 @@ module Mxrb
         return 0 unless File.directory?(@web)
 
         changed = html_files.count { render_html(_1) }
+        changed += materialize_dynamic_imports
         write_missing(File.join(@web, 'js', 'login_i18n.js'), login_i18n)
         write_missing(File.join(@web, 'lib', 'bootstrap', 'css', 'bootstrap.min.css'), login_styles)
         changed
+      end
+
+      # React Client deliberately omits page cache tokens in developer mode. Native mxrb
+      # rebuilds can then leave an already-open browser on an obsolete generated page.
+      def materialize_dynamic_imports
+        Dir.glob(File.join(@web, 'dist', '**', '*.js')).sort.count do |path|
+          source = File.binread(path)
+          rendered = render_javascript(source)
+          next false if source == rendered
+
+          write_versioned_chunk(path, rendered)
+          true
+        end
       end
 
       private
 
       def html_files = Dir.glob(File.join(@web, '*.html')).sort
 
+      def render_javascript(source)
+        rendered = source.gsub(DYNAMIC_PAGE_CACHE) do
+          %(`?#{cache_token}\${#{Regexp.last_match(1)}}`)
+        end
+        rendered.gsub(SELF_IMPORT) do |match|
+          asset = Regexp.last_match(:asset)
+          match.sub(%("./#{asset}"), %("./#{asset}?#{cache_token}"))
+        end
+      end
+
       def render_html(path)
         source = File.read(path)
-        rendered = source.gsub('{{cachebust}}', "mxrb-#{@version}").gsub(PLACEHOLDER, '')
+        rendered = source.gsub('{{cachebust}}', cache_token)
+        rendered = rendered.gsub('{{unsupportedbrowser}}', unsupported_browser)
+        rendered = rendered.gsub('{{themecss}}', theme_css)
+        rendered = rendered.gsub('{{manifest}}', manifest)
+        rendered = rendered.gsub(PLACEHOLDER, '')
         return false if source == rendered
 
         File.write(path, rendered)
         true
+      end
+
+      # Runtime's manifest handler accepts an opaque decimal cache token only.
+      def cache_token
+        Digest::SHA256.hexdigest("mxrb:web-shell:#{CACHE_REVISION}:#{@version}")[0, 15].to_i(16).to_s
+      end
+
+      def write_versioned_chunk(path, rendered)
+        old_stem = File.basename(path, '.js')
+        return File.binwrite(path, rendered) unless old_stem.match?(/\A[0-9a-f]{16}\z/)
+
+        new_stem = Digest::SHA256.hexdigest(rendered)[0, 16]
+        rewrite_chunk_references(old_stem, new_stem)
+        destination = File.join(File.dirname(path), "#{new_stem}.js")
+        File.binwrite(destination, rendered)
+        FileUtils.rm_f(path) unless destination == path
+      end
+
+      def rewrite_chunk_references(old_stem, new_stem)
+        Dir.glob(File.join(@web, 'dist', '**', '*.js')).sort.each do |path|
+          source = File.binread(path)
+          rendered = source.gsub(old_stem, new_stem)
+          File.binwrite(path, rendered) unless source == rendered
+        end
+      end
+
+      def theme_css
+        return '' unless File.file?(File.join(@web, 'theme.compiled.css'))
+
+        %(<link rel="stylesheet" href="theme.compiled.css?#{cache_token}">)
+      end
+
+      def manifest
+        %(<link rel="manifest" href="manifest.webmanifest?#{cache_token}" crossorigin="use-credentials">)
+      end
+
+      def unsupported_browser
+        <<~HTML.chomp
+          <script type="text/javascript">
+            try { eval("async () => {}"); }
+            catch (error) {
+              var homeUrl = window.location.origin + window.location.pathname;
+              var appUrl = homeUrl.slice(0, homeUrl.lastIndexOf("/") + 1);
+              window.location.replace(appUrl + "unsupported-browser.html");
+            }
+          </script>
+        HTML
       end
 
       def write_missing(path, contents)
@@ -72,6 +155,6 @@ module Mxrb
           .login-form{background:#fff;border-radius:12px}.login-form label{display:block;margin-bottom:6px}
         CSS
       end
-    end
+    end # rubocop:enable Metrics/ClassLength
   end
 end

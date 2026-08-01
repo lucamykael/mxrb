@@ -24,6 +24,7 @@ module Mxrb
         copy_root('resources', 'model/resources')
         copy_root('theme/web', 'web')
         copy_root('theme-cache/web', 'web')
+        copy_theme_public_assets
         export_images if @source
       end
 
@@ -31,6 +32,11 @@ module Mxrb
 
       def copy_root(source, destination)
         @copier.call(File.join(@project_root, source), File.join(@deployment, destination))
+      end
+
+      def copy_theme_public_assets
+        pattern = File.join(@project_root, 'themesource', '*', 'public')
+        Dir.glob(pattern).sort.each { @copier.call(_1, File.join(@deployment, 'web')) }
       end
 
       def export_images # rubocop:disable Metrics/AbcSize, Metrics/MethodLength

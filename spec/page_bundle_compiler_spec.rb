@@ -30,9 +30,10 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     bundle = described_class.new(source).compile(source.units_of('Forms$Page').first)
     expect(bundle.qualified_name).to eq('Demo.Home')
     expect(bundle.source).to include(
-      'PageFragment', 'export const title = "Welcome"', 'Demo.Shell.Main',
+      'PageFragment', 'export const title = "Welcome"', '"Main":',
       'mx-name-body body', '"Hello"'
     )
+    expect(bundle.source).not_to include('Demo.Shell.Main')
     expect(bundle.unsupported_widgets).to be_empty
   end
 
@@ -51,6 +52,38 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     )
   end
 
+  it 'renders responsive grids, headings, and page action buttons' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    argument = unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }
+    argument['Widgets'] = [
+      { '$Type' => 'Forms$LayoutGrid', 'Name' => 'grid', 'Rows' => [
+        { '$Type' => 'Forms$LayoutGridRow', 'Name' => 'row', 'Columns' => [
+          { '$Type' => 'Forms$LayoutGridColumn', 'Name' => 'column', 'Weight' => 6,
+            'TabletWeight' => 12, 'PhoneWeight' => 12, 'Widgets' => [
+              { '$Type' => 'Forms$DynamicText', 'Name' => 'heading', 'RenderMode' => 'H1',
+                'Content' => { 'Template' => { 'Items' => [
+                  { 'LanguageCode' => 'en_US', 'Text' => 'Dashboard' }
+                ] } } },
+              { '$Type' => 'Forms$ActionButton', 'Name' => 'open', 'ButtonStyle' => 'Primary',
+                'CaptionTemplate' => { 'Template' => { 'Items' => [
+                  { 'LanguageCode' => 'en_US', 'Text' => 'Open' }
+                ] } }, 'Action' => { '$Type' => 'Forms$FormAction',
+                                     'FormSettings' => { 'Form' => 'Demo.Home' } } }
+            ] }
+        ] }
+      ] }
+    ]
+
+    bundle = described_class.new(source).compile(unit)
+    expect(bundle.source).to include(
+      'mx-layoutgrid mx-layoutgrid-fluid', 'row', 'col-md-6 col-sm-12 col-xs-12',
+      'React.createElement("h1"', '"Dashboard"', 'btn-primary',
+      'window.mx?.ui?.openForm2?.("Demo.Home", {}, undefined, undefined'
+    )
+    expect(bundle.unsupported_widgets).to be_empty
+  end
+
   it 'normalizes explicit render modes and translation fallbacks' do
     compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
     expect(compiler.send(:render_mode, 'RenderMode' => 'Section')).to eq('section')
@@ -60,6 +93,125 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
                            3, { 'LanguageCode' => 'pt_BR', 'Text' => 'Olá' }
                          ])).to eq('Olá')
     expect(compiler.send(:translated_text, 'Items' => [3])).to eq('')
+  end
+
+  it 'renders parameter-backed data views, editable fields, save, and cancel actions' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    unit.document['Parameters'] << {
+      '$Type' => 'Forms$PageParameter', 'Name' => 'Item',
+      'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    unit.document['Parameters'] << {
+      '$Type' => 'Forms$PageParameter', 'Name' => 'Ignored',
+      'ParameterType' => { '$Type' => 'DataTypes$StringType' }
+    }
+    text_box = {
+      '$Type' => 'Forms$TextBox', 'Name' => 'name', 'IsPasswordBox' => true,
+      'InputMask' => 'AAA', 'MaxLengthCode' => 42, 'Autocomplete' => false,
+      'SubmitBehaviour' => 'OnTyping', 'SubmitOnInputDelay' => 150,
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' },
+      'LabelTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Name' }
+      ] } },
+      'PlaceholderTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Enter a name' }
+      ] } }
+    }
+    actions = %w[Forms$SaveChangesClientAction Forms$CancelChangesClientAction].map.with_index do |type, index|
+      {
+        '$Type' => 'Forms$ActionButton', 'Name' => "action#{index}",
+        'ButtonStyle' => index.zero? ? 'Primary' : 'Default',
+        'CaptionTemplate' => { 'Template' => { 'Items' => [
+          3, { 'LanguageCode' => 'en_US', 'Text' => index.zero? ? 'Save' : 'Cancel' }
+        ] } },
+        'Action' => { '$Type' => type, 'ClosePage' => index.zero?,
+                      'DisabledDuringExecution' => index.zero? }
+      }
+    end
+    data_view = {
+      '$Type' => 'Forms$DataView', 'Name' => 'editor', 'ShowFooter' => false,
+      'DataSource' => { 'SourceVariable' => { 'PageParameter' => 'Item' } },
+      'NoEntityMessage' => { 'Items' => [3] },
+      'Widgets' => [2, text_box, text_box.merge(
+        'Name' => 'code', 'IsPasswordBox' => false, 'MaxLengthCode' => -1,
+        'Autocomplete' => true, 'SubmitBehaviour' => 'OnEndEditing',
+        'AttributeRef' => { 'Attribute' => 'Demo.Item.Code' }
+      )],
+      'FooterWidgets' => [2, *actions]
+    }
+    unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }['Widgets'] = [2, data_view]
+
+    compiler = described_class.new(source)
+    bundle = compiler.compile(unit)
+    expect(bundle.source).to include(
+      '$DataView', '$TextBox', '$FormGroup', '$ActionButton',
+      'AssociationObjectProperty({ scope: "$Item"',
+      'AttributeProperty({ "scope": "p.Demo.Home.editor"',
+      '"isPassword": true', '"maxLength": 42', '"autocomplete": "off"',
+      '"submitWhileEditing": true', 'TextProperty({ value: "Name" })',
+      '"type": "saveChanges"', '"type": "cancelChanges"',
+      'export const parameters = {"$Item":{"kind":"object"}}'
+    )
+    expect(bundle.unsupported_widgets).to be_empty
+
+    expect(compiler.send(:render_data_view, {
+      '$Type' => 'Forms$DataView', 'Name' => 'unsafe', 'DataSource' => {}
+    })).to include('mxrb-unsupported-widget')
+    expect(compiler.send(:render_text_box, {
+      '$Type' => 'Forms$TextBox', 'Name' => 'unsafe', 'AttributeRef' => { 'Attribute' => 'unsafe' }
+    })).to include('mxrb-unsupported-widget')
+    expect(compiler.send(:js_literal, [true, nil])).to eq('[true, null]')
+    compiler.instance_variable_set(:@uses_data_grid, true)
+    expect(compiler.send(:widget_imports)).to include('$Datagrid', '$DataView')
+  end
+
+  it 'fails closed on invalid slots and covers safe page-action fallbacks' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    compiler = described_class.new(source)
+    compiler.compile(unit)
+
+    expect(compiler.send(:grid_weight_class, 'md', nil)).to be_nil
+    expect(compiler.send(:open_form_handler, '../unsafe')).to be_nil
+    expect(compiler.send(:create_object_handler, '../unsafe', 'Demo.Home')).to be_nil
+    expect(compiler.send(:create_object_handler, 'Demo.Item', '../unsafe')).to be_nil
+    expect(compiler.send(:action_handler, {})).to be_nil
+    expect(compiler.send(:action_handler, '$Type' => 'Forms$UnknownAction')).to be_nil
+    expect(compiler.send(:render_action_button, {
+      '$Type' => 'Forms$ActionButton', 'Name' => '', 'Action' => {},
+      'CaptionTemplate' => { 'Template' => { 'Items' => [] } }
+    })).to include('"disabled": true', 'btn-default')
+    unit.document['Parameters'] << {
+      '$Type' => 'Forms$PageParameter', 'Name' => 'Item',
+      'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    compiler.compile(unit)
+    create = compiler.send(:action_handler, {
+      '$Type' => 'Forms$CreateObjectClientAction',
+      'EntityRef' => { 'Entity' => 'Demo.Item' },
+      'PageSettings' => { 'Form' => 'Demo.Home' }
+    })
+    expect(create).to include(
+      'window.mx?.data?.create?', 'Demo.Item', 'Demo.Home', '"$Item": object.getGuid()',
+      'window.mx?.ui?.openForm2?'
+    )
+    expect(compiler.send(:create_object_handler, 'Demo.Other', 'Demo.Home')).to be_nil
+    expect(compiler.send(:create_object_handler, 'Demo.Item', 'Demo.Missing')).to be_nil
+    expect(compiler.send(:page_parameters)).to eq('$Item' => { kind: 'object' })
+    expect(compiler.send(:widget_id, '$ID' => {
+      '$binary' => { 'base64' => 'ab+/cd==' }
+    })).to eq('abcd')
+    expect(compiler.send(:widget_id, {})).to eq('')
+
+    arguments = unit.document['FormCall']['Arguments']
+    arguments << { 'Parameter' => 'Other.Main', 'Widgets' => [] }
+    expect { described_class.new(source).compile(unit) }
+      .to raise_error(Mxrb::CompilationError, /duplicate page slot "Main"/)
+    arguments.pop
+    arguments.find { _1.is_a?(Hash) }['Parameter'] = '../unsafe'
+    expect { described_class.new(source).compile(unit) }
+      .to raise_error(Mxrb::CompilationError, /invalid page slot/)
   end
 end
 

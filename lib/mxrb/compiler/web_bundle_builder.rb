@@ -24,13 +24,17 @@ module Mxrb
         return LegacyPageBuilder.new(@source, web, profiles:).build unless profiles.include?(:react)
 
         prepare(web)
-        output, status = Open3.capture2e(environment(web), node, runner, chdir: web)
-        raise CompilationError, "Rspack web build failed:\n#{output}" unless status.success?
-
+        run_rspack(web)
+        WebShellMaterializer.new(web, version: @source.version).materialize_dynamic_imports
         result(web)
       end
 
       private
+
+      def run_rspack(web)
+        output, status = Open3.capture2e(environment(web), node, runner, chdir: web)
+        raise CompilationError, "Rspack web build failed:\n#{output}" unless status.success?
+      end
 
       def prepare(web)
         WidgetPackageExtractor.new(File.dirname(@mpr_path), web).extract

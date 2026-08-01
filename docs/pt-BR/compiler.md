@@ -33,6 +33,42 @@ tipos dos atributos. Tipos ou combinações ainda não traduzidos recebem um
 fallback DOM e ficam registrados em `web/mxrb-pages.json`; o manifesto do
 VetClinic ficou vazio.
 
+O compilador React também materializa containers, textos e títulos, grids
+responsivos, colunas e botões de abertura/criação. O bootstrap injeta
+`theme.compiled.css`, manifest e assets `themesource/*/public`; portanto uma
+homepage com `LayoutGrid` não fica vazia. Para adicionar conteúdo em Ruby:
+
+Formulários `DataView` ligados a parâmetros agora renderizam campos `TextBox`
+editáveis e ações Save/Cancel. Create passa o GUID do novo objeto por
+`openForm2`; as operações commit/rollback são registradas com os user roles do
+projeto derivados dos module roles permitidos pela página. A autorização da
+Runtime é preservada, sem contorno de segurança.
+
+Nas sessões locais da Runtime em modo developer, o mxrb também versiona imports
+dinâmicos de páginas, aplica hash de conteúdo ao chunk corrigido do React Client
+e dá à autoimportação do Rspack o mesmo token do entrypoint. Isso impede que as
+respostas estáticas de longa duração do Mendix restaurem uma página branca
+obsoleta depois de um rebuild nativo.
+
+```ruby
+Mxrb.define("App.mpr") do
+  mendix_version "11.12.1"
+  self.module(:App) do
+    layout :Shell
+    page(:Home) do
+      layout "App.Shell"
+      title "Minha aplicação"
+      container(:main, class_name: "container") do
+        text :welcome, caption: "Conteúdo criado com mxrb"
+      end
+    end
+  end
+end
+```
+
+Projetos existentes podem ser exportados, alterados na DSL e regenerados. Os
+widgets fora do subconjunto continuam no manifesto, sem descarte silencioso.
+
 No Dojo, o Data Grid 1 cobre fontes database, XPath e microflow, pesquisa,
 ordenação, paginação, seleção e botões auditados. Outros widgets visuais são
 registrados por página em `web/mxrb-legacy-pages.json`; não são declarados como
@@ -81,7 +117,8 @@ encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
   substituir pelo launcher Java 21 da versão 11;
 - Data Grid 1 está coberto, mas os demais widgets Dojo continuam explicitamente
   pendentes no manifesto legado;
-- Data Grid 2 está coberto para datasource XPath e colunas de atributo; outros
+- Data Grid 2 está coberto para datasource XPath e colunas de atributo. Os
+  formulários React cobrem DataView/TextBox por parâmetro e Save/Cancel; outros
   widgets e combinações de propriedades usam fallback audível no manifesto;
 - bundles web nativos são gerados; o pipeline React Native ainda depende dos
   assets de template/projeto existentes;

@@ -30,6 +30,7 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     })
     source = instance_double(Mxrb::Compiler::SourceModel)
     allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
     Dir.mktmpdir do |root|
       path = File.join(root, 'operations.json')
       operations = described_class.new(source).write(path)
@@ -52,6 +53,42 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       :constants, 'Demo.Home', widget, { 'XPathConstraint' => '' }, 'Demo.Item'
     )
     expect(constants['XPath']).to eq('//Demo.Item')
+  end
+
+  it 'authorizes native save and cancel actions with deterministic operation ids' do
+    actions = %w[Forms$SaveChangesClientAction Forms$CancelChangesClientAction].map.with_index do |type, index|
+      { '$Type' => 'Forms$ActionButton', 'Name' => "button#{index}",
+        'Action' => { '$Type' => type } }
+    end
+    actions << { '$Type' => 'Forms$ActionButton', 'Name' => 'ignored',
+                 'Action' => { '$Type' => 'Forms$NoAction' } }
+    page = unit(module_name: 'Demo', document: { 'Name' => 'Edit', 'Widgets' => actions })
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+
+    operations = described_class.new(source).send(:page_operations, page)
+    expect(operations.map { _1['operationType'] }).to eq(%w[commit rollback])
+    expect(operations).to all(include(
+                                'parameters' => { 'Objects' => ['AnyObjectList'] },
+                                'constants' => {}, 'allowedUserRoleSets' => []
+                              ))
+  end
+
+  it 'maps page module roles to the project user roles allowed by the Runtime' do
+    page = unit(module_name: 'Demo', document: {
+      'Name' => 'Edit', 'AllowedModuleRoles' => [1, 'Demo.Editor']
+    })
+    security = {
+      'UserRoles' => [2,
+                      { 'Name' => 'Administrator', 'ModuleRoles' => [1, 'Demo.Editor'] },
+                      { 'Name' => 'Viewer', 'ModuleRoles' => [1, 'Demo.Viewer'] }]
+    }
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([security])
+
+    expect(described_class.new(source).send(:allowed_user_role_sets, page))
+      .to eq([['Administrator']])
   end
 end
 

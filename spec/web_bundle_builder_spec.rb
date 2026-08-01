@@ -36,6 +36,12 @@ RSpec.describe Mxrb::Compiler::WebBundleBuilder do
   end
 
   it 'writes localized startup data and reports the Rspack output inventory' do
+    client = File.join(@deployment, 'web', 'dist', 'chunks', 'one.js')
+    File.write(
+      client,
+      'let t=(0,A.g)().getConfig("isDevModeEnabled")?"":' \
+      '`?${(0,A.g)().getConfig("cachebust")}`'
+    )
     status = instance_double(Process::Status, success?: true)
     expect(Open3).to receive(:capture2e) do |environment, node, runner, chdir:|
       expect(environment).to include('NODE_ENV' => 'production', 'MX_DEPLOYMENT_WEB_DIRECTORY' => chdir)
@@ -46,7 +52,10 @@ RSpec.describe Mxrb::Compiler::WebBundleBuilder do
     result = described_class.new(
       @mpr, deployment: @deployment, mendix_home: File.join(@version, 'runtime')
     ).build
-    expect(result).to have_attributes(files: 2, bytes: 11)
+    expect(result.files).to eq(2)
+    expect(File.read(client)).to match(
+      /let t=`\?\d+\$\{\(0,A\.g\)\(\)\.getConfig\("cachebust"\)\}`/
+    )
     entry = File.read(File.join(@deployment, 'web', 'index.js'))
     expect(entry).to include('startApp', '"languages"', '"systemTexts"')
   end

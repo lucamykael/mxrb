@@ -29,10 +29,28 @@ module Mxrb
 
       def page_operations(unit)
         page_name = "#{unit.module_name}.#{unit.document['Name']}"
-        custom_widgets(unit.document).filter_map { operation(page_name, _1) }
+        role_sets = allowed_user_role_sets(unit)
+        custom_widgets(unit.document).filter_map { operation(page_name, _1, role_sets) } +
+          data_action_operations(page_name, unit.document, role_sets)
       end
 
-      def operation(page_name, widget)
+      def data_action_operations(page_name, document, role_sets) # rubocop:disable Metrics/MethodLength
+        nested(document, 'Forms$ActionButton').filter_map do |widget|
+          type = case widget.dig('Action', '$Type')
+                 when 'Forms$SaveChangesClientAction' then 'commit'
+                 when 'Forms$CancelChangesClientAction' then 'rollback'
+                 end
+          next unless type
+
+          {
+            'operationId' => self.class.operation_id(page_name, widget['Name']),
+            'operationType' => type, 'parameters' => { 'Objects' => ['AnyObjectList'] },
+            'constants' => {}, 'allowedUserRoleSets' => role_sets
+          }
+        end
+      end # rubocop:enable Metrics/MethodLength
+
+      def operation(page_name, widget, role_sets)
         source = xpath_sources(widget).first
         return unless source
 
@@ -41,9 +59,19 @@ module Mxrb
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'retrieve', 'parameters' => {},
           'constants' => constants(page_name, widget, source, entity),
-          'allowedUserRoleSets' => []
+          'allowedUserRoleSets' => role_sets
         }
       end
+
+      def allowed_user_role_sets(unit) # rubocop:disable Metrics/AbcSize
+        module_roles = array(unit.document['AllowedModuleRoles']).map(&:to_s)
+        security = @source.documents('Security$ProjectSecurity').first
+        array(security&.fetch('UserRoles', nil)).filter_map do |role|
+          next if (array(role['ModuleRoles']).map(&:to_s) & module_roles).empty?
+
+          [role['Name'].to_s]
+        end
+      end # rubocop:enable Metrics/AbcSize
 
       def constants(page_name, widget, source, entity)
         constraint = source['XPathConstraint'].to_s
