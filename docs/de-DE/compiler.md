@@ -48,7 +48,9 @@ In lokalen Runtime-Sitzungen im Developer-Modus versioniert mxrb außerdem
 dynamische Seitenimporte, versieht den korrigierten React-Client-Chunk mit
 einem Inhalts-Hash und gibt dem Rspack-Selbstimport dasselbe Cache-Token wie
 dem Entry-Point. Dadurch können langlebige statische Mendix-Antworten nach
-einem nativen Rebuild keine veraltete leere Seite wiederherstellen.
+einem nativen Rebuild keine veraltete leere Seite wiederherstellen. Die erzeugte
+Shell stellt außerdem einen begrenzten `openForm`-Adapter über `openForm2`
+bereit; alte Handler im Cache navigieren damit, statt still ohne Request zu enden.
 
 ```ruby
 Mxrb.define("App.mpr") do

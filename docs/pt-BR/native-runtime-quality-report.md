@@ -12,7 +12,7 @@ Data: 1º de agosto de 2026.
 - perfis web: Dojo em 6/7, híbrido Dojo/React em 9 e React em 11;
 - a Projects API inventariou 130 apps. Três projetos Git reais (`MyFirstModule`, `LearnNow Trainning Management` e `SLATaskApp`) passaram validate → export → generate → validate → compare;
 - `MyFirstModule` foi regenerado como 11.12.1 exato sem builders proprietários. A Runtime sincronizou 655 operações, criou o administrador `mx` ativo, serviu shell React e login estilizado em `127.0.0.1:18080` e expôs as tabelas esperadas;
-- QA final: 821 exemplos, zero falhas, 100% de linhas (12.981/12.981), 100% de branches (4.607/4.607) e RuboCop limpo em 205 arquivos.
+- QA final: 821 exemplos, zero falhas, 100% de linhas (12.987/12.987), 100% de branches (4.611/4.611) e RuboCop limpo em 205 arquivos.
 
 ## Correções do relatório de melhorias
 
@@ -26,6 +26,9 @@ Data: 1º de agosto de 2026.
 - imports de página no modo developer carregam o token da sessão; o chunk
   corrigido recebe hash de conteúdo e a autoimportação do Rspack compartilha o
   token do entrypoint, eliminando a homepage branca obsoleta sem desabilitar cache;
+- o shell gerado fornece um adaptador limitado de `openForm` sobre `openForm2`,
+  para que handlers antigos em cache naveguem em vez de falhar silenciosamente
+  sem disparar request para a Runtime;
 - cliques reais no navegador validaram Home → Courses → Add → Save. Formulários
   DataView/TextBox por parâmetro renderizam e persistem valores; create passa o
   GUID por `openForm2`, enquanto a autorização de commit/rollback deriva dos

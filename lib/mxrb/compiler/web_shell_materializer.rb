@@ -7,7 +7,7 @@ module Mxrb
   module Compiler
     # Completes web templates normally hydrated by Studio Pro's proprietary build stage.
     class WebShellMaterializer # rubocop:disable Metrics/ClassLength
-      CACHE_REVISION = 5
+      CACHE_REVISION = 6
       PLACEHOLDER = /\{\{[a-z0-9_-]+\}\}/i
       DYNAMIC_PAGE_CACHE = /
         (?:\(0,[A-Za-z0-9$_.]+\)\(\))\.getConfig\("isDevModeEnabled"\)\?"":
@@ -65,6 +65,7 @@ module Mxrb
         rendered = rendered.gsub('{{themecss}}', theme_css)
         rendered = rendered.gsub('{{manifest}}', manifest)
         rendered = rendered.gsub(PLACEHOLDER, '')
+        rendered = inject_navigation_compatibility(rendered) if File.basename(path) == 'index.html'
         return false if source == rendered
 
         File.write(path, rendered)
@@ -104,6 +105,36 @@ module Mxrb
       def manifest
         %(<link rel="manifest" href="manifest.webmanifest?#{cache_token}" crossorigin="use-credentials">)
       end
+
+      def inject_navigation_compatibility(html)
+        return html if html.include?('data-mxrb-navigation-compat') || !html.include?('</head>')
+
+        html.sub('</head>', "#{navigation_compatibility}\n</head>")
+      end
+
+      def navigation_compatibility # rubocop:disable Metrics/MethodLength
+        <<~HTML.chomp
+          <script data-mxrb-navigation-compat="#{CACHE_REVISION}">
+            (() => {
+              const install = () => {
+                const ui = window.mx && window.mx.ui;
+                if (!ui || typeof ui.openForm2 !== "function") return false;
+                if (typeof ui.openForm !== "function") {
+                  ui.openForm = (page, options, onLoad, onError) =>
+                    Promise.resolve(ui.openForm2(
+                      page, {}, undefined, undefined, options || { location: "content" }
+                    )).then(onLoad, onError);
+                }
+                return true;
+              };
+              if (!install()) {
+                const timer = window.setInterval(() => install() && window.clearInterval(timer), 50);
+                window.setTimeout(() => window.clearInterval(timer), 60000);
+              }
+            })();
+          </script>
+        HTML
+      end # rubocop:enable Metrics/MethodLength
 
       def unsupported_browser
         <<~HTML.chomp

@@ -16,20 +16,25 @@ RSpec.describe Mxrb::Compiler::WebShellMaterializer do
         '<head>{{unsupportedbrowser}}{{themecss}}{{appicons}}{{manifest}}</head>' \
         '<script src="x?{{cachebust}}"></script>'
       )
+      File.write(File.join(web, 'login.html'), '<head>{{manifest}}</head>')
 
-      expect(described_class.new(web, version: '11.12.1').materialize).to eq(1)
+      expect(described_class.new(web, version: '11.12.1').materialize).to eq(2)
       rendered = File.read(index)
-      token = Digest::SHA256.hexdigest('mxrb:web-shell:5:11.12.1')[0, 15].to_i(16).to_s
+      token = Digest::SHA256.hexdigest('mxrb:web-shell:6:11.12.1')[0, 15].to_i(16).to_s
       expect(rendered).to include(
         'eval("async () => {}")',
         %(<link rel="stylesheet" href="theme.compiled.css?#{token}">),
         %(<link rel="manifest" href="manifest.webmanifest?#{token}"),
-        %(<script src="x?#{token}"></script>)
+        %(<script src="x?#{token}"></script>),
+        'data-mxrb-navigation-compat="6"', 'ui.openForm =', 'ui.openForm2('
       )
       expect(rendered).not_to match(/\{\{[^}]+\}\}/)
       expect(File.read(File.join(web, 'js/login_i18n.js'))).to include('window.i18nMap', 'http401')
       expect(File.read(File.join(web, 'lib/bootstrap/css/bootstrap.min.css')))
         .to include('.form-control', '.btn-primary')
+      expect(described_class.new(web, version: '11.12.1').send(
+               :inject_navigation_compatibility, '<body>no head</body>'
+             )).to eq('<body>no head</body>')
       expect(described_class.new(web, version: '11.12.1').materialize).to eq(0)
     end
   end
@@ -42,7 +47,9 @@ RSpec.describe Mxrb::Compiler::WebShellMaterializer do
     Dir.mktmpdir do |root|
       File.write(File.join(root, 'index.html'), '<head>{{themecss}}</head>')
       expect(described_class.new(root, version: '11.12.1').materialize).to eq(1)
-      expect(File.read(File.join(root, 'index.html'))).to eq('<head></head>')
+      expect(File.read(File.join(root, 'index.html'))).to include(
+        '<head>', 'data-mxrb-navigation-compat="6"', '</head>'
+      )
     end
   end
 
@@ -58,7 +65,7 @@ RSpec.describe Mxrb::Compiler::WebShellMaterializer do
       )
       entry = File.join(root, 'dist', 'index.js')
       File.write(entry, 'import*as t from"./index.js";e.C(t),e(e.s=5237);')
-      token = Digest::SHA256.hexdigest('mxrb:web-shell:5:11.12.1')[0, 15].to_i(16).to_s
+      token = Digest::SHA256.hexdigest('mxrb:web-shell:6:11.12.1')[0, 15].to_i(16).to_s
 
       subject = described_class.new(root, version: '11.12.1')
       expect(subject.materialize).to eq(2)

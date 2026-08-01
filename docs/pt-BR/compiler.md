@@ -48,7 +48,9 @@ Nas sessões locais da Runtime em modo developer, o mxrb também versiona import
 dinâmicos de páginas, aplica hash de conteúdo ao chunk corrigido do React Client
 e dá à autoimportação do Rspack o mesmo token do entrypoint. Isso impede que as
 respostas estáticas de longa duração do Mendix restaurem uma página branca
-obsoleta depois de um rebuild nativo.
+obsoleta depois de um rebuild nativo. O shell gerado também fornece um adaptador
+limitado de `openForm` sobre `openForm2`; assim, handlers antigos em cache
+navegam em vez de terminar silenciosamente sem disparar request.
 
 ```ruby
 Mxrb.define("App.mpr") do

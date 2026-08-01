@@ -45,7 +45,9 @@ For local developer Runtime sessions, mxrb also versions dynamic page imports,
 content-hashes the patched React Client chunk, and gives Rspack's self-import
 the same cache token as the entrypoint. This prevents Mendix's long-lived
 static-resource responses from restoring an obsolete blank page after a native
-rebuild.
+rebuild. The generated shell also provides a bounded `openForm` adapter over
+`openForm2`; cached legacy handlers therefore navigate instead of silently
+issuing no request.
 
 ```ruby
 Mxrb.define("App.mpr") do
