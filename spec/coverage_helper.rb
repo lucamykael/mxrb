@@ -53,7 +53,11 @@ module MxrbCoverage
     end
     return if failures.empty?
 
-    raise failures.join("; ")
+    missed = payload[:files].filter_map do |path, details|
+      lines = details[:missed_lines]
+      "#{path}:#{lines.join(',')}" unless lines.empty?
+    end
+    raise [failures.join("; "), "missed lines: #{missed.join('; ')}"].join("; ")
   end
 
   def metric(counts)
