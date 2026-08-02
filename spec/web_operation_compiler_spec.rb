@@ -42,7 +42,7 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       )
       expect(operations.first['constants']).to include(
         'XPath' => '//Demo.Item[Active = true]',
-        'UsedAttributes' => ['Demo.Item.Name']
+        'UsedAttributes' => ['Demo.Item/Demo.Item.Name']
       )
     end
   end
@@ -50,9 +50,59 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
   it 'renders an unconstrained XPath without brackets' do
     compiler = described_class.new(instance_double(Mxrb::Compiler::SourceModel))
     constants = compiler.send(
-      :constants, 'Demo.Home', widget, { 'XPathConstraint' => '' }, 'Demo.Item'
+      :constants, 'Demo.Home', widget, '', 'Demo.Item'
     )
     expect(constants['XPath']).to eq('//Demo.Item')
+  end
+
+  it 'registers a microflow list data source as a callMicroflow operation' do
+    gallery = {
+      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'gallery',
+      'Object' => { 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource',
+        'MicroflowSettings' => { 'Microflow' => 'Demo.LoadItems' }
+      } }
+    }
+    page = unit(module_name: 'Demo', document: {
+      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [gallery]
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    flow = unit(module_name: 'Demo', document: {
+      'Name' => 'LoadItems', 'MicroflowReturnType' => {
+        '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item'
+      }
+    })
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:units_of).with('Microflows$Microflow').and_return([flow])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+
+    expect(described_class.new(source).send(:page_operations, page)).to contain_exactly(
+      include(
+        'operationType' => 'callMicroflow', 'parameters' => {},
+        'constants' => { 'MicroflowName' => 'Demo.LoadItems' }
+      )
+    )
+  end
+
+  it 'does not register a Runtime operation for a client-side nanoflow data source' do
+    gallery = {
+      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'gallery',
+      'Object' => { 'DataSource' => {
+        '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'Demo.LoadItems'
+      } }
+    }
+    page = unit(module_name: 'Demo', document: { 'Name' => 'Home', 'Widgets' => [gallery] })
+    flow = unit(module_name: 'Demo', document: {
+      '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
+      'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of) do |type|
+      { 'Forms$Page' => [page], 'Microflows$Nanoflow' => [flow] }.fetch(type, [])
+    end
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+
+    expect(described_class.new(source).send(:page_operations, page)).to be_empty
   end
 
   it 'authorizes native save and cancel actions with deterministic operation ids' do

@@ -51,14 +51,24 @@ module Mxrb
       end # rubocop:enable Metrics/MethodLength
 
       def operation(page_name, widget, role_sets)
-        source = xpath_sources(widget).first
-        return unless source
+        source = WebListDataSource.new(@source, widget)
+        return unless source.supported?
+        return xpath_operation(page_name, widget, role_sets, source) if source.xpath?
+        return if source.nanoflow?
 
-        entity = source.dig('EntityRef', 'Entity').to_s
+        {
+          'operationId' => self.class.operation_id(page_name, widget['Name']),
+          'operationType' => 'callMicroflow', 'parameters' => {},
+          'constants' => { 'MicroflowName' => source.microflow_name }, 'allowedUserRoleSets' => role_sets
+        }
+      end
+
+      def xpath_operation(page_name, widget, role_sets, source)
+        entity = source.entity
         {
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'retrieve', 'parameters' => {},
-          'constants' => constants(page_name, widget, source, entity),
+          'constants' => constants(page_name, widget, source.xpath_constraint, entity),
           'allowedUserRoleSets' => role_sets
         }
       end
@@ -73,20 +83,22 @@ module Mxrb
         end
       end # rubocop:enable Metrics/AbcSize
 
-      def constants(page_name, widget, source, entity)
-        constraint = source['XPathConstraint'].to_s
+      def constants(page_name, widget, constraint, entity)
         {
           'PageName' => page_name, 'WidgetName' => "#{page_name}.#{widget['Name']}",
-          'UsedAssociations' => [], 'UsedAttributes' => attribute_names(widget),
+          'UsedAssociations' => [], 'UsedAttributes' => used_attributes(widget, entity),
           'XPath' => "//#{entity}#{constraint.empty? ? '' : "[#{constraint}]"}"
         }
       end
 
       def custom_widgets(value) = nested(value, 'CustomWidgets$CustomWidget')
-      def xpath_sources(value) = nested(value, 'CustomWidgets$CustomWidgetXPathSource')
 
       def attribute_names(value)
         nested(value, 'DomainModels$AttributeRef').filter_map { _1['Attribute'] }.uniq.sort
+      end
+
+      def used_attributes(value, entity)
+        attribute_names(value).map { "#{entity}/#{_1}" }
       end
 
       def nested(value, type, result = [])

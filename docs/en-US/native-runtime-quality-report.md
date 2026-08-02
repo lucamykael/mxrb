@@ -29,6 +29,14 @@ Date: August 1, 2026.
 - the generated shell supplies a bounded `openForm` compatibility adapter over
   `openForm2`, so cached legacy click handlers navigate instead of failing
   silently without issuing a Runtime request;
+- the official React Gallery now renders XPath and microflow data, item
+  templates, selection, and formatted string/numeric values. Authenticated
+  browser QA rendered the persisted course title, description, `90 day(s)`,
+  and `49.95`, while an empty Teacher Gallery remained structurally present;
+- nanoflow list/object sources and button actions now compile to the real
+  Mendix client property contracts and function-backed instruction programs.
+  The audited linear instruction subset is tested; unsupported client nodes
+  fail closed instead of being mislabeled as microflows;
 - real browser clicks verified Home → Courses → Add → Save. Parameter-backed
   DataView/TextBox forms render and persist values; create passes GUIDs through
   `openForm2`, while commit/rollback authorization is derived from page module
@@ -39,7 +47,10 @@ Date: August 1, 2026.
 ## Explicit boundaries
 
 1. Dojo widgets other than Data Grid 1 remain listed in `web/mxrb-legacy-pages.json`; they are not silently reported as rendered.
-2. Data Grid 2 coverage is the audited XPath/attribute/create subset; other datasource, filter, and action variants fail closed.
+2. Data Grid 2 coverage is the audited XPath/attribute/create subset. Gallery
+   covers XPath/microflow and the audited linear nanoflow subset. Branches,
+   JavaScript actions, microflow calls inside nanoflows, and unsafe parameter
+   mappings still fail closed.
 3. Installed 6/7/9 distributions contain exact Runtime bundles but no compatible PAD/launcher. The available 11 launcher requires Java 21 and cannot safely start 9 on Java 11. Legacy `db up` therefore fails closed; only the exact 11.12.1 boot is claimed.
 4. Runtime uses a local trial/developer license, which emits the expected time-limit warning.
 5. Cloud Build/Deploy/Pipelines/Backups are optional external verification adapters, never dependencies of native generation or Runtime startup.

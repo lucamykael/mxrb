@@ -29,6 +29,14 @@ Datum: 1. August 2026.
 - die erzeugte Shell stellt einen begrenzten `openForm`-Kompatibilitätsadapter
   über `openForm2` bereit, damit zwischengespeicherte alte Click-Handler
   navigieren, statt ohne Runtime-Request still fehlzuschlagen;
+- die offizielle React Gallery rendert nun XPath- und Microflow-Daten,
+  Item-Templates, Auswahl sowie formatierte String-/Zahlenwerte. Authentifizierte
+  Browser-QA zeigte Titel, Beschreibung, `90 day(s)` und `49.95`; eine leere
+  Teacher-Gallery blieb strukturell vorhanden;
+- Nanoflow-Listen-/Objektquellen und Button-Aktionen werden in die echten
+  Mendix-Clientverträge und funktionsreferenzierte Instruktionsprogramme
+  kompiliert. Der auditierte lineare Teilumfang ist getestet; nicht unterstützte
+  Clientknoten schlagen geschlossen fehl statt als Microflows zu erscheinen;
 - echte Browserklicks bestätigten Home → Courses → Add → Save. Parametergestützte
   DataView/TextBox-Formulare rendern und speichern Werte; Create übergibt die GUID
   über `openForm2`, während die Commit-/Rollback-Autorisierung aus den Modulrollen
@@ -39,7 +47,10 @@ Datum: 1. August 2026.
 ## Explizite Grenzen
 
 1. Andere Dojo-Widgets als Data Grid 1 bleiben in `web/mxrb-legacy-pages.json`; sie werden nicht als gerendert gemeldet.
-2. Data Grid 2 deckt den auditierten XPath/Attribut/Create-Teil ab; andere Quellen, Filter und Aktionen schlagen geschlossen fehl.
+2. Data Grid 2 deckt den auditierten XPath/Attribut/Create-Teil ab. Gallery deckt
+   XPath/Microflow und den auditierten linearen Nanoflow-Teil ab. Verzweigungen,
+   JavaScript-Aktionen, interne Microflow-Aufrufe und unsichere Parameterabbildungen
+   schlagen weiterhin geschlossen fehl.
 3. Installierte 6/7/9-Distributionen enthalten exakte Bundles, aber keinen kompatiblen PAD/Launcher. Der 11-Launcher benötigt Java 21 und kann 9 unter Java 11 nicht sicher starten. Legacy-`db up` schlägt geschlossen fehl; nur der exakte 11.12.1-Boot wird behauptet.
 4. Runtime verwendet eine lokale Trial-/Developer-Lizenz mit erwarteter Zeitlimit-Warnung.
 5. Cloud Build/Deploy/Pipelines/Backups sind optionale externe Prüfungen, nie Abhängigkeiten des nativen Kerns.

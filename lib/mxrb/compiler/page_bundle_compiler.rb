@@ -19,6 +19,8 @@ module Mxrb
         @unit = unit
         @qualified_name = "#{unit.module_name}.#{unit.document['Name']}"
         @data_view_scopes = []
+        @list_scopes = []
+        @nanoflow_programs = NanoflowProgramCompiler.new(@source)
         content = page_content
         PageBundle.new(
           qualified_name: @qualified_name, source: module_source(content),
@@ -96,13 +98,25 @@ module Mxrb
         "React.createElement(#{JSON.generate(tag)}, #{js_props(props)})"
       end
 
-      def render_custom_widget(widget)
-        compiler = DataGridBundleCompiler.new(@source, @qualified_name, widget)
-        return render_unsupported(widget) unless compiler.supported?
+      def render_custom_widget(widget) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        grid = DataGridBundleCompiler.new(@source, @qualified_name, widget)
+        if grid.supported?
+          @uses_data_grid = true
+          return grid.render
+        end
 
-        @uses_data_grid = true
-        compiler.render
-      end
+        gallery = GalleryBundleCompiler.new(@source, @qualified_name, widget)
+        return render_unsupported(widget) unless gallery.supported?
+
+        @uses_gallery = true
+        nano_reference = nanoflow_reference(gallery.data_source.nanoflow_name) if gallery.data_source.nanoflow?
+        return render_unsupported(widget) if gallery.data_source.nanoflow? && !nano_reference
+
+        @list_scopes << { scope: gallery.widget_key, entity: gallery.entity_name }
+        content = children(gallery.content_widgets)
+        @list_scopes.pop
+        gallery.render(content, nanoflow_reference: nano_reference)
+      end # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def render_container(widget)
         props = common_props(widget).merge(
@@ -112,14 +126,45 @@ module Mxrb
       end
 
       def render_text(widget)
+        return render_bound_text(widget) if bound_text_attribute(widget)
+
         props = common_props(widget).merge(className: css_class(widget))
         caption = translated_text(widget.dig('Content', 'Template'))
         "React.createElement(#{JSON.generate(text_mode(widget))}, #{js_props(props)}, #{JSON.generate(caption)})"
       end
 
+      def render_bound_text(widget)
+        scope = @list_scopes.last
+        attribute = bound_text_attribute(widget)
+        entity, _, name = attribute.rpartition('.')
+        @uses_bound_text = true
+        "React.createElement($MxrbFormattedText, #{js_props(bound_text_props(widget), expressions: {
+          value: attribute_property(scope.fetch(:scope), entity, name)
+        })})"
+      end
+
+      def bound_text_props(widget)
+        common_props(widget).merge(
+          '$widgetId': widget_key(widget), class: css_class(widget), renderMode: text_mode(widget),
+          template: translated_text(widget.dig('Content', 'Template'))
+        )
+      end
+
+      def bound_text_attribute(widget)
+        return unless @list_scopes.any?
+
+        parameters = array(widget.dig('Content', 'Parameters'))
+        return unless parameters.length == 1
+
+        attribute = parameters.first.dig('AttributeRef', 'Attribute').to_s
+        entity, separator, name = attribute.rpartition('.')
+        attribute if separator == '.' && present_identifier?(entity) && present_identifier?(name)
+      end
+
       def render_action_button(widget) # rubocop:disable Metrics/AbcSize
         action = widget['Action'] || {}
         return render_data_action_button(widget, action) if data_action?(action)
+        return render_nanoflow_action_button(widget, action) if nanoflow_action?(action)
 
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         classes = ['btn', 'mx-button', button_style(widget), css_class(widget)].reject(&:empty?).join(' ')
@@ -130,11 +175,54 @@ module Mxrb
           "#{JSON.generate(caption)})"
       end # rubocop:enable Metrics/AbcSize
 
+      def nanoflow_action?(action)
+        action['$Type'] == 'Forms$CallNanoflowClientAction' &&
+          present_identifier?(action['Nanoflow']) && parameter_mappings(action).empty? &&
+          nanoflow_reference(action['Nanoflow'])
+      end
+
+      def parameter_mappings(action)
+        array(action['ParameterMappings']).select { _1.is_a?(Hash) }
+      end
+
+      def render_nanoflow_action_button(widget, action)
+        @uses_form_widgets = true
+        key = widget_key(widget)
+        caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
+        "React.createElement($ActionButton, #{js_props(nanoflow_button_props(widget, key), expressions: {
+          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+          tooltip: 'TextProperty({ value: "" })',
+          action: "ActionProperty(#{js_literal(nanoflow_action_config(action))})"
+        })})"
+      end
+
+      def nanoflow_button_props(widget, key)
+        common_props(widget).merge(
+          '$widgetId': key, buttonId: key, class: css_class(widget), renderType: 'button',
+          buttonClass: button_style(widget)
+        )
+      end
+
+      def nanoflow_action_config(action)
+        nanoflow = raw_js(nanoflow_reference(action['Nanoflow']))
+        {
+          action: {
+            type: 'callNanoflow', argMap: {}, config: { nanoflow: },
+            disabledDuringExecution: action.fetch('DisabledDuringExecution', true)
+          },
+          abortOnServerValidation: false, skipClientValidation: false
+        }
+      end
+
+      def nanoflow_reference(name) = @nanoflow_programs.reference(name.to_s)
+
+      def raw_js(value) = { '$raw' => value }
+
       def render_data_view(widget) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         @uses_form_widgets = true
         scope = widget_key(widget)
-        parameter = widget.dig('DataSource', 'SourceVariable', 'PageParameter').to_s
-        return render_unsupported(widget) unless present_identifier?(parameter)
+        object = data_view_object_property(widget, scope)
+        return render_unsupported(widget) unless object
 
         @data_view_scopes << scope
         body = array(widget['Widgets']).map { render_widget(_1) }
@@ -145,12 +233,35 @@ module Mxrb
           hideFooter: !widget.fetch('ShowFooter', true)
         )
         expressions = {
-          object: "AssociationObjectProperty({ scope: #{JSON.generate("$#{parameter}")}, " \
-                  'path: "", editable: true })',
+          object:,
           emptyMessage: "TextProperty({ value: #{JSON.generate(translated_text(widget['NoEntityMessage']))} })"
         }
         "React.createElement($DataView, #{js_props(props, expressions:)})"
       end # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def data_view_object_property(widget, scope)
+        source = widget['DataSource'] || {}
+        parameter = source.dig('SourceVariable', 'PageParameter').to_s
+        if present_identifier?(parameter)
+          return "AssociationObjectProperty({ scope: #{JSON.generate("$#{parameter}")}, " \
+                 'path: "", editable: true })'
+        end
+        return nanoflow_object_property(source, scope) if source['$Type'] == 'Forms$NanoflowSource'
+
+        nil
+      end
+
+      def nanoflow_object_property(source, scope)
+        reference = nanoflow_reference(source['Nanoflow'])
+        return unless reference && parameter_mappings(source).empty?
+
+        @uses_nanoflow_object = true
+        config = {
+          dataSourceId: scope, editable: true,
+          source: { nanoflow: raw_js(reference) }, argMap: {}
+        }
+        "NanoflowObjectProperty(#{js_literal(config)})"
+      end
 
       def render_text_box(widget) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         scope = @data_view_scopes.last
@@ -349,6 +460,8 @@ module Mxrb
       end
 
       def js_literal(value)
+        return value['$raw'] if value.is_a?(Hash) && value.key?('$raw')
+
         case value
         when Hash
           "{ #{value.map { |key, item| "#{JSON.generate(key)}: #{js_literal(item)}" }.join(', ')} }"
@@ -362,6 +475,7 @@ module Mxrb
           import React from "react";
           import { PageFragment } from "mendix/PageFragment";
           #{widget_imports}
+          #{@nanoflow_programs.declarations}
 
           export const title = #{JSON.generate(page_title)};
           export const classes = #{JSON.generate(page_classes)};
@@ -382,8 +496,9 @@ module Mxrb
         end.to_h
       end
 
-      def widget_imports # rubocop:disable Metrics/MethodLength
-        return '' unless @uses_data_grid || @uses_form_widgets
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+      def widget_imports
+        return '' unless @uses_data_grid || @uses_form_widgets || @uses_gallery || @uses_bound_text
 
         imports = ['import { asPluginWidgets } from "mendix";']
         widgets = []
@@ -409,10 +524,35 @@ module Mxrb
                          ])
           widgets.concat(%w[DataView TextBox FormGroup ActionButton])
         end
+        imports << 'import { NanoflowObjectProperty } from "mendix/NanoflowObjectProperty";' \
+          if @uses_nanoflow_object
+        if @uses_gallery
+          imports.concat([
+                           'import { DatabaseObjectListProperty } from "mendix/DatabaseObjectListProperty";',
+                           'import { MicroflowObjectListProperty } from "mendix/MicroflowObjectListProperty";',
+                           'import { NanoflowObjectListProperty } from "mendix/NanoflowObjectListProperty";',
+                           'import { SelectionProperty } from "mendix/SelectionProperty";',
+                           'import { TemplatedWidgetProperty } from "mendix/TemplatedWidgetProperty";',
+                           'import { ExpressionProperty } from "mendix/ExpressionProperty";',
+                           'import { Gallery } from "../widgets/com/mendix/widget/web/gallery/Gallery.mjs";'
+                         ])
+          widgets << 'Gallery'
+        end
+        if @uses_bound_text
+          imports.concat([
+                           'import { AttributeProperty } from "mendix/AttributeProperty";',
+                           'const MxrbFormattedText = ({ value, template, renderMode, class: className }) => ' \
+                           'React.createElement(renderMode, { className }, ' \
+                           'template.split("{1}").join(value?.displayValue ?? " "));',
+                           'MxrbFormattedText.displayName = "MxrbFormattedText";'
+                         ])
+          widgets << 'MxrbFormattedText'
+        end
         imports.uniq.push(
           "const { #{widgets.map { "$#{_1}" }.join(', ')} } = asPluginWidgets({ #{widgets.join(', ')} });"
         ).join("\n")
-      end # rubocop:enable Metrics/MethodLength
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
       def page_title = translated_text(@unit.document['Title'])
       def page_classes = layout&.document&.dig('Appearance', 'Class').to_s

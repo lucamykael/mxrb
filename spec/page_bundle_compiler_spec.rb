@@ -14,6 +14,7 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
         mendix_version '11.12.1'
         self.module(:Demo) do
           layout :Shell
+          nanoflow :ClientAction
           page(:Home) do
             layout 'Demo.Shell'
             title 'Welcome'
@@ -95,6 +96,29 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(compiler.send(:translated_text, 'Items' => [3])).to eq('')
   end
 
+  it 'formats bound list values and preserves their dynamic-text template' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    compiler.instance_variable_set(:@qualified_name, 'Demo.Home')
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'p.Demo.Home.gallery', entity: 'Demo.Item' }])
+    widget = {
+      '$Type' => 'Forms$DynamicText', 'Name' => 'duration', 'RenderMode' => 'Text',
+      'Content' => {
+        'Template' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => '{1} day(s)' }] },
+        'Parameters' => [2, { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Duration' } }]
+      }
+    }
+
+    output = compiler.send(:render_text, widget)
+    expect(output).to include(
+      'React.createElement($MxrbFormattedText', '"template": "{1} day(s)"',
+      '"value": AttributeProperty', '"attribute": "Duration"'
+    )
+    expect(compiler.send(:widget_imports)).to include(
+      'value?.displayValue', 'template.split("{1}")', '$MxrbFormattedText'
+    )
+  end
+
   it 'renders parameter-backed data views, editable fields, save, and cancel actions' do
     source = Mxrb::Compiler::SourceModel.read(@mpr)
     unit = source.units_of('Forms$Page').first
@@ -164,6 +188,83 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(compiler.send(:js_literal, [true, nil])).to eq('[true, null]')
     compiler.instance_variable_set(:@uses_data_grid, true)
     expect(compiler.send(:widget_imports)).to include('$Datagrid', '$DataView')
+  end
+
+  it 'renders a parameterless nanoflow action through the client action property' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    argument = unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }
+    argument['Widgets'] = [2, {
+      '$Type' => 'Forms$ActionButton', 'Name' => 'runClient', 'ButtonStyle' => 'Primary',
+      'CaptionTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Run locally' }
+      ] } },
+      'Action' => {
+        '$Type' => 'Forms$CallNanoflowClientAction', 'Nanoflow' => 'Demo.ClientAction',
+        'ParameterMappings' => [2], 'DisabledDuringExecution' => true
+      }
+    }]
+
+    bundle = described_class.new(source).compile(unit)
+    expect(bundle.source).to include(
+      '$ActionButton', 'ActionProperty', '"type": "callNanoflow"',
+      'const mxrbNanoflow_', '"name": "Demo.ClientAction"',
+      '"nanoflow": () => mxrbNanoflow_', '"disabledDuringExecution": true'
+    )
+    expect(bundle.unsupported_widgets).to be_empty
+  end
+
+  it 'renders a supported nanoflow-backed data view through the client object property' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    argument = unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }
+    argument['Widgets'] = [2, {
+      '$Type' => 'Forms$DataView', 'Name' => 'clientView',
+      'DataSource' => {
+        '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'Demo.ClientAction',
+        'ParameterMappings' => [2]
+      },
+      'NoEntityMessage' => { 'Items' => [3] }, 'Widgets' => [2], 'FooterWidgets' => [2]
+    }]
+
+    bundle = described_class.new(source).compile(unit)
+    expect(bundle.source).to include(
+      'NanoflowObjectProperty', '"source": { "nanoflow": () => mxrbNanoflow_',
+      '"dataSourceId": "p.Demo.Home.clientView"', '"name": "Demo.ClientAction"'
+    )
+    expect(bundle.unsupported_widgets).to be_empty
+
+    form_argument = unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }
+    source_doc = form_argument.dig('Widgets', 1, 'DataSource')
+    source_doc['ParameterMappings'] << { 'Parameter' => 'Demo.Input' }
+    expect(described_class.new(source).compile(unit).unsupported_widgets)
+      .to include('Forms$DataView')
+  end
+
+  it 'integrates Gallery rendering and fails closed for an uncompiled nanoflow source' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    unit = source.units_of('Forms$Page').first
+    compiler.compile(unit)
+    grid = instance_double(Mxrb::Compiler::DataGridBundleCompiler, supported?: false)
+    data_source = instance_double(Mxrb::Compiler::WebListDataSource, nanoflow?: false)
+    gallery = instance_double(
+      Mxrb::Compiler::GalleryBundleCompiler, supported?: true, data_source:,
+                                             widget_key: 'p.Demo.Home.gallery',
+                                             entity_name: 'Demo.Item', content_widgets: [],
+                                             render: 'gallery-output'
+    )
+    allow(Mxrb::Compiler::DataGridBundleCompiler).to receive(:new).and_return(grid)
+    allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new).and_return(gallery)
+    expect(compiler.send(:render_custom_widget, {})).to eq('gallery-output')
+    expect(compiler.send(:widget_imports)).to include('$Gallery')
+
+    nano_source = instance_double(
+      Mxrb::Compiler::WebListDataSource, nanoflow?: true, nanoflow_name: 'Demo.Missing'
+    )
+    allow(gallery).to receive(:data_source).and_return(nano_source)
+    expect(compiler.send(:render_custom_widget, '$Type' => 'CustomWidgets$CustomWidget'))
+      .to include('mxrb-unsupported-widget')
   end
 
   it 'fails closed on invalid slots and covers safe page-action fallbacks' do

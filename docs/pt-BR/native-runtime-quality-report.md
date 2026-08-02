@@ -29,6 +29,14 @@ Data: 1º de agosto de 2026.
 - o shell gerado fornece um adaptador limitado de `openForm` sobre `openForm2`,
   para que handlers antigos em cache naveguem em vez de falhar silenciosamente
   sem disparar request para a Runtime;
+- a Gallery React oficial agora renderiza dados XPath e microflow, templates de
+  item, seleção e valores string/numéricos formatados. O QA autenticado mostrou
+  título, descrição, `90 day(s)` e `49.95`; a Gallery vazia de Teachers
+  permaneceu presente na estrutura;
+- fontes nanoflow de lista/objeto e ações de botão agora compilam para os
+  contratos reais do cliente Mendix e programas de instruções referenciados por
+  função. O subconjunto linear auditado é testado; nós não suportados falham
+  fechado em vez de serem tratados incorretamente como microflows;
 - cliques reais no navegador validaram Home → Courses → Add → Save. Formulários
   DataView/TextBox por parâmetro renderizam e persistem valores; create passa o
   GUID por `openForm2`, enquanto a autorização de commit/rollback deriva dos
@@ -39,7 +47,10 @@ Data: 1º de agosto de 2026.
 ## Limites explícitos
 
 1. Widgets Dojo além do Data Grid 1 permanecem listados em `web/mxrb-legacy-pages.json`; não são declarados renderizados.
-2. Data Grid 2 cobre o subconjunto auditado XPath/atributo/create; outras fontes, filtros e ações falham fechadas.
+2. Data Grid 2 cobre o subconjunto auditado XPath/atributo/create. Gallery cobre
+   XPath/microflow e o subconjunto linear auditado de nanoflow. Decisões, ações
+   JavaScript, chamadas de microflow internas e mapeamentos inseguros ainda
+   falham fechado.
 3. As distribuições 6/7/9 instaladas têm bundles exatos, mas não PAD/launcher compatível. O launcher 11 exige Java 21 e não inicia 9 com segurança no Java 11. O `db up` legado falha fechado; só o boot 11.12.1 exato é afirmado.
 4. A Runtime usa licença local trial/developer e emite o aviso esperado de limite de tempo.
 5. Build/Deploy/Pipelines/Backups em nuvem são verificações externas opcionais, nunca dependências do build/runtime nativo.

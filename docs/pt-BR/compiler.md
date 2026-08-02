@@ -44,6 +44,16 @@ editáveis e ações Save/Cancel. Create passa o GUID do novo objeto por
 projeto derivados dos module roles permitidos pela página. A autorização da
 Runtime é preservada, sem contorno de segurança.
 
+O caminho React também compila a Gallery oficial com listas XPath e microflow,
+conteúdo de item por template, seleção e atributos dinâmicos formatados. Fontes
+e ações nanoflow usam os contratos `NanoflowObjectListProperty`,
+`NanoflowObjectProperty` e `ActionProperty` do cliente Mendix. O MXRB emite
+programas cliente reais `{ name, instructions }` para o subconjunto linear
+auditado: retorno, criação de variável, criação de objeto e chamadas de
+nanoflow. Fluxos ausentes, parâmetros sem mapeamento seguro, decisões, ações
+JavaScript, chamadas de microflow e demais instruções não traduzidas falham
+fechado e permanecem achados no manifesto de suporte.
+
 Nas sessões locais da Runtime em modo developer, o mxrb também versiona imports
 dinâmicos de páginas, aplica hash de conteúdo ao chunk corrigido do React Client
 e dá à autoimportação do Rspack o mesmo token do entrypoint. Isso impede que as
@@ -119,9 +129,10 @@ encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
   substituir pelo launcher Java 21 da versão 11;
 - Data Grid 1 está coberto, mas os demais widgets Dojo continuam explicitamente
   pendentes no manifesto legado;
-- Data Grid 2 está coberto para datasource XPath e colunas de atributo. Os
-  formulários React cobrem DataView/TextBox por parâmetro e Save/Cancel; outros
-  widgets e combinações de propriedades usam fallback audível no manifesto;
+- Data Grid 2 está coberto para datasource XPath e colunas de atributo. Gallery
+  cobre XPath/microflow e o subconjunto auditado de instruções nanoflow. Os
+  formulários React cobrem DataView/TextBox por parâmetro ou nanoflow suportado
+  e Save/Cancel; outros widgets e instruções cliente usam o fallback do manifesto;
 - bundles web nativos são gerados; o pipeline React Native ainda depende dos
   assets de template/projeto existentes;
 - `mx` e `mxbuild` não são fallbacks. Um recurso sem compilador produz erro ou

@@ -41,6 +41,16 @@ commit/rollback operations are registered with the project user roles derived
 from each page's allowed module roles. Runtime authorization is preserved
 instead of bypassed.
 
+The React path also compiles the official Gallery with XPath and microflow
+list sources, templated item content, selection, and formatted dynamic
+attributes. Client-side nanoflow sources and actions use the Mendix
+`NanoflowObjectListProperty`, `NanoflowObjectProperty`, and `ActionProperty`
+contracts. MXRB emits real `{ name, instructions }` client programs for the
+audited linear instruction subset (return, variable creation, object creation,
+and nested nanoflow calls). Missing flows, parameters that cannot be mapped,
+branches, JavaScript actions, microflow calls, and other untranslated client
+instructions fail closed and remain support-manifest findings.
+
 For local developer Runtime sessions, mxrb also versions dynamic page imports,
 content-hashes the patched React Client chunk, and gives Rspack's self-import
 the same cache token as the entrypoint. This prevents Mendix's long-lived
@@ -115,9 +125,10 @@ cleanly. The `ACT Create Animal` functional test then passed.
   instead of substituting the Java-21 launcher from 11;
 - Data Grid 1 is covered while other Dojo widgets remain explicit manifest
   findings;
-- Data Grid 2 is covered for XPath datasource and attribute columns. React edit
-  forms cover parameter-backed DataView/TextBox and Save/Cancel; other widgets
-  and property combinations use the manifest-recorded fallback;
+- Data Grid 2 is covered for XPath datasource and attribute columns. Gallery
+  covers XPath/microflow and the audited nanoflow instruction subset. React
+  edit forms cover parameter- or supported-nanoflow-backed DataView/TextBox and
+  Save/Cancel; other widgets and client instructions use the manifest fallback;
 - native web bundles are generated; React Native still relies on existing
   version-template and project assets;
 - `mx` and `mxbuild` are never fallbacks. Unsupported input produces a clear
