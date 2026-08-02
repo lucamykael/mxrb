@@ -70,3 +70,25 @@ Content ID, Version ID und Sicherheitsstatus werden gesperrt; `audit` prüft
 Updates und Schwachstellen. `login` validiert und speichert das PAT außerhalb
 des Projekts mit Modus `0600`. Das PAT wird nur an die exakten offiziellen
 Hosts `marketplace-api.mendix.com` und `marketplace.mendix.com` gesendet.
+
+## Protokoll-Connector-Audit
+
+`mxrb protocols` ist ein schreibgeschütztes Audit der IoT-, Industrie- und
+Messaging-Connectoren, die ein Projekt aus dem Marketplace importiert hat. Es
+führt kein Protokoll aus und installiert nichts; es meldet nur die öffentlichen
+Metadaten, die das Modell offenlegt.
+
+```sh
+mxrb protocols App.mpr
+mxrb protocols App.mpr --json
+```
+
+Erkannte Connectoren werden mit Modulname, Protokoll und Marketplace-
+Komponenten-id aufgeführt; nicht erkannte Marketplace-Module werden separat
+gelistet. Die Erkennung erfolgt über eine verifizierte `AppStoreGuid`, sodass
+ein Modul mit unbestätigter GUID als nicht erkannt gemeldet und nicht geraten
+wird.
+
+Diese Protokoll-Registry ist ein dritter Katalog, getrennt von den
+wiederverwendbaren Ruby-Modulen aus `mxrb module` und den offiziellen Paketen
+aus `mxrb marketplace`.
