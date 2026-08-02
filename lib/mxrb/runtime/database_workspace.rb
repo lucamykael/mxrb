@@ -11,7 +11,8 @@ module Mxrb
   module Runtime
     DatabaseInfo = Data.define(
       :project_id, :state_dir, :database_container, :runtime_container,
-      :host, :port, :database, :reader_user, :running, :model_fingerprint
+      :host, :port, :database, :reader_user, :running, :model_fingerprint,
+      :runtime_url
     )
 
     # Materializes a private PostgreSQL database for one MPR. The Mendix Runtime
@@ -22,12 +23,21 @@ module Mxrb
       DATABASE = 'mxrb'
       OWNER = 'mxrb_runtime'
       READER = 'mxrb_reader'
+      NATIVE_INPUT_DIRECTORIES = %w[
+        mprcontents deployment javasource javascriptsource userlib vendorlib
+        resources widgets theme theme-cache themesource
+      ].freeze
 
-      def initialize(project_path, state_dir: nil, port: 55_432, runner: nil, sleeper: nil)
+      def initialize(project_path, state_dir: nil, port: 55_432, runtime_port: 18_080, # rubocop:disable Metrics/AbcSize, Metrics/ParameterLists
+                     runner: nil, sleeper: nil)
         @project_path = File.expand_path(project_path)
         @project_id = Digest::SHA256.hexdigest(@project_path)[0, 12]
         @state_dir = File.expand_path(state_dir || default_state_dir)
         @port = Integer(port)
+        @runtime_port = Integer(runtime_port)
+        raise ArgumentError, 'database port must be between 1 and 65535' unless (1..65_535).cover?(@port)
+        raise ArgumentError, 'runtime port must be between 1 and 65535' unless (1..65_535).cover?(@runtime_port)
+
         @runner = runner || method(:capture)
         @sleeper = sleeper || Kernel.method(:sleep)
         @plan = Toolchain.new(@project_path).plan
@@ -237,7 +247,7 @@ module Mxrb
 
       def validate!
         raise ArgumentError, "#{@project_path}: file not found" unless File.file?(@project_path)
-        raise ToolchainError, "Mendix toolchain #{@plan.toolchain_path} is unavailable" unless @plan.available?
+        raise ToolchainError, "Mendix Runtime #{@plan.runtime_path} is unavailable" unless @plan.available?
 
         run!('docker', 'version', '--format', '{{.Server.Version}}')
       end
@@ -275,35 +285,65 @@ module Mxrb
         true
       end
 
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       def build_runtime!
-        ensure_builder_image!
         FileUtils.rm_rf(runtime_dir)
         FileUtils.mkdir_p(build_dir)
-        FileUtils.rm_f(File.join(build_dir, 'runtime.zip'))
-        run!(
-          'docker', 'run', '--rm',
-          '--mount', bind_mount(File.dirname(@project_path), '/input', readonly: true),
-          '--mount', bind_mount(@plan.toolchain_path, '/opt/mendix', readonly: true),
-          '--mount', bind_mount(build_dir, '/output', readonly: false),
-          '--tmpfs', '/workspace:exec,size=8g',
-          @plan.builder_image, File.basename(@project_path)
-        )
+        package = File.join(build_dir, 'runtime.zip')
+        FileUtils.rm_f(package)
+        build_native_package(package)
         FileUtils.mkdir_p(runtime_dir)
-        run!('unzip', '-q', File.join(build_dir, 'runtime.zip'), '-d', runtime_dir)
+        run!('unzip', '-q', package, '-d', runtime_dir)
         File.write(runtime_marker, JSON.generate('fingerprint' => model_fingerprint))
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-      def ensure_builder_image!
-        return if successful?('docker', 'image', 'inspect', @plan.builder_image)
+      def build_native_package(output)
+        Dir.mktmpdir('mxrb-db-build-', build_dir) do |root|
+          project = copy_native_input(root)
+          deployment = File.join(File.dirname(project), 'deployment')
+          compile_native(project, deployment, output)
+        end
+      rescue CompilationError => e
+        raise ToolchainError, "MXRB native database build failed: #{e.message}"
+      end
 
-        context = File.expand_path('../../../docker/functional', __dir__)
-        run!(
-          'docker', 'build', '--build-arg', "JAVA_VERSION=#{@plan.java_version}",
-          '-f', File.join(context, 'Dockerfile.builder'),
-          '-t', @plan.builder_image, context
-        )
+      def compile_native(project, deployment, output)
+        Compiler::DeploymentMaterializer.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).materialize
+        Compiler::ProjectJarBuilder.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).build
+        compile_web(project, deployment)
+        Compiler::PortablePackager.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).pack(output:, force: true)
+      end
+
+      def compile_web(project, deployment)
+        Compiler::WebBundleBuilder.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).build
+      end
+
+      def copy_native_input(root)
+        destination = File.join(root, 'project')
+        FileUtils.mkdir_p(destination)
+        FileUtils.cp(@project_path, destination)
+        project_root = File.dirname(@project_path)
+        copy_native_directories(project_root, destination)
+        File.join(destination, File.basename(@project_path))
+      end
+
+      def copy_native_directories(project_root, destination)
+        NATIVE_INPUT_DIRECTORIES.each do |name|
+          source = File.join(project_root, name)
+          next unless File.directory?(source)
+          if Dir.glob(File.join(source, '**', '*'), File::FNM_DOTMATCH).any? { File.symlink?(_1) }
+            raise ToolchainError, "native database input contains a symlink: #{source}"
+          end
+
+          FileUtils.cp_r(source, destination)
+        end
       end
 
       def ensure_network!
@@ -334,7 +374,15 @@ module Mxrb
         ).strip == '1'
         return if exists
 
-        run!('docker', 'exec', database_container, 'createdb', '--username', OWNER, DATABASE)
+        create_application_database!
+      end
+
+      def create_application_database!
+        command = ['docker', 'exec', database_container, 'createdb', '--username', OWNER, DATABASE]
+        output, status = run_command(*command)
+        return if status.success? || output.include?('already exists')
+
+        raise ToolchainError, "docker failed:\n#{output}"
       end
 
       def create_database_container! # rubocop:disable Metrics/MethodLength
@@ -360,12 +408,15 @@ module Mxrb
         end
       end
 
-      def wait_for_database!
+      def wait_for_database! # rubocop:disable Metrics/MethodLength
+        consecutive_ready = 0
         30.times do
-          return if successful?(
+          ready = successful?(
             'docker', 'exec', database_container,
             'pg_isready', '--username', OWNER, '--dbname', DATABASE
           )
+          consecutive_ready = ready ? consecutive_ready + 1 : 0
+          return if consecutive_ready >= 2
 
           @sleeper.call(1)
         end
@@ -500,6 +551,7 @@ module Mxrb
         run!(
           'docker', 'run', '-d', '--name', runtime_container,
           '--label', ownership_label, '--network', network_name,
+          '--publish', "127.0.0.1:#{@runtime_port}:8080",
           '--mount', bind_mount(runtime_dir, '/mendix', readonly: false),
           '-e', 'HOME=/tmp', '-e', "M2EE_ADMIN_PASS=#{secret.fetch('admin_password')}",
           '-e', "RUNTIME_ADMINUSER_PASSWORD=#{secret.fetch('admin_password')}",
@@ -584,7 +636,8 @@ module Mxrb
       def info(running:)
         DatabaseInfo.new(
           @project_id, @state_dir, database_container, runtime_container,
-          '127.0.0.1', @port, DATABASE, READER, running, model_fingerprint
+          '127.0.0.1', @port, DATABASE, READER, running, model_fingerprint,
+          "http://127.0.0.1:#{@runtime_port}/"
         )
       end
 

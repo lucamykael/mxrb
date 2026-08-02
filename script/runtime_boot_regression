@@ -1,0 +1,225 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+
+require 'fileutils'
+require 'net/http'
+require 'open3'
+require 'tmpdir'
+require 'time'
+require 'uri'
+require_relative '../lib/mxrb'
+
+STARTED = 'Mendix Runtime successfully started'
+STOPPED = 'Mendix Runtime is now shut down'
+TIMEOUT = Integer(ENV.fetch('MXRB_RUNTIME_BOOT_TIMEOUT', '120'))
+
+def usage
+  warn 'Usage: script/runtime_boot_regression APP.mpr DEPLOYMENT [MENDIX_HOME]'
+  exit 64
+end
+
+def unpack(archive, destination)
+  output, status = Open3.capture2e('unzip', '-q', archive, '-d', destination)
+  raise "could not unpack Runtime:\n#{output}" unless status.success?
+end
+
+def terminate(waiter)
+  return unless waiter&.alive?
+
+  Process.kill('TERM', waiter.pid)
+  waiter.join(20)
+  return unless waiter.alive?
+
+  Process.kill('KILL', waiter.pid)
+  raise 'Runtime process did not terminate after KILL' unless waiter.join(5)
+rescue Errno::ESRCH
+  nil
+end
+
+def wait_for_start(waiter, transcript)
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + TIMEOUT
+  until transcript.include?(STARTED)
+    raise 'Runtime stopped before reaching its running state' unless waiter.alive?
+    raise "Runtime startup exceeded #{TIMEOUT} seconds" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+    sleep 0.1
+  end
+end
+
+def probe_http(port, path)
+  uri = URI("http://127.0.0.1:#{port}#{path}")
+  Net::HTTP.start(uri.host, uri.port, open_timeout: 5, read_timeout: 5) do |http|
+    http.get(uri.request_uri).code.to_i
+  end
+end
+
+def write_browser_probe(runtime, page_probes)
+  probes = JSON.generate(page_probes)
+  File.write(File.join(runtime, 'app', 'web', 'mxrb-page-check.html'), <<~HTML)
+    <!doctype html><meta charset="utf-8"><body data-result="pending"></body>
+    <script type="module">
+      try {
+        const probes = #{probes};
+        const pages = await Promise.all(probes.map(probe => import(probe.path)));
+        let rendered = 0;
+        for (let index = 0; index < pages.length; index += 1) {
+          const page = pages[index];
+          if (!page.content || !page.title || typeof page.classes !== "string") throw new Error("exports");
+          for (const render of Object.values(page.content)) {
+            if (typeof render !== "function") throw new Error("factory");
+            if (probes[index].render && !render("mxrb-browser-probe")) throw new Error("render");
+          }
+          if (probes[index].render) rendered += 1;
+        }
+        document.body.dataset.result = `passed-${pages.length}-${rendered}`;
+      } catch (error) {
+        document.body.dataset.result = `failed-${error.message}`;
+      }
+    </script>
+  HTML
+end
+
+def probe_browser(port, page_probes)
+  chromium = %w[/usr/bin/chromium /usr/bin/chromium-browser /usr/bin/google-chrome].find { File.executable?(_1) }
+  return 'not-installed' unless chromium
+
+  url = "http://127.0.0.1:#{port}/mxrb-page-check.html"
+  command = [
+    chromium, '--headless', '--no-sandbox', '--disable-gpu', '--disable-background-networking',
+    '--disable-component-update', '--disable-crash-reporter', '--no-first-run',
+    '--run-all-compositor-stages-before-draw',
+    '--virtual-time-budget=5000', '--dump-dom', url
+  ]
+  output, status = Dir.mktmpdir('mxrb-chromium-') do |profile|
+    Open3.capture2e('timeout', '--kill-after=2', '20', *command.insert(-2, "--user-data-dir=#{profile}"))
+  end
+  expected_renders = page_probes.count { _1[:render] }
+  expected = "data-result=\"passed-#{page_probes.length}-#{expected_renders}\""
+  raise "browser page probe failed:\n#{output}" unless status.success? && output.include?(expected)
+
+  "passed (#{page_probes.length} imports, #{expected_renders} factory renders)"
+end
+
+def stage_runtime(root, mpr, deployment, mendix_home, java_home, http_port, admin_port)
+  staged = File.join(root, 'deployment')
+  File.directory?(deployment) ? FileUtils.cp_r(deployment, staged) : FileUtils.mkdir_p(staged)
+  Mxrb::Compiler::DeploymentMaterializer.new(
+    mpr, deployment: staged, mendix_home:
+  ).materialize
+  Mxrb::Compiler::ProjectJarBuilder.new(
+    mpr, deployment: staged, mendix_home:, java_home:
+  ).build
+  Mxrb::Compiler::WebBundleBuilder.new(
+    mpr, deployment: staged, mendix_home:
+  ).build
+  archive = File.join(root, 'runtime.zip')
+  package = Mxrb::Compiler::PortablePackager.new(
+    mpr, deployment: staged, mendix_home:
+  ).pack(output: archive)
+  runtime = File.join(root, 'runtime')
+  unpack(archive, runtime)
+  File.write(File.join(runtime, 'etc', 'Local.conf'), <<~CONF)
+    admin.port = #{admin_port}
+    runtime.http.port = #{http_port}
+    runtime.params.ApplicationRootUrl = "http://127.0.0.1:#{http_port}/"
+  CONF
+  [package, runtime]
+end
+
+def resolve_java_home(mpr)
+  requested = Mxrb::Runtime::Toolchain.new(mpr).plan.java_version
+  Mxrb::Runtime::JavaLocator.resolve(requested) ||
+    raise("Java #{requested} not found; set MXRB_JAVA_HOME or JAVA_HOME")
+end
+
+def page_probes(runtime)
+  Dir.glob(File.join(runtime, 'app', 'web', 'dist', 'pages', '*.js')).sort.map do |bundle|
+    path = "/dist/pages/#{File.basename(bundle)}"
+    source = File.join(runtime, 'app', 'web', 'pages', File.basename(bundle))
+    { path:, render: !File.read(source).include?('DatabaseObjectListProperty') }
+  end
+end
+
+def run_runtime(runtime, http_port, transcript, java_home)
+  command = ['./bin/start', 'etc/Default', 'etc/Local.conf']
+  environment = {
+    'JAVA_HOME' => java_home,
+    'PATH' => "#{File.join(java_home, 'bin')}:#{ENV.fetch('PATH', '')}",
+    'M2EE_ADMIN_PASS' => 'mxrb-runtime-regression'
+  }
+  probes = page_probes(runtime)
+  page_paths = probes.map { _1[:path] }
+  write_browser_probe(runtime, probes)
+  waiter = nil
+  reader = nil
+  Open3.popen2e(environment, *command, chdir: runtime, pgroup: true) do |stdin, output, process|
+    waiter = process
+    stdin.close
+    reader = Thread.new do
+      output.each_line do |line|
+        transcript << line
+        $stdout.write(line)
+      end
+    rescue IOError
+      nil
+    end
+    wait_for_start(waiter, transcript)
+    statuses = ['/', '/dist/index.js', *page_paths].to_h { [_1, probe_http(http_port, _1)] }
+    failed = statuses.reject { |_path, status| status == 200 }
+    raise "Runtime HTTP probes failed: #{failed}" unless failed.empty?
+
+    statuses['browser'] = probe_browser(http_port, probes)
+
+    terminate(waiter)
+    reader.join
+    raise 'Runtime did not shut down cleanly' unless transcript.include?(STOPPED)
+
+    return [command, statuses]
+  end
+ensure
+  terminate(waiter)
+  reader&.join(5)
+end
+
+mpr, deployment, mendix_home = ARGV
+usage unless mpr && deployment
+
+mpr = File.expand_path(mpr)
+deployment = File.expand_path(deployment)
+mendix_home = File.expand_path(mendix_home) if mendix_home
+http_port = Integer(ENV.fetch('MXRB_RUNTIME_HTTP_PORT', '18080'))
+admin_port = Integer(ENV.fetch('MXRB_RUNTIME_ADMIN_PORT', '18090'))
+evidence = File.expand_path(
+  ENV.fetch('MXRB_RUNTIME_EVIDENCE', 'tmp/runtime-boot-evidence.log'),
+  File.expand_path('..', __dir__)
+)
+transcript = +''
+result = nil
+java_home = resolve_java_home(mpr)
+
+Dir.mktmpdir('mxrb-runtime-regression-') do |root|
+  package, runtime = stage_runtime(
+    root, mpr, deployment, mendix_home, java_home, http_port, admin_port
+  )
+  command, statuses = run_runtime(runtime, http_port, transcript, java_home)
+  result = [package, command, statuses]
+end
+
+package, command, statuses = result
+FileUtils.mkdir_p(File.dirname(evidence))
+header = <<~TEXT
+  MXRB native Runtime boot regression
+  timestamp: #{Time.now.iso8601}
+  mpr: #{mpr}
+  mendix_version: #{package.mendix_version}
+  package_files: #{package.files}
+  package_sha256: #{package.sha256}
+  command: #{command.join(' ')}
+  http_status: #{statuses}
+
+TEXT
+File.write(evidence, header + transcript)
+puts "Runtime boot regression passed; evidence: #{evidence}"
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists

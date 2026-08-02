@@ -559,6 +559,11 @@ module Mxrb
         options << "name: #{ruby(assoc.name)}"
         documentation = assoc.respond_to?(:documentation) ? assoc.documentation : nil
         options << "documentation: #{ruby(documentation)}" unless documentation.to_s.empty?
+        inferred_storage = assoc.association_type == :ReferenceSet ? :Table : :Column
+        storage_format = assoc.respond_to?(:storage_format) ? assoc.storage_format : nil
+        if storage_format && storage_format != inferred_storage
+          options << "storage_format: #{symbol(storage_format)}"
+        end
         parent_delete = assoc.respond_to?(:parent_delete_behavior) ?
           assoc.parent_delete_behavior : :NoAction
         child_delete = assoc.respond_to?(:child_delete_behavior) ?
@@ -627,6 +632,8 @@ module Mxrb
       write_val = reconstruct_access(rule.fetch(:default_rights, "None"), rule.fetch(:members, []), "ReadWrite", nil)
       opts << "read: #{format_access(read_val)}"   unless read_val  == :none
       opts << "write: #{format_access(write_val)}" unless write_val == :none
+      opts << "default_rights: #{ruby(rule.fetch(:default_rights, 'None'))}"
+      opts << "members: #{native_ruby(rule.fetch(:members, []))}"
       xpath = rule.fetch(:xpath, "")
       opts << "xpath: #{ruby(xpath)}" unless xpath.empty?
       "  access_rule #{[roles, *opts].join(', ')}"
@@ -692,7 +699,8 @@ module Mxrb
         next unless param.is_a?(Hash)
         name = param["Name"] || param["name"]
         type = param["VariableType"] || param["Type"] || param["type"]
-        "  parameter #{symbol(name)}, type: #{symbol(type)}" if name && type
+        type_source = type.is_a?(Hash) ? native_ruby(type) : symbol(type)
+        "  parameter #{symbol(name)}, type: #{type_source}" if name && type
       end
       body = parameters
       body << "  return_type #{symbol(flow.return_type)}" if flow.return_type.is_a?(String)
@@ -797,6 +805,8 @@ module Mxrb
       when BSON::Binary
         encoded = Base64.strict_encode64(value.data)
         "bson_binary(#{ruby(encoded)}, subtype: #{value.type.inspect})"
+      when Time
+        "Time.at(#{value.to_i}, #{value.nsec}, :nanosecond).utc"
       when Hash
         return "{}" if value.empty?
 
@@ -1416,10 +1426,8 @@ module Mxrb
         else
           ""
         end
-        params  = bson_items(call["ParameterMappings"]).map do |m|
-          "#{symbol(m["Parameter"])} => #{ruby_val(m["Argument"])}"
-        end
-        pass_a  = params.empty? ? "" : ", pass: { #{params.join(", ")} }"
+        params = bson_items(call["ParameterMappings"]).map { [_1["Parameter"], _1["Argument"]] }
+        pass_a = params.empty? ? "" : ", pass: #{pass_source(params)}"
         "#{pad}call_microflow #{ruby(call["Microflow"])}#{as_a}#{pass_a}#{result_a}"
       when "Microflows$CreateVariableAction"
         type = action.dig("VariableType", "$Type").to_s
@@ -1519,8 +1527,13 @@ module Mxrb
       when "Microflows$ListOperationsAction"
         operation = action["NewOperation"] || {}
         op = operation["$Type"].to_s.delete_prefix("Microflows$")
-        "#{pad}list_operation :#{underscore(op)}, :#{operation["ListName"]}, " \
-          "with: :#{operation["SecondListOrObjectName"]}, as: :#{action["ResultVariableName"]}"
+        args = [":#{underscore(op)}", ":#{operation['ListName']}"]
+        second = operation["SecondListOrObjectName"].to_s
+        expression = operation["Expression"]
+        args << "with: :#{second}" unless second.empty?
+        args << "expression: #{ruby(expression)}" unless expression.nil?
+        args << "as: :#{action['ResultVariableName']}"
+        "#{pad}list_operation #{args.join(', ')}"
       when "Microflows$ChangeListAction"
         "#{pad}change_list :#{action["ChangeVariableName"]}, " \
           "action: :#{underscore(action["Type"])}, value: #{ruby_val(action["Value"])}"
@@ -1582,10 +1595,19 @@ module Mxrb
         args << "use_return: true"
       end
       unless mappings.empty?
-        rendered = mappings.map { |parameter, value| "#{ruby(parameter)} => #{ruby_val(value)}" }
-        args << "pass: { #{rendered.join(', ')} }"
+        args << "pass: #{pass_source(mappings)}"
       end
       "#{pad}#{method} #{args.join(', ')}"
+    end
+
+    def pass_source(mappings)
+      duplicate = mappings.map { _1.first.to_s }.tally.values.any? { _1 > 1 }
+      rendered = mappings.map do |parameter, value|
+        key = ruby(parameter)
+        val = ruby_val(value)
+        duplicate ? "[#{key}, #{val}]" : "#{key} => #{val}"
+      end
+      duplicate ? "[#{rendered.join(', ')}]" : "{ #{rendered.join(', ')} }"
     end
 
     def code_action_parameter_value(value)

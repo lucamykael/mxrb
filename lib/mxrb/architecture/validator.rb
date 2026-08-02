@@ -33,6 +33,7 @@ module Mxrb
         @graph.edges.each do |edge|
           next if @graph.nodes.key?(edge.to)
           next if late_bound_page_nanoflow?(edge)
+          next if platform_owned_target?(edge.to)
 
           errors << "#{edge.from} #{edge.relation} references missing #{edge.to}"
         end
@@ -41,6 +42,10 @@ module Mxrb
       def late_bound_page_nanoflow?(edge)
         from = @graph.nodes[edge.from]
         from&.kind == :page && edge.to.include?("::nanoflow::")
+      end
+
+      def platform_owned_target?(target)
+        target.start_with?("System::")
       end
 
       def validate_layers(errors)

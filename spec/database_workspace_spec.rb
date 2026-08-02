@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'tmpdir'
 
-# rubocop:disable Metrics/BlockLength
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength
 RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
   def status(successful)
     Struct.new(:success?).new(successful)
@@ -31,6 +31,7 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       Mxrb::Runtime::Plan,
       available?: true,
       toolchain_path: '/opt/mendix/10.18.0',
+      runtime_path: '/opt/mendix/10.18.0/runtime',
       builder_image: 'mxrb/builder:test',
       runtime_image: 'eclipse-temurin:17-jre',
       java_version: '17'
@@ -42,13 +43,57 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
                                                                   Mxrb::Runtime::Toolchain,
                                                                   plan: plan
                                                                 ))
+    materializer = instance_double(Mxrb::Compiler::DeploymentMaterializer)
+    allow(Mxrb::Compiler::DeploymentMaterializer).to receive(:new).and_return(materializer)
+    allow(materializer).to receive(:materialize).and_return(
+      Mxrb::Compiler::DeploymentMaterialization.new(
+        deployment: File.join(File.dirname(path), 'deployment'),
+        mendix_version: '10.18.0', stages: {}
+      )
+    )
+    jar_builder = instance_double(Mxrb::Compiler::ProjectJarBuilder)
+    allow(Mxrb::Compiler::ProjectJarBuilder).to receive(:new).and_return(jar_builder)
+    allow(jar_builder).to receive(:build).and_return(
+      Mxrb::Compiler::ProjectJarResult.new(
+        path: 'project.jar', sources: 0, classes: 0, classpath_entries: 1
+      )
+    )
+    web_builder = instance_double(Mxrb::Compiler::WebBundleBuilder)
+    allow(Mxrb::Compiler::WebBundleBuilder).to receive(:new).and_return(web_builder)
+    allow(web_builder).to receive(:build).and_return(
+      Mxrb::Compiler::WebBundleResult.new(directory: 'dist', files: 1, bytes: 1)
+    )
+    packager = instance_double(Mxrb::Compiler::PortablePackager)
+    allow(Mxrb::Compiler::PortablePackager).to receive(:new).and_return(packager)
+    allow(packager).to receive(:pack).and_return(
+      Mxrb::Compiler::PortableResult.new(
+        path: File.join(state, 'build', 'runtime.zip'), mendix_version: '10.18.0',
+        files: 1, sha256: 'native', metadata: {}
+      )
+    )
     described_class.new(
       path, state_dir: state, port: 55_999,
             runner: runner, sleeper: ->(_seconds) {}
     )
   end
 
-  it 'cold-starts an isolated builder, network, PostgreSQL, reader, and Runtime' do
+  it 'rejects invalid published ports and symbolic-link build inputs' do
+    expect { described_class.new('/tmp/App.mpr', port: 0) }
+      .to raise_error(ArgumentError, /database port/)
+    expect { described_class.new('/tmp/App.mpr', runtime_port: 70_000) }
+      .to raise_error(ArgumentError, /runtime port/)
+
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, 'theme'))
+      File.write(File.join(root, 'owned.txt'), 'owned')
+      File.symlink(File.join(root, 'owned.txt'), File.join(root, 'theme', 'linked.txt'))
+      subject = described_class.allocate
+      expect { subject.send(:copy_native_directories, root, File.join(root, 'destination')) }
+        .to raise_error(Mxrb::ToolchainError, /contains a symlink/)
+    end
+  end
+
+  it 'cold-starts a native package, network, PostgreSQL, reader, and Runtime' do
     Dir.mktmpdir do |dir|
       path = make_project(dir)
       commands = []
@@ -81,10 +126,8 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       expect(info.running).to be true
       expect(info.host).to eq('127.0.0.1')
       expect(info.port).to eq(55_999)
-      expect(commands).to include(
-        include('docker', 'build'),
-        include('docker', 'network', 'create')
-      )
+      expect(commands).to include(include('docker', 'network', 'create'))
+      expect(commands.flatten).not_to include('build')
       expect(commands.flatten).to include(
         a_string_starting_with('POSTGRES_PASSWORD='),
         'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL',
@@ -158,7 +201,7 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
 
         subject = workspace(path, state, &runner)
         subject.up
-        expect(commands).to include(include('docker', 'run', '--rm'))
+        expect(commands).to include(include('unzip', '-q'))
         subject.sync if name == 'missing'
       end
     end
@@ -381,6 +424,24 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
     end
   end
 
+  it 'accepts a concurrent database creation but preserves other createdb failures' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      duplicate = workspace(path, File.join(dir, 'duplicate')) do |*command|
+        output = command.include?('createdb') ? 'database "mxrb" already exists' : ''
+        [output, '', status(!command.include?('createdb'))]
+      end
+      expect { duplicate.send(:ensure_application_database!) }.not_to raise_error
+
+      denied = workspace(path, File.join(dir, 'denied')) do |*command|
+        output = command.include?('createdb') ? 'permission denied' : ''
+        [output, '', status(!command.include?('createdb'))]
+      end
+      expect { denied.send(:ensure_application_database!) }
+        .to raise_error(Mxrb::ToolchainError, /permission denied/)
+    end
+  end
+
   it 'provides read-only connection and shell details without exposing owner credentials' do
     Dir.mktmpdir do |dir|
       path = make_project(dir)
@@ -402,13 +463,33 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       failing = ->(*) { ['denied', '', status(false)] }
       subject = workspace(path, File.join(dir, 'state'), &failing)
       expect { subject.up }.to raise_error(Mxrb::ToolchainError, /docker failed/)
+      expect(subject.send(:bind_mount, '/source', '/target', readonly: true))
+        .to eq('type=bind,source=/source,target=/target,readonly')
+
+      FileUtils.mkdir_p(File.join(dir, 'deployment'))
+      FileUtils.mkdir_p(File.join(dir, 'mprcontents', '00'))
+      FileUtils.mkdir_p(File.join(dir, 'javasource', 'app'))
+      File.write(File.join(dir, 'mprcontents', '00', 'unit.mxunit'), 'unit')
+      File.write(File.join(dir, 'javasource', 'app', 'Action.java'), 'class Action {}')
+      copied_root = Dir.mktmpdir(dir: dir)
+      copied = subject.send(:copy_native_input, copied_root)
+      expect(File).to be_directory(File.join(File.dirname(copied), 'deployment'))
+      expect(File).to exist(File.join(File.dirname(copied), 'mprcontents', '00', 'unit.mxunit'))
+      expect(File).to exist(File.join(File.dirname(copied), 'javasource', 'app', 'Action.java'))
+
+      allow(Mxrb::Compiler::DeploymentMaterializer).to receive(:new)
+        .and_raise(Mxrb::CompilationError, 'compiler stopped')
+      FileUtils.mkdir_p(subject.send(:build_dir))
+      expect { subject.send(:build_native_package, File.join(dir, 'runtime.zip')) }
+        .to raise_error(Mxrb::ToolchainError, /native database build failed.*compiler stopped/)
 
       allow(Mxrb::Runtime::Toolchain).to receive(:new).and_return(instance_double(
                                                                     Mxrb::Runtime::Toolchain,
                                                                     plan: instance_double(
                                                                       Mxrb::Runtime::Plan,
                                                                       available?: false,
-                                                                      toolchain_path: '/missing'
+                                                                      toolchain_path: '/missing',
+                                                                      runtime_path: '/missing/runtime'
                                                                     )
                                                                   ))
       unavailable = described_class.new(path, state_dir: File.join(dir, 'unavailable'), runner: failing)
@@ -530,4 +611,4 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
     end
   end
 end
-# rubocop:enable Metrics/BlockLength
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength

@@ -70,6 +70,11 @@ RSpec.describe Mxrb::Scaffold::Generator do
       )
 
       load File.join(root, 'project.rb')
+      mpr_file = Mxrb::IO::MprFile.open(File.join(root, 'ScaffoldApp.mpr'), readonly: true)
+      security = mpr_file.all_units.map { mpr_file.parse_contents(_1) }
+                                   .find { _1['$Type'] == 'Security$ProjectSecurity' }
+      expect(security['AdminUserRole']).to eq('Administrator')
+      mpr_file.close
       Mxrb.open(File.join(root, 'ScaffoldApp.mpr')) do |project|
         mod = project.modules.first
         expect(mod.pages.map(&:name)).to contain_exactly('Home', 'AnimalOverview')

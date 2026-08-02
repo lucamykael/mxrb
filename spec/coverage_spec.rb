@@ -780,7 +780,9 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       generalization: { "Type" => "None" }, access_rules: [{ "Role" => "User" }],
       attributes: []
     )
-    expect(comparator.send(:entity_summary, entity)[:generalization]).to eq(Type: "None")
+    expect(comparator.send(:entity_summary, entity)[:generalization]).to include(
+      Type: "None", Persistable: false, HasChangedByAttr: false
+    )
 
     ids = {}
     objects = [

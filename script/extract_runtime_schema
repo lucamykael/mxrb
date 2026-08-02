@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require_relative '../lib/mxrb'
+
+model, version, output = ARGV
+unless model && version
+  warn 'Usage: script/extract_runtime_schema MODEL.MDP VERSION [OUTPUT]'
+  exit 64
+end
+output ||= File.join(__dir__, '..', 'lib', 'mxrb', 'compiler', 'schemas', "runtime-#{version}.json")
+
+fields = Hash.new { |hash, key| hash[key] = [] }
+visit = lambda do |value|
+  case value
+  when Hash
+    type = value['$Type'].to_s
+    fields[type] = value.keys if !type.empty? && value.keys.length > fields[type].length
+    value.each_value { visit.call(_1) }
+  when Array then value.each { visit.call(_1) }
+  end
+end
+Mxrb::Compiler::ModelPackage.read(model).documents.each { visit.call(_1) }
+document = fields.reject { |type, _keys| type.empty? }.sort.to_h
+File.write(output, "#{JSON.pretty_generate(document)}\n")
+puts "Runtime schema #{version}: #{document.length} types, output=#{File.expand_path(output)}"

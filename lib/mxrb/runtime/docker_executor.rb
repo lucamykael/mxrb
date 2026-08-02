@@ -2,54 +2,14 @@
 
 module Mxrb
   module Runtime
-    # Executes official Mendix build and runtime processes in containers. Ruby
-    # instrumentation still happens through the same disposable-copy pipeline.
+    # Executes natively compiled portable applications in a Runtime container.
     class DockerExecutor < Executor
-      def initialize(...)
-        super
-        @docker_context = File.expand_path(
-          "../../../docker/functional", __dir__
-        )
-      end
-
       private
 
       def validate_environment!
-        raise ToolchainError, "Mendix toolchain #{@plan.toolchain_path} is unavailable" unless @plan.available?
+        raise ToolchainError, "Mendix Runtime #{@plan.runtime_path} is unavailable" unless @plan.available?
         _, status = capture("docker", "version", "--format", "{{.Server.Version}}")
         raise ToolchainError, "Docker daemon is unavailable" unless status.success?
-
-        ensure_builder_image
-      end
-
-      def ensure_builder_image
-        _, status = capture("docker", "image", "inspect", @plan.builder_image)
-        return if status.success?
-
-        output, status = capture(
-          "docker", "build",
-          "--build-arg", "JAVA_VERSION=#{@plan.java_version}",
-          "-f", File.join(@docker_context, "Dockerfile.builder"),
-          "-t", @plan.builder_image,
-          @docker_context
-        )
-        raise ToolchainError, "could not build #{@plan.builder_image}:\n#{output}" unless status.success?
-      end
-
-      def build(project, root)
-        output, status = capture(
-          "docker", "run", "--rm",
-          "--mount", bind_mount(File.dirname(project), "/input", readonly: true),
-          "--mount", bind_mount(@plan.toolchain_path, "/opt/mendix", readonly: true),
-          "--mount", bind_mount(root, "/output", readonly: false),
-          "--tmpfs", "/workspace:exec,size=8g",
-          @plan.builder_image,
-          File.basename(project)
-        )
-        raise FunctionalTestError, "Docker mxbuild failed:\n#{output}" unless status.success?
-
-        @last_build_output = output
-        File.join(root, "runtime.zip")
       end
 
       def start_runtime(package, root)

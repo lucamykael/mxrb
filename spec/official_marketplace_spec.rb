@@ -7,6 +7,17 @@ require 'zip'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe Mxrb::OfficialMarketplace do
+  it 'upgrades a same-host HSTS redirect without permitting a cross-host HTTP downgrade' do
+    client = described_class::HttpClient.new
+    origin = URI('https://projects-api.home.mendix.com/v2/projects')
+    same = 'http://projects-api.home.mendix.com/v2/accounts/id/projects'
+    other = 'http://evil.example/projects'
+
+    expect(client.send(:redirect_url, origin, same))
+      .to eq('https://projects-api.home.mendix.com/v2/accounts/id/projects')
+    expect(client.send(:redirect_url, origin, other)).to eq(other)
+  end
+
   def zip_file(path, entries)
     Zip::File.open(path, create: true) do |zip|
       entries.each do |name, content|

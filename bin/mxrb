@@ -696,6 +696,7 @@ when "db"
          else
            55_432
          end
+  runtime_port = option.call("--runtime-port", 18_080)
   if engine == :sql_server
     unless %w[explain workload].include?(action)
       abort "--engine sql_server is supported only by db explain and db workload"
@@ -706,7 +707,7 @@ when "db"
       user: option.call("--user"), sqlcmd: option.call("--sqlcmd", "sqlcmd")
     )
   elsif engine == :postgresql
-    workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:)
+    workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:, runtime_port:)
   else
     abort "Unsupported database engine #{engine.inspect}; use postgresql or sql_server"
   end
@@ -717,6 +718,7 @@ when "db"
     puts "Host     : #{info.host}:#{info.port}"
     puts "Database : #{info.database}"
     puts "Role     : #{info.reader_user} (read-only)"
+    puts "Runtime  : #{info.runtime_url}"
   when "down"
     workspace.down
     puts "[mxrb] Runtime and PostgreSQL stopped; the data volume was preserved"
@@ -878,7 +880,6 @@ when "test"
   definition = Mxrb.functional_definition(definition_path)
   plan = Mxrb.runtime_plan(path)
   if plan_only
-    workspace = Mxrb::Runtime::DockerWorkspace.new(path, plan)
     puts "Mendix       : #{plan.mendix_version}"
     puts "Java         : #{plan.java_version}"
     puts "JDK builder  : #{plan.jdk_package}"
@@ -886,7 +887,7 @@ when "test"
     puts "Toolchain    : #{plan.toolchain_path} (#{plan.available? ? 'available' : 'missing'})"
     puts "Tests        : #{definition.tests.size}"
     definition.tests.each { puts "  #{_1.name} -> #{_1.target}" }
-    puts "Builder argv : #{Shellwords.join(workspace.builder_command(definition_path))}"
+    puts "Build         : MXRB native host compiler (no mxbuild)"
   else
     executor = if native
                  Mxrb::Runtime::Native::Executor
@@ -919,10 +920,12 @@ when "functional-instrument"
 
 when "team-server"
   usage = <<~USAGE
-    Usage: mxrb team-server <login|info|branches|commits|clone|status|fetch|pull|push> ...
+    Usage: mxrb team-server <login|projects|info|branches|commits|clone|status|fetch|pull|push> ...
 
       team-server login --pat-file FILE
           Store only FILE's absolute path; the PAT is never copied into MXRB.
+      team-server projects [--pat-file FILE]
+          List every company-owned project through the official Projects API.
       team-server info APP_ID [--pat-file FILE]
       team-server branches APP_ID [--pat-file FILE]
       team-server commits APP_ID BRANCH [--pat-file FILE]
@@ -969,6 +972,9 @@ when "team-server"
       app_id = ARGV.shift or abort "Usage: mxrb team-server info APP_ID [--pat-file FILE]"
       abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
       puts JSON.pretty_generate(api.call.info(app_id))
+    when "projects"
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      puts JSON.pretty_generate(Mxrb::TeamServer::ProjectsApi.new(credentials:).all)
     when "branches"
       app_id = ARGV.shift or abort "Usage: mxrb team-server branches APP_ID [--pat-file FILE]"
       abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
@@ -1405,8 +1411,10 @@ else
       design scan <file.mpr> [--json]       Inventory CSS and SCSS design tokens
              migrate <mpr> <literal> <token> Preview a literal-to-token migration
                  --apply                    Apply the asset migration atomically
-      db up      <file.mpr> [--port PORT]   Build, synchronize and expose local PostgreSQL
-         sync    <file.mpr> [--port PORT]   Rebuild and synchronize the retained database
+      db up      <file.mpr> [--port PORT] [--runtime-port PORT]
+                                            Build, synchronize and expose PostgreSQL and Runtime
+         sync    <file.mpr> [--port PORT] [--runtime-port PORT]
+                                            Rebuild and synchronize the retained database
          down    <file.mpr>                 Stop containers while preserving all data
          destroy <file.mpr> --yes           Remove isolated containers, data, and state
          status  <file.mpr>                 Show isolated database/runtime status
@@ -1475,7 +1483,7 @@ else
       ci init github                      Scaffold GitHub Actions
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
                  --native                  Use the Ruby model Runtime; no Java/mxbuild
-                 --docker                  Run mxbuild/runtime in disposable containers
+                 --docker                  Run the natively built package in a disposable Runtime container
                  --plan                    Show toolchain and Docker execution plan
                  --json PATH               Write a machine-readable result
                  --junit PATH              Write a JUnit-compatible result

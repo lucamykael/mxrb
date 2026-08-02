@@ -5,6 +5,7 @@ Nenhum comando usa `mx`, Studio Pro ou o Model SDK como intermediário.
 
 ```bash
 mxrb team-server login --pat-file /caminho/seguro/team-server.env
+mxrb team-server projects --pat-file /caminho/seguro/team-server.env
 mxrb team-server info a9e4af8a-2776-4b10-a471-8c42df8f5f43
 mxrb team-server branches a9e4af8a-2776-4b10-a471-8c42df8f5f43
 mxrb team-server clone \
@@ -13,6 +14,11 @@ mxrb team-server clone \
 mxrb team-server pull ./app
 mxrb team-server push ./app --branch main
 ```
+
+`projects` pagina a Projects API oficial e retorna todos os projetos da empresa.
+O cliente preserva o PAT apenas no mesmo host HTTPS e corrige com segurança o
+redirect HTTP anunciado pelo serviço somente quando origem e destino têm o
+mesmo host HSTS.
 
 ## Credenciais
 
