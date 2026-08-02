@@ -77,3 +77,23 @@ project with mode `0600`.
 The PAT is sent only to the exact official hosts `marketplace-api.mendix.com`
 and `marketplace.mendix.com`; redirects to any other host do not receive it.
 See the [Mendix Marketplace Content API](https://docs.mendix.com/apidocs-mxsdk/apidocs/content-api/).
+
+## Protocol connector audit
+
+`mxrb protocols` is a read-only audit of the IoT, industrial, and messaging
+connectors a project imported from the Marketplace. It never runs a protocol
+and never installs anything; it reports the public metadata the model exposes.
+
+```sh
+mxrb protocols App.mpr
+mxrb protocols App.mpr --json
+```
+
+Recognized connectors are listed with their module name, protocol, and
+Marketplace component id; unrecognized marketplace modules are listed
+separately. Recognition is by verified `AppStoreGuid`, so a module whose GUID
+is not confirmed from a real fixture or official metadata is reported as
+unrecognized rather than guessed.
+
+This protocol registry is a third catalog, distinct from the reusable Ruby
+modules of `mxrb module` and the official packages of `mxrb marketplace`.

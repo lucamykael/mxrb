@@ -193,6 +193,36 @@ when "modules"
     p.modules.each { puts _1.inspect }
   end
 
+when "protocols"
+  path = ARGV.shift or abort "Usage: mxrb protocols <file.mpr> [--json]"
+  json = ARGV.delete("--json")
+  Mxrb.open(path) do |project|
+    audit = Mxrb::Protocols.audit(project)
+    unknown = audit.unknown_marketplace_modules
+    if json
+      puts JSON.generate(
+        connectors: audit.connectors.map(&:to_h),
+        unknown_marketplace_modules: unknown,
+        project: File.basename(path)
+      )
+    else
+      if audit.connectors.empty?
+        puts "No known protocol connectors found."
+      else
+        audit.connectors.each do |connector|
+          puts "#{connector.protocol}\t#{connector.module_name}\t" \
+               "marketplace=#{connector.metadata[:marketplace_id]}\tprotected=#{connector.protected}"
+          puts "  entities: #{connector.entities.join(', ')}" unless connector.entities.empty?
+          puts "  microflows: #{connector.microflows.join(', ')}" unless connector.microflows.empty?
+        end
+      end
+      unless unknown.empty?
+        puts "Unrecognized marketplace modules (#{unknown.size}): #{unknown.join(', ')}"
+        puts "Run `mxrb modules #{path}` to list every module."
+      end
+    end
+  end
+
 when "generate"
   source = ARGV.shift or abort "Usage: mxrb generate <definition.rb> [file.mpr]"
   target = ARGV.shift

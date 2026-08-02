@@ -91,3 +91,24 @@ redirects para qualquer outro host. Consulte a
 Há dois marketplaces distintos: `mxrb module search/add` instala módulos Ruby
 reutilizáveis do ecossistema MXRB; `mxrb marketplace ...` instala pacotes
 Mendix oficiais/comunitários.
+
+## Auditoria de conectores de protocolo
+
+`mxrb protocols` é uma auditoria somente leitura dos conectores de IoT,
+industriais e de mensageria que um projeto importou do Marketplace. Ele nunca
+executa um protocolo e nunca instala nada; apenas relata os metadados públicos
+que o modelo expõe.
+
+```sh
+mxrb protocols App.mpr
+mxrb protocols App.mpr --json
+```
+
+Os conectores reconhecidos aparecem com nome do módulo, protocolo e id do
+componente no Marketplace; os módulos de marketplace não reconhecidos são
+listados à parte. O reconhecimento é por `AppStoreGuid` verificado, então um
+módulo cujo GUID não foi confirmado em fixture real ou metadado oficial é
+relatado como não reconhecido, nunca inferido.
+
+Este registro de protocolos é um terceiro catálogo, distinto dos módulos Ruby
+reutilizáveis de `mxrb module` e dos pacotes oficiais de `mxrb marketplace`.
