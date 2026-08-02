@@ -73,7 +73,7 @@ module Mxrb
 
       def compile_node(node)
         return compile_end(node) if node['$Type'] == 'Microflows$EndEvent'
-        return unless node['$Type'] == 'Microflows$ActionActivity'
+        return unsupported!(node, node['$Type']) unless node['$Type'] == 'Microflows$ActionActivity'
 
         action = node['Action'] || {}
         case action['$Type']

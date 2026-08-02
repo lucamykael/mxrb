@@ -95,5 +95,27 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
       expect(compiler.unsupported.last).to end_with(':Microflows$EmptyAction')
     end
   end
+
+  it 'fails closed instead of silently dropping unsupported control flow' do
+    Dir.mktmpdir do |root|
+      path = File.join(root, 'Branching.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module(:Demo) do
+          nanoflow(:Branch) do
+            decision '$ready' do
+              on(true)  { return_value 'true' }
+              on(false) { return_value 'false' }
+            end
+          end
+        end
+      end
+      compiler = described_class.new(Mxrb::Compiler::SourceModel.read(path))
+
+      expect(compiler.reference('Demo.Branch')).to be_nil
+      expect(compiler.declarations).to eq('')
+      expect(compiler.unsupported).to include(/Microflows\$ExclusiveSplit/)
+    end
+  end
 end
 # rubocop:enable Metrics/BlockLength
