@@ -12,10 +12,13 @@
 - [Conventions](conventions.md)
 - [Ruby-first roadmap](ruby-first-roadmap.md)
 - [Validation matrix](validation-matrix.md)
+- [Native compiler and Runtime](compiler.md)
+- [Native build and Runtime quality report](native-runtime-quality-report.md)
 - [Writing projects](writing.md)
 - [Project scaffolds](scaffolds.md)
 - [Entity DSL](entity-dsl.md)
 - [Operations, lifecycle, and Marketplace](platform-operations.md)
+- [Mendix API integration assessment](platform-api-integration.md)
 - [VetClinic end-to-end acceptance](vetclinic-acceptance.md)
 
 [Back to the project README](../../README.md)

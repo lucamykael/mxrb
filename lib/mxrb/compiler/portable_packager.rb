@@ -55,7 +55,7 @@ module Mxrb
               ClientCertificatePasswords = ""
               HashAlgorithm = "BCRYPT:12"
             }
-            adminUser.password = ""
+            adminUser.password = ${?RUNTIME_ADMINUSER_PASSWORD}
             debugger.password = ""
           }
           logging = [

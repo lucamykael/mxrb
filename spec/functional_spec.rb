@@ -311,27 +311,19 @@ RSpec.describe Mxrb::Runtime do
       .to eq("21")
   end
 
-  it "builds Docker commands with read-only source and disposable workspaces" do
+  it "builds the Docker Runtime command for native packages" do
     plan = described_class::Plan.new(
       "11.12.1", "21", File.join(@toolchains, "11.12.1"),
       "/tools/mx", "/tools/mxbuild", "jdk", "jre", "builder:image", "runtime:image"
     )
     workspace = described_class::DockerWorkspace.new(@path, plan, workspace_size: "4g")
-    build = workspace.builder_command("/tmp/tests.rb")
     runtime = workspace.runtime_command(
       package_volume: "mxrb-package", http_port: 18_080, admin_port: 18_090
     )
 
-    expect(build.join(" ")).to include(
-      "readonly", "/workspace:exec,size=4g", "mxrb-mendix-11-12-1-cache",
-      "source=mxrb-functional-package,target=/output"
-    )
-    expect(build).to include("builder:image")
     expect(runtime.join(" ")).to include(
       "source=mxrb-package", "18080:8080", "18090:8090", "runtime:image"
     )
-    expect(workspace.send(:bind_mount, "/source", "/target", readonly: false))
-      .to eq("type=bind,source=/source,target=/target")
   end
 
   it "ignores missing and invalid Java settings before using the fallback" do
@@ -379,6 +371,11 @@ RSpec.describe Mxrb::Runtime::Executor do
         "11.12.1", "21", dir, @mx, @mxbuild,
         "jdk", "jre", "builder", "runtime"
       )
+      Mxrb::Runtime::RUNTIME_REQUIRED_FILES.each do |relative|
+        path = File.join(@plan.runtime_path, relative)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, "runtime")
+      end
       @definition = Mxrb::Functional::Definition.new([
         Mxrb::Functional::TestCase.new("works", "Demo.Noop", {}.freeze, 1.0)
       ].freeze)
@@ -387,6 +384,20 @@ RSpec.describe Mxrb::Runtime::Executor do
       )
       example.run
     end
+  end
+  before do
+    jar_builder = instance_double(Mxrb::Compiler::ProjectJarBuilder)
+    allow(Mxrb::Compiler::ProjectJarBuilder).to receive(:new).and_return(jar_builder)
+    allow(jar_builder).to receive(:build).and_return(
+      Mxrb::Compiler::ProjectJarResult.new(
+        path: 'project.jar', sources: 3, classes: 4, classpath_entries: 5
+      )
+    )
+    web_builder = instance_double(Mxrb::Compiler::WebBundleBuilder)
+    allow(Mxrb::Compiler::WebBundleBuilder).to receive(:new).and_return(web_builder)
+    allow(web_builder).to receive(:build).and_return(
+      Mxrb::Compiler::WebBundleResult.new(directory: 'dist', files: 6, bytes: 100)
+    )
   end
 
   it "runs the disposable pipeline and returns a Ruby execution result" do
@@ -408,15 +419,15 @@ RSpec.describe Mxrb::Runtime::Executor do
     expect { @executor.run }.to raise_error(Mxrb::FunctionalTestError, /before/)
   end
 
-  it "validates the official toolchain and Java home" do
+  it "validates the Runtime distribution and Java home" do
     expect { @executor.send(:validate_environment!) }.not_to raise_error
 
-    missing_plan = @plan.with(mxbuild_path: File.join(@dir, "missing"))
+    missing_plan = @plan.with(toolchain_path: File.join(@dir, "missing"))
     executor = described_class.new(
       @project, @definition, plan: missing_plan, java_home: @java
     )
     expect { executor.send(:validate_environment!) }
-      .to raise_error(Mxrb::ToolchainError, /toolchain/)
+      .to raise_error(Mxrb::ToolchainError, /Runtime/)
 
     executor = described_class.new(
       @project, @definition, plan: @plan, java_home: nil
@@ -448,12 +459,26 @@ RSpec.describe Mxrb::Runtime::Executor do
   end
 
   it "builds and unpacks portable applications with actionable failures" do
-    allow(@executor).to receive(:capture).and_return(["built", Status.new(true)])
+    materializer = instance_double(Mxrb::Compiler::DeploymentMaterializer)
+    materialized = Mxrb::Compiler::DeploymentMaterialization.new(
+      deployment: File.join(@dir, "deployment"), mendix_version: "11.12.1", stages: { "Model" => true }
+    )
+    packager = instance_double(Mxrb::Compiler::PortablePackager)
+    package_result = Mxrb::Compiler::PortableResult.new(
+      path: File.join(@dir, "runtime.zip"), mendix_version: "11.12.1",
+      files: 42, sha256: "abc", metadata: {}
+    )
+    allow(Mxrb::Compiler::DeploymentMaterializer).to receive(:new).and_return(materializer)
+    allow(materializer).to receive(:materialize).and_return(materialized)
+    allow(Mxrb::Compiler::PortablePackager).to receive(:new).and_return(packager)
+    allow(packager).to receive(:pack).and_return(package_result)
     package = @executor.send(:build, @project, @dir)
     expect(package).to end_with("runtime.zip")
-    expect(@executor.send(:build_output, package)).to eq("built")
+    expect(@executor.send(:build_output, package)).to include(
+      "MXRB native build", "3 Java sources", "4 classes", "6 web files", "42 packaged files"
+    )
 
-    allow(@executor).to receive(:capture).and_return(["bad build", Status.new(false)])
+    allow(materializer).to receive(:materialize).and_raise(Mxrb::CompilationError, "bad build")
     expect { @executor.send(:build, @project, @dir) }
       .to raise_error(Mxrb::FunctionalTestError, /bad build/)
 
@@ -467,7 +492,7 @@ RSpec.describe Mxrb::Runtime::Executor do
   end
 
   it "collects the runtime protocol, streams it, and enforces its deadline" do
-    script = File.join(@dir, "runtime")
+    script = File.join(@dir, "runtime-script")
     File.write(script, "#!/bin/sh\nprintf '[MXRB_TEST] DONE\\n'\nsleep 30\n")
     FileUtils.chmod(0o755, script)
     output = StringIO.new
@@ -554,6 +579,11 @@ RSpec.describe Mxrb::Runtime::DockerExecutor do
         "11.12.1", "21", dir, @mx, @mxbuild,
         "jdk", "jre", "builder", "runtime"
       )
+      Mxrb::Runtime::RUNTIME_REQUIRED_FILES.each do |relative|
+        path = File.join(@plan.runtime_path, relative)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, "runtime")
+      end
       @definition = Mxrb::Functional::Definition.new([
         Mxrb::Functional::TestCase.new("works", "Demo.Noop", {}.freeze, 1.0)
       ].freeze)
@@ -564,18 +594,23 @@ RSpec.describe Mxrb::Runtime::DockerExecutor do
     end
   end
 
-  it "validates Docker and prepares a missing Java-family builder image" do
-    allow(@executor).to receive(:capture).and_return(
-      ["docker", DockerStatus.new(true)],
-      ["missing", DockerStatus.new(false)],
-      ["built", DockerStatus.new(true)]
+  before do
+    jar_builder = instance_double(Mxrb::Compiler::ProjectJarBuilder)
+    allow(Mxrb::Compiler::ProjectJarBuilder).to receive(:new).and_return(jar_builder)
+    allow(jar_builder).to receive(:build).and_return(
+      Mxrb::Compiler::ProjectJarResult.new(
+        path: 'project.jar', sources: 0, classes: 0, classpath_entries: 1
+      )
     )
-    expect { @executor.send(:validate_environment!) }.not_to raise_error
+    web_builder = instance_double(Mxrb::Compiler::WebBundleBuilder)
+    allow(Mxrb::Compiler::WebBundleBuilder).to receive(:new).and_return(web_builder)
+    allow(web_builder).to receive(:build).and_return(
+      Mxrb::Compiler::WebBundleResult.new(directory: 'dist', files: 2, bytes: 50)
+    )
+  end
 
-    allow(@executor).to receive(:capture).and_return(
-      ["docker", DockerStatus.new(true)],
-      ["present", DockerStatus.new(true)]
-    )
+  it "validates Docker and the native Runtime distribution" do
+    allow(@executor).to receive(:capture).and_return(["docker", DockerStatus.new(true)])
     expect { @executor.send(:validate_environment!) }.not_to raise_error
 
     allow(@executor).to receive(:capture)
@@ -584,37 +619,41 @@ RSpec.describe Mxrb::Runtime::DockerExecutor do
       .to raise_error(Mxrb::ToolchainError, /daemon/)
   end
 
-  it "reports unavailable toolchains and builder image failures" do
-    missing = @plan.with(mxbuild_path: File.join(@dir, "missing"))
+  it "reports unavailable Runtime distributions" do
+    missing = @plan.with(toolchain_path: File.join(@dir, "missing"))
     executor = described_class.new(
       @project, @definition, plan: missing, java_home: nil
     )
     expect { executor.send(:validate_environment!) }
-      .to raise_error(Mxrb::ToolchainError, /toolchain/)
-
-    allow(@executor).to receive(:capture).and_return(
-      ["missing", DockerStatus.new(false)],
-      ["failed image", DockerStatus.new(false)]
-    )
-    expect { @executor.send(:ensure_builder_image) }
-      .to raise_error(Mxrb::ToolchainError, /failed image/)
+      .to raise_error(Mxrb::ToolchainError, /Runtime/)
   end
 
-  it "builds the portable package in a read-only project mount" do
-    allow(@executor).to receive(:capture)
-      .and_return(["built", DockerStatus.new(true)])
+  it "builds the portable package through the shared native compiler" do
+    materializer = instance_double(Mxrb::Compiler::DeploymentMaterializer)
+    materialized = Mxrb::Compiler::DeploymentMaterialization.new(
+      deployment: File.join(@dir, "deployment"), mendix_version: "11.12.1", stages: {}
+    )
+    packager = instance_double(Mxrb::Compiler::PortablePackager)
+    package_result = Mxrb::Compiler::PortableResult.new(
+      path: File.join(@dir, "runtime.zip"), mendix_version: "11.12.1",
+      files: 1, sha256: "docker", metadata: {}
+    )
+    allow(Mxrb::Compiler::DeploymentMaterializer).to receive(:new).and_return(materializer)
+    allow(materializer).to receive(:materialize).and_return(materialized)
+    allow(Mxrb::Compiler::PortablePackager).to receive(:new).and_return(packager)
+    allow(packager).to receive(:pack).and_return(package_result)
     package = @executor.send(:build, @project, @dir)
     expect(package).to eq(File.join(@dir, "runtime.zip"))
-    expect(@executor.send(:build_output, package)).to eq("built")
+    expect(@executor.send(:build_output, package)).to include("MXRB native build")
     allow(Mxrb).to receive(:validate).and_return(
       Mxrb::Integrity::Result.new(errors: [], warnings: [])
     )
     expect(@executor.send(:check, @project, @dir)).to include("native validation")
 
-    allow(@executor).to receive(:capture)
-      .and_return(["bad Docker build", DockerStatus.new(false)])
+    allow(materializer).to receive(:materialize)
+      .and_raise(Mxrb::CompilationError, "bad native build")
     expect { @executor.send(:build, @project, @dir) }
-      .to raise_error(Mxrb::FunctionalTestError, /bad Docker build/)
+      .to raise_error(Mxrb::FunctionalTestError, /bad native build/)
   end
 
   it "starts the runtime as the host user and reports unpack failures" do

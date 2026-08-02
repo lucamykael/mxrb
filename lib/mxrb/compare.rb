@@ -118,7 +118,7 @@ module Mxrb
           name: entity.name,
           documentation: entity.documentation.to_s,
           persistable: entity.persistable != false,
-          generalization: normalize_flow_value(entity.generalization, {}),
+          generalization: normalize_generalization(entity.generalization),
           access_rules: Array(entity.access_rules).map { normalize_hash(_1) },
           attributes: entity.attributes.sort_by(&:name).map do |attribute|
             {
@@ -353,6 +353,14 @@ module Mxrb
           end
           [key.to_sym, normalized]
         end
+      end
+
+      def normalize_generalization(value)
+        defaults = {
+          Persistable: false, HasCreatedDateAttr: false, HasChangedDateAttr: false,
+          HasOwnerAttr: false, HasChangedByAttr: false
+        }
+        defaults.merge(normalize_flow_value(value, {}))
       end
 
       def format_path(path)

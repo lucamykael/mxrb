@@ -334,5 +334,57 @@ module Mxrb
         URI.encode_www_form_component(value.to_s).gsub('+', '%20')
       end
     end
+
+    # Read-only paginated client for Mendix's official Projects API.
+    class ProjectsApi
+      BASE = 'https://projects-api.home.mendix.com/v2/projects?limit=100'
+      HOST = 'projects-api.home.mendix.com'
+      MAX_PAGES = 100
+
+      def initialize(credentials: Credentials.new, client: OfficialMarketplace::HttpClient.new)
+        @credentials = credentials
+        @client = client
+      end
+
+      def all
+        projects = []
+        each_page { projects.concat(Array(_1['items'])) }
+        projects.freeze
+      rescue MarketplaceError => e
+        raise TeamServerError, e.message
+      end
+
+      private
+
+      def each_page
+        url = BASE
+        MAX_PAGES.times do
+          payload = @client.json(valid_url(url), authorization: authorization)
+          yield payload
+          url = payload.dig('links', 'next')
+          return unless url
+        end
+        raise TeamServerError, 'Projects API pagination exceeded its safety limit'
+      end
+
+      def authorization
+        token = @credentials.pat.to_s.strip
+        raise TeamServerError, 'Projects API requires --pat-file or MXRB_TEAM_SERVER_PAT_FILE' if token.empty?
+
+        "MxToken #{token}"
+      end
+
+      def valid_url(value)
+        uri = URI.parse(value.to_s)
+        path = %r{\A/v2/(?:projects|accounts/[^/]+/projects)\z}
+        unless uri.is_a?(URI::HTTPS) && uri.host == HOST && uri.path.match?(path)
+          raise TeamServerError, "unsafe Projects API pagination URL #{value.inspect}"
+        end
+
+        uri.to_s
+      rescue URI::InvalidURIError
+        raise TeamServerError, "unsafe Projects API pagination URL #{value.inspect}"
+      end
+    end
   end
 end
