@@ -206,12 +206,26 @@ module Mxrb
                      else
                        {}
                      end
+        definition = definition.merge(security: native_security_definition(security)) \
+          unless definition[:security]
         persistent_access_diagnostics(security) +
           secured_artifact_diagnostics(security) +
           public_contract_diagnostics(definition) +
           navigation_diagnostics(definition) +
           duplicate_role_diagnostics(definition) +
           design_system_diagnostics(definition)
+      end
+
+      def native_security_definition(security)
+        roles = IO::BsonCodec.parse_array(security&.fetch("UserRoles", nil))[:items]
+        {
+          user_roles: roles.map do |role|
+            {
+              name: role["Name"],
+              module_roles: IO::BsonCodec.parse_array(role["ModuleRoles"])[:items]
+            }
+          end
+        }
       end
 
       def project_security

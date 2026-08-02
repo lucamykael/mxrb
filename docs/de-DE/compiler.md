@@ -1,26 +1,140 @@
-# Compiler und MDA-Format
+# Nativer Compiler, Runtime und MDA-Format
 
-`mxrb pack App.mpr --output build/App.mda` schreibt ein deterministisches
-MDA-ZIP vollständig in Ruby. `mxrb mda inspect` inventarisiert das Archiv und
-`mxrb mda compare` vergleicht Einträge anhand ihres Inhalts.
+Die funktionale MXRB-Pipeline führt weder `mx`, `mxbuild`, `mxcli`, Studio Pro
+noch das Model SDK aus. Diese Werkzeuge können externe Kompatibilitätsprüfungen
+bleiben, sind aber keine Build-, Datenbank- oder Funktionstest-Abhängigkeiten.
 
-Diese erste Stufe benötigt ein bereits materialisiertes `deployment/` mit
-`model/model.mdp`, `model/metadata.json`, `model/bundles/project.jar` und
-`web/index.html`. Es gibt keinen impliziten Fallback auf `mx`, `mxbuild`, Studio
-Pro oder das Model SDK. Archiviert werden nur `model`, `web`, `native`, `sass`
-und `tmp`; Arbeitsverzeichnisse von Runtime und Gradle bleiben außen vor.
+## Build von null
 
-Adapter unterstützen derzeit Mendix 9.x, 10.x und 11.x. Die native Erzeugung
-von Domänenmetadaten, Microflows, Frontend-Bundles, Java-Artefakten und der
-portablen Runtime bleibt als Folgestufe explizit offen. Das von MXRB geschriebene
-VetClinic-MDA wurde von Runtime 11.12.1 akzeptiert, synchronisierte 675
-Datenbankoperationen und lieferte HTTP 200.
+`DeploymentMaterializer` erzeugt ein fehlendes `deployment/` aus den Templates
+der installierten Version und durchläuft 12 Stufen: Sicherheit, Konstanten,
+Domänenmodell, Artefakte, Übersetzungen, Systemtexte, Systemwarteschlangen,
+Clientmodell, Actions, Settings, Microflows und Projekt-/Modulindex. Metadaten,
+Abhängigkeiten und ein Runtime-kompatibel geordnetes BSON-`model.mdp` werden
+ebenfalls erzeugt.
 
-`mxrb portable App.mpr --output build/runtime.zip` kombiniert die installierte
-versionsgleiche Runtime, generierte Konfiguration und Konstanten sowie das
-materialisierte Deployment ohne Aufruf von `mx` oder `mxbuild`. Das
-VetClinic-Paket enthielt 4.384 Dateien, synchronisierte 675 Datenbankoperationen
-und lieferte HTTP 200. Strukturelle Funktionstests verwenden jetzt
-`Mxrb.validate`; die Instrumentierung benötigt weiterhin die native
-Materialisierung geänderter Microflows, bevor auch ihr Build `mxbuild` ablösen
-kann.
+Der Bootstrap besitzt auditierte Seeds und Kataloge für 6.10.8, 7.5.0,
+7.17.0, 9.6.1.29396 und 11.12.1. Die Familien 6.x, 7.x, 9.x und 11.x wählen
+einen kompatiblen Compiler-Seed; 5.x, 8.x und 10.x schlagen ohne auditierten
+Seed geschlossen fehl. Die Familie gilt nur für das Compiler-Schema. Die
+Runtime muss exakt zum Patch des MPR passen.
+
+`ProjectJarBuilder` findet das JDK über `MXRB_JAVA_HOME`, `JAVA_HOME`, asdf oder
+mise, kompiliert `javasource/**/*.java` gegen Runtime- und Projektbibliotheken
+und schreibt ein deterministisches OSGi-`project.jar`. Für VetClinic wurden 183
+Quelldateien zu 249 Klassen kompiliert.
+
+`WebBundleBuilder` wählt Dojo für 6/7, Dojo mit React-Wrapper für 9 und React
+für 11. Der React-Pfad erzeugt Entry-/Seitenmodule, entpackt `.mpk` und ruft
+Node/Rspack der Version direkt auf. Data Grid 2 wird für den Teilumfang aus XPath-Datenquelle
+und Attributspalten kompiliert, einschließlich `operations.json`, Datenquelle
+und Attributtypen. Noch nicht übersetzte Typen oder Eigenschaftskombinationen
+erhalten einen DOM-Fallback in `web/mxrb-pages.json`; das VetClinic-Manifest ist
+leer.
+
+Der React-Compiler materialisiert außerdem Container, Texte und Überschriften,
+responsive Grids/Spalten sowie Buttons zum Öffnen und Erzeugen. Der Bootstrap
+bindet `theme.compiled.css`, das Manifest und Assets aus
+`themesource/*/public` ein; eine Homepage mit `LayoutGrid` bleibt nicht leer.
+Ruby-Inhalte lassen sich so ergänzen:
+
+Parametergestützte `DataView`-Formulare rendern nun editierbare `TextBox`-Felder
+sowie Save/Cancel-Aktionen. Create übergibt die GUID des neuen Objekts über
+`openForm2`; Commit-/Rollback-Operationen werden mit den Projektbenutzerrollen
+registriert, die aus den erlaubten Modulrollen der Seite abgeleitet werden.
+Damit bleibt die Runtime-Autorisierung erhalten und wird nicht umgangen.
+
+Der React-Pfad kompiliert außerdem die offizielle Gallery mit XPath- und
+Microflow-Listenquellen, Template-Inhalten, Auswahl und formatierten dynamischen
+Attributen. Nanoflow-Quellen und -Aktionen verwenden die Mendix-Verträge
+`NanoflowObjectListProperty`, `NanoflowObjectProperty` und `ActionProperty`.
+MXRB erzeugt echte Clientprogramme `{ name, instructions }` für den auditierten
+linearen Teilumfang: Return, Variablenerzeugung, Objekterzeugung und verschachtelte
+Nanoflow-Aufrufe. Fehlende Flows, nicht sicher abbildbare Parameter, Verzweigungen,
+JavaScript-Aktionen, Microflow-Aufrufe und andere unübersetzte Clientinstruktionen
+schlagen geschlossen fehl und bleiben Befunde im Support-Manifest.
+
+In lokalen Runtime-Sitzungen im Developer-Modus versioniert mxrb außerdem
+dynamische Seitenimporte, versieht den korrigierten React-Client-Chunk mit
+einem Inhalts-Hash und gibt dem Rspack-Selbstimport dasselbe Cache-Token wie
+dem Entry-Point. Dadurch können langlebige statische Mendix-Antworten nach
+einem nativen Rebuild keine veraltete leere Seite wiederherstellen. Die erzeugte
+Shell stellt außerdem einen begrenzten `openForm`-Adapter über `openForm2`
+bereit; alte Handler im Cache navigieren damit, statt still ohne Request zu enden.
+
+```ruby
+Mxrb.define("App.mpr") do
+  mendix_version "11.12.1"
+  self.module(:App) do
+    layout :Shell
+    page(:Home) do
+      layout "App.Shell"
+      title "Meine Anwendung"
+      container(:main, class_name: "container") do
+        text :welcome, caption: "Mit mxrb erzeugter Inhalt"
+      end
+    end
+  end
+end
+```
+
+Bestehende Projekte können exportiert, in der DSL geändert und neu erzeugt
+werden. Nicht unterstützte Widgets bleiben im Support-Manifest sichtbar.
+
+Der Dojo-Pfad kompiliert Data Grid 1 mit Datenbank-, XPath- und
+Microflow-Quellen sowie auditierten Such-, Sortier-, Paging-, Auswahl- und
+Button-Verträgen. Alle anderen sichtbaren Widgets werden pro Seite in
+`web/mxrb-legacy-pages.json` erfasst und nicht als gerendert ausgewiesen.
+
+## MDA und portables Paket
+
+```bash
+mxrb pack App.mpr --output build/App.mda
+mxrb mda inspect build/App.mda
+mxrb portable App.mpr --output build/runtime.zip
+```
+
+MDA und portables ZIP sind deterministisch. Das portable Paket kombiniert das
+native Deployment mit der passenden installierten Runtime, Konfiguration,
+Konstanten und Skripten. Arbeitsverzeichnisse wie `data`, `log`, `run`, `build`
+und `.gradle` werden nicht in das MDA aufgenommen.
+
+## Regressionsnachweis
+
+```bash
+script/runtime_boot_regression App.mpr /fehlendes/deployment \
+  ~/.local/share/mendix/11.12.1
+```
+
+Der Test erzeugt ein temporäres Deployment, kompiliert Java und Web, paketiert,
+startet die Runtime und verlangt HTTP 200 für `/`, `dist/index.js` und jedes
+Seitenbundle. Ein sauberes Herunterfahren ist ebenfalls erforderlich. Protokoll
+und SHA-256 stehen in `tmp/runtime-boot-evidence.log`. Wenn Chromium installiert
+ist, importiert der Test alle Module und instanziiert Factorys ohne
+Sitzungsbedarf. Das Data-Grid-Bundle wird importiert und ausgewertet; seine
+Factory liest die Clientsitzung und benötigt daher einen authentifizierten Test.
+
+Am 1. August 2026 startete VetClinic 11.12.1 ohne vorhandenes Deployment,
+führte 675 Datenbanksynchronisierungen aus, initialisierte die
+`System`-Warteschlangen, plante `VetClinic.Cleanup`, lieferte 200 für alle vier
+Seitenbundles und fuhr sauber herunter. Danach bestand der Funktionstest
+`ACT Create Animal`.
+
+## Explizite Grenzen
+
+- alle 12 Stufen und saubere Web-Generierung sind für 6.10.8, 7.5.0, 7.17.0,
+  9.6.1.29396 und 11.12.1 validiert;
+- ein exakter nativer Boot ist für 11.12.1 belegt. Die installierten
+  6/7/9-Distributionen enthalten exakte Runtime-Bundles, aber keinen
+  PAD/Launcher; `db up` schlägt geschlossen fehl, statt den Java-21-Launcher
+  aus Version 11 einzusetzen;
+- Data Grid 1 ist abgedeckt, andere Dojo-Widgets bleiben explizite
+  Manifestbefunde;
+- Data Grid 2 ist für XPath-Datenquellen und Attributspalten abgedeckt. Gallery
+  deckt XPath/Microflow und den auditierten Nanoflow-Instruktionsumfang ab.
+  React-Formulare decken parameter- oder unterstützte Nanoflow-DataViews,
+  TextBox und Save/Cancel ab; andere Clientinstruktionen verwenden den Fallback;
+- native Web-Bundles werden erzeugt; React Native verwendet weiterhin
+  bestehende Versions-Template- und Projektassets;
+- `mx` und `mxbuild` sind niemals Fallbacks. Nicht unterstützte Eingaben führen
+  zu einem klaren Compilerfehler oder einem Eintrag im Support-Manifest.

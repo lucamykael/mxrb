@@ -1433,10 +1433,14 @@ module Mxrb
     def access_rule_doc(rule, module_name, entity_name, attributes: [], associations: [])
       read = rule.fetch(:read, :none)
       write = rule.fetch(:write, :none)
-      default_rights = access_default_rights(read, write)
-      members = access_member_docs(
-        read, write, module_name, entity_name, attributes:, associations:
-      )
+      default_rights = rule[:default_rights] || access_default_rights(read, write)
+      members = if rule[:members]
+                  exact_access_member_docs(rule.fetch(:members), module_name, entity_name)
+                else
+                  access_member_docs(
+                    read, write, module_name, entity_name, attributes:, associations:
+                  )
+                end
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "DomainModels$AccessRule",
@@ -1448,6 +1452,20 @@ module Mxrb
         "MemberAccesses" => IO::BsonCodec.build_array(members),
         "XPathConstraint" => rule.fetch(:xpath, "")
       }
+    end
+
+    def exact_access_member_docs(members, module_name, entity_name)
+      members.map do |member|
+        association = member.fetch(:kind, :attribute).to_sym == :association
+        name = member.fetch(:name).to_s
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "DomainModels$MemberAccess",
+          "Association" => association ? "#{module_name}.#{name}" : "",
+          "Attribute" => association ? "" : "#{module_name}.#{entity_name}.#{name}",
+          "AccessRights" => member.fetch(:rights).to_s
+        }
+      end
     end
 
     def access_default_rights(read, write)
@@ -1492,7 +1510,8 @@ module Mxrb
         "GUID" => previous&.dig("GUID") || SecureRandom.uuid,
         "Type" => association.fetch(:type).to_s,
         "Owner" => association.fetch(:owner, :Default).to_s,
-        "StorageFormat" => association.fetch(:type) == :ReferenceSet ? "Table" : "Column"
+        "StorageFormat" => association[:storage_format]&.to_s ||
+          (association.fetch(:type) == :ReferenceSet ? "Table" : "Column")
       )
       behavior = previous&.dig('DeleteBehavior') || previous&.dig('deleteBehavior') || {}
       parent_key = native_key(behavior, 'parentDeleteBehavior', 'ParentDeleteBehavior')
@@ -1708,6 +1727,8 @@ module Mxrb
         ]
       end
       roles = role_definitions.map { user_role_doc(_1) }
+      default_admin = role_definitions.find { _1[:admin] == true }&.fetch(:name, nil)
+      default_admin ||= roles.first.fetch("Name")
       password_policy = {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Security$PasswordPolicySettings",
@@ -1732,7 +1753,7 @@ module Mxrb
         "CheckSecurity" => true,
         "AdminUserName" => "MxAdmin",
         "AdminPassword" => "1",
-        "AdminUserRole" => security[:admin_user_role] || roles.first.fetch("Name"),
+        "AdminUserRole" => security[:admin_user_role] || default_admin,
         "EnableDemoUsers" => security.fetch(:demo_users_enabled, false) == true,
         "EnableGuestAccess" => security.fetch(:guest_access_enabled, false) == true,
         "GuestUserRole" => security[:guest_user_role].to_s,
@@ -2257,6 +2278,10 @@ module Mxrb
     end
 
     def microflow_data_type_doc(type, module_name)
+      if type.is_a?(Hash)
+        return type.merge("$ID" => stable_id("data_type", module_name, type.to_s))
+      end
+
       name = type.to_s
       native = case name.downcase
       when "", "void", "nil" then "DataTypes$VoidType"
@@ -2854,14 +2879,16 @@ module Mxrb
           "Entity" => activity[:entity], "ErrorHandlingType" => "Rollback",
           "VariableName" => activity[:variable] }
       when :list_operation
+        operation = {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$#{mendix_enum(activity[:operation])}",
+          "ListName" => activity[:variable]
+        }
+        operation["SecondListOrObjectName"] = activity[:second] if activity[:second]
+        operation["Expression"] = activity[:expression] if activity[:expression]
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ListOperationsAction",
           "ErrorHandlingType" => "Rollback",
-          "NewOperation" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Microflows$#{mendix_enum(activity[:operation])}",
-            "ListName" => activity[:variable],
-            "SecondListOrObjectName" => activity[:second]
-          },
+          "NewOperation" => operation,
           "ResultVariableName" => activity[:output] }
       when :change_list
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ChangeListAction",

@@ -5,10 +5,16 @@ Team-Server-Git-Repositories und der App Repository API:
 
 ```sh
 mxrb team-server login --pat-file /secure/team-server.env
+mxrb team-server projects --pat-file /secure/team-server.env
 mxrb team-server clone APP_ID ./app
 mxrb team-server branches APP_ID
 mxrb team-server pull ./app
 ```
+
+`projects` paginiert die offizielle Projects API und liefert alle Projekte des
+Unternehmens. Anmeldedaten bleiben auf denselben HTTPS-Host begrenzt; ein vom
+Dienst gemeldeter HTTP-Redirect wird nur für genau denselben HSTS-Host auf HTTPS
+angehoben.
 
 Im empfohlenen Modus wird nur der absolute Pfad zur PAT-Datei gespeichert.
 Unterstützt werden Klartext, JSON und `.env` mit `MXRB_TEAM_SERVER_PAT`. Der PAT

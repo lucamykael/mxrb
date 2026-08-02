@@ -86,12 +86,14 @@ RSpec.describe 'native navigation and design systems' do
     Dir.mktmpdir do |dir|
       source_dir = File.join(dir, 'source')
       FileUtils.mkdir_p(File.join(source_dir, 'theme', 'web'))
+      FileUtils.mkdir_p(File.join(source_dir, 'vendorlib'))
       path = File.join(source_dir, 'app.mpr')
       define_native_project(path)
       File.write(
         File.join(source_dir, 'theme', 'web', '_theme-dark.scss'),
         ":root.theme-dark { --foreground: #fff; }\n"
       )
+      File.binwrite(File.join(source_dir, 'vendorlib', 'driver.jar'), 'jar')
       exported = File.join(dir, 'ruby')
       rebuilt = File.join(dir, 'rebuilt', 'app.mpr')
 
@@ -100,7 +102,8 @@ RSpec.describe 'native navigation and design systems' do
         .to include('home_for', 'item "Home"', 'Applicatie')
       manifest = JSON.parse(File.read(File.join(exported, '.mxrb', 'assets.json')))
       expect(manifest.fetch('files')).to include(
-        include('path' => 'theme/web/_theme-dark.scss')
+        include('path' => 'theme/web/_theme-dark.scss'),
+        include('path' => 'vendorlib/driver.jar')
       )
 
       begin
@@ -111,6 +114,7 @@ RSpec.describe 'native navigation and design systems' do
       end
       expect(File.binread(File.join(File.dirname(rebuilt), 'theme', 'web', '_theme-dark.scss')))
         .to eq(File.binread(File.join(source_dir, 'theme', 'web', '_theme-dark.scss')))
+      expect(File.binread(File.join(File.dirname(rebuilt), 'vendorlib', 'driver.jar'))).to eq('jar')
       expect(Mxrb.compare(path, rebuilt)).to be_identical
     end
   end
@@ -146,6 +150,36 @@ RSpec.describe 'native navigation and design systems' do
       expect { plan.apply! }.to raise_error(ArgumentError, /already applied/)
       expect(system.plan_literal_migration('#abcdef' => 'var(--none)')).to be_empty
     end
+  end
+
+  it 'resolves source token references against Mendix compiled theme-cache output' do
+    Dir.mktmpdir do |dir|
+      source = File.join(dir, 'theme', 'web')
+      cache = File.join(dir, 'theme-cache', 'web')
+      FileUtils.mkdir_p([source, cache])
+      File.write(File.join(source, 'theme.scss'), ':root { --button: var(--brand-primary-50); }')
+      File.write(File.join(cache, 'theme.compiled.css'), ':root { --brand-primary-50: #eef; }')
+
+      system = Mxrb::Model::DesignSystem.new(dir)
+      expect(system.tokens.map(&:name)).to include('--button', '--brand-primary-50')
+      expect(system.unresolved_references).to be_empty
+    end
+  end
+
+  it 'derives navigation user roles from native project security without mxrb metadata' do
+    analyzer = Mxrb::Semantic::Analyzer.allocate
+    security = {
+      'UserRoles' => Mxrb::IO::BsonCodec.build_array(
+        [{
+          'Name' => 'Trainee',
+          'ModuleRoles' => Mxrb::IO::BsonCodec.build_array(['App.User'], marker: 1)
+        }], marker: 2
+      )
+    }
+    definition = analyzer.send(:native_security_definition, security)
+    expect(definition.dig(:user_roles, 0)).to eq(
+      name: 'Trainee', module_roles: ['App.User']
+    )
   end
 
   it 'exposes design token scanning and preview/apply migration through the CLI' do

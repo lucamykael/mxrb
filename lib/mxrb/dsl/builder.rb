@@ -96,6 +96,13 @@ module Mxrb
         }
       end
 
+      # Exported native widget payloads can contain BSON identifiers at any
+      # nesting level. Keep the reconstruction helper on the shared widget DSL
+      # so pages, containers, and tab pages all evaluate the same export.
+      def bson_binary(base64, subtype: :generic)
+        BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
+      end
+
       private
 
       def _add_widget(type, name, **options, &block)
@@ -923,6 +930,7 @@ module Mxrb
       ATTR_TYPES = %i[string integer long float decimal boolean datetime autonumber hashstring binary enum].freeze
       ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
       ASSOCIATION_OWNERS = %i[Default Both].freeze
+      ASSOCIATION_STORAGE_FORMATS = %i[Column Table].freeze
       CARDINALITIES = {
         many_to_one: %i[Reference Default],
         one_to_one: %i[Reference Both],
@@ -981,7 +989,8 @@ module Mxrb
       end
 
       def association(target, type: :Reference, owner: :Default, name: nil, cardinality: nil,
-                      documentation: '', parent_delete: :NoAction, child_delete: :NoAction)
+                      documentation: '', parent_delete: :NoAction, child_delete: :NoAction,
+                      storage_format: nil)
         if cardinality
           type, owner = CARDINALITIES.fetch(cardinality.to_sym) do
             raise ArgumentError, 'cardinality must be :many_to_one, :one_to_one, or :many_to_many'
@@ -993,6 +1002,7 @@ module Mxrb
           raise ArgumentError, "association type must be Reference or ReferenceSet"
         end
         raise ArgumentError, "association owner must be Default or Both" unless ASSOCIATION_OWNERS.include?(owner)
+        storage_format = normalize_association_storage_format(storage_format)
 
         @associations << {
           name: (name || "#{@name}_#{target}").to_s,
@@ -1001,7 +1011,8 @@ module Mxrb
           owner: owner,
           documentation: documentation.to_s,
           parent_delete: parent_delete.to_sym,
-          child_delete: child_delete.to_sym
+          child_delete: child_delete.to_sym,
+          storage_format: storage_format
         }
       end
 
@@ -1013,7 +1024,8 @@ module Mxrb
       end
 
       # access_rule "Module.Role", create: true, delete: false, read: :all, write: [:Name]
-      def access_rule(*roles, create: false, delete: false, read: :none, write: :none, xpath: "")
+      def access_rule(*roles, create: false, delete: false, read: :none, write: :none, xpath: "",
+                      default_rights: nil, members: nil)
         @access_rules ||= []
         @access_rules << {
           roles: roles.map(&:to_s),
@@ -1021,7 +1033,9 @@ module Mxrb
           delete: delete,
           read: normalize_access(read),
           write: normalize_access(write),
-          xpath: xpath.to_s
+          xpath: xpath.to_s,
+          default_rights: default_rights&.to_s,
+          members: members&.map { _1.transform_keys(&:to_sym) }
         }
       end
 
@@ -1035,6 +1049,15 @@ module Mxrb
       end
 
       private
+
+      def normalize_association_storage_format(value)
+        return if value.nil?
+
+        format = value.to_sym
+        return format if ASSOCIATION_STORAGE_FORMATS.include?(format)
+
+        raise ArgumentError, "association storage format must be Column or Table"
+      end
 
       def normalize_access(value)
         case value
@@ -1235,10 +1258,11 @@ module Mxrb
         _acts << { type: :create_list, entity: entity.to_s, variable: as.to_s }
       end
 
-      def list_operation(operation, list, with:, as:)
+      def list_operation(operation, list, as:, with: nil, expression: nil)
         _acts << {
           type: :list_operation, operation: operation.to_s,
-          variable: list.to_s, second: with.to_s, output: as.to_s
+          variable: list.to_s, second: with&.to_s,
+          expression: expression&.to_s, output: as.to_s
         }
       end
 
@@ -1367,7 +1391,11 @@ module Mxrb
       end
 
       def parameter(name, type:)
-        @parameters << { name: name.to_s, type: type.to_s }
+        @parameters << { name: name.to_s, type: type.is_a?(Hash) ? type : type.to_s }
+      end
+
+      def bson_binary(base64, subtype: :generic)
+        BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
       end
 
       def return_type(t) = (@return_type = t.to_s)

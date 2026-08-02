@@ -229,8 +229,14 @@ module Mxrb
 
       def follow_redirect(uri, response, options)
         get(
-          URI.join(uri, response['location']).to_s, **options
+          redirect_url(uri, response['location']), **options
         )
+      end
+
+      def redirect_url(origin, location)
+        target = URI.join(origin, location)
+        target.scheme = 'https' if origin.is_a?(URI::HTTPS) && target.host == origin.host && target.scheme == 'http'
+        target.to_s
       end
 
       def https_uri(url)

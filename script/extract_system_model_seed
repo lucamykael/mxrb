@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'base64'
+require 'digest'
+require 'fileutils'
+require 'stringio'
+require 'zlib'
+require_relative '../lib/mxrb'
+
+def usage
+  warn 'Usage: script/extract_system_model_seed MODEL.MDP VERSION [OUTPUT]'
+  exit 64
+end
+
+model, version, output = ARGV
+usage unless model && version
+output ||= File.join(__dir__, '..', 'lib', 'mxrb', 'compiler', 'schemas', "system-model-#{version}.b64")
+
+package = Mxrb::Compiler::ModelPackage.read(model)
+start = package.entries.index { _1.id == Mxrb::Compiler::SystemModelSeed::MODULE_ID }
+raise Mxrb::CompilationError, 'model has no canonical System module' unless start
+
+following = package.entries[(start + 1)..]
+boundary = following.index { _1.type == 'Projects$ModuleImpl' }
+entries = package.entries[start, boundary ? boundary + 1 : package.entries.length - start]
+documents = entries.map(&:document)
+unless documents.first&.dig('Name') == 'System' &&
+       documents[1]&.dig('$Type') == 'DomainModels$DomainModel'
+  raise Mxrb::CompilationError, 'System module boundary is invalid'
+end
+
+invalid = documents.drop(1).filter_map do |document|
+  qualified = document['QualifiedName'].to_s
+  document['$Type'] unless qualified.empty? || qualified.start_with?('System.')
+end
+raise Mxrb::CompilationError, "foreign documents in System seed: #{invalid.uniq.join(', ')}" unless invalid.empty?
+
+bytes = documents.map { Mxrb::IO::BsonCodec.serialize(_1) }.join
+buffer = StringIO.new
+gzip = Zlib::GzipWriter.new(buffer, Zlib::BEST_COMPRESSION)
+gzip.mtime = 0
+gzip.write(bytes)
+gzip.close
+compressed = buffer.string
+encoded = Base64.strict_encode64(compressed).scan(/.{1,76}/).join("\n") << "\n"
+FileUtils.mkdir_p(File.dirname(output))
+File.write(output, encoded)
+puts "System seed #{version}: #{documents.length} documents, #{bytes.bytesize} bytes, " \
+     "sha256=#{Digest::SHA256.hexdigest(bytes)}, output=#{File.expand_path(output)}"

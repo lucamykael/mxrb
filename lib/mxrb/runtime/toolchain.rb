@@ -2,13 +2,19 @@
 
 module Mxrb
   module Runtime
+    RUNTIME_REQUIRED_FILES = %w[
+      launcher/runtimelauncher.jar pad/bin/start.hbs pad/etc/example.conf pad/etc/variables.conf
+    ].freeze
+
     Plan = Data.define(
       :mendix_version, :java_version, :toolchain_path,
       :mx_path, :mxbuild_path, :jdk_package, :jre_package,
       :builder_image, :runtime_image
     ) do
+      def runtime_path = File.join(toolchain_path, 'runtime')
+
       def available?
-        File.executable?(mxbuild_path)
+        RUNTIME_REQUIRED_FILES.all? { File.file?(File.join(runtime_path, _1)) }
       end
     end
 

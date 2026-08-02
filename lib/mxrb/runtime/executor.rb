@@ -12,8 +12,8 @@ module Mxrb
       def passed? = result.passed?
     end
 
-    # Runs the official validators against a disposable project copy and
-    # converts the runtime protocol back into Ruby result objects.
+    # Builds a disposable project natively and converts the Runtime protocol
+    # back into Ruby result objects.
     class Executor
       STARTUP_ALLOWANCE = 120
 
@@ -49,7 +49,7 @@ module Mxrb
       private
 
       def validate_environment!
-        raise ToolchainError, "Mendix toolchain #{@plan.toolchain_path} is unavailable" unless @plan.available?
+        raise ToolchainError, "Mendix Runtime #{@plan.runtime_path} is unavailable" unless @plan.available?
         unless @java_home && File.executable?(File.join(@java_home, "bin", "java"))
           raise ToolchainError, "JAVA_HOME must point to a Java #{@plan.java_version} installation"
         end
@@ -79,18 +79,28 @@ module Mxrb
 
       def build(project, root)
         package = File.join(root, "runtime.zip")
-        output, status = capture(
-          @plan.mxbuild_path,
-          "--java-home=#{@java_home}",
-          "--java-exe-path=#{File.join(@java_home, 'bin', 'java')}",
-          "--target=portable-app-package",
-          "--output=#{package}",
-          project
+        deployment = File.join(File.dirname(project), 'deployment')
+        materialized = Compiler::DeploymentMaterializer.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).materialize
+        jar = Compiler::ProjectJarBuilder.new(
+          project, deployment:, mendix_home: @plan.toolchain_path, java_home: @java_home
+        ).build
+        web = Compiler::WebBundleBuilder.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).build
+        result = Compiler::PortablePackager.new(
+          project, deployment:, mendix_home: @plan.toolchain_path
+        ).pack(output: package, force: true)
+        @last_build_output = format(
+          'MXRB native build: Mendix %s, %d stages, %d Java sources, %d classes, ' \
+          '%d web files, %d packaged files, sha256 %s',
+          materialized.mendix_version, materialized.stages.length, jar.sources, jar.classes,
+          web.files, result.files, result.sha256
         )
-        raise FunctionalTestError, "mxbuild failed:\n#{output}" unless status.success?
-
-        @last_build_output = output
         package
+      rescue CompilationError => e
+        raise FunctionalTestError, "MXRB native build failed: #{e.message}"
       end
 
       def build_output(_package) = @last_build_output
