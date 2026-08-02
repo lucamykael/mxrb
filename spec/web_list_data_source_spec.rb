@@ -96,5 +96,14 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
     connection.document['Queries'].last['TableMappings'] = [2]
     expect(resolver.send(:simple_unconfigured_query?, action)).to be(false)
   end
+
+  it 'covers the flat microflow-name fallback and an empty connection field' do
+    resolver = described_class.new(source(units), widget)
+    expect(resolver.send(:flow_name, { 'Microflow' => 'Demo.Flat' }, 'Microflow')).to eq('Demo.Flat')
+
+    connection = units.find { _1.document['$Type'] == 'DatabaseConnector$DatabaseConnection' }
+    expect(resolver.send(:connection_unconfigured?, connection.document.merge('ConnectionString' => '')))
+      .to be(false)
+  end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength

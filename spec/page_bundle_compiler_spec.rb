@@ -314,6 +314,22 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect { described_class.new(source).compile(unit) }
       .to raise_error(Mxrb::CompilationError, /invalid page slot/)
   end
+
+  it 'skips list-scope text binding for multiple or malformed attribute parameters' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'p.Demo.Home.gallery', entity: 'Demo.Item' }])
+
+    two_parameters = { 'Content' => { 'Parameters' => [
+      3, { 'AttributeRef' => { 'Attribute' => 'Demo.Item.First' } },
+      { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Second' } }
+    ] } }
+    expect(compiler.send(:bound_text_attribute, two_parameters)).to be_nil
+
+    malformed = { 'Content' => { 'Parameters' => [
+      2, { 'AttributeRef' => { 'Attribute' => 'NoSeparator' } }
+    ] } }
+    expect(compiler.send(:bound_text_attribute, malformed)).to be_nil
+  end
 end
 
 RSpec.describe Mxrb::Compiler::PageBundleBuilder do

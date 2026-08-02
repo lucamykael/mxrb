@@ -128,5 +128,23 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
     expect(compiler.send(:primitive, 'Widgets', 'Widgets' => [2, {}])).to eq(:undefined)
     expect(compiler.send(:translated_text, nil)).to eq('')
   end
+
+  it 'covers absent list values, undefined primitives, unresolved pointers, and non-English text' do
+    widget = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                     'EntityRef' => { 'Entity' => 'Demo.Item' })
+    widget['Object']['Properties'].reject! do |property|
+      property.is_a?(Hash) && %w[content selection].include?(property['TypePointer'])
+    end
+    compiler = described_class.new(source, 'Demo.Home', widget)
+
+    expect(compiler.content_widgets).to eq([])
+    expect(compiler.send(:selection)).to include('SelectionProperty', '"selectionType": "None"')
+    expect(compiler.send(:primitive, 'Widgets', 'Widgets' => [2])).to eq([])
+    expect(compiler.send(:js_value, :undefined)).to eq('undefined')
+    expect(compiler.send(:property_values, 'Properties' => [2, property('unmapped', value)])).to eq({})
+    expect(compiler.send(:translated_text,
+                         'Template' => { 'Items' => [3, { 'LanguageCode' => 'pt_BR', 'Text' => 'Mais' }] }))
+      .to eq('Mais')
+  end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength
