@@ -6,6 +6,7 @@ require 'zip'
 module Mxrb
   module Compiler
     # Expands project-owned pluggable widget packages into the web build tree.
+    # rubocop:disable Metrics
     class WidgetPackageExtractor
       def initialize(project_root, web_root)
         @source = File.join(project_root, 'widgets')
@@ -24,8 +25,20 @@ module Mxrb
       def extract_package(path)
         Zip::File.open(path) do |archive|
           entries = archive.reject(&:directory?)
-          entries.each { write_entry(_1) }
-          return entries.length
+          entries.each { safe_destination(_1.name) }
+          runtime_roots = entries.select { _1.name.end_with?('.mjs') }
+                                 .map { File.dirname(_1.name) }.uniq
+          runtime_entries = entries.select do |entry|
+            runtime_roots.any? do |root|
+              if root == '.'
+                entry.name.match?(/\.(?:m?js|css)\z/) || entry.name.start_with?('assets/')
+              else
+                entry.name.start_with?("#{root}/")
+              end
+            end
+          end
+          runtime_entries.each { write_entry(_1) }
+          return runtime_entries.length
         end
       rescue Zip::Error => e
         raise CompilationError, "invalid widget package #{path}: #{e.message}"
@@ -45,5 +58,6 @@ module Mxrb
         raise CompilationError, "unsafe widget package entry #{name}"
       end
     end
+    # rubocop:enable Metrics
   end
 end

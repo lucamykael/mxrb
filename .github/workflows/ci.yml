@@ -26,9 +26,17 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
 
+      - name: Check out pinned Mendix acceptance fixture
+        run: |
+          git clone --quiet https://github.com/ako/mxcli-sudoku.git /tmp/mxcli-sudoku
+          git -C /tmp/mxcli-sudoku checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
+
       - name: Run strict test suite
         env:
           MXRB_COVERAGE: "1"
+          MXRB_LINE_COVERAGE_MIN: "98"
+          MXRB_BRANCH_COVERAGE_MIN: "95"
+          MXRB_ACCEPTANCE_MPRS: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
         run: bundle exec rspec
 
       - name: Run gradual Ruby quality gate

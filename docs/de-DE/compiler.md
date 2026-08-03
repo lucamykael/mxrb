@@ -44,14 +44,23 @@ sowie Save/Cancel-Aktionen. Create übergibt die GUID des neuen Objekts über
 registriert, die aus den erlaubten Modulrollen der Seite abgeleitet werden.
 Damit bleibt die Runtime-Autorisierung erhalten und wird nicht umgangen.
 
+Layouts, Platzhalter, Scrollbereiche, Sidebars, Header, Navigationsmenüs,
+Snippets, DataViews, ListViews, Formularelemente, Bilder, Combo Boxes, Gallery,
+Data Grid 2 und schemagestützte Pluggable Widgets werden über die nativen
+React-Client-Verträge kompiliert. Seiten-, Menü- und Widget-Aktionen decken
+Navigation, Microflows, Nanoflows, Objektlebenszyklus, Links und Sign-out ab.
+Nanoflow-Programme unterstützen außerdem Entscheidungen, Fehlerbehandlung,
+JavaScript-Aktionen und serverseitige Microflow-/Commit-
+Operationen, sofern der Modellvertrag sicher abgebildet werden kann.
+
 Der React-Pfad kompiliert außerdem die offizielle Gallery mit XPath- und
 Microflow-Listenquellen, Template-Inhalten, Auswahl und formatierten dynamischen
 Attributen. Nanoflow-Quellen und -Aktionen verwenden die Mendix-Verträge
 `NanoflowObjectListProperty`, `NanoflowObjectProperty` und `ActionProperty`.
-MXRB erzeugt echte Clientprogramme `{ name, instructions }` für den auditierten
-linearen Teilumfang: Return, Variablenerzeugung, Objekterzeugung und verschachtelte
-Nanoflow-Aufrufe. Fehlende Flows, nicht sicher abbildbare Parameter, Verzweigungen,
-JavaScript-Aktionen, Microflow-Aufrufe und andere unübersetzte Clientinstruktionen
+MXRB erzeugt echte Clientprogramme `{ name, instructions }` für auditierten
+Graph-Kontrollfluss, Returns, Variablen, Objekte, Nanoflow-/Microflow-Aufrufe,
+JavaScript-, Seiten-, Nachrichten-, Validierungs- und Commit-Aktionen. Fehlende
+Flows, unsichere Parameterabbildungen und nicht übersetzte Clientinstruktionen
 schlagen geschlossen fehl und bleiben Befunde im Support-Manifest.
 
 In lokalen Runtime-Sitzungen im Developer-Modus versioniert mxrb außerdem
@@ -80,6 +89,18 @@ end
 
 Bestehende Projekte können exportiert, in der DSL geändert und neu erzeugt
 werden. Nicht unterstützte Widgets bleiben im Support-Manifest sichtbar.
+
+Vor einem nativen Build kann das gesamte MPR mit dem für seine Mendix-Version
+gewählten Renderer geprüft werden:
+
+```bash
+mxrb preflight App.mpr
+mxrb preflight App.mpr --json
+```
+
+Der Nur-Lese-Befehl liefert bei nicht unterstützten Versionen oder
+Client-Features einen Fehlerstatus. Mendix 11 wird über den React-Compiler
+geprüft; 6/7/9 verwenden dieselbe Legacy-Dojo-Prüfung wie `WebBundleBuilder`.
 
 Der Dojo-Pfad kompiliert Data Grid 1 mit Datenbank-, XPath- und
 Microflow-Quellen sowie auditierten Such-, Sortier-, Paging-, Auswahl- und
@@ -130,10 +151,9 @@ Seitenbundles und fuhr sauber herunter. Danach bestand der Funktionstest
   aus Version 11 einzusetzen;
 - Data Grid 1 ist abgedeckt, andere Dojo-Widgets bleiben explizite
   Manifestbefunde;
-- Data Grid 2 ist für XPath-Datenquellen und Attributspalten abgedeckt. Gallery
-  deckt XPath/Microflow und den auditierten Nanoflow-Instruktionsumfang ab.
-  React-Formulare decken parameter- oder unterstützte Nanoflow-DataViews,
-  TextBox und Save/Cancel ab; andere Clientinstruktionen verwenden den Fallback;
+- der Mendix-11-React-Pfad besitzt saubere Preflights und vollständige
+  Rspack-Builds für LearnNow, MyFirstModule, SLATaskApp, Sudoku und VetClinic.
+  Diese Fixture-Matrix belegt auditierte Verträge, keine universelle Kompatibilität;
 - native Web-Bundles werden erzeugt; React Native verwendet weiterhin
   bestehende Versions-Template- und Projektassets;
 - `mx` und `mxbuild` sind niemals Fallbacks. Nicht unterstützte Eingaben führen

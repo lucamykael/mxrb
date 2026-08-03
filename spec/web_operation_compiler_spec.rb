@@ -119,7 +119,7 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(compiler.send(:xpath_operation, 'Demo.Home', {}, [], data_source, nil)).to be_nil
   end
 
-  it 'registers a microflow list data source as a callMicroflow operation' do
+  it 'registers a microflow list data source as a retrieveByMicroflow operation' do
     gallery = {
       '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'gallery',
       'Object' => { 'DataSource' => {
@@ -142,8 +142,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
 
     expect(described_class.new(source).send(:page_operations, page)).to contain_exactly(
       include(
-        'operationType' => 'callMicroflow', 'parameters' => {},
-        'constants' => { 'MicroflowName' => 'Demo.LoadItems' }
+        'operationType' => 'retrieveByMicroflow', 'parameters' => {},
+        'constants' => include('MicroflowName' => 'Demo.LoadItems')
       )
     )
   end

@@ -41,15 +41,23 @@ commit/rollback operations are registered with the project user roles derived
 from each page's allowed module roles. Runtime authorization is preserved
 instead of bypassed.
 
+Layouts, placeholders, scroll regions, sidebars, headers, navigation menus,
+snippets, DataViews, ListViews, form controls, images, combo boxes, Gallery,
+Data Grid 2 and schema-backed pluggable widgets are compiled through their
+native React-client contracts. Page, menu and widget actions cover navigation,
+microflows, nanoflows, object lifecycle, links and sign-out. Nanoflow programs
+also cover decisions, error handlers, JavaScript actions and server-side
+microflow/commit operations when their model contracts can be mapped safely.
+
 The React path also compiles the official Gallery with XPath and microflow
 list sources, templated item content, selection, and formatted dynamic
 attributes. Client-side nanoflow sources and actions use the Mendix
 `NanoflowObjectListProperty`, `NanoflowObjectProperty`, and `ActionProperty`
-contracts. MXRB emits real `{ name, instructions }` client programs for the
-audited linear instruction subset (return, variable creation, object creation,
-and nested nanoflow calls). Missing flows, parameters that cannot be mapped,
-branches, JavaScript actions, microflow calls, and other untranslated client
-instructions fail closed and remain support-manifest findings.
+contracts. MXRB emits real `{ name, instructions }` client programs for audited
+graph control flow, returns, variables, objects, nested nanoflow/microflow calls,
+JavaScript actions, page/message/validation actions and commits. Missing flows,
+unsafe parameter mappings and untranslated client instructions fail closed and
+remain support-manifest findings.
 
 For local developer Runtime sessions, mxrb also versions dynamic page imports,
 content-hashes the patched React Client chunk, and gives Rspack's self-import
@@ -77,6 +85,19 @@ end
 
 Existing projects can be exported, changed in the DSL, and regenerated.
 Unsupported widgets remain visible in the support manifest.
+
+Before a native build, audit the complete MPR through the renderer selected for
+its Mendix version:
+
+```bash
+mxrb preflight App.mpr
+mxrb preflight App.mpr --json
+```
+
+The command is read-only and exits non-zero for unsupported versions or client
+features. Mendix 11 is audited through the React compiler, while 6/7/9 use the
+same legacy Dojo audit as `WebBundleBuilder`; this prevents a report from
+claiming compatibility through a renderer the build will not use.
 
 The Dojo path compiles Data Grid 1 database, XPath, and microflow sources plus
 audited search, sorting, paging, selection, and buttons. Every other visible
@@ -125,10 +146,9 @@ cleanly. The `ACT Create Animal` functional test then passed.
   instead of substituting the Java-21 launcher from 11;
 - Data Grid 1 is covered while other Dojo widgets remain explicit manifest
   findings;
-- Data Grid 2 is covered for XPath datasource and attribute columns. Gallery
-  covers XPath/microflow and the audited nanoflow instruction subset. React
-  edit forms cover parameter- or supported-nanoflow-backed DataView/TextBox and
-  Save/Cancel; other widgets and client instructions use the manifest fallback;
+- the Mendix 11 React path is covered by clean preflights and complete Rspack
+  builds of LearnNow, MyFirstModule, SLATaskApp, Sudoku and VetClinic. This
+  fixture matrix is evidence for the audited contracts, not a universal claim;
 - native web bundles are generated; React Native still relies on existing
   version-template and project assets;
 - `mx` and `mxbuild` are never fallbacks. Unsupported input produces a clear

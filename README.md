@@ -32,6 +32,8 @@ remain optional external gates for compatibility and functional execution.
 - write, inspect and compare deterministic MDA containers without invoking `mxbuild`;
 - assemble executable portable Runtime ZIPs from materialized deployments and
   installed version-matched Runtime files without invoking `mx` or `mxbuild`;
+- preflight an existing MPR against its version-selected native web pipeline,
+  with precise unsupported widget, action, layout and nanoflow findings;
 - clone, inspect and synchronize official Team Server Git repositories while
   keeping PAT values in user-managed files.
 

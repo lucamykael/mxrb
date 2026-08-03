@@ -46,9 +46,13 @@ module MxrbCoverage
       payload[:branches][:percent], payload[:branches][:covered], payload[:branches][:total]
     )
 
-    minimum = ENV.fetch("MXRB_COVERAGE_MIN", "100").to_f
+    minimums = {
+      lines: ENV.fetch("MXRB_LINE_COVERAGE_MIN", ENV.fetch("MXRB_COVERAGE_MIN", "100")).to_f,
+      branches: ENV.fetch("MXRB_BRANCH_COVERAGE_MIN", ENV.fetch("MXRB_COVERAGE_MIN", "100")).to_f
+    }
     failures = %i[lines branches].filter_map do |metric_name|
       percent = payload.fetch(metric_name).fetch(:percent)
+      minimum = minimums.fetch(metric_name)
       "#{metric_name} coverage #{percent}% is below #{minimum}%" if percent < minimum
     end
     return if failures.empty?

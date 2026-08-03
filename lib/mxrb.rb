@@ -110,10 +110,12 @@ require_relative "mxrb/compiler/web_operation_compiler"
 require_relative "mxrb/compiler/data_grid_bundle_compiler"
 require_relative "mxrb/compiler/gallery_bundle_compiler"
 require_relative "mxrb/compiler/image_bundle_compiler"
+require_relative "mxrb/compiler/generic_widget_bundle_compiler"
 require_relative "mxrb/compiler/combo_box_bundle_compiler"
 require_relative "mxrb/compiler/legacy_data_grid_compiler"
 require_relative "mxrb/compiler/legacy_page_builder"
 require_relative "mxrb/compiler/page_bundle_compiler"
+require_relative "mxrb/compiler/compatibility_analyzer"
 require_relative "mxrb/compiler/page_bundle_builder"
 require_relative "mxrb/compiler/web_bundle_builder"
 require_relative "mxrb/compiler/portable_packager"
@@ -176,5 +178,9 @@ module Mxrb
 
   def self.runtime_plan(path, **options)
     Runtime::Toolchain.new(path, **options).plan
+  end
+
+  def self.compatibility(path)
+    Compiler::CompatibilityAnalyzer.new(path).analyze
   end
 end
