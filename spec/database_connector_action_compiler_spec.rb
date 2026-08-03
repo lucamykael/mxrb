@@ -146,6 +146,9 @@ RSpec.describe Mxrb::Compiler::DatabaseConnectorActionCompiler do
     model = instance_double(Mxrb::Compiler::SourceModel, units: [unit, constant])
     fallback = described_class.new(model)
 
+    expect(fallback.unconfigured_write?(nil)).to be(false)
+    expect(fallback.unconfigured_write?('$Type' => 'Microflows$CreateObjectAction')).to be(false)
+
     expect(fallback.unconfigured_write?(action.merge(
                                           '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'
                                         ))).to be(true)

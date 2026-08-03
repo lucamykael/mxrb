@@ -106,6 +106,19 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     )
   end
 
+  it 'rejects missing and non-object XPath page parameters' do
+    compiler = described_class.new(instance_double(Mxrb::Compiler::SourceModel))
+    expect(compiler.send(:object_page_parameters, nil, ['Missing'])).to be_nil
+    expect(compiler.send(:page_parameter_types, nil)).to eq({})
+    expect(compiler.send(:page_parameter_types, 'Parameters' => [2, 'invalid'])).to eq({})
+    expect(compiler.send(:object_parameter_entity, nil)).to be_nil
+    expect(compiler.send(:object_parameter_entity,
+                         '$Type' => 'DataTypes$ObjectType', 'Entity' => '')).to be_nil
+    data_source = instance_double(Mxrb::Compiler::WebListDataSource,
+                                  xpath_constraint: '[Parent = $Missing]')
+    expect(compiler.send(:xpath_operation, 'Demo.Home', {}, [], data_source, nil)).to be_nil
+  end
+
   it 'registers a microflow list data source as a callMicroflow operation' do
     gallery = {
       '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'gallery',

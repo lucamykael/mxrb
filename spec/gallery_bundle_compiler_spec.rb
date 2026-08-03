@@ -155,5 +155,22 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
                          'Template' => { 'Items' => [3, { 'LanguageCode' => 'pt_BR', 'Text' => 'Mais' }] }))
       .to eq('Mais')
   end
+
+  it 'covers unconstrained and unresolved XPath arguments' do
+    unconstrained = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                            'EntityRef' => { 'Entity' => 'Demo.Item' }, 'XPathConstraint' => '')
+    compiler = described_class.new(source, 'Demo.Home', unconstrained)
+    expect(compiler.render('[]')).to include('DatabaseObjectListProperty')
+    expect(compiler.render('[]')).not_to include('fetchOnlyWithAllParams')
+
+    missing = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                      'EntityRef' => { 'Entity' => 'Demo.Item' },
+                      'XPathConstraint' => '[Parent = $Missing]')
+    page = unit(module_name: 'Demo', document: {
+      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2]
+    })
+    expect(described_class.new(source(page), 'Demo.Home', missing)).not_to be_supported
+    expect(described_class.new(source, 'Demo.Missing', missing)).not_to be_supported
+  end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength

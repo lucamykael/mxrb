@@ -108,6 +108,68 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
 
     expect(builder.send(:strip_legacy_unused_imports, source)).not_to include('CustomJavaAction')
     expect(builder.send(:strip_legacy_unused_imports, used)).to eq(used)
+
+    Dir.mktmpdir do |staging|
+      path = File.join(@root, 'javasource', 'demo', 'Legacy.java')
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, source)
+      staged = builder.send(:stage_legacy_sources, [path], staging).first
+      expect(staged).not_to eq(path)
+      expect(File.read(staged)).not_to include('CustomJavaAction')
+    end
+  end
+
+  it 'generates referenced microflow proxies and covers their Java type contracts' do
+    Mxrb.define(@mpr) do
+      mendix_version '11.12.1'
+      self.module(:Demo) { microflow(:Run) }
+    end
+    source = File.join(@root, 'javasource', 'demo', 'UseFlow.java')
+    FileUtils.mkdir_p(File.dirname(source))
+    File.write(source, 'class UseFlow { Object x = demo.proxies.microflows.Microflows.missing; }')
+    expect(Mxrb::Compiler::JavaProxyGenerator.new(@mpr, project_root: @root).generate).to eq(0)
+
+    File.write(source, 'class UseFlow { void x() { demo.proxies.microflows.Microflows.run(null); } }')
+    generator = Mxrb::Compiler::JavaProxyGenerator.new(@mpr, project_root: @root)
+    expect(generator.generate).to eq(1)
+    expect(File.read(File.join(@root, 'javasource/demo/proxies/microflows/Microflows.java')))
+      .to include('public static void run(', 'Core.microflowCall("Demo.Run")', 'return;')
+
+    types = {
+      'DataTypes$BooleanType' => %w[java.lang.Boolean boolean],
+      'DataTypes$IntegerType' => %w[java.lang.Long java.lang.Long],
+      'DataTypes$LongType' => %w[java.lang.Long java.lang.Long],
+      'DataTypes$DecimalType' => %w[java.math.BigDecimal java.math.BigDecimal],
+      'DataTypes$DateTimeType' => %w[java.util.Date java.util.Date],
+      'DataTypes$StringType' => %w[java.lang.String java.lang.String],
+      'DataTypes$ObjectType' => %w[demo.proxies.Record demo.proxies.Record],
+      'DataTypes$VoidType' => %w[void void],
+      'DataTypes$BinaryType' => %w[java.lang.Object java.lang.Object]
+    }
+    types.each do |type, expected|
+      value = { '$Type' => type, 'Entity' => 'Demo.Record' }
+      expect(generator.send(:java_data_type, value)).to eq(expected.first)
+      expect(generator.send(:java_data_type, value, return_type: true)).to eq(expected.last)
+    end
+    expect(generator.send(:java_data_type, nil)).to eq('void')
+    expect(generator.send(:microflow_result, { '$Type' => 'DataTypes$BooleanType' })).to include('boolean')
+    expect(generator.send(:microflow_result, { '$Type' => 'DataTypes$ObjectType',
+                                               'Entity' => 'Demo.Record' })).to include('Record.initialize')
+    expect(generator.send(:microflow_result, { '$Type' => 'DataTypes$VoidType' })).to eq('return;')
+    expect(generator.send(:microflow_result, nil)).to eq('return;')
+    expect(generator.send(:microflow_result, { '$Type' => 'DataTypes$IntegerType' })).to include('java.lang.Long')
+    expect(generator.send(:lower_camel, 'RunFlow')).to eq('runFlow')
+
+    unit = Struct.new(:module_name, :document).new('Demo', {
+      'Name' => 'WithInput',
+      'ObjectCollection' => { 'Objects' => [2, {
+        '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Enabled',
+        'VariableType' => { '$Type' => 'DataTypes$BooleanType' }
+      }] },
+      'MicroflowReturnType' => { '$Type' => 'DataTypes$BooleanType' }
+    })
+    expect(generator.send(:microflow_method, unit))
+      .to include('boolean withInput(', 'java.lang.Boolean _enabled', '.withParam("Enabled", _enabled)')
   end
 
   it 'generates only Java proxies referenced by custom project sources' do
@@ -200,6 +262,21 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
       .to include('IEntityProxy')
     expect(generator.send(:association_methods, unit, association.merge('Type' => 'Reference')))
       .to include('demo.proxies.Child getParent_Children', 'demo.proxies.Child.load')
+    expect(generator.send(:association_methods, unit, association.merge('Type' => 'Association'))).to eq('')
+    expect(generator.send(:association_qualified_name, unit,
+                          association.merge('QualifiedName' => 'Shared.Parent_Children')))
+      .to eq('Shared.Parent_Children')
+    expect(generator.send(:association_child_qualified, unit,
+                          association.merge('Child' => 'Shared.Child'))).to eq('Shared.Child')
+    expect(generator.send(:association_child_type, unit,
+                          association.merge('Child' => 'Shared.Child')))
+      .to eq('com.mendix.systemwideinterfaces.core.IEntityProxy')
+    expect(generator.send(:requested_entities, 'demo.proxies.Parent'))
+      .to include('Demo.Parent', 'Demo.Child')
+    generator.instance_variable_set(:@entities, { 'Demo.Parent' => [unit, parent] })
+    expect(generator.send(:requested_entities, 'demo.proxies.Parent')).to eq(['Demo.Parent'])
+    generator.instance_variable_set(:@entities, entities)
+    expect(generator.send(:entity_source, unit, parent)).to include('Parent_Children')
     expect(generator.send(:identifier, Struct.new(:data).new('binary'))).to eq('binary')
     expect(generator.send(:attribute_java_type, unit, '$Type' => 'DomainModels$EnumerationAttributeType',
                                                       'Enumeration' => 'State'))
@@ -210,6 +287,18 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
     File.write(path, 'user owned')
     expect(generator.send(:write_missing, path, 'generated')).to be(false)
     expect(File.read(path)).to eq('user owned')
+  end
+
+  it 'ignores Java action documents without a matching source file' do
+    generator = Mxrb::Compiler::JavaProxyGenerator.allocate
+    units = [
+      Struct.new(:module_name, :document).new('Demo', { 'Name' => '' }),
+      Struct.new(:module_name, :document).new('Demo', { 'Name' => 'Missing' })
+    ]
+    generator.instance_variable_set(:@source, instance_double(Mxrb::Compiler::SourceModel,
+                                                              units_of: units))
+    generator.instance_variable_set(:@project_root, @root)
+    expect(generator.send(:user_action_classes)).to eq([])
   end
 end
 # rubocop:enable Metrics/BlockLength

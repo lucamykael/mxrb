@@ -583,6 +583,89 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     ] } }
     expect(compiler.send(:bound_text_attributes, malformed)).to be_nil
   end
+
+  it 'covers guarded page-expression, Combo box, and DatePicker branches' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    compiler.compile(source.units_of('Forms$Page').first)
+    compiler.instance_variable_set(:@data_view_scopes, [
+                                     { scope: 'p.Demo.Home.editor', entity: 'Demo.Item' }
+                                   ])
+    compiler.instance_variable_set(:@list_scopes, [])
+
+    allow(Mxrb::Compiler::DataGridBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::DataGridBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::GalleryBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::ImageBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::ImageBundleCompiler, supported?: false))
+    combo = instance_double(Mxrb::Compiler::ComboBoxBundleCompiler,
+                            supported?: true, render: 'combo-output')
+    allow(Mxrb::Compiler::ComboBoxBundleCompiler).to receive(:new).and_return(combo)
+
+    expect(compiler.send(:render_custom_widget, 'Name' => 'combo')).to eq('combo-output')
+    expect(compiler.send(:widget_imports)).to include('$Combobox', 'AssociationProperty')
+    expect(compiler.send(:attribute_reference_path, nil)).to eq('')
+    expect(compiler.send(:bound_text_attributes, 'Content' => { 'Parameters' => [2] })).to be_nil
+
+    compiler.instance_variable_set(:@list_scopes, [])
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:text_parameter_attribute,
+                         'Expression' => '$currentObject/Name')).to be_nil
+    compiler.instance_variable_set(:@list_scopes, ['legacy-scope'])
+    expect(compiler.send(:current_object_scope)).to eq(scope: 'legacy-scope', entity: '')
+
+    compiler.instance_variable_set(:@list_scopes, [
+                                     { scope: 'p.Demo.Home.items', entity: 'Demo.Item' }
+                                   ])
+    attributes = []
+    expect(compiler.send(
+             :conditional_visibility,
+             'Expression' => '$currentObject/Active = true or $currentObject/State = Demo.State.Open'
+           )).to be_an(Array)
+    expect(compiler.send(:conditional_visibility, 'Expression' => 'invalid')).to be_nil
+    expect(compiler.send(:logical_predicate, ['$currentObject/Active', 'invalid'], attributes, '&&'))
+      .to be_nil
+    expect(compiler.send(:visibility_atom, 'invalid', attributes)).to be_nil
+    expect(compiler.send(:visibility_atom, '$currentObject/State = invalid value', attributes)).to be_nil
+    expect(compiler.send(:visibility_atom, '$currentObject/Active = true', attributes))
+      .to include('=== true')
+    expect(compiler.send(:visibility_comparison, 'value', 'false')).to eq('value === false')
+    expect(compiler.send(:visibility_comparison, 'value', 'Demo.State.Open')).to include('"Open"')
+    expect(compiler.send(:visibility_comparison, 'value', "'ready'")).to include('"ready"')
+    expect(compiler.send(:visibility_comparison, 'value', 'not valid')).to be_nil
+
+    dynamic_widget = {
+      'Name' => 'invalidClass', 'Appearance' => { 'DynamicClasses' => 'not supported' }
+    }
+    expect(compiler.send(:wrap_dynamic_classes, dynamic_widget, 'content')).to eq('content')
+    expect(compiler.send(:dynamic_class_expression, 'not supported', [])).to be_nil
+    expect(compiler.send(:dynamic_class_conditional, 'invalid', [])).to be_nil
+    expect(compiler.send(:dynamic_class_conditional,
+                         "if invalid then 'yes' else 'no'", [])).to be_nil
+
+    expect(compiler.send(:microflow_argument_map, 'ParameterMappings' => [2, {
+      'Parameter' => 'Demo.Item', 'Expression' => '$Item'
+    }])).to eq(Item: { widget: '$Item', source: 'object' })
+    compiler.instance_variable_set(:@list_scopes, [])
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:inferred_microflow_argument_map, 'Demo.ServerAction')).to eq({})
+    expect(compiler.send(:inferred_microflow_parameters, 'Demo.Missing', 'Demo.Item')).to eq([])
+
+    compiler.instance_variable_set(:@data_view_scopes, [
+                                     { scope: 'p.Demo.Home.editor', entity: 'Demo.Item' }
+                                   ])
+    expect(compiler.send(:render_date_picker, {
+      '$Type' => 'Forms$DatePicker', 'Name' => 'invalid', 'AttributeRef' => { 'Attribute' => 'invalid' }
+    })).to include('mxrb-unsupported-widget')
+    expect(compiler.send(:render_date_picker, {
+      '$Type' => 'Forms$DatePicker', 'Name' => 'startTime',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Start' },
+      'FormattingInfo' => { 'DateFormat' => 'Time' }, 'ShowCalendarButton' => false,
+      'LabelTemplate' => { 'Template' => { 'Items' => [2] } },
+      'PlaceholderTemplate' => { 'Template' => { 'Items' => [2] } }
+    })).to include('"mode": "time"', '"timeFormat"')
+  end
 end
 
 RSpec.describe Mxrb::Compiler::ImageBundleCompiler do
