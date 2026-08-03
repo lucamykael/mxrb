@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe Mxrb::Protocols do
@@ -94,6 +95,44 @@ RSpec.describe Mxrb::Protocols do
       result = described_class.audit(project)
       expect(result.unknown_marketplace_modules).to include('AppCloudServices', 'ObjectHandling')
       expect(result.connectors).to be_empty
+    end
+  end
+
+  it 'preserves imported modules through export, rebuild, and semantic indexing' do
+    fixture = ENV.fetch('MXRB_CONNECTOR_FIXTURE', '')
+    skip 'connector fixture not present in this environment' unless File.exist?(fixture)
+
+    Dir.mktmpdir do |root|
+      exported = File.join(root, 'exported')
+      rebuilt = File.join(root, 'rebuilt.mpr')
+      original_imports = nil
+      original_artifacts = nil
+      Mxrb.open(fixture) do |project|
+        original_imports = imported_modules(project)
+        original_artifacts = project.semantic_index.artifacts.map(&:qualified_name).sort
+      end
+
+      Mxrb::Exporter.new(fixture, exported).export!(parallel: false)
+      begin
+        ENV['MXRB_OUTPUT_PATH'] = rebuilt
+        load File.join(exported, 'project.rb')
+      ensure
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+
+      expect(Mxrb.validate(rebuilt)).to be_valid
+      Mxrb.open(rebuilt) do |project|
+        expect(imported_modules(project)).to eq(original_imports)
+        expect(project.semantic_index.artifacts.map(&:qualified_name).sort).to eq(original_artifacts)
+        expect(described_class.audit(project).unknown_marketplace_modules)
+          .to include('AppCloudServices', 'ObjectHandling')
+      end
+    end
+  end
+
+  def imported_modules(project)
+    project.modules.select(&:from_app_store).to_h do |mod|
+      [mod.name, { guid: mod.app_store_guid, version: mod.app_store_version }]
     end
   end
 end

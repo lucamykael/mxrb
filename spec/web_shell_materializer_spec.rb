@@ -32,6 +32,7 @@ RSpec.describe Mxrb::Compiler::WebShellMaterializer do
       expect(File.read(File.join(web, 'js/login_i18n.js'))).to include('window.i18nMap', 'http401')
       expect(File.read(File.join(web, 'lib/bootstrap/css/bootstrap.min.css')))
         .to include('.form-control', '.btn-primary')
+      expect(File).to exist(File.join(web, 'dist/widgets.css'))
       expect(described_class.new(web, version: '11.12.1').send(
                :inject_navigation_compatibility, '<body>no head</body>'
              )).to eq('<body>no head</body>')

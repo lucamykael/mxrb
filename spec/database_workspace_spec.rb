@@ -201,7 +201,7 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
 
         subject = workspace(path, state, &runner)
         subject.up
-        expect(commands).to include(include('unzip', '-q'))
+        expect(commands).to include(include('unzip', '-oq'))
         subject.sync if name == 'missing'
       end
     end

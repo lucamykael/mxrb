@@ -15,6 +15,15 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
         self.module(:Demo) do
           layout :Shell
           nanoflow :ClientAction
+          microflow :ServerAction
+          native_document :Assets, type: 'Images$ImageCollection', deep_structure: {
+            'Images' => Mxrb::IO::BsonCodec.build_array([
+                                                          {
+                                                            '$Type' => 'Images$Image', 'Name' => 'Logo',
+                                                            'Image' => BSON::Binary.new("\x89PNG\r\n\x1A\nimage".b)
+                                                          }
+                                                        ])
+          }
           page(:Home) do
             layout 'Demo.Shell'
             title 'Welcome'
@@ -28,11 +37,14 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
 
   it 'renders page content, layout metadata, and translated text as an ES module' do
     source = Mxrb::Compiler::SourceModel.read(@mpr)
-    bundle = described_class.new(source).compile(source.units_of('Forms$Page').first)
+    unit = source.units_of('Forms$Page').first
+    unit.document['Appearance'] = { 'Class' => 'page-identity' }
+    bundle = described_class.new(source).compile(unit)
     expect(bundle.qualified_name).to eq('Demo.Home')
     expect(bundle.source).to include(
       'PageFragment', 'export const title = "Welcome"', '"Main":',
-      'mx-name-body body', '"Hello"'
+      'mx-name-body body', '"Hello"',
+      'export const classes = "mxrb-application-shell page-identity"'
     )
     expect(bundle.source).not_to include('Demo.Shell.Main')
     expect(bundle.unsupported_widgets).to be_empty
@@ -105,17 +117,85 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
       '$Type' => 'Forms$DynamicText', 'Name' => 'duration', 'RenderMode' => 'Text',
       'Content' => {
         'Template' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => '{1} day(s)' }] },
-        'Parameters' => [2, { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Duration' } }]
+        'Parameters' => [2, { 'AttributeRef' => {
+          'Attribute' => 'Demo.Item.Duration',
+          'EntityRef' => { 'Steps' => [2, {
+            'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item'
+          }] }
+        } }]
       }
     }
 
     output = compiler.send(:render_text, widget)
     expect(output).to include(
       'React.createElement($MxrbFormattedText', '"template": "{1} day(s)"',
-      '"value": AttributeProperty', '"attribute": "Duration"'
+      '"value1": AttributeProperty', '"path": "Demo.Parent_Items/Demo.Item"',
+      '"attribute": "Duration"'
     )
     expect(compiler.send(:widget_imports)).to include(
-      'value?.displayValue', 'template.split("{1}")', '$MxrbFormattedText'
+      'props[key]?.displayValue', 'text.split(`{${index + 1}}`)', '$MxrbFormattedText'
+    )
+  end
+
+  it 'formats expression parameters and evaluates simple conditional visibility' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+    compiler.instance_variable_set(:@qualified_name, 'Sudoku.Game_Play')
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    compiler.instance_variable_set(
+      :@list_scopes, [{ scope: 'p.Sudoku.Game_Play.board', entity: 'Sudoku.Cell' }]
+    )
+    widget = {
+      '$Type' => 'Forms$DynamicText', 'Name' => 'status', 'RenderMode' => 'Text',
+      'Content' => {
+        'Template' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => '{1} / {2}' }] },
+        'Parameters' => [3,
+                         { 'Expression' => 'toString($currentObject/Value)' },
+                         { 'Expression' => 'toString($currentObject/Row)' }]
+      },
+      'ConditionalVisibilitySettings' => {
+        'Expression' => '$currentObject/Value != empty and $currentObject/Row != 0'
+      }
+    }
+
+    output = compiler.send(:render_widget, widget)
+    expect(output).to include(
+      'React.createElement($MxrbConditional', 'React.createElement($MxrbFormattedText',
+      '"value1": AttributeProperty', '"attribute": "Value"',
+      '"value2": AttributeProperty', '"attribute": "Row"',
+      '"test": props =>', 'mxrbValue(props.value1)', 'Number(mxrbValue(props.value2)) === 0',
+      '"$widgetId": "p.Sudoku.Game_Play.status$visibility"'
+    )
+    expect(compiler.send(:widget_imports)).to include('$MxrbConditional', 'const mxrbValue')
+  end
+
+  it 'materializes attribute-backed dynamic classes on list content' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+    compiler.instance_variable_set(:@qualified_name, 'Sudoku.Game_Play')
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    compiler.instance_variable_set(
+      :@list_scopes, [{ scope: 'p.Sudoku.Game_Play.board', entity: 'Sudoku.Cell' }]
+    )
+    widget = {
+      '$Type' => 'Forms$DivContainer', 'Name' => 'cell', 'RenderMode' => 'Div', 'Widgets' => [],
+      'Appearance' => {
+        'Class' => '',
+        'DynamicClasses' => '$currentObject/CellClass + ' \
+                            "(if $currentObject/IsPeer then ' sd-peer' else '') + " \
+                            "(if $currentObject/IsInvalid then ' sd-bad' else '')"
+      }
+    }
+
+    output = compiler.send(:render_widget, widget)
+    expect(output).to include(
+      'React.createElement($MxrbDynamicClass', 'React.createElement("div"',
+      '"attribute": "CellClass"', '"attribute": "IsPeer"', '"attribute": "IsInvalid"',
+      'String(mxrbValue(props.value1) ?? \'\')',
+      'Boolean(mxrbValue(props.value2)) ? " sd-peer" : ""',
+      'Boolean(mxrbValue(props.value3)) ? " sd-bad" : ""',
+      '"$widgetId": "p.Sudoku.Game_Play.cell$class"'
+    )
+    expect(compiler.send(:widget_imports)).to include(
+      '$MxrbDynamicClass', 'React.cloneElement(children, classProp)'
     )
   end
 
@@ -142,6 +222,15 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
         3, { 'LanguageCode' => 'en_US', 'Text' => 'Enter a name' }
       ] } }
     }
+    date_picker = {
+      '$Type' => 'Forms$DatePicker', 'Name' => 'dueDate',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.DueDate' },
+      'FormattingInfo' => { 'DateFormat' => 'Date' },
+      'LabelTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Due date' }
+      ] } },
+      'PlaceholderTemplate' => { 'Template' => { 'Items' => [3] } }
+    }
     actions = %w[Forms$SaveChangesClientAction Forms$CancelChangesClientAction].map.with_index do |type, index|
       {
         '$Type' => 'Forms$ActionButton', 'Name' => "action#{index}",
@@ -157,11 +246,11 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
       '$Type' => 'Forms$DataView', 'Name' => 'editor', 'ShowFooter' => false,
       'DataSource' => { 'SourceVariable' => { 'PageParameter' => 'Item' } },
       'NoEntityMessage' => { 'Items' => [3] },
-      'Widgets' => [2, text_box, text_box.merge(
+      'Widgets' => [3, text_box, text_box.merge(
         'Name' => 'code', 'IsPasswordBox' => false, 'MaxLengthCode' => -1,
         'Autocomplete' => true, 'SubmitBehaviour' => 'OnEndEditing',
         'AttributeRef' => { 'Attribute' => 'Demo.Item.Code' }
-      )],
+      ), date_picker],
       'FooterWidgets' => [2, *actions]
     }
     unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }['Widgets'] = [2, data_view]
@@ -169,11 +258,12 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     compiler = described_class.new(source)
     bundle = compiler.compile(unit)
     expect(bundle.source).to include(
-      '$DataView', '$TextBox', '$FormGroup', '$ActionButton',
+      '$DataView', '$TextBox', '$DatePicker', '$FormGroup', '$ActionButton',
       'AssociationObjectProperty({ scope: "$Item"',
       'AttributeProperty({ "scope": "p.Demo.Home.editor"',
       '"isPassword": true', '"maxLength": 42', '"autocomplete": "off"',
       '"submitWhileEditing": true', 'TextProperty({ value: "Name" })',
+      '"mode": "date"', '"formatting": { "dateFormat": { "type": "date" } }',
       '"type": "saveChanges"', '"type": "cancelChanges"',
       'export const parameters = {"$Item":{"kind":"object"}}'
     )
@@ -188,6 +278,167 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(compiler.send(:js_literal, [true, nil])).to eq('[true, null]')
     compiler.instance_variable_set(:@uses_data_grid, true)
     expect(compiler.send(:widget_imports)).to include('$Datagrid', '$DataView')
+  end
+
+  it 'infers an omitted microflow mapping from the current DataView entity' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    unit.document['Parameters'] << {
+      '$Type' => 'Forms$PageParameter', 'Name' => 'Item',
+      'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    flow = source.units_of('Microflows$Microflow').find { _1.document['Name'] == 'ServerAction' }
+    flow.document.dig('ObjectCollection', 'Objects') << {
+      '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'CurrentItem',
+      'VariableType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    button = {
+      '$Type' => 'Forms$ActionButton', 'Name' => 'saveWithFlow',
+      'CaptionTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Save' }
+      ] } },
+      'Action' => {
+        '$Type' => 'Forms$MicroflowAction',
+        'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction', 'ParameterMappings' => [2] }
+      }
+    }
+    data_view = {
+      '$Type' => 'Forms$DataView', 'Name' => 'editor',
+      'DataSource' => { 'SourceVariable' => { 'PageParameter' => 'Item' } },
+      'Widgets' => [2], 'FooterWidgets' => [2, button]
+    }
+    unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }['Widgets'] = [2, data_view]
+
+    bundle = described_class.new(source).compile(unit)
+    expect(bundle.source).to include(
+      '"argMap": { "CurrentItem": { "widget": "p.Demo.Home.editor", "source": "object" } }'
+    )
+  end
+
+  it 'renders core labels, check boxes, tabs, images, links, and server actions' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    unit.document['Parameters'] << {
+      '$Type' => 'Forms$PageParameter', 'Name' => 'Item',
+      'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    label = {
+      '$Type' => 'Forms$Label', 'Name' => 'notice',
+      'Caption' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => 'Notice' }] }
+    }
+    checkbox = {
+      '$Type' => 'Forms$CheckBox', 'Name' => 'active',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Active' },
+      'LabelTemplate' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Active' }
+      ] } }
+    }
+    buttons = [
+      {
+        '$Type' => 'Forms$ActionButton', 'Name' => 'docs',
+        'CaptionTemplate' => { 'Template' => { 'Items' => [
+          3, { 'LanguageCode' => 'en_US', 'Text' => 'Docs' }
+        ] } },
+        'Action' => {
+          '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+          'Address' => { 'IsDynamic' => false, 'Value' => 'https://example.test' }
+        }
+      },
+      {
+        '$Type' => 'Forms$ActionButton', 'Name' => 'run',
+        'CaptionTemplate' => { 'Template' => { 'Items' => [
+          3, { 'LanguageCode' => 'en_US', 'Text' => 'Run' }
+        ] } },
+        'Action' => {
+          '$Type' => 'Forms$MicroflowAction',
+          'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction', 'ParameterMappings' => [2] }
+        }
+      }
+    ]
+    tab = {
+      '$Type' => 'Forms$TabControl', 'Name' => 'tabs',
+      'TabPages' => [2, {
+        '$Type' => 'Forms$TabPage', 'Name' => 'first',
+        'Caption' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => 'General' }] },
+        'Widgets' => [2, label], 'RefreshOnShow' => false
+      }]
+    }
+    image = {
+      '$Type' => 'Forms$StaticImageViewer', 'Name' => 'logo', 'Image' => 'Demo.Assets.Logo',
+      'Width' => 80, 'WidthUnit' => 'Pixels', 'Height' => 50, 'HeightUnit' => 'Pixels',
+      'Responsive' => true
+    }
+    data_view = {
+      '$Type' => 'Forms$DataView', 'Name' => 'editor',
+      'DataSource' => { 'SourceVariable' => { 'PageParameter' => 'Item' } },
+      'Widgets' => [2, checkbox, tab, image, *buttons, {
+        '$Type' => 'Forms$DivContainer', 'Name' => 'clickable', 'Widgets' => [2, label],
+        'OnClickAction' => {
+          '$Type' => 'Forms$MicroflowAction',
+          'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction', 'ParameterMappings' => [2] }
+        }
+      }], 'FooterWidgets' => [2]
+    }
+    unit.document['FormCall']['Arguments'].find { _1.is_a?(Hash) }['Widgets'] = [2, data_view]
+
+    bundle = described_class.new(source).compile(unit)
+    expect(bundle.source).to include(
+      '$CheckBox', '$Label', '$TabContainer', '$Image', '$Container', 'WebStaticImageProperty',
+      'img/Demo$Assets$Logo.png', '"type": "openLink"', 'https://example.test',
+      '"type": "callMicroflow"'
+    )
+    expect(bundle.source).to include(
+      Mxrb::Compiler::WebOperationCompiler.operation_id('Demo.Home', 'run')
+    )
+    expect(bundle.unsupported_widgets).to be_empty
+
+    compiler = described_class.new(source)
+    compiler.compile(unit)
+    compiler.instance_variable_set(:@data_view_scopes, ['p.Demo.Home.editor'])
+    dynamic = {
+      '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+      'Address' => {
+        'IsDynamic' => true, 'AttributeRef' => { 'Attribute' => 'Demo.Item.URL' }
+      }
+    }
+    expect(compiler.send(:open_link_config, dynamic)).to include(
+      argMap: { '$object': { widget: 'p.Demo.Home.editor', source: 'object' } },
+      config: { schema: 'web', addressAttribute: 'Demo.Item/URL' }
+    )
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:open_link_config, dynamic)).to be_nil
+    expect(compiler.send(:microflow_config, {}, '$Type' => 'Forms$MicroflowAction')).to be_nil
+    expect(compiler.send(:microflow_argument, 'Parameter' => '', 'Expression' => '$Item')).to be_nil
+    invalid_mapping = { 'ParameterMappings' => [2, { 'Parameter' => '', 'Expression' => '$Item' }] }
+    expect(compiler.send(:microflow_argument_map, invalid_mapping)).to be_nil
+    expect(compiler.send(
+             :microflow_config, { 'Name' => 'invalid' },
+             { '$Type' => 'Forms$MicroflowAction',
+               'MicroflowSettings' => invalid_mapping.merge('Microflow' => 'Demo.ServerAction') }
+           )).to be_nil
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'p.Demo.Home.items' }])
+    expect(compiler.send(
+             :microflow_argument, 'Parameter' => 'Demo.ServerAction.Item', 'Expression' => '$currentObject'
+           )).to eq([:Item, { widget: 'p.Demo.Home.items', source: 'object' }])
+    nanoflow = { '$Type' => 'Forms$CallNanoflowClientAction', 'Nanoflow' => 'Demo.ClientAction',
+                 'ParameterMappings' => [2] }
+    expect(compiler.send(:container_action_config, {}, nanoflow)).to include(
+      action: include(type: 'callNanoflow')
+    )
+    form_container = {
+      '$Type' => 'Forms$DivContainer', 'Name' => 'navigate', 'Widgets' => [2],
+      'OnClickAction' => {
+        '$Type' => 'Forms$FormAction', 'FormSettings' => { 'Form' => 'Demo.Home' }
+      }
+    }
+    expect(compiler.send(:render_container, form_container)).to include('onClick', 'role')
+    expect(compiler.send(:render_check_box, '$Type' => 'Forms$CheckBox', 'Name' => 'loose'))
+      .to include('mxrb-unsupported-widget')
+    expect(compiler.send(:image_uri, 'Demo.Assets.Missing')).to be_nil
+    expect(compiler.send(:image_uri, 'Demo.Unknown.Missing')).to be_nil
+    expect(compiler.send(:render_static_image, {
+      '$Type' => 'Forms$StaticImageViewer', 'Name' => 'missing', 'Image' => 'Demo.Unknown.Missing'
+    })).to include('mxrb-unsupported-widget')
   end
 
   it 'renders a parameterless nanoflow action through the client action property' do
@@ -323,12 +574,188 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
       3, { 'AttributeRef' => { 'Attribute' => 'Demo.Item.First' } },
       { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Second' } }
     ] } }
-    expect(compiler.send(:bound_text_attribute, two_parameters)).to be_nil
+    expect(compiler.send(:bound_text_attributes, two_parameters)).to eq(
+      %w[Demo.Item.First Demo.Item.Second]
+    )
 
     malformed = { 'Content' => { 'Parameters' => [
       2, { 'AttributeRef' => { 'Attribute' => 'NoSeparator' } }
     ] } }
-    expect(compiler.send(:bound_text_attribute, malformed)).to be_nil
+    expect(compiler.send(:bound_text_attributes, malformed)).to be_nil
+  end
+
+  it 'covers guarded page-expression, Combo box, and DatePicker branches' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    compiler.compile(source.units_of('Forms$Page').first)
+    compiler.instance_variable_set(:@data_view_scopes, [
+                                     { scope: 'p.Demo.Home.editor', entity: 'Demo.Item' }
+                                   ])
+    compiler.instance_variable_set(:@list_scopes, [])
+
+    allow(Mxrb::Compiler::DataGridBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::DataGridBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::GalleryBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::ImageBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::ImageBundleCompiler, supported?: false))
+    combo = instance_double(Mxrb::Compiler::ComboBoxBundleCompiler,
+                            supported?: true, render: 'combo-output')
+    allow(Mxrb::Compiler::ComboBoxBundleCompiler).to receive(:new).and_return(combo)
+
+    expect(compiler.send(:render_custom_widget, 'Name' => 'combo')).to eq('combo-output')
+    expect(compiler.send(:widget_imports)).to include('$Combobox', 'AssociationProperty')
+    expect(compiler.send(:attribute_reference_path, nil)).to eq('')
+    expect(compiler.send(:bound_text_attributes, 'Content' => { 'Parameters' => [2] })).to be_nil
+
+    compiler.instance_variable_set(:@list_scopes, [])
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:text_parameter_attribute,
+                         'Expression' => '$currentObject/Name')).to be_nil
+    compiler.instance_variable_set(:@list_scopes, ['legacy-scope'])
+    expect(compiler.send(:current_object_scope)).to eq(scope: 'legacy-scope', entity: '')
+
+    compiler.instance_variable_set(:@list_scopes, [
+                                     { scope: 'p.Demo.Home.items', entity: 'Demo.Item' }
+                                   ])
+    attributes = []
+    expect(compiler.send(
+             :conditional_visibility,
+             'Expression' => '$currentObject/Active = true or $currentObject/State = Demo.State.Open'
+           )).to be_an(Array)
+    expect(compiler.send(:conditional_visibility, 'Expression' => 'invalid')).to be_nil
+    expect(compiler.send(:logical_predicate, ['$currentObject/Active', 'invalid'], attributes, '&&'))
+      .to be_nil
+    expect(compiler.send(:visibility_atom, 'invalid', attributes)).to be_nil
+    expect(compiler.send(:visibility_atom, '$currentObject/State = invalid value', attributes)).to be_nil
+    expect(compiler.send(:visibility_atom, '$currentObject/Active = true', attributes))
+      .to include('=== true')
+    expect(compiler.send(:visibility_comparison, 'value', 'false')).to eq('value === false')
+    expect(compiler.send(:visibility_comparison, 'value', 'Demo.State.Open')).to include('"Open"')
+    expect(compiler.send(:visibility_comparison, 'value', "'ready'")).to include('"ready"')
+    expect(compiler.send(:visibility_comparison, 'value', 'not valid')).to be_nil
+
+    dynamic_widget = {
+      'Name' => 'invalidClass', 'Appearance' => { 'DynamicClasses' => 'not supported' }
+    }
+    expect(compiler.send(:wrap_dynamic_classes, dynamic_widget, 'content')).to eq('content')
+    expect(compiler.send(:dynamic_class_expression, 'not supported', [])).to be_nil
+    expect(compiler.send(:dynamic_class_conditional, 'invalid', [])).to be_nil
+    expect(compiler.send(:dynamic_class_conditional,
+                         "if invalid then 'yes' else 'no'", [])).to be_nil
+
+    expect(compiler.send(:microflow_argument_map, 'ParameterMappings' => [2, {
+      'Parameter' => 'Demo.Item', 'Expression' => '$Item'
+    }])).to eq(Item: { widget: '$Item', source: 'object' })
+    compiler.instance_variable_set(:@list_scopes, [])
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:inferred_microflow_argument_map, 'Demo.ServerAction')).to eq({})
+    expect(compiler.send(:inferred_microflow_parameters, 'Demo.Missing', 'Demo.Item')).to eq([])
+
+    compiler.instance_variable_set(:@data_view_scopes, [
+                                     { scope: 'p.Demo.Home.editor', entity: 'Demo.Item' }
+                                   ])
+    expect(compiler.send(:render_date_picker, {
+      '$Type' => 'Forms$DatePicker', 'Name' => 'invalid', 'AttributeRef' => { 'Attribute' => 'invalid' }
+    })).to include('mxrb-unsupported-widget')
+    expect(compiler.send(:render_date_picker, {
+      '$Type' => 'Forms$DatePicker', 'Name' => 'startTime',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Start' },
+      'FormattingInfo' => { 'DateFormat' => 'Time' }, 'ShowCalendarButton' => false,
+      'LabelTemplate' => { 'Template' => { 'Items' => [2] } },
+      'PlaceholderTemplate' => { 'Template' => { 'Items' => [2] } }
+    })).to include('"mode": "time"', '"timeFormat"')
+  end
+end
+
+RSpec.describe Mxrb::Compiler::ImageBundleCompiler do
+  def image_property_type(id, key, type)
+    { '$ID' => id, 'PropertyKey' => key, 'ValueType' => { 'Type' => type } }
+  end
+
+  def image_property(type, **values)
+    { 'TypePointer' => type, 'Value' => { 'PrimitiveValue' => '' }.merge(values.transform_keys(&:to_s)) }
+  end
+
+  def image_text(value, language = 'en_US')
+    { 'Template' => { 'Items' => [3, { 'LanguageCode' => language, 'Text' => value }] } }
+  end
+
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  def image_compiler(datasource: 'image', image: 'Demo.Assets.Logo', widget_id: described_class::WIDGET_ID)
+    types = [
+      image_property_type('datasource', 'datasource', 'Enumeration'),
+      image_property_type('image', 'imageObject', 'Image'),
+      image_property_type('responsive', 'responsive', 'Boolean'),
+      image_property_type('width', 'width', 'Integer'),
+      image_property_type('alt', 'alternativeText', 'TextTemplate'),
+      image_property_type('url', 'imageUrl', 'TextTemplate'),
+      image_property_type('ignored', 'onClick', 'Action')
+    ]
+    schema = {
+      '$ID' => 'widget-type', 'WidgetId' => widget_id,
+      'ObjectType' => { '$ID' => 'object-type', 'PropertyTypes' => [2, *types] }
+    }
+    image_unit = Struct.new(:module_name, :document, keyword_init: true).new(module_name: 'Demo', document: {
+      'Name' => 'Assets', 'Images' => [2, {
+        'Name' => 'Logo', 'Image' => BSON::Binary.new("\x89PNG\r\n\x1A\nimage".b)
+      }]
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel, documents: [schema, ['nested']])
+    allow(source).to receive(:units_of).with('Images$ImageCollection').and_return([image_unit])
+    widget = {
+      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'logo',
+      'Appearance' => { 'Class' => 'brand' },
+      'Object' => { 'TypePointer' => 'object-type', 'Properties' => [
+        2, image_property('datasource', PrimitiveValue: datasource),
+        image_property('image', Image: image), image_property('responsive', PrimitiveValue: 'true'),
+        image_property('width', PrimitiveValue: '80'),
+        image_property('alt', TextTemplate: image_text('Logo')),
+        image_property('url', TextTemplate: image_text('Adresse', 'de_DE')),
+        image_property('ignored'), image_property('missing')
+      ] }
+    }
+    described_class.new(source, 'Demo.Home', widget)
+  end
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+  it 'compiles the official static Image widget and its primitive properties' do
+    compiler = image_compiler
+    expect(compiler).to be_supported
+    expect(compiler.render).to include(
+      'React.createElement($Image', 'WebStaticImageProperty', 'Demo$Assets$Logo.png',
+      '"responsive": true', '"width": 80', 'Logo', 'Adresse', 'mx-name-logo brand'
+    )
+    expect(described_class.javascript(described_class.raw('raw'))).to eq('raw')
+    expect(described_class.javascript([true, nil])).to eq('[true, null]')
+    expect(described_class.javascript(test: 1)).to eq('{ "test": 1 }')
+    expect(described_class.unit(nil)).to eq('auto')
+    expect(described_class.number(nil, 7)).to eq(7)
+    expect(compiler.send(:translated_text, nil)).to eq('')
+    compiler.instance_variable_set(:@values, {})
+    expect(compiler.send(:primitive, 'missing')).to be_nil
+    expect(compiler.send(:text_value, 'missing')).to eq('')
+    expect(compiler.send(:image_uri)).to be_nil
+    expect(compiler.send(:property_values, nil)).to eq({})
+    compiler.instance_variable_set(:@index, {})
+    expect(compiler).not_to be_supported
+
+    populated = image_compiler
+    page_compiler = Mxrb::Compiler::PageBundleCompiler.new(populated.instance_variable_get(:@source))
+    page_compiler.instance_variable_set(:@qualified_name, 'Demo.Home')
+    page_compiler.instance_variable_set(:@list_scopes, [])
+    rendered = page_compiler.send(:render_custom_widget, populated.instance_variable_get(:@widget))
+    expect(rendered).to include('React.createElement($Image')
+    expect(page_compiler.send(:widget_imports))
+      .to include('../widgets/com/mendix/widget/web/image/Image.mjs')
+  end
+
+  it 'rejects another widget, a dynamic source, and an unresolved image' do
+    expect(image_compiler(widget_id: 'other')).not_to be_supported
+    expect(image_compiler(datasource: 'imageUrl')).not_to be_supported
+    missing = image_compiler(image: 'Demo.Assets.Missing')
+    expect(missing).not_to be_supported
+    expect(missing.send(:image_uri)).to be_nil
   end
 end
 

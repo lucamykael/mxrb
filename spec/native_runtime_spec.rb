@@ -182,15 +182,11 @@ RSpec.describe Mxrb::Runtime::Native do
     expect { @interpreter.send(:execute_action, nil, {}) }
       .to raise_error(Mxrb::NativeRuntimeError, /has no action/)
     expect do
-      @interpreter.send(:action_retrieve, { 'RetrieveSource' => { '$Type' => 'Microflows$AssociationSource' } }, {})
+      @interpreter.send(
+        :action_retrieve,
+        { 'RetrieveSource' => { '$Type' => 'Microflows$AssociationRetrieveSource' } }, {}
+      )
     end.to raise_error(Mxrb::NativeRuntimeError, /unsupported retrieve source/)
-    expect do
-      @interpreter.send(:action_retrieve, {
-        'RetrieveSource' => {
-          '$Type' => 'Microflows$DatabaseRetrieveSource', 'XpathConstraint' => '[Name = 1]'
-        }
-      }, {})
-    end.to raise_error(Mxrb::NativeRuntimeError, /XPath retrieve/)
     expect do
       @interpreter.send(:action_retrieve, {
         'RetrieveSource' => {
@@ -199,6 +195,44 @@ RSpec.describe Mxrb::Runtime::Native do
         }
       }, {})
     end.to raise_error(Mxrb::NativeRuntimeError, /sorting/)
+  end
+
+  it 'filters and sorts database retrieves and XPath counts' do
+    [['Ada', 4, true], ['Bob', 2, false], ['Cal', 4, true]].each do |name, age, active|
+      animal = @interpreter.store.create('Clinic.Animal')
+      animal.members.update('Name' => name, 'Age' => age, 'Active' => active)
+    end
+    variables = { 'minimum' => 3 }
+    retrieve = {
+      'RetrieveSource' => {
+        '$Type' => 'Microflows$DatabaseRetrieveSource', 'Entity' => 'Clinic.Animal',
+        'XpathConstraint' => '[Age >= $minimum][Active]',
+        'NewSortings' => { 'Sortings' => [
+          { 'AttributePath' => 'Clinic.Animal.Age', 'SortOrder' => 'Descending' },
+          { 'AttributeRef' => { 'Attribute' => 'Clinic.Animal.Name' }, 'SortOrder' => 'Ascending' }
+        ] }
+      },
+      'ResultVariableName' => 'animals'
+    }
+
+    @interpreter.send(:action_retrieve, retrieve, variables)
+    expect(variables['animals'].map { _1.members['Name'] }).to eq(%w[Ada Cal])
+    expect(@interpreter.count('Clinic.Animal', "[Name = 'Bob']")).to eq(1)
+    expect(@interpreter.count('Clinic.Animal', '[Active = true or Age < 3]')).to eq(3)
+    expect do
+      @interpreter.count('Clinic.Animal', "//Clinic.Animal[Name = 'Ada']")
+    end.to raise_error(Mxrb::NativeRuntimeError, /unsupported native XPath/)
+
+    expression = described_class::Expression.new
+    expect(expression.evaluate('4 > 3', {})).to be(true)
+    expect(expression.evaluate('3 <= 3', {})).to be(true)
+    expect(expression.send(:matching_parenthesis, '(missing', 0)).to be_nil
+    expect(expression.send(:matching_parenthesis, 'x()', 1)).to eq(2)
+    equal = described_class::ObjectValue.new(entity: 'Clinic.Animal', id: 'equal', members: { 'Age' => 4 })
+    expect(@interpreter.send(:compare_by_keys, equal, equal, [['Age', false]])).to eq(0)
+    expect(@interpreter.send(:compare_members, nil, nil)).to eq(0)
+    expect(@interpreter.send(:compare_members, nil, 1)).to eq(1)
+    expect(@interpreter.send(:compare_members, 1, nil)).to eq(-1)
   end
 
   it 'handles lower-level graph cases, mutations, templates, and collection encodings' do
@@ -222,6 +256,7 @@ RSpec.describe Mxrb::Runtime::Native do
 
   it 'supports executor hooks, failure details, optional output, and portable clocks' do
     hook = Mxrb::Functional::Hook.new('Clinic.Child', {})
+    seed_hook = Mxrb::Functional::Hook.new('Clinic.SeedAndCount', {})
     definition = Mxrb::Functional::Definition.new([
       Mxrb::Functional::TestCase.new('hooks', 'Clinic.Child', {}, 1.0, nil, [], hook, hook),
       Mxrb::Functional::TestCase.new(
@@ -230,7 +265,7 @@ RSpec.describe Mxrb::Runtime::Native do
       ),
       Mxrb::Functional::TestCase.new(
         'xpath count', 'Clinic.Child', {}, 1.0, nil,
-        [Mxrb::Functional::CountExpectation.new('Clinic.Animal', '[Name = 1]', 0)]
+        [Mxrb::Functional::CountExpectation.new('Clinic.Animal', "[Name = 'Updated']", 1)], seed_hook
       ),
       Mxrb::Functional::TestCase.new('runtime error', 'Clinic.Missing', {}, 1.0)
     ].freeze)
@@ -242,9 +277,9 @@ RSpec.describe Mxrb::Runtime::Native do
       calls.to_f
     end
     execution = described_class::Executor.new(@mpr, definition, clock:).run
-    expect(execution.result.tests.map(&:passed?)).to eq([true, false, false, false])
+    expect(execution.result.tests.map(&:passed?)).to eq([true, false, true, false])
     expect(execution.result.tests[1].message).to include('count 0, expected 2')
-    expect(execution.result.tests[2].message).to include('XPath count is not implemented')
+    expect(execution.result.tests[2].message).to eq('passed')
     expect(execution.result.tests[3].message).to include('not found')
     expect(execution.elapsed).to eq(1.0)
   end

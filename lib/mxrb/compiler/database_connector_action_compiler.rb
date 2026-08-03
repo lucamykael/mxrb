@@ -31,6 +31,25 @@ module Mxrb
         }
       end
 
+      def unconfigured_write?(action)
+        return false unless action&.fetch('$Type', nil) == 'DatabaseConnector$ExecuteDatabaseQueryAction'
+
+        connection, query = resolve_query(action['Query'].to_s)
+        return false if selecting_query?(query)
+
+        override = array(action['ConnectionParameterMappings']).find do |mapping|
+          mapping['ParameterName'].to_s.casecmp('DBSource').zero?
+        end
+        return false unless override.nil? || override['Value'].to_s.strip.empty?
+
+        constant_name = connection['ConnectionString'].to_s
+        constant = @source.units.find do |unit|
+          unit.document['$Type'] == 'Constants$Constant' &&
+            "#{unit.module_name}.#{unit.document['Name']}" == constant_name
+        end
+        constant && constant.document['DefaultValue'].to_s.empty?
+      end
+
       private
 
       def connection_index
@@ -54,7 +73,7 @@ module Mxrb
 
       def java_action_for(query)
         sql = remove_comments(query['Query'].to_s).downcase
-        selecting = (sql.start_with?('select ') && !sql.include?(' into ')) || sql.start_with?('with ')
+        selecting = selecting_sql?(sql)
         mapped = array(query['TableMappings']).any?
         if selecting
           return mapped ? 'ExternalDatabaseConnector.ExecuteQuery' : 'ExternalDatabaseConnector.ExecuteStatement'
@@ -67,6 +86,14 @@ module Mxrb
         else
           'ExternalDatabaseConnector.ExecuteCallableStatement'
         end
+      end
+
+      def selecting_query?(query)
+        selecting_sql?(remove_comments(query['Query'].to_s).downcase)
+      end
+
+      def selecting_sql?(sql)
+        (sql.start_with?('select ') && !sql.include?(' into ')) || sql.start_with?('with ')
       end
 
       def statement_action(mapped)

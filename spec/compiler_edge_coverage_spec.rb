@@ -109,7 +109,7 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
       'AssociationId' => 'App.Parent_Child', 'StartVariableName' => 'Child'
     )
     expect(defaults).to include('Argument' => '42', 'Location' => 'Content', 'ParameterMappings' => [])
-    expect(reverse['Type']).to eq('App.Parent')
+    expect(reverse['Type']).to eq('[App.Parent]')
   end
 
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do

@@ -603,6 +603,80 @@
     "$Type",
     "Sortings"
   ],
+  "Microflows$FindByExpression": [
+    "$ID",
+    "$Type",
+    "Expression",
+    "ListName"
+  ],
+  "Microflows$ImportXmlAction": [
+    "$ID",
+    "$Type",
+    "ResultHandling",
+    "IsValidationRequired",
+    "XmlDocumentVariableName",
+    "ErrorHandlingType"
+  ],
+  "Microflows$MicroflowParameterValue": [
+    "$ID",
+    "$Type",
+    "Microflow",
+    "ValueExpression"
+  ],
+  "Microflows$DownloadFileAction": [
+    "$ID",
+    "$Type",
+    "FileDocumentVariableName",
+    "ShowFileInBrowser",
+    "ErrorHandlingType"
+  ],
+  "Microflows$CustomRequestHandling": [
+    "$ID",
+    "$Type",
+    "Template"
+  ],
+  "Microflows$ListOperationsAction": [
+    "$ID",
+    "$Type",
+    "NewOperation",
+    "ResultVariableName",
+    "ErrorHandlingType"
+  ],
+  "Microflows$RetrieveSorting": [
+    "$ID",
+    "$Type",
+    "AttributePath",
+    "SortOrder"
+  ],
+  "Microflows$RuleCall": [
+    "$ID",
+    "$Type",
+    "ParameterMappings",
+    "Microflow"
+  ],
+  "Microflows$RuleCallParameterMapping": [
+    "$ID",
+    "$Type",
+    "Parameter",
+    "Argument"
+  ],
+  "Microflows$RuleSplitCondition": [
+    "$ID",
+    "$Type",
+    "RuleCall"
+  ],
+  "Microflows$Sort": [
+    "$ID",
+    "$Type",
+    "Sortings",
+    "ListName"
+  ],
+  "Microflows$Subtract": [
+    "$ID",
+    "$Type",
+    "SecondListOrObjectName",
+    "ListName"
+  ],
   "ScheduledEvents$DaySchedule": [
     "$ID",
     "$Type",
