@@ -136,9 +136,17 @@ module Mxrb
       def compile_index(source)
         {
           '$ID' => source['$ID'], '$Type' => source['$Type'],
-          'Attributes' => array(source['Attributes']).map { plain_document(_1) },
+          'Attributes' => array(source['Attributes']).map { compile_indexed_attribute(_1) },
           'GUID' => source['GUID'], 'IncludeInOffline' => source['IncludeInOffline'] == true
         }
+      end
+
+      def compile_indexed_attribute(source)
+        result = plain_document(source)
+        result['AssociationPointer'] ||= BSON::Binary.new(
+          IO::BsonCodec.uuid_to_blob('00000000-0000-0000-0000-000000000000'), :generic
+        )
+        result
       end
     end
   end

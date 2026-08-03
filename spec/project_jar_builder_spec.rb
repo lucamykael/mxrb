@@ -98,6 +98,18 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
     expect(direct.build.classpath_entries).to eq(1)
   end
 
+  it 'stages sources without an unused legacy CustomJavaAction import' do
+    source = <<~JAVA
+      package demo;
+      import com.mendix.webui.CustomJavaAction;
+      class Hello extends com.mendix.systemwideinterfaces.core.UserAction<Void> {}
+    JAVA
+    used = source.sub('{}', '{ CustomJavaAction action; }')
+
+    expect(builder.send(:strip_legacy_unused_imports, source)).not_to include('CustomJavaAction')
+    expect(builder.send(:strip_legacy_unused_imports, used)).to eq(used)
+  end
+
   it 'generates only Java proxies referenced by custom project sources' do
     Mxrb.define(@mpr) do
       mendix_version '11.12.1'
@@ -136,6 +148,28 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
       .to include('getLimit')
   end
 
+  it 'generates the OSGi registrar for Java actions that have project sources' do
+    Mxrb.define(@mpr) do
+      mendix_version '11.12.1'
+      self.module(:Demo) do
+        native_document :Publish, type: 'JavaActions$JavaAction', deep_structure: {
+          'Parameters' => [2], 'JavaReturnType' => { '$Type' => 'CodeActions$VoidType' }
+        }
+      end
+    end
+    action = File.join(@root, 'javasource', 'demo', 'actions', 'Publish.java')
+    FileUtils.mkdir_p(File.dirname(action))
+    File.write(action, 'package demo.actions; public class Publish {}')
+
+    generator = Mxrb::Compiler::JavaProxyGenerator.new(@mpr, project_root: @root)
+    expect(generator.generate).to eq(1)
+    registrar = File.read(File.join(@root, 'javasource', 'system', 'UserActionsRegistrar.java'))
+    expect(registrar).to include(
+      'class UserActionsRegistrar',
+      'registrator.registerUserAction(demo.actions.Publish.class);'
+    )
+  end
+
   it 'renders inherited and association proxy contracts without overwriting user files' do
     generator = Mxrb::Compiler::JavaProxyGenerator.allocate
     parent = {
@@ -164,7 +198,8 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
     expect(generator.send(:association_methods, unit, association)).to include('java.util.List<demo.proxies.Child>')
     expect(generator.send(:association_methods, unit, association.merge('ChildPointer' => 'missing')))
       .to include('IEntityProxy')
-    expect(generator.send(:association_methods, unit, association.merge('Type' => 'Reference'))).to eq('')
+    expect(generator.send(:association_methods, unit, association.merge('Type' => 'Reference')))
+      .to include('demo.proxies.Child getParent_Children', 'demo.proxies.Child.load')
     expect(generator.send(:identifier, Struct.new(:data).new('binary'))).to eq('binary')
     expect(generator.send(:attribute_java_type, unit, '$Type' => 'DomainModels$EnumerationAttributeType',
                                                       'Enumeration' => 'State'))

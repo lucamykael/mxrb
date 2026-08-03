@@ -55,6 +55,57 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(constants['XPath']).to eq('//Demo.Item')
   end
 
+  it 'inventories untyped attributes and current-object expressions used by list content' do
+    compiler = described_class.new(instance_double(Mxrb::Compiler::SourceModel))
+    content = {
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' },
+      'ConditionalVisibilitySettings' => {
+        'Expression' => '$currentObject/Active = true and $currentObject/Score != 0'
+      },
+      'RelatedEntity' => { 'AttributeRef' => {
+        'Attribute' => 'Demo.Parent.Name', 'EntityRef' => { 'Steps' => [2, {
+          'Association' => 'Demo.Item_Parent', 'DestinationEntity' => 'Demo.Parent'
+        }] }
+      } },
+      'OtherEntity' => { 'Attribute' => 'Demo.Parent.Name' }
+    }
+
+    expect(compiler.send(:used_attributes, content, 'Demo.Item')).to eq(
+      %w[Demo.Item/Demo.Item.Active Demo.Item/Demo.Item.Name Demo.Item/Demo.Item.Score
+         Demo.Item/Demo.Item_Parent/Demo.Parent/Demo.Parent.Name]
+    )
+  end
+
+  it 'preserves the brackets already stored by Studio Pro in an XPath constraint' do
+    compiler = described_class.new(instance_double(Mxrb::Compiler::SourceModel))
+    constants = compiler.send(
+      :constants, 'Demo.Home', widget, '[Demo.Item_Parent = $Parent][Active]', 'Demo.Item'
+    )
+    expect(constants['XPath']).to eq('//Demo.Item[Demo.Item_Parent = $Parent][Active]')
+  end
+
+  it 'binds object page parameters referenced by an XPath constraint' do
+    constrained = widget
+    constrained.dig('Object', 'DataSource')['XPathConstraint'] = '[Demo.Item_Parent = $Parent]'
+    page = unit(module_name: 'Demo', document: {
+      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [constrained],
+      'Parameters' => [2, {
+        '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
+        'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
+      }]
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+
+    expect(described_class.new(source).send(:page_operations, page)).to contain_exactly(
+      include(
+        'operationType' => 'retrieve', 'parameters' => { 'Parent' => ['Demo.Parent'] },
+        'constants' => include('XPath' => '//Demo.Item[Demo.Item_Parent = $Parent]')
+      )
+    )
+  end
+
   it 'registers a microflow list data source as a callMicroflow operation' do
     gallery = {
       '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'gallery',
@@ -123,6 +174,55 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
                                 'parameters' => { 'Objects' => ['AnyObjectList'] },
                                 'constants' => {}, 'allowedUserRoleSets' => []
                               ))
+  end
+
+  it 'registers button and clickable-container microflow operations with object parameters' do
+    action = {
+      '$Type' => 'Forms$MicroflowAction',
+      'MicroflowSettings' => { 'Microflow' => 'Demo.Update', 'ParameterMappings' => [2] }
+    }
+    page = unit(module_name: 'Demo', document: {
+      'Name' => 'Edit', 'Widgets' => [
+        { '$Type' => 'Forms$ActionButton', 'Name' => 'save', 'Action' => action },
+        { '$Type' => 'Forms$DivContainer', 'Name' => 'card', 'OnClickAction' => action }
+      ]
+    })
+    flow = unit(module_name: 'Demo', document: {
+      'Name' => 'Update', 'ObjectCollection' => { 'Objects' => [2, {
+        '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Item',
+        'VariableType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+      }] }
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:units_of).with('Microflows$Microflow').and_return([flow])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+
+    operations = described_class.new(source).send(:page_operations, page)
+    expect(operations.map { _1['operationId'] }).to contain_exactly(
+      described_class.operation_id('Demo.Edit', 'save'),
+      described_class.operation_id('Demo.Edit', 'card')
+    )
+    expect(operations).to all(include(
+                                'operationType' => 'callMicroflow',
+                                'parameters' => { 'Item' => ['Demo.Item'] },
+                                'constants' => { 'MicroflowName' => 'Demo.Update' }
+                              ))
+
+    compiler = described_class.new(source)
+    expect(compiler.send(:microflow_action_operation, 'Demo.Edit', {}, {}, [])).to be_nil
+    expect(compiler.send(
+             :microflow_action_operation, 'Demo.Edit', {},
+             { '$Type' => 'Forms$MicroflowAction', 'MicroflowSettings' => {} }, []
+           )).to be_nil
+    expect(compiler.send(:microflow_parameters, 'Demo.Missing')).to be_nil
+    expect(compiler.send(
+             :microflow_action_operation, 'Demo.Edit', {},
+             { '$Type' => 'Forms$MicroflowAction',
+               'MicroflowSettings' => { 'Microflow' => 'Demo.Missing' } }, []
+           )).to be_nil
+    flow.document['ObjectCollection']['Objects'][1]['VariableType'] = { '$Type' => 'DataTypes$StringType' }
+    expect(compiler.send(:microflow_parameters, 'Demo.Update')).to be_nil
   end
 
   it 'maps page module roles to the project user roles allowed by the Runtime' do

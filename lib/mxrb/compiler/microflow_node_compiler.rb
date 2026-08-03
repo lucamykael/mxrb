@@ -59,7 +59,10 @@ module Mxrb
         return value.to_h { |key, child| [key, compile(child)] } unless value['$Type']
         return nil if EDITORIAL_TYPES.include?(value['$Type'])
         return compile_custom_range(value) if value['$Type'] == 'Microflows$CustomRange'
+
         if value['$Type'] == 'DatabaseConnector$ExecuteDatabaseQueryAction'
+          return compile(noop_database_action(value)) if @database_connector.unconfigured_write?(value)
+
           return compile(@database_connector.compile(value))
         end
 
@@ -70,6 +73,18 @@ module Mxrb
         {
           '$ID' => derived_id(source, 'constant-range'), '$Type' => 'Microflows$ConstantRange',
           'SingleObject' => source['SingleObject'] == true
+        }
+      end
+
+      def noop_database_action(source)
+        {
+          '$ID' => source['$ID'], '$Type' => 'Microflows$LogMessageAction',
+          'MessageTemplate' => {
+            '$ID' => derived_id(source, 'local-fallback-message'),
+            '$Type' => 'Microflows$StringTemplate', 'Parameters' => [], 'Text' => ''
+          },
+          'ErrorHandlingType' => source.fetch('ErrorHandlingType', 'Rollback'),
+          'Level' => 'Trace', 'Node' => "'Mxrb'", 'IncludeLatestStackTrace' => false
         }
       end
 
@@ -86,6 +101,9 @@ module Mxrb
         end
         if field == 'StringRepresentation' && source['$Type'] == 'Microflows$InheritanceCase'
           return derived_default(source, field)
+        end
+        if field == 'ValueExpression' && source['$Type'] == 'Microflows$MicroflowParameterValue'
+          return "'#{source.fetch('Microflow')}'"
         end
 
         existing = @schema.counterpart(source)
@@ -176,7 +194,10 @@ module Mxrb
 
         start = @variable_types[source['StartVariableName'].to_s]
         target = start == association[:child] ? association[:parent] : association[:child]
-        association[:many] ? "[#{target}]" : target
+        return if target.to_s.empty?
+
+        list = association[:reference_set] || start == association[:child]
+        list ? "[#{target}]" : target
       end
 
       def runtime_association(name)
@@ -187,7 +208,7 @@ module Mxrb
         child = @schema.counterpart_id(association['ChildPointer'])
         {
           parent: parent&.fetch('QualifiedName', nil), child: child&.fetch('QualifiedName', nil),
-          many: association['Type'] == 'ReferenceSet'
+          reference_set: association['Type'] == 'ReferenceSet'
         }
       end
 
@@ -202,7 +223,7 @@ module Mxrb
             result["#{unit.module_name}.#{association['Name']}"] = {
               parent: entities[IO::BsonCodec.extract_id(association['ParentPointer'])],
               child: entities[IO::BsonCodec.extract_id(association['ChildPointer'])],
-              many: association['Type'] == 'ReferenceSet'
+              reference_set: association['Type'] == 'ReferenceSet'
             }
           end
         end

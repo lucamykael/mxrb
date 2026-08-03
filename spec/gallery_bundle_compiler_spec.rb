@@ -68,8 +68,15 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
 
   it 'compiles XPath data, selection and templated content through the official Gallery' do
     widget = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
-                     'EntityRef' => { 'Entity' => 'Demo.Item' })
-    compiler = described_class.new(source, 'Demo.Home', widget)
+                     'EntityRef' => { 'Entity' => 'Demo.Item' },
+                     'XPathConstraint' => '[Demo.Item_Parent = $Parent]')
+    page = unit(module_name: 'Demo', document: {
+      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2, {
+        '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
+        'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
+      }]
+    })
+    compiler = described_class.new(source(page), 'Demo.Home', widget)
 
     expect(compiler).to be_supported
     expect(compiler.entity_name).to eq('Demo.Item')
@@ -77,7 +84,9 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
     expect(compiler.render('[card]')).to include(
       'React.createElement($Gallery', 'DatabaseObjectListProperty',
       'TemplatedWidgetProperty({ children: () => [card]', 'SelectionProperty',
-      'ExpressionProperty', 'mx-name-gallery1 cards'
+      'ExpressionProperty', 'mx-name-gallery1 cards',
+      '"arguments": { "Parent": ["$Parent", undefined, false] }',
+      '"fetchOnlyWithAllParams": true'
     )
     expect(compiler.send(:primitive, 'Boolean', 'PrimitiveValue' => 'true')).to be(true)
     expect(compiler.send(:primitive, 'Boolean', 'PrimitiveValue' => 'false')).to be(false)

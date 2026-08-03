@@ -292,7 +292,10 @@ module Mxrb
         FileUtils.rm_f(package)
         build_native_package(package)
         FileUtils.mkdir_p(runtime_dir)
-        run!('unzip', '-q', package, '-d', runtime_dir)
+        # The package is always authoritative for this generated directory.
+        # Some unzip builds can still observe files created by a just-removed
+        # bind-mounted Runtime and prompt on stdin unless overwrite is explicit.
+        run!('unzip', '-oq', package, '-d', runtime_dir)
         File.write(runtime_marker, JSON.generate('fingerprint' => model_fingerprint))
       end
 

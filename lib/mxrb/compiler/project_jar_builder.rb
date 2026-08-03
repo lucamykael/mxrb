@@ -10,6 +10,8 @@ module Mxrb
 
     # Compiles generated/custom Java sources and writes project.jar without MxBuild or Gradle.
     class ProjectJarBuilder
+      LEGACY_UNUSED_IMPORTS = ['com.mendix.webui.CustomJavaAction'].freeze
+
       def initialize(mpr_path, deployment:, mendix_home:, java_home: nil)
         @mpr_path = File.expand_path(mpr_path)
         @project_root = File.dirname(@mpr_path)
@@ -36,8 +38,31 @@ module Mxrb
         Dir.mktmpdir('mxrb-java-', @deployment) do |root|
           classes = File.join(root, 'classes')
           FileUtils.mkdir_p(classes)
-          compile(sources, classpath, classes, root) unless sources.empty?
+          compile(stage_legacy_sources(sources, root), classpath, classes, root) unless sources.empty?
           ProjectJarArchive.new(@mpr_path, @project_root, @deployment).write(output, classes)
+        end
+      end
+
+      def stage_legacy_sources(sources, root)
+        sources.map do |source|
+          original = File.read(source)
+          rendered = strip_legacy_unused_imports(original)
+          next source if rendered == original
+
+          relative = source.delete_prefix("#{@project_root}/")
+          staged = File.join(root, 'sources', relative)
+          FileUtils.mkdir_p(File.dirname(staged))
+          File.write(staged, rendered)
+          staged
+        end
+      end
+
+      def strip_legacy_unused_imports(source)
+        LEGACY_UNUSED_IMPORTS.reduce(source) do |rendered, class_name|
+          simple_name = class_name.split('.').last
+          next rendered unless rendered.scan(/\b#{Regexp.escape(simple_name)}\b/).one?
+
+          rendered.gsub(/^import\s+#{Regexp.escape(class_name)};\r?\n/, '')
         end
       end
 

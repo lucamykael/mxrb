@@ -107,9 +107,16 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
       end
 
       def fields_for(document)
-        if document['$Type'] == 'Navigation$NavigationDocument'
+        case document['$Type']
+        when 'Navigation$NavigationDocument'
           return %w[$ID $Type Profiles Grids CustomWidgetModules
                     PluginWidgets]
+        when 'Texts$Text'
+          return %w[$ID $Type]
+        when 'Microflows$TextTemplate'
+          return %w[$ID $Type Parameters Text]
+        when 'Microflows$TemplateParameter'
+          return %w[$ID $Type Expression]
         end
 
         %w[$ID $Type HomePage HomeItems AppTitle LoginPageSettings ProgressiveWebAppSettings
@@ -131,6 +138,25 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
       'IsOffline' => true, 'HomePage' => nil, 'LoginPageSettings' => nil,
       'OfflineEntityConfigsRuntime' => [], 'AppIcon' => 'offline.svg'
     )
+
+    profile = Mxrb::IO::BsonCodec.parse_array(unit.document['Profiles'])[:items].first
+    title = {
+      '$ID' => '44444444-4444-4444-8444-444444444444', '$Type' => 'Microflows$TextTemplate',
+      'Parameters' => [], 'Text' => {
+        '$ID' => '55555555-5555-4555-8555-555555555555', '$Type' => 'Texts$Text', 'Items' => []
+      }
+    }
+    settings = {
+      '$ID' => '66666666-6666-4666-8666-666666666666', '$Type' => 'Forms$FormSettings',
+      'Form' => '', 'ParameterMappings' => [], 'TitleOverride' => title
+    }
+    rich_document = unit.document.merge('Profiles' => [profile.merge('LoginPageSettings' => settings)])
+    compiled_profile = compiler.compile(unit.with(document: rich_document)).fetch('Profiles').first
+    expect(compiled_profile.fetch('AppTitle').keys).to eq(%w[$ID $Type])
+    expect(compiled_profile.dig('LoginPageSettings', 'TitleOverride')).to include(
+      'Parameters' => [], 'Text' => include('$Type' => 'Texts$Text')
+    )
+
     missing = Mxrb::Compiler::NavigationDocumentCompiler.new(schema.new({ '$ID' => 'missing' }))
     expect(missing.compile(unit)).to include(
       'Grids' => [], 'CustomWidgetModules' => [], 'PluginWidgets' => []

@@ -150,7 +150,7 @@ RSpec.describe 'Compiler support branches' do
 
     node = Mxrb::Compiler::MicroflowNodeCompiler.allocate
     database = instance_double(Mxrb::Compiler::DatabaseConnectorActionCompiler)
-    allow(database).to receive(:compile).and_return('Lowered' => true)
+    allow(database).to receive_messages(compile: { 'Lowered' => true }, unconfigured_write?: false)
     node.instance_variable_set(:@database_connector, database)
     expect(node.send(:compile_hash, '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'))
       .to eq('Lowered' => true)
@@ -184,6 +184,30 @@ RSpec.describe 'Compiler support branches' do
     modern = Mxrb::Compiler::RuntimeModelSchema.new(package, version: '11.12.1')
     expect(modern.fields_for('$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'))
       .to include('Query', 'ParameterMappings', 'ConnectionParameterMappings')
+    expect(modern.fields_for('$Type' => 'Microflows$FindByExpression'))
+      .to eq(%w[$ID $Type Expression ListName])
+    expect(modern.fields_for('$Type' => 'Microflows$ImportXmlAction'))
+      .to eq(%w[$ID $Type ResultHandling IsValidationRequired XmlDocumentVariableName ErrorHandlingType])
+    expect(modern.fields_for('$Type' => 'Microflows$MicroflowParameterValue'))
+      .to eq(%w[$ID $Type Microflow ValueExpression])
+    parameter_value = { '$ID' => id(20), '$Type' => 'Microflows$MicroflowParameterValue',
+                        'Microflow' => 'App.Handle' }
+    expect(Mxrb::Compiler::MicroflowNodeCompiler.new(modern).send(:compile_hash, parameter_value))
+      .to include('Microflow' => 'App.Handle', 'ValueExpression' => "'App.Handle'")
+    legacy_microflow_fields = {
+      'Microflows$DownloadFileAction' => %w[$ID $Type FileDocumentVariableName ShowFileInBrowser ErrorHandlingType],
+      'Microflows$CustomRequestHandling' => %w[$ID $Type Template],
+      'Microflows$ListOperationsAction' => %w[$ID $Type NewOperation ResultVariableName ErrorHandlingType],
+      'Microflows$RetrieveSorting' => %w[$ID $Type AttributePath SortOrder],
+      'Microflows$RuleCall' => %w[$ID $Type ParameterMappings Microflow],
+      'Microflows$RuleCallParameterMapping' => %w[$ID $Type Parameter Argument],
+      'Microflows$RuleSplitCondition' => %w[$ID $Type RuleCall],
+      'Microflows$Sort' => %w[$ID $Type Sortings ListName],
+      'Microflows$Subtract' => %w[$ID $Type SecondListOrObjectName ListName]
+    }
+    legacy_microflow_fields.each do |type, fields|
+      expect(modern.fields_for('$Type' => type)).to eq(fields)
+    end
   end
 
   it 'reads all source documents and closes safely when opening fails' do

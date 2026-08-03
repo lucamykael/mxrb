@@ -48,8 +48,17 @@ module Mxrb
       # Deliberately small Mendix-expression evaluator. Unsupported syntax is
       # rejected rather than guessed, preserving deterministic test semantics.
       class Expression
-        def evaluate(source, variables)
-          text = unwrap(source).strip
+        COMPARISONS = {
+          '=' => ->(left, right) { left == right },
+          '!=' => ->(left, right) { left != right },
+          '>' => ->(left, right) { left > right },
+          '<' => ->(left, right) { left < right },
+          '>=' => ->(left, right) { left >= right },
+          '<=' => ->(left, right) { left <= right }
+        }.freeze
+
+        def evaluate(source, variables, node: nil)
+          text = strip_outer_parentheses(unwrap(source).strip)
           return nil if text.empty? || text == 'empty'
           return true if text.casecmp?('true')
           return false if text.casecmp?('false')
@@ -57,9 +66,10 @@ module Mxrb
           return Integer(text) if text.match?(/\A-?\d+\z/)
           return Float(text) if text.match?(/\A-?\d+\.\d+\z/)
           return variable(text, variables) if text.match?(%r{\A\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)?\z})
+          return node_member(text, node) if node && bare_reference?(text)
 
-          logical(text, variables) { |part| evaluate(part, variables) }
-        rescue ArgumentError
+          logical(text, variables) { |part| evaluate(part, variables, node:) }
+        rescue ArgumentError, TypeError
           raise NativeRuntimeError, "unsupported Mendix expression: #{source.inspect}"
         end
 
@@ -73,6 +83,27 @@ module Mxrb
           text.length >= 2 && text.start_with?("'") && text.end_with?("'")
         end
 
+        def strip_outer_parentheses(text)
+          text = text[1...-1].strip while text.start_with?('(') && matching_parenthesis(text, 0) == text.length - 1
+          text
+        end
+
+        def matching_parenthesis(text, opening)
+          depth = 0
+          quoted = false
+          text.each_char.with_index do |character, index|
+            next if index < opening
+
+            quoted = !quoted if character == "'"
+            next if quoted
+
+            depth += 1 if character == '('
+            depth -= 1 if character == ')'
+            return index if depth.zero?
+          end
+          nil
+        end
+
         def variable(text, variables)
           name, member = text.delete_prefix('$').split('/', 2)
           value = variables.fetch(name) do
@@ -83,6 +114,16 @@ module Mxrb
           raise NativeRuntimeError, "$#{name} is not an object" unless value.is_a?(ObjectValue)
 
           value.members[member.split('.').last]
+        end
+
+        # An attribute reference inside an XPath predicate, e.g. `Name` or
+        # `Clinic.Animal/Name`, resolved against the current candidate object.
+        def bare_reference?(text)
+          text.match?(%r{\A[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)?\z})
+        end
+
+        def node_member(text, node)
+          node.members[text.split('/').last.split('.').last]
         end
 
         def logical(text, variables, &block)
@@ -101,12 +142,11 @@ module Mxrb
 
           left = yield(match[1])
           right = yield(match[3])
-          { '=' => left == right, '!=' => left != right, '>' => left > right,
-            '<' => left < right, '>=' => left >= right, '<=' => left <= right }.fetch(match[2])
+          COMPARISONS.fetch(match[2]).call(left, right)
         end
 
         def split_operator(text, operator)
-          text.sub(/\A\((.*)\)\z/, '\\1').split(operator)
+          text.split(operator)
         end
       end
 
@@ -133,6 +173,12 @@ module Mxrb
         rescue StandardError
           store.restore(snapshot) if snapshot
           raise
+        end
+
+        # Counts stored objects of an entity, optionally narrowed by an XPath
+        # constraint. Used by the functional Executor's count expectations.
+        def count(entity, xpath = nil)
+          filter_by_xpath(store.retrieve(entity.to_s), xpath.to_s, {}).size
         end
 
         private
@@ -215,17 +261,70 @@ module Mxrb
             raise NativeRuntimeError, "unsupported retrieve source #{source['$Type']}"
           end
 
-          xpath = source['XpathConstraint'].to_s
-          raise NativeRuntimeError, "native XPath retrieve is not implemented: #{xpath}" unless xpath.empty?
-
-          sortings = items(source.dig('NewSortings', 'Sortings'))
-          raise NativeRuntimeError, 'native retrieve sorting is not implemented' unless sortings.empty?
-
-          values = store.retrieve(source['Entity'].to_s)
+          values = filter_by_xpath(store.retrieve(source['Entity'].to_s), source['XpathConstraint'].to_s, variables)
+          values = sort_values(values, items(source.dig('NewSortings', 'Sortings')))
           range = source['Range'] || {}
           limit = @expression.evaluate(range['LimitExpression'], variables)
           values = values.first(limit) if limit.is_a?(Integer) && limit.positive?
           variables[action['ResultVariableName'].to_s] = range['SingleObject'] == true ? values.first : values
+        end
+
+        # Narrows a value set by a Mendix XPath constraint. Only attribute
+        # predicates (comparisons, and/or, boolean shorthand) are understood;
+        # anything else is rejected by the expression evaluator rather than
+        # silently ignored.
+        def filter_by_xpath(values, xpath, variables)
+          predicate = xpath_predicate(xpath)
+          return values if predicate.empty?
+
+          values.select { @expression.evaluate(predicate, variables, node: _1) }
+        end
+
+        def xpath_predicate(xpath)
+          text = xpath.strip
+          return '' if text.empty?
+
+          groups = text.scan(/\[([^\[\]]*)\]/).flatten.map(&:strip).reject(&:empty?)
+          unless groups.any? && text.gsub(/\[[^\[\]]*\]/, '').strip.empty?
+            raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
+          end
+
+          groups.map { "(#{_1})" }.join(' and ')
+        end
+
+        def sort_values(values, sortings)
+          return values if sortings.empty?
+
+          keys = sortings.map { [sort_attribute(_1), descending?(_1)] }
+          values.sort { |left, right| compare_by_keys(left, right, keys) }
+        end
+
+        def compare_by_keys(left, right, keys)
+          keys.each do |attribute, descending|
+            comparison = compare_members(left.members[attribute], right.members[attribute])
+            comparison = -comparison if descending
+            return comparison unless comparison.zero?
+          end
+          0
+        end
+
+        def compare_members(left, right)
+          return 0 if left.nil? && right.nil?
+          return 1 if left.nil?
+          return -1 if right.nil?
+
+          (left <=> right) || raise(NativeRuntimeError, "cannot sort #{left.inspect} and #{right.inspect}")
+        end
+
+        def sort_attribute(sorting)
+          path = (sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')).to_s
+          raise NativeRuntimeError, 'native retrieve sorting requires an attribute' if path.empty?
+
+          path.split(%r{[./]}).last
+        end
+
+        def descending?(sorting)
+          sorting['SortOrder'].to_s.casecmp?('Descending')
         end
 
         def action_aggregate(action, variables)
@@ -350,11 +449,7 @@ module Mxrb
             failures << "return #{actual.inspect}, expected #{expected.inspect}" unless actual == expected
           end
           test.counts.each do |expectation|
-            if expectation.xpath && !expectation.xpath.empty?
-              raise NativeRuntimeError, "native XPath count is not implemented: #{expectation.xpath}"
-            end
-
-            actual_count = interpreter.store.count(expectation.entity)
+            actual_count = interpreter.count(expectation.entity, expectation.xpath)
             unless actual_count == expectation.equals
               failures << "#{expectation.entity} count #{actual_count}, expected #{expectation.equals}"
             end
