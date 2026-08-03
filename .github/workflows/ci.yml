@@ -26,9 +26,23 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
 
+      - name: Check out pinned Mendix acceptance fixture
+        run: |
+          git clone --quiet https://github.com/ako/mxcli-sudoku.git /tmp/mxcli-sudoku
+          git -C /tmp/mxcli-sudoku checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
+          git clone --quiet https://git.api.mendix.com/9c5cdce1-f479-44b2-830c-4d102da03632.git /tmp/mxrb-sla
+          git -C /tmp/mxrb-sla checkout --quiet 10e927c7a4508f98503b8367ce9cc2554206ee57
+          git clone --quiet https://git.api.mendix.com/384e8285-5e23-434b-a16f-ed09dc146f83.git /tmp/mxrb-learn
+          git -C /tmp/mxrb-learn checkout --quiet dea0c4839dd529849a254df1cb0a064c62fa43ce
+          git clone --quiet https://git.api.mendix.com/a9e4af8a-2776-4b10-a471-8c42df8f5f43.git /tmp/mxrb-first
+          git -C /tmp/mxrb-first checkout --quiet bb0cef697f86e8760dc4e8dae34f6995c737986e
+
       - name: Run strict test suite
         env:
           MXRB_COVERAGE: "1"
+          MXRB_LINE_COVERAGE_MIN: "99"
+          MXRB_BRANCH_COVERAGE_MIN: "96"
+          MXRB_ACCEPTANCE_MPRS: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr:/tmp/mxrb-sla/SLATaskApp.mpr:/tmp/mxrb-learn/LearnNow Trainning Management.mpr:/tmp/mxrb-first/MyFirstModule.mpr
         run: bundle exec rspec
 
       - name: Run gradual Ruby quality gate
