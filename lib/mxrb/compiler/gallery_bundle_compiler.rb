@@ -20,11 +20,12 @@ module Mxrb
         @values = property_values(widget['Object'])
         @data_source = WebListDataSource.new(source, widget)
         @entity_name = data_source.entity
+        @xpath_arguments = resolve_xpath_arguments
       end
 
       def supported?
         widget_type&.fetch('WidgetId', nil) == WIDGET_ID &&
-          @data_source.supported? && !entity_name.to_s.empty?
+          @data_source.supported? && !entity_name.to_s.empty? && !@xpath_arguments.nil?
       end
 
       def content_widgets = array(@values['content']&.last&.fetch('Widgets', nil))
@@ -56,7 +57,31 @@ module Mxrb
       end
 
       def xpath_datasource(config)
-        "DatabaseObjectListProperty(#{js_object(config.merge(entity: entity_name, sort: []))})"
+        values = config.merge(entity: entity_name, sort: [])
+        unless @xpath_arguments.empty?
+          values[:arguments] = @xpath_arguments
+          values[:fetchOnlyWithAllParams] = true
+        end
+        "DatabaseObjectListProperty(#{js_object(values)})"
+      end
+
+      def resolve_xpath_arguments
+        return {} unless @data_source.xpath?
+
+        names = xpath_variables(@data_source.xpath_constraint)
+        return {} if names.empty?
+
+        parameters = object_page_parameters(page_document, names)
+        return unless parameters
+
+        parameters.to_h { |name, _entity| [name, ["$#{name}", :undefined, false]] }
+      end
+
+      def page_document
+        module_name, document_name = @page_name.split('.', 2)
+        @source.units_of('Forms$Page').find do |unit|
+          unit.module_name == module_name && unit.document['Name'] == document_name
+        end&.document
       end
 
       def microflow_datasource(config)

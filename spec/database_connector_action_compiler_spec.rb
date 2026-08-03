@@ -136,5 +136,32 @@ RSpec.describe Mxrb::Compiler::DatabaseConnectorActionCompiler do
     expect { compiler.send(:query_builder_select, query) }
       .to raise_error(Mxrb::CompilationError, /no executable table/)
   end
+
+  it 'identifies unconfigured writes that can safely fall through to the local commit' do
+    query['Query'] = 'INSERT INTO users (name) VALUES ({Name})'
+    constant = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'constant', container_id: 'module', containment: 'Documents', module_name: 'Demo',
+      document: { '$Type' => 'Constants$Constant', 'Name' => 'Source', 'DefaultValue' => '' }
+    )
+    model = instance_double(Mxrb::Compiler::SourceModel, units: [unit, constant])
+    fallback = described_class.new(model)
+
+    expect(fallback.unconfigured_write?(nil)).to be(false)
+    expect(fallback.unconfigured_write?('$Type' => 'Microflows$CreateObjectAction')).to be(false)
+
+    expect(fallback.unconfigured_write?(action.merge(
+                                          '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'
+                                        ))).to be(true)
+    action['ConnectionParameterMappings'] = [2, {
+      'ParameterName' => 'DBSource', 'Value' => '$ConfiguredSource'
+    }]
+    expect(fallback.unconfigured_write?(action.merge(
+                                          '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'
+                                        ))).to be(false)
+    query['Query'] = 'SELECT name FROM users'
+    expect(fallback.unconfigured_write?(action.merge(
+                                          '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction'
+                                        ))).to be(false)
+  end
 end
 # rubocop:enable Metrics/BlockLength

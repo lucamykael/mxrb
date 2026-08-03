@@ -52,7 +52,8 @@ RSpec.describe Mxrb::Compiler::WebBundleBuilder do
     result = described_class.new(
       @mpr, deployment: @deployment, mendix_home: File.join(@version, 'runtime')
     ).build
-    expect(result.files).to eq(2)
+    expect(result.files).to eq(3)
+    expect(File).to exist(File.join(@deployment, 'web', 'dist', 'widgets.css'))
     expect(File.read(client)).to match(
       /let t=`\?\d+\$\{\(0,A\.g\)\(\)\.getConfig\("cachebust"\)\}`/
     )

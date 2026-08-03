@@ -60,7 +60,10 @@ RSpec.describe Mxrb::Compiler::DomainModelMaterializer do
     )
     expect(attributes.dig('BirthDate', 'Type', 'LocalizeDate')).to be(true)
     expect(entity['ValidationRules'].first['Message']).not_to have_key('Items')
-    expect(entity['Indexes'].first['Attributes']).to all(include('AttributePointer'))
+    indexed = entity['Indexes'].first['Attributes']
+    expect(indexed).to all(include('AttributePointer', 'AssociationPointer'))
+    expect(Mxrb::IO::BsonCodec.extract_id(indexed.first['AssociationPointer']))
+      .to eq('00000000-0000-0000-0000-000000000000')
     expect(entity['AccessRules'].first).to include(
       'AllowedUserRoles' => ['User'], 'AllowCreate' => true, 'AllowDelete' => false
     )

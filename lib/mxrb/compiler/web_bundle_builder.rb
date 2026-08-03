@@ -25,7 +25,7 @@ module Mxrb
 
         prepare(web)
         run_rspack(web)
-        WebShellMaterializer.new(web, version: @source.version).materialize_dynamic_imports
+        WebShellMaterializer.new(web, version: @source.version).materialize
         result(web)
       end
 

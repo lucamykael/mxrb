@@ -28,6 +28,9 @@ module Mxrb
         changed += materialize_dynamic_imports
         write_missing(File.join(@web, 'js', 'login_i18n.js'), login_i18n)
         write_missing(File.join(@web, 'lib', 'bootstrap', 'css', 'bootstrap.min.css'), login_styles)
+        # React Client requests this conventional aggregate even when every widget
+        # ships its styles through JavaScript or the compiled theme.
+        write_missing(File.join(@web, 'dist', 'widgets.css'), '')
         changed
       end
 

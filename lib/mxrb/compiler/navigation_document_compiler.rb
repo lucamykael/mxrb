@@ -79,7 +79,14 @@ module Mxrb
       def text_reference(source)
         return nil unless source
 
-        source.slice('$ID', '$Type')
+        @schema.fields_for(source).to_h do |field|
+          value = case field
+                  when 'Parameters' then array(source[field]).map { text_reference(_1) }
+                  when 'Text' then text_reference(source[field])
+                  else source[field]
+                  end
+          [field, value]
+        end
       end
     end
   end

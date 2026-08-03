@@ -10,6 +10,31 @@ module Mxrb
       def plain_array(value) = value ? array(value).map { plain_value(_1) } : []
       def plain_document(value) = value ? plain_value(value) : nil
 
+      def xpath_variables(constraint)
+        constraint.to_s.scan(/\$([A-Za-z_]\w*)/).flatten.uniq
+      end
+
+      def object_page_parameters(document, names)
+        indexed = page_parameter_types(document)
+        entities = names.to_h { |name| [name, object_parameter_entity(indexed[name])] }
+        entities if entities.values.all?
+      end
+
+      def page_parameter_types(document)
+        array(document&.fetch('Parameters', nil)).filter_map do |parameter|
+          next unless parameter.is_a?(Hash)
+
+          [parameter['Name'].to_s, parameter['ParameterType'] || {}]
+        end.to_h
+      end
+
+      def object_parameter_entity(type)
+        return unless type&.fetch('$Type', nil) == 'DataTypes$ObjectType'
+
+        entity = type['Entity'].to_s
+        entity unless entity.empty?
+      end
+
       def image_bytes(value)
         value.respond_to?(:data) ? value.data : value.to_s.b
       end

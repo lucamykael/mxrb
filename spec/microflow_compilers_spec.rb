@@ -103,6 +103,55 @@ RSpec.describe 'Runtime microflow compilers' do
       .to raise_error(Mxrb::CompilationError, /cannot derive Runtime retrieve type/)
   end
 
+  it 'replaces an unconfigured external write with a Runtime no-op action' do
+    fields = {
+      'Microflows$LogMessageAction' => %w[
+        $ID $Type MessageTemplate ErrorHandlingType Level Node IncludeLatestStackTrace
+      ],
+      'Microflows$StringTemplate' => %w[$ID $Type Parameters Text]
+    }
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing: {}))
+    connector = instance_double(Mxrb::Compiler::DatabaseConnectorActionCompiler)
+    allow(connector).to receive(:unconfigured_write?).and_return(true)
+    compiler.instance_variable_set(:@database_connector, connector)
+    action = node('DatabaseConnector$ExecuteDatabaseQueryAction', 29,
+                  ErrorHandlingType: 'Rollback')
+
+    compiled = compiler.compile(action)
+    expect(compiled).to include(
+      '$Type' => 'Microflows$LogMessageAction', 'Level' => 'Trace', 'Node' => "'Mxrb'"
+    )
+    expect(compiled['MessageTemplate']).to include(
+      '$Type' => 'Microflows$StringTemplate', 'Parameters' => [], 'Text' => ''
+    )
+  end
+
+  it 'derives Reference association cardinality from the retrieval direction' do
+    fields = { 'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type] }
+    parent = node('DomainModels$Entity', 30, QualifiedName: 'App.Cell')
+    child = node('DomainModels$Entity', 31, QualifiedName: 'App.Game')
+    association = node(
+      'DomainModels$Association', 32, QualifiedName: 'App.Cell_Game',
+                                      ParentPointer: parent['$ID'], ChildPointer: child['$ID'], Type: 'Reference'
+    )
+    existing = { id(30) => parent, id(31) => child, 'App.Cell_Game' => association }
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing:))
+    compiler.prepare(node('Microflows$Microflow', 33, Objects: [
+                            node('Microflows$MicroflowParameter', 34, Name: 'Cell',
+                                                                      VariableType: { 'Entity' => 'App.Cell' }),
+                            node('Microflows$MicroflowParameter', 35, Name: 'Game',
+                                                                      VariableType: { 'Entity' => 'App.Game' })
+                          ]))
+
+    from_cell = compiler.compile(node('Microflows$AssociationRetrieveSource', 36,
+                                      AssociationId: 'App.Cell_Game', StartVariableName: 'Cell'))
+    from_game = compiler.compile(node('Microflows$AssociationRetrieveSource', 37,
+                                      AssociationId: 'App.Cell_Game', StartVariableName: 'Game'))
+
+    expect(from_cell['Type']).to eq('App.Game')
+    expect(from_game['Type']).to eq('[App.Cell]')
+  end
+
   it 'rejects fields and data types that cannot be derived' do
     compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(
       schema(fields: { 'Test$Node' => %w[$ID $Type Missing],
