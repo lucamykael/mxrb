@@ -171,6 +171,8 @@ module Mxrb
       end
 
       def document_index
+        return @source.document_index if @source.is_a?(SourceModel)
+
         {}.tap { |index| @source.documents.each { index_document(_1, index) } }
       end
 

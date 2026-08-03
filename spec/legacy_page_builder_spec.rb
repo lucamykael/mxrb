@@ -163,5 +163,18 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
         .dig('unsupportedWidgets', 'Demo.Home')).to eq(['Forms$TextBox'])
     end
   end
+
+  it 'audits pages without writing files and includes custom widgets' do
+    page = Mxrb::Compiler::SourceModel::Unit.new(
+      id: SecureRandom.uuid, container_id: nil, containment: nil, module_name: 'Demo',
+      document: { '$Type' => 'Forms$Page', 'Name' => 'Home',
+                  'Widgets' => [3, { '$Type' => 'Forms$TextBox' },
+                                { '$Type' => 'CustomWidgets$CustomWidget' }] }
+    )
+    source = instance_double(Mxrb::Compiler::SourceModel, units_of: [page], documents: [page.document])
+
+    expect(described_class.new(source, '/not-used').audit)
+      .to eq('Demo.Home' => %w[CustomWidgets$CustomWidget Forms$TextBox])
+  end
 end
 # rubocop:enable Metrics/BlockLength

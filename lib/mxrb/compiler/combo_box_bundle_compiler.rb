@@ -6,7 +6,8 @@ require 'json'
 module Mxrb
   module Compiler
     # Compiles association- and database-backed instances of the official React Combo box widget.
-    class ComboBoxBundleCompiler # rubocop:disable Metrics/ClassLength
+    # rubocop:disable Metrics
+    class ComboBoxBundleCompiler
       include ModelValues
 
       WIDGET_ID = 'com.mendix.widget.web.combobox.Combobox'
@@ -59,7 +60,7 @@ module Mxrb
 
       def association_source_supported?
         primitive('source') == 'context' && primitive('optionsSourceType') == 'association' &&
-          association_step && association_caption_attribute
+          association_step && (association_caption_attribute || association_caption_expression)
       end
 
       def source_properties
@@ -88,11 +89,30 @@ module Mxrb
       end
 
       def association_properties
-        {
-          optionsSourceAssociationCaptionAttribute: raw(list_attribute_property(association_caption_attribute)),
+        properties = {
           attributeAssociation: raw(association_property(association_step)),
           optionsSourceAssociationDataSource: raw(list_property)
         }
+        if association_caption_attribute
+          properties[:optionsSourceAssociationCaptionAttribute] = raw(
+            list_attribute_property(association_caption_attribute)
+          )
+        else
+          properties[:optionsSourceAssociationCaptionExpression] = raw(list_expression_property)
+        end
+        properties
+      end
+
+      def list_expression_property
+        source = value('optionsSourceAssociationCaptionExpression')&.fetch('Expression', '').to_s
+        path = source[%r{\A\$currentObject/(.+)\z}, 1]
+        "ListExpressionProperty(#{javascript(
+          expression: {
+            expr: { type: 'variable', variable: 'currentObject', path: },
+            args: { currentObject: { widget: widget_key, source: 'object' } }
+          },
+          dataSourceId: data_source_id
+        )})"
       end
 
       def association_property(step)
@@ -175,6 +195,7 @@ module Mxrb
       def database_caption_attribute = value('optionsSourceDatabaseCaptionAttribute')&.fetch('AttributeRef', nil)
       def database_value_attribute = value('optionsSourceDatabaseValueAttribute')&.fetch('AttributeRef', nil)
       def association_caption_attribute = value('optionsSourceAssociationCaptionAttribute')&.fetch('AttributeRef', nil)
+      def association_caption_expression = value('optionsSourceAssociationCaptionExpression')&.fetch('Expression', nil)
 
       def association_step
         entity_steps(value('attributeAssociation')).first
@@ -256,6 +277,8 @@ module Mxrb
       end
 
       def document_index
+        return @source.document_index if @source.is_a?(SourceModel)
+
         {}.tap { |index| @source.documents.each { index_document(_1, index) } }
       end
 
@@ -268,6 +291,7 @@ module Mxrb
         when Array then value.each { index_document(_1, index) }
         end
       end
-    end # rubocop:enable Metrics/ClassLength
+    end
+    # rubocop:enable Metrics
   end
 end

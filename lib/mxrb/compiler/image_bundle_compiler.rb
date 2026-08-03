@@ -5,7 +5,8 @@ require 'json'
 module Mxrb
   module Compiler
     # Compiles the static-image subset of the official React Image widget.
-    class ImageBundleCompiler # rubocop:disable Metrics/ClassLength
+    # rubocop:disable Metrics
+    class ImageBundleCompiler
       include ModelValues
 
       WIDGET_ID = 'com.mendix.widget.web.image.Image'
@@ -42,32 +43,87 @@ module Mxrb
         JSON.generate(value)
       end
 
-      def initialize(source, page_name, widget)
+      def initialize(source, page_name, widget, scope: nil, entity: nil, key_prefix: 'p', action_property: nil)
         @source = source
         @page_name = page_name
         @widget = widget
+        @scope = scope
+        @entity = entity
+        @key_prefix = key_prefix
+        @action_property = action_property
         @index = document_index
         @values = property_values(widget['Object'])
       end
 
       def supported?
         type = widget_type
-        type && type.fetch('WidgetId', nil) == WIDGET_ID &&
-          primitive('datasource') == 'image' && image_uri
+        type && type.fetch('WidgetId', nil) == WIDGET_ID && supported_source? && supported_action?
       end
 
       def render # rubocop:disable Metrics/AbcSize
         values = primitive_properties.merge(
           key: widget_key, '$widgetId': widget_key,
-          imageObject: self.class.raw("WebStaticImageProperty({ image: { uri: #{JSON.generate(image_uri)} } })"),
-          imageUrl: self.class.raw(self.class.expression(text_value('imageUrl'))),
           alternativeText: self.class.raw(self.class.expression(text_value('alternativeText'))),
           class: css_class
         )
+        if primitive('datasource') == 'image'
+          values[:imageObject] = self.class.raw(
+            "WebStaticImageProperty({ image: { uri: #{JSON.generate(image_uri)} } })"
+          )
+          values[:imageUrl] = self.class.raw(self.class.expression(text_value('imageUrl')))
+        else
+          values[:imageUrl] = self.class.raw(dynamic_image_url)
+        end
+        action = compiled_action
+        values[:onClick] = self.class.raw(action) if action
         "React.createElement($Image, #{self.class.javascript(values)})"
       end # rubocop:enable Metrics/AbcSize
 
       private
+
+      def supported_source?
+        return !image_uri.nil? if primitive('datasource') == 'image'
+
+        primitive('datasource') == 'imageUrl' && !dynamic_image_url.nil?
+      end
+
+      def supported_action?
+        pair = @values['onClick']
+        action = pair&.last&.fetch('Action', nil)
+        action.nil? || action['$Type'] == 'Forms$NoAction' || !compiled_action.nil?
+      end
+
+      def compiled_action
+        pair = @values['onClick']
+        action = pair&.last&.fetch('Action', nil)
+        return if action.nil? || action['$Type'] == 'Forms$NoAction'
+
+        @action_property&.call(action)
+      end
+
+      def dynamic_image_url
+        parameter = image_url_parameter
+        attribute = parameter&.dig('AttributeRef', 'Attribute').to_s
+        return unless @scope && attribute.include?('.')
+
+        path = array(parameter.dig('AttributeRef', 'EntityRef', 'Steps')).flat_map do |step|
+          [step['Association'], step['DestinationEntity']]
+        end.map(&:to_s).reject(&:empty?).join('/')
+        member = [path, attribute.split('.').last].reject(&:empty?).join('/')
+        config = {
+          expression: {
+            expr: { type: 'variable', variable: 'currentObject', path: member },
+            args: { currentObject: { widget: @scope, source: 'object' } }
+          }
+        }
+        "ExpressionProperty(#{self.class.javascript(config)})"
+      end
+
+      def image_url_parameter
+        template = @values['imageUrl']&.last&.fetch('TextTemplate', nil)
+        parameters = array(template&.fetch('Parameters', nil))
+        parameters.one? ? parameters.first : nil
+      end
 
       def primitive_properties
         @values.each_with_object({}) do |(key, (type, value)), result|
@@ -115,7 +171,7 @@ module Mxrb
           items.first&.fetch('Text', '') || ''
       end
 
-      def widget_key = "p.#{@page_name}.#{@widget['Name']}"
+      def widget_key = "#{@key_prefix}.#{@page_name}.#{@widget['Name']}"
 
       def css_class
         ["mx-name-#{@widget['Name']}", @widget.dig('Appearance', 'Class')]
@@ -140,6 +196,8 @@ module Mxrb
       end
 
       def document_index
+        return @source.document_index if @source.is_a?(SourceModel)
+
         {}.tap { |index| @source.documents.each { index_document(_1, index) } }
       end
 
@@ -152,6 +210,7 @@ module Mxrb
         when Array then value.each { index_document(_1, index) }
         end
       end
-    end # rubocop:enable Metrics/ClassLength
+    end
+    # rubocop:enable Metrics
   end
 end
