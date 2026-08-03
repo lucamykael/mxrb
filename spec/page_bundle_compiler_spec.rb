@@ -42,11 +42,11 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     bundle = described_class.new(source).compile(unit)
     expect(bundle.qualified_name).to eq('Demo.Home')
     expect(bundle.source).to include(
-      'PageFragment', 'export const title = "Welcome"', '"Main":',
+      'PageFragment', 'export const title = "Welcome"', '"Demo.Shell.Main":',
       'mx-name-body body', '"Hello"',
       'export const classes = "mxrb-application-shell page-identity"'
     )
-    expect(bundle.source).not_to include('Demo.Shell.Main')
+    expect(bundle.source).to include('import { content as parentContent } from "../layouts/Demo.Shell.js";')
     expect(bundle.unsupported_widgets).to be_empty
   end
 
@@ -92,7 +92,7 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(bundle.source).to include(
       'mx-layoutgrid mx-layoutgrid-fluid', 'row', 'col-md-6 col-sm-12 col-xs-12',
       'React.createElement("h1"', '"Dashboard"', 'btn-primary',
-      'window.mx?.ui?.openForm2?.("Demo.Home", {}, undefined, undefined'
+      '"type": "openPage"', '"name": "Demo/Home.page.xml"'
     )
     expect(bundle.unsupported_widgets).to be_empty
   end
@@ -431,7 +431,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
         '$Type' => 'Forms$FormAction', 'FormSettings' => { 'Form' => 'Demo.Home' }
       }
     }
-    expect(compiler.send(:render_container, form_container)).to include('onClick', 'role')
+    expect(compiler.send(:render_container, form_container)).to include(
+      '$Container', 'ActionProperty', '"type": "openPage"'
+    )
     expect(compiler.send(:render_check_box, '$Type' => 'Forms$CheckBox', 'Name' => 'loose'))
       .to include('mxrb-unsupported-widget')
     expect(compiler.send(:image_uri, 'Demo.Assets.Missing')).to be_nil
@@ -557,9 +559,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(compiler.send(:widget_id, {})).to eq('')
 
     arguments = unit.document['FormCall']['Arguments']
-    arguments << { 'Parameter' => 'Other.Main', 'Widgets' => [] }
+    arguments << { 'Parameter' => arguments.find { _1.is_a?(Hash) }['Parameter'], 'Widgets' => [] }
     expect { described_class.new(source).compile(unit) }
-      .to raise_error(Mxrb::CompilationError, /duplicate page slot "Main"/)
+      .to raise_error(Mxrb::CompilationError, /duplicate page slot "Demo\.Shell\.Main"/)
     arguments.pop
     arguments.find { _1.is_a?(Hash) }['Parameter'] = '../unsafe'
     expect { described_class.new(source).compile(unit) }

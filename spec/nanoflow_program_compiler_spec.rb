@@ -31,7 +31,7 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
 
       expect(reference).to match(/\A\(\) => mxrbNanoflow_[a-f0-9]{12}\z/)
       expect(output).to include(
-        '"name": "Demo.Load"', '"type": "createVariable"',
+        '"name": "Demo.Load"', '"type": "setVariable"',
         '"type": "nanoflowCall"', '"flow": () => mxrbNanoflow_',
         '"type": "return"', '"variable": "ready"', '"name": "Demo.Child"'
       )
@@ -66,7 +66,7 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
                              'Entity' => 'Demo.Item', 'VariableName' => 'Item')
       )
       expect(compiler.send(:compile_node, create)).to include(
-        type: 'createObject', objectType: 'Demo.Item', outputVar: 'Item'
+        include(type: 'createObject', objectType: 'Demo.Item', outputVar: 'Item')
       )
       call = id.merge(
         '$Type' => 'Microflows$NanoflowCallAction', 'OutputVariableName' => '',
@@ -87,7 +87,7 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
       expect(expressions.map { compiler.send(:expression, _1) }).to include(
         { type: 'literal', value: nil }, { type: 'variable', variable: 'Item' },
         { type: 'literal', value: false }, { type: 'literalNumeric', value: '-12.5' },
-        { type: 'literal', value: '@Constant' }
+        { type: 'constant', name: 'Constant' }
       )
       compiler.instance_variable_get(:@programs)['Demo.Nil'] = nil
       expect(compiler.reference('Demo.Nil')).to be_nil
@@ -96,7 +96,7 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
     end
   end
 
-  it 'fails closed instead of silently dropping unsupported control flow' do
+  it 'compiles decisions as explicit switch control flow' do
     Dir.mktmpdir do |root|
       path = File.join(root, 'Branching.mpr')
       Mxrb.define(path) do
@@ -112,9 +112,11 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
       end
       compiler = described_class.new(Mxrb::Compiler::SourceModel.read(path))
 
-      expect(compiler.reference('Demo.Branch')).to be_nil
-      expect(compiler.declarations).to eq('')
-      expect(compiler.unsupported).to include(/Microflows\$ExclusiveSplit/)
+      expect(compiler.reference('Demo.Branch')).to match(/mxrbNanoflow/)
+      expect(compiler.declarations).to include(
+        '"type": "switch"', '"targets": { "true":', '"false":'
+      )
+      expect(compiler.unsupported).to be_empty
     end
   end
 end

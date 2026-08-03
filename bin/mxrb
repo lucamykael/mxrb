@@ -273,6 +273,25 @@ when "validate"
     exit 1
   end
 
+when "preflight"
+  path = ARGV.shift or abort "Usage: mxrb preflight <file.mpr> [--json]"
+  json = ARGV.delete("--json")
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  report = Mxrb.compatibility(path)
+  if json
+    puts JSON.pretty_generate(report.to_h)
+  else
+    puts "Project : #{report.path}"
+    puts "Mendix  : #{report.mendix_version}"
+    puts "Units   : #{report.stats[:units]}"
+    report.findings.each do |finding|
+      puts "[#{finding.severity.to_s.upcase}] #{finding.category} #{finding.type} " \
+           "at #{finding.location}: #{finding.message}"
+    end
+    puts "[mxrb] #{report.errors.size} error(s), #{report.warnings.size} warning(s)"
+  end
+  exit 1 unless report.compatible?
+
 when "pack"
   path = ARGV.shift or abort "Usage: mxrb pack <file.mpr> --output FILE.mda [--deployment DIR] [--force]"
   option = lambda do |name|
@@ -1385,6 +1404,7 @@ else
       widgets sync <definition.rb> <mpr>  Synchronize pluggable widget schemas
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
+      preflight  <file.mpr> [--json]      Audit native compiler/runtime compatibility
       compare    <left.mpr> <right.mpr>   Compare structural MPR snapshots
       diff       <left.mpr> <right.mpr>   Print typed semantic changes
       refs       <file.mpr> <name>        Find references to a Mendix artifact

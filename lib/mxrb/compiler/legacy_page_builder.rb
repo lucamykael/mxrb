@@ -19,7 +19,7 @@ module Mxrb
         Forms$DivContainer Forms$DropDown Forms$DynamicText Forms$ImageViewer Forms$Label
         Forms$LayoutGrid Forms$ListView Forms$RadioButtonGroup Forms$ReferenceSelector
         Forms$SnippetCallWidget Forms$StaticImageViewer Forms$TabControl Forms$TextArea
-        Forms$TextBox Forms$InputReferenceSetSelector
+        Forms$TextBox Forms$InputReferenceSetSelector CustomWidgets$CustomWidget
       ].freeze
 
       def initialize(source, web_root, profiles: [:dojo])
@@ -38,6 +38,21 @@ module Mxrb
           directory: File.join(@web_root, 'pages'), files: files.length,
           bytes: files.sum { File.size(_1) }, unsupported_widgets: frozen_unsupported
         )
+      end
+
+      # Performs the same widget audit as #build without writing deployment files.
+      def audit
+        @unsupported.clear
+        @source.units_of('Forms$Page').each do |unit|
+          name = "#{unit.module_name}.#{unit.document['Name']}"
+          audit_unsupported_widgets(unit.document, name)
+          descendants(unit.document).select { _1['$Type'] == 'Forms$DataGrid' }.each_with_index do |grid, index|
+            compiler = LegacyDataGridCompiler.new(@source, name, grid, language: 'en_US', sequence: index + 1)
+            compiler.html
+            @unsupported[name].concat(compiler.unsupported)
+          end
+        end
+        frozen_unsupported
       end
 
       private

@@ -8,6 +8,7 @@ module Mxrb
     WebBundleResult = Data.define(:directory, :files, :bytes)
 
     # Generates the web-client entrypoint and runs the version-owned Rspack toolchain directly.
+    # rubocop:disable Metrics
     class WebBundleBuilder
       include ModelValues
 
@@ -38,9 +39,47 @@ module Mxrb
 
       def prepare(web)
         WidgetPackageExtractor.new(File.dirname(@mpr_path), web).extract
+        materialize_react_dom_compatibility(web)
         WebOperationCompiler.new(@source).write(File.join(@deployment, 'model', 'operations.json'))
         PageBundleBuilder.new(@source, web).build
         write_entry(File.join(web, 'index.js'))
+      end
+
+      def materialize_react_dom_compatibility(web)
+        shim = File.join(web, 'react-dom-compat.mjs')
+        react_dom = File.join(@version_root, 'modeler', 'tools', 'node', 'node_modules',
+                              'react-dom', 'index.js')
+        File.write(shim, <<~JS)
+          import * as ReactDOM from #{JSON.generate(react_dom)};
+          export * from #{JSON.generate(react_dom)};
+          export default ReactDOM;
+          export const findDOMNode = value => {
+            if (typeof Element !== "undefined" && value instanceof Element) return value;
+            const seen = new Set();
+            const pending = [value?._reactInternals, value?._reactInternalFiber].filter(Boolean);
+            while (pending.length) {
+              const fiber = pending.shift();
+              if (!fiber || seen.has(fiber)) continue;
+              seen.add(fiber);
+              if (typeof Element !== "undefined" && fiber.stateNode instanceof Element) {
+                return fiber.stateNode;
+              }
+              pending.push(fiber.child, fiber.sibling);
+            }
+            return null;
+          };
+        JS
+        config_path = File.join(web, 'rspack.config.mjs')
+        return unless File.file?(config_path)
+
+        config = File.read(config_path)
+        return if config.include?(JSON.generate(shim))
+
+        marker = 'alias: {'
+        replacement = "#{marker}\n            \"react-dom\": #{JSON.generate(shim)},"
+        raise CompilationError, 'Rspack config has no resolve alias block' unless config.include?(marker)
+
+        File.write(config_path, config.sub(marker, replacement))
       end
 
       def version_root(path)
@@ -103,5 +142,6 @@ module Mxrb
         end
       end
     end
+    # rubocop:enable Metrics
   end
 end

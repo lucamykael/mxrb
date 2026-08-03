@@ -44,14 +44,23 @@ editáveis e ações Save/Cancel. Create passa o GUID do novo objeto por
 projeto derivados dos module roles permitidos pela página. A autorização da
 Runtime é preservada, sem contorno de segurança.
 
+Layouts, placeholders, regiões de scroll, sidebars, headers, menus de navegação,
+snippets, DataViews, ListViews, controles de formulário, imagens, combo boxes,
+Gallery, Data Grid 2 e widgets pluggable respaldados por schema são compilados
+pelos contratos nativos do cliente React. Ações de páginas, menus e widgets
+cobrem navegação, microflows, nanoflows, ciclo de vida de objetos, links e
+sign-out. Programas nanoflow também cobrem decisões, error handlers,
+ações JavaScript e operações server-side de microflow/commit quando o contrato
+do modelo pode ser mapeado com segurança.
+
 O caminho React também compila a Gallery oficial com listas XPath e microflow,
 conteúdo de item por template, seleção e atributos dinâmicos formatados. Fontes
 e ações nanoflow usam os contratos `NanoflowObjectListProperty`,
 `NanoflowObjectProperty` e `ActionProperty` do cliente Mendix. O MXRB emite
-programas cliente reais `{ name, instructions }` para o subconjunto linear
-auditado: retorno, criação de variável, criação de objeto e chamadas de
-nanoflow. Fluxos ausentes, parâmetros sem mapeamento seguro, decisões, ações
-JavaScript, chamadas de microflow e demais instruções não traduzidas falham
+programas cliente reais `{ name, instructions }` para controle de fluxo em
+grafo, retornos, variáveis, objetos, chamadas de nanoflow/microflow, ações
+JavaScript, páginas, mensagens, validações e commits. Fluxos ausentes,
+mapeamentos de parâmetro inseguros e instruções cliente não traduzidas falham
 fechado e permanecem achados no manifesto de suporte.
 
 Nas sessões locais da Runtime em modo developer, o mxrb também versiona imports
@@ -80,6 +89,19 @@ end
 
 Projetos existentes podem ser exportados, alterados na DSL e regenerados. Os
 widgets fora do subconjunto continuam no manifesto, sem descarte silencioso.
+
+Antes do build nativo, audite o MPR completo pelo renderer selecionado para sua
+versão Mendix:
+
+```bash
+mxrb preflight App.mpr
+mxrb preflight App.mpr --json
+```
+
+O comando é somente leitura e retorna código diferente de zero para versões ou
+recursos cliente não suportados. Mendix 11 é auditado pelo compilador React;
+6/7/9 usam a mesma auditoria Dojo legada do `WebBundleBuilder`. Assim o relatório
+não declara compatibilidade por um renderer que o build real não utilizará.
 
 No Dojo, o Data Grid 1 cobre fontes database, XPath e microflow, pesquisa,
 ordenação, paginação, seleção e botões auditados. Outros widgets visuais são
@@ -129,10 +151,9 @@ encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
   substituir pelo launcher Java 21 da versão 11;
 - Data Grid 1 está coberto, mas os demais widgets Dojo continuam explicitamente
   pendentes no manifesto legado;
-- Data Grid 2 está coberto para datasource XPath e colunas de atributo. Gallery
-  cobre XPath/microflow e o subconjunto auditado de instruções nanoflow. Os
-  formulários React cobrem DataView/TextBox por parâmetro ou nanoflow suportado
-  e Save/Cancel; outros widgets e instruções cliente usam o fallback do manifesto;
+- o caminho React do Mendix 11 tem preflight limpo e builds Rspack completos de
+  LearnNow, MyFirstModule, SLATaskApp, Sudoku e VetClinic. Essa matriz comprova
+  os contratos auditados, não compatibilidade universal;
 - bundles web nativos são gerados; o pipeline React Native ainda depende dos
   assets de template/projeto existentes;
 - `mx` e `mxbuild` não são fallbacks. Um recurso sem compilador produz erro ou

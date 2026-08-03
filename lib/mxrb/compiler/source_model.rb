@@ -21,7 +21,31 @@ module Mxrb
         selected.map(&:document)
       end
 
-      def units_of(type) = units.select { _1.document['$Type'] == type }
+      def units_of(type)
+        @units_by_type ||= units.group_by { _1.document['$Type'] }.transform_values(&:freeze).freeze
+        @units_by_type.fetch(type, EMPTY_UNITS)
+      end
+
+      def document_index
+        @document_index ||= {}.tap do |index|
+          units.each { index_document(_1.document, index) }
+        end.freeze
+      end
+
+      def web_page?(unit)
+        return false if unit.document['Excluded'] == true
+
+        layout_name = unit.document.dig('FormCall', 'Form').to_s
+        layout = units_of('Forms$Layout').find do |candidate|
+          "#{candidate.module_name}.#{candidate.document['Name']}" == layout_name
+        end
+        layout.nil? || layout.document.dig('Content', '$Type') != 'Forms$NativeLayoutContent'
+      end
+
+      def web_layout?(unit)
+        unit.document['Excluded'] != true &&
+          unit.document.dig('Content', '$Type') == 'Forms$WebLayoutContent'
+      end
 
       def client_reference?(qualified_name)
         reference = /(?:\A|[^A-Za-z0-9_.])@#{Regexp.escape(qualified_name)}(?![A-Za-z0-9_.])/
@@ -31,6 +55,8 @@ module Mxrb
       end
 
       private
+
+      EMPTY_UNITS = [].freeze
 
       def read_units
         mpr = IO::MprFile.open(path, readonly: true)
@@ -71,6 +97,16 @@ module Mxrb
         when Hash then value.any? { |_key, child| deep_string_match?(child, pattern) }
         when Array then value.any? { deep_string_match?(_1, pattern) }
         else value.is_a?(String) && value.match?(pattern)
+        end
+      end
+
+      def index_document(value, index)
+        case value
+        when Hash
+          id = IO::BsonCodec.extract_id(value['$ID'])
+          index[id] = value if id
+          value.each_value { index_document(_1, index) }
+        when Array then value.each { index_document(_1, index) }
         end
       end
     end
