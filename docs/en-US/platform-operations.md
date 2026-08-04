@@ -25,6 +25,8 @@ mxrb frontend migrate App.mpr --apply --json
 script/frontend_acceptance App.mpr -o frontend-round-trip.json
 script/frontend_acceptance App.mpr --mxbuild /path/to/mxbuild -o frontend.json
 script/frontend_acceptance App.mpr --mx /path/to/mx -o frontend-diagnostics.json
+script/frontend_lifecycle_acceptance --version 11.12.1 --mx /path/to/mx \
+  --mxbuild /path/to/mxbuild --strict-warnings -o frontend-lifecycle.json
 ```
 
 `mxrb frontend migrate` is an immutable, fail-closed preview by default. For
@@ -54,6 +56,14 @@ closed instead of being certified as a clean model.
 On August 4, 2026, the safe migration completed the accepted 10.24.0.73019 and
 11.12.1 matrix: source and rebuilt projects returned zero MxBuild errors and
 both reports set `frontend_ready` to `true`.
+
+`script/frontend_lifecycle_acceptance` creates an app exclusively through the
+CLI, generates its MPR, exports it to Ruby, changes Home and navigation, adds
+an entity, form, microflow, nanoflow, and asset, regenerates, exports again,
+and requires a structurally identical rebuild. On the official 10.24.0.73019
+and 11.12.1 matrix, source and rebuilt projects completed with zero errors,
+warnings, deprecations, or recommendations in `mx check`, plus zero MxBuild
+errors.
 
 `--mx` runs the official read-only checker with warnings, deprecations, and
 best-practice recommendations enabled. It validates the checker's exit bitmask
