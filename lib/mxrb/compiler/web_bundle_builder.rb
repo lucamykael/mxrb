@@ -21,20 +21,20 @@ module Mxrb
 
       def build
         web = File.join(@deployment, 'web')
-        profiles = Adapter.for(@source.version).web_profiles
+        profiles = Adapter.for(@source.version, source: @source).web_profiles
         return LegacyPageBuilder.new(@source, web, profiles:).build unless profiles.include?(:react)
 
         prepare(web)
-        run_rspack(web)
+        run_bundler(web)
         WebShellMaterializer.new(web, version: @source.version).materialize
         result(web)
       end
 
       private
 
-      def run_rspack(web)
-        output, status = Open3.capture2e(environment(web), node, runner, chdir: web)
-        raise CompilationError, "Rspack web build failed:\n#{output}" unless status.success?
+      def run_bundler(web)
+        output, status = Open3.capture2e(environment(web), node, *bundler_arguments, chdir: web)
+        raise CompilationError, "#{bundler_name} web build failed:\n#{output}" unless status.success?
       end
 
       def prepare(web)
@@ -94,7 +94,15 @@ module Mxrb
       end
 
       def node = File.join(@version_root, 'modeler', 'tools', 'node', 'linux-x64', 'node')
-      def runner = File.join(@version_root, 'modeler', 'tools', 'node', 'rspack-runner.mjs')
+      def bundler_name = @source.version.to_i == 10 ? 'Rollup' : 'Rspack'
+
+      def bundler_arguments
+        return [File.join(node_modules, 'rollup', 'dist', 'bin', 'rollup'), '--config'] if @source.version.to_i == 10
+
+        [File.join(@version_root, 'modeler', 'tools', 'node', 'rspack-runner.mjs')]
+      end
+
+      def node_modules = File.join(@version_root, 'modeler', 'tools', 'node', 'node_modules')
 
       def environment(web)
         {
@@ -102,7 +110,7 @@ module Mxrb
           'SHOULD_GENERATE_EMBEDDED_INDEX' => 'false',
           'MX_DEPLOYMENT_WEB_DIRECTORY' => web,
           'MX_WEB_CLIENT_BUILD_LOG' => File.join(@deployment, 'log', 'mxrb-web-build.log'),
-          'NODE_PATH' => File.join(@version_root, 'modeler', 'tools', 'node', 'node_modules')
+          'NODE_PATH' => node_modules
         }
       end
 

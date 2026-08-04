@@ -35,7 +35,8 @@ Ruby é a única linguagem pública do MXRB.
   descartável e executados pelo runtime Mendix sem JUnit.
 - Execução local ou Docker de `mx check`, pacote portátil e runtime, com seleção
   automática da família Java do projeto.
-- Gate nativo de 100% de cobertura de linhas e branches para a biblioteca.
+- Gate nativo de cobertura: 100% de linhas e 100% de branches no CI,
+  com default local mais estrito de 100/100 quando os limites são omitidos.
 
 Projetos graváveis mantêm um cache do índice semântico identificado por
 fingerprint. `mxrb cache status`, `warm` e `clear` expõem métricas e manutenção;
@@ -179,14 +180,18 @@ Arquivos de avaliação são Ruby comum e rodam com
 
 ## Marketplace oficial Mendix
 
-Esta família será separada de `mxrb module`, que instala módulos Ruby do
-catálogo interno. O formato previsto é:
+Esta família permanece separada de `mxrb module`, que instala módulos Ruby do
+catálogo interno. O formato entregue é:
 
 ```sh
 mxrb marketplace search "Community Commons"
 mxrb marketplace show 170
 mxrb marketplace versions 170 --mendix-version 11.12.1
 mxrb marketplace pull 170 --mpr App.mpr
+mxrb marketplace update 170 --mpr App.mpr
+mxrb marketplace update 170 --mpr App.mpr --apply
+mxrb marketplace remove CommunityCommons --mpr App.mpr
+mxrb marketplace remove CommunityCommons --mpr App.mpr --apply
 mxrb marketplace pull github:mendix/CommunityCommons
 mxrb marketplace import ./CommunityCommons.mpk --mpr App.mpr
 mxrb marketplace login --pat-file .env
@@ -204,6 +209,31 @@ Capacidades entregues:
    no MPR de destino via Ruby/SQLite/BSON, sem ferramentas Mendix.
 4. PAT Mendix: validar e armazenar com permissões restritas, exigindo o escopo
    `mx:marketplace-content:read` e enviando-o somente ao host oficial da API.
+5. Lifecycle transacional: `update` e `remove` são prévias por padrão, preservam
+   IDs referenciados externamente, recusam assets alterados e protegem MPR,
+   `mprcontents`, cache, lock e assets antes de `--apply` explícito.
+6. Dependências oficiais: `marketplace dependencies` lê referências no MPR
+   interno, resolve recursivamente, confirma a identidade real em cada MPK,
+   reconhece módulos do próprio projeto, instala folhas primeiro e faz rollback.
+7. Export/rebuild autenticado: os grafos Kafka passaram em 10.24 e 11.12, com
+   assets, checksums e diagnósticos fonte/reconstrução preservados.
+8. Frontend oficial: DataWidgets 3.11.3 foi importado com Content ID 116540 e
+   Version ID `e7b6d703-8e47-42f4-bb92-934e3601e71b`; o Combo box é o componente
+   oficial independente Widget/clientModule 219304, versão 2.9.0, Version ID
+   `dce845f4-d051-4161-847c-016c01703caa`. A instalação faz backup e substitui
+   o asset 2.6.x antes pertencente ao Atlas Core (Content ID 117187).
+9. Aceitação reproduzível: `script/frontend_acceptance` bloqueia drift de
+   modelo, assets, checksums ou proveniência do lock/cache/originais. O renderer
+   nativo tem zero achados de preflight na origem e reconstrução das fixtures
+   aceitas de 10.24 e 11.12.
+10. Migração segura: `mxrb frontend migrate App.mpr` mostra a prévia e somente
+    `--apply` grava um plano transacional considerado seguro.
 
 GitHub não cobre módulos sem fonte ou release pública; MPK local continua útil
 como rota offline. A integração oficial usa somente o contrato OpenAPI publicado.
+A trilha de migração está concluída em toda a matriz de frontend suportada. O
+oráculo MxBuild externo e opcional retorna zero erros na origem e reconstrução
+de 10.24 e 11.12; `mx check` também preserva diagnósticos observáveis dos
+pacotes byte a byte em cada round-trip. O MXRB permanece independente: `mx` e
+MxBuild são somente oráculos de validação, nunca geradores, mutadores ou
+dependências de runtime.

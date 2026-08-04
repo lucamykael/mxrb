@@ -144,7 +144,8 @@ back a guess would corrupt the project.
 
 ## 10. Coverage as a gate, not a metric
 
-The suite enforces 100% line and branch coverage through
-`MXRB_COVERAGE=1 bundle exec rspec`, using Ruby's native `Coverage` API.
+CI enforces 100% line and 100% branch coverage through Ruby's native
+`Coverage` API. The local helper defaults to 100/100 when no threshold
+variables are supplied.
 The gate measures every executable library line and branch; comments such as
 `:nocov:` do not remove code from the denominator. See [conventions](conventions.md).

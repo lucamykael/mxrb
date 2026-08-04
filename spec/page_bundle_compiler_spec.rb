@@ -37,6 +37,8 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
 
   it 'renders page content, layout metadata, and translated text as an ES module' do
     source = Mxrb::Compiler::SourceModel.read(@mpr)
+    allow(source).to receive(:units_of).and_call_original
+    allow(source).to receive(:documents).and_call_original
     unit = source.units_of('Forms$Page').first
     unit.document['Appearance'] = { 'Class' => 'page-identity' }
     bundle = described_class.new(source).compile(unit)
@@ -668,6 +670,392 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
       'PlaceholderTemplate' => { 'Template' => { 'Items' => [2] } }
     })).to include('"mode": "time"', '"timeFormat"')
   end
+
+  it 'covers advanced standard widgets, menus, actions, lists, and import flags' do # rubocop:disable Metrics/BlockLength
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    compiler = described_class.new(source)
+    compiler.send(:prepare_compile, unit, 'p')
+    compiler.instance_variable_set(:@data_view_scopes, [{ scope: 'p.Demo.Home.item', entity: 'Demo.Item' }])
+
+    expect(compiler.send(:render_widget, '$Type' => 'Forms$Title', 'Name' => 'title')).to include('h1')
+    expect(compiler.send(:render_widget, {
+      '$Type' => 'Forms$GroupBox', 'Name' => 'group', 'Collapsible' => 'YesInitiallyCollapsed',
+      'HeaderMode' => 'H2', 'Widgets' => []
+    })).to include('"collapsible": "yes"')
+    expect(compiler.send(:render_group_box, {
+      'Name' => 'expanded', 'Collapsible' => 'YesInitiallyExpanded', 'Widgets' => []
+    })).to include('"collapsible": "expanded"')
+    expect(compiler.send(:render_group_box, { 'Name' => 'plain', 'Widgets' => [] }))
+      .to include('"collapsible": "no"')
+    expect(compiler.send(:render_group_box, {
+      'Name' => 'content', 'Widgets' => [2, { '$Type' => 'Forms$DynamicText', 'Name' => 'child' }]
+    })).to include('child')
+
+    radio = { '$Type' => 'Forms$RadioButtonGroup', 'Name' => 'state',
+              'AttributeRef' => { 'Attribute' => 'Demo.Item.State' } }
+    expect(compiler.send(:render_widget, radio)).to include('$RadioButtonGroup')
+    expect(compiler.send(:render_widget, {
+      '$Type' => 'Forms$FileManager', 'Name' => 'file', 'Type' => '', 'MaxFileSize' => 'invalid'
+    })).to include('$FileManager', '"widgetType": "both"')
+    expect(compiler.send(:render_text_area, {
+      'Name' => 'description', 'AttributeRef' => { 'Attribute' => 'Demo.Item.Description' },
+      'AutoGrow' => true, 'MaxLengthCode' => 100, 'Autocomplete' => false,
+      'SubmitBehaviour' => 'WhileEditing'
+    })).to include('$TextArea', '"autoGrow": true')
+
+    expect(compiler.send(:menu_items, nil)).to be_nil
+    expect(compiler.send(:menu_items, '$Type' => 'Unknown')).to be_nil
+    expect(compiler.send(:menu_icon_property, nil)).to be_nil
+    expect(compiler.send(:menu_icon_property, 'Image' => 'Demo.Icons.AddItem')).to include('add-item')
+    expect(compiler.send(:grid_weight_class, 'md', 0)).to be_nil
+    expect(compiler.send(:grid_weight_class, 'md', 12)).to eq('col-md-12')
+    expect(compiler.send(:compile_menu_item, {
+      'Caption' => { 'Items' => [2] }, 'Items' => [2, { 'Caption' => { 'Items' => [2] } }]
+    }, {}, [0])).to include(:items)
+    expect(compiler.send(:menu_microflow_config, '$Type' => 'Other')).to be_nil
+    expect(compiler.send(:menu_microflow_config, {
+      '$Type' => 'Forms$MicroflowAction',
+      'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction', 'ParameterMappings' => [2] }
+    })).to include(type: 'callMicroflow')
+
+    expect(compiler.send(:open_page_config, '$Type' => 'Forms$FormAction', 'FormSettings' => {
+      'Form' => '', 'ParameterMappings' => [2]
+    })).to be_nil
+    expect(compiler.send(:sign_out_config, '$Type' => 'Other')).to be_nil
+    expect(compiler.send(:sign_out_config, '$Type' => 'Forms$SignOutClientAction'))
+      .to include(type: 'signOut')
+    expect(compiler.send(:create_object_config, {}, '$Type' => 'Other')).to be_nil
+    unit.document['Parameters'] << {
+      'Name' => 'Item', 'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+    }
+    expect(compiler.send(:create_object_config, { 'Name' => 'create' }, {
+      '$Type' => 'Forms$CreateObjectClientAction', 'EntityRef' => { 'Entity' => 'Demo.Item' },
+      'PageSettings' => { 'Form' => 'Demo.Home' }
+    })).to include(type: 'createObject')
+    expect(compiler.send(:open_link_config, '$Type' => 'Forms$OpenLinkClientAction',
+                                            'Address' => { 'Value' => 'https://example.invalid' }))
+      .to include(type: 'openLink')
+    expect(compiler.send(:action_handler, '$Type' => 'Forms$FormAction',
+                                          'FormSettings' => { 'Form' => 'Demo.Home' })).to include('openForm2')
+    expect(compiler.send(:action_handler, '$Type' => 'Forms$UnknownAction')).to be_nil
+    expect(compiler.send(:open_form_handler, '')).to be_nil
+
+    expect(compiler.send(:entity_ref_destination, nil)).to eq('')
+    expect(compiler.send(:entity_ref_destination, 'Entity' => 'Demo.Item')).to eq('Demo.Item')
+    expect(compiler.send(:entity_ref_destination, 'Steps' => [2, {
+      'DestinationEntity' => 'Demo.Child'
+    }])).to eq('Demo.Child')
+    expect(compiler.send(:flow_return_entity, '$Type' => 'Unknown')).to eq('')
+    expect(compiler.send(:flow_return_entity, '$Type' => 'Forms$MicroflowSource',
+                                              'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction' }))
+      .to eq('')
+    expect(compiler.send(:positive_integer, 5, 20)).to eq(5)
+    expect(compiler.send(:positive_integer, 0, 20)).to eq(20)
+    expect(compiler.send(:positive_integer, 'bad', 20)).to eq(20)
+
+    xpath = instance_double(Mxrb::Compiler::WebListDataSource, xpath?: true, entity: 'Demo.Item')
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', xpath))
+      .to include('DatabaseObjectListProperty')
+    association = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      xpath?: false, association?: true, association_path: 'Demo.Item_Parent/Demo.Parent'
+    )
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', association))
+      .to include('AssociationObjectListProperty')
+    microflow = instance_double(
+      Mxrb::Compiler::WebListDataSource, xpath?: false, association?: false, microflow?: true
+    )
+    allow(compiler).to receive(:microflow_argument_map).and_return({})
+    expect(compiler.send(:list_view_property, { 'Name' => 'items', 'DataSource' => {} }, 'key', microflow))
+      .to include('MicroflowObjectListProperty')
+    nanoflow = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      xpath?: false, association?: false, microflow?: false, nanoflow_name: 'Demo.ClientAction'
+    )
+    allow(compiler).to receive(:nanoflow_reference).and_return('() => flow')
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', nanoflow))
+      .to include('NanoflowObjectListProperty')
+
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(
+      instance_double(
+        Mxrb::Compiler::WebListDataSource,
+        supported?: true, entity: 'Demo.Item', xpath?: true
+      )
+    )
+    expect(compiler.send(:render_widget, {
+      '$Type' => 'Forms$ListView', 'Name' => 'list', 'Widgets' => [], 'PageSize' => 10
+    })).to include('$ListView', 'DatabaseObjectListProperty')
+
+    compiler.instance_variable_set(:@snippet_scopes, [{ 'Context' => { scope: 'snippet', entity: 'Demo.Item' } }])
+    expect(compiler.send(:data_source_scope, 'SourceVariable' => { 'SnippetParameter' => 'Context' }))
+      .to eq(scope: 'snippet', entity: 'Demo.Item')
+    expect(compiler.send(:data_source_scope, 'SourceVariable' => { 'SnippetParameter' => 'Missing' })).to be_nil
+    expect(compiler.send(:microflow_object_property, {
+      'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction' }
+    }, { 'Name' => 'view' }, 'scope')).to include('MicroflowObjectProperty')
+
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'scope', entity: 'Demo.Item' }])
+    expect(compiler.send(:snippet_scope_map, 'Parameters' => [2, {
+      'Name' => 'Context', 'ParameterType' => { '$Type' => 'DataTypes$ObjectType' }
+    }, { 'Name' => 'Ignored', 'ParameterType' => { '$Type' => 'DataTypes$StringType' } }]))
+      .to include('Context' => include(scope: 'scope'))
+    expect(compiler.send(:data_view_object_property, {
+      'Name' => 'nested', 'DataSource' => {
+        'SourceVariable' => { 'PageParameter' => 'Item' }, 'EntityRef' => { 'Steps' => [2, {
+          'Association' => 'Demo.Item_Child', 'DestinationEntity' => 'Demo.Child'
+        }] }
+      }
+    }, 'nested-scope')).to include('AssociationObjectProperty')
+
+    unit.document['Parameters'] = [2, { 'Name' => 'PageItem' }]
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'list-scope', entity: 'Demo.Item' }])
+    expect(compiler.send(:nanoflow_argument, 'Parameter' => 'Flow.Input', 'Expression' => '$PageItem').last)
+      .to include(kind: 'object')
+    expect(compiler.send(:nanoflow_argument, 'Parameter' => 'Flow.Input', 'Expression' => '$Item').last
+                   .dig(:expression, :args, :Item, :widget)).to eq('list-scope')
+    expect(compiler.send(:nanoflow_argument, 'Parameter' => 'Flow.Input', 'Expression' => '$Other').last
+                   .dig(:expression, :args, :Other, :widget)).to eq('$Other')
+
+    flags = %i[
+      @uses_form_widgets @uses_date_picker @uses_text_area @uses_radio_button_group
+      @uses_group_box @uses_file_manager @uses_microflow_object @uses_container
+      @uses_list_view @uses_nanoflow_object
+    ]
+    flags.each { compiler.instance_variable_set(_1, true) }
+    compiler.instance_variable_set(:@generic_widgets, { 'Custom' => 'example/Custom' })
+    imports = compiler.send(:widget_imports)
+    expect(imports).to include(
+      'RadioButtonGroup', 'GroupBox', 'FileManager', 'MicroflowObjectProperty',
+      'ListView', 'NanoflowObjectProperty', 'CustomWidgetModule'
+    )
+  end
+
+  it 'executes custom image and generic action-property callbacks' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    compiler.send(:prepare_compile, source.units_of('Forms$Page').first, 'p')
+    allow(Mxrb::Compiler::DataGridBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::DataGridBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::GalleryBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::ComboBoxBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::ComboBoxBundleCompiler, supported?: false))
+
+    allow(Mxrb::Compiler::ImageBundleCompiler).to receive(:new) do |*, action_property:, **|
+      rendered = [
+        action_property.call('$Type' => 'Forms$SignOutClientAction'),
+        action_property.call('$Type' => 'Forms$NoAction')
+      ].compact.join
+      instance_double(Mxrb::Compiler::ImageBundleCompiler, supported?: true, render: rendered)
+    end
+    expect(compiler.send(:render_custom_widget, 'Name' => 'image')).to include('ActionProperty')
+
+    allow(Mxrb::Compiler::ImageBundleCompiler).to receive(:new)
+      .and_return(instance_double(Mxrb::Compiler::ImageBundleCompiler, supported?: false))
+    allow(Mxrb::Compiler::GenericWidgetBundleCompiler).to receive(:new) do |*, render_widgets:, action_property:, **|
+      rendered = render_widgets.call([{ '$Type' => 'Forms$DynamicText', 'Name' => 'child' }])
+      actions = [
+        action_property.call('$Type' => 'Forms$CallNanoflowClientAction',
+                             'Nanoflow' => 'Demo.ClientAction'),
+        action_property.call('$Type' => 'Forms$SignOutClientAction'),
+        action_property.call('$Type' => 'Forms$UnknownAction')
+      ].compact.join
+      instance_double(Mxrb::Compiler::GenericWidgetBundleCompiler,
+                      supported?: true, component_name: 'Custom', module_path: 'example/Custom',
+                      render: "#{rendered}#{actions}")
+    end
+    allow(compiler).to receive(:nanoflow_reference).and_return('() => flow')
+    expect(compiler.send(:render_custom_widget, 'Name' => 'generic'))
+      .to include('child', 'callNanoflow', 'signOut')
+  end
+
+  it 'unwinds snippet scope stacks when child rendering raises' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    compiler = described_class.new(source)
+    compiler.send(:prepare_compile, source.units_of('Forms$Page').first, 'p')
+    snippet = Struct.new(:document).new({ 'Widgets' => [2, {}], 'Parameters' => [2] })
+    compiler.instance_variable_set(:@snippet_index, { 'Demo.Broken' => snippet })
+    allow(compiler).to receive(:children).and_raise(Mxrb::CompilationError, 'broken child')
+
+    expect do
+      compiler.send(:render_snippet_call, 'Name' => 'call', 'FormCall' => { 'Form' => 'Demo.Broken' })
+    end.to raise_error(Mxrb::CompilationError, 'broken child')
+    expect(compiler.instance_variable_get(:@snippet_scopes)).to be_empty
+    expect(compiler.instance_variable_get(:@snippet_stack)).to be_empty
+  end
+
+  it 'covers fail-closed branches for menus, containers, actions, sources, and fields' do # rubocop:disable Metrics/BlockLength
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    allow(source).to receive(:units_of).and_call_original
+    allow(source).to receive(:documents).and_call_original
+    unit = source.units_of('Forms$Page').first
+    compiler = described_class.new(source)
+    compiler.send(:prepare_compile, unit, 'p')
+
+    expect(compiler.send(:render_menu, { 'Name' => 'menu', 'MenuSource' => nil }, 'MenuBar'))
+      .to include('mxrb-unsupported-widget')
+    expect(compiler.send(:menu_items, '$Type' => 'Forms$MenuDocumentSource',
+                                      'Menu' => 'Demo.Missing')).to be_nil
+    expect(compiler.send(:menu_items, '$Type' => 'Forms$NavigationSource',
+                                      'NavigationProfile' => 'Missing')).to be_nil
+    expect(compiler.send(:render_snippet_call, 'Name' => 'missing',
+                                               'FormCall' => { 'Form' => 'Demo.Missing' }))
+      .to include('mxrb-unsupported-widget')
+    expect(compiler.send(:menu_microflow_config, {
+      '$Type' => 'Forms$MicroflowAction', 'MicroflowSettings' => {
+        'Microflow' => 'Demo.ServerAction', 'ParameterMappings' => [2, {
+          'Parameter' => 'Demo.ServerAction.Item', 'Expression' => '$Item'
+        }]
+      }
+    })).to be_nil
+
+    parameterized = {
+      '$Type' => 'Forms$DivContainer', 'Name' => 'clickable', 'Widgets' => [],
+      'OnClickAction' => { '$Type' => 'Forms$FormAction', 'FormSettings' => {
+        'Form' => 'Demo.Home', 'ParameterMappings' => [2, {}]
+      } }
+    }
+    expect(compiler.send(:render_container, parameterized)).to include('role')
+    expect(compiler.send(:render_container, {
+      '$Type' => 'Forms$DivContainer', 'Name' => 'unknown', 'Widgets' => [],
+      'OnClickAction' => { '$Type' => 'Forms$UnknownAction' }
+    })).not_to include('role')
+    expect(compiler.send(:render_action_button, {
+      '$Type' => 'Forms$ActionButton', 'Name' => 'legacy', 'Action' => parameterized['OnClickAction']
+    })).not_to include('"disabled": true')
+    expect(compiler.send(:open_page_config, parameterized['OnClickAction'])).to be_nil
+    expect(compiler.send(:action_handler, {})).to be_nil
+
+    expect(compiler.send(:create_object_config, {}, {
+      '$Type' => 'Forms$CreateObjectClientAction', 'EntityRef' => { 'Entity' => 'Missing.Entity' },
+      'PageSettings' => { 'Form' => 'Demo.Missing' }
+    })).to be_nil
+    missing_layout_page = Struct.new(:document).new({ 'FormCall' => { 'Form' => 'Demo.MissingLayout' } })
+    expect(compiler.send(:page_location, missing_layout_page)).to eq('content')
+    expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Missing')).to eq([])
+    popup_layout = Struct.new(:module_name, :document).new('Demo', {
+      'Name' => 'Popup', 'CanvasWidth' => 600
+    })
+    allow(source).to receive(:units_of).with('Forms$Layout').and_return([popup_layout])
+    popup_page = Struct.new(:document).new({ 'FormCall' => { 'Form' => 'Demo.Popup' } })
+    expect(compiler.send(:page_location, popup_page)).to eq('modal')
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([{
+      'UserRoles' => [2, { 'Name' => 'Admin', 'ModuleRoles' => [1, 'Demo.Admin'] }]
+    }])
+    role_unit = Struct.new(:module_name, :document).new('Demo', {
+      'Name' => 'Secure', 'AllowedModuleRoles' => [1, 'Demo.Admin']
+    })
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([role_unit])
+    expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Secure')).to eq(['Admin'])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
+    expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Secure')).to eq([])
+
+    invalid_mapping = { 'Parameter' => '', 'Expression' => 'invalid' }
+    expect(compiler.send(:nanoflow_argument_map, 'ParameterMappings' => [2, invalid_mapping])).to be_nil
+    expect(compiler.send(:nanoflow_argument, invalid_mapping)).to be_nil
+    compiler.instance_variable_set(:@list_scopes, [{ scope: 'scope', entity: 'Demo.Item' }])
+    expect(compiler.send(:data_view_object_property, {
+      'Name' => 'child', 'DataSource' => { 'EntityRef' => { 'Steps' => [2, {
+        'Association' => 'Demo.Item_Child', 'DestinationEntity' => 'Demo.Child'
+      }] } }
+    }, 'child')).to include('AssociationObjectProperty')
+    compiler.instance_variable_set(:@list_scopes, [])
+    expect(compiler.send(:data_view_object_property, {
+      'Name' => 'flow', 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.ServerAction' }
+      }
+    }, 'flow')).to include('MicroflowObjectProperty')
+    expect(compiler.send(:association_object_property, 'scope', '', 'child'))
+      .not_to include('operationId')
+    expect(compiler.send(:microflow_object_property, {
+      'MicroflowSettings' => { 'Microflow' => '' }
+    }, { 'Name' => 'child' }, 'scope')).to be_nil
+    expect(compiler.send(:flow_return_entity, '$Type' => 'Forms$MicroflowSource',
+                                              'MicroflowSettings' => { 'Microflow' => 'Demo.Missing' })).to eq('')
+
+    unsupported_source = instance_double(Mxrb::Compiler::WebListDataSource, supported?: false, entity: '')
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(unsupported_source)
+    expect(compiler.send(:render_list_view, '$Type' => 'Forms$ListView', 'Name' => 'bad'))
+      .to include('mxrb-unsupported-widget')
+    association = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      xpath?: false, association?: true, association_path: 'Demo.Item_Parent/Demo.Parent'
+    )
+    compiler.instance_variable_set(:@list_scopes, [])
+    compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', association)).to be_nil
+    microflow = instance_double(
+      Mxrb::Compiler::WebListDataSource, xpath?: false, association?: false, microflow?: true
+    )
+    allow(compiler).to receive(:microflow_argument_map).and_return(nil)
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', microflow)).to be_nil
+    nanoflow = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      xpath?: false, association?: false, microflow?: false, nanoflow_name: 'Demo.Missing'
+    )
+    allow(compiler).to receive(:nanoflow_reference).and_return(nil)
+    expect(compiler.send(:list_view_property, { 'Name' => 'items' }, 'key', nanoflow)).to be_nil
+    supported_without_value = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      supported?: true, entity: 'Demo.Item', xpath?: false, association?: false,
+      microflow?: false, nanoflow_name: 'Demo.Missing'
+    )
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(supported_without_value)
+    allow(compiler).to receive(:nanoflow_reference).and_return(nil)
+    expect(compiler.send(:render_list_view, '$Type' => 'Forms$ListView', 'Name' => 'missingFlow'))
+      .to include('mxrb-unsupported-widget')
+
+    invalid_field_renderers = %i[
+      render_text_area render_radio_button_group render_file_manager render_date_picker render_check_box
+    ]
+    invalid_field_renderers.each do |method|
+      expect(compiler.send(method, { '$Type' => 'Forms$Unknown', 'Name' => method.to_s }))
+        .to include('mxrb-unsupported-widget')
+    end
+    compiler.instance_variable_set(:@data_view_scopes, [{ scope: 'scope', entity: 'Demo.Item' }])
+    expect(compiler.send(:render_file_manager, { 'Name' => 'download', 'Type' => 'Download' }))
+      .to include('"widgetType": "download"')
+
+    expect(compiler.send(:custom_widget_identifier, 'Object' => {})).to eq('CustomWidgets$CustomWidget')
+    allow(source).to receive(:document_index).and_return({
+      'schema' => { 'ObjectType' => { '$ID' => 'other' } }
+    })
+    expect(compiler.send(:custom_widget_identifier, 'Object' => { 'TypePointer' => 'missing' }))
+      .to eq('CustomWidgets$CustomWidget')
+    allow(source).to receive(:document_index).and_return({
+      'schema' => { 'ObjectType' => { '$ID' => 'object' }, 'WidgetId' => 'Vendor.Widget' }
+    })
+    expect(compiler.send(:custom_widget_identifier, 'Object' => { 'TypePointer' => 'object' }))
+      .to eq('Vendor.Widget')
+    allow(source).to receive(:document_index).and_return({
+      'schema' => { 'ObjectType' => { '$ID' => 'object' }, 'WidgetId' => '' }
+    })
+    expect(compiler.send(:custom_widget_identifier, 'Object' => { 'TypePointer' => 'object' }))
+      .to eq('CustomWidgets$CustomWidget')
+    compiler.instance_variable_set(:@generic_widgets, nil)
+    %i[
+      @uses_data_grid @uses_form_widgets @uses_gallery @uses_bound_text @uses_tab_container
+      @uses_image @uses_conditional @uses_dynamic_class @uses_list_view
+    ].each { compiler.instance_variable_set(_1, false) }
+    compiler.instance_variable_set(:@uses_list_view, false)
+    compiler.instance_variable_set(:@uses_layout_widgets, true)
+    expect(compiler.send(:widget_imports)).to include('ScrollContainer')
+    compiler.instance_variable_set(:@layout_mode, true)
+    compiler.instance_variable_set(:@nanoflow_programs, double(declarations: ''))
+    allow(compiler).to receive(:parent_layout_name).and_return('')
+    expect(compiler.send(:layout_module_source, '[]')).to include('Object.assign({}, {}')
+    allow(compiler).to receive(:parent_layout_name).and_return('Demo.Shell')
+    expect(compiler.send(:layout_module_source, '[]')).to include('Object.assign({}, parentContent')
+    allow(compiler).to receive(:parent_layout_name).and_call_original
+    compiler.instance_variable_set(:@layout_mode, false)
+    compiler.instance_variable_set(:@unit, unit)
+    shell = Struct.new(:module_name, :document).new('Demo', { 'Name' => 'Shell' })
+    allow(source).to receive(:units_of).with('Forms$Layout').and_return([shell])
+    allow(source).to receive(:web_layout?).and_return(false)
+    expect(compiler.send(:parent_layout_name)).to eq('')
+    expect(compiler.send(:action_handler, '$Type' => '')).to be_nil
+  end
 end
 
 RSpec.describe Mxrb::Compiler::ImageBundleCompiler do
@@ -759,6 +1147,50 @@ RSpec.describe Mxrb::Compiler::ImageBundleCompiler do
     expect(missing).not_to be_supported
     expect(missing.send(:image_uri)).to be_nil
   end
+
+  it 'compiles dynamic image URLs and optional actions while failing closed for malformed values' do
+    compiler = image_compiler
+    action = { '$Type' => 'Forms$MicroflowAction' }
+    compiler.instance_variable_get(:@values)['onClick'] = ['Action', { 'Action' => action }]
+    compiler.instance_variable_set(:@action_property, ->(value) { "ActionProperty(#{value['$Type']})" })
+    expect(compiler).to be_supported
+    expect(compiler.render).to include('ActionProperty(Forms$MicroflowAction)')
+
+    compiler.instance_variable_set(:@action_property, nil)
+    expect(compiler).not_to be_supported
+    expect(compiler.send(:compiled_action)).to be_nil
+    compiler.instance_variable_get(:@values)['onClick'] = ['Action', {
+      'Action' => { '$Type' => 'Forms$NoAction' }
+    }]
+    expect(compiler.send(:compiled_action)).to be_nil
+
+    compiler.instance_variable_get(:@values).delete('onClick')
+    expect(compiler.send(:supported_action?)).to be(true)
+    expect(compiler.send(:image_url_parameter)).to be_nil
+    compiler.instance_variable_get(:@values).delete('imageUrl')
+    expect(compiler.send(:image_url_parameter)).to be_nil
+    compiler.instance_variable_get(:@values)['imageUrl'] = []
+    expect(compiler.send(:image_url_parameter)).to be_nil
+
+    compiler.instance_variable_set(:@scope, 'p.Demo.Home.context')
+    compiler.instance_variable_get(:@values)['datasource'] = ['Enumeration', { 'PrimitiveValue' => 'imageUrl' }]
+    compiler.instance_variable_get(:@values)['imageUrl'] = ['TextTemplate', {
+      'TextTemplate' => { 'Parameters' => [2, {
+        'AttributeRef' => {
+          'Attribute' => 'Demo.Item.Picture', 'EntityRef' => { 'Steps' => [2, {
+            'Association' => 'Demo.Parent_Item', 'DestinationEntity' => 'Demo.Item'
+          }] }
+        }
+      }] }
+    }]
+    expect(compiler).to be_supported
+    expect(compiler.render).to include('Demo.Parent_Item/Demo.Item/Picture')
+
+    compiler.instance_variable_set(:@scope, nil)
+    expect(compiler.send(:dynamic_image_url)).to be_nil
+    compiler.instance_variable_get(:@values)['imageUrl'] = ['TextTemplate', { 'TextTemplate' => nil }]
+    expect(compiler.send(:image_url_parameter)).to be_nil
+  end
 end
 
 RSpec.describe Mxrb::Compiler::PageBundleBuilder do
@@ -814,6 +1246,25 @@ RSpec.describe Mxrb::Compiler::WidgetPackageExtractor do
       File.write(File.join(widgets, 'broken.mpk'), 'broken')
       expect { described_class.new(root, File.join(root, 'web')).extract }
         .to raise_error(Mxrb::CompilationError, /invalid widget package/)
+    end
+  end
+
+  it 'extracts root-level JavaScript, CSS, and assets beside a root runtime module' do
+    Dir.mktmpdir do |root|
+      widgets = File.join(root, 'widgets')
+      web = File.join(root, 'web')
+      FileUtils.mkdir_p(widgets)
+      Zip::File.open(File.join(widgets, 'root.mpk'), create: true) do |zip|
+        zip.get_output_stream('Widget.mjs') { _1.write('export default {};') }
+        zip.get_output_stream('Widget.css') { _1.write('.widget {}') }
+        zip.get_output_stream('assets/icon.svg') { _1.write('<svg/>') }
+        zip.get_output_stream('ignored.xml') { _1.write('<widget/>') }
+      end
+
+      expect(described_class.new(root, web).extract).to eq(3)
+      expect(File).to exist(File.join(web, 'widgets', 'Widget.css'))
+      expect(File).to exist(File.join(web, 'widgets', 'assets', 'icon.svg'))
+      expect(File).not_to exist(File.join(web, 'widgets', 'ignored.xml'))
     end
   end
 end

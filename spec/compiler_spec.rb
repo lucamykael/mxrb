@@ -69,14 +69,46 @@ RSpec.describe Mxrb::Compiler do
     expect(described_class::Adapter.for('6.10.8')).to be_a(described_class::Adapter::V6)
     expect(described_class::Adapter.for('7.2.3')).to be_a(described_class::Adapter::V7)
     expect(described_class::Adapter.for('9.24.0')).to be_a(described_class::Adapter::V9)
+    expect(described_class::Adapter.for('10.24.0')).to be_a(described_class::Adapter::V10)
     expect(described_class::Adapter.for('11.12.1')).to be_a(described_class::Adapter::V11)
     expect(described_class::Adapter.for('7.17.0').web_profiles).to eq([:dojo])
     expect(described_class::Adapter.for('9.24.0').web_profiles).to eq(%i[dojo react_wrapper])
+    classic = instance_double(described_class::SourceModel, optimized_web_client?: false)
+    optimized = instance_double(described_class::SourceModel, optimized_web_client?: true)
+    expect(described_class::Adapter.for('10.24.0', source: classic).web_profiles).to eq([:dojo])
+    expect(described_class::Adapter.for('10.24.0', source: optimized).web_profiles).to eq([:react])
     expect(described_class::Adapter.for('11.12.1').web_profiles).to eq([:react])
     expect { described_class::Adapter.for('8.18.0') }
-      .to raise_error(Mxrb::UnsupportedVersion, /6\.x, 7\.x, 9\.x, and 11\.x/)
-    expect { described_class::Adapter.for('10.21.0') }
-      .to raise_error(Mxrb::UnsupportedVersion, /audited native compilation/)
+      .to raise_error(Mxrb::UnsupportedVersion, /6\.x, 7\.x, 9\.x, 10\.x, and 11\.x/)
+  end
+
+  it 'reads the Mendix 10 optimized-client choice from project settings' do
+    source = described_class::SourceModel.allocate
+    allow(source).to receive(:documents).with('Settings$ProjectSettings').and_return([])
+    expect(source.optimized_web_client?).to be(false)
+
+    allow(source).to receive(:documents).with('Settings$ProjectSettings').and_return(
+      [{
+        '$Type' => 'Settings$ProjectSettings',
+        'Settings' => [
+          2,
+          { '$Type' => 'Forms$WebUIProjectSettingsPart', 'UseOptimizedClient' => 'Yes' }
+        ]
+      }]
+    )
+    expect(source.optimized_web_client?).to be(true)
+  end
+
+  it 'creates new Mendix 10 projects with the optimized client' do
+    Dir.mktmpdir do |root|
+      path = File.join(root, 'Optimized.mpr')
+      Mxrb.define(path) do
+        mendix_version '10.24.0.73019'
+        self.module(:App)
+      end
+
+      expect(described_class::SourceModel.read(path).optimized_web_client?).to be(true)
+    end
   end
 
   it 'packs a deterministic MDA without invoking an external toolchain' do
@@ -256,10 +288,12 @@ RSpec.describe Mxrb::Compiler do
         expect(zip.read('etc/constants/variables.conf')).to include(
           '${?CONSTANTS_CLINIC_API_URL}'
         )
-        expect(zip.read('etc/configurations/Default.conf')).to include('adminPassword = ""')
+        expect(zip.read('etc/configurations/Default.conf')).to include(
+          'adminPassword = ""', 'DatabaseJdbcUrl = "jdbc:hsqldb:file:app/data/database/default"'
+        )
       end
       expect(described_class::PortableConfiguration.new({}).files.fetch('etc/StudioPro.conf'))
-        .to include('ScheduledEventExecution = "NONE"')
+        .to include('ScheduledEventExecution = "NONE"', 'adminUser.password = ""')
     end
   end
 
@@ -283,6 +317,26 @@ RSpec.describe Mxrb::Compiler do
       packager.pack(output:)
       expect { packager.pack(output:) }.to raise_error(Mxrb::CompilationError, /already exists/)
       expect { packager.pack(output:, force: true) }.not_to raise_error
+    end
+  end
+
+  it 'packages runtimes that predate PAD using built-in portable assets' do
+    Dir.mktmpdir do |root|
+      mpr = create_project(root, version: '10.24.0.73019')
+      deployment = create_deployment(root, runtime_version: '10.24.0.73019')
+      runtime = create_runtime(root)
+      FileUtils.rm_rf(File.join(runtime, 'pad'))
+      output = File.join(root, 'runtime.zip')
+
+      described_class::PortablePackager.new(mpr, deployment:, mendix_home: runtime).pack(output:)
+
+      Zip::File.open(output) do |zip|
+        expect(zip.read('bin/start')).to include('#!/bin/sh', 'runtimelauncher.jar')
+        expect(zip.get_entry('bin/start').unix_perms).to eq(0o755)
+        expect(zip.read('etc/variables.conf')).to include('${?M2EE_ADMIN_PASS}')
+        expect(zip.read('etc/variables.conf')).to include('${?RUNTIME_ADMINUSER_PASSWORD}')
+        expect(zip.read('etc/example.conf')).to include('DatabaseType = HSQLDB')
+      end
     end
   end
 

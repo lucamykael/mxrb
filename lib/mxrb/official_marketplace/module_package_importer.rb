@@ -119,8 +119,10 @@ module Mxrb
         @changes = []
       end
 
-      def install(staged_files)
-        staged_files.each { |relative, source| install_file(relative, source) }
+      def install(staged_files, protected_files = [])
+        staged_files.each do |relative, source|
+          install_file(relative, source) unless protected_files.include?(relative)
+        end
       end
 
       def rollback
@@ -133,6 +135,7 @@ module Mxrb
 
       def install_file(relative, source)
         destination = safe_destination(relative)
+        raise MarketplaceError, "asset destination is a symbolic link: #{relative}" if File.symlink?(destination)
         raise MarketplaceError, "asset destination is a directory: #{relative}" if File.directory?(destination)
 
         backup = backup_file(relative, destination)
@@ -166,11 +169,13 @@ module Mxrb
         :source_version, :target_version
       )
 
-      def initialize(package_path, mpr_path, target_root: nil, allow_model_upgrade: false)
+      def initialize(package_path, mpr_path, target_root: nil, allow_model_upgrade: false,
+                     protected_files: [])
         @package_path = File.expand_path(package_path)
         @mpr_path = File.expand_path(mpr_path)
         @target_root = File.expand_path(target_root || File.dirname(@mpr_path))
         @allow_model_upgrade = allow_model_upgrade
+        @protected_files = protected_files
       end
 
       def import!
@@ -221,7 +226,7 @@ module Mxrb
         validate_target!(target, descriptor.name, units)
         target.transaction do
           imported_ids.concat(insert_units(source, target, module_unit, units))
-          assets.install(staged_files)
+          assets.install(staged_files, @protected_files)
         end
       end
       # rubocop:enable Metrics/ParameterLists

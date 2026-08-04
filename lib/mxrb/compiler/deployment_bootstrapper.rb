@@ -77,12 +77,16 @@ module Mxrb
 
       def web_template_roots
         return { 'react-web' => 'web' } if modern_react_web?
+        return { 'dojo-web' => 'web' } if @source.version.to_i == 10
         return { 'web' => 'web', 'modern-web' => 'modern-web' } if @source.version.to_i == 9
 
         { 'web' => 'web' }
       end
 
-      def modern_react_web? = @source.version.to_i >= 11
+      def modern_react_web?
+        @source.version.to_i >= 11 || (@source.version.to_i == 10 && @source.optimized_web_client?)
+      end
+
       def legacy_archive? = @source.version.to_i <= 7 && File.file?(deployment_archive)
       def deployment_archive = File.join(@version_root, 'modeler', 'deployment.mxz')
 
@@ -152,6 +156,7 @@ module Mxrb
           '{InstallDir:JsStringEncode}' => @version_root,
           '{InstallDir:HtmlAttributeEncode}' => @version_root,
           '{DeploymentDir:JsStringEncode}' => @deployment,
+          '{DeploymentDir:HtmlAttributeEncode}' => @deployment,
           '{ProjectDir:HtmlAttributeEncode}' => @project_root,
           '{ProjectName:HtmlAttributeEncode}' => project_name,
           '{EnableWatchman:true|false}' => 'false', '{MxBuildNumber}' => "mxrb-#{@source.version}"

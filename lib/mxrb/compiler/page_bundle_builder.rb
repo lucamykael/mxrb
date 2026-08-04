@@ -18,7 +18,7 @@ module Mxrb
         FileUtils.mkdir_p(destination)
         Dir.glob(File.join(destination, '**', '*.js')).each { FileUtils.rm_f(_1) }
         bundles = @source.units_of('Forms$Page').select { web_page?(_1) }
-                                                .map { PageBundleCompiler.new(@source).compile(_1) }
+                         .map { PageBundleCompiler.new(@source).compile(_1) }
         bundles.each { write_bundle(destination, _1) }
         layout_bundles = build_layouts
         write_manifest(bundles)
@@ -41,7 +41,7 @@ module Mxrb
         FileUtils.mkdir_p(destination)
         Dir.glob(File.join(destination, '**', '*.js')).each { FileUtils.rm_f(_1) }
         bundles = @source.units_of('Forms$Layout').select { web_layout?(_1) }
-                                                  .map { PageBundleCompiler.new(@source).compile_layout(_1) }
+                         .map { PageBundleCompiler.new(@source).compile_layout(_1) }
         bundles.each { write_bundle(destination, _1) }
         bundles
       end

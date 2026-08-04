@@ -24,7 +24,7 @@ RSpec.describe Mxrb::Compiler::SecurityMaterializer do
       end
       mpr = Mxrb::IO::MprFile.open(@mpr, readonly: true)
       @source = mpr.all_units.map { mpr.parse_contents(_1) }
-                             .find { _1['$Type'] == 'Security$ProjectSecurity' }
+                   .find { _1['$Type'] == 'Security$ProjectSecurity' }
       mpr.close
       FileUtils.mkdir_p(File.join(@deployment, 'model'))
       other = { '$ID' => '11111111-1111-4111-8111-111111111111', '$Type' => 'Projects$Project' }

@@ -9,6 +9,11 @@ module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
   class Exporter
     LAYERS = %w[domain application presentation infrastructure].freeze
+    MARKETPLACE_PROVENANCE = [
+      ".mxrb/marketplace.lock.json",
+      ".mxrb/marketplace",
+      ".mxrb/marketplace-originals"
+    ].freeze
     EDITABLE_FLOW_OBJECT_TYPES = %w[
       Microflows$StartEvent
       Microflows$EndEvent
@@ -103,9 +108,10 @@ module Mxrb
 
     def export_project_assets
       source_root = File.dirname(@mpr_path)
-      files = Model::DesignSystem::ASSET_DIRECTORIES.flat_map do |directory|
+      files = (Model::DesignSystem::ASSET_DIRECTORIES + MARKETPLACE_PROVENANCE).flat_map do |directory|
         root = File.join(source_root, directory)
-        next [] unless File.directory?(root)
+        next [root] if File.file?(root) && !File.symlink?(root)
+        next [] unless File.directory?(root) && !File.symlink?(root)
 
         Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
       end.select { File.file?(_1) && !File.symlink?(_1) }.sort

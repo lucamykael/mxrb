@@ -276,6 +276,18 @@ RSpec.describe Mxrb::Runtime do
     expect(plan).not_to be_available
   end
 
+  it "accepts runtime distributions without PAD templates" do
+    plan = Mxrb::Runtime::Plan.new(
+      "10.24.0.73019", "21", File.join(@toolchains, "10.24.0.73019"),
+      "mx", "mxbuild", "jdk", "jre", "builder", "runtime"
+    )
+    launcher = File.join(plan.runtime_path, "launcher", "runtimelauncher.jar")
+    FileUtils.mkdir_p(File.dirname(launcher))
+    File.write(launcher, "runtime")
+
+    expect(plan).to be_available
+  end
+
   it "reads the Java family from project settings through the public API" do
     mpr = Mxrb::IO::MprFile.open(@path)
     mpr.insert_unit(

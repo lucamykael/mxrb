@@ -28,7 +28,8 @@ Ruby is MXRB's only public language.
 - Executable Ruby model evaluations with severity and scores.
 - Functional microflow tests without JUnit.
 - Local or Docker execution of `mx check`, portable MxBuild and Runtime.
-- A strict 100% library line-and-branch coverage gate.
+- A native coverage gate: 100% lines and 100% branches in CI, with a
+  stricter 100/100 local default when thresholds are omitted.
 
 ## Semantic API
 
@@ -155,3 +156,31 @@ including the complete unit tree and declared assets, without Mendix tools.
 The PAT requires `mx:marketplace-content:read`. Official downloads are selected
 against the target MPR version, vulnerable releases are denied by default, and
 Content/Version IDs plus security metadata are written to the lockfile.
+Authenticated Kafka acceptance and transactional lifecycle are now delivered.
+`marketplace update` and `marketplace remove` preview by default, preserve
+externally referenced IDs, reject changed assets, and snapshot MPR,
+`mprcontents`, cache, lock, and assets before explicit `--apply`. Remaining
+authenticated work is also delivered: `marketplace dependencies` recursively
+resolves official packages from references in the embedded MPR, verifies each
+downloaded MPK's actual module identity, recognizes host-owned modules, applies
+leaf-first, and rolls back atomically. Kafka package graphs passed authenticated
+10.24 and 11.12 acceptance, and imported modules now export to Ruby and rebuild
+with asset checksums and source/rebuild diagnostics preserved.
+
+The authenticated matrix now includes DataWidgets 3.11.3 (Content ID 116540,
+Version ID `e7b6d703-8e47-42f4-bb92-934e3601e71b`) and the independent official
+Combo box Widget/clientModule component 219304, version 2.9.0, Version ID
+`dce845f4-d051-4161-847c-016c01703caa`. Combo installation backs up and
+replaces the 2.6.x asset previously owned by Atlas Core (Content ID 117187).
+Ruby round trips preserve Marketplace lock/cache/original provenance, and
+`script/frontend_acceptance` fails on model, asset, checksum, or provenance
+drift. Native renderer coverage for the accepted 10.24 and 11.12 fixtures has
+zero source and rebuilt preflight findings.
+
+The migration interface is delivered as `mxrb frontend migrate FILE.mpr`: it
+previews by default and writes a safe transactional plan only with `--apply`.
+That migration track is complete across the supported frontend matrix. The
+optional external MxBuild oracle returns zero errors for source and rebuild on
+10.24 and 11.12; `mx check` also preserves byte-identical observable package
+diagnostics across each round trip. MXRB remains independent: `mx` and MxBuild
+are validation oracles only, never generators, mutators, or runtime dependencies.

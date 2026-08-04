@@ -9,6 +9,7 @@ module Mxrb
       CONTENT_LIMIT = 100
       VERSION_LIMIT = 20
       MENDIX_VERSION = /\A(?:\d{1,3}|1000)(?:\.(?:\d{1,3}|1000)){0,2}\z/
+      MENDIX_BUILD_VERSION = /\A(?:\d{1,3}|1000)(?:\.(?:\d{1,3}|1000)){2}\.\d{1,10}\z/
       UUID = /\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/i
 
       def initialize(pat: nil, credentials: Credentials.new, client: HttpClient.new)
@@ -205,9 +206,11 @@ module Mxrb
 
       def mendix_version_filter(value)
         return if value.nil?
-        raise MarketplaceError, "invalid Mendix version #{value.inspect}" unless value.to_s.match?(MENDIX_VERSION)
 
-        value.to_s
+        valid = value.to_s.match?(MENDIX_VERSION) || value.to_s.match?(MENDIX_BUILD_VERSION)
+        raise MarketplaceError, "invalid Mendix version #{value.inspect}" unless valid
+
+        value.to_s.split('.').first(3).join('.')
       end
 
       def bounded_integer(value, range)

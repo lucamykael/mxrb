@@ -253,6 +253,234 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(described_class.new(source).send(:allowed_user_role_sets, page))
       .to eq([['Administrator']])
   end
+
+  it 'covers defensive menu, data-action, association, and nanoflow operation paths' do # rubocop:disable Metrics/BlockLength
+    expect(described_class.menu_operation_id('$ID' => SecureRandom.uuid)).to be_a(String)
+    expect(described_class.menu_operation_id(
+             'MicroflowSettings' => { 'Microflow' => 'Demo.Run' }
+           )).to be_a(String)
+
+    source = instance_double(Mxrb::Compiler::SourceModel, document_index: {})
+    allow(source).to receive(:units_of).and_return([])
+    allow(source).to receive(:documents).and_return([])
+    compiler = described_class.new(source)
+
+    expect(compiler.send(:custom_widget_id, {})).to be_nil
+    expect(compiler.send(:custom_property_values, nil)).to eq({})
+    expect(compiler.send(:custom_property_values, 'Properties' => [2, { 'TypePointer' => 'missing' }]))
+      .to eq({})
+    expect(compiler.send(:grid_filter_specs, {})).to eq([])
+    expect(compiler.send(:popup_layout_document?, nil)).to be(false)
+    expect(compiler.send(:popup_layout_document?, 'Name' => 'PopupLayout')).to be(true)
+    expect(compiler.send(:popup_layout_document?, 'Name' => 'Shell', 'CanvasWidth' => 600)).to be(true)
+    expect(compiler.send(:popup_layout_document?, {
+      'Name' => 'Shell', 'CanvasWidth' => 900, 'Widget' => { '$Type' => 'Forms$Header' }
+    })).to be(false)
+
+    expect(compiler.send(:resolved_menu_items, nil)).to eq([])
+    expect(compiler.send(:resolved_menu_items, '$Type' => 'Unknown')).to eq([])
+    expect(compiler.send(:resolved_menu_items, '$Type' => 'Forms$MenuDocumentSource',
+                                               'Menu' => 'Demo.Missing')).to eq([])
+    expect(compiler.send(:resolved_menu_items, '$Type' => 'Forms$NavigationSource',
+                                               'NavigationProfile' => 'Missing')).to eq([])
+    expect(compiler.send(:menu_microflow_operation, '$Type' => 'Forms$MicroflowAction',
+                                                    'MicroflowSettings' => {})).to be_nil
+    expect(compiler.send(:page_related_documents, {
+      'Widget' => { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => '' } }
+    })).to be_an(Array)
+
+    actions = {
+      'Widgets' => [2,
+                    { '$Type' => 'Forms$ActionButton', 'Name' => 'delete',
+                      'Action' => { '$Type' => 'Forms$DeleteClientAction' } },
+                    { '$Type' => 'Forms$ActionButton', 'Name' => 'create',
+                      'Action' => { '$Type' => 'Forms$CreateObjectClientAction',
+                                    'EntityRef' => { 'Entity' => 'Demo.Item' } } }]
+    }
+    operations = compiler.send(:data_action_operations, 'Demo.Home', actions, [])
+    expect(operations.map { _1['operationType'] }).to eq(%w[delete create])
+    expect(compiler.send(:microflow_parameters, 'System.ShowHomePage')).to eq({})
+    expect(compiler.send(:supported_microflow_parameter?, 'VariableType' => {
+      '$Type' => 'DataTypes$ObjectType', 'Entity' => ''
+    })).to be(false)
+
+    data_view = { '$Type' => 'Forms$DataView', 'Name' => 'view', 'DataSource' => {
+      '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => '' }
+    } }
+    expect(compiler.send(:data_view_operation, 'Demo.Home', data_view, [])).to be_nil
+    expect(compiler.send(:association_retrieve_operation, 'Demo.Home', {}, [], 'Demo.Missing/Demo.Item'))
+      .to be_nil
+    expect(compiler.send(:call_microflow_operation, 'Demo.Home', {}, [], 'Demo.Missing')).to be_nil
+    expect(compiler.send(:retrieve_by_microflow_operation, 'Demo.Home', {}, [], 'Demo.Missing')).to be_nil
+    expect(compiler.send(:entity_ref_path, nil)).to eq('')
+    expect(compiler.send(:association_source_entity, 'Missing.Association/Demo.Item')).to be_nil
+    expect(compiler.send(:document_scope_entity, 'Parameters' => [2, {
+      'ParameterType' => { 'ObjectType' => { 'Entity' => 'Demo.Legacy' } }
+    }])).to eq('Demo.Legacy')
+
+    expect(compiler.send(:widget_scope_entity, '$Type' => 'Forms$DataView', 'DataSource' => {
+      'EntityRef' => { 'Entity' => 'Demo.Item' }
+    })).to eq('Demo.Item')
+    expect(compiler.send(:microflow_return_entity, 'MicroflowSettings' => {
+      'Microflow' => 'Demo.Missing'
+    })).to be_nil
+    expect(compiler.send(:nanoflow_operations)).to eq([])
+
+    activity = { '$ID' => SecureRandom.uuid }
+    expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
+      '$Type' => 'Microflows$MicroflowCallAction', 'MicroflowCall' => {}
+    }, {})).to be_nil
+    expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
+      '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Item'
+    }, 'Item' => 'Demo.Item')).to include(
+      'operationType' => 'commit', 'parameters' => { 'Objects' => ['[Demo.Item]'] }
+    )
+    expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
+      '$Type' => 'Microflows$CommitAction'
+    }, {})).to include('parameters' => { 'Objects' => ['AnyObjectList'] })
+    expect(compiler.send(:commit_action?, '$Type' => 'Microflows$ChangeAction', 'Commit' => 'Yes'))
+      .to be(true)
+    expect(compiler.send(:commit_action?, '$Type' => 'Other')).to be(false)
+
+    variables = compiler.send(:nanoflow_variable_entities, {
+      'Objects' => [2,
+                    { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty',
+                      'VariableType' => { 'Entity' => '' } },
+                    { '$Type' => 'Microflows$ActionActivity', 'Action' => {
+                      'OutputVariableName' => 'Created', 'Entity' => 'Demo.Item'
+                    } }]
+    })
+    expect(variables).to eq('Created' => 'Demo.Item')
+  end
+
+  it 'materializes successful menu, microflow, and association operation records' do
+    parent_id = SecureRandom.uuid
+    flow = unit(module_name: 'Demo', document: {
+      '$Type' => 'Microflows$Microflow', 'Name' => 'Load',
+      'ObjectCollection' => { 'Objects' => [2] }
+    })
+    domain = unit(module_name: 'Demo', document: {
+      'Associations' => [2, { 'Name' => 'Parent_Items', 'ParentPointer' => parent_id }],
+      'Entities' => [2, { '$ID' => parent_id, 'Name' => 'Parent' }]
+    })
+    source = instance_double(Mxrb::Compiler::SourceModel, document_index: {})
+    allow(source).to receive(:units_of) do |type|
+      { 'Microflows$Microflow' => [flow], 'DomainModels$DomainModel' => [domain] }.fetch(type, [])
+    end
+    allow(source).to receive(:units).and_return([flow, domain])
+    allow(source).to receive(:documents).and_return([])
+    compiler = described_class.new(source)
+    widget = { 'Name' => 'items' }
+
+    menu = compiler.send(:menu_microflow_operation, {
+      '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
+      'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+    })
+    expect(menu).to include('operationType' => 'callMicroflow')
+    expect(compiler.send(:call_microflow_operation, 'Demo.Home', widget, [], 'Demo.Load'))
+      .to include('operationType' => 'callMicroflow')
+    expect(compiler.send(:retrieve_by_microflow_operation, 'Demo.Home', widget, [], 'Demo.Load'))
+      .to include('operationType' => 'retrieveByMicroflow')
+    expect(compiler.send(:data_view_operation, 'Demo.Home', {
+      '$Type' => 'Forms$DataView', 'Name' => 'view', 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+      }
+    }, [])).to include('operationType' => 'retrieveByMicroflow')
+    path = 'Demo.Parent_Items/Demo.Item'
+    expect(compiler.send(:association_source_entity, path)).to eq('Demo.Parent')
+    operation = compiler.send(:association_retrieve_operation, 'Demo.Home', widget, [], path)
+    expect(operation).to include('operationType' => 'retrieve',
+                                 'parameters' => { 'CurrentObject' => ['Demo.Parent'] })
+    expect(compiler.send(:association_operation, 'Demo.Home', widget, [],
+                         instance_double(Mxrb::Compiler::WebListDataSource, association_path: path)))
+      .to include('operationType' => 'retrieve')
+
+    list_source = instance_double(
+      Mxrb::Compiler::WebListDataSource, association?: true, association_path: path
+    )
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(list_source)
+    expect(compiler.send(:standard_data_source_operation, 'Demo.Home', {
+      '$Type' => 'Forms$ListView', 'Name' => 'list'
+    }, [], {})).to include('operationType' => 'retrieve')
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_call_original
+    expect(compiler.send(:standard_data_source_operation, 'Demo.Home', {
+      '$Type' => 'Forms$ListView', 'Name' => 'flowList', 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+      }
+    }, [], {})).to include('operationType' => 'retrieveByMicroflow')
+
+    nested = { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Name', 'EntityRef' => {
+      'Steps' => [2, { 'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item' }]
+    } } }
+    expect(compiler.send(:used_associations, nested, 'Demo.Parent'))
+      .to eq(['Demo.Parent/Demo.Parent_Items/Demo.Item'])
+    expect(compiler.send(:model_id, SecureRandom.uuid)).to be_a(String)
+
+    flow.document['MicroflowReturnType'] = { 'Entity' => 'Demo.Item' }
+    expect(compiler.send(:microflow_return_entity, 'MicroflowSettings' => {
+      'Microflow' => 'Demo.Load'
+    })).to eq('Demo.Item')
+
+    menu_operations = compiler.send(:menu_item_operations, {
+      'Action' => { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
+                    'MicroflowSettings' => { 'Microflow' => 'Demo.Load' } }, 'Items' => [2]
+    })
+    expect(menu_operations).to contain_exactly(include('operationType' => 'callMicroflow'))
+
+    association_source = instance_double(
+      Mxrb::Compiler::WebListDataSource,
+      supported?: true, xpath?: false, association?: true, association_path: path
+    )
+    allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(association_source)
+    expect(compiler.send(:operation, 'Demo.Home', widget, [], {}))
+      .to include('operationType' => 'retrieve')
+
+    grid_object = { 'kind' => 'grid' }
+    grid = { 'Object' => grid_object }
+    column = { 'kind' => 'column' }
+    filter = { 'Name' => 'category' }
+    allow(compiler).to receive(:custom_property_values) do |object|
+      if object&.[]('kind') == 'grid'
+        { 'columns' => ['Object', { 'Objects' => [column] }] }
+      else
+        {
+          'attribute' => ['Attribute', { 'AttributeRef' => {
+            'Attribute' => 'Demo.Category.Name', 'EntityRef' => { 'Steps' => [{
+              'DestinationEntity' => 'Demo.Category'
+            }] }
+          } }],
+          'filter' => ['Widgets', { 'Widgets' => [filter] }]
+        }
+      end
+    end
+    expect(compiler.send(:grid_filter_specs, grid)).to eq([[filter, 'Demo.Category', 'Name']])
+    allow(compiler).to receive(:custom_property_values) do |object|
+      if object&.[]('kind') == 'grid'
+        { 'columns' => ['Object', { 'Objects' => [column] }] }
+      else
+        {
+          'attribute' => ['Attribute', { 'AttributeRef' => {
+            'Attribute' => '', 'EntityRef' => { 'Steps' => [{ 'DestinationEntity' => '' }] }
+          } }],
+          'filter' => ['Widgets', { 'Widgets' => [filter] }]
+        }
+      end
+    end
+    expect(compiler.send(:grid_filter_specs, grid)).to eq([])
+  end
+
+  it 'handles a page whose referenced popup layout is absent' do
+    Dir.mktmpdir do |root|
+      mpr = File.join(root, 'Popup.mpr')
+      Mxrb.define(mpr) do
+        mendix_version '11.12.1'
+        self.module(:Demo) { page(:Home) { layout 'Demo.Missing' } }
+      end
+      source = Mxrb::Compiler::SourceModel.read(mpr)
+      page = source.units_of('Forms$Page').first
+      expect(described_class.new(source).send(:popup_page?, page)).to be(false)
+    end
+  end
 end
 
 RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
@@ -430,6 +658,117 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
       '"value": ""'
     )
     expect(compiler.send(:attribute_type, 'Other.Item', 'Name')).to eq('String')
+  end
+
+  it 'compiles dynamic, custom-content, and association-filter column branches' do # rubocop:disable Metrics/BlockLength
+    compiler = described_class.new(
+      source, 'Demo.Home', grid,
+      render_widgets: ->(widgets, scope, entity) { JSON.generate([widgets.length, scope, entity]) }
+    )
+    index = compiler.instance_variable_get(:@index)
+    {
+      'dynamic' => %w[dynamicText TextTemplate],
+      'content' => %w[content Widgets],
+      'filter' => %w[filter Widgets],
+      'multi' => %w[multiSelect Boolean]
+    }.each do |id, (key, type)|
+      index[id] = property_type(id, key, type)
+    end
+
+    date_domain = unit(module_name: 'Demo', document: {
+      'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [2, {
+        'Name' => 'CreatedAt', 'NewType' => { '$Type' => 'DomainModels$DateTimeAttributeType' }
+      }] }]
+    })
+    allow(compiler.instance_variable_get(:@source)).to receive(:units_of)
+      .with('DomainModels$DomainModel').and_return([date_domain])
+
+    dynamic_values = {
+      'dynamicText' => ['TextTemplate', { 'TextTemplate' => { 'Parameters' => [2, {}] } }]
+    }
+    expect(compiler.send(:dynamic_text, dynamic_values, 'Demo.Item', 'CreatedAt').fetch('$raw'))
+      .to include('_format')
+    expect(compiler.send(:dynamic_text, dynamic_values, 'Demo.Item', 'Name').fetch('$raw'))
+      .not_to include('_format')
+    expect(compiler.send(:dynamic_text, {}, 'Demo.Item', '')).to eq(:undefined)
+
+    dynamic_column = {
+      'Properties' => [2,
+                       property('show', value('show-value', primitive: 'dynamicText')),
+                       property('attribute', value('attribute-value', AttributeRef: {
+                         'Attribute' => 'Demo.Item.CreatedAt'
+                       })),
+                       property('dynamic', value('dynamic-value', TextTemplate: {
+                         'Parameters' => [2, {}]
+                       }))]
+    }
+    expect(compiler.send(:compile_column, dynamic_column).fetch(:dynamicText).fetch('$raw'))
+      .to include('_format')
+
+    content_values = { 'content' => ['Widgets', { 'Widgets' => [2, { 'Name' => 'Child' }] }] }
+    expect(compiler.send(:templated_content, content_values).fetch('$raw')).to include('TemplatedWidgetProperty')
+    expect(compiler.send(:compile_widgets, nil)).to eq([])
+    expect(compiler.send(:compile_widgets, 'Widgets' => [2, { 'Name' => 'Filter' }]).fetch('$raw'))
+      .to include('p.Demo.Home.grid')
+    expect(compiler.send(:filter_widget, {})).to be_nil
+    expect(compiler.send(:filter_widget, 'filter' => [])).to be_nil
+    expect(compiler.send(:templated_content, {})).to include('$raw' => include('TemplatedWidgetProperty'))
+    expect(compiler.send(:templated_content, 'content' => [])).to include(
+      '$raw' => include('TemplatedWidgetProperty')
+    )
+
+    multi_select = property('multi', value('multi-value', primitive: 'true'))
+    filter = { 'Name' => 'associationFilter',
+               'Object' => { 'Properties' => [2, multi_select] } }
+    association_values = {
+      'attribute' => ['Attribute', { 'AttributeRef' => {
+        'Attribute' => 'Demo.Item.Name', 'EntityRef' => { 'Steps' => [2, {
+          'Association' => 'Demo.Item_Category', 'DestinationEntity' => 'Demo.Category'
+        }] }
+      } }],
+      'filter' => ['Widgets', { 'Widgets' => [2, filter] }]
+    }
+    expect(compiler.send(:association_filter?, association_values)).to be(true)
+    expect(compiler.send(:association_filter, association_values).fetch(:filterAssociation).fetch('$raw'))
+      .to include('ReferenceSet')
+
+    single_filter = { 'Name' => 'singleFilter', 'Object' => { 'Properties' => [2] } }
+    single_association_values = Marshal.load(Marshal.dump(association_values))
+    single_association_values['filter'].last['Widgets'][1] = single_filter
+    expect(compiler.send(:association_filter, single_association_values).fetch(:filterAssociation).fetch('$raw'))
+      .to include('"type": "Reference"')
+    expect(compiler.send(:compile_column, {
+      'Properties' => [2,
+                       property('show', value('show-value', primitive: 'attribute')),
+                       property('attribute', association_values['attribute'].last),
+                       property('filter', single_association_values['filter'].last)]
+    })).to include(:filterAssociation, :filterAssociationOptions, :filterAssociationOptionLabel)
+    expect(compiler.send(:filter_boolean, { 'Object' => nil }, 'multiSelect')).to be(false)
+    expect(compiler.send(:filter_boolean, {
+      'Object' => { 'Properties' => [2, property('multi', nil)] }
+    }, 'multiSelect')).to be(false)
+
+    custom = {
+      'Properties' => [2,
+                       property('show', value('show-value', primitive: 'customContent')),
+                       property('content', value('content-value', Widgets: [2, { 'Name' => 'Child' }]))]
+    }
+    expect(compiler.send(:supported_column?, custom)).to be(true)
+    expect(compiler.send(:compile_column, custom).fetch(:content).fetch('$raw'))
+      .to include('TemplatedWidgetProperty')
+    compiler.instance_variable_set(:@render_widgets, nil)
+    expect(compiler.send(:supported_column?, custom)).to be(false)
+    expect(compiler.send(:supported_column?, 'Properties' => [2])).to be(false)
+    compiler.instance_variable_set(:@render_widgets, ->(*) { '[]' })
+    custom_without_content = {
+      'Properties' => [2, property('show', value('show-value', primitive: 'customContent'))]
+    }
+    expect(compiler.send(:supported_column?, custom_without_content)).to be(false)
+    custom_with_nil_content = {
+      'Properties' => [2, property('show', value('show-value', primitive: 'customContent')),
+                       property('content', nil)]
+    }
+    expect(compiler.send(:supported_column?, custom_with_nil_content)).to be(false)
   end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength

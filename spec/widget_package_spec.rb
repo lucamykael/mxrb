@@ -30,14 +30,17 @@ RSpec.describe Mxrb::WidgetPackage do
             </property>
             <property key="subtitle" type="textTemplate" required="false"><caption>Subtitle</caption></property>
             <property key="formula" type="expression" defaultValue="$currentObject/Name"><caption>Formula</caption></property>
-            <property key="attribute" type="attribute" isList="true">
+            <property key="attribute" type="attribute" isList="true" setLabel="true"
+                      isLinked="true" isMetaData="true" selectableObjects="source">
               <caption>Attribute</caption>
               <attributeTypes><attributeType name="String" /></attributeTypes>
               <associationTypes><associationType name="Reference" /></associationTypes>
               <selectionTypes><selectionType name="Single" /></selectionTypes>
             </property>
-            <property key="action" type="action" dataSource="source" onChange="changed">
+            <property key="action" type="action" dataSource="source" onChange="changed"
+                      defaultType="CallNanoflow">
               <caption>Action</caption><returnType type="Object" assignableTo="context" />
+              <actionVariables><actionVariable key="input" caption="Input" type="String" /></actionVariables>
             </property>
             <property key="emptyAction" type="action"><caption>Empty action</caption><returnType /></property>
             <propertyGroup caption="Nested">
@@ -92,6 +95,13 @@ RSpec.describe Mxrb::WidgetPackage do
       expect(by_key.dig('mode', 'EnumerationValues')).not_to eq([2])
       expect(by_key.dig('attribute', 'AllowedTypes')).to eq([1, 'String'])
       expect(by_key.dig('attribute', 'AssociationTypes')).to eq([1, 'Reference'])
+      expect(by_key.fetch('attribute')).to include(
+        'IsLinked' => true, 'IsMetaData' => true, 'SetLabel' => true,
+        'SelectableObjectsProperty' => 'source'
+      )
+      expect(by_key.dig('action', 'DefaultType')).to eq('CallNanoflow')
+      expect(array(by_key.dig('action', 'ActionVariables')).first)
+        .to include('Caption' => 'Input', 'Key' => 'input', 'Type' => 'String')
       expect(by_key.dig('action', 'ReturnType')).to include('Type' => 'Object', 'AssignableTo' => 'context')
       expect(by_key.dig('emptyAction', 'ReturnType')).to include('Type' => 'None')
       expect(array(by_key.dig('rows', 'ObjectType', 'PropertyTypes')).first['PropertyKey']).to eq('label')
@@ -129,6 +139,29 @@ RSpec.describe Mxrb::WidgetPackage do
         zip.get_output_stream('widget.xml') { _1.write(widget_xml(id: 'after.Blank')) }
       end
       expect(described_class.new(blank_first).definition('after.Blank')).not_to be_nil
+    end
+  end
+
+  it 'reads direct nested properties without requiring an extra property group' do
+    xml = <<~XML
+      <widget id="direct.Widget"><name>Direct</name><properties>
+        <property key="filters" type="object"><caption>Filters</caption><properties>
+          <property key="filterOptions" type="object"><caption>Options</caption><properties>
+            <property key="label" type="string"><caption>Label</caption></property>
+          </properties></property>
+          <systemProperty key="Name" />
+        </properties></property>
+      </properties></widget>
+    XML
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'direct.mpk')
+      write_package(path, xml:)
+      definition = described_class.new(path).definition('direct.Widget')
+      filters = definition.properties.fetch(0)
+      options = filters.fetch(:children).fetch(0)
+      expect(filters[:children].map { _1[:key] }).to eq(['filterOptions'])
+      expect(options[:children].map { _1[:key] }).to eq(['label'])
+      expect(options[:category]).to eq('General')
     end
   end
 

@@ -186,7 +186,7 @@ module Mxrb
         def execute(flow, variables)
           objects = flow.objects.to_h { [identifier(_1), _1] }
           outgoing = flow.flows.reject { _1['IsErrorHandler'] == true }
-                               .group_by { identifier(_1['OriginPointer']) }
+                         .group_by { identifier(_1['OriginPointer']) }
           current = flow.objects.find { _1['$Type'] == 'Microflows$StartEvent' }
           raise NativeRuntimeError, "microflow #{flow.name} has no start event" unless current
 

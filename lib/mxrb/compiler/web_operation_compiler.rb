@@ -28,7 +28,7 @@ module Mxrb
 
       def write(path)
         operations = @source.units_of('Forms$Page').select { web_page?(_1) }
-                                                   .flat_map { page_operations(_1) }
+                            .flat_map { page_operations(_1) }
         if @source.is_a?(SourceModel)
           operations.concat(@source.units_of('Forms$Layout').select { web_layout?(_1) }
                                    .flat_map { page_operations(_1) })

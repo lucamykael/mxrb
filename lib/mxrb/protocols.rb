@@ -16,7 +16,7 @@ module Mxrb
     # verified fixture provides it; GUID-based detection then fails closed.
     Entry = Data.define(
       :protocol, :name, :publisher, :category, :marketplace_id,
-      :appstore_guids, :source_url, :evidence_date
+      :content_type, :appstore_guids, :source_url, :evidence_date
     ) do
       def matches_guid?(guid)
         key = guid.to_s
@@ -24,25 +24,45 @@ module Mxrb
       end
     end
 
-    # Verified from official Mendix pages on 2026-08-02.
+    # Verified from official Mendix Marketplace pages. Public component ids are
+    # useful for planning; module recognition remains GUID-only and fail-closed.
     REGISTRY = [
       Entry.new(
         protocol: :mqtt, name: 'MQTT', publisher: 'Mendix', category: 'Messaging',
-        marketplace_id: '119508', appstore_guids: [].freeze,
+        marketplace_id: '119508', content_type: 'Service', appstore_guids: [].freeze,
         source_url: 'https://marketplace.mendix.com/link/component/119508',
-        evidence_date: '2026-08-02'
+        evidence_date: '2026-08-04'
       ),
       Entry.new(
         protocol: :opc_ua, name: 'OPC-UA Connector', publisher: 'Mendix', category: 'Industrial',
-        marketplace_id: '230843', appstore_guids: [].freeze,
+        marketplace_id: '230843', content_type: 'Module', appstore_guids: [].freeze,
         source_url: 'https://marketplace.mendix.com/link/component/230843',
-        evidence_date: '2026-08-02'
+        evidence_date: '2026-08-04'
       ),
       Entry.new(
         protocol: :opc_ua, name: 'OPC UA Client Connector', publisher: 'Mendix', category: 'Industrial',
-        marketplace_id: '117391', appstore_guids: [].freeze,
+        marketplace_id: '117391', content_type: 'Service', appstore_guids: [].freeze,
         source_url: 'https://marketplace.mendix.com/link/component/117391',
-        evidence_date: '2026-08-02'
+        evidence_date: '2026-08-04'
+      ),
+      Entry.new(
+        protocol: :kafka, name: 'Kafka', publisher: 'Mendix', category: 'Messaging',
+        marketplace_id: '105878', content_type: 'Module', appstore_guids: [].freeze,
+        source_url: 'https://marketplace.mendix.com/link/component/105878',
+        evidence_date: '2026-08-04'
+      ),
+      Entry.new(
+        protocol: :websocket, name: 'WebsocketClient', publisher: 'Mendix', category: 'Communication',
+        marketplace_id: '235426', content_type: 'Module', appstore_guids: [].freeze,
+        source_url: 'https://marketplace.mendix.com/link/component/235426',
+        evidence_date: '2026-08-04'
+      ),
+      Entry.new(
+        protocol: :amqp, name: 'eMagiz Mendix Connector (Legacy)', publisher: 'eMagiz',
+        category: 'Communication', marketplace_id: '118800', content_type: 'Service',
+        appstore_guids: [].freeze,
+        source_url: 'https://marketplace.mendix.com/link/component/118800',
+        evidence_date: '2026-08-04'
       )
     ].freeze
 
@@ -54,7 +74,7 @@ module Mxrb
     def all = REGISTRY
 
     def find_by_protocol(protocol)
-      key = protocol.to_s.downcase.to_sym
+      key = normalize_protocol(protocol)
       REGISTRY.select { _1.protocol == key }
     end
 
@@ -93,5 +113,11 @@ module Mxrb
     end
 
     def surface_names(items) = items.map(&:name).compact.sort
+
+    def normalize_protocol(protocol)
+      protocol.to_s.strip.downcase.tr('- ', '__').to_sym
+    end
   end
 end
+
+require_relative 'protocols/plan'

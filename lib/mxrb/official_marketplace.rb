@@ -9,6 +9,9 @@ require 'tmpdir'
 require 'uri'
 require 'zip'
 require_relative 'official_marketplace/module_package_importer'
+require_relative 'official_marketplace/widget_package_installer'
+require_relative 'official_marketplace/lifecycle'
+require_relative 'official_marketplace/dependency_resolver'
 
 module Mxrb
   # Installer for official/community Mendix packages, separate from Ruby modules.
@@ -48,10 +51,31 @@ module Mxrb
     def self.verify(target)
       root = File.expand_path(target)
       lock(root).fetch('packages').to_h do |name, entry|
-        result = entry['kind'] == 'module' ? verify_module(root, name, entry) : verify_tree(root, entry)
+        result = case entry['kind']
+                 when 'module' then verify_module(root, name, entry)
+                 when 'widget' then verify_widget(root, entry)
+                 else verify_tree(root, entry)
+                 end
         [name, result]
       end
     end
+
+    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+    def self.verify_widget(root, entry)
+      destination = File.join(root, entry.fetch('destination'))
+      archive = File.join(root, entry.fetch('archive'))
+      actual = File.file?(destination) ? Digest::SHA256.file(destination).hexdigest : nil
+      cached = File.file?(archive) ? Digest::SHA256.file(archive).hexdigest : nil
+      inventory = WidgetPackageInventory.read(destination) if actual == entry['sha256']
+      identity = inventory&.name == entry['widget_name'] && inventory&.widget_ids == entry['widget_ids']
+      {
+        valid: actual == entry['sha256'] && cached == entry['sha256'] && identity,
+        expected: entry['sha256'], actual:, cached:, identity:
+      }
+    rescue MarketplaceError
+      { valid: false, expected: entry['sha256'], actual:, cached:, identity: false }
+    end
+    # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
     def self.verify_tree(root, entry)
       destination = File.join(root, entry.fetch('destination'))
@@ -335,6 +359,8 @@ module Mxrb
     # Safely extracts GitHub or local MPK archives into the target project.
     class Installer # rubocop:disable Metrics/ClassLength
       ATLAS_VARIABLES_IMPORT = '@import "../../themesource/atlas_core/web/variables";'
+      IMPORTABLE_CONTENT_TYPES = %w[Module Service].freeze
+      DOWNLOADABLE_CONTENT_TYPES = (IMPORTABLE_CONTENT_TYPES + %w[Widget]).freeze
 
       def initialize(target:, client: HttpClient.new, mpr: nil)
         @target = File.expand_path(target)
@@ -361,20 +387,58 @@ module Mxrb
         download_official(package, mpr, api)
       end
 
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+      def update_official(identifier, version: nil, mendix_version: nil,
+                          allow_vulnerable: false, apply: false, api: ContentApi.new)
+        lifecycle = Lifecycle.new(target: @target, mpr: @mpr, installer: self)
+        _name, installed = lifecycle.installed(identifier)
+        content_id = installed['content_id'] || identifier
+        mpr = lifecycle.mpr_path(installed)
+        mendix_version ||= detect_mendix_version(mpr)
+        package = api.resolve(content_id, version:, mendix_version:, allow_vulnerable:)
+        validate_official_package!(package)
+        Dir.mktmpdir('mxrb-marketplace-update-') do |dir|
+          archive = api.download(
+            package.version_id, File.join(dir, 'package.mpk'), download_url: package.download_url
+          )
+          plan = lifecycle.plan_update(identifier, archive, package)
+          plan.apply! if apply
+          plan
+        end
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+
+      def remove(identifier, apply: false)
+        plan = Lifecycle.new(target: @target, mpr: @mpr, installer: self).plan_remove(identifier)
+        plan.apply! if apply
+        plan
+      end
+
+      def dependencies(identifier, apply: false, apply_resolved: false, api: ContentApi.new)
+        lifecycle = Lifecycle.new(target: @target, mpr: @mpr, installer: self)
+        _name, entry = lifecycle.installed(identifier)
+        mpr = lifecycle.mpr_path(entry)
+        resolver = DependencyResolver.new(
+          target: @target, mpr:, installer: self, api:,
+          mendix_version: detect_mendix_version(mpr)
+        )
+        resolver.resolve(identifier, apply:, apply_resolved:)
+      end
+
       def download_official(package, mpr, api)
         Dir.mktmpdir('mxrb-marketplace-') do |dir|
           archive = api.download(
             package.version_id, File.join(dir, 'package.mpk'), download_url: package.download_url
           )
-          import_module(archive, package, mpr)
+          install_official_archive(archive, package, mpr)
         end
       end
 
       def validate_official_package!(package)
-        return if package.content_type == 'Module'
+        return if DOWNLOADABLE_CONTENT_TYPES.include?(package.content_type)
 
         raise MarketplaceError,
-              "Marketplace content #{package.name.inspect} is #{package.content_type}, not a Module"
+              "Marketplace content #{package.name.inspect} is #{package.content_type}, not a Module, Service, or Widget"
       end
 
       def import(path, name: nil, mpr: @mpr)
@@ -388,6 +452,21 @@ module Mxrb
 
       private
 
+      def install_official_archive(archive, package, mpr) # rubocop:disable Metrics/MethodLength
+        case PackageEnvelope.kind(archive)
+        when :module
+          import_module(archive, package, mpr)
+        when :widget
+          unless package.content_type == 'Widget'
+            raise MarketplaceError,
+                  "Marketplace #{package.content_type} archive declares a clientModule widget"
+          end
+          WidgetPackageInstaller.new(target: @target).install(archive, package)
+        else
+          raise MarketplaceError, 'unsupported official Marketplace package envelope'
+        end
+      end
+
       def detect_mendix_version(mpr)
         file = IO::MprFile.open(mpr, readonly: true)
         file.mendix_version
@@ -395,24 +474,42 @@ module Mxrb
         file&.close
       end
 
-      def import_module(archive, package, mpr) # rubocop:disable Metrics/MethodLength
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def import_module(archive, package, mpr)
         relative_target_path(mpr)
-        result = module_importer(archive, mpr, package).import!
+        inventory = ModulePackageInventory.read(archive)
+        originals, created_backups = preserve_asset_originals(inventory)
+        result = module_importer(
+          archive, mpr, package, protected_files: protected_package_assets(inventory.name)
+        ).import!
         ensure_atlas_theme_variables
         resolved = resolved_package(package, result)
         sha256 = Digest::SHA256.file(archive).hexdigest
         cached = cache_package(archive, resolved, sha256)
-        write_module_lock(resolved, mpr, result, cached, sha256)
+        write_module_lock(resolved, mpr, result, cached, sha256, originals)
         ModuleInstallation.new(
           resolved, File.expand_path(mpr), sha256, result.module_name, result.module_id,
           result.units, result.files, cached
         )
+      rescue StandardError
+        Array(created_backups).each { FileUtils.rm_f(_1) }
+        raise
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def module_importer(archive, mpr, package, protected_files: [])
+        ModulePackageImporter.new(
+          archive, mpr, target_root: @target, allow_model_upgrade: package.source == :mendix,
+                        protected_files:
+        )
       end
 
-      def module_importer(archive, mpr, package)
-        ModulePackageImporter.new(
-          archive, mpr, target_root: @target, allow_model_upgrade: package.source == :mendix
-        )
+      def protected_package_assets(package_name)
+        OfficialMarketplace.lock(@target).fetch('packages').flat_map do |name, entry|
+          next [] if name == package_name
+
+          Array(entry['files'])
+        end.uniq
       end
 
       def ensure_atlas_theme_variables
@@ -450,7 +547,8 @@ module Mxrb
         destination
       end
 
-      def write_module_lock(package, mpr, result, cached, digest) # rubocop:disable Metrics/AbcSize
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+      def write_module_lock(package, mpr, result, cached, digest, originals)
         path = File.join(@target, '.mxrb', 'marketplace.lock.json')
         FileUtils.mkdir_p(File.dirname(path))
         lock = OfficialMarketplace.lock(@target)
@@ -458,9 +556,46 @@ module Mxrb
           'kind' => 'module', 'version' => package.version, 'source' => package.source,
           'repository' => package.repository, 'sha256' => digest,
           'destination' => relative_target_path(mpr), 'archive' => relative_target_path(cached),
-          'module_id' => result.module_id, 'units' => result.units, 'files' => result.files
+          'module_id' => result.module_id, 'units' => result.units, 'files' => result.files,
+          'asset_originals' => originals
         }.merge(official_lock_metadata(package)).compact
         write_lock_atomically(path, lock)
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def preserve_asset_originals(inventory)
+        existing = OfficialMarketplace.lock(@target).dig('packages', inventory.name)
+        legacy = Array(existing&.fetch('files', [])).to_h { [_1, nil] }
+        retained = existing&.fetch('asset_originals', legacy) || {}
+        originals = inventory.files.keys.to_h do |relative|
+          [relative, retained.key?(relative) ? retained[relative] : preserve_asset(relative, inventory.name)]
+        end
+        created = originals.values.compact.filter_map do |relative|
+          path = safe_target_path(relative)
+          path unless retained.value?(relative)
+        end
+        [originals, created]
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def preserve_asset(relative, module_name)
+        source = safe_target_path(relative)
+        raise MarketplaceError, "package asset destination is a symbolic link: #{relative}" if File.symlink?(source)
+        return unless File.file?(source)
+
+        backup = safe_target_path(File.join('.mxrb', 'marketplace-originals', valid_name(module_name), relative))
+        FileUtils.mkdir_p(File.dirname(backup))
+        FileUtils.cp(source, backup)
+        relative_target_path(backup)
+      end
+
+      def safe_target_path(relative)
+        path = File.expand_path(File.join(@target, relative.to_s))
+        prefix = "#{@target}#{File::SEPARATOR}"
+        raise MarketplaceError, "path is outside marketplace target: #{path}" unless path.start_with?(prefix)
+
+        path
       end
 
       def official_lock_metadata(package)

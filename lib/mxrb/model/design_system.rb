@@ -41,7 +41,7 @@ module Mxrb
         names = tokens.map(&:name).to_h { [_1, true] }
         tokens.flat_map do |token|
           token.value.scan(/var\((--[A-Za-z0-9_-]+)/).flatten.reject { names.key?(_1) }
-                                                             .map do
+               .map do
             {
               token:, reference: _1
             }.freeze

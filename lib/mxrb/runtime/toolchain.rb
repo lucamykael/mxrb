@@ -2,9 +2,7 @@
 
 module Mxrb
   module Runtime
-    RUNTIME_REQUIRED_FILES = %w[
-      launcher/runtimelauncher.jar pad/bin/start.hbs pad/etc/example.conf pad/etc/variables.conf
-    ].freeze
+    RUNTIME_REQUIRED_FILES = %w[launcher/runtimelauncher.jar].freeze
 
     Plan = Data.define(
       :mendix_version, :java_version, :toolchain_path,
