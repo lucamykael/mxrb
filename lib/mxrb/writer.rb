@@ -759,7 +759,9 @@ module Mxrb
       existing = documents_by_name(mpr, module_id)
 
       mod.fetch(:pages).each do |page|
-        upsert_document(mpr, module_id, existing[page.fetch(:name)], page_doc(page))
+        upsert_document(
+          mpr, module_id, existing[page.fetch(:name)], page_doc(page, mod.fetch(:name))
+        )
       end
       mod.fetch(:microflows).each do |flow|
         upsert_document(
@@ -1670,7 +1672,7 @@ module Mxrb
       }
     end
 
-    def page_doc(page)
+    def page_doc(page, module_name = nil)
       if page[:deep_structure].is_a?(Hash)
         return page[:deep_structure].merge(
           "$ID" => SecureRandom.uuid,
@@ -1680,7 +1682,8 @@ module Mxrb
         )
       end
 
-      widgets = page.fetch(:widgets, []).map { widget_doc(_1) }
+      context_entity = page_context_entity(page, module_name)
+      widgets = page.fetch(:widgets, []).map { widget_doc(_1, context_entity:) }
       # Backwards-compatible page-level bindings target widgets by name.
       page.fetch(:events, []).each do |event|
         next unless event[:target]
@@ -1997,8 +2000,10 @@ module Mxrb
       }
     end
 
-    def widget_doc(widget)
+    def widget_doc(widget = nil, context_entity: nil, **keyword_widget)
+      widget ||= keyword_widget
       type = widget.fetch(:type)
+      widget = qualify_page_widget_attribute(widget, context_entity)
 
       if type == :snippet
         return snippet_call_doc(widget)
@@ -2044,7 +2049,7 @@ module Mxrb
       end
 
       if type == :container
-        children = Array(widget[:children]).map { widget_doc(_1) }
+        children = Array(widget[:children]).map { widget_doc(_1, context_entity:) }
         doc["Widgets"] = IO::BsonCodec.build_array(children)
         doc["Class"] = options[:class].to_s if options[:class]
       end
@@ -2053,6 +2058,74 @@ module Mxrb
         doc[event_property(event.fetch(:event))] = client_action_doc(event)
       end
       doc
+    end
+
+    def qualify_page_widget_attribute(widget, context_entity)
+      type = widget.fetch(:type).to_sym
+      return widget unless input_widget?(type) || type == :drop_down
+
+      attribute = widget.dig(:options, :attribute)
+      return widget unless attribute
+
+      qualified = qualified_attribute_identifier(attribute, context_entity)
+      options = widget.fetch(:options, {}).merge(attribute: qualified)
+      widget.merge(options:)
+    end
+
+    def page_context_entity(page, module_name)
+      source = page[:data_source]
+      entity = flow_return_entity(source&.dig(:name), module_name)
+      return entity if entity
+
+      attributes = simple_page_attributes(page.fetch(:widgets, []))
+      return if attributes.empty?
+
+      matching = module_entities(module_name).select do |candidate|
+        names = candidate.fetch(:attributes, []).map { _1.fetch(:name).to_s }
+        (attributes - names).empty?
+      end
+      return unless matching.one?
+
+      "#{module_name}.#{matching.first.fetch(:name)}"
+    end
+
+    def simple_page_attributes(widgets)
+      Array(widgets).flat_map do |widget|
+        type = widget.fetch(:type).to_sym
+        attribute = widget.dig(:options, :attribute).to_s
+        own = if (input_widget?(type) || type == :drop_down) &&
+                 !attribute.empty? && !attribute.include?('.') && !attribute.include?('/')
+          [attribute]
+        else
+          []
+        end
+        own + simple_page_attributes(widget[:children])
+      end.uniq
+    end
+
+    def flow_return_entity(name, module_name)
+      return if name.to_s.empty?
+
+      owner_name, flow_name = qualified_artifact_parts(name, module_name)
+      owner = @definition.fetch(:modules, []).find { _1.fetch(:name).to_s == owner_name }
+      flow = Array(owner&.fetch(:microflows, [])).find { _1.fetch(:name).to_s == flow_name }
+      return unless flow
+
+      entity = object_entity_type(flow[:return_type], owner_name)
+      return entity if entity
+
+      variables = flow_variable_entities(flow[:body], flow[:parameters], owner_name)
+      variables[flow[:return_variable_name].to_s]
+    end
+
+    def qualified_artifact_parts(name, module_name)
+      value = name.to_s
+      value.include?('.') ? value.split('.', 2) : [module_name.to_s, value]
+    end
+
+    def module_entities(module_name)
+      mod = @definition.fetch(:modules, []).find { _1.fetch(:name).to_s == module_name.to_s }
+      Array(mod&.fetch(:entities, []))
     end
 
     def deep_copy(value)
@@ -2232,13 +2305,41 @@ module Mxrb
       }
     end
 
-    def attribute_ref_doc(attribute)
-      return nil unless attribute
+    def attribute_ref_doc(attribute, entity: nil)
+      identifier = qualified_attribute_identifier(attribute, entity)
+      return nil unless identifier
 
       {
         "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$AttributeRef",
-        "Attribute" => attribute.to_s, "EntityRef" => nil
+        "Attribute" => identifier, "EntityRef" => nil
       }
+    end
+
+    def qualified_attribute_identifier(attribute, entity = nil)
+      value = attribute.to_s
+      return if value.empty?
+
+      value = value.tr('/', '.')
+      return value if value.split('.').size >= 3
+      return unless entity
+
+      entity_name = qualified_entity_name(entity)
+      return unless entity_name
+      if value.include?('.') && value.split('.').first == entity_name.split('.').last
+        return "#{entity_name.split('.').first}.#{value}"
+      end
+      return if value.include?('.')
+
+      "#{entity_name}.#{value}"
+    end
+
+    def qualified_entity_name(entity, module_name = nil)
+      value = entity.to_s
+      return if value.empty?
+      return value if value.include?('.')
+      return unless module_name
+
+      "#{module_name}.#{value}"
     end
 
     def formatting_info_doc
@@ -2404,8 +2505,9 @@ module Mxrb
       mark_as_used = flow[:mark_as_used]
       excluded = flow[:excluded]
 
+      body = qualify_flow_member_references(flow[:body], flow[:parameters], module_name)
       graph = build_microflow_graph(
-        flow[:body], flow[:return_expression] || flow[:return_variable_name]
+        body, flow[:return_expression] || flow[:return_variable_name]
       )
       object_collection = {
         "$ID" => stable_id(flow_name, "object_collection"),
@@ -2454,6 +2556,95 @@ module Mxrb
         doc["Entity"] = name.include?(".") ? name : "#{module_name}.#{name}"
       end
       doc
+    end
+
+    def qualify_flow_member_references(body, parameters, module_name)
+      variables = parameter_entity_types(parameters, module_name)
+      qualify_activity_members(Array(body), variables, module_name).first
+    end
+
+    def flow_variable_entities(body, parameters, module_name)
+      variables = parameter_entity_types(parameters, module_name)
+      qualify_activity_members(Array(body), variables, module_name).last
+    end
+
+    def parameter_entity_types(parameters, module_name)
+      Array(parameters).each_with_object({}) do |parameter, result|
+        entity = object_entity_type(parameter[:type], module_name)
+        result[parameter.fetch(:name).to_s] = entity if entity
+      end
+    end
+
+    def object_entity_type(type, module_name)
+      if type.is_a?(Hash)
+        native = type['$Type'] || type[:'$Type']
+        return unless native == 'DataTypes$ObjectType'
+
+        return qualified_entity_name(type['Entity'] || type[:Entity], module_name)
+      end
+
+      value = type.to_s
+      primitive = %w[
+        void nil boolean bool string integer long decimal float datetime date_time
+      ]
+      return if value.empty? || primitive.include?(value.downcase) || value.include?('$')
+
+      qualified_entity_name(value, module_name)
+    end
+
+    def qualify_activity_members(activities, inherited_variables, module_name)
+      variables = inherited_variables.dup
+      qualified = Array(activities).map do |activity|
+        item = activity.dup
+        type = item.fetch(:type).to_sym
+        case type
+        when :create_object, :retrieve_objects
+          entity = qualified_entity_name(item[:entity], module_name)
+          item[:entity] = entity if entity
+          variables[item[:variable].to_s] = entity if entity
+        when :retrieve_association
+          entity = association_destination(item[:association])
+          variables[item[:variable].to_s] = entity unless entity.to_s.empty?
+        when :change_object
+          item[:entity] ||= variables[item[:variable].to_s]
+        when :decision
+          item = qualify_decision_activity(item, variables, module_name)
+        when :inheritance_decision
+          item[:branches] = item.fetch(:branches).transform_values do |branch|
+            qualify_activity_members(branch, variables, module_name).first
+          end
+        when :loop_over
+          loop_variables = variables.dup
+          iterator_entity = variables[item[:variable].to_s]
+          loop_variables[item[:iterator].to_s] = iterator_entity if iterator_entity
+          item[:activities] = qualify_activity_members(
+            item[:activities], loop_variables, module_name
+          ).first
+        when :while_loop, :rescue_all
+          item[:activities] = qualify_activity_members(
+            item[:activities], variables, module_name
+          ).first
+        end
+        item
+      end
+      [qualified, variables]
+    end
+
+    def qualify_decision_activity(activity, variables, module_name)
+      item = activity.dup
+      if item[:branches]
+        item[:branches] = item.fetch(:branches).transform_values do |branch|
+          qualify_activity_members(branch, variables, module_name).first
+        end
+      else
+        item[:true_branch] = qualify_activity_members(
+          item[:true_branch], variables, module_name
+        ).first
+        item[:false_branch] = qualify_activity_members(
+          item[:false_branch], variables, module_name
+        ).first
+      end
+      item
     end
 
     def build_microflow_graph(body, return_expression)
@@ -2895,7 +3086,9 @@ module Mxrb
           "Commit" => commit,
           "ErrorHandlingType" => "Rollback",
           "Items" => IO::BsonCodec.build_array(
-            Array(activity[:members]).map { change_action_item_doc(_1) }, marker: 2
+            Array(activity[:members]).map do |member|
+              change_action_item_doc(member, entity: activity[:entity])
+            end, marker: 2
           ),
           "RefreshInClient" => activity[:refresh] == true }
       when :retrieve_objects
@@ -3463,16 +3656,35 @@ module Mxrb
     end
 
     def change_action_item_doc(member, entity: nil)
-      attribute = member[:attribute].to_s
-      if entity && !attribute.empty? && !attribute.include?('.') && !attribute.include?('/')
-        attribute = "#{entity}.#{attribute}"
+      association = qualified_association_identifier(member[:association], entity)
+      attribute = qualified_attribute_identifier(member[:attribute], entity)
+      if member[:association] && !association
+        raise SerializationError,
+              "cannot qualify association #{member[:association].inspect} without an object entity"
+      end
+      if member[:attribute] && !attribute
+        raise SerializationError,
+              "cannot qualify attribute #{member[:attribute].inspect} without an object entity"
       end
       { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ChangeActionItem",
-        "Association" => member[:association].to_s,
-        "Attribute" => attribute,
+        "Association" => association.to_s,
+        "Attribute" => attribute.to_s,
         "Type" => mendix_enum(member[:operation] || "Set"),
         "Value" => member_value_expr(member[:value]),
         "ValueModel" => no_expression_doc }
+    end
+
+    def qualified_association_identifier(association, entity = nil)
+      value = association.to_s
+      return if value.empty?
+
+      value = value.tr('/', '.')
+      return value if value.include?('.')
+
+      entity_name = qualified_entity_name(entity)
+      return unless entity_name
+
+      "#{entity_name.split('.').first}.#{value}"
     end
 
     def member_value_expr(value)
