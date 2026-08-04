@@ -55,8 +55,8 @@ module Mxrb
               ClientCertificatePasswords = ""
               HashAlgorithm = "BCRYPT:12"
             }
-            adminUser.password = ${?RUNTIME_ADMINUSER_PASSWORD}
-            debugger.password = ""
+            adminUser.password = ""
+          #{debugger_configuration}
           }
           logging = [
             {
@@ -69,9 +69,17 @@ module Mxrb
         CONF
       end
 
+      def debugger_configuration
+        @metadata['RuntimeVersion'].to_s.to_i >= 11 ? '    debugger.password = ""' : ''
+      end
+
       def default_configuration
         <<~CONF
-          runtime.params { DatabaseType = HSQLDB, DatabaseName = default }
+          runtime.params {
+            DatabaseType = HSQLDB
+            DatabaseName = default
+            DatabaseJdbcUrl = "jdbc:hsqldb:file:app/data/database/default"
+          }
           admin { adminPassword = "", port = 8090, addresses = [ localhost ] }
           runtime {
             http { port = 8080, addresses = [ "*" ] }
@@ -99,6 +107,72 @@ module Mxrb
       def hocon(value)
         value.to_s.gsub('\\', '\\\\').gsub('"', '\\"').gsub("\n", '\\n').gsub("\r", '\\r')
       end
+    end
+
+    # Portable assets used by Runtime distributions that do not ship PAD.
+    module PortableFallbackAssets
+      START = <<~'SH'
+        #!/bin/sh
+        set -eu
+
+        ROOT_PATH=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+        if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+          JAVA="$JAVA_HOME/bin/java"
+        else
+          JAVA=$(command -v java || true)
+        fi
+        if [ -z "$JAVA" ] || [ ! -x "$JAVA" ]; then
+          echo "Cannot find java; set JAVA_HOME or add java to PATH." >&2
+          exit 1
+        fi
+
+        if [ -z "${M2EE_ADMIN_PASS:-}" ]; then
+          M2EE_ADMIN_PASS=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+          export M2EE_ADMIN_PASS
+        fi
+        RUNTIME_ADMINUSER_PASSWORD="${RUNTIME_ADMINUSER_PASSWORD:-$M2EE_ADMIN_PASS}"
+        export RUNTIME_ADMINUSER_PASSWORD
+
+        export MX_INSTALL_PATH="$ROOT_PATH/lib"
+        CONFIG="${CONFIG:-$ROOT_PATH/etc/Default}"
+        if [ "$#" -eq 0 ]; then
+          set -- "$CONFIG"
+        fi
+        cd "$ROOT_PATH"
+        exec "$JAVA" ${JAVA_OPTS:-} \
+          -Dfile.encoding=UTF-8 \
+          -Djava.io.tmpdir="${TMPDIR:-/tmp}" \
+          -Djava.library.path="$MX_INSTALL_PATH/runtime/lib/x64;$ROOT_PATH/app/model/lib/userlib" \
+          -jar "$MX_INSTALL_PATH/runtime/launcher/runtimelauncher.jar" \
+          "$ROOT_PATH/app/." "$@"
+      SH
+      VARIABLES = <<~CONF
+        admin {
+          port = ${?ADMIN_PORT}
+          addresses = ${?ADMIN_ADDRESSES}
+          adminPassword = ${?M2EE_ADMIN_PASS}
+        }
+        runtime.http {
+          port = ${?RUNTIME_HTTP_PORT}
+          addresses = ${?RUNTIME_HTTP_ADDRESSES}
+        }
+        runtime.params {
+          DatabaseHost = ${?RUNTIME_PARAMS_DATABASEHOST}
+          DatabaseJdbcUrl = ${?RUNTIME_PARAMS_DATABASEJDBCURL}
+          DatabaseName = ${?RUNTIME_PARAMS_DATABASENAME}
+          DatabaseUserName = ${?RUNTIME_PARAMS_DATABASEUSERNAME}
+          DatabasePassword = ${?RUNTIME_PARAMS_DATABASEPASSWORD}
+          DatabaseType = ${?RUNTIME_PARAMS_DATABASETYPE}
+          ApplicationRootUrl = ${?RUNTIME_PARAMS_APPLICATIONROOTURL}
+        }
+        runtime.adminUser.password = ${?RUNTIME_ADMINUSER_PASSWORD}
+      CONF
+      EXAMPLE = <<~CONF
+        # Copy this file and pass its path to bin/start to override etc/Default.
+        runtime.params { DatabaseType = HSQLDB, DatabaseName = default }
+        admin { port = 8090, addresses = [ localhost ] }
+        runtime.http { port = 8080, addresses = [ "*" ] }
+      CONF
     end
 
     # Deterministic ZIP writer shared by portable package orchestration.
@@ -140,7 +214,7 @@ module Mxrb
       def add_generated_files(archive)
         add_start_scripts(archive)
         %w[example.conf variables.conf].each do |name|
-          add_source(archive, File.join(@runtime, 'pad', 'etc', name), "etc/#{name}")
+          add_runtime_configuration(archive, name)
         end
         PortableConfiguration.new(@metadata).files.each do |path, content|
           add_string(archive, path, content)
@@ -148,11 +222,30 @@ module Mxrb
       end
 
       def add_start_scripts(archive)
-        Dir.glob(File.join(@runtime, 'pad', 'bin', '*.hbs')).sort.each do |source|
+        templates = Dir.glob(File.join(@runtime, 'pad', 'bin', '*.hbs')).sort
+        return add_fallback_start(archive) if templates.empty?
+
+        templates.each do |source|
           name = File.basename(source, '.hbs')
           content = render_template(File.binread(source))
           add_string(archive, "bin/#{name}", content, mode: name == 'start' ? 0o755 : 0o644)
         end
+      end
+
+      def add_fallback_start(archive)
+        add_string(archive, 'bin/start', PortableFallbackAssets::START, mode: 0o755)
+      end
+
+      def add_runtime_configuration(archive, name)
+        source = File.join(@runtime, 'pad', 'etc', name)
+        return add_source(archive, source, "etc/#{name}") if File.file?(source)
+
+        fallback = if name == 'variables.conf'
+                     PortableFallbackAssets::VARIABLES
+                   else
+                     PortableFallbackAssets::EXAMPLE
+                   end
+        add_string(archive, "etc/#{name}", fallback)
       end
 
       def render_template(content)
@@ -206,12 +299,7 @@ module Mxrb
     # Creates an executable portable application from materialized app files
     # and an installed Mendix Runtime distribution. It never invokes mxbuild.
     class PortablePackager
-      REQUIRED_RUNTIME_FILES = %w[
-        launcher/runtimelauncher.jar
-        pad/bin/start.hbs
-        pad/etc/example.conf
-        pad/etc/variables.conf
-      ].freeze
+      REQUIRED_RUNTIME_FILES = %w[launcher/runtimelauncher.jar].freeze
 
       def initialize(mpr_path, deployment: nil, mendix_home: nil)
         @mpr_path = File.expand_path(mpr_path)

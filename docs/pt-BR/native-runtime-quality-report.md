@@ -1,18 +1,19 @@
 # Relatório de qualidade do build e Runtime nativos
 
-Data: 1º de agosto de 2026.
+Data: 4 de agosto de 2026.
 
 ## Resultado confirmado
 
 - nenhuma etapa funcional chama `mx`, `mxbuild`, `mxcli`, Studio Pro ou Model SDK;
-- build limpo de 12 estágios e geração web passaram em 6.10.8 (39 páginas), 7.5.0 (45), 7.17.0 (66), 9.6.1.29396 (90) e 11.12.1;
+- build limpo de 12 estágios e geração web passaram em 6.10.8 (39 páginas), 7.5.0 (45), 7.17.0 (66), 9.6.1.29396 (90), 10.24.0.73019 (cliente otimizado) e 11.12.1;
 - a matriz de round-trip passou em seis fixtures reais de 5.21.4 a 11.12.1: 1.506 units, 1.734 artefatos e 3.388 referências;
-- schemas/seeds auditados do compilador cobrem 6.x, 7.x, 9.x e 11.x. 5.x, 8.x e 10.x falham fechadas na compilação nativa; a Runtime exige o patch exato;
+- schemas/seeds auditados do compilador cobrem 6.x, 7.x, 9.x, 10.x e 11.x. 5.x e 8.x falham fechadas na compilação nativa; a Runtime exige o patch exato;
 - Data Grid 1 cobre database/XPath/microflow, pesquisa, ordenação, paginação, seleção e botões auditados. Data Grid 2 cobre XPath, colunas de atributo e ação create;
-- perfis web: Dojo em 6/7, híbrido Dojo/React em 9 e React em 11;
+- perfis web: Dojo em 6/7, híbrido Dojo/React em 9, clássico/otimizado conforme o projeto em 10 e React em 11;
 - a Projects API inventariou 130 apps. Três projetos Git reais (`MyFirstModule`, `LearnNow Trainning Management` e `SLATaskApp`) passaram validate → export → generate → validate → compare;
 - `MyFirstModule` foi regenerado como 11.12.1 exato sem builders proprietários. A Runtime sincronizou 655 operações, criou o administrador `mx` ativo, serviu shell React e login estilizado em `127.0.0.1:18080` e expôs as tabelas esperadas;
-- QA final: 821 exemplos, zero falhas, 100% de linhas (12.987/12.987), 100% de branches (4.611/4.611) e RuboCop limpo em 205 arquivos.
+- uma aplicação 10.24.0.73019 com cliente otimizado, criada do zero, passou no `mx check` e `mxbuild` oficiais, modelo/Java/Rollup/pacote portátil nativos, 460 operações de sincronização, probe de prontidão e HTTP 200;
+- QA final: 1.002 exemplos, zero falhas, 100,00% de linhas (16.917/16.917), 100,00% de branches (6.659/6.659) e RuboCop limpo em 238 arquivos.
 
 ## Correções do relatório de melhorias
 
@@ -35,8 +36,9 @@ Data: 1º de agosto de 2026.
   permaneceu presente na estrutura;
 - fontes nanoflow de lista/objeto e ações de botão agora compilam para os
   contratos reais do cliente Mendix e programas de instruções referenciados por
-  função. O subconjunto linear auditado é testado; nós não suportados falham
-  fechado em vez de serem tratados incorretamente como microflows;
+  função. O subconjunto auditado do grafo inclui decisões, caminhos de erro,
+  nanoflows aninhados, ações JavaScript e chamadas de microflow servidor; nós
+  não suportados falham fechado em vez de serem tratados como microflows;
 - cliques reais no navegador validaram Home → Courses → Add → Save. Formulários
   DataView/TextBox por parâmetro renderizam e persistem valores; create passa o
   GUID por `openForm2`, enquanto a autorização de commit/rollback deriva dos
@@ -48,10 +50,10 @@ Data: 1º de agosto de 2026.
 
 1. Widgets Dojo além do Data Grid 1 permanecem listados em `web/mxrb-legacy-pages.json`; não são declarados renderizados.
 2. Data Grid 2 cobre o subconjunto auditado XPath/atributo/create. Gallery cobre
-   XPath/microflow e o subconjunto linear auditado de nanoflow. Decisões, ações
-   JavaScript, chamadas de microflow internas e mapeamentos inseguros ainda
-   falham fechado.
-3. As distribuições 6/7/9 instaladas têm bundles exatos, mas não PAD/launcher compatível. O launcher 11 exige Java 21 e não inicia 9 com segurança no Java 11. O `db up` legado falha fechado; só o boot 11.12.1 exato é afirmado.
+   XPath/microflow e o subconjunto auditado do grafo nanoflow. Formatos de grafo
+   não suportados, referências ausentes, mapeamentos de parâmetros inseguros e
+   instruções cliente não traduzidas ainda falham fechado.
+3. As distribuições 6/7/9 instaladas têm bundles exatos, mas não launcher compatível. O launcher 11 exige Java 21 e não inicia 9 com segurança no Java 11. O `db up` legado falha fechado; boot exato é afirmado somente para 10.24.0.73019 e 11.12.1.
 4. A Runtime usa licença local trial/developer e emite o aviso esperado de limite de tempo.
 5. Build/Deploy/Pipelines/Backups em nuvem são verificações externas opcionais, nunca dependências do build/runtime nativo.
 

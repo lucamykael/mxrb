@@ -123,7 +123,9 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
                                                                        'Widgets' => [3] }] }
         }
       )
-      source = instance_double(Mxrb::Compiler::SourceModel, units_of: [page], documents: [page.document])
+      source = instance_double(Mxrb::Compiler::SourceModel, documents: [page.document])
+      allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+      allow(source).to receive(:units_of).with('Forms$Layout').and_return([])
       result = described_class.new(source, root, profiles: %i[dojo react_wrapper]).build
       expect(result.files).to eq(2)
       expect(result.unsupported_widgets).to be_empty
@@ -153,7 +155,9 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
           'Widgets' => [3, grid, { '$Type' => 'Forms$TextBox', 'Name' => 'name' }]
         }
       )
-      source = instance_double(Mxrb::Compiler::SourceModel, units_of: [page], documents: [page.document])
+      source = instance_double(Mxrb::Compiler::SourceModel, documents: [page.document])
+      allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+      allow(source).to receive(:units_of).with('Forms$Layout').and_return([])
       result = described_class.new(source, root).build
       xml = File.binread("#{result.directory}/pt_BR/Demo/Home.page.xml").force_encoding('UTF-8')
 
@@ -165,16 +169,124 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
   end
 
   it 'audits pages without writing files and includes custom widgets' do
+    grid = {
+      '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DataGrid', 'Name' => 'items',
+      'Columns' => [2], 'DataSource' => {
+        '$Type' => 'Forms$GridXPathSource', 'EntityPath' => 'Demo.Item'
+      }, 'ControlBar' => {}, 'IsPagingEnabled' => false
+    }
+    dynamic = {
+      '$Type' => 'Forms$DynamicText', 'Content' => {
+        'Parameters' => [2, { 'Expression' => '$Item/Name' }]
+      }
+    }
     page = Mxrb::Compiler::SourceModel::Unit.new(
       id: SecureRandom.uuid, container_id: nil, containment: nil, module_name: 'Demo',
       document: { '$Type' => 'Forms$Page', 'Name' => 'Home',
                   'Widgets' => [3, { '$Type' => 'Forms$TextBox' },
-                                { '$Type' => 'CustomWidgets$CustomWidget' }] }
+                                { '$Type' => 'CustomWidgets$CustomWidget' }, grid, dynamic] }
     )
-    source = instance_double(Mxrb::Compiler::SourceModel, units_of: [page], documents: [page.document])
+    source = instance_double(Mxrb::Compiler::SourceModel, documents: [page.document])
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+    allow(source).to receive(:units_of).with('Forms$Layout').and_return([])
 
-    expect(described_class.new(source, '/not-used').audit)
-      .to eq('Demo.Home' => %w[CustomWidgets$CustomWidget Forms$TextBox])
+    expect(described_class.new(source, '/not-used').audit).to eq(
+      'Demo.Home' => ['CustomWidgets$CustomWidget', 'Forms$DynamicText(parameters)', 'Forms$TextBox']
+    )
+  end
+
+  it 'renders layouts, placeholders, containers and literal dynamic text natively' do
+    Dir.mktmpdir do |root|
+      placeholder_id = SecureRandom.uuid
+      layout = Mxrb::Compiler::SourceModel::Unit.new(
+        id: SecureRandom.uuid, container_id: nil, containment: nil, module_name: 'Demo',
+        document: {
+          '$Type' => 'Forms$Layout', 'Name' => 'Shell',
+          'Widget' => { '$ID' => placeholder_id, '$Type' => 'Forms$Placeholder', 'Name' => 'Main' }
+        }
+      )
+      text = {
+        '$Type' => 'Forms$DynamicText', 'Name' => 'heading', 'RenderMode' => 'Text',
+        'Content' => {
+          'Parameters' => [2],
+          'Template' => { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Hello & welcome' }] }
+        }
+      }
+      page = Mxrb::Compiler::SourceModel::Unit.new(
+        id: SecureRandom.uuid, container_id: nil, containment: nil, module_name: 'Demo',
+        document: {
+          '$Type' => 'Forms$Page', 'Name' => 'Home', 'Class' => 'app-page',
+          'Title' => { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Home' }] },
+          'FormCall' => {
+            'Form' => 'Demo.Shell',
+            'Arguments' => [2, { 'Parameter' => 'Demo.Shell.Main',
+                                 'Widget' => {
+                                   '$Type' => 'Forms$VerticalFlow', 'Widgets' => [2, {
+                                     '$Type' => 'Forms$DivContainer', 'Name' => 'card',
+                                     'Class' => 'panel', 'Widget' => text
+                                   }]
+                                 } }]
+          }
+        }
+      )
+      source = instance_double(Mxrb::Compiler::SourceModel, documents: [layout.document, page.document])
+      allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
+      allow(source).to receive(:units_of).with('Forms$Layout').and_return([layout])
+
+      result = described_class.new(source, root).build
+      page_xml = File.binread(File.join(root, 'pages/en_US/Demo/Home.page.xml')).force_encoding('UTF-8')
+      layout_xml = File.binread(File.join(root, 'pages/en_US/Demo/Shell.layout.xml')).force_encoding('UTF-8')
+
+      expect(result).to have_attributes(files: 2, unsupported_widgets: {})
+      expect(page_xml).to include(
+        "parameterName='#{placeholder_id}'", "class='mx-name-card panel'",
+        "class='mx-text mx-name-heading'", 'Hello &amp; welcome'
+      )
+      expect(layout_xml).to include("data-mx-placeholder='#{placeholder_id}'")
+      expect { REXML::Document.new(page_xml) }.not_to raise_error
+      expect { REXML::Document.new(layout_xml) }.not_to raise_error
+    end
+  end
+
+  it 'covers defensive legacy rendering fallbacks and interactive-container auditing' do
+    layout = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'layout', container_id: nil, containment: nil, module_name: 'Demo',
+      document: { '$Type' => 'Forms$Layout', 'Name' => 'Shell', 'Widgets' => [2] }
+    )
+    source = instance_double(Mxrb::Compiler::SourceModel, documents: [])
+    allow(source).to receive(:units_of).with('Forms$Layout').and_return([layout])
+    allow(source).to receive(:units_of).with('Forms$Page').and_return([])
+    builder = described_class.new(source, '/not-used')
+    builder.instance_variable_set(:@widget_sequence, 0)
+
+    interactive = {
+      '$Type' => 'Forms$DivContainer',
+      'OnClickAction' => { '$Type' => 'Forms$MicroflowAction' }
+    }
+    builder.send(:audit_unsupported_widgets, interactive, 'Demo.Home')
+    expect(builder.instance_variable_get(:@unsupported)['Demo.Home'])
+      .to include('Forms$DivContainer(onClick)')
+    expect(builder.send(:render_widget, nil, 'Demo.Home', 'en_US')).to eq('')
+
+    span = { '$Type' => 'Forms$DivContainer', 'RenderMode' => 'Span', 'Style' => 'color:red' }
+    expect(builder.send(:render_widget, span, 'Demo.Home', 'en_US'))
+      .to include('<span', "style='color:red'")
+    paragraph = {
+      '$Type' => 'Forms$DynamicText', 'RenderMode' => 'Paragraph',
+      'Content' => {
+        'Template' => { 'Items' => [2] },
+        'Fallback' => { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Fallback' }] }
+      }
+    }
+    expect(builder.send(:render_widget, paragraph, 'Demo.Home', 'en_US'))
+      .to include('<p', 'Fallback')
+    expect(builder.send(:html_attributes, {}, base: nil)).to eq('')
+    expect(builder.send(:html_attributes, { 'Appearance' => { 'Style' => 'display:block' } }, base: nil))
+      .to eq(" style='display:block'")
+    expect(builder.send(:css_classes, { 'Name' => '' }, base: nil)).to eq('')
+    expect(builder.send(:widget_children, nil)).to eq([])
+    expect(builder.send(:layout_argument_id, 'Demo.Missing.Main')).to eq('Demo.Missing.Main')
+    expect(builder.send(:layout_argument_id, 'Demo.Shell.Missing')).to eq('Demo.Shell.Missing')
   end
 end
 # rubocop:enable Metrics/BlockLength

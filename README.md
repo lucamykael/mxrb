@@ -154,13 +154,13 @@ and persisted state through entity/XPath count assertions.
 
 ```sh
 bundle exec rspec
-MXRB_COVERAGE=1 bundle exec rspec
+MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=100 MXRB_BRANCH_COVERAGE_MIN=100 bundle exec rspec
 bundle exec ruby script/branch_report.rb
 bundle exec rubocop
 ```
 
-The enforced suite currently has 100% line and branch coverage. The branch
-report lists any regression by source file and line.
+CI and the local coverage helper enforce 100% line and 100% branch coverage.
+The branch report lists any regression by source file and line.
 
 Architecture and deeper writing guidance are available in
 [the English documentation](docs/en-US/README.md). The complete documentation

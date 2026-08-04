@@ -37,9 +37,10 @@ review. Writing-style guidance for exported projects lives in
 ## Testing
 
 - `bundle exec rspec` is the default suite; everything must pass.
-- `MXRB_COVERAGE=1 bundle exec rspec` is the strict gate and requires 100%
-  line coverage; `bundle exec ruby script/branch_report.rb` lists uncovered
-  branches by file and line.
+- CI sets `MXRB_LINE_COVERAGE_MIN=100` and `MXRB_BRANCH_COVERAGE_MIN=100`; the
+  local helper defaults to 100/100 when those variables are omitted.
+  `bundle exec ruby script/branch_report.rb` lists uncovered branches by file
+  and line.
 - Coverage uses Ruby's native `Coverage` API, not an external gem. Defensive
   branches that only fire on corrupt or malformed input — states the writer
   can never produce — are excluded with `# :nocov:` markers, inline or as

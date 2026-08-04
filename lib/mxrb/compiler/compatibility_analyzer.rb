@@ -52,7 +52,7 @@ module Mxrb
       end
 
       def analyze_version
-        @adapter = Adapter.for(@source.version)
+        @adapter = Adapter.for(@source.version, source: @source)
       rescue UnsupportedVersion => e
         add(:error, :version, "Mendix #{@source.version}", 'project', e.message)
       end

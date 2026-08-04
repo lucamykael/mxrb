@@ -61,23 +61,24 @@ module Mxrb
       end
       type = {
         '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$CustomWidgetType',
-        'HelpUrl' => definition.help_url, 'OfflineCapable' => definition.offline,
+        'HelpUrl' => definition.help_url,
+        'ObjectType' => {
+          '$ID' => object_type_id, '$Type' => 'CustomWidgets$WidgetObjectType',
+          'PropertyTypes' => IO::BsonCodec.build_array(property_types, marker: 2)
+        },
+        'OfflineCapable' => definition.offline,
         'StudioCategory' => definition.studio_category,
         'StudioProCategory' => definition.studio_pro_category,
         'SupportedPlatform' => definition.platform,
         'WidgetDescription' => definition.description,
         'WidgetId' => definition.id, 'WidgetName' => definition.name,
         'WidgetNeedsEntityContext' => definition.needs_context,
-        'WidgetPluginWidget' => definition.plugin,
-        'ObjectType' => {
-          '$ID' => object_type_id, '$Type' => 'CustomWidgets$WidgetObjectType',
-          'PropertyTypes' => IO::BsonCodec.build_array(property_types, marker: 2)
-        }
+        'WidgetPluginWidget' => definition.plugin
       }
       object = {
         '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetObject',
-        'TypePointer' => object_type_id,
-        'Properties' => IO::BsonCodec.build_array(properties, marker: 2)
+        'Properties' => IO::BsonCodec.build_array(properties, marker: 2),
+        'TypePointer' => object_type_id
       }
       [type, object]
     end
@@ -108,33 +109,20 @@ module Mxrb
       )
     end
 
-    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
     def property_groups(parent, category)
       parent.elements.to_a.flat_map do |element|
-        next [] unless element.name == 'propertyGroup'
-
-        group = [category, element.attributes['caption']].compact.reject(&:empty?).join('::')
-        element.elements.to_a.flat_map do |member|
-          case member.name
-          when 'property' then [property(member, group)]
-          when 'systemProperty' then [system_property(member, group)]
-          when 'propertyGroup' then property_groups_wrapper(member, group)
-          else []
-          end
-        end
+        property_member(element, category)
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
 
-    def property_groups_wrapper(group, parent_category)
-      category = [parent_category, group.attributes['caption']].compact.reject(&:empty?).join('::')
-      group.elements.to_a.flat_map do |member|
-        case member.name
-        when 'property' then [property(member, category)]
-        when 'systemProperty' then [system_property(member, category)]
-        when 'propertyGroup' then property_groups_wrapper(member, category)
-        else []
-        end
+    def property_member(element, category)
+      case element.name
+      when 'property' then [property(element, category.to_s.empty? ? 'General' : category.to_s)]
+      when 'systemProperty' then [system_property(element, category.to_s.empty? ? 'General' : category.to_s)]
+      when 'propertyGroup'
+        nested = [category, element.attributes['caption']].compact.reject(&:empty?).join('::')
+        property_groups(element, nested)
+      else []
       end
     end
 
@@ -147,6 +135,17 @@ module Mxrb
         list: element.attributes['isList'] == 'true', multiline: element.attributes['multiline'] == 'true',
         data_source: element.attributes['dataSource'].to_s,
         on_change: element.attributes['onChange'].to_s,
+        default_type: element.attributes['defaultType'].to_s,
+        linked: element.attributes['isLinked'] == 'true',
+        metadata: element.attributes['isMetaData'] == 'true',
+        selectable_objects: element.attributes['selectableObjects'].to_s,
+        set_label: element.attributes['setLabel'] == 'true',
+        action_variables: nested_elements(element, 'actionVariables', 'actionVariable').map do |variable|
+          {
+            key: variable.attributes['key'].to_s, caption: variable.attributes['caption'].to_s,
+            type: variable.attributes['type'].to_s
+          }
+        end,
         allowed_types: nested_element_names(element, 'attributeTypes', 'attributeType'),
         association_types: nested_element_names(element, 'associationTypes', 'associationType'),
         selection_types: nested_element_names(element, 'selectionTypes', 'selectionType'),
@@ -164,7 +163,9 @@ module Mxrb
       { key: element.attributes['key'], type: 'System', caption: "<system:#{element.attributes['key']}>",
         description: '', category:, required: false, default: '', list: false, multiline: false,
         data_source: '', on_change: '', allowed_types: [], association_types: [], selection_types: [],
-        enum_values: [], translations: [], return_type: nil, children: [], system: true }
+        enum_values: [], translations: [], return_type: nil, children: [], system: true,
+        default_type: '', linked: false, metadata: false, selectable_objects: '', set_label: false,
+        action_variables: [] }
     end
 
     def nested_properties(element)
@@ -203,21 +204,22 @@ module Mxrb
       type = property[:type]
       {
         '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetValueType',
-        'ActionVariables' => IO::BsonCodec.build_array([], marker: 2),
+        'ActionVariables' => action_variables(property[:action_variables]),
         'AllowedTypes' => IO::BsonCodec.build_array(property[:allowed_types], marker: 1),
         'AllowNonPersistableEntities' => false, 'AllowUpload' => false,
         'AssociationTypes' => IO::BsonCodec.build_array(property[:association_types], marker: 1),
-        'DataSourceProperty' => property[:data_source], 'DefaultType' => 'None',
+        'DataSourceProperty' => property[:data_source],
+        'DefaultType' => property[:default_type].empty? ? 'None' : property[:default_type],
         'DefaultValue' => property[:default], 'EntityProperty' => '',
         'EnumerationValues' => enumeration_values(property[:enum_values]),
-        'IsLinked' => false, 'IsList' => property[:list], 'IsMetaData' => false,
+        'IsLinked' => property[:linked], 'IsList' => property[:list], 'IsMetaData' => property[:metadata],
         'IsPath' => 'No', 'Multiline' => property[:multiline],
         'ObjectType' => object_type(property[:children]), 'OnChangeProperty' => property[:on_change],
         'ParameterIsList' => false, 'PathType' => 'None', 'Required' => property[:required],
         'ReturnType' => widget_return_type(property[:return_type]),
-        'SelectableObjectsProperty' => '',
+        'SelectableObjectsProperty' => property[:selectable_objects],
         'SelectionTypes' => IO::BsonCodec.build_array(property[:selection_types], marker: 1),
-        'SetLabel' => false, 'Translations' => widget_translations(property[:translations]),
+        'SetLabel' => property[:set_label], 'Translations' => widget_translations(property[:translations]),
         'Type' => type
       }
     end
@@ -246,6 +248,16 @@ module Mxrb
       end, marker: 2)
     end
 
+    def action_variables(values)
+      IO::BsonCodec.build_array(values.map do |variable|
+        {
+          '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetActionVariable',
+          'Caption' => variable.fetch(:caption), 'Key' => variable.fetch(:key),
+          'Type' => variable.fetch(:type)
+        }
+      end, marker: 2)
+    end
+
     def widget_return_type(value)
       return unless value
 
@@ -270,12 +282,16 @@ module Mxrb
     end
 
     # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
+    # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
     def default_widget_value(value, property)
       case property[:type]
       when 'Boolean' then value['PrimitiveValue'] = property[:default].empty? ? 'false' : property[:default]
       when 'Integer' then value['PrimitiveValue'] = property[:default].empty? ? '0' : property[:default]
       when 'Enumeration' then value['PrimitiveValue'] = property[:default]
+      when 'String', 'Decimal' then value['PrimitiveValue'] = property[:default]
       when 'Expression' then value['Expression'] = property[:default]
+      when 'Selection'
+        value['Selection'] = property[:default].empty? ? property[:selection_types].first || 'None' : property[:default]
       when 'TextTemplate'
         value['TextTemplate'] = client_template(property[:translations]) \
           if property[:required] || !property[:default].empty? || !property[:translations].empty?
@@ -283,6 +299,7 @@ module Mxrb
       value
     end
     # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
+    # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
 
     def client_template(translations)
       items = translations.map do |language, value|
@@ -316,6 +333,6 @@ module Mxrb
 
     def child(root, name) = root.elements.to_a.find { _1.name == name }
 
-    def text(root, name) = child(root, name)&.text.to_s.strip
+    def text(root, name) = child(root, name)&.text.to_s
   end
 end

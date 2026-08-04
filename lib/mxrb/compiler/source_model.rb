@@ -47,6 +47,12 @@ module Mxrb
           unit.document.dig('Content', '$Type') == 'Forms$WebLayoutContent'
       end
 
+      def optimized_web_client?
+        settings = documents('Settings$ProjectSettings').first
+        web = nested_values(settings).find { _1.is_a?(Hash) && _1['$Type'] == 'Forms$WebUIProjectSettingsPart' }
+        web&.fetch('UseOptimizedClient', nil).to_s == 'Yes'
+      end
+
       def client_reference?(qualified_name)
         reference = /(?:\A|[^A-Za-z0-9_.])@#{Regexp.escape(qualified_name)}(?![A-Za-z0-9_.])/
         units.any? do |unit|
@@ -97,6 +103,14 @@ module Mxrb
         when Hash then value.any? { |_key, child| deep_string_match?(child, pattern) }
         when Array then value.any? { deep_string_match?(_1, pattern) }
         else value.is_a?(String) && value.match?(pattern)
+        end
+      end
+
+      def nested_values(value)
+        case value
+        when Hash then [value, *value.values.flat_map { nested_values(_1) }]
+        when Array then value.flat_map { nested_values(_1) }
+        else []
         end
       end
 

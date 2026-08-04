@@ -52,8 +52,8 @@ module Mxrb
         @programs[qualified_name][:declaration] = "const #{reference} = #{js_literal(program)};"
         "() => #{reference}"
       ensure
-        @flow_stack&.pop
-        @variable_kind_stack&.pop
+        @flow_stack.pop
+        @variable_kind_stack.pop
       end
 
       def variable_kinds(document)
@@ -201,7 +201,7 @@ module Mxrb
 
       def change_instructions(action, variable, label)
         array(action['Items']).map.with_index do |item, index|
-          member = item['Attribute'].to_s.split('.').last
+          member = item['Attribute'].to_s.split('.').last.to_s
           next unsupported!(item, item['$Type']) if member.empty? || item['Type'] != 'Set'
 
           { type: 'changeObject', label: index.zero? ? label : "#{label}$#{index}",
@@ -333,7 +333,7 @@ module Mxrb
       end
 
       def compile_validation(action, node)
-        member = action['Attribute'].to_s.split('.').last
+        member = action['Attribute'].to_s.split('.').last.to_s
         return unsupported!(action, action['$Type']) if member.empty?
 
         { type: 'showValidation', label: model_id(node), inputVar: action['ValidationVariableName'],

@@ -105,5 +105,56 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
     expect(resolver.send(:connection_unconfigured?, connection.document.merge('ConnectionString' => '')))
       .to be(false)
   end
+
+  it 'resolves direct database and association sources, including entity fallbacks' do
+    database = {
+      '$Type' => 'Forms$DatabaseSource',
+      'EntityRef' => { 'Entity' => 'Demo.Direct' },
+      'XPathConstraint' => '[Active = true]'
+    }
+    direct = described_class.new(source([]), 'DataSource' => database)
+    expect(direct).to be_xpath
+    expect(direct.entity).to eq('Demo.Direct')
+    expect(direct.xpath_constraint).to eq('[Active = true]')
+
+    association = {
+      '$Type' => 'Forms$AssociationSource',
+      'EntityRef' => {
+        'Steps' => [2, { 'Association' => 'Demo.Parent_Items',
+                         'DestinationEntity' => 'Demo.Item' }]
+      }
+    }
+    associated = described_class.new(source([]), 'DataSource' => association)
+    expect(associated).to be_association
+    expect(associated.association_path).to eq('Demo.Parent_Items/Demo.Item')
+    expect(associated.entity).to eq('Demo.Item')
+  end
+
+  it 'walks nested source arrays and rejects ambiguous connector actions and non-hashes' do
+    nested_widget = {
+      'Children' => [
+        2,
+        { '$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+          'EntityRef' => { 'Entity' => 'Demo.Nested' } }
+      ]
+    }
+    nested = described_class.new(source([]), nested_widget)
+    expect(nested).to be_xpath
+    expect(nested.entity).to eq('Demo.Nested')
+
+    empty = described_class.new(source([]), nil)
+    expect(empty).not_to be_supported
+    expect(empty.send(:nested, 'scalar', 'Anything')).to eq([])
+
+    action = { '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction' }
+    flow = unit(module_name: 'Demo', document: {
+      '$Type' => 'Microflows$Microflow', 'Name' => 'LoadItems',
+      'MicroflowReturnType' => { 'Entity' => 'Demo.Item' },
+      'Actions' => [action, action]
+    })
+    ambiguous = described_class.new(source([flow]), widget)
+    expect(ambiguous).to be_microflow
+    expect(ambiguous).not_to be_xpath
+  end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength

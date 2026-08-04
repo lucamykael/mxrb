@@ -15,6 +15,11 @@ module Mxrb
         @source = source
         @unsupported = []
         @unsupported_custom = []
+        @data_view_scopes = []
+        @list_scopes = []
+        @snippet_scopes = []
+        @snippet_stack = []
+        @snippet_documents = []
         @uses_conditional = false
         @uses_dynamic_class = false
       end
@@ -42,6 +47,7 @@ module Mxrb
         @list_scopes = []
         @snippet_scopes = []
         @snippet_stack = []
+        @snippet_documents = []
         @generic_widgets = {}
         @nanoflow_programs = NanoflowProgramCompiler.new(@source)
       end
@@ -86,6 +92,7 @@ module Mxrb
                    when 'Forms$LayoutGrid' then render_layout_grid(widget)
                    when 'Forms$LayoutGridRow' then render_grid_row(widget)
                    when 'Forms$LayoutGridColumn' then render_grid_column(widget)
+                   when 'Forms$Table' then render_table(widget)
                    when 'Forms$DynamicText' then render_text(widget)
                    when 'Forms$Title' then render_title(widget)
                    when 'Forms$ActionButton' then render_action_button(widget)
@@ -129,6 +136,38 @@ module Mxrb
                    grid_weight_class('sm', widget['TabletWeight']),
                    grid_weight_class('xs', widget['PhoneWeight'])].compact.join(' ')
         render_element('div', widget, array(widget['Widgets']), classes)
+      end
+
+      def render_table(widget)
+        cells = array(widget['Cells']).group_by { integer_or(_1['TopRowIndex'], 0) }
+        rows = array(widget['Rows']).map.with_index do |row, index|
+          content = cells.fetch(index, []).sort_by { integer_or(_1['LeftColumnIndex'], 0) }
+                                          .map { render_table_cell(_1) }
+          props = common_props(row).merge(className: css_class(row))
+          "React.createElement(\"tr\", #{js_props(props)}, [#{content.join(', ')}])"
+        end
+        props = common_props(widget).merge(
+          className: ['mx-table', css_class(widget)].reject(&:empty?).join(' ')
+        )
+        body = "React.createElement(\"tbody\", null, [#{rows.join(', ')}])"
+        "React.createElement(\"table\", #{js_props(props)}, #{body})"
+      end
+
+      def render_table_cell(cell)
+        tag = cell['IsHeader'] == true ? 'th' : 'td'
+        props = common_props(cell).merge(
+          className: css_class(cell),
+          colSpan: positive_integer(cell['Width'], 1), rowSpan: positive_integer(cell['Height'], 1),
+          'data-column-index': integer_or(cell['LeftColumnIndex'], 0)
+        )
+        content = children(array(cell['Widgets']))
+        "React.createElement(#{JSON.generate(tag)}, #{js_props(props)}, #{content})"
+      end
+
+      def integer_or(value, fallback)
+        Integer(value)
+      rescue ArgumentError, TypeError
+        fallback
       end
 
       def render_scroll_container(widget)
@@ -206,12 +245,12 @@ module Mxrb
           unit = @source.units_of('Menus$MenuDocument').find do |candidate|
             "#{candidate.module_name}.#{candidate.document['Name']}" == qualified
           end
-          array(unit&.document&.dig('ItemCollection', 'Items')) if unit
+          array(unit.document.dig('ItemCollection', 'Items')) if unit
         when 'Forms$NavigationSource'
           profile = @source.units_of('Navigation$NavigationDocument').flat_map do |unit|
             array(unit.document['Profiles'])
           end.find { _1['Name'] == source['NavigationProfile'] }
-          array(profile&.dig('Menu', 'Items')) if profile
+          array(profile.dig('Menu', 'Items')) if profile
         end
       end
 
@@ -317,7 +356,7 @@ module Mxrb
 
         combo = ComboBoxBundleCompiler.new(
           @source, @qualified_name, widget,
-          scope: scope_name(@data_view_scopes&.last), entity: @data_view_scopes&.last&.fetch(:entity, nil)
+          scope: scope_name(@data_view_scopes.last), entity: @data_view_scopes.last&.fetch(:entity, nil)
         )
         if combo.supported?
           @uses_form_widgets = true
@@ -422,14 +461,17 @@ module Mxrb
         return render_unsupported(widget) unless snippet && !@snippet_stack.include?(qualified)
 
         @snippet_stack << qualified
+        @snippet_documents << snippet.document
         @snippet_scopes << snippet_scope_map(snippet.document)
         rendered = children(array(snippet.document['Widgets']))
         @snippet_scopes.pop
+        @snippet_documents.pop
         @snippet_stack.pop
         "React.createElement(React.Fragment, #{js_props(common_props(widget))}, #{rendered})"
       ensure
-        if @snippet_stack&.last == qualified
+        if @snippet_stack.last == qualified
           @snippet_scopes.pop
+          @snippet_documents.pop
           @snippet_stack.pop
         end
       end
@@ -508,7 +550,7 @@ module Mxrb
       end
 
       def current_object_scope
-        scope = @list_scopes&.last || @data_view_scopes&.last
+        scope = @list_scopes.last || @data_view_scopes.last
         return scope if scope.is_a?(Hash)
         return unless scope
 
@@ -858,10 +900,36 @@ module Mxrb
         name = mapping['Parameter'].to_s.split('.').last
         expression = mapping['Expression'].to_s
         current_scope = current_object_scope&.fetch(:scope)
-        scope = expression == '$currentObject' ? current_scope : expression
+        scope = if expression == '$currentObject'
+                  current_scope
+                elsif expression.empty?
+                  microflow_variable_scope(mapping['Variable'])
+                else
+                  expression
+                end
         return unless present_identifier?(name) && scope.to_s.match?(/\A\$[A-Za-z_]\w*\z|\Ap\./)
 
         [name.to_sym, { widget: scope, source: 'object' }]
+      end
+
+      def microflow_variable_scope(variable)
+        return unless variable
+
+        snippet = variable['SnippetParameter'].to_s
+        unless snippet.empty?
+          @snippet_scopes.reverse_each do |mapping|
+            return mapping.fetch(snippet).fetch(:scope) if mapping.key?(snippet)
+          end
+        end
+        page = variable['PageParameter'].to_s
+        return "$#{page}" if present_identifier?(page)
+
+        widget = variable['Widget'].to_s
+        target = page_widget(widget)
+        return widget_key(target) if present_identifier?(widget) && target
+
+        local = variable['LocalVariable'].to_s
+        "$#{local}" if present_identifier?(local)
       end
 
       def nanoflow_action?(action)
@@ -957,6 +1025,8 @@ module Mxrb
 
       def data_view_object_property(widget, scope)
         source = widget['DataSource'] || {}
+        return listen_object_property(source, widget) if source['$Type'] == 'Forms$ListenTargetSource'
+
         source_scope = data_source_scope(source)
         path = entity_ref_path(source['EntityRef'])
         if source_scope
@@ -974,8 +1044,45 @@ module Mxrb
         nil
       end
 
+      def listen_object_property(source, widget)
+        target_name = source['ListenTarget'].to_s
+        target = page_widget(target_name)
+        return unless present_identifier?(target_name) && target
+
+        @uses_listen_object = true
+        config = {
+          listenTo: widget_key(target), editable: true,
+          operationId: WebOperationCompiler.operation_id(@qualified_name, widget['Name'])
+        }
+        "ListenObjectProperty(#{js_literal(config)})"
+      end
+
+      def page_widget(name)
+        roots = [*@snippet_documents.reverse, @unit.document]
+        roots.each do |root|
+          widget = all_page_widgets(root).find { _1['Name'] == name }
+          return widget if widget
+        end
+        nil
+      end
+
+      def all_page_widgets(value, result = [])
+        case value
+        when Hash
+          result << value if value['$Type'].to_s.start_with?('Forms$', 'CustomWidgets$')
+          value.each_value { all_page_widgets(_1, result) }
+        when Array then value.each { all_page_widgets(_1, result) }
+        end
+        result
+      end
+
       def data_view_entity(widget)
         source = widget['DataSource'] || {}
+        if source['$Type'] == 'Forms$ListenTargetSource'
+          target = page_widget(source['ListenTarget'].to_s)
+          return target ? WebListDataSource.new(@source, target).entity : ''
+        end
+
         entity = entity_ref_destination(source['EntityRef'])
         return entity unless entity.empty?
 
@@ -1746,6 +1853,8 @@ module Mxrb
           end
           imports << 'import { MicroflowObjectProperty } from "mendix/MicroflowObjectProperty";' \
             if @uses_microflow_object
+          imports << 'import { ListenObjectProperty } from "mendix/ListenObjectProperty";' \
+            if @uses_listen_object
           widgets << 'Container' if @uses_container
         end
         if @uses_combo_box

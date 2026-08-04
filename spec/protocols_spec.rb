@@ -8,7 +8,7 @@ RSpec.describe Mxrb::Protocols do
   def entry(protocol:, guids: [], name: 'Test', marketplace_id: '1')
     described_class::Entry.new(
       protocol: protocol, name: name, publisher: 'Mendix', category: 'Messaging',
-      marketplace_id: marketplace_id, appstore_guids: guids.freeze,
+      marketplace_id: marketplace_id, content_type: 'Module', appstore_guids: guids.freeze,
       source_url: "https://marketplace.mendix.com/link/component/#{marketplace_id}",
       evidence_date: '2026-08-02'
     )
@@ -25,7 +25,9 @@ RSpec.describe Mxrb::Protocols do
   it 'exposes an immutable registry of connectors with verifiable provenance' do
     expect(described_class.all).to be_frozen
     expect(described_class.all).to all(be_a(described_class::Entry))
-    expect(described_class.all.map(&:marketplace_id)).to contain_exactly('119508', '230843', '117391')
+    expect(described_class.all.map(&:marketplace_id)).to contain_exactly(
+      '119508', '230843', '117391', '105878', '235426', '118800'
+    )
     expect(described_class.all.map(&:source_url)).to all(start_with('https://marketplace.mendix.com/'))
   end
 
@@ -33,7 +35,70 @@ RSpec.describe Mxrb::Protocols do
     expect(described_class.find_by_protocol(:opc_ua).map(&:name))
       .to contain_exactly('OPC-UA Connector', 'OPC UA Client Connector')
     expect(described_class.find_by_protocol('MQTT').map(&:name)).to eq(['MQTT'])
+    expect(described_class.find_by_protocol(:kafka).map(&:name)).to eq(['Kafka'])
+    expect(described_class.find_by_protocol('websocket').map(&:name)).to eq(['WebsocketClient'])
+    expect(described_class.find_by_protocol(:amqp).map(&:name)).to eq(['eMagiz Mendix Connector (Legacy)'])
     expect(described_class.find_by_protocol(:modbus)).to be_empty
+  end
+
+  it 'previews connector installation without writing and applies only through explicit adapters' do
+    package = Mxrb::OfficialMarketplace::OfficialPackage.new(
+      'Kafka', '2.12.0', :mendix, 'https://example.test/kafka.mpk', 'content:105878',
+      105_878, '123e4567-e89b-12d3-a456-426614174000', 'Module', 'Regular', [], false, true
+    )
+    api = instance_double(Mxrb::OfficialMarketplace::ContentApi)
+    installer = instance_double(Mxrb::OfficialMarketplace::Installer)
+    allow(api).to receive(:resolve).with(
+      '105878', version: '2.12.0', mendix_version: '10.24.0'
+    ).and_return(package)
+    allow(installer).to receive(:pull_official).with(
+      '105878', version: '2.12.0', mendix_version: '10.24.0', api:
+    ).and_return(:installed)
+
+    adapter = described_class.adapter(installer:, api:)
+    plan = described_class.plan(:kafka, mendix_version: '10.24.0', version: '2.12.0', adapter:)
+    expect(plan).to be_safe
+    expect(plan.changes.first).to include(
+      action: :install, protocol: :kafka, marketplace_id: '105878', version: '2.12.0'
+    )
+    expect(plan.apply!).to eq(:installed)
+    expect(plan).to be_applied
+    expect { plan.apply! }.to raise_error(Mxrb::MarketplaceError, /already applied/)
+  end
+
+  it 'fails closed for unverified protocols and adapter-free apply' do
+    expect { described_class.plan(:modbus, mendix_version: '10.24.0') }
+      .to raise_error(Mxrb::MarketplaceError, /no verified Marketplace connector/)
+
+    plan = described_class.plan(:websocket, mendix_version: '10.24.0', version: '1.0.0')
+    expect(plan).not_to be_safe
+    expect(plan.changes.first[:version]).to eq('1.0.0')
+    expect(plan.blocked_reasons).to include(/adapter was not provided/, /version was not resolved/)
+    expect { plan.apply! }.to raise_error(Mxrb::MarketplaceError, /blocked/)
+
+    adapter = described_class.adapter(installer: double, api: nil)
+    unresolved = described_class.plan(:kafka, mendix_version: '10.24.0', adapter:)
+    expect(unresolved.blocked_reasons).to eq(['official Marketplace version was not resolved'])
+
+    selected = described_class.plan(
+      :opc_ua, mendix_version: '10.24.0', marketplace_id: 117_391
+    )
+    expect(selected.entry.name).to eq('OPC UA Client Connector')
+    expect { described_class.plan(:opc_ua, mendix_version: '10.24.0', marketplace_id: 'missing') }
+      .to raise_error(Mxrb::MarketplaceError, /no verified Marketplace connector/)
+  end
+
+  it 'exposes connector declarations in the Ruby builder without emitting an incomplete MPR' do
+    builder = Mxrb::Dsl::Builder.new('/tmp/connector-plan.mpr')
+    builder.mendix_version('10.24.0')
+    builder.connector(:opc_ua, version: '2.2.0')
+
+    expect(builder.definition[:connectors]).to eq(
+      [{ protocol: :opc_ua, version: '2.2.0', marketplace_id: nil }]
+    )
+    expect(builder.connector_plans.first.entry.marketplace_id).to eq('230843')
+    expect { builder.build! }.to raise_error(Mxrb::MarketplaceError, /preview-only/)
+    expect(File).not_to exist('/tmp/connector-plan.mpr')
   end
 
   it 'identifies connectors only by verified GUIDs and fails closed otherwise' do

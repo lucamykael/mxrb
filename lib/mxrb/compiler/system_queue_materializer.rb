@@ -45,7 +45,7 @@ module Mxrb
 
       def queue_config(id, parallelism)
         config = { '$ID' => id, '$Type' => 'Queues$BasicQueueConfig' }
-        return config.merge('Parallelism' => parallelism.to_i) if @version.to_i < 11
+        return config.merge('Parallelism' => parallelism.to_i) if @version.to_i < 10
 
         config.merge('ParallelismExpression' => parallelism, 'ClusterWide' => false)
       end

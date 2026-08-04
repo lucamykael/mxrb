@@ -142,6 +142,7 @@ RSpec.describe Mxrb::Compiler::SystemModelSeed do
     expect(described_class.for('7.17.0-rc5').seed_version).to eq('7.17.0')
     expect(described_class.for('7.99.0').seed_version).to eq('7.17.0')
     expect(described_class.for('9.24.0').seed_version).to eq('9.6.1.29396')
+    expect(described_class.for('10.24.0').seed_version).to eq('10.24.0.73019')
     expect(described_class.for('11.99.0').seed_version).to eq('11.12.1')
   end
 
@@ -212,6 +213,15 @@ RSpec.describe Mxrb::Compiler::SystemQueueMaterializer do
       subject.materialize
       expect(Mxrb::Compiler::ModelPackage.read(path).types['Queues$Queue']).to eq(2)
     end
+  end
+
+  it 'uses expression-based queue configuration in Mendix 10' do
+    materializer = described_class.allocate
+    materializer.instance_variable_set(:@version, '10.24.0.73019')
+
+    expect(materializer.send(:queue_config, 'id', '5')).to include(
+      'ParallelismExpression' => '5', 'ClusterWide' => false
+    )
   end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength

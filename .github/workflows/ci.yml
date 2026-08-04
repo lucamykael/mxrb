@@ -34,8 +34,8 @@ jobs:
       - name: Run strict test suite
         env:
           MXRB_COVERAGE: "1"
-          MXRB_LINE_COVERAGE_MIN: "98"
-          MXRB_BRANCH_COVERAGE_MIN: "95"
+          MXRB_LINE_COVERAGE_MIN: "100"
+          MXRB_BRANCH_COVERAGE_MIN: "100"
           MXRB_ACCEPTANCE_MPRS: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
         run: bundle exec rspec
 
