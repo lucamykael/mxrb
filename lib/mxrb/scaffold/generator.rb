@@ -64,21 +64,6 @@ module Mxrb
         connect_module_aggregator(module_name, 'infrastructure', 'infrastructure.rb')
       end
 
-      def ensure_application_directory(module_name, directory)
-        ensure_module(module_name)
-        ensure_evaluate_dir(module_path(module_name, 'application', 'application.rb'), directory)
-      end
-
-      def ensure_evaluate_dir(path, directory)
-        source = @transaction.content(path)
-        raise ArgumentError, "#{path}: aggregator not found" unless source
-
-        line = %(evaluate_dir File.join(__dir__, "#{directory}"))
-        return if source.include?(line)
-
-        @transaction.write(path, "#{source.rstrip}\n#{line}\n")
-      end
-
       def connect_artifact(aggregator, *segments)
         source = @transaction.content(aggregator)
         raise ArgumentError, "#{aggregator}: aggregator not found" unless source

@@ -258,16 +258,12 @@ RSpec.describe Mxrb::Scaffold::Generator do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
       generator = described_class.new(:entity, 'ScaffoldApp.Animal', target: root)
-      application = File.join(root, 'modules/ScaffoldApp/application/application.rb')
       project = File.join(root, 'project.rb')
-      application_before = File.binread(application)
       project_before = File.binread(project)
 
-      generator.send(:ensure_evaluate_dir, application, 'use_cases')
       generator.send(:connect_project_file, 'modules', 'ScaffoldApp', 'module.rb')
 
       expect(generator.instance_variable_get(:@transaction).updated).to be_empty
-      expect(File.binread(application)).to eq(application_before)
       expect(File.binread(project)).to eq(project_before)
     end
   end

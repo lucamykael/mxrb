@@ -139,5 +139,46 @@ RSpec.describe Mxrb::Writer, 'modern member references' do
       end.to raise_error(Mxrb::SerializationError, /cannot qualify attribute "Name"/)
     end
   end
+
+  it 'handles qualified, ambiguous, absent, and legacy member-reference edges' do
+    writer = described_class.new('edge.mpr', version: '11.12.1', modules: [])
+
+    expect(writer.send(:qualified_attribute_identifier, 'Order.Name', 'App.Order'))
+      .to eq('App.Order.Name')
+    expect(writer.send(:qualified_attribute_identifier, 'Other.Name', 'App.Order')).to be_nil
+    expect(writer.send(:qualified_attribute_identifier, :Name, '')).to be_nil
+    expect(writer.send(:qualified_entity_name, nil, 'App')).to be_nil
+    expect(writer.send(:qualified_entity_name, :Order)).to be_nil
+    expect(writer.send(:qualified_entity_name, :Order, 'App')).to eq('App.Order')
+
+    expect(writer.send(:object_entity_type, { '$Type' => 'DataTypes$StringType' }, 'App')).to be_nil
+    expect(
+      writer.send(
+        :object_entity_type,
+        { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Order' }, 'App'
+      )
+    ).to eq('App.Order')
+    expect(writer.send(:qualified_artifact_parts, 'Load', 'App')).to eq(%w[App Load])
+    expect(writer.send(:qualified_artifact_parts, 'Shared.Load', 'App')).to eq(%w[Shared Load])
+    expect(writer.send(:flow_return_entity, 'Missing.Load', 'App')).to be_nil
+    expect(writer.send(:module_entities, 'Missing')).to eq([])
+
+    activity, variables = writer.send(
+      :qualify_activity_members,
+      [{ type: :create_object, entity: nil, variable: :unknown }], {}, 'App'
+    )
+    expect(activity.first[:entity]).to be_nil
+    expect(variables).to eq({})
+    decision = writer.send(
+      :qualify_decision_activity,
+      { type: :decision, true_branch: [], false_branch: [] }, {}, 'App'
+    )
+    expect(decision).to include(true_branch: [], false_branch: [])
+
+    expect(writer.send(:qualified_association_identifier, :Missing, nil)).to be_nil
+    expect do
+      writer.send(:change_action_item_doc, { association: :Missing, value: nil })
+    end.to raise_error(Mxrb::SerializationError, /cannot qualify association :Missing/)
+  end
 end
 # rubocop:enable Metrics/BlockLength
