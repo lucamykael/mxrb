@@ -259,14 +259,45 @@ module Mxrb
       existing = mpr.children_of(root_id).map { mpr.parse_contents(_1)['$Type'] }
       units = load_native_units(path).reject { existing.include?(_1.fetch('type')) }
       units.each do |unit|
-        next unless unit.fetch('type') == 'Settings$ProjectSettings'
-
-        array_items(unit.dig('doc', 'Settings')).each do |setting|
-          setting['EnableNewStringBehavior'] = true \
-            if setting['$Type'] == 'Forms$WebUIProjectSettingsPart'
+        case unit.fetch('type')
+        when 'Settings$ProjectSettings'
+          sanitize_project_settings!(unit.fetch('doc'))
+        when 'Navigation$NavigationDocument'
+          sanitize_project_navigation!(unit.fetch('doc'))
         end
       end
       apply_native_unit_tree(mpr, root_id, units)
+    end
+
+    def sanitize_project_navigation!(document)
+      profiles = array_items(document['Profiles'])
+      profiles += LEGACY_NAVIGATION_PROFILES.values.filter_map { document[_1] }
+      profiles.each do |profile|
+        # Icons stored in a donor project refer to image collections that are
+        # not part of a structural project template. The Ruby navigation DSL
+        # may set a new icon explicitly after the clean seed is installed.
+        profile['AppIcon'] = '' if profile.key?('AppIcon')
+      end
+      document
+    end
+
+    def sanitize_project_settings!(document)
+      array_items(document['Settings']).each do |setting|
+        case setting['$Type']
+        when 'Forms$WebUIProjectSettingsPart'
+          setting['EnableNewStringBehavior'] = true
+          setting['UseOptimizedClient'] = 'Yes' if @definition.fetch(:version).to_i == 10
+          setting['ThemeModuleName'] = '' if setting.key?('ThemeModuleName')
+        when 'Settings$ModelSettings'
+          # A project template is structural seed data, not an application
+          # baseline. Lifecycle callbacks from the donor project must never
+          # leak into a standalone Ruby-first project.
+          %w[AfterStartupMicroflow BeforeShutdownMicroflow HealthCheckMicroflow].each do |key|
+            setting[key] = '' if setting.key?(key)
+          end
+        end
+      end
+      document
     end
 
     def native_module_doc(native_units, module_name)
@@ -283,11 +314,46 @@ module Mxrb
 
     def write_native_documents(mpr, module_id, mod)
       mod.fetch(:native_documents, []).each do |document|
+        doc = document.fetch(:doc)
+        doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout?
         upsert_native_unit(
           mpr, module_id,
-          'containment' => document.fetch(:containment), 'doc' => document.fetch(:doc)
+          'containment' => document.fetch(:containment), 'doc' => doc
         )
       end
+    end
+
+    def legacy_layout?
+      @definition.fetch(:version).to_i < 9
+    end
+
+    def legacy_layout_doc(source)
+      placeholder = {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Placeholder',
+        'Class' => '', 'Name' => 'Main', 'Style' => '', 'TabIndex' => 0
+      }
+      common = {
+        '$ID' => source['$ID'] || SecureRandom.uuid, '$Type' => 'Forms$Layout',
+        'CanvasHeight' => source.fetch('CanvasHeight', 600),
+        'CanvasWidth' => source.fetch('CanvasWidth', 800),
+        'Class' => source.dig('Appearance', 'Class').to_s,
+        'Documentation' => source.fetch('Documentation', ''), 'Excluded' => false,
+        'FormCall' => nil, 'LayoutType' => 'Responsive', 'Name' => source.fetch('Name'),
+        'Style' => source.dig('Appearance', 'Style').to_s
+      }
+      return common.merge('Widgets' => IO::BsonCodec.build_array([placeholder], marker: 2)) \
+        unless oldest_layout_contract?
+
+      common.merge(
+        'AcceptPlaceholderName' => '', 'CancelPlaceholderName' => '',
+        'MainPlaceholderName' => 'Main', 'UseMainPlaceholderForPopups' => false,
+        'Widget' => placeholder
+      )
+    end
+
+    def oldest_layout_contract?
+      major, minor = @definition.fetch(:version).split('.').map(&:to_i)
+      major < 7 || (major == 7 && minor < 17)
     end
 
     def apply_native_unit_tree(mpr, target_root_id, units)
@@ -354,6 +420,15 @@ module Mxrb
           "UserRoles" => doc.fetch("UserRoles"),
           "AdminUserRole" => doc.fetch("AdminUserRole")
         }
+        if existing.key?("UserRoles") && array_items(existing["UserRoles"]).empty?
+          # Project templates may contain demo users for modules and roles that
+          # are intentionally not copied into a new Ruby-first project. Once
+          # the empty role set is bootstrapped, those references must be
+          # removed as one atomic security repair.
+          editable["DemoUsers"] = doc.fetch("DemoUsers")
+          editable["EnableDemoUsers"] = doc.fetch("EnableDemoUsers")
+          editable["SecurityLevel"] = doc.fetch("SecurityLevel")
+        end
         if security[:security_level]
           editable["SecurityLevel"] = doc.fetch("SecurityLevel")
         end
@@ -400,9 +475,29 @@ module Mxrb
 
     def legacy_navigation_doc(existing, navigation)
       navigation.fetch(:profiles, []).each_with_object(existing.dup) do |profile, document|
-        key = LEGACY_NAVIGATION_PROFILES.fetch(profile.fetch(:name).to_s)
-        document[key] = navigation_profile_doc(profile, previous: existing[key])
+        name = profile.fetch(:name).to_s
+        name = 'Desktop' if name == 'Responsive'
+        key = LEGACY_NAVIGATION_PROFILES.fetch(name)
+        document[key] = legacy_navigation_profile_doc(profile, previous: existing[key])
       end
+    end
+
+    def legacy_navigation_profile_doc(profile, previous:)
+      previous ||= {}
+      role_homes = profile.fetch(:role_homes, {}).map do |role, page|
+        { role: role.to_s, page: page.to_s }
+      end + profile.fetch(:role_home_details, [])
+      title = profile.fetch(:app_title, {})
+      title = title.values.first.to_s if title.is_a?(Hash)
+      editable = {
+        'HomePage' => navigation_home_doc(profile[:home_page], profile[:home_microflow]),
+        'HomeItems' => IO::BsonCodec.build_array(role_homes.map { navigation_role_home_doc(_1) }, marker: 2),
+        'Menu' => navigation_menu_doc(profile.fetch(:items, [])),
+        'Enabled' => true,
+        'ApplicationTitle' => title.to_s.empty? ? previous.fetch('ApplicationTitle', 'Mendix') : title.to_s
+      }
+      editable['Kind'] = profile[:kind].to_s unless profile[:kind].to_s.empty?
+      previous.merge(editable)
     end
 
     def modern_navigation_doc(existing, navigation)
@@ -551,9 +646,11 @@ module Mxrb
 
     def write_module_security(mpr, module_id, mod)
       raw = mpr.children_of(module_id).find { _1["ContainmentName"] == "ModuleSecurity" }
-      return if raw.nil? && mod.fetch(:module_roles, []).empty?
+      return if raw.nil? && mod.fetch(:module_roles, []).empty? && @definition.fetch(:version).to_i >= 10
 
-      doc = module_security_doc(mod.fetch(:module_roles, []))
+      doc = module_security_doc(
+        mod.fetch(:module_roles, []), legacy: @definition.fetch(:version).to_i < 10
+      )
       if raw
         existing = mpr.parse_contents(raw)
         doc = existing.merge(doc)
@@ -624,7 +721,8 @@ module Mxrb
 
       doc = existing.merge(
         "$ID" => raw&.fetch("UnitID", nil) || SecureRandom.uuid,
-        "$Type" => "DomainModels$DomainModel"
+        "$Type" => "DomainModels$DomainModel",
+        "Documentation" => existing.fetch("Documentation", "")
       )
       doc[entities_key] = IO::BsonCodec.build_array(entities)
       doc[associations_key] = IO::BsonCodec.build_array(associations)
@@ -1372,18 +1470,29 @@ module Mxrb
       end
       return previous || IO::BsonCodec.build_array([]) if declarations.empty?
 
-      declared_names = declarations.map { _1.fetch(:name) }
       kept = existing.reject do |rule|
-        declared_names.include?(rule['Attribute'].to_s.split('.').last) &&
-          rule.dig('RuleInfo', '$Type').to_s.match?(/(?:Required|Unique)RuleInfo\z/)
+        declarations.any? { validation_declaration_matches?(_1, rule) }
       end
       generated = declarations.flat_map do |attribute|
         %i[required unique].filter_map do |kind|
-          validation_rule_doc(module_name, entity.fetch(:name), attribute.fetch(:name), kind) \
-            if attribute[kind] == true
+          next unless attribute[kind] == true
+
+          existing.find { validation_rule_matches?(_1, attribute.fetch(:name), kind) } ||
+            validation_rule_doc(module_name, entity.fetch(:name), attribute.fetch(:name), kind)
         end
       end
       IO::BsonCodec.build_array(kept + generated)
+    end
+
+    def validation_declaration_matches?(attribute, rule)
+      %i[required unique].any? do |kind|
+        attribute.key?(kind) && validation_rule_matches?(rule, attribute.fetch(:name), kind)
+      end
+    end
+
+    def validation_rule_matches?(rule, attribute_name, kind)
+      rule['Attribute'].to_s.split('.').last == attribute_name &&
+        rule.dig('RuleInfo', '$Type').to_s.end_with?("#{kind.to_s.capitalize}RuleInfo")
     end
 
     def validation_rule_doc(module_name, entity_name, attribute_name, kind)
@@ -1458,14 +1567,19 @@ module Mxrb
       members.map do |member|
         association = member.fetch(:kind, :attribute).to_sym == :association
         name = member.fetch(:name).to_s
+        reference = member[:reference].to_s
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "DomainModels$MemberAccess",
-          "Association" => association ? "#{module_name}.#{name}" : "",
-          "Attribute" => association ? "" : "#{module_name}.#{entity_name}.#{name}",
+          "Association" => association ? qualified_member(reference, "#{module_name}.#{name}") : "",
+          "Attribute" => association ? "" : qualified_member(reference, "#{module_name}.#{entity_name}.#{name}"),
           "AccessRights" => member.fetch(:rights).to_s
         }
       end
+    end
+
+    def qualified_member(reference, fallback)
+      reference.empty? ? fallback : reference
     end
 
     def access_default_rights(read, write)
@@ -1578,14 +1692,20 @@ module Mxrb
       else
         widgets
       end
+      content = content.map { legacy_widget_tree(_1) } if oldest_layout_contract?
       roles_declared = !page[:allowed_roles].nil?
+      argument = {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$FormCallArgument",
+        "Parameter" => "#{page.fetch(:layout)}.Main"
+      }
+      if oldest_layout_contract?
+        argument['Widget'] = legacy_single_widget(content)
+      else
+        argument['Widgets'] = IO::BsonCodec.build_array(content, marker: 2)
+      end
       form_call = {
         "$ID" => SecureRandom.uuid, "$Type" => "Forms$LayoutCall",
-        "Arguments" => IO::BsonCodec.build_array([{
-          "$ID" => SecureRandom.uuid, "$Type" => "Forms$FormCallArgument",
-          "Parameter" => "#{page.fetch(:layout)}.Main",
-          "Widgets" => IO::BsonCodec.build_array(content, marker: 2)
-        }], marker: 2),
+        "Arguments" => IO::BsonCodec.build_array([argument], marker: 2),
         "Form" => page.fetch(:layout)
       }
       doc = { "$ID" => SecureRandom.uuid, "$Type" => "Forms$Page", "Name" => page.fetch(:name),
@@ -1599,6 +1719,38 @@ module Mxrb
         "PopupHeight" => page.fetch(:popup) ? 400 : 0,
         "PopupResizable" => page.fetch(:popup), "ExportLevel" => "Hidden" }
       doc
+    end
+
+    def legacy_widget_tree(value)
+      transformed = value.transform_values do |child|
+        case child
+        when Hash then legacy_widget_tree(child)
+        when Array then child.map { _1.is_a?(Hash) ? legacy_widget_tree(_1) : _1 }
+        else child
+        end
+      end
+      singular = {
+        'Forms$DivContainer' => [%w[Widgets Widget]],
+        'Forms$DataView' => [%w[Widgets Widget], %w[FooterWidgets FooterWidget]],
+        'Forms$TabPage' => [%w[Widgets Widget]]
+      }.fetch(transformed['$Type'], [])
+      singular.each do |plural, single|
+        next unless transformed.key?(plural)
+
+        transformed[single] = legacy_single_widget(array_items(transformed.delete(plural)))
+      end
+      transformed
+    end
+
+    def legacy_single_widget(widgets)
+      return nil if widgets.empty?
+      return widgets.first if widgets.one?
+
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$VerticalFlow',
+        'Widgets' => IO::BsonCodec.build_array(widgets, marker: 2),
+        'Name' => 'verticalFlow', 'Class' => '', 'Style' => '', 'TabIndex' => 0
+      }
     end
 
     def menu_doc(menu)
@@ -1783,11 +1935,13 @@ module Mxrb
       }
     end
 
-    def module_security_doc(roles)
+    def module_security_doc(roles, legacy: false)
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Security$ModuleSecurity",
-        "ModuleRoles" => IO::BsonCodec.build_array(roles.map { module_role_doc(_1) }, marker: 2)
+        "ModuleRoles" => IO::BsonCodec.build_array(
+          roles.map { module_role_doc(_1) }, marker: legacy ? 3 : 2
+        )
       }
     end
 

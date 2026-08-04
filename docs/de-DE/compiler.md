@@ -14,8 +14,8 @@ Abhängigkeiten und ein Runtime-kompatibel geordnetes BSON-`model.mdp` werden
 ebenfalls erzeugt.
 
 Der Bootstrap besitzt auditierte Seeds und Kataloge für 6.10.8, 7.5.0,
-7.17.0, 9.6.1.29396 und 11.12.1. Die Familien 6.x, 7.x, 9.x und 11.x wählen
-einen kompatiblen Compiler-Seed; 5.x, 8.x und 10.x schlagen ohne auditierten
+7.17.0, 9.6.1.29396, 10.24.0.73019 und 11.12.1. Die Familien 6.x, 7.x, 9.x, 10.x und 11.x wählen
+einen kompatiblen Compiler-Seed; 5.x und 8.x schlagen ohne auditierten
 Seed geschlossen fehl. Die Familie gilt nur für das Compiler-Schema. Die
 Runtime muss exakt zum Patch des MPR passen.
 
@@ -24,9 +24,10 @@ mise, kompiliert `javasource/**/*.java` gegen Runtime- und Projektbibliotheken
 und schreibt ein deterministisches OSGi-`project.jar`. Für VetClinic wurden 183
 Quelldateien zu 249 Klassen kompiliert.
 
-`WebBundleBuilder` wählt Dojo für 6/7, Dojo mit React-Wrapper für 9 und React
-für 11. Der React-Pfad erzeugt Entry-/Seitenmodule, entpackt `.mpk` und ruft
-Node/Rspack der Version direkt auf. Data Grid 2 wird für den Teilumfang aus XPath-Datenquelle
+`WebBundleBuilder` wählt Dojo für 6/7, Dojo mit React-Wrapper für 9, den im
+Projekt gewählten klassischen oder optimierten Client für 10 und React für 11.
+Der React-Pfad erzeugt Entry-/Seitenmodule, entpackt `.mpk` und ruft direkt
+Node/Rollup für 10 oder Node/Rspack für 11 auf. Data Grid 2 wird für den Teilumfang aus XPath-Datenquelle
 und Attributspalten kompiliert, einschließlich `operations.json`, Datenquelle
 und Attributtypen. Noch nicht übersetzte Typen oder Eigenschaftskombinationen
 erhalten einen DOM-Fallback in `web/mxrb-pages.json`; das VetClinic-Manifest ist
@@ -144,14 +145,15 @@ Seitenbundles und fuhr sauber herunter. Danach bestand der Funktionstest
 ## Explizite Grenzen
 
 - alle 12 Stufen und saubere Web-Generierung sind für 6.10.8, 7.5.0, 7.17.0,
-  9.6.1.29396 und 11.12.1 validiert;
-- ein exakter nativer Boot ist für 11.12.1 belegt. Die installierten
+  9.6.1.29396, 10.24.0.73019 und 11.12.1 validiert;
+- ein exakter nativer Boot ist für 10.24.0.73019 und 11.12.1 belegt. Die installierten
   6/7/9-Distributionen enthalten exakte Runtime-Bundles, aber keinen
-  PAD/Launcher; `db up` schlägt geschlossen fehl, statt den Java-21-Launcher
+  kompatiblen Launcher; `db up` schlägt geschlossen fehl, statt den Java-21-Launcher
   aus Version 11 einzusetzen;
 - Data Grid 1 ist abgedeckt, andere Dojo-Widgets bleiben explizite
   Manifestbefunde;
-- der Mendix-11-React-Pfad besitzt saubere Preflights und vollständige
+- der optimierte Mendix-10-React/Rollup-Pfad ist durch eine neu erstellte
+  Anwendung belegt; der Mendix-11-React-Pfad besitzt saubere Preflights und vollständige
   Rspack-Builds für LearnNow, MyFirstModule, SLATaskApp, Sudoku und VetClinic.
   Diese Fixture-Matrix belegt auditierte Verträge, keine universelle Kompatibilität;
 - native Web-Bundles werden erzeugt; React Native verwendet weiterhin

@@ -1,0 +1,56 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'base64'
+require 'json'
+require_relative '../lib/mxrb'
+
+model, version, output = ARGV
+unless model && version
+  warn 'Usage: script/extract_project_template MODEL.MPR VERSION [OUTPUT]'
+  exit 64
+end
+output ||= File.join(__dir__, '..', 'lib', 'mxrb', 'templates', 'project', "#{version}.json")
+
+types = %w[
+  Settings$ProjectSettings Texts$SystemTextCollection Projects$ProjectConversion
+  Navigation$NavigationDocument Security$ProjectSecurity
+].freeze
+
+sanitize = lambda do |document|
+  case document['$Type']
+  when 'Navigation$NavigationDocument'
+    document.each do |key, profile|
+      next unless key.end_with?('Profile') && profile.is_a?(Hash)
+
+      profile['HomePage']&.merge!('Page' => '', 'Microflow' => '')
+      profile['HomeItems'] = [profile.fetch('HomeItems', [2]).first]
+      profile.dig('Menu', 'Items')&.replace([profile.dig('Menu', 'Items').first])
+    end
+  when 'Security$ProjectSecurity'
+    document['UserRoles'] = [document.fetch('UserRoles', [1]).first]
+    document['AdminUserRole'] = ''
+    document['GuestUserRole'] = '' if document.key?('GuestUserRole')
+  end
+  document
+end
+mpr = Mxrb::IO::MprFile.open(model, readonly: true)
+root_id = mpr.root_unit.fetch('UnitID')
+units = mpr.children_of(root_id).filter_map do |unit|
+  document = sanitize.call(mpr.parse_contents(unit))
+  next unless types.include?(document['$Type'])
+
+  {
+    'unit_id' => unit.fetch('UnitID'), 'container_id' => unit.fetch('ContainerID'),
+    'module' => nil, 'containment' => unit.fetch('ContainmentName'),
+    'name' => document['Name'].to_s, 'type' => document.fetch('$Type'),
+    'contents' => Base64.strict_encode64(Mxrb::IO::BsonCodec.serialize(document))
+  }
+end
+mpr.close
+
+missing = types - units.map { _1.fetch('type') }
+raise Mxrb::SerializationError, "project template is missing #{missing.join(', ')}" unless missing.empty?
+
+File.write(output, "#{JSON.pretty_generate('format_version' => 'v1', 'units' => units)}\n")
+puts "Project template #{version}: #{units.length} units, output=#{File.expand_path(output)}"

@@ -28,7 +28,7 @@ module Mxrb
       def source_security
         mpr = IO::MprFile.open(@mpr_path, readonly: true)
         document = mpr.all_units.lazy.map { mpr.parse_contents(_1) }
-                                     .find { _1['$Type'] == 'Security$ProjectSecurity' }
+                      .find { _1['$Type'] == 'Security$ProjectSecurity' }
         raise CompilationError, 'MPR has no project security document' unless document
 
         document

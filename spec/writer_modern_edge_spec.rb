@@ -19,6 +19,149 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     writer.send(:ensure_project_documents, mpr, 'root')
   end
 
+  it 'removes dangling template demo users while bootstrapping project roles' do
+    raw = { 'UnitID' => 'security', 'ContainmentName' => 'ProjectDocuments' }
+    existing = {
+      '$ID' => 'security', '$Type' => 'Security$ProjectSecurity',
+      'UserRoles' => [2], 'EnableDemoUsers' => true,
+      'DemoUsers' => [2, {
+        '$Type' => 'Security$DemoUserImpl', 'UserName' => 'demo_user',
+        'Entity' => 'Administration.Account', 'UserRoles' => [1, 'User']
+      }]
+    }
+    mpr = double(children_of: [raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(existing)
+    expect(mpr).to receive(:update_unit).with(
+      'security', hash_including(
+                    'EnableDemoUsers' => false, 'DemoUsers' => [2], 'SecurityLevel' => 'CheckNothing'
+                  )
+    )
+
+    writer.send(:write_project_security, mpr, 'root', {})
+  end
+
+  it 'removes donor lifecycle callbacks from standalone project templates' do
+    document = {
+      'Settings' => [2,
+                     { '$Type' => 'Forms$WebUIProjectSettingsPart',
+                       'ThemeModuleName' => 'Donor_UI' },
+                     { '$Type' => 'Settings$ModelSettings',
+                       'AfterStartupMicroflow' => 'Donor.Start',
+                       'BeforeShutdownMicroflow' => 'Donor.Stop',
+                       'HealthCheckMicroflow' => 'Donor.Health' }]
+    }
+
+    writer.send(:sanitize_project_settings!, document)
+
+    expect(document['Settings'][1]).to include(
+      'EnableNewStringBehavior' => true, 'ThemeModuleName' => ''
+    )
+    expect(document['Settings'][2]).to include(
+      'AfterStartupMicroflow' => '', 'BeforeShutdownMicroflow' => '',
+      'HealthCheckMicroflow' => ''
+    )
+  end
+
+  it 'leaves absent lifecycle fields absent and uses the prior legacy application title' do
+    document = { 'Settings' => [2, { '$Type' => 'Settings$ModelSettings' }] }
+    writer.send(:sanitize_project_settings!, document)
+    expect(document['Settings'][1]).not_to have_key('AfterStartupMicroflow')
+
+    profile = writer.send(
+      :legacy_navigation_profile_doc,
+      { role_homes: {}, role_home_details: [], app_title: {}, items: [] },
+      previous: { 'ApplicationTitle' => 'Existing title' }
+    )
+    expect(profile['ApplicationTitle']).to eq('Existing title')
+  end
+
+  it 'normalizes explicitly supplied native layouts before writing Mendix 6 documents' do
+    legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
+    mpr = double
+    expect(legacy).to receive(:upsert_native_unit).with(
+      mpr, 'module-id', hash_including(
+                          'containment' => 'Documents',
+                          'doc' => hash_including('$Type' => 'Forms$Layout', 'Widget' => hash_including(
+                            '$Type' => 'Forms$Placeholder'
+                          ))
+                        )
+    )
+    legacy.send(
+      :write_native_documents, mpr, 'module-id',
+      native_documents: [{ containment: 'Documents', doc: {
+        '$Type' => 'Forms$Layout', 'Name' => 'Shell'
+      } }]
+    )
+  end
+
+  it 'removes donor image references from standalone navigation templates' do
+    document = {
+      'Profiles' => [2, {
+        '$Type' => 'Navigation$NavigationProfile', 'Name' => 'Responsive',
+        'AppIcon' => 'Donor_UI.Images.Icon'
+      }]
+    }
+
+    writer.send(:sanitize_project_navigation!, document)
+
+    expect(document.dig('Profiles', 1, 'AppIcon')).to eq('')
+  end
+
+  it 'materializes the audited singular and plural legacy layout contracts' do
+    source = { 'Name' => 'Shell', 'Appearance' => { 'Class' => 'shell', 'Style' => 'gap: 1px' } }
+    oldest = described_class.new('v6.mpr', version: '6.10.8', modules: [])
+                            .send(:legacy_layout_doc, source)
+    modern_legacy = described_class.new('v717.mpr', version: '7.17.0', modules: [])
+                                   .send(:legacy_layout_doc, source.merge('$ID' => 'layout-id'))
+
+    expect(oldest).to include('MainPlaceholderName' => 'Main', 'Widget' => hash_including(
+      '$Type' => 'Forms$Placeholder'
+    ))
+    expect(oldest).not_to have_key('Widgets')
+    expect(modern_legacy).to include('$ID' => 'layout-id', 'Widgets' => [2, hash_including(
+      '$Type' => 'Forms$Placeholder'
+    )])
+  end
+
+  it 'normalizes nested legacy widgets and singular cardinalities' do
+    legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
+    tree = {
+      '$Type' => 'Forms$DataView', 'Other' => 'kept', 'Metadata' => { 'Flag' => true },
+      'Widgets' => [2, { '$Type' => 'Forms$DivContainer', 'Widgets' => [2] },
+                    { '$Type' => 'Forms$TabPage', 'Widgets' => [2, { 'Name' => 'Only' }] }],
+      'FooterWidgets' => [2, { 'Name' => 'First' }, { 'Name' => 'Second' }]
+    }
+
+    normalized = legacy.send(:legacy_widget_tree, tree)
+    expect(normalized['Widget']['$Type']).to eq('Forms$VerticalFlow')
+    expect(normalized['Widget']['Widgets'][1]['Widget']).to be_nil
+    expect(normalized['Widget']['Widgets'][2]['Widget']).to eq('Name' => 'Only')
+    expect(normalized['FooterWidget']['$Type']).to eq('Forms$VerticalFlow')
+    expect(normalized['Other']).to eq('kept')
+    expect(normalized['Metadata']).to eq('Flag' => true)
+    expect(legacy.send(:legacy_widget_tree, '$Type' => 'Forms$DivContainer'))
+      .not_to have_key('Widget')
+  end
+
+  it 'covers legacy navigation and singular page decisions without donor references' do
+    legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
+    navigation = legacy.send(:legacy_navigation_doc, {}, profiles: [{
+      name: 'Responsive', home_page: nil, home_microflow: nil,
+      role_homes: { 'User' => 'App.Home' }, role_home_details: [],
+      app_title: 'Plain title', items: [], kind: nil
+    }])
+    page = legacy.send(:page_doc, {
+      name: 'Home', layout: 'App.Shell', title: 'Home', widgets: [], events: [],
+      allowed_roles: nil, popup: false, data_source: nil
+    })
+
+    expect(navigation).to have_key('DesktopProfile')
+    expect(navigation.dig('DesktopProfile', 'ApplicationTitle')).to eq('Plain title')
+    expect(navigation.dig('DesktopProfile', 'HomeItems', 1, 'Page')).to eq('App.Home')
+    expect(navigation.fetch('DesktopProfile')).not_to have_key('Kind')
+    expect(page.dig('FormCall', 'Arguments', 1)).to have_key('Widget')
+  end
+
   it 'inserts absent security and navigation project documents' do
     mpr = double(children_of: [])
     expect(mpr).to receive(:insert_unit).with(
@@ -111,6 +254,47 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     objects = Mxrb::IO::BsonCodec.parse_array(target.dig('ObjectCollection', 'Objects'))[:items]
     expect(objects.count { _1['$Type'] == 'Microflows$MicroflowParameter' }).to eq(1)
     expect(objects.map { _1['$Type'] }).to include('Microflows$Annotation')
+  end
+
+  it 'preserves localized native validation rules until explicitly disabled' do
+    native_rule = {
+      '$ID' => 'rule', '$Type' => 'DomainModels$ValidationRule',
+      'Attribute' => 'Catalog.Item.Name',
+      'Message' => {
+        '$ID' => 'message', '$Type' => 'Texts$Text',
+        'Items' => Mxrb::IO::BsonCodec.build_array([
+                                                     { 'LanguageCode' => 'en_US',
+                                                       'Text' => 'Name is required' },
+                                                     { 'LanguageCode' => 'nl_NL',
+                                                       'Text' => 'Naam is verplicht' }
+                                                   ])
+      },
+      'RuleInfo' => { '$ID' => 'info', '$Type' => 'DomainModels$RequiredRuleInfo' }
+    }
+    previous = Mxrb::IO::BsonCodec.build_array([native_rule])
+
+    preserved = writer.send(
+      :validation_rules_doc,
+      { name: 'Item', attributes: [{ name: 'Name', required: true }] }, 'Catalog', previous
+    )
+    expect(Mxrb::IO::BsonCodec.parse_array(preserved)[:items]).to eq([native_rule])
+
+    removed = writer.send(
+      :validation_rules_doc,
+      { name: 'Item', attributes: [{ name: 'Name', required: false }] }, 'Catalog', previous
+    )
+    expect(Mxrb::IO::BsonCodec.parse_array(removed)[:items]).to be_empty
+
+    generated = writer.send(
+      :validation_rules_doc,
+      { name: 'Item', attributes: [{ name: 'Name', unique: true }] }, 'Catalog', previous
+    )
+    expect(Mxrb::IO::BsonCodec.parse_array(generated)[:items]).to contain_exactly(
+      native_rule, hash_including(
+                     'Attribute' => 'Catalog.Item.Name',
+                     'RuleInfo' => hash_including('$Type' => 'DomainModels$UniqueRuleInfo')
+                   )
+    )
   end
 
   it 'writes supported schedules and rejects unsupported intervals and units' do

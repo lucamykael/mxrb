@@ -1,0 +1,572 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# rubocop:disable Metrics
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'tmpdir'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require_relative '../lib/mxrb'
+
+# Fail-closed frontend acceptance for the explicitly supported Mendix 10/11
+# matrix. MxBuild is never used to generate or mutate the project: when
+# configured, it is a read-only external acceptance oracle.
+module MxrbFrontendAcceptance
+  class Failure < StandardError; end
+
+  CATEGORY_BY_CODE = {
+    'CE0161' => 'host_schema',
+    'CE0462' => 'missing_widget_package',
+    'CE0463' => 'stale_widget_definition',
+    'CE0527' => 'missing_navigation_home',
+    'CE0535' => 'invalid_layout_grid',
+    'CE0635' => 'building_block_reference',
+    'CE1613' => 'missing_navigation_profile',
+    'CE6087' => 'stale_design_properties',
+    'CW0055' => 'missing_click_action',
+    'CW0094' => 'unused_variable',
+    'CW0263' => 'missing_translation'
+  }.freeze
+  ASSET_DIRECTORIES = Mxrb::Model::DesignSystem::ASSET_DIRECTORIES.freeze
+  ASSET_PATHS = (ASSET_DIRECTORIES + [
+    '.mxrb/marketplace.lock.json', '.mxrb/marketplace', '.mxrb/marketplace-originals'
+  ]).freeze
+  MARKETPLACE_GLOBS = [
+    '.mxrb/marketplace.lock.json', '.mxrb/marketplace/**/*', '.mxrb/marketplace-originals/**/*'
+  ].freeze
+
+  # Strict parser, classifier, and semantic comparator for MxBuild JSON.
+  class DiagnosticSet
+    SEVERITIES = %w[error warning].freeze
+    CHECK_ARRAYS = {
+      'errors' => %w[Error error],
+      'warnings' => %w[Warning warning],
+      'deprecations' => %w[Warning deprecation]
+    }.freeze
+
+    attr_reader :problems
+
+    def self.read(path)
+      new(JSON.parse(File.read(path)))
+    rescue JSON::ParserError => e
+      raise Failure, "#{path}: invalid MxBuild JSON: #{e.message}"
+    end
+
+    def self.success_without_diagnostics
+      new({ 'problems' => [] }, warnings_observable: false)
+    end
+
+    def initialize(payload, warnings_observable: true)
+      raise Failure, 'MxBuild result must be a JSON object' unless payload.is_a?(Hash)
+
+      payload = normalize_check_payload(payload) unless payload.key?('problems')
+      raise Failure, 'MxBuild result has no problems array' unless payload.key?('problems')
+
+      @problems = payload.fetch('problems')
+      @warnings_observable = warnings_observable
+      raise Failure, 'MxBuild problems must be an array' unless @problems.is_a?(Array)
+
+      @problems.each { validate_problem(_1) }
+    end
+
+    def equivalent?(other)
+      signatures == other.signatures
+    end
+
+    def ready?(strict_warnings: false)
+      errors.zero? && (!strict_warnings || (warnings_observable? && warnings.zero?))
+    end
+
+    def warnings_observable? = @warnings_observable
+
+    def exit_mask
+      kinds = @problems.map { problem_kind(_1) }
+      (kinds.include?('error') ? 1 : 0) |
+        (kinds.include?('warning') ? 2 : 0) |
+        (kinds.include?('deprecation') ? 4 : 0) |
+        (kinds.include?('best_practice') ? 8 : 0)
+    end
+
+    def errors
+      @problems.count { _1.fetch('severity').casecmp?('error') }
+    end
+
+    def warnings
+      return unless warnings_observable?
+
+      @problems.count { _1.fetch('severity').casecmp?('warning') }
+    end
+
+    def signatures
+      @signatures ||= @problems.map { signature(_1) }.sort.freeze
+    end
+
+    def to_h
+      {
+        problems: warnings_observable? ? @problems.size : nil,
+        errors:,
+        warnings:,
+        warnings_observable: warnings_observable?,
+        kinds: grouped_counts { problem_kind(_1) },
+        categories: grouped_counts { category(_1) },
+        codes: grouped_counts { _1.fetch('errorCode') },
+        modules: grouped_locations('module'),
+        elements: grouped_locations('element')
+      }
+    end
+
+    private
+
+    def normalize_check_payload(payload)
+      keys = CHECK_ARRAYS.keys + %w[performance total-problems]
+      return payload unless keys.all? { payload.key?(_1) }
+
+      problems = CHECK_ARRAYS.flat_map do |key, (severity, kind)|
+        normalize_check_array(payload.fetch(key), severity:, kind:, key:)
+      end
+      performance = payload.fetch('performance')
+      raise Failure, 'mx check performance must be an object' unless performance.is_a?(Hash)
+
+      recommendation_options = {
+        severity: 'Warning', kind: 'best_practice', key: 'performance recommendations'
+      }
+      problems.concat(
+        normalize_check_array(performance.fetch('recommendations', []), **recommendation_options)
+      )
+      total = payload.fetch('total-problems')
+      unless total.is_a?(Integer) && total == problems.size
+        raise Failure, "mx check total-problems mismatch: #{total.inspect} != #{problems.size}"
+      end
+
+      { 'problems' => problems }
+    end
+
+    def normalize_check_array(values, severity:, kind:, key:)
+      raise Failure, "mx check #{key} must be an array" unless values.is_a?(Array)
+
+      values.map do |problem|
+        raise Failure, "each mx check #{key} entry must be an object" unless problem.is_a?(Hash)
+
+        {
+          'severity' => severity, 'kind' => kind,
+          'errorCode' => problem.fetch('code', ''), 'message' => problem.fetch('message', ''),
+          'locations' => normalize_check_locations(problem.fetch('locations', []))
+        }
+      end
+    end
+
+    def normalize_check_locations(locations)
+      raise Failure, 'mx check problem locations must be an array' unless locations.is_a?(Array)
+
+      locations.map do |location|
+        raise Failure, 'each mx check location must be an object' unless location.is_a?(Hash)
+
+        {
+          'module' => location['module-name'], 'document' => location['document-name'],
+          'element' => location['element-name'], 'unitId' => location['unit-id'],
+          'elementId' => location['element-id']
+        }
+      end
+    end
+
+    def validate_problem(problem)
+      raise Failure, 'each MxBuild problem must be an object' unless problem.is_a?(Hash)
+
+      %w[severity message errorCode].each do |field|
+        raise Failure, "MxBuild problem has no #{field}" unless problem[field].is_a?(String)
+      end
+      unless SEVERITIES.include?(problem.fetch('severity').downcase)
+        raise Failure, "unknown MxBuild severity: #{problem.fetch('severity').inspect}"
+      end
+      raise Failure, 'MxBuild problem has an empty errorCode' if problem.fetch('errorCode').empty?
+
+      locations = problem.fetch('locations', [])
+      raise Failure, 'MxBuild problem locations must be an array' unless locations.is_a?(Array)
+      raise Failure, 'each MxBuild location must be an object' unless locations.all?(Hash)
+    end
+
+    def signature(problem)
+      locations = problem.fetch('locations', []).map do |location|
+        %w[module document element].map { location[_1].to_s }
+      end.sort
+      JSON.generate([
+                      problem.fetch('severity').downcase,
+                      problem_kind(problem), problem.fetch('errorCode'), problem.fetch('message'), locations
+                    ])
+    end
+
+    def problem_kind(problem)
+      problem.fetch('kind', problem.fetch('severity').downcase)
+    end
+
+    def category(problem)
+      CATEGORY_BY_CODE.fetch(problem.fetch('errorCode'), 'unclassified')
+    end
+
+    def grouped_counts
+      @problems.group_by { yield(_1) }.transform_values(&:size).sort.to_h
+    end
+
+    def grouped_locations(field)
+      @problems.flat_map { _1.fetch('locations', []).map { |location| location[field].to_s } }
+               .reject(&:empty?).tally.sort.to_h
+    end
+  end
+
+  # Verifies complete asset inventories, bytes, checksums, and lifecycle data.
+  class AssetGate
+    def initialize(source_root, exported_root, rebuilt_root)
+      @source_root = source_root
+      @exported_root = exported_root
+      @rebuilt_root = rebuilt_root
+    end
+
+    def inspect
+      entries = read_manifest
+      paths = entries.map { validate_entry(_1) }
+      raise Failure, 'asset manifest contains duplicate paths' unless paths.uniq.size == paths.size
+
+      expected = paths.sort
+      verify_inventory(@source_root, expected, 'source')
+      verify_inventory(@exported_root, expected, 'Ruby export')
+      verify_inventory(@rebuilt_root, expected, 'rebuilt project')
+      entries.each { verify_entry(_1, @source_root, @exported_root, @rebuilt_root) }
+      provenance = verify_marketplace_provenance
+      {
+        passed: %i[missing changed unexpected].all? { provenance.fetch(_1).empty? }, files: entries.size,
+        bytes: entries.sum { _1.fetch('size') }, marketplace_provenance: provenance
+      }
+    end
+
+    private
+
+    def read_manifest
+      path = File.join(@exported_root, '.mxrb', 'assets.json')
+      payload = JSON.parse(File.read(path))
+      raise Failure, 'asset manifest version must be 1' unless payload['version'] == 1
+      raise Failure, 'asset manifest files must be an array' unless payload['files'].is_a?(Array)
+
+      payload.fetch('files')
+    rescue Errno::ENOENT
+      raise Failure, 'Ruby export has no .mxrb/assets.json'
+    rescue JSON::ParserError => e
+      raise Failure, "invalid asset manifest: #{e.message}"
+    end
+
+    def validate_entry(entry)
+      raise Failure, 'asset manifest entry must be an object' unless entry.is_a?(Hash)
+
+      path = entry['path']
+      size = entry['size']
+      digest = entry['sha256']
+      pathname = Pathname.new(path.to_s)
+      safe = path.is_a?(String) && !path.empty? && !pathname.absolute? &&
+             !pathname.each_filename.include?('..')
+      raise Failure, "unsafe asset path: #{path.inspect}" unless safe
+      raise Failure, "invalid asset size: #{path}" unless size.is_a?(Integer) && size >= 0
+      raise Failure, "invalid asset checksum: #{path}" unless digest.to_s.match?(/\A[0-9a-f]{64}\z/)
+
+      path
+    end
+
+    def inventory(root)
+      candidates = ASSET_PATHS.flat_map do |relative|
+        path = File.join(root, relative)
+        next [path] if File.file?(path) || File.symlink?(path)
+
+        Dir.glob(File.join(path, '**', '*'), File::FNM_DOTMATCH)
+      end
+      symlinks = candidates.select { File.symlink?(_1) }
+      unless symlinks.empty?
+        paths = symlinks.map { Pathname.new(_1).relative_path_from(Pathname.new(root)).to_s }.sort
+        raise Failure, "asset inventory contains symlinks: #{paths.join(', ')}"
+      end
+
+      candidates.select { File.file?(_1) && File.basename(_1) != '.keep' }
+                .map { Pathname.new(_1).relative_path_from(Pathname.new(root)).to_s }.uniq.sort
+    end
+
+    def verify_inventory(root, expected, label)
+      actual = inventory(root)
+      return if actual == expected
+
+      raise Failure, "#{label} asset inventory differs: " \
+                     "missing=#{expected - actual}, untracked=#{actual - expected}"
+    end
+
+    def verify_entry(entry, *roots)
+      roots.each do |root|
+        path = File.join(root, entry.fetch('path'))
+        raise Failure, "missing asset: #{path}" unless File.file?(path) && !File.symlink?(path)
+        raise Failure, "asset size mismatch: #{path}" unless File.size(path) == entry.fetch('size')
+        next if Digest::SHA256.file(path).hexdigest == entry.fetch('sha256')
+
+        raise Failure, "asset checksum mismatch: #{path}"
+      end
+    end
+
+    def marketplace_paths(root)
+      MARKETPLACE_GLOBS.flat_map { Dir.glob(File.join(root, _1)) }
+                       .select { File.file?(_1) && !File.symlink?(_1) }
+                       .map { Pathname.new(_1).relative_path_from(Pathname.new(root)).to_s }.uniq.sort
+    end
+
+    def verify_marketplace_provenance
+      source = marketplace_paths(@source_root)
+      rebuilt = marketplace_paths(@rebuilt_root)
+      changed = (source & rebuilt).reject do |path|
+        Digest::SHA256.file(File.join(@source_root, path)).hexdigest ==
+          Digest::SHA256.file(File.join(@rebuilt_root, path)).hexdigest
+      end
+      { files: source.size, missing: source - rebuilt, changed:, unexpected: rebuilt - source }
+    end
+  end
+
+  # Executes MxBuild outside the generation path and captures diagnostics only.
+  class MxBuildOracle
+    def initialize(executable)
+      @executable = File.expand_path(executable)
+      raise Failure, "MxBuild is not executable: #{@executable}" unless File.executable?(@executable)
+    end
+
+    def diagnose(mpr, root)
+      FileUtils.mkdir_p(root)
+      output = File.join(root, 'app.mda')
+      errors = File.join(root, 'mxbuild-errors.json')
+      java_version = Mxrb::Runtime::Toolchain.new(mpr).plan.java_version
+      java_home = Mxrb::Runtime::JavaLocator.resolve(java_version)
+      raise Failure, "Java #{java_version} is required by MxBuild" unless java_home
+
+      command = [
+        @executable, "--java-home=#{java_home}",
+        "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", '--target=package',
+        "--output=#{output}", "--write-errors=#{errors}", mpr
+      ]
+      transcript, status = Open3.capture2e(*command, chdir: File.dirname(mpr))
+      diagnostics = DiagnosticSet.read(errors) if File.file?(errors)
+      if status.success?
+        unless File.file?(output) && File.size?(output)
+          raise Failure, 'MxBuild succeeded without producing a non-empty MDA'
+        end
+
+        return diagnostics || DiagnosticSet.success_without_diagnostics
+      end
+      return diagnostics if diagnostics&.errors&.positive?
+
+      detail = transcript.lines.last(20).join.strip
+      raise Failure, "MxBuild exited #{status.exitstatus.inspect} without model errors: #{detail}"
+    end
+  end
+
+  # Runs the official read-only checker so warnings, deprecations, and best
+  # practices remain observable even when a successful MxBuild emits no JSON.
+  class MxCheckOracle
+    def initialize(executable)
+      @executable = File.expand_path(executable)
+      raise Failure, "mx is not executable: #{@executable}" unless File.executable?(@executable)
+    end
+
+    def diagnose(mpr, root)
+      FileUtils.mkdir_p(root)
+      output = File.join(root, 'mx-check.json')
+      command = [
+        @executable, 'check', mpr, '--warnings', '--deprecations', '--best-practice', '--json', output
+      ]
+      transcript, status = Open3.capture2e(*command, chdir: File.dirname(mpr))
+      raise Failure, "mx check produced no JSON: #{transcript.lines.last(20).join.strip}" unless File.file?(output)
+
+      diagnostics = DiagnosticSet.read(output)
+      unless status.exited? && status.exitstatus == diagnostics.exit_mask
+        raise Failure,
+              "mx check exit status #{status.exitstatus.inspect} does not match " \
+              "diagnostic mask #{diagnostics.exit_mask}"
+      end
+
+      diagnostics
+    end
+  end
+
+  # Orchestrates validation, export/rebuild, asset, and optional oracle gates.
+  class Runner
+    def initialize(source, mxbuild: nil, mxcheck: nil, source_errors: nil, rebuilt_errors: nil,
+                   strict_warnings: false)
+      @source = File.expand_path(source)
+      @mxbuild = mxbuild
+      @mxcheck = mxcheck
+      @source_errors = source_errors
+      @rebuilt_errors = rebuilt_errors
+      @strict_warnings = strict_warnings
+      paired_errors?
+      exclusive_oracle!
+    end
+
+    def run
+      raise Failure, "MPR not found: #{@source}" unless File.file?(@source)
+
+      source_validation = Mxrb.validate(@source)
+      raise Failure, "source MPR is invalid: #{source_validation.errors.join('; ')}" unless source_validation.valid?
+
+      version = mendix_version(@source)
+      major = version.split('.').first.to_i
+      raise Failure, "unsupported Mendix generation: #{version}" unless [10, 11].include?(major)
+
+      source_preflight = Mxrb.compatibility(@source)
+
+      Dir.mktmpdir("mxrb-frontend-#{major}-") do |workspace|
+        report = perform_round_trip(workspace, version, source_preflight)
+        attach_oracle(report, workspace)
+        report[:scope] = report[:oracle] ? 'frontend' : 'round_trip'
+        report[:frontend_ready] = report.dig(:oracle, :frontend_ready)
+        report[:passed] = report.fetch(:gates).values.all? && report.dig(:assets, :passed) &&
+                          (report[:oracle].nil? || report.dig(:oracle, :passed))
+        report
+      end
+    end
+
+    private
+
+    def paired_errors?
+      return true if @source_errors.nil? == @rebuilt_errors.nil?
+
+      raise Failure, '--source-errors and --rebuilt-errors must be supplied together'
+    end
+
+    def exclusive_oracle!
+      sources = [@mxbuild, @mxcheck, @source_errors].compact
+      return if sources.size <= 1
+
+      raise Failure, '--mxbuild, --mx, and reused error JSON are mutually exclusive'
+    end
+
+    def mendix_version(path)
+      Mxrb.open(path, &:mendix_version)
+    end
+
+    def perform_round_trip(workspace, version, source_preflight)
+      exported = File.join(workspace, 'ruby')
+      rebuilt_root = File.join(workspace, 'rebuilt')
+      rebuilt = File.join(rebuilt_root, File.basename(@source))
+      FileUtils.mkdir_p(rebuilt_root)
+      Mxrb::Exporter.new(@source, exported).export!
+      evaluate_project(File.join(exported, 'project.rb'), rebuilt)
+
+      validation = Mxrb.validate(rebuilt)
+      raise Failure, "rebuilt MPR is invalid: #{validation.errors.join('; ')}" unless validation.valid?
+
+      preflight = Mxrb.compatibility(rebuilt)
+      comparison = Mxrb.compare(@source, rebuilt)
+
+      {
+        passed: false, mendix_version: version, source: @source,
+        gates: {
+          source_valid: true, rebuilt_valid: true, source_preflight: source_preflight.compatible?,
+          rebuilt_preflight: preflight.compatible?, structural_round_trip: comparison.identical?
+        },
+        preflight: {
+          source: preflight_summary(source_preflight), rebuilt: preflight_summary(preflight)
+        },
+        structural_differences: comparison.differences.first(20),
+        assets: AssetGate.new(File.dirname(@source), exported, rebuilt_root).inspect,
+        rebuilt: File.basename(rebuilt), oracle: nil
+      }
+    end
+
+    def preflight_summary(report)
+      {
+        compatible: report.compatible?, errors: report.errors.size, warnings: report.warnings.size,
+        categories: report.findings.group_by(&:category).transform_values { _1.sum(&:count) }.sort.to_h,
+        types: report.findings.group_by(&:type).transform_values { _1.sum(&:count) }.sort.to_h
+      }
+    end
+
+    def evaluate_project(project, target)
+      previous = ENV['MXRB_OUTPUT_PATH']
+      ENV['MXRB_OUTPUT_PATH'] = target
+      load project
+    ensure
+      previous.nil? ? ENV.delete('MXRB_OUTPUT_PATH') : ENV['MXRB_OUTPUT_PATH'] = previous
+    end
+
+    def attach_oracle(report, workspace)
+      rebuilt = File.join(workspace, 'rebuilt', report.fetch(:rebuilt))
+      source_set, rebuilt_set = diagnostic_sets(rebuilt, workspace)
+      return unless source_set
+
+      require_observable_warnings!(source_set, rebuilt_set)
+      equivalent = source_set.equivalent?(rebuilt_set)
+      ready = source_set.ready?(strict_warnings: @strict_warnings) &&
+              rebuilt_set.ready?(strict_warnings: @strict_warnings)
+      report[:oracle] = {
+        passed: equivalent && ready, equivalent:, frontend_ready: ready,
+        strict_warnings: @strict_warnings, source: source_set.to_h, rebuilt: rebuilt_set.to_h
+      }
+    end
+
+    def require_observable_warnings!(*sets)
+      return unless @strict_warnings && sets.any? { !_1.warnings_observable? }
+
+      raise Failure,
+            'strict warning gate requires observable warnings; ' \
+            'MxBuild succeeded without producing --write-errors JSON'
+    end
+
+    def diagnostic_sets(rebuilt, workspace)
+      return [DiagnosticSet.read(@source_errors), DiagnosticSet.read(@rebuilt_errors)] if @source_errors
+
+      if @mxcheck
+        oracle = MxCheckOracle.new(@mxcheck)
+        return [
+          oracle.diagnose(@source, File.join(workspace, 'mx-check-source')),
+          oracle.diagnose(rebuilt, File.join(workspace, 'mx-check-rebuilt'))
+        ]
+      end
+      return [nil, nil] unless @mxbuild
+
+      oracle = MxBuildOracle.new(@mxbuild)
+      [
+        oracle.diagnose(@source, File.join(workspace, 'mxbuild-source')),
+        oracle.diagnose(rebuilt, File.join(workspace, 'mxbuild-rebuilt'))
+      ]
+    end
+  end
+
+  # Small executable boundary which always emits machine-readable evidence.
+  module CLI
+    module_function
+
+    def run(argv)
+      options = { strict_warnings: false }
+      output = nil
+      parser = OptionParser.new do |cli|
+        cli.banner = 'Usage: script/frontend_acceptance APP.mpr [options]'
+        cli.on('--mxbuild FILE', 'Run MxBuild only as an external oracle') { options[:mxbuild] = _1 }
+        cli.on('--mx FILE', 'Run mx check as an observable diagnostic oracle') { options[:mxcheck] = _1 }
+        cli.on('--source-errors FILE', 'Reuse source MxBuild/mx check JSON') { options[:source_errors] = _1 }
+        cli.on('--rebuilt-errors FILE', 'Reuse rebuilt MxBuild/mx check JSON') { options[:rebuilt_errors] = _1 }
+        cli.on('--strict-warnings', 'Require zero MxBuild warnings too') { options[:strict_warnings] = true }
+        cli.on('-o', '--output FILE', 'Write JSON evidence to FILE') { options[:output] = _1 }
+      end
+      parser.parse!(argv)
+      source = argv.shift or raise OptionParser::MissingArgument, 'APP.mpr'
+      raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+      output = options.delete(:output)
+      report = Runner.new(source, **options).run
+      json = JSON.pretty_generate(report)
+      output ? File.write(output, "#{json}\n") : puts(json)
+      report.fetch(:passed) ? 0 : 1
+    rescue Failure, OptionParser::ParseError => e
+      json = JSON.pretty_generate(passed: false, error: e.message)
+      output ? File.write(output, "#{json}\n") : warn(json)
+      1
+    end
+  end
+end
+
+exit MxrbFrontendAcceptance::CLI.run(ARGV) if $PROGRAM_NAME == __FILE__
+
+# rubocop:enable Metrics

@@ -137,7 +137,7 @@ module Mxrb
           association_ref = m["Association"].to_s
           attr_ref = association_ref.empty? ? m["Attribute"] : association_ref
           kind = association_ref.empty? ? :attribute : :association
-          { name: attr_ref.to_s.split(%r{[/.]}).last,
+          { name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
             rights: m["AccessRights"] || "None", kind: kind }
         end
         {

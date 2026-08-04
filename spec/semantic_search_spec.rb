@@ -128,6 +128,9 @@ RSpec.describe 'semantic search (sqlite-vec + TF-IDF)' do
       stub_const('Informers', class_double('Informers', pipeline:))
       embedder = described_class.allocate
       allow(embedder).to receive(:require).with('informers').and_return(true)
+      expect(Informers).to receive(:pipeline).with(
+        'embedding', described_class::MODEL, revision: described_class::MODEL_REVISION
+      ).and_return(pipeline)
 
       embedder.send(:initialize)
       expect(embedder.embed('order')).to eq([0.1, 0.9])

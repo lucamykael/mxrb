@@ -14,6 +14,7 @@ module Mxrb
         ['7.0.0', '7.17.0', '7.5.0'],
         ['7.17.0', '8.0.0', '7.17.0'],
         ['9.0.0', '10.0.0', '9.6.1.29396'],
+        ['10.0.0', '11.0.0', '10.24.0.73019'],
         ['11.0.0', '12.0.0', '11.12.1']
       ].map { |minimum, maximum, seed| [Gem::Version.new(minimum), Gem::Version.new(maximum), seed] }
        .freeze
@@ -43,7 +44,7 @@ module Mxrb
 
         raise CompilationError,
               "no audited native System model seed for Mendix #{version}; " \
-              'supported families are 6.x, 7.x, 9.x, and 11.x'
+              'supported families are 6.x, 7.x, 9.x, 10.x, and 11.x'
       rescue ArgumentError
         raise CompilationError, "invalid Mendix version #{version.inspect}"
       end # rubocop:enable Metrics/AbcSize, Metrics/MethodLength

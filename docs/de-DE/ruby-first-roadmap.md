@@ -20,7 +20,8 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 - Statische Analyse und ausführbare Modellbewertungen.
 - Funktionale Microflow-Tests ohne JUnit.
 - Lokale oder Docker-Ausführung von `mx check`, MxBuild und Runtime.
-- Striktes Gate mit 100 % Zeilen- und Branch-Abdeckung.
+- Natives Coverage-Gate mit 100 % Zeilen und 100 % Branches im CI;
+  ohne explizite Grenzwerte bleibt der lokale Standard strenger bei 100/100.
 
 ## Beispiel
 
@@ -84,3 +85,32 @@ Lokale MPKs werden vollständig und ohne Mendix-Werkzeuge direkt über
 Ruby/SQLite/BSON in das Ziel-MPR importiert. Das PAT benötigt
 `mx:marketplace-content:read`. Verwundbare Releases werden standardmäßig
 abgelehnt; Content-/Version-IDs und Sicherheitsdaten stehen im Lockfile.
+Die authentifizierte Kafka-Abnahme und der transaktionale Lifecycle sind jetzt
+umgesetzt. `marketplace update` und `marketplace remove` zeigen standardmäßig
+nur eine Vorschau, erhalten extern referenzierte IDs, verweigern veränderte
+Assets und sichern MPR, `mprcontents`, Cache, Lock und Assets vor explizitem
+`--apply`. Auch die authentifizierten Folgeschritte sind umgesetzt:
+`marketplace dependencies` löst offizielle Pakete rekursiv aus Referenzen im
+eingebetteten MPR, prüft die tatsächliche Modulidentität jedes MPKs, erkennt
+projekteigene Module, installiert Blätter zuerst und führt atomaren Rollback
+aus. Kafka-Graphen bestanden die Abnahme unter 10.24 und 11.12; Ruby-
+Export/Rebuild bewahrt Assets, Prüfsummen und Quell-/Rebuild-Diagnosen.
+
+Die authentifizierte Matrix enthält jetzt DataWidgets 3.11.3 (Content ID
+116540, Version ID `e7b6d703-8e47-42f4-bb92-934e3601e71b`) und die unabhängige
+offizielle Combo-box-Widget/clientModule-Komponente 219304, Version 2.9.0,
+Version ID `dce845f4-d051-4161-847c-016c01703caa`. Die Installation sichert und
+ersetzt das zuvor Atlas Core (Content ID 117187) gehörende 2.6.x-Asset. Ruby-
+Roundtrips bewahren die Provenienz von Marketplace-Lock, Cache und Originalen;
+`script/frontend_acceptance` blockiert Modell-, Asset-, Prüfsummen- oder
+Provenienzdrift. Der native Renderer hat für die akzeptierten 10.24- und
+11.12-Fixtures null Preflight-Befunde in Quelle und Rebuild.
+
+Die Migrationsschnittstelle ist als `mxrb frontend migrate DATEI.mpr`
+umgesetzt: Standard ist die Vorschau, erst `--apply` schreibt einen sicheren
+transaktionalen Plan. Diese Migration ist auf der gesamten unterstützten
+Frontend-Matrix abgeschlossen. Das optionale externe MxBuild-Orakel liefert
+für Quelle und Rebuild unter 10.24 und 11.12 null Fehler; `mx check` bewahrt
+außerdem bytegleiche beobachtbare Paketdiagnosen in jedem Round-trip. MXRB
+bleibt unabhängig: `mx` und MxBuild sind nur Validierungsorakel, niemals
+Generatoren, Mutatoren oder Runtime-Abhängigkeiten.

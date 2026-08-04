@@ -256,6 +256,50 @@ when "widgets"
   puts "[mxrb] Synchronized widget schemas with #{result.mx_path}"
   puts "[mxrb] Generated #{result.project}"
 
+when "frontend"
+  frontend_usage = <<~USAGE
+    Usage: mxrb frontend migrate FILE.mpr [--apply] [--json]
+
+    Preview frontend widget, layout-row, and design-property migrations.
+    The MPR is changed only when --apply is provided and the plan is safe.
+  USAGE
+  action = ARGV.shift
+  if action.nil? || %w[-h --help help].include?(action)
+    puts frontend_usage
+    exit(action.nil? ? 1 : 0)
+  end
+  abort "Unknown frontend action #{action.inspect}; use migrate" unless action == "migrate"
+  if %w[-h --help].include?(ARGV.first)
+    puts frontend_usage
+    exit 0
+  end
+  path = ARGV.shift or abort "Usage: mxrb frontend migrate FILE.mpr [--apply] [--json]"
+  apply = !ARGV.delete("--apply").nil?
+  json = !ARGV.delete("--json").nil?
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  plan = Mxrb::Frontend::Migrator.plan(path)
+  plan.apply! if apply && plan.safe?
+  payload = {
+    version: plan.version, changes: plan.changes.size, widgets: plan.widgets,
+    layout_rows: plan.layout_rows, design_properties: plan.design_properties,
+    issues: plan.issues.map(&:to_h), safe: plan.safe?, applied: plan.applied?
+  }
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    puts "Version           : #{payload[:version]}"
+    puts "Changes           : #{payload[:changes]}"
+    puts "Widgets           : #{payload[:widgets]}"
+    puts "Layout rows       : #{payload[:layout_rows]}"
+    puts "Design properties : #{payload[:design_properties]}"
+    puts "Safe              : #{payload[:safe]}"
+    puts "Applied           : #{payload[:applied]}"
+    plan.issues.each do |issue|
+      puts "[#{issue.kind.to_s.upcase}] #{issue.unit_id}#{issue.path}: #{issue.message}"
+    end
+  end
+  exit 1 unless plan.safe?
+
 when "export"
   source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
   output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
@@ -1037,7 +1081,7 @@ when "team-server"
 
 when "marketplace"
   marketplace_usage = <<~USAGE
-    Usage: mxrb marketplace <login|search|show|versions|pull|import|audit|list|verify> ...
+    Usage: mxrb marketplace <login|search|show|versions|pull|dependencies|update|remove|import|audit|list|verify> ...
 
       marketplace login --pat-file FILE [--no-verify]
           Recommended: store only a path and read the PAT from FILE or a Ruby .env.
@@ -1052,15 +1096,21 @@ when "marketplace"
       marketplace import FILE.mpk --mpr FILE.mpr
           Import an official Mendix module package directly with Ruby/SQLite/BSON.
       marketplace pull NAME[@VERSION] --mpr FILE.mpr [--mendix-version VERSION]
-          Download from the official Marketplace and import directly into the MPR.
+          Download official Module, Service, or Widget content and install it transactionally.
       marketplace pull github:ORG/REPO --mpr FILE.mpr
           Use a public GitHub release instead of the official Marketplace.
+      marketplace update NAME[@VERSION] [--mpr FILE.mpr] [--apply]
+          Preview a reference-safe official update; mutate only with --apply.
+      marketplace remove NAME [--mpr FILE.mpr] [--apply]
+          Preview reference-safe removal; mutate only with --apply.
+      marketplace dependencies NAME [--mpr FILE.mpr] [--apply|--apply-resolved]
+          Resolve module references and WidgetIds; verify every downloaded MPK identity.
       marketplace audit [--target DIR] [--mendix-version VERSION]
           Check locked official components for updates and known vulnerabilities.
       marketplace list|verify [--target DIR]
           Inspect or verify .mxrb/marketplace.lock.json and cached packages.
 
-    Module import does not invoke mx, mxcli, Studio Pro, or the Model SDK.
+    Module/widget installation does not invoke mx, mxcli, Studio Pro, or the Model SDK.
   USAGE
   marketplace_login_usage = <<~USAGE
     Usage:
@@ -1103,6 +1153,19 @@ when "marketplace"
   end
   mpr = option.call('--mpr')
   target = option.call('--target') || (mpr ? File.dirname(File.expand_path(mpr)) : Dir.pwd)
+  plan_state = lambda do |plan|
+    next 'partial applied' if plan.applied? && !plan.safe?
+    next 'applied' if plan.applied?
+
+    plan.safe? ? 'safe preview' : 'blocked preview'
+  end
+  print_lifecycle_plan = lambda do |plan|
+    state = plan_state.call(plan)
+    version = plan.target_version ? " -> #{plan.target_version}" : ''
+    puts "[mxrb] #{plan.action} #{plan.name} #{plan.installed_version}#{version}: #{state}"
+    plan.changes.each { puts "  change: #{_1}" }
+    plan.blockers.each { puts "  blocker: #{_1}" }
+  end
   begin
     case action
     when 'login'
@@ -1216,6 +1279,40 @@ when "marketplace"
       puts "[mxrb] Imported #{result.package.name} into #{result.destination}"
       puts "[mxrb] #{result.units} MPR units written without Studio Pro" if result.respond_to?(:units)
       puts "[mxrb] SHA-256 #{result.sha256}"
+    when 'update'
+      identifier = ARGV.shift or
+        abort 'Usage: mxrb marketplace update <name[@version]> [--mpr FILE] [--apply]'
+      name, version = identifier.split('@', 2)
+      plan = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).update_official(
+        name, version:,
+              mendix_version: option.call('--mendix-version'),
+              allow_vulnerable: !ARGV.delete('--allow-vulnerable').nil?,
+              apply: !ARGV.delete('--apply').nil?
+      )
+      print_lifecycle_plan.call(plan)
+      exit 1 unless plan.safe?
+    when 'remove'
+      identifier = ARGV.shift or
+        abort 'Usage: mxrb marketplace remove <name> [--mpr FILE] [--apply]'
+      plan = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).remove(
+        identifier, apply: !ARGV.delete('--apply').nil?
+      )
+      print_lifecycle_plan.call(plan)
+      exit 1 unless plan.safe?
+    when 'dependencies'
+      identifier = ARGV.shift or
+        abort 'Usage: mxrb marketplace dependencies <name> [--mpr FILE] [--apply|--apply-resolved]'
+      apply = !ARGV.delete('--apply').nil?
+      apply_resolved = !ARGV.delete('--apply-resolved').nil?
+      abort '--apply and --apply-resolved are mutually exclusive' if apply && apply_resolved
+      plan = Mxrb::OfficialMarketplace::Installer.new(target:, mpr:).dependencies(
+        identifier, apply:, apply_resolved:
+      )
+      state = plan_state.call(plan)
+      puts "[mxrb] dependencies #{plan.root}: #{state}"
+      plan.changes.each { puts "  change: #{_1}" }
+      plan.blockers.each { puts "  blocker: #{_1}" }
+      exit 1 unless plan.safe?
     when 'list'
       packages = Mxrb::OfficialMarketplace.lock(target).fetch('packages')
       packages.each { |name, entry| puts "#{name}\t#{entry['version']}\t#{entry['source']}" }
@@ -1402,6 +1499,8 @@ else
                  --output FILE             Uses installed Runtime files; never calls mx/mxbuild
       mda inspect|compare <file.mda>       Inspect or diff MDA contents and metadata
       widgets sync <definition.rb> <mpr>  Synchronize pluggable widget schemas
+      frontend migrate <file.mpr>         Preview frontend schema/layout/theme migration
+                 [--apply] [--json]       Apply only a safe plan or emit structured output
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
       preflight  <file.mpr> [--json]      Audit native compiler/runtime compatibility

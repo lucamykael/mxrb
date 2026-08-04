@@ -244,7 +244,34 @@ module Mxrb
 
     # Entry point for the project-definition DSL.
     # Used by Mxrb.define { ... }
+    module ConnectorDeclarations
+      def connector(protocol, version: nil, marketplace_id: nil)
+        connector_requests << Protocols.request(protocol, version:, marketplace_id:)
+      end
+
+      def connector_plans(adapter: nil)
+        connector_requests.map do |request|
+          Protocols.plan(
+            request.protocol, mendix_version: @mendix_version, version: request.version,
+                              marketplace_id: request.marketplace_id, adapter:
+          )
+        end
+      end
+
+      def validate_connector_requests!
+        return if connector_requests.empty?
+
+        raise MarketplaceError,
+              'connector declarations are preview-only; resolve and apply connector_plans ' \
+              'to an existing MPR with the official Marketplace adapter'
+      end
+
+      def connector_requests = (@connector_requests ||= [])
+    end
+
     class Builder
+      include ConnectorDeclarations
+
       def initialize(path)
         @path              = path
         @mendix_version    = "10.18.0"
@@ -323,6 +350,7 @@ module Mxrb
       end
 
       def build!
+        validate_connector_requests!
         validate!
         Writer.new(@path, definition).write!
         self
@@ -343,6 +371,7 @@ module Mxrb
           security: @security,
           navigation: @navigation,
           design_system: @design_system,
+          connectors: connector_requests.map(&:to_h),
           project_assets: @project_assets,
           native_units_path: @native_units_path,
           native_unit_overrides: @native_unit_overrides

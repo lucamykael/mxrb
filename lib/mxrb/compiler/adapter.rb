@@ -17,20 +17,21 @@ module Mxrb
 
       attr_reader :version, :major
 
-      def self.for(version)
+      def self.for(version, source: nil)
         major = version.to_s.split('.').first.to_i
-        klass = { 6 => V6, 7 => V7, 9 => V9, 11 => V11 }[major]
+        klass = { 6 => V6, 7 => V7, 9 => V9, 10 => V10, 11 => V11 }[major]
         unless klass
           raise UnsupportedVersion,
-                "audited native compilation supports Mendix 6.x, 7.x, 9.x, and 11.x; got #{version}"
+                "audited native compilation supports Mendix 6.x, 7.x, 9.x, 10.x, and 11.x; got #{version}"
         end
 
-        klass.new(version)
+        klass.new(version, source:)
       end
 
-      def initialize(version)
+      def initialize(version, source: nil)
         @version = version.to_s
         @major = @version.split('.').first.to_i
+        @source = source
       end
 
       def validate_deployment!(root)
@@ -78,6 +79,12 @@ module Mxrb
       # Hybrid Dojo client with the React-wrapper bridge introduced in Mendix 9.
       class V9 < Adapter
         def web_profiles = %i[dojo react_wrapper]
+      end
+
+      # Mendix 10 owns both the classic Dojo client and the opt-in optimized
+      # React client. The selection is stored in the project model.
+      class V10 < Adapter
+        def web_profiles = @source&.optimized_web_client? ? [:react] : [:dojo]
       end
 
       # Current fully React web client contract.

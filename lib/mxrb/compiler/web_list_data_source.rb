@@ -64,7 +64,7 @@ module Mxrb
       attr_reader :widget
 
       def database_source?(source)
-        %w[Forms$DatabaseSource Forms$NewListViewDatabaseSource]
+        %w[Forms$DatabaseSource Forms$NewListViewDatabaseSource Forms$ListViewXPathSource]
           .include?(source&.fetch('$Type', nil))
       end
 

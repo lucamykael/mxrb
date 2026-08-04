@@ -24,8 +24,7 @@ module Mxrb
       end
 
       def supported?
-        widget_type&.fetch('WidgetId', nil) == WIDGET_ID && supported_source? &&
-          @data_source.supported? && !@data_source.entity.to_s.empty? && resolved_scope
+        widget_type&.fetch('WidgetId', nil) == WIDGET_ID && supported_source? && resolved_scope
       end
 
       def render # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
@@ -50,21 +49,38 @@ module Mxrb
 
       def supported_source?
         return database_source_supported? if primitive('source') == 'database'
+        return enumeration_source_supported? if primitive('optionsSourceType') == 'enumeration'
 
         association_source_supported?
       end
 
       def database_source_supported?
-        target_attribute && database_caption_attribute && database_value_attribute
+        target_attribute && database_caption_attribute && database_value_attribute && list_source_supported?
       end
 
       def association_source_supported?
         primitive('source') == 'context' && primitive('optionsSourceType') == 'association' &&
-          association_step && (association_caption_attribute || association_caption_expression)
+          association_step && (association_caption_attribute || association_caption_expression) &&
+          list_source_supported?
+      end
+
+      def enumeration_source_supported?
+        primitive('source') == 'context' && enumeration_attribute
+      end
+
+      def list_source_supported?
+        @data_source.supported? && !@data_source.entity.to_s.empty?
       end
 
       def source_properties
-        primitive('source') == 'database' ? database_properties : association_properties
+        return database_properties if primitive('source') == 'database'
+        return enumeration_properties if primitive('optionsSourceType') == 'enumeration'
+
+        association_properties
+      end
+
+      def enumeration_properties
+        { attributeEnumeration: raw(attribute_property(enumeration_attribute)) }
       end
 
       def database_properties
@@ -192,6 +208,7 @@ module Mxrb
 
       def target_value = value('databaseAttributeString')
       def target_attribute = target_value&.fetch('AttributeRef', nil)
+      def enumeration_attribute = value('attributeEnumeration')&.fetch('AttributeRef', nil)
       def database_caption_attribute = value('optionsSourceDatabaseCaptionAttribute')&.fetch('AttributeRef', nil)
       def database_value_attribute = value('optionsSourceDatabaseValueAttribute')&.fetch('AttributeRef', nil)
       def association_caption_attribute = value('optionsSourceAssociationCaptionAttribute')&.fetch('AttributeRef', nil)

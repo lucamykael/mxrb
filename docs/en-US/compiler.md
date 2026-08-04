@@ -13,8 +13,8 @@ settings, microflows, and the project/module index. It also creates metadata,
 dependency files, and a Runtime-ordered BSON `model.mdp`.
 
 Bootstrap has audited seeds and catalogs for 6.10.8, 7.5.0, 7.17.0,
-9.6.1.29396, and 11.12.1. The 6.x, 7.x, 9.x, and 11.x families select a
-compatible compiler seed; 5.x, 8.x, and 10.x fail closed without an audited
+9.6.1.29396, 10.24.0.73019, and 11.12.1. The 6.x, 7.x, 9.x, 10.x, and 11.x families select a
+compatible compiler seed; 5.x and 8.x fail closed without an audited
 seed. Family selection applies to compiler schema only. Runtime must always
 match the MPR's exact patch.
 
@@ -23,9 +23,10 @@ asdf, or mise, compiles `javasource/**/*.java` against Runtime and project
 libraries, and writes a deterministic OSGi `project.jar`. VetClinic compiled
 183 sources into 249 classes.
 
-`WebBundleBuilder` selects Dojo for 6/7, Dojo plus the React wrapper for 9, and
-React for 11. The React path generates entrypoint/page modules, expands `.mpk`,
-and invokes the version-owned Node/Rspack directly. Data Grid 2 compiles for the XPath datasource and attribute-column
+`WebBundleBuilder` selects Dojo for 6/7, Dojo plus the React wrapper for 9,
+the project-declared classic or optimized client for 10, and React for 11.
+The React path generates entrypoint/page modules, expands `.mpk`, and invokes
+the version-owned Node/Rollup (10) or Node/Rspack (11) directly. Data Grid 2 compiles for the XPath datasource and attribute-column
 subset, including `operations.json`, datasource, and attribute types.
 Untranslated types or property combinations receive a DOM fallback and are
 recorded in `web/mxrb-pages.json`; VetClinic's manifest is empty.
@@ -140,13 +141,14 @@ cleanly. The `ACT Create Animal` functional test then passed.
 ## Explicit boundaries
 
 - all 12 stages and clean web generation are validated on 6.10.8, 7.5.0,
-  7.17.0, 9.6.1.29396, and 11.12.1;
-- exact native boot is proven on 11.12.1. The installed 6/7/9 distributions
-  contain the exact Runtime bundles but no PAD/launcher; `db up` fails closed
+  7.17.0, 9.6.1.29396, 10.24.0.73019, and 11.12.1;
+- exact native boot is proven on 10.24.0.73019 and 11.12.1. The installed 6/7/9
+  distributions contain the exact Runtime bundles but no compatible launcher; `db up` fails closed
   instead of substituting the Java-21 launcher from 11;
 - Data Grid 1 is covered while other Dojo widgets remain explicit manifest
   findings;
-- the Mendix 11 React path is covered by clean preflights and complete Rspack
+- the optimized Mendix 10 React/Rollup path is covered by a from-scratch app;
+  the Mendix 11 React path is covered by clean preflights and complete Rspack
   builds of LearnNow, MyFirstModule, SLATaskApp, Sudoku and VetClinic. This
   fixture matrix is evidence for the audited contracts, not a universal claim;
 - native web bundles are generated; React Native still relies on existing

@@ -15,8 +15,8 @@ gera `metadata.json`, dependências e o `model.mdp` em ordem BSON aceita pelo
 Runtime.
 
 O bootstrap possui seeds e catálogos auditados para 6.10.8, 7.5.0, 7.17.0,
-9.6.1.29396 e 11.12.1. As famílias 6.x, 7.x, 9.x e 11.x selecionam o seed
-compatível; 5.x, 8.x e 10.x falham fechadas por ainda não terem seed auditado.
+9.6.1.29396, 10.24.0.73019 e 11.12.1. As famílias 6.x, 7.x, 9.x, 10.x e 11.x selecionam o seed
+compatível; 5.x e 8.x falham fechadas por ainda não terem seed auditado.
 Esse agrupamento vale para o schema do compilador. A Runtime deve sempre ter o
 mesmo patch exato do MPR.
 
@@ -25,9 +25,10 @@ mise, compila `javasource/**/*.java` com as bibliotecas do Runtime e do projeto
 e escreve um `project.jar` OSGi determinístico. No VetClinic foram compilados
 183 fontes em 249 classes.
 
-`WebBundleBuilder` seleciona Dojo em 6/7, Dojo com React wrapper em 9 e React
-em 11. No React, gera entrypoint e módulos, expande `.mpk` e chama diretamente
-o Node/Rspack da versão. O Data Grid 2 é compilado no subconjunto com
+`WebBundleBuilder` seleciona Dojo em 6/7, Dojo com React wrapper em 9, o cliente
+clássico ou otimizado declarado pelo projeto em 10 e React em 11. No React,
+gera entrypoint e módulos, expande `.mpk` e chama diretamente o Node/Rollup
+da versão 10 ou Node/Rspack da versão 11. O Data Grid 2 é compilado no subconjunto com
 fonte XPath e colunas de atributo, incluindo `operations.json`, datasource e
 tipos dos atributos. Tipos ou combinações ainda não traduzidos recebem um
 fallback DOM e ficam registrados em `web/mxrb-pages.json`; o manifesto do
@@ -145,13 +146,14 @@ encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
 ## Limites explícitos
 
 - os 12 estágios e a geração web limpa foram validados em 6.10.8, 7.5.0,
-  7.17.0, 9.6.1.29396 e 11.12.1;
-- o boot nativo exato foi provado em 11.12.1. As distribuições 6/7/9 instaladas
-  têm os bundles exatos, mas não PAD/launcher; `db up` falha fechado em vez de
+  7.17.0, 9.6.1.29396, 10.24.0.73019 e 11.12.1;
+- o boot nativo exato foi provado em 10.24.0.73019 e 11.12.1. As distribuições
+  6/7/9 instaladas têm os bundles exatos, mas não launcher compatível; `db up` falha fechado em vez de
   substituir pelo launcher Java 21 da versão 11;
 - Data Grid 1 está coberto, mas os demais widgets Dojo continuam explicitamente
   pendentes no manifesto legado;
-- o caminho React do Mendix 11 tem preflight limpo e builds Rspack completos de
+- o caminho React/Rollup otimizado do Mendix 10 está coberto por uma aplicação
+  criada do zero; o caminho React do Mendix 11 tem preflight limpo e builds Rspack completos de
   LearnNow, MyFirstModule, SLATaskApp, Sudoku e VetClinic. Essa matriz comprova
   os contratos auditados, não compatibilidade universal;
 - bundles web nativos são gerados; o pipeline React Native ainda depende dos

@@ -206,6 +206,7 @@ RSpec.describe Mxrb::OfficialMarketplace::ContentApi do
     expect { api.versions(170, version_id: 'bad') }.to raise_error(Mxrb::MarketplaceError, /version ID/)
     expect { api.versions(170, mendix_version: '11.next') }
       .to raise_error(Mxrb::MarketplaceError, /invalid Mendix/)
+    expect(api.send(:mendix_version_filter, '10.24.0.73019')).to eq('10.24.0')
   end
 end
 
@@ -259,16 +260,22 @@ RSpec.describe Mxrb::OfficialMarketplace::Installer, 'official Content API' do
       .to raise_error(Mxrb::MarketplaceError, /requires --mpr/)
   end
 
-  it 'rejects non-module content when importing into an MPR' do
+  it 'accepts Widget metadata and defers trust to the downloaded package structure' do
     package = Mxrb::OfficialMarketplace::OfficialPackage.new(
       'Widget', '1.0.0', :mendix, nil, 'content:10', 10,
       '123e4567-e89b-12d3-a456-426614174000', 'Widget', 'Regular', [], false, false
     )
-    api = instance_double(Mxrb::OfficialMarketplace::ContentApi, resolve: package)
-    installer = described_class.new(target: Dir.pwd, mpr: __FILE__)
-    allow(installer).to receive(:detect_mendix_version).and_return('11.12.1')
-    expect { installer.pull_official('10', api:) }
-      .to raise_error(Mxrb::MarketplaceError, /not a Module/)
+    installer = described_class.new(target: Dir.pwd)
+    expect { installer.validate_official_package!(package) }.not_to raise_error
+  end
+
+  it 'allows Marketplace Service content while the downloaded MPK validates the module boundary' do
+    package = Mxrb::OfficialMarketplace::OfficialPackage.new(
+      'MQTT Connector', '2.2.1', :mendix, nil, 'content:119508', 119_508,
+      '123e4567-e89b-12d3-a456-426614174000', 'Service', 'Regular', [], false, false
+    )
+    installer = described_class.new(target: Dir.pwd)
+    expect { installer.validate_official_package!(package) }.not_to raise_error
   end
 
   it 'closes safely when target Mendix version detection cannot open the MPR' do

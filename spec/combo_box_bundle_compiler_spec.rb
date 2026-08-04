@@ -14,12 +14,13 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
     }.merge(values.transform_keys(&:to_s)) }
   end
 
-  def schema # rubocop:disable Metrics/MethodLength
+  def schema # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     types = [
       property_type('source', 'source', 'Enumeration'),
       property_type('options-type', 'optionsSourceType', 'Enumeration'),
       property_type('caption-type', 'optionsSourceAssociationCaptionType', 'Enumeration'),
       property_type('association-caption', 'optionsSourceAssociationCaptionAttribute', 'Attribute'),
+      property_type('association-caption-expression', 'optionsSourceAssociationCaptionExpression', 'Expression'),
       property_type('association', 'attributeAssociation', 'Association'),
       property_type('association-source', 'optionsSourceAssociationDataSource', 'DataSource'),
       property_type('database-target', 'databaseAttributeString', 'Attribute'),
@@ -179,7 +180,10 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
     expect(incomplete.send(:target_attribute)).to be_nil
     expect(incomplete.send(:database_caption_attribute)).to be_nil
     expect(incomplete.send(:database_value_attribute)).to be_nil
+    expect(incomplete.send(:enumeration_attribute)).to be_nil
     expect(incomplete.send(:association_caption_attribute)).to be_nil
+    expect(incomplete.send(:association_caption_expression)).to be_nil
+    expect(incomplete.send(:list_expression_property)).to include('"path": null')
     expect(incomplete.send(:entity_steps, nil)).to eq([])
     expect(incomplete.send(:primitive, 'missing')).to be_nil
     expect(incomplete.send(:property_values, nil)).to eq({})
@@ -193,6 +197,52 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
       'Selection', { 'Selection' => 'Multiple' }
     ]
     expect(compiler.send(:selection_property)).to include('Multiple')
+  end
+
+  it 'compiles a context enumeration without requiring a list data source' do
+    properties = [
+      property('source', primitive: 'context'), property('options-type', primitive: 'enumeration'),
+      property('database-target', AttributeRef: nil),
+      property('association-caption', AttributeRef: nil),
+      property('clearable', primitive: 'true'),
+      {
+        'TypePointer' => 'enum-target',
+        'Value' => { 'AttributeRef' => { 'Attribute' => 'Demo.Order.Status' } }
+      }
+    ]
+    model = source
+    model.documents << property_type('enum-target', 'attributeEnumeration', 'Attribute')
+    compiler = described_class.new(
+      model, 'Demo.Edit', widget('status', properties),
+      scope: 'p.Demo.Edit.editor', entity: 'Demo.Order'
+    )
+
+    expect(compiler).to be_supported
+    expect(compiler.render).to include(
+      'React.createElement($Combobox', '"optionsSourceType": "enumeration"',
+      '"attributeEnumeration": AttributeProperty', '"entity": "Demo.Order"',
+      '"attribute": "Status"'
+    )
+  end
+
+  it 'compiles a context association caption expression' do
+    properties = [
+      property('source', primitive: 'context'), property('options-type', primitive: 'association'),
+      property('caption-type', primitive: 'expression'),
+      property('association-caption-expression', Expression: '$currentObject/Name'),
+      property('association', EntityRef: { 'Steps' => [2, {
+        'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
+      }] }),
+      property('association-source', DataSource: xpath('Demo.Location'))
+    ]
+    compiler = described_class.new(
+      source, 'Demo.Edit', widget('location', properties), scope: 'p.Demo.Edit.editor', entity: 'Demo.Order'
+    )
+
+    expect(compiler).to be_supported
+    expect(compiler.render).to include(
+      'optionsSourceAssociationCaptionExpression', 'ListExpressionProperty', '"path": "Name"'
+    )
   end
 end
 # rubocop:enable Metrics/BlockLength

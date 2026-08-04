@@ -137,6 +137,12 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
     bootstrap.instance_variable_set(:@source, Struct.new(:version).new('7.17.0'))
     expect(bootstrap.send(:web_template_roots)).to eq('web' => 'web')
 
+    classic_ten = Struct.new(:version, :optimized_web_client?).new('10.24.0', false)
+    bootstrap.instance_variable_set(:@source, classic_ten)
+    expect(bootstrap.send(:web_template_roots)).to eq('dojo-web' => 'web')
+    bootstrap.instance_variable_set(:@source, Struct.new(:version, :optimized_web_client?).new('10.24.0', true))
+    expect(bootstrap.send(:web_template_roots)).to eq('react-web' => 'web')
+
     source = Struct.new(:units) { def units_of(_type) = units }.new(
       [Mxrb::Compiler::SourceModel::Unit.new(
         id: 'images', container_id: 'images', containment: 'Images', module_name: '../bad',
@@ -149,6 +155,60 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
     allow(Gem::Version).to receive(:new).and_raise(ArgumentError)
     expect { Mxrb::Compiler::SystemModelSeed.seed_version_for('7.2.3') }
       .to raise_error(Mxrb::CompilationError, /invalid Mendix version/)
+  end
+
+  it 'selects the Mendix 10 Rollup command' do
+    web = Mxrb::Compiler::WebBundleBuilder.allocate
+    web.instance_variable_set(:@source, Struct.new(:version).new('10.24.0'))
+    web.instance_variable_set(:@version_root, '/mendix/10.24.0')
+    arguments = [
+      '/mendix/10.24.0/modeler/tools/node/node_modules/rollup/dist/bin/rollup', '--config'
+    ]
+
+    expect(web.send(:bundler_name)).to eq('Rollup')
+    expect(web.send(:bundler_arguments)).to eq(arguments)
+  end
+
+  it 'covers the source-less Mendix 10 adapter and every React DOM shim decision' do
+    expect(Mxrb::Compiler::Adapter.for('10.24.0').web_profiles).to eq([:dojo])
+
+    Dir.mktmpdir do |root|
+      web = File.join(root, 'web')
+      FileUtils.mkdir_p(web)
+      builder = Mxrb::Compiler::WebBundleBuilder.allocate
+      builder.instance_variable_set(:@version_root, '/mendix/11.12.1')
+
+      builder.send(:materialize_react_dom_compatibility, web)
+      shim = File.join(web, 'react-dom-compat.mjs')
+      expect(File).to exist(shim)
+
+      config = File.join(web, 'rspack.config.mjs')
+      File.write(config, 'export default { resolve: { alias: { } } };')
+      builder.send(:materialize_react_dom_compatibility, web)
+      expect(File.read(config)).to include(JSON.generate(shim))
+      builder.send(:materialize_react_dom_compatibility, web)
+
+      File.write(config, 'export default {};')
+      expect { builder.send(:materialize_react_dom_compatibility, web) }
+        .to raise_error(Mxrb::CompilationError, /no resolve alias block/)
+    end
+  end
+
+  it 'builds React layout bundles through the page bundle builder' do
+    Dir.mktmpdir do |root|
+      layout = Struct.new(:module_name, :document).new('Demo', { 'Name' => 'Shell' })
+      source = instance_double(Mxrb::Compiler::SourceModel, units_of: [layout])
+      allow(source).to receive(:web_layout?).with(layout).and_return(true)
+      bundle = Mxrb::Compiler::PageBundle.new('Demo.Shell', 'layout source', [], [])
+      compiler = instance_double(Mxrb::Compiler::PageBundleCompiler, compile_layout: bundle)
+      allow(Mxrb::Compiler::PageBundleCompiler).to receive(:new).with(source).and_return(compiler)
+      builder = Mxrb::Compiler::PageBundleBuilder.allocate
+      builder.instance_variable_set(:@source, source)
+      builder.instance_variable_set(:@web_root, root)
+
+      expect(builder.send(:build_layouts)).to eq([bundle])
+      expect(File.read(File.join(root, 'layouts', 'Demo.Shell.js'))).to eq('layout source')
+    end
   end
 
   it 'exercises all compatibility fallbacks that protect legacy build inputs' do
