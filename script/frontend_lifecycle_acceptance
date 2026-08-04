@@ -1,0 +1,423 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# rubocop:disable Metrics
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'rbconfig'
+require 'tmpdir'
+
+# Reproducible, mutation-aware frontend lifecycle acceptance. Every operation
+# which creates, reads, validates, exports, or compares an MPR is performed by
+# the public mxrb CLI. Ruby file edits between export and generate represent the
+# normal user workflow; official Mendix tools are optional read-only oracles.
+module MxrbFrontendLifecycleAcceptance
+  class Failure < StandardError; end
+
+  PROJECT_NAME = 'frontend_cycle'
+  MODULE_NAME = 'FrontendCycle'
+  MPR_NAME = 'FrontendCycle.mpr'
+
+  # Executes and verifies one isolated lifecycle scenario.
+  class Runner
+    attr_reader :project_root
+
+    def initialize(workspace:, version: '11.12.1', mxrb_root: File.expand_path('..', __dir__),
+                   mxcheck: nil, mxbuild: nil, strict_warnings: false)
+      @workspace = File.expand_path(workspace)
+      @version = version.to_s
+      @mxrb_root = File.expand_path(mxrb_root)
+      @mxcheck = mxcheck
+      @mxbuild = mxbuild
+      @strict_warnings = strict_warnings
+      @commands = []
+      @gates = {}
+      @project_root = File.join(@workspace, PROJECT_NAME)
+      @executable = File.join(@mxrb_root, 'bin', 'mxrb')
+      @acceptance = File.join(@mxrb_root, 'script', 'frontend_acceptance')
+    end
+
+    def run
+      validate_inputs!
+      FileUtils.mkdir_p(@workspace)
+      build_baseline
+      export_and_mutate
+      build_mutated
+      final_round_trip
+      run_optional_oracles
+      report(true)
+    rescue StandardError => e
+      report(false, error: e.message)
+    end
+
+    private
+
+    def validate_inputs!
+      raise Failure, "mxrb executable is missing: #{@executable}" unless File.file?(@executable)
+      raise Failure, "workspace project already exists: #{@project_root}" if File.exist?(@project_root)
+      raise Failure, "unsupported lifecycle version: #{@version}" unless %w[10 11].include?(@version.split('.').first)
+    end
+
+    def build_baseline
+      cli('init', PROJECT_NAME, '--mxrb-path', @mxrb_root, chdir: @workspace)
+      project = File.join(@project_root, 'project.rb')
+      replace_once(project, 'mendix_version "11.12.1"', "mendix_version #{@version.inspect}")
+
+      @baseline = File.join(@project_root, MPR_NAME)
+      cli('generate', 'project.rb', chdir: @project_root)
+      cli('validate', @baseline, chdir: @project_root)
+      @baseline_preflight = preflight(@baseline, chdir: @project_root)
+      assert_counts(@baseline_preflight, pages: 1, layouts: 1, microflows: 0, nanoflows: 0)
+      @gates[:ruby_zero_to_mpr] = true
+    end
+
+    def export_and_mutate
+      @ruby_export = File.join(@workspace, 'ruby-export')
+      cli('export', @baseline, @ruby_export, chdir: @project_root)
+      scaffold('entity', 'new', "#{MODULE_NAME}.Order")
+      scaffold('page', 'new', "#{MODULE_NAME}.Orders")
+      scaffold('use-case', 'new', "#{MODULE_NAME}.ACT_CreateOrder")
+      scaffold('nanoflow', 'new', "#{MODULE_NAME}.NAN_RefreshOrders")
+      write_order_entity
+      write_mutated_page
+      write_mutated_flows
+      mutate_home
+      mutate_navigation
+      add_asset
+      @gates[:mpr_to_editable_ruby] = true
+      @gates[:cli_scaffolds] = true
+    end
+
+    def build_mutated
+      @mutated_root = File.join(@workspace, 'mutated')
+      FileUtils.mkdir_p(@mutated_root)
+      @mutated = File.join(@mutated_root, MPR_NAME)
+      cli('generate', 'project.rb', @mutated, chdir: @ruby_export)
+      cli('validate', @mutated, chdir: @mutated_root)
+      @mutated_preflight = preflight(@mutated, chdir: @mutated_root)
+      assert_counts(@mutated_preflight, pages: 2, layouts: 1, microflows: 1, nanoflows: 1)
+
+      diff = cli('diff', @baseline, @mutated, chdir: @workspace, statuses: [1]).fetch(:stdout)
+      %w[Order Orders ACT_CreateOrder NAN_RefreshOrders].each do |name|
+        raise Failure, "semantic diff does not contain #{name}" unless diff.include?(name)
+      end
+      raise Failure, 'semantic diff did not record additions' unless diff.include?('added')
+
+      assert_planned_diff(diff)
+
+      @diff = diff.lines.map(&:strip).reject(&:empty?)
+      assert_asset(@mutated_root)
+      @gates[:planned_mutations_materialized] = true
+      @gates[:mutated_preflight] = true
+    end
+
+    def final_round_trip
+      @final_ruby = File.join(@workspace, 'final-ruby')
+      @final_root = File.join(@workspace, 'final')
+      @final_mpr = File.join(@final_root, MPR_NAME)
+      FileUtils.mkdir_p(@final_root)
+      cli('export', @mutated, @final_ruby, chdir: @mutated_root)
+      cli('generate', 'project.rb', @final_mpr, chdir: @final_ruby)
+      cli('validate', @final_mpr, chdir: @final_root)
+      @final_preflight = preflight(@final_mpr, chdir: @final_root)
+      raise Failure, 'final preflight differs from mutated preflight' unless
+        @final_preflight.fetch('stats') == @mutated_preflight.fetch('stats')
+
+      cli('compare', @mutated, @final_mpr, chdir: @workspace)
+      assert_exported_sources
+      assert_asset(@final_root)
+      @gates[:ruby_mutation_to_mpr] = true
+      @gates[:final_structural_round_trip] = true
+      @gates[:assets_added_and_preserved] = true
+    end
+
+    def run_optional_oracles
+      @oracles = {}
+      run_oracle(:mx, @mxcheck) if @mxcheck
+      run_oracle(:mxbuild, @mxbuild) if @mxbuild
+    end
+
+    def run_oracle(kind, executable)
+      output = File.join(@workspace, "#{kind}-frontend.json")
+      arguments = [@final_mpr, "--#{kind}", executable, '-o', output]
+      # Successful MxBuild versions may omit warning JSON entirely. Strict
+      # warning enforcement belongs to the observable `mx check` oracle.
+      arguments << '--strict-warnings' if @strict_warnings && kind == :mx
+      command(@acceptance, *arguments, chdir: @final_root)
+      payload = JSON.parse(File.read(output))
+      raise Failure, "#{kind} frontend oracle did not pass" unless payload['passed']
+
+      @oracles[kind] = payload.fetch('oracle')
+      @gates["#{kind}_oracle".to_sym] = true
+    end
+
+    def scaffold(*arguments)
+      cli(*arguments, chdir: @ruby_export)
+    end
+
+    def preflight(mpr, chdir:)
+      result = cli('preflight', mpr, '--json', chdir:)
+      payload = JSON.parse(result.fetch(:stdout))
+      raise Failure, "preflight is not compatible: #{mpr}" unless payload['compatible']
+      raise Failure, "preflight contains findings: #{mpr}" unless payload.fetch('findings').empty?
+
+      payload
+    end
+
+    def assert_counts(payload, expected)
+      stats = payload.fetch('stats')
+      expected.each do |name, count|
+        actual = stats.fetch(name.to_s)
+        raise Failure, "expected #{count} #{name}, got #{actual}" unless actual == count
+      end
+    end
+
+    def assert_planned_diff(diff)
+      allowed = [
+        'design_assets.theme/web/frontend-lifecycle.css',
+        "modules.#{MODULE_NAME}.entities.Order",
+        "modules.#{MODULE_NAME}.microflows.ACT_CreateOrder",
+        "modules.#{MODULE_NAME}.nanoflows.NAN_RefreshOrders",
+        "modules.#{MODULE_NAME}.pages.Home.widgets.pageHeader.children.pageTitle.options.caption",
+        "modules.#{MODULE_NAME}.pages.Orders",
+        'navigation.profiles.Responsive.app_title.en_US',
+        'navigation.profiles.Responsive.items.0'
+      ]
+      unexpected = diff.lines.filter_map do |line|
+        _operation, path, = line.split("\t", 3)
+        next if path&.start_with?('units.') || allowed.include?(path)
+
+        path
+      end
+      raise Failure, "semantic diff contains unexpected paths: #{unexpected.inspect}" unless unexpected.empty?
+    end
+
+    def write_order_entity
+      path = File.join(@ruby_export, 'modules', MODULE_NAME, 'domain', 'entities', 'order.rb')
+      File.write(path, <<~RUBY)
+        # frozen_string_literal: true
+
+        entity :Order do
+          string :Reference, length: 80
+          decimal :Total
+          boolean :Active, default: true
+        end
+      RUBY
+    end
+
+    def write_mutated_page
+      path = File.join(@ruby_export, 'modules', MODULE_NAME, 'presentation', 'pages', 'orders.rb')
+      File.write(path, <<~RUBY)
+        # frozen_string_literal: true
+
+        page :Orders do
+          title "Orders"
+          layout "#{MODULE_NAME}.ApplicationLayout"
+          data_source microflow: "#{MODULE_NAME}.ACT_CreateOrder"
+
+          container :pageHeader, class_name: "mxrb-page-header" do
+            text :pageTitle, caption: "Orders created from exported Ruby"
+          end
+
+          container :orderForm, class_name: "mxrb-card" do
+            text_box :reference, attribute: :Reference, caption: "Reference"
+            text_box :total, attribute: :Total, caption: "Total"
+            check_box :active, attribute: :Active, caption: "Active"
+
+            button :saveOrder, caption: "Save order" do
+              on_click action: :save_changes
+            end
+
+            button :cancelOrder, caption: "Cancel" do
+              on_click action: :cancel_changes
+            end
+          end
+
+          button :refreshOrders, caption: "Refresh orders" do
+            on_click nanoflow: "#{MODULE_NAME}.NAN_RefreshOrders"
+          end
+        end
+      RUBY
+    end
+
+    def write_mutated_flows
+      microflow = File.join(
+        @ruby_export, 'modules', MODULE_NAME, 'application', 'use_cases', 'act_create_order.rb'
+      )
+      File.write(microflow, <<~RUBY)
+        # frozen_string_literal: true
+
+        microflow :ACT_CreateOrder do
+          mark_as_used
+          return_type :Order
+          create_object "#{MODULE_NAME}.Order", as: :order,
+                        set: { Reference: "'NEW'", Total: 0, Active: true }
+          commit :order
+          return_value :order
+        end
+      RUBY
+
+      nanoflow = File.join(
+        @ruby_export, 'modules', MODULE_NAME, 'presentation', 'client_actions',
+        'nan_refresh_orders.rb'
+      )
+      File.write(nanoflow, <<~RUBY)
+        # frozen_string_literal: true
+
+        nanoflow :NAN_RefreshOrders do
+          mark_as_used
+          show_message "Orders refreshed", type: :information
+        end
+      RUBY
+    end
+
+    def mutate_home
+      path = File.join(@ruby_export, 'modules', MODULE_NAME, 'presentation', 'pages', 'home.rb')
+      replace_once(path, 'title "FrontendCycle"', 'title "Frontend lifecycle"')
+      replace_once(
+        path, '"Text" => "FrontendCycle"', '"Text" => "Frontend lifecycle verified"'
+      )
+    end
+
+    def mutate_navigation
+      path = File.join(@ruby_export, 'app', 'navigation', 'navigation.rb')
+      replace_once(
+        path,
+        'title :en_US, "FrontendCycle"',
+        "title :en_US, \"Frontend lifecycle\"\n    item \"Orders\", page: \"FrontendCycle.Orders\""
+      )
+    end
+
+    def add_asset
+      relative = 'theme/web/frontend-lifecycle.css'
+      path = File.join(@ruby_export, relative)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, ".frontend-lifecycle { display: block; }\n")
+      manifest_path = File.join(@ruby_export, '.mxrb', 'assets.json')
+      manifest = JSON.parse(File.read(manifest_path))
+      manifest.fetch('files') << {
+        'path' => relative, 'size' => File.size(path), 'sha256' => Digest::SHA256.file(path).hexdigest
+      }
+      File.write(manifest_path, "#{JSON.pretty_generate(manifest)}\n")
+      @asset = manifest.fetch('files').last
+    end
+
+    def assert_exported_sources
+      expectations = {
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'home.rb') =>
+          'Frontend lifecycle verified',
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'orders.rb') =>
+          '"Attribute" => "FrontendCycle.Order.Reference"',
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'domain', 'entities', 'order.rb') =>
+          'entity :Order',
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'application', 'use_cases', 'act_create_order.rb') =>
+          'microflow :ACT_CreateOrder',
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'client_actions',
+                  'nan_refresh_orders.rb') => 'nanoflow :NAN_RefreshOrders',
+        File.join(@final_ruby, 'app', 'navigation', 'navigation.rb') =>
+          'item "Orders", page: "FrontendCycle.Orders"'
+      }
+      expectations.each do |path, text|
+        raise Failure, "final Ruby export is missing #{text.inspect}" unless File.read(path).include?(text)
+      end
+    end
+
+    def assert_asset(root)
+      path = File.join(root, @asset.fetch('path'))
+      raise Failure, "lifecycle asset is missing: #{path}" unless File.file?(path)
+      raise Failure, "lifecycle asset size changed: #{path}" unless File.size(path) == @asset.fetch('size')
+      return if Digest::SHA256.file(path).hexdigest == @asset.fetch('sha256')
+
+      raise Failure, "lifecycle asset checksum changed: #{path}"
+    end
+
+    def replace_once(path, before, after)
+      content = File.read(path)
+      raise Failure, "mutation anchor not found in #{path}: #{before.inspect}" unless content.include?(before)
+
+      File.write(path, content.sub(before, after))
+    end
+
+    def cli(*arguments, chdir:, statuses: [0])
+      command(@executable, *arguments, chdir:, statuses:)
+    end
+
+    def command(executable, *arguments, chdir:, statuses: [0])
+      argv = [RbConfig.ruby, "-I#{File.join(@mxrb_root, 'lib')}", executable, *arguments]
+      stdout, stderr, status = Open3.capture3(*argv, chdir:)
+      entry = {
+        command: [File.basename(executable), *arguments], chdir:, status: status.exitstatus,
+        stdout:, stderr:
+      }
+      @commands << entry
+      return entry if statuses.include?(status.exitstatus)
+
+      detail = [stdout, stderr].reject(&:empty?).join("\n").strip
+      raise Failure, "#{entry[:command].join(' ')} exited #{status.exitstatus}: #{detail}"
+    end
+
+    def report(passed, error: nil)
+      {
+        passed:, scenario: 'frontend_cli_lifecycle', mendix_version: @version,
+        workspace: @workspace, project_root: @project_root,
+        gates: @gates, preflight: {
+          baseline: @baseline_preflight, mutated: @mutated_preflight, final: @final_preflight
+        }.compact,
+        mutations: {
+          entity: "#{MODULE_NAME}.Order", page: "#{MODULE_NAME}.Orders",
+          microflow: "#{MODULE_NAME}.ACT_CreateOrder",
+          nanoflow: "#{MODULE_NAME}.NAN_RefreshOrders",
+          home_text: 'Frontend lifecycle verified', asset: @asset, diff: @diff
+        }.compact,
+        oracles: @oracles || {}, commands: @commands, error:
+      }.compact
+    end
+  end
+
+  # Parses the executable boundary and always emits JSON evidence.
+  module CLI
+    module_function
+
+    def run(argv)
+      options = { version: '11.12.1', strict_warnings: false }
+      workspace = nil
+      output = nil
+      parser = OptionParser.new do |cli|
+        cli.banner = 'Usage: script/frontend_lifecycle_acceptance [options]'
+        cli.on('--version VERSION', 'Mendix 10/11 target version') { options[:version] = _1 }
+        cli.on('--workspace DIR', 'Keep the scenario below DIR/frontend_cycle') { workspace = _1 }
+        cli.on('--mx FILE', 'Use mx check as an optional read-only oracle') { options[:mxcheck] = _1 }
+        cli.on('--mxbuild FILE', 'Use MxBuild as an optional read-only oracle') { options[:mxbuild] = _1 }
+        cli.on('--strict-warnings', 'Require zero observable warning-class diagnostics') do
+          options[:strict_warnings] = true
+        end
+        cli.on('-o', '--output FILE', 'Write JSON evidence to FILE') { output = _1 }
+      end
+      parser.parse!(argv)
+      raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+      report = if workspace
+                 Runner.new(workspace:, **options).run
+               else
+                 Dir.mktmpdir('mxrb-frontend-lifecycle-') do |temporary|
+                   Runner.new(workspace: temporary, **options).run
+                 end
+               end
+      json = "#{JSON.pretty_generate(report)}\n"
+      output ? File.write(output, json) : puts(json)
+      report.fetch(:passed) ? 0 : 1
+    rescue OptionParser::ParseError => e
+      payload = { passed: false, error: e.message }
+      output ? File.write(output, "#{JSON.pretty_generate(payload)}\n") : warn(JSON.pretty_generate(payload))
+      1
+    end
+  end
+end
+
+exit MxrbFrontendLifecycleAcceptance::CLI.run(ARGV) if $PROGRAM_NAME == __FILE__
+
+# rubocop:enable Metrics

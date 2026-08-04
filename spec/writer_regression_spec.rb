@@ -50,4 +50,48 @@ RSpec.describe 'writer regressions from the VetClinic acceptance project' do # r
     mappings = Mxrb::IO::BsonCodec.parse_array(action.dig('MicroflowCall', 'ParameterMappings'))[:items]
     expect(mappings.map { _1['Parameter'] }).to eq(%w[Clinic.Create.Name Clinic.Create.Age])
   end
+
+  # rubocop:disable Metrics/BlockLength
+  it 'uses Abort instead of Rollback throughout generated nanoflow graphs' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'nanoflow-errors.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module :Ui do
+          microflow(:ServerNotice) { show_message 'Server notice' }
+          nanoflow :ClientNotice do
+            decision 'true' do
+              on(true) { show_message 'Accepted' }
+              on(false) { show_message 'Rejected' }
+            end
+            show_message 'May fail'
+            rescue_all { show_message 'Recovered' }
+          end
+        end
+      end
+
+      flows = Mxrb.open(path) do |project|
+        project.mpr.units_by_containment('Documents').to_h do |unit|
+          document = project.parse_bson(unit)
+          [document['Name'], document]
+        end
+      end
+      error_types = lambda do |value|
+        case value
+        when Hash
+          [value['ErrorHandlingType'], *value.values.flat_map { error_types.call(_1) }].compact
+        when Array
+          value.flat_map { error_types.call(_1) }
+        else
+          []
+        end
+      end
+
+      expect(error_types.call(flows.fetch('ClientNotice'))).to contain_exactly(
+        'Abort', 'Abort', 'Abort', 'Abort', 'CustomWithoutRollBack'
+      )
+      expect(error_types.call(flows.fetch('ServerNotice'))).to eq(['Rollback'])
+    end
+  end
+  # rubocop:enable Metrics/BlockLength
 end

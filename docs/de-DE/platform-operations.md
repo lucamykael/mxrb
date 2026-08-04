@@ -25,6 +25,8 @@ mxrb frontend migrate App.mpr --apply --json
 script/frontend_acceptance App.mpr -o frontend-round-trip.json
 script/frontend_acceptance App.mpr --mxbuild /pfad/mxbuild -o frontend.json
 script/frontend_acceptance App.mpr --mx /pfad/mx -o frontend-diagnostics.json
+script/frontend_lifecycle_acceptance --version 11.12.1 --mx /pfad/mx \
+  --mxbuild /pfad/mxbuild --strict-warnings -o frontend-lifecycle.json
 ```
 
 `mxrb frontend migrate` ist standardmäßig eine unveränderliche, fail-closed
@@ -55,6 +57,14 @@ null endet und ein nicht leeres MDA erzeugt; ein Toolchain-Fehler ohne gemeldete
 Modellfehler schlägt geschlossen fehl. Am 4. August 2026 schloss die sichere
 Migration die akzeptierte Matrix 10.24.0.73019 und 11.12.1 ab: Quelle und Rebuild lieferten null
 MxBuild-Fehler, und beide Reports setzten `frontend_ready` auf `true`.
+
+`script/frontend_lifecycle_acceptance` erstellt eine App ausschließlich über
+die CLI, erzeugt das MPR, exportiert nach Ruby, ändert Home und Navigation,
+fügt Entität, Formular, Microflow, Nanoflow und Asset hinzu, erzeugt erneut,
+exportiert ein zweites Mal und verlangt einen strukturell identischen Rebuild.
+In der offiziellen Matrix 10.24.0.73019 und 11.12.1 endeten Quelle und Rebuild
+mit null Fehlern, Warnungen, Deprecations oder Empfehlungen in `mx check` sowie
+null MxBuild-Fehlern.
 
 `--mx` führt den offiziellen schreibgeschützten Checker mit Warnungen,
 Deprecations und Best-Practice-Empfehlungen aus. Das Gate validiert die
