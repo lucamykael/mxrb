@@ -78,9 +78,11 @@ module MxrbFrontendLifecycleAcceptance
     def export_and_mutate
       @ruby_export = File.join(@workspace, 'ruby-export')
       cli('export', @baseline, @ruby_export, chdir: @project_root)
+      scaffold('entity', 'new', "#{MODULE_NAME}.Order")
       scaffold('page', 'new', "#{MODULE_NAME}.Orders")
       scaffold('use-case', 'new', "#{MODULE_NAME}.ACT_CreateOrder")
       scaffold('nanoflow', 'new', "#{MODULE_NAME}.NAN_RefreshOrders")
+      write_order_entity
       write_mutated_page
       write_mutated_flows
       mutate_home
@@ -100,7 +102,7 @@ module MxrbFrontendLifecycleAcceptance
       assert_counts(@mutated_preflight, pages: 2, layouts: 1, microflows: 1, nanoflows: 1)
 
       diff = cli('diff', @baseline, @mutated, chdir: @workspace, statuses: [1]).fetch(:stdout)
-      %w[Orders ACT_CreateOrder NAN_RefreshOrders].each do |name|
+      %w[Order Orders ACT_CreateOrder NAN_RefreshOrders].each do |name|
         raise Failure, "semantic diff does not contain #{name}" unless diff.include?(name)
       end
       raise Failure, 'semantic diff did not record additions' unless diff.include?('added')
@@ -177,6 +179,7 @@ module MxrbFrontendLifecycleAcceptance
     def assert_planned_diff(diff)
       allowed = [
         'design_assets.theme/web/frontend-lifecycle.css',
+        "modules.#{MODULE_NAME}.entities.Order",
         "modules.#{MODULE_NAME}.microflows.ACT_CreateOrder",
         "modules.#{MODULE_NAME}.nanoflows.NAN_RefreshOrders",
         "modules.#{MODULE_NAME}.pages.Home.widgets.pageHeader.children.pageTitle.options.caption",
@@ -193,6 +196,19 @@ module MxrbFrontendLifecycleAcceptance
       raise Failure, "semantic diff contains unexpected paths: #{unexpected.inspect}" unless unexpected.empty?
     end
 
+    def write_order_entity
+      path = File.join(@ruby_export, 'modules', MODULE_NAME, 'domain', 'entities', 'order.rb')
+      File.write(path, <<~RUBY)
+        # frozen_string_literal: true
+
+        entity :Order do
+          string :Reference, length: 80
+          decimal :Total
+          boolean :Active, default: true
+        end
+      RUBY
+    end
+
     def write_mutated_page
       path = File.join(@ruby_export, 'modules', MODULE_NAME, 'presentation', 'pages', 'orders.rb')
       File.write(path, <<~RUBY)
@@ -201,13 +217,24 @@ module MxrbFrontendLifecycleAcceptance
         page :Orders do
           title "Orders"
           layout "#{MODULE_NAME}.ApplicationLayout"
+          data_source microflow: "#{MODULE_NAME}.ACT_CreateOrder"
 
           container :pageHeader, class_name: "mxrb-page-header" do
             text :pageTitle, caption: "Orders created from exported Ruby"
           end
 
-          button :createOrder, caption: "Create order" do
-            on_click microflow: "#{MODULE_NAME}.ACT_CreateOrder"
+          container :orderForm, class_name: "mxrb-card" do
+            text_box :reference, attribute: :Reference, caption: "Reference"
+            text_box :total, attribute: :Total, caption: "Total"
+            check_box :active, attribute: :Active, caption: "Active"
+
+            button :saveOrder, caption: "Save order" do
+              on_click action: :save_changes
+            end
+
+            button :cancelOrder, caption: "Cancel" do
+              on_click action: :cancel_changes
+            end
           end
 
           button :refreshOrders, caption: "Refresh orders" do
@@ -226,7 +253,11 @@ module MxrbFrontendLifecycleAcceptance
 
         microflow :ACT_CreateOrder do
           mark_as_used
-          show_message "Order flow executed", type: :information
+          return_type :Order
+          create_object "#{MODULE_NAME}.Order", as: :order,
+                        set: { Reference: "'NEW'", Total: 0, Active: true }
+          commit :order
+          return_value :order
         end
       RUBY
 
@@ -280,7 +311,9 @@ module MxrbFrontendLifecycleAcceptance
         File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'home.rb') =>
           'Frontend lifecycle verified',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'orders.rb') =>
-          'page :Orders',
+          '"Attribute" => "FrontendCycle.Order.Reference"',
+        File.join(@final_ruby, 'modules', MODULE_NAME, 'domain', 'entities', 'order.rb') =>
+          'entity :Order',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'application', 'use_cases', 'act_create_order.rb') =>
           'microflow :ACT_CreateOrder',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'client_actions',
@@ -335,7 +368,8 @@ module MxrbFrontendLifecycleAcceptance
           baseline: @baseline_preflight, mutated: @mutated_preflight, final: @final_preflight
         }.compact,
         mutations: {
-          page: "#{MODULE_NAME}.Orders", microflow: "#{MODULE_NAME}.ACT_CreateOrder",
+          entity: "#{MODULE_NAME}.Order", page: "#{MODULE_NAME}.Orders",
+          microflow: "#{MODULE_NAME}.ACT_CreateOrder",
           nanoflow: "#{MODULE_NAME}.NAN_RefreshOrders",
           home_text: 'Frontend lifecycle verified', asset: @asset, diff: @diff
         }.compact,

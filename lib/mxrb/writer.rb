@@ -295,6 +295,13 @@ module Mxrb
           %w[AfterStartupMicroflow BeforeShutdownMicroflow HealthCheckMicroflow].each do |key|
             setting[key] = '' if setting.key?(key)
           end
+        when 'Settings$LanguageSettings'
+          default = setting['DefaultLanguageCode'].to_s
+          array_items(setting['Languages']).each do |language|
+            next if language['Code'].to_s == default
+
+            language['CheckCompleteness'] = false
+          end
         end
       end
       document

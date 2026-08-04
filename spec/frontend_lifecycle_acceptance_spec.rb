@@ -24,7 +24,7 @@ RSpec.describe MxrbFrontendLifecycleAcceptance do
           'pages' => 2, 'layouts' => 1, 'microflows' => 1, 'nanoflows' => 1
         )
         expect(report.dig(:mutations, :diff).join("\n")).to include(
-          'Orders', 'ACT_CreateOrder', 'NAN_RefreshOrders'
+          'Order', 'Orders', 'ACT_CreateOrder', 'NAN_RefreshOrders'
         )
         expect(report.fetch(:oracles)).to eq({})
         expect(report.fetch(:commands).map { _1.fetch(:command).first }.uniq).to eq(['mxrb'])
@@ -36,6 +36,16 @@ RSpec.describe MxrbFrontendLifecycleAcceptance do
         expect(File).to exist(File.join(final_root, 'FrontendCycle.mpr'))
         expect(File.read(File.join(final_ruby, 'app', 'navigation', 'navigation.rb')))
           .to include('item "Orders", page: "FrontendCycle.Orders"')
+        expect(File.read(File.join(final_ruby, 'modules', 'FrontendCycle', 'domain',
+                                   'entities', 'order.rb')))
+          .to include('entity :Order', 'string :Reference', 'decimal :Total', 'boolean :Active')
+        expect(File.read(File.join(final_ruby, 'modules', 'FrontendCycle', 'presentation',
+                                   'pages', 'orders.rb')))
+          .to include(
+            '"Attribute" => "FrontendCycle.Order.Reference"',
+            '"Attribute" => "FrontendCycle.Order.Total"',
+            '"Attribute" => "FrontendCycle.Order.Active"'
+          )
         expect(File.read(File.join(final_ruby, 'theme', 'web', 'frontend-lifecycle.css')))
           .to include('display: block')
       end
