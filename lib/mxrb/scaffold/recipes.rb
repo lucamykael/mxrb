@@ -25,28 +25,34 @@ module Mxrb
 
       def scaffold_constant
         module_name, artifact_name = qualified_name
-        create_module_file(module_name, SIMPLE.fetch(:constant), artifact_name, :constant)
-        ensure_evaluate_dir(module_path(module_name, 'domain', 'model.rb'), 'constants')
+        create_connected_module_file(
+          module_name, SIMPLE.fetch(:constant), artifact_name, :constant
+        )
       end
 
       def scaffold_page
         module_name, artifact_name = qualified_name
         ensure_presentation(module_name)
-        create_module_file(module_name, %w[presentation pages], artifact_name, :page)
+        create_connected_module_file(
+          module_name, %w[presentation pages], artifact_name, :page
+        )
       end
 
       def scaffold_nanoflow
         module_name, artifact_name = qualified_name
         ensure_presentation(module_name)
-        create_module_file(module_name, %w[presentation client_actions], artifact_name, :nanoflow)
+        create_connected_module_file(
+          module_name, %w[presentation client_actions], artifact_name, :nanoflow
+        )
       end
 
       def scaffold_repository
         module_name, artifact_name = qualified_name
-        ensure_application_directory(module_name, 'repositories')
         ensure_infrastructure(module_name)
-        create_module_file(module_name, %w[application repositories], artifact_name, :repository)
-        create_module_file(
+        create_connected_module_file(
+          module_name, %w[application repositories], artifact_name, :repository
+        )
+        create_connected_module_file(
           module_name, %w[infrastructure repositories], artifact_name,
           :repository_implementation, suffix: '_implementation'
         )
@@ -54,8 +60,9 @@ module Mxrb
 
       def scaffold_scheduled_event
         module_name, artifact_name = qualified_name
-        ensure_application_directory(module_name, 'jobs')
-        create_module_file(module_name, %w[application jobs], artifact_name, :scheduled_event)
+        create_connected_module_file(
+          module_name, %w[application jobs], artifact_name, :scheduled_event
+        )
       end
 
       def scaffold_integration = scaffold_infrastructure_artifact(:integration)
@@ -134,13 +141,13 @@ module Mxrb
 
       def scaffold_simple(kind)
         module_name, artifact_name = qualified_name
-        create_module_file(module_name, SIMPLE.fetch(kind), artifact_name, kind)
+        create_connected_module_file(module_name, SIMPLE.fetch(kind), artifact_name, kind)
       end
 
       def scaffold_infrastructure_artifact(kind)
         module_name, artifact_name = qualified_name
         ensure_infrastructure(module_name)
-        create_module_file(
+        create_connected_module_file(
           module_name, ['infrastructure', INFRASTRUCTURE.fetch(kind)], artifact_name, kind
         )
       end

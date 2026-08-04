@@ -62,6 +62,27 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     )
   end
 
+  it 'does not require translations for non-default donor-template languages' do
+    document = {
+      'Settings' => [2, {
+        '$Type' => 'Settings$LanguageSettings', 'DefaultLanguageCode' => 'en_US',
+        'Languages' => [3,
+                        { '$Type' => 'Texts$Language', 'Code' => 'en_US',
+                          'CheckCompleteness' => true },
+                        { '$Type' => 'Texts$Language', 'Code' => 'nl_NL',
+                          'CheckCompleteness' => true }]
+      }]
+    }
+
+    writer.send(:sanitize_project_settings!, document)
+
+    languages = Mxrb::IO::BsonCodec.parse_array(document['Settings'][1]['Languages'])[:items]
+    expect(languages).to contain_exactly(
+      hash_including('Code' => 'en_US', 'CheckCompleteness' => true),
+      hash_including('Code' => 'nl_NL', 'CheckCompleteness' => false)
+    )
+  end
+
   it 'leaves absent lifecycle fields absent and uses the prior legacy application title' do
     document = { 'Settings' => [2, { '$Type' => 'Settings$ModelSettings' }] }
     writer.send(:sanitize_project_settings!, document)
