@@ -193,7 +193,7 @@ module Mxrb
         layout = layout_unit(page.dig('FormCall', 'Form').to_s)&.document || {}
         [layout['Class'], layout.dig('Appearance', 'Class'), page['Class'],
          page.dig('Appearance', 'Class')].compact.flat_map { _1.to_s.split }
-                                                 .reject(&:empty?).uniq.join(' ')
+                                         .reject(&:empty?).uniq.join(' ')
       end
 
       def page_widgets(document)

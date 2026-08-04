@@ -30,7 +30,7 @@ module Mxrb
 
       def pressured_relations(report)
         report.findings.select { _1.rule == :table_sequential_pressure }
-                       .map { _1.subject.to_s.split('.').last.downcase }
+              .map { _1.subject.to_s.split('.').last.downcase }
       end
 
       def candidates_for(evidence, pressured)

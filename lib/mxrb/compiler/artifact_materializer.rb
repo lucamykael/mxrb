@@ -30,7 +30,7 @@ module Mxrb
       def compile_documents(source)
         compiler = ArtifactDocumentCompiler.new
         source.units.select { ArtifactDocumentCompiler::TYPES.include?(_1.document['$Type']) }
-                    .map { compiler.compile(_1) }
+              .map { compiler.compile(_1) }
       end
 
       def write_model(path, documents)

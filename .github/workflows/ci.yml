@@ -59,7 +59,27 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
 
+      - name: Restore pinned ONNX model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/informers
+          key: informers-${{ runner.os }}-1.3.0-all-MiniLM-L6-v2-1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+
+      - name: Warm pinned ONNX model cache
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if bundle exec ruby -Ilib -e 'require "mxrb"; Mxrb::Semantic::OnnxEmbedder.new.dimension'; then
+              exit 0
+            fi
+            if [ "$attempt" = 5 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
+
       - name: Run real ONNX semantic-search smoke test
+        env:
+          INFORMERS_OFFLINE: "1"
         run: bundle exec rspec spec/semantic_search_spec.rb
 
   sqlite-vec:

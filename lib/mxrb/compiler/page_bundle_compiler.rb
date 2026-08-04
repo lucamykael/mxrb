@@ -142,7 +142,7 @@ module Mxrb
         cells = array(widget['Cells']).group_by { integer_or(_1['TopRowIndex'], 0) }
         rows = array(widget['Rows']).map.with_index do |row, index|
           content = cells.fetch(index, []).sort_by { integer_or(_1['LeftColumnIndex'], 0) }
-                                          .map { render_table_cell(_1) }
+                         .map { render_table_cell(_1) }
           props = common_props(row).merge(className: css_class(row))
           "React.createElement(\"tr\", #{js_props(props)}, [#{content.join(', ')}])"
         end
