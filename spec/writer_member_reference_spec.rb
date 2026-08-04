@@ -169,6 +169,18 @@ RSpec.describe Mxrb::Writer, 'modern member references' do
     )
     expect(activity.first[:entity]).to be_nil
     expect(variables).to eq({})
+    association_activity, association_variables = writer.send(
+      :qualify_activity_members,
+      [{ type: :retrieve_association, association: :Missing, variable: :unknown }], {}, 'App'
+    )
+    expect(association_activity.first[:association]).to eq(:Missing)
+    expect(association_variables).to eq({})
+    loop_activity, loop_variables = writer.send(
+      :qualify_activity_members,
+      [{ type: :loop_over, variable: :missing, iterator: :item, activities: [] }], {}, 'App'
+    )
+    expect(loop_activity.first[:activities]).to eq([])
+    expect(loop_variables).to eq({})
     decision = writer.send(
       :qualify_decision_activity,
       { type: :decision, true_branch: [], false_branch: [] }, {}, 'App'
