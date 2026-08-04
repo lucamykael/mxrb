@@ -10,6 +10,12 @@ module Mxrb
       Result = Data.define(:root, :files, :updated, :kind, :name, :dry_run)
       IDENTIFIER = /\A[A-Za-z][A-Za-z0-9_]*\z/
       RESERVED_ENTITY_NAMES = %w[Owner ChangedBy CreatedDate ChangedDate].freeze
+      LAYER_AGGREGATORS = {
+        'domain' => 'model.rb',
+        'application' => 'application.rb',
+        'presentation' => 'presentation.rb',
+        'infrastructure' => 'infrastructure.rb'
+      }.freeze
 
       def initialize(kind, name = nil, target: Dir.pwd, dry_run: false)
         @kind = kind.to_sym
@@ -73,6 +79,22 @@ module Mxrb
         @transaction.write(path, "#{source.rstrip}\n#{line}\n")
       end
 
+      def connect_artifact(aggregator, *segments)
+        source = @transaction.content(aggregator)
+        raise ArgumentError, "#{aggregator}: aggregator not found" unless source
+
+        line = artifact_evaluation(source, segments)
+        return if source.include?(line)
+
+        @transaction.write(aggregator, "#{source.rstrip}\n#{line}\n")
+      end
+
+      def artifact_evaluation(source, segments)
+        return evaluate_line(segments) unless source.match?(/^\s*evaluate_dir File\.join\(__dir__, /)
+
+        %(evaluate_dir File.join(__dir__, "#{segments.fetch(0)}"))
+      end
+
       def connect_module_aggregator(module_name, *segments)
         path = module_path(module_name, 'module.rb')
         source = @transaction.content(path)
@@ -116,6 +138,17 @@ module Mxrb
         filename = "#{Templates.snake_case(artifact_name)}#{suffix}.rb"
         path = module_path(module_name, *directories, filename)
         @transaction.create(path, Templates.render(template, module_name:, name: artifact_name))
+        filename
+      end
+
+      def create_connected_module_file(module_name, directories, artifact_name, template, suffix: nil)
+        filename = create_module_file(
+          module_name, directories, artifact_name, template, suffix:
+        )
+        layer, *relative = directories
+        aggregator = module_path(module_name, layer, LAYER_AGGREGATORS.fetch(layer))
+        connect_artifact(aggregator, *relative, filename)
+        filename
       end
 
       def create_project_file(directories, artifact_name, content)

@@ -160,6 +160,63 @@ RSpec.describe Mxrb::Scaffold::Generator do
     end
   end
 
+  it 'connects new artifacts to explicit aggregators in an exported Ruby project' do
+    Dir.mktmpdir do |dir|
+      source_root = project_in(dir)
+      load File.join(source_root, 'project.rb')
+      source_mpr = File.join(source_root, 'ScaffoldApp.mpr')
+      exported = File.join(dir, 'exported')
+      Mxrb::Exporter.new(source_mpr, exported).export!
+
+      scaffold(exported, :entity, 'ScaffoldApp.Animal')
+      scaffold(exported, :use_case, 'ScaffoldApp.ACT_CreateAnimal')
+      scaffold(exported, :page, 'ScaffoldApp.AnimalOverview')
+      scaffold(exported, :nanoflow, 'ScaffoldApp.NAN_OpenAnimal')
+      scaffold(exported, :repository, 'ScaffoldApp.AnimalRepository')
+      scaffold(exported, :scheduled_event, 'ScaffoldApp.Cleanup')
+      scaffold(exported, :integration, 'ScaffoldApp.PetApi')
+
+      expect(File.read(File.join(exported, 'modules/ScaffoldApp/domain/model.rb')))
+        .to include('evaluate File.join(__dir__, "entities", "animal.rb")')
+      expect(File.read(File.join(exported, 'modules/ScaffoldApp/application/application.rb')))
+        .to include(
+          'evaluate File.join(__dir__, "use_cases", "act_create_animal.rb")',
+          'evaluate File.join(__dir__, "repositories", "animal_repository.rb")',
+          'evaluate File.join(__dir__, "jobs", "cleanup.rb")'
+        )
+      expect(File.read(File.join(exported, 'modules/ScaffoldApp/presentation/presentation.rb')))
+        .to include(
+          'evaluate File.join(__dir__, "pages", "animal_overview.rb")',
+          'evaluate File.join(__dir__, "client_actions", "nan_open_animal.rb")'
+        )
+      expect(File.read(File.join(exported, 'modules/ScaffoldApp/infrastructure/infrastructure.rb')))
+        .to include(
+          'evaluate File.join(__dir__, "repositories", "animal_repository_implementation.rb")',
+          'evaluate File.join(__dir__, "integrations", "pet_api.rb")'
+        )
+
+      rebuilt = File.join(dir, 'rebuilt.mpr')
+      previous = ENV['MXRB_OUTPUT_PATH']
+      ENV['MXRB_OUTPUT_PATH'] = rebuilt
+      load File.join(exported, 'project.rb')
+      ENV['MXRB_OUTPUT_PATH'] = previous
+
+      expect(Mxrb.validate(rebuilt)).to be_valid
+      Mxrb.open(rebuilt) do |project|
+        mod = project.modules.first
+        expect(mod.entities.map(&:name)).to include('Animal')
+        expect(mod.pages.map(&:name)).to include('AnimalOverview')
+        expect(mod.nanoflows.map(&:name)).to include('NAN_OpenAnimal')
+        expect(mod.microflows.map(&:name)).to include(
+          'ACT_CreateAnimal', 'AnimalRepositoryImplementation', 'Cleanup', 'PetApi'
+        )
+        expect(mod.scheduled_events.map { _1['Name'] }).to include('Cleanup')
+      end
+    ensure
+      previous.nil? ? ENV.delete('MXRB_OUTPUT_PATH') : ENV['MXRB_OUTPUT_PATH'] = previous
+    end
+  end
+
   it 'rejects invalid names, missing roots, missing modules, and unsupported CI providers' do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
