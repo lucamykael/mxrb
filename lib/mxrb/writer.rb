@@ -3486,11 +3486,24 @@ module Mxrb
     end
 
     def nanoflow_doc(flow)
-      microflow_doc(flow).merge(
+      doc = microflow_doc(flow)
+      normalize_nanoflow_error_handling!(doc)
+      doc.merge(
         "$Type" => "Microflows$Nanoflow",
         "AllowConcurrentExecution" => nil,
         "UseListParameterByReference" => true
       ).compact
+    end
+
+    def normalize_nanoflow_error_handling!(value)
+      case value
+      when Hash
+        value["ErrorHandlingType"] = "Abort" if value["ErrorHandlingType"] == "Rollback"
+        value.each_value { normalize_nanoflow_error_handling!(_1) }
+      when Array
+        value.each { normalize_nanoflow_error_handling!(_1) }
+      end
+      value
     end
 
     def text_doc(text)
