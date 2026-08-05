@@ -1810,9 +1810,8 @@ module Mxrb
         (@generic_widgets || {}).sort.each do |name, path|
           imports.concat([
                            "import * as #{name}WidgetModule from \"../widgets/#{path}.mjs\";",
-                           "const #{name} = Object.getOwnPropertyDescriptor(#{name}WidgetModule, " \
-                           "#{JSON.generate(name)})?.value || " \
-                           "Object.getOwnPropertyDescriptor(#{name}WidgetModule, \"default\")?.value;"
+                           "const #{name} = #{name}WidgetModule[#{JSON.generate(name)}] || " \
+                           "#{name}WidgetModule.default;"
                          ])
           widgets << name
         end

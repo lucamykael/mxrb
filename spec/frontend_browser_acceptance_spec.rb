@@ -90,12 +90,16 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
 
   it 'rejects the generic Mendix runtime error dialog' do
     Dir.mktmpdir do |root|
-      broken = snapshot.merge('elements' => [{
-        'tag' => 'p', 'text' => 'An error occurred, please contact your system administrator.'
-      }])
+      messages = [
+        'An error occurred, please contact your system administrator.',
+        'Executing runtime operation failed for security reasons: operation-id'
+      ]
 
-      expect(run(fake_browser(snapshot: broken), root).fetch(:error))
-        .to include('visible widget render failure')
+      messages.each do |message|
+        broken = snapshot.merge('elements' => [{ 'tag' => 'p', 'text' => message }])
+        expect(run(fake_browser(snapshot: broken), root).fetch(:error))
+          .to include('visible widget render failure')
+      end
     end
   end
 end
