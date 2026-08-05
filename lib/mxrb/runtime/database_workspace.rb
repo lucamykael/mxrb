@@ -14,6 +14,7 @@ module Mxrb
       :host, :port, :database, :reader_user, :running, :model_fingerprint,
       :runtime_url
     )
+    AdminCredentials = Data.define(:username, :password, :state_dir, :path)
 
     # Materializes a private PostgreSQL database for one MPR. The Mendix Runtime
     # owns schema synchronization; analyst access uses a separate read-only role.
@@ -148,7 +149,34 @@ module Mxrb
         "postgresql://#{READER}:#{secret}@127.0.0.1:#{@port}/#{DATABASE}"
       end
 
+      def admin_credentials
+        unless File.file?(credentials_path)
+          raise ToolchainError,
+                "Runtime credentials not found; run `mxrb db up #{@project_path}` first"
+        end
+
+        values = JSON.parse(File.read(credentials_path))
+        password = values.fetch('admin_password')
+        AdminCredentials.new(admin_user_name, password, @state_dir, credentials_path)
+      rescue JSON::ParserError, KeyError => e
+        raise ToolchainError, "invalid Runtime credentials file #{credentials_path}: #{e.message}"
+      end
+
       private
+
+      def admin_user_name
+        mpr = IO::MprFile.open(@project_path, readonly: true)
+        begin
+          security = mpr.all_units.lazy.map { mpr.parse_contents(_1) }
+                        .find { _1['$Type'] == 'Security$ProjectSecurity' }
+          name = security.to_h.fetch('AdminUserName', '').to_s
+          raise ToolchainError, 'MPR has no configured administrator user' if name.empty?
+
+          name
+        ensure
+          mpr.close
+        end
+      end
 
       def bind_parameters(statement, params)
         values = params.to_h.transform_keys(&:to_s)

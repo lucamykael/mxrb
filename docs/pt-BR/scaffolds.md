@@ -30,6 +30,7 @@ o hash criado pelo gerador, protegendo edições posteriores.
 | `mxrb page new App.Order --chain page:nanoflow:microflow` | Fatia vertical executável |
 | `mxrb nanoflow new App.NAN_OpenCustomer` | Nanoflow cliente |
 | `mxrb security init App` | Papéis, `CheckEverything` no projeto e orientação de acesso |
+| `mxrb demo-user new manager --role User` | Demo user com segredo local em `.env` |
 | `mxrb integration new App.PetApi` | Adaptador de integração |
 | `mxrb published-rest new App.CustomersApi` | Handler editável para REST publicado |
 | `mxrb consumed-rest new App.ExternalPets` | Adaptador REST consumido |
@@ -70,6 +71,27 @@ as cadeias que terminam em microflow criam também `ACT_RefreshOrder`. Sem
 são aliases de `page new`. Cada cadeia é materializada em um MPR válido, serve
 como ponto de partida removível e exercita o preflight do compilador; arquivos
 existentes nunca são sobrescritos.
+
+## Demo users
+
+Depois de inicializar a segurança, um demo user pode ser declarado como um
+arquivo Ruby independente:
+
+```sh
+mxrb security init App
+mxrb demo-user new manager --entity System.User --role User
+mxrb demo-user operator --entity App.Account --role User --role Administrator
+```
+
+`new` é opcional. `--entity` usa `System.User` por padrão e `--role` pode ser
+repetido; sem ele, o papel `User` é usado. O scaffold valida imediatamente se
+a entidade e os papéis existem, conecta `app/security/demo_users` ao bloco
+`security` e habilita demo users no MPR.
+
+A senha aleatória fica apenas no `.env` ignorado, com modo `0600` quando o
+arquivo é criado. O Ruby gerado usa `ENV.fetch` e `.env.example` recebe somente
+a variável vazia. Gere e valide o MPR normalmente depois do scaffold. Demo
+users destinam-se a desenvolvimento e demonstração, não a usuários de produção.
 
 ## Modelos de página
 

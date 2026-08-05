@@ -31,9 +31,12 @@ module Mxrb
       def generator
         chain = extract_option('--chain') if @command == 'page'
         template = extract_option('--template') if @command == 'page'
+        entity = extract_option('--entity') if @command == 'demo-user'
+        roles = extract_options('--role') if @command == 'demo-user'
         Generator.new(
           kind, scaffold_name, target: target, dry_run: @dry_run,
-                               page_chain: chain, page_template: template
+                               page_chain: chain, page_template: template,
+                               demo_entity: entity, demo_roles: roles
         )
       end
 
@@ -56,6 +59,12 @@ module Mxrb
       end
 
       def validate_action!
+        if @command == 'demo-user'
+          @argv.shift if @argv.first == 'new'
+          abort Help.text(@command) if @argv.empty?
+          return
+        end
+
         action = @argv.shift
         abort Help.text(@command) unless accepted_actions.include?(action)
       end
@@ -88,6 +97,16 @@ module Mxrb
 
         abort "#{name} requires a value" unless @argv[index + 1]
         @argv.slice!(index, 2).last
+      end
+
+      def extract_options(name)
+        values = []
+        while (index = @argv.index(name))
+          abort "#{name} requires a value" unless @argv[index + 1]
+
+          values << @argv.slice!(index, 2).last
+        end
+        values
       end
 
       def kind = @command.tr('-', '_').to_sym

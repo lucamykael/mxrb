@@ -129,6 +129,33 @@ module Mxrb
         connect_project_security(module_name)
       end
 
+      def scaffold_demo_user
+        ensure_project
+        name = identifier(@name, label: 'demo user')
+        entity = demo_user_entity
+        roles = demo_user_roles
+        validate_demo_user_references!(name, entity, roles)
+        password_env = "MXRB_DEMO_USER_#{name.gsub(/[^A-Za-z0-9]/, '_').upcase}_PASSWORD"
+
+        connect_project_demo_users
+        create_demo_user_file(name, entity, roles, password_env)
+        ensure_demo_user_secret(password_env) unless @dry_run
+      end
+
+      def demo_user_entity
+        entity = (@demo_entity || 'System.User').to_s
+        pattern = /\A[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*\z/
+        raise ArgumentError, 'demo user entity must be qualified as Module.Entity' unless entity.match?(pattern)
+
+        entity
+      end
+
+      def demo_user_roles
+        roles = Array(@demo_roles)
+        roles = ['User'] if roles.empty?
+        roles.map { identifier(_1.to_s, label: 'user role') }.uniq
+      end
+
       def scaffold_functional_test
         module_name, artifact_name = qualified_name
         ensure_project

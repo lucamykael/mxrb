@@ -144,6 +144,24 @@ bundle exec mxrb db sql Shop.mpr \
 bundle exec mxrb db shell Shop.mpr
 ```
 
+As credenciais do administrador do Runtime já criado podem ser consultadas sem
+imprimir a senha por padrão:
+
+```sh
+bundle exec mxrb db credentials Shop.mpr
+bundle exec mxrb db credentials Shop.mpr --copy
+bundle exec mxrb db credentials Shop.mpr --json
+bundle exec mxrb db credentials Shop.mpr --show-password
+```
+
+`--copy` envia a senha ao clipboard por stdin, sem colocá-la nos argumentos do
+processo. `--show-password` é a única forma de imprimi-la; no JSON, `password`
+permanece `null` sem essa opção. `--copy` e `--show-password` são mutuamente
+exclusivos. O comando apenas lê o workspace existente: não cria nem gira
+credenciais e orienta executar `db up` quando o estado ainda não existe. Essas
+são as credenciais do administrador da aplicação Mendix, distintas dos papéis
+PostgreSQL `mxrb_reader` e proprietário do Runtime.
+
 Depois de alterar o MPR, recompile e sincronize preservando os dados:
 
 ```sh

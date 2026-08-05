@@ -152,6 +152,7 @@ module Mxrb
         # frozen_string_literal: true
 
         require "dotenv/load"
+        Dotenv.load(File.join(__dir__, ".env"))
         require "mxrb"
 
         output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, "#{@mpr_name}"))

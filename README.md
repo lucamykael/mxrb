@@ -23,6 +23,7 @@ remain optional external gates for compatibility and functional execution.
 - inventory design tokens, check contrast and preview atomic literal migration;
 - discover native OQL and render safe logical SQL views only when OQL exists;
 - materialize an isolated, Runtime-synchronized PostgreSQL for direct SQL inspection;
+- scaffold demo users with local `.env` secrets and safely inspect Runtime credentials;
 - analyze PostgreSQL/SQL Server plans and rank cumulative PostgreSQL workload pressure;
 - move standalone units between folders in the same module with a preview;
 - remove standalone units only after reference and child-unit safety checks;
@@ -57,6 +58,7 @@ Install dependencies:
 
 ```sh
 bundle install
+bundle exec mxrb --version
 ```
 
 ## Ruby DSL
@@ -92,7 +94,9 @@ bundle exec mxrb cache warm Shop.mpr
 bundle exec mxrb cache clear Shop.mpr
 bundle exec mxrb oql Shop.mpr --dialect postgresql
 bundle exec mxrb db up Shop.mpr
+bundle exec mxrb db credentials Shop.mpr --copy
 bundle exec mxrb db sql Shop.mpr 'SELECT * FROM "sales$order" LIMIT 20'
+bundle exec mxrb demo-user new manager --entity System.User --role User
 bundle exec mxrb pack Shop.mpr --output build/Shop.mda
 bundle exec mxrb portable Shop.mpr --output build/runtime.zip
 bundle exec mxrb team-server clone APP_ID ./shop --pat-file /secure/team-server.env

@@ -415,6 +415,12 @@ module Mxrb
       options = []
       options << "  admin_user_role #{ruby(doc["AdminUserRole"])}" unless doc["AdminUserRole"].to_s.empty?
       options << "  demo_users #{doc["EnableDemoUsers"] == true}"
+      demo_users = doc["DemoUsers"] || IO::BsonCodec.build_array([])
+      IO::BsonCodec.parse_array(demo_users).fetch(:items).each do |user|
+        assigned_roles = IO::BsonCodec.parse_array(user["UserRoles"]).fetch(:items)
+        options << "  demo_user #{ruby(user["UserName"])}, entity: #{ruby(user["Entity"])}, " \
+                   "roles: #{ruby(assigned_roles)}, password: #{ruby(user["Password"])}"
+      end
       guest = "  guest_access #{doc["EnableGuestAccess"] == true}"
       guest += ", role: #{ruby(doc["GuestUserRole"])}" unless doc["GuestUserRole"].to_s.empty?
       options << guest
