@@ -163,6 +163,7 @@ module Mxrb
           DatabaseUserName = ${?RUNTIME_PARAMS_DATABASEUSERNAME}
           DatabasePassword = ${?RUNTIME_PARAMS_DATABASEPASSWORD}
           DatabaseType = ${?RUNTIME_PARAMS_DATABASETYPE}
+          DatabaseUseSsl = ${?RUNTIME_PARAMS_DATABASEUSESSL}
           ApplicationRootUrl = ${?RUNTIME_PARAMS_APPLICATIONROOTURL}
         }
         runtime.adminUser.password = ${?RUNTIME_ADMINUSER_PASSWORD}

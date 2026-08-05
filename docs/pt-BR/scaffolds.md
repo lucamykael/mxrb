@@ -24,7 +24,10 @@ o hash criado pelo gerador, protegendo edições posteriores.
 | `mxrb repository new App.CustomerRepository` | Contrato e adaptador inicial |
 | `mxrb scheduled-event new App.Cleanup` | Evento agendado e microflow |
 | `mxrb presentation init App` | Pastas e agregador de apresentação |
-| `mxrb page new App.CustomerOverview` | Página com layout, título e roles comentados |
+| `mxrb page new App.CustomerOverview` | Página mínima com layout, título e roles comentados |
+| `mxrb page templates` | Árvore de modelos de página auditados |
+| `mxrb page new App.Dashboard --template dashboard` | Página baseada em modelo |
+| `mxrb page new App.Order --chain page:nanoflow:microflow` | Fatia vertical executável |
 | `mxrb nanoflow new App.NAN_OpenCustomer` | Nanoflow cliente |
 | `mxrb security init App` | Papéis, `CheckEverything` no projeto e orientação de acesso |
 | `mxrb integration new App.PetApi` | Adaptador de integração |
@@ -46,8 +49,49 @@ fluxos, widgets, permissões efetivas, URLs e credenciais continuam sendo
 decisões do projeto. Páginas são esqueletos nativos mínimos; roles e conteúdo
 ficam comentados até serem definidos. `init` cria o perfil Responsive e uma
 página Home mínima para que o scaffold possa ser verificado e compilado
-oficialmente. Outras páginas e itens de menu podem ser escritos no `project.rb`,
-pois ainda não há um subcomando específico para inserir menus.
+oficialmente. Outras páginas e itens de menu podem ser escritos na DSL Ruby.
+
+`mxrb page new App.Order --chain ...` transforma o scaffold mínimo de página
+em uma fatia vertical executável: gera entidade de amostra, microflow de data
+source, formulário com campos e ações, página e item no perfil Responsive. Há
+três cadeias de ação Mendix explícitas:
+
+```sh
+mxrb page new App.Order --chain page:microflow
+mxrb page generate App.Order --chain page:nanoflow
+mxrb page g App.Order --chain page:nanoflow:microflow
+```
+
+`page:microflow` chama o Runtime diretamente; `page:nanoflow` mantém a ação no
+cliente; `page:nanoflow:microflow` usa o nanoflow como orquestrador cliente e
+chama o microflow no Runtime. Todas criam `ACT_LoadOrder` para o data source;
+as cadeias que terminam em microflow criam também `ACT_RefreshOrder`. Sem
+`--chain`, `page new` preserva o esqueleto mínimo. `page generate` e `page g`
+são aliases de `page new`. Cada cadeia é materializada em um MPR válido, serve
+como ponto de partida removível e exercita o preflight do compilador; arquivos
+existentes nunca são sobrescritos.
+
+## Modelos de página
+
+No Mendix, page templates são pontos de partida: sua estrutura é copiada para
+uma página comum e editável. O catálogo do MXRB expõe somente padrões que o
+compilador e o Runtime já auditam:
+
+```sh
+mxrb page templates
+mxrb page templates --json
+mxrb page new App.Landing --template starter
+mxrb page new App.Empty --template blank
+mxrb page new App.Operations --template dashboard
+mxrb page new App.Order_NewEdit --template form-vertical
+```
+
+`form-vertical` cria também entidade de amostra e `ACT_Load...` para o DataView.
+Qualquer modelo pode receber `--chain`; por exemplo,
+`--template dashboard --chain page:nanoflow` adiciona a ação cliente ao
+dashboard. Esses nomes são contratos estáveis do MXRB inspirados nos padrões
+Mendix, não uma promessa de importar silenciosamente todo template instalado
+por Atlas ou Marketplace. Veja a [documentação oficial de páginas](https://docs.mendix.com/refguide/pages/).
 
 Para um checkout local durante desenvolvimento:
 

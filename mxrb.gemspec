@@ -10,15 +10,16 @@ Gem::Specification.new do |s|
   s.homepage    = "https://github.com/lucamykael/mxrb"
   s.metadata    = {
     "source_code_uri" => s.homepage,
-    "documentation_uri" => "#{s.homepage}/tree/main/docs"
+    "documentation_uri" => "#{s.homepage}/tree/main/docs",
+    "rubygems_mfa_required" => "true"
   }
 
   s.required_ruby_version = ">= 4.0"
 
   s.files = Dir[
-    "lib/**/*.rb", "bin/*", "docker/**/*", "docs/**/*.md", "marketplace/**/*",
+    "lib/**/*", "bin/*", "docker/**/*", "docs/**/*.md", "marketplace/**/*",
     "examples/**/*.rb", "README*.md", "LICENSE"
-  ]
+  ].select { File.file?(_1) }
   s.executables = ["mxrb"]
   s.require_paths = ["lib"]
 

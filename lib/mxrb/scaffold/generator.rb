@@ -10,6 +10,7 @@ module Mxrb
       Result = Data.define(:root, :files, :updated, :kind, :name, :dry_run)
       IDENTIFIER = /\A[A-Za-z][A-Za-z0-9_]*\z/
       RESERVED_ENTITY_NAMES = %w[Owner ChangedBy CreatedDate ChangedDate].freeze
+      PAGE_CHAINS = %w[page:microflow page:nanoflow page:nanoflow:microflow].freeze
       LAYER_AGGREGATORS = {
         'domain' => 'model.rb',
         'application' => 'application.rb',
@@ -17,12 +18,16 @@ module Mxrb
         'infrastructure' => 'infrastructure.rb'
       }.freeze
 
-      def initialize(kind, name = nil, target: Dir.pwd, dry_run: false)
+      def initialize(kind, name = nil, target: Dir.pwd, dry_run: false, **page_options)
         @kind = kind.to_sym
         @name = name.to_s
         @root = File.expand_path(target)
         @transaction = Transaction.new
         @dry_run = dry_run
+        @page_chain = page_options.delete(:page_chain)
+        @page_template = page_options.delete(:page_template)
+        raise ArgumentError, "unknown generator options: #{page_options.keys.join(', ')}" unless
+          page_options.empty?
       end
 
       def scaffold
@@ -36,6 +41,18 @@ module Mxrb
       end
 
       private
+
+      def page_chain
+        return unless @page_chain
+        return @page_chain if PAGE_CHAINS.include?(@page_chain)
+
+        raise ArgumentError,
+              "page chain must be one of: #{PAGE_CHAINS.join(', ')}"
+      end
+
+      def selected_page_template
+        PageTemplates.fetch(@page_template)&.name
+      end
 
       def stage_registry
         Registry.stage(
@@ -134,6 +151,49 @@ module Mxrb
         aggregator = module_path(module_name, layer, LAYER_AGGREGATORS.fetch(layer))
         connect_artifact(aggregator, *relative, filename)
         filename
+      end
+
+      def create_connected_module_content(module_name, directories, artifact_name, content)
+        ensure_module(module_name)
+        filename = "#{Templates.snake_case(artifact_name)}.rb"
+        path = module_path(module_name, *directories, filename)
+        @transaction.create(path, content)
+        layer, *relative = directories
+        aggregator = module_path(module_name, layer, LAYER_AGGREGATORS.fetch(layer))
+        connect_artifact(aggregator, *relative, filename)
+        filename
+      end
+
+      def create_page_template(module_name, artifact_name, template:, chain:)
+        content = Templates.render(
+          :page_from_template, module_name:, name: artifact_name,
+                               template:, refresh_action: page_refresh_action(module_name, artifact_name, chain)
+        )
+        create_connected_module_content(
+          module_name, %w[presentation pages], artifact_name, content
+        )
+      end
+
+      def page_refresh_action(module_name, artifact_name, chain)
+        return unless chain
+        return "microflow: \"#{module_name}.ACT_Refresh#{artifact_name}\"" if
+          chain == 'page:microflow'
+
+        "nanoflow: \"#{module_name}.NAN_Refresh#{artifact_name}\""
+      end
+
+      def create_page_navigation(module_name, artifact_name)
+        project = @transaction.content(project_path('project.rb')).to_s
+        unless project.include?('evaluate_dir File.join(__dir__, "app", "navigation", "responsive")')
+          raise ArgumentError,
+                'page chain requires the generated Responsive navigation aggregator'
+        end
+
+        filename = "#{Templates.snake_case(module_name)}_#{Templates.snake_case(artifact_name)}.rb"
+        @transaction.create(
+          project_path('app', 'navigation', 'responsive', filename),
+          Templates.render(:page_chain_navigation, module_name:, name: artifact_name)
+        )
       end
 
       def create_project_file(directories, artifact_name, content)

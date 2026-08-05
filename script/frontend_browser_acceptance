@@ -1,0 +1,643 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# rubocop:disable Metrics
+
+require 'base64'
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'securerandom'
+require 'socket'
+require 'tempfile'
+require 'timeout'
+require 'uri'
+
+# Authenticated Chromium acceptance with deterministic layout snapshots. The
+# browser is controlled through Chrome DevTools Protocol over a loopback socket,
+# so the gate adds no Ruby/browser-driver dependency and never places a password
+# on the process command line.
+module MxrbFrontendBrowserAcceptance
+  class Failure < StandardError; end
+
+  # Loopback WebSocket transport for Chrome DevTools Protocol. It implements
+  # only the RFC 6455 client surface needed for text CDP messages.
+  class ChromiumTransport
+    def initialize(chromium:, width:, height:)
+      @stderr = Tempfile.new('mxrb-browser-stderr')
+      @profile = Dir.mktmpdir('mxrb-browser-profile-')
+      command = [
+        chromium, '--headless=new', '--no-sandbox', '--disable-gpu',
+        '--disable-background-networking', '--disable-component-update',
+        '--disable-crash-reporter', '--no-first-run', '--remote-debugging-port=0',
+        "--user-data-dir=#{@profile}", "--window-size=#{width},#{height}", 'about:blank'
+      ]
+      @pid = Process.spawn(*command, out: File::NULL, err: @stderr.path)
+      connect(wait_for_endpoint)
+    end
+
+    def write(message)
+      write_frame(0x1, JSON.generate(message))
+    rescue Errno::EPIPE, IOError
+      raise Failure, "Chromium DevTools socket closed: #{stderr_text}"
+    end
+
+    def read(timeout: 15)
+      fragments = +''
+      loop do
+        final, opcode, payload = read_frame(timeout:)
+        case opcode
+        when 0x0
+          fragments << payload
+          return fragments if final
+        when 0x1
+          fragments = payload
+          return fragments if final
+        when 0x8
+          raise Failure, "Chromium DevTools WebSocket closed: #{stderr_text}"
+        when 0x9
+          write_frame(0xA, payload)
+        end
+      end
+    end
+
+    def close
+      write_frame(0x8, '') if @socket && !@socket.closed?
+      @socket&.close
+      terminate
+      @stderr.close!
+      FileUtils.remove_entry_secure(@profile) if File.directory?(@profile)
+    end
+
+    private
+
+    def wait_for_endpoint
+      path = File.join(@profile, 'DevToolsActivePort')
+      100.times do
+        if File.file?(path)
+          port, endpoint = File.readlines(path, chomp: true)
+          return URI("ws://127.0.0.1:#{Integer(port)}#{endpoint}")
+        end
+        raise Failure, "Chromium stopped before DevTools started: #{stderr_text}" unless process_alive?
+
+        sleep 0.05
+      end
+      raise Failure, "Chromium DevTools endpoint timed out: #{stderr_text}"
+    end
+
+    def connect(endpoint)
+      @socket = TCPSocket.new(endpoint.host, endpoint.port)
+      key = Base64.strict_encode64(SecureRandom.random_bytes(16))
+      request = [
+        "GET #{endpoint.request_uri} HTTP/1.1", "Host: #{endpoint.host}:#{endpoint.port}",
+        'Upgrade: websocket', 'Connection: Upgrade', "Sec-WebSocket-Key: #{key}",
+        'Sec-WebSocket-Version: 13', '', ''
+      ].join("\r\n")
+      @socket.write(request)
+      response = read_headers
+      raise Failure, "Chromium DevTools WebSocket handshake failed: #{response.lines.first}" unless
+        response.start_with?('HTTP/1.1 101')
+
+      expected = Base64.strict_encode64(
+        Digest::SHA1.digest("#{key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+      )
+      accept = response[/^Sec-WebSocket-Accept:\s*(.+?)\r?$/i, 1]
+      raise Failure, 'Chromium DevTools WebSocket handshake signature is invalid' unless accept == expected
+    end
+
+    def read_headers
+      content = +''
+      content << @socket.readpartial(1024) until content.include?("\r\n\r\n")
+      content
+    end
+
+    def write_frame(opcode, payload)
+      bytes = payload.b
+      header = [0x80 | opcode]
+      length = bytes.bytesize
+      if length < 126
+        header << (0x80 | length)
+      elsif length <= 0xFFFF
+        header << (0x80 | 126)
+        header.concat([length].pack('n').bytes)
+      else
+        header << (0x80 | 127)
+        header.concat([length].pack('Q>').bytes)
+      end
+      mask = SecureRandom.random_bytes(4)
+      masked = bytes.bytes.each_with_index.map { |byte, index| byte ^ mask.getbyte(index % 4) }.pack('C*')
+      @socket.write(header.pack('C*') + mask + masked)
+    end
+
+    def read_frame(timeout:)
+      header = read_exact(2, timeout:).bytes
+      final = (header[0] & 0x80).positive?
+      opcode = header[0] & 0x0F
+      masked = (header[1] & 0x80).positive?
+      length = header[1] & 0x7F
+      length = read_exact(2, timeout:).unpack1('n') if length == 126
+      length = read_exact(8, timeout:).unpack1('Q>') if length == 127
+      mask = read_exact(4, timeout:) if masked
+      payload = read_exact(length, timeout:)
+      if masked
+        payload = payload.bytes.each_with_index.map do |byte, index|
+          byte ^ mask.getbyte(index % 4)
+        end.pack('C*')
+      end
+      [final, opcode, payload]
+    end
+
+    def read_exact(length, timeout:)
+      bytes = +''
+      while bytes.bytesize < length
+        raise Failure, "Chromium DevTools response timed out: #{stderr_text}" unless
+          IO.select([@socket], nil, nil, timeout)
+
+        bytes << @socket.readpartial(length - bytes.bytesize)
+      end
+      bytes
+    rescue EOFError
+      raise Failure, "Chromium DevTools socket reached EOF: #{stderr_text}"
+    end
+
+    def process_alive?
+      Process.kill(0, @pid)
+      true
+    rescue Errno::ESRCH
+      false
+    end
+
+    def terminate
+      return unless process_alive?
+
+      Process.kill('TERM', @pid)
+      Timeout.timeout(5) { Process.wait(@pid) }
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    rescue Timeout::Error
+      Process.kill('KILL', @pid)
+      Process.wait(@pid)
+    end
+
+    def stderr_text
+      @stderr.flush
+      File.read(@stderr.path).strip
+    end
+  end
+
+  # Correlates CDP commands and responses while retaining browser events for
+  # diagnostics. Commands are deliberately synchronous for deterministic gates.
+  class CdpClient
+    attr_reader :events
+
+    def initialize(transport)
+      @transport = transport
+      @next_id = 0
+      @events = []
+    end
+
+    def call(method, params = {}, session_id: nil)
+      identifier = @next_id += 1
+      message = { id: identifier, method:, params: }
+      message[:sessionId] = session_id if session_id
+      @transport.write(message)
+      loop do
+        response = JSON.parse(@transport.read)
+        if response['id'] == identifier
+          raise Failure, "CDP #{method} failed: #{response.fetch('error').inspect}" if response['error']
+
+          return response.fetch('result', {})
+        end
+        @events << response
+      end
+    end
+  end
+
+  # Small high-level browser surface used by the acceptance runner.
+  class Browser
+    def initialize(base_url:, chromium:, width:, height:, transport: nil)
+      @base_url = base_url.end_with?('/') ? base_url : "#{base_url}/"
+      @transport = transport || ChromiumTransport.new(chromium:, width:, height:)
+      @client = CdpClient.new(@transport)
+      target = @client.call('Target.createTarget', { url: 'about:blank' }).fetch('targetId')
+      @session = @client.call(
+        'Target.attachToTarget', { targetId: target, flatten: true }
+      ).fetch('sessionId')
+      call('Page.enable')
+      call('Runtime.enable')
+      call('Console.enable')
+      call('Emulation.setDeviceMetricsOverride', {
+        width:, height:, deviceScaleFactor: 1, mobile: false
+      })
+      @console_errors = []
+      @console_event_index = 0
+    end
+
+    def login(username, password)
+      navigate('login.html')
+      wait('document.querySelector("#loginForm") !== null', 'login form')
+      evaluate(<<~JS)
+        (() => {
+          const username = document.querySelector("#usernameInput");
+          const password = document.querySelector("#passwordInput");
+          const form = document.querySelector("#loginForm");
+          if (!username || !password || !form) return false;
+          username.value = #{JSON.generate(username)};
+          password.value = #{JSON.generate(password)};
+          username.dispatchEvent(new Event("input", { bubbles: true }));
+          password.dispatchEvent(new Event("input", { bubbles: true }));
+          form.requestSubmit();
+          return true;
+        })()
+      JS
+      wait('!location.pathname.endsWith("/login.html")', 'authenticated redirect', timeout: 30)
+      wait('document.readyState === "complete"', 'authenticated page load', timeout: 30)
+      raise Failure, 'login returned to the Mendix login form' if evaluate(
+        'document.querySelector("#loginForm") !== null'
+      )
+    end
+
+    def navigate(path)
+      url = URI.join(@base_url, path).to_s
+      call('Page.navigate', { url: })
+      wait('document.readyState === "complete"', "page load #{path}", timeout: 30)
+      url
+    end
+
+    def click_text(text)
+      expression = <<~JS
+        (() => {
+          const expected = #{JSON.generate(text)};
+          const visible = element => {
+            const style = getComputedStyle(element);
+            const box = element.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" &&
+              box.width > 0 && box.height > 0;
+          };
+          const elements = [...document.querySelectorAll("a,button,[role=button],[role=menuitem]")];
+          const target = elements.find(element => visible(element) &&
+            element.textContent.replace(/\\s+/g, " ").trim().includes(expected));
+          if (!target) return false;
+          target.click();
+          return true;
+        })()
+      JS
+      wait(expression, "visible clickable text #{text.inspect}")
+
+      wait('document.readyState === "complete"', "navigation after #{text.inspect}")
+    end
+
+    def click_selector(selector)
+      expression = <<~JS
+        (() => {
+          const target = document.querySelector(#{JSON.generate(selector)});
+          if (!target) return false;
+          const style = getComputedStyle(target);
+          const box = target.getBoundingClientRect();
+          if (style.display === "none" || style.visibility === "hidden" ||
+              box.width <= 0 || box.height <= 0) return false;
+          target.click();
+          return true;
+        })()
+      JS
+      wait(expression, "visible clickable selector #{selector.inspect}")
+    end
+
+    def wait_for_text(text)
+      expression = <<~JS
+        (() => {
+          const expected = #{JSON.generate(text)};
+          return document.body && document.body.innerText.includes(expected);
+        })()
+      JS
+      wait(expression, "text #{text.inspect}")
+    end
+
+    def wait_for_selector(selector)
+      wait(
+        "document.querySelector(#{JSON.generate(selector)}) !== null",
+        "selector #{selector.inspect}"
+      )
+    end
+
+    def wait_for_style(expectation)
+      selector = expectation.fetch('selector')
+      property = expectation.fetch('property')
+      expected = expectation['equals']
+      rejected = expectation['not']
+      condition = if expected
+                    "value === #{JSON.generate(expected)}"
+                  else
+                    "value !== #{JSON.generate(rejected.to_s)}"
+                  end
+      expression = <<~JS
+        (() => {
+          const element = document.querySelector(#{JSON.generate(selector)});
+          if (!element) return false;
+          const value = getComputedStyle(element).getPropertyValue(#{JSON.generate(property)}).trim();
+          return #{condition};
+        })()
+      JS
+      wait(expression, "style #{selector} #{property}")
+    end
+
+    def snapshot
+      evaluate(<<~'JS')
+        (() => {
+          const normalize = value => (value || "").replace(/\s+/g, " ").trim();
+          const normalizeId = value => value ?
+            value.replace(/^scrollcontainer_[^-]+/, "scrollcontainer_dynamic") : null;
+          const nodes = [...document.querySelectorAll("body *")].filter(element => {
+            if (["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName)) return false;
+            const style = getComputedStyle(element);
+            const box = element.getBoundingClientRect();
+            if (style.display === "none" || style.visibility === "hidden" ||
+                box.width <= 0 || box.height <= 0) return false;
+            return normalize(element.innerText) ||
+              ["INPUT", "SELECT", "TEXTAREA", "BUTTON", "IMG"].includes(element.tagName);
+          });
+          return {
+            title: document.title,
+            path: location.pathname,
+            viewport: { width: innerWidth, height: innerHeight },
+            elements: nodes.map(element => {
+              const style = getComputedStyle(element);
+              const box = element.getBoundingClientRect();
+              const ownText = [...element.childNodes]
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent).join(" ");
+              return {
+                tag: element.tagName.toLowerCase(),
+                id: normalizeId(element.id),
+                role: element.getAttribute("role"),
+                widget: element.getAttribute("data-widget-id") ||
+                  element.getAttribute("data-button-id"),
+                state: [element.getAttribute("aria-expanded"),
+                  element.getAttribute("data-disabled"), element.disabled || false],
+                text: normalize(ownText || element.getAttribute("aria-label") ||
+                  element.getAttribute("placeholder")).slice(0, 200),
+                box: [box.x, box.y, box.width, box.height].map(value => Math.round(value)),
+                style: [style.display, style.position, style.fontSize, style.fontWeight,
+                  style.color, style.backgroundColor]
+              };
+            })
+          };
+        })()
+      JS
+    end
+
+    def screenshot(path)
+      result = call('Page.captureScreenshot', { format: 'png', fromSurface: true })
+      File.binwrite(path, Base64.strict_decode64(result.fetch('data')))
+      path
+    end
+
+    def console_errors
+      collect_console_errors
+      @console_errors.uniq
+    end
+
+    def close
+      logout
+    ensure
+      collect_console_errors
+      @transport.close
+    end
+
+    private
+
+    def call(method, params = {})
+      @client.call(method, params, session_id: @session)
+    end
+
+    def evaluate(expression)
+      response = call('Runtime.evaluate', {
+        expression:, returnByValue: true, awaitPromise: true
+      })
+      raise Failure, "browser JavaScript failed: #{response.fetch('exceptionDetails').inspect}" if
+        response['exceptionDetails']
+
+      response.dig('result', 'value')
+    end
+
+    def wait(expression, label, timeout: 15)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        return true if evaluate(expression)
+        raise Failure, "browser timed out waiting for #{label}" if
+          Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.1
+      end
+    end
+
+    def logout
+      started = evaluate(<<~'JS')
+        (() => {
+          if (typeof mx === "undefined" || typeof mx.logout !== "function") return false;
+          mx.logout();
+          return true;
+        })()
+      JS
+      call('Page.navigate', { url: URI.join(@base_url, 'logout.html').to_s }) unless started
+      wait(
+        'location.pathname.endsWith("/login.html") || document.querySelector("#loginForm") !== null',
+        'logout', timeout: 10
+      )
+    rescue Failure
+      nil
+    end
+
+    def collect_console_errors
+      events = @client.events.drop(@console_event_index)
+      @console_event_index = @client.events.length
+      @console_errors.concat(events.filter_map do |event|
+        next unless event['method'] == 'Runtime.exceptionThrown'
+
+        event.dig('params', 'exceptionDetails', 'text') || 'browser exception'
+      end)
+    end
+  end
+
+  # Applies one declarative scenario and compares stable visual/layout snapshots.
+  class Runner
+    def initialize(config:, base_url:, username:, password:, output_dir:, baseline: nil,
+                   update_baseline: false, chromium: nil, browser: nil)
+      @config = config
+      @base_url = base_url
+      @username = username
+      @password = password
+      @output_dir = File.expand_path(output_dir)
+      @baseline = baseline && File.expand_path(baseline)
+      @update_baseline = update_baseline
+      viewport = config.fetch('viewport', {})
+      @width = Integer(viewport.fetch('width', 1440))
+      @height = Integer(viewport.fetch('height', 900))
+      @browser = browser || Browser.new(
+        base_url:, chromium: chromium || self.class.chromium!, width: @width, height: @height
+      )
+    end
+
+    def self.chromium!
+      candidates = [ENV['MXRB_CHROMIUM'], '/usr/bin/chromium', '/usr/bin/chromium-browser',
+                    '/usr/bin/google-chrome'].compact
+      candidates.find { File.executable?(_1) } || raise(Failure, 'Chromium is not installed')
+    end
+
+    def run
+      validate!
+      FileUtils.mkdir_p(@output_dir)
+      @browser.login(@username, @password)
+      pages = @config.fetch('pages').map { capture_page(_1) }
+      console_errors = @browser.console_errors
+      raise Failure, "browser exceptions: #{console_errors.join('; ')}" unless console_errors.empty?
+
+      current = {
+        'scenario' => @config.fetch('name'),
+        'viewport' => { 'width' => @width, 'height' => @height },
+        'pages' => pages.map { _1.slice('name', 'snapshot_sha256', 'snapshot') }
+      }
+      baseline = verify_or_update_baseline(current)
+      {
+        passed: true, scenario: @config.fetch('name'), base_url: @base_url,
+        authenticated: true, baseline:, pages:,
+        console_errors:
+      }
+    rescue StandardError => e
+      { passed: false, scenario: @config['name'], base_url: @base_url, error: e.message }
+    ensure
+      @browser&.close
+    end
+
+    private
+
+    def validate!
+      raise Failure, 'browser scenario needs a name' if @config['name'].to_s.empty?
+      raise Failure, 'browser scenario needs at least one page' if Array(@config['pages']).empty?
+      raise Failure, 'browser username is empty' if @username.to_s.empty?
+      raise Failure, 'browser password is empty' if @password.to_s.empty?
+      raise Failure, '--update-baseline requires --baseline' if @update_baseline && !@baseline
+    end
+
+    def capture_page(page)
+      @browser.navigate(page['path']) if page['path']
+      @browser.click_selector(page.fetch('click_selector')) if page['click_selector']
+      @browser.click_text(page.fetch('click_text')) if page['click_text']
+      Array(page['text']).each { @browser.wait_for_text(_1) }
+      Array(page['selectors']).each { @browser.wait_for_selector(_1) }
+      Array(page['styles']).each { @browser.wait_for_style(_1) }
+      snapshot = @browser.snapshot
+      failure_markers = ['Could not render widget',
+                         'An error occurred, please contact your system administrator.']
+      render_errors = Array(snapshot['elements']).filter_map do |element|
+        text = element['text'].to_s
+        text if failure_markers.any? { text.include?(_1) }
+      end
+      raise Failure, "visible widget render failure: #{render_errors.uniq.join('; ')}" unless
+        render_errors.empty?
+
+      digest = Digest::SHA256.hexdigest(JSON.generate(snapshot))
+      name = page.fetch('name')
+      screenshot = File.join(@output_dir, "#{safe_name(name)}.png")
+      @browser.screenshot(screenshot)
+      {
+        'name' => name, 'url' => page['path'], 'snapshot' => snapshot,
+        'snapshot_sha256' => digest, 'screenshot' => screenshot,
+        'screenshot_sha256' => Digest::SHA256.file(screenshot).hexdigest
+      }
+    end
+
+    def verify_or_update_baseline(current)
+      return { 'mode' => 'evidence_only' } unless @baseline
+
+      if @update_baseline
+        FileUtils.mkdir_p(File.dirname(@baseline))
+        File.write(@baseline, "#{JSON.pretty_generate(current)}\n")
+        return { 'mode' => 'updated', 'path' => @baseline }
+      end
+
+      expected = JSON.parse(File.read(@baseline))
+      return { 'mode' => 'matched', 'path' => @baseline } if expected == current
+
+      changed = changed_pages(expected, current)
+      raise Failure, "visual baseline differs for: #{changed.join(', ')}"
+    rescue Errno::ENOENT
+      raise Failure, "visual baseline does not exist: #{@baseline}; use --update-baseline"
+    end
+
+    def changed_pages(expected, current)
+      expected_pages = Array(expected['pages']).to_h { [_1['name'], _1['snapshot_sha256']] }
+      current_pages = Array(current['pages']).to_h { [_1['name'], _1['snapshot_sha256']] }
+      (expected_pages.keys | current_pages.keys).reject do |name|
+        expected_pages[name] == current_pages[name]
+      end
+    end
+
+    def safe_name(name)
+      normalized = name.to_s.downcase.gsub(/[^a-z0-9]+/, '-').gsub(/\A-+|-+\z/, '')
+      raise Failure, "invalid page name: #{name.inspect}" if normalized.empty?
+
+      normalized
+    end
+  end
+
+  # Command-line boundary and secret-file parsing.
+  module CLI
+    module_function
+
+    def run(argv)
+      options = { username: 'MxAdmin', output_dir: 'tmp/frontend-browser' }
+      parser = OptionParser.new do |cli|
+        cli.banner = 'Usage: script/frontend_browser_acceptance --scenario FILE --url URL [options]'
+        cli.on('--scenario FILE', 'Declarative browser scenario JSON') { options[:scenario] = _1 }
+        cli.on('--url URL', 'Running Mendix Runtime base URL') { options[:base_url] = _1 }
+        cli.on('--username NAME', 'Runtime user name (default: MxAdmin)') { options[:username] = _1 }
+        cli.on('--password-file FILE', 'Plain password or credentials.json; never logged') do
+          options[:password_file] = _1
+        end
+        cli.on('--chromium FILE', 'Chromium/Chrome executable') { options[:chromium] = _1 }
+        cli.on('--baseline FILE', 'Committed deterministic visual snapshot') { options[:baseline] = _1 }
+        cli.on('--update-baseline', 'Explicitly create or replace the baseline') do
+          options[:update_baseline] = true
+        end
+        cli.on('--output-dir DIR', 'Screenshots and JSON evidence directory') do
+          options[:output_dir] = _1
+        end
+        cli.on('-o', '--output FILE', 'JSON evidence path') { options[:output] = _1 }
+      end
+      parser.parse!(argv)
+      raise OptionParser::MissingArgument, '--scenario' unless options[:scenario]
+      raise OptionParser::MissingArgument, '--url' unless options[:base_url]
+
+      config = JSON.parse(File.read(options.fetch(:scenario)))
+      password = password(options[:password_file])
+      report = Runner.new(
+        config:, base_url: options.fetch(:base_url), username: options.fetch(:username),
+        password:, output_dir: options.fetch(:output_dir), baseline: options[:baseline],
+        update_baseline: options.fetch(:update_baseline, false), chromium: options[:chromium]
+      ).run
+      json = "#{JSON.pretty_generate(report)}\n"
+      options[:output] ? File.write(options[:output], json) : puts(json)
+      report.fetch(:passed) ? 0 : 1
+    rescue OptionParser::ParseError, JSON::ParserError, Errno::ENOENT, Failure => e
+      warn JSON.pretty_generate(passed: false, error: e.message)
+      1
+    end
+
+    def password(path)
+      return ENV.fetch('MXRB_BROWSER_PASSWORD', '') unless path
+
+      content = File.read(path)
+      parsed = JSON.parse(content)
+      parsed.fetch('admin_password', parsed['password']).to_s
+    rescue JSON::ParserError
+      content.strip
+    end
+  end
+end
+
+exit MxrbFrontendBrowserAcceptance::CLI.run(ARGV) if $PROGRAM_NAME == __FILE__
+
+# rubocop:enable Metrics

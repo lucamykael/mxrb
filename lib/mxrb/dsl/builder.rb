@@ -497,6 +497,16 @@ module Mxrb
         @items << builder.to_h
       end
 
+      def evaluate(path)
+        instance_eval(File.read(path), path, 1)
+      end
+
+      def evaluate_dir(dir)
+        return unless File.directory?(dir)
+
+        Dir[File.join(dir, '*.rb')].sort.each { |path| evaluate(path) }
+      end
+
       def to_h
         {
           name: @name, home_page: @home_page, home_microflow: @home_microflow,

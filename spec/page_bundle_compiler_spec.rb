@@ -99,6 +99,51 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(bundle.unsupported_widgets).to be_empty
   end
 
+  it 'supplies complete Runtime contracts for sidebar toggles and navigation menus' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+    compiler.instance_variable_set(:@qualified_name, 'Demo.Shell')
+    compiler.instance_variable_set(:@scope_prefix, 'l')
+    toggle = compiler.send(
+      :render_sidebar_toggle,
+      '$Type' => 'Forms$SidebarToggleButton', 'Name' => 'sidebarToggle',
+      'ButtonStyle' => 'Primary',
+      'CaptionTemplate' => { 'Template' => { 'Items' => [
+        { 'LanguageCode' => 'en_US', 'Text' => 'Menu' }
+      ] } },
+      'Tooltip' => { 'Items' => [{ 'LanguageCode' => 'en_US', 'Text' => 'Open navigation' }] }
+    )
+
+    expect(toggle).to include(
+      'React.createElement($SidebarToggle', '"buttonClass": "btn-primary"',
+      '"caption": TextProperty({ value: "Menu" })',
+      '"tooltip": TextProperty({ value: "Open navigation" })'
+    )
+    allow(compiler).to receive(:menu_items).and_return([])
+    expect(compiler.send(:render_menu, {
+      '$Type' => 'Forms$NavigationTree', 'Name' => 'navigation',
+      'MenuSource' => { '$Type' => 'Forms$NavigationSource', 'NavigationProfile' => 'Responsive' }
+    }, 'NavigationTree')).to include('"name": "navigation"')
+  end
+
+  it 'maps Mendix scroll-region enums to the Runtime toggle contract' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+
+    expect(compiler.send(:scroll_toggle_mode, '')).to eq('none')
+    expect(compiler.send(:scroll_toggle_mode, 'None')).to eq('none')
+    expect(compiler.send(:scroll_toggle_mode, 'ShrinkContentInitiallyClosed')).to eq('shrink')
+    expect(compiler.send(:scroll_toggle_mode, 'PushContentInitiallyOpen')).to eq('push')
+    expect(compiler.send(:scroll_toggle_mode, 'SlideOverContentInitiallyClosed')).to eq('slide')
+    expect { compiler.send(:scroll_toggle_mode, 'FutureMode') }
+      .to raise_error(Mxrb::CompilationError, /unsupported scroll container toggle mode/)
+  end
+
+  it 'authorizes every project role when Mendix security checks are disabled' do
+    compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
+
+    expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Home'))
+      .to eq(['Administrator'])
+  end
+
   it 'normalizes explicit render modes and translation fallbacks' do
     compiler = described_class.new(Mxrb::Compiler::SourceModel.read(@mpr))
     expect(compiler.send(:render_mode, 'RenderMode' => 'Section')).to eq('section')
@@ -941,12 +986,19 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     popup_page = Struct.new(:document).new({ 'FormCall' => { 'Form' => 'Demo.Popup' } })
     expect(compiler.send(:page_location, popup_page)).to eq('modal')
     allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([{
-      'UserRoles' => [2, { 'Name' => 'Admin', 'ModuleRoles' => [1, 'Demo.Admin'] }]
+      'UserRoles' => [2,
+                      { 'Name' => 'Admin', 'ModuleRoles' => [1, 'Demo.Admin'] },
+                      { 'Name' => 'User', 'ModuleRoles' => [1, 'Demo.User'] }]
     }])
     role_unit = Struct.new(:module_name, :document).new('Demo', {
       'Name' => 'Secure', 'AllowedModuleRoles' => [1, 'Demo.Admin']
     })
     allow(source).to receive(:units_of).with('Forms$Page').and_return([role_unit])
+    expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Secure')).to eq(['Admin'])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([{
+      'SecurityLevel' => 'CheckNothing',
+      'UserRoles' => [2, { 'Name' => 'Admin' }, { 'Name' => '' }]
+    }])
     expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Secure')).to eq(['Admin'])
     allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
     expect(compiler.send(:allowed_roles_for, 'Forms$Page', 'Demo.Secure')).to eq([])

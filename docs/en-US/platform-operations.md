@@ -27,6 +27,11 @@ script/frontend_acceptance App.mpr --mxbuild /path/to/mxbuild -o frontend.json
 script/frontend_acceptance App.mpr --mx /path/to/mx -o frontend-diagnostics.json
 script/frontend_lifecycle_acceptance --version 11.12.1 --mx /path/to/mx \
   --mxbuild /path/to/mxbuild --strict-warnings -o frontend-lifecycle.json
+script/frontend_browser_acceptance --scenario examples/frontend-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /path/to/credentials.json \
+  --baseline examples/frontend-browser-baseline-11.12.1.json
+script/frontend_browser_acceptance --scenario examples/page-chain-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /path/to/credentials.json
 ```
 
 `mxrb frontend migrate` is an immutable, fail-closed preview by default. For
@@ -64,6 +69,20 @@ and requires a structurally identical rebuild. On the official 10.24.0.73019
 and 11.12.1 matrix, source and rebuilt projects completed with zero errors,
 warnings, deprecations, or recommendations in `mx check`, plus zero MxBuild
 errors.
+
+`script/frontend_browser_acceptance` drives Chromium over local CDP,
+authenticates without placing the password on the command line, traverses
+pages, and compares deterministic structure, geometry, style, and ARIA-state
+snapshots. Browser exceptions, broken widgets, and the generic Runtime error
+dialog fail the gate. Baseline replacement requires explicit
+`--update-baseline`; normal runs are read-only comparisons. The gate signs out
+through `mx.logout()` so it remains repeatable under a trial license.
+
+`page-chain-browser-scenario.json` uses a `PageChainQa` app with `DirectOrder`,
+`ClientOrder`, and `HybridOrder`, created by the three `page --chain` values.
+It clicks `Refresh` on each page and also requires computed CSS — document
+margin, header gradient, and card background — so functional but unthemed HTML
+fails the gate.
 
 `--mx` runs the official read-only checker with warnings, deprecations, and
 best-practice recommendations enabled. It validates the checker's exit bitmask

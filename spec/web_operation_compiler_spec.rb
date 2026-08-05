@@ -143,7 +143,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(described_class.new(source).send(:page_operations, page)).to contain_exactly(
       include(
         'operationType' => 'retrieveByMicroflow', 'parameters' => {},
-        'constants' => include('MicroflowName' => 'Demo.LoadItems')
+        'constants' => include(
+          'MicroflowName' => 'Demo.LoadItems', 'UsedAssociations' => [], 'UsedAttributes' => []
+        )
       )
     )
   end

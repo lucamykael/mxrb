@@ -1588,7 +1588,10 @@ else
       functional-test new Module.Flow     Scaffold a runtime functional test
       evaluation new Name                 Scaffold static model evaluations
       presentation init Module            Initialize presentation directories
-      page new Module.Name                Scaffold a page
+      page templates [--json]             List audited page patterns as a tree
+      page new|generate|g Module.Name      Scaffold a page
+                 [--template NAME]         Apply starter/blank/dashboard/form-vertical
+                 [--chain CHAIN]           Compose page/nanoflow/microflow actions
       nanoflow new Module.Name            Scaffold a client nanoflow
       repository new Module.Name          Scaffold a repository port and adapter
       security init Module                Scaffold module roles

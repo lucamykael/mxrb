@@ -6,6 +6,12 @@ require 'spec_helper'
 require 'tmpdir'
 
 RSpec.describe 'native navigation and design systems' do
+  it 'silently skips a missing Responsive navigation fragment directory' do
+    builder = Mxrb::Dsl::NavigationProfileBuilder.new(:Responsive)
+
+    expect(builder.evaluate_dir('/path/that/does/not/exist')).to be_nil
+  end
+
   def define_native_project(path)
     Mxrb.define(path) do
       mendix_version '10.18.0'

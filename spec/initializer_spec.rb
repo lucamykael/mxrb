@@ -16,7 +16,14 @@ RSpec.describe Mxrb::Initializer do
         'modules/VetClinic/application/application.rb',
         'modules/VetClinic/domain/entities/.keep',
         'modules/VetClinic/presentation/presentation.rb',
-        'modules/VetClinic/presentation/pages/home.rb'
+        'modules/VetClinic/presentation/pages/home.rb',
+        'app/navigation/responsive/.keep',
+        'app/design_system/design_system.rb',
+        'theme/web/custom-variables.scss',
+        'theme/web/main.scss',
+        'theme/web/exclusion-variables.scss',
+        'theme/web/settings.json',
+        'theme-cache/web/theme.compiled.css'
       ].map { File.join(result.root, _1) }
       expect(result.root).to eq(File.join(dir, 'vet_clinic'))
       expect(result.files).to eq(expected)
@@ -28,6 +35,8 @@ RSpec.describe Mxrb::Initializer do
         'require "dotenv/load"',
         'Mxrb.define', 'mendix_version "11.12.1"',
         'home_page: "VetClinic.Home"', 'app_title: "VetClinic"',
+        'evaluate_dir File.join(__dir__, "app", "navigation", "responsive")',
+        'app", "design_system", "design_system.rb"',
         'modules", "VetClinic", "module.rb"'
       )
       expect(File.read(expected[4])).to include(
@@ -52,6 +61,9 @@ RSpec.describe Mxrb::Initializer do
       expect(File.read(expected[9])).to include(
         'page :Home', 'title "VetClinic"', 'layout "VetClinic.ApplicationLayout"',
         'class_name: "mxrb-dashboard-grid"', 'caption: "Model your business"'
+      )
+      expect(File.read(expected[16])).to include(
+        '.mxrb-page-header', 'background: linear-gradient', '.mxrb-card'
       )
 
       load expected[3]
