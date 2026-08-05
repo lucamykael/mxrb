@@ -335,6 +335,9 @@ RSpec.describe Mxrb::Compiler do
         expect(zip.get_entry('bin/start').unix_perms).to eq(0o755)
         expect(zip.read('etc/variables.conf')).to include('${?M2EE_ADMIN_PASS}')
         expect(zip.read('etc/variables.conf')).to include('${?RUNTIME_ADMINUSER_PASSWORD}')
+        expect(zip.read('etc/variables.conf')).to include(
+          '${?RUNTIME_PARAMS_DATABASEJDBCURL}', '${?RUNTIME_PARAMS_DATABASEUSESSL}'
+        )
         expect(zip.read('etc/example.conf')).to include('DatabaseType = HSQLDB')
       end
     end

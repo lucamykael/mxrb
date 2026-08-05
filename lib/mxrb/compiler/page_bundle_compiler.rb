@@ -186,13 +186,23 @@ module Mxrb
       def scroll_region(region)
         return { enabled: false } unless region
 
+        toggle_mode = region['ToggleMode'].to_s
         {
           enabled: true, content: raw_js(children(array(region['Widgets']))),
           sizeMode: region['SizeMode'].to_s.downcase, sizeValue: region['Size'],
           class: region.dig('Appearance', 'Class').to_s,
-          toggleMode: region['ToggleMode'].to_s.downcase,
-          initiallyOpen: !region['ToggleMode'].to_s.include?('InitiallyClosed')
+          toggleMode: scroll_toggle_mode(toggle_mode),
+          initiallyOpen: !toggle_mode.include?('InitiallyClosed')
         }
+      end
+
+      def scroll_toggle_mode(value)
+        return 'none' if value.empty? || value == 'None'
+        return 'shrink' if value.start_with?('ShrinkContent')
+        return 'push' if value.start_with?('PushContent')
+        return 'slide' if value.start_with?('SlideOverContent')
+
+        raise CompilationError, "unsupported scroll container toggle mode: #{value}"
       end
 
       def render_placeholder(widget)
@@ -208,11 +218,16 @@ module Mxrb
       def render_sidebar_toggle(widget)
         @uses_layout_widgets = true
         key = widget_key(widget)
+        caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
+        tooltip = translated_text(widget['Tooltip'])
         props = common_props(widget).merge(
           '$widgetId': key, buttonId: key, class: css_class(widget),
           renderType: 'button', buttonClass: button_style(widget)
         )
-        "React.createElement($SidebarToggle, #{js_props(props)})"
+        "React.createElement($SidebarToggle, #{js_props(props, expressions: {
+          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+          tooltip: "TextProperty({ value: #{JSON.generate(tooltip)} })"
+        })})"
       end
 
       def render_header(widget)
@@ -231,7 +246,7 @@ module Mxrb
 
         @uses_layout_widgets = true
         props = common_props(widget).merge(
-          '$widgetId': widget_key(widget), class: css_class(widget),
+          '$widgetId': widget_key(widget), name: widget['Name'].to_s, class: css_class(widget),
           menu: items.map.with_index { |item, index| compile_menu_item(item, widget, [index]) }
         )
         props[:orientation] = widget['Orientation'].to_s.downcase if component == 'SimpleMenuBar'
@@ -819,11 +834,18 @@ module Mxrb
         unit = @source.units_of(type).find do |candidate|
           "#{candidate.module_name}.#{candidate.document['Name']}" == qualified_name
         end
-        module_roles = array(unit&.document&.fetch('AllowedModuleRoles', nil)).map(&:to_s)
-        security = @source.documents('Security$ProjectSecurity').first
-        array(security&.fetch('UserRoles', nil)).filter_map do |role|
-          role['Name'].to_s if (array(role['ModuleRoles']).map(&:to_s) & module_roles).any?
+        return [] unless unit
+
+        module_roles = array(unit.document.fetch('AllowedModuleRoles', nil)).map(&:to_s)
+        security = @source.documents('Security$ProjectSecurity').first || {}
+        user_roles = array(security.fetch('UserRoles', nil))
+        if security.fetch('SecurityLevel', nil) == 'CheckNothing'
+          return user_roles.map { _1['Name'].to_s }.reject(&:empty?)
         end
+
+        user_roles.select do |role|
+          (array(role['ModuleRoles']).map(&:to_s) & module_roles).any?
+        end.map { _1['Name'].to_s }
       end
 
       def close_page_config(action)

@@ -42,8 +42,27 @@ module Mxrb
       write(root, '.gitignore', gitignore)
       write(root, '.env.example', env_example)
       write(root, 'project.rb', project_rb)
+      write(File.join(root, 'app', 'navigation', 'responsive'), '.keep', '')
+      write_design_scaffold(root)
       module_root = File.join(root, 'modules', @module_name)
       write_module_scaffold(module_root)
+    end
+
+    def write_design_scaffold(root)
+      design_files.each do |parts, template|
+        write(File.join(root, *parts[0...-1]), parts.last, Scaffold::Templates.render(template))
+      end
+    end
+
+    def design_files
+      {
+        %w[app design_system design_system.rb] => :design_system,
+        %w[theme web custom-variables.scss] => :theme_custom_variables,
+        %w[theme web main.scss] => :theme_main,
+        %w[theme web exclusion-variables.scss] => :theme_exclusion_variables,
+        %w[theme web settings.json] => :theme_settings,
+        %w[theme-cache web theme.compiled.css] => :theme_compiled
+      }
     end
 
     def write_module_scaffold(module_root)
@@ -58,7 +77,9 @@ module Mxrb
     def relative_files
       module_prefix = File.join('modules', @module_name)
       ['Gemfile', '.gitignore', '.env.example', 'project.rb',
-       *relative_module_files.map { File.join(module_prefix, _1) }]
+       *relative_module_files.map { File.join(module_prefix, _1) },
+       File.join('app', 'navigation', 'responsive', '.keep'),
+       *design_files.keys.map { File.join(*_1) }]
     end
 
     def relative_module_files
@@ -141,9 +162,12 @@ module Mxrb
           navigation do
             profile :Responsive,
                     home_page: "#{@module_name}.Home",
-                    app_title: "#{@module_name}"
+                    app_title: "#{@module_name}" do
+              evaluate_dir File.join(__dir__, "app", "navigation", "responsive")
+            end
           end
 
+          evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
           evaluate File.join(__dir__, "modules", "#{@module_name}", "module.rb")
         end
       RUBY

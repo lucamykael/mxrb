@@ -3187,6 +3187,7 @@ module Mxrb
           },
           "Type" => activity[:message_type].to_s.capitalize }
       when :log_message
+        major = @definition.fetch(:version).to_s.split('.').first.to_i
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$LogMessageAction",
           "ErrorHandlingType" => "Rollback",
           "IncludeLatestStackTrace" => activity[:include_stack] == true,
@@ -3198,8 +3199,9 @@ module Mxrb
             ),
             "Text" => activity[:message]
           },
-          "Node" => activity[:node].to_s,
-          "NodeModel" => no_expression_doc }
+          "Node" => activity[:node] || "'MXRB'" }.tap do |document|
+            document['NodeModel'] = no_expression_doc if major.between?(6, 10)
+          end
       when :show_page
         show_form_action_doc(activity)
       when :close_page

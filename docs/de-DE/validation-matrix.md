@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · [English](../en-US/validation-matrix.md) · **Deutsch**
 
-Stand: 29. Juli 2026.
+Stand: 5. August 2026.
 
 ```text
 Original-MPR → validate → export → generate → validate → compare
@@ -37,15 +37,23 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.778 Artefakte und 3.387 Referenzen;
-- 510 Beispiele, keine Fehler;
-- 100 % Zeilenabdeckung (7.062/7.062);
-- 100 % Branch-Abdeckung (2.626/2.626);
+- 1.039 Beispiele, keine Fehler;
+- 100 % Zeilenabdeckung (17.224/17.224);
+- 100 % Branch-Abdeckung (6.811/6.811);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
 Ruby-Assertions prüfen Rückgabewerte und persistierte XPath-Anzahlen. Der
 Docker-Lauf bestätigte Games 1/2/3 und Cells 81/162/243; JUnit XML ist nur ein
 in Ruby erzeugtes CI-Format.
+
+Das 11.12.1-Gate enthält nun zusätzlich ein authentifiziertes Chromium-Szenario
+mit Login, Home-/Orders-Navigation, deterministischen DOM/Layout/Style/ARIA-
+Snapshots, Screenshots, explizitem SHA-256-Baseline-Vergleich, Fehlererkennung
+und echtem Logout. Alle drei `page --chain`-Pfade werden als gültiges MPR
+materialisiert und durch den Compiler-Preflight geprüft. Die mit
+`page --template` erzeugten Dashboard- und vertikalen Formularseiten wurden
+zusätzlich in der Runtime mit geprüftem berechnetem CSS ausgeführt.
 
 `script/validate_matrix` prüfte 1.506 Units in sechs Round-Trips in 14,760 s.
 `script/benchmark` maß 6,8463 s für die vollständige Sudoku-Pipeline.

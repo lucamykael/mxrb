@@ -1,0 +1,2065 @@
+{
+  "scenario": "frontend-cli-lifecycle",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "home",
+      "snapshot_sha256": "bd89ab89acb77366f56dd579e3431d15d16f9b7e11e3deeae9a0b3254e89f7a3",
+      "snapshot": {
+        "title": "Frontend lifecycle - FrontendCycle",
+        "path": "/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "elements": [
+          {
+            "tag": "div",
+            "id": "root",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              143
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              143
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              143
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.topbarContent",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "button",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.sidebarToggle1",
+            "state": [
+              "true",
+              "false",
+              false
+            ],
+            "text": "Menu",
+            "box": [
+              8,
+              8,
+              49,
+              21
+            ],
+            "style": [
+              "inline-block",
+              "static",
+              "13.3333px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgb(239, 239, 239)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.applicationTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "FrontendCycle",
+            "box": [
+              57,
+              9,
+              95,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              106
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              106
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              106
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": "scrollcontainer_dynamic-toggleable",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "ul",
+            "id": null,
+            "role": "menu",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "li",
+            "id": null,
+            "role": "none",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              48,
+              45,
+              1384,
+              18
+            ],
+            "style": [
+              "list-item",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "a",
+            "id": null,
+            "role": "menuitem",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Orders",
+            "box": [
+              48,
+              45,
+              44,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 238)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              72
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              72
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              72
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.pageHeader",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.pageTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Frontend lifecycle verified",
+            "box": [
+              8,
+              79,
+              171,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.pageSubtitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "A Ruby-first Mendix application, ready to grow.",
+            "box": [
+              179,
+              79,
+              309,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.dashboard",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              97,
+              1424,
+              54
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.domainCard",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              97,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.domainEyebrow",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "DOMAIN",
+            "box": [
+              8,
+              97,
+              66,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.domainTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Model your business",
+            "box": [
+              74,
+              97,
+              133,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.domainCopy",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Add entities, enumerations and associations using the mxrb DSL.",
+            "box": [
+              207,
+              97,
+              419,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.logicCard",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              115,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.logicEyebrow",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "LOGIC",
+            "box": [
+              8,
+              115,
+              49,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.logicTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Build application flows",
+            "box": [
+              57,
+              115,
+              150,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.logicCopy",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Keep use cases, validations and queries organized by convention.",
+            "box": [
+              207,
+              115,
+              418,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.experienceCard",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              133,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.experienceEyebrow",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "EXPERIENCE",
+            "box": [
+              8,
+              133,
+              98,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.experienceTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Ship a polished UI",
+            "box": [
+              106,
+              133,
+              120,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Home.experienceCopy",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Create pages, snippets and client actions without manual wiring.",
+            "box": [
+              225,
+              133,
+              412,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "orders",
+      "snapshot_sha256": "e810c423d8d8cacdbf108a71ec52d6292d93ef295fc3c25fa8931b471330c423",
+      "snapshot": {
+        "title": "Frontend lifecycle - Orders",
+        "path": "/",
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "elements": [
+          {
+            "tag": "div",
+            "id": "root",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              239
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              239
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              239
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.topbarContent",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              8,
+              1424,
+              21
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "button",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.sidebarToggle1",
+            "state": [
+              "true",
+              "false",
+              false
+            ],
+            "text": "Menu",
+            "box": [
+              8,
+              8,
+              49,
+              21
+            ],
+            "style": [
+              "inline-block",
+              "static",
+              "13.3333px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgb(239, 239, 239)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "l.FrontendCycle.ApplicationLayout.applicationTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "FrontendCycle",
+            "box": [
+              57,
+              9,
+              95,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              202
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              202
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              202
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": "scrollcontainer_dynamic-toggleable",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "ul",
+            "id": null,
+            "role": "menu",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              45,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "li",
+            "id": null,
+            "role": "none",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              48,
+              45,
+              1384,
+              18
+            ],
+            "style": [
+              "list-item",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "a",
+            "id": null,
+            "role": "menuitem",
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Orders",
+            "box": [
+              48,
+              45,
+              44,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 238)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              168
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              168
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              168
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              168
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              168
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.pageHeader",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              79,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "span",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.pageTitle",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Orders created from exported Ruby",
+            "box": [
+              8,
+              79,
+              227,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.orderForm",
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              97,
+              1424,
+              129
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              97,
+              1424,
+              36
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "label",
+            "id": "p.FrontendCycle.Orders.reference-label",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Reference",
+            "box": [
+              8,
+              97,
+              65,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              115,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "NEW",
+            "box": [
+              8,
+              115,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              133,
+              1424,
+              36
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "label",
+            "id": "p.FrontendCycle.Orders.total-label",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Total",
+            "box": [
+              8,
+              133,
+              33,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              151,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "0",
+            "box": [
+              8,
+              151,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              169,
+              1424,
+              36
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "label",
+            "id": "p.FrontendCycle.Orders.active-label",
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Active",
+            "box": [
+              8,
+              169,
+              43,
+              17
+            ],
+            "style": [
+              "inline",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "",
+            "box": [
+              8,
+              187,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "div",
+            "id": null,
+            "role": null,
+            "widget": null,
+            "state": [
+              null,
+              null,
+              false
+            ],
+            "text": "Yes",
+            "box": [
+              8,
+              187,
+              1424,
+              18
+            ],
+            "style": [
+              "block",
+              "static",
+              "16px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgba(0, 0, 0, 0)"
+            ]
+          },
+          {
+            "tag": "button",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.saveOrder",
+            "state": [
+              null,
+              "false",
+              false
+            ],
+            "text": "Save order",
+            "box": [
+              8,
+              205,
+              81,
+              21
+            ],
+            "style": [
+              "inline-block",
+              "static",
+              "13.3333px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgb(239, 239, 239)"
+            ]
+          },
+          {
+            "tag": "button",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.cancelOrder",
+            "state": [
+              null,
+              "false",
+              false
+            ],
+            "text": "Cancel",
+            "box": [
+              89,
+              205,
+              58,
+              21
+            ],
+            "style": [
+              "inline-block",
+              "static",
+              "13.3333px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgb(239, 239, 239)"
+            ]
+          },
+          {
+            "tag": "button",
+            "id": null,
+            "role": null,
+            "widget": "p.FrontendCycle.Orders.refreshOrders",
+            "state": [
+              null,
+              "false",
+              false
+            ],
+            "text": "Refresh orders",
+            "box": [
+              8,
+              226,
+              104,
+              21
+            ],
+            "style": [
+              "inline-block",
+              "static",
+              "13.3333px",
+              "400",
+              "rgb(0, 0, 0)",
+              "rgb(239, 239, 239)"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

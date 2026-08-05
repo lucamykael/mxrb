@@ -1,6 +1,6 @@
 # Relatório de qualidade do build e Runtime nativos
 
-Data: 4 de agosto de 2026.
+Data: 5 de agosto de 2026.
 
 ## Resultado confirmado
 
@@ -13,7 +13,16 @@ Data: 4 de agosto de 2026.
 - a Projects API inventariou 130 apps. Três projetos Git reais (`MyFirstModule`, `LearnNow Trainning Management` e `SLATaskApp`) passaram validate → export → generate → validate → compare;
 - `MyFirstModule` foi regenerado como 11.12.1 exato sem builders proprietários. A Runtime sincronizou 655 operações, criou o administrador `mx` ativo, serviu shell React e login estilizado em `127.0.0.1:18080` e expôs as tabelas esperadas;
 - uma aplicação 10.24.0.73019 com cliente otimizado, criada do zero, passou no `mx check` e `mxbuild` oficiais, modelo/Java/Rollup/pacote portátil nativos, 460 operações de sincronização, probe de prontidão e HTTP 200;
-- QA final: 1.002 exemplos, zero falhas, 100,00% de linhas (16.917/16.917), 100,00% de branches (6.659/6.659) e RuboCop limpo em 238 arquivos.
+- QA autenticado em Chromium passou repetidamente em Home e Orders, com
+  snapshots DOM/layout/estilo/ARIA e screenshots determinísticos, zero erros de
+  console e baseline SHA-256 explícito;
+- `mxrb page new|generate|g Module.Page --chain ...` materializa MPRs válidos
+  para `page:microflow`, `page:nanoflow` e `page:nanoflow:microflow`; sem a
+  opção, o scaffold mínimo de página permanece inalterado;
+- `mxrb page templates` expõe a árvore starter/blank/dashboard/form-vertical;
+  `--template` combina os modelos com as chains, e dashboard/form-vertical
+  passaram em Runtime real com tema compilado e zero erros de console;
+- QA final: 1.039 exemplos, zero falhas, 100,00% de linhas (17.224/17.224), 100,00% de branches (6.811/6.811) e RuboCop limpo em 244 arquivos.
 
 ## Correções do relatório de melhorias
 
@@ -39,6 +48,10 @@ Data: 4 de agosto de 2026.
   função. O subconjunto auditado do grafo inclui decisões, caminhos de erro,
   nanoflows aninhados, ações JavaScript e chamadas de microflow servidor; nós
   não suportados falham fechado em vez de serem tratados como microflows;
+- o workspace PostgreSQL injeta a JDBC URL coerente e a opção de SSL no Runtime;
+  papéis de navegação em `CheckNothing`, modos de scroll, SidebarToggle e as
+  constantes de retorno de data sources de microflow seguem os contratos reais
+  observados no cliente 11.12.1;
 - cliques reais no navegador validaram Home → Courses → Add → Save. Formulários
   DataView/TextBox por parâmetro renderizam e persistem valores; create passa o
   GUID por `openForm2`, enquanto a autorização de commit/rollback deriva dos

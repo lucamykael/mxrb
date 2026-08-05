@@ -51,6 +51,22 @@ RSpec.describe 'writer regressions from the VetClinic acceptance project' do # r
     expect(mappings.map { _1['Parameter'] }).to eq(%w[Clinic.Create.Name Clinic.Create.Age])
   end
 
+  it 'writes a valid default log node for the Mendix 11 Runtime' do
+    activity = {
+      type: :log_message, message: 'ready', level: :info, node: nil,
+      include_stack: false, parameters: []
+    }
+    modern = Mxrb::Writer.new('/tmp/log-modern.mpr', version: '11.12.1', modules: [])
+    legacy = Mxrb::Writer.new('/tmp/log-legacy.mpr', version: '10.24.0', modules: [])
+
+    modern_action = modern.send(:activity_action_doc, activity)
+    legacy_action = legacy.send(:activity_action_doc, activity)
+
+    expect(modern_action).to include('Node' => "'MXRB'")
+    expect(modern_action).not_to have_key('NodeModel')
+    expect(legacy_action.dig('NodeModel', '$Type')).to eq('Expressions$NoExpression')
+  end
+
   # rubocop:disable Metrics/BlockLength
   it 'uses Abort instead of Rollback throughout generated nanoflow graphs' do
     Dir.mktmpdir do |dir|

@@ -85,6 +85,222 @@ RSpec.describe Mxrb::Scaffold::Generator do
     end
   end
 
+  it 'scaffolds an executable page to nanoflow to microflow chain' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      result = described_class.new(
+        :page, 'ScaffoldApp.Order', target: root, page_chain: 'page:nanoflow:microflow'
+      ).scaffold
+
+      expected = %w[
+        modules/ScaffoldApp/domain/entities/order.rb
+        modules/ScaffoldApp/application/use_cases/act_load_order.rb
+        modules/ScaffoldApp/application/use_cases/act_refresh_order.rb
+        modules/ScaffoldApp/presentation/client_actions/nan_refresh_order.rb
+        modules/ScaffoldApp/presentation/pages/order.rb
+        app/navigation/responsive/scaffold_app_order.rb
+      ].map { File.join(root, _1) }
+      expect(result.files).to include(*expected)
+      expect(File.read(expected[0])).to include(
+        'entity :Order', 'string :Reference', 'decimal :Total', 'boolean :Active'
+      )
+      expect(File.read(expected[1])).to include(
+        'microflow :ACT_LoadOrder', 'create_object "ScaffoldApp.Order"',
+        'return_value :record'
+      )
+      expect(File.read(expected[2])).to include(
+        'microflow :ACT_RefreshOrder',
+        'log_message "Order refreshed from the page scaffold"'
+      )
+      expect(File.read(expected[3])).to include(
+        'nanoflow :NAN_RefreshOrder', 'show_message "Order refreshed"',
+        'call_microflow "ScaffoldApp.ACT_RefreshOrder"'
+      )
+      expect(File.read(expected[4])).to include(
+        'page :Order', 'data_source microflow: "ScaffoldApp.ACT_LoadOrder"',
+        'number_input :total', 'action: :save_changes',
+        'nanoflow: "ScaffoldApp.NAN_RefreshOrder"'
+      )
+      expect(File.read(expected[5])).to include(
+        'item "Order", page: "ScaffoldApp.Order", icon: "file"'
+      )
+
+      load File.join(root, 'project.rb')
+      mpr = File.join(root, 'ScaffoldApp.mpr')
+      expect(Mxrb.validate(mpr)).to be_valid
+      source = Mxrb::Compiler::SourceModel.read(mpr)
+      expect(Mxrb::Compiler::CompatibilityAnalyzer.new(mpr, source:).analyze).to be_compatible
+      Mxrb.open(mpr) do |project|
+        mod = project.modules.first
+        expect(mod.entities.map(&:name)).to eq(['Order'])
+        expect(mod.pages.map(&:name)).to contain_exactly('Home', 'Order')
+        expect(mod.microflows.map(&:name)).to include('ACT_LoadOrder', 'ACT_RefreshOrder')
+        expect(mod.nanoflows.map(&:name)).to include('NAN_RefreshOrder')
+        expect(project.navigation.profiles.first.menu_items.first[:page]).to eq('ScaffoldApp.Order')
+      end
+    end
+  end
+
+  it 'scaffolds a page that calls a microflow directly when requested' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      result = described_class.new(
+        :page, 'ScaffoldApp.Order', target: root, page_chain: 'page:microflow'
+      ).scaffold
+      page = File.join(root, 'modules/ScaffoldApp/presentation/pages/order.rb')
+      nanoflow = File.join(
+        root, 'modules/ScaffoldApp/presentation/client_actions/nan_refresh_order.rb'
+      )
+
+      expect(File.read(page)).to include(
+        'on_click microflow: "ScaffoldApp.ACT_RefreshOrder"'
+      )
+      expect(result.files).not_to include(nanoflow)
+      expect(File).not_to exist(nanoflow)
+
+      load File.join(root, 'project.rb')
+      mpr = File.join(root, 'ScaffoldApp.mpr')
+      expect(Mxrb.validate(mpr)).to be_valid
+      source = Mxrb::Compiler::SourceModel.read(mpr)
+      expect(Mxrb::Compiler::CompatibilityAnalyzer.new(mpr, source:).analyze).to be_compatible
+      Mxrb.open(mpr) do |project|
+        mod = project.modules.first
+        expect(mod.microflows.map(&:name)).to include('ACT_LoadOrder', 'ACT_RefreshOrder')
+        expect(mod.nanoflows).to be_empty
+      end
+    end
+  end
+
+  it 'scaffolds a page that calls a client nanoflow without a server action' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      result = described_class.new(
+        :page, 'ScaffoldApp.Order', target: root, page_chain: 'page:nanoflow'
+      ).scaffold
+      nanoflow = File.join(
+        root, 'modules/ScaffoldApp/presentation/client_actions/nan_refresh_order.rb'
+      )
+      action = File.join(root, 'modules/ScaffoldApp/application/use_cases/act_refresh_order.rb')
+      page = File.join(root, 'modules/ScaffoldApp/presentation/pages/order.rb')
+
+      expect(File.read(nanoflow)).to include(
+        'nanoflow :NAN_RefreshOrder', 'show_message "Order refreshed"'
+      )
+      expect(File.read(nanoflow)).not_to include('call_microflow')
+      expect(File.read(page)).to include('on_click nanoflow: "ScaffoldApp.NAN_RefreshOrder"')
+      expect(result.files).not_to include(action)
+      expect(File).not_to exist(action)
+
+      load File.join(root, 'project.rb')
+      mpr = File.join(root, 'ScaffoldApp.mpr')
+      expect(Mxrb.validate(mpr)).to be_valid
+      source = Mxrb::Compiler::SourceModel.read(mpr)
+      expect(Mxrb::Compiler::CompatibilityAnalyzer.new(mpr, source:).analyze).to be_compatible
+      Mxrb.open(mpr) do |project|
+        mod = project.modules.first
+        expect(mod.microflows.map(&:name)).to eq(['ACT_LoadOrder'])
+        expect(mod.nanoflows.map(&:name)).to eq(['NAN_RefreshOrder'])
+      end
+    end
+  end
+
+  it 'lists and materializes every audited page template as editable Mendix pages' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      templates = {
+        'starter' => 'StarterPage', 'blank' => 'BlankPage',
+        'dashboard' => 'DashboardPage', 'form-vertical' => 'FormPage'
+      }
+      templates.each do |template, name|
+        described_class.new(
+          :page, "ScaffoldApp.#{name}", target: root, page_template: template
+        ).scaffold
+      end
+
+      dashboard = File.join(root, 'modules/ScaffoldApp/presentation/pages/dashboard_page.rb')
+      form = File.join(root, 'modules/ScaffoldApp/presentation/pages/form_page.rb')
+      expect(File.read(dashboard)).to include(
+        'mxrb-dashboard-grid', 'PRIMARY', 'SECONDARY', 'ACTIVITY'
+      )
+      expect(File.read(form)).to include(
+        'data_source microflow: "ScaffoldApp.ACT_LoadFormPage"'
+      )
+      expect(File).to exist(File.join(root, 'modules/ScaffoldApp/domain/entities/form_page.rb'))
+
+      load File.join(root, 'project.rb')
+      mpr = File.join(root, 'ScaffoldApp.mpr')
+      expect(Mxrb.validate(mpr)).to be_valid
+      source = Mxrb::Compiler::SourceModel.read(mpr)
+      expect(Mxrb::Compiler::CompatibilityAnalyzer.new(mpr, source:).analyze).to be_compatible
+      Mxrb.open(mpr) do |project|
+        expect(project.modules.first.pages.map(&:name)).to include(*templates.values)
+      end
+    end
+  end
+
+  it 'combines a dashboard template with a page to nanoflow chain' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      described_class.new(
+        :page, 'ScaffoldApp.Operations', target: root,
+                                         page_template: 'dashboard', page_chain:    'page:nanoflow'
+      ).scaffold
+      page = File.join(root, 'modules/ScaffoldApp/presentation/pages/operations.rb')
+
+      expect(File.read(page)).to include(
+        'mxrb-dashboard-grid', 'on_click nanoflow: "ScaffoldApp.NAN_RefreshOperations"'
+      )
+      expect(File).not_to exist(
+        File.join(root, 'modules/ScaffoldApp/domain/entities/operations.rb')
+      )
+      load File.join(root, 'project.rb')
+      expect(Mxrb.validate(File.join(root, 'ScaffoldApp.mpr'))).to be_valid
+    end
+  end
+
+  it 'rejects unsupported page chains before creating files' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+
+      expect do
+        described_class.new(
+          :page, 'ScaffoldApp.Order', target: root, page_chain: 'page:microflow:nanoflow'
+        ).scaffold
+      end.to raise_error(ArgumentError, /page chain must be one of/)
+      expect do
+        described_class.new(
+          :page, 'ScaffoldApp.Other', target: root, page_template: 'unknown'
+        ).scaffold
+      end.to raise_error(ArgumentError, /page template must be one of/)
+      expect do
+        described_class.new(:entity, 'ScaffoldApp.Other', target: root, unsupported: true)
+      end.to raise_error(ArgumentError, /unknown generator options/)
+      expect(File).not_to exist(File.join(root, 'modules/ScaffoldApp/domain/entities/order.rb'))
+    end
+  end
+
+  it 'fails atomically when page-chain navigation is not connected' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      project = File.join(root, 'project.rb')
+      File.write(
+        project,
+        File.read(project).sub(
+          'evaluate_dir File.join(__dir__, "app", "navigation", "responsive")',
+          '# navigation aggregator intentionally absent'
+        )
+      )
+
+      expect do
+        described_class.new(
+          :page, 'ScaffoldApp.Order', target: root, page_chain: 'page:nanoflow:microflow'
+        ).scaffold
+      end
+        .to raise_error(ArgumentError, /generated Responsive navigation aggregator/)
+      expect(File).not_to exist(File.join(root, 'modules/ScaffoldApp/domain/entities/order.rb'))
+    end
+  end
+
   it 'does not duplicate project security and diagnoses malformed project definitions' do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
@@ -143,10 +359,7 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect(definition.tests.first.target).to eq('ScaffoldApp.ACT_CreateAnimal')
       expect(File.read(evaluation.files.fetch(0))).to include('no_call_cycles')
       expect(File.read(ci.files.fetch(0))).to include('ruby/setup-ruby@v1', 'bundle exec rspec')
-      expect(design.files.map { File.basename(_1) }).to include(
-        'design_system.rb', 'custom-variables.scss', 'main.scss',
-        'exclusion-variables.scss', 'settings.json'
-      )
+      expect(design.files).to be_empty
       expect(File.read(File.join(root, 'theme', 'web', 'settings.json')))
         .to include('theme.compiled.css')
 
@@ -267,6 +480,26 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect(File.binread(project)).to eq(project_before)
     end
   end
+
+  it 'stages a missing project-level aggregator connection' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      project = File.join(root, 'project.rb')
+      source = File.binread(project).sub(
+        /^\s*evaluate File\.join\(__dir__, "app", "design_system", "design_system\.rb"\)\n/,
+        ''
+      )
+      File.binwrite(project, source)
+      generator = described_class.new(:design, target: root)
+
+      generator.send(:connect_project_file, 'app', 'design_system', 'design_system.rb')
+
+      transaction = generator.instance_variable_get(:@transaction)
+      expect(transaction.updated).to eq([project])
+      expect(transaction.content(project))
+        .to include('evaluate File.join(__dir__, "app", "design_system", "design_system.rb")')
+    end
+  end
 end
 
 RSpec.describe Mxrb::Scaffold::Transaction do
@@ -340,6 +573,66 @@ RSpec.describe Mxrb::Scaffold::CLI do
     end
   end
 
+  it 'accepts new, generate, and g plus every chain for the page scaffold' do
+    Dir.mktmpdir do |dir|
+      root = Mxrb::Initializer.new('cli_app').scaffold(into: dir).root
+      {
+        'new' => 'page:microflow',
+        'generate' => 'page:nanoflow',
+        'g' => 'page:nanoflow:microflow'
+      }.each do |action, chain|
+        output = StringIO.new
+        described_class.new(
+          'page', [
+            action, 'CliApp.Order', '--chain', chain, '--target', root, '--dry-run'
+          ], output:
+        ).run
+        expect(output.string).to include('would create', 'order.rb')
+      end
+
+      minimal = StringIO.new
+      described_class.new(
+        'page', ['new', 'CliApp.Order', '--target', root, '--dry-run'], output: minimal
+      ).run
+      expect(minimal.string).to include('would create', 'order.rb')
+      expect(minimal.string).not_to include('act_refresh_order.rb')
+    end
+  end
+
+  it 'renders the page-template catalog as a tree and JSON' do
+    tree = StringIO.new
+    described_class.new('page', ['templates'], output: tree).run
+    expect(tree.string).to include(
+      'Page templates', 'General', 'Dashboards', 'Forms', 'form-vertical'
+    )
+
+    json = StringIO.new
+    described_class.new('page', %w[templates --json], output: json).run
+    payload = JSON.parse(json.string)
+    expect(payload.flat_map { _1.fetch('templates') }.map { _1.fetch('name') }).to contain_exactly(
+      'starter', 'blank', 'dashboard', 'form-vertical'
+    )
+
+    expect { described_class.new('page', %w[templates --unknown]).run }
+      .to raise_error(SystemExit, /Unknown arguments/)
+  end
+
+  it 'routes the public page alias and chain option through bin/mxrb' do
+    Dir.mktmpdir do |dir|
+      root = Mxrb::Initializer.new('cli_app').scaffold(into: dir).root
+      executable = [RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'page']
+      stdout, stderr, status = Open3.capture3(
+        *executable, 'g', 'CliApp.Order', '--chain', 'page:microflow', '--target', root
+      )
+
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to include('act_refresh_order.rb', 'order.rb')
+      page = File.join(root, 'modules/CliApp/presentation/pages/order.rb')
+      expect(File.read(page)).to include('on_click microflow: "CliApp.ACT_RefreshOrder"')
+    end
+  end
+
   it 'covers help placement and reports invalid command arguments' do
     output = StringIO.new
     described_class.new('entity', ['new', '--help'], output:).run
@@ -361,7 +654,7 @@ RSpec.describe Mxrb::Scaffold::CLI do
       Dir.chdir(root) do
         output = StringIO.new
         described_class.new('design', ['init'], output:).run
-        expect(output.string).to include('design_system.rb', 'Done. Run:')
+        expect(output.string).to include('Done. Run:')
 
         quiet = StringIO.new
         described_class.new('evaluation', %w[new architecture], output: quiet).run
