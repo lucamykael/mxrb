@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    mxrb (0.1.0)
+    mxrb (0.1.1)
       base64 (~> 0.2)
       bigdecimal (~> 3.1)
       bson (~> 5.2)
@@ -126,7 +126,7 @@ CHECKSUMS
   json (2.21.1) sha256=13a43df75d95641443f5702dff350f237164a9d811ff0f2c2800d4d980220583
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
-  mxrb (0.1.0)
+  mxrb (0.1.1)
   onnxruntime (0.11.5-arm64-darwin) sha256=9f2f45b3ac16999c466ac352562195e03a011cc930b8750c0b1e43a49c1ca5d9
   onnxruntime (0.11.5-x86_64-darwin) sha256=19c18e90eb101f69a3232dfdd1742e77d69e2df623b106b670221629d4b4cc15
   onnxruntime (0.11.5-x86_64-linux) sha256=13f20de606a8fb32ba404bca9e1fc47f0eab4605c909252dbcf6db4fb106c9e6
