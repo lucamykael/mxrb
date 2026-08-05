@@ -23,6 +23,11 @@ module Mxrb
         'nanoflow' => ['new Module.Flow', 'Create a client nanoflow', 'presentation/client_actions'],
         'repository' => ['new Module.Repository', 'Create repository port and adapter', 'application/infrastructure'],
         'security' => ['init Module', 'Create module roles template', 'security'],
+        'demo-user' => [
+          'new NAME [--entity Module.Entity] [--role ROLE]',
+          'Create a local Mendix demo user backed by an ignored .env secret',
+          'app/security/demo_users'
+        ],
         'scheduled-event' => ['new Module.Event', 'Create scheduled event and handler', 'application/jobs'],
         'constant' => ['new Module.Constant', 'Create a string constant', 'domain/constants'],
         'integration' => ['new Module.Adapter', 'Create integration adapter flow', 'infrastructure/integrations'],
@@ -54,6 +59,14 @@ module Mxrb
           mxrb page templates [--json]
           --template starter|blank|dashboard|form-vertical
       HELP
+      DEMO_USER_OPTIONS = <<~HELP
+        Demo user options:
+          --entity Module.Entity   User entity (default: System.User)
+          --role ROLE              App user role (repeatable; default: User)
+
+        `new` is optional, so `mxrb demo-user manager ...` is also accepted.
+        The generated password is stored in the ignored .env file.
+      HELP
 
       def text(command)
         usage, description, destination = COMMANDS.fetch(command)
@@ -71,9 +84,10 @@ module Mxrb
       end
 
       def page_options(command)
-        return '' unless command == 'page'
+        return PAGE_OPTIONS if command == 'page'
+        return DEMO_USER_OPTIONS if command == 'demo-user'
 
-        PAGE_OPTIONS
+        ''
       end
     end
   end

@@ -293,6 +293,17 @@ module Mxrb
         RUBY
       end
 
+      def demo_user(_module_name, name, entity:, roles:, password_env:)
+        <<~RUBY
+          # frozen_string_literal: true
+
+          demo_user #{name.inspect},
+                    entity: #{entity.inspect},
+                    roles: #{roles.inspect},
+                    password: ENV.fetch(#{password_env.inspect})
+        RUBY
+      end
+
       def scheduled_event(module_name, name)
         <<~RUBY
           # frozen_string_literal: true

@@ -19,6 +19,7 @@ und Testen von Mendix-Projekten (`.mpr`) ohne MDL oder `mxcli`.
 - Lint und ausführbare Modellbewertungen;
 - Erkennung von nativem OQL und logische SQL-Ansicht nur bei vorhandenem OQL;
 - isolierte, durch das Runtime synchronisierte PostgreSQL für direkte SQL-Abfragen;
+- Demo-Benutzer mit lokalen `.env`-Geheimnissen und sichere Runtime-Zugangsdaten;
 - Analyse von PostgreSQL-/SQL-Server-Plänen und kumulativem PostgreSQL-Workload;
 - funktionale Microflow-Tests lokal oder in Docker.
 - Suche und Installation wiederverwendbarer Ruby-Module mit SHA-256-Lock.
@@ -35,6 +36,7 @@ wird kompatibles Java benötigt; Docker stellt JDK und Runtime bereit.
 
 ```sh
 bundle install
+bundle exec mxrb --version
 bundle exec mxrb validate App.mpr
 bundle exec mxrb export App.mpr app-ruby
 bundle exec mxrb compare original.mpr rebuilt.mpr
@@ -45,7 +47,9 @@ bundle exec mxrb cache warm App.mpr
 bundle exec mxrb cache clear App.mpr
 bundle exec mxrb oql App.mpr --dialect postgresql
 bundle exec mxrb db up App.mpr
+bundle exec mxrb db credentials App.mpr --copy
 bundle exec mxrb db sql App.mpr 'SELECT * FROM "sales$order" LIMIT 20'
+bundle exec mxrb demo-user new manager --entity System.User --role User
 ```
 
 Die MPR speichert das Modell, nicht die Anwendungsdaten. `db up` baut das

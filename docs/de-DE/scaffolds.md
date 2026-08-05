@@ -30,6 +30,29 @@ Data Source. Ketten, die mit einem Microflow enden, erzeugen zusätzlich
 Jede erzeugte Kette wird als gültiges MPR materialisiert und durch den
 Compiler-Preflight geprüft.
 
+## Demo-Benutzer
+
+Nach der Initialisierung der Sicherheit wird jeder Demo-Benutzer als eigene
+Ruby-Datei erzeugt:
+
+```sh
+mxrb security init App
+mxrb demo-user new manager --entity System.User --role User
+mxrb demo-user operator --entity App.Account --role User --role Administrator
+```
+
+`new` ist optional. `--entity` verwendet standardmäßig `System.User`, und
+`--role` kann wiederholt werden; ohne Angabe wird die Rolle `User` gewählt. Das
+Scaffold prüft sofort, ob Entität und Anwendungsrollen vorhanden sind,
+verbindet `app/security/demo_users` mit dem `security`-Block und aktiviert
+Demo-Benutzer in der MPR.
+
+Das zufällige Passwort liegt nur in der ignorierten `.env`, die beim Erstellen
+den Modus `0600` erhält. Der erzeugte Ruby-Code nutzt `ENV.fetch`, während
+`.env.example` nur eine leere Variable enthält. Danach wird die MPR wie gewohnt
+generiert und validiert. Demo-Benutzer sind für Entwicklung und Vorführungen
+gedacht, nicht für Produktionsbenutzer.
+
 ## Seitenvorlagen
 
 In Mendix sind Page Templates Ausgangspunkte, deren Struktur zu einer normalen,

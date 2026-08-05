@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'securerandom'
+
 module Mxrb
   module Scaffold
     # Creates conventional Ruby-first artifacts and connects missing aggregators.
@@ -24,8 +26,7 @@ module Mxrb
         @root = File.expand_path(target)
         @transaction = Transaction.new
         @dry_run = dry_run
-        @page_chain = page_options.delete(:page_chain)
-        @page_template = page_options.delete(:page_template)
+        assign_options(page_options)
         raise ArgumentError, "unknown generator options: #{page_options.keys.join(', ')}" unless
           page_options.empty?
       end
@@ -42,6 +43,13 @@ module Mxrb
 
       private
 
+      def assign_options(options)
+        @page_chain = options.delete(:page_chain)
+        @page_template = options.delete(:page_template)
+        @demo_entity = options.delete(:demo_entity)
+        @demo_roles = options.delete(:demo_roles)
+      end
+
       def page_chain
         return unless @page_chain
         return @page_chain if PAGE_CHAINS.include?(@page_chain)
@@ -55,8 +63,13 @@ module Mxrb
       end
 
       def stage_registry
+        files = @transaction.created.dup
+        if @kind == :demo_user
+          shared = [project_path('.env'), project_path('.env.example')]
+          files -= shared
+        end
         Registry.stage(
-          @transaction, root: @root, key: "#{@kind}:#{@name}", files: @transaction.created.dup
+          @transaction, root: @root, key: "#{@kind}:#{@name}", files:
         )
       end
 
@@ -123,6 +136,115 @@ module Mxrb
         block = Templates.render(:project_security, module_name:, name: nil)
         lines.insert(version + 1, "\n#{block.lines.map { "  #{_1}" }.join}")
         @transaction.write(path, lines.join)
+      end
+
+      def connect_project_demo_users
+        path = project_path('project.rb')
+        source = connect_project_dotenv(@transaction.content(path))
+        opening = source.lines.index { _1.match?(/^\s*security do\s*$/) }
+        raise ArgumentError, security_initialization_error unless opening
+
+        insert_demo_user_loader(path, source, opening)
+      end
+
+      def insert_demo_user_loader(path, source, opening)
+        line = 'evaluate_dir File.join(__dir__, "app", "security", "demo_users")'
+        return if source.include?(line)
+
+        lines = source.lines
+        indentation = "#{lines.fetch(opening)[/^\s*/]}  "
+        lines.insert(opening + 1, "#{indentation}#{line}\n")
+        @transaction.write(path, lines.join)
+      end
+
+      def connect_project_dotenv(source)
+        dotenv_line = 'Dotenv.load(File.join(__dir__, ".env"))'
+        return source if source.include?(dotenv_line)
+
+        lines = source.lines
+        require_line = lines.index { _1.match?(%r{^require ["']dotenv/load["']\s*$}) }
+        raise ArgumentError, 'project.rb must require dotenv/load before scaffolding demo users' unless require_line
+
+        lines.insert(require_line + 1, "#{dotenv_line}\n").join
+      end
+
+      def security_initialization_error
+        'project security is not initialized; run `mxrb security init Module` first'
+      end
+
+      def create_demo_user_file(name, entity, roles, password_env)
+        path = project_path('app', 'security', 'demo_users', "#{Templates.snake_case(name)}.rb")
+        @transaction.create(
+          path,
+          Templates.render(
+            :demo_user, name:, entity:, roles:, password_env:
+          )
+        )
+      end
+
+      def ensure_demo_user_secret(password_env)
+        path = project_path('.env')
+        source = @transaction.content(path)
+        if source
+          @transaction.write(path, append_env(source, password_env, generated_demo_password)) unless
+            env_key?(source, password_env)
+        else
+          create_demo_user_secret(path, password_env)
+        end
+        ensure_demo_user_env_example(password_env)
+      end
+
+      def create_demo_user_secret(path, password_env)
+        source = "# Local secrets; never commit this file.\n"
+        content = append_env(source, password_env, generated_demo_password)
+        @transaction.create(path, content, mode: 0o600)
+      end
+
+      def ensure_demo_user_env_example(password_env)
+        path = project_path('.env.example')
+        source = @transaction.content(path) || "# Copy to .env and keep real values local.\n"
+        @transaction.write(path, append_env(source, password_env, '')) unless env_key?(source, password_env)
+      end
+
+      def append_env(source, key, value)
+        "#{source.rstrip}\n#{key}=#{value}\n"
+      end
+
+      def env_key?(source, key)
+        source.lines.any? { _1.match?(/\A#{Regexp.escape(key)}=/) }
+      end
+
+      def generated_demo_password
+        "Mxrb#{SecureRandom.alphanumeric(16)}7"
+      end
+
+      def validate_demo_user_references!(name, entity, roles)
+        sources = project_ruby_sources
+        errors = []
+        missing_roles = roles - known_user_roles(sources)
+        errors << "missing user role(s): #{missing_roles.join(', ')}" unless missing_roles.empty?
+        errors << "missing user entity: #{entity}" unless
+          entity == 'System.User' || known_entities(sources).include?(entity)
+        return if errors.empty?
+
+        raise ArgumentError, "demo user #{name}: #{errors.join('; ')}"
+      end
+
+      def project_ruby_sources
+        Dir.glob(project_path('**', '*.rb')).to_h { [_1, File.read(_1)] }
+      end
+
+      def known_user_roles(sources)
+        pattern = /\buser_role\s+(?::([A-Za-z][A-Za-z0-9_]*)|["']([^"']+)["'])/
+        sources.values.flat_map { _1.scan(pattern).map { |match| match.compact.first } }.uniq
+      end
+
+      def known_entities(sources)
+        pattern = /\bentity\s+(?::([A-Za-z][A-Za-z0-9_]*)|["']([^"']+)["'])/
+        sources.flat_map do |path, source|
+          mod = path.match(%r{/modules/([^/]+)/})&.[](1)
+          mod ? source.scan(pattern).map { "#{mod}.#{_1.compact.first}" } : []
+        end.uniq
       end
 
       def insert_before_closing(source, line, path)

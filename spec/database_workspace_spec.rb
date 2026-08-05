@@ -143,6 +143,72 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       credentials = File.join(info.state_dir, 'credentials.json')
       expect(File.stat(credentials).mode & 0o777).to eq(0o600)
       expect(File).to exist(File.join(info.state_dir, 'runtime.json'))
+
+      credentials = workspace(path, File.join(dir, 'second-state'), &runner)
+      expect { credentials.admin_credentials }.to raise_error(Mxrb::ToolchainError, /db up/)
+    end
+  end
+
+  it 'reads the configured Runtime administrator without exposing database passwords' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      FileUtils.mkdir_p(state)
+      credentials_path = File.join(state, 'credentials.json')
+      File.write(
+        credentials_path,
+        JSON.generate(
+          'owner_password' => 'owner', 'reader_password' => 'reader',
+          'admin_password' => 'runtime-admin-secret'
+        )
+      )
+      result = workspace(path, state) { |_command| ['', '', status(true)] }.admin_credentials
+
+      expect(result.username).to eq('MxAdmin')
+      expect(result.password).to eq('runtime-admin-secret')
+      expect(result.path).to eq(credentials_path)
+
+      File.write(credentials_path, '{}')
+      expect { workspace(path, state) { ['', '', status(true)] }.admin_credentials }
+        .to raise_error(Mxrb::ToolchainError, /invalid Runtime credentials file/)
+
+      File.write(credentials_path, JSON.generate('admin_password' => 'secret'))
+      mpr = Mxrb::IO::MprFile.open(path)
+      raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Security$ProjectSecurity' }
+      security = mpr.parse_contents(raw)
+      security['AdminUserName'] = ''
+      mpr.update_unit(raw.fetch('UnitID'), security)
+      mpr.close
+      expect { workspace(path, state) { ['', '', status(true)] }.admin_credentials }
+        .to raise_error(Mxrb::ToolchainError, /no configured administrator/)
+    end
+  end
+
+  it 'copies a secret through clipboard stdin instead of command arguments' do
+    Dir.mktmpdir do |dir|
+      executable = File.join(dir, 'wl-copy')
+      File.write(executable, '')
+      File.chmod(0o700, executable)
+      calls = []
+      runner = lambda do |command, input|
+        calls << [command, input]
+        ['', '', status(true)]
+      end
+
+      command = Mxrb::Runtime::Clipboard.new(path: dir, runner:).copy('secret')
+      expect(command).to eq('wl-copy')
+      expect(calls).to eq([[['wl-copy'], 'secret']])
+
+      failing = ->(_command, _input) { ['', 'clipboard unavailable', status(false)] }
+      expect { Mxrb::Runtime::Clipboard.new(path: dir, runner: failing).copy('secret') }
+        .to raise_error(Mxrb::ToolchainError, /clipboard command failed/)
+
+      File.write(executable, "#!/bin/sh\nexit 0\n")
+      expect(Mxrb::Runtime::Clipboard.new(path: dir).copy('captured')).to eq('wl-copy')
+
+      File.chmod(0o600, executable)
+      expect { Mxrb::Runtime::Clipboard.new(path: dir).copy('secret') }
+        .to raise_error(Mxrb::ToolchainError, /no clipboard command found/)
     end
   end
 
