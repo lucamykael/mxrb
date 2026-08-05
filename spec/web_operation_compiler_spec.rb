@@ -256,6 +256,75 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       .to eq([['Administrator']])
   end
 
+  it 'authorizes layout microflow data sources from the microflow module roles' do
+    data_view = {
+      '$Type' => 'Forms$DataView', 'Name' => 'currentUser', 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource',
+        'MicroflowSettings' => { 'Microflow' => 'Atlas_Core.DS_Account_CurrentUser' }
+      }
+    }
+    layout = unit(module_name: 'Atlas_Core', document: {
+      '$Type' => 'Forms$Layout', 'Name' => 'Atlas_TopBar', 'Widgets' => [data_view]
+    })
+    flow = unit(module_name: 'Atlas_Core', document: {
+      '$Type' => 'Microflows$Microflow', 'Name' => 'DS_Account_CurrentUser',
+      'AllowedModuleRoles' => [1, 'Atlas_Core.User']
+    })
+    security = {
+      'UserRoles' => [2,
+                      { 'Name' => 'Administrator',
+                        'ModuleRoles' => [1, 'Atlas_Core.User'] },
+                      { 'Name' => 'Unrelated', 'ModuleRoles' => [1, 'Demo.User'] }]
+    }
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of) do |type|
+      { 'Microflows$Microflow' => [flow] }.fetch(type, [])
+    end
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([security])
+
+    expect(described_class.new(source).send(:page_operations, layout)).to contain_exactly(
+      include(
+        'operationType' => 'retrieveByMicroflow',
+        'allowedUserRoleSets' => [['Administrator']]
+      )
+    )
+  end
+
+  it 'limits page and nanoflow microflow operations to the microflow roles' do
+    flow = unit(module_name: 'Demo', document: {
+      '$Type' => 'Microflows$Microflow', 'Name' => 'SecureAction',
+      'AllowedModuleRoles' => [1, 'Demo.Executor']
+    })
+    security = {
+      'UserRoles' => [2,
+                      { 'Name' => 'Administrator', 'ModuleRoles' => [1, 'Demo.Executor'] },
+                      { 'Name' => 'Viewer', 'ModuleRoles' => [1, 'Demo.Viewer'] }]
+    }
+    source = instance_double(Mxrb::Compiler::SourceModel)
+    allow(source).to receive(:units_of).with('Microflows$Microflow').and_return([flow])
+    allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([security])
+    compiler = described_class.new(source)
+
+    expect(compiler.send(
+             :microflow_operation_role_sets, [['Administrator']], 'Demo.Missing'
+           )).to eq([['Administrator']])
+
+    expect(compiler.send(
+             :call_microflow_operation, 'Demo.Home', { 'Name' => 'run' },
+             [['Administrator'], ['Viewer']], 'Demo.SecureAction'
+           )).to include('allowedUserRoleSets' => [['Administrator']])
+
+    nanoflow = {
+      'ObjectCollection' => { 'Objects' => [2, {
+        '$Type' => 'Microflows$ActionActivity', '$ID' => SecureRandom.uuid,
+        'Action' => { '$Type' => 'Microflows$MicroflowCallAction',
+                      'MicroflowCall' => { 'Microflow' => 'Demo.SecureAction' } }
+      }] }
+    }
+    expect(compiler.send(:nanoflow_action_operations, 'Demo.ClientAction', nanoflow))
+      .to contain_exactly(include('allowedUserRoleSets' => [['Administrator']]))
+  end
+
   it 'covers defensive menu, data-action, association, and nanoflow operation paths' do # rubocop:disable Metrics/BlockLength
     expect(described_class.menu_operation_id('$ID' => SecureRandom.uuid)).to be_a(String)
     expect(described_class.menu_operation_id(

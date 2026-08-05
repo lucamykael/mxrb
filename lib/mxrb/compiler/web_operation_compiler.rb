@@ -241,7 +241,8 @@ module Mxrb
         {
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'callMicroflow', 'parameters' => parameters,
-          'constants' => { 'MicroflowName' => name }, 'allowedUserRoleSets' => role_sets
+          'constants' => { 'MicroflowName' => name },
+          'allowedUserRoleSets' => microflow_operation_role_sets(role_sets, name)
         }
       end
 
@@ -276,7 +277,7 @@ module Mxrb
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'retrieveByMicroflow', 'parameters' => microflow_parameters(source.microflow_name) || {},
           'constants' => data_source_constants(page_name, widget, source.microflow_name),
-          'allowedUserRoleSets' => role_sets
+          'allowedUserRoleSets' => microflow_operation_role_sets(role_sets, source.microflow_name)
         }
       end
 
@@ -340,7 +341,8 @@ module Mxrb
         {
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'callMicroflow', 'parameters' => parameters,
-          'constants' => { 'MicroflowName' => name }, 'allowedUserRoleSets' => role_sets
+          'constants' => { 'MicroflowName' => name },
+          'allowedUserRoleSets' => microflow_operation_role_sets(role_sets, name)
         }
       end
 
@@ -352,7 +354,7 @@ module Mxrb
           'operationId' => self.class.operation_id(page_name, widget['Name']),
           'operationType' => 'retrieveByMicroflow', 'parameters' => parameters,
           'constants' => data_source_constants(page_name, widget, name),
-          'allowedUserRoleSets' => role_sets
+          'allowedUserRoleSets' => microflow_operation_role_sets(role_sets, name)
         }
       end
 
@@ -455,7 +457,9 @@ module Mxrb
         nested(document, 'Microflows$ActionActivity').filter_map do |activity|
           action = activity['Action'] || {}
           operation = nanoflow_server_operation(qualified_name, activity, action, entities)
-          operation&.merge('allowedUserRoleSets' => [])
+          name = operation&.dig('constants', 'MicroflowName')
+          role_sets = name ? microflow_operation_role_sets([], name) : []
+          operation&.merge('allowedUserRoleSets' => role_sets)
         end
       end
 
@@ -536,6 +540,15 @@ module Mxrb
           [role['Name'].to_s]
         end
       end # rubocop:enable Metrics/AbcSize
+
+      def microflow_operation_role_sets(container_role_sets, qualified_name)
+        flow = qualified_unit('Microflows$Microflow', qualified_name)
+        flow_role_sets = flow ? allowed_user_role_sets(flow) : []
+        return container_role_sets if flow_role_sets.empty?
+        return flow_role_sets if container_role_sets.empty?
+
+        container_role_sets & flow_role_sets
+      end
 
       def constants(page_name, widget, constraint, entity)
         {

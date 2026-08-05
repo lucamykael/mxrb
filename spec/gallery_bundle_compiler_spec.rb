@@ -135,6 +135,8 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
     expect(compiler).not_to be_supported
     expect(compiler.send(:property_values, nil)).to eq({})
     expect(compiler.send(:primitive, 'Widgets', 'Widgets' => [2, {}])).to eq(:undefined)
+    expect(compiler.send(:primitive, 'Object', 'Objects' => [2])).to eq([])
+    expect(compiler.send(:primitive, 'Object', 'Objects' => [2, {}])).to eq(:undefined)
     expect(compiler.send(:translated_text, nil)).to eq('')
   end
 

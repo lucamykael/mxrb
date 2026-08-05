@@ -872,8 +872,10 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     imports = compiler.send(:widget_imports)
     expect(imports).to include(
       'RadioButtonGroup', 'GroupBox', 'FileManager', 'MicroflowObjectProperty',
-      'ListView', 'NanoflowObjectProperty', 'CustomWidgetModule'
+      'ListView', 'NanoflowObjectProperty', 'CustomWidgetModule',
+      'const Custom = CustomWidgetModule["Custom"] || CustomWidgetModule.default;'
     )
+    expect(imports).not_to include('Object.getOwnPropertyDescriptor')
   end
 
   it 'executes custom image and generic action-property callbacks' do
