@@ -77,6 +77,87 @@ RSpec.describe "typed project contracts" do
     end
   end
 
+  it "writes, validates, and exports individual demo users" do
+    Dir.mktmpdir do |dir|
+      source = File.join(dir, 'demo.mpr')
+      rebuilt = File.join(dir, 'rebuilt.mpr')
+      exported = File.join(dir, 'exported')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module(:App) { module_role :User }
+        security do
+          user_role :User, module_roles: ['App.User']
+          demo_user 'manager', entity: 'System.User', roles: ['User'], password: 'MxrbDemo123'
+        end
+      end
+
+      mpr = Mxrb::IO::MprFile.open(source, readonly: true)
+      security = mpr.all_units.map { mpr.parse_contents(_1) }
+                    .find { _1['$Type'] == 'Security$ProjectSecurity' }
+      users = Mxrb::IO::BsonCodec.parse_array(security['DemoUsers']).fetch(:items)
+      expect(security['EnableDemoUsers']).to be true
+      expect(users.fetch(0)).to include(
+        '$Type' => 'Security$DemoUserImpl', 'UserName' => 'manager',
+        'Entity' => 'System.User', 'Password' => 'MxrbDemo123'
+      )
+      expect(Mxrb::IO::BsonCodec.parse_array(users.fetch(0)['UserRoles']).fetch(:items))
+        .to eq(['User'])
+      mpr.close
+
+      Mxrb::Exporter.new(source, exported).export!
+      security_source = File.read(File.join(exported, 'app', 'security', 'security.rb'))
+      expect(security_source).to include(
+        'demo_user "manager"', 'entity: "System.User"', 'roles: ["User"]'
+      )
+      begin
+        ENV['MXRB_OUTPUT_PATH'] = rebuilt
+        load File.join(exported, 'project.rb')
+      ensure
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+      expect(Mxrb.compare(source, rebuilt)).to be_identical
+    end
+  end
+
+  it "rejects invalid and duplicate demo-user references" do
+    invalid_arguments = [
+      ['', 'System.User', ['User'], 'secret', /name must not be empty/],
+      ['bad name', 'System.User', ['User'], 'secret', /must not contain whitespace/],
+      ['manager', 'SystemUser', ['User'], 'secret', /qualified as Module.Entity/],
+      ['manager', 'System.User', [], 'secret', /at least one role/],
+      ['manager', 'System.User', ['User'], '', /password must not be empty/]
+    ]
+    invalid_arguments.each do |name, entity, roles, password, message|
+      expect do
+        Mxrb::Dsl::SecurityBuilder.new.demo_user(name, entity:, roles:, password:)
+      end.to raise_error(ArgumentError, message)
+    end
+    expect { Mxrb::Dsl::SecurityBuilder.new.evaluate_dir('/missing/demo-users') }
+      .not_to raise_error
+
+    expect do
+      Mxrb::Dsl::Builder.new('/tmp/invalid-demo.mpr').tap do |builder|
+        builder.module(:App) { entity :Account }
+        builder.security do
+          user_role :User
+          demo_user 'manager', entity: 'App.Missing', roles: ['Manager'], password: 'secret'
+        end
+        builder.validate!
+      end
+    end.to raise_error(Mxrb::ValidationError, /missing user role.*Manager.*missing user entity/m)
+
+    expect do
+      Mxrb::Dsl::Builder.new('/tmp/duplicate-demo.mpr').tap do |builder|
+        builder.module(:App)
+        builder.security do
+          user_role :User
+          2.times { demo_user 'manager', entity: 'System.User', roles: ['User'], password: 'secret' }
+        end
+        builder.validate!
+      end
+    end.to raise_error(Mxrb::ValidationError, /duplicate demo user/)
+  end
+
   it "round-trips navigation and design-system contracts through exported Ruby" do
     Dir.mktmpdir do |dir|
       source_dir = File.join(dir, "source")

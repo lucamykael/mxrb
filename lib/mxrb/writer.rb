@@ -441,6 +441,7 @@ module Mxrb
         end
         {
           demo_users_enabled: "EnableDemoUsers",
+          demo_users: "DemoUsers",
           guest_access_enabled: "EnableGuestAccess",
           guest_user_role: "GuestUserRole",
           sign_in_microflow: "SignInMicroflow",
@@ -1923,7 +1924,9 @@ module Mxrb
         "StrictMode" => false,
         "StrictPageUrlCheck" => true,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
-        "DemoUsers" => IO::BsonCodec.build_array([], marker: 2),
+        "DemoUsers" => IO::BsonCodec.build_array(
+          Array(security[:demo_users]).map { demo_user_doc(_1) }, marker: 2
+        ),
         "FileDocumentAccess" => access_container("Security$FileDocumentAccessRuleContainer"),
         "ImageAccess" => access_container("Security$ImageAccessRuleContainer"),
         "PasswordPolicySettings" => password_policy
@@ -1942,6 +1945,17 @@ module Mxrb
         "ManageAllRoles" => role[:admin] == true,
         "ManageUsersWithoutRoles" => false,
         "ModuleRoles" => IO::BsonCodec.build_array(role.fetch(:module_roles, []), marker: 1)
+      }
+    end
+
+    def demo_user_doc(user)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Security$DemoUserImpl",
+        "UserName" => user.fetch(:name),
+        "Password" => user.fetch(:password),
+        "Entity" => user.fetch(:entity),
+        "UserRoles" => IO::BsonCodec.build_array(user.fetch(:roles), marker: 1)
       }
     end
 

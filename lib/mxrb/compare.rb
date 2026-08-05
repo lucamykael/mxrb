@@ -72,6 +72,13 @@ module Mxrb
           admin_user_name: doc["AdminUserName"],
           admin_user_role: doc["AdminUserRole"],
           demo_users_enabled: doc["EnableDemoUsers"],
+          demo_users: IO::BsonCodec.parse_array(doc["DemoUsers"]).fetch(:items).map do |user|
+            {
+              name: user["UserName"], entity: user["Entity"],
+              roles: IO::BsonCodec.parse_array(user["UserRoles"]).fetch(:items).sort,
+              password_sha256: Digest::SHA256.hexdigest(user["Password"].to_s)
+            }
+          end.sort_by { _1[:name].to_s },
           guest_access_enabled: doc["EnableGuestAccess"],
           guest_user_role: doc["GuestUserRole"],
           sign_in_microflow: doc["SignInMicroflow"],

@@ -29,6 +29,28 @@ end in a microflow also create `ACT_RefreshOrder`. `page generate` and `page g`
 are aliases of `page new`. Every generated chain is materialized as a valid MPR
 and checked by compiler preflight.
 
+## Demo users
+
+After initializing security, scaffold each demo user as an independent Ruby
+file:
+
+```sh
+mxrb security init App
+mxrb demo-user new manager --entity System.User --role User
+mxrb demo-user operator --entity App.Account --role User --role Administrator
+```
+
+`new` is optional. `--entity` defaults to `System.User`, and `--role` is
+repeatable; without it, the `User` role is selected. The scaffold immediately
+validates that the entity and application roles exist, connects
+`app/security/demo_users` to the `security` block, and enables demo users in
+the MPR.
+
+The random password exists only in the ignored `.env`, created with mode
+`0600`. Generated Ruby uses `ENV.fetch`, while `.env.example` receives only an
+empty variable. Generate and validate the MPR normally after scaffolding. Demo
+users are intended for development and demonstrations, not production users.
+
 ## Page templates
 
 In Mendix, page templates are starting points whose structure becomes a normal,

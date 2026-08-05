@@ -6,6 +6,49 @@ require "base64"
 
 module Mxrb
   module Dsl
+    # Validates project-security references that cross DSL builders.
+    class SecurityValidator
+      def initialize(modules, security)
+        @modules = modules
+        @security = security
+      end
+
+      def validate!
+        return unless @security
+
+        errors = demo_users.flat_map { reference_errors(_1) }
+        duplicates = demo_users.group_by { _1.fetch(:name) }.select { |_name, users| users.size > 1 }
+        errors << "duplicate demo user name(s): #{duplicates.keys.join(', ')}" unless duplicates.empty?
+        return if errors.empty?
+
+        raise ValidationError, "security validation failed:\n- #{errors.join("\n- ")}"
+      end
+
+      private
+
+      def demo_users = Array(@security[:demo_users])
+
+      def reference_errors(user)
+        errors = []
+        missing_roles = user.fetch(:roles) - user_roles
+        errors << "demo user #{user[:name]} references missing user role(s): #{missing_roles.join(', ')}" unless
+          missing_roles.empty?
+        entity = user.fetch(:entity)
+        errors << "demo user #{user[:name]} references missing user entity #{entity}" unless
+          entity == "System.User" || entities.include?(entity)
+        errors
+      end
+
+      def user_roles = @security.fetch(:user_roles, []).map { _1.fetch(:name) }
+
+      def entities
+        @modules.flat_map do |mod|
+          definition = mod.to_h
+          definition.fetch(:entities, []).map { "#{definition.fetch(:name)}.#{_1.fetch(:name)}" }
+        end
+      end
+    end
+
     # Shared widget-building methods for PageBuilder and ContainerBuilder.
     # Includers must implement private `_widget_list` returning the target array.
     module WidgetDsl
@@ -361,7 +404,12 @@ module Mxrb
       end
 
       def validate!
+        validate_security!
         Architecture::Validator.new(graph).validate!
+      end
+
+      def validate_security!
+        SecurityValidator.new(@modules, @security).validate!
       end
 
       def definition
@@ -382,6 +430,8 @@ module Mxrb
     class SecurityBuilder
       def initialize
         @user_roles = []
+        @demo_users = []
+        @demo_users_declared = false
         @security_level = nil
         @admin_user_role = nil
         @demo_users_enabled = nil
@@ -414,6 +464,36 @@ module Mxrb
         @demo_users_enabled = enabled == true
       end
 
+      def demo_user(name, entity:, roles:, password:)
+        user_name = name.to_s
+        entity_name = entity.to_s
+        role_names = Array(roles).map(&:to_s).uniq
+        secret = password.to_s
+        raise ArgumentError, 'demo user name must not be empty' if user_name.empty?
+        raise ArgumentError, 'demo user name must not contain whitespace' unless user_name.match?(/\A[^\s]+\z/)
+        unless entity_name.match?(/\A[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*\z/)
+          raise ArgumentError, 'demo user entity must be qualified as Module.Entity'
+        end
+        raise ArgumentError, 'demo user requires at least one role' if role_names.empty?
+        raise ArgumentError, 'demo user password must not be empty' if secret.empty?
+
+        @demo_users << {
+          name: user_name, entity: entity_name, roles: role_names, password: secret
+        }
+        @demo_users_declared = true
+        @demo_users_enabled = true
+      end
+
+      def evaluate(path)
+        instance_eval(File.read(path), path, 1)
+      end
+
+      def evaluate_dir(dir)
+        return unless File.directory?(dir)
+
+        Dir[File.join(dir, '*.rb')].sort.each { |path| evaluate(path) }
+      end
+
       def guest_access(enabled = true, role: nil)
         @guest_access_enabled = enabled == true
         @guest_user_role = role&.to_s
@@ -430,6 +510,7 @@ module Mxrb
       def to_h
         {
           user_roles: @user_roles,
+          demo_users: @demo_users_declared ? @demo_users : nil,
           security_level: @security_level,
           admin_user_role: @admin_user_role,
           demo_users_enabled: @demo_users_enabled,

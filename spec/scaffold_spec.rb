@@ -85,6 +85,97 @@ RSpec.describe Mxrb::Scaffold::Generator do
     end
   end
 
+  it 'scaffolds a demo user with a local secret and validates model references' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      scaffold(root, :security, 'ScaffoldApp')
+      result = described_class.new(
+        :demo_user, 'manager', target: root,
+                               demo_entity: 'System.User', demo_roles: ['User']
+      ).scaffold
+      user_file = File.join(root, 'app', 'security', 'demo_users', 'manager.rb')
+      env_file = File.join(root, '.env')
+
+      expect(result.files).to include(user_file, env_file)
+      expect(File.read(user_file)).to include(
+        'demo_user "manager"', 'entity: "System.User"',
+        'roles: ["User"]', 'ENV.fetch("MXRB_DEMO_USER_MANAGER_PASSWORD")'
+      )
+      expect(File.read(user_file)).not_to include(File.read(env_file).split('=').last.strip)
+      expect(File.stat(env_file).mode & 0o777).to eq(0o600)
+      expect(File.read(File.join(root, '.env.example')))
+        .to include('MXRB_DEMO_USER_MANAGER_PASSWORD=')
+      expect(File.read(File.join(root, 'project.rb')))
+        .to include('evaluate_dir File.join(__dir__, "app", "security", "demo_users")')
+
+      Dir.chdir(root) { load File.join(root, 'project.rb') }
+      mpr = Mxrb::IO::MprFile.open(File.join(root, 'ScaffoldApp.mpr'), readonly: true)
+      security = mpr.all_units.map { mpr.parse_contents(_1) }
+                    .find { _1['$Type'] == 'Security$ProjectSecurity' }
+      users = Mxrb::IO::BsonCodec.parse_array(security['DemoUsers']).fetch(:items)
+      expect(users.map { _1['UserName'] }).to eq(['manager'])
+      mpr.close
+
+      expect do
+        described_class.new(
+          :demo_user, 'broken', target: root,
+                                demo_entity: 'Administration.Account', demo_roles: ['Manager']
+        ).scaffold
+      end.to raise_error(ArgumentError, /missing user role.*missing user entity/)
+
+      File.open(File.join(root, '.env.example'), 'a') do |file|
+        file.puts 'MXRB_DEMO_USER_OPERATOR_PASSWORD='
+      end
+      File.open(env_file, 'a') do |file|
+        file.puts 'MXRB_DEMO_USER_OPERATOR_PASSWORD=ExistingSecret7'
+      end
+      operator = described_class.new(:demo_user, 'operator', target: root).scaffold
+      expect(operator.files).to include(
+        File.join(root, 'app', 'security', 'demo_users', 'operator.rb')
+      )
+
+      expect do
+        described_class.new(
+          :demo_user, 'invalid', target: root,
+                                 demo_entity: 'SystemUser', demo_roles: ['User']
+        ).scaffold
+      end.to raise_error(ArgumentError, /qualified as Module.Entity/)
+    end
+  end
+
+  it 'repairs legacy dotenv loading and diagnoses incomplete demo-user projects' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      scaffold(root, :security, 'ScaffoldApp')
+      project = File.join(root, 'project.rb')
+      File.write(
+        project,
+        File.read(project).sub(%{Dotenv.load(File.join(__dir__, ".env"))\n}, '')
+      )
+      File.write(File.join(root, '.env'), "EXISTING=value\n")
+      described_class.new(:demo_user, 'legacy', target: root).scaffold
+      expect(File.read(project)).to include('Dotenv.load(File.join(__dir__, ".env"))')
+
+      incomplete = File.join(dir, 'incomplete')
+      FileUtils.mkdir_p(incomplete)
+      no_security = project_in(incomplete)
+      scaffold(no_security, :security, 'ScaffoldApp')
+      incomplete_project = File.join(no_security, 'project.rb')
+      File.write(incomplete_project, File.read(incomplete_project).sub('  security do', '  if false'))
+      expect do
+        described_class.new(:demo_user, 'missing', target: no_security).scaffold
+      end.to raise_error(ArgumentError, /security is not initialized/)
+
+      source = File.read(project)
+      source = source.sub(%r{^require ["']dotenv/load["']\n}, '')
+                     .sub(%{Dotenv.load(File.join(__dir__, ".env"))\n}, '')
+      File.write(project, source)
+      expect do
+        described_class.new(:demo_user, 'dotenv', target: root).scaffold
+      end.to raise_error(ArgumentError, %r{must require dotenv/load})
+    end
+  end
+
   it 'scaffolds an executable page to nanoflow to microflow chain' do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
@@ -573,6 +664,33 @@ RSpec.describe Mxrb::Scaffold::CLI do
     end
   end
 
+  it 'accepts demo-user with or without the new action and repeatable roles' do
+    Dir.mktmpdir do |dir|
+      root = Mxrb::Initializer.new('cli_app').scaffold(into: dir).root
+      Mxrb::Scaffold::Generator.new(:security, 'CliApp', target: root).scaffold
+      output = StringIO.new
+      described_class.new(
+        'demo-user', ['manager', '--entity', 'System.User', '--role', 'User',
+                      '--target', root], output:
+      ).run
+      expect(output.string).to include('manager.rb', '.env')
+
+      preview = StringIO.new
+      described_class.new(
+        'demo-user', ['new', 'operator', '--role', 'User', '--target', root, '--dry-run'],
+        output: preview
+      ).run
+      expect(preview.string).to include('would create', 'operator.rb')
+
+      expect do
+        described_class.new('demo-user', [], output: StringIO.new).run
+      end.to raise_error(SystemExit, /Usage: mxrb demo-user/)
+      expect do
+        described_class.new('demo-user', ['broken', '--role'], output: StringIO.new).run
+      end.to raise_error(SystemExit, /--role requires a value/)
+    end
+  end
+
   it 'accepts new, generate, and g plus every chain for the page scaffold' do
     Dir.mktmpdir do |dir|
       root = Mxrb::Initializer.new('cli_app').scaffold(into: dir).root
@@ -630,6 +748,17 @@ RSpec.describe Mxrb::Scaffold::CLI do
       expect(stdout).to include('act_refresh_order.rb', 'order.rb')
       page = File.join(root, 'modules/CliApp/presentation/pages/order.rb')
       expect(File.read(page)).to include('on_click microflow: "CliApp.ACT_RefreshOrder"')
+    end
+  end
+
+  it 'reports the public CLI version with both standard flags' do
+    executable = [RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__)]
+    %w[--version -v].each do |flag|
+      stdout, stderr, status = Open3.capture3(*executable, flag)
+
+      expect(status).to be_success
+      expect(stderr).to be_empty
+      expect(stdout).to eq("mxrb #{Mxrb::VERSION}\n")
     end
   end
 

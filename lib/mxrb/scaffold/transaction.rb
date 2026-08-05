@@ -21,11 +21,11 @@ module Mxrb
         nil
       end
 
-      def create(path, content)
+      def create(path, content, mode: 0o644)
         abort "#{path}: file already exists" if File.exist?(path) || @changes.key?(path)
 
         @created << path
-        @changes[path] = Change.new(path, content, nil, 0o644)
+        @changes[path] = Change.new(path, content, nil, mode)
       end
 
       def write(path, new_content)
