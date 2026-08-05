@@ -110,13 +110,14 @@ module Mxrb
         end
       end
 
-      def primitive(type, value) # rubocop:disable Metrics/CyclomaticComplexity
+      def primitive(type, value) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
         compiled = case type
                    when 'Boolean' then value['PrimitiveValue'] == 'true'
                    when 'Integer' then value['PrimitiveValue'].to_i
                    when 'Enumeration' then value['PrimitiveValue'].to_s
                    when 'TextTemplate' then raw(expression(translated_text(value['TextTemplate'])))
                    when 'Widgets' then [] if array(value['Widgets']).empty?
+                   when 'Object' then [] if array(value['Objects']).empty?
                    end
         compiled.nil? ? :undefined : compiled
       end

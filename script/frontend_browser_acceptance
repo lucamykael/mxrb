@@ -530,7 +530,8 @@ module MxrbFrontendBrowserAcceptance
       Array(page['styles']).each { @browser.wait_for_style(_1) }
       snapshot = @browser.snapshot
       failure_markers = ['Could not render widget',
-                         'An error occurred, please contact your system administrator.']
+                         'An error occurred, please contact your system administrator.',
+                         'Executing runtime operation failed for security reasons']
       render_errors = Array(snapshot['elements']).filter_map do |element|
         text = element['text'].to_s
         text if failure_markers.any? { text.include?(_1) }
