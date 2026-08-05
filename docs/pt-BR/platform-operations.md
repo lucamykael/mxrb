@@ -29,6 +29,11 @@ script/frontend_acceptance App.mpr --mxbuild /caminho/mxbuild -o frontend.json
 script/frontend_acceptance App.mpr --mx /caminho/mx -o frontend-diagnostics.json
 script/frontend_lifecycle_acceptance --version 11.12.1 --mx /caminho/mx \
   --mxbuild /caminho/mxbuild --strict-warnings -o frontend-lifecycle.json
+script/frontend_browser_acceptance --scenario examples/frontend-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /caminho/credentials.json \
+  --baseline examples/frontend-browser-baseline-11.12.1.json
+script/frontend_browser_acceptance --scenario examples/page-chain-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /caminho/credentials.json
 ```
 
 `mxrb frontend migrate` é uma prévia imutável e fail-closed por padrão. Para
@@ -66,6 +71,19 @@ formulário, microflow, nanoflow e asset, gera novamente, exporta uma segunda ve
 e exige reconstrução estruturalmente idêntica. Na matriz oficial 10.24.0.73019
 e 11.12.1, origem e reconstrução concluíram com zero erros, warnings,
 depreciações e recomendações no `mx check`, além de zero erros no MxBuild.
+
+`script/frontend_browser_acceptance` controla Chromium por CDP local, autentica
+sem colocar senha na linha de comando, percorre páginas e compara snapshots
+determinísticos de estrutura, geometria, estilos e estado ARIA. Exceções do
+navegador, widgets quebrados e o diálogo genérico de erro do Runtime reprovam o
+gate. `--update-baseline` é explícito; execuções normais apenas comparam. O gate
+faz logout pela API `mx.logout()` e pode ser repetido sob licença trial.
+
+O cenário `page-chain-browser-scenario.json` usa uma app `PageChainQa` com
+`DirectOrder`, `ClientOrder` e `HybridOrder`, criadas pelos três valores de
+`page --chain`. Ele aciona `Refresh` em cada página e exige também CSS
+computado — margem do documento, gradiente do cabeçalho e fundo dos cards —,
+portanto HTML funcional sem tema reprova o gate.
 
 `--mx` executa o checker oficial somente leitura com warnings, depreciações e
 recomendações de boas práticas. O gate valida o bitmask de saída e compara as

@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
 
-Last updated: 2026-07-29.
+Last updated: 2026-08-05.
 
 The matrix exercises this pipeline using only MXRB:
 
@@ -202,9 +202,9 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 510 examples and passes with 100.00% line coverage
-(7,062/7,062 executable library lines) and 100.00% branch coverage
-(2,626/2,626 branches).
+The current suite contains 1,039 examples and passes with 100.00% line coverage
+(17,224/17,224 executable library lines) and 100.00% branch coverage
+(6,811/6,811 branches).
 Run the enforced gate with:
 
 ```sh
@@ -235,8 +235,15 @@ MPR was copied before instrumentation and remained unchanged.
 Ruby assertions now verify return expressions and persisted XPath counts. The
 Docker run confirmed Game counts 1/2/3 and Cell counts 81/162/243 after the
 three cases. JUnit XML remains an optional Ruby-written CI report, not a Java
-test dependency. End-to-end browser behavior remains outside this runtime
-suite.
+test dependency.
+
+The 11.12.1 gate now also includes an authenticated Chromium scenario: login,
+Home/Orders navigation, deterministic DOM/layout/style/ARIA snapshots,
+screenshots, explicit SHA-256 baseline comparison, widget/Runtime error
+detection, and real logout. The three supported `page --chain` paths are each
+materialized as a valid MPR and checked by compiler preflight. Dashboard and
+vertical-form `page --template` outputs were also exercised in Runtime with
+audited computed CSS.
 
 ## Reproducibility and performance
 

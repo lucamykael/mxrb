@@ -15,17 +15,37 @@ module Mxrb
 
       def run
         return show_help if help?
+        return render_page_templates if page_templates?
 
         validate_action!
         @dry_run = @argv.delete('--dry-run') ? true : false
         @json = @argv.delete('--json') ? true : false
-        result = Generator.new(kind, scaffold_name, target: target, dry_run: @dry_run).scaffold
+        result = generator.scaffold
         render(result)
       rescue ArgumentError => e
         abort "[mxrb] error: #{e.message}"
       end
 
       private
+
+      def generator
+        chain = extract_option('--chain') if @command == 'page'
+        template = extract_option('--template') if @command == 'page'
+        Generator.new(
+          kind, scaffold_name, target: target, dry_run: @dry_run,
+                               page_chain: chain, page_template: template
+        )
+      end
+
+      def page_templates? = @command == 'page' && @argv.first == 'templates'
+
+      def render_page_templates
+        @argv.shift
+        json = @argv.delete('--json')
+        abort "Unknown arguments: #{@argv.join(' ')}" unless @argv.empty?
+
+        @output.puts(json ? JSON.pretty_generate(PageTemplates.payload) : PageTemplates.tree)
+      end
 
       def help?
         @argv.first == '--help' || @argv.delete('--help')
@@ -37,7 +57,13 @@ module Mxrb
 
       def validate_action!
         action = @argv.shift
-        abort Help.text(@command) unless action == expected_action
+        abort Help.text(@command) unless accepted_actions.include?(action)
+      end
+
+      def accepted_actions
+        return %w[new generate g] if @command == 'page'
+
+        [expected_action]
       end
 
       def expected_action

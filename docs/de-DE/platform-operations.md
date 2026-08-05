@@ -27,6 +27,11 @@ script/frontend_acceptance App.mpr --mxbuild /pfad/mxbuild -o frontend.json
 script/frontend_acceptance App.mpr --mx /pfad/mx -o frontend-diagnostics.json
 script/frontend_lifecycle_acceptance --version 11.12.1 --mx /pfad/mx \
   --mxbuild /pfad/mxbuild --strict-warnings -o frontend-lifecycle.json
+script/frontend_browser_acceptance --scenario examples/frontend-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /pfad/credentials.json \
+  --baseline examples/frontend-browser-baseline-11.12.1.json
+script/frontend_browser_acceptance --scenario examples/page-chain-browser-scenario.json \
+  --url http://127.0.0.1:18080 --password-file /pfad/credentials.json
 ```
 
 `mxrb frontend migrate` ist standardmäßig eine unveränderliche, fail-closed
@@ -65,6 +70,20 @@ exportiert ein zweites Mal und verlangt einen strukturell identischen Rebuild.
 In der offiziellen Matrix 10.24.0.73019 und 11.12.1 endeten Quelle und Rebuild
 mit null Fehlern, Warnungen, Deprecations oder Empfehlungen in `mx check` sowie
 null MxBuild-Fehlern.
+
+`script/frontend_browser_acceptance` steuert Chromium über lokales CDP,
+authentifiziert ohne Passwort in der Kommandozeile und vergleicht
+deterministische Snapshots von Struktur, Geometrie, Styles und ARIA-Zustand.
+Browser-Ausnahmen, defekte Widgets und der generische Runtime-Fehlerdialog
+lassen das Gate fehlschlagen. Nur `--update-baseline` ersetzt die Baseline;
+normale Läufe vergleichen schreibgeschützt. `mx.logout()` hält das Gate auch
+unter einer Trial-Lizenz wiederholbar.
+
+`page-chain-browser-scenario.json` verwendet eine `PageChainQa`-App mit
+`DirectOrder`, `ClientOrder` und `HybridOrder`, erzeugt durch die drei Werte von
+`page --chain`. Das Szenario klickt auf jeder Seite `Refresh` und verlangt auch
+berechnetes CSS — Dokumentrand, Header-Gradient und Card-Hintergrund —, sodass
+funktionales HTML ohne Theme das Gate nicht besteht.
 
 `--mx` führt den offiziellen schreibgeschützten Checker mit Warnungen,
 Deprecations und Best-Practice-Empfehlungen aus. Das Gate validiert die

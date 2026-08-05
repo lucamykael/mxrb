@@ -15,7 +15,11 @@ module Mxrb
         'functional-test' => ['new Module.Flow', 'Create a runtime test', 'functional_tests'],
         'evaluation' => ['new Name', 'Create static model checks', 'evaluations'],
         'presentation' => ['init Module', 'Initialize presentation directories', 'presentation'],
-        'page' => ['new Module.Page', 'Create a page', 'presentation/pages'],
+        'page' => [
+          'new|generate|g Module.Page [--template NAME] [--chain CHAIN] | templates [--json]',
+          'Create a page or an executable page-led vertical slice',
+          'presentation or domain/application/presentation/navigation'
+        ],
         'nanoflow' => ['new Module.Flow', 'Create a client nanoflow', 'presentation/client_actions'],
         'repository' => ['new Module.Repository', 'Create repository port and adapter', 'application/infrastructure'],
         'security' => ['init Module', 'Create module roles template', 'security'],
@@ -38,6 +42,18 @@ module Mxrb
         Documentation:
           https://github.com/lucamykael/mxrb/blob/main/docs/pt-BR/scaffolds.md
       HELP
+      PAGE_OPTIONS = <<~HELP
+        Page chains:
+          --chain page:microflow           Page calls a microflow directly
+          --chain page:nanoflow             Page calls a client nanoflow
+          --chain page:nanoflow:microflow   Page calls a nanoflow that calls a microflow
+
+        Without --chain, creates the minimal page scaffold.
+
+        Page templates:
+          mxrb page templates [--json]
+          --template starter|blank|dashboard|form-vertical
+      HELP
 
       def text(command)
         usage, description, destination = COMMANDS.fetch(command)
@@ -48,8 +64,16 @@ module Mxrb
           Destination: #{destination}
           Existing files are never overwritten. Aggregators are connected automatically.
 
+          #{page_options(command)}
+
           #{OPTIONS}
         HELP
+      end
+
+      def page_options(command)
+        return '' unless command == 'page'
+
+        PAGE_OPTIONS
       end
     end
   end

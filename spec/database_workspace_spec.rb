@@ -131,6 +131,10 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       expect(commands.flatten).to include(
         a_string_starting_with('POSTGRES_PASSWORD='),
         'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL',
+        a_string_matching(
+          %r{\ARUNTIME_PARAMS_DATABASEJDBCURL=jdbc:postgresql://mxrb-[0-9a-f]{12}-postgres:5432/mxrb\z}
+        ),
+        'RUNTIME_PARAMS_DATABASEUSESSL=false',
         a_string_including(
           "pg_advisory_xact_lock(hashtext('mxrb.configure_reader'))",
           'GRANT pg_read_all_stats TO mxrb_reader'

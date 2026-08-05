@@ -2,7 +2,7 @@
 
 **Português** · [English](../en-US/validation-matrix.md) · [Deutsch](../de-DE/validation-matrix.md)
 
-Última atualização: 29 de julho de 2026.
+Última atualização: 5 de agosto de 2026.
 
 O pipeline validado é:
 
@@ -63,15 +63,22 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 510 exemplos, zero falhas;
-- 100% das linhas: 7.062/7.062;
-- 100% dos branches: 2.626/2.626;
+- 1.039 exemplos, zero falhas;
+- 100% das linhas: 17.224/17.224;
+- 100% dos branches: 6.811/6.811;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.
 
 Asserções Ruby verificam retorno e contagens XPath persistidas: Games 1/2/3 e
 Cells 81/162/243. JUnit XML é apenas relatório opcional gerado em Ruby.
+
+O gate 11.12.1 agora inclui navegador Chromium autenticado: login, navegação
+Home/Orders, captura determinística de DOM/layout/estilo/ARIA, screenshots,
+comparação SHA-256 com baseline explícito, detecção de erros de widget/Runtime
+e logout real. Os scaffolds `page --chain` também materializam e passam
+preflight nos três caminhos suportados; `page --template` foi exercitado em
+Runtime para dashboard e formulário vertical com CSS computado auditado.
 
 `script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 14,760 s.
 `script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing

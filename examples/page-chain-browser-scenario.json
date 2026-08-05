@@ -1,0 +1,61 @@
+{
+  "name": "generated-page-chains",
+  "viewport": { "width": 1440, "height": 900 },
+  "pages": [
+    {
+      "name": "home-menu-direct",
+      "path": "/",
+      "click_text": "Menu",
+      "text": ["Direct Order", "Client Order", "Hybrid Order"],
+      "styles": [
+        { "selector": "body", "property": "margin-top", "equals": "0px" },
+        { "selector": ".mxrb-page-header", "property": "background-image", "not": "none" }
+      ]
+    },
+    {
+      "name": "direct-order",
+      "click_text": "Direct Order",
+      "text": ["Direct Order", "Reference", "Total", "Active", "Refresh"],
+      "styles": [
+        { "selector": ".mxrb-card", "property": "background-color", "equals": "rgb(255, 255, 255)" }
+      ]
+    },
+    {
+      "name": "direct-order-refreshed",
+      "click_text": "Refresh",
+      "text": ["Direct Order", "Reference", "Total", "Active"]
+    },
+    {
+      "name": "home-menu-client",
+      "path": "/",
+      "click_text": "Menu",
+      "text": ["Direct Order", "Client Order", "Hybrid Order"]
+    },
+    {
+      "name": "client-order",
+      "click_text": "Client Order",
+      "text": ["Client Order", "Reference", "Total", "Active", "Refresh"]
+    },
+    {
+      "name": "client-order-refreshed",
+      "click_text": "Refresh",
+      "text": ["Client Order refreshed"]
+    },
+    {
+      "name": "home-menu-hybrid",
+      "path": "/",
+      "click_text": "Menu",
+      "text": ["Direct Order", "Client Order", "Hybrid Order"]
+    },
+    {
+      "name": "hybrid-order",
+      "click_text": "Hybrid Order",
+      "text": ["Hybrid Order", "Reference", "Total", "Active", "Refresh"]
+    },
+    {
+      "name": "hybrid-order-refreshed",
+      "click_text": "Refresh",
+      "text": ["Hybrid Order refreshed"]
+    }
+  ]
+}

@@ -32,10 +32,48 @@ module Mxrb
 
       def scaffold_page
         module_name, artifact_name = qualified_name
+        chain = page_chain
+        template = selected_page_template
+        return scaffold_basic_page(module_name, artifact_name) unless chain || template
+
+        scaffold_templated_page(module_name, artifact_name, template || 'form-vertical', chain)
+      end
+
+      def scaffold_templated_page(module_name, artifact_name, template, chain)
         ensure_presentation(module_name)
-        create_connected_module_file(
-          module_name, %w[presentation pages], artifact_name, :page
-        )
+        page_support_specs(artifact_name, chain, template).each do |directories, name, source|
+          create_connected_module_file(module_name, directories, name, source)
+        end
+        create_page_template(module_name, artifact_name, template:, chain:)
+        create_page_navigation(module_name, artifact_name)
+      end
+
+      def scaffold_basic_page(module_name, artifact_name)
+        ensure_presentation(module_name)
+        create_connected_module_file(module_name, %w[presentation pages], artifact_name, :page)
+      end
+
+      def page_support_specs(name, chain, template)
+        specs = PageTemplates.fetch(template).data_backed ? page_chain_base_specs(name) : []
+        specs << page_chain_microflow_spec(name) if chain&.end_with?('microflow')
+        specs << page_chain_nanoflow_spec(name, chain) if chain&.include?('nanoflow')
+        specs
+      end
+
+      def page_chain_base_specs(name)
+        [
+          [%w[domain entities], name, :page_chain_entity],
+          [%w[application use_cases], "ACT_Load#{name}", :page_chain_loader]
+        ]
+      end
+
+      def page_chain_microflow_spec(name)
+        [%w[application use_cases], "ACT_Refresh#{name}", :page_chain_action]
+      end
+
+      def page_chain_nanoflow_spec(name, chain)
+        template = chain.end_with?('microflow') ? :page_chain_client_server : :page_chain_nanoflow
+        [%w[presentation client_actions], "NAN_Refresh#{name}", template]
       end
 
       def scaffold_nanoflow
@@ -114,9 +152,7 @@ module Mxrb
         abort 'Usage: mxrb design init' unless @name.empty?
 
         design_assets.each do |parts, template|
-          @transaction.create(
-            project_path(*parts), Templates.render(template, module_name: nil, name: nil)
-          )
+          ensure_file(project_path(*parts), Templates.render(template, module_name: nil, name: nil))
         end
         connect_project_file('app', 'design_system', 'design_system.rb')
       end
@@ -127,7 +163,8 @@ module Mxrb
           %w[theme web custom-variables.scss] => :theme_custom_variables,
           %w[theme web main.scss] => :theme_main,
           %w[theme web exclusion-variables.scss] => :theme_exclusion_variables,
-          %w[theme web settings.json] => :theme_settings
+          %w[theme web settings.json] => :theme_settings,
+          %w[theme-cache web theme.compiled.css] => :theme_compiled
         }
       end
 

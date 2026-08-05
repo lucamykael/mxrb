@@ -357,9 +357,12 @@ module Mxrb
       end
 
       def data_source_constants(page_name, widget, microflow_name)
+        entity = microflow_return_entity('MicroflowSettings' => { 'Microflow' => microflow_name })
         {
           'MicroflowName' => microflow_name, 'PageName' => page_name,
-          'WidgetName' => "#{page_name}.#{widget['Name']}"
+          'WidgetName' => "#{page_name}.#{widget['Name']}",
+          'UsedAssociations' => entity ? used_associations(widget, entity) : [],
+          'UsedAttributes' => entity ? used_attributes(widget, entity) : []
         }
       end
 

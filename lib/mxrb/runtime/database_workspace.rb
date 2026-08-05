@@ -560,6 +560,7 @@ module Mxrb
           '-e', "RUNTIME_ADMINUSER_PASSWORD=#{secret.fetch('admin_password')}",
           '-e', 'RUNTIME_PARAMS_DATABASETYPE=POSTGRESQL',
           '-e', "RUNTIME_PARAMS_DATABASEHOST=#{database_container}:5432",
+          '-e', "RUNTIME_PARAMS_DATABASEJDBCURL=jdbc:postgresql://#{database_container}:5432/#{DATABASE}",
           '-e', "RUNTIME_PARAMS_DATABASENAME=#{DATABASE}",
           '-e', "RUNTIME_PARAMS_DATABASEUSERNAME=#{OWNER}",
           '-e', "RUNTIME_PARAMS_DATABASEPASSWORD=#{secret.fetch('owner_password')}",

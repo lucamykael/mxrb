@@ -1,0 +1,50 @@
+{
+  "name": "frontend-cli-lifecycle",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "home",
+      "path": "/",
+      "click_text": "Menu",
+      "text": [
+        "Frontend lifecycle verified",
+        "Orders"
+      ],
+      "styles": [
+        {
+          "selector": "body",
+          "property": "margin-top",
+          "equals": "0px"
+        },
+        {
+          "selector": ".mxrb-page-header",
+          "property": "background-image",
+          "not": "none"
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "click_text": "Orders",
+      "text": [
+        "Orders created from exported Ruby",
+        "Reference",
+        "Total",
+        "Active",
+        "Save order",
+        "Cancel",
+        "Refresh orders"
+      ],
+      "styles": [
+        {
+          "selector": ".mxrb-card",
+          "property": "background-color",
+          "equals": "rgb(255, 255, 255)"
+        }
+      ]
+    }
+  ]
+}
