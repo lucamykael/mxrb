@@ -31,19 +31,32 @@ module Mxrb
     def initialize(path, definition)
       @path = File.expand_path(path)
       @definition = definition
+      @progress = Progress::NullTask.instance
     end
 
     def write!
-      create_project! unless File.exist?(@path)
-      mpr = IO::MprFile.open(@path)
-      mpr.transaction do
-        apply(mpr)
-        mpr.write_architecture_definition(@definition)
+      mpr = nil
+      native_units = prepared_native_units
+      asset_manifest = project_asset_manifest
+      total = 4 + native_units.count { _1["containment"] != "Modules" } +
+              @definition.fetch(:modules).size + Array(asset_manifest&.fetch("files", [])).size
+      Progress.with("Generating #{File.basename(@path)}", total:) do |progress|
+        @progress = progress
+        create_project! unless File.exist?(@path)
+        progress.advance(detail: "project container")
+        mpr = IO::MprFile.open(@path)
+        mpr.transaction do
+          apply(mpr, native_units)
+          mpr.write_architecture_definition(@definition)
+        end
+        progress.advance(detail: "model transaction")
+        materialize_project_assets(asset_manifest)
+        materialize_design_system
+        progress.advance(detail: "design system")
       end
-      materialize_project_assets
-      materialize_design_system
       self
     ensure
+      @progress = Progress::NullTask.instance
       mpr&.close
     end
 
@@ -56,11 +69,17 @@ module Mxrb
       Model::DesignMaterializer.new(File.dirname(@path), design_system).materialize!
     end
 
-    def materialize_project_assets
+    def project_asset_manifest
       assets = @definition[:project_assets]
       return unless assets
 
-      manifest = JSON.parse(File.read(assets.fetch(:manifest)))
+      JSON.parse(File.read(assets.fetch(:manifest)))
+    end
+
+    def materialize_project_assets(manifest)
+      assets = @definition[:project_assets]
+      return unless assets && manifest
+
       source_root = File.realpath(assets.fetch(:root))
       target_root = File.dirname(@path)
       manifest.fetch("files").each do |entry|
@@ -79,6 +98,7 @@ module Mxrb
         FileUtils.mv(temporary, target)
       ensure
         FileUtils.rm_f(temporary) if temporary
+        @progress.advance(detail: "asset #{relative}") if defined?(relative) && relative
       end
     end
 
@@ -161,7 +181,7 @@ module Mxrb
       JSON.parse(File.read(path))["format_version"]
     end
 
-    def apply(mpr)
+    def apply(mpr, native_units)
       root = mpr.root_unit
       root_id = root.fetch("UnitID")
       root_doc = mpr.parse_contents(root)
@@ -171,10 +191,6 @@ module Mxrb
         "IsSystemProject" => false
       }
       mpr.update_unit(root_id, root_doc)
-      native_units = load_native_units(@definition[:native_units_path])
-      native_units = apply_native_unit_overrides(
-        native_units, @definition.fetch(:native_unit_overrides, [])
-      )
       apply_native_project_units(mpr, root_id, native_units)
       apply_default_project_units(mpr, root_id)
       ensure_project_documents(mpr, root_id)
@@ -194,9 +210,18 @@ module Mxrb
         write_module_security(mpr, module_id, mod) if mod.key?(:module_roles)
         write_domain_model(mpr, module_id, mod)
         write_documents(mpr, module_id, mod)
+        @progress.advance(detail: "module #{mod.fetch(:name)}")
       end
       write_project_security(mpr, root_id, @definition[:security]) if @definition[:security]
       write_project_navigation(mpr, root_id, @definition[:navigation]) if @definition[:navigation]
+      @progress.advance(detail: "project security and navigation")
+    end
+
+    def prepared_native_units
+      apply_native_unit_overrides(
+        load_native_units(@definition[:native_units_path]),
+        @definition.fetch(:native_unit_overrides, [])
+      )
     end
 
     def load_native_units(path)
@@ -323,8 +348,20 @@ module Mxrb
       mod.fetch(:native_documents, []).each do |document|
         doc = document.fetch(:doc)
         doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout?
+        existing = mpr.unit(document[:unit_id]) if document[:unit_id]
+        if existing
+          current = mpr.parse_contents(existing)
+          preserved = current.merge(doc).merge(
+            '$ID' => current['$ID'] || existing.fetch('UnitID'), '$Type' => doc.fetch('$Type')
+          )
+          mpr.update_unit(existing.fetch('UnitID'), preserved)
+          next
+        end
+
+        requested_container = document[:container_id]
+        target_container = requested_container && mpr.unit(requested_container) ? requested_container : module_id
         upsert_native_unit(
-          mpr, module_id,
+          mpr, target_container,
           'containment' => document.fetch(:containment), 'doc' => doc
         )
       end
@@ -365,7 +402,10 @@ module Mxrb
 
     def apply_native_unit_tree(mpr, target_root_id, units)
       if units.any? { _1["unit_id"].to_s.empty? || _1["container_id"].to_s.empty? }
-        units.each { upsert_native_unit(mpr, target_root_id, _1) }
+        units.each do |unit|
+          upsert_native_unit(mpr, target_root_id, unit)
+          @progress.advance(detail: "native unit #{unit['name']}")
+        end
         return
       end
 
@@ -382,6 +422,7 @@ module Mxrb
           target_container = mapped_containers.fetch(unit.fetch("container_id"))
           actual_id = upsert_native_unit(mpr, target_container, unit)
           mapped_containers[unit.fetch("unit_id")] = actual_id
+          @progress.advance(detail: "native unit #{unit['name']}")
         end
         pending = blocked
       end
@@ -1360,7 +1401,7 @@ module Mxrb
         previous&.dig(rules_key) || IO::BsonCodec.build_array([])
       end
       doc = (previous || {}).merge(
-        "$ID" => id, "$Type" => "DomainModels$EntityImpl",
+        "$ID" => id, "$Type" => previous&.fetch("$Type", nil) || "DomainModels$EntityImpl",
         "Name" => entity.fetch(:name), "Documentation" => entity.fetch(:documentation, ""),
         "GUID" => previous&.dig("GUID") || SecureRandom.uuid,
         "Location" => previous&.dig("Location") || "#{(index % 4) * 220};#{(index / 4) * 160}",
@@ -1368,6 +1409,7 @@ module Mxrb
         "IsRemote" => previous&.fetch("IsRemote", false) || false,
         "RemoteSource" => previous&.fetch("RemoteSource", "") || ""
       )
+      apply_oql_view!(doc, entity.fetch(:oql_view, nil), previous)
       doc[attrs_key] = IO::BsonCodec.build_array(attrs)
       doc[rules_key] = access_rules
       doc[validation_key] = validation_rules_doc(
@@ -1395,6 +1437,25 @@ module Mxrb
         doc[generalization_key] ||= no_generalization(entity.fetch(:persistable, true))
       end
       doc
+    end
+
+    def apply_oql_view!(doc, view, previous)
+      return unless view
+
+      if view[:source]
+        source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
+        current_source = previous&.dig(source_key)
+        source = (current_source.is_a?(Hash) ? current_source : {}).merge(
+          '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
+          '$Type' => 'DomainModels$OqlViewEntitySource',
+          'SourceDocument' => view.fetch(:source)
+        )
+        doc[source_key] = source
+      end
+      return unless view[:query]
+
+      query_key = native_existing_key(previous, 'oqlQuery', 'OqlQuery', 'OQLQuery') || 'OqlQuery'
+      doc[query_key] = view.fetch(:query)
     end
 
     def attribute_doc(attr, previous)

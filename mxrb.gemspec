@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name        = "mxrb"
-  s.version     = "0.1.2"
+  s.version     = "0.1.3"
   s.summary     = "Pure-Ruby read/write engine for Mendix .mpr projects — no mxcli required"
   s.description = "mxrb reads and writes Mendix .mpr files (SQLite3) directly, providing a Ruby DSL to define entities, pages, microflows and modules without any dependency on the official mxcli tooling."
   s.authors     = ["Lucas Moura"]

@@ -309,17 +309,22 @@ module Mxrb
         @mendix_home = mendix_home && File.expand_path(mendix_home)
       end
 
-      def pack(output:, force: false)
-        output_path = File.expand_path(output)
-        validate_output!(output_path, force:)
-        version = Mxrb.open(@mpr_path, &:mendix_version)
-        adapter = Adapter.for(version)
-        metadata = adapter.validate_deployment!(@deployment)
-        adapter.validate_freshness!(@mpr_path, @deployment)
-        runtime = runtime_root(version)
-        validate_runtime!(runtime)
-        PortableArchiveWriter.new(@deployment, runtime, metadata).write(output_path)
-        result(output_path, version, metadata)
+      def pack(output:, force: false) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        Progress.with("Packing portable Runtime for #{File.basename(@mpr_path)}") do |progress|
+          output_path = File.expand_path(output)
+          validate_output!(output_path, force:)
+          progress.update(detail: 'validating deployment')
+          version = Mxrb.open(@mpr_path, &:mendix_version)
+          adapter = Adapter.for(version)
+          metadata = adapter.validate_deployment!(@deployment)
+          adapter.validate_freshness!(@mpr_path, @deployment)
+          runtime = runtime_root(version)
+          validate_runtime!(runtime)
+          progress.update(detail: 'writing Runtime archive')
+          PortableArchiveWriter.new(@deployment, runtime, metadata).write(output_path)
+          progress.update(detail: 'calculating checksum')
+          result(output_path, version, metadata)
+        end
       end
 
       private

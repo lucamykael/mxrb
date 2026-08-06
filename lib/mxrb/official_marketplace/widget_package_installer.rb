@@ -200,17 +200,21 @@ module Mxrb
       end
 
       def install(archive, package)
-        validate_target!
-        inventory = WidgetPackageInventory.read(archive)
-        validate_identity!(inventory, package)
-        digest = Digest::SHA256.file(archive).hexdigest
-        destination = safe_path(File.join('widgets', inventory.project_filename))
-        cache = safe_path(cache_relative(inventory, package))
-        lock_path = safe_path(File.join('.mxrb', 'marketplace.lock.json'))
-        current = validate_boundaries!(package, destination, cache, lock_path)
-        install_transaction(
-          archive, package, inventory, digest, destination, cache, lock_path, current
-        )
+        Progress.with("Installing widget #{package.name}") do |progress|
+          validate_target!
+          progress.update(detail: 'reading widget package')
+          inventory = WidgetPackageInventory.read(archive)
+          validate_identity!(inventory, package)
+          digest = Digest::SHA256.file(archive).hexdigest
+          destination = safe_path(File.join('widgets', inventory.project_filename))
+          cache = safe_path(cache_relative(inventory, package))
+          lock_path = safe_path(File.join('.mxrb', 'marketplace.lock.json'))
+          current = validate_boundaries!(package, destination, cache, lock_path)
+          progress.update(detail: 'installing project assets')
+          install_transaction(
+            archive, package, inventory, digest, destination, cache, lock_path, current
+          )
+        end
       end
 
       private

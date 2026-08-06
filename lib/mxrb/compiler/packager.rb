@@ -19,16 +19,24 @@ module Mxrb
         @deployment = File.expand_path(deployment || File.join(@project_root, 'deployment'))
       end
 
-      def pack(output:, force: false)
-        output_path = File.expand_path(output)
-        validate_input!(output_path, force:)
-        version = Mxrb.open(@mpr_path, &:mendix_version)
-        adapter = Adapter.for(version)
-        metadata = adapter.validate_deployment!(@deployment)
-        adapter.validate_freshness!(@mpr_path, @deployment)
-        files, directories = inventory
-        write_atomically(output_path, files, directories)
-        package_result(output_path, version, metadata)
+      def pack(output:, force: false) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        Progress.with("Packing #{File.basename(@mpr_path)}") do |progress|
+          output_path = File.expand_path(output)
+          validate_input!(output_path, force:)
+          version = Mxrb.open(@mpr_path, &:mendix_version)
+          adapter = Adapter.for(version)
+          metadata = adapter.validate_deployment!(@deployment)
+          adapter.validate_freshness!(@mpr_path, @deployment)
+          files, directories = inventory
+          progress.update(
+            current: 3, total: files.size + directories.size + 4,
+            detail: "#{files.size} files"
+          )
+          write_atomically(output_path, files, directories, progress)
+          package_result(output_path, version, metadata).tap do
+            progress.advance(detail: 'package checksum')
+          end
+        end
       end
 
       private
@@ -69,13 +77,19 @@ module Mxrb
         path.delete_prefix("#{@deployment}/").tr('\\', '/')
       end
 
-      def write_atomically(output, files, directories)
+      def write_atomically(output, files, directories, progress) # rubocop:disable Metrics/MethodLength
         FileUtils.mkdir_p(File.dirname(output))
         Dir.mktmpdir('mxrb-mda-', File.dirname(output)) do |tmpdir|
           temporary = File.join(tmpdir, 'package.mda')
           Zip::File.open(temporary, create: true) do |archive|
-            directories.each { add_directory(archive, _1) }
-            files.each { add_file(archive, _1) }
+            directories.each do |directory|
+              add_directory(archive, directory)
+              progress.advance(detail: relative(directory))
+            end
+            files.each do |file|
+              add_file(archive, file)
+              progress.advance(detail: relative(file))
+            end
           end
           FileUtils.mv(temporary, output, force: true)
         end

@@ -122,6 +122,7 @@ module Mxrb
       def install(staged_files, protected_files = [])
         staged_files.each do |relative, source|
           install_file(relative, source) unless protected_files.include?(relative)
+          yield(relative) if block_given?
         end
       end
 
@@ -179,9 +180,12 @@ module Mxrb
       end
 
       def import!
-        validate_inputs!
-        Dir.mktmpdir('mxrb-module-import-') do |temporary|
-          Zip::File.open(@package_path) { import_archive(_1, temporary) }
+        Progress.with("Importing #{File.basename(@package_path)}") do |progress|
+          validate_inputs!
+          progress.update(detail: 'reading package')
+          Dir.mktmpdir('mxrb-module-import-') do |temporary|
+            Zip::File.open(@package_path) { import_archive(_1, temporary, progress) }
+          end
         end
       rescue Zip::Error, REXML::ParseException => e
         raise MarketplaceError, "invalid Mendix module package: #{e.message}"
@@ -189,12 +193,12 @@ module Mxrb
 
       private
 
-      def import_archive(archive, temporary)
+      def import_archive(archive, temporary, progress)
         reader = ModulePackageReader.new(archive)
         descriptor = reader.descriptor
         source_path = reader.extract_project(descriptor, temporary)
         staged_files = reader.stage_files(descriptor.files, temporary)
-        import_project(source_path, descriptor, staged_files, temporary)
+        import_project(source_path, descriptor, staged_files, temporary, progress)
       end
 
       def validate_inputs!
@@ -203,12 +207,13 @@ module Mxrb
         raise MarketplaceError, "target root not found: #{@target_root}" unless File.directory?(@target_root)
       end
 
-      def import_project(source_path, descriptor, staged_files, temporary) # rubocop:disable Metrics/MethodLength
+      def import_project(source_path, descriptor, staged_files, temporary, progress) # rubocop:disable Metrics/MethodLength
         source = IO::MprFile.open(source_path, readonly: true)
         target = IO::MprFile.open(@mpr_path)
         assets = ModulePackageAssets.new(@target_root, temporary)
         imported_ids = []
-        import_transaction(source, target, descriptor, staged_files, assets, imported_ids)
+        import_transaction(source, target, descriptor, staged_files, assets, imported_ids, progress)
+        progress.advance(detail: 'import transaction')
         import_result(source, target, descriptor, staged_files, imported_ids)
       rescue StandardError
         assets&.rollback
@@ -220,24 +225,30 @@ module Mxrb
       end
 
       # rubocop:disable Metrics/ParameterLists
-      def import_transaction(source, target, descriptor, staged_files, assets, imported_ids)
+      def import_transaction(source, target, descriptor, staged_files, assets, imported_ids, progress) # rubocop:disable Metrics/MethodLength
         validate_versions!(source, target, descriptor)
         module_unit, units = package_units(source, descriptor.name)
         validate_target!(target, descriptor.name, units)
+        progress.update(
+          current: 2, total: units.size + staged_files.size + 3,
+          detail: "#{units.size} model units"
+        )
         target.transaction do
-          imported_ids.concat(insert_units(source, target, module_unit, units))
-          assets.install(staged_files, @protected_files)
+          imported_ids.concat(insert_units(source, target, module_unit, units, progress))
+          assets.install(staged_files, @protected_files) do |relative|
+            progress.advance(detail: "asset #{relative}")
+          end
         end
       end
       # rubocop:enable Metrics/ParameterLists
 
-      def insert_units(source, target, module_unit, units)
+      def insert_units(source, target, module_unit, units, progress)
         units.map do |unit|
           container = unit == module_unit ? target.root_unit.fetch('UnitID') : unit.fetch('ContainerID')
           target.insert_unit(
             container_uuid: container, containment_name: unit.fetch('ContainmentName'),
             contents_doc: source.parse_contents(unit)
-          )
+          ).tap { progress.advance(detail: "unit #{unit.fetch('UnitID')}") }
         end
       end
 
