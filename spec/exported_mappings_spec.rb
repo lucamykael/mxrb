@@ -11,6 +11,17 @@ EXPORTED_MAPPING_TYPES = {
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'exported mapping documents' do
+  it 'creates and extends layer aggregators idempotently' do
+    Dir.mktmpdir('mxrb-aggregator-') do |dir|
+      path = File.join(dir, 'application.rb')
+      exporter = Mxrb::Exporter.allocate
+      exporter.send(:append_to_aggregator, path, ['queries/one.rb'])
+      exporter.send(:append_to_aggregator, path, ['queries/one.rb', 'queries/two.rb'])
+      expect(File.read(path).lines.grep(/one\.rb/).size).to eq(1)
+      expect(File.read(path)).to include('two.rb')
+    end
+  end
+
   it 'exports mappings as layered Ruby and updates them without moving or duplicating units' do
     Dir.mktmpdir('mxrb-exported-mappings-') do |dir|
       source = File.join(dir, 'Mappings.mpr')
@@ -22,7 +33,16 @@ RSpec.describe 'exported mapping documents' do
       end
       add_mapping_documents(source)
 
-      Mxrb::Exporter.new(source, exported).export!
+      Mxrb.open(source) do |project|
+        expect(project.modules.first.mapping_documents.map { _1[:type] })
+          .to contain_exactly(*EXPORTED_MAPPING_TYPES.values)
+      end
+
+      exporter = Mxrb::Exporter.new(source, exported)
+      used = { File.join('mappings', 'same.rb') => true }
+      expect(exporter.send(:unique_relative_path, 'mappings', 'same', used))
+        .to eq(File.join('mappings', 'same_2.rb'))
+      exporter.export!
       files = EXPORTED_MAPPING_TYPES.keys.to_h do |category|
         [category, Dir[File.join(exported, 'modules', 'Integration', 'infrastructure',
                                  'mappings', category.to_s, '*.rb')].fetch(0)]

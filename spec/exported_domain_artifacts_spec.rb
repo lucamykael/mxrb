@@ -22,6 +22,10 @@ RSpec.describe 'exported domain artifacts' do
         'DomainModels$ViewEntitySourceDocument',
         'SELECT Name FROM API_Rest.Product'
       )
+      legacy_view_path = File.join(root, 'domain', 'oql_views', 'legacy_view.rb')
+      expect(File.read(legacy_view_path)).to include(
+        'oql_view query: "SELECT Name FROM API_Rest.Product"'
+      )
       dataset_path = File.join(root, 'application', 'queries', 'datasets', 'product_data.rb')
       expect(File.read(dataset_path)).to include('DataSets$DataSet', 'OqlDataSetSource')
       enumeration_path = File.join(root, 'domain', 'enumerations', 'location_type.rb')
@@ -38,11 +42,12 @@ RSpec.describe 'exported domain artifacts' do
       expect(Mxrb.validate(rebuilt)).to be_valid
       Mxrb.open(rebuilt) do |project|
         expect(project.modules.first.entities.map(&:name)).to contain_exactly(
-          'Product', 'ProductDTO', 'ProductView'
+          'LegacyView', 'Product', 'ProductDTO', 'ProductView'
         )
         query = project.oql_queries.find { _1.name == 'ProductViewSource' }
         expect(query.oql).to include('SELECT Name, Code')
         expect(project.oql_queries.find { _1.name == 'ProductData' }.kind).to eq(:dataset)
+        expect(project.oql_queries.find { _1.name == 'LegacyView' }.kind).to eq(:view_entity)
         expect(project.modules.first.enumerations.map { _1['Name'] }).to include('LocationType')
         expect(project.modules.first.constants.find { _1['Name'] == 'ApiAddress' })
           .to include('DefaultValue' => 'https://new.example')
@@ -50,7 +55,7 @@ RSpec.describe 'exported domain artifacts' do
     end
   end
 
-  def define_domain_project(path) # rubocop:disable Metrics/MethodLength
+  def define_domain_project(path) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     Mxrb.define(path) do
       mendix_version '11.12.1'
       self.module(:API_Rest) do
@@ -61,6 +66,10 @@ RSpec.describe 'exported domain artifacts' do
         end
         entity(:ProductView) do
           oql_view source: 'API_Rest.ProductViewSource'
+          string :Name
+        end
+        entity(:LegacyView) do
+          oql_view query: 'SELECT Name FROM API_Rest.Product'
           string :Name
         end
         enumeration(:LocationType) { value :Warehouse, caption: 'Warehouse' }
@@ -78,6 +87,28 @@ RSpec.describe 'exported domain artifacts' do
         }
       end
     end
+  end
+
+  it 'requires an OQL source or inline query' do
+    builder = Mxrb::Dsl::EntityBuilder.new(:BrokenView)
+    expect { builder.oql_view }.to raise_error(ArgumentError, /requires source or query/)
+  end
+
+  it 'keeps a native view entity recognizable when it has no editable query field' do
+    entity = Mxrb::Model::Entity.new
+    entity.id = SecureRandom.uuid
+    entity.name = 'OpaqueView'
+    entity.persistable = false
+    entity.documentation = ''
+    entity.native_type = 'DomainModels$ViewEntity'
+    entity.access_rules = []
+    entity.indexes = []
+    entity.system_members = {}
+    mod = Struct.new(:name, :entities).new('API_Rest', [entity])
+
+    source = Mxrb::Exporter.allocate.send(:entity_source, entity, mod, [])
+    expect(source).to include('entity :OpaqueView', 'non_persistent!')
+    expect(source).not_to include('oql_view ')
   end
 
   def generate(exported, rebuilt)

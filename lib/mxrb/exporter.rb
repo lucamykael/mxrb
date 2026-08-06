@@ -135,13 +135,13 @@ module Mxrb
         target = File.join(@output_dir, relative)
         FileUtils.mkdir_p(File.dirname(target))
         FileUtils.cp(source, target)
-        {
+        result = {
           "path" => relative,
           "size" => File.size(source),
           "sha256" => Digest::SHA256.file(source).hexdigest
         }
-      ensure
-        progress.advance(detail: "asset #{relative}") if defined?(relative) && relative
+        progress.advance(detail: "asset #{relative}")
+        result
       end
       write(
         File.join(@output_dir, ".mxrb", "assets.json"),

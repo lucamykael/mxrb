@@ -31,6 +31,7 @@ module Mxrb
     def initialize(path, definition)
       @path = File.expand_path(path)
       @definition = definition
+      @progress = Progress::NullTask.instance
     end
 
     def write!
@@ -55,7 +56,7 @@ module Mxrb
       end
       self
     ensure
-      @progress = nil
+      @progress = Progress::NullTask.instance
       mpr&.close
     end
 
@@ -97,7 +98,7 @@ module Mxrb
         FileUtils.mv(temporary, target)
       ensure
         FileUtils.rm_f(temporary) if temporary
-        @progress&.advance(detail: "asset #{relative}") if defined?(relative) && relative
+        @progress.advance(detail: "asset #{relative}") if defined?(relative) && relative
       end
     end
 
@@ -209,11 +210,11 @@ module Mxrb
         write_module_security(mpr, module_id, mod) if mod.key?(:module_roles)
         write_domain_model(mpr, module_id, mod)
         write_documents(mpr, module_id, mod)
-        @progress&.advance(detail: "module #{mod.fetch(:name)}")
+        @progress.advance(detail: "module #{mod.fetch(:name)}")
       end
       write_project_security(mpr, root_id, @definition[:security]) if @definition[:security]
       write_project_navigation(mpr, root_id, @definition[:navigation]) if @definition[:navigation]
-      @progress&.advance(detail: "project security and navigation")
+      @progress.advance(detail: "project security and navigation")
     end
 
     def prepared_native_units
@@ -403,7 +404,7 @@ module Mxrb
       if units.any? { _1["unit_id"].to_s.empty? || _1["container_id"].to_s.empty? }
         units.each do |unit|
           upsert_native_unit(mpr, target_root_id, unit)
-          @progress&.advance(detail: "native unit #{unit['name']}")
+          @progress.advance(detail: "native unit #{unit['name']}")
         end
         return
       end
@@ -421,7 +422,7 @@ module Mxrb
           target_container = mapped_containers.fetch(unit.fetch("container_id"))
           actual_id = upsert_native_unit(mpr, target_container, unit)
           mapped_containers[unit.fetch("unit_id")] = actual_id
-          @progress&.advance(detail: "native unit #{unit['name']}")
+          @progress.advance(detail: "native unit #{unit['name']}")
         end
         pending = blocked
       end
