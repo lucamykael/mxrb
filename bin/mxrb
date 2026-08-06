@@ -64,7 +64,9 @@ end
 
 SCAFFOLD_COMMANDS = (Mxrb::Scaffold::Help::COMMANDS.keys - ["design"]).freeze
 
+progress_disabled = ARGV.delete("--no-progress")
 command = ARGV.shift
+Mxrb::Progress.configure(enabled: false) if progress_disabled || ARGV.include?("--json")
 
 case command
 when '--version', '-v'
@@ -1506,6 +1508,7 @@ else
     mxrb — Pure-Ruby Mendix .mpr toolkit
 
     Commands:
+      --no-progress                         Disable interactive progress rendering
       --version, -v                         Show the installed MXRB version
       doctor     [DIR] [--json]           Check project files and local toolchain
       benchmark <file.mpr>                Measure open, index and validation time

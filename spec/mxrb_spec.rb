@@ -802,9 +802,11 @@ RSpec.describe Mxrb do
       mpr.close
 
       Mxrb::Exporter.new(source, exported).export!
-      ruby_path = File.join(exported, ".mxrb", "native_units.rb")
+      ruby_path = File.join(
+        exported, "modules", "Sales", "domain", "constants", "endpoint.rb"
+      )
       source_code = File.read(ruby_path)
-      expect(source_code).to include("native_unit ", '"Constants$Constant"', "bson_binary(")
+      expect(source_code).to include("native_document ", '"Constants$Constant"', "bson_binary(")
       File.write(ruby_path, source_code.sub('"Value" => "before"', '"Value" => "after"'))
 
       begin

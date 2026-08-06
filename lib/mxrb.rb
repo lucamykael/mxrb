@@ -2,6 +2,7 @@
 
 require_relative "mxrb/version"
 require_relative "mxrb/errors"
+require_relative "mxrb/progress"
 require_relative "mxrb/doctor"
 require_relative "mxrb/benchmark"
 require_relative "mxrb/project_lifecycle"
@@ -139,14 +140,18 @@ module Mxrb
   #
   #   Mxrb.open("MyApp.mpr") { |p| puts p.modules.map(&:name) }
   #
-  def self.open(path, readonly: true, &block)
-    project = Model::Project.open(path, readonly: readonly)
-    return project unless block
+  def self.open(path, readonly: true, &block) # rubocop:disable Metrics/MethodLength
+    return Model::Project.open(path, readonly: readonly) unless block
 
-    begin
-      block.call(project)
-    ensure
-      project.close
+    Progress.with("Loading #{File.basename(path)}") do |progress|
+      progress.update(detail: "opening model")
+      project = Model::Project.open(path, readonly: readonly)
+      begin
+        progress.update(detail: "processing model")
+        block.call(project)
+      ensure
+        project.close
+      end
     end
   end
 

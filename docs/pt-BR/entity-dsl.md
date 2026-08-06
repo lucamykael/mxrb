@@ -94,6 +94,12 @@ entity :AnimalSearchResult do
   string :Name
 end
 
+entity :AnimalSummaryView do
+  oql_view source: "VetClinic.AnimalSummarySource"
+  string :Name
+  integer :Total
+end
+
 entity :Animal do
   before_commit microflow: "VetClinic.VAL_Animal"
   after_commit microflow: "VetClinic.ACT_AfterAnimalCommit"
@@ -111,6 +117,8 @@ end
 
 Em `access_rule`, `read:` e `write:` aceitam `:all`, `:none` ou uma lista de
 atributos. Declare um ou mais papéis qualificados como primeiros argumentos.
+`oql_view` liga a entidade ao `ViewEntitySourceDocument`; ao exportar um projeto
+existente, a consulta OQL aparece junto da entidade em `domain/oql_views`.
 
 Use `mxrb entity --help` para o comando e `mxrb generate project.rb` seguido de
 `mxrb validate App.mpr` para validar o resultado.

@@ -14,16 +14,22 @@ module Mxrb
       end
 
       def validate
-        @errors = []
-        @warnings = []
-        @mpr = IO::MprFile.open(@path, readonly: true)
-        validate_tables
-        validate_units
-        validate_v2_files
-        Result.new(errors: @errors, warnings: @warnings)
+        Progress.with("Validating #{File.basename(@path)}") do |progress|
+          @progress = progress
+          @errors = []
+          @warnings = []
+          @mpr = IO::MprFile.open(@path, readonly: true)
+          validate_tables
+          progress.advance(detail: "MPR tables")
+          validate_units
+          validate_v2_files
+          progress.advance(detail: "v2 contents")
+          Result.new(errors: @errors, warnings: @warnings)
+        end
       rescue Error => e
         Result.new(errors: [e.message], warnings: @warnings || [])
       ensure
+        @progress = nil
         @mpr&.close
       end
 
@@ -40,8 +46,10 @@ module Mxrb
 
       def validate_units
         @units = @mpr.all_units
+        @progress&.update(total: @units.size + 3, detail: "#{@units.size} units")
         validate_root
         validate_unit_ids
+        @progress&.advance(detail: "unit tree")
         validate_contents
       end
 
@@ -78,6 +86,8 @@ module Mxrb
           next unless doc
 
           validate_doc_identity(unit, doc)
+        ensure
+          @progress&.advance(detail: "unit #{unit['UnitID']}")
         end
       end
 

@@ -5,6 +5,12 @@
 `mxrb generate` avalia uma definição Ruby e cria ou atualiza o MPR. Nomes
 Mendix são chaves estáveis, portanto reaplicar a definição não duplica units.
 
+Operações demoradas exibem progresso em `stderr` quando executadas em um
+terminal interativo. Quando o total é conhecido, o MXRB mostra barra e
+porcentagem; operações externas sem total confiável mostram spinner e tempo
+decorrido. Pipes, redirecionamentos e saídas `--json` permanecem limpos. Use
+`--no-progress` ou `MXRB_PROGRESS=0` para desativar explicitamente.
+
 Para iniciar em uma pasta vazia:
 
 ```sh
@@ -121,6 +127,28 @@ datasets, serviços, configurações, templates e tipos futuros; valores binári
 usam `bson_binary`. Alterações nesse Ruby sobrepõem o baseline antes das escritas
 tipadas. Corpos de flow possuem `body_fingerprint`: o grafo nativo é reutilizado
 quando o Ruby não mudou e regenerado após uma edição.
+
+Export mappings, import mappings e JSON structures são materializados por
+módulo em `infrastructure/mappings/{exports,imports,json_structures}`. Esses
+arquivos mantêm `UnitID` e container/pasta originais, podem editar toda a
+estrutura profunda em Ruby e têm precedência sobre o baseline durante o
+`generate`.
+
+Serviços REST, OData e web services publicados são exportados para
+`infrastructure/endpoints`; recursos, operações, métodos HTTP, paths,
+parâmetros e referências a microflows permanecem no mesmo arquivo Ruby.
+Serviços consumidos são roteados para `infrastructure/integrations`, enquanto
+message definitions e XML schemas ficam em `infrastructure/mappings`.
+
+O Domain Model exportado separa entidades persistentes em `domain/entities`,
+DTOs/non-persistent em `domain/dtos` e entidades de OQL View em
+`domain/oql_views`. O arquivo da OQL View também contém seu
+`DomainModels$ViewEntitySourceDocument`, portanto a consulta `Oql` pode ser
+editada no mesmo Ruby sem perder a referência da entidade. Datasets OQL ficam
+em `application/queries/datasets`; enumerations e constants ficam em
+`domain/enumerations` e `domain/constants`. Scheduled events ficam em
+`application/jobs/scheduled_events`. O `domain/model.rb` e o
+`application/application.rb` carregam automaticamente todas essas categorias.
 
 A DSL cobre criação/alteração/retrieve/commit/delete, chamadas de microflow,
 Java, JavaScript, nanoflow e app service, páginas, REST, listas, decisões,

@@ -9,6 +9,7 @@ module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
   class Exporter
     LAYERS = %w[domain application presentation infrastructure].freeze
+    MODULE_PROGRESS_WEIGHT = 10
     MARKETPLACE_PROVENANCE = [
       ".mxrb/marketplace.lock.json",
       ".mxrb/marketplace",
@@ -63,22 +64,30 @@ module Mxrb
     end
 
     def export!(parallel: true)
-      FileUtils.mkdir_p(@output_dir)
-      Mxrb.open(@mpr_path) do |project|
-        @architecture = project.architecture_definition
-        export_app_structure
-        export_project_assets
-        export_native_units(project)
-        export_security(project)
-        export_architecture_contracts(project)
-        mods = project.modules
-        if parallel && mods.size > 1
-          threads = mods.map { |mod| Thread.new { export_module(mod) } }
-          threads.each(&:join)
-        else
-          mods.each { export_module(_1) }
+      Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress|
+        FileUtils.mkdir_p(@output_dir)
+        Mxrb.open(@mpr_path) do |project|
+          @architecture = project.architecture_definition
+          units = project.all_units
+          modules = project.modules
+          assets = project_asset_files
+          progress.update(
+            current: 0,
+            total: 4 + assets.size + (units.size * 2) + (modules.size * MODULE_PROGRESS_WEIGHT),
+            detail: "preparing Ruby project"
+          )
+          export_app_structure
+          progress.advance(detail: "project structure")
+          export_project_assets(assets, progress)
+          export_native_units(project, units, progress)
+          export_security(project)
+          progress.advance(detail: "project security")
+          export_architecture_contracts(project)
+          progress.advance(detail: "navigation and design system")
+          export_modules(modules, progress, parallel:)
+          write_project(project)
+          progress.advance(detail: "project.rb")
         end
-        write_project(project)
       end
       @output_dir
     end
@@ -91,6 +100,8 @@ module Mxrb
 
       export_domain(root, mod)
       export_microflows(root, mod)
+      export_application_documents(root, mod)
+      export_infrastructure_documents(root, mod)
       export_pages(root, mod)
       export_menus(root, mod)
       export_nanoflows(root, mod)
@@ -106,15 +117,19 @@ module Mxrb
       ].each { write(File.join(@output_dir, _1, ".keep"), "") }
     end
 
-    def export_project_assets
+    def project_asset_files
       source_root = File.dirname(@mpr_path)
-      files = (Model::DesignSystem::ASSET_DIRECTORIES + MARKETPLACE_PROVENANCE).flat_map do |directory|
+      (Model::DesignSystem::ASSET_DIRECTORIES + MARKETPLACE_PROVENANCE).flat_map do |directory|
         root = File.join(source_root, directory)
         next [root] if File.file?(root) && !File.symlink?(root)
         next [] unless File.directory?(root) && !File.symlink?(root)
 
         Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
       end.select { File.file?(_1) && !File.symlink?(_1) }.sort
+    end
+
+    def export_project_assets(files, progress)
+      source_root = File.dirname(@mpr_path)
       entries = files.map do |source|
         relative = Pathname.new(source).relative_path_from(Pathname.new(source_root)).to_s
         target = File.join(@output_dir, relative)
@@ -125,6 +140,8 @@ module Mxrb
           "size" => File.size(source),
           "sha256" => Digest::SHA256.file(source).hexdigest
         }
+      ensure
+        progress.advance(detail: "asset #{relative}") if defined?(relative) && relative
       end
       write(
         File.join(@output_dir, ".mxrb", "assets.json"),
@@ -132,8 +149,8 @@ module Mxrb
       )
     end
 
-    def export_native_units(project)
-      units = project.all_units.filter_map do |unit|
+    def export_native_units(project, project_units, progress)
+      units = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
         type = doc["$Type"]
         next if type.to_s.empty? || type == "Projects$Project"
@@ -147,21 +164,38 @@ module Mxrb
           "type" => type,
           "contents" => Base64.strict_encode64(IO::BsonCodec.serialize(doc))
         }
+      ensure
+        progress.advance(detail: "native baseline")
       end
       write(
         File.join(@output_dir, ".mxrb", "native_units.json"),
         JSON.pretty_generate("format_version" => project.format_version.to_s, "units" => units)
       )
-      source = project.all_units.filter_map do |unit|
+      source = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
         next if doc["$Type"].to_s.empty? || doc["$Type"] == "Projects$Project"
+        next if Model::Module::EDITABLE_DOCUMENT_TYPES.include?(doc["$Type"])
 
         native_unit_source(project, unit, doc)
+      ensure
+        progress.advance(detail: "editable native units")
       end
       write(
         File.join(@output_dir, ".mxrb", "native_units.rb"),
         "# frozen_string_literal: true\n\n#{source.join("\n")}"
       )
+    end
+
+    def export_modules(modules, progress, parallel:)
+      operation = lambda do |mod|
+        export_module(mod)
+        progress.advance(MODULE_PROGRESS_WEIGHT, detail: "module #{mod.name}")
+      end
+      if parallel && modules.size > 1
+        modules.map { |mod| Thread.new { operation.call(mod) } }.each(&:join)
+      else
+        modules.each { operation.call(_1) }
+      end
     end
 
     def native_unit_source(project, unit, doc)
@@ -211,8 +245,10 @@ module Mxrb
 
     def export_module_scaffolding(root)
       %w[
-        domain/enumerations domain/rules domain/policies
-        application/ports/repositories application/queries application/validations application/jobs
+        domain/entities domain/dtos domain/oql_views domain/enumerations domain/constants
+        domain/rules domain/policies
+        application/ports/repositories application/queries application/queries/datasets
+        application/validations application/jobs application/jobs/scheduled_events
         presentation/features presentation/client_actions presentation/snippets presentation/view_models
         presentation/menus
         infrastructure/persistence/mendix infrastructure/persistence/external
@@ -238,24 +274,60 @@ module Mxrb
 
     def export_domain(root, mod)
       domain = File.join(root, "domain")
-      entities_dir = File.join(domain, "entities")
-      FileUtils.mkdir_p(entities_dir)
-
       associations = mod.associations.group_by(&:from_entity_id)
       architecture = architecture_module(mod.name)
-      entity_files = unique_entity_filenames(mod.entities)
+      paths = {}
+      grouped = mod.entities.group_by { entity_domain_route(_1) }
+      grouped.each do |route, entities|
+        unique_entity_filenames(entities).each do |id, filename|
+          paths[id] = File.join(route, filename)
+        end
+      end
+      domain_documents = mod.domain_documents
+      oql_documents = mod.oql_view_documents
+      attached_oql_documents = {}
       mod.entities.each do |entity|
         entity_metadata = architecture&.fetch(:entities, [])&.find { _1[:name] == entity.name }
+        source = entity_source(entity, mod, associations.fetch(entity.id, []), entity_metadata)
+        if oql_view_entity?(entity) && (document = oql_document_for(entity, oql_documents, mod.name))
+          source = "#{source.rstrip}\n\n#{native_document_declaration(document)}"
+          attached_oql_documents[document.fetch(:id)] = true
+        end
         write(
-          File.join(entities_dir, entity_files.fetch(entity.id)),
-          entity_source(entity, mod, associations.fetch(entity.id, []), entity_metadata)
+          File.join(domain, paths.fetch(entity.id)), source
         )
       end
-
-      loads = entity_files.values.sort.map do |filename|
-        %(evaluate File.join(__dir__, "entities", #{ruby(filename)}))
+      used = paths.values.to_h { [_1, true] }
+      domain_documents.reject { attached_oql_documents[_1.fetch(:id)] }.each do |document|
+        relative = unique_relative_path(document.fetch(:route), underscore(document.fetch(:name)), used)
+        write(File.join(domain, relative), mapping_document_source(document))
+        paths[document.fetch(:id)] = relative
+      end
+      loads = paths.values.sort.map do |relative|
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        %(evaluate File.join(__dir__, #{segments}))
       end
       write(File.join(domain, "model.rb"), "#{loads.join("\n")}\n")
+    end
+
+    def entity_domain_route(entity)
+      return 'oql_views' if oql_view_entity?(entity)
+      return 'dtos' unless entity.persistable
+
+      'entities'
+    end
+
+    def oql_view_entity?(entity)
+      entity.respond_to?(:oql_view?) && entity.oql_view?
+    end
+
+    def oql_document_for(entity, documents, module_name)
+      reference = entity.oql_source_document.to_s
+      return nil if reference.empty?
+
+      documents.find do |document|
+        [document.fetch(:name), "#{module_name}.#{document.fetch(:name)}"].include?(reference)
+      end
     end
 
     def export_microflows(root, mod)
@@ -294,6 +366,74 @@ module Mxrb
         paths << relative
       end
       write_path_aggregator(File.join(presentation, "presentation.rb"), paths)
+    end
+
+    def export_infrastructure_documents(root, mod)
+      documents = mod.infrastructure_documents
+      return if documents.empty?
+
+      infrastructure = File.join(root, "infrastructure")
+      used = {}
+      paths = documents.map do |document|
+        base = underscore(document.fetch(:name))
+        relative = unique_relative_path(document.fetch(:route), base, used)
+        write(File.join(infrastructure, relative), mapping_document_source(document))
+        relative
+      end
+      append_to_aggregator(File.join(infrastructure, "infrastructure.rb"), paths)
+    end
+
+    def export_application_documents(root, mod)
+      documents = mod.application_documents
+      return if documents.empty?
+
+      application = File.join(root, 'application')
+      used = {}
+      paths = documents.map do |document|
+        relative = unique_relative_path(document.fetch(:route), underscore(document.fetch(:name)), used)
+        write(File.join(application, relative), mapping_document_source(document))
+        relative
+      end
+      append_to_aggregator(File.join(application, 'application.rb'), paths)
+    end
+
+    def unique_relative_path(directory, base, used)
+      candidate = File.join(directory, "#{base}.rb")
+      suffix = 2
+      while used[candidate]
+        candidate = File.join(directory, "#{base}_#{suffix}.rb")
+        suffix += 1
+      end
+      used[candidate] = true
+      candidate
+    end
+
+    def mapping_document_source(document)
+      <<~RUBY
+        # frozen_string_literal: true
+
+        #{native_document_declaration(document)}
+      RUBY
+    end
+
+    def native_document_declaration(document)
+      <<~RUBY.rstrip
+        native_document #{symbol(document.fetch(:name))},
+                        type: #{ruby(document.fetch(:type))},
+                        unit_id: #{ruby(document.fetch(:id))},
+                        container_id: #{ruby(document.fetch(:container_id))},
+                        containment: #{ruby(document.fetch(:containment))},
+                        deep_structure: #{native_ruby(document.fetch(:doc), 24)}
+      RUBY
+    end
+
+    def append_to_aggregator(path, relative_paths)
+      existing = File.exist?(path) ? File.read(path).lines : []
+      additions = relative_paths.sort.map do |relative|
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        "evaluate File.join(__dir__, #{segments})\n"
+      end
+      write(path, (existing + additions).uniq.join)
     end
 
     def export_menus(root, mod)
@@ -586,6 +726,12 @@ module Mxrb
       end
       flags = []
       flags << "  non_persistent!" unless entity.persistable
+      if oql_view_entity?(entity)
+        options = []
+        options << "source: #{ruby(entity.oql_source_document)}" if entity.oql_source_document
+        options << "query: #{ruby(entity.oql_query)}" unless entity.oql_query.to_s.empty?
+        flags << "  oql_view #{options.join(', ')}" unless options.empty?
+      end
       flags << "  documentation #{ruby(entity.documentation)}" unless entity.documentation.to_s.empty?
       generalization = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
       flags << "  generalizes #{ruby(generalization)}" if generalization
