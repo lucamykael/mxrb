@@ -11,6 +11,7 @@ module Mxrb
     class Validator
       def initialize(path)
         @path = path
+        @progress = Progress::NullTask.instance
       end
 
       def validate
@@ -29,7 +30,7 @@ module Mxrb
       rescue Error => e
         Result.new(errors: [e.message], warnings: @warnings || [])
       ensure
-        @progress = nil
+        @progress = Progress::NullTask.instance
         @mpr&.close
       end
 
@@ -46,10 +47,10 @@ module Mxrb
 
       def validate_units
         @units = @mpr.all_units
-        @progress&.update(total: @units.size + 3, detail: "#{@units.size} units")
+        @progress.update(total: @units.size + 3, detail: "#{@units.size} units")
         validate_root
         validate_unit_ids
-        @progress&.advance(detail: "unit tree")
+        @progress.advance(detail: "unit tree")
         validate_contents
       end
 

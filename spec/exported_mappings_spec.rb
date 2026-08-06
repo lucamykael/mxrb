@@ -22,6 +22,31 @@ RSpec.describe 'exported mapping documents' do
     end
   end
 
+  it 'honors an existing requested container for a new native document' do
+    Dir.mktmpdir('mxrb-native-container-') do |dir|
+      path = File.join(dir, 'Container.mpr')
+      Mxrb.define(path) { self.module(:Integration) {} }
+      mpr = Mxrb::IO::MprFile.open(path)
+      module_id = mpr.units_by_containment('Modules').first.fetch('UnitID')
+      folder_id = mpr.insert_unit(
+        container_uuid: module_id, containment_name: 'Folders',
+        contents_doc: { '$Type' => 'Projects$Folder', 'Name' => 'Resources' }
+      )
+      definition = {
+        native_documents: [{
+          name: 'Payload', type: 'JsonStructures$JsonStructure',
+          containment: 'Documents', unit_id: nil, container_id: folder_id,
+          doc: { '$Type' => 'JsonStructures$JsonStructure', 'Name' => 'Payload' }
+        }]
+      }
+      Mxrb::Writer.allocate.send(:write_native_documents, mpr, module_id, definition)
+
+      expect(mpr.children_of(folder_id).map { mpr.parse_contents(_1)['Name'] }).to include('Payload')
+    ensure
+      mpr&.close
+    end
+  end
+
   it 'exports mappings as layered Ruby and updates them without moving or duplicating units' do
     Dir.mktmpdir('mxrb-exported-mappings-') do |dir|
       source = File.join(dir, 'Mappings.mpr')
