@@ -872,13 +872,19 @@ module Mxrb
         @scheduled_events << sb.to_h
       end
 
-      def native_document(name, type:, deep_structure:, containment: 'Documents')
+      def native_document(name, type:, deep_structure:, containment: 'Documents',
+                          unit_id: nil, container_id: nil)
         raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
 
         @native_documents << {
           name: name.to_s, type: type.to_s, containment: containment.to_s,
+          unit_id: unit_id&.to_s, container_id: container_id&.to_s,
           doc: { '$Type' => type.to_s, 'Name' => name.to_s }.merge(deep_structure)
         }
+      end
+
+      def bson_binary(base64, subtype: :generic)
+        BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
       end
 
       # Native responsive application shell. It deliberately uses only Mendix
@@ -1070,6 +1076,7 @@ module Mxrb
         @generalization = nil
         @system_members = nil
         @indexes = nil
+        @oql_view = nil
       end
 
       ATTR_TYPES.each do |type|
@@ -1080,6 +1087,16 @@ module Mxrb
 
       def non_persistent!  = (@persistable = false)
       def documentation(d) = (@doc = d)
+
+      # Marks an entity as an OQL-backed view. Modern Mendix projects keep the
+      # query in a separate ViewEntitySourceDocument; older projects may keep
+      # it directly on the embedded entity.
+      def oql_view(source: nil, query: nil)
+        raise ArgumentError, 'oql_view requires source or query' if source.nil? && query.nil?
+
+        @oql_view = { source: source&.to_s, query: query&.to_s }.compact
+        @persistable = false
+      end
 
       def generalizes(entity)
         @generalization = entity.to_s
@@ -1164,7 +1181,7 @@ module Mxrb
           name: @name, persistable: @persistable, documentation: @doc,
           attributes: @attributes, associations: @associations, lifecycle: @lifecycle,
           access_rules: @access_rules, generalization: @generalization,
-          system_members: @system_members, indexes: @indexes
+          system_members: @system_members, indexes: @indexes, oql_view: @oql_view
         }
       end
 

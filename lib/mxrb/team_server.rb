@@ -161,7 +161,7 @@ module Mxrb
 
     # Git transport for Team Server. PATs are passed to a short-lived
     # GIT_ASKPASS process and are never embedded in a URL or git config.
-    class Repository
+    class Repository # rubocop:disable Metrics/ClassLength
       def initialize(credentials: Credentials.new, runner: CommandRunner.new,
                      authenticator: GitAuthenticator.new(credentials))
         @runner = runner
@@ -249,11 +249,14 @@ module Mxrb
       end
 
       def capture!(command, chdir: nil)
-        @authenticator.call do |environment|
-          output, status = @runner.capture(environment, command, chdir:)
-          raise TeamServerError, "Team Server Git operation failed: #{output.strip}" unless status.success?
+        Progress.with("Team Server #{command.first(2).join(' ')}") do |progress|
+          progress.update(detail: chdir || 'remote repository')
+          @authenticator.call do |environment|
+            output, status = @runner.capture(environment, command, chdir:)
+            raise TeamServerError, "Team Server Git operation failed: #{output.strip}" unless status.success?
 
-          output
+            output
+          end
         end
       end
 
@@ -285,7 +288,7 @@ module Mxrb
           mpr
         end
       end
-    end
+    end # rubocop:enable Metrics/ClassLength
 
     # Read-only client for Mendix's official App Repository API.
     class Api

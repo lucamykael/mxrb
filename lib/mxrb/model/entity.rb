@@ -10,7 +10,7 @@ module Mxrb
       attr_accessor :id, :name, :qualified_name, :documentation,
                     :persistable, :location, :data_storage_guid,
                     :export_level, :generalization, :access_rules, :indexes,
-                    :system_members
+                    :system_members, :source, :oql_query, :native_type
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
       def self.from_bson(doc, _domain_model_id, mpr)
@@ -19,6 +19,9 @@ module Mxrb
         e.name               = doc["name"]  || doc["Name"]
         e.qualified_name     = doc["$QualifiedName"] || doc["\$QualifiedName"]
         e.documentation      = doc["documentation"] || doc["Documentation"] || ""
+        e.native_type        = doc["$Type"]
+        e.source             = doc["source"] || doc["Source"]
+        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"]
         e.data_storage_guid  = doc["dataStorageGuid"] || doc["DataStorageGuid"]
         e.export_level       = doc["exportLevel"] || doc["ExportLevel"] || "Hidden"
         e.location           = parse_location(doc["location"] || doc["Location"])
@@ -56,6 +59,19 @@ module Mxrb
         return unless @generalization.is_a?(Hash)
 
         @generalization['generalization'] || @generalization['Generalization']
+      end
+
+      def oql_view?
+        source_type = @source.is_a?(Hash) ? @source.fetch('$Type', '') : ''
+        @native_type.to_s.match?(/ViewEntity/i) ||
+          source_type.match?(/OqlViewEntitySource/i) ||
+          !@oql_query.to_s.empty?
+      end
+
+      def oql_source_document
+        return unless @source.is_a?(Hash)
+
+        @source['SourceDocument'] || @source['sourceDocument']
       end
 
       def to_bson

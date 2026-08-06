@@ -223,14 +223,20 @@ module Mxrb
       end
 
       def json(url, authorization: default_authorization)
-        JSON.parse(get(url, accept: 'application/json', authorization:))
+        Progress.with('Loading Marketplace data') do |progress|
+          progress.update(detail: URI.parse(url).host)
+          JSON.parse(get(url, accept: 'application/json', authorization:))
+        end
       rescue JSON::ParserError => e
         raise MarketplaceError, "invalid JSON response: #{e.message}"
       end
 
       def download(url, destination, authorization: default_authorization)
-        File.binwrite(destination, get(url, accept: 'application/octet-stream', authorization:))
-        destination
+        Progress.with("Downloading #{File.basename(destination)}") do |progress|
+          progress.update(detail: URI.parse(url).host)
+          File.binwrite(destination, get(url, accept: 'application/octet-stream', authorization:))
+          destination
+        end
       end
 
       private

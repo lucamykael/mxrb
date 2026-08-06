@@ -49,7 +49,7 @@ module Mxrb
 
       # Recursive BSON discovery is intentionally kept together so that its
       # source-type guard and ownership context cannot diverge.
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
       def discover(document, raw, module_name)
         found = []
         walk(document) do |node, path, ancestors|
@@ -57,6 +57,11 @@ module Mxrb
           if source_type.match?(/Oql/i) && node['Query'].is_a?(String)
             found << build_query(
               node['Query'], raw, module_name, path + ['Query'], source_type, ancestors
+            )
+          end
+          if source_type == 'DomainModels$ViewEntitySourceDocument' && node['Oql'].is_a?(String)
+            found << build_query(
+              node['Oql'], raw, module_name, path + ['Oql'], source_type, ancestors
             )
           end
           node.each do |key, value|
@@ -67,7 +72,7 @@ module Mxrb
         end
         found.uniq { [_1.unit_id, _1.path] }
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
 
       # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
       def walk(node, path = [], ancestors = [], &block)
@@ -97,7 +102,8 @@ module Mxrb
         unit_type = @project.parse_bson(raw)['$Type'].to_s
         kind = if unit_type == 'DataSets$DataSet'
                  :dataset
-               elsif owner['$Type'].to_s.match?(/Entity/i)
+               elsif unit_type == 'DomainModels$ViewEntitySourceDocument' ||
+                     owner['$Type'].to_s.match?(/Entity/i)
                  :view_entity
                else
                  :oql
