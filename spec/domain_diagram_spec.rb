@@ -110,18 +110,23 @@ RSpec.describe Mxrb::DomainDiagram do
     end
   end
 
-  it 'serves the DBeaver-style editor and exports to a safe MPR copy' do
+  it 'serves the React TypeScript editor and exports to a safe MPR copy' do
     Dir.mktmpdir do |dir|
       source = File.join(dir, 'Shop.mpr')
       output = File.join(dir, 'Shop-layout.mpr')
       build_project(source)
       server = described_class::Server.new(source, output:, modules: %w[Sales Logistics])
       expect(File).to exist(output)
-      html = File.read(File.expand_path('../lib/mxrb/domain_diagram/index.html', __dir__))
-      expect(html).to include('Exportar PNG', 'Salvar layout no MPR', 'Auto-organizar')
-      expect(html).to include('onpointerdown', 'sourceAnchor', 'targetAnchor', 'toDataURL(\'image/png\')')
-      expect(html).to include('visibleModules', 'visibleAssociations', 'startAnchorDrag')
-      expect(html).to include('kind-entity', 'kind-dto', 'kind-oql_view', 'OQL view')
+      frontend = File.expand_path('../frontend/modeler', __dir__)
+      html = File.read(File.join(frontend, 'domain.html'))
+      app = File.read(File.join(frontend, 'src/domain-diagram/App.tsx'))
+      helpers = File.read(File.join(frontend, 'src/domain-diagram/helpers.ts'))
+      expect(html).to include('id="root"', '/src/domain-diagram/main.tsx')
+      expect(app).to include('Exportar PNG', 'Salvar layout no MPR', 'Auto-organizar')
+      expect(app).to include('onPointerDown', 'source_anchor', 'target_anchor', 'toDataURL("image/png")')
+      expect(app).to include('visibleModules', 'visibleAssociations', 'startAnchorDrag')
+      expect(app).to include('kind-${entity.kind}')
+      expect(helpers).to include('oql_view', 'DTO / non-persistent', 'OQL view')
 
       request = Struct.new(:request_method, :path, :body, :headers) do
         def [](name) = headers[name]

@@ -6,6 +6,8 @@ require 'securerandom'
 require 'uri'
 require 'webrick'
 
+require_relative 'web_ui'
+
 module Mxrb
   # Browser ER diagram for Mendix domain models. It edits visual layout only:
   # entity locations plus local and cross-module connection anchors.
@@ -348,7 +350,14 @@ module Mxrb
 
       def dispatch(request, response)
         if request.request_method == 'GET' && request.path == '/'
-          return render(response, 200, File.binread(asset_path), 'text/html; charset=utf-8')
+          return render(response, 200, WebUi.page('domain'), 'text/html; charset=utf-8')
+        end
+
+        if request.request_method == 'GET' && request.path.start_with?('/assets/')
+          asset = WebUi.asset(request.path)
+          return render(response, 200, *asset) if asset
+
+          return json(response, 404, ok: false, error: 'not_found')
         end
 
         if request.request_method == 'GET' && request.path == '/api/diagram'
@@ -378,15 +387,10 @@ module Mxrb
         end
         return json(response, 404, ok: false, error: 'not_found') if request.path.start_with?('/api/')
 
-        return render(response, 200, File.binread(asset_path), 'text/html; charset=utf-8') \
-          if request.request_method == 'GET'
-
         json(response, 404, ok: false, error: 'not_found')
       rescue JSON::ParserError, ValidationError, KeyError, ArgumentError => e
         json(response, 422, ok: false, error: e.message)
       end
-
-      def asset_path = File.join(__dir__, 'domain_diagram', 'index.html')
 
       def lifecycle_authorized?(request)
         @lifecycle_token && request['X-MXRB-Lifecycle-Token'].to_s == @lifecycle_token

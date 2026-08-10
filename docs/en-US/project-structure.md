@@ -182,6 +182,12 @@ bundle exec mxrb diagram-er destroy App.mpr --yes
 created by that lifecycle. Management uses a private authenticated loopback
 endpoint; state and token are stored in permission-restricted local files.
 
+The editor UI is implemented in React + TypeScript and talks only to the Ruby
+server APIs. Its Vite bundle is compiled into `lib/mxrb/web_ui`, included in the
+gem, and served locally. Node.js is therefore not required to use the installed
+editor, and no CDN is contacted. To develop the UI, run `npm install`,
+`npm run typecheck`, and `npm run build` from `frontend/modeler`.
+
 ## UML diagrams
 
 UML is an additional implementation independent from the ER editor. It uses
@@ -201,7 +207,8 @@ bundle exec mxrb uml App.mpr --export=sequence --module=Sales
 Without `--export`, the unified viewer is served at
 `http://127.0.0.1:4569`. Text export defaults to Mermaid; select PlantUML with
 `--format=plantuml`. Sequence diagrams accept either a depth-limited root or
-all calls internal to one module.
+all calls internal to one module. The viewer uses the same React + TypeScript
+workspace, with Mermaid bundled locally so rendering also works offline.
 
 ## Version transitions and round-trips
 

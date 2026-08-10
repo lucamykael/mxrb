@@ -168,6 +168,12 @@ bundle exec mxrb diagram-er destroy App.mpr --yes
 esse lifecycle criou. O controle usa um endpoint privado autenticado em loopback;
 estado e token ficam em arquivos locais com permissões restritas.
 
+A interface do editor é implementada em React + TypeScript e consome somente as
+APIs do servidor Ruby. O bundle Vite é compilado em `lib/mxrb/web_ui`, incluído
+na gem e servido localmente; portanto Node.js não é necessário para usar o
+editor instalado e nenhum CDN é acessado. Para desenvolver a interface, use
+`npm install`, `npm run typecheck` e `npm run build` em `frontend/modeler`.
+
 ## Diagramas UML
 
 UML é uma implementação adicional e independente do editor ER. Ela usa a porta
@@ -187,7 +193,9 @@ bundle exec mxrb uml App.mpr --export=sequence --module=Sales
 Sem `--export`, o comando abre o viewer unificado em
 `http://127.0.0.1:4569`. A exportação textual usa Mermaid por padrão; selecione
 PlantUML com `--format=plantuml`. Diagramas de sequência aceitam uma raiz com
-profundidade limitada ou todas as chamadas internas de um módulo.
+profundidade limitada ou todas as chamadas internas de um módulo. O viewer usa
+o mesmo workspace React + TypeScript; Mermaid é empacotado localmente para que a
+renderização também funcione offline.
 
 ## Transições de versão e round-trips
 
