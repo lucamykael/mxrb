@@ -846,13 +846,14 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     parameterized = double(
       name: "Typed", parameters: [
                        { "Name" => "Value", "VariableType" => "String" }, "opaque"
-                     ],
+      ],
       return_type: nil, documentation: "", allow_concurrent_execution: true,
+      apply_entity_access: true,
       mark_as_used: false, excluded: false, allowed_module_roles: [],
       objects: [], flows: []
     )
     expect(exporter.send(:microflow_source, parameterized))
-      .to include("parameter :Value, type: :String")
+      .to include("parameter :Value, type: :String", "apply_entity_access true")
     auxiliary = { "$ID" => "note", "$Type" => "Microflows$Annotation" }
     source = {
       "ObjectCollection" => { "Objects" => [3, auxiliary] },
