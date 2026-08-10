@@ -10,7 +10,7 @@ module Mxrb
       attr_accessor :id, :name, :qualified_name, :documentation,
                     :persistable, :location, :data_storage_guid,
                     :export_level, :generalization, :access_rules, :indexes,
-                    :system_members, :source, :oql_query, :native_type
+                    :system_members, :lifecycle, :source, :oql_query, :native_type
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
       def self.from_bson(doc, _domain_model_id, mpr)
@@ -49,6 +49,8 @@ module Mxrb
         # Access rules (embedded array with marker 3)
         rule_arr = IO::BsonCodec.parse_array(doc["accessRules"] || doc["AccessRules"])[:items]
         e.access_rules = rule_arr.map { parse_access_rule(_1) }
+        event_arr = IO::BsonCodec.parse_array(doc["eventHandlers"] || doc["EventHandlers"])[:items]
+        e.lifecycle = event_arr.map { parse_lifecycle(_1) }
 
         e
       end
@@ -86,7 +88,7 @@ module Mxrb
           "generalization"  => serialize_generalization,
           "attributes"      => IO::BsonCodec.build_array(@attributes.map(&:to_bson)),
           "validationRules" => IO::BsonCodec.build_array([]),  # must come after attributes
-          "eventHandlers"   => IO::BsonCodec.build_array([]),
+          "eventHandlers"   => IO::BsonCodec.build_array(@lifecycle.to_a.map { lifecycle_bson(_1) }),
           "indexes"         => IO::BsonCodec.build_array([]),
           "accessRules"     => IO::BsonCodec.build_array(@access_rules.to_a),
           "source"          => nil,
@@ -166,6 +168,17 @@ module Mxrb
         }
       end
 
+      def self.parse_lifecycle(doc)
+        moment = doc["Moment"].to_s.downcase
+        event = doc["Event"].to_s.downcase
+        {
+          event: [moment, event].reject(&:empty?).join("_").to_sym,
+          handler: doc["Microflow"].to_s,
+          pass_event_object: doc.fetch("PassEventObject", true) == true,
+          raise_error_on_false: doc["RaiseErrorOnFalse"] == true
+        }
+      end
+
       def self.parse_location(loc)
         if loc.is_a?(String)
           x, y = loc.split(';', 2).map(&:to_i)
@@ -189,6 +202,19 @@ module Mxrb
           "hasCreatedDate"  => false,
           "hasOwner"        => false,
           "hasChangedBy"    => false,
+        }
+      end
+
+      def lifecycle_bson(callback)
+        moment, event = callback.fetch(:event).to_s.split("_", 2)
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "DomainModels$EventHandler",
+          "Event" => event.to_s.capitalize,
+          "Moment" => moment.to_s.capitalize,
+          "Microflow" => callback.fetch(:handler).to_s,
+          "PassEventObject" => callback.fetch(:pass_event_object, true) == true,
+          "RaiseErrorOnFalse" => callback.fetch(:raise_error_on_false, false) == true
         }
       end
     end

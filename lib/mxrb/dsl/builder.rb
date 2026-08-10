@@ -89,6 +89,14 @@ module Mxrb
         _add_widget(:data_grid, name, entity: entity, &block)
       end
 
+      # Gallery projections remain present beside an authoritative page
+      # deep_structure in exported projects. Accept the concise projection at
+      # every widget nesting level so arbitrary native pages can be evaluated
+      # and reconstructed from their lossless payload.
+      def gallery(name, entity: nil, &block)
+        _add_widget(:gallery, name, entity: entity, &block)
+      end
+
       def tab_control(name, &block)
         _add_widget(:tab_control, name, &block)
       end
@@ -315,6 +323,8 @@ module Mxrb
     class Builder
       include ConnectorDeclarations
 
+      attr_reader :path
+
       def initialize(path)
         @path              = path
         @mendix_version    = "10.18.0"
@@ -325,6 +335,7 @@ module Mxrb
         @native_units_path = nil
         @native_unit_overrides = []
         @project_assets = nil
+        @ruby_app_sources_path = nil
       end
 
       def mendix_version(v)
@@ -364,6 +375,10 @@ module Mxrb
           manifest: File.expand_path(manifest),
           root: File.expand_path(root)
         }
+      end
+
+      def ruby_app_sources(path)
+        @ruby_app_sources_path = File.expand_path(path)
       end
 
       def native_unit(unit_id, container_id:, containment:, deep_structure:, module_name: nil)
@@ -421,6 +436,7 @@ module Mxrb
           design_system: @design_system,
           connectors: connector_requests.map(&:to_h),
           project_assets: @project_assets,
+          ruby_app_sources_path: @ruby_app_sources_path,
           native_units_path: @native_units_path,
           native_unit_overrides: @native_unit_overrides
         }
@@ -1523,6 +1539,7 @@ module Mxrb
         @return_expression    = nil
         @expected_body_fingerprint = nil
         @allow_concurrent_execution = nil
+        @apply_entity_access = nil
         @mark_as_used = nil
         @excluded = nil
       end
@@ -1538,6 +1555,7 @@ module Mxrb
       def return_type(t) = (@return_type = t.to_s)
       def documentation(d) = (@doc = d)
       def allow_concurrent_execution(value = true) = (@allow_concurrent_execution = !!value)
+      def apply_entity_access(value = true) = (@apply_entity_access = !!value)
       def mark_as_used(value = true) = (@mark_as_used = !!value)
       def excluded(value = true) = (@excluded = !!value)
 
@@ -1603,6 +1621,7 @@ module Mxrb
           body: @body, return_variable_name: @return_variable_name,
           return_expression: @return_expression,
           allow_concurrent_execution: @allow_concurrent_execution,
+          apply_entity_access: @apply_entity_access,
           mark_as_used: @mark_as_used, excluded: @excluded,
           preserve_native_body: !@expected_body_fingerprint.nil? &&
             @expected_body_fingerprint == current_fingerprint

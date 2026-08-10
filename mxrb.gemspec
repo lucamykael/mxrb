@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name        = "mxrb"
-  s.version     = "0.1.3"
+  s.version     = "0.1.4"
   s.summary     = "Pure-Ruby read/write engine for Mendix .mpr projects — no mxcli required"
   s.description = "mxrb reads and writes Mendix .mpr files (SQLite3) directly, providing a Ruby DSL to define entities, pages, microflows and modules without any dependency on the official mxcli tooling."
   s.authors     = ["Lucas Moura"]
@@ -11,6 +11,7 @@ Gem::Specification.new do |s|
   s.metadata    = {
     "source_code_uri" => s.homepage,
     "documentation_uri" => "#{s.homepage}/tree/main/docs",
+    "changelog_uri" => "#{s.homepage}/releases",
     "rubygems_mfa_required" => "true"
   }
 
@@ -31,6 +32,7 @@ Gem::Specification.new do |s|
   s.add_dependency "dotenv",     "~> 3.0"
   s.add_dependency "rexml",      "~> 3.3"
   s.add_dependency "rubyzip",    "~> 3.0"
+  s.add_dependency "tzinfo",     "~> 2.0"
   s.add_dependency "webrick",    "~> 1.9"
 
   s.add_development_dependency "benchmark", "~> 0.5"

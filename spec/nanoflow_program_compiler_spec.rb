@@ -208,5 +208,186 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
       expect(compiler.send(:conditional_expression, 'plain')).to be_nil
     end
   end
+
+  it 'covers every supported action and defensive compiler branch' do
+    build_source do |source|
+      compiler = described_class.new(source)
+      identifier = lambda do |suffix|
+        { '$ID' => "22222222-2222-4222-8222-#{suffix.to_s.rjust(12, '0')}" }
+      end
+      node = identifier.call(1).merge('$Type' => 'Microflows$ActionActivity')
+      action_node = ->(action) { node.merge('Action' => action) }
+
+      parameter = {
+        '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Input',
+        'VariableType' => { '$Type' => 'DataTypes$ObjectType' }
+      }
+      create_change = {
+        '$Type' => 'Microflows$ActionActivity',
+        'Action' => {
+          '$Type' => 'Microflows$CreateChangeAction', 'VariableName' => 'Created',
+          'VariableType' => { '$Type' => 'DataTypes$StringType' },
+          'OutputVariableName' => 'Output', 'ResultVariableName' => 'Result'
+        }
+      }
+      kinds = compiler.send(
+        :variable_kinds, 'ObjectCollection' => { 'Objects' => [2, parameter, create_change] }
+      )
+      expect(kinds).to include(
+        'Input' => 'object', 'Created' => 'object', 'Output' => 'object',
+        'Result' => 'primitive'
+      )
+
+      start = identifier.call(2)
+      repeated = identifier.call(3).merge('$Type' => 'Microflows$EndEvent')
+      flows = {
+        start['$ID'] => [
+          { 'DestinationPointer' => repeated['$ID'] },
+          { 'DestinationPointer' => repeated['$ID'] }
+        ]
+      }
+      expect(compiler.send(:reachable_nodes, start, { repeated['$ID'] => repeated }, flows))
+        .to eq([repeated])
+
+      normal = { 'DestinationPointer' => identifier.call(4) }
+      error = { 'IsErrorHandler' => true, 'DestinationPointer' => identifier.call(5) }
+      protected_node = action_node.call(
+        '$Type' => 'Microflows$CreateVariableAction', 'VariableName' => 'Protected',
+        'VariableType' => { '$Type' => 'DataTypes$BooleanType' }, 'InitialValue' => 'true'
+      )
+      expect(compiler.send(:compile_graph_node, protected_node, [normal, error]))
+        .to include(include(type: 'tryCatch'), include(type: 'jump'))
+      array_node = action_node.call(
+        '$Type' => 'Microflows$CreateObjectAction', 'Entity' => 'Demo.Item',
+        'VariableName' => 'Created'
+      )
+      expect(compiler.send(:compile_graph_node, array_node, [normal]))
+        .to include(include(type: 'createObject'), include(type: 'jump'))
+      merge = identifier.call(6).merge('$Type' => 'Microflows$ExclusiveMerge')
+      expect(compiler.send(:compile_node, merge, [normal])).to include(type: 'jump')
+
+      expect(compiler.send(:compile_node, action_node.call(
+                                            '$Type' => 'Microflows$ChangeVariableAction',
+                                            'ChangeVariableName' => 'Ready', 'Value' => 'false'
+                                          ))).to include(type: 'setVariable', outputVar: 'Ready')
+      expect(compiler.send(:compile_node, action_node.call(
+                                            '$Type' => 'Microflows$CreateChangeAction',
+                                            'Entity' => 'Demo.Item', 'VariableName' => 'Created'
+                                          ))).to include(include(type: 'createObject'))
+
+      changes = [2,
+                 { '$Type' => 'Microflows$MemberChange', 'Attribute' => 'Demo.Item.Name',
+                   'Type' => 'Set', 'Value' => "'First'" },
+                 { '$Type' => 'Microflows$MemberChange', 'Attribute' => 'Demo.Item.Code',
+                   'Type' => 'Set', 'Value' => "'Second'" }]
+      change_action = {
+        '$Type' => 'Microflows$ChangeAction', 'ChangeVariableName' => 'Item',
+        'Items' => changes, 'Commit' => 'Yes'
+      }
+      compiled_changes = compiler.send(:compile_node, action_node.call(change_action))
+      expect(compiled_changes).to include(
+        include(type: 'changeObject', member: 'Name'),
+        include(type: 'changeObject', member: 'Code'), include(type: 'commitObjects')
+      )
+      expect(compiler.send(:compile_change_object, change_action.merge('Commit' => 'No'), node))
+        .not_to include(include(type: 'commitObjects'))
+
+      microflow_call = {
+        '$Type' => 'Microflows$MicroflowCallAction', 'UseReturnVariable' => true,
+        'ResultVariableName' => 'Called',
+        'MicroflowCall' => { 'Microflow' => 'Demo.Server', 'ParameterMappings' => [2] }
+      }
+      expect(compiler.send(:compile_node, action_node.call(microflow_call)))
+        .to include(type: 'microflowCall', outputVar: 'Called')
+      expect(compiler.send(:compile_microflow_call,
+                           microflow_call.merge('UseReturnVariable' => false), node))
+        .not_to have_key(:outputVar)
+
+      javascript_unit = Mxrb::Compiler::SourceModel::Unit.new(
+        id: 'js', container_id: 'module', containment: 'Documents', module_name: 'Demo',
+        document: {
+          '$Type' => 'JavaScriptActions$JavaScriptAction', 'Name' => 'Notify',
+          'Parameters' => [2,
+                           { 'Name' => 'Item', 'ParameterType' => {
+                             'Type' => { '$Type' => 'DataTypes$EntityType' }
+                           } },
+                           { 'Name' => 'Items', 'ParameterType' => {
+                             'Type' => { '$Type' => 'DataTypes$ListType' }
+                           } },
+                           { 'Name' => 'Count', 'ParameterType' => {
+                             'Type' => { '$Type' => 'DataTypes$IntegerType' }
+                           } }]
+        }
+      )
+      allow(source).to receive(:units_of).and_wrap_original do |original, type|
+        type == 'JavaScriptActions$JavaScriptAction' ? [javascript_unit] : original.call(type)
+      end
+      javascript_call = {
+        '$Type' => 'Microflows$JavaScriptActionCallAction',
+        'JavaScriptAction' => 'Demo.Notify', 'UseReturnVariable' => true,
+        'OutputVariableName' => 'Notification',
+        'ParameterMappings' => [2,
+                                { 'Parameter' => 'Demo.Notify.Item',
+                                  'ParameterValue' => { 'Argument' => '$Item' } },
+                                { 'Parameter' => 'Demo.Notify.Items',
+                                  'ParameterValue' => { 'Entity' => 'Demo.Item' } },
+                                { 'Parameter' => 'Demo.Notify.Count',
+                                  'ParameterValue' => { 'Argument' => '2' } }]
+      }
+      compiled_javascript = compiler.send(:compile_node, action_node.call(javascript_call))
+      expect(compiled_javascript).to include(
+        type: 'javaScriptActionCall', outputVar: 'Notification',
+        parameters: [include(kind: 'object'), include(kind: 'list'), include(kind: 'primitive')]
+      )
+      expect(compiler.send(:compile_javascript_call,
+                           javascript_call.merge('UseReturnVariable' => false), node))
+        .not_to have_key(:outputVar)
+      expect(compiler.send(:javascript_reference, javascript_unit))
+        .to include('javascriptsource/demo/actions/Notify')
+
+      form_action = {
+        '$Type' => 'Microflows$ShowFormAction',
+        'FormSettings' => {
+          'Form' => 'Demo.Detail', 'ParameterMappings' => [2, {
+            'Parameter' => 'Demo.Detail.Item', 'Argument' => '$Item'
+          }]
+        }
+      }
+      expect(compiler.send(:compile_node, action_node.call(form_action)))
+        .to include(type: 'openForm', inputArgs: include('$Item'))
+      expect(compiler.send(:compile_show_form,
+                           form_action.merge('FormSettings' => { 'Form' => 'Demo.Detail' }), node))
+        .not_to have_key(:inputArgs)
+
+      close = { '$Type' => 'Microflows$CloseFormAction', 'NumberOfPagesToClose' => '2' }
+      expect(compiler.send(:compile_node, action_node.call(close)))
+        .to include(type: 'closeForm', numberOfPagesToClose: include(value: '2'))
+      expect(compiler.send(:compile_close_form, close.merge('NumberOfPagesToClose' => ''), node))
+        .not_to have_key(:numberOfPagesToClose)
+      expect(compiler.send(:compile_node, action_node.call(
+                                            '$Type' => 'Microflows$ShowMessageAction', 'Type' => 'Warning',
+                                            'Blocking' => true, 'Template' => { 'Text' => 'Attention' }
+                                          ))).to include(type: 'showMessage', blocking: true)
+      expect(compiler.send(:compile_node, action_node.call(
+                                            '$Type' => 'Microflows$ValidationFeedbackAction',
+                                            'Attribute' => 'Demo.Item.Name',
+                                            'ValidationVariableName' => 'Item',
+                                            'FeedbackTemplate' => { 'Text' => 'Required' }
+                                          ))).to include(type: 'showValidation', member: 'Name')
+      expect(compiler.send(:compile_node, action_node.call(
+                                            '$Type' => 'Microflows$LogMessageAction', 'Level' => 'Info',
+                                            'MessageTemplate' => { 'Text' => 'Saved' }
+                                          ))).to include(type: 'writeLog', level: 'info')
+
+      localized = {
+        'Text' => { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Hello' }] }
+      }
+      expect(compiler.send(:text_template_expression, localized)).to include(value: 'Hello')
+      expect(compiler.send(:text_template_expression, 'Text' => { 'Items' => [2] }))
+        .to eq(type: 'literal', value: nil)
+      expect(compiler.send(:expression, '$Item/Name')).to include(path: 'Name')
+      expect(compiler.send(:expression, 'plain text')).to eq(type: 'literal', value: 'plain text')
+    end
+  end
 end
 # rubocop:enable Metrics/BlockLength

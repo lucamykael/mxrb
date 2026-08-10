@@ -47,7 +47,9 @@ module Mxrb
         mpr = IO::MprFile.open(@path)
         mpr.transaction do
           apply(mpr, native_units)
+          write_native_compatibility(mpr, native_units)
           mpr.write_architecture_definition(@definition)
+          mpr.write_ruby_app_sources(ruby_app_source_files) if @definition[:ruby_app_sources_path]
         end
         progress.advance(detail: "model transaction")
         materialize_project_assets(asset_manifest)
@@ -61,6 +63,22 @@ module Mxrb
     end
 
     private
+
+    def ruby_app_source_files
+      path = @definition.fetch(:ruby_app_sources_path)
+      manifest = JSON.parse(File.read(path))
+      manifest.fetch("files").map do |file|
+        relative = safe_asset_path(file.fetch("path"))
+        contents = Base64.strict_decode64(file.fetch("contents"))
+        checksum = Digest::SHA256.hexdigest(contents)
+        raise SerializationError, "Ruby source checksum mismatch: #{relative}" \
+          unless checksum == file.fetch("sha256")
+
+        { path: relative, contents:, sha256: checksum, mode: file.fetch("mode", 0o644) }
+      end
+    rescue JSON::ParserError, KeyError, ArgumentError => e
+      raise SerializationError, "invalid Ruby source manifest: #{e.message}"
+    end
 
     def materialize_design_system
       design_system = @definition[:design_system]
@@ -352,7 +370,8 @@ module Mxrb
         if existing
           current = mpr.parse_contents(existing)
           preserved = current.merge(doc).merge(
-            '$ID' => current['$ID'] || existing.fetch('UnitID'), '$Type' => doc.fetch('$Type')
+            '$ID' => current['$ID'] || existing.fetch('UnitID'),
+            '$Type' => doc['$Type'] || doc[:'$Type'] || document.fetch(:type)
           )
           mpr.update_unit(existing.fetch('UnitID'), preserved)
           next
@@ -431,26 +450,59 @@ module Mxrb
     def upsert_native_unit(mpr, container_id, unit)
       doc = unit.fetch("doc")
       name = doc["Name"] || doc["name"]
-      existing = if name.to_s.empty?
-        mpr.children_of(container_id).find { mpr.parse_contents(_1)["$Type"] == doc["$Type"] }
-      else
-        mpr.children_of(container_id).find do |raw|
-          existing_doc = mpr.parse_contents(raw)
-          (existing_doc["Name"] || existing_doc["name"]) == name && existing_doc["$Type"] == doc["$Type"]
-        end
-      end
+      requested_id = unit["unit_id"].to_s
+      requested_id = nil if requested_id.empty?
+      stable = mpr.unit(requested_id) if requested_id
+      existing = stable if stable && mpr.parse_contents(stable)["$Type"] == doc["$Type"]
+      candidates = mpr.children_of(container_id)
+      existing ||= if name.to_s.empty?
+                     candidates.find { mpr.parse_contents(_1)["$Type"] == doc["$Type"] }
+                   else
+                     candidates.find do |raw|
+                       existing_doc = mpr.parse_contents(raw)
+                       (existing_doc["Name"] || existing_doc["name"]) == name &&
+                         existing_doc["$Type"] == doc["$Type"]
+                     end
+                   end
       if existing
         current = mpr.parse_contents(existing)
         preserved = {
           "$ID" => current["$ID"] || existing.fetch("UnitID"),
           "$Type" => doc["$Type"]
         }.merge(current).merge(doc)
+        preserved["$ID"] = current["$ID"] || existing.fetch("UnitID") unless existing.equal?(stable)
         mpr.update_unit(existing.fetch("UnitID"), preserved)
         existing.fetch("UnitID")
       else
         containment = unit.fetch("containment")
-        mpr.insert_unit(container_uuid: container_id, containment_name: containment, contents_doc: doc)
+        inserted_id = stable ? SecureRandom.uuid : requested_id
+        inserted_doc = stable ? doc.merge("$ID" => inserted_id) : doc
+        mpr.insert_unit(
+          container_uuid: container_id,
+          containment_name: containment,
+          contents_doc: inserted_doc,
+          unit_uuid: inserted_id
+        )
       end
+    end
+
+    def write_native_compatibility(mpr, native_units)
+      mismatches = native_units.filter_map do |unit|
+        unit_id = unit["unit_id"].to_s
+        doc = unit.fetch("doc")
+        content_id = IO::BsonCodec.extract_id(doc["$ID"]).to_s
+        next if unit_id.empty? || content_id.empty? || unit_id == content_id
+
+        raw = mpr.unit(unit_id)
+        next unless raw
+
+        written = mpr.parse_contents(raw)
+        written_id = IO::BsonCodec.extract_id(written["$ID"]).to_s
+        next unless written_id == content_id && written["$Type"] == doc["$Type"]
+
+        { unit_id: unit_id, content_id: content_id, type: doc["$Type"] }
+      end
+      mpr.write_legacy_unit_identity_mismatches(mismatches)
     end
 
     def write_project_security(mpr, root_id, security)
@@ -899,6 +951,7 @@ module Mxrb
       doc.delete("__mxrb_preserve_native_body")
       doc.delete("__mxrb_deep_structure_declared")
       doc.delete("__mxrb_allow_concurrent_execution_declared")
+      doc.delete("__mxrb_apply_entity_access_declared")
       doc.delete("__mxrb_mark_as_used_declared")
       doc.delete("__mxrb_excluded_declared")
       strip_nested_internal_keys(doc)
@@ -1131,6 +1184,7 @@ module Mxrb
     def preserve_flow_metadata(merged, existing, generated)
       {
         "AllowConcurrentExecution" => "__mxrb_allow_concurrent_execution_declared",
+        "ApplyEntityAccess" => "__mxrb_apply_entity_access_declared",
         "MarkAsUsed" => "__mxrb_mark_as_used_declared",
         "Excluded" => "__mxrb_excluded_declared"
       }.each do |field, declaration|
@@ -1459,7 +1513,7 @@ module Mxrb
     end
 
     def attribute_doc(attr, previous)
-      storage_type = Model::Attribute::TYPE_MAP.fetch(attr.fetch(:type))
+      storage_type = Model::Attribute::TYPE_MAP.fetch(attr.fetch(:type).to_sym)
       type_key = native_existing_key(previous, "type", "Type", "newType", "NewType") || "NewType"
       value_key = native_existing_key(previous, "value", "Value") || "Value"
       name_key = native_key(previous, "name", "Name")
@@ -2259,6 +2313,48 @@ module Mxrb
       }
     end
 
+    # A project created outside Studio Pro may not have the pluggable-widget
+    # package available yet. These standard-shaped fallback fields preserve
+    # the concise Ruby projection until Studio Pro can hydrate the widget.
+    def configure_fallback_data_grid!(doc, options)
+      entity = options[:entity].to_s
+      columns = Array(options[:columns]).map do |column|
+        attribute = column[:attribute].to_s
+        attribute = "#{entity}.#{attribute}" if !entity.empty? && !attribute.empty? && !attribute.include?('.')
+        {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DataGridColumn',
+          'Name' => column[:name].to_s,
+          'AttributeRef' => attribute_ref_doc(attribute),
+          'Caption' => text_doc(column[:caption] || column[:name])
+        }
+      end
+      toolbar = Array(options.dig(:toolbar, :buttons)).map do |button|
+        kind = { new: 'New', delete: 'Delete', search: 'Search', export: 'ExportToExcel' }
+               .fetch(button[:type].to_sym)
+        {
+          '$ID' => SecureRandom.uuid, '$Type' => "Forms$Grid#{kind}Button",
+          'Caption' => text_doc(button[:caption].to_s)
+        }
+      end
+      doc['DataSource'] = {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DatabaseSource', 'Entity' => entity
+      }
+      doc['Columns'] = IO::BsonCodec.build_array(columns)
+      doc['ToolBar'] = {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$GridControlBar',
+        'Buttons' => IO::BsonCodec.build_array(toolbar)
+      }
+      doc
+    end
+
+    def configure_fallback_combo_box!(doc, options)
+      doc['AttributePath'] = options[:attribute].to_s if options[:attribute]
+      doc['LabelText'] = text_doc(options[:caption]) if options.key?(:caption)
+      doc['SelectorType'] = options[:__kind].to_sym == :reference_selector ? 'Reference' : 'Enumeration'
+      doc['DisplayAttribute'] = options[:display_attribute].to_s if options[:display_attribute]
+      doc
+    end
+
     def combo_box_descriptor
       {
         id: "com.mendix.widget.web.combobox.Combobox", name: "Combo box",
@@ -2305,6 +2401,15 @@ module Mxrb
       configure_data_grid2!(doc, options) if descriptor.fetch(:id) == data_grid2_descriptor[:id]
       configure_combo_box!(doc, options) if descriptor.fetch(:id) == combo_box_descriptor[:id]
       configure_pluggable_widget!(doc, options) if widget.fetch(:type) == :pluggable_widget
+      if definition.nil? && descriptor.fetch(:id) == data_grid2_descriptor[:id]
+        configure_fallback_data_grid!(doc, options)
+      end
+      if definition.nil? && descriptor.fetch(:id) == combo_box_descriptor[:id]
+        configure_fallback_combo_box!(doc, options)
+      end
+      widget.fetch(:events, []).each do |event|
+        doc[event_property(event.fetch(:event))] = client_action_doc(event)
+      end
       doc
     end
 
@@ -2584,6 +2689,7 @@ module Mxrb
       body_declared   = !flow[:body].nil? || !flow[:return_expression].nil?
       return_var_name = flow[:return_variable_name] || "ReturnValue"
       allow_concurrent = flow[:allow_concurrent_execution]
+      apply_entity_access = flow[:apply_entity_access]
       mark_as_used = flow[:mark_as_used]
       excluded = flow[:excluded]
 
@@ -2601,6 +2707,7 @@ module Mxrb
         "Name" => flow_name, "Documentation" => flow.fetch(:documentation, ""),
         "ReturnVariableName" => return_var_name,
         "AllowConcurrentExecution" => allow_concurrent.nil? ? true : allow_concurrent,
+        "ApplyEntityAccess" => apply_entity_access.nil? ? false : apply_entity_access,
         "MarkAsUsed" => mark_as_used.nil? ? false : mark_as_used,
         "Excluded" => excluded.nil? ? false : excluded,
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(flow[:allowed_roles]), marker: 1),
@@ -2608,6 +2715,7 @@ module Mxrb
         "__mxrb_body_declared" => body_declared,
         "__mxrb_preserve_native_body" => flow[:preserve_native_body] == true,
         "__mxrb_allow_concurrent_execution_declared" => !allow_concurrent.nil?,
+        "__mxrb_apply_entity_access_declared" => !apply_entity_access.nil?,
         "__mxrb_mark_as_used_declared" => !mark_as_used.nil?,
         "__mxrb_excluded_declared" => !excluded.nil?,
         "MicroflowReturnType" => microflow_data_type_doc(flow[:return_type], module_name),

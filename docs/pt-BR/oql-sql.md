@@ -42,6 +42,47 @@ Os nomes físicos devem ser conferidos no banco criado pelo Runtime Mendix
 exato. Joins por caminho de associação são declarados não suportados enquanto
 os metadados de armazenamento do Runtime não puderem provar o join correto.
 
+## Conversão segura de SQL para OQL
+
+O caminho inverso aceita um subconjunto de `SELECT` em PostgreSQL, SQL Server
+ou ANSI e produz OQL lógico. Informar o projeto permite recuperar exatamente a
+capitalização dos módulos, entidades e atributos:
+
+```ruby
+projection = Mxrb.open("Shop.mpr") do |project|
+  project.sql_to_oql(
+    'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name',
+    dialect: :postgresql
+  )
+end
+
+puts projection.oql if projection.supported?
+# SELECT p/Name FROM Shop.Product p WHERE p/Name = $Name
+```
+
+O comando unificado `query` converte nas duas direções; `--input -` lê de stdin
+e `--json` retorna o resultado tipado:
+
+```sh
+bundle exec mxrb query \
+  'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name' \
+  --from sql --to oql --project Shop.mpr --dialect postgresql
+bundle exec mxrb query 'SELECT p/Name FROM Shop.Product p' \
+  --from oql --to sql --dialect sql_server
+bundle exec mxrb query --input query.sql --from sql --dialect sql_server --json
+```
+
+O subconjunto inclui aliases, joins explícitos, fontes separadas por vírgula,
+`WHERE`, `GROUP BY`, `HAVING`, `UNION`, `ORDER BY`, `LIMIT`/`OFFSET`, funções
+OQL conhecidas e parâmetros nomeados (`:Name`, `@Name` ou `$Name`). Tabelas
+físicas `module$entity` viram `Module.Entity`; sem `--project`, a capitalização
+é inferida e o resultado recebe confiança `inferred`.
+
+Escritas, múltiplas instruções, CTEs, subconsultas em `FROM`/`JOIN`, parâmetros
+posicionais, funções desconhecidas e extensões sem equivalente OQL seguro, como `ILIKE`,
+`DISTINCT ON`, `TOP`, `::` e concatenação `||`, retornam `supported? == false`
+com uma explicação em `warnings`.
+
 ## Análise dialect-aware
 
 `Oql::Analyzer` encontra padrões de custo e portabilidade na fonte original,

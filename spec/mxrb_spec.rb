@@ -124,6 +124,16 @@ RSpec.describe Mxrb do
       expect(described_class.extract_id(binary)).to eq(uuid)
     end
 
+    it "restores line-wrapped canonical Extended JSON binary" do
+      bytes = "a" * 120
+      restored = described_class.restore_extended_json(
+        "$binary" => { "base64" => Base64.encode64(bytes), "subType" => "00" }
+      )
+
+      expect(restored).to be_a(BSON::Binary)
+      expect(restored.data).to eq(bytes)
+    end
+
     it "parses arrays with marker" do
       result = described_class.parse_array([3, "a", "b"])
       expect(result[:marker]).to eq(3)
@@ -1266,6 +1276,8 @@ RSpec.describe Mxrb do
         page = project.pages.find { _1.name == "OrderList" }
         grid = page.widgets.find { _1[:type] == :data_grid }
         expect(grid).not_to be_nil
+        expect(grid[:options]).to include(entity: "Sales.Order")
+        expect(grid[:options][:columns]).to include(include(name: "Name", attribute: "Sales.Order.Name"))
       end
     end
 
@@ -4298,7 +4310,9 @@ RSpec.describe Mxrb do
         page = project.pages.first
         grid = page.widgets.find { _1[:type] == :data_grid }
         expect(grid).not_to be_nil
-        expect(grid[:options][:columns]).to be_empty
+        expect(grid[:options]).to include(entity: "M.Order")
+        expect(grid[:options][:columns]).to include(include(name: "Name", attribute: "M.Order.Name"))
+        expect(grid[:options].dig(:toolbar, :buttons).map { _1[:type] }).to eq(%i[new delete export])
       end
     end
 

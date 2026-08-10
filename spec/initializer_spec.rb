@@ -23,16 +23,24 @@ RSpec.describe Mxrb::Initializer do
         'theme/web/main.scss',
         'theme/web/exclusion-variables.scss',
         'theme/web/settings.json',
-        'theme-cache/web/theme.compiled.css'
+        'theme-cache/web/theme.compiled.css',
+        'config/environments/development.env.example',
+        'config/environments/qa.env.example',
+        'config/environments/staging.env.example',
+        'config/environments/production.env.example'
       ].map { File.join(result.root, _1) }
       expect(result.root).to eq(File.join(dir, 'vet_clinic'))
       expect(result.files).to eq(expected)
       expect(result.files).to all(satisfy { File.file?(_1) })
-      expect(File.read(expected[0])).to include('gem "dotenv", "~> 3.0"')
+      expect(File.read(expected[0])).to include('gem "mxrb"')
+      expect(File.read(expected[0])).not_to include('dotenv')
       expect(File.read(expected[1])).to include('.env', '!.env.example')
+      expect(File.read(expected[1])).to include(
+        'config/environments/*.env', '!config/environments/*.env.example'
+      )
       expect(File.read(expected[2])).to include('MXRB_MENDIX_PAT=')
       expect(File.read(expected[3])).to include(
-        'require "dotenv/load"',
+        'Mxrb::Environment.load(root: __dir__).apply',
         'Mxrb.define', 'mendix_version "11.12.1"',
         'home_page: "VetClinic.Home"', 'app_title: "VetClinic"',
         'evaluate_dir File.join(__dir__, "app", "navigation", "responsive")',
@@ -65,6 +73,15 @@ RSpec.describe Mxrb::Initializer do
       expect(File.read(expected[16])).to include(
         '.mxrb-page-header', 'background: linear-gradient', '.mxrb-card'
       )
+      expected.last(4).zip(%w[development qa staging production]).each do |path, environment|
+        contents = File.read(path)
+        expect(contents).to include(
+          "MXRB_DATABASE_PATH=.mxrb/runtime/#{environment}.sqlite3",
+          'MXRB_SESSION_TTL=3600', 'MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false',
+          "MXRB_AUTH_TOKENS=\n", "MXRB_USERS_JSON=\n"
+        )
+        expect(contents).not_to match(/MXRB_(?:AUTH_TOKENS|USERS_JSON)=.+/)
+      end
 
       load expected[3]
       mpr = File.join(result.root, 'VetClinic.mpr')
@@ -74,6 +91,40 @@ RSpec.describe Mxrb::Initializer do
       expect(Mxrb.open(mpr) { _1.navigation.profiles.first.home_page }).to eq('VetClinic.Home')
       layout = Mxrb.open(mpr) { _1.find_artifact('VetClinic.ApplicationLayout') }
       expect(layout).not_to be_nil
+    end
+  end
+
+  it 'starts in conventional Ruby mode and materializes later model edits as Mendix' do
+    Dir.mktmpdir do |dir|
+      result = described_class.new(
+        'ruby_shop', mode: :ruby, mxrb_path: File.expand_path('..', __dir__)
+      ).scaffold(into: dir)
+      manifest_path = File.join(result.root, '.mxrb', 'ruby-app.json')
+
+      expect(JSON.parse(File.read(manifest_path))).to include('mode' => 'ruby')
+      expect(File).to exist(File.join(result.root, 'frontend', 'src', 'App.jsx'))
+      expect(File).to exist(File.join(result.root, 'app', 'pages', 'ruby_shop', 'home_page.rb'))
+      expect(File.read(File.join(result.root, 'Gemfile'))).to include(
+        "gem 'mxrb', path: #{File.expand_path('..', __dir__).inspect}"
+      )
+
+      model = File.join(result.root, 'app', 'models', 'ruby_shop', 'product.rb')
+      FileUtils.mkdir_p(File.dirname(model))
+      File.write(model, <<~RUBY)
+        # frozen_string_literal: true
+
+        module RubyShop
+          class Product < Mxrb::RubyApp::Record
+            mendix_name 'RubyShop.Product'
+            persistence true
+            attribute :name, type: :string, mendix_name: 'Name', required: false
+          end
+        end
+      RUBY
+      target = File.join(result.root, 'build', 'RubyShop.mpr')
+      expect(Mxrb::RubyApp.compile(result.root, target)).to eq(target)
+      expect(Mxrb.validate(target)).to be_valid
+      expect(Mxrb.open(target) { _1.entities.map(&:qualified_name) }).to include('RubyShop.Product')
     end
   end
 
@@ -120,6 +171,9 @@ RSpec.describe Mxrb::Initializer do
       expect { described_class.new(name) }.to raise_error(ArgumentError, /project name/)
     end
     Dir.mktmpdir do |dir|
+      expect { described_class.new('missing_path', mxrb_path: File.join(dir, 'missing')) }
+        .to raise_error(ArgumentError, /mxrb path does not exist/)
+
       existing = File.join(dir, 'existing')
       FileUtils.mkdir_p(existing)
       File.write(File.join(existing, 'keep.txt'), 'keep')

@@ -157,15 +157,23 @@ module Mxrb
         @transaction.write(path, lines.join)
       end
 
-      def connect_project_dotenv(source)
+      def connect_project_dotenv(source) # rubocop:disable Metrics/MethodLength
+        return source if source.include?('Mxrb::Environment.load(root: __dir__).apply')
+
         dotenv_line = 'Dotenv.load(File.join(__dir__, ".env"))'
         return source if source.include?(dotenv_line)
 
         lines = source.lines
         require_line = lines.index { _1.match?(%r{^require ["']dotenv/load["']\s*$}) }
-        raise ArgumentError, 'project.rb must require dotenv/load before scaffolding demo users' unless require_line
+        return lines.insert(require_line + 1, "#{dotenv_line}\n").join if require_line
 
-        lines.insert(require_line + 1, "#{dotenv_line}\n").join
+        mxrb_require = lines.index { _1.match?(/^require ["']mxrb["']\s*$/) }
+        unless mxrb_require
+          raise ArgumentError,
+                'project.rb must require mxrb or dotenv/load before scaffolding demo users'
+        end
+
+        lines.insert(mxrb_require + 1, "\nMxrb::Environment.load(root: __dir__).apply\n").join
       end
 
       def security_initialization_error

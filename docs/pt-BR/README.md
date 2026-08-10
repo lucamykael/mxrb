@@ -13,6 +13,7 @@
 - [Roadmap Ruby-first](ruby-first-roadmap.md)
 - [Matriz de validação](validation-matrix.md)
 - [Compilador nativo e Runtime](compiler.md)
+- [Runtime Ruby sem Java e ambientes](runtime-ruby.md)
 - [Relatório de qualidade do build e Runtime](native-runtime-quality-report.md)
 - [Criação e edição de projetos](writing.md)
 - [Scaffolds de projeto](scaffolds.md)

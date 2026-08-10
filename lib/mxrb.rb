@@ -6,6 +6,7 @@ require_relative "mxrb/progress"
 require_relative "mxrb/doctor"
 require_relative "mxrb/benchmark"
 require_relative "mxrb/project_lifecycle"
+require_relative "mxrb/environment"
 require_relative "mxrb/scaffold/templates"
 require_relative "mxrb/scaffold/page_templates"
 require_relative "mxrb/initializer"
@@ -16,6 +17,8 @@ require_relative "mxrb/scaffold/recipes"
 require_relative "mxrb/scaffold/generator"
 require_relative "mxrb/scaffold/help"
 require_relative "mxrb/scaffold/cli"
+require_relative "mxrb/cli/help"
+require_relative "mxrb/cli/release"
 require_relative "mxrb/io/bson_codec"
 require_relative "mxrb/widget_package"
 require_relative "mxrb/frontend/migrator"
@@ -36,6 +39,12 @@ require_relative "mxrb/model/design_migration"
 require_relative "mxrb/model/module"
 require_relative "mxrb/model/connector"
 require_relative "mxrb/model/project"
+require_relative "mxrb/domain_diagram"
+require_relative "mxrb/domain_diagram/lifecycle"
+require_relative "mxrb/uml/class_diagram"
+require_relative "mxrb/uml/activity_diagram"
+require_relative "mxrb/uml/sequence_diagram"
+require_relative "mxrb/uml/server"
 require_relative "mxrb/protocols"
 require_relative "mxrb/oql"
 require_relative "mxrb/oql/plan_analyzer"
@@ -126,6 +135,13 @@ require_relative "mxrb/widget_synchronizer"
 require_relative "mxrb/runtime/docker_workspace"
 require_relative "mxrb/runtime/executor"
 require_relative "mxrb/runtime/native"
+require_relative "mxrb/runtime/schema_migrator"
+require_relative "mxrb/runtime/sqlite_store"
+require_relative "mxrb/runtime/access_control"
+require_relative "mxrb/runtime/scheduler"
+require_relative "mxrb/ruby_app"
+require_relative "mxrb/ruby_app/preset"
+require_relative "mxrb/ruby_app/exporter"
 require_relative "mxrb/runtime/docker_executor"
 require_relative "mxrb/runtime/clipboard"
 require_relative "mxrb/runtime/database_workspace"
@@ -169,8 +185,12 @@ module Mxrb
   #
   def self.define(path, &block)
     output = ENV.fetch("MXRB_OUTPUT_PATH", path)
-    Dsl::Builder.new(output).tap { _1.instance_eval(&block) }.build!
+    builder = Dsl::Builder.new(output).tap { _1.instance_eval(&block) }.build!
+    @last_defined_path = builder.path
+    builder
   end
+
+  def self.last_defined_path = @last_defined_path
 
   def self.validate(path)
     Integrity::Validator.new(path).validate

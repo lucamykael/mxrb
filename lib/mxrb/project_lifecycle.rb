@@ -11,6 +11,7 @@ module Mxrb
   # Inspects, previews upgrades, and compares generated definitions with an MPR.
   class ProjectLifecycle
     VERSION = /\A\d+\.\d+\.\d+\z/
+    VERSION_DECLARATION = /(?<prefix>mendix_version(?:\s+|\s*=\s*))["'](?<version>[^"']+)["']/
 
     def initialize(root = Dir.pwd)
       @root = File.expand_path(root)
@@ -36,7 +37,9 @@ module Mxrb
       raise ArgumentError, 'project.rb has no mendix_version declaration' unless current
 
       if apply
-        updated = source.sub(/mendix_version\s+["'][^"']+["']/, %(mendix_version "#{target}"))
+        updated = source.sub(VERSION_DECLARATION) do
+          "#{Regexp.last_match(:prefix)}\"#{target}\""
+        end
         transaction = Scaffold::Transaction.new
         transaction.write(@project_file, updated)
         transaction.commit
@@ -70,7 +73,7 @@ module Mxrb
     def declared_version
       return unless File.file?(@project_file)
 
-      File.read(@project_file)[/mendix_version\s+["']([^"']+)["']/, 1]
+      File.read(@project_file).match(VERSION_DECLARATION)&.[](:version)
     end
   end
 end

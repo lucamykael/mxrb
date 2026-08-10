@@ -616,6 +616,13 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     ].each do |type, payload, kind|
       expect(page.send(:parse_action, payload.merge("$Type" => type))[:kind]).to eq(kind)
     end
+    nanoflow_action = page.send(:parse_action, {
+      "$Type" => "Pages$CallNanoflowClientAction", "Nanoflow" => "Sales.ClientRun",
+      "ParameterMappings" => [3, { "Parameter" => "Sales.ClientRun.Order", "Expression" => "$Order" }]
+    })
+    expect(nanoflow_action).to include(
+      kind: :nanoflow, handler: "ClientRun", arguments: { "Order" => "$Order" }
+    )
 
     module_doc = { "$ID" => "mod", "$Type" => "Projects$Module", "Name" => "Sales" }
     module_mpr = double(parse_contents: module_doc)
@@ -1557,7 +1564,7 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       Mxrb::Exporter.new(path, exported).export!
 
       # Spot-check exported content for optional features
-      product_src = Dir.glob(File.join(exported, "**", "product.rb")).first
+      product_src = Dir.glob(File.join(exported, "**", "product_dto.rb")).first
       expect(product_src).not_to be_nil
       content = File.read(product_src)
       expect(content).to include("non_persistent!")

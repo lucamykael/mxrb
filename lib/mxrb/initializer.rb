@@ -5,18 +5,30 @@ require 'tmpdir'
 
 module Mxrb
   # Creates the minimum editable Ruby project accepted by `mxrb generate`.
-  # rubocop:disable Metrics/ClassLength
+  # rubocop:disable Metrics
   class Initializer
     Result = Data.define(:root, :files)
     NAME = /\A[A-Za-z][A-Za-z0-9_-]*\z/
+    MODES = %i[mendix ruby].freeze
     COMPOUND_SUFFIXES = %w[service clinic portal demo api app kit].freeze
 
-    def initialize(name, subject: :project, mxrb_path: nil)
+    attr_reader :mode
+
+    def initialize(name, subject: :project, mxrb_path: nil, mode: :mendix, stack: nil)
       @dir_name = name.to_s
       raise ArgumentError, "#{subject} name must be snake_case or PascalCase" unless NAME.match?(@dir_name)
 
       @module_name = to_pascal_case(@dir_name)
       @mpr_name = "#{@module_name}.mpr"
+      @mode = mode.to_sym
+      raise ArgumentError, 'project mode must be mendix or ruby' unless MODES.include?(@mode)
+
+      @stack = stack&.to_sym
+      raise ArgumentError, 'Ruby stack presets require --mode ruby' if @stack && @mode != :ruby
+      if @stack && !RubyApp::Preset::NAMES.include?(@stack)
+        raise ArgumentError, "Ruby stack must be #{RubyApp::Preset::NAMES.join(' or ')}"
+      end
+
       @mxrb_path = File.expand_path(mxrb_path) if mxrb_path
       raise ArgumentError, "mxrb path does not exist: #{@mxrb_path}" if @mxrb_path && !File.directory?(@mxrb_path)
     end
@@ -28,19 +40,61 @@ module Mxrb
 
       FileUtils.mkdir_p(parent)
       staging = Dir.mktmpdir(".#{@dir_name}.mxrb-init-", parent)
-      write_scaffold(staging)
+      mode == :ruby ? write_ruby_scaffold(staging) : write_scaffold(staging)
+      files = mode == :ruby ? generated_files(staging) : relative_files
       FileUtils.mv(staging, root)
-      Result.new(root, relative_files.map { File.join(root, _1) }.freeze)
+      Result.new(root, files.map { File.join(root, _1) }.freeze)
     ensure
       FileUtils.rm_rf(staging) if staging && File.exist?(staging)
     end
 
     private
 
+    def write_ruby_scaffold(root)
+      bootstrap = File.join(root, '.mxrb-bootstrap')
+      write_scaffold(bootstrap)
+      target = File.join(bootstrap, @mpr_name)
+      previous = ENV['MXRB_OUTPUT_PATH']
+      library = @mxrb_path ? File.join(@mxrb_path, 'lib') : File.expand_path('..', __dir__)
+      added_load_path = !$LOAD_PATH.include?(library)
+      $LOAD_PATH.unshift(library) if added_load_path
+      ENV['MXRB_OUTPUT_PATH'] = target
+      load File.join(bootstrap, 'project.rb')
+      Exporter.new(target, root, mode: :ruby).export!(parallel: false)
+      pin_exported_gemfile(root) if @mxrb_path
+      RubyApp::Preset.apply!(root, @stack) if @stack
+    ensure
+      if previous
+        ENV['MXRB_OUTPUT_PATH'] = previous
+      else
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+      $LOAD_PATH.delete(library) if added_load_path
+      FileUtils.rm_rf(bootstrap)
+    end
+
+    def generated_files(root)
+      Dir.glob(File.join(root, '**', '*'), File::FNM_DOTMATCH)
+         .select { File.file?(_1) }
+         .map { Pathname.new(_1).relative_path_from(Pathname.new(root)).to_s }
+         .sort
+    end
+
+    def pin_exported_gemfile(root)
+      File.binwrite(
+        File.join(root, 'Gemfile'),
+        "# frozen_string_literal: true\n\nsource 'https://rubygems.org'\n" \
+        "gem 'mxrb', path: #{@mxrb_path.inspect}\n"
+      )
+    end
+
     def write_scaffold(root)
       write(root, 'Gemfile', gemfile)
       write(root, '.gitignore', gitignore)
       write(root, '.env.example', env_example)
+      environment_names.each do |name|
+        write(File.join(root, 'config', 'environments'), "#{name}.env.example", environment_example(name))
+      end
       write(root, 'project.rb', project_rb)
       write(File.join(root, 'app', 'navigation', 'responsive'), '.keep', '')
       write_design_scaffold(root)
@@ -79,7 +133,8 @@ module Mxrb
       ['Gemfile', '.gitignore', '.env.example', 'project.rb',
        *relative_module_files.map { File.join(module_prefix, _1) },
        File.join('app', 'navigation', 'responsive', '.keep'),
-       *design_files.keys.map { File.join(*_1) }]
+       *design_files.keys.map { File.join(*_1) },
+       *environment_names.map { File.join('config', 'environments', "#{_1}.env.example") }]
     end
 
     def relative_module_files
@@ -121,7 +176,6 @@ module Mxrb
         source "https://rubygems.org"
 
         #{gem_declaration}
-        gem "dotenv", "~> 3.0"
       RUBY
     end
 
@@ -131,6 +185,8 @@ module Mxrb
         .env
         .env.*
         !.env.example
+        config/environments/*.env
+        !config/environments/*.env.example
       TEXT
     end
 
@@ -138,6 +194,19 @@ module Mxrb
       <<~TEXT
         # Copy to .env and keep real values local. Never commit secrets.
         MXRB_MENDIX_PAT=
+      TEXT
+    end
+
+    def environment_names = %w[development qa staging production]
+
+    def environment_example(name)
+      <<~TEXT
+        # Copy to #{name}.env. Process ENV still has highest precedence.
+        MXRB_DATABASE_PATH=.mxrb/runtime/#{name}.sqlite3
+        MXRB_SESSION_TTL=3600
+        MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false
+        MXRB_AUTH_TOKENS=
+        MXRB_USERS_JSON=
       TEXT
     end
 
@@ -151,9 +220,9 @@ module Mxrb
       <<~RUBY
         # frozen_string_literal: true
 
-        require "dotenv/load"
-        Dotenv.load(File.join(__dir__, ".env"))
         require "mxrb"
+
+        Mxrb::Environment.load(root: __dir__).apply
 
         output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, "#{@mpr_name}"))
 
@@ -254,5 +323,5 @@ module Mxrb
       RUBY
     end
   end
-  # rubocop:enable Metrics/ClassLength
+  # rubocop:enable Metrics
 end
