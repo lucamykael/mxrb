@@ -130,7 +130,11 @@ module Mxrb
       end
 
       def association_manifest(mod, association)
-        entities = @project.modules.flat_map(&:entities).to_h { [_1.id.to_s, _1.qualified_name.to_s] }
+        entities = @project.modules.flat_map do |project_module|
+          project_module.entities.map do |entity|
+            [entity.id.to_s, "#{project_module.name}.#{entity.name}"]
+          end
+        end.to_h
         {
           'name' => "#{mod.name}.#{association.name}", 'id' => association.id,
           'type' => association.association_type.to_s,
@@ -718,7 +722,7 @@ module Mxrb
 
       def frontend_app
         <<~'JS'
-          import { useCallback, useEffect, useState } from 'react';
+          import { useCallback, useEffect, useRef, useState } from 'react';
           import nanoflows from './nanoflows.js';
 
           const TOKEN_KEY = 'mxrb.session.token';
@@ -740,6 +744,14 @@ module Mxrb
           const classes = (...values) => values.filter(Boolean).join(' ');
           const attributes = object => object?.attributes || {};
           const memberName = value => (value || '').split(/[./]/).pop();
+          const entityCollectionPath = (entity, association, context) => {
+            const path = `/api/entities/${encodeURIComponent(entity)}`;
+            if (!association || !context?.type || !context?.id) return path;
+            const query = new URLSearchParams({
+              association, context_type: context.type, context_id: context.id
+            });
+            return `${path}?${query}`;
+          };
           const expressionValue = (source, context, variables = {}) => {
             const text = (source || '').trim();
             const wrapped = text.match(/^toString\((.*)\)$/);
@@ -961,17 +973,14 @@ module Mxrb
             useEffect(() => {
               if (!options.entity) return;
               setLoading(true);
-              request(`/api/entities/${encodeURIComponent(options.entity)}`).then(payload => {
+              request(entityCollectionPath(options.entity, options.association, pageContext)).then(payload => {
                 let values = payload.records || [];
-                const associationName = memberName(options.association);
-                if (associationName && pageContext?.id) {
-                  values = values.filter(record => record.attributes?.[associationName]?.id === pageContext.id);
-                }
                 values = sortRecords(values, options.sort || []);
                 setRecords(values);
                 setPageNumber(current => Math.min(current, Math.max(0, Math.ceil(values.length / pageSize) - 1)));
               }).catch(onError).finally(() => setLoading(false));
-            }, [options.entity, options.association, pageContext?.id, pageSize, reload, revision, request, onError]);
+            }, [options.entity, options.association, pageContext?.type, pageContext?.id,
+                pageSize, reload, revision, request, onError]);
 
             const mutate = operation => operation.then(result => {
               setReload(value => value + 1);
@@ -1024,15 +1033,11 @@ module Mxrb
             const [records, setRecords] = useState([]);
             useEffect(() => {
               if (!options.entity) return;
-              request(`/api/entities/${encodeURIComponent(options.entity)}`).then(payload => {
-                let values = payload.records || [];
-                const association = memberName(options.association);
-                if (association && pageContext?.id) {
-                  values = values.filter(record => record.attributes?.[association]?.id === pageContext.id);
-                }
-                setRecords(sortRecords(values, options.sort || []));
+              request(entityCollectionPath(options.entity, options.association, pageContext)).then(payload => {
+                setRecords(sortRecords(payload.records || [], options.sort || []));
               }).catch(onError);
-            }, [options.entity, options.association, pageContext?.id, revision, request, onError]);
+            }, [options.entity, options.association, pageContext?.type, pageContext?.id,
+                revision, request, onError]);
             return <div className={classes('mxrb-widget', 'mxrb-gallery', options.class)}>
               <div className="mxrb-gallery-items gallery-items">
                 {records.map(record => <div className="mxrb-gallery-item gallery-item" key={record.id}>
@@ -1182,6 +1187,7 @@ module Mxrb
             const [pageContext, setPageContext] = useState(null);
             const [error, setError] = useState(null);
             const [busy, setBusy] = useState(false);
+            const invocationInFlight = useRef(false);
             const [revision, setRevision] = useState(0);
             const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
             const [session, setSession] = useState(null);
@@ -1284,22 +1290,29 @@ module Mxrb
             const selectRecord = useCallback(record => setPageContext(record), []);
 
             const invoke = (name, parameters = {}, contextOverride = null) => {
+              if (invocationInFlight.current) return Promise.resolve(null);
+              invocationInFlight.current = true;
               setBusy(true);
-              const activeContext = contextOverride || pageContext;
+              const activeContext = pageContext || contextOverride;
               return request(`/api/microflows/${encodeURIComponent(name)}`, {
                 method: 'POST', body: JSON.stringify({
                   ...parameters, ...(activeContext ? { __mxrb_context: activeContext } : {})
                 })
-              })
-                .then(payload => {
-                  setRevision(value => value + 1);
-                  const navigation = (payload.effects || []).find(effect => effect.type === 'open_page');
-                  if (navigation?.page) {
-                    const context = Object.values(navigation.arguments || {})[0] || null;
-                    return openPage(navigation.page, context);
-                  }
-                  return refreshPageContext().then(() => payload);
-                }).catch(handleError).finally(() => setBusy(false));
+                })
+                  .then(payload => {
+                    setRevision(value => value + 1);
+                    if (payload.context) setPageContext(payload.context);
+                    const navigation = (payload.effects || []).find(effect => effect.type === 'open_page');
+                    if (navigation?.page) {
+                      const context = Object.values(navigation.arguments || {})[0]
+                        || payload.context || payload.result || null;
+                      return openPage(navigation.page, context);
+                    }
+                    return payload.context ? payload : refreshPageContext().then(() => payload);
+                  }).catch(handleError).finally(() => {
+                    invocationInFlight.current = false;
+                    setBusy(false);
+                  });
             };
 
             const invokeNanoflow = async (name, parameters = {}, contextOverride = null) => {
@@ -1362,6 +1375,7 @@ module Mxrb
           button, input, textarea, select { font: inherit; }
           .mxrb-app-shell { min-height: 100vh; }
           .mxrb-page { min-height: 100vh; }
+          .mxrb-page[aria-busy='true'] { cursor: progress; pointer-events: none; }
           .mxrb-navigation { position: fixed; z-index: 20; right: 1rem; top: 1rem; }
           .mxrb-navigation ul { display: flex; gap: .5rem; margin: 0; padding: 0; list-style: none; }
           .mxrb-navigation button { border: 1px solid currentColor; border-radius: .4rem; background: transparent; color: inherit; cursor: pointer; }

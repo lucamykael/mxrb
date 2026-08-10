@@ -135,7 +135,8 @@ RSpec.describe 'Ruby application internal contracts' do
     ).once.and_return(true)
     app.send(:authorize_entity!, 'M.E', :read, Object.new)
     allow(store).to receive(:retrieve).with('M.E').and_return([native])
-    allow(store).to receive(:retrieve).with('Missing').and_return([])
+    allow(store).to receive(:find).with('M.E', '1').and_return(native)
+    allow(store).to receive(:find).with('Missing', '1').and_return(nil)
     allow(store).to receive(:transaction).and_yield
     allow(store).to receive(:create).and_return(native)
     allow(store).to receive_messages(commit: native, delete: true)

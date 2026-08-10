@@ -132,7 +132,7 @@ RSpec.describe 'Native runtime entity security context' do
     object = Mxrb::Runtime::Native::ObjectValue.new(
       entity: 'M.E', id: '1', members: { 'Name' => 'Original' }
     )
-    store = double(retrieve: [object])
+    store = double(find: object)
     interpreter = double(store:)
     application.instance_variable_set(:@bridge, double(interpreter:))
     policy = double(authorize!: true)

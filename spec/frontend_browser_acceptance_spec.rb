@@ -26,18 +26,20 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
     }
   end
 
-  def fake_browser(snapshot:, console_errors: [])
+  def fake_browser(snapshot:, console_errors: []) # rubocop:disable Metrics/MethodLength
     instance_double(MxrbFrontendBrowserAcceptance::Browser).tap do |browser|
       allow(browser).to receive_messages(
         login: nil, navigate: nil, click_selector: nil, click_text: nil,
-        wait_for_text: nil, wait_for_selector: nil, wait_for_style: nil, snapshot:,
-        console_errors:, close: nil
+        measure_click: { 'duration_ms' => 42.0 },
+        wait_for_text: nil, wait_for_selector: nil, wait_for_count: nil,
+        wait_for_absence: nil, wait_for_idle: nil, wait_for_style: nil, snapshot:,
+        console_errors:, diagnostics: {}, close: nil
       )
       allow(browser).to receive(:screenshot) do |path|
         File.binwrite(path, 'stable png')
       end
     end
-  end
+  end # rubocop:enable Metrics/MethodLength
 
   def run(browser, root, baseline: nil, update_baseline: false)
     described_class.new(
@@ -102,6 +104,50 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
       end
     end
   end
+
+  it 'runs an unauthenticated multi-step interaction flow in order' do
+    Dir.mktmpdir do |root|
+      config['authentication'] = false
+      config.fetch('pages').first.replace(
+        'name' => 'sudoku', 'path' => '/',
+        'steps' => [
+          { 'click_text' => 'Start easy game' },
+          { 'wait_for_count' => { 'selector' => '.sd-cell', 'equals' => 81 } },
+          { 'measure_click' => { 'selector' => '.sd-cell', 'index' => 72, 'max_ms' => 250 } },
+          { 'wait_for_selector' => '.sd-cell.sd-sel' },
+          { 'wait_for_absence' => '[role="alert"]' }
+        ]
+      )
+      browser = fake_browser(snapshot:)
+
+      report = run(browser, root)
+
+      expect(report).to include(passed: true, authenticated: false)
+      expect(browser).not_to have_received(:login)
+      expect(browser).to have_received(:click_text).with('Start easy game').ordered
+      expect(browser).to have_received(:wait_for_count)
+        .with('selector' => '.sd-cell', 'equals' => 81).ordered
+      expect(browser).to have_received(:measure_click)
+        .with('selector' => '.sd-cell', 'index' => 72, 'max_ms' => 250).ordered
+      expect(browser).to have_received(:wait_for_selector).with('.sd-cell.sd-sel').ordered
+      expect(browser).to have_received(:wait_for_absence).with('[role="alert"]').ordered
+      expect(report.dig(:pages, 0, 'measurements', 0, 'result', 'duration_ms')).to eq(42.0)
+    end
+  end
+
+  it 'rejects ambiguous or empty declarative steps' do
+    Dir.mktmpdir do |root|
+      config['authentication'] = false
+      config.fetch('pages').first.replace(
+        'name' => 'invalid', 'steps' => [{ 'click_text' => 'Easy', 'navigate' => '/' }]
+      )
+
+      report = run(fake_browser(snapshot:), root)
+
+      expect(report).to include(passed: false)
+      expect(report.fetch(:error)).to include('exactly one action')
+    end
+  end
 end
 
 RSpec.describe MxrbFrontendBrowserAcceptance::CdpClient do
@@ -142,6 +188,31 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Browser do
     )
 
     expect(browser).to have_received(:wait).twice
+  end
+
+  it 'supports indexed clicks, exact counts, and absence assertions' do
+    browser = described_class.allocate
+    allow(browser).to receive(:wait).and_return(true)
+
+    browser.click_selector('selector' => '.sd-cell', 'index' => 73)
+    browser.wait_for_count('selector' => '.sd-cell', 'equals' => 81)
+    browser.wait_for_absence('[role="alert"]')
+
+    expect(browser).to have_received(:wait).exactly(3).times
+  end
+
+  it 'enforces measured click latency budgets' do
+    browser = described_class.allocate
+    allow(browser).to receive(:evaluate).and_return(
+      'duration_ms' => 48.5, 'requests' => [{ 'url' => '/api/action', 'duration_ms' => 20.0 }]
+    )
+
+    result = browser.measure_click('selector' => '.cell', 'index' => 2, 'max_ms' => 50)
+    expect(result).to include('duration_ms' => 48.5, 'selector' => '.cell', 'index' => 2)
+
+    allow(browser).to receive(:evaluate).and_return('duration_ms' => 51.0, 'requests' => [])
+    expect { browser.measure_click('selector' => '.cell', 'max_ms' => 50) }
+      .to raise_error(MxrbFrontendBrowserAcceptance::Failure, /budget 50.0ms/)
   end
 end
 

@@ -1,0 +1,43 @@
+{
+  "name": "mxrb-sudoku-full-flow",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "sudoku-gameplay",
+      "path": "/",
+      "steps": [
+        { "click_text": "Start easy game" },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "measure_click": { "selector": ".sd-cell", "index": 72, "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_selector": ".sd-cell.sd-sel" },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "measure_click": { "selector": ".sd-cell", "index": 73, "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_selector": ".sd-cell.sd-sel" },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "measure_click": { "selector": ".sd-cell.sd-open", "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_selector": ".sd-cell.sd-open.sd-sel" },
+        { "measure_click": { "selector": ".sd-key:not(.sd-key-done)", "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "click_text": "MEDIUM" },
+        { "wait_for_idle": true },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "click_text": "HARD" },
+        { "wait_for_idle": true },
+        { "wait_for_count": { "selector": ".sd-cell", "equals": 81 } },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".sd-board",
+        ".sd-seg-btn.sd-seg-on"
+      ]
+    }
+  ]
+}
