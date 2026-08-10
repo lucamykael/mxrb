@@ -118,10 +118,10 @@ RSpec.describe Mxrb::Runtime::Native do
 
   it 'rolls back a failed call and rejects unsupported or malformed execution' do
     expect { @interpreter.call('Clinic.ExternalFailure') }
-      .to raise_error(Mxrb::NativeRuntimeError, /unsupported activity.*JavaAction/)
+      .to raise_error(Mxrb::NativeRuntimeError, /Java Custom Action Clinic\.External is not registered/)
     expect(@interpreter.store.count('Clinic.Animal')).to eq(0)
     expect { @interpreter.call('Clinic.CommittedFailure') }
-      .to raise_error(Mxrb::NativeRuntimeError, /unsupported activity.*JavaAction/)
+      .to raise_error(Mxrb::NativeRuntimeError, /Java Custom Action Clinic\.External is not registered/)
     expect(@interpreter.store.count('Clinic.Animal')).to eq(0)
     expect { @interpreter.call('Clinic.Missing') }
       .to raise_error(Mxrb::NativeRuntimeError, /not found/)
@@ -389,7 +389,7 @@ RSpec.describe Mxrb::Runtime::Native do
     )
     expect do
       interpreter.send(:action_java_action_call, { 'JavaAction' => 'Legacy.Custom' }, {})
-    end.to raise_error(Mxrb::NativeRuntimeError, /outside the pure-Ruby runtime scope/)
+    end.to raise_error(Mxrb::NativeRuntimeError, /Legacy\.Custom is not registered/)
   end
 
   it 'follows modeled error-handler sequence flows' do
@@ -734,7 +734,7 @@ RSpec.describe Mxrb::Runtime::Native do
     fallback = described_class::Interpreter.new(@project, store: wrapper)
     expect(fallback.call('Clinic.Child')).to eq('child')
     expect { fallback.call('Clinic.ExternalFailure') }
-      .to raise_error(Mxrb::NativeRuntimeError, /JavaAction/)
+      .to raise_error(Mxrb::NativeRuntimeError, /Java Custom Action/)
     expect(wrapper.restored).to be(true)
   end
 

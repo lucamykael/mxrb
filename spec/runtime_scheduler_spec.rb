@@ -326,6 +326,9 @@ RSpec.describe Mxrb::Runtime::Scheduler do
     expect do
       described_class.new(project_with(source), executor: ->(_name) {}, poll_interval: 0)
     end.to raise_error(ArgumentError, /poll_interval/)
+    expect do
+      described_class.new(project_with(source), executor: ->(_name) {}, lease_ttl: 0)
+    end.to raise_error(ArgumentError, /lease_ttl/)
     bad_interval = event(
       'BadInterval', microflow: 'Bad',
                      schedule: { '$Type' => 'ScheduledEvents$MinuteSchedule', 'Multiplier' => 0 }
@@ -333,6 +336,56 @@ RSpec.describe Mxrb::Runtime::Scheduler do
     expect do
       described_class.new(project_with(bad_interval), executor: ->(_name) {})
     end.to raise_error(ArgumentError, /interval must be positive/)
+  end
+
+  it 'handles coordinator completion and heartbeat failures without losing scheduler state' do
+    source = event(
+      'Coordinated', microflow: 'Coordinated',
+                     schedule: { '$Type' => 'ScheduledEvents$MinuteSchedule', 'Multiplier' => 1 }
+    )
+    coordinator = Object.new
+    coordinator.define_singleton_method(:claim_scheduled_event) { |**| true }
+    coordinator.define_singleton_method(:complete_scheduled_event) { |**| raise 'completion failed' }
+    logger = double('coordination logger', error: nil)
+    logged = described_class.new(
+      project_with(source), executor: ->(_name) {}, coordinator:, logger:, async: false
+    )
+    expect(logged.tick(Time.utc(2026, 8, 10, 12, 10)).size).to eq(1)
+    expect(logger).to have_received(:error).with(/lease completion failed/)
+    expect(logged.instance_variable_get(:@running_jobs)).to be_empty
+
+    silent = described_class.new(
+      project_with(source), executor: ->(_name) {}, coordinator:, async: false
+    )
+    expect(silent.tick(Time.utc(2026, 8, 10, 12, 10)).size).to eq(1)
+    expect(silent.send(:stop_heartbeat, nil)).to be_nil
+
+    job = silent.jobs.first
+    state = -> { { mutex: Mutex.new, condition: ConditionVariable.new, stopping: false } }
+    stops = Object.new
+    stops.define_singleton_method(:claim_scheduled_event) { |**| true }
+    stops.define_singleton_method(:complete_scheduled_event) { |**| true }
+    stops.define_singleton_method(:renew_scheduled_event) { |**| false }
+    stopping = described_class.new(
+      project_with(source), executor: ->(_name) {}, coordinator: stops, lease_ttl: 0.01, async: false
+    )
+    expect(stopping.send(:heartbeat_loop, job, 'minute:1', state.call)).to be_nil
+
+    broken = Object.new
+    broken.define_singleton_method(:claim_scheduled_event) { |**| true }
+    broken.define_singleton_method(:complete_scheduled_event) { |**| true }
+    broken.define_singleton_method(:renew_scheduled_event) { |**| raise 'renewal failed' }
+    noisy = described_class.new(
+      project_with(source), executor: ->(_name) {}, coordinator: broken,
+                            logger:, lease_ttl: 0.01, async: false
+    )
+    expect(noisy.send(:heartbeat_loop, job, 'minute:1', state.call)).to be_nil
+    expect(logger).to have_received(:error).with(/lease renewal failed/)
+    quiet = described_class.new(
+      project_with(source), executor: ->(_name) {}, coordinator: broken,
+                            lease_ttl: 0.01, async: false
+    )
+    expect(quiet.send(:heartbeat_loop, job, 'minute:1', state.call)).to be_nil
   end
 
   it 'uses IANA daylight-saving transitions and de-duplicates repeated daily wall-clock slots' do

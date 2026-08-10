@@ -305,15 +305,21 @@ RSpec.describe 'Ruby application internal contracts' do
       )
       app.instance_variable_set(:@environment, destructive)
       app.instance_variable_set(:@manifest, double(absolute_path: '/tmp/runtime.mpr'))
-      native_bridge = double
+      native_bridge = double(close: nil)
+      coordinator = app.send(:shared_store)
+      allow(Mxrb::RubyApp::Registry).to receive(:all).and_return({})
       allow(Mxrb::RubyApp::Registry).to receive(:all).with(:record).and_return({})
       allow(Mxrb::RubyApp::Registry).to receive(:adapters).and_return({})
+      allow(Mxrb::RubyApp::Registry).to receive(:java_custom_actions).and_return({})
       allow(Mxrb::RubyApp::NativeBridge).to receive(:new).and_call_original
       expect(Mxrb::RubyApp::NativeBridge).to receive(:new).with(
         '/tmp/runtime.mpr', database: File.join(dir, 'db/custom.sqlite3'),
-                            record_hooks: {}, adapters: {}, allow_destructive: true
+                            record_hooks: {}, adapters: {}, java_custom_actions: {},
+                            allow_destructive: true, coordinator:,
+                            scheduler_lease_ttl: '300'
       ).and_return(native_bridge)
       expect(app.send(:bridge)).to eq(native_bridge)
+      app.close
     ensure
       old ? ENV['MXRB_OUTPUT_PATH'] = old : ENV.delete('MXRB_OUTPUT_PATH')
     end
@@ -465,7 +471,7 @@ RSpec.describe 'Ruby application internal contracts' do
     allow(Mxrb::Runtime::Native::Interpreter).to receive(:new).and_return(interpreter)
     scheduler = double(jobs: [], shutdown: nil)
     executors = []
-    allow(Mxrb::Runtime::Scheduler).to receive(:new) do |_project, executor:|
+    allow(Mxrb::Runtime::Scheduler).to receive(:new) do |_project, executor:, **|
       executors << executor
       scheduler
     end

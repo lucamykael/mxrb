@@ -99,11 +99,16 @@ RSpec.describe 'Ruby application export mode' do
       expect(frontend_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
       adapter_source = File.read(File.join(root, 'config', 'adapters.rb'))
       expect(adapter_source).to include(
-        'Registry.register_adapter(:app_service)', ':import_mapping', ':document'
+        'Registry.register_adapter(:app_service)',
+        "Registry.register_java_custom_action('MyModule.MyAction')",
+        ':import_mapping', ':document'
       )
       expect(adapter_source).not_to include('password=', 'token=')
       expect(File.read(File.join(root, 'config', 'environments', 'production.env.example')))
-        .to include('MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false')
+        .to include(
+          'MXRB_SHARED_STORE_PATH=.mxrb/runtime/production-shared.sqlite3',
+          'MXRB_SCHEDULER_LEASE_TTL=300', 'MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false'
+        )
       sales = manifest.fetch('modules').find { _1.fetch('name') == 'Sales' }
       expect(sales.fetch('services').map { _1.fetch('name') }).to include('Sales.Ping')
       expect(sales.fetch('services').first).to have_key('allowed_module_roles')

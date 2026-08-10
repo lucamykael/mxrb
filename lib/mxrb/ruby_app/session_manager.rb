@@ -4,6 +4,7 @@ require 'digest'
 require 'json'
 require 'securerandom'
 require 'time'
+require_relative '../runtime/shared_store'
 
 module Mxrb
   module RubyApp
@@ -13,13 +14,12 @@ module Mxrb
     # standalone Ruby server. Production deployments can put the same adapter
     # behind their own Rack authentication and provide static bearer tokens.
     class SessionManager
-      Session = Data.define(:token, :context, :expires_at)
-
       attr_reader :ttl
 
+      # rubocop:disable Metrics/ParameterLists
       def initialize(access_control, users: ENV['MXRB_USERS_JSON'],
                      tokens: ENV['MXRB_AUTH_TOKENS'], ttl: ENV.fetch('MXRB_SESSION_TTL', '3600'),
-                     clock: -> { Time.now.utc })
+                     clock: -> { Time.now.utc }, store: nil)
         @access_control = access_control
         @users = parse_map(users, 'MXRB_USERS_JSON')
         @static_tokens = parse_map(tokens, 'MXRB_AUTH_TOKENS')
@@ -27,9 +27,9 @@ module Mxrb
         raise ArgumentError, 'session TTL must be positive' unless @ttl.positive?
 
         @clock = clock
-        @sessions = {}
-        @mutex = Mutex.new
+        @store = store || Runtime::MemorySharedStore.new
       end
+      # rubocop:enable Metrics/ParameterLists
 
       def anonymous
         @access_control.context
@@ -42,13 +42,10 @@ module Mxrb
         static = @static_tokens[token]
         return context_for(static) if static
 
-        session = @mutex.synchronize do
-          prune!
-          @sessions[token]
-        end
+        session = @store.read_session(token, now: @clock.call)
         raise AuthenticationError, 'invalid or expired bearer token' unless session
 
-        session.context
+        context_for(session.identity)
       end
 
       def login(username, password)
@@ -56,17 +53,16 @@ module Mxrb
 
         token = SecureRandom.urlsafe_base64(32)
         expires_at = @clock.call + ttl
-        context = context_for(identity.merge('user' => username.to_s))
-        @mutex.synchronize do
-          prune!
-          @sessions[token] = Session.new(token:, context:, expires_at:)
-        end
+        profile = identity.slice('roles', 'user_roles', 'module_roles', 'attributes')
+                          .merge('user' => username.to_s)
+        context = context_for(profile)
+        @store.write_session(token:, identity: profile, expires_at:)
         { token:, expires_at: expires_at.iso8601, user: context.user, roles: context.user_roles }
       end
 
       def logout(header)
         token = bearer_token(header)
-        token && @mutex.synchronize { !!@sessions.delete(token) }
+        token && @store.delete_session(token)
       end
 
       private
@@ -120,11 +116,6 @@ module Mxrb
         parsed
       rescue JSON::ParserError => e
         raise ArgumentError, "invalid #{name}: #{e.message}"
-      end
-
-      def prune!
-        now = @clock.call
-        @sessions.delete_if { |_token, session| session.expires_at <= now }
       end
     end
   end

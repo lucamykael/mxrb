@@ -203,7 +203,9 @@ module Mxrb
       <<~TEXT
         # Copy to #{name}.env. Process ENV still has highest precedence.
         MXRB_DATABASE_PATH=.mxrb/runtime/#{name}.sqlite3
+        MXRB_SHARED_STORE_PATH=.mxrb/runtime/#{name}-shared.sqlite3
         MXRB_SESSION_TTL=3600
+        MXRB_SCHEDULER_LEASE_TTL=300
         MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false
         MXRB_AUTH_TOKENS=
         MXRB_USERS_JSON=

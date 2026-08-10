@@ -13,6 +13,7 @@ module Mxrb
       # Graph interpretation intentionally keeps semantic dispatch together.
       # rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/ClassLength, Metrics/CyclomaticComplexity
       # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+      # rubocop:disable Metrics/ParameterLists
       ObjectValue = Data.define(:entity, :id, :members)
 
       # Transactional in-memory persistence used by the Ruby model Runtime.
@@ -496,7 +497,7 @@ module Mxrb
       class Interpreter
         attr_reader :store, :log, :effects
 
-        def initialize(project, store: nil, adapters: {}, http: nil, policy: nil)
+        def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil)
           @project = project
           @expression = Expression.new
           @log = []
@@ -510,6 +511,8 @@ module Mxrb
           @identifier_cache = {}.compare_by_identity
           @flow_case_cache = {}.compare_by_identity
           @adapters = adapters.transform_keys(&:to_sym)
+          @java_custom_actions = java_custom_actions.to_h.transform_keys(&:to_s).freeze
+          @java_action_parameter_names = {}
           @http = http || method(:http_request)
           @policy = policy
           @security_context = nil
@@ -1000,16 +1003,71 @@ module Mxrb
           variables[action['ResultVariableName'].to_s] = result
         end
 
-        def action_java_action_call(action, _variables)
-          raise NativeRuntimeError,
-                "unsupported activity JavaActionCall: Java Custom Action #{action['JavaAction']} " \
-                'is outside the pure-Ruby runtime scope'
+        def action_java_action_call(action, variables)
+          name = action['JavaAction'].to_s
+          adapter = @java_custom_actions[name]
+          unless adapter
+            raise NativeRuntimeError,
+                  "Java Custom Action #{name.empty? ? '(missing name)' : name} is not registered; " \
+                  'register an explicit Ruby adapter with ' \
+                  'Mxrb::RubyApp::Registry.register_java_custom_action'
+          end
+
+          result = adapter.call(java_action_arguments(name, action, variables).freeze)
+          result_name = (action['ResultVariableName'] || action['OutputVariableName']).to_s
+          use_return = action.key?('UseReturnVariable') ? action['UseReturnVariable'] == true : !result_name.empty?
+          variables[result_name] = result if use_return && !result_name.empty?
+          result
         end
         alias action_java_action action_java_action_call
         alias action_basic_java action_java_action_call
         alias action_basic_code action_java_action_call
         alias action_entity_type_java action_java_action_call
         alias action_microflow_java action_java_action_call
+
+        def java_action_arguments(name, action, variables)
+          parameter_names = java_action_parameter_names(name)
+          items(action['ParameterMappings']).to_h do |mapping|
+            reference = identifier(mapping['Parameter'])
+            parameter_name = parameter_names.fetch(reference, reference.to_s.split('.').last)
+            if parameter_name.to_s.empty?
+              raise NativeRuntimeError, "Java Custom Action #{name} has an unnamed parameter mapping"
+            end
+
+            [parameter_name, java_action_argument(name, parameter_name, mapping['Value'], variables)]
+          end
+        end
+
+        def java_action_argument(action_name, parameter_name, value, variables)
+          value ||= {}
+          type = value['$Type'].to_s.delete_prefix('Microflows$')
+          case type
+          when 'BasicJavaActionParameterValue', 'BasicCodeActionParameterValue'
+            @expression.evaluate(value['Argument'], variables)
+          when 'EntityTypeJavaActionParameterValue'
+            value['Entity'].to_s
+          when 'MicroflowJavaActionParameterValue'
+            value['Microflow'].to_s
+          when 'ImportMappingJavaActionParameterValue'
+            value['ImportMapping'].to_s
+          when 'ExportMappingJavaActionParameterValue'
+            value['ExportMapping'].to_s
+          else
+            raise NativeRuntimeError,
+                  "Java Custom Action #{action_name} parameter #{parameter_name} " \
+                  "uses unsupported mapping #{value['$Type'].inspect}"
+          end
+        end
+
+        def java_action_parameter_names(name)
+          @java_action_parameter_names[name] ||= begin
+            artifact = @project.find_artifact(name, kind: :java_action)
+            document = artifact && @project.parse_bson(@project.raw_unit(artifact.unit_id))
+            items(document&.[]('Parameters')).to_h do |parameter|
+              [identifier(parameter['$ID']), parameter['Name'].to_s]
+            end
+          end
+        end
 
         def action_java_script_action_call(action, variables)
           client_action(:javascript, action['JavaScriptAction'], action, variables,
@@ -1324,6 +1382,7 @@ module Mxrb
       end
       # rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/ClassLength, Metrics/CyclomaticComplexity
       # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+      # rubocop:enable Metrics/ParameterLists
     end
   end
 end
