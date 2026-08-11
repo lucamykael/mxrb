@@ -243,11 +243,140 @@ module Mxrb
       end
 
       def pluggable_widget(widget)
-        case widget.dig("Type", "WidgetId")
+        widget_id = widget.dig("Type", "WidgetId").to_s
+        return native_widget(widget) if widget_id.empty?
+
+        case widget_id
         when "com.mendix.widget.web.datagrid.Datagrid" then data_grid2_widget(widget)
         when "com.mendix.widget.web.combobox.Combobox"  then combo_box_widget(widget)
         when "com.mendix.widget.web.gallery.Gallery"    then gallery_widget(widget)
-        else native_widget(widget)
+        else generic_pluggable_widget(widget)
+        end
+      end
+
+      def generic_pluggable_widget(widget)
+        object_type = widget.dig("Type", "ObjectType")
+        properties = pluggable_properties(widget["Object"], object_type)
+        children = nested_pluggable_widgets(properties)
+        properties = strip_pluggable_widgets(properties)
+        options = appearance_options(widget).merge(
+          widget_id: widget.dig("Type", "WidgetId"),
+          widget_name: widget.dig("Type", "WidgetName"),
+          platform: widget.dig("Type", "SupportedPlatform"),
+          properties:
+        ).compact
+        {
+          type: :pluggable_widget, name: widget["Name"] || "widget",
+          options:, children:, events: pluggable_events(properties)
+        }
+      end
+
+      def pluggable_properties(object, object_type)
+        return {} unless object.is_a?(Hash) && object_type.is_a?(Hash)
+
+        types = parse_array(object_type["PropertyTypes"])
+        types_by_id = types.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+        parse_array(object["Properties"]).each_with_object({}) do |property, result|
+          type = types_by_id[IO::BsonCodec.extract_id(property["TypePointer"])]
+          next unless type
+
+          result[type["PropertyKey"].to_s] = pluggable_value(
+            property["Value"], type["ValueType"]
+          )
+        end
+      end
+
+      def pluggable_value(value, value_type)
+        return nil unless value.is_a?(Hash)
+
+        type = value_type.is_a?(Hash) ? value_type["Type"].to_s : ""
+        widgets = parse_array(value["Widgets"])
+        unless widgets.empty?
+          parsed = []
+          parse_widgets(widgets, parsed)
+          return { widgets: parsed }
+        end
+        objects = parse_array(value["Objects"])
+        unless objects.empty?
+          object_type = value_type.is_a?(Hash) ? value_type["ObjectType"] : nil
+          return { objects: objects.map { pluggable_properties(_1, object_type) } }
+        end
+
+        return extract_text(value["TextTemplate"]) if value["TextTemplate"].is_a?(Hash)
+        return value.dig("AttributeRef", "Attribute") if value["AttributeRef"].is_a?(Hash)
+        return pluggable_data_source(value["DataSource"]) if value["DataSource"].is_a?(Hash)
+        return value["Expression"] unless value["Expression"].to_s.empty?
+        return value["Image"] unless value["Image"].to_s.empty?
+        return value["Form"] unless value["Form"].to_s.empty?
+
+        primitive = value["PrimitiveValue"]
+        return primitive == true || primitive.to_s.casecmp("true").zero? if type == "Boolean"
+        return primitive.to_i if type == "Integer"
+        return primitive.to_f if %w[Decimal Number].include?(type)
+        return primitive unless primitive.nil? || primitive.to_s.empty?
+
+        action = value["Action"]
+        return pluggable_action(action) if action.is_a?(Hash) && action["$Type"] != "Forms$NoAction"
+        return value["Selection"] unless value["Selection"].to_s.empty? || value["Selection"] == "None"
+
+        nil
+      end
+
+      def pluggable_data_source(source)
+        {
+          data_source: source.dig("EntityRef", "Entity") || source["Entity"],
+          xpath: source["XPathConstraint"].to_s,
+          sort: parse_array(source.dig("SortBar", "SortItems")).map do |item|
+            {
+              attribute: item.dig("AttributeRef", "Attribute"),
+              direction: item["SortDirection"].to_s
+            }.compact
+          end
+        }.compact
+      end
+
+      def pluggable_action(action)
+        candidates = {
+          "nanoflow" => action["Nanoflow"],
+          "microflow" => action["Microflow"],
+          "page" => action["Form"]
+        }
+        kind, handler = candidates.find { |_candidate, value| !value.to_s.empty? }
+        kind ||= "action"
+        handler ||= action["$Type"]
+        { kind:, handler: handler.to_s }
+      end
+
+      def nested_pluggable_widgets(value, found = [])
+        case value
+        when Hash
+          widgets = value[:widgets] || value["widgets"]
+          found.concat(Array(widgets)) if widgets
+          value.each_value { nested_pluggable_widgets(_1, found) }
+        when Array then value.each { nested_pluggable_widgets(_1, found) }
+        end
+        found.uniq { [_1[:name] || _1["name"], _1[:type] || _1["type"]] }
+      end
+
+      def strip_pluggable_widgets(value)
+        case value
+        when Hash
+          value.each_with_object({}) do |(key, child), result|
+            next if key.to_s == "widgets"
+
+            result[key] = strip_pluggable_widgets(child)
+          end
+        when Array then value.map { strip_pluggable_widgets(_1) }
+        else value
+        end
+      end
+
+      def pluggable_events(properties)
+        properties.filter_map do |key, value|
+          next unless value.is_a?(Hash) && value[:handler]
+
+          event = key.to_s.match?(/change/i) ? :on_change : :on_click
+          value.merge(event:)
         end
       end
 

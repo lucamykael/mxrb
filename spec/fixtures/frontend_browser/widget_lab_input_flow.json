@@ -27,6 +27,7 @@
       "path": "/",
       "steps": [
         { "wait_for_text": "Widget certification laboratory" },
+        { "measure_click": { "selector": "[data-widget-name=\"SeedCustomer\"]", "max_ms": 250, "min_requests": 1 } },
         { "audit_widgets": { "selector": ".mxrb-widget", "min_count": 12, "max_render_ms": 1500 } },
         { "measure_click": { "selector": ".mxrb-data_grid button", "index": 0, "max_ms": 250, "min_requests": 2 } },
         { "wait_for_count": { "selector": ".mxrb-data_grid tbody tr", "equals": 1 } },

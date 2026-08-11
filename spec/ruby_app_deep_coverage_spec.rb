@@ -73,6 +73,55 @@ RSpec.describe 'Ruby application internal contracts' do
       nanoflow = double(name: 'Client', id: 'n', parameters: [], objects: [], flows: [])
       expect(exp.send(:export_nanoflow, nanoflow, mod, 'sales')).to include('runtime' => 'frontend')
       expect(exp.send(:frontend_nanoflows)).to include('Nanoflow0', '"Sales.Client"')
+      object_parameter = {
+        'Name' => 'Order',
+        'VariableType' => { '$Type' => 'ObjectType', 'Entity' => 'Sales.Order' }
+      }
+      expect(exp.send(:nanoflow_parameter_type, [nil, object_parameter]))
+        .to include('EntityTypeMap["Sales.Order"] | null')
+      expect(exp.send(:typescript_flow_type,
+                      '$Type' => 'ListType', 'Entity' => 'Sales.Order')).to include('Array<EntityTypeMap')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'BooleanType')).to eq('boolean')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'DecimalType')).to eq('number')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'DateTimeType')).to eq('string')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'VoidType')).to eq('undefined')
+      expect(exp.send(:typescript_flow_type, nil)).to eq('undefined')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'UnsupportedType')).to eq('RuntimeValue | undefined')
+
+      boolean_end = { 'id' => 'end', 'type' => 'EndEvent', 'return' => 'true' }
+      expect(exp.send(:nanoflow_typescript_case,
+                      { 'type' => 'MicroflowParameter' }, [], 'boolean')).to be_nil
+      expect(exp.send(:nanoflow_typescript_case, boolean_end, [], 'boolean')).to include('runtime.boolean')
+      expect(exp.send(:nanoflow_end_source, boolean_end, 'number')).to include('runtime.number')
+      expect(exp.send(:nanoflow_end_source, boolean_end, 'string')).to include('runtime.string')
+      expect(exp.send(:nanoflow_end_source, boolean_end, 'undefined')).to include('complete(undefined)')
+      expect(exp.send(:nanoflow_end_source, boolean_end, 'RuntimeValue | undefined')).to include('runtime.value')
+
+      split = { 'id' => 'split', 'type' => 'ExclusiveSplit', 'condition' => 'true' }
+      split_flows = [
+        { 'origin' => 'split', 'destination' => 'yes', 'case' => 'true' },
+        { 'origin' => 'split', 'destination' => 'fallback', 'case' => '' }
+      ]
+      expect(exp.send(:nanoflow_typescript_case, split, split_flows, 'undefined'))
+        .to include('case "true"', 'current = "fallback"')
+      expect(exp.send(:nanoflow_split_source, split, split_flows.first(1)))
+        .to include('runtime.stopped("ExclusiveSplit")')
+
+      %w[LogMessage CreateVariable ChangeVariable Change].each do |type|
+        action = {
+          'type' => type, 'message' => 'hello', 'variable' => 'Value', 'value' => '1',
+          'changes' => [{ 'member' => 'Name', 'value' => "'Changed'" }]
+        }
+        edge = [{ 'origin' => type, 'destination' => 'next' }]
+        source = exp.send(:nanoflow_typescript_case,
+                          { 'id' => type, 'type' => 'ActionActivity', 'action' => action }, edge,
+                          'undefined')
+        expect(source).to include('current = "next"')
+      end
+      expect(exp.send(:nanoflow_action_source, nil)).to include('runtime.unsupported')
+      expect(exp.send(:nanoflow_typescript_case,
+                      { 'id' => 'unknown', 'type' => 'Unknown' }, [], 'undefined'))
+        .to include("runtime.stopped('node')")
       manifests = [{
         'models' => [], 'dtos' => [], 'pages' => [],
         'enumerations' => [{ 'name' => 'Sales.Empty', 'values' => [] }]
@@ -134,10 +183,16 @@ RSpec.describe 'Ruby application internal contracts' do
         .to eq('number_input')
 
       sidecar_theme = File.join(dir, '.mxrb', 'mendix', 'theme')
-      FileUtils.mkdir_p(File.join(sidecar_theme, 'web'))
+      FileUtils.mkdir_p(File.join(sidecar_theme, 'web', 'js'))
+      FileUtils.mkdir_p(File.join(sidecar_theme, 'native'))
       File.write(File.join(sidecar_theme, 'web', 'main.scss'), 'theme')
+      File.write(File.join(sidecar_theme, 'web', 'js', 'legacy.js'), 'legacy')
+      File.write(File.join(sidecar_theme, 'native', 'main.js'), 'native')
       exp.send(:copy_frontend_theme)
-      expect(File.read(File.join(dir, 'frontend', 'src', 'mendix', 'theme', 'web', 'main.scss'))).to eq('theme')
+      frontend_theme = File.join(dir, 'frontend', 'src', 'mendix', 'theme')
+      expect(File.read(File.join(frontend_theme, 'web', 'main.scss'))).to eq('theme')
+      expect(Dir.glob(File.join(frontend_theme, '**', '*.{js,jsx}'))).to be_empty
+      expect(File).not_to exist(File.join(frontend_theme, 'native'))
 
       source_contents = File.join(dir, 'mprcontents')
       FileUtils.mkdir_p(source_contents)
@@ -203,6 +258,18 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(app.call_service('M.Native')).to eq('native')
     synchronized_context = { 'id' => '1', 'type' => 'M.E', 'attributes' => { 'Name' => 'Synchronized' } }
     expect(app.call_service('M.Native', {}, synchronized_context:, context: Object.new)).to eq('native')
+    transient_context = {
+      'id' => 'transient-1', 'type' => 'M.E', 'transient' => true,
+      'attributes' => { 'Name' => 'Client draft' }
+    }
+    allow(store).to receive(:find).with('M.E', 'transient-1').and_return(nil)
+    transient = app.send(:deserialize, transient_context)
+    expect([transient.entity, transient.id, transient.members['Name']])
+      .to eq(['M.E', 'transient-1', 'Client draft'])
+    synchronized = app.send(:synchronize_context, transient_context, context: nil)
+    expect([synchronized.entity, synchronized.id]).to eq(['M.E', 'transient-1'])
+    expect { app.send(:deserialize, transient_context.merge('transient' => false)) }
+      .to raise_error(Mxrb::NativeRuntimeError, /not found/)
     expect(app.invoke_service('M.Ruby', value: 2)).to include(result: 2)
     expect(app.native_call('M.Native', { value: 1 }, context: Object.new)).to eq('native')
   end

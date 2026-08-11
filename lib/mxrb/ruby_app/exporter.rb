@@ -2,6 +2,7 @@
 
 require 'digest'
 require 'fileutils'
+require 'find'
 require 'json'
 
 module Mxrb
@@ -37,6 +38,7 @@ module Mxrb
           @project = project
           @coverage = []
           @nanoflow_entries = []
+          @page_entries = []
           modules = project.modules.map { export_module(_1) }
           @module_manifests = modules
           write_support_files
@@ -221,12 +223,7 @@ module Mxrb
       def export_nanoflow(flow, mod, root)
         qualified = "#{mod.name}.#{flow.name}"
         relative = File.join('frontend', 'src', 'nanoflows', root, "#{underscore(flow.name)}.ts")
-        plan = nanoflow_plan(flow, qualified)
-        write(
-          relative,
-          "import type { NanoflowPlan } from '../../types';\n\n" \
-          "export default #{JSON.pretty_generate(plan)} satisfies NanoflowPlan;\n"
-        )
+        write(relative, nanoflow_typescript(flow, qualified))
         entry = {
           'name' => qualified, 'id' => flow.id, 'path' => relative,
           'kind' => 'nanoflow', 'runtime' => 'frontend'
@@ -234,6 +231,143 @@ module Mxrb
         @nanoflow_entries << entry.merge('import_name' => "Nanoflow#{@nanoflow_entries.size}")
         add_coverage(flow.id, qualified, 'nanoflow', relative, 'frontend_executable')
         entry
+      end
+
+      def nanoflow_typescript(flow, qualified)
+        plan = nanoflow_plan(flow, qualified)
+        parameters = nanoflow_parameter_type(flow.parameters)
+        result_type = nanoflow_result_type(flow.respond_to?(:return_type) ? flow.return_type : nil)
+        start = plan.fetch('objects').find { _1['type'] == 'StartEvent' }
+        cases = plan.fetch('objects').filter_map do |object|
+          nanoflow_typescript_case(object, plan.fetch('flows'), result_type)
+        end
+        <<~TS
+          import { defineNanoflow } from '../../runtime/nanoflow';
+          import type { EntityTypeMap, NanoflowParameters, RuntimeValue } from '../../types';
+
+          type Parameters = NanoflowParameters & #{parameters};
+
+          export default defineNanoflow<Parameters, #{result_type}>({
+            name: #{JSON.generate(qualified)},
+            id: #{JSON.generate(flow.id.to_s)},
+            parameters: #{JSON.generate(plan.fetch('parameters'))}
+          }, runtime => {
+            let current = #{JSON.generate(start && start['id'])};
+            for (let step = 0; step < 10_000; step += 1) {
+              switch (current) {
+          #{cases.join("\n")}
+                default:
+                  throw runtime.missing(current);
+              }
+            }
+            throw runtime.exceeded();
+          });
+        TS
+      end
+
+      def nanoflow_parameter_type(parameters)
+        fields = parameters.filter_map do |parameter|
+          next unless parameter.is_a?(Hash)
+
+          "  #{JSON.generate(parameter['Name'].to_s)}: #{typescript_flow_type(parameter['VariableType'])};"
+        end
+        "{\n#{fields.join("\n")}\n}"
+      end
+
+      def nanoflow_result_type(type)
+        typescript_flow_type('$Type' => type.to_s).delete_suffix(' | null')
+      end
+
+      def typescript_flow_type(type)
+        type = {} unless type.is_a?(Hash)
+        kind = (type['$Type'] || type['Type']).to_s
+        entity = type['Entity'].to_s
+        return "EntityTypeMap[#{JSON.generate(entity)}] | null" if kind.end_with?('ObjectType') && !entity.empty?
+        return "Array<EntityTypeMap[#{JSON.generate(entity)}]>" if kind.end_with?('ListType') && !entity.empty?
+        return 'boolean' if kind.match?(/Boolean/)
+        return 'number' if kind.match?(/Integer|Long|Decimal|Float/)
+        return 'string' if kind.match?(/String|DateTime|Enumeration/)
+        return 'undefined' if kind.empty? || kind.match?(/Void|MicroflowReturnType/)
+
+        'RuntimeValue | undefined'
+      end
+
+      def nanoflow_typescript_case(object, flows, result_type)
+        return if object['type'] == 'MicroflowParameter'
+
+        outgoing = flows.select { _1['origin'] == object['id'] }
+        body = case object['type']
+               when 'EndEvent' then nanoflow_end_source(object, result_type)
+               when 'ExclusiveSplit' then nanoflow_split_source(object, outgoing)
+               when 'ActionActivity' then nanoflow_action_source(object['action']) + nanoflow_next_source(outgoing)
+               else nanoflow_next_source(outgoing)
+               end
+        <<~TS.chomp
+                case #{JSON.generate(object['id'])}: {
+          #{indent(body, 10)}
+                }
+        TS
+      end
+
+      def nanoflow_end_source(object, result_type)
+        expression = JSON.generate(object['return'].to_s)
+        value = case result_type
+                when 'boolean' then "runtime.boolean(#{expression})"
+                when 'number' then "runtime.number(#{expression})"
+                when 'string' then "runtime.string(#{expression})"
+                when 'undefined' then 'undefined'
+                else "runtime.value(#{expression}) as #{result_type}"
+                end
+        "return runtime.complete(#{value});"
+      end
+
+      def nanoflow_split_source(object, flows)
+        cases = flows.reject { _1['case'].to_s.empty? }.map do |edge|
+          "case #{JSON.generate(edge['case'].to_s)}: current = #{JSON.generate(edge['destination'])}; break;"
+        end
+        fallback = flows.find { _1['case'].to_s.empty? }
+        default = if fallback
+                    "current = #{JSON.generate(fallback['destination'])}; break;"
+                  else
+                    "throw runtime.stopped(#{JSON.generate(object['type'])});"
+                  end
+        <<~TS.chomp
+          switch (String(runtime.condition(#{JSON.generate(object['condition'].to_s)}))) {
+          #{indent(cases.join("\n"), 2)}
+            default: #{default}
+          }
+          break;
+        TS
+      end
+
+      def nanoflow_action_source(action)
+        action ||= {}
+        case action['type']
+        when 'LogMessage'
+          "runtime.log(#{JSON.generate(action['message'].to_s)});\n"
+        when 'CreateVariable', 'ChangeVariable'
+          "runtime.set(#{JSON.generate(action['variable'].to_s)}, " \
+            "runtime.value(#{JSON.generate(action['value'].to_s)}));\n"
+        when 'Change'
+          changes = action.fetch('changes', []).to_h do |change|
+            [change['member'].to_s, change['value'].to_s]
+          end
+          "runtime.change(#{JSON.generate(action['variable'].to_s)}, #{JSON.generate(changes)});\n"
+        else
+          "throw runtime.unsupported(#{JSON.generate(action['type'].to_s)});\n"
+        end
+      end
+
+      def nanoflow_next_source(flows)
+        edge = flows.first
+        return "throw runtime.stopped('node');" unless edge
+
+        "current = #{JSON.generate(edge['destination'])};\nbreak;"
+      end
+
+      def indent(source, spaces)
+        prefix = ' ' * spaces
+        source.to_s.lines.map { "#{prefix}#{_1}" }.join.chomp
       end
 
       def nanoflow_plan(flow, qualified)
@@ -312,7 +446,7 @@ module Mxrb
                       data_source: page.data_source)
         )
         add_coverage(page.id, qualified, 'page', relative, 'native_projection_source_preserved')
-        {
+        manifest = {
           'name' => qualified, 'id' => page.id, 'title' => page.title,
           'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
           'appearance_class' => page.appearance_class,
@@ -321,6 +455,67 @@ module Mxrb
           'allowed_module_roles' => page.allowed_module_roles.map(&:to_s),
           'widgets' => widgets
         }
+        export_frontend_page(manifest, root, page.name)
+        manifest
+      end
+
+      def export_frontend_page(manifest, root, page_name)
+        relative = File.join('frontend', 'src', 'pages', root, "#{underscore(page_name)}.tsx")
+        component = "#{typescript_identifier(manifest.fetch('name'))}Page"
+        definition = manifest.slice('name', 'title', 'appearance_class', 'appearance_style', 'widgets')
+        declarations = []
+        compiled_widgets = definition.fetch('widgets').each_with_index.map do |widget, index|
+          frontend_widget_jsx(widget, [index], declarations, 6)
+        end
+        widget_tree = compiled_widgets.map(&:first).join("\n")
+        definition_source = frontend_page_definition_source(definition, compiled_widgets.map(&:last))
+        write(relative, <<~TS)
+          import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
+
+          #{declarations.join("\n\n")}
+
+          export const definition = #{definition_source} satisfies PageDefinition;
+
+          export default function #{component}({ busy, Widget: PageWidget }: PageComponentProps) {
+            return <main className="mxrb-page region-content mx-scrollcontainer-wrapper"
+              aria-busy={busy} data-page={definition.name}>
+          #{widget_tree}
+            </main>;
+          }
+        TS
+        @page_entries << {
+          'name' => manifest.fetch('name'), 'path' => relative,
+          'import_name' => component
+        }
+      end
+
+      def frontend_widget_jsx(widget, path, declarations, indent)
+        identifier = "widget#{path.join('_')}"
+        children = Array(widget['children'])
+        compiled = widget.reject { |key, _value| key == 'children' }
+        nested_widgets = children.each_with_index.map do |child, index|
+          frontend_widget_jsx(child, path + [index], declarations, indent + 2)
+        end
+        source = JSON.pretty_generate(compiled)
+        unless nested_widgets.empty?
+          source = source.sub(/\n}\z/, ",\n  \"children\": [#{nested_widgets.map(&:last).join(', ')}]\n}")
+        end
+        declarations << "const #{identifier} = #{source} satisfies WidgetDefinition;"
+        padding = ' ' * indent
+        return ["#{padding}<PageWidget widget={#{identifier}} index={#{path.last}} />", identifier] if children.empty?
+
+        nested = nested_widgets.map(&:first).join("\n")
+        jsx = <<~TS.chomp
+          #{padding}<PageWidget widget={#{identifier}} index={#{path.last}}>
+          #{nested}
+          #{padding}</PageWidget>
+        TS
+        [jsx, identifier]
+      end
+
+      def frontend_page_definition_source(definition, widget_identifiers)
+        source = JSON.pretty_generate(definition.reject { |key, _value| key == 'widgets' })
+        source.sub(/\n}\z/, ",\n  \"widgets\": [#{widget_identifiers.join(', ')}]\n}")
       end
 
       def attribute_manifest(attribute)
@@ -465,8 +660,13 @@ module Mxrb
         write(File.join('frontend', 'src', 'vite-env.d.ts'), "/// <reference types=\"vite/client\" />\n")
         write(File.join('frontend', 'src', 'main.tsx'), frontend_main)
         write(File.join('frontend', 'src', 'types.ts'), frontend_types)
+        write(File.join('frontend', 'src', 'api', 'client.ts'), frontend_api_client)
+        write(File.join('frontend', 'src', 'runtime', 'nanoflow.ts'), frontend_nanoflow_runtime)
+        write(File.join('frontend', 'src', 'runtime', 'marketplace.tsx'), frontend_marketplace_runtime)
         write(File.join('frontend', 'src', 'nanoflows.ts'), frontend_nanoflows)
-        write(File.join('frontend', 'src', 'App.tsx'), frontend_app)
+        write(File.join('frontend', 'src', 'pages.ts'), frontend_pages)
+        write(File.join('frontend', 'src', 'app', 'App.tsx'), frontend_app)
+        write(File.join('frontend', 'src', 'App.tsx'), "export { default } from './app/App';\n")
         write(File.join('frontend', 'src', 'app.css'), frontend_css)
         write('README.md', readme)
       end
@@ -478,10 +678,28 @@ module Mxrb
           source = File.join(@mendix_sidecar, directory)
           next unless File.directory?(source)
 
-          FileUtils.cp_r(source, File.join(root, directory), remove_destination: true)
+          copy_frontend_web_assets(source, File.join(root, directory))
         end
         fallback = File.join(root, 'theme', 'web', 'main.scss')
         write(relative(fallback), '') unless File.file?(fallback)
+      end
+
+      def copy_frontend_web_assets(source, destination)
+        FileUtils.rm_rf(destination)
+        Find.find(source) do |path|
+          relative_path = path.delete_prefix("#{source}/")
+          Find.prune if File.directory?(path) && relative_path.split(File::SEPARATOR).include?('native')
+          next if path == source
+          next if File.file?(path) && %w[.js .jsx].include?(File.extname(path).downcase)
+
+          target = File.join(destination, relative_path)
+          if File.directory?(path)
+            FileUtils.mkdir_p(target)
+          else
+            FileUtils.mkdir_p(File.dirname(target))
+            FileUtils.cp(path, target)
+          end
+        end
       end
 
       def write_manifest(project, modules, runtime_mpr)
@@ -694,7 +912,7 @@ module Mxrb
             'lib' => %w[ES2022 DOM DOM.Iterable], 'allowJs' => false,
             'skipLibCheck' => true, 'esModuleInterop' => true,
             'allowSyntheticDefaultImports' => true, 'strict' => true,
-            'noImplicitAny' => false, 'useUnknownInCatchVariables' => false,
+            'noImplicitAny' => true, 'useUnknownInCatchVariables' => true,
             'forceConsistentCasingInFileNames' => true, 'module' => 'ESNext',
             'moduleResolution' => 'Bundler', 'resolveJsonModule' => true,
             'isolatedModules' => true, 'noEmit' => true, 'jsx' => 'react-jsx'
@@ -712,6 +930,14 @@ module Mxrb
 
           export default defineConfig({
             plugins: [react()],
+            css: {
+              preprocessorOptions: {
+                scss: {
+                  // Mendix Atlas still depends on the legacy global Sass module model.
+                  silenceDeprecations: ['import', 'global-builtin']
+                }
+              }
+            },
             server: { proxy: { '/api': `http://127.0.0.1:${apiPort}` } }
           });
         JS
@@ -738,7 +964,7 @@ module Mxrb
         <<~JS
           import React from 'react';
           import { createRoot } from 'react-dom/client';
-          import App from './App';
+          import App from './app/App';
           import './app.css';
           import './mendix/theme/web/main.scss';
 
@@ -760,15 +986,344 @@ module Mxrb
           "  #{entry.fetch('name').inspect}: #{entry.fetch('import_name')}"
         end
         <<~TS
-          import type { NanoflowPlan } from './types';
+          import type { RegisteredNanoflow } from './types';
 
           #{imports.join("\n")}
 
-          const nanoflows = {
+          const nanoflows: Record<string, RegisteredNanoflow> = {
           #{mappings.join(",\n")}
-          } satisfies Record<string, NanoflowPlan>;
+          };
 
           export default nanoflows;
+        TS
+      end
+
+      def frontend_pages
+        imports = @page_entries.map do |entry|
+          relative = entry.fetch('path').delete_prefix('frontend/src/')
+          "import #{entry.fetch('import_name')} from './#{relative.delete_suffix('.tsx')}';"
+        end
+        mappings = @page_entries.map do |entry|
+          "  #{JSON.generate(entry.fetch('name'))}: #{entry.fetch('import_name')}"
+        end
+        <<~TS
+          import type { ComponentType } from 'react';
+          import type { PageComponentProps } from './types';
+
+          #{imports.join("\n")}
+
+          const pages: Record<string, ComponentType<PageComponentProps>> = {
+          #{mappings.join(",\n")}
+          };
+
+          export default pages;
+        TS
+      end
+
+      def frontend_api_client
+        <<~'TS'
+          import type { ApiFailure, RuntimeValue } from '../types';
+
+          const errorMessage = (payload: unknown, status: number): string => {
+            if (payload && typeof payload === 'object' && 'error' in payload) {
+              const error = payload.error;
+              if (error && typeof error === 'object' && 'message' in error) return String(error.message);
+            }
+            return `HTTP ${status}`;
+          };
+
+          export const api = async <T = RuntimeValue | undefined>(
+            path: string, options: RequestInit = {}, token: string | null = null
+          ): Promise<T> => {
+            const headers = new Headers(options.headers);
+            headers.set('Content-Type', 'application/json');
+            if (token) headers.set('Authorization', `Bearer ${token}`);
+            const response = await fetch(path, { ...options, headers });
+            const payload: unknown = await response.json();
+            if (!response.ok) {
+              const error: ApiFailure = new Error(errorMessage(payload, response.status));
+              error.status = response.status;
+              throw error;
+            }
+            return payload as T;
+          };
+        TS
+      end
+
+      def frontend_nanoflow_runtime
+        <<~'TS'
+          import type {
+            EntityRecord, NanoflowExecution, NanoflowMetadata, NanoflowParameters,
+            RegisteredNanoflow, RuntimeValue
+          } from '../types';
+
+          type ChangeExpressions = Record<string, string>;
+          type Comparable = string | number;
+
+          const isRecord = (value: RuntimeValue | undefined): value is EntityRecord => {
+            return Boolean(value && typeof value === 'object'
+              && 'id' in value && 'type' in value && 'attributes' in value);
+          };
+
+          const attributes = (value: RuntimeValue | undefined): Record<string, RuntimeValue | undefined> => {
+            return isRecord(value) ? value.attributes : {};
+          };
+
+          const memberName = (value: string): string => value.split(/[./]/).at(-1) || value;
+
+          export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> {
+            readonly variables: NanoflowParameters;
+            readonly #changes = new Map<string, EntityRecord>();
+
+            constructor(parameters: P, readonly metadata: NanoflowMetadata) {
+              this.variables = structuredClone(parameters);
+            }
+
+            value(source: string | undefined, context: EntityRecord | null = null): RuntimeValue | undefined {
+              const text = (source || '').trim();
+              if (/\s(?:and|or)\s|(?:=|!=|>=|<=|>|<)/.test(text)) {
+                return this.condition(text, context);
+              }
+              const wrapped = text.match(/^toString\((.*)\)$/);
+              if (wrapped) return this.string(wrapped[1], context);
+              if (text === '$currentObject') return context;
+              const variable = text.match(/^\$([A-Za-z_]\w*)$/);
+              if (variable) return this.variables[variable[1]] ?? context;
+              const member = text.match(/^\$([A-Za-z_]\w*)\/([A-Za-z_][\w.]*)$/);
+              if (member) {
+                return attributes(this.variables[member[1]] ?? context)[memberName(member[2])];
+              }
+              if (text === 'empty') return null;
+              if (text === 'true') return true;
+              if (text === 'false') return false;
+              if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
+              if (/^'.*'$/.test(text)) return text.slice(1, -1).replaceAll("''", "'");
+              return text;
+            }
+
+            condition(source: string | undefined, context: EntityRecord | null = null): boolean {
+              const text = (source || '').trim().replace(/^\((.*)\)$/, '$1');
+              const orParts = text.split(/\s+or\s+/);
+              if (orParts.length > 1) return orParts.some(part => this.condition(part, context));
+              const andParts = text.split(/\s+and\s+/);
+              if (andParts.length > 1) return andParts.every(part => this.condition(part, context));
+              const comparison = text.match(/^(.*?)\s*(=|!=|>=|<=|>|<)\s*(.*?)$/);
+              if (!comparison) return Boolean(this.value(text, context));
+              const left = this.value(comparison[1], context);
+              const right = this.value(comparison[3], context);
+              switch (comparison[2]) {
+                case '=': return left === right;
+                case '!=': return left !== right;
+                case '>': return this.comparable(left) > this.comparable(right);
+                case '<': return this.comparable(left) < this.comparable(right);
+                case '>=': return this.comparable(left) >= this.comparable(right);
+                case '<=': return this.comparable(left) <= this.comparable(right);
+                default: return false;
+              }
+            }
+
+            boolean(source: string | undefined, context: EntityRecord | null = null): boolean {
+              return this.condition(source, context);
+            }
+
+            number(source: string | undefined, context: EntityRecord | null = null): number {
+              return Number(this.value(source, context));
+            }
+
+            string(source: string | undefined, context: EntityRecord | null = null): string {
+              return String(this.value(source, context) ?? '');
+            }
+
+            set(name: string, value: RuntimeValue | undefined): void {
+              this.variables[name] = value;
+            }
+
+            log(message: string): void {
+              console.info(`[nanoflow] ${message || this.metadata.name}`);
+            }
+
+            change(variable: string, expressions: ChangeExpressions): void {
+              const record = this.variables[variable];
+              if (!isRecord(record)) throw new Error(`Nanoflow object $${variable} is missing`);
+              Object.entries(expressions).forEach(([member, expression]) => {
+                record.attributes[member] = this.value(expression, record);
+              });
+              this.#changes.set(`${record.type}:${record.id}`, record);
+            }
+
+            complete<R>(result: R): NanoflowExecution<R> {
+              return { result, variables: this.variables, changes: [...this.#changes.values()] };
+            }
+
+            missing(current: string | null): Error {
+              return new Error(`Nanoflow ${this.metadata.name} points to missing object ${current || '(none)'}`);
+            }
+
+            stopped(type: string): Error {
+              return new Error(`Nanoflow ${this.metadata.name} stops at ${type}`);
+            }
+
+            unsupported(type: string): Error {
+              return new Error(`Unsupported frontend nanoflow action: ${type || '(empty)'}`);
+            }
+
+            exceeded(): Error {
+              return new Error(`Nanoflow ${this.metadata.name} exceeded 10000 steps`);
+            }
+
+            private comparable(value: RuntimeValue | undefined): Comparable {
+              return typeof value === 'number' ? value : String(value ?? '');
+            }
+          }
+
+          export const defineNanoflow = <P extends NanoflowParameters, R extends RuntimeValue | undefined>(
+            metadata: NanoflowMetadata,
+            compiled: (runtime: NanoflowRuntime<P>) => NanoflowExecution<R> | Promise<NanoflowExecution<R>>
+          ): RegisteredNanoflow => ({
+            ...metadata,
+            execute: async parameters => compiled(new NanoflowRuntime(parameters as P, metadata))
+          });
+        TS
+      end
+
+      def frontend_marketplace_runtime
+        <<~'TS'
+          import { useState } from 'react';
+          import type { ReactNode } from 'react';
+          import type { EntityRecord, RuntimeValue, WidgetDefinition } from '../types';
+
+          export interface MarketplaceWidgetProps {
+            widget: WidgetDefinition;
+            context: EntityRecord | null;
+            children?: ReactNode;
+            onChange(attribute: string | undefined, value: RuntimeValue): unknown;
+          }
+
+          type Properties = Record<string, unknown>;
+
+          const asProperties = (value: unknown): Properties =>
+            value && typeof value === 'object' && !Array.isArray(value) ? value as Properties : {};
+
+          const firstText = (properties: Properties, keys: string[], fallback: string): string => {
+            for (const key of keys) {
+              const value = properties[key];
+              if (typeof value === 'string' && value.trim()) return value;
+              if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            }
+            return fallback;
+          };
+
+          const findAttribute = (value: unknown): string | undefined => {
+            if (!value || typeof value !== 'object') return undefined;
+            if (Array.isArray(value)) {
+              for (const child of value) {
+                const found = findAttribute(child);
+                if (found) return found;
+              }
+              return undefined;
+            }
+            for (const [key, child] of Object.entries(value as Properties)) {
+              if (/attribute/i.test(key) && typeof child === 'string' && child.includes('.')) return child;
+              const found = findAttribute(child);
+              if (found) return found;
+            }
+            return undefined;
+          };
+
+          const memberName = (value: string | undefined): string =>
+            (value || '').split(/[./]/).pop() || '';
+
+          const numericValue = (value: RuntimeValue | undefined, fallback = 0): number => {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
+          };
+
+          const chart = (name: string, children?: ReactNode) => <>
+            <figure className="mxrb-marketplace-chart">
+              <svg viewBox="0 0 240 100" role="img" aria-label={name}>
+                <title>{name}</title>
+                <polyline points="8,82 48,55 88,68 128,25 168,42 228,12" fill="none"
+                  stroke="currentColor" strokeWidth="4" />
+                <line x1="8" y1="90" x2="232" y2="90" stroke="currentColor" />
+              </svg>
+              <figcaption>{name}</figcaption>
+            </figure>
+            {children}
+          </>;
+
+          export function MarketplaceWidget({ widget, context, children, onChange }: MarketplaceWidgetProps) {
+            const options = widget.options || {};
+            const properties = asProperties(options.properties);
+            const id = String(options.widget_id || options.native_type || widget.name).toLowerCase();
+            const name = String(options.widget_name || widget.name);
+            const attribute = findAttribute(properties);
+            const current = context?.attributes?.[memberName(attribute)];
+            const [localValue, setLocalValue] = useState<RuntimeValue>(current ?? 0);
+            const update = (value: RuntimeValue) => {
+              setLocalValue(value);
+              return onChange(attribute, value);
+            };
+            const label = firstText(
+              properties,
+              ['label', 'value', 'caption', 'title', 'legend', 'textMessage', 'alternativeText'],
+              name
+            );
+
+            if (/(area|bar|bubble|column|custom|heatmap|line|pie|time)chart/.test(id)
+                || id.includes('timeseries') || id.includes('heatmap')) return chart(name, children);
+            if (id.includes('progresscircle') || id.includes('progressbar')) {
+              const value = numericValue(current ?? localValue, 50);
+              return <label>{label}<progress value={value} max={100}>{value}%</progress></label>;
+            }
+            if (id.includes('rangeslider')) {
+              const start = Array.isArray(localValue) ? numericValue(localValue[0]) : numericValue(localValue);
+              return <label>{label}<input aria-label={`${label} minimum`} type="range" value={start}
+                onChange={event => update(Number(event.target.value))} /></label>;
+            }
+            if (id.includes('slider')) {
+              return <label>{label}<input aria-label={label} type="range"
+                value={numericValue(current ?? localValue)}
+                onChange={event => update(Number(event.target.value))} /></label>;
+            }
+            if (id.includes('starrating') || id.endsWith('.rating')) {
+              const rating = numericValue(current ?? localValue);
+              return <fieldset className="mxrb-marketplace-rating"><legend>{label}</legend>
+                {[1, 2, 3, 4, 5].map(value => <button type="button" key={value}
+                  aria-label={`${value} stars`} aria-pressed={value <= rating}
+                  onClick={() => update(value)}>{value <= rating ? '★' : '☆'}</button>)}
+              </fieldset>;
+            }
+            if (id.includes('switch')) {
+              return <label><input type="checkbox" checked={Boolean(current ?? localValue)}
+                onChange={event => update(event.target.checked)} />{label}</label>;
+            }
+            if (id.includes('badgebutton')) return <button type="button">{label}</button>;
+            if (id.includes('badge')) return <output className="mxrb-marketplace-badge">{label}</output>;
+            if (id.includes('accordion')) return <details><summary>{label}</summary>{children}</details>;
+            if (id.includes('fieldset')) return <fieldset><legend>{label}</legend>{children}</fieldset>;
+            if (id.includes('accessibilityhelper')) return <div aria-live="polite">{children}</div>;
+            if (id.includes('htmlelement')) return <article>{children || label}</article>;
+            if (id.endsWith('.image')) {
+              const source = firstText(properties, ['imageUrl', 'url'], '');
+              return source ? <img src={source} alt={label} /> : <span>{label}</span>;
+            }
+            if (id.includes('languageselector')) return <label>{label}<select defaultValue="pt-BR">
+              <option value="pt-BR">Português</option><option value="en-US">English</option>
+            </select></label>;
+            if (id.includes('popupmenu')) return <details><summary>{label}</summary>{children || 'Menu'}</details>;
+            if (id.includes('timeline')) return <ol className="mxrb-marketplace-timeline"><li>{label}</li>{children}</ol>;
+            if (id.includes('tooltip')) return <span title={label}>{children || label}</span>;
+            if (id.includes('treenode') || id.includes('treeview')) return <ul><li>{label}{children}</li></ul>;
+            if (id.includes('videoplayer')) {
+              const source = firstText(properties, ['videoUrl', 'videoURL', 'url'], '');
+              return <video controls src={source || undefined}>{label}</video>;
+            }
+            if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
+
+            return <section className="mxrb-marketplace-generic" aria-label={name}>
+              <strong>{name}</strong>{children}
+            </section>;
+          }
         TS
       end
 
@@ -810,6 +1365,8 @@ module Mxrb
         end
         <<~TS
           // Generated from the Mendix domain, page, widget, effect, and API contracts.
+          import type { ComponentType, ReactNode } from 'react';
+
           export type RuntimeScalar = string | number | boolean | null;
           export type RuntimeValue = RuntimeScalar | EntityRecord | RuntimeValue[] | { [key: string]: RuntimeValue };
           export type RuntimeVariables = Record<string, RuntimeValue | undefined>;
@@ -821,6 +1378,7 @@ module Mxrb
             id: string;
             type: Name;
             attributes: Attributes;
+            transient?: boolean;
           }
 
           export interface WidgetEvent {
@@ -830,11 +1388,54 @@ module Mxrb
             arguments?: Record<string, string>;
           }
 
+          export interface WidgetColumn {
+            name?: string;
+            attribute?: string;
+            caption?: string;
+          }
+
+          export interface WidgetTab {
+            name: string;
+            caption?: string;
+            widgets?: WidgetDefinition[];
+          }
+
+          export interface WidgetOptions {
+            [key: string]: unknown;
+            association?: string;
+            attribute?: string;
+            caption?: string;
+            class?: string;
+            columns?: WidgetColumn[];
+            display_attribute?: string;
+            dynamic_class?: string;
+            entity?: string;
+            items?: RuntimeValue[] | Record<string, RuntimeValue>;
+            lines?: number;
+            native_type?: string;
+            options?: RuntimeValue[] | Record<string, RuntimeValue>;
+            pageSize?: number;
+            page_size?: number;
+            parameters?: string[];
+            read_only?: boolean;
+            sort?: Array<{ attribute: string; direction?: string }>;
+            style?: string;
+            tabs?: WidgetTab[];
+            target_entity?: string;
+            toolbar?: { buttons?: Array<{ type: string }> };
+            values?: RuntimeValue[] | Record<string, RuntimeValue>;
+            visible?: string | boolean;
+            platform?: string;
+            properties?: Record<string, unknown>;
+            widget_id?: string;
+            widget_name?: string;
+          }
+
           export interface WidgetDefinition<Name extends string = string> {
             type: string;
             name: Name;
             caption?: string;
-            options?: Record<string, any>;
+            options?: WidgetOptions;
             events?: WidgetEvent[];
             children?: WidgetDefinition[];
           }
@@ -844,7 +1445,19 @@ module Mxrb
             title: string;
             appearance_class?: string;
             appearance_style?: string;
+            data_source?: { kind: 'microflow' | 'nanoflow' | string; name: string } | null;
             widgets: WidgetDefinition<WidgetName>[];
+          }
+
+          export interface PageComponentProps {
+            busy: boolean;
+            Widget: ComponentType<PageWidgetProps>;
+          }
+
+          export interface PageWidgetProps {
+            widget: WidgetDefinition;
+            index: number;
+            children?: ReactNode;
           }
 
           export interface AttributeDefinition {
@@ -933,28 +1546,26 @@ module Mxrb
             status?: number;
           }
 
-          export type ApiRequest = <T = any>(path: string, options?: RequestInit) => Promise<T>;
+          export type ApiRequest = <T = RuntimeValue | undefined>(
+            path: string, options?: RequestInit
+          ) => Promise<T>;
 
-          export interface NanoflowObject {
-            id: string;
-            type: string;
-            action?: Record<string, any>;
-            condition?: string;
-            return?: string;
-          }
+          export type NanoflowParameters = RuntimeVariables;
 
-          export interface NanoflowEdge {
-            origin: string;
-            destination: string;
-            case?: string;
-          }
-
-          export interface NanoflowPlan {
+          export interface NanoflowMetadata {
             name: string;
             id: string;
             parameters: string[];
-            objects: NanoflowObject[];
-            flows: NanoflowEdge[];
+          }
+
+          export interface NanoflowExecution<R = RuntimeValue | undefined> {
+            result: R;
+            variables: NanoflowParameters;
+            changes: EntityRecord[];
+          }
+
+          export interface RegisteredNanoflow extends NanoflowMetadata {
+            execute(parameters: NanoflowParameters): Promise<NanoflowExecution>;
           }
 
           #{enumeration_types.join("\n")}
@@ -1006,33 +1617,90 @@ module Mxrb
       def frontend_app
         <<~'JS'
           import { useCallback, useEffect, useRef, useState } from 'react';
-          import nanoflows from './nanoflows';
+          import type { CSSProperties, FormEvent, ReactNode } from 'react';
+          import { api } from '../api/client';
+          import { MarketplaceWidget } from '../runtime/marketplace';
+          import nanoflows from '../nanoflows';
+          import pages from '../pages';
           import type {
-            ApiFailure, ApiRequest, ApplicationSchema, EntityRecord, InvocationResult,
-            LoginResponse, NanoflowPlan, NavigationItem, OpenPageEffect, PageDefinition, Session
-          } from './types';
+            ApiFailure, ApiRequest, ApplicationSchema, EntityCollectionResponse, EntityRecord,
+            InvocationResult, LoginResponse, NavigationItem, OpenPageEffect, PageDefinition,
+            PageWidgetProps, RuntimeValue, RuntimeVariables, Session, WidgetDefinition,
+            WidgetEvent, WidgetOptions
+          } from '../types';
 
           const TOKEN_KEY = 'mxrb.session.token';
-          const api = async <T = any>(path: string, options: RequestInit = {}, token: string | null = null): Promise<T> => {
-            const headers = new Headers(options.headers);
-            headers.set('Content-Type', 'application/json');
-            if (token) headers.set('Authorization', `Bearer ${token}`);
-            const response = await fetch(path, {
-              ...options, headers
-            });
-            const payload = await response.json();
-            if (!response.ok) {
-              const error: ApiFailure = new Error(payload.error?.message || `HTTP ${response.status}`);
-              error.status = response.status;
-              throw error;
-            }
-            return payload;
-          };
 
-          const classes = (...values) => values.filter(Boolean).join(' ');
-          const attributes = object => object?.attributes || {};
-          const memberName = value => (value || '').split(/[./]/).pop();
-          const entityCollectionPath = (entity, association, context) => {
+          type ErrorHandler = (failure: unknown) => void;
+          type SaveRecord = (
+            record: EntityRecord | null, changes: Record<string, RuntimeValue | undefined>
+          ) => Promise<EntityRecord | null>;
+          type InvokeHandler = (
+            name: string, parameters?: RuntimeVariables, contextOverride?: EntityRecord | null
+          ) => Promise<unknown>;
+          type NavigateHandler = (name: string, context?: EntityRecord | null) => Promise<unknown>;
+          type SelectRecord = (record: EntityRecord | null) => void;
+
+          interface WidgetRuntimeProps {
+            widget: WidgetDefinition;
+            children?: ReactNode;
+            moduleName: string;
+            invoke: InvokeHandler;
+            invokeNanoflow: InvokeHandler;
+            navigate: NavigateHandler;
+            context?: EntityRecord | null;
+            pageContext: EntityRecord | null;
+            revision: number;
+            schema: ApplicationSchema;
+            request: ApiRequest;
+            saveRecord: SaveRecord;
+            onError: ErrorHandler;
+            onMutation: () => void;
+            onSelectRecord: SelectRecord;
+          }
+
+          interface BoundFieldProps {
+            widget: WidgetDefinition;
+            record: EntityRecord | null;
+            schema: ApplicationSchema;
+            request: ApiRequest;
+            saveRecord: SaveRecord;
+            revision: number;
+            onChanged?: (record: EntityRecord) => unknown;
+            onError: ErrorHandler;
+          }
+
+          interface DataGridProps {
+            widget: WidgetDefinition;
+            request: ApiRequest;
+            pageContext: EntityRecord | null;
+            revision: number;
+            onError: ErrorHandler;
+            onMutation: () => void;
+            onRowAction: (record: EntityRecord) => unknown;
+            onSelectRecord: SelectRecord;
+          }
+
+          type GalleryProps = Omit<WidgetRuntimeProps, 'context'>;
+
+          interface LoginProps {
+            onLogin: (username: string, password: string) => Promise<void>;
+            error: ApiFailure | null;
+            busy: boolean;
+          }
+
+          const classes = (...values: Array<string | false | null | undefined>): string =>
+            values.filter(Boolean).join(' ');
+          const isEntityRecord = (value: RuntimeValue | undefined): value is EntityRecord =>
+            Boolean(value && typeof value === 'object' && !Array.isArray(value)
+              && 'id' in value && 'type' in value && 'attributes' in value);
+          const attributes = (object: RuntimeValue | undefined): Record<string, RuntimeValue | undefined> =>
+            isEntityRecord(object) ? object.attributes : {};
+          const memberName = (value: string | undefined): string =>
+            (value || '').split(/[./]/).pop() || '';
+          const entityCollectionPath = (
+            entity: string, association: string | undefined, context: EntityRecord | null
+          ): string => {
             const path = `/api/entities/${encodeURIComponent(entity)}`;
             if (!association || !context?.type || !context?.id) return path;
             const query = new URLSearchParams({
@@ -1040,7 +1708,10 @@ module Mxrb
             });
             return `${path}?${query}`;
           };
-          const expressionValue = (source, context, variables = {}) => {
+          const expressionValue = (
+            source: string | undefined, context: EntityRecord | null,
+            variables: RuntimeVariables = {}
+          ): RuntimeValue | undefined => {
             const text = (source || '').trim();
             const wrapped = text.match(/^toString\((.*)\)$/);
             if (wrapped) return String(expressionValue(wrapped[1], context, variables) ?? '');
@@ -1055,7 +1726,10 @@ module Mxrb
             if (/^'.*'$/.test(text)) return text.slice(1, -1).replaceAll("''", "'");
             return text;
           };
-          const conditionValue = (source, context, variables = {}) => {
+          const conditionValue = (
+            source: string | undefined, context: EntityRecord | null,
+            variables: RuntimeVariables = {}
+          ): boolean => {
             const text = (source || '').trim().replace(/^\((.*)\)$/, '$1');
             const orParts = text.split(/\s+or\s+/);
             if (orParts.length > 1) return orParts.some(part => conditionValue(part, context, variables));
@@ -1065,56 +1739,77 @@ module Mxrb
             if (!comparison) return Boolean(expressionValue(text, context, variables));
             const left = expressionValue(comparison[1], context, variables);
             const right = expressionValue(comparison[3], context, variables);
-            return ({
-              '=': left === right, '!=': left !== right, '>': left > right,
-              '<': left < right, '>=': left >= right, '<=': left <= right
-            })[comparison[2]];
+            if (comparison[2] === '=') return left === right;
+            if (comparison[2] === '!=') return left !== right;
+            const comparable = (value: RuntimeValue | undefined): string | number =>
+              typeof value === 'number' ? value : String(value ?? '');
+            if (comparison[2] === '>') return comparable(left) > comparable(right);
+            if (comparison[2] === '<') return comparable(left) < comparable(right);
+            if (comparison[2] === '>=') return comparable(left) >= comparable(right);
+            return comparable(left) <= comparable(right);
           };
-          const nanoflowValue = (source, context, variables = {}) => {
-            const text = (source || '').trim();
-            if (/\s(?:and|or)\s|(?:=|!=|>=|<=|>|<)/.test(text)) {
-              return conditionValue(text, context, variables);
-            }
-            return expressionValue(text, context, variables);
-          };
-          const isVisible = (source, context) => {
+          const isVisible = (source: string | boolean | undefined, context: EntityRecord | null): boolean => {
+            if (typeof source === 'boolean') return source;
             return !source || conditionValue(source, context);
           };
-          const dynamicClass = (source, context) => {
+          const dynamicClass = (source: string | undefined, context: EntityRecord | null): string => {
             let text = source || '';
             text = text.replace(/\(?if\s+(.+?)\s+then\s+'([^']*)'\s+else\s+'([^']*)'\)?/g,
-              (_, condition, yes, no) => conditionValue(condition, context) ? yes : no);
+              (_match: string, condition: string, yes: string, no: string) =>
+                conditionValue(condition, context) ? yes : no);
             text = text.replace(/toString\(\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)\)/g,
-              (_, member) => String(attributes(context)[memberName(member)] ?? ''));
+              (_match: string, member: string) => String(attributes(context)[memberName(member)] ?? ''));
             text = text.replace(/\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)/g,
-              (_, member) => attributes(context)[memberName(member)] ?? '');
+              (_match: string, member: string) => String(attributes(context)[memberName(member)] ?? ''));
             return text.replace(/[+()']/g, ' ').replace(/\s+/g, ' ').trim();
           };
-          const caption = (widget, options, context) => {
+          const caption = (
+            widget: WidgetDefinition, options: WidgetOptions, context: EntityRecord | null
+          ): string => {
             let value = options.caption || widget.caption || widget.name;
             (options.parameters || []).forEach((parameter, index) => {
-              value = value.replaceAll(`{${index + 1}}`, expressionValue(parameter, context) ?? '');
+              value = value.replaceAll(`{${index + 1}}`, String(expressionValue(parameter, context) ?? ''));
             });
             return value;
           };
-          const inlineStyle = value => Object.fromEntries((value || '').split(';').filter(Boolean).map(rule => {
+          const inlineStyle = (value: string | undefined): CSSProperties =>
+            Object.fromEntries((value || '').split(';').filter(Boolean).map((rule: string) => {
             const [property, ...parts] = rule.split(':');
-            const name = property.trim().replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+            const name = property.trim().replace(/-([a-z])/g,
+              (_match: string, letter: string) => letter.toUpperCase());
             return [name, parts.join(':').trim()];
           }));
 
-          const eventArguments = (event, context) => Object.fromEntries(
+          const eventArguments = (event: WidgetEvent | undefined, context: EntityRecord | null): RuntimeVariables => Object.fromEntries(
             Object.entries(event?.arguments || {}).map(([name, expression]) => [name, expressionValue(expression, context)])
           );
 
-          const recordValue = (record, attribute) => attributes(record)[memberName(attribute)];
-          const displayValue = value => {
+          const recordValue = (record: EntityRecord | null, attribute: string | undefined): RuntimeValue | undefined =>
+            attributes(record || undefined)[memberName(attribute)];
+          const displayValue = (value: RuntimeValue | undefined): string | number | boolean => {
             if (value == null) return '';
             if (Array.isArray(value)) return value.map(displayValue).join(', ');
-            if (value?.attributes) return Object.values(value.attributes).find(item =>
-              ['string', 'number', 'boolean'].includes(typeof item)) ?? value.id;
-            if (typeof value === 'object') return value.id || JSON.stringify(value);
+            if (isEntityRecord(value)) return Object.values(value.attributes).find(item =>
+              ['string', 'number', 'boolean'].includes(typeof item)) as string | number | boolean || value.id;
+            if (typeof value === 'object') return JSON.stringify(value);
             return String(value);
+          };
+
+          const choiceValue = (value: RuntimeValue, key: string): RuntimeValue | undefined => {
+            if (isEntityRecord(value)) return key === 'id' ? value.id : value.attributes[key];
+            if (value && typeof value === 'object' && !Array.isArray(value)) return value[key];
+            return undefined;
+          };
+
+          const draftValue = (value: RuntimeValue | undefined): string | number | boolean => {
+            if (isEntityRecord(value)) return value.id;
+            return ['string', 'number', 'boolean'].includes(typeof value)
+              ? value as string | number | boolean : '';
+          };
+
+          const apiFailure = (failure: unknown): ApiFailure => {
+            if (failure instanceof Error) return failure as ApiFailure;
+            return new Error(String(failure));
           };
 
           const sortRecords = (
@@ -1131,51 +1826,16 @@ module Mxrb
             return result;
           };
 
-          const executeNanoflow = async (
-            plan: NanoflowPlan | undefined, parameters: Record<string, any>
-          ): Promise<{ result: any; variables: Record<string, any> }> => {
-            if (!plan) throw new Error('Nanoflow frontend not found');
-            const variables = structuredClone(parameters || {});
-            const objects = Object.fromEntries(plan.objects.map(object => [object.id, object]));
-            const outgoing = {};
-            plan.flows.forEach(flow => { (outgoing[flow.origin] ||= []).push(flow); });
-            let current = plan.objects.find(object => object.type === 'StartEvent');
-            for (let step = 0; step < 10000; step += 1) {
-              if (!current) throw new Error(`Nanoflow ${plan.name} points to a missing object`);
-              if (current.type === 'EndEvent') {
-                return { result: expressionValue(current.return, null, variables), variables };
-              }
-              if (current.type === 'ActionActivity') {
-                const action = current.action || {};
-                if (action.type === 'LogMessage') console.info(`[nanoflow] ${action.message || plan.name}`);
-              else if (action.type === 'CreateVariable' || action.type === 'ChangeVariable') {
-                variables[action.variable] = nanoflowValue(action.value, null, variables);
-              } else if (action.type === 'Change') {
-                  const object = variables[action.variable];
-                  if (!object?.attributes) throw new Error(`Nanoflow object $${action.variable} is missing`);
-                (action.changes || []).forEach(change => {
-                  object.attributes[change.member] = nanoflowValue(change.value, object, variables);
-                });
-                } else throw new Error(`Unsupported frontend nanoflow action: ${action.type}`);
-              }
-              const edges = outgoing[current.id] || [];
-              let edge = edges[0];
-              if (current.type === 'ExclusiveSplit') {
-                const value = String(conditionValue(current.condition, null, variables));
-                edge = edges.find(item => item.case === value) || edges.find(item => !item.case);
-              }
-              if (!edge) throw new Error(`Nanoflow ${plan.name} stops at ${current.type}`);
-              current = objects[edge.destination];
-            }
-            throw new Error(`Nanoflow ${plan.name} exceeded 10000 steps`);
-          };
-
-          function BoundField({ widget, record, schema, request, saveRecord, onChanged, onError }) {
+          function BoundField({
+            widget, record, schema, request, saveRecord, revision, onChanged, onError
+          }: BoundFieldProps) {
             const options = widget.options || {};
             const member = memberName(options.attribute || widget.name);
             const kind = widget.type;
             const value = recordValue(record, member);
-            const [draft, setDraft] = useState(kind === 'check_box' ? Boolean(value) : (value ?? ''));
+            const [draft, setDraft] = useState<string | number | boolean>(
+              kind === 'check_box' ? Boolean(value) : draftValue(value)
+            );
             const [references, setReferences] = useState<EntityRecord[]>([]);
             const associations = (schema?.modules || []).flatMap(module => module.associations || []);
             const association = associations.find(item =>
@@ -1194,19 +1854,19 @@ module Mxrb
               || item.name === attributeDefinition?.enumeration);
 
             useEffect(() => {
-              setDraft(kind === 'check_box' ? Boolean(value) : (value?.id || value || ''));
-            }, [kind, record?.id, value?.id, value]);
+              setDraft(kind === 'check_box' ? Boolean(value) : draftValue(value));
+            }, [kind, record?.id, value]);
 
             useEffect(() => {
               if (kind !== 'reference_selector' || !referenceEntity) return;
-              request(`/api/entities/${encodeURIComponent(referenceEntity)}`)
+              request<EntityCollectionResponse>(`/api/entities/${encodeURIComponent(referenceEntity)}`)
                 .then(payload => setReferences(payload.records || [])).catch(onError);
-            }, [kind, referenceEntity, request, onError]);
+            }, [kind, referenceEntity, revision, request, onError]);
 
-            const persist = next => {
+            const persist = (next: string | number | boolean) => {
               setDraft(next);
               if (!record?.type || !record?.id || !member) return Promise.resolve(record);
-              let normalized = next;
+              let normalized: RuntimeValue = next;
               if (kind === 'number_input') normalized = next === '' ? null : Number(next);
               if (kind === 'reference_selector') {
                 normalized = references.find(item => item.id === next) || null;
@@ -1220,7 +1880,7 @@ module Mxrb
             const disabled = !record?.id || !member || options.read_only === true;
 
             if (kind === 'text_area') {
-              return <textarea rows={options.lines || 4} value={draft} disabled={disabled}
+              return <textarea rows={options.lines || 4} value={String(draft)} disabled={disabled}
                 onChange={event => setDraft(event.target.value)} onBlur={() => persist(draft)} />;
             }
             if (kind === 'check_box') {
@@ -1232,28 +1892,31 @@ module Mxrb
                 id: item.name, label: item.caption || item.name
               }));
               const configuredValue = options.values || options.items || options.options || enumValues;
-              const configured = Array.isArray(configuredValue) ? configuredValue : Object.values(configuredValue);
-              const choices = kind === 'reference_selector' ? references : configured.map(item =>
-                typeof item === 'object' ? item : { id: item, label: item }
-              );
-              return <select value={draft} disabled={disabled} onChange={event => persist(event.target.value)}>
+              const configured: RuntimeValue[] = Array.isArray(configuredValue)
+                ? configuredValue : configuredValue ? Object.values(configuredValue) : [];
+              const choices: RuntimeValue[] = kind === 'reference_selector' ? references : configured;
+              return <select value={String(draft)} disabled={disabled} onChange={event => persist(event.target.value)}>
                 <option value="">—</option>
-                {draft && !choices.some(item => (item.id || item.value) === draft) ?
-                  <option value={draft}>{displayValue(value)}</option> : null}
-                {choices.map(item => <option key={item.id || item.value} value={item.id || item.value}>
-                  {displayValue(item.label || item.caption || recordValue(item, options.display_attribute)
-                    || item.id || item.value)}
+                {draft && !choices.some(item => (choiceValue(item, 'id') || choiceValue(item, 'value') || item) === draft) ?
+                  <option value={String(draft)}>{displayValue(value)}</option> : null}
+                {choices.map((item, index) => <option
+                  key={String(choiceValue(item, 'id') || choiceValue(item, 'value') || index)}
+                  value={String(choiceValue(item, 'id') || choiceValue(item, 'value') || item)}>
+                  {displayValue(choiceValue(item, 'label') || choiceValue(item, 'caption')
+                    || (isEntityRecord(item) ? recordValue(item, options.display_attribute) : undefined)
+                    || choiceValue(item, 'id') || choiceValue(item, 'value') || item)}
                 </option>)}
               </select>;
             }
             const inputType = kind === 'date_picker' ? 'date' : kind === 'number_input' ? 'number' : 'text';
-            const inputValue = inputType === 'date' ? String(draft).slice(0, 10) : draft;
+            const inputValue = inputType === 'date' ? String(draft).slice(0, 10)
+              : typeof draft === 'boolean' ? String(draft) : draft;
             return <input type={inputType} value={inputValue} disabled={disabled}
               onChange={event => setDraft(event.target.value)} onBlur={() => persist(draft)} />;
           }
 
           function DataGrid({ widget, request, pageContext, revision, onError, onMutation,
-                              onRowAction, onSelectRecord }) {
+                              onRowAction, onSelectRecord }: DataGridProps) {
             const options = widget.options || {};
             const [records, setRecords] = useState<EntityRecord[]>([]);
             const [pageNumber, setPageNumber] = useState(0);
@@ -1265,7 +1928,9 @@ module Mxrb
             useEffect(() => {
               if (!options.entity) return;
               setLoading(true);
-              request(entityCollectionPath(options.entity, options.association, pageContext)).then(payload => {
+              request<EntityCollectionResponse>(
+                entityCollectionPath(options.entity, options.association, pageContext)
+              ).then(payload => {
                 let values = payload.records || [];
                 values = sortRecords(values, options.sort || []);
                 setRecords(values);
@@ -1274,22 +1939,25 @@ module Mxrb
             }, [options.entity, options.association, pageContext?.type, pageContext?.id,
                 pageSize, reload, revision, request, onError]);
 
-            const mutate = operation => operation.then(result => {
+            const mutate = <T,>(operation: Promise<T>): Promise<T> => operation.then(result => {
               setReload(value => value + 1);
               onMutation();
               return result;
-            }).catch(onError);
-            const createRecord = () => mutate(request(`/api/entities/${encodeURIComponent(options.entity)}`, {
+            }).catch(failure => {
+              onError(failure);
+              throw failure;
+            });
+            const createRecord = () => mutate(request<EntityRecord>(`/api/entities/${encodeURIComponent(options.entity || '')}`, {
               method: 'POST', body: '{}'
             })).then(record => {
               setSelected(record);
               if (record) onSelectRecord(record);
             });
             const deleteRecord = () => selected && mutate(request(
-              `/api/entities/${encodeURIComponent(options.entity)}/${encodeURIComponent(selected.id)}`,
+              `/api/entities/${encodeURIComponent(options.entity || '')}/${encodeURIComponent(selected.id)}`,
               { method: 'DELETE' }
             )).then(() => { setSelected(null); onSelectRecord(null); });
-            const toolbar = options.toolbar?.buttons || [];
+            const toolbar = options.toolbar?.buttons || [{ type: 'new' }, { type: 'delete' }];
             const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
             const visible = records.slice(pageNumber * pageSize, (pageNumber + 1) * pageSize);
 
@@ -1320,12 +1988,14 @@ module Mxrb
           }
 
           function Gallery({ widget, moduleName, invoke, invokeNanoflow, navigate, pageContext, revision,
-                             schema, request, saveRecord, onError, onMutation, onSelectRecord }) {
+                             schema, request, saveRecord, onError, onMutation, onSelectRecord }: GalleryProps) {
             const options = widget.options || {};
             const [records, setRecords] = useState<EntityRecord[]>([]);
             useEffect(() => {
               if (!options.entity) return;
-              request(entityCollectionPath(options.entity, options.association, pageContext)).then(payload => {
+              request<EntityCollectionResponse>(
+                entityCollectionPath(options.entity, options.association, pageContext)
+              ).then(payload => {
                 setRecords(sortRecords(payload.records || [], options.sort || []));
               }).catch(onError);
             }, [options.entity, options.association, pageContext?.type, pageContext?.id,
@@ -1345,18 +2015,19 @@ module Mxrb
             </div>;
           }
 
-          function Widget({ widget, moduleName, invoke, invokeNanoflow, navigate,
+          function Widget({ widget, children: compiledChildren, moduleName, invoke, invokeNanoflow, navigate,
                             context, pageContext, revision, schema, request, saveRecord,
-                            onError, onMutation, onSelectRecord }) {
+                            onError, onMutation, onSelectRecord }: WidgetRuntimeProps) {
             const options = widget.options || {};
             if (!isVisible(options.visible, context || pageContext)) return null;
-            const className = classes('mxrb-widget', `mxrb-${widget.type}`, options.class,
+            const className = classes('mxrb-widget', `mxrb-${widget.type}`, `mx-name-${widget.name}`,
+              options.class,
               dynamicClass(options.dynamic_class, context || pageContext));
             const runtimeProps = {
               'data-widget-name': widget.name,
               'data-widget-type': widget.type
             };
-            const children = (widget.children || []).map((child, index) =>
+            const children = compiledChildren ?? (widget.children || []).map((child, index) =>
               <Widget key={`${child.name}-${index}`} widget={child} moduleName={moduleName} invoke={invoke}
                 invokeNanoflow={invokeNanoflow} navigate={navigate}
                 context={context} pageContext={pageContext} revision={revision} schema={schema}
@@ -1364,19 +2035,22 @@ module Mxrb
                 onSelectRecord={onSelectRecord} />);
             const click = (widget.events || []).find(event => event.event === 'on_click');
             const change = (widget.events || []).find(event => event.event === 'on_change');
-            const runEvent = (event, eventContext = context || pageContext) => {
+            const runEvent = (
+              event: WidgetEvent | undefined, eventContext: EntityRecord | null = context || pageContext
+            ): Promise<unknown> => {
               if (!event) return Promise.resolve();
               const handler = event.handler.includes('.') ? event.handler : `${moduleName}.${event.handler}`;
               const parameters = eventArguments(event, eventContext);
               if (event.kind === 'nanoflow') return invokeNanoflow(handler, parameters, eventContext);
               if (event.kind === 'page') {
-                const targetContext = Object.values(parameters)[0] || pageContext || context || null;
+                const candidate = Object.values(parameters)[0];
+                const targetContext = isEntityRecord(candidate) ? candidate : pageContext || context || null;
                 return navigate(handler, targetContext);
               }
               return invoke(handler, parameters, eventContext);
             };
             const onClick = click ? () => runEvent(click) : undefined;
-            const onChanged = updated => runEvent(change, updated);
+            const onChanged = (updated: EntityRecord) => runEvent(change, updated);
 
             switch (widget.type) {
               case 'container':
@@ -1393,30 +2067,35 @@ module Mxrb
               case 'text_area':
                 return <label {...runtimeProps} className={className}>{caption(widget, options, context || pageContext)}
                   <BoundField widget={widget} record={context || pageContext} schema={schema}
-                    request={request} saveRecord={saveRecord} onChanged={onChanged} onError={onError} />
+                    request={request} saveRecord={saveRecord} revision={revision}
+                    onChanged={onChanged} onError={onError} />
                 </label>;
               case 'text_box':
               case 'number_input':
                 return <label {...runtimeProps} className={className}>{caption(widget, options, context || pageContext)}
                   <BoundField widget={widget} record={context || pageContext} schema={schema}
-                    request={request} saveRecord={saveRecord} onChanged={onChanged} onError={onError} />
+                    request={request} saveRecord={saveRecord} revision={revision}
+                    onChanged={onChanged} onError={onError} />
                 </label>;
               case 'check_box':
                 return <label {...runtimeProps} className={className}>
                   <BoundField widget={widget} record={context || pageContext} schema={schema}
-                    request={request} saveRecord={saveRecord} onChanged={onChanged} onError={onError} />
+                    request={request} saveRecord={saveRecord} revision={revision}
+                    onChanged={onChanged} onError={onError} />
                   {caption(widget, options, context || pageContext)}
                 </label>;
               case 'date_picker':
                 return <label {...runtimeProps} className={className}>{caption(widget, options, context || pageContext)}
                   <BoundField widget={widget} record={context || pageContext} schema={schema}
-                    request={request} saveRecord={saveRecord} onChanged={onChanged} onError={onError} />
+                    request={request} saveRecord={saveRecord} revision={revision}
+                    onChanged={onChanged} onError={onError} />
                 </label>;
               case 'drop_down':
               case 'reference_selector':
                 return <label {...runtimeProps} className={className}>{caption(widget, options, context || pageContext)}
                   <BoundField widget={widget} record={context || pageContext} schema={schema}
-                    request={request} saveRecord={saveRecord} onChanged={onChanged} onError={onError} />
+                    request={request} saveRecord={saveRecord} revision={revision}
+                    onChanged={onChanged} onError={onError} />
                 </label>;
               case 'tab_control':
                 return <div {...runtimeProps} className={className}>{(options.tabs || []).map(tab =>
@@ -1440,6 +2119,20 @@ module Mxrb
                   pageContext={pageContext} revision={revision} schema={schema} request={request}
                   saveRecord={saveRecord} onError={onError} onMutation={onMutation}
                   onSelectRecord={onSelectRecord} />;
+              case 'pluggable_widget':
+                return <div {...runtimeProps} className={classes(className, 'mxrb-marketplace-widget')}
+                  data-widget-id={options.widget_id || ''}>
+                  <MarketplaceWidget widget={widget} context={context || pageContext}
+                    onChange={(attribute, value) => {
+                      const active = context || pageContext;
+                      const member = memberName(attribute);
+                      if (!active || !member) return Promise.resolve(active);
+                      return saveRecord(active, { [member]: value }).then(updated => {
+                        if (updated) return onChanged(updated);
+                        return updated;
+                      });
+                    }}>{children}</MarketplaceWidget>
+                </div>;
               case 'native_widget':
                 return <div {...runtimeProps} className={classes(className, 'mxrb-native-widget')}
                   data-native-type={options.native_type || ''} role="alert">
@@ -1461,10 +2154,10 @@ module Mxrb
             </li>);
           }
 
-          function Login({ onLogin, error, busy }) {
+          function Login({ onLogin, error, busy }: LoginProps) {
             const [username, setUsername] = useState('');
             const [password, setPassword] = useState('');
-            const submit = event => {
+            const submit = (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
               onLogin(username, password).finally(() => setPassword(''));
             };
@@ -1487,24 +2180,55 @@ module Mxrb
             const [pageContext, setPageContext] = useState<EntityRecord | null>(null);
             const [error, setError] = useState<ApiFailure | null>(null);
             const [busy, setBusy] = useState(false);
+            const initialLoadStarted = useRef(false);
             const invocationInFlight = useRef(false);
             const [revision, setRevision] = useState(0);
             const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
             const [session, setSession] = useState<Session | null>(null);
             const [authRequired, setAuthRequired] = useState(false);
 
-            const handleError = useCallback(failure => {
-              if (failure?.status === 401) setAuthRequired(true);
-              setError(failure);
+            const handleError = useCallback((failure: unknown) => {
+              const normalized = apiFailure(failure);
+              if (normalized.status === 401) setAuthRequired(true);
+              setError(normalized);
             }, []);
             const request: ApiRequest = useCallback(
               (path: string, options: RequestInit = {}) => api(path, options, token), [token]
             );
 
-            const openPage = (name: string, context: EntityRecord | null = null, activeToken = token) =>
-              api<PageDefinition>(`/api/pages/${encodeURIComponent(name)}`, {}, activeToken)
-                .then(value => { setPage(value); setPageContext(context); setError(null); })
-                .catch(handleError);
+            const openPage = async (
+              name: string, context: EntityRecord | null = null, activeToken = token
+            ): Promise<void> => {
+              try {
+                const value = await api<PageDefinition>(
+                  `/api/pages/${encodeURIComponent(name)}`, {}, activeToken
+                );
+                let resolvedContext = context;
+                if (!resolvedContext && value.data_source?.name) {
+                  if (value.data_source.kind === 'nanoflow') {
+                    const source = nanoflows[value.data_source.name as keyof typeof nanoflows];
+                    if (!source) throw new Error(`Page data source nanoflow not found: ${value.data_source.name}`);
+                    const execution = await source.execute({});
+                    resolvedContext = isEntityRecord(execution.result)
+                      ? { ...execution.result, transient: true } : null;
+                  } else {
+                    const payload = await api<InvocationResult>(
+                      `/api/microflows/${encodeURIComponent(value.data_source.name)}`,
+                      { method: 'POST', body: '{}' }, activeToken
+                    );
+                    const candidate = payload.context || payload.result;
+                    resolvedContext = isEntityRecord(candidate)
+                      ? { ...candidate, transient: true } : null;
+                  }
+                }
+                setPage(value);
+                setPageContext(resolvedContext);
+                setRevision(current => current + 1);
+                setError(null);
+              } catch (failure) {
+                handleError(failure);
+              }
+            };
 
             const loadApplication = async (activeToken = token) => {
               try {
@@ -1521,21 +2245,24 @@ module Mxrb
                 const fallback = value.modules.flatMap(module => module.pages)[0]?.name;
                 await openPage(profile?.home_page || fallback, null, activeToken);
               } catch (failure) {
-                if (failure?.status === 401) {
+                const normalized = apiFailure(failure);
+                if (normalized.status === 401) {
                   localStorage.removeItem(TOKEN_KEY);
                   setToken(null);
                   setSession(null);
                   setAuthRequired(true);
                 }
-                setError(failure);
+                setError(normalized);
               }
             };
 
             useEffect(() => {
+              if (initialLoadStarted.current) return;
+              initialLoadStarted.current = true;
               loadApplication(token);
             }, []);
 
-            const login = async (username, password) => {
+            const login = async (username: string, password: string): Promise<void> => {
               setBusy(true);
               try {
                 const authenticated = await api<LoginResponse>('/api/login', {
@@ -1545,7 +2272,7 @@ module Mxrb
                 setToken(authenticated.token);
                 await loadApplication(authenticated.token);
               } catch (failure) {
-                setError(failure);
+                setError(apiFailure(failure));
               } finally {
                 setBusy(false);
               }
@@ -1555,7 +2282,8 @@ module Mxrb
               try {
                 await api('/api/logout', { method: 'POST' }, token);
               } catch (failure) {
-                if (failure?.status !== 401) setError(failure);
+                const normalized = apiFailure(failure);
+                if (normalized.status !== 401) setError(normalized);
               } finally {
                 localStorage.removeItem(TOKEN_KEY);
                 setToken(null);
@@ -1568,13 +2296,22 @@ module Mxrb
 
             const refreshPageContext = () => {
               if (!pageContext?.type || !pageContext?.id) return Promise.resolve();
-              return request(
-                `/api/entities/${encodeURIComponent(pageContext.type)}/${encodeURIComponent(pageContext.id)}`
+            return request<EntityRecord>(
+              `/api/entities/${encodeURIComponent(pageContext.type)}/${encodeURIComponent(pageContext.id)}`
               ).then(setPageContext).catch(handleError);
             };
 
-            const saveRecord = useCallback((record, changes) => {
+            const saveRecord: SaveRecord = useCallback((record, changes) => {
               if (!record?.type || !record?.id) return Promise.resolve(record);
+              if (record.transient) {
+                const updated: EntityRecord = {
+                  ...record, attributes: { ...record.attributes, ...changes }
+                };
+                setPageContext(current => current?.id === updated.id ? updated : current);
+                setRevision(value => value + 1);
+                setError(null);
+                return Promise.resolve(updated);
+              }
               return request<EntityRecord>(`/api/entities/${encodeURIComponent(record.type)}/${encodeURIComponent(record.id)}`, {
                 method: 'PATCH', body: JSON.stringify(changes)
               }).then(updated => {
@@ -1583,15 +2320,25 @@ module Mxrb
                 setError(null);
                 return updated;
               }).catch(failure => {
+                const normalized = apiFailure(failure);
+                if (normalized.status === 404) {
+                  const updated: EntityRecord = {
+                    ...record, attributes: { ...record.attributes, ...changes }
+                  };
+                  setPageContext(current => current?.id === updated.id ? updated : current);
+                  setRevision(value => value + 1);
+                  setError(null);
+                  return updated;
+                }
                 handleError(failure);
                 return null;
               });
             }, [request, handleError]);
 
             const markMutation = useCallback(() => setRevision(value => value + 1), []);
-            const selectRecord = useCallback(record => setPageContext(record), []);
+            const selectRecord: SelectRecord = useCallback(record => setPageContext(record), []);
 
-            const invoke = (name, parameters = {}, contextOverride = null) => {
+            const invoke: InvokeHandler = (name, parameters = {}, contextOverride = null) => {
               if (invocationInFlight.current) return Promise.resolve(null);
               invocationInFlight.current = true;
               setBusy(true);
@@ -1619,25 +2366,27 @@ module Mxrb
                   });
             };
 
-            const invokeNanoflow = async (name, parameters = {}, contextOverride = null) => {
+            const invokeNanoflow: InvokeHandler = async (
+              name, parameters = {}, contextOverride = null
+            ) => {
               setBusy(true);
               try {
-                const plan = nanoflows[name];
-                const resolvedParameters = { ...parameters };
-                const activeContext = contextOverride || pageContext;
-                if (plan?.parameters?.length === 1 && !(plan.parameters[0] in resolvedParameters)
-                    && activeContext) {
-                  resolvedParameters[plan.parameters[0]] = activeContext;
-                }
-                const execution = await executeNanoflow(plan, resolvedParameters);
-                const changedContext = Object.values(execution.variables).find(value =>
-                  value?.id && value.id === activeContext?.id
-                );
-                if (changedContext) await saveRecord(changedContext, changedContext.attributes || {});
-                setError(null);
+              const definition = nanoflows[name as keyof typeof nanoflows];
+              const resolvedParameters: RuntimeVariables = { ...parameters };
+              const activeContext = contextOverride || pageContext;
+              if (definition?.parameters?.length === 1 && !(definition.parameters[0] in resolvedParameters)
+                  && activeContext) {
+                resolvedParameters[definition.parameters[0]] = activeContext;
+              }
+              if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
+              const execution = await definition.execute(resolvedParameters);
+              for (const changed of execution.changes) {
+                await saveRecord(changed, changed.attributes);
+              }
+              setError(null);
                 return execution.result;
               } catch (failure) {
-                setError(failure);
+                setError(apiFailure(failure));
                 return null;
               } finally {
                 setBusy(false);
@@ -1648,21 +2397,24 @@ module Mxrb
             if (!schema || !page) return <main className="mxrb-loading">Loading application…</main>;
             const profile = schema.navigation?.profiles?.find(item => item.kind === 'Responsive')
               || schema.navigation?.profiles?.[0];
-            const moduleName = page.name.split('.')[0];
+          const moduleName = page.name.split('.')[0];
+          const PageComponent = pages[page.name as keyof typeof pages];
+          const PageWidget = ({ widget, children }: PageWidgetProps) =>
+            <Widget widget={widget} moduleName={moduleName} invoke={invoke}
+              invokeNanoflow={invokeNanoflow} navigate={openPage}
+              context={pageContext} pageContext={pageContext} revision={revision} schema={schema}
+              request={request} saveRecord={saveRecord} onError={handleError}
+              onMutation={markMutation} onSelectRecord={selectRecord}>{children}</Widget>;
 
-            return <div className={classes('mxrb-app-shell', 'mx-page', page.appearance_class)} style={inlineStyle(page.appearance_style)}>
+          return <div className={classes('mxrb-app-shell', 'mx-page', page.appearance_class)} style={inlineStyle(page.appearance_style)}>
               {profile?.items?.length || session ? <nav className="mxrb-navigation region-sidebar">
                 {profile?.items?.length ? <ul>{navigationItems(profile.items, openPage)}</ul> : null}
                 {session ? <button type="button" onClick={logout}>Sign out</button> : null}
               </nav> : null}
-              <main className="mxrb-page region-content mx-scrollcontainer-wrapper" aria-busy={busy}>
-                {(page.widgets || []).map((widget, index) =>
-                  <Widget key={`${widget.name}-${index}`} widget={widget} moduleName={moduleName} invoke={invoke}
-                    invokeNanoflow={invokeNanoflow} navigate={openPage}
-                    context={pageContext} pageContext={pageContext} revision={revision} schema={schema}
-                    request={request} saveRecord={saveRecord} onError={handleError}
-                    onMutation={markMutation} onSelectRecord={selectRecord} />)}
-              </main>
+            {PageComponent ? <PageComponent busy={busy} Widget={PageWidget} /> :
+              <main className="mxrb-page region-content" role="alert">
+                Generated React page not found: {page.name}
+              </main>}
               {error ? <aside className="mxrb-runtime-error" role="alert">
                 <button type="button" onClick={() => setError(null)}>×</button>{error.message}
               </aside> : null}
@@ -1690,6 +2442,13 @@ module Mxrb
           .mxrb-login { display: grid; min-height: 100vh; place-items: center; padding: 1rem; }
           .mxrb-login form { display: grid; width: min(24rem, 100%); gap: 1rem; padding: 2rem; border: 1px solid #d1d5db; border-radius: .75rem; }
           .mxrb-login label { display: grid; gap: .25rem; }
+          .mxrb-marketplace-widget { display: block; min-width: 0; }
+          .mxrb-marketplace-widget img, .mxrb-marketplace-widget video,
+          .mxrb-marketplace-chart svg { display: block; width: 100%; height: 12rem; max-width: 100%; }
+          .mxrb-marketplace-chart { margin: .5rem 0; }
+          .mxrb-marketplace-rating { display: inline-flex; border: 0; padding: 0; }
+          .mxrb-marketplace-rating button { border: 0; background: transparent; cursor: pointer; }
+          .mxrb-marketplace-badge { display: inline-block; padding: .125rem .5rem; border-radius: 999px; background: #e5e7eb; }
           .mxrb-grid-toolbar, .mxrb-grid-pagination { display: flex; align-items: center; gap: .5rem; margin-block: .5rem; }
           .mxrb-data-grid-runtime table { width: 100%; border-collapse: collapse; }
           .mxrb-data-grid-runtime th, .mxrb-data-grid-runtime td { padding: .5rem; border-bottom: 1px solid #d1d5db; text-align: left; }

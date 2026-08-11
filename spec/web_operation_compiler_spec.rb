@@ -697,6 +697,8 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
 
   it 'covers optional grid metadata and schema fallbacks' do
     compiler = described_class.new(source, 'Demo.Home', grid)
+    expect(compiler.send(:selection, 'itemSelection' => ['Object', { 'Selection' => 'Single' }])
+      .fetch('$raw')).to include('Single')
     expect(compiler.send(:primitive, 'Widgets', 'Widgets' => [2, {}])).to eq(:undefined)
     expect(compiler.send(:property_values, nil)).to eq({})
     plain = described_class.new(source, 'Demo.Home', 'Name' => 'plain')

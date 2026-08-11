@@ -397,6 +397,97 @@ RSpec.describe 'modern page widgets' do
     expect(filtered.to_h.dig(:options, :filters).length).to eq(1)
   end
 
+  it 'normalizes every pluggable widget property shape for the React projection' do
+    page = Mxrb::Model::Page.allocate
+    allow(page).to receive(:parse_widgets) do |_widgets, target|
+      target << { type: :text, name: 'Slot', options: {}, events: [] }
+    end
+
+    expect(page.send(:pluggable_properties, nil, nil)).to eq({})
+    expect(page.send(:pluggable_value, 'invalid', nil)).to be_nil
+    expect(page.send(:pluggable_value, { 'Selection' => 'None' }, nil)).to be_nil
+    slot = page.send(:pluggable_value, { 'Widgets' => [2, { '$Type' => 'Forms$DynamicText' }] }, {})
+    expect(slot).to include(widgets: include(include(type: :text, name: 'Slot')))
+
+    object_type = {
+      'PropertyTypes' => [2, {
+        '$ID' => 'value-type', 'PropertyKey' => 'value',
+        'ValueType' => { 'Type' => 'String' }
+      }]
+    }
+    object = {
+      'Properties' => [2, {
+        'TypePointer' => 'value-type', 'Value' => { 'PrimitiveValue' => 'nested' }
+      }, {
+        'TypePointer' => 'missing', 'Value' => { 'PrimitiveValue' => 'ignored' }
+      }]
+    }
+    objects = page.send(
+      :pluggable_value, { 'Objects' => [2, object] }, { 'ObjectType' => object_type }
+    )
+    expect(objects).to eq(objects: [{ 'value' => 'nested' }])
+    expect(page.send(:pluggable_value, { 'Objects' => [2, object] }, nil)).to eq(objects: [{}])
+
+    text = { 'TextTemplate' => { 'Template' => { 'Items' => [3, { 'Text' => 'Caption' }] } } }
+    allow(page).to receive(:extract_text).with(text['TextTemplate']).and_return('Caption')
+    expect(page.send(:pluggable_value, text, {})).to eq('Caption')
+    expect(page.send(:pluggable_value, { 'AttributeRef' => { 'Attribute' => 'M.E.Name' } }, {}))
+      .to eq('M.E.Name')
+    data_source = {
+      'DataSource' => {
+        'EntityRef' => { 'Entity' => 'M.E' }, 'XPathConstraint' => '[Active]',
+        'SortBar' => { 'SortItems' => [2, {
+          'AttributeRef' => { 'Attribute' => 'M.E.Name' }, 'SortDirection' => 'Ascending'
+        }] }
+      }
+    }
+    expect(page.send(:pluggable_value, data_source, {})).to eq(
+      data_source: 'M.E', xpath: '[Active]',
+      sort: [{ attribute: 'M.E.Name', direction: 'Ascending' }]
+    )
+    expect(page.send(:pluggable_data_source, 'Entity' => 'Fallback')).to include(data_source: 'Fallback')
+
+    %w[Expression Image Form].each do |key|
+      expect(page.send(:pluggable_value, { key => 'value' }, {})).to eq('value')
+    end
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => 'true' }, { 'Type' => 'Boolean' })).to be(true)
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => false }, { 'Type' => 'Boolean' })).to be(false)
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => '4' }, { 'Type' => 'Integer' })).to eq(4)
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => '1.5' }, { 'Type' => 'Decimal' })).to eq(1.5)
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => '2.5' }, { 'Type' => 'Number' })).to eq(2.5)
+    expect(page.send(:pluggable_value, { 'PrimitiveValue' => 'plain' }, {})).to eq('plain')
+
+    actions = {
+      'nanoflow' => { 'Nanoflow' => 'M.N', '$Type' => 'Action' },
+      'microflow' => { 'Microflow' => 'M.M', '$Type' => 'Action' },
+      'page' => { 'Form' => 'M.P', '$Type' => 'Action' },
+      'action' => { '$Type' => 'Forms$SaveChangesClientAction' }
+    }
+    actions.each do |kind, action|
+      value = page.send(:pluggable_value, { 'Action' => action }, {})
+      expect(value.fetch(:kind)).to eq(kind)
+    end
+    expect(page.send(:pluggable_value, { 'Selection' => 'Single' }, {})).to eq('Single')
+    expect(page.send(:pluggable_value, { 'Selection' => 'None' }, {})).to be_nil
+
+    widget = { type: :text, name: 'Slot' }
+    nested = { section: [{ widgets: [widget, widget] }] }
+    expect(page.send(:nested_pluggable_widgets, nested)).to eq([widget])
+    expect(page.send(:strip_pluggable_widgets, nested)).to eq(section: [{}])
+    expect(page.send(:strip_pluggable_widgets, 'value')).to eq('value')
+    events = page.send(:pluggable_events, {
+      'onChange' => { kind: 'microflow', handler: 'M.Change' },
+      'onClick' => { kind: 'nanoflow', handler: 'M.Click' },
+      'ignored' => nil
+    })
+    expect(events).to contain_exactly(include(event: :on_change), include(event: :on_click))
+    native = page.send(:native_widget, {
+      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'Native',
+      'Type' => { 'WidgetId' => 'example.Native', 'SupportedPlatform' => 'Web' }
+    })
+    expect(native[:options]).to include(widget_id: 'example.Native', platform: 'Web')
+  end
+
   it 'retains explicit association storage and exact member access overrides' do
     entity = Mxrb::Dsl::EntityBuilder.new(:Account)
     entity.association 'System.User', name: :Account_User, storage_format: :Table
@@ -541,6 +632,12 @@ RSpec.describe 'modern page widgets' do
     )
     expect(writer.send(:custom_widget_properties, generated.last).dig('value', 'Value', 'PrimitiveValue'))
       .to eq('ready')
+    parsed = Mxrb::Model::Page.allocate.send(:pluggable_widget, generated.last)
+    expect(parsed).to include(
+      type: :pluggable_widget, name: 'Custom',
+      options: include(widget_id: 'example.Widget', widget_name: 'Custom', properties: include('value' => 'ready'))
+    )
+    expect(parsed[:children]).to be_empty
   end
 
   it 'runs the native MPK-backed generator twice to settle widget schemas' do
