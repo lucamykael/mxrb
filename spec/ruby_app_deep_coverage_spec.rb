@@ -160,6 +160,8 @@ RSpec.describe 'Ruby application internal contracts' do
     expect { app.call_service('Missing') }.to raise_error(Mxrb::NativeRuntimeError)
     allow(project).to receive(:modules).and_return([double(name: 'M', microflows: [double(name: 'Native')])])
     expect(app.call_service('M.Native')).to eq('native')
+    synchronized_context = { 'id' => '1', 'type' => 'M.E', 'attributes' => { 'Name' => 'Synchronized' } }
+    expect(app.call_service('M.Native', {}, synchronized_context:, context: Object.new)).to eq('native')
     expect(app.invoke_service('M.Ruby', value: 2)).to include(result: 2)
     expect(app.native_call('M.Native', { value: 1 }, context: Object.new)).to eq('native')
   end

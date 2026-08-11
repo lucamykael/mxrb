@@ -161,6 +161,48 @@ RSpec.describe 'Native runtime entity security context' do
     expect(application.send(:synchronize_context, 2, context:)).to eq(2)
   end
 
+  it 'compares synchronized object, collection, and timestamp context values deterministically' do
+    application = Mxrb::RubyApp::Application.allocate
+    original = Mxrb::Runtime::Native::ObjectValue.new(
+      entity: 'M.E', id: '1', members: { 'Name' => 'Original' }
+    )
+    equivalent = Mxrb::Runtime::Native::ObjectValue.new(entity: 'M.E', id: '1', members: {})
+    different = Mxrb::Runtime::Native::ObjectValue.new(entity: 'M.E', id: '2', members: {})
+
+    expect(application.send(:context_values_equal?, original, equivalent)).to be(true)
+    expect(application.send(:context_values_equal?, original, different)).to be(false)
+    expect(application.send(:context_values_equal?, original, '1')).to be(false)
+    expect(application.send(:context_values_equal?, [original], [equivalent])).to be(true)
+    expect(application.send(:context_values_equal?, [original], [])).to be(false)
+    expect(application.send(:context_values_equal?, [original], original)).to be(false)
+
+    timestamp = Time.utc(2026, 8, 10, 12, 30)
+    expect(application.send(:context_values_equal?, timestamp, timestamp.iso8601)).to be(true)
+    expect(application.send(:context_values_equal?, timestamp, 'not-a-timestamp')).to be(false)
+
+    store_class = Class.new do
+      def initialize(object)
+        @object = object
+      end
+
+      def find(_entity, _id)
+        @object
+      end
+    end
+    store = store_class.new(original)
+    application.instance_variable_set(:@bridge, Struct.new(:interpreter).new(Struct.new(:store).new(store)))
+    policy = double(authorize!: true)
+    application.instance_variable_set(:@access_control, policy)
+    context = Object.new
+    unchanged = { 'id' => '1', 'type' => 'M.E', 'attributes' => { 'Name' => 'Original' } }
+    changed = { 'id' => '1', 'type' => 'M.E', 'attributes' => { 'Name' => 'Changed' } }
+
+    expect(application.send(:synchronize_context, unchanged, context:)).to equal(original)
+    expect(application.send(:synchronize_context, changed, context:)).to equal(original)
+    expect(original.members['Name']).to eq('Changed')
+    expect(policy).to have_received(:authorize!).once
+  end
+
   it 'materializes REST input as a detached authorized object and propagates service context' do
     application = Mxrb::RubyApp::Application.allocate
     store = double

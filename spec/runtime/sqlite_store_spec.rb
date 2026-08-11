@@ -515,6 +515,25 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     store.close
   end
 
+  it 'restores staged unit-of-work records and snapshots nested transaction members' do
+    store = described_class.new(project, path: @database_path)
+    staged = store.create('Store.Pet')
+
+    expect(store.find('Store.Pet', staged.id)).to equal(staged)
+    expect(store.send(:transaction_member_snapshot, 'record' => [staged])).to eq('record' => [staged])
+    expect(store.send(:association_dirty?, staged, 'Pet_Owner')).to be(false)
+
+    snapshot = store.snapshot
+    store.rollback(staged)
+    expect(store.find('Store.Pet', staged.id)).to be_nil
+
+    store.restore(snapshot)
+    restored = store.find('Store.Pet', staged.id)
+    expect(restored).to have_attributes(id: staged.id, entity: 'Store.Pet')
+    expect(store.retrieve('Store.Pet')).to contain_exactly(restored)
+    store.close
+  end
+
   it 'honors explicit commit boundaries in real MPR microflows' do
     Dir.mktmpdir('mxrb-sqlite-uow-') do |dir|
       mpr_path = File.join(dir, 'UnitOfWork.mpr')
