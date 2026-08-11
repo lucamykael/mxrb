@@ -657,10 +657,16 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
   it 'compiles an XPath Data Grid 2 and its attribute columns' do
     compiler = described_class.new(source, 'Demo.Home', grid)
     expect(compiler).to be_supported
+    without_filters = grid
+    without_filters.dig('Object', 'Properties').reject! do |item|
+      item.is_a?(Hash) && item['TypePointer'] == 'widgets'
+    end
+    expect(described_class.new(source, 'Demo.Home', without_filters).send(:properties)[:filtersPlaceholder])
+      .to eq([])
     output = compiler.render
     expect(output).to include(
       'React.createElement($Datagrid', 'DatabaseObjectListProperty',
-      'AttributeProperty', 'ExpressionProperty', '"attributeType": "String"',
+      'ListAttributeProperty', 'ExpressionProperty', '"attributeType": "String"',
       '"refreshIndicator": false', 'mx-name-grid table'
     )
   end
@@ -684,7 +690,9 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
     })
     bundle = Mxrb::Compiler::PageBundleCompiler.new(model).compile(page)
     expect(bundle.unsupported_widgets).to be_empty
-    expect(bundle.source).to include('asPluginWidgets', 'DatabaseObjectListProperty', '$Datagrid')
+    expect(bundle.source).to include(
+      'asPluginWidgets', 'DatabaseObjectListProperty', 'ListAttributeProperty', '$Datagrid'
+    )
   end
 
   it 'covers optional grid metadata and schema fallbacks' do

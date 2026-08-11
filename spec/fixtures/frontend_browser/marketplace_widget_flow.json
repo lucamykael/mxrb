@@ -1,0 +1,84 @@
+{
+  "name": "mxrb-marketplace-widget-flow",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "certification": {
+    "widget_types": [
+      "Forms$ActionButton",
+      "Forms$DataView",
+      "Forms$DivContainer",
+      "Forms$DynamicText",
+      "Forms$NavigationTree",
+      "Forms$Placeholder",
+      "Forms$ScrollContainer",
+      "Forms$SidebarToggleButton"
+    ],
+    "widget_ids": [
+      "com.mendix.widget.custom.badge.Badge",
+      "com.mendix.widget.custom.badgebutton.BadgeButton",
+      "com.mendix.widget.custom.progresscircle.ProgressCircle",
+      "com.mendix.widget.custom.slider.Slider",
+      "com.mendix.widget.custom.starrating.StarRating",
+      "com.mendix.widget.custom.switch.Switch",
+      "com.mendix.widget.web.accessibilityhelper.AccessibilityHelper",
+      "com.mendix.widget.web.accordion.Accordion",
+      "com.mendix.widget.web.areachart.AreaChart",
+      "com.mendix.widget.web.barchart.BarChart",
+      "com.mendix.widget.web.bubblechart.BubbleChart",
+      "com.mendix.widget.web.chartplayground.ChartPlayground",
+      "com.mendix.widget.web.columnchart.ColumnChart",
+      "com.mendix.widget.web.combobox.Combobox",
+      "com.mendix.widget.web.customchart.CustomChart",
+      "com.mendix.widget.web.datagrid.Datagrid",
+      "com.mendix.widget.web.datagriddatefilter.DatagridDateFilter",
+      "com.mendix.widget.web.datagriddropdownfilter.DatagridDropdownFilter",
+      "com.mendix.widget.web.datagridnumberfilter.DatagridNumberFilter",
+      "com.mendix.widget.web.datagridtextfilter.DatagridTextFilter",
+      "com.mendix.widget.web.dropdownsort.DropdownSort",
+      "com.mendix.widget.web.fieldset.Fieldset",
+      "com.mendix.widget.web.gallery.Gallery",
+      "com.mendix.widget.web.heatmap.HeatMap",
+      "com.mendix.widget.web.htmlelement.HTMLElement",
+      "com.mendix.widget.web.image.Image",
+      "com.mendix.widget.web.languageselector.LanguageSelector",
+      "com.mendix.widget.web.linechart.LineChart",
+      "com.mendix.widget.web.piechart.PieChart",
+      "com.mendix.widget.web.popupmenu.PopupMenu",
+      "com.mendix.widget.web.selectionhelper.SelectionHelper",
+      "com.mendix.widget.web.timeline.Timeline",
+      "com.mendix.widget.web.timeseries.TimeSeries",
+      "com.mendix.widget.web.tooltip.Tooltip",
+      "com.mendix.widget.web.treenode.TreeNode",
+      "com.mendix.widget.web.videoplayer.VideoPlayer"
+    ]
+  },
+  "pages": [
+    {
+      "name": "marketplace-widget-laboratory",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Marketplace widget certification laboratory" },
+        { "wait_for_idle": {} },
+        { "wait_for_absence": ".video-error-label-html5.hasError" },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "measure_click": { "selector": ".mx-name-MarketplaceWidget2", "max_ms": 250 } },
+        { "measure_click": { "selector": "[role=\"button\"]", "index": 0, "max_ms": 250 } },
+        { "measure_click": { "selector": "input[role=\"combobox\"]", "max_ms": 250 } },
+        { "measure_click": { "selector": "input[aria-label=\"Select row 1\"]", "max_ms": 350 } },
+        { "measure_click": { "selector": ".mx-name-PopupTrigger", "max_ms": 250 } },
+        { "wait_for_text": "Menu item" },
+        { "measure_click": { "selector": "video", "max_ms": 250 } },
+        { "wait_for_idle": {} },
+        { "wait_for_absence": ".video-error-label-html5.hasError" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        "body",
+        ".marketplace-widget-under-test"
+      ]
+    }
+  ]
+}

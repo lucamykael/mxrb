@@ -1062,7 +1062,9 @@ module Mxrb
     def render_widget(widget, indent)
       pad       = " " * indent
       child_pad = " " * (indent + 2)
-      type      = widget.fetch(:type)
+      # Architecture metadata is serialized through JSON inside generated MPRs,
+      # so a second export can surface widget type values as strings.
+      type      = widget.fetch(:type).to_sym
       options   = widget.fetch(:options, {})
 
       # Snippet: snippet :name, from: "..."

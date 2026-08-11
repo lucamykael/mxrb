@@ -149,6 +149,17 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
 
     allow(Mxrb::Compiler::DataGridBundleCompiler).to receive(:new)
       .and_return(instance_double(Mxrb::Compiler::DataGridBundleCompiler, supported?: false))
+    gallery_source = instance_double(Mxrb::Compiler::WebListDataSource, nanoflow?: false)
+    allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new) do |*, render_widgets:, **|
+      nested = render_widgets.call([text('galleryChild')], 'galleryScope', 'Demo.Item')
+      instance_double(
+        Mxrb::Compiler::GalleryBundleCompiler, supported?: true, data_source: gallery_source,
+                                               widget_key: 'galleryScope', entity_name: 'Demo.Item',
+                                               content_widgets: [], render: nested
+      )
+    end
+    expect(@compiler.send(:render_custom_widget, 'Name' => 'gallery')).to include('galleryChild')
+
     allow(Mxrb::Compiler::GalleryBundleCompiler).to receive(:new)
       .and_return(instance_double(Mxrb::Compiler::GalleryBundleCompiler, supported?: false))
     allow(Mxrb::Compiler::ImageBundleCompiler).to receive(:new)

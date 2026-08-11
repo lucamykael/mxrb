@@ -1,0 +1,55 @@
+{
+  "name": "mxrb-widget-lab-input-performance",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "certification": {
+    "widget_types": [
+      "Forms$ActionButton",
+      "Forms$CheckBox",
+      "Forms$DataGrid",
+      "Forms$DatePicker",
+      "Forms$DivContainer",
+      "Forms$DropDown",
+      "Forms$DynamicText",
+      "Forms$ReferenceSelector",
+      "Forms$TabControl",
+      "Forms$TextArea",
+      "Forms$TextBox"
+    ],
+    "widget_ids": []
+  },
+  "pages": [
+    {
+      "name": "widget-inputs",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Widget certification laboratory" },
+        { "audit_widgets": { "selector": ".mxrb-widget", "min_count": 12, "max_render_ms": 1500 } },
+        { "measure_click": { "selector": ".mxrb-data_grid button", "index": 0, "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_count": { "selector": ".mxrb-data_grid tbody tr", "equals": 1 } },
+        { "measure_input": { "selector": ".mxrb-text_box input", "value": "Certified record", "max_ms": 250, "min_requests": 1 } },
+        { "measure_input": { "selector": ".mxrb-number_input input", "value": "42", "max_ms": 250, "min_requests": 1 } },
+        { "measure_input": { "selector": ".mxrb-text_area textarea", "value": "All widgets exercised", "max_ms": 250, "min_requests": 1 } },
+        { "measure_click": { "selector": ".mxrb-check_box input", "max_ms": 250, "min_requests": 1 } },
+        { "measure_input": { "selector": ".mxrb-date_picker input", "value": "2026-08-11", "max_ms": 250, "min_requests": 1 } },
+        { "measure_select": { "selector": ".mxrb-drop_down select", "option_index": 1, "max_ms": 250, "min_requests": 1 } },
+        { "measure_select": { "selector": ".mxrb-reference_selector select", "option_index": 1, "max_ms": 250, "min_requests": 1 } },
+        { "measure_click": { "selector": ".mxrb-button", "max_ms": 250, "min_requests": 1 } },
+        { "audit_widgets": { "selector": ".mxrb-widget", "min_count": 12, "max_render_ms": 1500 } },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".mxrb-text_box input:not(:disabled)",
+        ".mxrb-number_input input[type=\"number\"]:not(:disabled)",
+        ".mxrb-text_area textarea:not(:disabled)",
+        ".mxrb-check_box input[type=\"checkbox\"]:not(:disabled)",
+        ".mxrb-date_picker input[type=\"date\"]:not(:disabled)",
+        ".mxrb-drop_down select:not(:disabled)",
+        ".mxrb-reference_selector select:not(:disabled)"
+      ]
+    }
+  ]
+}

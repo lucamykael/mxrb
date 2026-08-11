@@ -341,7 +341,10 @@ module Mxrb
           return grid.render
         end
 
-        gallery = GalleryBundleCompiler.new(@source, @qualified_name, widget)
+        gallery = GalleryBundleCompiler.new(
+          @source, @qualified_name, widget,
+          render_widgets: ->(widgets, scope, entity) { render_scoped_widgets(widgets, scope, entity) }
+        )
         if gallery.supported?
           @uses_gallery = true
           nano_reference = nanoflow_reference(gallery.data_source.nanoflow_name) if gallery.data_source.nanoflow?
@@ -1818,17 +1821,21 @@ module Mxrb
         if @generic_widgets&.any?
           imports.concat([
                            'import { AttributeProperty } from "mendix/AttributeProperty";',
+                           'import { ListAttributeProperty } from "mendix/ListAttributeProperty";',
                            'import { ExpressionProperty } from "mendix/ExpressionProperty";',
                            'import { ListExpressionProperty } from "mendix/ListExpressionProperty";',
-                           'import { DatabaseObjectListProperty } from "mendix/DatabaseObjectListProperty";'
+                           'import { DatabaseObjectListProperty } from "mendix/DatabaseObjectListProperty";',
+                           'import { SelectionProperty } from "mendix/SelectionProperty";',
+                           'import { TemplatedWidgetProperty } from "mendix/TemplatedWidgetProperty";'
                          ])
         end
         if @uses_data_grid
           imports.concat([
                            'import { DatabaseObjectListProperty } from "mendix/DatabaseObjectListProperty";',
-                           'import { AttributeProperty } from "mendix/AttributeProperty";',
+                           'import { ListAttributeProperty } from "mendix/ListAttributeProperty";',
                            'import { ExpressionProperty } from "mendix/ExpressionProperty";',
                            'import { ListExpressionProperty } from "mendix/ListExpressionProperty";',
+                           'import { SelectionProperty } from "mendix/SelectionProperty";',
                            'import { TemplatedWidgetProperty } from "mendix/TemplatedWidgetProperty";',
                            'import Datagrid from "../widgets/com/mendix/widget/web/datagrid/Datagrid.mjs";'
                          ])
@@ -1988,7 +1995,9 @@ module Mxrb
 
       def render_content(content)
         JSON.pretty_generate(content).sub(/\A\{/, '{').sub(/\}\z/, '}')
-            .gsub(/"(renderKey =>[^\n]+)"/) { Regexp.last_match(1).gsub('\\"', '"') }
+            .gsub(/"(renderKey =>[^\n]+)"/) do
+              JSON.parse(%("#{Regexp.last_match(1)}"))
+            end
       end
 
       def layout

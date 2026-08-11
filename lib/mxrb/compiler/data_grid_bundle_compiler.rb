@@ -35,8 +35,15 @@ module Mxrb
         primitives(values).merge(
           key: widget_key, '$widgetId': widget_key, advanced: false,
           datasource: datasource, columns: columns.map { compile_column(_1) },
+          itemSelection: selection(values),
+          filtersPlaceholder: compile_widgets(values['filtersPlaceholder']&.last),
           class: css_class
         )
+      end
+
+      def selection(values)
+        type = values['itemSelection']&.last&.fetch('Selection', 'None') || 'None'
+        raw_property('SelectionProperty', selectionType: type, dataSourceId: data_source_id)
       end
 
       def primitives(values)
@@ -173,7 +180,7 @@ module Mxrb
 
       def raw_attribute(entity, name)
         {
-          '$raw' => "AttributeProperty(#{js_object(
+          '$raw' => "ListAttributeProperty(#{js_object(
             path: '', entity:, attribute: name, attributeType: attribute_type(entity, name),
             sortable: true, filterable: true, dataSourceId: data_source_id, isList: false
           )})"

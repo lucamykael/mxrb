@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
 
-Last updated: 2026-08-05.
+Last updated: 2026-08-11.
 
 The matrix exercises this pipeline using only MXRB:
 
@@ -26,6 +26,23 @@ are never modified.
 | `ako/ConnectorKitDemo` | 7.5.0 | v1 | 222 | pass |
 | `mendixlabs/TreeViewAndGridView` (`TreeviewDemo`) | 5.21.4 | v1 | 176 | pass |
 | `mendixlabs/TreeViewAndGridView` (`GridViewPlayground`) | 6.10.8 | v1 | 122 | pass |
+
+On August 11, `script/validate_matrix` repeated the matrix with **6/6 passes**:
+1,506 units, 1,734 artifacts, and 3,388 references in 16.381 seconds.
+
+## Additional local inventory
+
+`script/certify_mprs --cycles 2 --repair-hashes` certified seven additional
+MPRs through 14 consecutive round trips: **7/7 passes**, 2,799 units, 3,238
+artifacts, and 4,819 references. The set covers LearnNow, SLATaskApp,
+SLATaskAppNative, MyFirstModule, CourseManager, RubyBridgeSandbox, and
+VetClinic.
+
+SLATaskApp had one stale content hash and RubyBridgeSandbox had two. The gate
+repaired only `Unit.ContentsHash` in temporary copies, recorded the changed
+UUIDs, and preserved the original BSON bytes. Source files were not modified.
+The second round trip also exposed and fixed native-widget types deserialized
+as strings.
 
 The comparator used for this matrix includes:
 
@@ -162,6 +179,24 @@ and is also expanded into editable `native_unit` hashes in
 `.mxrb/native_units.rb`. Concise typed DSLs overlay that complete Ruby
 representation where available.
 
+## Widget certification
+
+`script/certify_widgets --browser-report REPORT.json App.mpr` is the fail-closed
+gate for native web compiler and Marketplace widgets actually used by a
+project. It jointly requires page/layout compilation without fallbacks, resolution of every
+pluggable ID to an MPK `.mjs` entry with SHA-256, a version-owned native Rspack
+build, and passing Chromium evidence that declares every exercised widget type
+and ID without visible Runtime/widget errors.
+
+Importing an MPK or compiling its bundle alone does not certify behavior.
+Widgets that require a datasource, attribute, or specific parent placement only
+pass in a browser scenario configured with that valid context. Future or
+unexercised packages fail as missing evidence instead of inheriting a universal
+compatibility claim.
+The React/TypeScript frontend for `--mode ruby` has a separate track: its
+Chromium report certifies those widgets without claiming that equivalent
+pluggable components also passed in the Mendix Runtime.
+
 ## Ruby semantic index
 
 The Ruby semantic index was built successfully from every original MPR in the
@@ -202,9 +237,9 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 1,039 examples and passes with 100.00% line coverage
-(17,224/17,224 executable library lines) and 100.00% branch coverage
-(6,811/6,811 branches).
+The current suite contains 1,329 examples and passes with 100.00% line coverage
+(23,771/23,771 executable library lines) and 100.00% branch coverage
+(9,704/9,704 branches).
 Run the enforced gate with:
 
 ```sh

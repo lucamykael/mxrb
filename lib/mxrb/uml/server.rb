@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'webrick'
 
 require_relative '../web_ui'
+require_relative '../http/server'
+require_relative '../modeler/catalog'
 
 module Mxrb
   module Uml
@@ -25,12 +26,8 @@ module Mxrb
       end
 
       def start
-        @server = WEBrick::HTTPServer.new(
-          BindAddress: host, Port: port, Logger: WEBrick::Log.new(File::NULL), AccessLog: []
-        )
-        @server.mount_proc('/') { dispatch(_1, _2) }
-        yield(@server) if block_given?
-        @server.start
+        @server = Http::Server.new(host:, port:) { dispatch(_1, _2) }
+        @server.start { yield(_1) if block_given? }
       end
 
       def shutdown = @server&.shutdown
@@ -40,6 +37,8 @@ module Mxrb
       def dispatch(request, response)
         return render(response, 200, WebUi.page('uml'), 'text/html; charset=utf-8') \
           if request.request_method == 'GET' && request.path == '/'
+        return render(response, 200, WebUi.page('modeler'), 'text/html; charset=utf-8') \
+          if request.request_method == 'GET' && request.path == '/modeler'
 
         if request.request_method == 'GET' && request.path.start_with?('/assets/')
           asset = WebUi.asset(request.path)
@@ -54,6 +53,7 @@ module Mxrb
                   when '/api/activity' then activity_payload(request.query)
                   when '/api/sequence' then sequence_payload(request.query)
                   when '/api/catalog' then catalog_payload
+                  when '/api/project' then Modeler::Catalog.new(source).to_h
                   end
         return json(response, 404, ok: false, error: 'not_found') unless payload
 

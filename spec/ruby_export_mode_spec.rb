@@ -78,7 +78,8 @@ RSpec.describe 'Ruby application export mode' do
 
       expect(manifest).to include('mode' => 'ruby')
       expect(manifest.fetch('frontend')).to include(
-        'framework' => 'react', 'bundler' => 'vite'
+        'framework' => 'react', 'language' => 'typescript', 'bundler' => 'vite',
+        'types' => 'frontend/src/types.ts', 'typecheck' => 'npm run typecheck'
       )
       expect(File).to exist(File.join(root, 'app', 'models', 'sales', 'order.rb'))
       expect(File).to exist(File.join(root, 'app', 'dtos', 'sales', 'order_input_dto.rb'))
@@ -86,13 +87,13 @@ RSpec.describe 'Ruby application export mode' do
       expect(File.read(File.join(root, 'frontend', 'package.json'))).to include(
         'react', 'vite'
       )
-      frontend_source = File.read(File.join(root, 'frontend', 'src', 'App.jsx'))
+      frontend_source = File.read(File.join(root, 'frontend', 'src', 'App.tsx'))
       expect(frontend_source).to include(
-        "api('/api/schema', {}, activeToken)", 'useState', 'executeNanoflow',
+        "api<ApplicationSchema>('/api/schema', {}, activeToken)", 'useState', 'executeNanoflow',
         'resolvedParameters[plan.parameters[0]] = activeContext', 'nanoflowValue',
         'function BoundField', "method: 'PATCH'", 'function DataGrid',
-        'mxrb-grid-pagination', "api('/api/login'", 'localStorage.setItem(TOKEN_KEY',
-        'headers.Authorization = `Bearer ${token}`', "api('/api/session'", "api('/api/logout'",
+        'mxrb-grid-pagination', "api<LoginResponse>('/api/login'", 'localStorage.setItem(TOKEN_KEY',
+        "headers.set('Authorization', `Bearer ${token}`)", "api<Session>('/api/session'", "api('/api/logout'",
         'payload.records || []', 'records.slice(', "method: 'POST'", "method: 'DELETE'", '>Reload</button>',
         'entityCollectionPath(options.entity, options.association, pageContext)',
         'association, context_type: context.type, context_id: context.id',
@@ -108,6 +109,20 @@ RSpec.describe 'Ruby application export mode' do
       expect(frontend_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
       expect(frontend_source.scan('const activeContext = pageContext || contextOverride;').size).to eq(1)
       expect(frontend_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(1)
+      types = File.read(File.join(root, 'frontend', 'src', 'types.ts'))
+      expect(types).to include(
+        'export interface SalesOrderAttributes', '"Number"?: string', '"Paid"?: boolean',
+        'export type SalesOrderStatus = "New" | "Done"', 'export interface EntityTypeMap',
+        '"Sales.Order": SalesOrderRecord', 'export interface PageTypeMap',
+        '"Sales.Dashboard": PageDefinition', 'export interface OpenPageEffect',
+        'export type ApiRequest'
+      )
+      expect(File.read(File.join(root, 'frontend', 'tsconfig.json'))).to include(
+        '"strict": true', '"allowJs": false'
+      )
+      expect(File.read(File.join(root, 'frontend', 'package.json'))).to include(
+        '"typecheck": "tsc --noEmit"', '"typescript"', '"sass-embedded"'
+      )
       adapter_source = File.read(File.join(root, 'config', 'adapters.rb'))
       expect(adapter_source).to include(
         'Registry.register_adapter(:app_service)',
@@ -148,7 +163,7 @@ RSpec.describe 'Ruby application export mode' do
       expect(sales.fetch('nanoflows')).to include(
         include('name' => 'Sales.ClientPing', 'runtime' => 'frontend')
       )
-      expect(File).to exist(File.join(root, 'frontend', 'src', 'nanoflows', 'sales', 'client_ping.js'))
+      expect(File).to exist(File.join(root, 'frontend', 'src', 'nanoflows', 'sales', 'client_ping.ts'))
       expect(File).not_to exist(File.join(root, 'app', 'services', 'sales', 'client_ping.rb'))
 
       application = Mxrb::RubyApp::Application.new(root)
@@ -252,7 +267,7 @@ RSpec.describe 'Ruby application export mode' do
       Mxrb::Exporter.new(source, root, mode: :ruby).export!
 
       model_path = File.join(root, 'app', 'models', 'sales', 'order.rb')
-      frontend_path = File.join(root, 'frontend', 'src', 'App.jsx')
+      frontend_path = File.join(root, 'frontend', 'src', 'App.tsx')
       model = File.read(model_path)
       File.write(
         model_path,
@@ -286,7 +301,7 @@ RSpec.describe 'Ruby application export mode' do
       Mxrb::Exporter.new(rebuilt, restored, mode: :ruby).export!
       expect(File.read(File.join(restored, 'app', 'models', 'sales', 'order.rb')))
         .to include('mendix_name: \'Total\'')
-      expect(File.read(File.join(restored, 'frontend', 'src', 'App.jsx')))
+      expect(File.read(File.join(restored, 'frontend', 'src', 'App.tsx')))
         .to include('// preserved through Mendix')
       expect(File.read(File.join(restored, 'config', 'adapters.rb')))
         .to include('Registry.register_adapter(:document)', "document:\#{name}")
@@ -303,7 +318,7 @@ RSpec.describe 'Ruby application export mode' do
       end
       switched_ruby = File.join(dir, 'switched_ruby_app')
       Mxrb::Exporter.new(switched, switched_ruby, mode: :ruby).export!
-      expect(File.read(File.join(switched_ruby, 'frontend', 'src', 'App.jsx')))
+      expect(File.read(File.join(switched_ruby, 'frontend', 'src', 'App.tsx')))
         .to include('// preserved through Mendix')
     end
   end

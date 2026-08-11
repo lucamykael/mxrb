@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require_relative '../lib/mxrb'
+
+options = { build: true }
+OptionParser.new do |parser|
+  parser.banner = 'Usage: script/certify_widgets [options] FILE.mpr'
+  parser.on('--browser-report FILE', 'Passing frontend_browser_acceptance JSON evidence') do
+    options[:browser_report] = _1
+  end
+  parser.on('--mendix-home DIR', 'Installed Mendix version root') { options[:mendix_home] = _1 }
+  parser.on('--no-build', 'Skip native Rspack build (result remains non-certified)') { options[:build] = false }
+  parser.on('-o', '--output FILE', 'Write JSON report to FILE') { options[:output] = _1 }
+end.parse!
+abort 'exactly one MPR is required' unless ARGV.one?
+
+report = Mxrb::WidgetCertification.new(
+  ARGV.first, browser_report: options[:browser_report], build: options[:build],
+              mendix_home: options[:mendix_home]
+).run
+json = "#{JSON.pretty_generate(report)}\n"
+options[:output] ? File.write(options[:output], json) : puts(json)
+exit(report.fetch(:status) == 'pass' ? 0 : 1)

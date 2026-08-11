@@ -150,15 +150,15 @@ RSpec.describe 'Pure-Ruby runtime layers' do
         def [](name) = headers[name]
       end
 
-      anonymous = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      anonymous = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/pages/Sales.Dashboard', 'GET', '', {}, {}), anonymous)
       expect(anonymous.status).to eq(403)
 
-      health = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      health = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/health', 'GET', '', {}, {}), health)
       expect(JSON.parse(health.body)).to include('environment' => 'qa')
 
-      login = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      login = Mxrb::Http::Response.new
       server.send(
         :dispatch,
         request.new(
@@ -168,13 +168,13 @@ RSpec.describe 'Pure-Ruby runtime layers' do
       )
       token = JSON.parse(login.body).fetch('token')
       headers = { 'Authorization' => "Bearer #{token}" }
-      session = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      session = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/session', 'GET', '', {}, headers), session)
       expect(JSON.parse(session.body)).to include('user' => 'ada', 'roles' => ['User'])
-      navigation = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      navigation = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/navigation', 'GET', '', {}, headers), navigation)
       expect(JSON.parse(navigation.body).fetch('profiles').first).to include('name' => 'Responsive')
-      authorized = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      authorized = Mxrb::Http::Response.new
       server.send(
         :dispatch, request.new('/api/pages/Sales.Dashboard', 'GET', '', {}, headers), authorized
       )
@@ -187,14 +187,14 @@ RSpec.describe 'Pure-Ruby runtime layers' do
       )
       expect(created.fetch(:attributes)).to eq('Number' => 'SO-1-hook')
       expect(server.application.record('Sales.Order', created.fetch(:id), context:)).to eq(created)
-      fetched = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      fetched = Mxrb::Http::Response.new
       server.send(
         :dispatch,
         request.new("/api/entities/Sales.Order/#{created.fetch(:id)}", 'GET', '', {}, headers),
         fetched
       )
       expect(fetched.status).to eq(200)
-      updated = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      updated = Mxrb::Http::Response.new
       server.send(
         :dispatch,
         request.new(
@@ -212,10 +212,10 @@ RSpec.describe 'Pure-Ruby runtime layers' do
           context: server.application.session_manager.authenticate(headers['Authorization'])
         )
       end.to raise_error(Mxrb::Runtime::AuthorizationError)
-      logout = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      logout = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/logout', 'POST', '', {}, headers), logout)
       expect(JSON.parse(logout.body)).to include('ok' => true)
-      expired = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+      expired = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/session', 'GET', '', {}, headers), expired)
       expect(expired.status).to eq(401)
       server.application.close

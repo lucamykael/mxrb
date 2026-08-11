@@ -120,7 +120,11 @@ module Mxrb
           constants: { LAYOUT_SCOPE_ID_PREFIX: 'l' },
           registerServiceWorker: false, enableServiceWorkerCaching: true
         }
-        File.write(path, "import { startApp } from \"mendix\";\n\nstartApp(#{JSON.pretty_generate(payload)});\n")
+        File.write(
+          path,
+          "import { startApp } from \"mendix\";\n\n" \
+          "startApp(#{JSON.pretty_generate(payload)});\n"
+        )
       end
 
       def languages

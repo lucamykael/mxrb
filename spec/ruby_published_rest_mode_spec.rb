@@ -157,7 +157,7 @@ RSpec.describe 'Ruby mode published REST services' do
       def [](name) = headers[name]
     end
     request = request_class.new('/rest/catalog/v1/products/tenant-a', 'GET', '', {}, {})
-    response = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+    response = Mxrb::Http::Response.new
     server.send(:dispatch, request, response)
     expect(response.status).to eq(200)
     expect(response['Access-Control-Allow-Origin']).to eq('*')
@@ -175,7 +175,7 @@ RSpec.describe 'Ruby mode published REST services' do
     request = request_class.new(
       '/rest/catalog/v1/echo', 'POST', JSON.generate('TotalCount' => 2), {}, {}
     )
-    response = WEBrick::HTTPResponse.new(WEBrick::Config::HTTP)
+    response = Mxrb::Http::Response.new
     server.send(:dispatch, request, response)
     expect(response.status).to eq(201)
     expect(JSON.parse(response.body)).to include(

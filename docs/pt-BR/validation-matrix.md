@@ -2,7 +2,7 @@
 
 **Português** · [English](../en-US/validation-matrix.md) · [Deutsch](../de-DE/validation-matrix.md)
 
-Última atualização: 5 de agosto de 2026.
+Última atualização: 11 de agosto de 2026.
 
 O pipeline validado é:
 
@@ -20,6 +20,22 @@ Os originais nunca são modificados.
 | ConnectorKitDemo | 7.5.0 | v1 | passou |
 | TreeviewDemo | 5.21.4 | v1 | passou |
 | GridViewPlayground | 6.10.8 | v1 | passou |
+
+Em 11 de agosto, `script/validate_matrix` repetiu a matriz com **6/6 passes**:
+1.506 units, 1.734 artefatos e 3.388 referências em 16,381 s.
+
+## Inventário adicional local
+
+`script/certify_mprs --cycles 2 --repair-hashes` certificou outros sete MPRs
+em 14 roundtrips consecutivos: **7/7 passes**, 2.799 units, 3.238 artefatos e
+4.819 referências. Foram cobertos LearnNow, SLATaskApp, SLATaskAppNative,
+MyFirstModule, CourseManager, RubyBridgeSandbox e VetClinic.
+
+SLATaskApp tinha um hash de conteúdo obsoleto e RubyBridgeSandbox tinha dois.
+O gate reparou somente `Unit.ContentsHash` em cópias temporárias, registrou os
+UUIDs alterados e preservou os bytes BSON originais. Os arquivos-fonte não
+foram modificados. O segundo roundtrip também detectou e corrigiu tipos de
+widgets nativos desserializados como strings.
 
 ## Cobertura profunda editável
 
@@ -55,6 +71,27 @@ todo metamodelo Mendix. Encodings `.mxunit` desconhecidos são rejeitados em vez
 de adivinhados. A validação exata do 5.21 em Studio Pro/Windows continua sendo
 um limite explícito.
 
+## Certificação de widgets
+
+`script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
+widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
+em conjunto:
+
+- compilação sem fallback de todas as páginas e layouts web;
+- resolução de cada ID pluggable para um `.mjs` dentro de MPK, com SHA-256;
+- materialização do modelo e build Rspack nativo da versão Mendix;
+- relatório Chromium aprovado, sem exceção/fallback visível, declarando todos
+  os IDs e tipos de widget exercitados pelo cenário.
+
+Importar um MPK ou concluir o bundle isoladamente não certifica comportamento.
+Widgets que exigem datasource, atributo ou posição específica — por exemplo,
+filtros dentro de Data Grid/Gallery — só passam quando o cenário os exercita
+nesse contexto válido. Pacotes futuros ou ainda não exercitados falham como
+evidência ausente, em vez de herdarem uma promessa genérica de compatibilidade.
+O frontend React/TypeScript de `--mode ruby` tem uma trilha separada: seu
+relatório Chromium certifica os widgets sem afirmar que os componentes
+pluggable equivalentes também passaram no Runtime Mendix.
+
 ## Índice semântico
 
 Os seis MPRs produziram **1.778 artefatos** e **3.387 referências**. Consultas
@@ -63,9 +100,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 1.039 exemplos, zero falhas;
-- 100% das linhas: 17.224/17.224;
-- 100% dos branches: 6.811/6.811;
+- 1.329 exemplos, zero falhas;
+- 100% das linhas: 23.771/23.771;
+- 100% dos branches: 9.704/9.704;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.
@@ -80,7 +117,7 @@ e logout real. Os scaffolds `page --chain` também materializam e passam
 preflight nos três caminhos suportados; `page --template` foi exercitado em
 Runtime para dashboard e formulário vertical com CSS computado auditado.
 
-`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 14,760 s.
+`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 16,381 s.
 `script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing
 determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`
 atômicos, inclusive valores binários.

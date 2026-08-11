@@ -1,0 +1,39 @@
+{
+  "name": "mxrb-project-modeler-catalog",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "project-catalog",
+      "path": "/modeler",
+      "steps": [
+        { "wait_for_text": "MXRB Modeler" },
+        { "wait_for_count": { "selector": ".metric-card", "equals": 7 } },
+        { "click_text": "Pages" },
+        { "wait_for_text": "No pages match the current scope." },
+        { "click_text": "Logic" },
+        { "wait_for_text": "CreateOrder" },
+        { "click_text": "Navigation" },
+        { "wait_for_text": "No navigation profiles were found." },
+        { "click_text": "Security" },
+        { "wait_for_text": "Module roles" },
+        { "click_text": "Integrations" },
+        { "wait_for_text": "No matching model documents were found." },
+        { "click_text": "Settings" },
+        { "wait_for_selector": ".settings-stack" },
+        { "click_text": "Overview" },
+        { "wait_for_count": { "selector": ".module-card", "equals": 2 } },
+        { "wait_for_absence": ".load-screen.error" }
+      ],
+      "selectors": [
+        ".modeler-app",
+        ".sidebar button.active",
+        ".workspace-tools input",
+        ".workspace-tools select"
+      ]
+    }
+  ]
+}

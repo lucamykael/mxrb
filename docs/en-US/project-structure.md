@@ -98,8 +98,9 @@ app/
 config/application.rb
 frontend/
   package.json
-  vite.config.js
-  src/{main.jsx,App.jsx,app.css}
+  vite.config.ts
+  tsconfig.json
+  src/{main.tsx,App.tsx,types.ts,nanoflows.ts,app.css}
 project.rb
 .mxrb/
   ruby-app.json
@@ -110,7 +111,9 @@ project.rb
 Persistent entities become records. Non-persistent entities become DTO classes
 and always use the `_dto.rb` suffix, avoiding ambiguous `_2.rb` names. Services
 are ordinary Ruby classes and initially delegate to the pure-Ruby native
-interpreter. Pages expose native metadata to the React frontend.
+interpreter. Pages expose native metadata to the React + TypeScript frontend.
+The export derives `types.ts` from entities, enumerations, pages, widgets,
+contexts, effects, and API contracts; `npm run typecheck` is part of the Vite build.
 
 Install the Ruby and frontend dependencies once, then start both processes with
 one command:
@@ -121,7 +124,8 @@ npm install --prefix frontend
 bundle exec mxrb run .
 ```
 
-`mxrb run` supervises the loopback Ruby JSON API and Vite development server.
+`mxrb run` supervises the loopback Ruby JSON API, served by Puma 8, and the
+Vite development server.
 Vite proxies `/api` to Ruby. Use `--server-port` for the backend port and
 `--client-port` for the frontend port. `--no-frontend` starts only the API.
 The former `--api-port` and `--port` names remain compatibility aliases.
@@ -187,12 +191,21 @@ server APIs. Its Vite bundle is compiled into `lib/mxrb/web_ui`, included in the
 gem, and served locally. Node.js is therefore not required to use the installed
 editor, and no CDN is contacted. To develop the UI, run `npm install`,
 `npm run typecheck`, and `npm run build` from `frontend/modeler`.
+ER, UML, OQL, and the generic `--mode ruby` backend share the same embedded
+Puma adapter. `puma ~> 8.0` is a direct MXRB dependency and brings
+`nio4r ~> 2.0` transitively; WEBrick is not part of the HTTP stack.
 
 ## UML diagrams
 
 UML is an additional implementation independent from the ER editor. It uses
 port 4569 and does not change domain-model layout. The viewer combines class,
 microflow activity and call-sequence diagrams rendered with Mermaid:
+
+The same server publishes `http://127.0.0.1:4569/modeler`, a React + TypeScript
+visual catalog for modules, pages, microflows and nanoflows, navigation,
+security, integrations, and settings. This first expanded surface is read-only;
+mutations remain locked until they have fail-closed validation and round-trip
+guarantees equivalent to the ER editor.
 
 ```sh
 bundle exec mxrb uml App.mpr

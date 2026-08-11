@@ -28,10 +28,11 @@ RSpec.describe 'MXRB UML diagrams' do
     end
   end
 
-  def stub_web_ui(directory)
+  def stub_web_ui(directory) # rubocop:disable Metrics/AbcSize
     root = File.join(directory, 'web-ui')
     FileUtils.mkdir_p(File.join(root, 'assets'))
     File.binwrite(File.join(root, 'domain.html'), '<!doctype html><title>Domain bundle</title>')
+    File.binwrite(File.join(root, 'modeler.html'), '<!doctype html><title>Modeler bundle</title>')
     File.binwrite(File.join(root, 'uml.html'), '<!doctype html><title>UML bundle</title>')
     File.binwrite(File.join(root, 'assets', 'uml.js'), 'globalThis.mxrbUml = true')
     File.binwrite(File.join(root, 'assets', 'mark.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
@@ -59,6 +60,21 @@ RSpec.describe 'MXRB UML diagrams' do
       '"1" --> "N"', '"*" --> "*"'
     )
     expect(plantuml).to include('@startuml', 'Sales.Order', 'Order_Customer', '@enduml')
+  end
+
+  it 'projects the complete project catalog for the React modeler' do
+    payload = Mxrb::Modeler::Catalog.new(@path).to_h
+
+    expect(payload.fetch(:project)).to include(name: 'Shop', mendix_version: '11.12.1')
+    expect(payload.fetch(:summary)).to include(
+      modules: 2, entities: 5, microflows: 4, nanoflows: 0
+    )
+    sales = payload.fetch(:modules).find { _1.fetch(:name) == 'Sales' }
+    expect(sales).to include(marketplace: false)
+    expect(sales.fetch(:entities).map { _1.fetch(:qualified_name) }).to include('Sales.Order')
+    expect(sales.fetch(:microflows).map { _1.fetch(:qualified_name) }).to include('Sales.CreateOrder')
+    expect(payload).to include(:navigation, :security, :settings)
+    expect { JSON.generate(payload) }.not_to raise_error
   end
 
   it 'renders native microflow objects and sequence-flow edges as activities' do
@@ -215,6 +231,7 @@ RSpec.describe 'MXRB UML diagrams' do
 
     root = dispatch.call('GET', '/')
     expect(root.body).to include('UML bundle')
+    expect(dispatch.call('GET', '/modeler').body).to include('Modeler bundle')
     expect(root.headers).to include(
       'Content-Type' => 'text/html; charset=utf-8',
       'Cache-Control' => 'no-store', 'X-Content-Type-Options' => 'nosniff'
@@ -227,6 +244,9 @@ RSpec.describe 'MXRB UML diagrams' do
     expect(dispatch.call('GET', '/assets/missing.js').status).to eq(404)
     expect(dispatch.call('GET', '/assets/%2e%2e/uml.html').status).to eq(404)
     expect(JSON.parse(dispatch.call('GET', '/api/catalog').body)).to include('modules', 'microflows')
+    expect(JSON.parse(dispatch.call('GET', '/api/project').body)).to include(
+      'project', 'summary', 'modules', 'navigation', 'security', 'settings'
+    )
     expect(JSON.parse(dispatch.call('GET', '/api/class', 'modules' => 'Sales').body))
       .to include('mermaid', 'plantuml')
     expect(JSON.parse(dispatch.call('GET', '/api/class').body))
@@ -260,12 +280,12 @@ RSpec.describe 'MXRB UML diagrams' do
 
     server = Mxrb::Uml::Server.new(@path)
     expect(server.shutdown).to be_nil
-    http = instance_double(WEBrick::HTTPServer)
-    allow(http).to receive(:mount_proc)
-    allow(http).to receive(:start)
+    http = instance_double(Mxrb::Http::Server)
+    puma = instance_double(Puma::Server)
+    allow(http).to receive(:start).and_yield(puma)
     allow(http).to receive(:shutdown)
-    allow(WEBrick::HTTPServer).to receive(:new).and_return(http)
-    expect { |block| server.start(&block) }.to yield_with_args(http)
+    allow(Mxrb::Http::Server).to receive(:new).and_return(http)
+    expect { |block| server.start(&block) }.to yield_with_args(puma)
     server.shutdown
 
     server_without_block = Mxrb::Uml::Server.new(@path)

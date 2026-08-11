@@ -25,7 +25,9 @@ module Mxrb
         @index = source.document_index
         @widget_type = find_widget_type
         @values = property_values(widget['Object'])
-        @list_data_source = @values.values.find { _1.first == 'DataSource' }&.last
+        @list_data_source = @values.values.find do |type, value, _metadata|
+          type == 'DataSource' && database_list_property(value)
+        end&.last
         @component_name = widget_id.to_s.split('.').last
         @module_path = widget_id.to_s.tr('.', '/')
       end
@@ -60,60 +62,105 @@ module Mxrb
           type = @index[IO::BsonCodec.extract_id(property['TypePointer'])]
           next unless type
 
-          [type.fetch('PropertyKey'), [type.dig('ValueType', 'Type'), property['Value']]]
+          value_type = type.fetch('ValueType', {})
+          [type.fetch('PropertyKey'), [value_type['Type'], property['Value'], value_type]]
         end.to_h
       end
 
       def supported_property?(pair)
-        type, value = pair
+        type, value, metadata = pair
         return true if %w[Boolean Integer Decimal Enumeration String System].include?(type)
         return value['DataSource'].nil? || !database_list_property(value).nil? if type == 'DataSource'
         return true if type == 'Association'
         return true if type == 'Attribute' && value['AttributeRef'].nil?
-        return true if %w[Expression TextTemplate].include?(type) && expression_property(type, value)
-        return true if type == 'Attribute' && attribute_property(value)
+        return true if type == 'Selection'
+        return value['Icon'].nil? if type == 'Icon'
+        return value['Image'].to_s.empty? if type == 'Image'
+        return true if %w[Expression TextTemplate].include?(type) && expression_property(type, value, metadata)
+        return true if type == 'Attribute' && attribute_property(value, metadata)
         return no_action?(value) || !compiled_action(value).nil? if type == 'Action'
         return array(value['Widgets']).empty? || @render_widgets if type == 'Widgets'
-        return array(value['Objects']).empty? if type == 'Object'
+        return supported_objects?(value) if type == 'Object'
 
         false
       end
 
       def compile_property(pair)
-        type, value = pair
+        type, value, metadata = pair
         case type
         when 'Boolean' then value['PrimitiveValue'] == 'true'
         when 'Integer' then value['PrimitiveValue'].to_i
         when 'Decimal' then value['PrimitiveValue'].to_f
         when 'Enumeration', 'String' then value['PrimitiveValue'].to_s
-        when 'Expression', 'TextTemplate' then raw(expression_property(type, value))
+        when 'Expression', 'TextTemplate' then raw(expression_property(type, value, metadata))
         when 'DataSource' then database_list_property(value)&.then { raw(_1) } || :undefined
         when 'Action' then compiled_action(value)&.then { raw(_1) } || :undefined
         when 'Association' then :undefined
-        when 'Attribute' then attribute_property(value)&.then { raw(_1) } || :undefined
-        when 'Widgets' then compile_widgets(value)
-        when 'Object' then []
+        when 'Attribute' then attribute_property(value, metadata)&.then { raw(_1) } || :undefined
+        when 'Selection' then raw(selection_property(value))
+        when 'Icon', 'Image' then :undefined
+        when 'Widgets' then compile_widgets(value, metadata)
+        when 'Object' then compile_objects(value)
         else :undefined
         end
       end
 
-      def compile_widgets(value)
+      def compile_widgets(value, metadata = nil)
         widgets = array(value['Widgets'])
         return [] if widgets.empty?
 
-        @render_widgets.call(widgets)
+        rendered = @render_widgets.call(widgets)
+        return rendered unless data_source_bound?(metadata)
+
+        raw("TemplatedWidgetProperty(#{javascript(
+          children: raw("() => #{javascript(rendered)}"), dataSourceId: widget_key, editable: false
+        )})")
       end
 
-      def expression_property(type, value)
+      def supported_objects?(value)
+        array(value['Objects']).all? do |object|
+          values = property_values(object)
+          !values.empty? && values.values.all? { supported_property?(_1) }
+        end
+      end
+
+      def compile_objects(value)
+        array(value['Objects']).map do |object|
+          values = property_values(object)
+          with_list_data_source(values) do
+            values.each_with_object({}) do |(key, pair), result|
+              compiled = compile_property(pair)
+              result[key.to_sym] = compiled unless compiled.equal?(:undefined)
+            end
+          end
+        end
+      end
+
+      def with_list_data_source(values)
+        previous = @list_data_source
+        @list_data_source = values.values.find do |type, value, _metadata|
+          type == 'DataSource' && database_list_property(value)
+        end&.last
+        yield
+      ensure
+        @list_data_source = previous
+      end
+
+      def selection_property(value)
+        "SelectionProperty(#{javascript(selectionType: value.fetch('Selection', 'None'), dataSourceId: widget_key)})"
+      end
+
+      def expression_property(type, value, metadata = nil)
         expression = type == 'Expression' ? compile_expression(value['Expression']) : compile_template(value)
         return unless expression
 
+        list_bound = data_source_bound?(metadata) && @list_data_source
         args = expression_variables(expression).to_h do |variable|
-          [variable.to_sym, { widget: @scope, source: 'object' }]
+          [variable.to_sym, { widget: list_bound ? widget_key : @scope, source: 'object' }]
         end
-        property = @list_data_source ? 'ListExpressionProperty' : 'ExpressionProperty'
+        property = list_bound ? 'ListExpressionProperty' : 'ExpressionProperty'
         config = { expression: { expr: expression, args: } }
-        config[:dataSourceId] = widget_key if @list_data_source
+        config[:dataSourceId] = widget_key if list_bound
         "#{property}(#{javascript(config)})"
       end
 
@@ -200,16 +247,26 @@ module Mxrb
         pieces.compact.reduce { |left, right| { type: 'function', name: '+', parameters: [left, right] } }
       end
 
-      def attribute_property(value)
+      def attribute_property(value, metadata = nil)
         attribute = value.dig('AttributeRef', 'Attribute').to_s
-        return unless @scope && attribute.include?('.')
+        return unless (@scope || @list_data_source) && attribute.include?('.')
 
         entity, _, name = attribute.rpartition('.')
+        if data_source_bound?(metadata) && @list_data_source
+          return "ListAttributeProperty(#{javascript(
+            path: '', entity:, attribute: name, dataSourceId: widget_key, isList: false
+          )})"
+        end
+
         "AttributeProperty(#{javascript(
           scope: @scope, path: '', entity:, attribute: name,
           onChange: { type: 'doNothing', argMap: {}, config: {}, disabledDuringExecution: true },
           isList: false, validation: nil, formatting: {}
         )})"
+      end
+
+      def data_source_bound?(metadata)
+        !metadata.to_h.fetch('DataSourceProperty', '').to_s.empty?
       end
 
       def expression_variables(expression)

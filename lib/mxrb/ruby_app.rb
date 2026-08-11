@@ -5,8 +5,8 @@ require 'fileutils'
 require 'json'
 require 'monitor'
 require 'uri'
-require 'webrick'
 require_relative 'ruby_app/session_manager'
+require_relative 'http/server'
 
 module Mxrb
   # Runtime and reversible metadata contract for projects exported with
@@ -985,17 +985,13 @@ module Mxrb
         @port = Integer(port)
         @application = Application.new(root, environment:)
         @sessions = @application.session_manager
-        @logger = logger || WEBrick::Log.new(File::NULL)
+        @logger = logger
       end
 
       def start
-        @server = WEBrick::HTTPServer.new(
-          BindAddress: host, Port: port, Logger: @logger, AccessLog: []
-        )
-        @server.mount_proc('/') { dispatch(_1, _2) }
+        @server = Http::Server.new(host:, port:, logger: @logger) { dispatch(_1, _2) }
         application.start_scheduler
-        yield(@server) if block_given?
-        @server.start
+        @server.start { yield(_1) if block_given? }
       ensure
         application.close
       end
