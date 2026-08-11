@@ -171,6 +171,13 @@ Lifecycle erzeugte Kopie samt externen Inhalten. Die Steuerung nutzt einen
 privaten authentifizierten Loopback-Endpunkt; Zustand und Token liegen in lokal
 zugriffsbeschränkten Dateien.
 
+Die Editor-Oberfläche ist in React + TypeScript implementiert und verwendet nur
+die APIs des Ruby-Servers. Das Vite-Bundle wird nach `lib/mxrb/web_ui`
+kompiliert, in die Gem aufgenommen und lokal ausgeliefert. Node.js ist daher
+für die Nutzung des installierten Editors nicht erforderlich, und es wird kein
+CDN kontaktiert. Für die UI-Entwicklung werden in `frontend/modeler`
+`npm install`, `npm run typecheck` und `npm run build` ausgeführt.
+
 ## UML-Diagramme
 
 UML ist eine zusätzliche, vom ER-Editor unabhängige Implementierung. Sie nutzt
@@ -191,7 +198,8 @@ Ohne `--export` läuft der gemeinsame Viewer unter
 `http://127.0.0.1:4569`. Textexporte verwenden standardmäßig Mermaid;
 PlantUML wird mit `--format=plantuml` gewählt. Sequenzdiagramme akzeptieren
 entweder einen tiefenbegrenzten Einstiegspunkt oder alle internen Aufrufe eines
-Moduls.
+Moduls. Der Viewer verwendet denselben React-+-TypeScript-Workspace; Mermaid ist
+lokal gebündelt, damit die Darstellung auch offline funktioniert.
 
 ## Versionswechsel und Round-trips
 

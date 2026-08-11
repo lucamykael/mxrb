@@ -3,6 +3,8 @@
 require 'json'
 require 'webrick'
 
+require_relative '../web_ui'
+
 module Mxrb
   module Uml
     # Loopback-only unified viewer for class, activity, and sequence diagrams.
@@ -36,8 +38,15 @@ module Mxrb
       private
 
       def dispatch(request, response)
-        return render(response, 200, File.binread(asset_path), 'text/html; charset=utf-8') \
+        return render(response, 200, WebUi.page('uml'), 'text/html; charset=utf-8') \
           if request.request_method == 'GET' && request.path == '/'
+
+        if request.request_method == 'GET' && request.path.start_with?('/assets/')
+          asset = WebUi.asset(request.path)
+          return render(response, 200, *asset) if asset
+
+          return json(response, 404, ok: false, error: 'not_found')
+        end
         return json(response, 405, ok: false, error: 'method_not_allowed') unless request.request_method == 'GET'
 
         payload = case request.path
@@ -119,7 +128,6 @@ module Mxrb
       end
 
       def formats(diagram) = { mermaid: diagram.to_mermaid, plantuml: diagram.to_plantuml }
-      def asset_path = File.join(__dir__, 'index.html')
 
       def json(response, status, payload)
         render(response, status, JSON.generate(payload), 'application/json; charset=utf-8')

@@ -233,6 +233,7 @@ module MxrbFrontendBrowserAcceptance
       })
       @console_errors = []
       @console_event_index = 0
+      @authenticated = false
     end
 
     def login(username, password)
@@ -257,6 +258,8 @@ module MxrbFrontendBrowserAcceptance
       raise Failure, 'login returned to the Mendix login form' if evaluate(
         'document.querySelector("#loginForm") !== null'
       )
+
+      @authenticated = true
     end
 
     def navigate(path)
@@ -289,10 +292,11 @@ module MxrbFrontendBrowserAcceptance
       wait('document.readyState === "complete"', "navigation after #{text.inspect}")
     end
 
-    def click_selector(selector)
+    def click_selector(expectation)
+      selector, index = selector_and_index(expectation)
       expression = <<~JS
         (() => {
-          const target = document.querySelector(#{JSON.generate(selector)});
+          const target = document.querySelectorAll(#{JSON.generate(selector)})[#{index}];
           if (!target) return false;
           const style = getComputedStyle(target);
           const box = target.getBoundingClientRect();
@@ -303,6 +307,70 @@ module MxrbFrontendBrowserAcceptance
         })()
       JS
       wait(expression, "visible clickable selector #{selector.inspect}")
+    end
+
+    def measure_click(expectation)
+      selector, index = selector_and_index(expectation)
+      maximum = Float(expectation.fetch('max_ms', 250))
+      timeout = Float(expectation.fetch('timeout_ms', 5_000))
+      minimum_requests = Integer(expectation.fetch('min_requests', 1))
+      result = evaluate(<<~JS)
+        new Promise(resolve => {
+          const target = document.querySelectorAll(#{JSON.generate(selector)})[#{index}];
+          if (!target) return resolve({ error: 'target not found' });
+          const originalFetch = window.fetch;
+          const requests = [];
+          let pending = 0;
+          let lastFinished = performance.now();
+          window.fetch = async (...args) => {
+            const entry = {
+              url: String(args[0]), method: args[1]?.method || 'GET',
+              started: performance.now()
+            };
+            requests.push(entry);
+            pending += 1;
+            try {
+              const response = await originalFetch(...args);
+              entry.status = response.status;
+              return response;
+            } catch (error) {
+              entry.error = String(error);
+              throw error;
+            } finally {
+              entry.duration_ms = performance.now() - entry.started;
+              pending -= 1;
+              lastFinished = performance.now();
+            }
+          };
+          const started = performance.now();
+          target.click();
+          const poll = () => {
+            const duration = performance.now() - started;
+            const busy = document.querySelector('.mxrb-page')?.getAttribute('aria-busy') === 'true';
+            if (requests.length >= #{minimum_requests} && pending === 0 && !busy &&
+                performance.now() - lastFinished >= 25) {
+              window.fetch = originalFetch;
+              return resolve({ duration_ms: duration, requests });
+            }
+            if (duration >= #{timeout}) {
+              window.fetch = originalFetch;
+              return resolve({ error: 'interaction timed out', duration_ms: duration, requests });
+            }
+            setTimeout(poll, 5);
+          };
+          poll();
+        })
+      JS
+      raise Failure, "measured click #{selector.inspect} failed: #{result['error']}" if result['error']
+      if result['duration_ms'] > maximum
+        raise Failure, "measured click #{selector.inspect} took #{result['duration_ms'].round(1)}ms " \
+                       "(budget #{maximum.round(1)}ms)"
+      end
+
+      result.merge(
+        'selector' => selector, 'index' => index, 'max_ms' => maximum,
+        'min_requests' => minimum_requests
+      )
     end
 
     def wait_for_text(text)
@@ -320,6 +388,37 @@ module MxrbFrontendBrowserAcceptance
         "document.querySelector(#{JSON.generate(selector)}) !== null",
         "selector #{selector.inspect}"
       )
+    end
+
+    def wait_for_count(expectation)
+      selector = expectation.fetch('selector')
+      expected = Integer(expectation.fetch('equals'))
+      wait(
+        "document.querySelectorAll(#{JSON.generate(selector)}).length === #{expected}",
+        "#{expected} elements matching #{selector.inspect}"
+      )
+    end
+
+    def wait_for_absence(selector)
+      wait(
+        "document.querySelector(#{JSON.generate(selector)}) === null",
+        "absence of selector #{selector.inspect}"
+      )
+    end
+
+    def wait_for_idle(_expectation)
+      evaluate(<<~'JS')
+        new Promise(resolve => {
+          let stableSince = null;
+          const poll = () => {
+            const busy = document.querySelector('.mxrb-page')?.getAttribute('aria-busy') === 'true';
+            stableSince = busy ? null : (stableSince || performance.now());
+            if (stableSince && performance.now() - stableSince >= 300) return resolve(true);
+            setTimeout(poll, 25);
+          };
+          poll();
+        })
+      JS
     end
 
     def wait_for_style(expectation)
@@ -399,14 +498,33 @@ module MxrbFrontendBrowserAcceptance
       @console_errors.uniq
     end
 
+    def diagnostics
+      evaluate(<<~'JS')
+        ({
+          cell_count: document.querySelectorAll('.sd-cell').length,
+          alert: document.querySelector('[role="alert"]')?.textContent || null,
+          resources: performance.getEntriesByType('resource')
+            .filter(entry => entry.name.includes('/api/'))
+            .map(entry => ({ name: entry.name, duration_ms: entry.duration,
+              transfer_size: entry.transferSize }))
+        })
+      JS
+    end
+
     def close
-      logout
+      logout if @authenticated
     ensure
       collect_console_errors
       @transport.close
     end
 
     private
+
+    def selector_and_index(expectation)
+      return [expectation, 0] unless expectation.is_a?(Hash)
+
+      [expectation.fetch('selector'), Integer(expectation.fetch('index', 0))]
+    end
 
     def call(method, params = {})
       @client.call(method, params, session_id: @session)
@@ -489,7 +607,7 @@ module MxrbFrontendBrowserAcceptance
     def run
       validate!
       FileUtils.mkdir_p(@output_dir)
-      @browser.login(@username, @password)
+      @browser.login(@username, @password) if authenticated?
       pages = @config.fetch('pages').map { capture_page(_1) }
       console_errors = @browser.console_errors
       raise Failure, "browser exceptions: #{console_errors.join('; ')}" unless console_errors.empty?
@@ -502,22 +620,39 @@ module MxrbFrontendBrowserAcceptance
       baseline = verify_or_update_baseline(current)
       {
         passed: true, scenario: @config.fetch('name'), base_url: @base_url,
-        authenticated: true, baseline:, pages:,
+        authenticated: authenticated?, baseline:, pages:,
         console_errors:
       }
     rescue StandardError => e
-      { passed: false, scenario: @config['name'], base_url: @base_url, error: e.message }
+      failure_report(e)
     ensure
       @browser&.close
     end
 
     private
 
+    def failure_report(error)
+      report = { passed: false, scenario: @config['name'], base_url: @base_url, error: error.message }
+      return report unless @browser
+
+      FileUtils.mkdir_p(@output_dir)
+      screenshot = File.join(@output_dir, 'failure.png')
+      @browser.screenshot(screenshot)
+      report.merge(
+        failure_screenshot: screenshot,
+        failure_snapshot: @browser.snapshot,
+        console_errors: @browser.console_errors,
+        diagnostics: @browser.diagnostics
+      )
+    rescue StandardError => e
+      report.merge(diagnostic_error: e.message)
+    end
+
     def validate!
       raise Failure, 'browser scenario needs a name' if @config['name'].to_s.empty?
       raise Failure, 'browser scenario needs at least one page' if Array(@config['pages']).empty?
-      raise Failure, 'browser username is empty' if @username.to_s.empty?
-      raise Failure, 'browser password is empty' if @password.to_s.empty?
+      raise Failure, 'browser username is empty' if authenticated? && @username.to_s.empty?
+      raise Failure, 'browser password is empty' if authenticated? && @password.to_s.empty?
       raise Failure, '--update-baseline requires --baseline' if @update_baseline && !@baseline
     end
 
@@ -525,6 +660,7 @@ module MxrbFrontendBrowserAcceptance
       @browser.navigate(page['path']) if page['path']
       @browser.click_selector(page.fetch('click_selector')) if page['click_selector']
       @browser.click_text(page.fetch('click_text')) if page['click_text']
+      measurements = Array(page['steps']).filter_map { perform_step(_1) }
       Array(page['text']).each { @browser.wait_for_text(_1) }
       Array(page['selectors']).each { @browser.wait_for_selector(_1) }
       Array(page['styles']).each { @browser.wait_for_style(_1) }
@@ -546,8 +682,36 @@ module MxrbFrontendBrowserAcceptance
       {
         'name' => name, 'url' => page['path'], 'snapshot' => snapshot,
         'snapshot_sha256' => digest, 'screenshot' => screenshot,
-        'screenshot_sha256' => Digest::SHA256.file(screenshot).hexdigest
+        'screenshot_sha256' => Digest::SHA256.file(screenshot).hexdigest,
+        'measurements' => measurements
       }
+    end
+
+    def perform_step(step)
+      actions = {
+        'navigate' => :navigate,
+        'click_selector' => :click_selector,
+        'measure_click' => :measure_click,
+        'click_text' => :click_text,
+        'wait_for_text' => :wait_for_text,
+        'wait_for_selector' => :wait_for_selector,
+        'wait_for_count' => :wait_for_count,
+        'wait_for_absence' => :wait_for_absence,
+        'wait_for_idle' => :wait_for_idle,
+        'wait_for_style' => :wait_for_style
+      }
+      selected = actions.keys.select { step.key?(_1) }
+      raise Failure, "browser step needs exactly one action: #{step.inspect}" unless selected.one?
+
+      action = selected.first
+      result = @browser.public_send(actions.fetch(action), step.fetch(action))
+      return unless action == 'measure_click'
+
+      { 'action' => action, 'result' => result }
+    end
+
+    def authenticated?
+      @config.fetch('authentication', true) != false
     end
 
     def verify_or_update_baseline(current)

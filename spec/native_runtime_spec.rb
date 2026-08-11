@@ -231,11 +231,14 @@ RSpec.describe Mxrb::Runtime::Native do
     store.delete(first)
     store.restore(snapshot)
     expect(store.retrieve('Clinic.Animal').map { _1.members['Age'] }).to eq([2, 4])
+    expect(store.find('Clinic.Animal', first.id)&.members&.fetch('Age')).to eq(2)
+    expect(store.find('Clinic.Animal', 'missing')).to be_nil
 
     owner = store.create('Clinic.Owner')
     restored_first = store.retrieve('Clinic.Animal').first
     restored_first.members['Animal_Owner'] = owner
     expect(store.retrieve_association('Animal_Owner', owner)).to eq([restored_first])
+    expect(store.retrieve_association('Clinic.Animal_Owner', owner)).to eq([restored_first])
 
     transient_store = described_class::Store.new(transient_entities: ['Clinic.Scratch'])
     transient_events = []
@@ -405,8 +408,29 @@ RSpec.describe Mxrb::Runtime::Native do
       { 'OriginPointer' => 'action', 'DestinationPointer' => 'end', 'IsErrorHandler' => true }
     ]
 
+    allow(@interpreter.store).to receive(:snapshot).and_call_original
     expect(@interpreter.send(:execute, flow.new('Handled', [start, action, ending], edges), {}))
       .to eq('handled')
+    expect(@interpreter.store).to have_received(:snapshot).once
+  end
+
+  it 'does not snapshot the store for ordinary action activities' do
+    flow = Struct.new(:name, :objects, :flows)
+    start = { '$ID' => 'start', '$Type' => 'Microflows$StartEvent' }
+    action = {
+      '$ID' => 'action', '$Type' => 'Microflows$ActionActivity',
+      'Action' => { '$Type' => 'Microflows$EmptyAction', 'ErrorHandlingType' => 'None' }
+    }
+    ending = { '$ID' => 'end', '$Type' => 'Microflows$EndEvent', 'ReturnValue' => "'done'" }
+    edges = [
+      { 'OriginPointer' => 'start', 'DestinationPointer' => 'action' },
+      { 'OriginPointer' => 'action', 'DestinationPointer' => 'end' }
+    ]
+    allow(@interpreter.store).to receive(:snapshot).and_call_original
+
+    expect(@interpreter.send(:execute, flow.new('Ordinary', [start, action, ending], edges), {}))
+      .to eq('done')
+    expect(@interpreter.store).not_to have_received(:snapshot)
   end
 
   it 'filters and sorts database retrieves and XPath counts' do

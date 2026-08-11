@@ -62,3 +62,39 @@ there is no class discovery, JAR execution, or JVM fallback. REST, app services,
 SOAP, mappings, and document generation continue to use type-level Ruby
 adapters. The browser still runs JavaScript/React, while its backend and APIs run
 without the Java Runtime.
+
+## Ruby → Mendix → Ruby certification
+
+The reproducible certification scenario lives in
+[`spec/fixtures/flymetothemoon/project.rb`](../../spec/fixtures/flymetothemoon/project.rb).
+It models customers, products, orders, and order lines in Ruby, including an
+enumeration, indexes, associations, microflows, a nanoflow, a scheduled event,
+and a data-grid page. The
+[`spec/flymetothemoon_roundtrip_spec.rb`](../../spec/flymetothemoon_roundtrip_spec.rb)
+test verifies these use cases:
+
+- generate and validate a Mendix 11.12.1 MPR from the Ruby DSL;
+- export through the real CLI with `--mode ruby --flymetothemoon`;
+- require Sinatra, Puma, ActiveRecord, and RSpec while producing no Java, JAR,
+  or bytecode files;
+- execute creation, aggregation, branching, CRUD, and page metadata through the
+  Ruby Runtime and SQLite;
+- compile an unchanged app and structurally compare the MPR with its source;
+- add an attribute and replace a microflow with idiomatic Ruby;
+- export once more and prove that both the Ruby code and Mendix model survive a
+  second structurally identical round trip.
+
+Run the isolated case with:
+
+```bash
+bundle exec rspec spec/flymetothemoon_roundtrip_spec.rb
+```
+
+For generated interfaces, the declarative
+[`spec/fixtures/frontend_browser/sudoku_full_flow.json`](../../spec/fixtures/frontend_browser/sudoku_full_flow.json)
+scenario runs through `script/frontend_browser_acceptance` in a real Chromium.
+It covers board positions 73 and 74, selection, value entry, and Easy, Medium,
+and Hard transitions. Each critical click waits for the microflow POST plus the
+association GET and must finish within 250 ms. Gallery queries are filtered by
+context in SQLite; objects loaded through an inverse association retain that
+link when only attributes are committed.

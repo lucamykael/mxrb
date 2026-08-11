@@ -98,6 +98,27 @@ module Mxrb
         values.uniq(&:id)
       end
 
+      def find(entity, id)
+        return @transient.find(transient_name(entity), id) if transient?(entity)
+
+        definition = schema.entity(entity)
+        staged = @staged_new[id.to_s]
+        return staged if staged&.entity == definition.name
+
+        row = database.get_first_row(
+          "SELECT * FROM #{quote(definition.table)} WHERE id = ?", id.to_s
+        )
+        return unless row
+
+        materialize(definition, row).tap { load_direct_associations([_1]) }
+      end
+
+      def release_cache!
+        @identity = @staged_new.dup
+        @persisted = {}
+        self
+      end
+
       def retrieve_association(association, start)
         return [] unless start
 
@@ -156,14 +177,13 @@ module Mxrb
       def begin_transaction
         raise SQLite3::SQLException, 'transaction already active' if @manual_transaction
 
-        @manual_snapshot = snapshot
+        @manual_snapshot = transaction_snapshot
         database.execute('BEGIN IMMEDIATE')
         @manual_transaction = true
         self
       end
 
       def transaction
-        state = snapshot
         begin_transaction
         result = yield self
         finish_manual_transaction
@@ -171,7 +191,6 @@ module Mxrb
         result
       rescue Exception # rubocop:disable Lint/RescueException
         rollback if @manual_transaction
-        restore(state)
         raise
       end
 
@@ -182,8 +201,7 @@ module Mxrb
         database.execute('ROLLBACK') if database.transaction_active?
         @manual_transaction = false
         @manual_snapshot = nil
-        clear_cache
-        restore(state) if state
+        restore_transaction_snapshot(state) if state
         self
       end
 
@@ -222,6 +240,37 @@ module Mxrb
       end
 
       private
+
+      def transaction_snapshot
+        {
+          identity: @identity.dup,
+          members: @identity.to_h do |id, value|
+            [id, value.members.transform_values { transaction_member_snapshot(_1) }]
+          end,
+          persisted: @persisted.transform_values(&:dup),
+          staged_new: @staged_new.dup,
+          sequence_values: @sequence_values.dup,
+          transient: @transient.snapshot
+        }
+      end
+
+      def restore_transaction_snapshot(state)
+        state.fetch(:identity).each do |id, value|
+          value.members.replace(state.fetch(:members).fetch(id))
+        end
+        @identity = state.fetch(:identity)
+        @persisted = state.fetch(:persisted)
+        @staged_new = state.fetch(:staged_new)
+        @sequence_values = state.fetch(:sequence_values)
+        @transient.restore(state.fetch(:transient))
+      end
+
+      def transaction_member_snapshot(value)
+        return value.map { transaction_member_snapshot(_1) } if value.is_a?(Array)
+        return value.transform_values { transaction_member_snapshot(_1) } if value.is_a?(Hash)
+
+        value
+      end
 
       def restore_legacy_snapshot(snapshot)
         snapshot.each do |entity, values|
@@ -356,6 +405,7 @@ module Mxrb
       def persist_associations(value, entity)
         schema.associations.select { _1.from_entity == entity.name }.each do |association|
           next if hybrid_association?(association)
+          next unless value.members.key?(association.name)
 
           database.execute("DELETE FROM #{quote(association.table)} WHERE source_id = ?", [value.id])
           targets = Array(value.members[association.name]).compact
@@ -399,12 +449,32 @@ module Mxrb
 
       def load_direct_associations(values)
         values.each do |value|
+          # A staged object can already carry associations that only reach the
+          # database when a later batch commit runs. Reloading those links from
+          # SQLite here would replace the in-memory values with an empty result.
+          next if @staged_new.key?(value.id)
+
           schema.associations.select { _1.from_entity == value.entity }.each do |association|
+            next if association_dirty?(value, association.name)
+
             related = retrieve_association(association.qualified_name, value)
             value.members[association.name] = association.type == :Reference ? related.first : related
-            @persisted[value.id] = value.members.dup unless @staged_new.key?(value.id)
+            (@persisted[value.id] ||= {})[association.name] = value.members[association.name]
           end
         end
+      end
+
+      def association_dirty?(value, name)
+        persisted = @persisted[value.id]
+        return false unless persisted&.key?(name)
+
+        comparable_member(value.members[name]) != comparable_member(persisted[name])
+      end
+
+      def comparable_member(value)
+        return value.map { comparable_member(_1) } if value.is_a?(Array)
+
+        value.respond_to?(:id) ? value.id : value
       end
 
       def cache(value)
@@ -433,12 +503,7 @@ module Mxrb
       end
 
       def comparable_members(members)
-        members.transform_values do |value|
-          case value
-          when Array then value.map { _1.respond_to?(:id) ? _1.id : _1 }
-          else value.respond_to?(:id) ? value.id : value
-          end
-        end
+        members.transform_values { comparable_member(_1) }
       end
 
       def defaults_for(entity)

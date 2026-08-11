@@ -65,3 +65,40 @@ ihrem Namen und einem Registrierungshinweis geschlossen fehl; es gibt weder
 Klassenerkennung noch JAR-Ausführung oder JVM-Fallback. REST, App Services, SOAP,
 Mappings und Dokumenterzeugung verwenden weiterhin typbezogene Ruby-Adapter.
 Im Browser bleibt JavaScript/React; Backend und APIs laufen ohne Java Runtime.
+
+## Ruby → Mendix → Ruby-Zertifizierung
+
+Das reproduzierbare Zertifizierungsszenario befindet sich in
+[`spec/fixtures/flymetothemoon/project.rb`](../../spec/fixtures/flymetothemoon/project.rb).
+Es modelliert Kunden, Produkte, Bestellungen und Positionen in Ruby, inklusive
+Enumeration, Indizes, Assoziationen, Microflows, Nanoflow, Scheduled Event und
+einer Seite mit Data Grid. Der Test
+[`spec/flymetothemoon_roundtrip_spec.rb`](../../spec/flymetothemoon_roundtrip_spec.rb)
+prüft folgende Anwendungsfälle:
+
+- ein Mendix-11.12.1-MPR aus der Ruby-DSL erzeugen und validieren;
+- über die echte CLI mit `--mode ruby --flymetothemoon` exportieren;
+- Sinatra, Puma, ActiveRecord und RSpec bereitstellen, ohne Java-, JAR- oder
+  Bytecode-Dateien zu erzeugen;
+- Erzeugung, Aggregation, Verzweigung, CRUD und Seitenmetadaten in der
+  Ruby-Runtime mit SQLite ausführen;
+- eine unveränderte Anwendung kompilieren und das MPR strukturell mit der
+  Quelle vergleichen;
+- ein Attribut hinzufügen und einen Microflow durch idiomatisches Ruby ersetzen;
+- erneut exportieren und nachweisen, dass Ruby-Code und Mendix-Modell einen
+  zweiten strukturell identischen Roundtrip überstehen.
+
+Der isolierte Test wird so ausgeführt:
+
+```bash
+bundle exec rspec spec/flymetothemoon_roundtrip_spec.rb
+```
+
+Für generierte Oberflächen wird das deklarative Szenario
+[`spec/fixtures/frontend_browser/sudoku_full_flow.json`](../../spec/fixtures/frontend_browser/sudoku_full_flow.json)
+mit `script/frontend_browser_acceptance` in einem echten Chromium ausgeführt.
+Es deckt die Brettpositionen 73 und 74, Auswahl, Werteingabe sowie den Wechsel
+zwischen Easy, Medium und Hard ab. Jeder kritische Klick wartet auf Microflow-POST
+und Assoziations-GET und muss innerhalb von 250 ms enden. Galerieabfragen werden
+in SQLite nach Kontext gefiltert; über eine inverse Assoziation geladene Objekte
+behalten ihre Verknüpfung, wenn nur Attribute gespeichert werden.
