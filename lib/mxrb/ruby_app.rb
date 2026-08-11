@@ -720,6 +720,14 @@ module Mxrb
         value = keyword_value if value.nil? && !keyword_value.empty?
         if value.is_a?(Hash) && value['id'] && value['type']
           object = bridge.interpreter.store.find(value['type'].to_s, value['id'].to_s)
+          if !object && value['transient'] == true
+            object = Runtime::Native::ObjectValue.new(
+              entity: value['type'].to_s, id: value['id'].to_s, members: {}
+            )
+            value.fetch('attributes', {}).each do |member, member_value|
+              object.members[member.to_s] = deserialize(member_value, context:, synchronize:)
+            end
+          end
           raise NativeRuntimeError, "object #{value['type']} #{value['id']} not found" unless object
 
           value.fetch('attributes', {}).each do |member, member_value|
@@ -756,7 +764,7 @@ module Mxrb
             authorize_entity!(object.entity, :write, context, member:, record: object)
             object.members[member] = member_value
           end
-          store.commit(object) if store.respond_to?(:commit)
+          store.commit(object) if value['transient'] != true && store.respond_to?(:commit)
           object
         end
         return apply.call unless store.respond_to?(:transaction)

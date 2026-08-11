@@ -32,13 +32,22 @@ Mxrb.define(destination) do
       show_message 'Widget action completed'
     end
 
+    microflow :SeedReferences do
+      create_object 'WidgetLab.Customer', as: :Customer,
+                                          set: { Name: "'Certified customer'" }, commit: true
+    end
+
     page :Dashboard do
       title 'Widget certification laboratory'
+      data_source microflow: 'WidgetLab.SeedReferences'
 
       container :Introduction, class_name: 'widget-lab-introduction' do
         text :Heading, caption: 'Widget certification laboratory'
         button :Ping, caption: 'Run widget action' do
           on_click microflow: 'WidgetLab.Ping'
+        end
+        button :SeedCustomer, caption: 'Prepare reference data' do
+          on_click microflow: 'WidgetLab.SeedReferences'
         end
       end
 
