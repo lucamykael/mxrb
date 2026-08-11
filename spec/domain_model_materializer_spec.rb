@@ -29,6 +29,7 @@ RSpec.describe Mxrb::Compiler::DomainModelMaterializer do
         module_role :User
         entity(:Animal) do
           string :Name, required: true, length: 80
+          string :Description
           datetime :BirthDate
           index :Name
           access_rule 'Clinic.User', read: :all, write: [:Name], create: true
@@ -58,6 +59,7 @@ RSpec.describe Mxrb::Compiler::DomainModelMaterializer do
     expect(attributes.dig('Name', 'Type')).to include(
       '$Type' => 'DomainModels$StringAttributeType', 'Length' => 80
     )
+    expect(attributes.dig('Description', 'Type', 'Length')).to eq(200)
     expect(attributes.dig('BirthDate', 'Type', 'LocalizeDate')).to be(true)
     expect(entity['ValidationRules'].first['Message']).not_to have_key('Items')
     indexed = entity['Indexes'].first['Attributes']

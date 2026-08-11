@@ -123,7 +123,7 @@ module Mxrb
 
       def page_category(type)
         return :client_action if type.end_with?('Action')
-        return :custom_widget if type == 'CustomWidgets$CustomWidget'
+        return :custom_widget if type == 'CustomWidgets$CustomWidget' || !type.include?('$')
 
         :widget
       end

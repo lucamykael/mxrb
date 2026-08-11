@@ -118,6 +118,9 @@ module Mxrb
 
       def compile_attribute_type(source)
         result = plain_document(source)
+        if result['$Type'] == 'DomainModels$StringAttributeType'
+          result['Length'] ||= Model::Attribute::DEFAULT_STRING_LENGTH
+        end
         if result['$Type'] == 'DomainModels$DateTimeAttributeType'
           result['LocalizeDate'] = source.fetch('LocalizeDate', true) == true
         end

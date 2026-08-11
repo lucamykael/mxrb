@@ -1319,6 +1319,7 @@ RSpec.describe Mxrb::Compiler::WidgetPackageExtractor do
       expect(File).to exist(File.join(web, 'widgets', 'Widget.css'))
       expect(File).to exist(File.join(web, 'widgets', 'assets', 'icon.svg'))
       expect(File).not_to exist(File.join(web, 'widgets', 'ignored.xml'))
+      expect(File).not_to exist(File.join(web, 'mxrb-widgets.css'))
     end
   end
 end

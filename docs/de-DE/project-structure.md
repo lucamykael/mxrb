@@ -82,8 +82,9 @@ app/
 config/application.rb
 frontend/
   package.json
-  vite.config.js
-  src/{main.jsx,App.jsx,app.css}
+  vite.config.ts
+  tsconfig.json
+  src/{main.tsx,App.tsx,types.ts,nanoflows.ts,app.css}
 project.rb
 .mxrb/
   ruby-app.json
@@ -94,8 +95,10 @@ project.rb
 Persistente Entitäten werden Records. Nicht persistente Entitäten werden
 DTO-Klassen und verwenden immer das Suffix `_dto.rb`, wodurch mehrdeutige
 `_2.rb`-Namen entfallen. Services sind normale Ruby-Klassen und delegieren
-anfangs an den nativen Pure-Ruby-Interpreter. Pages stellen dem React-Frontend
-native Metadaten bereit.
+anfangs an den nativen Pure-Ruby-Interpreter. Pages stellen dem React-TypeScript-
+Frontend native Metadaten bereit. Der Export leitet `types.ts` aus Entitäten,
+Enumerationen, Pages, Widgets, Kontexten, Effekten und API-Verträgen ab;
+`npm run typecheck` ist Bestandteil des Vite-Builds.
 
 Nach der einmaligen Installation der Ruby- und Frontend-Abhängigkeiten startet
 ein einziger Befehl beide Prozesse:
@@ -106,7 +109,8 @@ npm install --prefix frontend
 bundle exec mxrb run .
 ```
 
-`mxrb run` überwacht die Ruby-JSON-API auf Loopback und den Vite-Server. Vite
+`mxrb run` überwacht die über Puma 8 bereitgestellte Ruby-JSON-API auf Loopback
+und den Vite-Server. Vite
 leitet `/api` an Ruby weiter. `--server-port` legt den Backend-Port fest und
 `--client-port` den Frontend-Port. `--no-frontend` startet nur die API. Die
 bisherigen Namen `--api-port` und `--port` bleiben kompatible Aliase.
@@ -177,12 +181,21 @@ kompiliert, in die Gem aufgenommen und lokal ausgeliefert. Node.js ist daher
 für die Nutzung des installierten Editors nicht erforderlich, und es wird kein
 CDN kontaktiert. Für die UI-Entwicklung werden in `frontend/modeler`
 `npm install`, `npm run typecheck` und `npm run build` ausgeführt.
+ER, UML, OQL und das generische `--mode ruby`-Backend verwenden denselben
+eingebetteten Puma-Adapter. `puma ~> 8.0` ist eine direkte MXRB-Abhängigkeit und
+bringt transitiv `nio4r ~> 2.0` mit; WEBrick gehört nicht zum HTTP-Stack.
 
 ## UML-Diagramme
 
 UML ist eine zusätzliche, vom ER-Editor unabhängige Implementierung. Sie nutzt
 Port 4569 und verändert das Domain-Model-Layout nicht. Der Viewer vereint
 Klassen-, Microflow-Aktivitäts- und Aufrufsequenzdiagramme mit Mermaid:
+
+Derselbe Server veröffentlicht unter `http://127.0.0.1:4569/modeler` einen
+visuellen React- und TypeScript-Katalog für Module, Seiten, Microflows und
+Nanoflows, Navigation, Sicherheit, Integrationen und Einstellungen. Diese erste
+erweiterte Oberfläche ist schreibgeschützt; Mutationen bleiben gesperrt, bis
+Fail-Closed-Validierung und Roundtrip-Garantien dem ER-Editor entsprechen.
 
 ```sh
 bundle exec mxrb uml App.mpr

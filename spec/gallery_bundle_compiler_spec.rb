@@ -158,6 +158,23 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
       .to eq('Mais')
   end
 
+  it 'renders configured filter widgets only when a scoped renderer is available' do
+    widget = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                     'EntityRef' => { 'Entity' => 'Demo.Item' })
+    filters = { 'Widgets' => [2, { '$Type' => 'Forms$DynamicText', 'Name' => 'filter' }] }
+    without_renderer = described_class.new(source, 'Demo.Home', widget)
+    without_renderer.instance_variable_get(:@values)['filtersPlaceholder'] = ['Widgets', filters]
+    expect(without_renderer.send(:filters_placeholder)).to eq(:undefined)
+
+    renderer = lambda do |widgets, scope, entity|
+      expect([widgets.length, scope, entity]).to eq([1, 'p.Demo.Home.gallery1', 'Demo.Item'])
+      '[filter]'
+    end
+    with_renderer = described_class.new(source, 'Demo.Home', widget, render_widgets: renderer)
+    with_renderer.instance_variable_get(:@values)['filtersPlaceholder'] = ['Widgets', filters]
+    expect(with_renderer.send(:filters_placeholder)).to eq('$raw' => '[filter]')
+  end
+
   it 'covers unconstrained and unresolved XPath arguments' do
     unconstrained = gallery('$Type' => 'CustomWidgets$CustomWidgetXPathSource',
                             'EntityRef' => { 'Entity' => 'Demo.Item' }, 'XPathConstraint' => '')

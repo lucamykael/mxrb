@@ -107,6 +107,72 @@ RSpec.describe 'modern page widgets' do
     expect(values.dig('config', 'Value', 'Rules', 0, 'Enabled')).to be(true)
   end
 
+  it 'hydrates semantic datasource, attribute, selection, children, and object values' do
+    nested_types = %w[name amount].map.with_index do |key, index|
+      {
+        '$ID' => "nested-property-#{index}", 'PropertyKey' => key,
+        'ValueType' => {
+          '$ID' => "nested-value-#{index}", 'Type' => index.zero? ? 'String' : 'Attribute',
+          'DefaultValue' => ''
+        }
+      }
+    end
+    nested_object_type = {
+      '$ID' => 'nested-object',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array(nested_types, marker: 2)
+    }
+    widget = schema_widget('example.Semantic', {
+      source: { type: 'DataSource' }, label: { type: 'Attribute' }, selected: { type: 'Selection' },
+      content: { type: 'Widgets' }, series: { type: 'Object', object_type: nested_object_type }
+    })
+    options = {
+      properties: {
+        source: { data_source: { entity: 'Ui.Item', xpath: '[Active = true]' } },
+        label: { attribute: 'Ui.Item.Name' }, selected: { selection: 'Single' },
+        content: { widgets: [{ type: :text, name: 'Nested', options: { caption: 'Child' }, events: [] }] },
+        series: { objects: [{ name: { primitive: 'Primary' }, amount: { attribute: 'Ui.Item.Amount' } }] }
+      }
+    }
+
+    writer.send(:configure_pluggable_widget!, widget, options)
+    values = writer.send(:custom_widget_properties, widget)
+
+    expect(values.dig('source', 'Value', 'DataSource')).to include(
+      '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'XPathConstraint' => '[Active = true]'
+    )
+    expect(values.dig('label', 'Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Name')
+    expect(values.dig('selected', 'Value', 'Selection')).to eq('Single')
+    expect(writer.send(:array_items, values.dig('content', 'Value', 'Widgets')).first).to include(
+      '$Type' => 'Forms$DynamicText', 'Name' => 'Nested'
+    )
+    object = writer.send(:array_items, values.dig('series', 'Value', 'Objects')).first
+    nested = writer.send(:widget_object_properties, nested_object_type, object)
+    expect(nested.dig('name', 'Value', 'PrimitiveValue')).to eq('Primary')
+    expect(nested.dig('amount', 'Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Amount')
+  end
+
+  it 'hydrates every semantic scalar and normalizes singular data and widget values' do
+    widget = schema_widget('example.Semantics', {
+      expression: { type: 'Expression' }, text: { type: 'TextTemplate' },
+      association: { type: 'Association' }, source: { type: 'DataSource' },
+      content: { type: 'Widgets' }
+    })
+    writer.send(:configure_pluggable_widget!, widget, properties: {
+      expression: { expression: '$currentObject/Name' }, text: { text: 'Hello' },
+      association: { association: 'Ui.Item_Owner' }, source: { data_source: 'Ui.Item' },
+      content: { widgets: { type: :text, name: 'OnlyChild', options: { caption: 'Child' }, events: [] } }
+    })
+    values = writer.send(:custom_widget_properties, widget)
+
+    expect(values.dig('expression', 'Value', 'Expression')).to eq('$currentObject/Name')
+    expect(values.dig('text', 'Value', 'TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
+    expect(values.dig('association', 'Value', 'EntityRef', '$Type')).to eq('DomainModels$IndirectEntityRef')
+    expect(values.dig('source', 'Value', 'DataSource', 'EntityRef', 'Entity')).to eq('Ui.Item')
+    expect(writer.send(:array_items, values.dig('content', 'Value', 'Widgets')).length).to eq(1)
+    expect(writer.send(:widget_object_properties, nil, nil)).to eq({})
+    expect(writer.send(:widget_object_properties, widget.dig('Type', 'ObjectType'), nil)).to eq({})
+  end
+
   it 'covers optional synchronization paths without inventing widget values' do
     current_writer = writer
     empty = schema_widget('example.Empty', {}, name: 'Empty')
@@ -207,6 +273,34 @@ RSpec.describe 'modern page widgets' do
     expect(text_value.dig('TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
   end
 
+  it 'hydrates Data Grid 2 selection, filter slots, and multiple column filters' do
+    filter_type = {
+      '$ID' => 'filter', 'PropertyKey' => 'filter',
+      'ValueType' => { '$ID' => 'filter-value', 'Type' => 'Widgets', 'DefaultValue' => '' }
+    }
+    column_type = {
+      '$ID' => 'column-type', '$Type' => 'CustomWidgets$WidgetObjectType',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array([filter_type], marker: 2)
+    }
+    grid = schema_widget('grid', {
+      itemSelection: { type: 'Selection' }, filtersPlaceholder: { type: 'Widgets' },
+      columns: { type: 'Object', object_type: column_type }
+    })
+    filter = { type: :text, name: 'Filter', options: { caption: 'Filter' }, events: [] }
+    writer.send(:configure_data_grid2!, grid, selection: :Multi, filters: filter, columns: [{
+      name: 'Name', filter: [filter, filter]
+    }])
+    values = writer.send(:custom_widget_properties, grid)
+
+    expect(values.dig('itemSelection', 'Value', 'Selection')).to eq('Multi')
+    expect(writer.send(:array_items, values.dig('filtersPlaceholder', 'Value', 'Widgets')).length).to eq(1)
+    writer.send(:configure_data_grid2!, grid, filters: [filter])
+    expect(writer.send(:array_items, values.dig('filtersPlaceholder', 'Value', 'Widgets')).length).to eq(1)
+    column = writer.send(:array_items, values.dig('columns', 'Value', 'Objects')).first
+    column_values = writer.send(:widget_object_properties, column_type, column)
+    expect(writer.send(:array_items, column_values.dig('filter', 'Value', 'Widgets')).length).to eq(2)
+  end
+
   it 'hydrates Combo Box enumeration and association modes' do
     specs = {
       source: { type: 'Enumeration' }, optionsSourceType: { type: 'Enumeration' },
@@ -286,6 +380,21 @@ RSpec.describe 'modern page widgets' do
     expect(tabbed).to be_a(BSON::Binary)
     expect(nested.type).to eq(:uuid)
     expect(tabbed.type).to eq(:uuid)
+  end
+
+  it 'retains children nested directly in a generic widget builder' do
+    empty = Mxrb::Dsl::WidgetBuilder.new(:layout_grid, :Empty)
+    expect(empty.to_h).not_to have_key(:children)
+
+    nested = Mxrb::Dsl::WidgetBuilder.new(:layout_grid, :Grid)
+    nested.instance_eval { text :Caption, caption: 'Nested content' }
+    expect(nested.to_h.fetch(:children)).to contain_exactly(
+      include(type: :text, name: 'Caption', options: include(caption: 'Nested content'))
+    )
+
+    filtered = Mxrb::Dsl::WidgetBuilder.new(:data_grid, :Filtered)
+    filtered.filter(type: :text, name: 'Search', options: { caption: 'Search' }, events: [])
+    expect(filtered.to_h.dig(:options, :filters).length).to eq(1)
   end
 
   it 'retains explicit association storage and exact member access overrides' do
@@ -372,7 +481,7 @@ RSpec.describe 'modern page widgets' do
       type: :pluggable_widget, name: 'Basic', events: [], options: { widget_id: 'example.Basic' }
     }, 2).join("\n")
     native = exporter.send(:render_widget, {
-      type: :native_widget, name: 'Raw', events: [],
+      type: 'native_widget', name: 'Raw', events: [],
       options: { native_type: 'Vendor$Raw', deep_structure: { 'Mode' => '3d' } }
     }, 2).join("\n")
     reference = exporter.send(:render_widget, {
@@ -395,6 +504,43 @@ RSpec.describe 'modern page widgets' do
     expect(reference).to include('display_attribute:')
     expect(text_area).to include('lines: 4')
     expect(tabs).to include('tab_page :Empty', 'tab_page :Full do', 'text :Help')
+    page_builder = Mxrb::Dsl::PageBuilder.new(:Page)
+    page_builder.container(:Empty)
+    expect(page_builder.to_h.fetch(:widgets).last).to include(type: :container, children: [])
+  end
+
+  it 'hydrates incomplete generated widgets from each compatible native baseline' do
+    descriptors = [writer.send(:data_grid2_descriptor), writer.send(:combo_box_descriptor)]
+    baselines = descriptors.map do |descriptor|
+      schema_widget(descriptor[:id], { value: { type: 'String' } }, name: descriptor[:name])
+    end
+    custom_baseline = schema_widget('example.Widget', { value: { type: 'String' } }, name: 'Custom')
+    baselines << custom_baseline
+    generated = [
+      {
+        '$Type' => 'CustomWidgets$CustomWidget', 'Name' => descriptors[0][:name],
+        'Type' => { 'WidgetId' => descriptors[0][:id] },
+        '__mxrb_widget_options' => { __kind: :data_grid }
+      },
+      {
+        '$Type' => 'CustomWidgets$CustomWidget', 'Name' => descriptors[1][:name],
+        'Type' => { 'WidgetId' => descriptors[1][:id] },
+        '__mxrb_widget_options' => { __kind: :drop_down }
+      },
+      {
+        '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'Custom',
+        'Type' => { 'WidgetId' => 'example.Widget' },
+        '__mxrb_widget_options' => { __kind: :pluggable_widget, properties: { value: 'ready' } }
+      }
+    ]
+
+    writer.send(:hydrate_pluggable_widgets!, { 'Widgets' => generated }, 'Widgets' => baselines)
+
+    expect(generated.map { _1.dig('Type', 'WidgetId') }).to eq(
+      [descriptors[0][:id], descriptors[1][:id], 'example.Widget']
+    )
+    expect(writer.send(:custom_widget_properties, generated.last).dig('value', 'Value', 'PrimitiveValue'))
+      .to eq('ready')
   end
 
   it 'runs the native MPK-backed generator twice to settle widget schemas' do

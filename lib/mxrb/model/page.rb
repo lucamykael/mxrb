@@ -276,9 +276,14 @@ module Mxrb
 
       def native_widget(widget)
         deep = widget.reject { |key, _| %w[$ID $Type Name].include?(key.to_s) }
+        widget_id = widget.dig("Type", "WidgetId").to_s
+        platform = widget.dig("Type", "SupportedPlatform").to_s
+        options = { native_type: widget["$Type"], deep_structure: deep }
+        options[:widget_id] = widget_id unless widget_id.empty?
+        options[:platform] = platform unless platform.empty?
         {
           type: :native_widget, name: widget["Name"] || "widget",
-          options: { native_type: widget["$Type"], deep_structure: deep }, events: []
+          options:, events: []
         }
       end
 

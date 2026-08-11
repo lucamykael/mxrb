@@ -33,7 +33,7 @@ Gem::Specification.new do |s|
   s.add_dependency "rexml",      "~> 3.3"
   s.add_dependency "rubyzip",    "~> 3.0"
   s.add_dependency "tzinfo",     "~> 2.0"
-  s.add_dependency "webrick",    "~> 1.9"
+  s.add_dependency "puma",       "~> 8.0"
 
   s.add_development_dependency "benchmark", "~> 0.5"
   s.add_development_dependency "rspec",     "~> 3.13"

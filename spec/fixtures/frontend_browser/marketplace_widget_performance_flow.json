@@ -1,0 +1,30 @@
+{
+  "name": "mxrb-marketplace-widget-performance",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "pages": [
+    {
+      "name": "marketplace-widget-performance",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Marketplace widget certification laboratory" },
+        { "wait_for_idle": {} },
+        {
+          "audit_widgets": {
+            "selector": ".marketplace-widget-under-test",
+            "min_count": 28,
+            "max_render_ms": 2500,
+            "max_long_task_ms": 250
+          }
+        }
+      ],
+      "selectors": [
+        "body",
+        ".marketplace-widget-under-test"
+      ]
+    }
+  ]
+}

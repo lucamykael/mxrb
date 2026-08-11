@@ -13,6 +13,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         domain: fileURLToPath(new URL('./domain.html', import.meta.url)),
+        modeler: fileURLToPath(new URL('./modeler.html', import.meta.url)),
         uml: fileURLToPath(new URL('./uml.html', import.meta.url))
       }
     }

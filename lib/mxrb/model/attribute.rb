@@ -7,6 +7,8 @@ module Mxrb
     # Attributes are embedded in Entity BSON — NOT separate Unit rows.
     # $Type: DomainModels$Attribute
     class Attribute
+      DEFAULT_STRING_LENGTH = 200
+
       # Maps DSL symbol → Mendix storage type name
       TYPE_MAP = {
         string:      "DomainModels$StringAttributeType",
@@ -84,6 +86,7 @@ module Mxrb
       def serialize_type
         storage_type = TYPE_MAP[@type] || TYPE_MAP[:string]
         base = { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
+        base["length"] = @length || DEFAULT_STRING_LENGTH if storage_type == TYPE_MAP[:string]
         base["localizeDate"] = true if @type == :datetime
         base
       end

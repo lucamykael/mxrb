@@ -233,6 +233,27 @@ RSpec.describe Mxrb do
     subject(:mpr) { described_class.open(@mpr_path) }
     after { mpr.close }
 
+    it "repairs stale content hashes without changing unit payloads" do
+      unit = mpr.units_by_containment("Modules").first
+      before = mpr.content_bytes(unit)
+      db = SQLite3::Database.new(@mpr_path)
+      db.execute("UPDATE Unit SET ContentsHash = 'stale' WHERE ContainmentName = 'Modules'")
+      db.close
+
+      repairs = mpr.repair_content_hashes!
+      expect(repairs).to contain_exactly(include(unit_id: unit.fetch("UnitID"), previous: "stale"))
+      expect(mpr.content_bytes(mpr.unit(unit.fetch("UnitID")))).to eq(before)
+      expect(mpr.repair_content_hashes!).to eq([])
+      expect(Mxrb.validate(@mpr_path)).to be_valid
+
+      allow(mpr).to receive(:all_units).and_return([{ "ContentsHash" => "missing" }])
+      expect(mpr.repair_content_hashes!).to eq([])
+
+      readonly = described_class.open(@mpr_path, readonly: true)
+      expect { readonly.repair_content_hashes! }.to raise_error(Mxrb::ReadOnlyError)
+      readonly.close
+    end
+
     it "detects v1 format" do
       expect(mpr.format_version).to eq(:v1)
     end
@@ -3981,6 +4002,48 @@ RSpec.describe Mxrb do
 
   # ── Writer coverage: page buttons, return types, old format ────────────────
   describe "writer edge cases for line coverage" do
+    it "round-trips a widget page action through the typed DSL" do
+      path = File.join(File.dirname(@mpr_path), "writer_page_action.mpr")
+      Mxrb.define(path) do
+        mendix_version "10.18.0"
+        self.module(:M) do
+          page(:Target)
+          page(:Source) do
+            button(:OpenTarget) { on_click page: :"M.Target" }
+          end
+        end
+      end
+
+      Mxrb.open(path) do |project|
+        source = project.pages.find { _1.name == "Source" }
+        event = source.widgets.first.fetch(:events).first
+        expect(event).to include(kind: :page, handler: "M.Target")
+
+        raw_page = project.mpr.units_by_containment("Documents").find do |unit|
+          project.parse_bson(unit)["Name"] == "Source"
+        end
+        page_doc = project.parse_bson(raw_page)
+        argument = Mxrb::IO::BsonCodec.parse_array(page_doc.dig("FormCall", "Arguments"))[:items].first
+        button = Mxrb::IO::BsonCodec.parse_array(argument["Widgets"])[:items].first
+        expect(button["Action"]).to include("$Type" => "Forms$FormAction")
+        expect(button.dig("Action", "FormSettings", "Form")).to eq("M.Target")
+      end
+
+      exported = File.join(File.dirname(@mpr_path), "writer_page_action_ruby")
+      Mxrb::Exporter.new(path, exported).export!
+      source = File.read(File.join(exported, "modules", "M", "presentation", "pages", "source.rb"))
+      expect(source).to include('on_click page: :"M.Target"')
+
+      rebuilt = File.join(File.dirname(@mpr_path), "writer_page_action_rebuilt.mpr")
+      begin
+        ENV["MXRB_OUTPUT_PATH"] = rebuilt
+        load File.join(exported, "project.rb")
+      ensure
+        ENV.delete("MXRB_OUTPUT_PATH")
+      end
+      expect(Mxrb.compare(path, rebuilt)).to be_identical
+    end
+
     it "builds page with cancel_changes, delete, and close_page button actions" do
       path = File.join(File.dirname(@mpr_path), "writer_buttons.mpr")
       Mxrb.define(path) do

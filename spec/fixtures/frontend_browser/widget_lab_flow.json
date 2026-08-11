@@ -1,0 +1,40 @@
+{
+  "name": "mxrb-widget-lab-full-flow",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "pages": [
+    {
+      "name": "widget-laboratory",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Widget certification laboratory" },
+        { "measure_click": { "selector": ".mxrb-data_grid button", "index": 0, "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_count": { "selector": ".mxrb-data_grid tbody tr", "equals": 1 } },
+        { "measure_click": { "selector": ".mxrb-check_box input", "max_ms": 250, "min_requests": 1 } },
+        { "measure_click": { "selector": ".mxrb-button", "max_ms": 250, "min_requests": 1 } },
+        { "wait_for_absence": "[role=\"alert\"]" },
+        { "measure_click": { "selector": ".mxrb-data_grid button", "index": 2, "max_ms": 250, "min_requests": 1 } },
+        { "measure_click": { "selector": ".mxrb-data_grid button", "index": 1, "max_ms": 250, "min_requests": 2 } },
+        { "wait_for_count": { "selector": ".mxrb-data_grid tbody tr", "equals": 0 } },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".mxrb-container",
+        ".mxrb-text",
+        ".mxrb-button",
+        ".mxrb-data_grid",
+        ".mxrb-text_box",
+        ".mxrb-number_input",
+        ".mxrb-text_area",
+        ".mxrb-check_box",
+        ".mxrb-date_picker",
+        ".mxrb-drop_down",
+        ".mxrb-reference_selector",
+        ".mxrb-tab_control"
+      ]
+    }
+  ]
+}

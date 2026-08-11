@@ -24,7 +24,8 @@ module Mxrb
       def materialize
         return 0 unless File.directory?(@web)
 
-        changed = html_files.count { render_html(_1) }
+        changed = materialize_widget_stylesheet ? 1 : 0
+        changed += html_files.count { render_html(_1) }
         changed += materialize_dynamic_imports
         write_missing(File.join(@web, 'js', 'login_i18n.js'), login_i18n)
         write_missing(File.join(@web, 'lib', 'bootstrap', 'css', 'bootstrap.min.css'), login_styles)
@@ -51,6 +52,29 @@ module Mxrb
 
       def html_files = Dir.glob(File.join(@web, '*.html')).sort
 
+      def materialize_widget_stylesheet
+        destination = File.join(@web, 'widgets', 'mxrb-widgets.css')
+        styles = Dir.glob(File.join(@web, 'widgets', '**', '*.css')).sort
+        styles.delete(destination)
+        return remove_widget_stylesheet(destination) if styles.empty?
+
+        rendered = widget_stylesheet(styles)
+        return false if File.file?(destination) && File.binread(destination) == rendered
+
+        File.binwrite(destination, rendered)
+        true
+      end
+
+      def remove_widget_stylesheet(path)
+        existed = File.exist?(path)
+        FileUtils.rm_f(path)
+        existed
+      end
+
+      def widget_stylesheet(styles)
+        styles.map { File.binread(_1) }.join("\n") << "\n"
+      end
+
       def render_javascript(source)
         rendered = source.gsub(DYNAMIC_PAGE_CACHE) do
           %(`?#{cache_token}\${#{Regexp.last_match(1)}}`)
@@ -68,7 +92,7 @@ module Mxrb
         rendered = rendered.gsub('{{themecss}}', theme_css)
         rendered = rendered.gsub('{{manifest}}', manifest)
         rendered = rendered.gsub(PLACEHOLDER, '')
-        rendered = inject_navigation_compatibility(rendered) if File.basename(path) == 'index.html'
+        rendered = render_application_html(rendered) if File.basename(path) == 'index.html'
         return false if source == rendered
 
         File.write(path, rendered)
@@ -113,6 +137,22 @@ module Mxrb
         return html if html.include?('data-mxrb-navigation-compat') || !html.include?('</head>')
 
         html.sub('</head>', "#{navigation_compatibility}\n</head>")
+      end
+
+      def render_application_html(html)
+        inject_navigation_compatibility(inject_widget_stylesheet(html))
+      end
+
+      def inject_widget_stylesheet(html)
+        return html unless File.file?(File.join(@web, 'widgets', 'mxrb-widgets.css'))
+
+        stylesheet = '<link data-mxrb-widget-styles rel="stylesheet" ' \
+                     "href=\"widgets/mxrb-widgets.css?#{cache_token}\">"
+        return html.sub(/<link\b[^>]*data-mxrb-widget-styles[^>]*>/, stylesheet) if
+          html.include?('data-mxrb-widget-styles')
+        return html unless html.include?('</head>')
+
+        html.sub('</head>', "#{stylesheet}\n</head>")
       end
 
       def navigation_compatibility # rubocop:disable Metrics/MethodLength
