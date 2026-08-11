@@ -97,8 +97,65 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     expect(restored.members['createdDate']).to be_a(Time)
     expect(restored.members['Pet_Owner'].members['Name']).to eq('Ada')
     expect(restored.members['Pet_Friends'].map(&:id)).to eq([second.id])
+    expect(reopened.find('Store.Pet', id)).to equal(restored)
+    expect(reopened.find('Store.Pet', 'missing')).to be_nil
+    reopened.release_cache!
+    expect(reopened.find('Store.Pet', id)).not_to equal(restored)
     expect(reopened.retrieve_association('Pet_Owner', restored.members['Pet_Owner']).map(&:id)).to include(id)
     reopened.close
+  end
+
+  it 'preserves associations on staged records until a batch commit persists them' do
+    store = described_class.new(project, path: @database_path)
+    owner = store.create('Store.Owner')
+    store.commit(owner)
+    pet = store.create('Store.Pet')
+    pet.members['Pet_Owner'] = owner
+
+    expect(store.retrieve('Store.Pet').first.members['Pet_Owner']).to equal(owner)
+
+    store.commit(pet)
+    store.close
+    reopened = described_class.new(project, path: @database_path)
+    restored = reopened.retrieve('Store.Pet').find { _1.id == pet.id }
+    expect(restored.members['Pet_Owner'].id).to eq(owner.id)
+    reopened.close
+  end
+
+  it 'does not overwrite a dirty association while reloading persisted records' do
+    store = described_class.new(project, path: @database_path)
+    owner = store.create('Store.Owner')
+    pet = store.create('Store.Pet')
+    store.commit([owner, pet])
+    store.retrieve('Store.Pet')
+    pet.members['Pet_Owner'] = owner
+
+    expect(store.retrieve('Store.Pet').first.members['Pet_Owner']).to equal(owner)
+
+    store.commit(pet)
+    expect(store.retrieve_association('Pet_Owner', pet).map(&:id)).to eq([owner.id])
+    store.close
+  end
+
+  it 'preserves an unloaded association when committing an object found through its inverse' do
+    store = described_class.new(project, path: @database_path)
+    owner = store.create('Store.Owner')
+    pet = store.create('Store.Pet')
+    pet.members['Pet_Owner'] = owner
+    store.commit([owner, pet])
+    store.release_cache!
+
+    restored_owner = store.find('Store.Owner', owner.id)
+    restored_pet = store.retrieve_association('Store.Pet_Owner', restored_owner).first
+    expect(restored_pet.members).not_to have_key('Pet_Owner')
+
+    restored_pet.members['Name'] = 'still linked'
+    store.commit(restored_pet)
+    store.release_cache!
+
+    restored_owner = store.find('Store.Owner', owner.id)
+    expect(store.retrieve_association('Pet_Owner', restored_owner).map(&:id)).to eq([pet.id])
+    store.close
   end
 
   it 'runs lifecycle hooks in transaction order and rolls database state back on failure' do
@@ -150,6 +207,49 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     store.close
   end
 
+  it 'uses a lightweight transaction snapshot and restores existing object identity' do
+    store = described_class.new(project, path: @database_path)
+    pet = store.create('Store.Pet')
+    pet.members['Name'] = 'saved'
+    store.commit(pet)
+    expect(store).not_to receive(:snapshot)
+
+    expect do
+      store.transaction do
+        pet.members['Name'] = 'rejected'
+        store.commit(pet)
+        store.delete(pet)
+        raise 'stop'
+      end
+    end.to raise_error(RuntimeError, 'stop')
+
+    expect(pet.members['Name']).to eq('saved')
+    expect(store.retrieve('Store.Pet').first).to equal(pet)
+    expect(store.database.transaction_active?).to be(false)
+    store.close
+  end
+
+  it 'restores association arrays mutated in place inside a failed transaction' do
+    store = described_class.new(project, path: @database_path)
+    first = store.create('Store.Pet')
+    second = store.create('Store.Pet')
+    third = store.create('Store.Pet')
+    first.members['Pet_Friends'] = [second]
+    store.commit([first, second, third])
+
+    expect do
+      store.transaction do
+        first.members.fetch('Pet_Friends') << third
+        store.commit(first)
+        raise 'stop'
+      end
+    end.to raise_error(RuntimeError, 'stop')
+
+    expect(first.members.fetch('Pet_Friends').map(&:id)).to eq([second.id])
+    expect(store.retrieve_association('Pet_Friends', first).map(&:id)).to eq([second.id])
+    store.close
+  end
+
   it 'covers transient and mixed persistence paths, global hooks, and disabled events' do
     scratch = entity(
       'Scratch', id: 'scratch', guid: 'scratch',
@@ -166,6 +266,7 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     transient = store.create('Scratch')
     persistent = store.create('Store.Pet', events: false)
     expect(store.retrieve('Scratch')).to eq([transient])
+    expect(store.find('Scratch', transient.id)).to equal(transient)
     expect(store.count('Scratch')).to eq(1)
     store.commit([transient, persistent])
     expect(events).to include(['temporary', described_class], [:global, 'Store.Scratch'])
@@ -411,6 +512,25 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     expect(store.send(:comparable_members, 'values' => [owner, 'raw'], 'owner' => owner)).to eq(
       'values' => [owner.id, 'raw'], 'owner' => owner.id
     )
+    store.close
+  end
+
+  it 'restores staged unit-of-work records and snapshots nested transaction members' do
+    store = described_class.new(project, path: @database_path)
+    staged = store.create('Store.Pet')
+
+    expect(store.find('Store.Pet', staged.id)).to equal(staged)
+    expect(store.send(:transaction_member_snapshot, 'record' => [staged])).to eq('record' => [staged])
+    expect(store.send(:association_dirty?, staged, 'Pet_Owner')).to be(false)
+
+    snapshot = store.snapshot
+    store.rollback(staged)
+    expect(store.find('Store.Pet', staged.id)).to be_nil
+
+    store.restore(snapshot)
+    restored = store.find('Store.Pet', staged.id)
+    expect(restored).to have_attributes(id: staged.id, entity: 'Store.Pet')
+    expect(store.retrieve('Store.Pet')).to contain_exactly(restored)
     store.close
   end
 

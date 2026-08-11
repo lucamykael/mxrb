@@ -1,0 +1,651 @@
+@import "../shared/theme.css";
+
+:root {
+  color-scheme: dark;
+  --domain-chrome: #17191d;
+  --domain-chrome-2: #22252b;
+  --domain-line: #3b414b;
+  --domain-muted: #9ba3af;
+  --domain-accent: #4ea1ff;
+  --domain-canvas: #f4f5f7;
+  --domain-card: #fff;
+  --domain-ink: #252930;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.domain-diagram-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--domain-chrome);
+  color: #e6e9ee;
+  font: 13px Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  user-select: none;
+}
+
+.domain-diagram-root button,
+.domain-diagram-root select,
+.domain-diagram-root input {
+  font: inherit;
+}
+
+.domain-diagram-root .shell {
+  display: grid;
+  grid-template-rows: 42px 38px 1fr 26px;
+  height: 100%;
+}
+
+.domain-diagram-root .titlebar,
+.domain-diagram-root .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-bottom: 1px solid #30343b;
+  background: var(--domain-chrome);
+}
+
+.domain-diagram-root .brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.domain-diagram-root .logo {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 5px;
+  background: linear-gradient(145deg, #64b5ff, #3978db);
+  color: white;
+  font-size: 11px;
+}
+
+.domain-diagram-root .project {
+  color: var(--domain-muted);
+  font-size: 12px;
+}
+
+.domain-diagram-root .spacer {
+  flex: 1;
+}
+
+.domain-diagram-root .divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: #383c43;
+}
+
+.domain-diagram-root .tool {
+  display: inline-flex;
+  align-items: center;
+  height: 27px;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #d5d9df;
+  cursor: pointer;
+}
+
+.domain-diagram-root .tool:hover {
+  border-color: #3c424b;
+  background: #2b2f36;
+}
+
+.domain-diagram-root .tool.primary {
+  border-color: #398ce5;
+  background: #2878d1;
+  color: white;
+}
+
+.domain-diagram-root .tool.primary:hover {
+  background: #3186df;
+}
+
+.domain-diagram-root .tool svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.domain-diagram-root .toolbar {
+  padding-left: 7px;
+  background: var(--domain-chrome-2);
+}
+
+.domain-diagram-root .toolbar select {
+  height: 27px;
+  padding: 0 24px 0 8px;
+  border: 1px solid #3b4048;
+  border-radius: 4px;
+  background: #191b20;
+  color: #ddd;
+}
+
+.domain-diagram-root .zoom {
+  min-width: 48px;
+  color: #bcc2cb;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.domain-diagram-root .workspace {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 226px 1fr 250px;
+}
+
+.domain-diagram-root .sidebar,
+.domain-diagram-root .inspector {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid #343840;
+  background: #202329;
+}
+
+.domain-diagram-root .inspector {
+  border-right: 0;
+  border-left: 1px solid #343840;
+}
+
+.domain-diagram-root .panel-title {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 11px;
+  border-bottom: 1px solid #343840;
+  color: #aeb5c0;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.domain-diagram-root .search {
+  width: calc(100% - 18px);
+  height: 29px;
+  margin: 9px;
+  padding: 0 9px;
+  border: 1px solid #393e47;
+  border-radius: 4px;
+  outline: none;
+  background: #17191d;
+  color: #e8ebef;
+}
+
+.domain-diagram-root .search:focus {
+  border-color: var(--domain-accent);
+}
+
+.domain-diagram-root .module {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-left: 3px solid transparent;
+  color: #c7ccd4;
+  cursor: pointer;
+}
+
+.domain-diagram-root .module:hover {
+  background: #292d34;
+}
+
+.domain-diagram-root .module.active {
+  border-left-color: var(--domain-accent);
+  background: #2b313a;
+  color: white;
+}
+
+.domain-diagram-root .module .count {
+  margin-left: auto;
+  color: #858e9c;
+  font-size: 11px;
+}
+
+.domain-diagram-root .tree-dot {
+  display: grid;
+  width: 11px;
+  height: 11px;
+  place-items: center;
+  border: 1px solid #7f8997;
+  border-radius: 2px;
+  font-size: 9px;
+}
+
+.domain-diagram-root .module.active .tree-dot {
+  border-color: #66adfa;
+  background: #2878d1;
+}
+
+.domain-diagram-root .panel-actions {
+  display: flex;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.domain-diagram-root .panel-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #74b5ff;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.domain-diagram-root .panel-action:hover {
+  text-decoration: underline;
+}
+
+.domain-diagram-root .viewport {
+  position: relative;
+  overflow: auto;
+  outline: none;
+  background: var(--domain-canvas);
+}
+
+.domain-diagram-root .viewport.grid {
+  background-image:
+    linear-gradient(#dfe2e6 1px, transparent 1px),
+    linear-gradient(90deg, #dfe2e6 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.domain-diagram-root .surface {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.domain-diagram-root .stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6000px;
+  height: 4000px;
+  transform-origin: 0 0;
+}
+
+.domain-diagram-root .connections {
+  position: absolute;
+  inset: 0;
+  width: 6000px;
+  height: 4000px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.domain-diagram-root .edge {
+  fill: none;
+  stroke: #798391;
+  stroke-width: 1.4;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.domain-diagram-root .edge:hover,
+.domain-diagram-root .edge.selected {
+  stroke: #1976d2;
+  stroke-width: 2.5;
+}
+
+.domain-diagram-root .edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.domain-diagram-root .edge-label {
+  fill: #545d69;
+  stroke: #f4f5f7;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  font-size: 10px;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.domain-diagram-root .edge-anchor {
+  stroke: #fff;
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: grab;
+}
+
+.domain-diagram-root .edge-anchor.source {
+  fill: #ef8d22;
+}
+
+.domain-diagram-root .edge-anchor.target {
+  fill: #1976d2;
+}
+
+.domain-diagram-root .edge-anchor:hover {
+  r: 8;
+}
+
+.domain-diagram-root .edge-anchor:active {
+  cursor: grabbing;
+}
+
+.domain-diagram-root .entity {
+  position: absolute;
+  width: 248px;
+  overflow: hidden;
+  border: 1px solid #8993a0;
+  border-radius: 4px;
+  background: var(--domain-card);
+  box-shadow: 0 2px 5px #26313d22;
+  color: var(--domain-ink);
+}
+
+.domain-diagram-root .entity.selected {
+  border-width: 2px;
+  box-shadow: 0 0 0 2px #1976d233;
+}
+
+.domain-diagram-root .entity.match {
+  box-shadow: 0 0 0 3px #ffb30088;
+}
+
+.domain-diagram-root .entity.dim {
+  opacity: 0.32;
+}
+
+.domain-diagram-root .entity.kind-entity {
+  border-color: #4b8bc8;
+}
+
+.domain-diagram-root .entity.kind-dto {
+  border-color: #d2a928;
+}
+
+.domain-diagram-root .entity.kind-oql_view {
+  border-color: #49a566;
+}
+
+.domain-diagram-root .entity-head {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  gap: 8px;
+  padding: 0 9px;
+  border-bottom: 1px solid #c6ccd3;
+  font-weight: 650;
+  cursor: grab;
+}
+
+.domain-diagram-root .kind-entity .entity-head {
+  background: linear-gradient(#e4f1ff, #cfe5fb);
+}
+
+.domain-diagram-root .kind-dto .entity-head {
+  background: linear-gradient(#fff8d8, #f8e9a3);
+}
+
+.domain-diagram-root .kind-oql_view .entity-head {
+  background: linear-gradient(#e5f8e9, #ccebd4);
+}
+
+.domain-diagram-root .entity-head:active {
+  cursor: grabbing;
+}
+
+.domain-diagram-root .kind {
+  display: grid;
+  width: 19px;
+  height: 17px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 8px;
+}
+
+.domain-diagram-root .kind-entity .kind {
+  color: #236ba8;
+}
+
+.domain-diagram-root .kind-dto .kind {
+  color: #8c6b00;
+}
+
+.domain-diagram-root .kind-oql_view .kind {
+  color: #237841;
+}
+
+.domain-diagram-root .entity-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-diagram-root .qualified {
+  margin-left: auto;
+  color: #67717d;
+  font-size: 9px;
+}
+
+.domain-diagram-root .attrs {
+  padding: 3px 0;
+}
+
+.domain-diagram-root .attr {
+  display: grid;
+  height: 23px;
+  align-items: center;
+  grid-template-columns: 17px 1fr auto;
+  gap: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.domain-diagram-root .attr:last-child {
+  border: 0;
+}
+
+.domain-diagram-root .attr-icon {
+  color: #b27a12;
+  font-size: 9px;
+}
+
+.domain-diagram-root .attr-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-diagram-root .attr-type {
+  color: #77818d;
+  font-size: 10px;
+}
+
+.domain-diagram-root .dto {
+  padding: 7px 9px;
+  color: #6e7782;
+  font-style: italic;
+}
+
+.domain-diagram-root .legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #adb5c0;
+  font-size: 11px;
+}
+
+.domain-diagram-root .legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.domain-diagram-root .legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.domain-diagram-root .legend .entity-color {
+  background: #68a8e3;
+}
+
+.domain-diagram-root .legend .dto-color {
+  background: #e2c044;
+}
+
+.domain-diagram-root .legend .oql-color {
+  background: #62ba78;
+}
+
+.domain-diagram-root .handle {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #1976d2;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.domain-diagram-root .entity.selected .handle {
+  display: block;
+}
+
+.domain-diagram-root .handle.north {
+  top: -6px;
+  left: calc(50% - 5px);
+}
+
+.domain-diagram-root .handle.east {
+  top: calc(50% - 5px);
+  right: -6px;
+}
+
+.domain-diagram-root .handle.south {
+  bottom: -6px;
+  left: calc(50% - 5px);
+}
+
+.domain-diagram-root .handle.west {
+  top: calc(50% - 5px);
+  left: -6px;
+}
+
+.domain-diagram-root .empty {
+  padding: 18px 12px;
+  color: #8d96a3;
+  line-height: 1.55;
+}
+
+.domain-diagram-root .section {
+  padding: 11px;
+  border-bottom: 1px solid #343840;
+}
+
+.domain-diagram-root .section h3 {
+  margin: 0 0 10px;
+  color: #9da6b3;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.domain-diagram-root .field {
+  margin: 9px 0;
+}
+
+.domain-diagram-root .field label {
+  display: block;
+  margin-bottom: 5px;
+  color: #aeb5bf;
+  font-size: 11px;
+}
+
+.domain-diagram-root .field select {
+  width: 100%;
+  height: 29px;
+  padding: 0 7px;
+  border: 1px solid #3d424b;
+  border-radius: 4px;
+  background: #17191d;
+  color: #e3e7ed;
+}
+
+.domain-diagram-root .meta {
+  color: #c8cdd5;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.domain-diagram-root .meta small {
+  display: block;
+  color: #848d9a;
+}
+
+.domain-diagram-root .hint {
+  color: #8d96a3;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.domain-diagram-root .statusbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 9px;
+  border-top: 1px solid #30343b;
+  background: #1b1d21;
+  color: #8f98a5;
+  font-size: 11px;
+}
+
+.domain-diagram-root .statusbar .ok {
+  color: #64c68a;
+}
+
+.domain-diagram-root .statusbar .dirty {
+  color: #e8b55c;
+}
+
+.domain-diagram-root .toast {
+  position: fixed;
+  right: 18px;
+  bottom: 40px;
+  padding: 10px 13px;
+  border: 1px solid #3f4650;
+  border-radius: 5px;
+  opacity: 0;
+  background: #252a31;
+  box-shadow: 0 8px 25px #0006;
+  transform: translateY(8px);
+  transition: 0.18s;
+  pointer-events: none;
+}
+
+.domain-diagram-root .toast.show {
+  opacity: 1;
+  transform: none;
+}
+
+.domain-diagram-root .toast.error {
+  border-color: #b84b4b;
+  color: #ffb0b0;
+}

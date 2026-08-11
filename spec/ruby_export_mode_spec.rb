@@ -93,10 +93,21 @@ RSpec.describe 'Ruby application export mode' do
         'function BoundField', "method: 'PATCH'", 'function DataGrid',
         'mxrb-grid-pagination', "api('/api/login'", 'localStorage.setItem(TOKEN_KEY',
         'headers.Authorization = `Bearer ${token}`', "api('/api/session'", "api('/api/logout'",
-        'payload.records || []', 'records.slice(', "method: 'POST'", "method: 'DELETE'", '>Reload</button>'
+        'payload.records || []', 'records.slice(', "method: 'POST'", "method: 'DELETE'", '>Reload</button>',
+        'entityCollectionPath(options.entity, options.association, pageContext)',
+        'association, context_type: context.type, context_id: context.id',
+        'if (payload.context) setPageContext(payload.context)',
+        'const activeContext = pageContext || contextOverride;',
+        'if (invocationInFlight.current) return Promise.resolve(null)',
+        '|| payload.context || payload.result || null'
+      )
+      expect(File.read(File.join(root, 'frontend', 'src', 'app.css'))).to include(
+        ".mxrb-page[aria-busy='true'] { cursor: progress; pointer-events: none; }"
       )
       expect(frontend_source).to include('module.enumerations || []', 'enumeration?.values || []')
       expect(frontend_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
+      expect(frontend_source.scan('const activeContext = pageContext || contextOverride;').size).to eq(1)
+      expect(frontend_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(1)
       adapter_source = File.read(File.join(root, 'config', 'adapters.rb'))
       expect(adapter_source).to include(
         'Registry.register_adapter(:app_service)',
@@ -113,7 +124,10 @@ RSpec.describe 'Ruby application export mode' do
       expect(sales.fetch('services').map { _1.fetch('name') }).to include('Sales.Ping')
       expect(sales.fetch('services').first).to have_key('allowed_module_roles')
       expect(sales.fetch('associations')).to include(
-        include('name' => 'Sales.Order_Customer', 'type' => 'Reference')
+        include(
+          'name' => 'Sales.Order_Customer', 'type' => 'Reference',
+          'from_entity' => 'Sales.Order', 'to_entity' => 'Sales.Customer'
+        )
       )
       expect(sales.fetch('enumerations')).to include(
         include(
@@ -148,7 +162,8 @@ RSpec.describe 'Ruby application export mode' do
         .to eq(serialized.fetch(:id))
       changed_context = JSON.parse(JSON.generate(serialized))
       changed_context.fetch('attributes')['Number'] = 'SO-2'
-      application.invoke_service('Sales.Ping', '__mxrb_context' => changed_context)
+      invocation = application.invoke_service('Sales.Ping', '__mxrb_context' => changed_context)
+      expect(invocation.dig(:context, :attributes, 'Number')).to eq('SO-2')
       expect(application.records('Sales.Order').first.dig(:attributes, 'Number')).to eq('SO-2')
       parent = Mxrb::Runtime::Native::ObjectValue.new(entity: 'Sales.Order', id: 'parent', members: {})
       child = Mxrb::Runtime::Native::ObjectValue.new(entity: 'Sales.Order', id: 'child', members: {})

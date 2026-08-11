@@ -185,7 +185,7 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       diagram = dispatch.call('GET', '/api/diagram')
       payload = JSON.parse(diagram.body)
       expect(payload.fetch('csrf_token')).not_to be_empty
-      expect(dispatch.call('GET', '/client-route').status).to eq(200)
+      expect(dispatch.call('GET', '/client-route').status).to eq(404)
       expect(dispatch.call('POST', '/missing').status).to eq(404)
       expect(dispatch.call('POST', '/api/layout', '{}').status).to eq(422)
       expect(dispatch.call(

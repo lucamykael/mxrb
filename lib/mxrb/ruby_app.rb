@@ -3,6 +3,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'monitor'
 require 'uri'
 require 'webrick'
 require_relative 'ruby_app/session_manager'
@@ -328,6 +329,7 @@ module Mxrb
 
       def initialize(root, environment: nil, process: ENV)
         @root = File.expand_path(root)
+        @runtime_monitor = Monitor.new
         @manifest = Manifest.load(@root)
         @environment = if environment.is_a?(Environment)
                          environment
@@ -351,25 +353,35 @@ module Mxrb
       end
 
       def call_service(name, arguments = {}, synchronized_context: nil, context: nil)
-        implementation = Registry.fetch(:service, name.to_s)
-        raise NativeRuntimeError, "microflow #{name} not found" unless implementation || microflow_exists?(name)
+        runtime_synchronize do
+          implementation = Registry.fetch(:service, name.to_s)
+          raise NativeRuntimeError, "microflow #{name} not found" unless implementation || microflow_exists?(name)
 
-        authorize_document!(:microflow, name, :execute, context)
-        normalized = arguments.to_h.transform_values { deserialize(_1, context:) }
-        synchronize_context(synchronized_context, context:) if synchronized_context
-        return native_call(name, normalized, context:) unless implementation
+          authorize_document!(:microflow, name, :execute, context)
+          normalized = arguments.to_h.transform_values { deserialize(_1, context:) }
+          synchronize_context(synchronized_context, context:) if synchronized_context
+          next native_call(name, normalized, context:) unless implementation
 
-        keyword_arguments = normalized.transform_keys(&:to_sym)
-        implementation.new(self, context:).call(**keyword_arguments)
+          keyword_arguments = normalized.transform_keys(&:to_sym)
+          implementation.new(self, context:).call(**keyword_arguments)
+        end
       end
 
       def invoke_service(name, arguments = nil, context: nil, **keyword_arguments)
-        arguments = keyword_arguments if arguments.nil?
-        bridge.interpreter.clear_effects!
-        invocation_arguments = arguments.to_h.dup
-        synchronized_context = invocation_arguments.delete('__mxrb_context')
-        result = call_service(name, invocation_arguments, synchronized_context:, context:)
-        { result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:) }
+        runtime_synchronize do
+          arguments = keyword_arguments if arguments.nil?
+          bridge.interpreter.clear_effects!
+          invocation_arguments = arguments.to_h.dup
+          synchronized_context = invocation_arguments.delete('__mxrb_context')
+          active_context = synchronize_context(synchronized_context, context:) if synchronized_context
+          result = call_service(name, invocation_arguments, context:)
+          {
+            result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:),
+            context: serialize(active_context, context:)
+          }
+        ensure
+          release_runtime_cache
+        end
       end
 
       def rest_routes
@@ -393,61 +405,87 @@ module Mxrb
       end
 
       def native_call(name, arguments = {}, context: nil)
-        authorize_document!(:microflow, name, :execute, context)
-        serialize(
-          bridge.interpreter.call(name.to_s, arguments.to_h.transform_keys(&:to_s), context:), context:
-        )
+        runtime_synchronize do
+          authorize_document!(:microflow, name, :execute, context)
+          serialize(
+            bridge.interpreter.call(name.to_s, arguments.to_h.transform_keys(&:to_s), context:), context:
+          )
+        end
       end
 
-      def records(name, context: nil)
-        values = bridge.interpreter.store.retrieve(name.to_s)
-        values = access_control.filter_readable(name.to_s, values, context:) if context
-        values.map { serialize(_1, context:) }
+      def records(name, context: nil, association: nil, context_type: nil, context_id: nil)
+        runtime_synchronize do
+          filter = [association, context_type, context_id]
+          if filter.any? && !filter.all? { !_1.to_s.empty? }
+            raise ArgumentError,
+                  'association filter requires association, context_type, and context_id'
+          end
+          store = bridge.interpreter.store
+          values = if filter.all? { !_1.to_s.empty? }
+                     parent = store.find(context_type.to_s, context_id.to_s)
+                     parent ? store.retrieve_association(association.to_s, parent) : []
+                   else
+                     store.retrieve(name.to_s)
+                   end
+          values = values.select { _1.entity == name.to_s }
+          values = access_control.filter_readable(name.to_s, values, context:) if context
+          values.map { serialize(_1, context:) }
+        ensure
+          release_runtime_cache
+        end
       end
 
       def record(name, id, context: nil)
-        value = bridge.interpreter.store.retrieve(name.to_s).find { _1.id == id.to_s }
-        return unless value
-        return unless !context || access_control.entity_allowed?(name, action: :read, context:, record: value)
+        runtime_synchronize do
+          value = bridge.interpreter.store.find(name.to_s, id.to_s)
+          next unless value
+          next unless !context || access_control.entity_allowed?(name, action: :read, context:, record: value)
 
-        serialize(value, context:)
-      end
-
-      def create_record(name, attributes = nil, context: nil, **keyword_attributes)
-        attributes = keyword_attributes if attributes.nil?
-        authorize_entity!(name, :create, context)
-        bridge.interpreter.store.transaction do
-          value = bridge.interpreter.store.create(name.to_s)
-          attributes.to_h.each do |member, member_value|
-            authorize_entity!(name, :write, context, member: member, record: value)
-            value.members[member.to_s] = member_value
-          end
-          bridge.interpreter.store.commit(value)
           serialize(value, context:)
         end
       end
 
-      def delete_record(name, id, context: nil)
-        value = bridge.interpreter.store.retrieve(name.to_s).find { _1.id == id.to_s }
-        return false unless value
+      def create_record(name, attributes = nil, context: nil, **keyword_attributes)
+        runtime_synchronize do
+          attributes = keyword_attributes if attributes.nil?
+          authorize_entity!(name, :create, context)
+          bridge.interpreter.store.transaction do
+            value = bridge.interpreter.store.create(name.to_s)
+            attributes.to_h.each do |member, member_value|
+              authorize_entity!(name, :write, context, member: member, record: value)
+              value.members[member.to_s] = member_value
+            end
+            bridge.interpreter.store.commit(value)
+            serialize(value, context:)
+          end
+        end
+      end
 
-        authorize_entity!(name, :delete, context, record: value)
-        bridge.interpreter.store.delete(value)
-        true
+      def delete_record(name, id, context: nil)
+        runtime_synchronize do
+          value = bridge.interpreter.store.find(name.to_s, id.to_s)
+          next false unless value
+
+          authorize_entity!(name, :delete, context, record: value)
+          bridge.interpreter.store.delete(value)
+          true
+        end
       end
 
       def update_record(name, id, attributes, context: nil)
-        value = bridge.interpreter.store.retrieve(name.to_s).find { _1.id == id.to_s }
-        return unless value
+        runtime_synchronize do
+          value = bridge.interpreter.store.find(name.to_s, id.to_s)
+          next unless value
 
-        authorize_entity!(name, :write, context, record: value)
-        bridge.interpreter.store.transaction do
-          attributes.to_h.each do |member, member_value|
-            authorize_entity!(name, :write, context, member: member, record: value)
-            value.members[member.to_s] = deserialize(member_value)
+          authorize_entity!(name, :write, context, record: value)
+          bridge.interpreter.store.transaction do
+            attributes.to_h.each do |member, member_value|
+              authorize_entity!(name, :write, context, member: member, record: value)
+              value.members[member.to_s] = deserialize(member_value)
+            end
+            bridge.interpreter.store.commit(value)
+            serialize(value, context:)
           end
-          bridge.interpreter.store.commit(value)
-          serialize(value, context:)
         end
       end
 
@@ -489,6 +527,10 @@ module Mxrb
       end
 
       private
+
+      def runtime_synchronize(&block)
+        (@runtime_monitor ||= Monitor.new).synchronize(&block)
+      end
 
       def microflow_exists?(name)
         bridge.project.modules.any? do |mod|
@@ -677,7 +719,7 @@ module Mxrb
       def deserialize(value = nil, context: nil, synchronize: false, **keyword_value)
         value = keyword_value if value.nil? && !keyword_value.empty?
         if value.is_a?(Hash) && value['id'] && value['type']
-          object = bridge.interpreter.store.retrieve(value['type'].to_s).find { _1.id == value['id'].to_s }
+          object = bridge.interpreter.store.find(value['type'].to_s, value['id'].to_s)
           raise NativeRuntimeError, "object #{value['type']} #{value['id']} not found" unless object
 
           value.fetch('attributes', {}).each do |member, member_value|
@@ -700,13 +742,51 @@ module Mxrb
 
       def synchronize_context(value, context:)
         store = bridge.interpreter.store
-        return deserialize(value, context:, synchronize: true) unless store.respond_to?(:transaction)
+        object = deserialize(value, context:)
+        return object unless object.is_a?(Runtime::Native::ObjectValue) && value.is_a?(Hash)
 
-        store.transaction do
-          result = deserialize(value, context:, synchronize: true)
-          store.commit(result) if result.is_a?(Runtime::Native::ObjectValue) && store.respond_to?(:commit)
-          result
+        changes = value.fetch('attributes', {}).filter_map do |member, member_value|
+          resolved = deserialize(member_value, context:)
+          [member.to_s, resolved] unless context_values_equal?(object.members[member.to_s], resolved)
         end
+        return object if changes.empty?
+
+        apply = lambda do
+          changes.each do |member, member_value|
+            authorize_entity!(object.entity, :write, context, member:, record: object)
+            object.members[member] = member_value
+          end
+          store.commit(object) if store.respond_to?(:commit)
+          object
+        end
+        return apply.call unless store.respond_to?(:transaction)
+
+        store.transaction { apply.call }
+      end
+
+      def context_values_equal?(current, incoming)
+        if current.is_a?(Runtime::Native::ObjectValue) || incoming.is_a?(Runtime::Native::ObjectValue)
+          return current.is_a?(Runtime::Native::ObjectValue) &&
+                 incoming.is_a?(Runtime::Native::ObjectValue) &&
+                 current.entity == incoming.entity && current.id == incoming.id
+        end
+        if current.is_a?(Array) || incoming.is_a?(Array)
+          return false unless current.is_a?(Array) && incoming.is_a?(Array) && current.size == incoming.size
+
+          return current.zip(incoming).all? { context_values_equal?(_1, _2) }
+        end
+        if current.respond_to?(:iso8601) && incoming.is_a?(String)
+          return Time.parse(incoming).to_i == Time.parse(current.iso8601).to_i
+        end
+
+        current == incoming
+      rescue ArgumentError
+        false
+      end
+
+      def release_runtime_cache
+        store = bridge.interpreter.store
+        store.release_cache! if store.respond_to?(:release_cache!)
       end
     end
 
@@ -971,8 +1051,16 @@ module Mxrb
 
         if (tail = route_name(path, '/api/entities/'))
           name, id = tail.split('/', 2)
-          return render_json(response, 200, records: application.records(name, context:)) \
-            if method == 'GET' && id.nil?
+          if method == 'GET' && id.nil?
+            query = request.query.to_h
+            records = application.records(
+              name, context:,
+                    association: query['association'],
+                    context_type: query['context_type'],
+                    context_id: query['context_id']
+            )
+            return render_json(response, 200, records:)
+          end
 
           if method == 'GET' && id
             record = application.record(name, id, context:)

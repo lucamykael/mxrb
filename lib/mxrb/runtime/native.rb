@@ -52,10 +52,13 @@ module Mxrb
 
         def retrieve(entity) = @records[entity].dup
 
+        def find(entity, id) = @records[entity].find { _1.id == id.to_s }
+
         def retrieve_association(association, start)
-          direct = Array(start&.members&.[](association))
+          member = association.to_s.split('.').last
+          direct = Array(start&.members&.[](association) || start&.members&.[](member))
           inverse = @records.values.flatten.select do |object|
-            Array(object.members[association]).include?(start)
+            Array(object.members[association] || object.members[member]).include?(start)
           end
           (direct + inverse).uniq
         end
@@ -660,13 +663,18 @@ module Mxrb
             end
 
             edges = outgoing[identifier(current)] || []
+            error_edge = edges.find { _1['IsErrorHandler'] == true }
+            action_snapshot = nil
             begin
-              action_snapshot = store.snapshot if type == 'Microflows$ActionActivity'
+              if type == 'Microflows$ActionActivity' && error_edge &&
+                 current.dig('Action', 'ErrorHandlingType') == 'Rollback'
+                action_snapshot = store.snapshot
+              end
               execute_action(current['Action'], variables) if type == 'Microflows$ActionActivity'
               execute_loop(current, outgoing, variables, label:) if type == 'Microflows$LoopedActivity'
               edge = select_edge(current, edges.reject { _1['IsErrorHandler'] == true }, variables)
             rescue StandardError => e
-              edge = edges.find { _1['IsErrorHandler'] == true }
+              edge = error_edge
               raise unless edge
 
               if action_snapshot && current.dig('Action', 'ErrorHandlingType') == 'Rollback'

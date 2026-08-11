@@ -175,6 +175,7 @@ RSpec.describe 'Ruby application defensive coverage' do
       Mxrb::Runtime::Native::ObjectValue.new(entity:, id: '1', members: {})
     end
     allow(store).to receive(:retrieve).and_return([])
+    allow(store).to receive(:find).and_return(nil)
     service = { 'parameters' => [{ 'name' => 'Input', 'entity' => 'M.E', 'required' => true }] }
     args = app.send(:request_arguments, service, {}, {}, { 'Name' => 'Ada' })
     expect(args['Input'].members).to eq('Name' => 'Ada')
@@ -186,7 +187,7 @@ RSpec.describe 'Ruby application defensive coverage' do
     child = Mxrb::Runtime::Native::ObjectValue.new(entity: 'M.E', id: '2', members: { 'Secret' => 1 })
     expect(app.send(:serialize, child, {}, context: Object.new)).to include(type: 'M.E')
     expect(app.send(:serialize, { a: [child] })).to include(a: [include(id: '2')])
-    allow(store).to receive(:retrieve).with('M.E').and_return([child])
+    allow(store).to receive(:find).with('M.E', '2').and_return(child)
     restored = app.send(
       :deserialize,
       { 'id' => '2', 'type' => 'M.E', 'attributes' => { 'Name' => ['A'] } },
@@ -196,6 +197,20 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect { app.send(:deserialize, { 'id' => 'missing', 'type' => 'M.E' }) }
       .to raise_error(Mxrb::NativeRuntimeError, /not found/)
     expect(app.send(:deserialize, { 'a' => [1] })).to eq('a' => [1])
+
+    parent = Mxrb::Runtime::Native::ObjectValue.new(entity: 'M.Parent', id: 'p1', members: {})
+    allow(store).to receive(:find).with('M.Parent', 'p1').and_return(parent)
+    allow(store).to receive(:find).with('M.Parent', 'missing').and_return(nil)
+    allow(store).to receive(:retrieve_association).with('M.E_Parent', parent).and_return([child])
+    expect(
+      app.records(
+        'M.E', association: 'M.E_Parent', context_type: 'M.Parent', context_id: 'p1'
+      )
+    ).to contain_exactly(include(id: '2', type: 'M.E'))
+    expect(app.records('M.E', association: 'M.E_Parent', context_type: 'M.Parent', context_id: 'missing'))
+      .to eq([])
+    expect { app.records('M.E', association: 'M.E_Parent') }
+      .to raise_error(ArgumentError, /requires association, context_type, and context_id/)
   end
 
   it 'covers server routing, REST, errors, static assets, and Rack adaptation' do
@@ -225,6 +240,15 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(dispatch.call('/api/pages/M.Home').status).to eq(200)
     expect(dispatch.call('/api/microflows/M.Run', 'POST', '{}').status).to eq(200)
     expect(dispatch.call('/api/entities/M.E').status).to eq(200)
+    expect(
+      dispatch.call(
+        '/api/entities/M.E', 'GET', '',
+        'association' => 'M.E_Parent', 'context_type' => 'M.Parent', 'context_id' => 'p1'
+      ).status
+    ).to eq(200)
+    expect(app).to have_received(:records).with(
+      'M.E', context:, association: 'M.E_Parent', context_type: 'M.Parent', context_id: 'p1'
+    )
     expect(dispatch.call('/api/entities/M.E/1').status).to eq(404)
     allow(app).to receive(:record).and_return(id: '1')
     expect(dispatch.call('/api/entities/M.E/1').status).to eq(200)

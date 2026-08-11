@@ -28,6 +28,16 @@ RSpec.describe 'MXRB UML diagrams' do
     end
   end
 
+  def stub_web_ui(directory)
+    root = File.join(directory, 'web-ui')
+    FileUtils.mkdir_p(File.join(root, 'assets'))
+    File.binwrite(File.join(root, 'domain.html'), '<!doctype html><title>Domain bundle</title>')
+    File.binwrite(File.join(root, 'uml.html'), '<!doctype html><title>UML bundle</title>')
+    File.binwrite(File.join(root, 'assets', 'uml.js'), 'globalThis.mxrbUml = true')
+    File.binwrite(File.join(root, 'assets', 'mark.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    allow(Mxrb::WebUi).to receive(:root).and_return(root)
+  end
+
   around do |example|
     Dir.mktmpdir do |dir|
       @path = File.join(dir, 'Shop.mpr')
@@ -189,6 +199,7 @@ RSpec.describe 'MXRB UML diagrams' do
   end
 
   it 'serves all UML endpoints through the loopback-only viewer' do
+    stub_web_ui(File.dirname(@path))
     server = Mxrb::Uml::Server.new(@path)
     request_class = Struct.new(:request_method, :path, :query)
     response_class = Struct.new(:status, :body, :headers) do
@@ -202,7 +213,19 @@ RSpec.describe 'MXRB UML diagrams' do
       response
     end
 
-    expect(dispatch.call('GET', '/').body).to include('MXRB UML', 'mermaid@11')
+    root = dispatch.call('GET', '/')
+    expect(root.body).to include('UML bundle')
+    expect(root.headers).to include(
+      'Content-Type' => 'text/html; charset=utf-8',
+      'Cache-Control' => 'no-store', 'X-Content-Type-Options' => 'nosniff'
+    )
+    script = dispatch.call('GET', '/assets/uml.js')
+    expect(script.body).to eq('globalThis.mxrbUml = true')
+    expect(script.headers['Content-Type']).to eq('application/javascript; charset=utf-8')
+    expect(dispatch.call('GET', '/assets/mark.svg').headers['Content-Type'])
+      .to eq('image/svg+xml; charset=utf-8')
+    expect(dispatch.call('GET', '/assets/missing.js').status).to eq(404)
+    expect(dispatch.call('GET', '/assets/%2e%2e/uml.html').status).to eq(404)
     expect(JSON.parse(dispatch.call('GET', '/api/catalog').body)).to include('modules', 'microflows')
     expect(JSON.parse(dispatch.call('GET', '/api/class', 'modules' => 'Sales').body))
       .to include('mermaid', 'plantuml')

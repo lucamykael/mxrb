@@ -37,6 +37,17 @@ RSpec.describe Mxrb::DomainDiagram, 'complete main implementation paths' do
     response
   end
 
+  def stub_web_ui(directory) # rubocop:disable Metrics/AbcSize
+    root = File.join(directory, 'web-ui')
+    FileUtils.mkdir_p(File.join(root, 'assets'))
+    File.binwrite(File.join(root, 'domain.html'), '<!doctype html><title>Domain bundle</title>')
+    File.binwrite(File.join(root, 'uml.html'), '<!doctype html><title>UML bundle</title>')
+    File.binwrite(File.join(root, 'assets', 'domain.js'), 'globalThis.mxrbDomain = true')
+    File.binwrite(File.join(root, 'assets', 'domain.css'), 'body { color: #123; }')
+    File.binwrite(File.join(root, 'assets', 'data.bin'), "\x00\x01")
+    allow(Mxrb::WebUi).to receive(:root).and_return(root)
+  end
+
   it 'closes defensively and skips modules or associations without model endpoints' do
     allow(Mxrb::Model::Project).to receive(:open).and_raise(Errno::ENOENT, 'missing')
     expect { described_class::Document.new('/missing').to_h }.to raise_error(Errno::ENOENT)
@@ -190,9 +201,28 @@ RSpec.describe Mxrb::DomainDiagram, 'complete main implementation paths' do
   it 'dispatches HTML, layout writes, fallback routes, and validation failures' do
     Dir.mktmpdir do |directory|
       source, output = server_files(directory)
+      stub_web_ui(directory)
       server = described_class::Server.new(source, output:)
-      expect(dispatch(server, 'GET', '/').status).to eq(200)
-      expect(dispatch(server, 'GET', '/client/route').headers['Content-Type']).to include('text/html')
+      root = dispatch(server, 'GET', '/')
+      expect(root.status).to eq(200)
+      expect(root.body).to include('Domain bundle')
+      expect(root.headers).to include(
+        'Content-Type' => 'text/html; charset=utf-8',
+        'Cache-Control' => 'no-store', 'X-Content-Type-Options' => 'nosniff'
+      )
+
+      script = dispatch(server, 'GET', '/assets/domain.js')
+      expect(script.status).to eq(200)
+      expect(script.body).to eq('globalThis.mxrbDomain = true')
+      expect(script.headers['Content-Type']).to eq('application/javascript; charset=utf-8')
+      expect(dispatch(server, 'GET', '/assets/domain.css').headers['Content-Type'])
+        .to eq('text/css; charset=utf-8')
+      expect(dispatch(server, 'GET', '/assets/data.bin').headers['Content-Type'])
+        .to eq('application/octet-stream')
+      expect(dispatch(server, 'GET', '/assets/missing.js').status).to eq(404)
+      expect(dispatch(server, 'GET', '/assets/../domain.html').status).to eq(404)
+      expect(dispatch(server, 'GET', '/assets/%252e%252e/domain.html').status).to eq(404)
+      expect(dispatch(server, 'GET', '/client/route').status).to eq(404)
       expect(dispatch(server, 'POST', '/client/route').status).to eq(404)
 
       writer = instance_double(described_class::LayoutWriter, apply!: 3)

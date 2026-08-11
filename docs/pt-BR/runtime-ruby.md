@@ -70,3 +70,39 @@ com seu nome e a instrução de registro; não há descoberta de classes, execu�
 de JAR nem fallback para a JVM. REST, app services, SOAP, mappings e geração de
 documentos continuam usando os adapters Ruby por tipo. O frontend permanece
 JavaScript/React no navegador, servido pelo backend Ruby sem Runtime Java.
+
+## Certificação Ruby → Mendix → Ruby
+
+O cenário reproduzível de certificação fica em
+[`spec/fixtures/flymetothemoon/project.rb`](../../spec/fixtures/flymetothemoon/project.rb).
+Ele modela em Ruby clientes, produtos, pedidos e itens, incluindo enumeração,
+índices, associações, microflows, nanoflow, scheduled event e uma página com
+data grid. O teste
+[`spec/flymetothemoon_roundtrip_spec.rb`](../../spec/flymetothemoon_roundtrip_spec.rb)
+verifica estes casos de uso:
+
+- gerar e validar um MPR Mendix 11.12.1 a partir da DSL Ruby;
+- exportar pelo CLI real com `--mode ruby --flymetothemoon`;
+- garantir que o preset contenha Sinatra, Puma, ActiveRecord e RSpec, sem
+  arquivos Java, JAR ou bytecode;
+- executar criação, contagem, decisão, CRUD e metadados de página no Runtime
+  Ruby com SQLite;
+- recompilar sem alterações e comparar o MPR estruturalmente com a origem;
+- adicionar um atributo e substituir um microflow por Ruby idiomático;
+- exportar novamente e provar que código Ruby e modelo Mendix sobrevivem a um
+  segundo round-trip estruturalmente idêntico.
+
+Execute o caso isolado com:
+
+```bash
+bundle exec rspec spec/flymetothemoon_roundtrip_spec.rb
+```
+
+Para interfaces geradas, o cenário declarativo
+[`spec/fixtures/frontend_browser/sudoku_full_flow.json`](../../spec/fixtures/frontend_browser/sudoku_full_flow.json)
+é executado pelo runner `script/frontend_browser_acceptance` em Chromium real.
+Ele cobre as posições 73 e 74 do tabuleiro, seleção, preenchimento e troca entre
+Easy, Medium e Hard. Cada clique crítico aguarda a cadeia POST do microflow + GET
+da associação e deve concluir em até 250 ms. A consulta da galeria é filtrada no
+SQLite pelo contexto; objetos carregados pela associação inversa preservam o
+vínculo quando somente atributos são salvos.

@@ -135,7 +135,8 @@ RSpec.describe 'Ruby application internal contracts' do
     ).once.and_return(true)
     app.send(:authorize_entity!, 'M.E', :read, Object.new)
     allow(store).to receive(:retrieve).with('M.E').and_return([native])
-    allow(store).to receive(:retrieve).with('Missing').and_return([])
+    allow(store).to receive(:find).with('M.E', '1').and_return(native)
+    allow(store).to receive(:find).with('Missing', '1').and_return(nil)
     allow(store).to receive(:transaction).and_yield
     allow(store).to receive(:create).and_return(native)
     allow(store).to receive_messages(commit: native, delete: true)
@@ -159,6 +160,8 @@ RSpec.describe 'Ruby application internal contracts' do
     expect { app.call_service('Missing') }.to raise_error(Mxrb::NativeRuntimeError)
     allow(project).to receive(:modules).and_return([double(name: 'M', microflows: [double(name: 'Native')])])
     expect(app.call_service('M.Native')).to eq('native')
+    synchronized_context = { 'id' => '1', 'type' => 'M.E', 'attributes' => { 'Name' => 'Synchronized' } }
+    expect(app.call_service('M.Native', {}, synchronized_context:, context: Object.new)).to eq('native')
     expect(app.invoke_service('M.Ruby', value: 2)).to include(result: 2)
     expect(app.native_call('M.Native', { value: 1 }, context: Object.new)).to eq('native')
   end
