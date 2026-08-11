@@ -99,6 +99,15 @@ RSpec.describe Mxrb::Compiler do
     expect(source.optimized_web_client?).to be(true)
   end
 
+  it 'does not expose excluded pages to the web client' do
+    source = described_class::SourceModel.allocate
+    excluded = described_class::SourceModel::Unit.new(
+      'page', nil, nil, { '$Type' => 'Forms$Page', 'Excluded' => true }, 'App'
+    )
+
+    expect(source.web_page?(excluded)).to be(false)
+  end
+
   it 'creates new Mendix 10 projects with the optimized client' do
     Dir.mktmpdir do |root|
       path = File.join(root, 'Optimized.mpr')

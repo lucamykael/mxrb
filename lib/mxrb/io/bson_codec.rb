@@ -11,7 +11,7 @@ module Mxrb
     #   - Arrays have a 4-byte int32 marker as first element (1=by-name, 2=part-secondary, 3=part-primary)
     #   - $ID can appear as String, BSON Binary, or {Data:, Subtype:} map
     #   - $Type uses storage names ("DomainModels$Entity") not SDK qualified names
-    module BsonCodec
+    module BsonCodec # rubocop:disable Metrics/ModuleLength
       # ── UUID / BLOB conversion ─────────────────────────────────────────────
 
       # Convert a 16-byte MS-GUID blob to UUID string.
@@ -49,11 +49,52 @@ module Mxrb
         when BSON::Binary
           blob_to_uuid(value.data)
         when Hash
+          binary = extended_binary(value)
+          return blob_to_uuid(binary.data) if binary
+
           data = value["Data"] || value[:Data]
           return nil unless data
           blob_to_uuid(Base64.strict_decode64(data.to_s))
         end
       end
+
+      BINARY_SUBTYPES = {
+        "00" => :generic, "01" => :function, "02" => :old_binary,
+        "03" => :uuid_old, "04" => :uuid, "05" => :md5,
+        "80" => :user
+      }.freeze
+
+      # Restores BSON values serialized through JSON's canonical extended form.
+      # Architecture metadata uses JSON, so this conversion is required before
+      # a stored native document is written again during a version transition.
+      def self.restore_extended_json(value)
+        case value
+        when Hash
+          binary = extended_binary(value)
+          return binary if binary
+
+          value.to_h { |key, child| [key, restore_extended_json(child)] }
+        when Array
+          value.map { restore_extended_json(_1) }
+        else
+          value
+        end
+      end
+
+      def self.extended_binary(value)
+        payload = value["$binary"] || value[:$binary]
+        return unless payload.is_a?(Hash)
+
+        base64 = payload["base64"] || payload[:base64]
+        return unless base64
+
+        subtype = payload["subType"] || payload[:subType] || "00"
+        BSON::Binary.new(
+          Base64.strict_decode64(base64.to_s.delete(" \t\r\n")),
+          BINARY_SUBTYPES.fetch(subtype.to_s.downcase, :generic)
+        )
+      end
+      private_class_method :extended_binary
 
       # ── Array parsing ───────────────────────────────────────────────────────
 

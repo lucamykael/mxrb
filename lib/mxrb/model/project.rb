@@ -63,6 +63,9 @@ module Mxrb
         analyzer = Oql::Analyzer.new(dialect:)
         oql_queries.map { analyzer.analyze(_1) }.freeze
       end
+      def sql_to_oql(source, dialect: :postgresql)
+        Oql::ReverseTranslator.new(dialect:, project: self).translate(source)
+      end
 
       # ── Semantic analysis ───────────────────────────────────────────────
 

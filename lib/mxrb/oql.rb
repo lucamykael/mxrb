@@ -154,10 +154,12 @@ module Mxrb
       end
 
       def self.parameters(source)
-        new.send(:tokenize, source).filter_map do |token|
+        tokens(source).filter_map do |token|
           token.text.delete_prefix('$') if token.type == :parameter
         end.uniq.freeze
       end
+
+      def self.tokens(source) = new.send(:tokenize, source.to_s)
 
       def translate_source(source, name: 'AdHoc')
         text = source.to_s
@@ -208,6 +210,7 @@ module Mxrb
         return consume_while(source, index, :space) { SPACE.match?(_1) } if SPACE.match?(char)
         return consume_quoted(source, index, "'", :string) if char == "'"
         return consume_quoted(source, index, '"', :quoted_identifier) if char == '"'
+        return consume_bracket_quoted(source, index) if char == '['
         return consume_line_comment(source, index) if source[index, 2] == '--'
         return consume_block_comment(source, index) if source[index, 2] == '/*'
         return consume_parameter(source, index) if char == '$' && source[index + 1]&.match?(WORD_START)
@@ -244,6 +247,22 @@ module Mxrb
       def consume_line_comment(source, index)
         finish = source.index("\n", index) || source.length
         [:comment, source[index...finish], finish]
+      end
+
+      def consume_bracket_quoted(source, index) # rubocop:disable Metrics/MethodLength
+        finish = index + 1
+        while finish < source.length
+          if source[finish] == ']'
+            finish += 1
+            if source[finish] == ']'
+              finish += 1
+              next
+            end
+            break
+          end
+          finish += 1
+        end
+        [:quoted_identifier, source[index...finish], finish]
       end
 
       def consume_block_comment(source, index)
@@ -387,6 +406,8 @@ module Mxrb
       def identifier_text(token)
         return token.text unless token.type == :quoted_identifier
 
+        return token.text[1...-1].gsub(']]', ']') if token.text.start_with?('[')
+
         token.text[1...-1].gsub('""', '"')
       end
 
@@ -428,3 +449,4 @@ module Mxrb
 end
 
 require_relative 'oql/analyzer'
+require_relative 'oql/reverse_translator'

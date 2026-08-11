@@ -15,6 +15,7 @@ RSpec.describe "localized documentation" do
     validation-matrix.md writing.md oql-sql.md scaffolds.md entity-dsl.md
     platform-operations.md vetclinic-acceptance.md compiler.md team-server.md
     native-runtime-quality-report.md platform-api-integration.md
+    runtime-ruby.md runtime-schema-migrations.md
   ].sort.freeze
 
   it "keeps the same document set in every locale" do
