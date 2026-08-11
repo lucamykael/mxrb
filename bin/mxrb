@@ -62,15 +62,102 @@ def render_index_advice(advice, json:) # rubocop:disable Metrics/AbcSize
   puts '[mxrb] No evidence-backed index candidates' if advice.candidates.empty?
 end
 
+def extract_cli_value!(arguments, name) # rubocop:disable Metrics/AbcSize
+  attached = arguments.select { _1.start_with?("#{name}=") }
+  index = arguments.index(name)
+  raise ArgumentError, "use #{name} only once" if attached.size + (index ? 1 : 0) > 1
+
+  return arguments.delete(attached.first).split('=', 2).last if attached.one?
+  return unless index
+
+  raise ArgumentError, "#{name} requires a value" unless arguments[index + 1]
+
+  arguments.slice!(index, 2).last
+end
+
+def load_environment!(name, root:)
+  Mxrb::Environment.load(name, root:)
+rescue Mxrb::Environment::Error, Mxrb::Environment::InvalidName => e
+  abort "[mxrb] #{e.message}"
+end
+
 SCAFFOLD_COMMANDS = (Mxrb::Scaffold::Help::COMMANDS.keys - ["design"]).freeze
 
 progress_disabled = ARGV.delete("--no-progress")
 command = ARGV.shift
+command = 'diagram-er' if command == 'domain-model'
 Mxrb::Progress.configure(enabled: false) if progress_disabled || ARGV.include?("--json")
+
+command_flags = %w[--commands --comands]
+if command.nil?
+  puts Mxrb::CLI::Help.welcome(release: Mxrb::CLI::Releases.new.status)
+  exit
+elsif %w[--help -h help].include?(command)
+  path = command == 'help' ? ARGV.reject { _1.start_with?('-') } : []
+  puts(path.empty? ? Mxrb::CLI::Help.overview : Mxrb::CLI::Help.command(path))
+  exit
+elsif command_flags.include?(command)
+  puts Mxrb::CLI::Help.commands
+  exit
+elsif (commands_flag = (ARGV & command_flags).first)
+  ARGV.delete(commands_flag)
+  puts Mxrb::CLI::Help.commands(command)
+  exit
+elsif (help_flag = (ARGV & %w[--help -h]).first)
+  help_index = ARGV.index(help_flag)
+  path = [command] + ARGV.take(help_index).reject { _1.start_with?('-') }.take(1)
+  puts Mxrb::CLI::Help.command(path)
+  exit
+end
 
 case command
 when '--version', '-v'
   puts "mxrb #{Mxrb::VERSION}"
+
+when 'changelog'
+  version = ARGV.shift
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  begin
+    release = Mxrb::CLI::Releases.new.changelog(version)
+    puts "#{release.fetch(:title)}#{release[:published_at] ? " (#{release[:published_at]})" : ''}"
+    puts
+    puts release.fetch(:body).empty? ? 'No release notes were published.' : release.fetch(:body)
+    puts
+    puts release.fetch(:url)
+  rescue Mxrb::CLI::ReleaseError => e
+    abort "[mxrb] #{e.message}"
+  end
+
+when 'update'
+  check = !ARGV.delete('--check').nil?
+  show_changelog = !ARGV.delete('--changelog').nil?
+  abort 'Use only one of --check or --changelog' if check && show_changelog
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  begin
+    releases = Mxrb::CLI::Releases.new
+    if show_changelog
+      release = releases.changelog
+      puts "#{release.fetch(:title)}\n\n#{release.fetch(:body)}\n\n#{release.fetch(:url)}"
+    elsif check
+      status = releases.status(force: true)
+      abort '[mxrb] Could not check the latest published version' unless status.latest
+      if status.available?
+        puts "[mxrb] Update available: #{status.installed} -> #{status.latest}"
+        puts '[mxrb] Review it with `mxrb changelog`; install it with `mxrb update`.'
+      else
+        puts "[mxrb] #{status.installed} is the latest published version."
+      end
+    else
+      status = Mxrb::CLI::Updater.new(releases:).update!
+      if status.available?
+        puts "[mxrb] Updated MXRB from #{status.installed} to #{status.latest}."
+      else
+        puts "[mxrb] #{status.installed} is already the latest published version."
+      end
+    end
+  rescue Mxrb::CLI::ReleaseError => e
+    abort "[mxrb] #{e.message}"
+  end
 
 when 'doctor'
   json = ARGV.delete('--json')
@@ -236,6 +323,15 @@ when "generate"
     ENV["MXRB_OUTPUT_PATH"] = File.expand_path(target)
   end
   load File.expand_path(source)
+  generated_path = target || Mxrb.last_defined_path
+  if generated_path && File.file?(generated_path)
+    result = Mxrb.validate(generated_path)
+    result.warnings.each { warn "[mxrb] warning: #{_1}" }
+    unless result.valid?
+      result.errors.each { warn "[mxrb] error: #{_1}" }
+      abort "[mxrb] Generated MPR failed validation"
+    end
+  end
   puts "[mxrb] Generated #{target || 'project from definition'}"
 
 when "widgets"
@@ -306,10 +402,259 @@ when "frontend"
   exit 1 unless plan.safe?
 
 when "export"
-  source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
-  output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir>"
-  destination = Mxrb::Exporter.new(source, output).export!
-  puts "[mxrb] Exported Ruby project to #{destination}"
+  source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir> [--mode mendix|ruby]"
+  output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir> [--mode mendix|ruby]"
+  mode_equals = ARGV.find { _1.start_with?('--mode=') }
+  ARGV.delete(mode_equals) if mode_equals
+  mode_index = ARGV.index("--mode")
+  abort 'Use only one --mode option' if mode_equals && mode_index
+  mode = if mode_equals
+           mode_equals.split('=', 2).last
+         elsif mode_index
+           ARGV.slice!(mode_index, 2).last
+         else
+           'mendix'
+         end
+  abort "--mode requires mendix or ruby" unless %w[mendix ruby].include?(mode)
+  stack_flags = %w[--flymetothemoon --onrails].select { ARGV.delete(_1) }
+  abort 'Use only one of --flymetothemoon or --onrails' if stack_flags.size > 1
+  abort 'Ruby stack presets require --mode ruby' if stack_flags.any? && mode != 'ruby'
+  stack = stack_flags.first&.delete_prefix('--')
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  destination = Mxrb::Exporter.new(source, output, mode:).export!
+  Mxrb::RubyApp::Preset.apply!(destination, stack) if stack
+  suffix = stack ? " with #{stack}" : ''
+  puts "[mxrb] Exported #{mode} project#{suffix} to #{destination}"
+
+when 'diagram-er'
+  lifecycle_action = %w[up down status destroy __serve].include?(ARGV.first) ? ARGV.shift : nil
+  domain_usage = if lifecycle_action
+                   "Usage: mxrb diagram-er #{lifecycle_action} FILE.mpr [options]"
+                 else
+                   'Usage: mxrb diagram-er FILE.mpr [--module NAME] [--output FILE] [--port PORT] [--force]'
+                 end
+  source = ARGV.shift or abort domain_usage
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  modules = []
+  modules_given = false
+  while (index = ARGV.index('--module'))
+    abort '--module requires a value' unless ARGV[index + 1]
+    modules_given = true
+    modules << ARGV.slice!(index, 2).last
+  end
+  output = option.call('--output')
+  port = option.call('--port')
+  token = option.call('--token') if lifecycle_action == '__serve'
+  state_root = option.call('--state-root') if lifecycle_action == '__serve'
+  force = !ARGV.delete('--force').nil?
+  yes = !ARGV.delete('--yes').nil?
+  json = !ARGV.delete('--json').nil?
+  begin
+    if lifecycle_action
+      lifecycle = Mxrb::DomainDiagram::Lifecycle.new(
+        source, state_root: state_root || Mxrb::DomainDiagram::Lifecycle.default_state_root,
+                executable: File.expand_path(__FILE__)
+      )
+      selected_modules = modules if modules_given
+      if lifecycle_action == '__serve' && !(output && port && token && state_root)
+        abort '__serve requires --output, --port, --token, and --state-root'
+      end
+      status = case lifecycle_action
+               when 'up'
+                 abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+                 lifecycle.up(output:, modules: selected_modules, port:, force:)
+               when 'down'
+                 valid = ARGV.empty? && !output && !port && !force && !yes && !json
+                 abort "Unknown arguments: #{ARGV.join(' ')}" unless valid
+                 lifecycle.down
+               when 'status'
+                 abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty? && !output && !port && !force && !yes
+                 lifecycle.status
+               when 'destroy'
+                 abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty? && !output && !port && !force && !json
+                 lifecycle.destroy(confirm: yes)
+               when '__serve'
+                 abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty? && !force && !yes && !json
+                 lifecycle.run_worker(output:, modules:, port:, token:)
+                 exit
+               end
+      if json
+        puts JSON.pretty_generate(status.to_h)
+      else
+        puts "[mxrb] ER diagram: #{status.state}"
+        puts "[mxrb] URL: #{status.url}" if status.url
+        puts "[mxrb] Layout MPR: #{status.output}" if status.output
+        puts "[mxrb] Log: #{status.log}" if status.log
+      end
+      exit
+    end
+
+    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty? && !yes && !json && !token && !state_root
+    server = Mxrb::DomainDiagram::Server.new(
+      source, output:, modules:, port: port || 4568, force:
+    )
+    puts "[mxrb] ER Diagram: http://127.0.0.1:#{port || 4568}"
+    puts "[mxrb] Layout MPR: #{server.output}"
+    puts '[mxrb] Use Exportar PNG in the browser to create the diagram image.'
+    trap('INT') { Thread.new { server.shutdown } }
+    server.start
+  rescue ArgumentError => e
+    abort "[mxrb] #{e.message}"
+  end
+
+when 'uml'
+  uml_usage = 'Usage: mxrb uml FILE.mpr [--export class|activity|sequence] ' \
+              '[--format mermaid|plantuml] [options]'
+  source = ARGV.shift or abort uml_usage
+  pull = lambda do |name|
+    equals = ARGV.find { _1.start_with?("#{name}=") }
+    if equals
+      ARGV.delete(equals)
+      next equals.split('=', 2).last
+    end
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  modules = []
+  loop do
+    value = pull.call('--module')
+    break unless value
+
+    modules << value
+  end
+  export = pull.call('--export')
+  format = pull.call('--format') || 'mermaid'
+  microflow = pull.call('--microflow')
+  root = pull.call('--root')
+  depth = pull.call('--depth') || 2
+  port = pull.call('--port') || 4569
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  abort '--format requires mermaid or plantuml' unless %w[mermaid plantuml].include?(format)
+  abort '--export requires class, activity, or sequence' if export && !%w[class activity sequence].include?(export)
+  begin
+    unless export
+      viewer_options = modules.empty? && !microflow && !root && depth.to_s == '2' && format == 'mermaid'
+      abort 'Viewer mode only accepts --port' unless viewer_options
+
+      server = Mxrb::Uml::Server.new(source, port:)
+      puts "[mxrb] UML viewer: http://127.0.0.1:#{port}"
+      puts '[mxrb] Use Ctrl+C to stop the server.'
+      trap('INT') { Thread.new { server.shutdown } }
+      server.start
+      exit
+    end
+
+    project = Mxrb::Model::Project.open(source)
+    diagram = case export
+              when 'class'
+                selected = project.modules
+                unless modules.empty?
+                  unknown = modules - selected.map(&:name)
+                  raise ArgumentError, "unknown modules: #{unknown.join(', ')}" unless unknown.empty?
+
+                  selected = selected.select { modules.include?(_1.name) }
+                end
+                Mxrb::Uml::ClassDiagram.new(selected)
+              when 'activity'
+                raise ArgumentError, '--microflow is required for activity export' if microflow.to_s.empty?
+
+                module_name, flow_name = microflow.split('.', 2)
+                flow = project.modules.find { _1.name == module_name }&.microflows&.find { _1.name == flow_name }
+                raise ArgumentError, "microflow not found: #{microflow}" unless flow
+
+                Mxrb::Uml::ActivityDiagram.new(flow)
+              when 'sequence'
+                raise ArgumentError, 'use either --root or --module for sequence export' if root && modules.any?
+                raise ArgumentError, '--root or --module is required for sequence export' unless root || modules.one?
+
+                Mxrb::Uml::SequenceDiagram.new(
+                  project.semantic_index, root:, module_name: modules.first, depth:
+                )
+              end
+    puts(format == 'plantuml' ? diagram.to_plantuml : diagram.to_mermaid)
+  rescue ArgumentError, Mxrb::Error => e
+    abort "[mxrb] #{e.message}"
+  ensure
+    project&.close
+  end
+
+when "run"
+  run_usage = <<~USAGE
+    Usage: mxrb run [DIR] [options]
+
+    Start the Ruby backend and React + Vite frontend together.
+
+    Options:
+      --host HOST          Bind host (default: 127.0.0.1)
+      --server-port PORT   Ruby backend port (default: 9292)
+      --client-port PORT   React + Vite port (default: 5173)
+      --environment NAME   Load .env and config/environments/NAME.env
+      --no-frontend        Start only the Ruby backend
+
+    Compatibility aliases: --api-port for --server-port, --port for --client-port.
+    The global --no-progress option is optional and only suppresses progress output.
+  USAGE
+  if %w[-h --help help].include?(ARGV.first)
+    puts run_usage
+    exit
+  end
+  root = ARGV.first&.start_with?("--") ? Dir.pwd : (ARGV.shift || Dir.pwd)
+  environment_name = extract_cli_value!(ARGV, '--environment')
+  option = lambda do |names, fallback|
+    matches = Array(names).filter_map do |name|
+      index = ARGV.index(name)
+      [name, index] if index
+    end
+    abort "Use only one of #{Array(names).join(' or ')}" if matches.size > 1
+    next fallback if matches.empty?
+
+    name, index = matches.first
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  host = option.call("--host", "127.0.0.1")
+  server_port = option.call(%w[--server-port --api-port], 9292)
+  client_port = option.call(%w[--client-port --port], 5173)
+  frontend = !ARGV.delete("--no-frontend")
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  environment = load_environment!(environment_name, root:)
+  supervisor = Mxrb::RubyApp::Supervisor.new(
+    root, host:, api_port: server_port, frontend_port: client_port, frontend:, environment:
+  )
+  puts "[mxrb] Environment: #{environment.name}"
+  puts "[mxrb] Ruby server: http://#{host}:#{server_port}"
+  puts "[mxrb] React client: http://#{host}:#{client_port}" if frontend
+  trap("INT") { Thread.new { supervisor.shutdown } }
+  supervisor.start
+
+when 'env'
+  root = ARGV.first&.start_with?('--') ? Dir.pwd : (ARGV.shift || Dir.pwd)
+  environment_name = extract_cli_value!(ARGV, '--environment')
+  json = ARGV.delete('--json')
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  environment = load_environment!(environment_name, root:)
+  payload = {
+    environment: environment.name, requested: environment.requested_name,
+    root: environment.root, sources: environment.sources,
+    keys: environment.to_h.keys.sort
+  }
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    puts "Environment : #{payload.fetch(:environment)}"
+    puts "Root        : #{payload.fetch(:root)}"
+    payload.fetch(:sources).each { puts "Source      : #{_1}" }
+    puts "Keys        : #{payload.fetch(:keys).join(', ')}"
+  end
 
 when "validate"
   path = ARGV.shift or abort "Usage: mxrb validate <file.mpr>"
@@ -626,6 +971,71 @@ when "oql"
       view.warnings.each { warn "[mxrb] warning: #{_1}" }
     end
   end
+
+when "query"
+  usage = 'Usage: mxrb query "SELECT ..." --from sql|oql ' \
+          '[--to oql|sql] [--dialect ansi|postgresql|sql_server] ' \
+          '[--project FILE.mpr] [--input FILE] [--json]'
+  option = lambda do |name|
+    index = ARGV.index(name)
+    next unless index
+
+    abort "#{name} requires a value" unless ARGV[index + 1]
+    ARGV.slice!(index, 2).last
+  end
+  source_language = option.call('--from') || abort('--from is required: use sql or oql')
+  abort '--from must be sql or oql' unless %w[sql oql].include?(source_language)
+
+  target_language = option.call('--to') || { 'sql' => 'oql', 'oql' => 'sql' }.fetch(source_language)
+  unless [%w[sql oql], %w[oql sql]].include?([source_language, target_language])
+    abort 'Supported query conversions are sql to oql and oql to sql'
+  end
+  dialect = (option.call('--dialect') || 'postgresql').to_sym
+  project_path = option.call('--project')
+  abort '--project applies only when converting SQL to OQL' if project_path && source_language != 'sql'
+
+  input = option.call('--input')
+  json = !ARGV.delete('--json').nil?
+  abort 'Query must be provided either as an argument or through --input' if input && !ARGV.empty?
+  source = if input == '-'
+             $stdin.read
+           elsif input
+             File.read(input)
+           else
+             ARGV.shift || abort(usage)
+           end
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  begin
+    projection = if source_language == 'sql'
+                   if project_path
+                     Mxrb.open(project_path) { _1.sql_to_oql(source, dialect:) }
+                   else
+                     Mxrb::Oql::ReverseTranslator.new(dialect:).translate(source)
+                   end
+                 else
+                   Mxrb::Oql::Translator.new(dialect:).translate_source(source)
+                 end
+  rescue ArgumentError, Mxrb::Error, Errno::ENOENT => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  sql = projection.sql
+  oql = source_language == 'oql' ? projection.query.oql : projection.oql
+  payload = {
+    supported: projection.supported?, from: source_language, to: target_language,
+    sql:, oql:,
+    dialect: projection.dialect, confidence: projection.confidence,
+    parameters: projection.parameters, warnings: projection.warnings
+  }
+  if json
+    puts JSON.pretty_generate(payload)
+  else
+    puts "#{source_language.upcase} source:"
+    puts source
+    puts "#{target_language.upcase} (#{projection.dialect}, #{projection.confidence}):"
+    puts((target_language == 'sql' ? sql : oql) || '(not generated)')
+    projection.warnings.each { warn "[mxrb] warning: #{_1}" }
+  end
+  exit 1 unless projection.supported?
 
 when "analyze"
   option = lambda do |name|
@@ -958,6 +1368,7 @@ when "test"
   plan_only = ARGV.delete("--plan")
   docker = ARGV.delete("--docker")
   native = ARGV.delete("--native")
+  environment_name = extract_cli_value!(ARGV, '--environment')
   abort "--native and --docker are mutually exclusive" if native && docker
   report_option = lambda do |name|
     index = ARGV.index(name)
@@ -988,9 +1399,11 @@ when "test"
                else
                  Mxrb::Runtime::Executor
                end
-    execution = executor.new(
-      path, definition, plan: plan, output: $stdout
-    ).run
+    environment = load_environment!(environment_name, root: File.dirname(File.expand_path(path)))
+    puts "[mxrb] Environment: #{environment.name}"
+    execution = environment.with do
+      executor.new(path, definition, plan: plan, output: $stdout).run
+    end
     execution.result.tests.each do |test|
       puts "[#{test.passed? ? 'pass' : 'fail'}] #{test.name}: #{test.message}"
     end
@@ -1487,13 +1900,29 @@ when "tree"
   end
 
 when "init"
-  name = ARGV.shift or abort "Usage: mxrb init <project_name> [--mxrb-path DIR]"
+  name = ARGV.shift or abort "Usage: mxrb init <project_name> [--mode mendix|ruby] [--mxrb-path DIR]"
+  mode_equals = ARGV.find { _1.start_with?('--mode=') }
+  ARGV.delete(mode_equals) if mode_equals
+  mode_index = ARGV.index('--mode')
+  abort 'Use only one --mode option' if mode_equals && mode_index
+  mode = if mode_equals
+           mode_equals.split('=', 2).last
+         elsif mode_index
+           ARGV.slice!(mode_index, 2).last
+         else
+           'mendix'
+         end
+  abort '--mode requires mendix or ruby' unless %w[mendix ruby].include?(mode)
+  stack_flags = %w[--flymetothemoon --onrails].select { ARGV.delete(_1) }
+  abort 'Use only one of --flymetothemoon or --onrails' if stack_flags.size > 1
+  abort 'Ruby stack presets require --mode ruby' if stack_flags.any? && mode != 'ruby'
+  stack = stack_flags.first&.delete_prefix('--')
   path_index = ARGV.index('--mxrb-path')
   mxrb_path = path_index ? ARGV.slice!(path_index, 2).last : nil
   abort '--mxrb-path requires a value' if path_index && mxrb_path.nil?
   abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
   begin
-    result = Mxrb::Initializer.new(name, mxrb_path:).scaffold
+    result = Mxrb::Initializer.new(name, mxrb_path:, mode:, stack:).scaffold
   rescue ArgumentError => e
     abort "[mxrb] error: #{e.message}"
   end
@@ -1501,9 +1930,19 @@ when "init"
   puts "\nDone. Next steps:"
   puts "  cd #{result.root}"
   puts "  bundle install"
-  puts "  bundle exec mxrb generate project.rb"
+  if mode == 'ruby'
+    puts '  npm install --prefix frontend'
+    puts '  bundle exec mxrb run .'
+    puts '  bundle exec ruby project.rb  # materialize build/*.mpr for Mendix'
+  else
+    puts '  bundle exec mxrb generate project.rb'
+  end
 
 else
+  unless ENV['MXRB_LEGACY_HELP'] == '1'
+    abort "[mxrb] Unknown command #{command.inspect}. Run `mxrb --commands` to list commands " \
+          'or `mxrb --help` for guided examples.'
+  end
   puts <<~USAGE
     mxrb — Pure-Ruby Mendix .mpr toolkit
 
@@ -1533,6 +1972,11 @@ else
       frontend migrate <file.mpr>         Preview frontend schema/layout/theme migration
                  [--apply] [--json]       Apply only a safe plan or emit structured output
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
+                 --mode mendix|ruby       Mendix DSL (default) or executable Ruby app
+      run        [directory]              Start Ruby API and React + Vite together
+                 --host HOST --port PORT  Vite host/port (default 127.0.0.1:5173)
+                 --api-port PORT           Ruby API port (default 9292)
+                 --no-frontend             Start only the Ruby API
       validate   <file.mpr>               Check MPR structure, hashes and v2 contents
       preflight  <file.mpr> [--json]      Audit native compiler/runtime compatibility
       compare    <left.mpr> <right.mpr>   Compare structural MPR snapshots

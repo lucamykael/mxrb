@@ -162,10 +162,10 @@ module Mxrb
       # ── Writes ────────────────────────────────────────────────────────────
 
       # Insert a new unit. Returns the assigned UUID.
-      def insert_unit(container_uuid:, containment_name:, contents_doc:)
+      def insert_unit(container_uuid:, containment_name:, contents_doc:, unit_uuid: nil)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
-        uuid = BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
+        uuid = unit_uuid || BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
         unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
           contents_doc = { "$ID" => uuid }.merge(contents_doc)
         end
@@ -463,7 +463,7 @@ module Mxrb
       def architecture_definition
         return nil unless tables.include?("_MxrbArchitecture")
         json = @db.get_first_value("SELECT Definition FROM _MxrbArchitecture WHERE ID = 1")
-        json && JSON.parse(json, symbolize_names: true)
+        json && BsonCodec.restore_extended_json(JSON.parse(json, symbolize_names: true))
       end
 
       def write_architecture_definition(definition)
@@ -479,6 +479,124 @@ module Mxrb
           "INSERT OR REPLACE INTO _MxrbArchitecture (ID, Version, Definition) VALUES (1, 1, ?)",
           [JSON.generate(definition)]
         )
+      end
+
+      # Ruby/React sources are stored outside the Mendix Unit tree. Mendix can
+      # keep editing the native model while MXRB can later restore the exact
+      # conventional application sources on a Ruby-mode export.
+      def ruby_app_sources
+        return [] unless tables.include?("_MxrbRubySource")
+
+        has_mode = table_info("_MxrbRubySource").any? { (_1["name"] || _1[:name]) == "Mode" }
+        columns = has_mode ? "Path, Contents, Sha256, Mode" : "Path, Contents, Sha256"
+        @db.execute("SELECT #{columns} FROM _MxrbRubySource ORDER BY Path").map do |row|
+          fallback = row[0].to_s.start_with?('bin/') ? 0o755 : 0o644
+          { path: row[0], contents: row[1], sha256: row[2], mode: has_mode ? row[3] : fallback }
+        end
+      end
+
+      def write_ruby_app_sources(files)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbRubySource (
+            Path TEXT PRIMARY KEY NOT NULL,
+            Contents BLOB NOT NULL,
+            Sha256 TEXT NOT NULL,
+            Mode INTEGER NOT NULL DEFAULT 420
+          )
+        SQL
+        unless table_info("_MxrbRubySource").any? { (_1["name"] || _1[:name]) == "Mode" }
+          @db.execute("ALTER TABLE _MxrbRubySource ADD COLUMN Mode INTEGER NOT NULL DEFAULT 420")
+        end
+        @db.execute("DELETE FROM _MxrbRubySource")
+        files.each do |file|
+          @db.execute(
+            "INSERT INTO _MxrbRubySource (Path, Contents, Sha256, Mode) VALUES (?, ?, ?, ?)",
+            [
+              file.fetch(:path), SQLite3::Blob.new(file.fetch(:contents)),
+              file.fetch(:sha256), file.fetch(:mode, 0o644)
+            ]
+          )
+        end
+      end
+
+      # Cross-module Mendix associations do not expose native visual
+      # connection fields. Keep their ER-editor anchors in an MXRB-only table
+      # so the diagram remains editable without inventing unsupported BSON.
+      def domain_diagram_anchors
+        return {} unless tables.include?("_MxrbDomainDiagramAssociation")
+
+        @db.execute(<<~SQL).to_h do |row|
+          SELECT AssociationID, SourceAnchor, TargetAnchor
+          FROM _MxrbDomainDiagramAssociation
+        SQL
+          [row[0], { source_anchor: row[1], target_anchor: row[2] }]
+        end
+      end
+
+      def write_domain_diagram_anchors(layouts)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        items = Array(layouts)
+        return 0 if items.empty?
+
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbDomainDiagramAssociation (
+            AssociationID TEXT PRIMARY KEY NOT NULL,
+            SourceAnchor TEXT NOT NULL,
+            TargetAnchor TEXT NOT NULL
+          )
+        SQL
+        current = domain_diagram_anchors
+        items.count do |layout|
+          id = layout.fetch(:id).to_s
+          anchors = {
+            source_anchor: layout.fetch(:source_anchor).to_s,
+            target_anchor: layout.fetch(:target_anchor).to_s
+          }
+          next false if current[id] == anchors
+
+          @db.execute(
+            "INSERT OR REPLACE INTO _MxrbDomainDiagramAssociation " \
+            "(AssociationID, SourceAnchor, TargetAnchor) VALUES (?, ?, ?)",
+            [id, anchors.fetch(:source_anchor), anchors.fetch(:target_anchor)]
+          )
+          true
+        end
+      end
+
+      def legacy_unit_identity_mismatches
+        return [] unless tables.include?("_MxrbCompatibility")
+
+        @db.execute(<<~SQL).map do |row|
+          SELECT UnitID, ContentID, UnitType
+          FROM _MxrbCompatibility
+          WHERE Kind = 'legacy-unit-identity'
+        SQL
+          { unit_id: row[0], content_id: row[1], type: row[2] }
+        end
+      end
+
+      def write_legacy_unit_identity_mismatches(mismatches)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbCompatibility (
+            Kind TEXT NOT NULL,
+            UnitID TEXT NOT NULL,
+            ContentID TEXT NOT NULL,
+            UnitType TEXT NOT NULL,
+            PRIMARY KEY (Kind, UnitID, ContentID)
+          )
+        SQL
+        @db.execute("DELETE FROM _MxrbCompatibility WHERE Kind = 'legacy-unit-identity'")
+        mismatches.each do |mismatch|
+          @db.execute(
+            "INSERT INTO _MxrbCompatibility (Kind, UnitID, ContentID, UnitType) VALUES (?, ?, ?, ?)",
+            ["legacy-unit-identity", mismatch.fetch(:unit_id),
+             mismatch.fetch(:content_id), mismatch.fetch(:type)]
+          )
+        end
       end
 
       def close

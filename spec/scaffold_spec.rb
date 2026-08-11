@@ -147,14 +147,27 @@ RSpec.describe Mxrb::Scaffold::Generator do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
       scaffold(root, :security, 'ScaffoldApp')
+      generator = described_class.new(:demo_user, 'legacy', target: root)
+      dotenv_source = <<~RUBY
+        require "dotenv/load"
+
+        Mxrb.define("App.mpr") do
+        end
+      RUBY
+      connected = generator.send(:connect_project_dotenv, dotenv_source)
+      expect(connected).to include(
+        "require \"dotenv/load\"\nDotenv.load(File.join(__dir__, \".env\"))\n"
+      )
+      expect(generator.send(:connect_project_dotenv, connected)).to eq(connected)
+
       project = File.join(root, 'project.rb')
       File.write(
         project,
-        File.read(project).sub(%{Dotenv.load(File.join(__dir__, ".env"))\n}, '')
+        File.read(project).sub(%{Mxrb::Environment.load(root: __dir__).apply\n}, '')
       )
       File.write(File.join(root, '.env'), "EXISTING=value\n")
       described_class.new(:demo_user, 'legacy', target: root).scaffold
-      expect(File.read(project)).to include('Dotenv.load(File.join(__dir__, ".env"))')
+      expect(File.read(project)).to include('Mxrb::Environment.load(root: __dir__).apply')
 
       incomplete = File.join(dir, 'incomplete')
       FileUtils.mkdir_p(incomplete)
@@ -167,12 +180,12 @@ RSpec.describe Mxrb::Scaffold::Generator do
       end.to raise_error(ArgumentError, /security is not initialized/)
 
       source = File.read(project)
-      source = source.sub(%r{^require ["']dotenv/load["']\n}, '')
-                     .sub(%{Dotenv.load(File.join(__dir__, ".env"))\n}, '')
+      source = source.sub(/^require ["']mxrb["']\n/, '')
+                     .sub(%{Mxrb::Environment.load(root: __dir__).apply\n}, '')
       File.write(project, source)
       expect do
         described_class.new(:demo_user, 'dotenv', target: root).scaffold
-      end.to raise_error(ArgumentError, %r{must require dotenv/load})
+      end.to raise_error(ArgumentError, %r{must require mxrb or dotenv/load})
     end
   end
 

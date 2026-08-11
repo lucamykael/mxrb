@@ -8,6 +8,7 @@ require "digest"
 module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
   class Exporter
+    MODES = %i[mendix ruby].freeze
     LAYERS = %w[domain application presentation infrastructure].freeze
     MODULE_PROGRESS_WEIGHT = 10
     MARKETPLACE_PROVENANCE = [
@@ -58,18 +59,25 @@ module Mxrb
       Microflows$RestCallAction
     ].freeze
 
-    def initialize(mpr_path, output_dir)
+    attr_reader :mode
+
+    def initialize(mpr_path, output_dir, mode: :mendix)
       @mpr_path = File.expand_path(mpr_path)
       @output_dir = File.expand_path(output_dir)
+      @mode = mode.to_sym
+      raise ArgumentError, "export mode must be mendix or ruby" unless MODES.include?(@mode)
     end
 
     def export!(parallel: true)
+      return export_ruby!(parallel:) if mode == :ruby
+
       Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress|
         FileUtils.mkdir_p(@output_dir)
         Mxrb.open(@mpr_path) do |project|
           @architecture = project.architecture_definition
           units = project.all_units
           modules = project.modules
+          @inferred_public_artifacts = infer_public_artifacts(modules)
           assets = project_asset_files
           progress.update(
             current: 0,
@@ -80,12 +88,13 @@ module Mxrb
           progress.advance(detail: "project structure")
           export_project_assets(assets, progress)
           export_native_units(project, units, progress)
+          ruby_sources = export_ruby_app_sources(project)
           export_security(project)
           progress.advance(detail: "project security")
           export_architecture_contracts(project)
           progress.advance(detail: "navigation and design system")
           export_modules(modules, progress, parallel:)
-          write_project(project)
+          write_project(project, ruby_sources:)
           progress.advance(detail: "project.rb")
         end
       end
@@ -93,6 +102,12 @@ module Mxrb
     end
 
     private
+
+    def export_ruby!(parallel:)
+      sidecar = File.join(@output_dir, ".mxrb", "mendix")
+      self.class.new(@mpr_path, sidecar, mode: :mendix).export!(parallel:)
+      RubyApp::Exporter.new(@mpr_path, @output_dir, mendix_sidecar: sidecar).export!
+    end
 
     def export_module(mod)
       root = File.join(@output_dir, "modules", mod.name)
@@ -184,6 +199,24 @@ module Mxrb
         File.join(@output_dir, ".mxrb", "native_units.rb"),
         "# frozen_string_literal: true\n\n#{source.join("\n")}"
       )
+    end
+
+    def export_ruby_app_sources(project)
+      files = project.mpr.ruby_app_sources
+      return false if files.empty?
+
+      payload = files.map do |file|
+        contents = file.fetch(:contents)
+        {
+          "path" => file.fetch(:path), "sha256" => file.fetch(:sha256),
+          "contents" => Base64.strict_encode64(contents), "mode" => file.fetch(:mode, 0o644)
+        }
+      end
+      write(
+        File.join(@output_dir, ".mxrb", "ruby_sources.json"),
+        JSON.pretty_generate("version" => 1, "files" => payload)
+      )
+      true
     end
 
     def export_modules(modules, progress, parallel:)
@@ -279,7 +312,7 @@ module Mxrb
       paths = {}
       grouped = mod.entities.group_by { entity_domain_route(_1) }
       grouped.each do |route, entities|
-        unique_entity_filenames(entities).each do |id, filename|
+        unique_entity_filenames(entities, route:).each do |id, filename|
           paths[id] = File.join(route, filename)
         end
       end
@@ -337,7 +370,10 @@ module Mxrb
       mod.microflows.each do |flow|
         layer, category = flow_location(flow.name)
         relative = File.join(category, files.fetch(flow.id))
-        metadata = architecture&.fetch(:microflows, [])&.find { _1[:name] == flow.name }
+        metadata = flow_metadata(
+          mod.name, :microflow, flow.name,
+          architecture&.fetch(:microflows, [])&.find { _1[:name] == flow.name }
+        )
         write(File.join(root, layer, relative), microflow_source(flow, metadata))
         by_layer.fetch(layer) << relative
       end
@@ -466,7 +502,10 @@ module Mxrb
       architecture = architecture_module(mod.name)
       flows.each do |flow|
         relative = File.join("client_actions", files.fetch(flow.id))
-        metadata = architecture&.fetch(:nanoflows, [])&.find { _1[:name] == flow.name }
+        metadata = flow_metadata(
+          mod.name, :nanoflow, flow.name,
+          architecture&.fetch(:nanoflows, [])&.find { _1[:name] == flow.name }
+        )
         write(File.join(presentation, relative), nanoflow_source(flow, metadata))
         paths << relative
       end
@@ -497,7 +536,7 @@ module Mxrb
       end
     end
 
-    def write_project(project)
+    def write_project(project, ruby_sources: false)
       module_loads = project.modules.map do |mod|
         %(  evaluate File.join(__dir__, "modules", #{ruby(mod.name)}, "module.rb"))
       end.join("\n")
@@ -513,6 +552,7 @@ module Mxrb
           mendix_version #{ruby(project.mendix_version || "10.18.0")}
           native_units File.join(__dir__, ".mxrb", "native_units.json")
           project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
+      #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
           evaluate File.join(__dir__, ".mxrb", "native_units.rb")
           evaluate File.join(__dir__, "app", "security", "security.rb")
           evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
@@ -824,19 +864,21 @@ module Mxrb
       end
     end
 
-    def unique_entity_filenames(entities)
-      unique_filenames(entities)
+    def unique_entity_filenames(entities, route: nil)
+      suffix = route == "dtos" ? "_dto" : nil
+      unique_filenames(entities, suffix:)
     end
 
-    def unique_filenames(entities)
+    def unique_filenames(entities, suffix: nil)
       used = {}
       entities.to_h do |entity|
         base = underscore(entity.name)
+        base = "#{base}#{suffix}" if suffix && !base.end_with?(suffix)
         candidate = "#{base}.rb"
-        suffix = 2
+        sequence = 2
         while used[candidate]
-          candidate = "#{base}_#{suffix}.rb"
-          suffix += 1
+          candidate = "#{base}_#{sequence}.rb"
+          sequence += 1
         end
         used[candidate] = true
         [entity.id, candidate]
@@ -864,6 +906,8 @@ module Mxrb
       body << "  return_type #{symbol(flow.return_type)}" if flow.return_type.is_a?(String)
       body << "  documentation #{ruby(flow.documentation)}" unless flow.documentation.to_s.empty?
       body << "  allow_concurrent_execution #{flow.allow_concurrent_execution ? 'true' : 'false'}"
+      apply_entity_access = flow.respond_to?(:apply_entity_access) && flow.apply_entity_access
+      body << "  apply_entity_access #{apply_entity_access ? 'true' : 'false'}"
       body << "  mark_as_used #{flow.mark_as_used ? 'true' : 'false'}"
       body << "  excluded #{flow.excluded ? 'true' : 'false'}"
       body << "  allowed_roles #{flow.allowed_module_roles.map { symbol(_1) }.join(', ')}" unless flow.allowed_module_roles.empty?
@@ -883,10 +927,12 @@ module Mxrb
       elsif objects.any?
         body << "  # Native body baseline retained: this graph shape has no typed DSL mapping yet"
       end
+      declaration = [symbol(flow.name)]
+      declaration << "public: true" if metadata&.fetch(:public, false)
       <<~RUBY
         # frozen_string_literal: true
 
-        microflow #{symbol(flow.name)} do
+        microflow #{declaration.join(', ')} do
       #{body.join("\n")}
         end
       RUBY
@@ -927,7 +973,7 @@ module Mxrb
       body << "  allowed_roles #{page.allowed_module_roles.map { symbol(_1) }.join(', ')}" unless page.allowed_module_roles.empty?
       deep = page_deep_structure(page)
       if (source = metadata&.dig(:data_source) || page.data_source)
-        body << "  data_source #{source.fetch(:kind)}: #{symbol(source.fetch(:name))}"
+        body << "  data_source #{source.fetch(:kind)}: #{reference(source.fetch(:name))}"
       end
       body << "  deep_structure(#{native_ruby(deep, 2)})" if deep
       metadata&.fetch(:events, [])&.each do |event|
@@ -1854,6 +1900,32 @@ module Mxrb
 
     def architecture_module(name)
       @architecture&.fetch(:modules, [])&.find { _1[:name] == name }
+    end
+
+    def infer_public_artifacts(modules)
+      modules.each_with_object({}) do |mod, public_artifacts|
+        mod.pages.each do |page|
+          source = page.data_source
+          next unless source
+
+          target_module, target_name = source.fetch(:name).to_s.split(".", 2)
+          next if target_name.to_s.empty? || target_module == mod.name
+
+          public_artifacts[[target_module, source.fetch(:kind).to_sym, target_name]] = true
+        end
+      end
+    end
+
+    def flow_metadata(module_name, kind, name, metadata)
+      result = metadata ? metadata.dup : {}
+      if @inferred_public_artifacts&.include?([module_name, kind, name])
+        result[:public] = true
+      end
+      result.empty? ? nil : result
+    end
+
+    def reference(value)
+      value.to_s.include?(".") ? ruby(value.to_s) : symbol(value)
     end
 
     def symbol(value)

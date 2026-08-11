@@ -8,7 +8,7 @@ module Mxrb
     # ContainmentName: "Documents"
     class Microflow < Unit
       attr_reader :name, :documentation, :return_variable_name,
-                  :allow_concurrent_execution, :mark_as_used, :excluded,
+                  :allow_concurrent_execution, :apply_entity_access, :mark_as_used, :excluded,
                   :allowed_module_roles, :parameters, :return_type,
                   :objects, :flows
 
@@ -17,6 +17,7 @@ module Mxrb
         @documentation              = doc["Documentation"] || doc["documentation"] || ""
         @return_variable_name       = doc["ReturnVariableName"] || "ReturnValue"
         @allow_concurrent_execution = doc["AllowConcurrentExecution"] != false
+        @apply_entity_access = doc["ApplyEntityAccess"] == true
         @mark_as_used               = doc["MarkAsUsed"] == true
         @excluded                   = doc["Excluded"] == true
         @allowed_module_roles       = parse_array(doc["AllowedModuleRoles"])
@@ -43,6 +44,7 @@ module Mxrb
           "Documentation"             => @documentation || "",
           "ReturnVariableName"        => @return_variable_name || "ReturnValue",
           "AllowConcurrentExecution"  => @allow_concurrent_execution != false,
+          "ApplyEntityAccess" => @apply_entity_access == true,
           "MarkAsUsed"                => @mark_as_used || false,
           "Excluded"                  => @excluded || false,
           "AllowedModuleRoles"        => IO::BsonCodec.build_array(@allowed_module_roles || [], marker: 1),

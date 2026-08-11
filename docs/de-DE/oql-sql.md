@@ -44,6 +44,48 @@ exakten Mendix Runtime geprüft werden. Assoziationspfad-Joins gelten als nicht
 unterstützt, solange Runtime-Speichermetadaten den korrekten Join nicht
 beweisen können.
 
+## Sichere Konvertierung von SQL nach OQL
+
+Der Rückweg akzeptiert eine schreibgeschützte `SELECT`-Teilmenge in PostgreSQL,
+SQL Server oder ANSI und erzeugt logisches OQL. Mit dem Projekt werden die
+exakte Groß-/Kleinschreibung von Modulen, Entitäten und Attributen
+wiederhergestellt:
+
+```ruby
+projection = Mxrb.open("Shop.mpr") do |project|
+  project.sql_to_oql(
+    'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name',
+    dialect: :postgresql
+  )
+end
+
+puts projection.oql if projection.supported?
+# SELECT p/Name FROM Shop.Product p WHERE p/Name = $Name
+```
+
+Der einheitliche Befehl `query` konvertiert in beide Richtungen. `--input -`
+liest stdin und `--json` liefert das typisierte Ergebnis:
+
+```sh
+bundle exec mxrb query \
+  'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name' \
+  --from sql --to oql --project Shop.mpr --dialect postgresql
+bundle exec mxrb query 'SELECT p/Name FROM Shop.Product p' \
+  --from oql --to sql --dialect sql_server
+bundle exec mxrb query --input query.sql --from sql --dialect sql_server --json
+```
+
+Die Teilmenge umfasst Aliase, explizite Joins, kommaseparierte Quellen,
+`WHERE`, `GROUP BY`, `HAVING`, `UNION`, `ORDER BY`, `LIMIT`/`OFFSET`, bekannte
+OQL-Funktionen und benannte Parameter (`:Name`, `@Name` oder `$Name`). Physische
+Tabellen `module$entity` werden zu `Module.Entity`; ohne `--project` wird die
+Schreibweise abgeleitet und das Ergebnis erhält die Vertrauensstufe `inferred`.
+
+Schreiboperationen, mehrere Anweisungen, CTEs, Tabellen-Unterabfragen in
+`FROM`/`JOIN`, positionale Parameter, unbekannte Funktionen und Erweiterungen ohne sichere OQL-Entsprechung wie
+`ILIKE`, `DISTINCT ON`, `TOP`, `::` und die Verkettung `||` liefern
+`supported? == false` mit einer Erklärung in `warnings`.
+
 ## Dialektabhängige Analyse
 
 `Oql::Analyzer` erkennt Kosten- und Portabilitätsmuster im Originaltext,

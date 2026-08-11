@@ -47,6 +47,9 @@ module Mxrb
 
       def validate_units
         @units = @mpr.all_units
+        @legacy_identity_mismatches = @mpr.legacy_unit_identity_mismatches.to_set do |entry|
+          [entry.fetch(:unit_id), entry.fetch(:content_id), entry.fetch(:type)]
+        end
         @progress.update(total: @units.size + 3, detail: "#{@units.size} units")
         validate_root
         validate_unit_ids
@@ -113,6 +116,17 @@ module Mxrb
         if doc_id.to_s.empty?
           add_error("unit #{unit['UnitID']} missing $ID")
         elsif doc_id != unit["UnitID"]
+          record_identity_mismatch(unit, doc_id, type)
+        end
+      end
+
+      def record_identity_mismatch(unit, doc_id, type)
+        mismatch = [unit["UnitID"], doc_id, type]
+        if @legacy_identity_mismatches&.include?(mismatch)
+          add_warning(
+            "unit #{unit['UnitID']} preserves legacy content $ID mismatch #{doc_id}"
+          )
+        else
           add_error("unit #{unit['UnitID']} content $ID mismatch #{doc_id}")
         end
       end

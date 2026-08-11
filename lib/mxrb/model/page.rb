@@ -10,7 +10,8 @@ module Mxrb
       attr_reader :name, :documentation, :url, :layout_id, :title,
                   :popup_width, :popup_height, :popup_resizable, :excluded,
                   :allowed_module_roles, :parameters, :export_level,
-                  :widgets, :data_source, :raw_document
+                  :widgets, :data_source, :appearance_class, :appearance_style,
+                  :raw_document
 
       def decode(doc)
         @raw_document        = doc
@@ -25,6 +26,8 @@ module Mxrb
         @popup_resizable     = doc["PopupResizable"] == true
         @excluded            = doc["Excluded"] == true
         @export_level        = doc["ExportLevel"] || "Hidden"
+        @appearance_class    = doc.dig("Appearance", "Class").to_s
+        @appearance_style    = doc.dig("Appearance", "Style").to_s
         @allowed_module_roles = parse_array(doc["AllowedModuleRoles"] || doc["AllowedRoles"] || doc["allowedModuleRoles"])
         @parameters          = parse_array(doc["Parameters"] || doc["parameters"])
         @widgets             = []
@@ -112,7 +115,8 @@ module Mxrb
             children = []
             parse_widgets(parse_array(widget["Widgets"]), children)
             target << { type: :container, name: widget["Name"] || "container",
-                        options: container_options(widget), children: children, events: [] }
+                        options: container_options(widget), children: children,
+                        events: container_events(widget) }
             next
           end
           if layout_container?(widget)
@@ -171,17 +175,42 @@ module Mxrb
       end
 
       def widget_options(widget, widget_type)
-        options = {
+        options = appearance_options(widget).merge(
           attribute: attribute_path(widget),
           caption: widget_caption(widget, widget_type)
-        }.compact
+        ).compact
+        parameters = template_parameters(widget)
+        options[:parameters] = parameters unless parameters.empty?
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
         options
       end
 
       def container_options(widget)
+        appearance_options(widget)
+      end
+
+      def appearance_options(widget)
         class_name = widget.dig("Appearance", "Class") || widget["Class"]
-        class_name.to_s.empty? ? {} : { class: class_name }
+        style = widget.dig("Appearance", "Style") || widget["Style"]
+        dynamic = widget.dig("Appearance", "DynamicClasses")
+        visibility = widget.dig("ConditionalVisibilitySettings", "Expression")
+        { class: class_name.to_s, style: style.to_s,
+          dynamic_class: dynamic.to_s, visible: visibility.to_s }.reject { |_key, value| value.empty? }
+      end
+
+      def container_events(widget)
+        action = parse_action(widget["OnClickAction"] || widget["Action"])
+        action ? [action.merge(event: :on_click)] : []
+      end
+
+      def template_parameters(widget)
+        template = widget["Content"] || widget["CaptionTemplate"] || widget["LabelTemplate"]
+        parse_array(template.is_a?(Hash) ? template["Parameters"] : nil).filter_map do |parameter|
+          expression = parameter["Expression"].to_s
+          attribute = parameter.dig("AttributeRef", "Attribute").to_s.split('.').last.to_s
+          expression = "$currentObject/#{attribute}" if expression.empty? && !attribute.empty?
+          expression unless expression.empty?
+        end
       end
 
       def attribute_path(widget)
@@ -210,15 +239,39 @@ module Mxrb
         options = { entity: grid_entity(widget), columns: columns }.compact
         options[:search_bar] = parse_search_bar(widget["SearchBar"]) if widget["SearchBar"].is_a?(Hash)
         options[:toolbar]    = parse_toolbar(widget["ToolBar"])       if widget["ToolBar"].is_a?(Hash)
-        { type: :data_grid, name: widget["Name"], options: options, events: [] }
+        { type: :data_grid, name: widget["Name"], options: options, events: grid_events(widget) }
       end
 
       def pluggable_widget(widget)
         case widget.dig("Type", "WidgetId")
         when "com.mendix.widget.web.datagrid.Datagrid" then data_grid2_widget(widget)
         when "com.mendix.widget.web.combobox.Combobox"  then combo_box_widget(widget)
+        when "com.mendix.widget.web.gallery.Gallery"    then gallery_widget(widget)
         else native_widget(widget)
         end
+      end
+
+      def gallery_widget(widget)
+        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        source = properties.dig("datasource", "DataSource") || {}
+        children = []
+        parse_widgets(parse_array(properties.dig("content", "Widgets")), children)
+        sort = parse_array(source.dig("SortBar", "SortItems")).map do |item|
+          {
+            attribute: item.dig("AttributeRef", "Attribute"),
+            direction: item["SortDirection"].to_s
+          }.compact
+        end
+        xpath = source["XPathConstraint"].to_s
+        options = appearance_options(widget).merge(
+          entity: source.dig("EntityRef", "Entity"), xpath: xpath,
+          association: xpath[/\[([\w.]+)\s*=\s*\$\w+\]/, 1],
+          context_variable: xpath[/\$([A-Za-z_]\w*)/, 1], sort: sort
+        ).compact
+        {
+          type: :gallery, name: widget["Name"], options: options,
+          children: children, events: []
+        }
       end
 
       def native_widget(widget)
@@ -231,6 +284,8 @@ module Mxrb
 
       def data_grid2_widget(widget)
         properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        return data_grid_widget(widget) if properties.empty? && widget["DataSource"]
+
         entity = properties.dig("datasource", "DataSource", "EntityRef", "Entity")
         column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
                       &.dig("ValueType", "ObjectType")
@@ -244,12 +299,35 @@ module Mxrb
         end
         {
           type: :data_grid, name: widget["Name"],
-          options: { entity: entity, columns: columns }.compact, events: []
+          options: { entity: entity, columns: columns }.compact, events: grid_events(widget)
         }
+      end
+
+      def grid_events(widget)
+        {
+          "OnChangeAction" => :on_change,
+          "OnClickAction" => :on_click,
+          "Action" => :on_click
+        }.filter_map do |property, event|
+          action = parse_action(widget[property])
+          action&.merge(event: event)
+        end
       end
 
       def combo_box_widget(widget)
         properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        if properties.empty? && widget["AttributePath"]
+          reference = widget["SelectorType"] == "Reference"
+          options = {
+            attribute: widget["AttributePath"], caption: extract_text(widget["LabelText"]),
+            display_attribute: widget["DisplayAttribute"]
+          }.compact
+          return {
+            type: reference ? :reference_selector : :drop_down,
+            name: widget["Name"], options: options, events: grid_events(widget)
+          }
+        end
+
         association = parse_array(properties.dig("attributeAssociation", "EntityRef", "Steps"))
                       .first&.fetch("Association", nil)
         reference = properties.dig("optionsSourceType", "PrimitiveValue") == "association"
@@ -267,7 +345,7 @@ module Mxrb
           )
         end
         { type: reference ? :reference_selector : :drop_down,
-          name: widget["Name"], options: options.compact, events: [] }
+          name: widget["Name"], options: options.compact, events: grid_events(widget) }
       end
 
       def custom_property_map(object, object_type)
@@ -376,21 +454,49 @@ module Mxrb
       def parse_source(source)
         return nil unless source.is_a?(Hash)
         result = if %w[Pages$NanoflowSource Forms$NanoflowSource].include?(source["$Type"])
-          { kind: :nanoflow, name: local_name(source["Nanoflow"] || source.dig("NanoflowSettings", "Nanoflow")) }
+          { kind: :nanoflow, name: source_name(source["Nanoflow"] || source.dig("NanoflowSettings", "Nanoflow")) }
         else
-          { kind: :microflow, name: local_name(source["Microflow"] || source.dig("MicroflowSettings", "Microflow")) }
+          { kind: :microflow, name: source_name(source["Microflow"] || source.dig("MicroflowSettings", "Microflow")) }
         end
         result[:name].to_s.empty? ? nil : result
+      end
+
+      # Page data sources are architectural references. Unlike widget-local
+      # action handlers, their module qualification must survive export so a
+      # native Core.Flow reference cannot silently become Portal.Flow.
+      def source_name(name)
+        name.to_s
       end
 
       def parse_action(action)
         return nil unless action.is_a?(Hash)
         if %w[Pages$CallNanoflowClientAction Forms$CallNanoflowClientAction].include?(action["$Type"])
-          handler = local_name(action["Nanoflow"] || action.dig("NanoflowSettings", "Nanoflow"))
-          handler.to_s.empty? ? nil : { kind: :nanoflow, handler: handler }
+          settings = action["NanoflowSettings"] || action
+          handler = local_name(action["Nanoflow"] || settings["Nanoflow"])
+          return nil if handler.to_s.empty?
+
+          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
+            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+          end
+          { kind: :nanoflow, handler: handler, arguments: arguments }
         elsif %w[Pages$MicroflowClientAction Forms$MicroflowAction Forms$MicroflowClientAction].include?(action["$Type"])
-          handler = local_name(action["Microflow"] || action.dig("MicroflowSettings", "Microflow"))
-          handler.to_s.empty? ? nil : { kind: :microflow, handler: handler }
+          settings = action["MicroflowSettings"] || action
+          handler = local_name(action["Microflow"] || settings["Microflow"])
+          return nil if handler.to_s.empty?
+
+          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
+            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+          end
+          { kind: :microflow, handler: handler, arguments: arguments }
+        elsif %w[Pages$FormAction Forms$FormAction].include?(action["$Type"])
+          settings = action["FormSettings"] || action
+          handler = settings["Form"].to_s
+          return nil if handler.empty?
+
+          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
+            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+          end
+          { kind: :page, handler: handler, arguments: arguments }
         elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action["$Type"])
           { kind: :action, handler: "save_changes" }
         elsif %w[Pages$CancelChangesClientAction Forms$CancelChangesClientAction].include?(action["$Type"])

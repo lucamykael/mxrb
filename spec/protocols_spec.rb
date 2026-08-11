@@ -153,7 +153,7 @@ RSpec.describe Mxrb::Protocols do
   end
 
   it 'detects real FromAppStore modules in a live fixture when it is present' do
-    fixture = '/home/mykael/Personal_Projects/mxrb-fixtures/ConnectorKitDemo/ConnectorKitDemo.mpr'
+    fixture = ENV.fetch('MXRB_CONNECTOR_FIXTURE', '')
     skip 'connector fixture not present in this environment' unless File.exist?(fixture)
 
     Mxrb.open(fixture) do |project|
@@ -164,7 +164,7 @@ RSpec.describe Mxrb::Protocols do
   end
 
   it 'preserves imported modules through export, rebuild, and semantic indexing' do
-    fixture = '/home/mykael/Personal_Projects/mxrb-fixtures/ConnectorKitDemo/ConnectorKitDemo.mpr'
+    fixture = ENV.fetch('MXRB_CONNECTOR_FIXTURE', '')
     skip 'connector fixture not present in this environment' unless File.exist?(fixture)
 
     Dir.mktmpdir do |root|

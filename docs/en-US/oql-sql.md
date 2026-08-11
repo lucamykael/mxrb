@@ -42,6 +42,47 @@ Always verify physical table and column names against the database created by
 the exact Mendix Runtime. Association-path joins are reported as unsupported
 until Runtime storage metadata can prove the correct join.
 
+## Safe SQL-to-OQL conversion
+
+The reverse path accepts a read-only `SELECT` subset in PostgreSQL, SQL Server,
+or ANSI and emits logical OQL. Supplying the project restores the exact module,
+entity, and attribute casing:
+
+```ruby
+projection = Mxrb.open("Shop.mpr") do |project|
+  project.sql_to_oql(
+    'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name',
+    dialect: :postgresql
+  )
+end
+
+puts projection.oql if projection.supported?
+# SELECT p/Name FROM Shop.Product p WHERE p/Name = $Name
+```
+
+The unified `query` command converts in both directions. `--input -` reads
+stdin and `--json` returns the typed result:
+
+```sh
+bundle exec mxrb query \
+  'SELECT p."name" FROM "shop$product" p WHERE p."name" = :Name' \
+  --from sql --to oql --project Shop.mpr --dialect postgresql
+bundle exec mxrb query 'SELECT p/Name FROM Shop.Product p' \
+  --from oql --to sql --dialect sql_server
+bundle exec mxrb query --input query.sql --from sql --dialect sql_server --json
+```
+
+The subset includes aliases, explicit joins, comma-separated sources,
+`WHERE`, `GROUP BY`, `HAVING`, `UNION`, `ORDER BY`, `LIMIT`/`OFFSET`, known OQL
+functions, and named parameters (`:Name`, `@Name`, or `$Name`). Physical
+`module$entity` tables become `Module.Entity`; without `--project`, casing is
+inferred and the result has `inferred` confidence.
+
+Writes, multiple statements, CTEs, table subqueries in `FROM`/`JOIN`, positional
+parameters, unknown functions, and extensions without a safe OQL equivalent—such as `ILIKE`, `DISTINCT ON`,
+`TOP`, `::`, and `||` concatenation—return `supported? == false` with an
+explanation in `warnings`.
+
 ## Dialect-aware analysis
 
 `Oql::Analyzer` detects cost and portability patterns in the original source,
