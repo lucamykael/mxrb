@@ -569,7 +569,9 @@ module Mxrb
         <<~TEXT
           # Copy to #{name}.env. Process ENV has highest precedence.
           MXRB_DATABASE_PATH=.mxrb/runtime/#{name}.sqlite3
+          MXRB_SHARED_STORE_PATH=.mxrb/runtime/#{name}-shared.sqlite3
           MXRB_SESSION_TTL=3600
+          MXRB_SCHEDULER_LEASE_TTL=300
           MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false
           MXRB_AUTH_TOKENS=
           MXRB_USERS_JSON=
@@ -606,6 +608,13 @@ module Mxrb
           #
           # Mxrb::RubyApp::Registry.register_adapter(:app_service) do |name, document, variables|
           #   MyAppServiceClient.call(name, document:, variables:)
+          # end
+          #
+          # Legacy Custom Actions use Ruby implementations only. Register every
+          # permitted action explicitly by its qualified Mendix name.
+          #
+          # Mxrb::RubyApp::Registry.register_java_custom_action('MyModule.MyAction') do |arguments|
+          #   MyRubyAction.call(arguments)
           # end
           #
           # Supported kinds: :app_service, :web_service, :import_xml,

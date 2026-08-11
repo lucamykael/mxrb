@@ -77,7 +77,9 @@ RSpec.describe Mxrb::Initializer do
         contents = File.read(path)
         expect(contents).to include(
           "MXRB_DATABASE_PATH=.mxrb/runtime/#{environment}.sqlite3",
-          'MXRB_SESSION_TTL=3600', 'MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false',
+          "MXRB_SHARED_STORE_PATH=.mxrb/runtime/#{environment}-shared.sqlite3",
+          'MXRB_SESSION_TTL=3600', 'MXRB_SCHEDULER_LEASE_TTL=300',
+          'MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=false',
           "MXRB_AUTH_TOKENS=\n", "MXRB_USERS_JSON=\n"
         )
         expect(contents).not_to match(/MXRB_(?:AUTH_TOKENS|USERS_JSON)=.+/)

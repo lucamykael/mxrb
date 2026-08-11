@@ -33,7 +33,32 @@ as `America/New_York` use `tzinfo`, including daylight-saving transitions.
 Unknown zones fail during scheduling instead of silently falling back to UTC;
 `UTC`, `local`, and numeric offsets such as `-04:00` are also supported.
 
-Java Custom Actions are the deliberate exclusion and fail with an explicit
-message. REST, app services, SOAP, mappings, and document generation can use
-injected Ruby adapters. The browser still runs JavaScript/React, while its
-backend and APIs run without the Java Runtime.
+Sessions and scheduler coordination default to the native shared SQLite file
+`.mxrb/runtime/<environment>-shared.sqlite3`, with no external service. Multiple
+instances must point `MXRB_SHARED_STORE_PATH` to the same file. Idempotent
+event-slot claims and heartbeat-renewed overlap leases are atomic; an unfinished
+claim can be recovered after its lease expires. The default lease is 300 seconds
+and can be changed with `MXRB_SCHEDULER_LEASE_TTL`. Set the shared-store path to
+`:memory:`, `memory`, or `local` for explicit process-local mode.
+
+Java Custom Actions never start a JVM. Every permitted action must have an
+explicit Ruby adapter registered by qualified name in `config/adapters.rb`:
+
+```ruby
+Mxrb::RubyApp::Registry.register_java_custom_action('Orders.CalculateTotal') do |arguments|
+  Calculator.call(
+    items: arguments.fetch('Items'),
+    discount: arguments.fetch('Discount')
+  )
+end
+```
+
+Keys are the parameter names from the Mendix model. Basic values are evaluated
+in the microflow context; entity, microflow, and mapping references are passed
+as qualified names. The return value is assigned only when `UseReturnVariable`
+is enabled (or for the legacy shape that only declares `ResultVariableName`).
+An unregistered action fails closed with its name and registration guidance;
+there is no class discovery, JAR execution, or JVM fallback. REST, app services,
+SOAP, mappings, and document generation continue to use type-level Ruby
+adapters. The browser still runs JavaScript/React, while its backend and APIs run
+without the Java Runtime.
