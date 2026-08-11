@@ -85,8 +85,8 @@ module Mxrb
         _add_widget(:text, name, caption: caption || name.to_s, &block)
       end
 
-      def data_grid(name, entity: nil, &block)
-        _add_widget(:data_grid, name, entity: entity, &block)
+      def data_grid(name, entity: nil, selection: nil, &block)
+        _add_widget(:data_grid, name, entity: entity, selection: selection, &block)
       end
 
       # Gallery projections remain present beside an authoritative page
@@ -165,6 +165,8 @@ module Mxrb
 
     # Builds sub-widgets inside a data_grid column sub-items or inside a container.
     class WidgetBuilder
+      include WidgetDsl
+
       def initialize(type, name, **options)
         @type        = type
         @name        = name.to_s
@@ -174,11 +176,17 @@ module Mxrb
         @tabs        = []
         @search_bar  = nil
         @toolbar     = nil
+        @children    = []
+        @filters     = []
       end
 
-      def column(name, attribute: nil, caption: nil)
-        @columns << { name: name.to_s, attribute: attribute&.to_s, caption: caption }.compact
+      def column(name, attribute: nil, caption: nil, filter: nil)
+        @columns << {
+          name: name.to_s, attribute: attribute&.to_s, caption:, filter:
+        }.compact
       end
+
+      def filter(widget) = @filters << widget
 
       def tab_page(name, caption: nil, &block)
         tab = TabPageBuilder.new(name, caption: caption)
@@ -199,8 +207,8 @@ module Mxrb
       end
 
       %i[on_change on_click on_enter on_leave].each do |event|
-        define_method(event) do |microflow: nil, nanoflow: nil, action: nil|
-          choices = { microflow: microflow, nanoflow: nanoflow, action: action }.compact
+        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil|
+          choices = { microflow: microflow, nanoflow: nanoflow, page: page, action: action }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.size == 1
           @events << { event: event, kind: choices.keys.first, handler: choices.values.first.to_s }
         end
@@ -212,8 +220,15 @@ module Mxrb
         options[:tabs]       = @tabs       unless @tabs.empty?
         options[:search_bar] = @search_bar if @search_bar
         options[:toolbar]    = @toolbar    if @toolbar
-        { type: @type, name: @name, options: options, events: @events }
+        options[:filters]    = @filters    unless @filters.empty?
+        value = { type: @type, name: @name, options: options, events: @events }
+        value[:children] = @children unless @children.empty?
+        value
       end
+
+      private
+
+      def _widget_list = @children
     end
 
     class TabPageBuilder
@@ -1263,8 +1278,8 @@ module Mxrb
       end
 
       %i[on_change on_click on_submit on_load].each do |event|
-        define_method(event) do |target: nil, microflow: nil, nanoflow: nil, action: nil|
-          choices = { microflow: microflow, nanoflow: nanoflow, action: action }.compact
+        define_method(event) do |target: nil, microflow: nil, nanoflow: nil, page: nil, action: nil|
+          choices = { microflow: microflow, nanoflow: nanoflow, page: page, action: action }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.size == 1
           @events << {
             event: event, target: target&.to_s,

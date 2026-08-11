@@ -73,6 +73,16 @@ RSpec.describe 'Ruby application internal contracts' do
       nanoflow = double(name: 'Client', id: 'n', parameters: [], objects: [], flows: [])
       expect(exp.send(:export_nanoflow, nanoflow, mod, 'sales')).to include('runtime' => 'frontend')
       expect(exp.send(:frontend_nanoflows)).to include('Nanoflow0', '"Sales.Client"')
+      manifests = [{
+        'models' => [], 'dtos' => [], 'pages' => [],
+        'enumerations' => [{ 'name' => 'Sales.Empty', 'values' => [] }]
+      }]
+      exp.instance_variable_set(:@module_manifests, manifests)
+      expect(exp.send(:frontend_types)).to include('export type SalesEmpty = never;')
+      expect(exp.send(:typescript_attribute_type,
+                      { 'type' => 'enum', 'enumeration' => 'Missing' }, [])).to eq('string')
+      expect(exp.send(:typescript_identifier, '123')).to eq('Mx123')
+      expect(exp.send(:typescript_identifier, '')).to eq('MxrbType')
       expect(exp.send(:entity_source, 'M', 'E', 'M.E', 'id', [], dto: false, persistable: true))
         .to include('class E < Mxrb::RubyApp::Record')
       expect(exp.send(:entity_source, 'M', 'D', 'M.D', 'id', [], dto: true, persistable: false))
@@ -91,6 +101,37 @@ RSpec.describe 'Ruby application internal contracts' do
       )
       expect(widget).to include('caption' => 'Caption', 'events' => [include('event' => 'click')])
       expect(exp.send(:runtime_value, deep_structure: true, kept: :yes)).to eq('kept' => 'yes')
+
+      exp.instance_variable_set(:@project, double(modules: []))
+      expect(exp.send(:runtime_widget_type, type: :button)).to eq('button')
+      expect(exp.send(:runtime_widget_type, type: :text_box, options: { attribute: 'Quantity' }))
+        .to eq('text_box')
+      expect(exp.send(:runtime_widget_type, type: :text_box,
+                                            options: { attribute: 'Missing.Item.Quantity' }))
+        .to eq('text_box')
+
+      module_definition = double(name: 'Demo', entities: nil)
+      exp.instance_variable_set(:@project, double(modules: [module_definition]))
+      expect(exp.send(:runtime_widget_type, type: :text_box,
+                                            options: { attribute: 'Demo.Item.Quantity' }))
+        .to eq('text_box')
+
+      entity = double(name: 'Item', attributes: nil)
+      allow(module_definition).to receive(:entities).and_return([entity])
+      expect(exp.send(:runtime_widget_type, type: :text_box,
+                                            options: { attribute: 'Demo.Item.Quantity' }))
+        .to eq('text_box')
+
+      attributes = [
+        double(name: 'Name', type: :string), double(name: 'Quantity', type: :integer)
+      ]
+      allow(entity).to receive(:attributes).and_return(attributes)
+      expect(exp.send(:runtime_widget_type, type: :text_box,
+                                            options: { attribute: 'Demo.Item.Name' }))
+        .to eq('text_box')
+      expect(exp.send(:runtime_widget_type, type: :text_box,
+                                            options: { attribute: 'Demo.Item.Quantity' }))
+        .to eq('number_input')
 
       sidecar_theme = File.join(dir, '.mxrb', 'mendix', 'theme')
       FileUtils.mkdir_p(File.join(sidecar_theme, 'web'))
@@ -225,12 +266,13 @@ RSpec.describe 'Ruby application internal contracts' do
     server = Mxrb::RubyApp::Server.allocate
     server.instance_variable_set(:@host, '127.0.0.1')
     server.instance_variable_set(:@port, 0)
-    server.instance_variable_set(:@logger, WEBrick::Log.new(File::NULL))
+    server.instance_variable_set(:@logger, Puma::LogWriter.null)
     application = double(start_scheduler: nil, close: nil)
     server.instance_variable_set(:@application, application)
-    http = double
-    allow(http).to receive_messages(mount_proc: nil, start: nil, shutdown: nil)
-    allow(WEBrick::HTTPServer).to receive(:new).and_return(http)
+    http = instance_double(Mxrb::Http::Server, shutdown: nil)
+    puma = instance_double(Puma::Server)
+    allow(http).to receive(:start).and_yield(puma)
+    allow(Mxrb::Http::Server).to receive(:new).and_return(http)
     yielded = false
     server.start { yielded = true }
     expect(yielded).to be(true)

@@ -74,7 +74,7 @@ RSpec.describe Mxrb::Oql::Server do
   end
 
   it 'builds the default database workspace and accepts a custom logger' do
-    logger = instance_double(WEBrick::Log)
+    logger = Puma::LogWriter.null
     allow(Mxrb::Runtime::DatabaseWorkspace).to receive(:new).and_return(workspace)
     described_class.new('/tmp/App.mpr', database_port: 55_999, logger:)
     expect(Mxrb::Runtime::DatabaseWorkspace).to have_received(:new)
@@ -112,16 +112,17 @@ RSpec.describe Mxrb::Oql::Server do
     expect(result.status).to eq(422)
   end
 
-  it 'prepares and starts a quiet WEBrick server' do
-    http = instance_double(WEBrick::HTTPServer, mount_proc: nil, start: nil, shutdown: nil)
-    allow(WEBrick::HTTPServer).to receive(:new).and_return(http)
+  it 'prepares and starts the embedded Puma server' do
+    http = instance_double(Mxrb::Http::Server, shutdown: nil)
+    puma = instance_double(Puma::Server)
+    allow(http).to receive(:start).and_yield(puma)
+    allow(Mxrb::Http::Server).to receive(:new).and_return(http)
     yielded = nil
     expect(server.shutdown).to be_nil
     server.start { yielded = _1 }
     expect(workspace).to have_received(:up)
-    expect(http).to have_received(:mount_proc).with('/query')
     expect(http).to have_received(:start)
-    expect(yielded).to equal(http)
+    expect(yielded).to equal(puma)
     server.shutdown
     expect(http).to have_received(:shutdown)
 

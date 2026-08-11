@@ -173,20 +173,19 @@ RSpec.describe Mxrb::DomainDiagram, 'complete main implementation paths' do
     end
   end
 
-  it 'starts, yields, and shuts down the WEBrick adapter' do
+  it 'starts, yields, and shuts down the Puma adapter' do
     Dir.mktmpdir do |directory|
       source, output = server_files(directory)
-      adapter = double
-      allow(adapter).to receive(:mount_proc)
-      allow(adapter).to receive(:start)
+      adapter = instance_double(Mxrb::Http::Server)
+      puma = instance_double(Puma::Server)
+      allow(adapter).to receive(:start).and_yield(puma)
       allow(adapter).to receive(:shutdown)
-      allow(WEBrick::HTTPServer).to receive(:new).and_return(adapter)
+      allow(Mxrb::Http::Server).to receive(:new).and_return(adapter)
       server = described_class::Server.new(source, output:)
       yielded = nil
       expect(server.shutdown).to be_nil
       server.start { |value| yielded = value }
-      expect(yielded).to eq(adapter)
-      expect(adapter).to have_received(:mount_proc).with('/')
+      expect(yielded).to eq(puma)
       expect(adapter).to have_received(:start)
       server.shutdown
       expect(adapter).to have_received(:shutdown)

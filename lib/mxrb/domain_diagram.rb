@@ -4,9 +4,9 @@ require 'fileutils'
 require 'json'
 require 'securerandom'
 require 'uri'
-require 'webrick'
 
 require_relative 'web_ui'
+require_relative 'http/server'
 
 module Mxrb
   # Browser ER diagram for Mendix domain models. It edits visual layout only:
@@ -288,12 +288,8 @@ module Mxrb
       end
 
       def start
-        @server = WEBrick::HTTPServer.new(
-          BindAddress: host, Port: port, Logger: WEBrick::Log.new(File::NULL), AccessLog: []
-        )
-        @server.mount_proc('/') { dispatch(_1, _2) }
-        yield(@server) if block_given?
-        @server.start
+        @server = Http::Server.new(host:, port:) { dispatch(_1, _2) }
+        @server.start { yield(_1) if block_given? }
       end
 
       def shutdown = @server&.shutdown

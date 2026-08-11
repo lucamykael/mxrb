@@ -67,7 +67,7 @@ module Mxrb
 
       def gems
         common = [
-          "gem 'rack', '~> 3.1'", "gem 'puma', '~> 7.0'",
+          "gem 'rack', '~> 3.1'", "gem 'puma', '~> 8.0'",
           "gem 'activerecord', '~> 8.0'", "gem 'sqlite3', '~> 2.0'",
           "gem 'rake', '~> 13.2'", "gem 'rspec', '~> 3.13'",
           "gem 'rack-test', '~> 2.2'"
