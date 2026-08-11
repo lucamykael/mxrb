@@ -34,7 +34,34 @@ Sommerzeitwechsel. Unbekannte Zonen führen zu einem Fehler statt unbemerkt auf
 UTC zurückzufallen; `UTC`, `local` und numerische Offsets werden ebenfalls
 unterstützt.
 
-Java Custom Actions sind bewusst ausgeschlossen und führen zu einer eindeutigen
-Fehlermeldung. REST, App Services, SOAP, Mappings und Dokumenterzeugung können
-injizierte Ruby-Adapter verwenden. Im Browser bleibt JavaScript/React; Backend
-und APIs laufen ohne Java Runtime.
+Sitzungen und Scheduler-Koordination verwenden standardmäßig die native
+SQLite-Datei `.mxrb/runtime/<Umgebung>-shared.sqlite3`, ohne externen Dienst.
+Mehrere Instanzen müssen mit `MXRB_SHARED_STORE_PATH` dieselbe Datei verwenden.
+Idempotente Claims pro Ereignis/Zeitfenster und per Heartbeat erneuerte
+Overlap-Leases sind atomar; ein unvollständiger Claim kann nach Lease-Ablauf
+übernommen werden. Der Standard-Lease beträgt 300 Sekunden und lässt sich über
+`MXRB_SCHEDULER_LEASE_TTL` ändern. `:memory:`, `memory` oder `local` aktivieren
+explizit den prozesslokalen Modus.
+
+Java Custom Actions starten niemals eine JVM. Jede erlaubte Action benötigt
+einen expliziten Ruby-Adapter, der in `config/adapters.rb` unter dem
+qualifizierten Namen registriert wird:
+
+```ruby
+Mxrb::RubyApp::Registry.register_java_custom_action('Orders.CalculateTotal') do |arguments|
+  Calculator.call(
+    items: arguments.fetch('Items'),
+    discount: arguments.fetch('Discount')
+  )
+end
+```
+
+Die Schlüssel sind die Parameternamen aus dem Mendix-Modell. Basiswerte werden
+im Microflow-Kontext ausgewertet; Entity-, Microflow- und Mapping-Referenzen
+werden als qualifizierte Namen übergeben. Der Rückgabewert wird nur bei aktivem
+`UseReturnVariable` zugewiesen (oder beim Legacy-Format, das ausschließlich
+`ResultVariableName` deklariert). Eine nicht registrierte Action schlägt mit
+ihrem Namen und einem Registrierungshinweis geschlossen fehl; es gibt weder
+Klassenerkennung noch JAR-Ausführung oder JVM-Fallback. REST, App Services, SOAP,
+Mappings und Dokumenterzeugung verwenden weiterhin typbezogene Ruby-Adapter.
+Im Browser bleibt JavaScript/React; Backend und APIs laufen ohne Java Runtime.

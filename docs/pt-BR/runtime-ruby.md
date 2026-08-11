@@ -41,7 +41,32 @@ como `America/Boa_Vista`, usam `tzinfo`, inclusive nas transições de horário 
 verão. Zonas desconhecidas geram erro em vez de cair silenciosamente para UTC;
 `UTC`, `local` e offsets numéricos como `-04:00` também são aceitos.
 
-Java Custom Actions são a exclusão intencional: o runtime falha com mensagem
-explícita. REST, app services, SOAP, mappings e geração de documentos podem usar
-adapters Ruby injetados. O frontend continua JavaScript/React no navegador, mas
-é servido e atendido pelo backend Ruby, sem Runtime Java.
+Sessões e coordenação do scheduler usam por padrão o SQLite nativo compartilhado
+`.mxrb/runtime/<ambiente>-shared.sqlite3`, sem serviço externo. Múltiplas
+instâncias devem apontar `MXRB_SHARED_STORE_PATH` para o mesmo arquivo. Claims
+idempotentes por evento/janela e leases de sobreposição renovados por heartbeat
+são atômicos; um claim inacabado pode ser retomado após a expiração. O lease
+padrão é de 300 segundos e pode ser alterado com `MXRB_SCHEDULER_LEASE_TTL`.
+Use `:memory:`, `memory` ou `local` para ativar explicitamente o modo por processo.
+
+Java Custom Actions não iniciam uma JVM. Cada ação permitida deve ter um adapter
+Ruby explícito, registrado pelo nome qualificado em `config/adapters.rb`:
+
+```ruby
+Mxrb::RubyApp::Registry.register_java_custom_action('Pedidos.CalcularTotal') do |arguments|
+  Calculador.call(
+    itens: arguments.fetch('Itens'),
+    desconto: arguments.fetch('Desconto')
+  )
+end
+```
+
+As chaves são os nomes dos parâmetros no modelo Mendix. Valores básicos são
+avaliados no contexto do microflow; referências de entidade, microflow e
+mappings são entregues como nomes qualificados. O retorno alimenta a variável
+de resultado apenas quando `UseReturnVariable` está ativo (ou no formato legado
+que declara somente `ResultVariableName`). Uma ação sem registro falha fechado
+com seu nome e a instrução de registro; não há descoberta de classes, execução
+de JAR nem fallback para a JVM. REST, app services, SOAP, mappings e geração de
+documentos continuam usando os adapters Ruby por tipo. O frontend permanece
+JavaScript/React no navegador, servido pelo backend Ruby sem Runtime Java.

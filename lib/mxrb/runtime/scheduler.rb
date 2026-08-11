@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'time'
+require 'securerandom'
+require_relative 'shared_store'
 
 begin
   require 'tzinfo'
@@ -29,8 +31,10 @@ module Mxrb
 
       def initialize(project, executor: nil, clock: -> { Time.now.utc },
                      sleeper: Kernel.method(:sleep), poll_interval: 1.0,
-                     skip_overlap: true, async: true, on_error: nil, logger: nil)
+                     skip_overlap: true, async: true, on_error: nil, logger: nil,
+                     coordinator: nil, lease_ttl: 300, owner: nil)
         raise ArgumentError, 'poll_interval must be positive' unless poll_interval.to_f.positive?
+        raise ArgumentError, 'lease_ttl must be positive' unless lease_ttl.to_f.positive?
 
         @project = project
         @executor = executor || default_executor
@@ -41,6 +45,9 @@ module Mxrb
         @async = async
         @on_error = on_error
         @logger = logger
+        @coordinator = coordinator || MemorySharedStore.new
+        @lease_ttl = lease_ttl.to_f
+        @owner = owner || "#{Process.pid}-#{SecureRandom.uuid}"
         @time_zones = {}
         @jobs = load_jobs.freeze
         @errors = []
@@ -83,9 +90,9 @@ module Mxrb
         jobs.filter_map do |job|
           slot = due_slot(job, now)
           next unless slot
-          next unless reserve(job, slot)
+          next unless reserve(job, slot, now)
 
-          dispatch(job, async:)
+          dispatch(job, slot, async:)
           job
         end
       end
@@ -192,13 +199,20 @@ module Mxrb
         end
       end
 
-      def reserve(job, slot)
+      def reserve(job, slot, now)
         @mutex.synchronize do
           return false if @last_slots[job.qualified_name] == slot
           return false if skip_overlap?(job) && @running_jobs[job.qualified_name]
 
+          slot_key = "#{job.schedule.fetch(:type)}:#{slot}"
+          claimed = @coordinator.claim_scheduled_event(
+            event: job.qualified_name, slot: slot_key, owner: @owner,
+            now:, lease_until: now + @lease_ttl, skip_overlap: skip_overlap?(job)
+          )
+          return false unless claimed
+
           @last_slots[job.qualified_name] = slot
-          @running_jobs[job.qualified_name] = true
+          @running_jobs[job.qualified_name] = slot_key
           true
         end
       end
@@ -207,25 +221,82 @@ module Mxrb
         @skip_overlap || job.overlap.to_s.match?(/skip/i)
       end
 
-      def dispatch(job, async:)
+      def dispatch(job, slot = nil, async:)
+        slot_key = slot && "#{job.schedule.fetch(:type)}:#{slot}"
+        slot_key ||= @running_jobs[job.qualified_name] || "manual:#{SecureRandom.uuid}"
         unless async
-          execute(job)
+          execute(job, slot_key)
           return
         end
 
-        worker = Thread.new { execute(job) }
+        worker = Thread.new { execute(job, slot_key) }
         worker.name = "mxrb-job-#{job.qualified_name}" if worker.respond_to?(:name=)
         @mutex.synchronize { @workers << worker }
       end
 
-      def execute(job)
+      def execute(job, slot)
+        heartbeat = start_heartbeat(job, slot)
         invoke_executor(job)
       rescue StandardError => e
         @mutex.synchronize { @errors << [job, e].freeze }
         @on_error&.call(job, e)
         @logger&.error("scheduled event #{job.qualified_name} failed: #{e.message}")
       ensure
-        @mutex.synchronize { @running_jobs.delete(job.qualified_name) }
+        stop_heartbeat(heartbeat)
+        begin
+          @coordinator.complete_scheduled_event(
+            event: job.qualified_name, slot:, owner: @owner
+          )
+        rescue StandardError => e
+          @logger&.error("scheduled event #{job.qualified_name} lease completion failed: #{e.message}")
+        ensure
+          @mutex.synchronize { @running_jobs.delete(job.qualified_name) }
+        end
+      end
+
+      def start_heartbeat(job, slot)
+        return unless @coordinator.respond_to?(:renew_scheduled_event)
+
+        state = { mutex: Mutex.new, condition: ConditionVariable.new, stopping: false }
+        state[:thread] = Thread.start do
+          heartbeat_loop(job, slot, state)
+        end
+        state[:thread].name = "mxrb-lease-#{job.qualified_name}"
+        state
+      end
+
+      def heartbeat_loop(job, slot, state)
+        interval = [@lease_ttl / 3.0, 0.01].max
+        loop do
+          stopping = state.fetch(:mutex).synchronize do
+            if state.fetch(:stopping)
+              true
+            else
+              state.fetch(:condition).wait(state.fetch(:mutex), interval)
+              state.fetch(:stopping)
+            end
+          end
+          break if stopping
+
+          now = @clock.call
+          renewed = @coordinator.renew_scheduled_event(
+            event: job.qualified_name, slot:, owner: @owner,
+            lease_until: now + @lease_ttl
+          )
+          break unless renewed
+        end
+      rescue StandardError => e
+        @logger&.error("scheduled event #{job.qualified_name} lease renewal failed: #{e.message}")
+      end
+
+      def stop_heartbeat(state)
+        return unless state
+
+        state.fetch(:mutex).synchronize do
+          state[:stopping] = true
+          state.fetch(:condition).broadcast
+        end
+        state.fetch(:thread).join
       end
 
       def invoke_executor(job)

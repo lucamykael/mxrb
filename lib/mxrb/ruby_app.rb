@@ -135,6 +135,7 @@ module Mxrb
         @services = {}
         @pages = {}
         @adapters = {}
+        @java_custom_actions = {}
       end
 
       def register(kind, name, implementation)
@@ -157,9 +158,27 @@ module Mxrb
 
       def adapters = all(:adapter)
 
+      def register_java_custom_action(name, implementation = nil, &block)
+        qualified_name = name.to_s
+        unless qualified_name.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+          raise ArgumentError, "Java Custom Action name must be qualified as Module.Action: #{name}"
+        end
+
+        callback = implementation || block
+        raise ArgumentError, 'Java Custom Action adapter must respond to call' unless callback.respond_to?(:call)
+
+        register(:java_custom_action, qualified_name, callback)
+        callback
+      end
+
+      def java_custom_actions = all(:java_custom_action)
+
       def collection(kind)
         reset! unless defined?(@records) && @records
-        { record: @records, service: @services, page: @pages, adapter: @adapters }.fetch(kind)
+        {
+          record: @records, service: @services, page: @pages, adapter: @adapters,
+          java_custom_action: @java_custom_actions
+        }.fetch(kind)
       end
     end
 
@@ -453,7 +472,8 @@ module Mxrb
         @session_manager ||= SessionManager.new(
           access_control, users: environment['MXRB_USERS_JSON'],
                           tokens: environment['MXRB_AUTH_TOKENS'],
-                          ttl: environment.fetch('MXRB_SESSION_TTL', '3600')
+                          ttl: environment.fetch('MXRB_SESSION_TTL', '3600'),
+                          store: shared_store
         )
       end
 
@@ -461,9 +481,11 @@ module Mxrb
 
       def close
         @bridge&.close
+        @shared_store&.close
         @bridge = nil
         @access_control = nil
         @session_manager = nil
+        @shared_store = nil
       end
 
       private
@@ -600,8 +622,27 @@ module Mxrb
           manifest.absolute_path('runtime_mpr'),
           database: runtime_database_path,
           record_hooks: Registry.all(:record), adapters: Registry.adapters,
-          allow_destructive: environment['MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS'].to_s.casecmp?('true')
+          java_custom_actions: Registry.java_custom_actions,
+          allow_destructive: environment['MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS'].to_s.casecmp?('true'),
+          coordinator: shared_store,
+          scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300')
         )
+      end
+
+      def shared_store
+        @shared_store ||= begin
+          configured = environment['MXRB_SHARED_STORE_PATH'].to_s.strip
+          if %w[:memory: memory local].include?(configured.downcase)
+            Runtime::MemorySharedStore.new
+          else
+            path = configured.empty? ? default_shared_store_path : File.expand_path(configured, root)
+            Runtime::SQLiteSharedStore.new(path)
+          end
+        end
+      end
+
+      def default_shared_store_path
+        File.join(root, '.mxrb', 'runtime', "#{environment.name}-shared.sqlite3")
       end
 
       def runtime_database_path
@@ -673,18 +714,20 @@ module Mxrb
     class NativeBridge
       attr_reader :access_control, :interpreter, :project, :scheduler, :store
 
-      def initialize(path, database:, record_hooks: {}, adapters: {}, allow_destructive: false)
+      def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
+                     allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300)
         FileUtils.mkdir_p(File.dirname(database))
         @project = Model::Project.open(path)
         @store = Runtime::SQLiteStore.new(@project, path: database, allow_destructive:)
         @access_control = Runtime::AccessControl.new(@project)
         @interpreter = Runtime::Native::Interpreter.new(
-          @project, store: @store, policy: @access_control, adapters:
+          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:
         )
         register_record_hooks(record_hooks)
         @scheduler = Runtime::Scheduler.new(
           @project,
-          executor: ->(name, **_metadata) { @interpreter.call(name) }
+          executor: ->(name, **_metadata) { @interpreter.call(name) }, coordinator:,
+          lease_ttl: scheduler_lease_ttl
         )
       rescue StandardError
         close
