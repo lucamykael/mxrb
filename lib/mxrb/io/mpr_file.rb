@@ -223,6 +223,31 @@ module Mxrb
         true
       end
 
+      # Repairs stale Unit.ContentsHash metadata without reserializing or
+      # otherwise changing the BSON/mxunit payload. Returns an audit trail.
+      def repair_content_hashes!
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        repairs = []
+        transaction do
+          all_units.each do |unit|
+            bytes = content_bytes(unit)
+            next if bytes.to_s.empty?
+
+            previous = unit['ContentsHash'].to_s
+            current = BsonCodec.contents_hash(bytes)
+            next if previous == current
+
+            @db.execute(
+              'UPDATE Unit SET ContentsHash = ? WHERE UnitID = ?',
+              [current, BsonCodec.uuid_to_blob(unit.fetch('UnitID'))]
+            )
+            repairs << { unit_id: unit.fetch('UnitID'), previous:, current: }
+          end
+        end
+        repairs
+      end
+
       def delete_unit(uuid)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
         @db.execute("DELETE FROM Unit WHERE UnitID = ?", [BsonCodec.uuid_to_blob(uuid)])

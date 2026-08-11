@@ -21,7 +21,9 @@ module Mxrb
         'Forms$GridNewButton' => 'InsertNew',
         'Forms$GridEditButton' => 'EditSelection',
         'Forms$GridDeleteButton' => 'DeleteSelection',
-        'Forms$GridActionButton' => 'InvokeAction'
+        'Forms$GridActionButton' => 'InvokeAction',
+        'Forms$DataGridAddButton' => 'AddRef',
+        'Forms$DataGridRemoveButton' => 'DeleteRef'
       }.freeze
 
       attr_reader :unsupported
@@ -38,16 +40,18 @@ module Mxrb
       def html
         props = JSON.generate(properties)[1..-2]
         attributes = {
-          'data-mendix-id' => widget_id, 'data-mendix-type' => 'mxui.widget.DataGrid',
+          'data-mendix-id' => widget_id, 'data-mendix-type' => client_widget_type,
           'data-mendix-props' => props, 'class' => css_class, 'tabindex' => @widget['TabIndex'].to_i
         }
         "<div #{attributes.map { |key, value| "#{key}='#{escape(value)}'" }.join(' ')}></div>"
       end
 
+      def id = widget_id
+
       private
 
       def properties
-        {
+        result = {
           'friendlyId' => friendly_id, 'entity' => entity, 'schema' => entity_schema,
           'config' => {
             'locale' => @language, 'gridType' => 'Standalone',
@@ -57,11 +61,14 @@ module Mxrb
             'griddata' => columns.map { compile_column(_1) }, 'plugins' => {}
           }
         }
+        result['xpathConstraint'] = @widget['SelectableXPathConstraint'].to_s if reference_set?
+        result
       end
 
       def presentation
         {
-          'rows' => @widget['NumberOfRows'].to_i, 'columns' => 1,
+          'rows' => @widget['NumberOfRows'].to_i,
+          'columns' => template_grid? ? [@widget['NumberOfColumns'].to_i, 1].max : 1,
           'controlbar' => @widget['IsControlBarVisible'] == true,
           'pagingbar' => @widget['IsPagingEnabled'] == true,
           'sortparams' => sort_items, 'searchbar' => !search_elements.empty?,
@@ -74,6 +81,8 @@ module Mxrb
       end
 
       def datasource
+        return reference_set_datasource if reference_set?
+
         type = SOURCE_TYPES[data_source['$Type']]
         @unsupported << data_source['$Type'].to_s unless type
         result = { 'friendlyId' => friendly_id, 'type' => type || 'unsupported', 'path' => entity }
@@ -136,7 +145,7 @@ module Mxrb
 
       def button_params(button)
         case button['$Type']
-        when 'Forms$GridNewButton', 'Forms$GridEditButton'
+        when 'Forms$GridNewButton', 'Forms$GridEditButton', 'Forms$DataGridAddButton'
           { entity => { 'pageSettings' => page_settings(button['FormSettings']) } }
         when 'Forms$GridActionButton'
           { entity => { 'action' => client_action(button['Action']),
@@ -200,7 +209,17 @@ module Mxrb
 
       def entity
         direct = data_source['EntityPath'] || data_source.dig('EntityRef', 'Entity')
-        direct.to_s.empty? ? attribute_path(columns.first).to_s.rpartition('.').first : direct.to_s
+        value = direct.to_s.empty? ? attribute_path(columns.first).to_s.rpartition('.').first : direct.to_s
+        reference_set? ? value.split('/').last.to_s : value
+      end
+
+      def reference_set_datasource
+        {
+          'friendlyId' => friendly_id, 'path' => entity, 'entity' => entity,
+          'reference' => data_source['EntityPath'].to_s.split('/').first.to_s,
+          'sort' => sort_items, 'attributes' => columns.map { relative_attribute(attribute_path(_1)) },
+          'distinct' => false
+        }
       end
 
       def entity_schema
@@ -233,9 +252,26 @@ module Mxrb
       def widget_id = "#{@sequence}_#{buttons.length}"
 
       def css_class
-        ['mx-datagrid', "mx-name-#{@widget['Name']}", @widget['Class']]
+        [widget_css_class, "mx-name-#{@widget['Name']}", @widget['Class']]
           .map(&:to_s).reject(&:empty?).uniq.join(' ')
       end
+
+      def client_widget_type
+        return 'mxui.widget.TemplateGrid' if template_grid?
+        return 'mxui.widget.ReferenceSetSelector' if reference_set?
+
+        'mxui.widget.DataGrid'
+      end
+
+      def widget_css_class
+        return 'mx-templategrid' if template_grid?
+        return 'mx-referencesetselector' if reference_set?
+
+        'mx-datagrid'
+      end
+
+      def template_grid? = @widget['$Type'] == 'Forms$TemplateGrid'
+      def reference_set? = @widget['$Type'] == 'Forms$ReferenceSetSelector'
 
       def translated(text)
         items = array(text&.fetch('Items', nil))

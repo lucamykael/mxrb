@@ -7,11 +7,11 @@ PATH
       bson (~> 5.2)
       csv (~> 3.3)
       dotenv (~> 3.0)
+      puma (~> 8.0)
       rexml (~> 3.3)
       rubyzip (~> 3.0)
       sqlite3 (~> 2.0)
       tzinfo (~> 2.0)
-      webrick (~> 1.9)
 
 GEM
   remote: https://rubygems.org/
@@ -35,6 +35,7 @@ GEM
     json (2.21.1)
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
+    nio4r (2.7.5)
     onnxruntime (0.11.5-arm64-darwin)
       ffi
     onnxruntime (0.11.5-x86_64-darwin)
@@ -46,6 +47,8 @@ GEM
       ast (~> 2.4.1)
       racc
     prism (1.9.0)
+    puma (8.0.2)
+      nio4r (~> 2.0)
     racc (1.8.1)
     rainbow (3.1.1)
     regexp_parser (2.12.0)
@@ -95,7 +98,6 @@ GEM
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
-    webrick (1.9.2)
 
 PLATFORMS
   arm64-darwin
@@ -132,12 +134,14 @@ CHECKSUMS
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
   mxrb (0.1.4)
+  nio4r (2.7.5) sha256=6c90168e48fb5f8e768419c93abb94ba2b892a1d0602cb06eef16d8b7df1dca1
   onnxruntime (0.11.5-arm64-darwin) sha256=9f2f45b3ac16999c466ac352562195e03a011cc930b8750c0b1e43a49c1ca5d9
   onnxruntime (0.11.5-x86_64-darwin) sha256=19c18e90eb101f69a3232dfdd1742e77d69e2df623b106b670221629d4b4cc15
   onnxruntime (0.11.5-x86_64-linux) sha256=13f20de606a8fb32ba404bca9e1fc47f0eab4605c909252dbcf6db4fb106c9e6
   parallel (2.1.0) sha256=b35258865c2e31134c5ecb708beaaf6772adf9d5efae28e93e99260877b09356
   parser (3.3.12.0) sha256=21a6d7f755d5a24dfbdc6e6b772e4e879a52e7631a88bc5a3a134606052c9828
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
+  puma (8.0.2) sha256=c8ed871dfbbe66448ea9ffd46692342d9804d4071522b52b5331b7b6e7b686fb
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
   rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
   regexp_parser (2.12.0) sha256=35a916a1d63190ab5c9009457136ae5f3c0c7512d60291d0d1378ba18ce08ebb
@@ -165,7 +169,6 @@ CHECKSUMS
   tzinfo (2.0.6) sha256=8daf828cc77bcf7d63b0e3bdb6caa47e2272dcfaf4fbfe46f8c3a9df087a829b
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
   unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
-  webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
 
 BUNDLED WITH
   4.0.17

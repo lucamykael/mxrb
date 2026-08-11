@@ -547,6 +547,7 @@ when 'uml'
 
       server = Mxrb::Uml::Server.new(source, port:)
       puts "[mxrb] UML viewer: http://127.0.0.1:#{port}"
+      puts "[mxrb] Project modeler: http://127.0.0.1:#{port}/modeler"
       puts '[mxrb] Use Ctrl+C to stop the server.'
       trap('INT') { Thread.new { server.shutdown } }
       server.start

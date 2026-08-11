@@ -12,10 +12,11 @@ module Mxrb
 
       attr_reader :data_source, :entity_name
 
-      def initialize(source, page_name, widget)
+      def initialize(source, page_name, widget, render_widgets: nil)
         @source = source
         @page_name = page_name
         @widget = widget
+        @render_widgets = render_widgets
         @index = document_index
         @values = property_values(widget['Object'])
         @data_source = WebListDataSource.new(source, widget)
@@ -38,12 +39,21 @@ module Mxrb
           key: widget_key, '$widgetId': widget_key, datasource: raw(datasource),
           content: raw("TemplatedWidgetProperty({ children: () => #{content}, " \
                        "dataSourceId: #{JSON.generate(data_source_id)}, editable: false })"),
+          filtersPlaceholder: filters_placeholder,
           itemSelection: raw(selection), class: css_class
         )
         "React.createElement($Gallery, #{js_object(values)})"
       end
 
       private
+
+      def filters_placeholder
+        widgets = array(@values['filtersPlaceholder']&.last&.fetch('Widgets', nil))
+        return [] if widgets.empty?
+        return :undefined unless @render_widgets
+
+        raw(@render_widgets.call(widgets, widget_key, entity_name))
+      end
 
       def datasource
         config = {

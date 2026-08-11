@@ -200,12 +200,12 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
         'X-MXRB-Token' => payload.fetch('csrf_token')
       ).status).to eq(200)
 
-      fake_http = instance_double(WEBrick::HTTPServer)
-      allow(fake_http).to receive(:mount_proc)
-      allow(fake_http).to receive(:start)
+      fake_http = instance_double(Mxrb::Http::Server)
+      puma = instance_double(Puma::Server)
+      allow(fake_http).to receive(:start).and_yield(puma)
       allow(fake_http).to receive(:shutdown)
-      allow(WEBrick::HTTPServer).to receive(:new).and_return(fake_http)
-      expect { |block| server.start(&block) }.to yield_with_args(fake_http)
+      allow(Mxrb::Http::Server).to receive(:new).and_return(fake_http)
+      expect { |block| server.start(&block) }.to yield_with_args(puma)
       server.start
       server.shutdown
 
@@ -960,10 +960,11 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       expect { Mxrb::RubyApp::Server.new(root, host: 'public.example') }
         .to raise_error(ArgumentError, /loopback/)
       server = Mxrb::RubyApp::Server.new(root, port: 0)
-      fake_http = instance_double(WEBrick::HTTPServer, start: nil, shutdown: nil)
-      allow(fake_http).to receive(:mount_proc)
-      allow(WEBrick::HTTPServer).to receive(:new).and_return(fake_http)
-      expect { |block| server.start(&block) }.to yield_with_args(fake_http)
+      fake_http = instance_double(Mxrb::Http::Server, shutdown: nil)
+      puma = instance_double(Puma::Server)
+      allow(fake_http).to receive(:start).and_yield(puma)
+      allow(Mxrb::Http::Server).to receive(:new).and_return(fake_http)
+      expect { |block| server.start(&block) }.to yield_with_args(puma)
       server.start
       server.shutdown
 

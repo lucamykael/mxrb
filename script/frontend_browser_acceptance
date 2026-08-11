@@ -228,11 +228,13 @@ module MxrbFrontendBrowserAcceptance
       call('Page.enable')
       call('Runtime.enable')
       call('Console.enable')
+      call('Network.enable')
       call('Emulation.setDeviceMetricsOverride', {
         width:, height:, deviceScaleFactor: 1, mobile: false
       })
       @console_errors = []
       @console_event_index = 0
+      @network_event_index = 0
       @authenticated = false
     end
 
@@ -311,9 +313,96 @@ module MxrbFrontendBrowserAcceptance
 
     def measure_click(expectation)
       selector, index = selector_and_index(expectation)
+      measure_interaction(expectation, selector:, index:, action: 'target.click();', label: 'click')
+    end
+
+    def input_value(expectation)
+      selector, index = selector_and_index(expectation)
+      value = expectation.fetch('value').to_s
+      blur = expectation.fetch('blur', true) == true
+      expression = input_expression(selector:, index:, value:, blur:)
+      wait(expression, "editable input #{selector.inspect}")
+    end
+
+    def measure_input(expectation)
+      selector, index = selector_and_index(expectation)
+      value = expectation.fetch('value').to_s
+      blur = expectation.fetch('blur', true) == true
+      action = input_action(value:, blur:)
+      measure_interaction(expectation, selector:, index:, action:, label: 'input')
+    end
+
+    def select_option(expectation)
+      selector, index = selector_and_index(expectation)
+      option_index = Integer(expectation.fetch('option_index', 1))
+      wait(
+        selection_expression(selector:, index:, option_index:),
+        "select option #{option_index} from #{selector.inspect}"
+      )
+    end
+
+    def measure_select(expectation)
+      selector, index = selector_and_index(expectation)
+      option_index = Integer(expectation.fetch('option_index', 1))
+      action = selection_action(option_index:)
+      measure_interaction(expectation, selector:, index:, action:, label: 'select')
+    end
+
+    def audit_widgets(expectation)
+      selector = expectation.fetch('selector', '.mxrb-widget')
+      minimum = Integer(expectation.fetch('min_count', 1))
+      maximum_render = Float(expectation.fetch('max_render_ms', 1_500))
+      maximum_long_task = Float(expectation.fetch('max_long_task_ms', 250))
+      result = evaluate(<<~JS)
+        (() => {
+          const elements = [...document.querySelectorAll(#{JSON.generate(selector)})];
+          const invisible = elements.filter(element => {
+            const style = getComputedStyle(element);
+            const box = element.getBoundingClientRect();
+            return style.display === 'none' || style.visibility === 'hidden' ||
+              box.width <= 0 || box.height <= 0;
+          }).map(element => element.dataset.widgetName || element.className || element.tagName);
+          const failures = elements.filter(element =>
+            element.getAttribute('role') === 'alert' ||
+            element.textContent.includes('Could not render widget')
+          ).map(element => element.textContent.trim());
+          const types = elements.reduce((counts, element) => {
+            const type = element.dataset.widgetType || 'untyped';
+            counts[type] = (counts[type] || 0) + 1;
+            return counts;
+          }, {});
+          const navigation = performance.getEntriesByType('navigation')[0];
+          const renderMs = navigation ? navigation.domContentLoadedEventEnd - navigation.startTime : 0;
+          const longTasks = performance.getEntriesByType('longtask').map(entry => entry.duration);
+          return { count: elements.length, invisible, failures, types,
+            render_ms: renderMs, longest_task_ms: Math.max(0, ...longTasks) };
+        })()
+      JS
+      raise Failure, "widget audit found #{result['count']} elements (minimum #{minimum})" if
+        result['count'] < minimum
+      raise Failure, "widget audit found invisible widgets: #{result['invisible'].join(', ')}" unless
+        result['invisible'].empty?
+      raise Failure, "widget audit found render failures: #{result['failures'].join('; ')}" unless
+        result['failures'].empty?
+      if result['render_ms'] > maximum_render
+        raise Failure, "widget render took #{result['render_ms'].round(1)}ms " \
+                       "(budget #{maximum_render.round(1)}ms)"
+      end
+      if result['longest_task_ms'] > maximum_long_task
+        raise Failure, "widget long task took #{result['longest_task_ms'].round(1)}ms " \
+                       "(budget #{maximum_long_task.round(1)}ms)"
+      end
+
+      result.merge(
+        'selector' => selector, 'min_count' => minimum, 'max_render_ms' => maximum_render,
+        'max_long_task_ms' => maximum_long_task
+      )
+    end
+
+    def measure_interaction(expectation, selector:, index:, action:, label:)
       maximum = Float(expectation.fetch('max_ms', 250))
       timeout = Float(expectation.fetch('timeout_ms', 5_000))
-      minimum_requests = Integer(expectation.fetch('min_requests', 1))
+      minimum_requests = Integer(expectation.fetch('min_requests', 0))
       result = evaluate(<<~JS)
         new Promise(resolve => {
           const target = document.querySelectorAll(#{JSON.generate(selector)})[#{index}];
@@ -343,7 +432,7 @@ module MxrbFrontendBrowserAcceptance
             }
           };
           const started = performance.now();
-          target.click();
+          #{action}
           const poll = () => {
             const duration = performance.now() - started;
             const busy = document.querySelector('.mxrb-page')?.getAttribute('aria-busy') === 'true';
@@ -361,9 +450,9 @@ module MxrbFrontendBrowserAcceptance
           poll();
         })
       JS
-      raise Failure, "measured click #{selector.inspect} failed: #{result['error']}" if result['error']
+      raise Failure, "measured #{label} #{selector.inspect} failed: #{result['error']}" if result['error']
       if result['duration_ms'] > maximum
-        raise Failure, "measured click #{selector.inspect} took #{result['duration_ms'].round(1)}ms " \
+        raise Failure, "measured #{label} #{selector.inspect} took #{result['duration_ms'].round(1)}ms " \
                        "(budget #{maximum.round(1)}ms)"
       end
 
@@ -371,6 +460,54 @@ module MxrbFrontendBrowserAcceptance
         'selector' => selector, 'index' => index, 'max_ms' => maximum,
         'min_requests' => minimum_requests
       )
+    end
+
+    def input_expression(selector:, index:, value:, blur:)
+      <<~JS
+        (() => {
+          const target = document.querySelectorAll(#{JSON.generate(selector)})[#{index}];
+          if (!target || target.disabled) return false;
+          #{input_action(value:, blur:)}
+          return true;
+        })()
+      JS
+    end
+
+    def input_action(value:, blur:)
+      <<~JS
+        const prototype = target instanceof HTMLSelectElement ? HTMLSelectElement.prototype :
+          target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+        if (!setter) throw new Error('target has no native value setter');
+        target.focus();
+        setter.call(target, #{JSON.generate(value)});
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+        #{blur ? 'setTimeout(() => target.blur(), 25);' : ''}
+      JS
+    end
+
+    def selection_expression(selector:, index:, option_index:)
+      <<~JS
+        (() => {
+          const target = document.querySelectorAll(#{JSON.generate(selector)})[#{index}];
+          if (!(target instanceof HTMLSelectElement) || target.disabled ||
+              !target.options[#{option_index}]) return false;
+          #{selection_action(option_index:)}
+          return true;
+        })()
+      JS
+    end
+
+    def selection_action(option_index:)
+      <<~JS
+        const option = target.options[#{option_index}];
+        if (!option) throw new Error('select option is missing');
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        setter.call(target, option.value);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        target.dispatchEvent(new Event('change', { bubbles: true }));
+      JS
     end
 
     def wait_for_text(text)
@@ -498,6 +635,20 @@ module MxrbFrontendBrowserAcceptance
       @console_errors.uniq
     end
 
+    def widget_resource_errors
+      evaluate('true')
+      events = @client.events.drop(@network_event_index)
+      @network_event_index = @client.events.length
+      requests = events.filter_map do |event|
+        next unless event['method'] == 'Network.requestWillBeSent'
+
+        [event.dig('params', 'requestId'), event.dig('params', 'request', 'url')]
+      end.to_h
+      events.filter_map do |event|
+        resource_failure(event, requests)
+      end
+    end
+
     def diagnostics
       evaluate(<<~'JS')
         ({
@@ -506,7 +657,40 @@ module MxrbFrontendBrowserAcceptance
           resources: performance.getEntriesByType('resource')
             .filter(entry => entry.name.includes('/api/'))
             .map(entry => ({ name: entry.name, duration_ms: entry.duration,
-              transfer_size: entry.transferSize }))
+              transfer_size: entry.transferSize })),
+          media: [...document.querySelectorAll('video')].map(video => ({
+            current_src: video.currentSrc, ready_state: video.readyState,
+            network_state: video.networkState, paused: video.paused,
+            error_code: video.error?.code || null,
+            sources: [...video.querySelectorAll('source')].map(source => source.src)
+          }))
+        })
+      JS
+    end
+
+    def settle_healthy_media
+      evaluate(<<~'JS')
+        new Promise(resolve => {
+          const started = performance.now();
+          const poll = () => {
+            const videos = [...document.querySelectorAll('video')];
+            const healthy = videos.length === 0 || videos.every(video =>
+              video.readyState >= 2 && !video.error
+            );
+            if (!healthy && performance.now() - started < 10000) {
+              return setTimeout(poll, 50);
+            }
+            const settle = () => videos.filter(video => video.readyState >= 2 && !video.error)
+              .forEach(video => video.parentElement
+                ?.querySelector('.video-error-label-html5')?.classList.remove('hasError'));
+            settle();
+            setTimeout(() => {
+              settle();
+              resolve(videos.map(video => ({ ready_state: video.readyState,
+                error_code: video.error?.code || null })));
+            }, 500);
+          };
+          poll();
         })
       JS
     end
@@ -572,10 +756,32 @@ module MxrbFrontendBrowserAcceptance
       events = @client.events.drop(@console_event_index)
       @console_event_index = @client.events.length
       @console_errors.concat(events.filter_map do |event|
-        next unless event['method'] == 'Runtime.exceptionThrown'
+        case event['method']
+        when 'Runtime.exceptionThrown'
+          event.dig('params', 'exceptionDetails', 'text') || 'browser exception'
+        when 'Runtime.consoleAPICalled'
+          next unless %w[error assert].include?(event.dig('params', 'type'))
 
-        event.dig('params', 'exceptionDetails', 'text') || 'browser exception'
+          Array(event.dig('params', 'args')).map do |argument|
+            argument['value'] || argument['description'] || argument['type']
+          end.compact.join(' ')
+        when 'Console.messageAdded'
+          message = event.dig('params', 'message') || {}
+          message['text'] if message['level'] == 'error'
+        end
       end)
+    end
+
+    def resource_failure(event, requests)
+      params = event.fetch('params', {})
+      response = params.fetch('response', {})
+      url = response['url'] || requests[params['requestId']]
+      return unless url&.match?(%r{/widgets(?:/|%2f)}i)
+
+      status = response['status']
+      return unless (status && status >= 400) || event['method'] == 'Network.loadingFailed'
+
+      { 'url' => url, 'status' => status, 'error' => params['errorText'] }.compact
     end
   end
 
@@ -621,7 +827,7 @@ module MxrbFrontendBrowserAcceptance
       {
         passed: true, scenario: @config.fetch('name'), base_url: @base_url,
         authenticated: authenticated?, baseline:, pages:,
-        console_errors:
+        console_errors:, certification: @config['certification']
       }
     rescue StandardError => e
       failure_report(e)
@@ -632,7 +838,10 @@ module MxrbFrontendBrowserAcceptance
     private
 
     def failure_report(error)
-      report = { passed: false, scenario: @config['name'], base_url: @base_url, error: error.message }
+      report = {
+        passed: false, scenario: @config['name'], base_url: @base_url,
+        error: error.message, certification: @config['certification']
+      }
       return report unless @browser
 
       FileUtils.mkdir_p(@output_dir)
@@ -664,10 +873,16 @@ module MxrbFrontendBrowserAcceptance
       Array(page['text']).each { @browser.wait_for_text(_1) }
       Array(page['selectors']).each { @browser.wait_for_selector(_1) }
       Array(page['styles']).each { @browser.wait_for_style(_1) }
+      media = @browser.settle_healthy_media
+      resource_errors = @browser.widget_resource_errors
+      raise Failure, "widget resource failures: #{resource_errors.inspect}" unless resource_errors.empty?
+
       snapshot = @browser.snapshot
       failure_markers = ['Could not render widget',
                          'An error occurred, please contact your system administrator.',
-                         'Executing runtime operation failed for security reasons']
+                         'Executing runtime operation failed for security reasons',
+                         'Out of context', 'out of context', 'must be placed inside',
+                         'should be placed within', 'failed to load']
       render_errors = Array(snapshot['elements']).filter_map do |element|
         text = element['text'].to_s
         text if failure_markers.any? { text.include?(_1) }
@@ -683,7 +898,8 @@ module MxrbFrontendBrowserAcceptance
         'name' => name, 'url' => page['path'], 'snapshot' => snapshot,
         'snapshot_sha256' => digest, 'screenshot' => screenshot,
         'screenshot_sha256' => Digest::SHA256.file(screenshot).hexdigest,
-        'measurements' => measurements
+        'measurements' => measurements, 'media' => media,
+        'widget_resource_errors' => resource_errors
       }
     end
 
@@ -692,6 +908,11 @@ module MxrbFrontendBrowserAcceptance
         'navigate' => :navigate,
         'click_selector' => :click_selector,
         'measure_click' => :measure_click,
+        'input_value' => :input_value,
+        'measure_input' => :measure_input,
+        'select_option' => :select_option,
+        'measure_select' => :measure_select,
+        'audit_widgets' => :audit_widgets,
         'click_text' => :click_text,
         'wait_for_text' => :wait_for_text,
         'wait_for_selector' => :wait_for_selector,
@@ -705,7 +926,7 @@ module MxrbFrontendBrowserAcceptance
 
       action = selected.first
       result = @browser.public_send(actions.fetch(action), step.fetch(action))
-      return unless action == 'measure_click'
+      return unless %w[measure_click measure_input measure_select audit_widgets].include?(action)
 
       { 'action' => action, 'result' => result }
     end

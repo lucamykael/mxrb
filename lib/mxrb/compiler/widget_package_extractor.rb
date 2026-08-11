@@ -10,10 +10,13 @@ module Mxrb
     class WidgetPackageExtractor
       def initialize(project_root, web_root)
         @source = File.join(project_root, 'widgets')
+        @web_root = web_root
         @destination = File.join(web_root, 'widgets')
       end
 
       def extract
+        FileUtils.rm_f(File.join(@web_root, 'mxrb-widgets.css'))
+        FileUtils.rm_f(File.join(@destination, 'mxrb-widgets.css'))
         return 0 unless File.directory?(@source)
 
         FileUtils.mkdir_p(@destination)

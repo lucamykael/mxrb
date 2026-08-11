@@ -54,6 +54,31 @@ RSpec.describe Mxrb::Compiler::WebShellMaterializer do
     end
   end
 
+  it 'materializes Marketplace styles after bundling and links them from the application shell' do
+    Dir.mktmpdir do |root|
+      styles = File.join(root, 'widgets', 'vendor', 'Widget.css')
+      FileUtils.mkdir_p(File.dirname(styles))
+      File.write(styles, '.widget { color: green; }')
+      index = File.join(root, 'index.html')
+      File.write(index, '<head></head>')
+
+      subject = described_class.new(root, version: '11.12.1')
+      expect(subject.materialize).to eq(2)
+      expect(File.read(File.join(root, 'widgets', 'mxrb-widgets.css')))
+        .to eq(".widget { color: green; }\n")
+      expect(File.read(index)).to include(
+        'data-mxrb-widget-styles', 'href="widgets/mxrb-widgets.css?'
+      )
+      expect(subject.send(:inject_widget_stylesheet, '<body>no head</body>'))
+        .to eq('<body>no head</body>')
+      expect(subject.materialize).to eq(0)
+
+      File.write(index, File.read(index).sub('widgets/mxrb-widgets.css', 'mxrb-widgets.css'))
+      expect(subject.materialize).to eq(1)
+      expect(File.read(index)).to include('href="widgets/mxrb-widgets.css?')
+    end
+  end
+
   it 'versions React page imports in developer mode to prevent stale native bundles' do
     Dir.mktmpdir do |root|
       chunks = File.join(root, 'dist', 'chunks')

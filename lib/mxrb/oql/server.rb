@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'webrick'
+require_relative '../http/server'
 
 module Mxrb
   module Oql
@@ -21,18 +21,14 @@ module Mxrb
 
         @port = Integer(port)
         @workspace = workspace || Runtime::DatabaseWorkspace.new(project_path, port: database_port)
-        @logger = logger || WEBrick::Log.new(File::NULL)
+        @logger = logger
       end
       # rubocop:enable Metrics/ParameterLists
 
       def start(prepare: true)
         @workspace.up if prepare
-        @server = WEBrick::HTTPServer.new(
-          BindAddress: @host, Port: @port, Logger: @logger, AccessLog: []
-        )
-        @server.mount_proc('/query') { |request, response| dispatch(request, response) }
-        yield(@server) if block_given?
-        @server.start
+        @server = Http::Server.new(host:, port:, logger: @logger) { dispatch(_1, _2) }
+        @server.start { yield(_1) if block_given? }
       end
 
       def shutdown = @server&.shutdown

@@ -988,15 +988,61 @@ module Mxrb
     def configure_pluggable_widget!(widget, options)
       properties = custom_widget_properties(widget)
       options.fetch(:properties, {}).each do |key, configured|
-        value = properties.dig(key.to_s, "Value")
-        next unless value
-
-        if configured.is_a?(Hash)
-          value.merge!(stringify_keys(configured))
-        elsif !configured.nil?
-          value["PrimitiveValue"] = configured.to_s
-        end
+        property = properties[key.to_s]
+        configure_custom_widget_value!(property, configured) if property
       end
+    end
+
+    def configure_custom_widget_value!(property, configured)
+      value = property.fetch('Value')
+      unless configured.is_a?(Hash)
+        value['PrimitiveValue'] = configured.to_s unless configured.nil?
+        return value
+      end
+      return value.merge!(stringify_keys(configured)) unless semantic_widget_value?(configured)
+
+      configured = configured.to_h { |key, item| [key.to_sym, item] }
+      value['PrimitiveValue'] = configured[:primitive].to_s if configured.key?(:primitive)
+      value['Expression'] = configured[:expression].to_s if configured.key?(:expression)
+      value['Selection'] = configured[:selection].to_s if configured.key?(:selection)
+      value['TextTemplate'] = client_template_doc(configured[:text]) if configured.key?(:text)
+      value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
+      value['EntityRef'] = indirect_entity_ref_doc(configured[:association]) if configured.key?(:association)
+      configure_widget_data_source!(value, configured[:data_source]) if configured.key?(:data_source)
+      configure_widget_children!(value, configured[:widgets]) if configured.key?(:widgets)
+      configure_widget_objects!(property, value, configured[:objects]) if configured.key?(:objects)
+      value
+    end
+
+    def semantic_widget_value?(value)
+      value.is_a?(Hash) && (value.keys.map(&:to_sym) & %i[
+        primitive expression selection text attribute association data_source widgets objects
+      ]).any?
+    end
+
+    def configure_widget_data_source!(value, configured)
+      options = configured.is_a?(Hash) ? configured : { entity: configured }
+      value['DataSource'] = custom_xpath_source_doc(
+        options.fetch(:entity), xpath: options.fetch(:xpath, '')
+      )
+    end
+
+    def configure_widget_children!(value, widgets)
+      children = (widgets.is_a?(Array) ? widgets : [widgets]).compact.map { widget_doc(_1) }
+      value['Widgets'] = IO::BsonCodec.build_array(children, marker: 2)
+    end
+
+    def configure_widget_objects!(property, value, configurations)
+      object_type = property.dig('ValueType', 'ObjectType')
+      objects = Array(configurations).map do |configuration|
+        object = custom_widget_object_doc(object_type)
+        nested = widget_object_properties(object_type, object)
+        configuration.each do |key, configured|
+          configure_custom_widget_value!(nested.fetch(key.to_s), configured)
+        end
+        object
+      end
+      value['Objects'] = IO::BsonCodec.build_array(objects, marker: 2)
     end
 
     def stringify_keys(value)
@@ -1039,6 +1085,15 @@ module Mxrb
       end
       if options[:entity] && properties["datasource"]
         properties["datasource"]["Value"]["DataSource"] = custom_xpath_source_doc(options[:entity])
+      end
+      if options[:selection] && properties['itemSelection']
+        properties.dig('itemSelection', 'Value')['Selection'] = options[:selection].to_s
+      end
+      if properties['filtersPlaceholder'] && options[:filters]
+        configured_filters = options[:filters].is_a?(Array) ? options[:filters] : [options[:filters]]
+        filters = configured_filters.map { widget_doc(_1) }
+        properties.dig('filtersPlaceholder', 'Value')['Widgets'] =
+          IO::BsonCodec.build_array(filters, marker: 2)
       end
       return unless properties["columns"] && options[:columns]
 
@@ -1105,16 +1160,20 @@ module Mxrb
     end
 
     def custom_widget_properties(widget)
-      types = array_items(widget.dig("Type", "ObjectType", "PropertyTypes")).to_h do |type|
+      widget_object_properties(widget.dig('Type', 'ObjectType'), widget['Object'])
+    end
+
+    def widget_object_properties(object_type, object)
+      types = array_items(object_type&.fetch('PropertyTypes', nil)).to_h do |type|
         [IO::BsonCodec.extract_id(type["$ID"]), type]
       end
-      array_items(widget.dig("Object", "Properties")).to_h do |property|
+      array_items(object&.fetch('Properties', nil)).to_h do |property|
         type = types[IO::BsonCodec.extract_id(property["TypePointer"])]
         [type && type["PropertyKey"], property.merge("ValueType" => type && type["ValueType"])]
       end.compact
     end
 
-    def custom_xpath_source_doc(entity)
+    def custom_xpath_source_doc(entity, xpath: '')
       {
         "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidgetXPathSource",
         "EntityRef" => {
@@ -1126,19 +1185,24 @@ module Mxrb
           "$ID" => SecureRandom.uuid, "$Type" => "Forms$GridSortBar",
           "SortItems" => IO::BsonCodec.build_array([], marker: 2)
         },
-        "SourceVariable" => nil, "XPathConstraint" => ""
+        "SourceVariable" => nil, "XPathConstraint" => xpath.to_s
       }
     end
 
     def data_grid2_column_doc(object_type, column, entity: nil)
       attribute = column[:attribute]
       attribute = "#{entity}.#{attribute}" if entity && attribute && !attribute.include?('.')
+      filters = column[:filter].is_a?(Array) ? column[:filter] : [column[:filter]].compact
       overrides = {
         "showContentAs" => { "PrimitiveValue" => "attribute" },
         "attribute" => { "AttributeRef" => attribute_ref_doc(attribute) },
         "header" => { "TextTemplate" => client_template_doc(column[:caption] || column[:name]) },
         "tooltip" => { "TextTemplate" => empty_client_template_doc },
-        "filter" => { "TextTemplate" => empty_client_template_doc }
+        "filter" => {
+          "Widgets" => IO::BsonCodec.build_array(
+            filters.map { widget_doc(_1) }, marker: 2
+          )
+        }
       }
       custom_widget_object_doc(object_type, overrides)
     end
@@ -1525,9 +1589,11 @@ module Mxrb
         { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
       end
       type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
-      if attr[:length]
+      string_type = storage_type == Model::Attribute::TYPE_MAP[:string]
+      if attr[:length] || (string_type && !previous_type&.key?('length') && !previous_type&.key?('Length'))
         length_key = native_key(previous_type, 'length', 'Length')
-        type_doc = type_doc.merge(length_key => Integer(attr[:length]))
+        length = attr[:length] || Model::Attribute::DEFAULT_STRING_LENGTH
+        type_doc = type_doc.merge(length_key => Integer(length))
       end
       if attr.key?(:localize_date)
         localize_key = native_key(previous_type, 'localizeDate', 'LocalizeDate')
@@ -2570,6 +2636,8 @@ module Mxrb
       case event.fetch(:kind).to_sym
       when :action
         native_action_doc(event.fetch(:handler))
+      when :page
+        form_action_doc(event.fetch(:handler))
       when :nanoflow
         {
           "$ID" => SecureRandom.uuid,

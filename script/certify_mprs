@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'optparse'
+require 'tmpdir'
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require_relative '../lib/mxrb'
+
+options = { cycles: 2, repair_hashes: false }
+OptionParser.new do |parser|
+  parser.banner = 'Usage: script/certify_mprs [--cycles N] [--output REPORT.json] FILE.mpr ...'
+  parser.on('--cycles N', Integer, 'Consecutive roundtrips (default: 2)') { options[:cycles] = _1 }
+  parser.on('--output FILE', 'Write JSON report to FILE') { options[:output] = _1 }
+  parser.on('--repair-hashes', 'Repair stale hashes in a temporary copy before certification') do
+    options[:repair_hashes] = true
+  end
+end.parse!
+abort 'at least one MPR is required' if ARGV.empty?
+abort '--cycles must be greater than zero' unless options[:cycles].positive?
+
+files = ARGV.map { File.expand_path(_1) }.uniq
+# rubocop:disable Metrics/BlockLength
+results = files.map do |source|
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  row = { path: source, name: File.basename(source, '.mpr') }
+  begin
+    raise "fixture not found: #{source}" unless File.file?(source)
+
+    Dir.mktmpdir('mxrb-certify-') do |directory|
+      current = source
+      repairs = []
+      unless Mxrb.validate(current).valid?
+        raise 'original validation failed' unless options[:repair_hashes]
+
+        current = File.join(directory, File.basename(source))
+        FileUtils.cp(source, current)
+        contents = File.join(File.dirname(source), 'mprcontents')
+        FileUtils.cp_r(contents, directory) if File.directory?(contents)
+        mpr = Mxrb::IO::MprFile.open(current, readonly: false)
+        repairs = mpr.repair_content_hashes!
+        mpr.close
+        raise 'temporary hash repair did not produce a valid MPR' unless Mxrb.validate(current).valid?
+      end
+      details = Mxrb.open(current) do |project|
+        {
+          mendix: project.mendix_version,
+          format: project.format_version,
+          units: project.all_units.size,
+          artifacts: project.semantic_index.artifacts.size,
+          references: project.semantic_index.references.size
+        }
+      end
+      options[:cycles].times do |index|
+        exported = File.join(directory, "source-#{index + 1}")
+        rebuilt = File.join(directory, "roundtrip-#{index + 1}.mpr")
+        previous = ENV['MXRB_OUTPUT_PATH']
+        Mxrb::Exporter.new(current, exported).export!
+        begin
+          ENV['MXRB_OUTPUT_PATH'] = rebuilt
+          load File.join(exported, 'project.rb')
+        ensure
+          previous ? ENV['MXRB_OUTPUT_PATH'] = previous : ENV.delete('MXRB_OUTPUT_PATH')
+        end
+        raise "roundtrip #{index + 1} validation failed" unless Mxrb.validate(rebuilt).valid?
+
+        comparison = Mxrb.compare(current, rebuilt)
+        raise "roundtrip #{index + 1}: #{comparison.differences.first}" unless comparison.identical?
+
+        current = rebuilt
+      end
+      row[:repaired_hashes] = repairs.map { _1.fetch(:unit_id) }
+      row.merge!(details)
+    end
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    warn format('[mxrb] %-36s pass %7.3fs', row[:name], elapsed)
+    row.merge(result: 'pass', cycles: options[:cycles], elapsed_seconds: elapsed.round(3))
+  rescue StandardError, ScriptError => e
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    warn format('[mxrb] %-36s fail %7.3fs  %s: %s', row[:name], elapsed, e.class, e.message.lines.first.chomp)
+    row.merge(
+      result: 'fail', cycles: options[:cycles], elapsed_seconds: elapsed.round(3),
+      error: { class: e.class.name, message: e.message }
+    )
+  end
+end
+# rubocop:enable Metrics/BlockLength
+
+passed = results.count { _1.fetch(:result) == 'pass' }
+payload = {
+  generated_at: Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+  totals: {
+    projects: results.size, passed:, failed: results.size - passed,
+    cycles: results.sum { _1.fetch(:cycles) },
+    units: results.sum { _1.fetch(:units, 0) },
+    artifacts: results.sum { _1.fetch(:artifacts, 0) },
+    references: results.sum { _1.fetch(:references, 0) },
+    elapsed_seconds: results.sum { _1.fetch(:elapsed_seconds) }.round(3)
+  },
+  projects: results
+}
+json = JSON.pretty_generate(payload)
+options[:output] ? File.write(options[:output], "#{json}\n") : puts(json)
+exit 1 unless passed == results.size

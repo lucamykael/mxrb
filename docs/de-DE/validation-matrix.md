@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · [English](../en-US/validation-matrix.md) · **Deutsch**
 
-Stand: 5. August 2026.
+Stand: 11. August 2026.
 
 ```text
 Original-MPR → validate → export → generate → validate → compare
@@ -16,6 +16,25 @@ Original-MPR → validate → export → generate → validate → compare
 | ConnectorKitDemo | 7.5.0 | v1 | bestanden |
 | TreeviewDemo | 5.21.4 | v1 | bestanden |
 | GridViewPlayground | 6.10.8 | v1 | bestanden |
+
+Am 11. August wiederholte `script/validate_matrix` die Matrix mit **6/6
+erfolgreichen Läufen**: 1.506 Units, 1.734 Artefakte und 3.388 Referenzen in
+16,381 Sekunden.
+
+## Zusätzliches lokales Inventar
+
+`script/certify_mprs --cycles 2 --repair-hashes` zertifizierte sieben weitere
+MPRs in 14 aufeinanderfolgenden Roundtrips: **7/7 bestanden**, 2.799 Units,
+3.238 Artefakte und 4.819 Referenzen. Enthalten sind LearnNow, SLATaskApp,
+SLATaskAppNative, MyFirstModule, CourseManager, RubyBridgeSandbox und
+VetClinic.
+
+SLATaskApp enthielt einen veralteten Content-Hash, RubyBridgeSandbox zwei. Das
+Gate reparierte ausschließlich `Unit.ContentsHash` in temporären Kopien,
+protokollierte die geänderten UUIDs und bewahrte die ursprünglichen BSON-Bytes.
+Die Quelldateien wurden nicht verändert. Der zweite Roundtrip deckte außerdem
+als Strings deserialisierte Native-Widget-Typen auf und führte zu deren
+Korrektur.
 
 ## Tiefe Abdeckung
 
@@ -37,9 +56,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.778 Artefakte und 3.387 Referenzen;
-- 1.039 Beispiele, keine Fehler;
-- 100 % Zeilenabdeckung (17.224/17.224);
-- 100 % Branch-Abdeckung (6.811/6.811);
+- 1.329 Beispiele, keine Fehler;
+- 100 % Zeilenabdeckung (23.771/23.771);
+- 100 % Branch-Abdeckung (9.704/9.704);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
@@ -62,3 +81,22 @@ Deterministisches Fuzzing deckt 250 BSON-Dokumente und 50 atomare
 
 Die Matrix beweist die geprüften Szenarien, nicht universelle Kompatibilität
 mit jedem Mendix-Metamodell. Unbekannte `.mxunit`-Kodierungen werden abgelehnt.
+
+## Widget-Zertifizierung
+
+`script/certify_widgets --browser-report REPORT.json App.mpr` ist das
+Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers
+und Marketplace-Widgets. Es
+verlangt gemeinsam eine Page/Layout-Kompilierung ohne Fallback, die Auflösung
+jeder Pluggable-ID auf einen MPK-`.mjs`-Eintrag samt SHA-256, einen nativen
+Rspack-Build der Mendix-Version und bestandene Chromium-Evidenz, die alle
+geprüften Widget-Typen und IDs ohne sichtbare Runtime-/Widget-Fehler ausweist.
+
+Der MPK-Import oder ein erfolgreicher Bundle-Build allein zertifiziert kein
+Verhalten. Widgets mit erforderlicher Datenquelle, Attributbindung oder
+Elternplatzierung bestehen nur in einem korrekt konfigurierten Browserszenario.
+Zukünftige oder ungeprüfte Pakete scheitern als fehlende Evidenz, statt eine
+pauschale Kompatibilitätszusage zu erben.
+Das React/TypeScript-Frontend von `--mode ruby` besitzt eine getrennte Spur:
+Sein Chromium-Bericht zertifiziert diese Widgets, ohne zu behaupten, dass die
+entsprechenden Pluggable-Komponenten auch im Mendix Runtime bestanden haben.

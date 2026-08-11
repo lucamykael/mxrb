@@ -26,13 +26,17 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
     }
   end
 
-  def fake_browser(snapshot:, console_errors: []) # rubocop:disable Metrics/MethodLength
+  def fake_browser(snapshot:, console_errors: [], resource_errors: []) # rubocop:disable Metrics/MethodLength
     instance_double(MxrbFrontendBrowserAcceptance::Browser).tap do |browser|
       allow(browser).to receive_messages(
         login: nil, navigate: nil, click_selector: nil, click_text: nil,
         measure_click: { 'duration_ms' => 42.0 },
+        input_value: nil, measure_input: { 'duration_ms' => 35.0 },
+        select_option: nil, measure_select: { 'duration_ms' => 30.0 },
+        audit_widgets: { 'count' => 12, 'render_ms' => 80.0 },
         wait_for_text: nil, wait_for_selector: nil, wait_for_count: nil,
         wait_for_absence: nil, wait_for_idle: nil, wait_for_style: nil, snapshot:,
+        settle_healthy_media: [], widget_resource_errors: resource_errors,
         console_errors:, diagnostics: {}, close: nil
       )
       allow(browser).to receive(:screenshot) do |path|
@@ -87,6 +91,16 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
 
       expect(visible_failure.fetch(:error)).to include('visible widget render failure')
       expect(browser_failure.fetch(:error)).to include('browser exceptions: Uncaught Error')
+    end
+  end
+
+  it 'rejects failed Marketplace widget resources' do
+    Dir.mktmpdir do |root|
+      errors = [{ 'url' => 'http://127.0.0.1/widgets/icon.svg', 'status' => 404 }]
+      report = run(fake_browser(snapshot:, resource_errors: errors), root)
+
+      expect(report).to include(passed: false)
+      expect(report.fetch(:error)).to include('widget resource failures', 'icon.svg')
     end
   end
 
@@ -150,6 +164,34 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Runner do
   end
 end
 
+RSpec.describe MxrbFrontendBrowserAcceptance::Browser do
+  it 'collects exceptions, console.error/assert calls, and Console error messages' do
+    events = [
+      { 'method' => 'Runtime.exceptionThrown', 'params' => { 'exceptionDetails' => { 'text' => 'boom' } } },
+      { 'method' => 'Runtime.consoleAPICalled', 'params' => {
+        'type' => 'error', 'args' => [{ 'value' => 'widget failed' }, { 'description' => 'Error: bad' }]
+      } },
+      { 'method' => 'Runtime.consoleAPICalled', 'params' => { 'type' => 'log', 'args' => [] } },
+      { 'method' => 'Console.messageAdded', 'params' => {
+        'message' => { 'level' => 'error', 'text' => 'console domain failure' }
+      } },
+      { 'method' => 'Console.messageAdded', 'params' => { 'message' => { 'level' => 'warning' } } }
+    ]
+    browser = described_class.allocate
+    browser.instance_variable_set(:@client, instance_double(
+                                              MxrbFrontendBrowserAcceptance::CdpClient,
+                                              events:
+                                            ))
+    browser.instance_variable_set(:@console_event_index, 0)
+    browser.instance_variable_set(:@console_errors, [])
+
+    expect(browser.console_errors).to eq(
+      ['boom', 'widget failed Error: bad', 'console domain failure']
+    )
+    expect(browser.console_errors.length).to eq(3)
+  end
+end
+
 RSpec.describe MxrbFrontendBrowserAcceptance::CdpClient do
   it 'correlates responses while retaining intervening browser events' do
     transport = instance_double(MxrbFrontendBrowserAcceptance::ChromiumTransport)
@@ -176,6 +218,40 @@ RSpec.describe MxrbFrontendBrowserAcceptance::CdpClient do
 end
 
 RSpec.describe MxrbFrontendBrowserAcceptance::Browser do
+  it 'reports HTTP and transport failures for Marketplace widget resources only' do
+    browser = described_class.allocate
+    events = [
+      {
+        'method' => 'Network.responseReceived',
+        'params' => { 'response' => { 'url' => 'http://app/widgets/icon.svg', 'status' => 404 } }
+      },
+      {
+        'method' => 'Network.responseReceived',
+        'params' => { 'response' => { 'url' => 'http://app/favicon.ico', 'status' => 404 } }
+      },
+      {
+        'method' => 'Network.requestWillBeSent',
+        'params' => { 'requestId' => 'failed',
+                      'request' => { 'url' => 'http://app/widgets%2Fvideo.mp4' } }
+      },
+      {
+        'method' => 'Network.loadingFailed',
+        'params' => { 'requestId' => 'failed', 'errorText' => 'net::ERR_FAILED' }
+      }
+    ]
+    browser.instance_variable_set(
+      :@client, instance_double(MxrbFrontendBrowserAcceptance::CdpClient, events:)
+    )
+    browser.instance_variable_set(:@network_event_index, 0)
+    allow(browser).to receive(:evaluate).with('true').and_return(true)
+
+    expect(browser.widget_resource_errors).to contain_exactly(
+      { 'url' => 'http://app/widgets/icon.svg', 'status' => 404 },
+      { 'url' => 'http://app/widgets%2Fvideo.mp4', 'error' => 'net::ERR_FAILED' }
+    )
+    expect(browser.widget_resource_errors).to be_empty
+  end
+
   it 'waits for positive and negative computed-style contracts' do
     browser = described_class.allocate
     allow(browser).to receive(:wait).and_return(true)
@@ -213,6 +289,47 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Browser do
     allow(browser).to receive(:evaluate).and_return('duration_ms' => 51.0, 'requests' => [])
     expect { browser.measure_click('selector' => '.cell', 'max_ms' => 50) }
       .to raise_error(MxrbFrontendBrowserAcceptance::Failure, /budget 50.0ms/)
+  end
+
+  it 'sets and measures controlled inputs and audits rendered widgets' do
+    browser = described_class.allocate
+    allow(browser).to receive(:wait).and_return(true)
+    allow(browser).to receive(:evaluate).and_return(
+      { 'duration_ms' => 40.0, 'requests' => [] },
+      { 'duration_ms' => 30.0, 'requests' => [] },
+      {
+        'count' => 3, 'invisible' => [], 'failures' => [],
+        'types' => { 'text_box' => 1, 'button' => 2 },
+        'render_ms' => 120.0, 'longest_task_ms' => 0
+      }
+    )
+
+    browser.input_value('selector' => 'input', 'value' => 'Ada')
+    measured = browser.measure_input(
+      'selector' => 'input', 'value' => 'Grace', 'max_ms' => 50
+    )
+    browser.select_option('selector' => 'select', 'option_index' => 1)
+    selected = browser.measure_select(
+      'selector' => 'select', 'option_index' => 1, 'max_ms' => 50
+    )
+    audit = browser.audit_widgets('min_count' => 3, 'max_render_ms' => 200)
+
+    expect(browser).to have_received(:wait).twice
+    expect(measured).to include('duration_ms' => 40.0, 'selector' => 'input')
+    expect(selected).to include('duration_ms' => 30.0, 'selector' => 'select')
+    expect(audit).to include('count' => 3, 'render_ms' => 120.0)
+  end
+
+  it 'fails widget audits on placeholders, invisible output, and render budgets' do
+    browser = described_class.allocate
+    allow(browser).to receive(:evaluate).and_return(
+      {
+        'count' => 1, 'invisible' => [], 'failures' => ['Could not render widget'],
+        'types' => {}, 'render_ms' => 10.0, 'longest_task_ms' => 0
+      }
+    )
+    expect { browser.audit_widgets({}) }
+      .to raise_error(MxrbFrontendBrowserAcceptance::Failure, /render failures/)
   end
 end
 

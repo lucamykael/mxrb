@@ -93,6 +93,38 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       .not_to be_supported
   end
 
+  it 'does not bind expressions to an unconfigured list datasource' do
+    Dir.mktmpdir do |root|
+      FileUtils.mkdir_p(File.join(root, 'widgets', 'example'))
+      File.write(File.join(root, 'widgets', 'example', 'Chart.mjs'), 'export default {};')
+      index = {
+        'items' => property_type('items', 'items', 'DataSource'),
+        'label' => property_type('label', 'label', 'Expression'),
+        'widget' => { 'WidgetId' => 'example.Chart', 'ObjectType' => { '$ID' => 'widget-object' } }
+      }
+      source = instance_double(
+        Mxrb::Compiler::SourceModel,
+        path: File.join(root, 'App.mpr'), document_index: index
+      )
+      allow(source).to receive(:units_of).and_return([])
+      properties = [
+        2, property('items', 'DataSource' => nil),
+        property('label', 'Expression' => '$Item/Name')
+      ]
+      widget = {
+        'Name' => 'chart', 'Object' => {
+          'TypePointer' => 'widget-object', 'Properties' => properties
+        }
+      }
+
+      compiler = described_class.new(source, 'Demo.Home', widget, scope: 'scope', entity: 'Demo.Item')
+
+      expect(compiler).to be_supported
+      expect(compiler.render).to include('ExpressionProperty')
+      expect(compiler.render).not_to include('ListExpressionProperty')
+    end
+  end
+
   it 'covers every schema-property, expression, template, and package fallback' do # rubocop:disable Metrics/BlockLength
     Dir.mktmpdir do |root|
       index = {}
@@ -123,6 +155,11 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       primitive_types = %w[Boolean Integer Decimal Enumeration String System]
       primitive_types.each { expect(compiler.send(:supported_property?, [_1, {}])).to be(true) }
       expect(compiler.send(:supported_property?, ['Association', {}])).to be(true)
+      expect(compiler.send(:supported_property?, ['Selection', {}])).to be(true)
+      expect(compiler.send(:supported_property?, ['Icon', { 'Icon' => nil }])).to be(true)
+      expect(compiler.send(:supported_property?, ['Icon', { 'Icon' => {} }])).to be(false)
+      expect(compiler.send(:supported_property?, ['Image', { 'Image' => '' }])).to be(true)
+      expect(compiler.send(:supported_property?, ['Image', { 'Image' => 'Demo.Logo' }])).to be(false)
       expect(compiler.send(:supported_property?, ['Attribute', { 'AttributeRef' => nil }])).to be(true)
       expect(compiler.send(:supported_property?, ['DataSource', { 'DataSource' => nil }])).to be(true)
       expect(compiler.send(:supported_property?, ['DataSource', { 'DataSource' => { '$Type' => 'Bad' } }]))
@@ -134,9 +171,12 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       values = {
         'Boolean' => { 'PrimitiveValue' => 'false' }, 'Integer' => { 'PrimitiveValue' => '12' },
         'Decimal' => { 'PrimitiveValue' => '1.5' }, 'Enumeration' => { 'PrimitiveValue' => 'One' },
-        'String' => { 'PrimitiveValue' => 'value' }, 'Association' => {}, 'Object' => {}
+        'String' => { 'PrimitiveValue' => 'value' }, 'Association' => {}, 'Object' => {},
+        'Selection' => { 'Selection' => 'Multi' }, 'Icon' => {}, 'Image' => {}
       }
       values.each { |type, value| expect { compiler.send(:compile_property, [type, value]) }.not_to raise_error }
+      expect(compiler.send(:compile_property, ['Selection', { 'Selection' => 'Multi' }]))
+        .to include('$raw' => include('SelectionProperty', '"selectionType": "Multi"'))
       expect(compiler.send(:compile_property, ['Unknown', {}])).to eq(:undefined)
       expect(compiler.send(:compile_property, ['DataSource', { 'DataSource' => { '$Type' => 'Bad' } }]))
         .to eq(:undefined)
@@ -145,6 +185,17 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       }])).to eq(:undefined)
       expect(compiler.send(:compile_widgets, 'Widgets' => [2])).to eq([])
       expect(compiler.send(:compile_widgets, 'Widgets' => [2, {}])).to eq('rendered-1')
+
+      index['nested-name'] = property_type('nested-name', 'name', 'String')
+      index['nested-source'] = property_type('nested-source', 'source', 'DataSource')
+      nested = {
+        'Properties' => [2,
+                         property('nested-name', 'PrimitiveValue' => 'Series'),
+                         property('nested-source', 'DataSource' => nil)]
+      }
+      object_value = { 'Objects' => [2, nested] }
+      expect(compiler.send(:supported_property?, ['Object', object_value])).to be(true)
+      expect(compiler.send(:compile_property, ['Object', object_value])).to eq([{ name: 'Series' }])
 
       expressions = ['', 'empty', '$Item', '$Item/Name', '12', '-1.5', 'true', 'false', "'text'", 'invalid +']
       compiled = expressions.map { compiler.send(:compile_expression, _1) }
@@ -195,12 +246,21 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
                                     }]
                                   } } }
       expect(compiler.send(:database_list_property, xpath)).to include('"desc"')
+      compiler.send(:with_list_data_source, 'items' => ['DataSource', xpath, { 'DataSourceProperty' => 'items' }]) do
+        expect(compiler.instance_variable_get(:@list_data_source)).to eq('DataSourceProperty' => 'items')
+      end
       expect(compiler.send(:database_list_property, 'DataSource' => {
         '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'EntityRef' => { 'Entity' => 'Bad' }
       })).to be_nil
       compiler.instance_variable_set(:@list_data_source, xpath)
-      expect(compiler.send(:expression_property, 'Expression', 'Expression' => '$Item'))
+      bound = { 'DataSourceProperty' => 'items' }
+      expect(compiler.send(:expression_property, 'Expression', { 'Expression' => '$Item' }, bound))
         .to include('ListExpressionProperty', 'dataSourceId')
+      expect(compiler.send(:attribute_property, {
+        'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
+      }, bound)).to include('ListAttributeProperty', 'dataSourceId')
+      expect(compiler.send(:compile_widgets, { 'Widgets' => [2, {}] }, bound).fetch('$raw'))
+        .to include('TemplatedWidgetProperty', 'dataSourceId')
       expect(compiler.send(:expression_property, 'Expression', 'Expression' => 'bad +')).to be_nil
       compiler.instance_variable_set(:@list_data_source, nil)
       expect(compiler.send(:expression_property, 'Expression', 'Expression' => '$Item'))
