@@ -1005,10 +1005,9 @@ module Mxrb
       def add_entity(project, name, implementation)
         module_name, entity_name = qualified_parts(name)
         attributes = implementation.attributes.to_a.map do |attribute|
-          reject_unsupported_required!(name, attribute)
           {
             name: attribute.fetch(:mendix_name), type: attribute.fetch(:type),
-            default: attribute[:default]
+            default: attribute[:default], required: attribute.fetch(:required)
           }
         end
         project.plan_add_entity(
@@ -1041,10 +1040,9 @@ module Mxrb
         end
         (declared.keys - existing.keys).each do |name|
           declaration = declared.fetch(name)
-          reject_unsupported_required!(entity_name, declaration)
           project.plan_add_attribute(
             entity_name, name:, type: declaration.fetch(:type),
-                         default: declaration[:default]
+                         default: declaration[:default], required: declaration.fetch(:required)
           ).apply!
         end
         (declared.keys & existing.keys).each do |name|
@@ -1053,11 +1051,9 @@ module Mxrb
       end
 
       def synchronize_attribute(project, entity_name, attribute, declaration)
-        if (attribute.required == true) != declaration.fetch(:required)
-          raise ValidationError,
-                "changing required for #{entity_name}/#{attribute.name} is outside the reversible Ruby contract"
-        end
         updates = {}
+        declared_required = declaration.fetch(:required)
+        updates[:required] = declared_required if (attribute.required == true) != declared_required
         declared_type = declaration.fetch(:type).to_sym
         updates[:type] = declared_type if attribute.type != declared_type
         current_default = attribute.default_value.to_s
@@ -1066,14 +1062,6 @@ module Mxrb
         return if updates.empty?
 
         project.plan_change_attribute("#{entity_name}/#{attribute.name}", **updates).apply!
-      end
-
-      def reject_unsupported_required!(entity_name, declaration)
-        return unless declaration.fetch(:required)
-
-        raise ValidationError,
-              "adding required attribute #{entity_name}/#{declaration.fetch(:mendix_name)} " \
-              'is outside the reversible Ruby contract'
       end
 
       def qualified_parts(name)

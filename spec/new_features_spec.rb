@@ -149,7 +149,9 @@ RSpec.describe "new features" do
         end
 
         Mxrb.open(path, readonly: false) do |project|
-          plan = project.plan_add_attribute("Shop.Product", name: :Price, type: :decimal, default: "0.0")
+          plan = project.plan_add_attribute(
+            "Shop.Product", name: :Price, type: :decimal, default: "0.0", required: true
+          )
 
           expect(plan.changes).to include(match(/Price.*decimal.*Shop\.Product/i))
           expect(plan.empty?).to be false
@@ -163,6 +165,14 @@ RSpec.describe "new features" do
           price = product.attributes.find { _1.name == "Price" }
           expect(price.type).to eq(:decimal)
           expect(price.default_value).to eq("0.0")
+          expect(price.required).to be true
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_doc = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items].first
+          price_docs = Mxrb::IO::BsonCodec.parse_array(entity_doc.fetch("Attributes"))[:items]
+          price_doc = price_docs.find { _1["Name"] == "Price" }
+          expect(price_doc).to include("Name" => "Price")
+          expect(price_doc.fetch("GUID")).not_to be_nil
+          expect(price_doc).not_to have_key("name")
         end
       end
     end
@@ -274,13 +284,22 @@ RSpec.describe "new features" do
         end
 
         Mxrb.open(path, readonly: false) do |project|
-          plan = project.plan_change_attribute("M.E/Score", type: :integer, default: "0")
+          plan = project.plan_change_attribute(
+            "M.E/Score", type: :integer, default: "0", required: true
+          )
           expect(plan.changes.first).to match(/Score/)
           plan.apply!
 
           attr = project.modules.first.entities.first.attributes.first
           expect(attr.type).to eq(:integer)
           expect(attr.default_value).to eq("0")
+          expect(attr.required).to be true
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_doc = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items].first
+          score_doc = Mxrb::IO::BsonCodec.parse_array(entity_doc.fetch("Attributes"))[:items].first
+          expect(score_doc).to include("Name" => "Score")
+          expect(score_doc.fetch("GUID")).not_to be_nil
+          expect(score_doc).not_to have_key("name")
         end
       end
     end
@@ -307,7 +326,7 @@ RSpec.describe "new features" do
         Mxrb.open(path, readonly: false) do |project|
           plan = project.plan_add_entity("M", name: :NewEntity,
                                          attributes: [
-                                           { name: :Label, type: :string },
+                                           { name: :Label, type: :string, required: true },
                                            { name: :Active, type: :boolean, default: "true" }
                                          ])
           expect(plan.changes).to include(match(/NewEntity/))
@@ -317,9 +336,17 @@ RSpec.describe "new features" do
           expect(names).to include("NewEntity")
           entity = project.modules.first.entities.find { _1.name == "NewEntity" }
           expect(entity.attributes.map(&:name)).to eq(%w[Label Active])
+          expect(entity.attributes.find { _1.name == "Label" }.required).to be true
           active = entity.attributes.find { _1.name == "Active" }
           expect(active.type).to eq(:boolean)
           expect(active.default_value).to eq("true")
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_docs = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items]
+          entity_doc = entity_docs.find { _1["Name"] == "NewEntity" }
+          expect(entity_doc).to include("Name" => "NewEntity")
+          expect(entity_doc.fetch("GUID")).not_to be_nil
+          expect(entity_doc).to include("Attributes", "ValidationRules", "MaybeGeneralization")
+          expect(entity_doc).not_to have_key("name")
         end
       end
     end

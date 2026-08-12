@@ -64,7 +64,7 @@ Ruby mode can also start without an existing Mendix project:
 bundle exec mxrb init CustomerPortal --mode ruby
 cd CustomerPortal
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 
@@ -98,9 +98,20 @@ app/
 config/application.rb
 frontend/
   package.json
+  package-lock.json
   vite.config.ts
   tsconfig.json
-  src/{main.tsx,App.tsx,types.ts,nanoflows.ts,app.css}
+  eslint.config.js
+  .prettierrc.json
+  src/
+    app/{App.tsx,router.tsx}
+    components/{auth,feedback,navigation}/
+    core/
+    features/
+    hooks/
+    layouts/
+    styles/
+    generated/{bridge,pages,nanoflows,types.ts}
 project.rb
 .mxrb/
   ruby-app.json
@@ -111,16 +122,18 @@ project.rb
 Persistent entities become records. Non-persistent entities become DTO classes
 and always use the `_dto.rb` suffix, avoiding ambiguous `_2.rb` names. Services
 are ordinary Ruby classes and initially delegate to the pure-Ruby native
-interpreter. Pages expose native metadata to the React + TypeScript frontend.
-The export derives `types.ts` from entities, enumerations, pages, widgets,
-contexts, effects, and API contracts; `npm run typecheck` is part of the Vite build.
+interpreter. Editable React code follows a conventional application layout.
+Only `src/generated` is owned by MXRB; application code under `app`,
+`components`, `core`, `features`, `hooks`, `layouts`, and `styles` survives
+round-trips byte-for-byte. The scaffold includes strict TypeScript, ESLint,
+Prettier, Vitest, React Testing Library, and a reproducible npm lockfile.
 
 Install the Ruby and frontend dependencies once, then start both processes with
 one command:
 
 ```sh
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 

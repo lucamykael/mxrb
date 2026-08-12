@@ -104,8 +104,10 @@ RSpec.describe Mxrb::Initializer do
       manifest_path = File.join(result.root, '.mxrb', 'ruby-app.json')
 
       expect(JSON.parse(File.read(manifest_path))).to include('mode' => 'ruby')
-      expect(File).to exist(File.join(result.root, 'frontend', 'src', 'App.tsx'))
-      expect(File).to exist(File.join(result.root, 'frontend', 'src', 'types.ts'))
+      expect(File).to exist(File.join(result.root, 'frontend', 'src', 'app', 'App.tsx'))
+      expect(File).to exist(File.join(result.root, 'frontend', 'src', 'generated', 'types.ts'))
+      expect(File).not_to exist(File.join(result.root, 'frontend', 'src', 'App.tsx'))
+      expect(File).to exist(File.join(result.root, 'frontend', 'package-lock.json'))
       expect(File).to exist(File.join(result.root, 'frontend', 'tsconfig.json'))
       expect(File).to exist(File.join(result.root, 'app', 'pages', 'ruby_shop', 'home_page.rb'))
       expect(File.read(File.join(result.root, 'Gemfile'))).to include(

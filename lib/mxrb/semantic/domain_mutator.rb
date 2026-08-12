@@ -4,6 +4,52 @@ require "securerandom"
 
 module Mxrb
   module Semantic
+    # Shared BSON helpers for entity validation rules.
+    module DomainValidationRules
+      module_function
+
+      def extract(entity_doc)
+        IO::BsonCodec.parse_array(
+          entity_doc["validationRules"] || entity_doc["ValidationRules"]
+        )[:items]
+      end
+
+      def put(entity_doc, rules)
+        key = entity_doc.key?("validationRules") ? "validationRules" : "ValidationRules"
+        entity_doc[key] = IO::BsonCodec.build_array(rules)
+      end
+
+      def for_attribute?(rule, attribute_name, kind = nil)
+        matches_attribute = rule["Attribute"].to_s.split(".").last == attribute_name.to_s
+        return matches_attribute unless kind
+
+        rule_kind = rule.dig("RuleInfo", "$Type").to_s
+        matches_attribute && rule_kind.end_with?("#{kind.to_s.capitalize}RuleInfo")
+      end
+
+      def build(module_name, entity_name, attribute_name, kind)
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "DomainModels$ValidationRule",
+          "Attribute" => "#{module_name}.#{entity_name}.#{attribute_name}",
+          "Message" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "Texts$Text",
+            "Items" => IO::BsonCodec.build_array([{
+              "$ID" => SecureRandom.uuid,
+              "$Type" => "Texts$Translation",
+              "LanguageCode" => "en_US",
+              "Text" => "#{attribute_name} #{kind == :required ? 'is required' : 'must be unique'}"
+            }])
+          },
+          "RuleInfo" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "DomainModels$#{kind.to_s.capitalize}RuleInfo"
+          }
+        }
+      end
+    end
+
     # Plan that adds a new attribute to an existing entity.
     class AddAttributePlan
       attr_reader :changes
@@ -40,16 +86,15 @@ module Mxrb
           raise ArgumentError, "attribute #{@attribute_def[:name]} already exists on #{@entity_name}" \
             if existing.include?(@attribute_def[:name].to_s)
 
-          new_attr                 = Model::Attribute.new
-          new_attr.id              = SecureRandom.uuid
-          new_attr.name            = @attribute_def[:name].to_s
-          new_attr.documentation   = @attribute_def.fetch(:documentation, "").to_s
-          new_attr.type            = @attribute_def.fetch(:type, :string).to_sym
-          new_attr.default_value   = @attribute_def[:default]&.to_s || ""
-          new_attr.data_storage_guid = SecureRandom.uuid
-          new_attr.export_level    = "Hidden"
-
-          DomainMutator.put_attributes(entity_doc, attrs + [new_attr.to_bson])
+          new_attr = Writer.new("", {}).build_domain_attribute_document(@attribute_def)
+          DomainMutator.put_attributes(entity_doc, attrs + [new_attr])
+          if @attribute_def[:required] == true
+            rules = DomainValidationRules.extract(entity_doc)
+            rules << DomainValidationRules.build(
+              @module_name, @entity_name, @attribute_def[:name], :required
+            )
+            DomainValidationRules.put(entity_doc, rules)
+          end
           DomainMutator.put_entity(doc, @entity_id, entity_doc)
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
@@ -105,6 +150,10 @@ module Mxrb
             if attrs.size == before_size
 
           DomainMutator.put_attributes(entity_doc, attrs)
+          rules = DomainValidationRules.extract(entity_doc).reject do |rule|
+            DomainValidationRules.for_attribute?(rule, @attribute_name)
+          end
+          DomainValidationRules.put(entity_doc, rules)
           DomainMutator.put_entity(doc, @entity_id, entity_doc)
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
@@ -152,13 +201,29 @@ module Mxrb
           attr_doc = attrs.find { (_1["name"] || _1["Name"]).to_s == @attribute_name }
           raise ArgumentError, "attribute #{@attribute_name.inspect} not found on #{@entity_name}" unless attr_doc
 
-          attr_model                 = Model::Attribute.from_bson(attr_doc)
-          attr_model.type            = @updates[:type].to_sym       if @updates.key?(:type)
-          attr_model.default_value   = @updates[:default].to_s      if @updates.key?(:default)
-          attr_model.documentation   = @updates[:documentation].to_s if @updates.key?(:documentation)
-
-          new_attrs = attrs.map { (_1["name"] || _1["Name"]).to_s == @attribute_name ? attr_model.to_bson : _1 }
+          attr_model = Model::Attribute.from_bson(attr_doc)
+          attribute_def = {
+            name: @attribute_name,
+            type: @updates.fetch(:type, attr_model.type),
+            default: @updates.fetch(:default, attr_model.default_value),
+            documentation: @updates.fetch(:documentation, attr_model.documentation)
+          }
+          replacement = Writer.new("", {}).build_domain_attribute_document(
+            attribute_def, previous: attr_doc
+          )
+          new_attrs = attrs.map { (_1["name"] || _1["Name"]).to_s == @attribute_name ? replacement : _1 }
           DomainMutator.put_attributes(entity_doc, new_attrs)
+          if @updates.key?(:required)
+            rules = DomainValidationRules.extract(entity_doc).reject do |rule|
+              DomainValidationRules.for_attribute?(rule, @attribute_name, :required)
+            end
+            if @updates[:required] == true
+              rules << DomainValidationRules.build(
+                @module_name, @entity_name, @attribute_name, :required
+              )
+            end
+            DomainValidationRules.put(entity_doc, rules)
+          end
           DomainMutator.put_entity(doc, @entity_id, entity_doc)
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
@@ -198,32 +263,20 @@ module Mxrb
           raise ArgumentError, "entity #{@entity_def[:name]} already exists in #{@module_name}" \
             if existing_names.include?(@entity_def[:name].to_s)
 
-          entity                    = Model::Entity.new
-          entity.id                 = SecureRandom.uuid
-          entity.name               = @entity_def[:name].to_s
-          entity.qualified_name     = "#{@module_name}.#{@entity_def[:name]}"
-          entity.documentation      = @entity_def.fetch(:documentation, "").to_s
-          entity.data_storage_guid  = SecureRandom.uuid
-          entity.export_level       = "Hidden"
-          entity.persistable        = !@entity_def[:non_persistent]
-          entity.location           = { x: (entities.size % 4) * 220, y: (entities.size / 4) * 160 }
-          entity.access_rules       = []
-
-          attrs = Array(@entity_def[:attributes]).map.with_index do |attr_def, i|
-            a                   = Model::Attribute.new
-            a.id                = SecureRandom.uuid
-            a.name              = attr_def[:name].to_s
-            a.documentation     = attr_def.fetch(:documentation, "").to_s
-            a.type              = attr_def.fetch(:type, :string).to_sym
-            a.default_value     = attr_def[:default]&.to_s || ""
-            a.data_storage_guid = SecureRandom.uuid
-            a.export_level      = "Hidden"
-            a
-          end
-          entity.instance_variable_set(:@attributes, attrs)
-
           entities_key = DomainMutator.entities_key(doc)
-          doc[entities_key] = IO::BsonCodec.build_array(entities + [entity.to_bson])
+          definition = {
+            name: @entity_def[:name].to_s,
+            documentation: @entity_def.fetch(:documentation, "").to_s,
+            persistable: !@entity_def[:non_persistent],
+            attributes: Array(@entity_def[:attributes]),
+            access_rules: nil,
+            indexes: nil,
+            lifecycle: nil
+          }
+          entity_doc = Writer.new("", {}).build_domain_entity_document(
+            definition, module_name: @module_name, index: entities.size
+          )
+          doc[entities_key] = IO::BsonCodec.build_array(entities + [entity_doc])
           @project.mpr.update_unit(@domain_unit_id, doc)
         end
 
@@ -281,25 +334,22 @@ module Mxrb
       end
     end
 
-    # Factory for domain model mutation plans.
-    #
-    # Usage:
-    #   project.plan_add_attribute("M.Product", name: :Price, type: :decimal)
-    #   project.plan_remove_attribute("M.Product/Price")
-    #   project.plan_change_attribute("M.Product/Price", type: :integer, default: "0")
-    #   project.plan_add_entity("M", name: :Tag, attributes: [{name: :Label, type: :string}])
-    #   project.plan_remove_entity("M.Product")
-    class DomainMutator
+    # Factory for domain model mutation plans exposed through Project.
+    class DomainMutator # rubocop:disable Metrics/ClassLength
       def initialize(project)
         @project = project
       end
 
-      def plan_add_attribute(entity_qname, name:, type: :string, default: nil, documentation: nil)
+      def plan_add_attribute(entity_qname, name:, type: :string, default: nil, documentation: nil,
+                             required: false)
         mod_name, entity_name, dm_id, entity_id = resolve_entity(entity_qname)
         AddAttributePlan.new(
           project: @project, module_name: mod_name, entity_name: entity_name,
           entity_id: entity_id, domain_unit_id: dm_id,
-          attribute_def: { name: name.to_s, type: type, default: default, documentation: documentation.to_s }
+          attribute_def: {
+            name: name.to_s, type: type, default: default,
+            documentation: documentation.to_s, required: required == true
+          }
         )
       end
 
@@ -315,12 +365,14 @@ module Mxrb
         )
       end
 
-      def plan_change_attribute(attribute_qname, type: nil, default: nil, documentation: nil)
+      def plan_change_attribute(attribute_qname, type: nil, default: nil, documentation: nil,
+                                required: nil)
         mod_name, entity_name, dm_id, entity_id, attr_name = resolve_attribute(attribute_qname)
         updates = {}
         updates[:type]          = type          if type
         updates[:default]       = default       unless default.nil?
         updates[:documentation] = documentation if documentation
+        updates[:required]      = required       unless required.nil?
         raise ArgumentError, "plan_change_attribute: no changes specified" if updates.empty?
 
         ChangeAttributePlan.new(

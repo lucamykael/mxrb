@@ -16,7 +16,7 @@ module Mxrb
       'calendar' => 57_609, 'calendar_today' => 57_609,
       'user' => 57_352, 'search' => 57_347, 'settings' => 57_369,
       'trash' => 57_376, 'file' => 57_378, 'time' => 57_379,
-      'shopping_cart' => 57_622
+      'shopping_cart' => 57_622, 'tasks' => 57_655, 'checklist' => 57_655
     }.freeze
 
     LEGACY_NAVIGATION_PROFILES = {
@@ -81,6 +81,15 @@ module Mxrb
         synchronize_ruby_navigation!(mpr, root_id, navigation_items)
       end
       self
+    end
+
+    # Canonical editor-shape serializers shared by incremental semantic plans.
+    def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
+      entity_doc(entity, module_name, previous, index)
+    end
+
+    def build_domain_attribute_document(attribute, previous: nil)
+      attribute_doc(attribute, previous)
     end
 
     private

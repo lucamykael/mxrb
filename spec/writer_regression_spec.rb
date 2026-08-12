@@ -32,6 +32,8 @@ RSpec.describe 'writer regressions from the VetClinic acceptance project' do # r
     writer = Mxrb::Writer.new('/tmp/navigation.mpr', version: '11.12.1', modules: [])
     expect(writer.send(:glyph_icon_doc, 'home')['Code']).to eq(57_377)
     expect(writer.send(:glyph_icon_doc, 'calendar_today')['Code']).to eq(57_609)
+    expect(writer.send(:glyph_icon_doc, 'tasks')['Code']).to eq(57_655)
+    expect(writer.send(:glyph_icon_doc, 'checklist')['Code']).to eq(57_655)
     expect(writer.send(:glyph_icon_doc, 57_349)['Code']).to eq(57_349)
     expect(writer.send(:glyph_icon_doc, nil)).to be_nil
     expect { writer.send(:glyph_icon_doc, 'not-a-mendix-glyph') }

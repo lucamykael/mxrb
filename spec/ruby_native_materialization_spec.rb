@@ -126,10 +126,12 @@ RSpec.describe 'Ruby-first native materialization' do
       expect(File.read(File.join(round_trip, 'app', 'services', 'app', 'act_launch.rb')))
         .to include('native :microflow', "show_message 'Ruby reached Mendix'")
       expect(File).to exist(File.join(
-                              round_trip, 'frontend', 'src', 'nanoflows', 'app', 'nan_launch.ts'
+                              round_trip, 'frontend', 'src', 'generated', 'nanoflows',
+                              'app', 'nan_launch.ts'
                             ))
       expect(File.read(File.join(
-                         round_trip, 'frontend', 'src', 'nanoflows', 'app', 'nan_launch.ts'
+                         round_trip, 'frontend', 'src', 'generated', 'nanoflows',
+                         'app', 'nan_launch.ts'
                        ))).to include('runtime.string(["$status"][Number(rawIndex) - 1])')
       Mxrb::RubyApp.compile(round_trip, recompiled)
       expect(document_ids(recompiled)).to eq(first_ids)

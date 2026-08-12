@@ -269,6 +269,24 @@ VetClinic.ACT_RefreshAppointmentBoard    microflow
 IDs novos são determinísticos. Documentos existentes são localizados pelo nome
 qualificado e conservam seus IDs. Repetir o comando não cria cópias.
 
+Valide também no pipeline oficial da mesma versão do Studio Pro/MxBuild:
+
+```bash
+export MXRB_MENDIX_HOME="$HOME/.local/share/mendix/11.12.1"
+export MXRB_JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+
+"$MXRB_MENDIX_HOME/modeler/mxbuild" \
+  --java-home="$MXRB_JAVA_HOME" \
+  --java-exe-path="$MXRB_JAVA_HOME/bin/java" \
+  --target=package \
+  --output="$MXRB_WORK/VetClinic-ruby-native.mda" \
+  "$MXRB_COMPILED"
+```
+
+O aceite é `BUILD SUCCEEDED`. O MxBuild carrega os modelers internos de domain
+model, page e microflow e rejeita formas BSON que o validador estrutural não
+reconheceria sozinho.
+
 ## 5. Fazer o round-trip e gerar o TypeScript atualizado
 
 ```bash
@@ -293,7 +311,7 @@ cmp \
   "$MXRB_RUNTIME/app/pages/vet_clinic/appointment_board_page.rb"
 
 rg -n 'callMicroflow|showMessage|runtime.string' \
-  "$MXRB_RUNTIME/frontend/src/nanoflows/vet_clinic/nan_refresh_appointment_board.ts"
+  "$MXRB_RUNTIME/frontend/src/generated/nanoflows/vet_clinic/nan_refresh_appointment_board.ts"
 ```
 
 `cmp` sem saída confirma preservação byte a byte. Projeções TypeScript de uma
@@ -307,10 +325,9 @@ cd "$MXRB_RUNTIME"
 export MXRB_ROOT
 
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec rspec
-npm run typecheck --prefix frontend
-npm run build --prefix frontend
+npm run check --prefix frontend
 ```
 
 ## 7. Configurar autenticação sem versionar senha
@@ -421,6 +438,7 @@ sequência.
 - [ ] todo o experimento ficou num diretório único de `/tmp`;
 - [ ] Home existente e documentos novos foram declarados nas classes Ruby;
 - [ ] `mxrb validate` aprovou os dois MPRs compilados;
+- [ ] o MxBuild oficial terminou com `BUILD SUCCEEDED`;
 - [ ] IDs permaneceram estáveis após o round-trip;
 - [ ] RSpec passou;
 - [ ] TypeScript e Vite passaram;

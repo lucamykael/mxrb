@@ -202,7 +202,7 @@ RSpec.describe 'Ruby application internal contracts' do
       File.write(File.join(sidecar_theme, 'web', 'js', 'legacy.js'), 'legacy')
       File.write(File.join(sidecar_theme, 'native', 'main.js'), 'native')
       exp.send(:copy_frontend_theme)
-      frontend_theme = File.join(dir, 'frontend', 'src', 'mendix', 'theme')
+      frontend_theme = File.join(dir, 'frontend', 'src', 'generated', 'platform', 'theme')
       expect(File.read(File.join(frontend_theme, 'web', 'main.scss'))).to eq('theme')
       expect(Dir.glob(File.join(frontend_theme, '**', '*.{js,jsx}'))).to be_empty
       expect(File).not_to exist(File.join(frontend_theme, 'native'))
@@ -316,8 +316,7 @@ RSpec.describe 'Ruby application internal contracts' do
     expect { sync.send(:add_entity, model_project, 'Bad', implementation) }
       .to raise_error(Mxrb::ValidationError, /Module.Entity/)
     required = { mendix_name: 'Name', type: :string, required: true, default: nil }
-    expect { sync.send(:add_entity, model_project, 'M.E', double(persistable: true, attributes: [required])) }
-      .to raise_error(Mxrb::ValidationError, /required attribute/)
+    sync.send(:add_entity, model_project, 'M.E', double(persistable: true, attributes: [required]))
     valid = { mendix_name: 'Name', type: :string, required: false, default: nil }
     sync.send(:add_entity, model_project, 'M.E', double(persistable: false, attributes: [valid]))
     expect { sync.send(:synchronize_entity, double(find_artifact: nil), 'M.E', implementation) }
@@ -337,8 +336,7 @@ RSpec.describe 'Ruby application internal contracts' do
     same = double(name: 'Name', required: false, type: :string, default_value: '')
     expect(sync.send(:synchronize_attribute, model_project, 'M.E', same, valid)).to be_nil
     required_existing = double(name: 'Name', required: true, type: :string, default_value: nil)
-    expect { sync.send(:synchronize_attribute, model_project, 'M.E', required_existing, valid) }
-      .to raise_error(Mxrb::ValidationError, /changing required/)
+    sync.send(:synchronize_attribute, model_project, 'M.E', required_existing, valid)
   end
 
   it 'covers server lifecycle and supervisor internal/external process paths' do

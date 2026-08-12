@@ -1,0 +1,179 @@
+:root {
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.app-shell,
+.app-page {
+  min-height: 100vh;
+}
+
+.app-page[aria-busy='true'] {
+  cursor: progress;
+  pointer-events: none;
+}
+
+.app-navigation {
+  position: fixed;
+  z-index: 20;
+  top: 1rem;
+  right: 1rem;
+}
+
+.app-navigation ul {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-navigation button {
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-feedback {
+  position: fixed;
+  z-index: 50;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: 34rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  color: white;
+  box-shadow: 0 0.5rem 2rem #0008;
+}
+
+.app-feedback button {
+  float: right;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-feedback--error {
+  background: #7f1d1d;
+}
+
+.app-feedback--notice {
+  z-index: 49;
+  background: #14532d;
+}
+
+.loading-page,
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.login-page {
+  padding: 1rem;
+}
+
+.login-page form {
+  display: grid;
+  width: min(24rem, 100%);
+  gap: 1rem;
+  padding: 2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.75rem;
+}
+
+.login-page label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.marketplace-widget {
+  display: block;
+  min-width: 0;
+}
+
+.mxrb-marketplace-widget img,
+.mxrb-marketplace-widget video,
+.mxrb-marketplace-chart svg {
+  display: block;
+  width: 100%;
+  height: 12rem;
+  max-width: 100%;
+}
+
+.mxrb-marketplace-chart {
+  margin: 0.5rem 0;
+}
+
+.mxrb-marketplace-rating {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+}
+
+.mxrb-marketplace-rating button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.mxrb-marketplace-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.data-grid__toolbar,
+.data-grid__pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+
+.data-grid table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-grid th,
+.data-grid td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #d1d5db;
+  text-align: left;
+}
+
+.data-grid tbody tr {
+  cursor: pointer;
+}
+
+.data-grid tbody tr.is-selected {
+  background: #dbeafe;
+}
+
+.native-widget:empty {
+  min-height: 1px;
+}

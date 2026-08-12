@@ -507,12 +507,6 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     synchronizer = Mxrb::RubyApp::Synchronizer.allocate
     expect { synchronizer.send(:qualified_parts, 'Unqualified') }
       .to raise_error(Mxrb::ValidationError, /Module.Entity/)
-    expect do
-      synchronizer.send(
-        :reject_unsupported_required!, 'Sales.Order',
-        { required: true, mendix_name: 'Required' }
-      )
-    end.to raise_error(Mxrb::ValidationError, /adding required/)
 
     attribute = Struct.new(:name, :required, :type, :default_value).new('Number', false, :string, '')
     unsafe_plan = double(safe?: false, changes: ['unsafe'])
@@ -521,12 +515,13 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     expect do
       synchronizer.send(:synchronize_attributes, project, 'Sales.Order', entity, [])
     end.to raise_error(Mxrb::ValidationError, /unsafe/)
-    expect do
-      synchronizer.send(
-        :synchronize_attribute, project, 'Sales.Order', attribute,
-        { required: true, type: :string, default: nil }
-      )
-    end.to raise_error(Mxrb::ValidationError, /changing required/)
+    required_plan = double
+    expect(required_plan).to receive(:apply!)
+    required_project = double(plan_change_attribute: required_plan)
+    synchronizer.send(
+      :synchronize_attribute, required_project, 'Sales.Order', attribute,
+      { required: true, type: :string, default: nil }
+    )
     expect do
       synchronizer.send(:synchronize_entity, double(find_artifact: nil), 'Sales.Missing', record_class)
     end.to raise_error(Mxrb::ValidationError, /missing/)
