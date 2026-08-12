@@ -544,7 +544,7 @@ module Mxrb
       source = <<~RUBY
         # frozen_string_literal: true
 
-        require "mxrb"
+        require "mxrb" unless defined?(Mxrb::Dsl)
 
         output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
 

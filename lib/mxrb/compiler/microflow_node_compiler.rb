@@ -21,7 +21,11 @@ module Mxrb
         ['Microflows$ResultHandling', 'VariableDataType'] => 'VariableType'
       }.freeze
       TYPE_DEFAULTS = {
-        'Microflows$NoCase' => { 'StringRepresentation' => '' }
+        'Microflows$NoCase' => { 'StringRepresentation' => '' },
+        'Microflows$AggregateAction' => {
+          'Expression' => '', 'UseExpression' => false,
+          'ReduceInitialValueExpression' => ''
+        }
       }.freeze
       RUNTIME_DERIVED_FIELDS = {
         'Microflows$ActionActivity' => %w[Caption]

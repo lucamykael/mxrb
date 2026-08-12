@@ -17,7 +17,7 @@ module Mxrb
     SOURCE_GLOBS = [
       'app/**/*.rb', 'config/**/*', 'frontend/**/*', 'spec/**/*.rb',
       'db/migrate/**/*', 'bin/**/*', '.rspec', 'config.ru',
-      'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example'
+      'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[models dtos services pages].freeze
@@ -186,6 +186,7 @@ module Mxrb
     # Base for generated persistent models.
     class Record
       LIFECYCLE_EVENTS = Runtime::Native::Store::LIFECYCLE_EVENTS
+      ATTRIBUTE_OPTION_UNSET = Object.new.freeze
 
       class << self
         attr_reader :mendix_id, :attributes, :persistable, :lifecycle_callbacks
@@ -206,13 +207,19 @@ module Mxrb
 
         def persistence(value) = (@persistable = value == true)
 
-        def attribute(name, type:, mendix_name:, required: false, default: nil)
+        def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil,
+                      documentation: '', length: nil, localize_date: ATTRIBUTE_OPTION_UNSET,
+                      enumeration: nil)
           @attributes ||= []
-          @attributes << {
+          declaration = {
             name: name.to_sym, type: type.to_sym,
             mendix_name: mendix_name.to_s, required: required == true,
-            default: default
+            unique: unique == true, default: default,
+            documentation: documentation.to_s, length: length,
+            enumeration: enumeration
           }
+          declaration[:localize_date] = localize_date unless localize_date.equal?(ATTRIBUTE_OPTION_UNSET)
+          @attributes << declaration
           attr_accessor name
         end
 
@@ -485,7 +492,9 @@ module Mxrb
 
       def native_call(name, arguments = {}, context: nil)
         runtime_synchronize do
-          authorize_document!(:microflow, name, :execute, context)
+          service = Registry.all(:service)[name.to_s]
+          kind = service&.native_kind == :nanoflow ? :nanoflow : :microflow
+          authorize_document!(kind, name, :execute, context)
           serialize(
             bridge.interpreter.call(name.to_s, arguments.to_h.transform_keys(&:to_s), context:), context:
           )
@@ -1007,7 +1016,10 @@ module Mxrb
         attributes = implementation.attributes.to_a.map do |attribute|
           {
             name: attribute.fetch(:mendix_name), type: attribute.fetch(:type),
-            default: attribute[:default], required: attribute.fetch(:required)
+            default: attribute[:default], required: attribute.fetch(:required, false),
+            unique: attribute.fetch(:unique, false), documentation: attribute[:documentation],
+            length: attribute[:length], localize_date: attribute[:localize_date],
+            enumeration: attribute[:enumeration]
           }
         end
         project.plan_add_entity(
@@ -1042,7 +1054,10 @@ module Mxrb
           declaration = declared.fetch(name)
           project.plan_add_attribute(
             entity_name, name:, type: declaration.fetch(:type),
-                         default: declaration[:default], required: declaration.fetch(:required)
+                         default: declaration[:default], required: declaration.fetch(:required, false),
+                         unique: declaration.fetch(:unique, false),
+                         documentation: declaration[:documentation], length: declaration[:length],
+                         localize_date: declaration[:localize_date], enumeration: declaration[:enumeration]
           ).apply!
         end
         (declared.keys & existing.keys).each do |name|
@@ -1052,13 +1067,41 @@ module Mxrb
 
       def synchronize_attribute(project, entity_name, attribute, declaration)
         updates = {}
-        declared_required = declaration.fetch(:required)
+        declared_required = declaration.fetch(:required, false)
         updates[:required] = declared_required if (attribute.required == true) != declared_required
+        declared_unique = declaration.fetch(:unique, false)
+        existing_unique = attribute.respond_to?(:unique) && attribute.unique == true
+        updates[:unique] = declared_unique if existing_unique != declared_unique
         declared_type = declaration.fetch(:type).to_sym
         updates[:type] = declared_type if attribute.type != declared_type
         current_default = attribute.default_value.to_s
         declared_default = declaration[:default].to_s
         updates[:default] = declaration[:default] if current_default != declared_default
+        if declaration.key?(:documentation)
+          declared_documentation = declaration[:documentation].to_s
+          existing_documentation = attribute.documentation if attribute.respond_to?(:documentation)
+          updates[:documentation] = declared_documentation \
+            if existing_documentation.to_s != declared_documentation
+        end
+        if declaration.key?(:length)
+          declared_length = declaration[:length]
+          declared_length = Model::Attribute::DEFAULT_STRING_LENGTH \
+            if declared_type == :string && declared_length.nil?
+          existing_length = attribute.length if attribute.respond_to?(:length)
+          updates[:length] = declared_length if existing_length != declared_length
+        end
+        if declaration.key?(:localize_date)
+          declared_localize_date = declaration[:localize_date]
+          declared_localize_date = false if declared_type == :datetime && declared_localize_date.nil?
+          existing_localize_date = attribute.localize_date if attribute.respond_to?(:localize_date)
+          updates[:localize_date] = declared_localize_date \
+            if existing_localize_date != declared_localize_date
+        end
+        if declaration.key?(:enumeration)
+          existing_enumeration = attribute.enumeration if attribute.respond_to?(:enumeration)
+          updates[:enumeration] = declaration[:enumeration] \
+            if existing_enumeration.to_s != declaration[:enumeration].to_s
+        end
         return if updates.empty?
 
         project.plan_change_attribute("#{entity_name}/#{attribute.name}", **updates).apply!
@@ -1114,18 +1157,25 @@ module Mxrb
         if method == 'POST' && path == '/api/login'
           credentials = request_json(request)
           session = @sessions.login(credentials['username'], credentials['password'])
-          return render_json(response, 200, { ok: true }.merge(session))
+          set_session_cookie(response, session.fetch(:token))
+          public_session = session.reject { |key, _value| key == :token }
+          return render_json(response, 200, { ok: true }.merge(public_session))
         end
 
-        context = @sessions.authenticate(request['Authorization'])
+        authorization = request_authorization(request)
+        validate_csrf!(request, authorization) if unsafe_request?(method) && cookie_authenticated?(request)
+        context = @sessions.authenticate(authorization)
         if method == 'GET' && path == '/api/session'
           return render_json(
             response, 200,
-            user: context.user, roles: context.user_roles, module_roles: context.module_roles
+            user: context.user, roles: context.user_roles, module_roles: context.module_roles,
+            csrf: @sessions.csrf_token(authorization)
           )
         end
         if method == 'POST' && path == '/api/logout'
-          return render_json(response, 200, ok: @sessions.logout(request['Authorization']))
+          logged_out = @sessions.logout(authorization)
+          clear_session_cookie(response)
+          return render_json(response, 200, ok: logged_out)
         end
         return render_json(response, 200, application.schema(context:)) if method == 'GET' && path == '/api/schema'
         return render_json(response, 200, application.schema(context:)[:navigation]) \
@@ -1185,8 +1235,8 @@ module Mxrb
 
         if (match = rest_route(method, path))
           route, path_parameters = match
-          return render_json(response, 401, error('unauthorized', 'Authorization header required')) \
-            if route['requires_authentication'] && request['Authorization'].to_s.empty?
+          return render_json(response, 401, error('unauthorized', 'Authenticated session required')) \
+            if route['requires_authentication'] && authorization.to_s.empty?
 
           body = request.body.to_s.empty? ? nil : request_json(request)
           result = application.invoke_rest(
@@ -1248,6 +1298,40 @@ module Mxrb
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
         response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      end
+
+      def request_authorization(request)
+        header = request['Authorization'].to_s
+        return header unless header.empty?
+
+        token = request['Cookie'].to_s.split(';').filter_map do |part|
+          name, value = part.strip.split('=', 2)
+          value if name == 'mxrb_session'
+        end.first
+        token && "Bearer #{token}"
+      end
+
+      def cookie_authenticated?(request)
+        request['Authorization'].to_s.empty? && request['Cookie'].to_s.match?(/(?:\A|;\s*)mxrb_session=/)
+      end
+
+      def unsafe_request?(method) = !%w[GET HEAD OPTIONS].include?(method)
+
+      def validate_csrf!(request, authorization)
+        return if @sessions.valid_csrf?(authorization, request['X-CSRF-Token'])
+
+        raise AuthenticationError, 'invalid or missing CSRF token'
+      end
+
+      def set_session_cookie(response, token)
+        attributes = ["mxrb_session=#{token}", 'Path=/', 'HttpOnly', 'SameSite=Strict',
+                      "Max-Age=#{@sessions.ttl}"]
+        attributes << 'Secure' if ENV['MXRB_SECURE_COOKIES'] == 'true'
+        response['Set-Cookie'] = attributes.join('; ')
+      end
+
+      def clear_session_cookie(response)
+        response['Set-Cookie'] = 'mxrb_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
       end
 
       def route_name(path, prefix)
@@ -1352,7 +1436,11 @@ module Mxrb
         body = input ? input.read.to_s : ''
         input.rewind if input.respond_to?(:rewind)
         query = URI.decode_www_form(environment['QUERY_STRING'].to_s).to_h
-        headers = { 'Authorization' => environment['HTTP_AUTHORIZATION'].to_s }
+        headers = {
+          'Authorization' => environment['HTTP_AUTHORIZATION'].to_s,
+          'Cookie' => environment['HTTP_COOKIE'].to_s,
+          'X-CSRF-Token' => environment['HTTP_X_CSRF_TOKEN'].to_s
+        }
         path = "#{environment['SCRIPT_NAME']}#{environment.fetch('PATH_INFO', '/')}"
         Request.new(
           path, environment.fetch('REQUEST_METHOD', 'GET'),

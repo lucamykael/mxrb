@@ -301,6 +301,28 @@ RSpec.describe 'modern page widgets' do
     expect(writer.send(:array_items, column_values.dig('filter', 'Value', 'Widgets')).length).to eq(2)
   end
 
+  it 'fails before emitting unsupported official Data Grid 2 toolbar and selection events' do
+    descriptor = writer.send(:data_grid2_descriptor)
+    toolbar = {
+      type: :data_grid, name: 'Grid', events: [],
+      options: { toolbar: { buttons: [{ type: :new }] } }
+    }
+    selection_event = {
+      type: :data_grid, name: 'Grid', options: {},
+      events: [{ event: :on_change, kind: :nanoflow, handler: 'Ui.Refresh' }]
+    }
+
+    expect do
+      writer.send(:validate_official_data_grid2_contract!, toolbar, descriptor, Object.new)
+    end.to raise_error(Mxrb::ValidationError, /toolbar buttons are not portable/)
+    expect do
+      writer.send(:validate_official_data_grid2_contract!, selection_event, descriptor, Object.new)
+    end.to raise_error(Mxrb::ValidationError, /on_change is not certified/)
+    expect do
+      writer.send(:validate_official_data_grid2_contract!, selection_event, descriptor, nil)
+    end.not_to raise_error
+  end
+
   it 'hydrates Combo Box enumeration and association modes' do
     specs = {
       source: { type: 'Enumeration' }, optionsSourceType: { type: 'Enumeration' },

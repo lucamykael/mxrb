@@ -10,7 +10,7 @@ Mxrb.define(output) do
 
   self.module :Certification do
     enumeration :OrderStatus do
-      value :New, caption: 'New'
+      value :Submitted, caption: 'Submitted'
       value :Processing, caption: 'Processing'
       value :Done, caption: 'Done'
     end
@@ -31,7 +31,7 @@ Mxrb.define(output) do
 
     entity :Order do
       string :Number, required: true
-      enum :Status, enumeration: 'Certification.OrderStatus', default: 'New'
+      enum :Status, enumeration: 'Certification.OrderStatus', default: 'Submitted'
       decimal :Total, default: '0'
       datetime :PlacedAt
       association 'Certification.Customer', name: 'Order_Customer', cardinality: :many_to_one
@@ -75,7 +75,10 @@ Mxrb.define(output) do
       delete :orders
     end
 
-    nanoflow(:ClientRefresh) { return_value 'true' }
+    nanoflow :ClientRefresh do
+      call_microflow 'Certification.CountOrders', as: :count
+      return_value '$count'
+    end
     scheduled_event :DailyOrderAudit, microflow: 'Certification.CountOrders', interval: 1, unit: :days
 
     page :Dashboard do
@@ -84,16 +87,18 @@ Mxrb.define(output) do
         column :Number, attribute: 'Certification.Order/Number', caption: 'Number'
         column :Status, attribute: 'Certification.Order/Status', caption: 'Status'
         column :Total, attribute: 'Certification.Order/Total', caption: 'Total'
-        toolbar do
-          new_button
-          delete_button
-        end
-        on_change nanoflow: 'Certification.ClientRefresh'
       end
       button :Seed, caption: 'Seed order' do
         on_click microflow: 'Certification.SeedOrder'
       end
+      button :Refresh, caption: 'Refresh count' do
+        on_click nanoflow: 'Certification.ClientRefresh'
+      end
     end
+  end
+
+  navigation do
+    profile :Responsive, home_page: 'Certification.Dashboard'
   end
 end
 # rubocop:enable Metrics/BlockLength

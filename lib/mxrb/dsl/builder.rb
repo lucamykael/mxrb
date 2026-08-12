@@ -845,9 +845,12 @@ module Mxrb
       end
 
       def page(name, &block)
-        pb = PageBuilder.new(name)
+        default_layout = "#{@name}.ApplicationLayout"
+        pb = PageBuilder.new(name, default_layout:)
         pb.instance_eval(&block) if block
-        @pages << pb.to_h
+        page = pb.to_h
+        ensure_application_layout if page.fetch(:layout) == default_layout
+        @pages << page
       end
 
       def menu(name, &block)
@@ -956,30 +959,36 @@ module Mxrb
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NoAction',
           'DisabledDuringExecution' => true
         }
-        navigation_tree = {
-          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationTree',
-          'Appearance' => appearance.call('mxrb-navigation'),
-          'MenuSource' => {
-            '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationSource',
-            'NavigationProfile' => navigation.to_s
-          },
-          'Name' => 'navigationTree1', 'TabIndex' => 0
-        }
-        left = {
-          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
-          'Appearance' => appearance.call('region-sidebar'),
-          'Size' => 264, 'SizeMode' => 'Pixels',
-          'ToggleMode' => 'ShrinkContentInitiallyClosed',
-          'Widgets' => IO::BsonCodec.build_array([navigation_tree], marker: 2)
-        }
-        sidebar_toggle = {
-          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$SidebarToggleButton',
-          'Appearance' => appearance.call('mxrb-sidebar-toggle'),
-          'ButtonStyle' => 'Primary', 'CaptionTemplate' => client_template.call('Menu'),
-          'ConditionalVisibilitySettings' => nil, 'Icon' => nil,
-          'Name' => 'sidebarToggle1', 'RenderType' => 'Button', 'TabIndex' => 0,
-          'Tooltip' => text.call('Toggle navigation')
-        }
+        navigation_tree = if navigation
+                            {
+                              '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationTree',
+                              'Appearance' => appearance.call('mxrb-navigation'),
+                              'MenuSource' => {
+                                '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationSource',
+                                'NavigationProfile' => navigation.to_s
+                              },
+                              'Name' => 'navigationTree1', 'TabIndex' => 0
+                            }
+                          end
+        left = if navigation_tree
+                 {
+                   '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
+                   'Appearance' => appearance.call('region-sidebar'),
+                   'Size' => 264, 'SizeMode' => 'Pixels',
+                   'ToggleMode' => 'ShrinkContentInitiallyClosed',
+                   'Widgets' => IO::BsonCodec.build_array([navigation_tree], marker: 2)
+                 }
+               end
+        sidebar_toggle = if navigation_tree
+                           {
+                             '$ID' => SecureRandom.uuid, '$Type' => 'Forms$SidebarToggleButton',
+                             'Appearance' => appearance.call('mxrb-sidebar-toggle'),
+                             'ButtonStyle' => 'Primary', 'CaptionTemplate' => client_template.call('Menu'),
+                             'ConditionalVisibilitySettings' => nil, 'Icon' => nil,
+                             'Name' => 'sidebarToggle1', 'RenderType' => 'Button', 'TabIndex' => 0,
+                             'Tooltip' => text.call('Toggle navigation')
+                           }
+                         end
         brand = {
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DynamicText',
           'Appearance' => appearance.call('mxrb-brand'), 'Class' => '',
@@ -995,7 +1004,7 @@ module Mxrb
           'ConditionalVisibilitySettings' => nil, 'Name' => 'topbarContent',
           'OnClickAction' => no_action, 'RenderMode' => 'Div',
           'ScreenReaderHidden' => false, 'TabIndex' => 0,
-          'Widgets' => IO::BsonCodec.build_array([sidebar_toggle, brand], marker: 2)
+          'Widgets' => IO::BsonCodec.build_array([sidebar_toggle, brand].compact, marker: 2)
         }
         top = {
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ScrollContainerRegion',
@@ -1030,6 +1039,14 @@ module Mxrb
             'Excluded' => false, 'ExportLevel' => 'Hidden'
           }
         )
+      end
+
+      def ensure_application_layout
+        return if @native_documents.any? do |document|
+          document[:type] == 'Forms$Layout' && document[:name] == 'ApplicationLayout'
+        end
+
+        layout(:ApplicationLayout, title: @name, navigation: nil)
       end
 
       def evaluate(path)
@@ -1239,9 +1256,9 @@ module Mxrb
     class PageBuilder
       include WidgetDsl
 
-      def initialize(name)
+      def initialize(name, default_layout: 'Atlas_Default')
         @name          = name.to_s
-        @layout        = "Atlas_Default"
+        @layout        = default_layout.to_s
         @title         = name.to_s
         @popup         = false
         @data_source   = nil

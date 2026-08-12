@@ -73,6 +73,9 @@ module Mxrb
          'mxrb pack Shop.mpr --output Shop.mda'],
         ['portable', 'portable FILE.mpr --output runtime.zip', 'Build a portable executable Runtime ZIP',
          'mxrb portable Shop.mpr --output Shop.zip'],
+        ['portability', 'portability [DIR] [--json] [--require-native]',
+         'Audit what Ruby/TypeScript code materializes in Mendix',
+         'mxrb portability . --require-native'],
         ['preflight', 'preflight FILE.mpr [--json]', 'Audit compiler and Runtime compatibility',
          'mxrb preflight Shop.mpr'],
         ['project', 'project inspect [DIR] [--json]', 'Inspect an MXRB project workspace', 'mxrb project inspect .'],
@@ -108,8 +111,8 @@ module Mxrb
         ['upgrade', 'upgrade --mendix VERSION [--target DIR] [--apply]', 'Transition the Mendix version in project.rb',
          'mxrb upgrade --mendix 11.12.1 --apply'],
         ['validate', 'validate FILE.mpr', 'Validate MPR structure, hashes and contents', 'mxrb validate Shop.mpr'],
-        ['widgets', 'widgets sync DEFINITION.rb FILE.mpr', 'Synchronize pluggable widget schemas',
-         'mxrb widgets sync project.rb Shop.mpr']
+        ['widgets', 'widgets <new|build|sync> ...', 'Develop TypeScript widgets and synchronize MPK schemas',
+         'mxrb widgets new OrderSummary ./widgets-src']
       ].to_h { |values| [values.first, Command.new(*values)] }.freeze
 
       SUBCOMMANDS = {

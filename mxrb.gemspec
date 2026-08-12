@@ -27,7 +27,7 @@ Gem::Specification.new do |s|
   s.add_dependency "sqlite3", "~> 2.0"
   s.add_dependency "bson",    "~> 5.2"
   s.add_dependency "base64",     "~> 0.2"
-  s.add_dependency "bigdecimal", "~> 3.1"
+  s.add_dependency "bigdecimal", ">= 3.1", "< 5"
   s.add_dependency "csv",        "~> 3.3"
   s.add_dependency "dotenv",     "~> 3.0"
   s.add_dependency "rexml",      "~> 3.3"

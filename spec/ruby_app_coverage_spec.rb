@@ -216,7 +216,10 @@ RSpec.describe 'Ruby application defensive coverage' do
   it 'covers server routing, REST, errors, static assets, and Rack adaptation' do
     context = double(user: 'ada', user_roles: ['User'], module_roles: ['M.User'])
     sessions = double
-    allow(sessions).to receive_messages(authenticate: context, logout: true, login: { token: 't' })
+    allow(sessions).to receive_messages(
+      authenticate: context, logout: true,
+      login: { token: 't', csrf: 'csrf' }, ttl: 3600, csrf_token: 'csrf'
+    )
     environment = double(name: 'qa')
     app = double(environment:, root: '/tmp/no-app')
     allow(app).to receive_messages(

@@ -89,6 +89,8 @@ RSpec.describe 'Ruby application export mode' do
       expect(File.read(File.join(root, 'frontend', 'package.json'))).to include(
         'react', 'vite'
       )
+      expect(File.read(File.join(root, '.ruby-version'))).to eq("4.0\n")
+      expect(File.read(File.join(root, 'Gemfile'))).to include("gem 'ruby-lsp', require: false")
       expect(File).not_to exist(File.join(root, 'frontend', 'src', 'App.tsx'))
       expect(File).not_to exist(File.join(root, 'frontend', 'src', 'app.css'))
       frontend_source = File.read(File.join(root, 'frontend', 'src', 'app', 'App.tsx'))
@@ -105,7 +107,7 @@ RSpec.describe 'Ruby application export mode' do
                                 ))
       expect(frontend_source).to include('AppRouter')
       expect(application_source).to include(
-        "api<ApplicationSchema>('/api/schema', {}, activeToken)", 'useState',
+        "api<ApplicationSchema>('/api/schema')", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
         'const execution = await definition.execute(resolvedParameters, invoke)',
         "effect): effect is ShowMessageEffect => effect.type === 'show_message'",
@@ -116,8 +118,12 @@ RSpec.describe 'Ruby application export mode' do
         'if (invocationInFlight.current) return Promise.resolve(null)',
         'payload.context ||', 'payload.result ||'
       )
+      expect(Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join)
+        .to include('native :microflow do', 'body_fingerprint')
       expect(widget_source).to include('WidgetRenderer', 'BoundField', 'DataGrid')
-      expect(api_source).to include("headers.set('Authorization', `Bearer ${token}`)")
+      expect(api_source).to include("headers.set('X-CSRF-Token', csrfToken)")
+      expect(api_source).to include("credentials: 'same-origin'")
+      expect(api_source).not_to include('Authorization')
       expect(File).to exist(File.join(
                               root, 'frontend', 'src', 'generated', 'bridge', 'nanoflow.ts'
                             ))

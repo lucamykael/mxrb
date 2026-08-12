@@ -59,7 +59,7 @@ RSpec.describe 'Flymetothemoon Ruby-to-Mendix certification' do
       expect(mod.entities.map(&:name)).to contain_exactly('Customer', 'Product', 'Order', 'OrderLine')
       enumeration = mod.enumerations.find { _1['Name'] == 'OrderStatus' }
       values = Mxrb::IO::BsonCodec.parse_array(enumeration.fetch('Values')).fetch(:items)
-      expect(values.map { _1.fetch('Name') }).to eq(%w[New Processing Done])
+      expect(values.map { _1.fetch('Name') }).to eq(%w[Submitted Processing Done])
       expect(project.modules.first.associations.map(&:name)).to contain_exactly(
         'Order_Customer', 'OrderLine_Order', 'OrderLine_Product'
       )
@@ -89,6 +89,8 @@ RSpec.describe 'Flymetothemoon Ruby-to-Mendix certification' do
         'preset' => 'flymetothemoon', 'web_framework' => 'sinatra',
         'server' => 'puma', 'orm' => 'active_record'
       )
+      expect(File.read(File.join(app, 'project.rb')))
+        .to include("require 'mxrb' unless defined?(Mxrb::RubyApp)")
       stack_files = Dir[File.join(app, '{app,bin,config,spec}', '**', '*')].select { File.file?(_1) }
       expect(stack_files.grep(/\.(?:java|jar|class)\z/i)).to be_empty
 
@@ -96,6 +98,7 @@ RSpec.describe 'Flymetothemoon Ruby-to-Mendix certification' do
       expect(application.invoke_service('Certification.SeedOrder').fetch(:result))
         .to include(type: 'Certification.Order')
       expect(application.invoke_service('Certification.CountOrders').fetch(:result)).to eq(1)
+      expect(application.invoke_service('Certification.ClientRefresh').fetch(:result)).to eq(1)
       expect(application.invoke_service('Certification.ChoosePriority', Urgent: true).fetch(:result)).to eq('high')
       customer = application.create_record('Certification.Customer', 'Name' => 'Ada', 'Active' => true)
       expect(application.record('Certification.Customer', customer.fetch(:id))).to include(id: customer.fetch(:id))

@@ -1180,7 +1180,12 @@ module Mxrb
         properties["datasource"]["Value"]["DataSource"] = custom_xpath_source_doc(options[:entity])
       end
       if options[:selection] && properties['itemSelection']
-        properties.dig('itemSelection', 'Value')['Selection'] = options[:selection].to_s
+        selection = {
+          none: 'None', single: 'Single', multi: 'Multi', multiple: 'Multi'
+        }.fetch(options[:selection].to_s.downcase.to_sym) do
+          raise ValidationError, 'data grid selection must be none, single, or multi'
+        end
+        properties.dig('itemSelection', 'Value')['Selection'] = selection
       end
       if properties['filtersPlaceholder'] && options[:filters]
         configured_filters = options[:filters].is_a?(Array) ? options[:filters] : [options[:filters]]
@@ -1681,14 +1686,18 @@ module Mxrb
       else
         { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
       end
-      type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
+      if attr.key?(:enumeration)
+        type_doc = type_doc.reject { |key, _value| %w[enumeration Enumeration].include?(key) }
+        type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
+      end
       string_type = storage_type == Model::Attribute::TYPE_MAP[:string]
-      if attr[:length] || (string_type && !previous_type&.key?('length') && !previous_type&.key?('Length'))
+      if string_type && (attr.key?(:length) || (!previous_type&.key?('length') && !previous_type&.key?('Length')))
         length_key = native_key(previous_type, 'length', 'Length')
         length = attr[:length] || Model::Attribute::DEFAULT_STRING_LENGTH
         type_doc = type_doc.merge(length_key => Integer(length))
       end
-      if attr.key?(:localize_date)
+      datetime_type = storage_type == Model::Attribute::TYPE_MAP[:datetime]
+      if attr.key?(:localize_date) && (datetime_type || !attr[:localize_date].nil?)
         localize_key = native_key(previous_type, 'localizeDate', 'LocalizeDate')
         type_doc = type_doc.merge(localize_key => (attr[:localize_date] == true))
       end
@@ -2524,6 +2533,7 @@ module Mxrb
 
     def pluggable_widget_doc(widget, descriptor)
       definition = WidgetPackage.find(File.dirname(@path), descriptor.fetch(:id))
+      validate_official_data_grid2_contract!(widget, descriptor, definition)
       if definition
         type, object = WidgetPackage.template(definition)
       else
@@ -2568,9 +2578,34 @@ module Mxrb
         configure_fallback_combo_box!(doc, options)
       end
       widget.fetch(:events, []).each do |event|
-        doc[event_property(event.fetch(:event))] = client_action_doc(event)
+        if descriptor.fetch(:id) == data_grid2_descriptor[:id] && event.fetch(:event).to_sym == :on_change
+          property = custom_widget_properties(doc)['onSelectionChange']
+          if property
+            property['Value']['Action'] = client_action_doc(event)
+          else
+            doc[event_property(event.fetch(:event))] = client_action_doc(event)
+          end
+        else
+          doc[event_property(event.fetch(:event))] = client_action_doc(event)
+        end
       end
       doc
+    end
+
+    def validate_official_data_grid2_contract!(widget, descriptor, definition)
+      return unless definition && descriptor.fetch(:id) == data_grid2_descriptor[:id]
+
+      toolbar = Array(widget.dig(:options, :toolbar, :buttons))
+      unless toolbar.empty?
+        raise ValidationError,
+              'Data Grid 2 toolbar buttons are not portable to the official widget schema; ' \
+              'use explicit page buttons or a pluggable widget'
+      end
+      return unless widget.fetch(:events, []).any? { _1.fetch(:event).to_sym == :on_change }
+
+      raise ValidationError,
+            'Data Grid 2 on_change is not certified against the official widget schema; ' \
+            'use an explicit action button to call the nanoflow or microflow'
     end
 
     def modern_widget_properties(type, options)
@@ -2736,8 +2771,8 @@ module Mxrb
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$CallNanoflowClientAction",
-          "Nanoflow" => event.fetch(:handler),
           "ConfirmationInfo" => nil, "DisabledDuringExecution" => true,
+          "Nanoflow" => event.fetch(:handler),
           "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
           "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
           "ProgressBar" => "None", "ProgressMessage" => nil

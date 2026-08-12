@@ -150,7 +150,8 @@ RSpec.describe "new features" do
 
         Mxrb.open(path, readonly: false) do |project|
           plan = project.plan_add_attribute(
-            "Shop.Product", name: :Price, type: :decimal, default: "0.0", required: true
+            "Shop.Product", name: :Price, type: :decimal, default: "0.0",
+                            documentation: "Current list price", required: true, unique: true
           )
 
           expect(plan.changes).to include(match(/Price.*decimal.*Shop\.Product/i))
@@ -166,6 +167,8 @@ RSpec.describe "new features" do
           expect(price.type).to eq(:decimal)
           expect(price.default_value).to eq("0.0")
           expect(price.required).to be true
+          expect(price.unique).to be true
+          expect(price.documentation).to eq("Current list price")
           domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
           entity_doc = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items].first
           price_docs = Mxrb::IO::BsonCodec.parse_array(entity_doc.fetch("Attributes"))[:items]
@@ -300,6 +303,32 @@ RSpec.describe "new features" do
           expect(score_doc).to include("Name" => "Score")
           expect(score_doc.fetch("GUID")).not_to be_nil
           expect(score_doc).not_to have_key("name")
+        end
+      end
+    end
+
+    it "round-trips string length, date localization, enumeration, and uniqueness" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) do
+            enumeration(:Status) { value :Open; value :Closed }
+            entity :E do
+              string :Code, length: 32
+              datetime :OccurredAt, localize_date: true
+              enum :State, enumeration: "M.Status"
+            end
+          end
+        end
+
+        Mxrb.open(path, readonly: false) do |project|
+          project.plan_change_attribute("M.E/Code", length: 80, unique: true).apply!
+          project.plan_change_attribute("M.E/OccurredAt", localize_date: false).apply!
+          project.plan_change_attribute("M.E/State", enumeration: nil).apply!
+
+          code, occurred_at, state = project.modules.first.entities.first.attributes
+          expect(code).to have_attributes(length: 80, unique: true)
+          expect(occurred_at.localize_date).to be(false)
+          expect(state.enumeration).to be_nil
         end
       end
     end

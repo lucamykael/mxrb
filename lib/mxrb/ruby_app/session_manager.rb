@@ -52,17 +52,29 @@ module Mxrb
         identity = authenticated_identity(username, password)
 
         token = SecureRandom.urlsafe_base64(32)
+        csrf = SecureRandom.urlsafe_base64(32)
         expires_at = @clock.call + ttl
         profile = identity.slice('roles', 'user_roles', 'module_roles', 'attributes')
-                          .merge('user' => username.to_s)
+                          .merge('user' => username.to_s, '_csrf' => csrf)
         context = context_for(profile)
         @store.write_session(token:, identity: profile, expires_at:)
-        { token:, expires_at: expires_at.iso8601, user: context.user, roles: context.user_roles }
+        { token:, csrf:, expires_at: expires_at.iso8601, user: context.user, roles: context.user_roles }
       end
 
       def logout(header)
         token = bearer_token(header)
         token && @store.delete_session(token)
+      end
+
+      def csrf_token(header)
+        token = bearer_token(header)
+        session = token && @store.read_session(token, now: @clock.call)
+        session&.identity&.fetch('_csrf', nil)
+      end
+
+      def valid_csrf?(header, supplied)
+        expected = csrf_token(header).to_s
+        !expected.empty? && secure_compare(expected, supplied.to_s)
       end
 
       private

@@ -92,5 +92,25 @@ versionados.
 - o frontend exportado concentrava o runtime num único componente e misturava
   código da aplicação com projeções geradas;
 - o round-trip podia restaurar uma bridge gerada antiga.
+- o interpretador Ruby indexava apenas microflows e não executava diretamente
+  um nanoflow nativo que chamava o backend;
+- um projeto novo com página não materializava automaticamente o layout
+  `ApplicationLayout`;
+- um projeto sem perfil `Responsive` e home page passava no validador local,
+  mas o exportador de ícones do MxBuild falhava durante o deployment;
+- ações de aggregate geravam campos incompletos para o schema 11.12.1;
+- o `project.rb` exportado tentava reativar a gem já carregada pelo CLI e a
+  restrição antiga de `bigdecimal` rejeitava Ruby 4;
+- o fallback de Data Grid 2 não era equivalente ao schema oficial do pacote
+  Data Widgets e podia esconder opções de toolbar não materializadas.
 
 Essas falhas agora possuem regressões automatizadas ou cenários de navegador.
+
+Na certificação final, o fixture `flymetothemoon` usa Data Widgets 3.11.3 e
+declara `Responsive` com `Certification.Dashboard` como home. O botão `Refresh`
+executa `Certification.ClientRefresh`, que chama `Certification.CountOrders` e
+devolve o resultado. Origem e round-trip Ruby produziram MDA com `BUILD
+SUCCEEDED`; o gate frontend comparou 124 assets, incluindo dois arquivos de
+proveniência do Marketplace, sem diferenças. O relatório ficou em 9 artefatos
+`native`, 22 `preserved_native` e 2 `runtime_only` (a página/React convencional
+que ainda não possui declaração `Page.native`).

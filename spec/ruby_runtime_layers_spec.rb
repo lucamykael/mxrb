@@ -166,11 +166,27 @@ RSpec.describe 'Pure-Ruby runtime layers' do
         ),
         login
       )
-      token = JSON.parse(login.body).fetch('token')
-      headers = { 'Authorization' => "Bearer #{token}" }
+      login_payload = JSON.parse(login.body)
+      expect(login_payload).not_to have_key('token')
+      expect(login['Set-Cookie']).to include('HttpOnly', 'SameSite=Strict', 'Path=/')
+      token = login['Set-Cookie'].match(/mxrb_session=([^;]+)/)[1]
+      headers = {
+        'Cookie' => "mxrb_session=#{token}",
+        'X-CSRF-Token' => login_payload.fetch('csrf')
+      }
       session = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/session', 'GET', '', {}, headers), session)
       expect(JSON.parse(session.body)).to include('user' => 'ada', 'roles' => ['User'])
+      rejected = Mxrb::Http::Response.new
+      server.send(
+        :dispatch,
+        request.new(
+          '/api/microflows/Sales.SecureFlow', 'POST', '{}', {},
+          'Cookie' => "mxrb_session=#{token}"
+        ),
+        rejected
+      )
+      expect(JSON.parse(rejected.body).dig('error', 'message')).to match(/CSRF/)
       navigation = Mxrb::Http::Response.new
       server.send(:dispatch, request.new('/api/navigation', 'GET', '', {}, headers), navigation)
       expect(JSON.parse(navigation.body).fetch('profiles').first).to include('name' => 'Responsive')
@@ -180,7 +196,7 @@ RSpec.describe 'Pure-Ruby runtime layers' do
       )
       expect(authorized.status).to eq(200)
 
-      context = server.application.session_manager.authenticate(headers['Authorization'])
+      context = server.application.session_manager.authenticate("Bearer #{token}")
       created = server.application.create_record(
         'Sales.Order', { 'Number' => 'SO-1' },
         context:
@@ -209,7 +225,7 @@ RSpec.describe 'Pure-Ruby runtime layers' do
       expect do
         server.application.create_record(
           'Sales.Order', { 'Secret' => 'hidden' },
-          context: server.application.session_manager.authenticate(headers['Authorization'])
+          context: server.application.session_manager.authenticate("Bearer #{token}")
         )
       end.to raise_error(Mxrb::Runtime::AuthorizationError)
       logout = Mxrb::Http::Response.new

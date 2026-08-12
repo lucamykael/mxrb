@@ -143,7 +143,7 @@ module Mxrb
         root = underscore(mod.name)
         entities = mod.entities.map { export_entity(_1, mod, namespace, root) }
         microflows = mod.microflows.map { export_service(_1, mod, namespace, root, :microflow) }
-        nanoflows = mod.nanoflows.map { export_nanoflow(_1, mod, root) }
+        nanoflows = mod.nanoflows.map { export_nanoflow(_1, mod, namespace, root) }
         pages = mod.pages.map { export_page(_1, mod, namespace, root) }
         endpoints = export_endpoints(mod)
         {
@@ -204,8 +204,13 @@ module Mxrb
         class_name = ruby_constant(flow.name)
         relative = File.join('app', 'services', root, "#{underscore(flow.name)}.rb")
         qualified = "#{mod.name}.#{flow.name}"
-        write(relative, service_source(namespace, class_name, qualified, flow.id))
-        add_coverage(flow.id, qualified, kind.to_s, relative, 'runtime_source_preserved')
+        native_source = native_flow_source(flow, kind)
+        write(
+          relative,
+          service_source(namespace, class_name, qualified, flow.id, native_source:, native_kind: kind)
+        )
+        status = native_source ? 'native_projection_source_preserved' : 'runtime_source_preserved'
+        add_coverage(flow.id, qualified, kind.to_s, relative, status)
         {
           'name' => qualified, 'id' => flow.id,
           'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
@@ -273,19 +278,53 @@ module Mxrb
         REST_STATUS_CODES.fetch(raw.to_s.gsub(/[^A-Za-z]/, '').downcase, 200)
       end
 
-      def export_nanoflow(flow, mod, root)
+      def export_nanoflow(flow, mod, namespace, root = nil)
+        root ||= namespace
+        namespace = ruby_constant(mod.name) if root == namespace
         qualified = "#{mod.name}.#{flow.name}"
         relative = File.join(
           'frontend', 'src', 'generated', 'nanoflows', root, "#{underscore(flow.name)}.ts"
         )
         write(relative, nanoflow_typescript(flow, qualified))
+        native_source = native_flow_source(flow, :nanoflow)
+        ruby_path = File.join('app', 'services', root, "#{underscore(flow.name)}_nanoflow.rb")
+        if native_source
+          write(
+            ruby_path,
+            service_source(
+              namespace, ruby_constant(flow.name), qualified, flow.id,
+              native_source:, native_kind: :nanoflow
+            )
+          )
+        end
         entry = {
           'name' => qualified, 'id' => flow.id, 'path' => relative,
           'kind' => 'nanoflow', 'runtime' => 'frontend'
         }
+        entry['ruby_path'] = ruby_path if native_source
         @nanoflow_entries << entry.merge('import_name' => "Nanoflow#{@nanoflow_entries.size}")
-        add_coverage(flow.id, qualified, 'nanoflow', relative, 'frontend_executable')
+        add_coverage(
+          flow.id, qualified, 'nanoflow', native_source ? ruby_path : relative,
+          native_source ? 'native_projection_source_preserved' : 'frontend_executable'
+        )
         entry
+      end
+
+      def native_flow_source(flow, kind)
+        return unless flow.is_a?(Model::Microflow)
+
+        converter = Mxrb::Exporter.allocate
+        converter.instance_variable_set(:@mpr_path, @mpr_path)
+        method = kind.to_sym == :nanoflow ? :nanoflow_source : :microflow_source
+        source = converter.send(method, flow)
+        return unless source.include?('body_fingerprint')
+
+        declaration = source.lines.index { _1.match?(/^\s*(?:microflow|nanoflow)\s/) }
+        return unless declaration
+
+        source.lines[(declaration + 1)...-1].map { _1.delete_prefix('  ') }.join.rstrip
+      rescue StandardError, SyntaxError
+        nil
       end
 
       def nanoflow_typescript(flow, qualified)
@@ -632,11 +671,21 @@ module Mxrb
         value = {
           'name' => attribute.name, 'ruby_name' => ruby_method_name(attribute.name),
           'type' => attribute.type.to_s, 'required' => attribute.required == true,
-          'default' => attribute.default_value, 'id' => attribute.id
+          'unique' => optional_attribute_value(attribute, :unique) == true,
+          'default' => attribute.default_value,
+          'documentation' => optional_attribute_value(attribute, :documentation).to_s,
+          'length' => optional_attribute_value(attribute, :length),
+          'id' => attribute.id
         }
+        localize_date = optional_attribute_value(attribute, :localize_date)
+        value['localize_date'] = localize_date unless localize_date.nil?
         enumeration = native_identifier(attribute.respond_to?(:enumeration) ? attribute.enumeration : nil)
         value['enumeration'] = enumeration unless enumeration.empty?
         value
+      end
+
+      def optional_attribute_value(attribute, name)
+        attribute.public_send(name) if attribute.respond_to?(name)
       end
 
       def enumeration_manifest(mod, enumeration)
@@ -701,9 +750,17 @@ module Mxrb
 
       def entity_source(namespace, class_name, qualified, id, attributes, dto:, persistable:)
         declarations = attributes.map do |attribute|
+          localize_date = if attribute.key?('localize_date')
+                            ", localize_date: #{attribute.fetch('localize_date').inspect}"
+                          else
+                            ''
+                          end
           "    attribute :#{attribute.fetch('ruby_name')}, type: :#{attribute.fetch('type')}, " \
             "mendix_name: #{attribute.fetch('name').inspect}, required: #{attribute.fetch('required')}, " \
-            "default: #{attribute.fetch('default').inspect}"
+            "unique: #{attribute.fetch('unique')}, default: #{attribute.fetch('default').inspect}, " \
+            "documentation: #{attribute.fetch('documentation').inspect}, " \
+            "length: #{attribute['length'].inspect}#{localize_date}, " \
+            "enumeration: #{attribute['enumeration'].inspect}"
         end
         <<~RUBY
           # frozen_string_literal: true
@@ -718,13 +775,21 @@ module Mxrb
         RUBY
       end
 
-      def service_source(namespace, class_name, qualified, id)
+      def service_source(namespace, class_name, qualified, id, native_source: nil,
+                         native_kind: :microflow)
+        native = if native_source
+                   "\n    native :#{native_kind} do\n" \
+                     "#{indent(native_source, 6)}\n    end\n"
+                 else
+                   ''
+                 end
         <<~RUBY
           # frozen_string_literal: true
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Service
               mendix_name #{qualified.inspect}, id: #{id.inspect}
+          #{native}
 
               def call(**arguments)
                 native_call(arguments)
@@ -753,6 +818,7 @@ module Mxrb
 
       def write_support_files
         write('Gemfile', gemfile)
+        write('.ruby-version', "4.0\n")
         write('.gitignore', ruby_gitignore)
         write('.env.example', ruby_env_example)
         %w[development qa staging production].each do |name|
@@ -938,6 +1004,10 @@ module Mxrb
 
           source 'https://rubygems.org'
           gem 'mxrb'
+
+          group :development do
+            gem 'ruby-lsp', require: false
+          end
         RUBY
       end
 
@@ -978,7 +1048,7 @@ module Mxrb
         <<~RUBY
           # frozen_string_literal: true
 
-          require 'mxrb'
+          require 'mxrb' unless defined?(Mxrb::RubyApp)
 
           mendix_version = #{@project.mendix_version.inspect}
           Mxrb::RubyApp.compile(__dir__, mendix_version:)
@@ -1240,12 +1310,14 @@ module Mxrb
           };
 
           export const api = async <T = RuntimeValue | undefined>(
-            path: string, options: RequestInit = {}, token: string | null = null
+            path: string, options: RequestInit = {}
           ): Promise<T> => {
             const headers = new Headers(options.headers);
             headers.set('Content-Type', 'application/json');
-            if (token) headers.set('Authorization', `Bearer ${token}`);
-            const response = await fetch(path, { ...options, headers });
+            if (csrfToken && !['GET', 'HEAD'].includes(options.method || 'GET')) {
+              headers.set('X-CSRF-Token', csrfToken);
+            }
+            const response = await fetch(path, { ...options, headers, credentials: 'same-origin' });
             const payload: unknown = await response.json();
             if (!response.ok) {
               const error: ApiFailure = new Error(errorMessage(payload, response.status));
@@ -1254,6 +1326,9 @@ module Mxrb
             }
             return payload as T;
           };
+
+          let csrfToken: string | null = null;
+          export const setCsrfToken = (value: string | null): void => { csrfToken = value; };
         TS
       end
 
@@ -1773,11 +1848,14 @@ module Mxrb
           export interface Session {
             id?: string;
             username?: string;
+            csrf?: string;
             [key: string]: RuntimeValue | undefined;
           }
 
           export interface LoginResponse {
-            token: string;
+            csrf: string;
+            user?: string;
+            roles?: string[];
           }
 
           export interface ApiFailure extends Error {

@@ -1,0 +1,25 @@
+{
+  "name": "mxrb-ruby-cookie-frontend-smoke",
+  "authentication": true,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "generated-react-application",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "VetClinic" },
+        { "wait_for_selector": ".mxrb-navigation" },
+        { "wait_for_selector": ".mxrb-page-header" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".mxrb-navigation",
+        ".mxrb-page-header",
+        "main.mxrb-page"
+      ]
+    }
+  ]
+}

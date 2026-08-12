@@ -421,6 +421,7 @@ module Mxrb
         return data_grid_widget(widget) if properties.empty? && widget["DataSource"]
 
         entity = properties.dig("datasource", "DataSource", "EntityRef", "Entity")
+        selection = properties.dig('itemSelection', 'Selection').to_s
         column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
                       &.dig("ValueType", "ObjectType")
         columns = parse_array(properties.dig("columns", "Objects")).map do |object|
@@ -431,9 +432,20 @@ module Mxrb
             caption: extract_text(values.dig("header", "TextTemplate"))
           }.compact
         end
+        property_events = {
+          'onSelectionChange' => :on_change,
+          'onClick' => :on_click
+        }.filter_map do |property, event|
+          action = parse_action(properties.dig(property, 'Action'))
+          action&.merge(event:)
+        end
         {
           type: :data_grid, name: widget["Name"],
-          options: { entity: entity, columns: columns }.compact, events: grid_events(widget)
+          options: {
+            entity: entity, columns: columns,
+            selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym)
+          }.compact,
+          events: (grid_events(widget) + property_events).uniq
         }
       end
 

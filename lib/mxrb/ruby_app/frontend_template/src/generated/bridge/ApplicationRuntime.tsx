@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api } from './api';
+import { api, setCsrfToken } from './api';
 import { apiFailure, inlineStyle, isEntityRecord } from './value';
 import type { InvokeHandler, SaveRecord, SelectRecord } from './contracts';
 import nanoflows from '../nanoflows';
@@ -9,7 +9,6 @@ import { AppFeedback } from '../../components/feedback/AppFeedback';
 import { AppNavigation } from '../../components/navigation/AppNavigation';
 import { PageOutlet } from './components/PageOutlet';
 import { WidgetRenderer } from './components/WidgetRenderer';
-import { useSessionToken } from '../../hooks/useSessionToken';
 import { AppLayout } from '../../layouts/AppLayout';
 import type {
   ApiFailure,
@@ -29,7 +28,6 @@ import type {
 export function ApplicationRuntime() {
   const navigate = useNavigate();
   const { pageName } = useParams();
-  const { token, saveToken, clearToken } = useSessionToken();
   const [schema, setSchema] = useState<ApplicationSchema | null>(null);
   const [page, setPage] = useState<PageDefinition | null>(null);
   const [pageContext, setPageContext] = useState<EntityRecord | null>(null);
@@ -48,21 +46,19 @@ export function ApplicationRuntime() {
     setError(normalized);
   }, []);
   const request: ApiRequest = useCallback(
-    (path: string, options: RequestInit = {}) => api(path, options, token),
-    [token],
+    (path: string, options: RequestInit = {}) => api(path, options),
+    [],
   );
 
   const openPage = async (
     name: string,
     context: EntityRecord | null = null,
-    activeToken = token,
     updateLocation = true,
   ): Promise<void> => {
     try {
       const value = await api<PageDefinition>(
         `/api/pages/${encodeURIComponent(name)}`,
         {},
-        activeToken,
       );
       let resolvedContext = context;
       if (!resolvedContext && value.data_source?.name) {
@@ -78,7 +74,6 @@ export function ApplicationRuntime() {
           const payload = await api<InvocationResult>(
             `/api/microflows/${encodeURIComponent(value.data_source.name)}`,
             { method: 'POST', body: '{}' },
-            activeToken,
           );
           const candidate = payload.context || payload.result;
           resolvedContext = isEntityRecord(candidate) ? { ...candidate, transient: true } : null;
@@ -94,12 +89,12 @@ export function ApplicationRuntime() {
     }
   };
 
-  const loadApplication = async (activeToken = token) => {
+  const loadApplication = async () => {
     try {
-      if (activeToken) {
-        setSession(await api<Session>('/api/session', {}, activeToken));
-      }
-      const value = await api<ApplicationSchema>('/api/schema', {}, activeToken);
+      const activeSession = await api<Session>('/api/session');
+      setSession(activeSession);
+      setCsrfToken(activeSession.csrf || null);
+      const value = await api<ApplicationSchema>('/api/schema');
       setSchema(value);
       setAuthRequired(false);
       setError(null);
@@ -109,16 +104,16 @@ export function ApplicationRuntime() {
       const fallback = value.modules.flatMap((module) => module.pages)[0]?.name;
       const routeTarget = pageName ? decodeURIComponent(pageName) : null;
       const target = routeTarget || profile?.home_page || fallback;
-      if (!target && !activeToken) {
+      if (!target && !activeSession.user) {
         setAuthRequired(true);
         return;
       }
       if (!target) throw new Error('No accessible page is available for this session');
-      await openPage(target, null, activeToken, !routeTarget);
+      await openPage(target, null, !routeTarget);
     } catch (failure) {
       const normalized = apiFailure(failure);
       if (normalized.status === 401) {
-        clearToken();
+        setCsrfToken(null);
         setSession(null);
         setAuthRequired(true);
       }
@@ -129,7 +124,7 @@ export function ApplicationRuntime() {
   useEffect(() => {
     if (initialLoadStarted.current) return;
     initialLoadStarted.current = true;
-    void loadApplication(token);
+    void loadApplication();
   }, []);
 
   const login = async (username: string, password: string): Promise<void> => {
@@ -139,8 +134,8 @@ export function ApplicationRuntime() {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
-      saveToken(authenticated.token);
-      await loadApplication(authenticated.token);
+      setCsrfToken(authenticated.csrf);
+      await loadApplication();
     } catch (failure) {
       setError(apiFailure(failure));
     } finally {
@@ -150,12 +145,12 @@ export function ApplicationRuntime() {
 
   const logout = async () => {
     try {
-      await api('/api/logout', { method: 'POST' }, token);
+      await api('/api/logout', { method: 'POST' });
     } catch (failure) {
       const normalized = apiFailure(failure);
       if (normalized.status !== 401) setError(normalized);
     } finally {
-      clearToken();
+      setCsrfToken(null);
       setSession(null);
       setSchema(null);
       setPage(null);

@@ -521,7 +521,7 @@ module Mxrb
           @security_context = nil
           @apply_entity_access = false
           @flows = project.modules.flat_map do |mod|
-            mod.microflows.map { ["#{mod.name}.#{_1.name}", _1] }
+            (mod.microflows + mod.nanoflows).map { ["#{mod.name}.#{_1.name}", _1] }
           end.to_h
           entity_names = project.modules.flat_map do |mod|
             mod.entities.map { [_1.id.to_s, "#{mod.name}.#{_1.name}"] }
@@ -573,7 +573,7 @@ module Mxrb
           @effects = [] if root_call
           @call_depth += 1
           flow = @flows[name]
-          raise NativeRuntimeError, "microflow #{name} not found" unless flow
+          raise NativeRuntimeError, "flow #{name} not found" unless flow
 
           @security_context = context unless context.nil?
           @apply_entity_access = flow.respond_to?(:apply_entity_access) && flow.apply_entity_access == true

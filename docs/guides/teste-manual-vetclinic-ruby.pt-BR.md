@@ -330,6 +330,19 @@ bundle exec rspec
 npm run check --prefix frontend
 ```
 
+Antes de recompilar, confira o que realmente se materializa no Studio Pro:
+
+```bash
+bundle exec mxrb portability "$RUBY_APP"
+bundle exec mxrb portability "$RUBY_APP" --json \
+  > "$WORK_ROOT/portability.json"
+```
+
+Use `--require-native` somente quando a entrega não puder depender do runtime
+Ruby/TypeScript. Rotas React manuais aparecerão corretamente como
+`runtime_only`; componentes que devem rodar dentro do cliente Mendix devem ser
+empacotados com `mxrb widgets new` e `mxrb widgets build`.
+
 ## 7. Configurar autenticação sem versionar senha
 
 ```bash

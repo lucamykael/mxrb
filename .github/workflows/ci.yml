@@ -58,6 +58,69 @@ jobs:
       - name: Run gradual Ruby quality gate
         run: bundle exec rubocop
 
+  installed-gem:
+    name: installed gem smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+
+      - name: Build and install the packaged gem
+        run: |
+          gem build mxrb.gemspec
+          gem install ./mxrb-*.gem --no-document
+          mxrb --version
+
+      - name: Create a Ruby application through the installed executable
+        working-directory: /tmp
+        run: |
+          mxrb init InstalledGemSmoke --mode ruby
+          test -f InstalledGemSmoke/.mxrb/ruby-app.json
+          test -f InstalledGemSmoke/frontend/src/app/App.tsx
+
+  ruby-frontend:
+    name: generated Ruby TypeScript frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Generate and export a Ruby-first fixture
+        run: |
+          bundle exec ruby bin/mxrb generate spec/fixtures/flymetothemoon/project.rb /tmp/flymetothemoon.mpr
+          bundle exec ruby bin/mxrb export /tmp/flymetothemoon.mpr /tmp/flymetothemoon-ruby --mode ruby --flymetothemoon
+
+      - name: Run the complete application frontend gate
+        working-directory: /tmp/flymetothemoon-ruby/frontend
+        run: |
+          npm ci
+          npm run check
+
+      - name: Compile the Ruby application back to Mendix
+        run: |
+          bundle exec ruby bin/mxrb portability /tmp/flymetothemoon-ruby --json
+          bundle exec ruby bin/mxrb generate /tmp/flymetothemoon-ruby/project.rb /tmp/flymetothemoon-roundtrip.mpr
+          bundle exec ruby bin/mxrb validate /tmp/flymetothemoon-roundtrip.mpr
+
   onnx:
     name: onnx
     runs-on: ubuntu-latest

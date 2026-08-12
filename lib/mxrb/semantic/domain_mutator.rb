@@ -88,10 +88,12 @@ module Mxrb
 
           new_attr = Writer.new("", {}).build_domain_attribute_document(@attribute_def)
           DomainMutator.put_attributes(entity_doc, attrs + [new_attr])
-          if @attribute_def[:required] == true
+          %i[required unique].each do |kind|
+            next unless @attribute_def[kind] == true
+
             rules = DomainValidationRules.extract(entity_doc)
             rules << DomainValidationRules.build(
-              @module_name, @entity_name, @attribute_def[:name], :required
+              @module_name, @entity_name, @attribute_def[:name], kind
             )
             DomainValidationRules.put(entity_doc, rules)
           end
@@ -206,22 +208,24 @@ module Mxrb
             name: @attribute_name,
             type: @updates.fetch(:type, attr_model.type),
             default: @updates.fetch(:default, attr_model.default_value),
-            documentation: @updates.fetch(:documentation, attr_model.documentation)
+            documentation: @updates.fetch(:documentation, attr_model.documentation),
+            length: @updates.fetch(:length, attr_model.length),
+            localize_date: @updates.fetch(:localize_date, attr_model.localize_date),
+            enumeration: @updates.fetch(:enumeration, attr_model.enumeration)
           }
           replacement = Writer.new("", {}).build_domain_attribute_document(
             attribute_def, previous: attr_doc
           )
           new_attrs = attrs.map { (_1["name"] || _1["Name"]).to_s == @attribute_name ? replacement : _1 }
           DomainMutator.put_attributes(entity_doc, new_attrs)
-          if @updates.key?(:required)
+          %i[required unique].each do |kind|
+            next unless @updates.key?(kind)
+
             rules = DomainValidationRules.extract(entity_doc).reject do |rule|
-              DomainValidationRules.for_attribute?(rule, @attribute_name, :required)
+              DomainValidationRules.for_attribute?(rule, @attribute_name, kind)
             end
-            if @updates[:required] == true
-              rules << DomainValidationRules.build(
-                @module_name, @entity_name, @attribute_name, :required
-              )
-            end
+            rules << DomainValidationRules.build(@module_name, @entity_name, @attribute_name, kind) \
+              if @updates[kind] == true
             DomainValidationRules.put(entity_doc, rules)
           end
           DomainMutator.put_entity(doc, @entity_id, entity_doc)
@@ -336,19 +340,23 @@ module Mxrb
 
     # Factory for domain model mutation plans exposed through Project.
     class DomainMutator # rubocop:disable Metrics/ClassLength
+      UNSET = Object.new.freeze
+
       def initialize(project)
         @project = project
       end
 
       def plan_add_attribute(entity_qname, name:, type: :string, default: nil, documentation: nil,
-                             required: false)
+                             required: false, unique: false, length: nil, localize_date: nil,
+                             enumeration: nil)
         mod_name, entity_name, dm_id, entity_id = resolve_entity(entity_qname)
         AddAttributePlan.new(
           project: @project, module_name: mod_name, entity_name: entity_name,
           entity_id: entity_id, domain_unit_id: dm_id,
           attribute_def: {
             name: name.to_s, type: type, default: default,
-            documentation: documentation.to_s, required: required == true
+            documentation: documentation.to_s, required: required == true,
+            unique: unique == true, length:, localize_date:, enumeration:
           }
         )
       end
@@ -365,14 +373,15 @@ module Mxrb
         )
       end
 
-      def plan_change_attribute(attribute_qname, type: nil, default: nil, documentation: nil,
-                                required: nil)
+      def plan_change_attribute(attribute_qname, type: UNSET, default: UNSET,
+                                documentation: UNSET, required: UNSET, unique: UNSET,
+                                length: UNSET, localize_date: UNSET, enumeration: UNSET)
         mod_name, entity_name, dm_id, entity_id, attr_name = resolve_attribute(attribute_qname)
         updates = {}
-        updates[:type]          = type          if type
-        updates[:default]       = default       unless default.nil?
-        updates[:documentation] = documentation if documentation
-        updates[:required]      = required       unless required.nil?
+        {
+          type:, default:, documentation:, required:, unique:, length:,
+          localize_date:, enumeration:
+        }.each { |key, value| updates[key] = value unless value.equal?(UNSET) }
         raise ArgumentError, "plan_change_attribute: no changes specified" if updates.empty?
 
         ChangeAttributePlan.new(

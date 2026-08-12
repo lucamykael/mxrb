@@ -198,6 +198,25 @@ when 'project'
     payload.each { |key, value| puts "#{key}: #{Array(value).join(', ')}" }
   end
 
+when 'portability'
+  json = !ARGV.delete('--json').nil?
+  require_native = !ARGV.delete('--require-native').nil?
+  root = ARGV.shift || Dir.pwd
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  report = Mxrb::RubyApp::PortabilityReport.new(root)
+  if json
+    puts JSON.pretty_generate(report.to_h)
+  else
+    report.entries.each do |entry|
+      puts "[#{entry.status.upcase}] #{entry.kind} #{entry.name}"
+      puts "  #{entry.reason} (#{entry.path})"
+    end
+    puts "[mxrb] native=#{report.summary.fetch('native')} " \
+         "preserved=#{report.summary.fetch('preserved_native')} " \
+         "runtime_only=#{report.summary.fetch('runtime_only')}"
+  end
+  exit 1 if require_native && !report.native?
+
 when 'upgrade'
   version_index = ARGV.index('--mendix')
   abort 'Usage: mxrb upgrade --mendix VERSION [--target DIR] [--apply]' unless version_index
@@ -336,17 +355,35 @@ when "generate"
 
 when "widgets"
   widgets_usage = <<~USAGE
-    Usage: mxrb widgets sync <definition.rb> <file.mpr>
+    Usage:
+      mxrb widgets new NAME [DIR]
+      mxrb widgets build DIR [--project MENDIX_PROJECT_DIR]
+      mxrb widgets sync <definition.rb> <file.mpr>
 
-    Generate the project, load schemas from .mpk files in widgets/, and
-    regenerate Data Grid 2, Combo Box, and other pluggable widget properties.
+    Create and build a React + TypeScript pluggable widget with Mendix's official
+    generator, or synchronize MPK schemas into an MPR generated from Ruby.
   USAGE
   action = ARGV.shift
   if action.nil? || %w[-h --help help].include?(action)
     puts widgets_usage
     exit(action.nil? ? 1 : 0)
   end
-  abort "Unknown widgets action #{action.inspect}; use sync" unless action == "sync"
+  if action == 'new'
+    name = ARGV.shift or abort 'Usage: mxrb widgets new NAME [DIR]'
+    destination = ARGV.shift || Dir.pwd
+    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+    puts "[mxrb] Widget project: #{Mxrb::WidgetDevelopment.new.create(name, directory: destination)}"
+    exit
+  end
+  if action == 'build'
+    directory = ARGV.shift or abort 'Usage: mxrb widgets build DIR [--project MENDIX_PROJECT_DIR]'
+    project = extract_cli_value!(ARGV, '--project')
+    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+    packages = Mxrb::WidgetDevelopment.new.build(directory, project:)
+    packages.each { puts "[mxrb] Built #{_1}" }
+    exit
+  end
+  abort "Unknown widgets action #{action.inspect}; use new, build, or sync" unless action == "sync"
   if %w[-h --help].include?(ARGV.first)
     puts widgets_usage
     exit 0
@@ -1161,141 +1198,145 @@ when "design"
   end
 
 when "db"
-  action = ARGV.shift or
-    abort "Usage: mxrb db <up|sync|down|destroy|status|credentials|url|sql|explain|workload|indexes|shell> <file.mpr>"
-  path = ARGV.shift or abort "Usage: mxrb db #{action} <file.mpr>"
-  option = lambda do |name, fallback = nil|
-    index = ARGV.index(name)
-    next fallback unless index
+  begin
+    action = ARGV.shift or
+      abort "Usage: mxrb db <up|sync|down|destroy|status|credentials|url|sql|explain|workload|indexes|shell> <file.mpr>"
+    path = ARGV.shift or abort "Usage: mxrb db #{action} <file.mpr>"
+    option = lambda do |name, fallback = nil|
+      index = ARGV.index(name)
+      next fallback unless index
 
-    abort "#{name} requires a value" unless ARGV[index + 1]
-    ARGV.slice!(index, 2).last
-  end
-  engine = option.call("--engine", "postgresql").to_sym
-  port_index = ARGV.index("--port")
-  port = if port_index
-           abort "--port requires a value" unless ARGV[port_index + 1]
-           ARGV.slice!(port_index, 2).last
-         else
-           55_432
-         end
-  runtime_port = option.call("--runtime-port", 18_080)
-  recreate = !ARGV.delete('--recreate').nil?
-  keep_current = !ARGV.delete('--keep-current').nil?
-  abort '--recreate and --keep-current are mutually exclusive' if recreate && keep_current
-  if (recreate || keep_current) && !%w[up sync].include?(action)
-    abort '--recreate and --keep-current are valid only for db up or db sync'
-  end
-  reconcile = recreate ? :recreate : keep_current ? :keep_current : :prompt
-  if engine == :sql_server
-    unless %w[explain workload].include?(action)
-      abort "--engine sql_server is supported only by db explain and db workload"
+      abort "#{name} requires a value" unless ARGV[index + 1]
+      ARGV.slice!(index, 2).last
     end
-
-    workspace = Mxrb::Runtime::SqlServerDatabase.new(
-      server: option.call("--server"), database: option.call("--database"),
-      user: option.call("--user"), sqlcmd: option.call("--sqlcmd", "sqlcmd")
-    )
-  elsif engine == :postgresql
-    workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:, runtime_port:)
-  else
-    abort "Unsupported database engine #{engine.inspect}; use postgresql or sql_server"
-  end
-  case action
-  when "up", "sync"
-    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
-    info = if action == 'sync'
-             workspace.sync(reconcile:)
+    engine = option.call("--engine", "postgresql").to_sym
+    port_index = ARGV.index("--port")
+    port = if port_index
+             abort "--port requires a value" unless ARGV[port_index + 1]
+             ARGV.slice!(port_index, 2).last
            else
-             workspace.up(reconcile:)
+             55_432
            end
-    message = case info.disposition
-              when :reused then 'Reused the current PostgreSQL and Mendix Runtime'
-              when :kept_current then 'Kept the previously running Docker version'
-              when :recreated then 'Rebuilt and replaced the Docker runtime'
-              else 'PostgreSQL and Mendix Runtime started'
-              end
-    puts "[mxrb] #{message}"
-    puts "Host     : #{info.host}:#{info.port}"
-    puts "Database : #{info.database}"
-    puts "Role     : #{info.reader_user} (read-only)"
-    puts "Runtime  : #{info.runtime_url}"
-  when "down"
-    workspace.down
-    puts "[mxrb] Runtime and PostgreSQL stopped; the data volume was preserved"
-  when "destroy"
-    abort "db destroy requires --yes" unless ARGV.delete("--yes")
-    workspace.destroy(confirm: true)
-    puts "[mxrb] Removed the isolated containers, volume, network, and local state"
-  when "status"
-    info = workspace.status
-    puts "Running  : #{info.running}"
-    puts "Database : #{info.database_container}"
-    puts "Runtime  : #{info.runtime_container}"
-    puts "State    : #{info.state_dir}"
-  when "credentials"
-    copy = !ARGV.delete("--copy").nil?
-    show_password = !ARGV.delete("--show-password").nil?
-    json = !ARGV.delete("--json").nil?
-    abort '--copy and --show-password are mutually exclusive' if copy && show_password
-    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
-
-    credentials = workspace.admin_credentials
-    visible_password = nil
-    visible_password = credentials.password if show_password
-    if copy
-      command = Mxrb::Runtime::Clipboard.new.copy(credentials.password)
-      puts "[mxrb] Password for #{credentials.username} copied with #{command}"
-    elsif json
-      puts JSON.pretty_generate(
-        username: credentials.username, password: visible_password,
-        state: credentials.state_dir, credentials_file: credentials.path
-      )
-    else
-      visible_password ||= '<hidden; use --copy or --show-password>'
-      puts "User name : #{credentials.username}"
-      puts "Password  : #{visible_password}"
-      puts "State     : #{credentials.state_dir}"
+    runtime_port = option.call("--runtime-port", 18_080)
+    recreate = !ARGV.delete('--recreate').nil?
+    keep_current = !ARGV.delete('--keep-current').nil?
+    abort '--recreate and --keep-current are mutually exclusive' if recreate && keep_current
+    if (recreate || keep_current) && !%w[up sync].include?(action)
+      abort '--recreate and --keep-current are valid only for db up or db sync'
     end
-  when "url"
-    puts workspace.connection_url
-  when "sql"
-    sql = ARGV.shift or abort "Usage: mxrb db sql <file.mpr> \"SELECT ...\" [--write]"
-    write = ARGV.delete("--write")
-    puts workspace.query(sql, write:)
-  when "explain"
-    sql = ARGV.shift or
-      abort "Usage: mxrb db explain <file.mpr> \"SELECT ...\" [--analyze] [--json]"
-    analyze = ARGV.delete("--analyze") == "--analyze"
-    json = ARGV.delete("--json") == "--json"
-    report = workspace.explain(sql, analyze:)
-    render_plan_report(report, json:)
-  when "workload"
-    limit = option.call("--limit", 20)
-    save = option.call('--save')
-    compare = option.call('--compare')
-    json = ARGV.delete("--json") == "--json"
-    report = workspace.workload(limit:)
-    File.write(save, Mxrb::Oql::WorkloadBaseline.dump(report)) if save
-    comparison = Mxrb::Oql::WorkloadBaseline.compare(report, compare) if compare
-    render_workload_report(report, json:)
-    unless json
-      comparison&.deltas&.each do |delta|
-        puts "[DELTA] #{delta.query_id} #{delta.metric}: #{delta.change_percent}%"
+    reconcile = recreate ? :recreate : keep_current ? :keep_current : :prompt
+    if engine == :sql_server
+      unless %w[explain workload].include?(action)
+        abort "--engine sql_server is supported only by db explain and db workload"
       end
-    end
-  when "indexes"
-    abort 'db indexes currently requires PostgreSQL' unless engine == :postgresql
 
-    limit = option.call('--limit', 50)
-    json = ARGV.delete('--json') == '--json'
-    render_index_advice(workspace.index_advice(limit:), json:)
-  when "shell"
-    write = ARGV.delete("--write")
-    exec(*workspace.shell_command(write:))
-  else
-    abort "Unknown db action #{action.inspect}; " \
-          "use up, sync, down, destroy, status, credentials, url, sql, explain, workload, indexes or shell"
+      workspace = Mxrb::Runtime::SqlServerDatabase.new(
+        server: option.call("--server"), database: option.call("--database"),
+        user: option.call("--user"), sqlcmd: option.call("--sqlcmd", "sqlcmd")
+      )
+    elsif engine == :postgresql
+      workspace = Mxrb::Runtime::DatabaseWorkspace.new(path, port:, runtime_port:)
+    else
+      abort "Unsupported database engine #{engine.inspect}; use postgresql or sql_server"
+    end
+    case action
+    when "up", "sync"
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+      info = if action == 'sync'
+               workspace.sync(reconcile:)
+             else
+               workspace.up(reconcile:)
+             end
+      message = case info.disposition
+                when :reused then 'Reused the current PostgreSQL and Mendix Runtime'
+                when :kept_current then 'Kept the previously running Docker version'
+                when :recreated then 'Rebuilt and replaced the Docker runtime'
+                else 'PostgreSQL and Mendix Runtime started'
+                end
+      puts "[mxrb] #{message}"
+      puts "Host     : #{info.host}:#{info.port}"
+      puts "Database : #{info.database}"
+      puts "Role     : #{info.reader_user} (read-only)"
+      puts "Runtime  : #{info.runtime_url}"
+    when "down"
+      workspace.down
+      puts "[mxrb] Runtime and PostgreSQL stopped; the data volume was preserved"
+    when "destroy"
+      abort "db destroy requires --yes" unless ARGV.delete("--yes")
+      workspace.destroy(confirm: true)
+      puts "[mxrb] Removed the isolated containers, volume, network, and local state"
+    when "status"
+      info = workspace.status
+      puts "Running  : #{info.running}"
+      puts "Database : #{info.database_container}"
+      puts "Runtime  : #{info.runtime_container}"
+      puts "State    : #{info.state_dir}"
+    when "credentials"
+      copy = !ARGV.delete("--copy").nil?
+      show_password = !ARGV.delete("--show-password").nil?
+      json = !ARGV.delete("--json").nil?
+      abort '--copy and --show-password are mutually exclusive' if copy && show_password
+      abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+
+      credentials = workspace.admin_credentials
+      visible_password = nil
+      visible_password = credentials.password if show_password
+      if copy
+        command = Mxrb::Runtime::Clipboard.new.copy(credentials.password)
+        puts "[mxrb] Password for #{credentials.username} copied with #{command}"
+      elsif json
+        puts JSON.pretty_generate(
+          username: credentials.username, password: visible_password,
+          state: credentials.state_dir, credentials_file: credentials.path
+        )
+      else
+        visible_password ||= '<hidden; use --copy or --show-password>'
+        puts "User name : #{credentials.username}"
+        puts "Password  : #{visible_password}"
+        puts "State     : #{credentials.state_dir}"
+      end
+    when "url"
+      puts workspace.connection_url
+    when "sql"
+      sql = ARGV.shift or abort "Usage: mxrb db sql <file.mpr> \"SELECT ...\" [--write]"
+      write = ARGV.delete("--write")
+      puts workspace.query(sql, write:)
+    when "explain"
+      sql = ARGV.shift or
+        abort "Usage: mxrb db explain <file.mpr> \"SELECT ...\" [--analyze] [--json]"
+      analyze = ARGV.delete("--analyze") == "--analyze"
+      json = ARGV.delete("--json") == "--json"
+      report = workspace.explain(sql, analyze:)
+      render_plan_report(report, json:)
+    when "workload"
+      limit = option.call("--limit", 20)
+      save = option.call('--save')
+      compare = option.call('--compare')
+      json = ARGV.delete("--json") == "--json"
+      report = workspace.workload(limit:)
+      File.write(save, Mxrb::Oql::WorkloadBaseline.dump(report)) if save
+      comparison = Mxrb::Oql::WorkloadBaseline.compare(report, compare) if compare
+      render_workload_report(report, json:)
+      unless json
+        comparison&.deltas&.each do |delta|
+          puts "[DELTA] #{delta.query_id} #{delta.metric}: #{delta.change_percent}%"
+        end
+      end
+    when "indexes"
+      abort 'db indexes currently requires PostgreSQL' unless engine == :postgresql
+
+      limit = option.call('--limit', 50)
+      json = ARGV.delete('--json') == '--json'
+      render_index_advice(workspace.index_advice(limit:), json:)
+    when "shell"
+      write = ARGV.delete("--write")
+      exec(*workspace.shell_command(write:))
+    else
+      abort "Unknown db action #{action.inspect}; " \
+            "use up, sync, down, destroy, status, credentials, url, sql, explain, workload, indexes or shell"
+    end
+  rescue Mxrb::ToolchainError, Mxrb::CompilationError, ArgumentError => e
+    abort "[mxrb] #{e.message}"
   end
 
 when "serve"
