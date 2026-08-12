@@ -130,6 +130,28 @@ RSpec.describe Mxrb::RubyApp::Preset do
     end
   end
 
+  it 'switches existing presets without retaining the previous framework' do
+    Dir.mktmpdir do |dir|
+      root = build(dir, 'switchable_app', :flymetothemoon)
+
+      Mxrb::RubyApp::Preset.apply!(root, :onrails)
+      expect(manifest(root).dig('ruby_stack', 'preset')).to eq('onrails')
+      expect(File.read(File.join(root, 'Gemfile'))).to include("gem 'rails'", "gem 'rspec-rails'")
+      expect(File.read(File.join(root, 'Gemfile'))).not_to include("gem 'sinatra'")
+      expect(File.read(File.join(root, 'config.ru'))).to include('Rails.application')
+      expect(File).not_to exist(File.join(root, 'app', 'web', 'application.rb'))
+
+      Mxrb::RubyApp::Preset.apply!(root, :flymetothemoon)
+      expect(manifest(root).dig('ruby_stack', 'preset')).to eq('flymetothemoon')
+      expect(File.read(File.join(root, 'Gemfile'))).to include("gem 'sinatra'")
+      expect(File.read(File.join(root, 'Gemfile'))).not_to include("gem 'rails'", "gem 'rspec-rails'")
+      expect(File.read(File.join(root, 'config.ru'))).to include('RackAdapter')
+      expect(File.read(File.join(root, 'config', 'application.rb'))).to include('MXRB_APPLICATION_ROOT')
+      expect(File).not_to exist(File.join(root, 'bin', 'rails'))
+      expect(File).not_to exist(File.join(root, 'spec', 'rails_helper.rb'))
+    end
+  end
+
   it 'makes the supervisor select Puma and preserve the selected environment for both presets' do
     Dir.mktmpdir do |dir|
       %i[flymetothemoon onrails].each do |stack|

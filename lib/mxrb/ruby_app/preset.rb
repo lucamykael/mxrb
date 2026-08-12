@@ -12,6 +12,17 @@ module Mxrb
     class Preset
       NAMES = %i[flymetothemoon onrails].freeze
       MARKER_PATH = File.join('config', 'mxrb_stack.rb')
+      SHARED_ENTRYPOINTS = %w[
+        config.ru config/environment.rb Rakefile spec/spec_helper.rb
+        spec/requests/health_spec.rb
+      ].freeze
+      RAILS_ONLY_PATHS = %w[
+        bin/rails config/boot.rb config/environments/development.rb
+        config/environments/test.rb config/routes.rb
+        app/controllers/application_controller.rb app/controllers/health_controller.rb
+        spec/rails_helper.rb
+      ].freeze
+      FLY_ONLY_PATHS = %w[app/web/application.rb].freeze
 
       def self.apply!(root, name)
         new(root, name).apply!
@@ -40,9 +51,11 @@ module Mxrb
 
         @manifest = Manifest.load(@root)
         @namespace = ruby_constant(@manifest.data.dig('project', 'name'))
+        @previous_name = self.class.detect(@root)&.to_sym
       end
 
       def apply!
+        clean_previous_preset if switching?
         ensure_gems
         write(MARKER_PATH, marker_source, replace_baseline: true)
         name == :onrails ? write_rails : write_flymetothemoon
@@ -53,11 +66,23 @@ module Mxrb
 
       private
 
-      attr_reader :root, :name, :manifest, :namespace
+      attr_reader :root, :name, :manifest, :namespace, :previous_name
+
+      def switching? = previous_name && previous_name != name
+
+      def clean_previous_preset
+        paths = SHARED_ENTRYPOINTS + (name == :onrails ? FLY_ONLY_PATHS : RAILS_ONLY_PATHS)
+        paths << 'config/application.rb' if name == :flymetothemoon
+        paths.each { FileUtils.rm_f(File.join(root, _1)) }
+      end
 
       def ensure_gems
         path = File.join(root, 'Gemfile')
         source = File.file?(path) ? File.read(path).rstrip : "source 'https://rubygems.org'"
+        excluded = name == :onrails ? %w[sinatra] : %w[rails rspec-rails]
+        source = source.lines.reject do |line|
+          excluded.any? { |gem_name| line.match?(/^\s*gem ['"]#{Regexp.escape(gem_name)}['"]/) }
+        end.join.rstrip
         gems.each do |declaration|
           gem_name = declaration[/gem ['"]([^'"]+)/, 1]
           source += "\n#{declaration}" unless source.match?(/gem ['"]#{Regexp.escape(gem_name)}['"]/)
@@ -80,6 +105,7 @@ module Mxrb
       end
 
       def write_flymetothemoon
+        write('config/application.rb', generic_application)
         write('config.ru', fly_config_ru)
         write('config/environment.rb', fly_environment)
         write('config/puma.rb', puma_config)
@@ -222,6 +248,16 @@ module Mxrb
               primary_abstract_class
             end
           end
+        RUBY
+      end
+
+      def generic_application
+        <<~RUBY
+          # frozen_string_literal: true
+
+          require 'mxrb'
+
+          MXRB_APPLICATION_ROOT = File.expand_path('..', __dir__)
         RUBY
       end
 

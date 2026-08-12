@@ -176,6 +176,12 @@ module Mxrb
         ],
         'test' => [
           ['--environment NAME', 'Apply the selected profile while the test runtime executes']
+        ],
+        'db' => [
+          ['--port PORT', 'PostgreSQL loopback port (default: 55432)'],
+          ['--runtime-port PORT', 'Mendix Runtime loopback port (default: 18080)'],
+          ['--recreate', 'Replace a running stale Runtime without prompting'],
+          ['--keep-current', 'Keep a running stale Runtime and start no second stack']
         ]
       }.freeze
 
@@ -206,9 +212,11 @@ module Mxrb
         'diagram-er destroy' => ['diagram-er destroy FILE.mpr --yes',
                                  'Stop the ER editor and remove only its managed files',
                                  'mxrb diagram-er destroy Shop.mpr --yes'],
-        'db up' => ['db up FILE.mpr [--port PORT]', 'Build, synchronize and start PostgreSQL and Runtime',
+        'db up' => ['db up FILE.mpr [--port PORT] [--recreate|--keep-current]',
+                    'Reconcile and start PostgreSQL and Runtime',
                     'mxrb db up Shop.mpr'],
-        'db sync' => ['db sync FILE.mpr [--port PORT]', 'Rebuild and synchronize the retained database',
+        'db sync' => ['db sync FILE.mpr [--port PORT] [--recreate|--keep-current]',
+                      'Rebuild and synchronize the retained database',
                       'mxrb db sync Shop.mpr'],
         'db down' => ['db down FILE.mpr', 'Stop containers while preserving data', 'mxrb db down Shop.mpr'],
         'db destroy' => ['db destroy FILE.mpr --yes', 'Remove the isolated containers, data and state',

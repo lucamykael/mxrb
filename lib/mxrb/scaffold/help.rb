@@ -52,6 +52,7 @@ module Mxrb
           --chain page:microflow           Page calls a microflow directly
           --chain page:nanoflow             Page calls a client nanoflow
           --chain page:nanoflow:microflow   Page calls a nanoflow that calls a microflow
+          --role Module.Role                Allow a module role (repeatable; applies to page and flows)
 
         Without --chain, creates the minimal page scaffold.
 

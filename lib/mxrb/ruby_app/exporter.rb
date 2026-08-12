@@ -36,6 +36,9 @@ module Mxrb
         embedded_sources = read_embedded_sources
         Mxrb.open(@mpr_path) do |project|
           @project = project
+          @known_entity_names = project.modules.flat_map do |mod|
+            mod.entities.map { "#{mod.name}.#{_1.name}" }
+          end.freeze
           @coverage = []
           @nanoflow_entries = []
           @page_entries = []
@@ -44,12 +47,14 @@ module Mxrb
           write_support_files
           copy_frontend_theme
           restore_embedded_sources(embedded_sources)
+          refresh_native_frontend_sources(project, modules, embedded_sources)
           write_manifest(project, modules, runtime_mpr)
         end
         @output_dir
       ensure
         @project = nil
         @module_manifests = nil
+        @known_entity_names = nil
       end
 
       private
@@ -73,6 +78,53 @@ module Mxrb
           File.binwrite(path, contents)
           File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
         end
+      end
+
+      # Generated frontend projections normally remain user-editable and are
+      # restored byte-for-byte. A Ruby class with an explicit `native`
+      # declaration is authoritative, though, so its page/nanoflow projection
+      # must be refreshed from the just-compiled MPR instead of reviving stale
+      # TypeScript from the previous round trip.
+      def refresh_native_frontend_sources(project, modules, embedded_sources)
+        names = embedded_native_document_names(embedded_sources)
+        return if names.empty?
+
+        modules.each do |mod|
+          root = underscore(mod.fetch('name'))
+          mod.fetch('pages').each do |page|
+            next unless names.include?(page.fetch('name'))
+
+            page_name = page.fetch('name').split('.', 2).last
+            export_frontend_page(page, root, page_name)
+            @page_entries.pop
+          end
+        end
+        project.modules.each do |mod|
+          root = underscore(mod.name)
+          mod.nanoflows.each do |flow|
+            qualified = "#{mod.name}.#{flow.name}"
+            next unless names.include?(qualified)
+
+            relative = File.join(
+              'frontend', 'src', 'nanoflows', root, "#{underscore(flow.name)}.ts"
+            )
+            write(relative, nanoflow_typescript(flow, qualified))
+          end
+        end
+        write(File.join('frontend', 'src', 'pages.ts'), frontend_pages)
+        write(File.join('frontend', 'src', 'nanoflows.ts'), frontend_nanoflows)
+      end
+
+      def embedded_native_document_names(files)
+        files.filter_map do |file|
+          next unless file.fetch(:path).match?(%r{\Aapp/(?:pages|services)/.+\.rb\z})
+
+          source = file.fetch(:contents).to_s
+          next unless source.match?(/^\s*native(?:\s|\()/)
+
+          match = source.match(/^\s*mendix_name\s+(['"])([^'"]+)\1/)
+          match && match[2]
+        end.uniq
       end
 
       def copy_runtime_mpr
@@ -243,7 +295,7 @@ module Mxrb
         end
         <<~TS
           import { defineNanoflow } from '../../runtime/nanoflow';
-          import type { EntityTypeMap, NanoflowParameters, RuntimeValue } from '../../types';
+          import type { EntityRecord, EntityTypeMap, NanoflowParameters, RuntimeValue } from '../../types';
 
           type Parameters = NanoflowParameters & #{parameters};
 
@@ -251,7 +303,7 @@ module Mxrb
             name: #{JSON.generate(qualified)},
             id: #{JSON.generate(flow.id.to_s)},
             parameters: #{JSON.generate(plan.fetch('parameters'))}
-          }, runtime => {
+          }, async runtime => {
             let current = #{JSON.generate(start && start['id'])};
             for (let step = 0; step < 10_000; step += 1) {
               switch (current) {
@@ -282,8 +334,10 @@ module Mxrb
         type = {} unless type.is_a?(Hash)
         kind = (type['$Type'] || type['Type']).to_s
         entity = type['Entity'].to_s
-        return "EntityTypeMap[#{JSON.generate(entity)}] | null" if kind.end_with?('ObjectType') && !entity.empty?
-        return "Array<EntityTypeMap[#{JSON.generate(entity)}]>" if kind.end_with?('ListType') && !entity.empty?
+        return "#{typescript_entity_reference(entity)} | null" if
+          kind.end_with?('ObjectType') && !entity.empty?
+        return "Array<#{typescript_entity_reference(entity)}>" if
+          kind.end_with?('ListType') && !entity.empty?
         return 'boolean' if kind.match?(/Boolean/)
         return 'number' if kind.match?(/Integer|Long|Decimal|Float/)
         return 'string' if kind.match?(/String|DateTime|Enumeration/)
@@ -353,6 +407,22 @@ module Mxrb
             [change['member'].to_s, change['value'].to_s]
           end
           "runtime.change(#{JSON.generate(action['variable'].to_s)}, #{JSON.generate(changes)});\n"
+        when 'MicroflowCall'
+          variable = action['result_variable'].to_s
+          invocation = "runtime.callMicroflow(#{JSON.generate(action['microflow'].to_s)}, " \
+                       "#{JSON.generate(action.fetch('arguments', {}))})"
+          if variable.empty?
+            "await #{invocation};\n"
+          else
+            "const response = await #{invocation};\n" \
+              "runtime.set(#{JSON.generate(variable)}, response);\n"
+          end
+        when 'ShowMessage'
+          "runtime.showMessage(#{JSON.generate(action['message'].to_s)}.replace(" \
+            '/\\{(\\d+)\\}/g, (_placeholder, rawIndex) => ' \
+            "runtime.string(#{JSON.generate(action.fetch('parameters', []))}[Number(rawIndex) - 1])), " \
+            "#{JSON.generate(action['level'].to_s.downcase)}, " \
+            "#{action['blocking'] == true});\n"
         else
           "throw runtime.unsupported(#{JSON.generate(action['type'].to_s)});\n"
         end
@@ -413,9 +483,44 @@ module Mxrb
           end
           result.merge!('variable' => action['ChangeVariableName'].to_s, 'changes' => changes)
         when 'LogMessage'
-          result['message'] = action.dig('MessageTemplate', 'Text').to_s
+          result['message'] = translated_text_template(action['MessageTemplate'])
+        when 'MicroflowCall'
+          call = action['MicroflowCall'] || {}
+          arguments = native_items(call['ParameterMappings']).to_h do |mapping|
+            [mapping['Parameter'].to_s.split('.').last, mapping['Argument'].to_s]
+          end
+          result.merge!(
+            'microflow' => call['Microflow'].to_s,
+            'arguments' => arguments,
+            'result_variable' => action['UseReturnVariable'] == true ? action['ResultVariableName'].to_s : ''
+          )
+        when 'ShowMessage'
+          template = action['Template'] || {}
+          result.merge!(
+            'message' => translated_text_template(template),
+            'parameters' => native_items(template['Parameters']).map { _1['Expression'].to_s },
+            'level' => action['Type'].to_s,
+            'blocking' => action['Blocking'] == true
+          )
         end
         result
+      end
+
+      def translated_text_template(template)
+        text = template.is_a?(Hash) ? template['Text'] : nil
+        return text.to_s unless text.is_a?(Hash)
+
+        translations = native_items(text['Items'])
+        selected = translations.find { _1['LanguageCode'].to_s == 'en_US' } || translations.first
+        selected.is_a?(Hash) ? selected['Text'].to_s : ''
+      end
+
+      def typescript_entity_reference(entity)
+        known = @known_entity_names
+        available = known ? known.include?(entity.to_s) : !entity.to_s.start_with?('System.')
+        return "EntityTypeMap[#{JSON.generate(entity)}]" if available
+
+        'EntityRecord'
       end
 
       def nanoflow_case(edge)
@@ -1053,8 +1158,8 @@ module Mxrb
       def frontend_nanoflow_runtime
         <<~'TS'
           import type {
-            EntityRecord, NanoflowExecution, NanoflowMetadata, NanoflowParameters,
-            RegisteredNanoflow, RuntimeValue
+            EntityRecord, NanoflowExecution, NanoflowMetadata, NanoflowMicroflowInvoker,
+            NanoflowParameters, RegisteredNanoflow, RuntimeValue
           } from '../types';
 
           type ChangeExpressions = Record<string, string>;
@@ -1074,8 +1179,10 @@ module Mxrb
           export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> {
             readonly variables: NanoflowParameters;
             readonly #changes = new Map<string, EntityRecord>();
+            readonly #messages: Array<{ message: string; level: string; blocking: boolean }> = [];
 
-            constructor(parameters: P, readonly metadata: NanoflowMetadata) {
+            constructor(parameters: P, readonly metadata: NanoflowMetadata,
+              readonly microflowInvoker?: NanoflowMicroflowInvoker) {
               this.variables = structuredClone(parameters);
             }
 
@@ -1151,8 +1258,29 @@ module Mxrb
               this.#changes.set(`${record.type}:${record.id}`, record);
             }
 
+            async callMicroflow(name: string, expressions: Record<string, string>): Promise<RuntimeValue | undefined> {
+              if (!this.microflowInvoker) {
+                throw new Error(`Nanoflow ${this.metadata.name} cannot call ${name}: invoker is unavailable`);
+              }
+              const parameters = Object.fromEntries(
+                Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)])
+              );
+              const response = await this.microflowInvoker(name, parameters);
+              if (response && typeof response === 'object' && 'result' in response) {
+                return (response as { result?: RuntimeValue }).result;
+              }
+              return response as RuntimeValue | undefined;
+            }
+
+            showMessage(message: string, level = 'information', blocking = false): void {
+              this.#messages.push({ message, level, blocking });
+            }
+
             complete<R>(result: R): NanoflowExecution<R> {
-              return { result, variables: this.variables, changes: [...this.#changes.values()] };
+              return {
+                result, variables: this.variables, changes: [...this.#changes.values()],
+                messages: [...this.#messages]
+              };
             }
 
             missing(current: string | null): Error {
@@ -1181,7 +1309,8 @@ module Mxrb
             compiled: (runtime: NanoflowRuntime<P>) => NanoflowExecution<R> | Promise<NanoflowExecution<R>>
           ): RegisteredNanoflow => ({
             ...metadata,
-            execute: async parameters => compiled(new NanoflowRuntime(parameters as P, metadata))
+            execute: async (parameters, invokeMicroflow) =>
+              compiled(new NanoflowRuntime(parameters as P, metadata, invokeMicroflow))
           });
         TS
       end
@@ -1517,6 +1646,13 @@ module Mxrb
             arguments?: Record<string, RuntimeValue>;
           }
 
+          export interface ShowMessageEffect {
+            type: 'show_message';
+            message: string;
+            level?: string;
+            blocking?: boolean;
+          }
+
           export interface RuntimeEffect {
             type: string;
             [key: string]: RuntimeValue | undefined;
@@ -1525,7 +1661,7 @@ module Mxrb
           export interface InvocationResult {
             result?: RuntimeValue;
             context?: EntityRecord | null;
-            effects?: Array<OpenPageEffect | RuntimeEffect>;
+            effects?: Array<OpenPageEffect | ShowMessageEffect | RuntimeEffect>;
           }
 
           export interface EntityCollectionResponse<T extends EntityRecord = EntityRecord> {
@@ -1551,6 +1687,9 @@ module Mxrb
           ) => Promise<T>;
 
           export type NanoflowParameters = RuntimeVariables;
+          export type NanoflowMicroflowInvoker = (
+            name: string, parameters?: RuntimeVariables
+          ) => Promise<unknown>;
 
           export interface NanoflowMetadata {
             name: string;
@@ -1562,10 +1701,13 @@ module Mxrb
             result: R;
             variables: NanoflowParameters;
             changes: EntityRecord[];
+            messages: Array<{ message: string; level: string; blocking: boolean }>;
           }
 
           export interface RegisteredNanoflow extends NanoflowMetadata {
-            execute(parameters: NanoflowParameters): Promise<NanoflowExecution>;
+            execute(
+              parameters: NanoflowParameters, invokeMicroflow?: NanoflowMicroflowInvoker
+            ): Promise<NanoflowExecution>;
           }
 
           #{enumeration_types.join("\n")}
@@ -1626,7 +1768,7 @@ module Mxrb
             ApiFailure, ApiRequest, ApplicationSchema, EntityCollectionResponse, EntityRecord,
             InvocationResult, LoginResponse, NavigationItem, OpenPageEffect, PageDefinition,
             PageWidgetProps, RuntimeValue, RuntimeVariables, Session, WidgetDefinition,
-            WidgetEvent, WidgetOptions
+            ShowMessageEffect, WidgetEvent, WidgetOptions
           } from '../types';
 
           const TOKEN_KEY = 'mxrb.session.token';
@@ -2155,20 +2297,18 @@ module Mxrb
           }
 
           function Login({ onLogin, error, busy }: LoginProps) {
-            const [username, setUsername] = useState('');
-            const [password, setPassword] = useState('');
             const submit = (event: FormEvent<HTMLFormElement>) => {
               event.preventDefault();
-              onLogin(username, password).finally(() => setPassword(''));
+              const fields = new FormData(event.currentTarget);
+              onLogin(String(fields.get('username') || ''), String(fields.get('password') || ''));
             };
             return <main className="mxrb-login">
-              <form onSubmit={submit}>
+              <form id="loginForm" onSubmit={submit}>
                 <h1>Sign in</h1>
-                <label>Username<input autoComplete="username" value={username}
-                  onChange={event => setUsername(event.target.value)} /></label>
-                <label>Password<input type="password" autoComplete="current-password" value={password}
-                  onChange={event => setPassword(event.target.value)} /></label>
-                <button type="submit" disabled={busy || !username || !password}>Sign in</button>
+                <label>Username<input id="usernameInput" name="username" autoComplete="username" required /></label>
+                <label>Password<input id="passwordInput" name="password" type="password"
+                  autoComplete="current-password" required /></label>
+                <button type="submit" disabled={busy}>Sign in</button>
                 {error ? <p role="alert">{error.message}</p> : null}
               </form>
             </main>;
@@ -2179,6 +2319,7 @@ module Mxrb
             const [page, setPage] = useState<PageDefinition | null>(null);
             const [pageContext, setPageContext] = useState<EntityRecord | null>(null);
             const [error, setError] = useState<ApiFailure | null>(null);
+            const [notice, setNotice] = useState<string | null>(null);
             const [busy, setBusy] = useState(false);
             const initialLoadStarted = useRef(false);
             const invocationInFlight = useRef(false);
@@ -2243,7 +2384,13 @@ module Mxrb
                 const profile = value.navigation?.profiles?.find(item => item.kind === 'Responsive')
                   || value.navigation?.profiles?.[0];
                 const fallback = value.modules.flatMap(module => module.pages)[0]?.name;
-                await openPage(profile?.home_page || fallback, null, activeToken);
+                const target = profile?.home_page || fallback;
+                if (!target && !activeToken) {
+                  setAuthRequired(true);
+                  return;
+                }
+                if (!target) throw new Error('No accessible page is available for this session');
+                await openPage(target, null, activeToken);
               } catch (failure) {
                 const normalized = apiFailure(failure);
                 if (normalized.status === 401) {
@@ -2351,6 +2498,10 @@ module Mxrb
                   .then(payload => {
                     setRevision(value => value + 1);
                     if (payload.context) setPageContext(payload.context);
+                    const message = (payload.effects || []).find(
+                      (effect): effect is ShowMessageEffect => effect.type === 'show_message'
+                    );
+                    if (message?.message) setNotice(String(message.message));
                     const navigation = (payload.effects || []).find(
                       (effect): effect is OpenPageEffect => effect.type === 'open_page'
                     );
@@ -2379,10 +2530,12 @@ module Mxrb
                 resolvedParameters[definition.parameters[0]] = activeContext;
               }
               if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
-              const execution = await definition.execute(resolvedParameters);
+              const execution = await definition.execute(resolvedParameters, invoke);
               for (const changed of execution.changes) {
                 await saveRecord(changed, changed.attributes);
               }
+              const message = execution.messages.at(-1);
+              if (message?.message) setNotice(message.message);
               setError(null);
                 return execution.result;
               } catch (failure) {
@@ -2418,6 +2571,9 @@ module Mxrb
               {error ? <aside className="mxrb-runtime-error" role="alert">
                 <button type="button" onClick={() => setError(null)}>×</button>{error.message}
               </aside> : null}
+              {notice ? <aside className="mxrb-runtime-notice" role="status">
+                <button type="button" onClick={() => setNotice(null)}>×</button>{notice}
+              </aside> : null}
             </div>;
           }
         JS
@@ -2438,6 +2594,8 @@ module Mxrb
           .mxrb-text { display: block; }
           .mxrb-runtime-error { position: fixed; z-index: 50; right: 1rem; bottom: 1rem; max-width: 34rem; padding: 1rem; border-radius: .5rem; background: #7f1d1d; color: white; box-shadow: 0 .5rem 2rem #0008; }
           .mxrb-runtime-error button { float: right; border: 0; background: transparent; color: inherit; cursor: pointer; }
+          .mxrb-runtime-notice { position: fixed; z-index: 49; right: 1rem; bottom: 1rem; max-width: 34rem; padding: 1rem; border-radius: .5rem; background: #14532d; color: white; box-shadow: 0 .5rem 2rem #0008; }
+          .mxrb-runtime-notice button { float: right; border: 0; background: transparent; color: inherit; cursor: pointer; }
           .mxrb-loading { display: grid; min-height: 100vh; place-items: center; }
           .mxrb-login { display: grid; min-height: 100vh; place-items: center; padding: 1rem; }
           .mxrb-login form { display: grid; width: min(24rem, 100%); gap: 1rem; padding: 2rem; border: 1px solid #d1d5db; border-radius: .75rem; }

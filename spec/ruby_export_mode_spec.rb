@@ -94,7 +94,9 @@ RSpec.describe 'Ruby application export mode' do
       expect(frontend_source).to include(
         "api<ApplicationSchema>('/api/schema', {}, activeToken)", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
-        'const execution = await definition.execute(resolvedParameters)',
+        'const execution = await definition.execute(resolvedParameters, invoke)',
+        "effect): effect is ShowMessageEffect => effect.type === 'show_message'",
+        'mxrb-runtime-notice',
         'function BoundField', "method: 'PATCH'", 'function DataGrid',
         'mxrb-grid-pagination', "api<LoginResponse>('/api/login'", 'localStorage.setItem(TOKEN_KEY',
         "api<Session>('/api/session'", "api('/api/logout'",
@@ -404,7 +406,7 @@ RSpec.describe 'Ruby application export mode' do
       )
       expect(Process).to receive(:spawn).with(
         { 'MXRB_ENV' => 'development', 'MXRB_API_PORT' => '9393' }, 'npm', 'run', 'dev', '--',
-        '--host', '127.0.0.1', '--port', '5393', chdir: frontend
+        '--host', '127.0.0.1', '--port', '5393', '--strictPort', chdir: frontend
       ).and_return(12_345)
       expect(supervisor.send(:spawn_frontend)).to eq(12_345)
     end

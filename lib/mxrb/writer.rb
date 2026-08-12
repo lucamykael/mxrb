@@ -62,6 +62,27 @@ module Mxrb
       mpr&.close
     end
 
+    # Incrementally applies Ruby-first pages and flows to an existing module.
+    # Unlike #write!, this deliberately does not rewrite the domain model,
+    # security, settings, or unrelated native documents.
+    def synchronize_ruby_documents!(mpr, module_name:, pages: [], microflows: [], nanoflows: [],
+                                    navigation_items: [])
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      definition = {
+        name: module_name.to_s, pages: Array(pages), microflows: Array(microflows),
+        nanoflows: Array(nanoflows), menus: [], enumerations: [], constants: [],
+        scheduled_events: []
+      }
+      mpr.transaction do
+        write_documents(mpr, raw_module.fetch("UnitID"), definition)
+        synchronize_ruby_navigation!(mpr, root_id, navigation_items)
+      end
+      self
+    end
+
     private
 
     def ruby_app_source_files
@@ -888,6 +909,7 @@ module Mxrb
     end
 
     def upsert_document(mpr, module_id, candidates, doc)
+      requested_unit_id = doc.delete("__mxrb_unit_id").to_s
       raw = Array(candidates).find do |candidate|
         mpr.parse_contents(candidate)["$Type"] == doc["$Type"]
       end
@@ -900,8 +922,70 @@ module Mxrb
         mpr.update_unit(raw.fetch("UnitID"), doc)
       else
         strip_internal_keys(doc)
-        mpr.insert_unit(container_uuid: module_id, containment_name: "Documents", contents_doc: doc)
+        unit_id = requested_unit_id.empty? ? nil : requested_unit_id
+        doc["$ID"] = unit_id if unit_id
+        mpr.insert_unit(
+          container_uuid: module_id, containment_name: "Documents",
+          contents_doc: doc, unit_uuid: unit_id
+        )
       end
+    end
+
+    def synchronize_ruby_navigation!(mpr, root_id, declarations)
+      Array(declarations).each do |declaration|
+        synchronize_ruby_navigation_item!(mpr, root_id, declaration)
+      end
+    end
+
+    def synchronize_ruby_navigation_item!(mpr, root_id, declaration)
+      raw = mpr.children_of(root_id).find do |unit|
+        mpr.parse_contents(unit)["$Type"] == "Navigation$NavigationDocument"
+      end
+      raise ValidationError, "Mendix navigation document does not exist" unless raw
+
+      document = mpr.parse_contents(raw)
+      profile = ruby_navigation_profile(document, declaration.fetch(:profile).to_s)
+      raise ValidationError, "Mendix navigation profile #{declaration.fetch(:profile)} does not exist" unless profile
+
+      menu = profile["Menu"] || profile["MenuItemCollection"]
+      raise ValidationError, "navigation profile #{declaration.fetch(:profile)} has no menu" unless menu
+
+      parsed = IO::BsonCodec.parse_array(menu["Items"])
+      items = parsed.fetch(:items)
+      generated = navigation_menu_item_doc(
+        caption: normalize_navigation_caption(declaration.fetch(:caption)),
+        page: declaration.fetch(:page), icon: declaration[:icon], items: []
+      )
+      index = items.index { ruby_navigation_page(_1) == declaration.fetch(:page).to_s }
+      if index
+        generated["$ID"] = items[index]["$ID"] if items[index]["$ID"]
+        items[index] = items[index].merge(generated)
+      else
+        items << generated
+      end
+      menu["Items"] = IO::BsonCodec.build_array(items, marker: parsed.fetch(:marker))
+      if declaration[:home]
+        profile["HomePage"] = navigation_home_doc(declaration.fetch(:page), nil)
+      end
+      mpr.update_unit(raw.fetch("UnitID"), document)
+    end
+
+    def ruby_navigation_profile(document, name)
+      modern = array_items(document["Profiles"]).find { _1["Name"].to_s == name }
+      return modern if modern
+
+      key = LEGACY_NAVIGATION_PROFILES[name] || LEGACY_NAVIGATION_PROFILES.fetch("Desktop")
+      document[key] if name == "Desktop" || LEGACY_NAVIGATION_PROFILES[name]
+    end
+
+    def ruby_navigation_page(item)
+      item.dig("Action", "FormSettings", "Form").to_s
+    end
+
+    def normalize_navigation_caption(value)
+      return value.to_h.transform_keys(&:to_s).transform_values(&:to_s) if value.respond_to?(:to_h)
+
+      { "en_US" => value.to_s }
     end
 
     def merge_existing_document(existing, generated)
@@ -1901,6 +1985,7 @@ module Mxrb
         "Form" => page.fetch(:layout)
       }
       doc = { "$ID" => SecureRandom.uuid, "$Type" => "Forms$Page", "Name" => page.fetch(:name),
+        "__mxrb_unit_id" => page[:unit_id],
         "Documentation" => "", "Url" => "", "FormCall" => form_call,
         "Title" => text_doc(page.fetch(:title)), "MarkAsUsed" => false, "Excluded" => false,
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
@@ -2772,6 +2857,7 @@ module Mxrb
       }
 
       { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$Microflow",
+        "__mxrb_unit_id" => flow[:unit_id],
         "Name" => flow_name, "Documentation" => flow.fetch(:documentation, ""),
         "ReturnVariableName" => return_var_name,
         "AllowConcurrentExecution" => allow_concurrent.nil? ? true : allow_concurrent,

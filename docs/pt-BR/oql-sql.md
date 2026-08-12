@@ -211,7 +211,17 @@ bundle exec mxrb db down Shop.mpr
 ```
 
 `db down` para os containers, mas preserva o volume PostgreSQL. Um novo
-`db up` reutiliza o pacote em cache e os dados. A porta padrão é
+`db up` reutiliza o pacote, containers, rede e dados quando o fingerprint não
+mudou. Se houver uma versão anterior ainda ativa, a CLI mostra os fingerprints
+e pede confirmação antes de substituí-la. Em CI, escolha explicitamente:
+
+```sh
+bundle exec mxrb db up Shop.mpr --recreate
+bundle exec mxrb db up Shop.mpr --keep-current
+```
+
+`--keep-current` não inicia uma segunda pilha. O rebuild ocorre em staging e a
+versão anterior é restaurada se a substituta não iniciar. A porta padrão é
 `127.0.0.1:55432` e pode ser alterada com `--port`.
 
 Para ferramentas locais, o mesmo workspace pode ser exposto como JSON HTTP:

@@ -87,6 +87,8 @@ RSpec.describe 'Ruby application internal contracts' do
       expect(exp.send(:typescript_flow_type, '$Type' => 'VoidType')).to eq('undefined')
       expect(exp.send(:typescript_flow_type, nil)).to eq('undefined')
       expect(exp.send(:typescript_flow_type, '$Type' => 'UnsupportedType')).to eq('RuntimeValue | undefined')
+      expect(exp.send(:typescript_flow_type,
+                      '$Type' => 'ObjectType', 'Entity' => 'System.User')).to eq('EntityRecord | null')
 
       boolean_end = { 'id' => 'end', 'type' => 'EndEvent', 'return' => 'true' }
       expect(exp.send(:nanoflow_typescript_case,
@@ -118,6 +120,17 @@ RSpec.describe 'Ruby application internal contracts' do
                           'undefined')
         expect(source).to include('current = "next"')
       end
+      microflow_source = exp.send(
+        :nanoflow_action_source,
+        'type' => 'MicroflowCall', 'microflow' => 'Sales.Refresh',
+        'arguments' => { 'Order' => '$Order' }, 'result_variable' => 'Result'
+      )
+      expect(microflow_source).to include(
+        'await runtime.callMicroflow', 'Sales.Refresh', 'runtime.set("Result", response)'
+      )
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'ShowMessage', 'message' => 'Ready', 'level' => 'Information'))
+        .to include('runtime.showMessage("Ready".replace(/\\{(\\d+)\\}/g')
       expect(exp.send(:nanoflow_action_source, nil)).to include('runtime.unsupported')
       expect(exp.send(:nanoflow_typescript_case,
                       { 'id' => 'unknown', 'type' => 'Unknown' }, [], 'undefined'))
@@ -472,9 +485,10 @@ RSpec.describe 'Ruby application internal contracts' do
       thread = double(join: nil)
       allow(Thread).to receive(:new).and_return(thread)
       if interrupt
-        allow(Process).to receive(:wait).and_raise(Errno::ECHILD)
+        allow(Process).to receive(:wait2).and_raise(Errno::ECHILD)
       else
-        allow(Process).to receive(:wait)
+        status = double(success?: true)
+        allow(Process).to receive(:wait2) { |pid| [pid, status] }
       end
       [supervisor, thread]
     end
@@ -485,7 +499,7 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(thread).to have_received(:join)
     frontend, = build.call(external: true, frontend_pid: 22)
     frontend.start
-    expect(Process).to have_received(:wait).with(22)
+    expect(Process).to have_received(:wait2).with(22)
     interrupted, = build.call(external: true, interrupt: true)
     expect(interrupted.start).to be_nil
 

@@ -33,6 +33,10 @@ Ruby é a única linguagem pública do MXRB.
   score e extensão por blocos Ruby.
 - Testes funcionais de microflows definidos em Ruby, instrumentados numa cópia
   descartável e executados pelo runtime Mendix sem JUnit.
+- Materialização incremental de páginas, microflows e nanoflows declarados nas
+  classes Ruby, com IDs estáveis, papéis, widgets, chamadas e navegação.
+- Round-trip de fluxos Ruby-first até TypeScript, incluindo
+  página → nanoflow → microflow → retorno visível na página.
 - Execução local ou Docker de `mx check`, pacote portátil e runtime, com seleção
   automática da família Java do projeto.
 - Gate nativo de cobertura: 100% de linhas e 100% de branches no CI,
@@ -45,6 +49,37 @@ a troca usa upsert antes da limpeza da entrada antiga.
 A validação nativa exata do Mendix 5 continua dependente de Windows/Studio Pro.
 Ela fica documentada como limitação legada remota e não é um gate atual de
 entrega.
+
+### Reconciliação do ciclo de vida Docker
+
+Os comandos `mxrb db up` e `mxrb db sync` convergem para um único workspace por
+projeto, sem criar uma segunda pilha a cada execução. O contrato entregue é:
+
+1. calcular um fingerprint do MPR, fontes, Dockerfile/Compose, imagem e opções
+   relevantes, sem incluir nem registrar o conteúdo de segredos;
+2. reutilizar containers e recursos existentes quando o fingerprint não mudou;
+3. quando o projeto mudou e os recursos estão parados, compilar em staging e
+   recriar somente recursos obsoletos que tenham labels de propriedade do MXRB;
+4. quando uma versão anterior ainda está rodando, não substituí-la
+   silenciosamente. A CLI deve avisar qual fingerprint está ativo e perguntar se
+   o usuário deseja encerrá-la e recriar. Recusar mantém a versão anterior e não
+   inicia uma segunda pilha;
+5. em execução não interativa, nunca aguardar stdin: exigir uma opção explícita,
+   como `--recreate` ou `--keep-current`, e falhar com instrução clara quando ela
+   estiver ausente;
+6. remover automaticamente apenas volumes efêmeros. Volumes de dados persistentes
+   continuam preservados até uma confirmação destrutiva explícita;
+7. nunca executar `docker system prune`. A coleta alcança somente recursos com
+   labels MXRB do projeto, não referenciados pelo estado reconciliado;
+8. serializar `up`, rebuild e cleanup com um lock por projeto; falha de build não
+   toca a versão ativa e falha ao iniciar a substituta restaura o pacote e o
+   container anteriores.
+
+Em terminal interativo a CLI pergunta antes de substituir uma versão ativa. Em
+CI ou stdin não interativo, ela falha com instrução para escolher
+`--recreate` ou `--keep-current`. A coleta seletiva cobre containers e redes
+obsoletos, imagens MXRB dangling e volumes marcados `mxrb.ephemeral=true`;
+volumes persistentes continuam fora da coleta automática.
 
 Perfis de navegação agora leem e escrevem documentos nativos Mendix, incluindo
 homes por papel e menus recursivos. Assets de tema e código fazem round-trip

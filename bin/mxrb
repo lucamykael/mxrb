@@ -635,7 +635,11 @@ when "run"
   puts "[mxrb] Ruby server: http://#{host}:#{server_port}"
   puts "[mxrb] React client: http://#{host}:#{client_port}" if frontend
   trap("INT") { Thread.new { supervisor.shutdown } }
-  supervisor.start
+  begin
+    supervisor.start
+  rescue ArgumentError, Mxrb::Error => e
+    abort "[mxrb] #{e.message}"
+  end
 
 when 'env'
   root = ARGV.first&.start_with?('--') ? Dir.pwd : (ARGV.shift || Dir.pwd)
@@ -1176,6 +1180,13 @@ when "db"
            55_432
          end
   runtime_port = option.call("--runtime-port", 18_080)
+  recreate = !ARGV.delete('--recreate').nil?
+  keep_current = !ARGV.delete('--keep-current').nil?
+  abort '--recreate and --keep-current are mutually exclusive' if recreate && keep_current
+  if (recreate || keep_current) && !%w[up sync].include?(action)
+    abort '--recreate and --keep-current are valid only for db up or db sync'
+  end
+  reconcile = recreate ? :recreate : keep_current ? :keep_current : :prompt
   if engine == :sql_server
     unless %w[explain workload].include?(action)
       abort "--engine sql_server is supported only by db explain and db workload"
@@ -1192,8 +1203,19 @@ when "db"
   end
   case action
   when "up", "sync"
-    info = action == "sync" ? workspace.sync : workspace.up
-    puts "[mxrb] PostgreSQL and Mendix Runtime started"
+    abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+    info = if action == 'sync'
+             workspace.sync(reconcile:)
+           else
+             workspace.up(reconcile:)
+           end
+    message = case info.disposition
+              when :reused then 'Reused the current PostgreSQL and Mendix Runtime'
+              when :kept_current then 'Kept the previously running Docker version'
+              when :recreated then 'Rebuilt and replaced the Docker runtime'
+              else 'PostgreSQL and Mendix Runtime started'
+              end
+    puts "[mxrb] #{message}"
     puts "Host     : #{info.host}:#{info.port}"
     puts "Database : #{info.database}"
     puts "Role     : #{info.reader_user} (read-only)"
@@ -2008,6 +2030,8 @@ else
                  --apply                    Apply the asset migration atomically
       db up      <file.mpr> [--port PORT] [--runtime-port PORT]
                                             Build, synchronize and expose PostgreSQL and Runtime
+                 --recreate                 Replace a running stale version without prompting
+                 --keep-current             Keep a running stale version and start nothing new
          sync    <file.mpr> [--port PORT] [--runtime-port PORT]
                                             Rebuild and synchronize the retained database
          down    <file.mpr>                 Stop containers while preserving all data

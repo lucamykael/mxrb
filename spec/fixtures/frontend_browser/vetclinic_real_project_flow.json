@@ -1,0 +1,28 @@
+{
+  "name": "mxrb-vetclinic-real-project-flow",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "ruby-typescript-flow-contracts",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "VetClinic Operations" },
+        { "measure_click": { "selector": ".mx-name-checkClinicStatus", "max_ms": 500, "min_requests": 1 } },
+        { "wait_for_text": "Clinic workflow is ready" },
+        { "click_text": "Appointment Board" },
+        { "wait_for_text": "Daily appointment operations" },
+        { "measure_click": { "selector": ".mx-name-refresh", "max_ms": 500, "min_requests": 1 } },
+        { "wait_for_text": "Appointment Board refreshed" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".mxrb-navigation",
+        ".mxrb-page-header",
+        ".mxrb-runtime-notice"
+      ]
+    }
+  ]
+}

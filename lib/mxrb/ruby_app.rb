@@ -273,7 +273,7 @@ module Mxrb
     # pure-Ruby native interpreter and can be replaced with idiomatic Ruby.
     class Service
       class << self
-        attr_reader :mendix_id
+        attr_reader :mendix_id, :native_definition, :native_kind
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -281,6 +281,41 @@ module Mxrb
           @mendix_name = value.to_s
           @mendix_id = id.to_s
           Registry.register(:service, @mendix_name, self)
+        end
+
+        # Declares the Mendix-native representation of this Ruby service.
+        # The block uses the same typed flow DSL as project.rb, so one source
+        # can run through MXRB and materialize as a microflow or nanoflow.
+        def native(kind = :microflow, public: false, &block)
+          qualified = require_qualified_mendix_name!
+          runtime, flow_kind = case kind.to_sym
+                               when :microflow then %i[server use_case]
+                               when :nanoflow then %i[client client_action]
+                               else
+                                 raise ArgumentError, 'native service kind must be microflow or nanoflow'
+                               end
+          builder = Dsl::FlowBuilder.new(
+            qualified.split('.', 2).last, runtime:, kind: flow_kind, public:
+          )
+          builder.instance_eval(&block) if block
+          @native_kind = kind.to_sym
+          @native_definition = builder.to_h.merge(unit_id: native_unit_id(@native_kind))
+        end
+
+        private
+
+        def require_qualified_mendix_name!
+          value = @mendix_name.to_s
+          return value if value.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+
+          raise ArgumentError, 'call mendix_name with Module.Document before native'
+        end
+
+        def native_unit_id(kind)
+          return @mendix_id unless @mendix_id.to_s.empty?
+
+          hex = Digest::SHA1.hexdigest("mxrb:ruby:#{kind}:#{@mendix_name}")
+          "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}"
         end
       end
 
@@ -303,7 +338,8 @@ module Mxrb
     class Page
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
-                    :appearance_style, :data_source
+                    :appearance_style, :data_source, :native_definition,
+                    :navigation_definition
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -319,6 +355,49 @@ module Mxrb
           @appearance_class = appearance_class.to_s
           @appearance_style = appearance_style.to_s
           @data_source = data_source
+        end
+
+        # Declares an editable native Mendix page with the typed page/widget
+        # DSL. Existing exported pages may keep using #configure and remain
+        # untouched; only pages with #native are synchronized back to the MPR.
+        def native(&block)
+          qualified = require_qualified_mendix_name!
+          builder = Dsl::PageBuilder.new(qualified.split('.', 2).last)
+          builder.instance_eval(&block) if block
+          definition = builder.to_h.merge(unit_id: native_unit_id)
+          @native_definition = definition
+          @title = definition.fetch(:title).to_s
+          @widgets = definition.fetch(:widgets).freeze
+          @data_source = definition[:data_source]
+          @appearance_class ||= ''
+          @appearance_style ||= ''
+          definition
+        end
+
+        # Adds or updates one navigation item without replacing unrelated
+        # native menu entries. Set home: true only when this page must become
+        # the profile's home page.
+        def navigation(caption:, profile: 'Responsive', icon: nil, home: false)
+          qualified = require_qualified_mendix_name!
+          @navigation_definition = {
+            page: qualified, caption:, profile: profile.to_s, icon:, home: home == true
+          }
+        end
+
+        private
+
+        def require_qualified_mendix_name!
+          value = @mendix_name.to_s
+          return value if value.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+
+          raise ArgumentError, 'call mendix_name with Module.Document before native'
+        end
+
+        def native_unit_id
+          return @mendix_id unless @mendix_id.to_s.empty?
+
+          hex = Digest::SHA1.hexdigest("mxrb:ruby:page:#{@mendix_name}")
+          "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}"
         end
       end
     end
@@ -862,6 +941,7 @@ module Mxrb
         RubyApp.application_files(@root).each { load _1, true }
         project = Model::Project.open(@target, readonly: false)
         synchronize_entities(project)
+        synchronize_native_documents(project)
         project.close
         project = nil
         embed_sources!
@@ -895,6 +975,31 @@ module Mxrb
         end
         (registered.keys - source_names).each { add_entity(project, _1, registered.fetch(_1)) }
         (source_names & registered.keys).each { synchronize_entity(project, _1, registered.fetch(_1)) }
+      end
+
+      def synchronize_native_documents(project)
+        services = Registry.all(:service).values.select(&:native_definition)
+        pages = Registry.all(:page).values.select(&:native_definition)
+        modules = (services + pages).group_by { module_name(_1.mendix_name) }
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        modules.each do |name, implementations|
+          module_services = implementations.grep(Class).select { _1 <= Service }
+          module_pages = implementations.grep(Class).select { _1 <= Page }
+          writer.synchronize_ruby_documents!(
+            project.mpr, module_name: name,
+                         pages: module_pages.map(&:native_definition),
+                         microflows: module_services.select { _1.native_kind == :microflow }
+                                                    .map(&:native_definition),
+                         nanoflows: module_services.select { _1.native_kind == :nanoflow }
+                                                   .map(&:native_definition),
+                         navigation_items: module_pages.filter_map(&:navigation_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def module_name(qualified)
+        qualified_parts(qualified).first
       end
 
       def add_entity(project, name, implementation)
@@ -1299,9 +1404,9 @@ module Mxrb
         @frontend_pid = spawn_frontend if @frontend
         yield(self) if block_given?
         if @frontend_pid
-          Process.wait(@frontend_pid)
+          wait_for_process(@frontend_pid, 'frontend')
         elsif @backend_pid
-          Process.wait(@backend_pid)
+          wait_for_process(@backend_pid, 'backend')
         else
           @backend.join
         end
@@ -1312,6 +1417,7 @@ module Mxrb
       end
 
       def shutdown
+        @shutting_down = true
         @server&.shutdown
         terminate(@frontend_pid)
         terminate(@backend_pid)
@@ -1342,6 +1448,14 @@ module Mxrb
         Process.wait(pid)
       end
 
+      def wait_for_process(pid, label)
+        _waited, status = Process.wait2(pid)
+        return if status.success? || @shutting_down
+
+        reason = status.exitstatus ? "status #{status.exitstatus}" : "signal #{status.termsig}"
+        raise Error, "#{label} process exited with #{reason}"
+      end
+
       def spawn_frontend
         directory = File.join(root, 'frontend')
         package = File.join(directory, 'package.json')
@@ -1355,7 +1469,7 @@ module Mxrb
         frontend_environment['MXRB_API_PORT'] = api_port.to_s
         Process.spawn(
           frontend_environment, @npm, 'run', 'dev', '--',
-          '--host', host, '--port', frontend_port.to_s, chdir: directory
+          '--host', host, '--port', frontend_port.to_s, '--strictPort', chdir: directory
         )
       end
 

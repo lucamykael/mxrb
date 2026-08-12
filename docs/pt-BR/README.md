@@ -21,5 +21,6 @@
 - [Operação, lifecycle e Marketplace](platform-operations.md)
 - [Avaliação de integração das APIs Mendix](platform-api-integration.md)
 - [Aceitação end-to-end do VetClinic](vetclinic-acceptance.md)
+- [Teste manual do VetClinic em Ruby/Fly Me to the Moon](../guides/teste-manual-vetclinic-ruby.pt-BR.md)
 
 [Voltar ao README do projeto](../../README.pt-BR.md)

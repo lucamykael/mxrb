@@ -78,6 +78,10 @@ Die echten Mendix-Projekte sind externe Zertifizierungseingaben und werden nie
 in diesem Repository gespeichert. Vor `script/validate_matrix` muss
 `MXRB_FIXTURES_ROOT`, vor `script/benchmark` `MXRB_BENCHMARK_MPR` und für die
 optionalen Connector-Spezifikationen `MXRB_CONNECTOR_FIXTURE` gesetzt werden.
+`MXRB_ACCEPTANCE_MPRS` akzeptiert eine oder mehrere, durch den systemeigenen
+Pfadseparator getrennte MPR-Dateien für das Web-Kompatibilitäts-Gate. Die Suite
+lädt diese vier Schlüssel aus der ignorierten `.env`, ohne bereits gesetzte
+Prozessvariablen zu überschreiben.
 `.env.example` dokumentiert nur die Variablennamen; arbeitsplatzspezifische
 Werte gehören in die ignorierte `.env` oder in die Shell-Umgebung.
 
