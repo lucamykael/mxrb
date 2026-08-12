@@ -117,6 +117,13 @@ e logout real. Os scaffolds `page --chain` também materializam e passam
 preflight nos três caminhos suportados; `page --template` foi exercitado em
 Runtime para dashboard e formulário vertical com CSS computado auditado.
 
+Os projetos Mendix reais são entradas externas de certificação e nunca ficam
+neste repositório. Defina `MXRB_FIXTURES_ROOT` para `script/validate_matrix`,
+`MXRB_BENCHMARK_MPR` para `script/benchmark` e `MXRB_CONNECTOR_FIXTURE` para os
+specs opcionais do conector. `.env.example` documenta somente os nomes; valores
+específicos da estação devem permanecer no `.env` ignorado ou no ambiente do
+shell.
+
 `script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 16,381 s.
 `script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing
 determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`

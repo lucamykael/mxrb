@@ -8,13 +8,10 @@ require "tmpdir"
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require_relative "../lib/mxrb"
 
-fixture = File.expand_path(
-  ENV.fetch(
-    "MXRB_BENCHMARK_MPR",
-    "../../mxrb-fixtures/mxcli-sudoku/Sudoku/Sudoku.mpr"
-  ),
-  __dir__
-)
+fixture_value = ENV.fetch("MXRB_BENCHMARK_MPR", "").strip
+abort "MXRB_BENCHMARK_MPR must point to an external benchmark MPR" if fixture_value.empty?
+
+fixture = File.expand_path(fixture_value)
 raise "#{fixture}: benchmark fixture not found" unless File.file?(fixture)
 
 measurements = {}

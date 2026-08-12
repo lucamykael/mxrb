@@ -7,6 +7,16 @@ require 'rbconfig'
 require 'tmpdir'
 
 RSpec.describe 'script/validate_matrix' do
+  it 'requires an explicit external fixtures directory' do
+    script = File.expand_path('../script/validate_matrix', __dir__)
+    _stdout, stderr, status = Open3.capture3(
+      { 'MXRB_FIXTURES_ROOT' => nil }, RbConfig.ruby, script
+    )
+
+    expect(status).not_to be_success
+    expect(stderr).to include('MXRB_FIXTURES_ROOT must point to the external validation matrix directory')
+  end
+
   it 'reports every missing fixture and fails closed after completing the matrix' do
     Dir.mktmpdir do |directory|
       report = File.join(directory, 'matrix.json')

@@ -282,6 +282,13 @@ audited computed CSS.
 
 ## Reproducibility and performance
 
+The real Mendix projects are external certification inputs and are never stored
+in this repository. Set `MXRB_FIXTURES_ROOT` before `script/validate_matrix`,
+`MXRB_BENCHMARK_MPR` before `script/benchmark`, and
+`MXRB_CONNECTOR_FIXTURE` for the optional connector integration specs. Copy the
+variable names from `.env.example`, but keep workstation-specific values in an
+ignored `.env` or in the shell environment.
+
 `script/validate_matrix` reruns all six disposable round trips and emits JSON
 evidence. The current run covered 1,506 units in 14.760 seconds with zero
 semantic differences. `script/benchmark` measured the Sudoku pipeline on Ruby

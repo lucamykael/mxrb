@@ -74,6 +74,13 @@ materialisiert und durch den Compiler-Preflight geprüft. Die mit
 `page --template` erzeugten Dashboard- und vertikalen Formularseiten wurden
 zusätzlich in der Runtime mit geprüftem berechnetem CSS ausgeführt.
 
+Die echten Mendix-Projekte sind externe Zertifizierungseingaben und werden nie
+in diesem Repository gespeichert. Vor `script/validate_matrix` muss
+`MXRB_FIXTURES_ROOT`, vor `script/benchmark` `MXRB_BENCHMARK_MPR` und für die
+optionalen Connector-Spezifikationen `MXRB_CONNECTOR_FIXTURE` gesetzt werden.
+`.env.example` dokumentiert nur die Variablennamen; arbeitsplatzspezifische
+Werte gehören in die ignorierte `.env` oder in die Shell-Umgebung.
+
 `script/validate_matrix` prüfte 1.506 Units in sechs Round-Trips in 14,760 s.
 `script/benchmark` maß 6,8463 s für die vollständige Sudoku-Pipeline.
 Deterministisches Fuzzing deckt 250 BSON-Dokumente und 50 atomare

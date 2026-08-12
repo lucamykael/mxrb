@@ -7,9 +7,10 @@ require "tmpdir"
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require_relative "../lib/mxrb"
 
-fixtures_root = File.expand_path(
-  ENV.fetch("MXRB_FIXTURES_ROOT", "../../mxrb-fixtures"), __dir__
-)
+fixtures_root_value = ENV.fetch("MXRB_FIXTURES_ROOT", "").strip
+abort "MXRB_FIXTURES_ROOT must point to the external validation matrix directory" if fixtures_root_value.empty?
+
+fixtures_root = File.expand_path(fixtures_root_value)
 output_path = ARGV.shift
 fixtures = {
   "QueryApiBlogPost" => "QueryApiBlogPost/QueryApiBlogPost.mpr",
