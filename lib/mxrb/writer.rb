@@ -706,8 +706,8 @@ module Mxrb
         "$ID" => SecureRandom.uuid,
         "$Type" => "Navigation$RoleBasedHomePage",
         "UserRole" => home.fetch(:role).to_s,
-        "Page" => home[:page],
-        "Microflow" => home[:microflow]
+        "Page" => home[:page].to_s,
+        "Microflow" => home[:microflow].to_s
       }
     end
 

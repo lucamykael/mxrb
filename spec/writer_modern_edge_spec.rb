@@ -96,6 +96,22 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect(profile['ApplicationTitle']).to eq('Existing title')
   end
 
+  it 'writes empty navigation role-home alternatives as empty references' do
+    page_home = writer.send(
+      :navigation_role_home_doc, role: 'Trainee', page: 'App.TraineeOverview'
+    )
+    microflow_home = writer.send(
+      :navigation_role_home_doc, role: 'Administrator', microflow: 'App.ACT_Home'
+    )
+
+    expect(page_home).to include(
+      'Page' => 'App.TraineeOverview', 'Microflow' => ''
+    )
+    expect(microflow_home).to include(
+      'Page' => '', 'Microflow' => 'App.ACT_Home'
+    )
+  end
+
   it 'normalizes explicitly supplied native layouts before writing Mendix 6 documents' do
     legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
     mpr = double
