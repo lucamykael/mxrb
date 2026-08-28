@@ -1156,6 +1156,8 @@ module Mxrb
     end
 
     class MenuBuilder
+      include PresentationValues
+
       def initialize(name)
         @name  = name.to_s
         @items = []
@@ -1166,6 +1168,12 @@ module Mxrb
         raise ArgumentError, "deep_structure requires a Hash" unless value.is_a?(Hash)
 
         @deep_structure = value
+      end
+
+      def form_structure(value)
+        raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
+
+        @deep_structure = presentation_value_document(value)
       end
 
       def bson_binary(base64, subtype: :generic)
@@ -1367,6 +1375,7 @@ module Mxrb
 
     class PageBuilder
       include WidgetDsl
+      include PresentationValues
 
       def initialize(name, default_layout: 'Atlas_Default')
         @name          = name.to_s
@@ -1390,6 +1399,12 @@ module Mxrb
         raise ArgumentError, "deep_structure requires a Hash" unless value.is_a?(Hash)
 
         @deep_structure = value
+      end
+
+      def form_structure(value)
+        raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
+
+        @deep_structure = presentation_value_document(value)
       end
 
       def bson_binary(base64, subtype: :generic)

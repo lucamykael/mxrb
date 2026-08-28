@@ -974,9 +974,9 @@ RSpec.describe Mxrb do
       ].find { File.read(_1).include?("page :LegacyPage") }
       expect(page_source).not_to be_nil
       source = File.read(page_source)
-      expect(source).to include("deep_structure({")
-      expect(source).to include('"$Type" => "CustomWidgets$CustomWidget"')
-      expect(source).to include("bson_binary(")
+      expect(source).to include("form_structure({")
+      expect(source).to include(':node_type => "CustomWidgets$CustomWidget"')
+      expect(source).not_to include("bson_binary(")
       File.write(page_source, source.sub('"Zoom" => 8', '"Zoom" => 12'))
 
       begin

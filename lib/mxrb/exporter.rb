@@ -1663,7 +1663,9 @@ module Mxrb
       if (source = metadata&.dig(:data_source) || page.data_source)
         body << "  data_source #{source.fetch(:kind)}: #{reference(source.fetch(:name))}"
       end
-      body << "  deep_structure(#{native_ruby(deep, 2)})" if deep
+      if deep
+        body << "  form_structure(#{native_ruby(presentation_value_spec(deep), 2)})"
+      end
       metadata&.fetch(:events, [])&.each do |event|
         args = []
         args << "target: #{symbol(event[:target])}" if event[:target]
@@ -1724,7 +1726,9 @@ module Mxrb
       body = menu.items.flat_map { menu_item_source(_1, 2) }
       if menu.raw_document.is_a?(Hash)
         deep = menu.raw_document.reject { |key, _| %w[$ID Name name].include?(key.to_s) }
-        body.unshift("  deep_structure(#{native_ruby(deep, 2)})")
+        body.unshift(
+          "  form_structure(#{native_ruby(presentation_value_spec(deep), 2)})"
+        )
       end
       <<~RUBY
         # frozen_string_literal: true

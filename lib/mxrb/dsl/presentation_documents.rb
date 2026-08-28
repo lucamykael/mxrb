@@ -5,11 +5,65 @@ require 'securerandom'
 
 module Mxrb
   module Dsl
+    # Decodes the Ruby-friendly recursive form representation shared by pages,
+    # menus, layouts, templates, building blocks, and snippets.
+    module PresentationValues
+      private
+
+      def presentation_value_document(value)
+        case value
+        when Array
+          value.map { presentation_value_document(_1) }
+        when Hash
+          presentation_hash_document(value)
+        else
+          value
+        end
+      end
+
+      def presentation_hash_document(value) # rubocop:disable Metrics/AbcSize
+        spec = value.to_h.transform_keys { _1.respond_to?(:to_sym) ? _1.to_sym : _1 }
+        return presentation_node_document(spec) if spec.key?(:node_type)
+        return presentation_collection_document(spec) if spec.key?(:collection)
+        return presentation_binary_document(spec) if spec.key?(:binary)
+        return spec.fetch(:map).to_h.transform_values { presentation_value_document(_1) } if spec.key?(:map)
+
+        value.to_h.transform_values { presentation_value_document(_1) }
+      end
+
+      def presentation_node_document(spec)
+        fields = spec.fetch(:fields).to_h
+        presentation_identity(spec[:id]).merge('$Type' => spec.fetch(:node_type).to_s).tap do |document|
+          fields.each { |key, value| document[key.to_s] = presentation_value_document(value) }
+        end
+      end
+
+      def presentation_collection_document(spec)
+        IO::BsonCodec.build_array(
+          Array(spec.fetch(:collection)).map { presentation_value_document(_1) },
+          marker: spec.fetch(:marker, 2).to_i
+        )
+      end
+
+      def presentation_binary_document(spec)
+        BSON::Binary.new(
+          Base64.strict_decode64(spec.fetch(:binary).to_s),
+          spec.fetch(:subtype, :generic).to_sym
+        )
+      end
+
+      def presentation_identity(id)
+        { '$ID' => id.to_s.empty? ? SecureRandom.uuid : id.to_s }
+      end
+    end
+
     # Reversible Ruby declarations for reusable Mendix presentation documents.
     # Root contracts are typed; nested form nodes retain their Mendix property
     # names while IDs, collections, and binary values use Ruby-friendly specs.
     # rubocop:disable Metrics/ParameterLists
     module PresentationDocuments
+      include PresentationValues
+
       def layout_document(name, appearance:, canvas_height:, canvas_width:, content:,
                           documentation: '', excluded: false, export_level: 'Hidden',
                           unit_id: nil, container_id: nil)
@@ -73,52 +127,6 @@ module Mxrb
           name, type:, unit_id:, container_id:, containment: 'Documents',
                 deep_structure: document
         )
-      end
-
-      def presentation_value_document(value)
-        case value
-        when Array
-          value.map { presentation_value_document(_1) }
-        when Hash
-          presentation_hash_document(value)
-        else
-          value
-        end
-      end
-
-      def presentation_hash_document(value) # rubocop:disable Metrics/AbcSize
-        spec = value.to_h.transform_keys { _1.respond_to?(:to_sym) ? _1.to_sym : _1 }
-        return presentation_node_document(spec) if spec.key?(:node_type)
-        return presentation_collection_document(spec) if spec.key?(:collection)
-        return presentation_binary_document(spec) if spec.key?(:binary)
-        return spec.fetch(:map).to_h.transform_values { presentation_value_document(_1) } if spec.key?(:map)
-
-        value.to_h.transform_values { presentation_value_document(_1) }
-      end
-
-      def presentation_node_document(spec)
-        fields = spec.fetch(:fields).to_h
-        presentation_identity(spec[:id]).merge('$Type' => spec.fetch(:node_type).to_s).tap do |document|
-          fields.each { |key, value| document[key.to_s] = presentation_value_document(value) }
-        end
-      end
-
-      def presentation_collection_document(spec)
-        IO::BsonCodec.build_array(
-          Array(spec.fetch(:collection)).map { presentation_value_document(_1) },
-          marker: spec.fetch(:marker, 2).to_i
-        )
-      end
-
-      def presentation_binary_document(spec)
-        BSON::Binary.new(
-          Base64.strict_decode64(spec.fetch(:binary).to_s),
-          spec.fetch(:subtype, :generic).to_sym
-        )
-      end
-
-      def presentation_identity(id)
-        { '$ID' => id.to_s.empty? ? SecureRandom.uuid : id.to_s }
       end
     end
     # rubocop:enable Metrics/ParameterLists
