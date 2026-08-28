@@ -833,6 +833,9 @@ module Mxrb
       return nil if role_list.empty?
       roles = role_list.map { ruby(_1) }.join(", ")
       opts = []
+      opts << "id: #{ruby(rule.fetch(:id))}" unless rule.fetch(:id, '').to_s.empty?
+      documentation = rule.fetch(:documentation, '').to_s
+      opts << "documentation: #{ruby(documentation)}" unless documentation.empty?
       opts << "create: true" if rule[:create]
       opts << "delete: true" if rule[:delete]
       read_val  = reconstruct_access(rule.fetch(:default_rights, "None"), rule.fetch(:members, []), "ReadOnly",  "ReadWrite")
@@ -843,6 +846,8 @@ module Mxrb
       opts << "members: #{native_ruby(rule.fetch(:members, []))}"
       xpath = rule.fetch(:xpath, "")
       opts << "xpath: #{ruby(xpath)}" unless xpath.empty?
+      xpath_caption = rule.fetch(:xpath_caption, nil)
+      opts << "xpath_caption: #{ruby(xpath_caption)}" unless xpath_caption.nil?
       "  access_rule #{[roles, *opts].join(', ')}"
     end
 

@@ -192,16 +192,20 @@ module Mxrb
       ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
       ASSOCIATION_OWNERS = %i[Default Both].freeze
       ASSOCIATION_STORAGE_FORMATS = %i[Column Table].freeze
+      ACCESS_RIGHTS = %i[None ReadOnly ReadWrite].freeze
+      ACCESS_MEMBER_KINDS = %i[attribute association].freeze
       ATTRIBUTE_OPTION_UNSET = Object.new.freeze
 
       class << self
-        attr_reader :mendix_id, :attributes, :associations, :persistable, :lifecycle_callbacks
+        attr_reader :mendix_id, :attributes, :associations, :persistable, :lifecycle_callbacks,
+                    :access_rules
 
         def inherited(child)
           super
           child.instance_variable_set(:@attributes, [])
           child.instance_variable_set(:@associations, [])
           child.instance_variable_set(:@lifecycle_callbacks, {})
+          child.instance_variable_set(:@access_rules, nil)
         end
 
         def mendix_name(value = nil, id: nil)
@@ -252,6 +256,22 @@ module Mxrb
           }
         end
 
+        def access_rule(*roles, id: nil, documentation: '', create: false, delete: false,
+                        default_rights: :None, xpath: '', xpath_caption: nil, members: [])
+          raise ArgumentError, 'access_rule requires at least one module role' if roles.empty?
+
+          @access_rules ||= []
+          @access_rules << {
+            id: id.to_s, roles: roles.map(&:to_s), documentation: documentation.to_s,
+            create: create == true, delete: delete == true,
+            default_rights: normalize_access_right(default_rights), xpath: xpath.to_s,
+            xpath_caption: xpath_caption&.to_s,
+            members: Array(members).map { normalize_access_member(_1) }
+          }
+        end
+
+        def clear_access_rules! = (@access_rules = [])
+
         def lifecycle(event, method_name = nil, &block)
           event = event.to_sym
           raise ArgumentError, "unknown lifecycle event #{event}" unless LIFECYCLE_EVENTS.include?(event)
@@ -270,6 +290,29 @@ module Mxrb
             [attribute.fetch(:name), value.members[attribute.fetch(:mendix_name)]]
           end
           new(id: value.id, **values).tap { _1.instance_variable_set(:@native_value, value) }
+        end
+
+        private
+
+        def normalize_access_right(value)
+          right = value.to_sym
+          raise ArgumentError, "access rights must be one of #{ACCESS_RIGHTS.join(', ')}" \
+            unless ACCESS_RIGHTS.include?(right)
+
+          right
+        end
+
+        def normalize_access_member(member)
+          declaration = member.to_h.transform_keys(&:to_sym)
+          kind = declaration.fetch(:kind, :attribute).to_sym
+          raise ArgumentError, 'access member kind must be attribute or association' \
+            unless ACCESS_MEMBER_KINDS.include?(kind)
+
+          {
+            id: declaration[:id].to_s, name: declaration.fetch(:name).to_s,
+            reference: declaration[:reference].to_s,
+            rights: normalize_access_right(declaration.fetch(:rights)), kind:
+          }
         end
       end
 
@@ -1116,7 +1159,9 @@ module Mxrb
         project = Model::Project.open(@target, readonly: false)
         synchronize_constant_definitions(project)
         synchronize_enumeration_definitions(project)
+        synchronize_entity_access(project, existing_only: true)
         synchronize_entities(project)
+        synchronize_entity_access(project, existing_only: false)
         synchronize_associations(project)
         prune_constants(project)
         prune_enumerations(project)
@@ -1296,6 +1341,31 @@ module Mxrb
                            {
                              name: qualified_parts(implementation.mendix_name).last,
                              associations: implementation.associations.to_a
+                           }
+                         end
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_entity_access(project, existing_only:)
+        existing_names = project.modules.flat_map do |mod|
+          mod.entities.map { "#{mod.name}.#{_1.name}" }
+        end
+        existing = existing_names.to_h { [_1, true] }
+        records = Registry.all(:record).values.reject { _1.access_rules.nil? }
+        records.select! { existing.key?(_1.mendix_name) } if existing_only
+        records = records.group_by { module_name(_1.mendix_name) }
+        return if records.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        records.each do |name, implementations|
+          writer.synchronize_ruby_entity_access!(
+            project.mpr, module_name: name,
+                         entities: implementations.map do |implementation|
+                           {
+                             name: qualified_parts(implementation.mendix_name).last,
+                             access_rules: implementation.access_rules
                            }
                          end
           )

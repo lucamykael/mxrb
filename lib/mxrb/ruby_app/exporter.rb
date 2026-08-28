@@ -180,11 +180,12 @@ module Mxrb
           association.from_entity_id.to_s == entity.id.to_s
         end
         associations = associations.map { association_manifest(mod, _1) }
+        access_rules = runtime_value(entity.access_rules || [])
         write(
           relative,
           entity_source(
             namespace, class_name, qualified, entity.id, attributes, associations,
-            dto:, persistable: entity.persistable == true
+            access_rules:, dto:, persistable: entity.persistable == true
           )
         )
         add_coverage(entity.id, qualified, dto ? 'dto' : 'model', relative, 'executable_bidirectional')
@@ -194,7 +195,7 @@ module Mxrb
           'attributes' => attributes,
           'associations' => associations,
           'system_members' => runtime_value(entity.system_members || {}),
-          'access_rules' => runtime_value(entity.access_rules || []),
+          'access_rules' => access_rules,
           'lifecycle' => runtime_value(entity.respond_to?(:lifecycle) ? entity.lifecycle : [])
         }
       end
@@ -849,7 +850,8 @@ module Mxrb
         end
       end
 
-      def entity_source(namespace, class_name, qualified, id, attributes, associations = [], dto:, persistable:)
+      def entity_source(namespace, class_name, qualified, id, attributes, associations = [],
+                        access_rules:, dto:, persistable:)
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
                             ", localize_date: #{attribute.fetch('localize_date').inspect}"
@@ -873,6 +875,11 @@ module Mxrb
             "child_delete: :#{association.fetch('child_delete')}, " \
             "storage_format: :#{association.fetch('storage_format')}"
         end
+        access_declarations = if access_rules.empty?
+                                ['    clear_access_rules!']
+                              else
+                                access_rules.map { access_rule_source(_1) }
+                              end
         <<~RUBY
           # frozen_string_literal: true
 
@@ -880,10 +887,25 @@ module Mxrb
             class #{class_name} < Mxrb::RubyApp::#{dto ? 'DTO' : 'Record'}
               mendix_name #{qualified.inspect}, id: #{id.inspect}
               persistence #{persistable}
-          #{(declarations + association_declarations).join("\n")}
+          #{(declarations + association_declarations + access_declarations).join("\n")}
             end
           end
         RUBY
+      end
+
+      def access_rule_source(rule)
+        roles = rule.fetch('roles').map(&:inspect).join(', ')
+        members = rule.fetch('members').map do |member|
+          "{ id: #{member.fetch('id').inspect}, name: #{member.fetch('name').inspect}, " \
+            "reference: #{member.fetch('reference').inspect}, rights: :#{member.fetch('rights')}, " \
+            "kind: :#{member.fetch('kind')} }"
+        end
+        "    access_rule #{roles}, id: #{rule.fetch('id').inspect}, " \
+          "documentation: #{rule.fetch('documentation').inspect}, create: #{rule.fetch('create')}, " \
+          "delete: #{rule.fetch('delete')}, default_rights: :#{rule.fetch('default_rights')}, " \
+          "xpath: #{rule.fetch('xpath').inspect}, " \
+          "xpath_caption: #{rule.fetch('xpath_caption', nil).inspect}, " \
+          "members: [#{members.join(', ')}]"
       end
 
       def enumeration_source(namespace, class_name, enumeration)

@@ -155,16 +155,20 @@ module Mxrb
           association_ref = m["Association"].to_s
           attr_ref = association_ref.empty? ? m["Attribute"] : association_ref
           kind = association_ref.empty? ? :attribute : :association
-          { name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
+          { id: IO::BsonCodec.extract_id(m["$ID"]),
+            name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
             rights: m["AccessRights"] || "None", kind: kind }
         end
         {
+          id: IO::BsonCodec.extract_id(doc["$ID"]),
           roles: roles,
           create: doc["AllowCreate"] == true,
           delete: doc["AllowDelete"] == true,
+          documentation: doc["Documentation"].to_s,
           default_rights: default_rights,
           members: members,
-          xpath: doc["XPathConstraint"] || ""
+          xpath: doc["XPathConstraint"] || "",
+          xpath_caption: doc["XPathConstraintCaption"]
         }
       end
 

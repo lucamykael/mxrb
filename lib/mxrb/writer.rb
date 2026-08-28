@@ -179,6 +179,43 @@ module Mxrb
       self
     end
 
+    # Applies authoritative entity access rules directly to the embedded
+    # domain model while retaining rule/member IDs and unsupported metadata.
+    def synchronize_ruby_entity_access!(mpr, module_name:, entities:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch("UnitID")
+      raw_domain = mpr.units_by_containment("DomainModel").find { _1["ContainerID"] == module_id }
+      raise ValidationError, "Mendix module #{module_name} has no domain model" unless raw_domain
+
+      domain = mpr.parse_contents(raw_domain)
+      entities_key = native_key(domain, "entities", "Entities")
+      payload = IO::BsonCodec.parse_array(domain[entities_key])
+      existing = payload.fetch(:items).to_h do |entity|
+        [(entity["name"] || entity["Name"]).to_s, entity]
+      end
+      Array(entities).each do |declaration|
+        rules = declaration[:access_rules]
+        next if rules.nil?
+
+        name = declaration.fetch(:name).to_s
+        entity = existing[name]
+        raise ValidationError, "entity #{module_name}.#{name} does not exist" unless entity
+
+        rules_key = native_key(entity, "accessRules", "AccessRules")
+        entity[rules_key] = ruby_access_rule_docs(
+          Array(rules), entity[rules_key], module_name.to_s, name
+        )
+      end
+      domain[entities_key] = IO::BsonCodec.build_array(
+        payload.fetch(:items), marker: payload.fetch(:marker)
+      )
+      mpr.transaction { mpr.update_unit(raw_domain.fetch("UnitID"), domain) }
+      self
+    end
+
     # Canonical editor-shape serializers shared by incremental semantic plans.
     def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
       entity_doc(entity, module_name, previous, index)
@@ -189,6 +226,160 @@ module Mxrb
     end
 
     private
+
+    ACCESS_RIGHTS = %i[None ReadOnly ReadWrite].freeze
+    ACCESS_MEMBER_KINDS = %i[attribute association].freeze
+
+    def ruby_access_rule_docs(declarations, previous, module_name, entity_name)
+      validate_ruby_access_rules!(declarations, module_name, entity_name)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |rule|
+        rule.is_a?(Hash) && rule["$Type"] == "DomainModels$AccessRule"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_signature = supported.group_by { access_rule_signature(_1) }
+      rules = declarations.map do |declaration|
+        id = declaration[:id].to_s
+        signature_match = Array(by_signature[access_rule_declaration_signature(declaration)]).then do |matches|
+          matches.one? ? matches.first : nil
+        end
+        validate_ruby_nested_identity!(id, by_id, signature_match, "access rule")
+        current = (!id.empty? && by_id[id]) || signature_match
+        ruby_access_rule_doc(declaration, current, module_name, entity_name)
+      end
+      IO::BsonCodec.build_array(rules + opaque, marker: payload.fetch(:marker))
+    end
+
+    def validate_ruby_access_rules!(declarations, module_name, entity_name)
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      duplicates = ids.tally.select { |_id, count| count > 1 }.keys
+      unless duplicates.empty?
+        raise ValidationError,
+              "duplicate access rule ids for #{module_name}.#{entity_name}: #{duplicates.join(', ')}"
+      end
+
+      declarations.each do |rule|
+        validate_ruby_uuid!(rule[:id], "access rule for #{module_name}.#{entity_name}")
+        raise ValidationError, "access rule for #{module_name}.#{entity_name} has no roles" \
+          if Array(rule[:roles]).empty?
+        validate_access_right!(rule.fetch(:default_rights, :None), "default access")
+        members = Array(rule[:members])
+        member_ids = members.map { _1[:id].to_s }.reject(&:empty?)
+        duplicate_member_ids = member_ids.tally.select { |_id, count| count > 1 }.keys
+        references = members.map { access_member_declaration_signature(_1, module_name, entity_name) }
+        duplicate_references = references.tally.select { |_key, count| count > 1 }.keys
+        unless duplicate_member_ids.empty? && duplicate_references.empty?
+          raise ValidationError,
+                "duplicate access members for #{module_name}.#{entity_name}"
+        end
+        members.each do |member|
+          validate_ruby_uuid!(member[:id], "access member for #{module_name}.#{entity_name}")
+          validate_access_right!(member.fetch(:rights), "member access")
+          kind = member.fetch(:kind, :attribute).to_sym
+          next if ACCESS_MEMBER_KINDS.include?(kind)
+
+          raise ValidationError, "unsupported access member kind #{kind.inspect}"
+        end
+      end
+    end
+
+    def validate_access_right!(value, label)
+      right = value.to_sym
+      return if ACCESS_RIGHTS.include?(right)
+
+      raise ValidationError, "unsupported #{label} right #{right.inspect}"
+    end
+
+    def validate_ruby_nested_identity!(id, by_id, semantic_match, label)
+      return if id.empty? || by_id.key?(id) || semantic_match.nil?
+
+      previous_id = IO::BsonCodec.extract_id(semantic_match["$ID"])
+      raise ValidationError,
+            "native identity mismatch for #{label}: expected #{previous_id}, received #{id}"
+    end
+
+    def ruby_access_rule_doc(declaration, current, module_name, entity_name)
+      previous = current || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
+      roles_key = native_key(previous, "AllowedModuleRoles", "ModuleRoles")
+      roles_payload = IO::BsonCodec.parse_array(previous[roles_key])
+      previous_members = previous["MemberAccesses"]
+      previous.merge(
+        "$ID" => id,
+        "$Type" => previous["$Type"] || "DomainModels$AccessRule",
+        "Documentation" => declaration.fetch(:documentation, '').to_s,
+        roles_key => IO::BsonCodec.build_array(
+          Array(declaration.fetch(:roles)).map(&:to_s), marker: roles_payload.fetch(:marker)
+        ),
+        "AllowCreate" => declaration.fetch(:create, false) == true,
+        "AllowDelete" => declaration.fetch(:delete, false) == true,
+        "DefaultMemberAccessRights" => declaration.fetch(:default_rights, :None).to_s,
+        "MemberAccesses" => ruby_access_member_docs(
+          Array(declaration[:members]), previous_members, module_name, entity_name
+        ),
+        "XPathConstraint" => declaration.fetch(:xpath, '').to_s
+      ).tap do |doc|
+        caption = declaration[:xpath_caption]
+        doc["XPathConstraintCaption"] = caption.to_s unless caption.nil?
+      end
+    end
+
+    def ruby_access_member_docs(declarations, previous, module_name, entity_name)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |member|
+        member.is_a?(Hash) && member["$Type"] == "DomainModels$MemberAccess"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_reference = supported.to_h { [access_member_signature(_1), _1] }
+      members = declarations.map do |declaration|
+        id = declaration[:id].to_s
+        signature = access_member_declaration_signature(declaration, module_name, entity_name)
+        semantic_match = by_reference[signature]
+        validate_ruby_nested_identity!(id, by_id, semantic_match, "access member #{signature.last}")
+        current = (!id.empty? && by_id[id]) || semantic_match
+        ruby_access_member_doc(declaration, current, module_name, entity_name)
+      end
+      IO::BsonCodec.build_array(members + opaque, marker: payload.fetch(:marker))
+    end
+
+    def ruby_access_member_doc(declaration, current, module_name, entity_name)
+      previous = current || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
+      kind, reference = access_member_declaration_signature(declaration, module_name, entity_name)
+      previous.merge(
+        "$ID" => id,
+        "$Type" => previous["$Type"] || "DomainModels$MemberAccess",
+        "Association" => kind == :association ? reference : "",
+        "Attribute" => kind == :attribute ? reference : "",
+        "AccessRights" => declaration.fetch(:rights).to_s
+      )
+    end
+
+    def access_rule_signature(rule)
+      roles = IO::BsonCodec.parse_array(rule["AllowedModuleRoles"] || rule["ModuleRoles"])[:items]
+      [roles.map(&:to_s).sort, rule["XPathConstraint"].to_s]
+    end
+
+    def access_rule_declaration_signature(rule)
+      [Array(rule[:roles]).map(&:to_s).sort, rule.fetch(:xpath, '').to_s]
+    end
+
+    def access_member_signature(member)
+      association = member["Association"].to_s
+      association.empty? ? [:attribute, member["Attribute"].to_s] : [:association, association]
+    end
+
+    def access_member_declaration_signature(member, module_name, entity_name)
+      kind = member.fetch(:kind, :attribute).to_sym
+      reference = member[:reference].to_s
+      if reference.empty?
+        name = member.fetch(:name).to_s
+        reference = kind == :association ? "#{module_name}.#{name}" : "#{module_name}.#{entity_name}.#{name}"
+      end
+      [kind, reference]
+    end
 
     def validate_ruby_constants!(module_name, declarations)
       duplicate_names = declarations.group_by { _1.fetch(:name).to_s }.select { |_key, values| values.size > 1 }.keys
@@ -2200,16 +2391,19 @@ module Mxrb
                   )
                 end
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => rule.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : rule.fetch(:id).to_s,
         "$Type" => "DomainModels$AccessRule",
-        "Documentation" => "",
+        "Documentation" => rule.fetch(:documentation, '').to_s,
         "AllowedModuleRoles" => IO::BsonCodec.build_array(rule.fetch(:roles), marker: 1),
         "AllowCreate" => rule.fetch(:create, false),
         "AllowDelete" => rule.fetch(:delete, false),
         "DefaultMemberAccessRights" => default_rights,
         "MemberAccesses" => IO::BsonCodec.build_array(members),
         "XPathConstraint" => rule.fetch(:xpath, "")
-      }
+      }.tap do |doc|
+        caption = rule[:xpath_caption]
+        doc["XPathConstraintCaption"] = caption.to_s unless caption.nil?
+      end
     end
 
     def exact_access_member_docs(members, module_name, entity_name)
@@ -2218,7 +2412,7 @@ module Mxrb
         name = member.fetch(:name).to_s
         reference = member[:reference].to_s
         {
-          "$ID" => SecureRandom.uuid,
+          "$ID" => member.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : member.fetch(:id).to_s,
           "$Type" => "DomainModels$MemberAccess",
           "Association" => association ? qualified_member(reference, "#{module_name}.#{name}") : "",
           "Attribute" => association ? "" : qualified_member(reference, "#{module_name}.#{entity_name}.#{name}"),

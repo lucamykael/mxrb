@@ -1209,16 +1209,20 @@ module Mxrb
       end
 
       # access_rule "Module.Role", create: true, delete: false, read: :all, write: [:Name]
-      def access_rule(*roles, create: false, delete: false, read: :none, write: :none, xpath: "",
+      def access_rule(*roles, id: nil, documentation: '', create: false, delete: false,
+                      read: :none, write: :none, xpath: "", xpath_caption: nil,
                       default_rights: nil, members: nil)
         @access_rules ||= []
         @access_rules << {
+          id: id&.to_s,
+          documentation: documentation.to_s,
           roles: roles.map(&:to_s),
           create: create,
           delete: delete,
           read: normalize_access(read),
           write: normalize_access(write),
           xpath: xpath.to_s,
+          xpath_caption: xpath_caption&.to_s,
           default_rights: default_rights&.to_s,
           members: members&.map { _1.transform_keys(&:to_sym) }
         }
