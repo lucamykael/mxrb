@@ -763,20 +763,47 @@ module Mxrb
     class EnumerationBuilder
       attr_reader :name
 
-      def initialize(name)
-        @name   = name.to_s
+      def initialize(name, **options)
+        @name = name.to_s
         @values = []
-        @doc    = ""
+        @id = options[:id]&.to_s
+        @unit_id = options[:unit_id]&.to_s
+        @doc = options.fetch(:documentation, '').to_s
+        @excluded = options.fetch(:excluded, false) == true
+        @export_level = options.fetch(:export_level, 'Hidden').to_s
+        @remote_source = options[:remote_source]
+        @values_marker = options.fetch(:values_marker, 3).to_i
       end
 
-      def value(name, caption: nil)
-        @values << { name: name.to_s, caption: caption&.to_s }
+      def value(name, caption: nil, captions: nil, id: nil, caption_id: nil,
+                caption_ids: {}, image: '', remote_value: nil,
+                translations_marker: 3, export_level: nil)
+        localized = normalized_captions(name, caption, captions)
+        @values << {
+          name: name.to_s, id: id&.to_s, caption_id: caption_id&.to_s,
+          captions: localized.transform_keys(&:to_s).transform_values(&:to_s),
+          caption_ids: caption_ids.to_h.transform_keys(&:to_s).transform_values(&:to_s),
+          image: image.to_s, remote_value:, translations_marker: translations_marker.to_i,
+          export_level: export_level&.to_s
+        }
       end
 
       def documentation(d) = (@doc = d)
 
       def to_h
-        { name: @name, values: @values, documentation: @doc }
+        {
+          name: @name, id: @id, unit_id: @unit_id, values: @values,
+          documentation: @doc, excluded: @excluded, export_level: @export_level,
+          remote_source: @remote_source, values_marker: @values_marker
+        }
+      end
+
+      private
+
+      def normalized_captions(name, caption, captions)
+        return captions.to_h unless captions.nil?
+
+        { 'en_US' => caption.nil? ? name.to_s : caption }
       end
     end
 
@@ -789,17 +816,27 @@ module Mxrb
 
       attr_reader :name
 
-      def initialize(name, type:, value: nil)
-        @name  = name.to_s
-        @type  = type.to_sym
+      def initialize(name, type:, value: nil, **options)
+        @name = name.to_s
+        @type = type.to_sym
         @value = value
-        @doc   = ""
+        @id = options[:id]&.to_s
+        @type_id = options[:type_id]&.to_s
+        @unit_id = options[:unit_id]&.to_s
+        @doc = options.fetch(:documentation, '').to_s
+        @excluded = options.fetch(:excluded, false) == true
+        @export_level = options.fetch(:export_level, 'Hidden').to_s
+        @exposed_to_client = options.fetch(:exposed_to_client, false) == true
       end
 
       def documentation(d) = (@doc = d)
 
       def to_h
-        { name: @name, type: @type, value: @value, documentation: @doc }
+        {
+          name: @name, type: @type, value: @value, documentation: @doc,
+          id: @id, type_id: @type_id, unit_id: @unit_id, excluded: @excluded,
+          export_level: @export_level, exposed_to_client: @exposed_to_client
+        }
       end
     end
 
@@ -902,14 +939,14 @@ module Mxrb
         }
       end
 
-      def enumeration(name, &block)
-        eb = EnumerationBuilder.new(name)
+      def enumeration(name, **options, &block)
+        eb = EnumerationBuilder.new(name, **options)
         eb.instance_eval(&block) if block
         @enumerations << eb.to_h
       end
 
-      def constant(name, type:, value: nil, &block)
-        cb = ConstantBuilder.new(name, type: type, value: value)
+      def constant(name, type:, value: nil, **options, &block)
+        cb = ConstantBuilder.new(name, type:, value:, **options)
         cb.instance_eval(&block) if block
         @constants << cb.to_h
       end

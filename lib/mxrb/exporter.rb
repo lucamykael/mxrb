@@ -332,7 +332,7 @@ module Mxrb
         entity_metadata = architecture&.fetch(:entities, [])&.find { _1[:name] == entity.name }
         source = entity_source(entity, mod, associations.fetch(entity.id, []), entity_metadata)
         if oql_view_entity?(entity) && (document = oql_document_for(entity, oql_documents, mod.name))
-          source = "#{source.rstrip}\n\n#{native_document_declaration(document)}"
+          source = "#{source.rstrip}\n\n#{integration_document_declaration(document)}"
           attached_oql_documents[document.fetch(:id)] = true
         end
         write(
@@ -475,8 +475,89 @@ module Mxrb
         return mapping_declaration(document, :export) if doc.key?("JsonStructure")
       when "Rest$PublishedRestService"
         return published_rest_declaration(document) if semantic_rest_service?(doc)
+      when "Enumerations$Enumeration"
+        return enumeration_declaration(document) if semantic_enumeration?(doc)
+      when "Constants$Constant"
+        return constant_declaration(document) if doc["Type"].is_a?(Hash)
+      when "DomainModels$ViewEntitySourceDocument"
+        return oql_source_declaration(document) if doc.key?("Oql")
       end
       native_document_declaration(document)
+    end
+
+    def enumeration_declaration(document)
+      doc = document.fetch(:doc)
+      options = {
+        id: document_id(doc), unit_id: document.fetch(:id),
+        documentation: doc.fetch("Documentation", ""), excluded: doc["Excluded"] == true,
+        export_level: doc.fetch("ExportLevel", "Hidden"), remote_source: doc["RemoteSource"],
+        values_marker: bson_marker(doc["Values"], 3)
+      }
+      lines = domain_call_lines(:enumeration, document.fetch(:name), options)
+      lines[-1] = "#{lines[-1]} do"
+      bson_items(doc["Values"]).each do |value|
+        caption = value.fetch("Caption")
+        translations = bson_items(caption["Items"])
+        value_options = {
+          id: document_id(value), caption_id: document_id(caption),
+          captions: translations.to_h { [_1.fetch("LanguageCode"), _1.fetch("Text", "")] },
+          caption_ids: translations.to_h { [_1.fetch("LanguageCode"), document_id(_1)] },
+          image: value.fetch("Image", ""), remote_value: value["RemoteValue"],
+          translations_marker: bson_marker(caption["Items"], 3)
+        }
+        value_options[:export_level] = value["ExportLevel"] if value.key?("ExportLevel")
+        lines.concat(domain_call_lines(:value, value.fetch("Name"), value_options, indent: 2))
+      end
+      lines << "end"
+      lines.join("\n")
+    end
+
+    def constant_declaration(document)
+      doc = document.fetch(:doc)
+      domain_call_lines(:constant, document.fetch(:name), {
+        type: data_type_spec(doc.fetch("Type")), value: doc.fetch("DefaultValue", ""),
+        id: document_id(doc), type_id: document_id(doc.fetch("Type")),
+        unit_id: document.fetch(:id), documentation: doc.fetch("Documentation", ""),
+        excluded: doc["Excluded"] == true, export_level: doc.fetch("ExportLevel", "Hidden"),
+        exposed_to_client: doc["ExposedToClient"] == true
+      }).join("\n")
+    end
+
+    def oql_source_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:oql_source_document, document, {
+        query: doc.fetch("Oql", ""), documentation: doc.fetch("Documentation", ""),
+        excluded: doc["Excluded"] == true, export_level: doc.fetch("ExportLevel", "Hidden")
+      })
+    end
+
+    def domain_call_lines(method, name, options, indent: 0)
+      pad = " " * indent
+      entries = options.to_a
+      lines = ["#{pad}#{method} #{symbol(name)},"]
+      entries.each_with_index do |(key, value), index|
+        comma = index == entries.size - 1 ? "" : ","
+        lines << "#{pad}            #{key}: #{native_ruby(value, indent + 12)}#{comma}"
+      end
+      lines
+    end
+
+    def semantic_enumeration?(doc)
+      return false unless doc.key?("Values")
+
+      bson_items(doc["Values"]).all? do |value|
+        caption = value["Caption"]
+        caption.is_a?(Hash) && bson_items(caption["Items"]).all? do |translation|
+          translation.is_a?(Hash) && translation["$Type"] == "Texts$Translation" &&
+            translation.key?("LanguageCode")
+        end
+      end
+    end
+
+    def bson_marker(bson, fallback)
+      IO::BsonCodec.parse_array(bson)[:marker]
+    rescue StandardError
+      fallback
     end
 
     def json_structure_declaration(document)

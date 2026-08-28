@@ -19,9 +19,10 @@ RSpec.describe 'exported domain artifacts' do
       view_path = File.join(root, 'domain', 'oql_views', 'product_view.rb')
       expect(File.read(view_path)).to include(
         'oql_view source: "API_Rest.ProductViewSource"',
-        'DomainModels$ViewEntitySourceDocument',
+        'oql_source_document :ProductViewSource',
         'SELECT Name FROM API_Rest.Product'
       )
+      expect(File.read(view_path)).not_to include('native_document', 'deep_structure:', 'bson_binary(')
       legacy_view_path = File.join(root, 'domain', 'oql_views', 'legacy_view.rb')
       expect(File.read(legacy_view_path)).to include(
         'oql_view query: "SELECT Name FROM API_Rest.Product"'
@@ -29,9 +30,11 @@ RSpec.describe 'exported domain artifacts' do
       dataset_path = File.join(root, 'application', 'queries', 'datasets', 'product_data.rb')
       expect(File.read(dataset_path)).to include('DataSets$DataSet', 'OqlDataSetSource')
       enumeration_path = File.join(root, 'domain', 'enumerations', 'location_type.rb')
-      expect(File.read(enumeration_path)).to include('Enumerations$Enumeration', 'Warehouse')
+      expect(File.read(enumeration_path)).to include('enumeration :LocationType', 'value :Warehouse')
+      expect(File.read(enumeration_path)).not_to include('native_document', 'bson_binary(')
       constant_path = File.join(root, 'domain', 'constants', 'api_address.rb')
-      expect(File.read(constant_path)).to include('Constants$Constant', 'https://old.example')
+      expect(File.read(constant_path)).to include('constant :ApiAddress', 'https://old.example')
+      expect(File.read(constant_path)).not_to include('native_document', 'bson_binary(')
       expect(File.read(File.join(root, 'domain', 'model.rb'))).to include('dtos', 'oql_views')
       expect(File.read(File.join(root, 'application', 'application.rb'))).to include('datasets')
 

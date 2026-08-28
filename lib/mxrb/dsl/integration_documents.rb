@@ -94,6 +94,19 @@ module Mxrb
         )
       end
 
+      def oql_source_document(name, query:, documentation: '', excluded: false,
+                              export_level: 'Hidden', unit_id: nil, container_id: nil)
+        doc = integration_identity(unit_id).merge(
+          'Documentation' => documentation.to_s,
+          'Excluded' => excluded == true,
+          'ExportLevel' => export_level.to_s,
+          'Oql' => query.to_s
+        )
+        semantic_native_document(
+          name, 'DomainModels$ViewEntitySourceDocument', doc, unit_id:, container_id:
+        )
+      end
+
       private
 
       def semantic_native_document(name, type, doc, unit_id:, container_id:)

@@ -3611,28 +3611,45 @@ module Mxrb
 
     def enumeration_doc(enum)
       values = Array(enum.fetch(:values, [])).map do |val|
-        {
-          "$ID" => SecureRandom.uuid,
+        captions = val.fetch(:captions, { 'en_US' => val[:caption] || val.fetch(:name) })
+        caption_ids = val.fetch(:caption_ids, {})
+        value = {
+          "$ID" => val[:id].to_s.empty? ? SecureRandom.uuid : val[:id].to_s,
           "$Type" => "Enumerations$EnumerationValue",
           "Name" => val.fetch(:name),
-          "Caption" => { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text", "Items" => [] },
-          "Image" => "",
-          "ExportLevel" => "Hidden"
-        }.tap do |value|
-          value["Caption"]["Items"] = IO::BsonCodec.build_array([{
-            "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
-            "LanguageCode" => "en_US", "Text" => val[:caption] || val.fetch(:name)
-          }])
-        end
+          "Caption" => {
+            "$ID" => val[:caption_id].to_s.empty? ? SecureRandom.uuid : val[:caption_id].to_s,
+            "$Type" => "Texts$Text",
+            "Items" => IO::BsonCodec.build_array(
+              captions.map do |language, text|
+                translation_id = caption_ids[language.to_s].to_s
+                {
+                  "$ID" => translation_id.empty? ? SecureRandom.uuid : translation_id,
+                  "$Type" => "Texts$Translation",
+                  "LanguageCode" => language.to_s, "Text" => text.to_s
+                }
+              end,
+              marker: val.fetch(:translations_marker, 3)
+            )
+          },
+          "Image" => val.fetch(:image, '').to_s,
+          "RemoteValue" => val[:remote_value]
+        }
+        value["ExportLevel"] = val[:export_level].to_s unless val[:export_level].nil?
+        value
       end
-      {
-        "$ID" => SecureRandom.uuid,
+      document = {
+        "$ID" => enum[:id].to_s.empty? ? SecureRandom.uuid : enum[:id].to_s,
         "$Type" => "Enumerations$Enumeration",
         "Name" => enum.fetch(:name),
         "Documentation" => enum.fetch(:documentation, ""),
-        "ExportLevel" => "Hidden",
-        "Values" => IO::BsonCodec.build_array(values)
+        "Excluded" => enum.fetch(:excluded, false) == true,
+        "ExportLevel" => enum.fetch(:export_level, "Hidden"),
+        "RemoteSource" => enum[:remote_source],
+        "Values" => IO::BsonCodec.build_array(values, marker: enum.fetch(:values_marker, 3))
       }
+      document["__mxrb_unit_id"] = enum[:unit_id].to_s unless enum[:unit_id].to_s.empty?
+      document
     end
 
     def constant_doc(constant)
@@ -3641,15 +3658,22 @@ module Mxrb
         raise ArgumentError, "unsupported constant type #{type_sym.inspect}; " \
                              "use one of: #{CONSTANT_TYPE_MAP.keys.join(', ')}"
       end
-      {
-        "$ID" => SecureRandom.uuid,
+      document = {
+        "$ID" => constant[:id].to_s.empty? ? SecureRandom.uuid : constant[:id].to_s,
         "$Type" => "Constants$Constant",
         "Name" => constant.fetch(:name),
         "Documentation" => constant.fetch(:documentation, ""),
-        "ExportLevel" => "Hidden",
-        "Type" => { "$ID" => SecureRandom.uuid, "$Type" => type_str },
+        "Excluded" => constant.fetch(:excluded, false) == true,
+        "ExportLevel" => constant.fetch(:export_level, "Hidden"),
+        "ExposedToClient" => constant.fetch(:exposed_to_client, false) == true,
+        "Type" => {
+          "$ID" => constant[:type_id].to_s.empty? ? SecureRandom.uuid : constant[:type_id].to_s,
+          "$Type" => type_str
+        },
         "DefaultValue" => constant.fetch(:value, "").to_s
       }
+      document["__mxrb_unit_id"] = constant[:unit_id].to_s unless constant[:unit_id].to_s.empty?
+      document
     end
 
     def scheduled_event_doc(event)
