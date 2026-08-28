@@ -19,6 +19,7 @@ module Mxrb
         datetime: 'DataTypes$DateTimeType',
         binary: 'DataTypes$BinaryType'
       }.freeze
+      DATABASE_QUERY_TYPES = { select: 1, execute: 2 }.freeze
 
       def json_structure(name, snippet:, elements:, documentation: '', excluded: false,
                          export_level: 'Hidden', unit_id: nil, container_id: nil)
@@ -104,6 +105,32 @@ module Mxrb
         )
         semantic_native_document(
           name, 'DomainModels$ViewEntitySourceDocument', doc, unit_id:, container_id:
+        )
+      end
+
+      def database_connection(name, database_type:, connection_string:, username:, password:,
+                              connection:, queries:, properties: [], documentation: '',
+                              excluded: false, export_level: 'Hidden',
+                              properties_marker: 2, queries_marker: 3,
+                              unit_id: nil, container_id: nil)
+        doc = integration_identity(unit_id).merge(
+          'AdditionalProperties' => integration_array(
+            Array(properties).map { database_property_document(_1) }, properties_marker
+          ),
+          'ConnectionInput' => database_connection_parts_document(connection),
+          'ConnectionString' => connection_string.to_s,
+          'DatabaseType' => database_type.to_s,
+          'Documentation' => documentation.to_s,
+          'Excluded' => excluded == true,
+          'ExportLevel' => export_level.to_s,
+          'Password' => password.to_s,
+          'Queries' => integration_array(
+            Array(queries).map { database_query_document(_1) }, queries_marker
+          ),
+          'UserName' => username.to_s
+        )
+        semantic_native_document(
+          name, 'DatabaseConnector$DatabaseConnection', doc, unit_id:, container_id:
         )
       end
 
@@ -267,6 +294,106 @@ module Mxrb
           'Path' => spec.fetch(:path, '').to_s,
           'Summary' => spec.fetch(:summary, '').to_s
         )
+      end
+
+      def database_property_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$AdditionalProperty',
+          'Key' => spec.fetch(:key).to_s,
+          'Value' => integration_identity(spec[:value_id]).merge(
+            '$Type' => 'DatabaseConnector$ValueAsString',
+            'Value' => spec.fetch(:value, '').to_s
+          )
+        )
+      end
+
+      def database_connection_parts_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$ConnectionParts',
+          'DatabaseName' => spec.fetch(:database, '').to_s,
+          'Host' => spec.fetch(:host, '').to_s,
+          'Port' => spec.fetch(:port, 0).to_i
+        )
+      end
+
+      def database_query_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$DatabaseQuery',
+          'Name' => spec.fetch(:name).to_s,
+          'Parameters' => integration_array(
+            Array(spec[:parameters]).map { database_parameter_document(_1) },
+            spec.fetch(:parameters_marker, 2).to_i
+          ),
+          'Query' => spec.fetch(:query, '').to_s,
+          'QueryType' => database_query_type(spec.fetch(:kind, :select)),
+          'TableMappings' => integration_array(
+            Array(spec[:tables]).map { database_table_document(_1) },
+            spec.fetch(:tables_marker, 2).to_i
+          )
+        )
+      end
+
+      def database_parameter_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$QueryParameter',
+          'DatabaseParameterName' => spec.fetch(:database_name, '').to_s,
+          'DataType' => data_type_document(spec.fetch(:type, :unknown), spec[:type_id]),
+          'DefaultValue' => spec.fetch(:default, '').to_s,
+          'EmptyValueBecomesNull' => spec.fetch(:empty_as_null, false) == true,
+          'Mode' => integration_enum(spec.fetch(:mode, :unknown)),
+          'ParameterName' => spec.fetch(:name).to_s,
+          'SqlDataType' => database_sql_type_document(spec.fetch(:sql_type, {})),
+          'TableMapping' => spec[:table_mapping]
+        )
+      end
+
+      def database_table_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$TableMapping',
+          'Columns' => integration_array(
+            Array(spec[:columns]).map { database_column_document(_1) },
+            spec.fetch(:columns_marker, 2).to_i
+          ),
+          'Entity' => spec.fetch(:entity, '').to_s,
+          'TableName' => spec.fetch(:table, '').to_s
+        )
+      end
+
+      def database_column_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'DatabaseConnector$ColumnMapping',
+          'Attribute' => spec.fetch(:attribute, '').to_s,
+          'ColumnName' => spec.fetch(:column, '').to_s,
+          'SqlDataType' => database_sql_type_document(spec.fetch(:sql_type, {}))
+        )
+      end
+
+      def database_sql_type_document(source)
+        spec = integration_spec(source)
+        kind = spec.fetch(:kind, :simple).to_sym
+        type = if kind == :limited
+                 'DatabaseConnector$LimitedLengthSqlDataType'
+               else
+                 'DatabaseConnector$SimpleSqlDataType'
+               end
+        document = integration_identity(spec[:id]).merge(
+          '$Type' => type,
+          'DataTypeName' => spec.fetch(:name, '').to_s
+        )
+        document['Length'] = spec.fetch(:length).to_i if kind == :limited
+        document
+      end
+
+      def database_query_type(value)
+        return value.to_i unless value.is_a?(Symbol)
+
+        DATABASE_QUERY_TYPES.fetch(value) { value.to_s.to_i }
       end
 
       def data_type_document(type, id = nil)
