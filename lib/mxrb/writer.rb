@@ -84,6 +84,21 @@ module Mxrb
       self
     end
 
+    # Applies the authoritative association declarations of Ruby Record classes
+    # without rewriting entities or opaque domain-model metadata.
+    def synchronize_ruby_associations!(mpr, module_name:, entities:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch("UnitID")
+      raw_domain = mpr.units_by_containment("DomainModel").find { _1["ContainerID"] == module_id }
+      raise ValidationError, "Mendix module #{module_name} has no domain model" unless raw_domain
+
+      synchronize_ruby_domain_associations!(mpr, raw_domain, module_name.to_s, Array(entities))
+      self
+    end
+
     # Canonical editor-shape serializers shared by incremental semantic plans.
     def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
       entity_doc(entity, module_name, previous, index)
@@ -94,6 +109,65 @@ module Mxrb
     end
 
     private
+
+    def synchronize_ruby_domain_associations!(mpr, raw_domain, module_name, entities)
+      doc = mpr.parse_contents(raw_domain)
+      entities_key = native_key(doc, "entities", "Entities")
+      associations_key = native_key(doc, "associations", "Associations")
+      cross_key = native_key(doc, "crossAssociations", "CrossAssociations")
+      entity_ids = array_items(doc[entities_key]).to_h do |entity|
+        [entity["name"] || entity["Name"], IO::BsonCodec.extract_id(entity["$ID"])]
+      end
+      owned_ids = entities.filter_map { entity_ids[_1.fetch(:name)] }
+      missing = entities.map { _1.fetch(:name) } - entity_ids.keys
+      raise ValidationError, "entities missing from #{module_name}: #{missing.join(', ')}" unless missing.empty?
+
+      local = array_items(doc[associations_key])
+      cross = array_items(doc[cross_key])
+      previous = (local + cross).to_h { [association_native_name(_1), _1] }
+      local.reject! { owned_ids.include?(association_parent_id(_1)) }
+      cross.reject! { owned_ids.include?(association_parent_id(_1)) }
+      declared_names = []
+
+      entities.each do |entity|
+        from_id = entity_ids.fetch(entity.fetch(:name))
+        Array(entity[:associations]).each do |association|
+          name = association.fetch(:name)
+          raise ValidationError, "duplicate Ruby association #{module_name}.#{name}" \
+            if declared_names.include?(name)
+
+          declared_names << name
+          target_module, target_name = association_target(association.fetch(:target), module_name)
+          prior = previous[name]
+          association = association.merge(id: association[:id].to_s)
+          prior = (prior || {}).merge('$ID' => association[:id]) unless association[:id].empty?
+          if target_module == module_name
+            to_id = entity_ids[target_name]
+            raise ValidationError, "unknown association target #{association.fetch(:target).inspect}" unless to_id
+
+            local << association_doc(association, from_id:, to_id:, previous: prior)
+          else
+            cross << cross_association_doc(
+              association, from_id:, target: "#{target_module}.#{target_name}", previous: prior
+            )
+          end
+        end
+      end
+
+      doc[associations_key] = IO::BsonCodec.build_array(local)
+      doc[cross_key] = IO::BsonCodec.build_array(cross)
+      mpr.transaction { mpr.update_unit(raw_domain.fetch("UnitID"), doc) }
+    end
+
+    def association_native_name(association)
+      association["Name"] || association["name"]
+    end
+
+    def association_parent_id(association)
+      IO::BsonCodec.extract_id(
+        association["ParentPointer"] || association["ParentID"] || association["parentId"]
+      )
+    end
 
     def ruby_app_source_files
       path = @definition.fetch(:ruby_app_sources_path)

@@ -168,10 +168,15 @@ module Mxrb
         relative = File.join('app', category, root, "#{base_name}.rb")
         qualified = "#{mod.name}.#{entity.name}"
         attributes = entity.attributes.map { attribute_manifest(_1) }
+        module_associations = mod.respond_to?(:associations) ? mod.associations : []
+        associations = module_associations.select do |association|
+          association.from_entity_id.to_s == entity.id.to_s
+        end
+        associations = associations.map { association_manifest(mod, _1) }
         write(
           relative,
           entity_source(
-            namespace, class_name, qualified, entity.id, attributes,
+            namespace, class_name, qualified, entity.id, attributes, associations,
             dto:, persistable: entity.persistable == true
           )
         )
@@ -180,6 +185,7 @@ module Mxrb
           'name' => qualified, 'id' => entity.id, 'ruby_class' => "#{namespace}::#{class_name}",
           'path' => relative, 'dto' => dto, 'persistable' => entity.persistable == true,
           'attributes' => attributes,
+          'associations' => associations,
           'system_members' => runtime_value(entity.system_members || {}),
           'access_rules' => runtime_value(entity.access_rules || []),
           'lifecycle' => runtime_value(entity.respond_to?(:lifecycle) ? entity.lifecycle : [])
@@ -196,7 +202,12 @@ module Mxrb
           'name' => "#{mod.name}.#{association.name}", 'id' => association.id,
           'type' => association.association_type.to_s,
           'from_entity' => entities[association.from_entity_id.to_s] || association.from_entity_id.to_s,
-          'to_entity' => entities[association.to_entity_id.to_s] || association.to_entity_id.to_s
+          'to_entity' => entities[association.to_entity_id.to_s] || association.to_entity_id.to_s,
+          'owner' => association.owner.to_s,
+          'storage_format' => association.storage_format.to_s,
+          'documentation' => association.documentation.to_s,
+          'parent_delete' => association.parent_delete_behavior.to_s,
+          'child_delete' => association.child_delete_behavior.to_s
         }
       end
 
@@ -748,7 +759,7 @@ module Mxrb
         end
       end
 
-      def entity_source(namespace, class_name, qualified, id, attributes, dto:, persistable:)
+      def entity_source(namespace, class_name, qualified, id, attributes, associations = [], dto:, persistable:)
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
                             ", localize_date: #{attribute.fetch('localize_date').inspect}"
@@ -762,6 +773,16 @@ module Mxrb
             "length: #{attribute['length'].inspect}#{localize_date}, " \
             "enumeration: #{attribute['enumeration'].inspect}"
         end
+        association_declarations = associations.map do |association|
+          "    association #{association.fetch('to_entity').inspect}, " \
+            "name: #{association.fetch('name').split('.', 2).last.inspect}, " \
+            "id: #{association.fetch('id').inspect}, type: :#{association.fetch('type')}, " \
+            "owner: :#{association.fetch('owner')}, " \
+            "documentation: #{association.fetch('documentation').inspect}, " \
+            "parent_delete: :#{association.fetch('parent_delete')}, " \
+            "child_delete: :#{association.fetch('child_delete')}, " \
+            "storage_format: :#{association.fetch('storage_format')}"
+        end
         <<~RUBY
           # frozen_string_literal: true
 
@@ -769,7 +790,7 @@ module Mxrb
             class #{class_name} < Mxrb::RubyApp::#{dto ? 'DTO' : 'Record'}
               mendix_name #{qualified.inspect}, id: #{id.inspect}
               persistence #{persistable}
-          #{declarations.join("\n")}
+          #{(declarations + association_declarations).join("\n")}
             end
           end
         RUBY

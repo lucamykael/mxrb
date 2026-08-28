@@ -186,14 +186,18 @@ module Mxrb
     # Base for generated persistent models.
     class Record
       LIFECYCLE_EVENTS = Runtime::Native::Store::LIFECYCLE_EVENTS
+      ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
+      ASSOCIATION_OWNERS = %i[Default Both].freeze
+      ASSOCIATION_STORAGE_FORMATS = %i[Column Table].freeze
       ATTRIBUTE_OPTION_UNSET = Object.new.freeze
 
       class << self
-        attr_reader :mendix_id, :attributes, :persistable, :lifecycle_callbacks
+        attr_reader :mendix_id, :attributes, :associations, :persistable, :lifecycle_callbacks
 
         def inherited(child)
           super
           child.instance_variable_set(:@attributes, [])
+          child.instance_variable_set(:@associations, [])
           child.instance_variable_set(:@lifecycle_callbacks, {})
         end
 
@@ -221,6 +225,28 @@ module Mxrb
           declaration[:localize_date] = localize_date unless localize_date.equal?(ATTRIBUTE_OPTION_UNSET)
           @attributes << declaration
           attr_accessor name
+        end
+
+        def association(target, name:, id: nil, type: :Reference, owner: :Default,
+                        documentation: '', parent_delete: :NoAction, child_delete: :NoAction,
+                        storage_format: nil)
+          type = type.to_sym
+          owner = owner.to_sym
+          storage_format = storage_format&.to_sym
+          raise ArgumentError, 'association type must be Reference or ReferenceSet' \
+            unless ASSOCIATION_TYPES.include?(type)
+          raise ArgumentError, 'association owner must be Default or Both' \
+            unless ASSOCIATION_OWNERS.include?(owner)
+          if storage_format && !ASSOCIATION_STORAGE_FORMATS.include?(storage_format)
+            raise ArgumentError, 'association storage format must be Column or Table'
+          end
+
+          @associations ||= []
+          @associations << {
+            name: name.to_s, id: id&.to_s, target: target.to_s, type:, owner:,
+            documentation: documentation.to_s, parent_delete: parent_delete.to_sym,
+            child_delete: child_delete.to_sym, storage_format:
+          }
         end
 
         def lifecycle(event, method_name = nil, &block)
@@ -950,6 +976,7 @@ module Mxrb
         RubyApp.application_files(@root).each { load _1, true }
         project = Model::Project.open(@target, readonly: false)
         synchronize_entities(project)
+        synchronize_associations(project)
         synchronize_native_documents(project)
         project.close
         project = nil
@@ -1002,6 +1029,23 @@ module Mxrb
                          nanoflows: module_services.select { _1.native_kind == :nanoflow }
                                                    .map(&:native_definition),
                          navigation_items: module_pages.filter_map(&:navigation_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_associations(project)
+        records = Registry.all(:record).values.group_by { module_name(_1.mendix_name) }
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        records.each do |name, implementations|
+          writer.synchronize_ruby_associations!(
+            project.mpr, module_name: name,
+                         entities: implementations.map do |implementation|
+                           {
+                             name: qualified_parts(implementation.mendix_name).last,
+                             associations: implementation.associations.to_a
+                           }
+                         end
           )
         end
         project.refresh!
