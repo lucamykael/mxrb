@@ -21,7 +21,7 @@ module Mxrb
 
       # Subclasses implement these
       def decode(_doc); end
-      def to_bson;      raise NotImplementedError, "#{self.class}#to_bson not implemented"; end
+      def to_bson; raise NotImplementedError, "#{self.class}#to_bson not implemented"; end
 
       def save!
         doc = to_bson
