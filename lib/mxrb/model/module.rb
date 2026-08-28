@@ -34,6 +34,12 @@ module Mxrb
         'JavaActions$JavaAction' => 'actions/java',
         'JavaScriptActions$JavaScriptAction' => 'actions/javascript'
       }.freeze
+      PRESENTATION_DOCUMENT_ROUTES = {
+        'Forms$Layout' => 'layouts',
+        'Forms$PageTemplate' => 'page_templates',
+        'Forms$BuildingBlock' => 'building_blocks',
+        'Forms$Snippet' => 'snippets'
+      }.freeze
       DOMAIN_DOCUMENT_ROUTES = {
         'DomainModels$ViewEntitySourceDocument' => 'oql_views',
         'Enumerations$Enumeration' => 'enumerations',
@@ -41,6 +47,7 @@ module Mxrb
       }.freeze
       EDITABLE_DOCUMENT_TYPES = (
         INFRASTRUCTURE_DOCUMENT_ROUTES.keys + APPLICATION_DOCUMENT_ROUTES.keys +
+        PRESENTATION_DOCUMENT_ROUTES.keys +
         DOMAIN_DOCUMENT_ROUTES.keys
       ).freeze
 
@@ -131,6 +138,10 @@ module Mxrb
 
       def application_documents
         @application_documents ||= routed_documents(APPLICATION_DOCUMENT_ROUTES)
+      end
+
+      def presentation_documents
+        @presentation_documents ||= routed_documents(PRESENTATION_DOCUMENT_ROUTES)
       end
 
       def domain_documents

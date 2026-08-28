@@ -120,6 +120,7 @@ module Mxrb
       export_microflows(root, mod)
       export_application_documents(root, mod)
       export_infrastructure_documents(root, mod)
+      export_presentation_documents(root, mod)
       export_pages(root, mod)
       export_menus(root, mod)
       export_nanoflows(root, mod)
@@ -445,6 +446,25 @@ module Mxrb
       append_to_aggregator(File.join(application, 'application.rb'), paths)
     end
 
+    def export_presentation_documents(root, mod)
+      documents = mod.presentation_documents
+      return if documents.empty?
+
+      presentation = File.join(root, 'presentation')
+      used = {}
+      paths = documents.map do |document|
+        relative = unique_relative_path(
+          document.fetch(:route), underscore(document.fetch(:name)), used
+        )
+        write(File.join(presentation, relative), mapping_document_source(document))
+        relative
+      end
+      append_to_aggregator(
+        File.join(presentation, 'presentation.rb'), paths,
+        managed_types: documents.map { _1.fetch(:type) }
+      )
+    end
+
     def unique_relative_path(directory, base, used)
       candidate = File.join(directory, "#{base}.rb")
       suffix = 2
@@ -487,8 +507,102 @@ module Mxrb
         return code_action_declaration(document, :java) if semantic_code_action?(doc)
       when "JavaScriptActions$JavaScriptAction"
         return code_action_declaration(document, :javascript) if semantic_code_action?(doc)
+      when "Forms$Layout"
+        return layout_document_declaration(document)
+      when "Forms$PageTemplate"
+        return page_template_document_declaration(document)
+      when "Forms$BuildingBlock"
+        return building_block_document_declaration(document)
+      when "Forms$Snippet"
+        return snippet_document_declaration(document)
       end
       native_document_declaration(document)
+    end
+
+    def layout_document_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:layout_document, document, {
+        appearance: presentation_value_spec(doc['Appearance']),
+        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+        content: presentation_value_spec(doc['Content']),
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden')
+      })
+    end
+
+    def page_template_document_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:page_template_document, document, {
+        appearance: presentation_value_spec(doc['Appearance']),
+        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+        display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
+        documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        image: presentation_value_spec(doc['ImageData']),
+        layout_call: presentation_value_spec(doc['LayoutCall']),
+        template_category: doc.fetch('TemplateCategory', ''),
+        template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
+        template_type: presentation_value_spec(doc['TemplateType'])
+      })
+    end
+
+    def building_block_document_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:building_block_document, document, {
+        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+        display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
+        documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        image: presentation_value_spec(doc['ImageData']), platform: doc.fetch('Platform', ''),
+        template_category: doc.fetch('TemplateCategory', ''),
+        template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
+        widgets: presentation_value_spec(doc['Widgets'])
+      })
+    end
+
+    def snippet_document_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:snippet_document, document, {
+        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        parameters: presentation_value_spec(doc['Parameters']),
+        snippet_type: doc.fetch('Type', ''), variables: presentation_value_spec(doc['Variables']),
+        widgets: presentation_value_spec(doc['Widgets'])
+      })
+    end
+
+    def presentation_value_spec(value)
+      case value
+      when BSON::Binary
+        { binary: Base64.strict_encode64(value.data), subtype: value.type.to_sym }
+      when Array
+        presentation_array_spec(value)
+      when Hash
+        presentation_hash_spec(value)
+      else
+        value
+      end
+    end
+
+    def presentation_array_spec(value)
+      return value.map { presentation_value_spec(_1) } unless value.first.is_a?(Integer)
+
+      parsed = IO::BsonCodec.parse_array(value)
+      {
+        collection: parsed.fetch(:items).map { presentation_value_spec(_1) },
+        marker: parsed.fetch(:marker)
+      }
+    end
+
+    def presentation_hash_spec(value)
+      if value['$Type']
+        fields = value.reject { |key, _| %w[$ID $Type].include?(key) }
+                      .transform_values { presentation_value_spec(_1) }
+        return { node_type: value.fetch('$Type'), id: document_id(value), fields: }
+      end
+
+      { map: value.transform_values { presentation_value_spec(_1) } }
     end
 
     def code_action_declaration(document, language)
