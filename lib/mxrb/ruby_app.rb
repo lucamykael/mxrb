@@ -20,7 +20,7 @@ module Mxrb
       'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
-    ARTIFACT_DIRECTORIES = %w[enumerations models dtos services pages].freeze
+    ARTIFACT_DIRECTORIES = %w[constants enumerations models dtos services pages].freeze
 
     def self.application_files(root)
       ARTIFACT_DIRECTORIES.flat_map do |directory|
@@ -132,6 +132,7 @@ module Mxrb
       module_function
 
       def reset!
+        @constants = {}
         @enumerations = {}
         @records = {}
         @services = {}
@@ -178,7 +179,7 @@ module Mxrb
       def collection(kind)
         reset! unless defined?(@records) && @records
         {
-          enumeration: @enumerations, record: @records, service: @services,
+          constant: @constants, enumeration: @enumerations, record: @records, service: @services,
           page: @pages, adapter: @adapters,
           java_custom_action: @java_custom_actions
         }.fetch(kind)
@@ -348,6 +349,91 @@ module Mxrb
           {
             name: @mendix_name.to_s.split('.', 2).last, id: @mendix_id.to_s,
             documentation: @documentation.to_s, values: Array(@values)
+          }
+        end
+      end
+    end
+
+    # Editable Mendix constant definition. Private defaults are omitted from
+    # generated source and can be supplied locally through process/.env values.
+    class Constant
+      OPTION_UNSET = Object.new.freeze
+
+      class << self
+        attr_reader :mendix_id
+
+        def inherited(child)
+          super
+          child.instance_variable_set(:@documentation, '')
+          child.instance_variable_set(:@type, :string)
+          child.instance_variable_set(:@default_supplied, false)
+          child.instance_variable_set(:@default_value, nil)
+          child.instance_variable_set(:@exposed_to_client, false)
+          child.instance_variable_set(:@excluded, false)
+          child.instance_variable_set(:@export_level, 'Hidden')
+        end
+
+        def mendix_name(value = nil, id: nil)
+          return @mendix_name unless value
+
+          @mendix_name = value.to_s
+          @mendix_id = id.to_s
+          Registry.register(:constant, @mendix_name, self)
+        end
+
+        def documentation(value = OPTION_UNSET)
+          return @documentation.to_s if value.equal?(OPTION_UNSET)
+
+          @documentation = value.to_s
+        end
+
+        def type(value = OPTION_UNSET)
+          return @type if value.equal?(OPTION_UNSET)
+
+          @type = value.to_sym
+        end
+
+        def default(value = OPTION_UNSET)
+          return @default_value if value.equal?(OPTION_UNSET)
+
+          @default_supplied = true
+          @default_value = value
+        end
+
+        def default_from_env(name)
+          default ENV.fetch(name.to_s)
+        end
+
+        def preserve_default!
+          @default_supplied = false
+          @default_value = nil
+        end
+
+        def exposed_to_client(value = OPTION_UNSET)
+          return @exposed_to_client == true if value.equal?(OPTION_UNSET)
+
+          @exposed_to_client = value == true
+        end
+
+        def excluded(value = OPTION_UNSET)
+          return @excluded == true if value.equal?(OPTION_UNSET)
+
+          @excluded = value == true
+        end
+
+        def export_level(value = OPTION_UNSET)
+          return @export_level.to_s if value.equal?(OPTION_UNSET)
+
+          @export_level = value.to_s
+        end
+
+        def native_definition
+          {
+            name: @mendix_name.to_s.split('.', 2).last, id: @mendix_id.to_s,
+            documentation: @documentation.to_s, type: @type || :string,
+            default_supplied: @default_supplied == true, default_value: @default_value,
+            exposed_to_client: @exposed_to_client == true, excluded: @excluded == true,
+            export_level: @export_level.to_s
           }
         end
       end
@@ -1024,11 +1110,15 @@ module Mxrb
 
       def synchronize!
         Registry.reset!
-        RubyApp.application_files(@root).each { load _1, true }
+        Environment.load(root: @root).with do
+          RubyApp.application_files(@root).each { load _1, true }
+        end
         project = Model::Project.open(@target, readonly: false)
+        synchronize_constant_definitions(project)
         synchronize_enumeration_definitions(project)
         synchronize_entities(project)
         synchronize_associations(project)
+        prune_constants(project)
         prune_enumerations(project)
         synchronize_native_documents(project)
         project.close
@@ -1080,6 +1170,60 @@ module Mxrb
           )
         end
         project.refresh!
+      end
+
+      def synchronize_constant_definitions(project)
+        constants = Registry.all(:constant).values.group_by do |implementation|
+          module_name(implementation.mendix_name)
+        end
+        return if constants.empty?
+
+        validate_constant_renames!(project)
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        constants.each do |name, implementations|
+          writer.synchronize_ruby_constants!(
+            project.mpr, module_name: name,
+                         constants: implementations.map(&:native_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def validate_constant_renames!(project)
+        source_by_id = @manifest.modules.flat_map { _1.fetch('constants', []) }
+                                .to_h { [_1.fetch('id', '').to_s, _1] }
+        Registry.all(:constant).each_value do |implementation|
+          id = implementation.mendix_id.to_s
+          source = source_by_id[id]
+          next unless source && source.fetch('name') != implementation.mendix_name
+
+          artifact = project.find_artifact(source.fetch('name'))
+          incoming = artifact ? project.references_to(artifact) : []
+          next if incoming.empty?
+
+          raise ValidationError,
+                "cannot rename constant #{source.fetch('name')}: " \
+                "#{incoming.size} incoming reference(s)"
+        end
+      end
+
+      def prune_constants(project)
+        registered = Registry.all(:constant)
+        registered_ids = registered.values.map(&:mendix_id).reject(&:empty?)
+        @manifest.modules.flat_map { _1.fetch('constants', []) }.each do |source|
+          retained = registered.key?(source.fetch('name')) ||
+                     registered_ids.include?(source.fetch('id', '').to_s)
+          next if retained
+
+          plan = project.plan_remove(source.fetch('name'))
+          unless plan.safe?
+            raise ValidationError,
+                  "cannot remove constant #{source.fetch('name')}: " \
+                  "#{plan.incoming.size} incoming reference(s), #{plan.children.size} child unit(s)"
+          end
+
+          plan.apply!
+        end
       end
 
       def prune_enumerations(project)

@@ -5,6 +5,53 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Ruby application internal contracts' do
+  it 'covers constant DSL defaults, environment values, and type validation' do
+    implementation = Class.new(Mxrb::RubyApp::Constant)
+    expect(implementation.mendix_name).to be_nil
+    expect(implementation.documentation).to eq('')
+    expect(implementation.type).to eq(:string)
+    expect(implementation.default).to be_nil
+    expect(implementation.exposed_to_client).to be(false)
+    expect(implementation.excluded).to be(false)
+    expect(implementation.export_level).to eq('Hidden')
+    implementation.mendix_name 'App.Secret', id: '11111111-1111-4111-8111-111111111111'
+    implementation.documentation 'Local secret'
+    implementation.type :string
+    implementation.exposed_to_client false
+    implementation.excluded true
+    implementation.export_level 'Public'
+    previous = ENV['MXRB_SPEC_CONSTANT_DSL']
+    ENV['MXRB_SPEC_CONSTANT_DSL'] = 'fixture-value'
+    implementation.default_from_env 'MXRB_SPEC_CONSTANT_DSL'
+    expect(implementation.native_definition).to include(
+      name: 'Secret', default_supplied: true, default_value: 'fixture-value',
+      exposed_to_client: false, excluded: true, export_level: 'Public'
+    )
+    implementation.preserve_default!
+    expect(implementation.native_definition).to include(default_supplied: false, default_value: nil)
+
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    expect(exporter.send(:constant_type, 'DataType' => 'Boolean')).to eq(:boolean)
+    expect do
+      exporter.send(:constant_type, 'Name' => 'Broken', 'DataType' => 'Object')
+    end.to raise_error(Mxrb::ValidationError, /unsupported native constant type/)
+
+    Mxrb::RubyApp::Registry.reset!
+    renamed = Class.new(Mxrb::RubyApp::Constant)
+    renamed.mendix_name 'App.NewName', id: '22222222-2222-4222-8222-222222222222'
+    synchronizer = Mxrb::RubyApp::Synchronizer.allocate
+    synchronizer.instance_variable_set(
+      :@manifest,
+      double(modules: [{ 'constants' => [{
+        'name' => 'App.MissingOldName', 'id' => '22222222-2222-4222-8222-222222222222'
+      }] }])
+    )
+    project = double(find_artifact: nil)
+    expect(synchronizer.send(:validate_constant_renames!, project)).to be_nil
+  ensure
+    previous.nil? ? ENV.delete('MXRB_SPEC_CONSTANT_DSL') : ENV['MXRB_SPEC_CONSTANT_DSL'] = previous
+  end
+
   it 'covers enumeration DSL defaults, caption filters, and generic unsafe removal' do
     implementation = Class.new(Mxrb::RubyApp::Enumeration)
     expect(implementation.mendix_name).to be_nil

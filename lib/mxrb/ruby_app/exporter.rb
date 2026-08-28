@@ -17,6 +17,10 @@ module Mxrb
         'badrequest' => 400, 'unauthorized' => 401, 'forbidden' => 403,
         'notfound' => 404, 'conflict' => 409, 'internalservererror' => 500
       }.freeze
+      CONSTANT_TYPES = {
+        'string' => :string, 'integer' => :integer, 'boolean' => :boolean,
+        'decimal' => :decimal, 'datetime' => :datetime
+      }.freeze
       RUBY_KEYWORDS = %w[
         alias and begin break case class def defined do else elsif end ensure false
         for if in module next nil not or redo rescue retry return self super then
@@ -155,6 +159,7 @@ module Mxrb
           'dtos' => entities.select { _1['dto'] },
           'services' => microflows, 'nanoflows' => nanoflows, 'pages' => pages,
           'endpoints' => endpoints,
+          'constants' => mod.constants.map { export_constant(mod, _1, namespace, root) },
           'enumerations' => mod.enumerations.map { export_enumeration(mod, _1, namespace, root) },
           'associations' => mod.associations.map { association_manifest(mod, _1) },
           'scheduled_events' => mod.scheduled_events.map { runtime_value(_1) }
@@ -730,6 +735,51 @@ module Mxrb
         manifest
       end
 
+      def export_constant(mod, constant, namespace, root)
+        name = constant['Name'].to_s
+        class_name = ruby_constant(name)
+        id = native_identifier(constant['$ID'])
+        qualified = "#{mod.name}.#{name}"
+        relative = embedded_constant_path(id, qualified) ||
+                   File.join('app', 'constants', root, "#{underscore(name)}.rb")
+        exposed = constant['ExposedToClient'] == true
+        manifest = {
+          'name' => qualified, 'id' => id,
+          'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
+          'documentation' => constant['Documentation'].to_s,
+          'type' => constant_type(constant).to_s,
+          'exposed_to_client' => exposed, 'excluded' => constant['Excluded'] == true,
+          'export_level' => (constant['ExportLevel'] || 'Hidden').to_s,
+          'default_redacted' => !exposed
+        }
+        manifest['default'] = constant['DefaultValue'].to_s if exposed
+        write(relative, constant_source(namespace, class_name, manifest))
+        add_coverage(id, qualified, 'constant', relative, 'executable_bidirectional')
+        manifest
+      end
+
+      def embedded_constant_path(id, qualified)
+        Array(@embedded_sources).find do |file|
+          next unless file.fetch(:path).match?(%r{\Aapp/constants/.+\.rb\z})
+
+          source = file.fetch(:contents).to_s
+          matches_id = source.match?(
+            /^\s*mendix_name\s+['"][^'"]+['"],\s+id:\s+['"]#{Regexp.escape(id)}['"]/
+          )
+          matches_id ||
+            source.match?(/^\s*mendix_name\s+['"]#{Regexp.escape(qualified)}['"]/)
+        end&.fetch(:path)
+      end
+
+      def constant_type(constant)
+        raw = constant.dig('Type', '$Type') || constant['DataType']
+        normalized = raw.to_s.delete_prefix('DataTypes$').delete_suffix('Type').downcase
+        CONSTANT_TYPES.fetch(normalized) do
+          raise ValidationError,
+                "unsupported native constant type #{raw.inspect} for #{constant['Name']}"
+        end
+      end
+
       def embedded_enumeration_path(id, qualified)
         Array(@embedded_sources).find do |file|
           next unless file.fetch(:path).match?(%r{\Aapp/enumerations/.+\.rb\z})
@@ -849,6 +899,29 @@ module Mxrb
               mendix_name #{enumeration.fetch('name').inspect}, id: #{enumeration.fetch('id').inspect}
               documentation #{enumeration.fetch('documentation').inspect}
           #{declarations.join("\n")}
+            end
+          end
+        RUBY
+      end
+
+      def constant_source(namespace, class_name, constant)
+        default = if constant.fetch('default_redacted')
+                    '    preserve_default!'
+                  else
+                    "    default #{constant.fetch('default').inspect}"
+                  end
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module #{namespace}
+            class #{class_name} < Mxrb::RubyApp::Constant
+              mendix_name #{constant.fetch('name').inspect}, id: #{constant.fetch('id').inspect}
+              documentation #{constant.fetch('documentation').inspect}
+              type #{constant.fetch('type').to_sym.inspect}
+              exposed_to_client #{constant.fetch('exposed_to_client')}
+              excluded #{constant.fetch('excluded')}
+              export_level #{constant.fetch('export_level').inspect}
+          #{default}
             end
           end
         RUBY

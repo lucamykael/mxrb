@@ -166,6 +166,59 @@ RSpec.describe 'Ruby-first native materialization' do
     mpr&.close
   end
 
+  def define_constant_source(path)
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:App) do
+        constant :PrivateToken, type: :string, value: 'private-fixture-value' do
+          documentation 'Private token'
+        end
+        constant :PublicLimit, type: :integer, value: 10 do
+          documentation 'Public limit'
+        end
+      end
+    end
+  end
+
+  def enrich_native_constants(path) # rubocop:disable Metrics/AbcSize
+    mpr = Mxrb::IO::MprFile.open(path, readonly: false)
+    pairs = mpr.all_units.filter_map do |raw|
+      document = mpr.parse_contents(raw)
+      [raw, document] if document['$Type'] == 'Constants$Constant'
+    end
+    constants = pairs.to_h { |raw, document| [document.fetch('Name'), [raw, document]] }
+    private_raw, private_doc = constants.fetch('PrivateToken')
+    private_doc['ExposedToClient'] = false
+    private_doc['Excluded'] = false
+    private_doc['VendorMetadata'] = { 'Keep' => true }
+    private_doc.fetch('Type')['VendorTypeMetadata'] = 'keep-type'
+    public_raw, public_doc = constants.fetch('PublicLimit')
+    public_doc['ExposedToClient'] = true
+    public_doc['Excluded'] = false
+    mpr.transaction do
+      mpr.update_unit(private_raw.fetch('UnitID'), private_doc)
+      mpr.update_unit(public_raw.fetch('UnitID'), public_doc)
+      module_raw = mpr.units_by_containment('Modules').find do |raw|
+        mpr.parse_contents(raw)['Name'] == 'App'
+      end
+      mpr.insert_unit(
+        container_uuid: module_raw.fetch('UnitID'), containment_name: 'Documents',
+        contents_doc: {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Vendor$ConstantConsumer',
+          'Name' => 'PrivateConsumer', 'Expression' => '@App.PrivateToken'
+        }
+      )
+    end
+  ensure
+    mpr&.close
+  end
+
+  def native_constant(path, name)
+    Mxrb.open(path) do |project|
+      project.modules.find { _1.name == 'App' }.constants.find { _1['Name'] == name }
+    end
+  end
+
   it 'materializes new Ruby flows, a connected page, navigation, and a stable round trip' do
     Dir.mktmpdir('mxrb-ruby-native-') do |dir|
       source = File.join(dir, 'Source.mpr')
@@ -362,6 +415,101 @@ RSpec.describe 'Ruby-first native materialization' do
       File.delete(enumeration_paths.fetch('App.FulfillmentStatus'))
       expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
         .to raise_error(Mxrb::ValidationError, /cannot remove enumeration.*incoming reference/)
+    end
+  end
+
+  it 'round-trips Ruby-native constants without exporting private defaults' do
+    Dir.mktmpdir('mxrb-ruby-constants-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      ruby_root = File.join(dir, 'ruby-app')
+      compiled = File.join(dir, 'Compiled.mpr')
+      round_trip = File.join(dir, 'round-trip')
+      recompiled = File.join(dir, 'Recompiled.mpr')
+      define_constant_source(source)
+      enrich_native_constants(source)
+      private_id = Mxrb::IO::BsonCodec.extract_id(native_constant(source, 'PrivateToken')['$ID'])
+      public_id = Mxrb::IO::BsonCodec.extract_id(native_constant(source, 'PublicLimit')['$ID'])
+      Mxrb::Exporter.new(source, ruby_root, mode: :ruby).export!
+
+      private_path = File.join(ruby_root, 'app', 'constants', 'app', 'private_token.rb')
+      public_path = File.join(ruby_root, 'app', 'constants', 'app', 'public_limit.rb')
+      manifest_path = File.join(ruby_root, '.mxrb', 'ruby-app.json')
+      expect(File.read(private_path)).to include('preserve_default!')
+      expect(File.read(private_path)).not_to include('private-fixture-value')
+      expect(File.read(manifest_path)).not_to include('private-fixture-value')
+      expect(File.read(public_path)).to include('default "10"')
+
+      private_source = File.read(private_path).sub('excluded false', 'excluded true')
+      File.write(private_path, private_source)
+      public_source = File.read(public_path).sub('App.PublicLimit', 'App.MaximumItems')
+                          .sub('documentation "Public limit"', 'documentation "Ruby limit"')
+                          .sub('type :integer', 'type :decimal')
+                          .sub('default "10"', 'default "42.5"')
+      File.write(public_path, public_source)
+      generated_path = File.join(ruby_root, 'app', 'constants', 'app', 'generated_secret.rb')
+      File.write(generated_path, <<~RUBY)
+        module App
+          class GeneratedSecret < Mxrb::RubyApp::Constant
+            mendix_name 'App.GeneratedSecret', id: '11111111-1111-4111-8111-111111111111'
+            type :string
+            default_from_env 'MXRB_SPEC_GENERATED_SECRET'
+          end
+        end
+      RUBY
+      File.write(File.join(ruby_root, 'app', 'constants', 'app', 'empty_default.rb'), <<~RUBY)
+        module App
+          class EmptyDefault < Mxrb::RubyApp::Constant
+            mendix_name 'App.EmptyDefault'
+            type :boolean
+          end
+        end
+      RUBY
+
+      previous = ENV['MXRB_SPEC_GENERATED_SECRET']
+      ENV['MXRB_SPEC_GENERATED_SECRET'] = 'local-fixture-secret'
+      Mxrb::RubyApp.compile(ruby_root, compiled)
+      changed = native_constant(compiled, 'MaximumItems')
+      private_changed = native_constant(compiled, 'PrivateToken')
+      expect(Mxrb::IO::BsonCodec.extract_id(changed['$ID'])).to eq(public_id)
+      expect(changed).to include('Documentation' => 'Ruby limit', 'DefaultValue' => '42.5')
+      expect(changed.dig('Type', '$Type')).to eq('DataTypes$DecimalType')
+      expect(Mxrb::IO::BsonCodec.extract_id(private_changed['$ID'])).to eq(private_id)
+      expect(private_changed).to include(
+        'DefaultValue' => 'private-fixture-value', 'Excluded' => true,
+        'VendorMetadata' => { 'Keep' => true }
+      )
+      expect(private_changed.dig('Type', 'VendorTypeMetadata')).to eq('keep-type')
+      expect(native_constant(compiled, 'GeneratedSecret'))
+        .to include('DefaultValue' => 'local-fixture-secret')
+      expect(native_constant(compiled, 'EmptyDefault')).to include('DefaultValue' => '')
+
+      Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
+      round_manifest = JSON.parse(File.read(File.join(round_trip, '.mxrb', 'ruby-app.json')))
+      constant_paths = round_manifest.fetch('modules').first.fetch('constants').to_h do |entry|
+        [entry.fetch('name'), File.join(round_trip, entry.fetch('path'))]
+      end
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(Mxrb::IO::BsonCodec.extract_id(native_constant(recompiled, 'MaximumItems')['$ID']))
+        .to eq(public_id)
+      expect(native_constant(recompiled, 'PrivateToken')['DefaultValue'])
+        .to eq('private-fixture-value')
+
+      private_round_path = constant_paths.fetch('App.PrivateToken')
+      private_round_source = File.read(private_round_path)
+      File.write(private_round_path, private_round_source.sub('App.PrivateToken', 'App.RenamedPrivate'))
+      expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
+        .to raise_error(Mxrb::ValidationError, /cannot rename constant.*incoming reference/)
+      File.write(private_round_path, private_round_source)
+
+      File.delete(constant_paths.fetch('App.MaximumItems'))
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(native_constant(recompiled, 'MaximumItems')).to be_nil
+
+      File.delete(constant_paths.fetch('App.PrivateToken'))
+      expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
+        .to raise_error(Mxrb::ValidationError, /cannot remove constant.*incoming reference/)
+    ensure
+      previous.nil? ? ENV.delete('MXRB_SPEC_GENERATED_SECRET') : ENV['MXRB_SPEC_GENERATED_SECRET'] = previous
     end
   end
 end

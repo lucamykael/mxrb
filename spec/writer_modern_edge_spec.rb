@@ -523,5 +523,90 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
       )
     end.to raise_error(Mxrb::ValidationError, /identity mismatch.*value Open/)
   end
+
+  it 'validates and incrementally merges modern and legacy Ruby constants' do
+    missing_mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.synchronize_ruby_constants!(missing_mpr, module_name: 'Missing', constants: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing/)
+
+    first_id = '11111111-1111-4111-8111-111111111111'
+    second_id = '22222222-2222-4222-8222-222222222222'
+    expect do
+      writer.send(
+        :validate_ruby_constants!, 'App',
+        [{ name: 'Value', id: first_id }, { name: 'Value', id: second_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /names Value/)
+    expect do
+      writer.send(
+        :validate_ruby_constants!, 'App',
+        [{ name: 'Value', id: first_id }, { name: 'Other', id: first_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /ids #{first_id}/)
+    expect do
+      writer.send(:validate_ruby_constants!, 'App', [{ name: 'Value', id: 'invalid' }])
+    end.to raise_error(Mxrb::ValidationError, /invalid native id/)
+    expect do
+      writer.send(:validate_ruby_constants!, 'App', [{ name: 'Value', type: :object }])
+    end.to raise_error(Mxrb::ValidationError, /unsupported Ruby constant type/)
+
+    type_id = '33333333-3333-4333-8333-333333333333'
+    modern = writer.send(
+      :ruby_constant_doc,
+      {
+        name: 'Limit', type: :decimal, documentation: 'Changed', default_supplied: false,
+        exposed_to_client: false, excluded: true, export_level: 'Public'
+      },
+      previous: {
+        '$ID' => first_id, '$Type' => 'Constants$Constant', 'Name' => 'Limit',
+        'DefaultValue' => 'private-value', 'ExposedToClient' => false,
+        'Type' => {
+          '$ID' => type_id, '$Type' => 'DataTypes$IntegerType', 'VendorType' => 'keep'
+        },
+        'VendorMetadata' => 'keep'
+      }
+    )
+    expect(modern).to include(
+      '$ID' => first_id, 'DefaultValue' => 'private-value', 'Excluded' => true,
+      'ExportLevel' => 'Public', 'VendorMetadata' => 'keep'
+    )
+    expect(modern.fetch('Type')).to include(
+      '$ID' => type_id, '$Type' => 'DataTypes$DecimalType', 'VendorType' => 'keep'
+    )
+
+    legacy = writer.send(
+      :ruby_constant_doc,
+      { name: 'Enabled', type: :boolean, default_supplied: true, default_value: true },
+      previous: {
+        '$ID' => second_id, '$Type' => 'Constants$Constant', 'Name' => 'Enabled',
+        'DataType' => 'String', 'DefaultValue' => 'old', 'LegacyMetadata' => 'keep'
+      },
+      legacy: true
+    )
+    expect(legacy).to include(
+      'DataType' => 'Boolean', 'DefaultValue' => 'true', 'LegacyMetadata' => 'keep'
+    )
+    expect(legacy).not_to have_key('Type')
+
+    hybrid = writer.send(
+      :ruby_constant_doc,
+      { name: 'Hybrid', type: :string },
+      previous: {
+        '$ID' => first_id, 'Type' => { '$Type' => 'DataTypes$IntegerType' },
+        'DataType' => 'Integer', 'DefaultValue' => '1'
+      }
+    )
+    expect(hybrid).to include('DataType' => 'Integer')
+
+    expect do
+      writer.send(
+        :ruby_constant_doc,
+        { name: 'Private', exposed_to_client: true, default_supplied: false },
+        previous: { '$ID' => first_id, 'ExposedToClient' => false, 'DefaultValue' => 'secret' }
+      )
+    end.to raise_error(Mxrb::ValidationError, /explicit safe default/)
+  end
 end
 # rubocop:enable Metrics/BlockLength

@@ -138,6 +138,47 @@ module Mxrb
       self
     end
 
+    # Incrementally applies Ruby constant declarations without revealing or
+    # replacing private defaults unless the declaration supplies a new value.
+    def synchronize_ruby_constants!(mpr, module_name:, constants:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      declarations = Array(constants)
+      validate_ruby_constants!(module_name, declarations)
+      module_id = raw_module.fetch("UnitID")
+      existing = collect_documents(mpr, module_id).filter_map do |raw|
+        document = mpr.parse_contents(raw)
+        [raw, document] if document["$Type"] == "Constants$Constant"
+      end
+      by_id = existing.to_h { |raw, doc| [IO::BsonCodec.extract_id(doc["$ID"]) || raw["UnitID"], [raw, doc]] }
+      by_name = existing.to_h { |raw, doc| [doc["Name"].to_s, [raw, doc]] }
+      legacy = existing.any? { |_raw, doc| doc.key?("DataType") && !doc.key?("Type") } ||
+               mpr.mendix_version.to_s.split('.').first.to_i < 7
+
+      mpr.transaction do
+        declarations.each do |declaration|
+          id = declaration[:id].to_s
+          named = by_name[declaration.fetch(:name).to_s]
+          validate_ruby_identity!(id, by_id, named, "constant #{module_name}.#{declaration.fetch(:name)}")
+          pair = (!id.empty? && by_id[id]) || named
+          raw, previous = pair
+          document = ruby_constant_doc(declaration, previous:, legacy:)
+          if raw
+            mpr.update_unit(raw.fetch("UnitID"), document)
+          else
+            unit_id = id.empty? ? nil : id
+            mpr.insert_unit(
+              container_uuid: module_id, containment_name: "Documents",
+              contents_doc: document, unit_uuid: unit_id
+            )
+          end
+        end
+      end
+      self
+    end
+
     # Canonical editor-shape serializers shared by incremental semantic plans.
     def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
       entity_doc(entity, module_name, previous, index)
@@ -148,6 +189,72 @@ module Mxrb
     end
 
     private
+
+    def validate_ruby_constants!(module_name, declarations)
+      duplicate_names = declarations.group_by { _1.fetch(:name).to_s }.select { |_key, values| values.size > 1 }.keys
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      duplicate_ids = ids.tally.select { |_key, count| count > 1 }.keys
+      unless duplicate_names.empty? && duplicate_ids.empty?
+        details = []
+        details << "names #{duplicate_names.join(', ')}" unless duplicate_names.empty?
+        details << "ids #{duplicate_ids.join(', ')}" unless duplicate_ids.empty?
+        raise ValidationError, "duplicate Ruby constants in #{module_name}: #{details.join('; ')}"
+      end
+
+      declarations.each do |declaration|
+        validate_ruby_uuid!(declaration[:id], "constant #{module_name}.#{declaration.fetch(:name)}")
+        type = declaration.fetch(:type, :string).to_sym
+        next if CONSTANT_TYPE_MAP.key?(type)
+
+        raise ValidationError,
+              "unsupported Ruby constant type #{type.inspect} for " \
+              "#{module_name}.#{declaration.fetch(:name)}"
+      end
+    end
+
+    def ruby_constant_doc(declaration, previous: nil, legacy: false)
+      current = previous || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(current["$ID"]) || SecureRandom.uuid if id.empty?
+      type = declaration.fetch(:type, :string).to_sym
+      default_value = ruby_constant_default(declaration, current)
+      document = current.merge(
+        "$ID" => id,
+        "$Type" => current["$Type"] || "Constants$Constant",
+        "Name" => declaration.fetch(:name).to_s,
+        "Documentation" => declaration.fetch(:documentation, '').to_s,
+        "Excluded" => declaration.fetch(:excluded, false) == true,
+        "DefaultValue" => default_value
+      )
+      if legacy && !current.key?("Type")
+        document["DataType"] = CONSTANT_TYPE_MAP.fetch(type).delete_prefix("DataTypes$").delete_suffix("Type")
+      else
+        previous_type = current["Type"].is_a?(Hash) ? current["Type"] : {}
+        document["Type"] = previous_type.merge(
+          "$ID" => IO::BsonCodec.extract_id(previous_type["$ID"]) || SecureRandom.uuid,
+          "$Type" => CONSTANT_TYPE_MAP.fetch(type)
+        )
+        document["ExportLevel"] = declaration.fetch(:export_level, 'Hidden').to_s
+        document["ExposedToClient"] = declaration.fetch(:exposed_to_client, false) == true
+        document.delete("DataType") unless current.key?("DataType")
+      end
+      document
+    end
+
+    def ruby_constant_default(declaration, current)
+      supplied = declaration.fetch(:default_supplied, false) == true
+      requested_exposure = declaration.fetch(:exposed_to_client, false) == true
+      previous_private = !current.empty? && current["ExposedToClient"] != true
+      previous_value = current.fetch("DefaultValue", '').to_s
+      if requested_exposure && previous_private && !supplied && !previous_value.empty?
+        raise ValidationError,
+              "cannot expose constant #{declaration.fetch(:name)} without an explicit safe default"
+      end
+      return declaration[:default_value].to_s if supplied
+      return previous_value unless current.empty?
+
+      ''
+    end
 
     def validate_ruby_enumerations!(module_name, declarations)
       duplicate_names = declarations.group_by { _1.fetch(:name).to_s }.select { |_key, values| values.size > 1 }.keys
