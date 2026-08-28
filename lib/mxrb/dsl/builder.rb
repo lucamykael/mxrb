@@ -1509,19 +1509,63 @@ module Mxrb
 
       def call_rest(method:, location:, location_parameters: [], headers: {},
                     request_mapping: nil, request_variable: nil,
+                    request_body: nil, request_parameters: [],
                     result_mapping: nil, as: nil, result_entity: nil,
                     timeout: nil, commit: :yes_without_events,
+                    result_content_type: :json, force_single: false, single: false,
+                    object_handling: :create, parameter_variable: nil,
                     error_result: :http_response, error: :rollback)
         _acts << {
           type: :call_rest, method: method.to_s, location: location.to_s,
           location_parameters: Array(location_parameters),
           headers: headers.transform_keys(&:to_s),
-          request_mapping: request_mapping&.to_s,
-          request_variable: request_variable&.to_s,
-          result_mapping: result_mapping&.to_s, variable: as&.to_s,
-          result_entity: result_entity&.to_s, timeout: timeout&.to_s,
-          commit: commit.to_s, error_result: error_result.to_s,
+          request_mapping: request_mapping.to_s,
+          request_variable: request_variable.to_s,
+          request_body: _optional_string(request_body),
+          request_parameters: Array(request_parameters),
+          result_mapping: result_mapping.to_s, variable: as.to_s,
+          result_entity: result_entity.to_s, timeout: timeout.to_s,
+          commit: commit.to_s, result_content_type: result_content_type.to_s,
+          force_single: force_single == true, single: single == true,
+          object_handling: object_handling.to_s,
+          parameter_variable: parameter_variable.to_s,
+          error_result: error_result.to_s,
           error: error.to_s
+        }
+      end
+
+      def execute_database_query(query = nil, as: nil, dynamic_query: nil,
+                                 parameters: {}, connection_parameters: {},
+                                 error: :rollback)
+        _acts << {
+          type: :execute_database_query, query: query.to_s,
+          dynamic_query: dynamic_query.to_s, variable: as&.to_s,
+          parameters: parameters.map { |name, value| { name: name.to_s, value: value } },
+          connection_parameters: connection_parameters.map do |name, value|
+            { name: name.to_s, value: value }
+          end,
+          error: error.to_s
+        }
+      end
+
+      def import_xml(document, mapping:, as:, result_entity:, validate: false,
+                     content_type: :xml, commit: :yes_without_events,
+                     force_single: false, single: false, object_handling: :create,
+                     parameter_variable: nil, error: :rollback)
+        _acts << {
+          type: :import_xml, variable: document.to_s, mapping: mapping.to_s,
+          output: as.to_s, result_entity: result_entity.to_s,
+          validate: validate == true, content_type: content_type.to_s,
+          commit: commit.to_s, force_single: force_single == true,
+          single: single == true, object_handling: object_handling.to_s,
+          parameter_variable: parameter_variable.to_s, error: error.to_s
+        }
+      end
+
+      def download_file(variable, show_in_browser: false, error: :rollback)
+        _acts << {
+          type: :download_file, variable: variable.to_s,
+          show_in_browser: show_in_browser == true, error: error.to_s
         }
       end
 
@@ -1580,6 +1624,10 @@ module Mxrb
 
       private
 
+      def _optional_string(value)
+        value&.to_s
+      end
+
       def _build_members(set_hash, &block)
         if block
           sb = SetBuilder.new
@@ -1623,7 +1671,7 @@ module Mxrb
         BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
       end
 
-      def return_type(t) = (@return_type = t.to_s)
+      def return_type(type) = (@return_type = type.is_a?(Hash) ? type : type.to_s)
       def documentation(d) = (@doc = d)
       def allow_concurrent_execution(value = true) = (@allow_concurrent_execution = !!value)
       def apply_entity_access(value = true) = (@apply_entity_access = !!value)

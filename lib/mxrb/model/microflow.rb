@@ -10,7 +10,7 @@ module Mxrb
       attr_reader :name, :documentation, :return_variable_name,
                   :allow_concurrent_execution, :apply_entity_access, :mark_as_used, :excluded,
                   :allowed_module_roles, :parameters, :return_type,
-                  :objects, :flows
+                  :return_type_document, :objects, :flows
 
       def decode(doc)
         @name                       = doc["Name"] || doc["name"]
@@ -23,6 +23,7 @@ module Mxrb
         @allowed_module_roles       = parse_array(doc["AllowedModuleRoles"])
         @parameters                 = extract_parameters(doc)
         return_doc                  = doc["MicroflowReturnType"] || doc["ReturnType"]
+        @return_type_document       = return_doc if return_doc.is_a?(Hash)
         @return_type                = return_doc.is_a?(Hash) ? (return_doc["$Type"] || return_doc["Type"]) : return_doc
 
         obj_col = doc["ObjectCollection"] || {}

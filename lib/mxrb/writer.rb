@@ -2898,6 +2898,7 @@ module Mxrb
       generated_flows.concat(
         original_flows.select { _1["$Type"] == "Microflows$AnnotationFlow" }
       )
+      validate_flow_endpoints!(generated_objects, generated_flows)
 
       generated_collection["Objects"] = IO::BsonCodec.build_array(generated_objects)
       target["ObjectCollection"] = generated_collection
@@ -2961,6 +2962,7 @@ module Mxrb
     end
 
     def ordered_flow_objects(objects, flows)
+      flows = flows.reject { _1["$Type"] == "Microflows$AnnotationFlow" }
       by_id = objects.to_h { [_1["$ID"], _1] }
       incoming = flows.group_by { _1["DestinationPointer"] }
       outgoing = flows.group_by { _1["OriginPointer"] }
@@ -2978,6 +2980,18 @@ module Mxrb
         end
       end
       result + (objects - result)
+    end
+
+    def validate_flow_endpoints!(objects, flows)
+      object_ids = all_flow_objects(objects).map { _1["$ID"] }
+      dangling = flows.find do |flow|
+        !object_ids.include?(flow["OriginPointer"]) ||
+          !object_ids.include?(flow["DestinationPointer"])
+      end
+      return unless dangling
+
+      flow_id = IO::BsonCodec.extract_id(dangling["$ID"])
+      raise ValidationError, "generated flow #{flow_id} references a missing object"
     end
 
     def flow_auxiliary_object?(object)
@@ -5141,7 +5155,103 @@ module Mxrb
         validation_feedback_action_doc(activity)
       when :call_rest
         rest_call_action_doc(activity)
+      when :execute_database_query
+        database_query_action_doc(activity)
+      when :import_xml
+        import_xml_action_doc(activity)
+      when :download_file
+        download_file_action_doc(activity)
       end
+    end
+
+    def database_query_action_doc(activity)
+      if activity[:query].to_s.empty? && activity[:dynamic_query].to_s.empty?
+        raise ValidationError, "database query action requires query or dynamic_query"
+      end
+
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "DatabaseConnector$ExecuteDatabaseQueryAction",
+        "ConnectionParameterMappings" => database_query_parameter_docs(
+          activity[:connection_parameters], "DatabaseConnector$ConnectionParameterMapping"
+        ),
+        "DynamicQuery" => member_value_expr(activity[:dynamic_query]),
+        "ErrorHandlingType" => mendix_enum(activity[:error]),
+        "OutputVariableName" => activity[:variable].to_s,
+        "ParameterMappings" => database_query_parameter_docs(
+          activity[:parameters], "DatabaseConnector$QueryParameterMapping"
+        ),
+        "Query" => activity[:query].to_s
+      }
+    end
+
+    def database_query_parameter_docs(mappings, type)
+      documents = Array(mappings).map do |mapping|
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => type,
+          "ParameterName" => mapping.fetch(:name).to_s,
+          "Value" => member_value_expr(mapping[:value])
+        }
+      end
+      IO::BsonCodec.build_array(documents, marker: 2)
+    end
+
+    def import_xml_action_doc(activity)
+      if activity[:variable].to_s.empty? || activity[:mapping].to_s.empty? ||
+         activity[:output].to_s.empty? || activity[:result_entity].to_s.empty?
+        raise ValidationError,
+              "import_xml requires document, mapping, as, and result_entity"
+      end
+
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$ImportXmlAction",
+        "ResultHandling" => {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$ResultHandling",
+          "Bind" => true,
+          "ImportMappingCall" => import_mapping_call_doc(activity),
+          "ResultVariableName" => activity[:output].to_s,
+          "VariableType" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "DataTypes$ObjectType",
+            "Entity" => activity[:result_entity].to_s
+          }
+        },
+        "IsValidationRequired" => activity[:validate] == true,
+        "XmlDocumentVariableName" => activity[:variable].to_s,
+        "ErrorHandlingType" => mendix_enum(activity[:error])
+      }
+    end
+
+    def import_mapping_call_doc(activity)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$ImportMappingCall",
+        "Commit" => mendix_enum(activity[:commit]),
+        "ContentType" => mendix_enum(activity[:content_type]),
+        "ForceSingleOccurrence" => activity[:force_single] == true,
+        "ObjectHandlingBackup" => mendix_enum(activity[:object_handling]),
+        "ParameterVariableName" => activity[:parameter_variable].to_s,
+        "Range" => {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$ConstantRange",
+          "SingleObject" => activity[:single] == true
+        },
+        "ReturnValueMapping" => activity[:mapping].to_s
+      }
+    end
+
+    def download_file_action_doc(activity)
+      raise ValidationError, "download_file requires a variable" if activity[:variable].to_s.empty?
+
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$DownloadFileAction",
+        "FileDocumentVariableName" => activity[:variable].to_s,
+        "ShowFileInBrowser" => activity[:show_in_browser] == true,
+        "ErrorHandlingType" => mendix_enum(activity[:error])
+      }
     end
 
     def rest_call_action_doc(activity)
@@ -5179,19 +5289,38 @@ module Mxrb
           "UseHttpAuthentication" => false
         },
         "ProxyConfiguration" => nil,
-        "RequestHandling" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Microflows$MappingRequestHandling",
-          "ContentType" => "Json",
-          "MappingId" => activity[:request_mapping].to_s,
-          "MappingVariableName" => activity[:request_variable].to_s
-        },
-        "RequestHandlingType" => "Mapping",
+        "RequestHandling" => rest_request_handling_doc(activity),
+        "RequestHandlingType" => activity[:request_body].nil? ? "Mapping" : "Custom",
         "RequestProxyType" => "DefaultProxy",
         "ResultHandling" => rest_result_handling_doc(activity),
         "ResultHandlingType" => "Mapping",
         "TimeOutExpression" => activity[:timeout].to_s,
         "UseRequestTimeOut" => !activity[:timeout].to_s.empty?
+      }
+    end
+
+    def rest_request_handling_doc(activity)
+      unless activity[:request_body].nil?
+        return {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$CustomRequestHandling",
+          "Template" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "Microflows$StringTemplate",
+            "Parameters" => IO::BsonCodec.build_array(
+              template_parameter_docs(activity[:request_parameters]), marker: 2
+            ),
+            "Text" => activity[:request_body].to_s
+          }
+        }
+      end
+
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$MappingRequestHandling",
+        "ContentType" => "Json",
+        "MappingId" => activity[:request_mapping].to_s,
+        "MappingVariableName" => activity[:request_variable].to_s
       }
     end
 
@@ -5204,14 +5333,14 @@ module Mxrb
           "$ID" => SecureRandom.uuid,
           "$Type" => "Microflows$ImportMappingCall",
           "Commit" => mendix_enum(activity[:commit]),
-          "ContentType" => "Json",
-          "ForceSingleOccurrence" => false,
-          "ObjectHandlingBackup" => "Create",
-          "ParameterVariableName" => "",
+          "ContentType" => mendix_enum(activity.fetch(:result_content_type, 'json')),
+          "ForceSingleOccurrence" => activity[:force_single] == true,
+          "ObjectHandlingBackup" => mendix_enum(activity.fetch(:object_handling, 'create')),
+          "ParameterVariableName" => activity[:parameter_variable].to_s,
           "Range" => {
             "$ID" => SecureRandom.uuid,
             "$Type" => "Microflows$ConstantRange",
-            "SingleObject" => false
+            "SingleObject" => activity[:single] == true
           },
           "ReturnValueMapping" => activity[:result_mapping].to_s
         },

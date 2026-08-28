@@ -57,6 +57,9 @@ module Mxrb
       Microflows$ChangeListAction
       Microflows$ValidationFeedbackAction
       Microflows$RestCallAction
+      DatabaseConnector$ExecuteDatabaseQueryAction
+      Microflows$ImportXmlAction
+      Microflows$DownloadFileAction
     ].freeze
 
     attr_reader :mode
@@ -955,7 +958,12 @@ module Mxrb
         "  parameter #{symbol(name)}, type: #{type_source}" if name && type
       end
       body = parameters
-      body << "  return_type #{symbol(flow.return_type)}" if flow.return_type.is_a?(String)
+      return_type = if flow.respond_to?(:return_type_document) && flow.return_type_document
+                      "return_type(#{native_ruby(flow.return_type_document)})"
+                    elsif flow.return_type.is_a?(String)
+                      "return_type #{symbol(flow.return_type)}"
+                    end
+      body << "  #{return_type}" if return_type
       body << "  documentation #{ruby(flow.documentation)}" unless flow.documentation.to_s.empty?
       body << "  allow_concurrent_execution #{flow.allow_concurrent_execution ? 'true' : 'false'}"
       apply_entity_access = flow.respond_to?(:apply_entity_access) && flow.apply_entity_access
@@ -1358,12 +1366,44 @@ module Mxrb
       when "Microflows$RestCallAction"
         http = action["HttpConfiguration"] || {}
         request = action["RequestHandling"] || {}
+        request_supported = case request["$Type"]
+                            when "Microflows$MappingRequestHandling"
+                              !request["MappingId"].to_s.empty?
+                            when "Microflows$CustomRequestHandling"
+                              template = request["Template"] || {}
+                              bson_items(template["Parameters"]).all? { _1["Expression"] }
+                            else
+                              false
+                            end
+        result = action["ResultHandling"] || {}
+        result_mapping = result["ImportMappingCall"] || {}
+        result_supported = action["ResultHandlingType"] == "Mapping" &&
+          !result_mapping["ReturnValueMapping"].to_s.empty? &&
+          result_mapping.dig("Range", "$Type") == "Microflows$ConstantRange"
         !http["HttpMethod"].to_s.empty? &&
           bson_items(http["HttpHeaderEntries"]).all? { _1["Key"] && _1["Value"] } &&
           bson_items(http.dig("CustomLocationTemplate", "Parameters")).all? {
             _1["Expression"]
           } &&
-          request["$Type"] == "Microflows$MappingRequestHandling"
+          request_supported && result_supported
+      when "DatabaseConnector$ExecuteDatabaseQueryAction"
+        (!action["Query"].to_s.empty? || !action["DynamicQuery"].to_s.empty?) &&
+          bson_items(action["ParameterMappings"]).all? { |mapping|
+            mapping["ParameterName"] && mapping["Value"]
+          } &&
+          bson_items(action["ConnectionParameterMappings"]).all? { |mapping|
+            mapping["ParameterName"] && mapping["Value"]
+          }
+      when "Microflows$ImportXmlAction"
+        result = action["ResultHandling"] || {}
+        mapping = result["ImportMappingCall"] || {}
+        !action["XmlDocumentVariableName"].to_s.empty? &&
+          result["Bind"] == true && !result["ResultVariableName"].to_s.empty? &&
+          !result.dig("VariableType", "Entity").to_s.empty? &&
+          !mapping["ReturnValueMapping"].to_s.empty? &&
+          mapping.dig("Range", "$Type") == "Microflows$ConstantRange"
+      when "Microflows$DownloadFileAction"
+        !action["FileDocumentVariableName"].to_s.empty?
       else
         true
       end
@@ -1811,7 +1851,64 @@ module Mxrb
         "#{pad}validation_feedback #{args.join(', ')}"
       when "Microflows$RestCallAction"
         rest_call_line(pad, action)
+      when "DatabaseConnector$ExecuteDatabaseQueryAction"
+        database_query_line(pad, action)
+      when "Microflows$ImportXmlAction"
+        import_xml_line(pad, action)
+      when "Microflows$DownloadFileAction"
+        args = [":#{action['FileDocumentVariableName']}"]
+        args << "show_in_browser: true" if action["ShowFileInBrowser"] == true
+        error = underscore(action["ErrorHandlingType"])
+        args << "error: :#{error}" unless error == "rollback"
+        "#{pad}download_file #{args.join(', ')}"
       end
+    end
+
+    def database_query_line(pad, action)
+      args = []
+      query = action["Query"].to_s
+      args << ruby(query.empty? ? nil : query)
+      dynamic_query = action["DynamicQuery"].to_s
+      args << "dynamic_query: #{ruby_val(dynamic_query)}" unless dynamic_query.empty?
+      output = action["OutputVariableName"].to_s
+      args << "as: :#{output}" unless output.empty?
+      parameters = bson_items(action["ParameterMappings"]).map do |mapping|
+        [mapping["ParameterName"], mapping["Value"]]
+      end
+      connection_parameters = bson_items(action["ConnectionParameterMappings"]).map do |mapping|
+        [mapping["ParameterName"], mapping["Value"]]
+      end
+      args << "parameters: #{pass_source(parameters)}" unless parameters.empty?
+      unless connection_parameters.empty?
+        args << "connection_parameters: #{pass_source(connection_parameters)}"
+      end
+      error = underscore(action["ErrorHandlingType"])
+      args << "error: :#{error}" unless error == "rollback"
+      "#{pad}execute_database_query #{args.join(', ')}"
+    end
+
+    def import_xml_line(pad, action)
+      result = action["ResultHandling"] || {}
+      mapping = result["ImportMappingCall"] || {}
+      range = mapping["Range"] || {}
+      args = [":#{action['XmlDocumentVariableName']}"]
+      args << "mapping: #{ruby(mapping['ReturnValueMapping'])}"
+      args << "as: :#{result['ResultVariableName']}"
+      args << "result_entity: #{ruby(result.dig('VariableType', 'Entity'))}"
+      args << "validate: true" if action["IsValidationRequired"] == true
+      content_type = underscore(mapping["ContentType"])
+      args << "content_type: :#{content_type}" unless content_type == "xml"
+      commit = underscore(mapping["Commit"])
+      args << "commit: :#{commit}" unless commit == "yes_without_events"
+      args << "force_single: true" if mapping["ForceSingleOccurrence"] == true
+      args << "single: true" if range["SingleObject"] == true
+      handling = underscore(mapping["ObjectHandlingBackup"])
+      args << "object_handling: :#{handling}" unless handling == "create"
+      parameter = mapping["ParameterVariableName"].to_s
+      args << "parameter_variable: :#{parameter}" unless parameter.empty?
+      error = underscore(action["ErrorHandlingType"])
+      args << "error: :#{error}" unless error == "rollback"
+      "#{pad}import_xml #{args.join(', ')}"
     end
 
     def rest_call_line(pad, action)
@@ -1830,13 +1927,32 @@ module Mxrb
       parameters = bson_items(location["Parameters"]).map { _1["Expression"] }
       args << "location_parameters: #{ruby(parameters)}" unless parameters.empty?
       args << "headers: #{ruby(headers)}" unless headers.empty?
-      args << "request_mapping: #{ruby(request["MappingId"])}" if request["MappingId"]
-      args << "request_variable: :#{request["MappingVariableName"]}" if request["MappingVariableName"]
+      if request["$Type"] == "Microflows$CustomRequestHandling"
+        template = request["Template"] || {}
+        args << "request_body: #{ruby(template['Text'].to_s)}"
+        request_parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
+        unless request_parameters.empty?
+          args << "request_parameters: #{ruby(request_parameters)}"
+        end
+      else
+        args << "request_mapping: #{ruby(request["MappingId"])}" if request["MappingId"]
+        args << "request_variable: :#{request["MappingVariableName"]}" if request["MappingVariableName"]
+      end
       args << "result_mapping: #{ruby(import_call["ReturnValueMapping"])}" if import_call["ReturnValueMapping"]
       args << "as: :#{result["ResultVariableName"]}" unless result["ResultVariableName"].to_s.empty?
       args << "result_entity: #{ruby(result.dig("VariableType", "Entity"))}" if result.dig("VariableType", "Entity")
       args << "timeout: #{ruby(action["TimeOutExpression"])}" if action["UseRequestTimeOut"] == true
       args << "commit: :#{underscore(import_call["Commit"])}" unless import_call["Commit"].to_s.empty?
+      content_type = underscore(import_call["ContentType"])
+      args << "result_content_type: :#{content_type}" unless content_type.empty? || content_type == "json"
+      args << "force_single: true" if import_call["ForceSingleOccurrence"] == true
+      args << "single: true" if import_call.dig("Range", "SingleObject") == true
+      object_handling = underscore(import_call["ObjectHandlingBackup"])
+      unless object_handling.empty? || object_handling == "create"
+        args << "object_handling: :#{object_handling}"
+      end
+      parameter = import_call["ParameterVariableName"].to_s
+      args << "parameter_variable: :#{parameter}" unless parameter.empty?
       args << "error_result: :#{underscore(action["ErrorResultHandlingType"])}"
       args << "error: :#{underscore(action["ErrorHandlingType"])}"
       "#{pad}call_rest #{args.join(', ')}"
