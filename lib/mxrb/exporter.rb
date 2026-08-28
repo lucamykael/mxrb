@@ -301,6 +301,8 @@ module Mxrb
     def export_module_security(root, mod)
       roles = mod.module_roles.map do |role|
         args = [symbol(role.fetch(:name))]
+        id = role.fetch(:id, '').to_s
+        args << "id: #{ruby(id)}" unless id.empty?
         description = role.fetch(:description, "")
         args << "description: #{ruby(description)}" unless description.empty?
         "module_role #{args.join(', ')}"
@@ -590,19 +592,30 @@ module Mxrb
       level = doc["SecurityLevel"]
       roles = IO::BsonCodec.parse_array(doc["UserRoles"]).fetch(:items).map do |role|
         module_roles = IO::BsonCodec.parse_array(role["ModuleRoles"]).fetch(:items)
-        admin = role["ManageAllRoles"] == true
         args = [symbol(role.fetch("Name"))]
+        id = IO::BsonCodec.extract_id(role["$ID"])
+        guid = IO::BsonCodec.extract_id(role["GUID"])
+        manageable = IO::BsonCodec.parse_array(role["ManageableRoles"]).fetch(:items)
+        args << "id: #{ruby(id)}" unless id.to_s.empty?
+        args << "guid: #{ruby(guid)}" unless guid.to_s.empty?
+        args << "description: #{ruby(role['Description'].to_s)}" unless role['Description'].to_s.empty?
+        args << "check_security: false" unless role["CheckSecurity"] == true
+        args << "manageable_roles: #{ruby(manageable)}" unless manageable.empty?
         args << "module_roles: #{ruby(module_roles)}" unless module_roles.empty?
-        args << "admin: true" if admin
+        args << "admin: true" if role["ManageAllRoles"] == true
+        args << "manage_users_without_roles: true" if role["ManageUsersWithoutRoles"] == true
         "  user_role #{args.join(', ')}"
       end
       options = []
+      security_id = IO::BsonCodec.extract_id(doc["$ID"])
+      options << "  mendix_id #{ruby(security_id)}" unless security_id.to_s.empty?
       options << "  admin_user_role #{ruby(doc["AdminUserRole"])}" unless doc["AdminUserRole"].to_s.empty?
       options << "  demo_users #{doc["EnableDemoUsers"] == true}"
       demo_users = doc["DemoUsers"] || IO::BsonCodec.build_array([])
       IO::BsonCodec.parse_array(demo_users).fetch(:items).each do |user|
         assigned_roles = IO::BsonCodec.parse_array(user["UserRoles"]).fetch(:items)
-        options << "  demo_user #{ruby(user["UserName"])}, entity: #{ruby(user["Entity"])}, " \
+        options << "  demo_user #{ruby(user["UserName"])}, id: #{ruby(IO::BsonCodec.extract_id(user['$ID']))}, " \
+                   "entity: #{ruby(user["Entity"])}, " \
                    "roles: #{ruby(assigned_roles)}, password: #{ruby(user["Password"])}"
       end
       guest = "  guest_access #{doc["EnableGuestAccess"] == true}"
@@ -622,7 +635,8 @@ module Mxrb
 
           result[known.fetch(key, key.to_sym)] = value
         end
-        options << "  password_policy(**#{ruby(policy)})"
+        options << "  password_policy(id: #{ruby(IO::BsonCodec.extract_id(password['$ID']))}, " \
+                   "**#{ruby(policy)})"
       end
       <<~RUBY
         # frozen_string_literal: true

@@ -4,6 +4,7 @@ require 'digest'
 require 'fileutils'
 require 'find'
 require 'json'
+require 'time'
 
 module Mxrb
   module RubyApp
@@ -48,6 +49,7 @@ module Mxrb
           @nanoflow_entries = []
           @page_entries = []
           modules = project.modules.map { export_module(_1) }
+          @security_manifest = export_project_security(project)
           @module_manifests = modules
           write_support_files
           copy_frontend_theme
@@ -60,6 +62,7 @@ module Mxrb
         @project = nil
         @embedded_sources = nil
         @module_manifests = nil
+        @security_manifest = nil
         @known_entity_names = nil
       end
 
@@ -152,9 +155,11 @@ module Mxrb
         nanoflows = mod.nanoflows.map { export_nanoflow(_1, mod, namespace, root) }
         pages = mod.pages.map { export_page(_1, mod, namespace, root) }
         endpoints = export_endpoints(mod)
+        module_security = export_module_security(mod, namespace, root)
         {
           'name' => mod.name, 'ruby_namespace' => namespace,
-          'module_roles' => runtime_value(mod.module_roles),
+          'module_roles' => module_security.fetch('roles'),
+          'module_security' => module_security,
           'models' => entities.reject { _1['dto'] },
           'dtos' => entities.select { _1['dto'] },
           'services' => microflows, 'nanoflows' => nanoflows, 'pages' => pages,
@@ -162,8 +167,119 @@ module Mxrb
           'constants' => mod.constants.map { export_constant(mod, _1, namespace, root) },
           'enumerations' => mod.enumerations.map { export_enumeration(mod, _1, namespace, root) },
           'associations' => mod.associations.map { association_manifest(mod, _1) },
-          'scheduled_events' => mod.scheduled_events.map { runtime_value(_1) }
+          'scheduled_events_authoritative' => true,
+          'scheduled_events' => mod.scheduled_events.map do |event|
+            export_scheduled_event(mod, event, namespace, root)
+          end
         }
+      end
+
+      def export_module_security(mod, namespace, root)
+        id = mod.module_security_id.to_s
+        qualified = "#{mod.name}.ModuleSecurity"
+        relative = embedded_security_path(id, mod.name, module_security: true) ||
+                   File.join('app', 'security', root, 'module_security.rb')
+        roles = mod.module_roles.map do |role|
+          {
+            'id' => role.fetch(:id, '').to_s,
+            'name' => role.fetch(:name).to_s,
+            'description' => role.fetch(:description, '').to_s
+          }
+        end
+        manifest = { 'id' => id, 'name' => qualified, 'roles' => roles, 'path' => relative }
+        write(relative, module_security_source(namespace, mod.name, manifest))
+        add_coverage(id, qualified, 'module_security', relative, 'executable_bidirectional') \
+          unless id.empty?
+        manifest
+      end
+
+      def export_project_security(project)
+        pair = project.all_units.filter_map do |unit|
+          document = project.parse_bson(unit)
+          [unit, document] if document['$Type'] == 'Security$ProjectSecurity'
+        end.first
+        return nil unless pair
+
+        unit, document = pair
+        id = native_identifier(document['$ID'])
+        id = unit.fetch('UnitID').to_s if id.empty?
+        relative = embedded_security_path(id, 'ProjectSecurity') ||
+                   File.join('app', 'security', 'project_security.rb')
+        policy = document['PasswordPolicySettings'] if document['PasswordPolicySettings'].is_a?(Hash)
+        manifest = {
+          'id' => id,
+          'security_level' => document['SecurityLevel'].to_s,
+          'admin_user_role' => document['AdminUserRole'].to_s,
+          'demo_users_enabled' => document['EnableDemoUsers'] == true,
+          'guest_access_enabled' => document['EnableGuestAccess'] == true,
+          'guest_user_role' => document['GuestUserRole'].to_s,
+          'sign_in_microflow' => document['SignInMicroflow'].to_s,
+          'user_roles' => native_items(document['UserRoles']).map { project_user_role_manifest(_1) },
+          'demo_users' => native_items(document['DemoUsers']).map { project_demo_user_manifest(_1) },
+          'password_policy' => if policy
+                                 {
+                                   'id' => native_identifier(policy['$ID']),
+                                   'properties' => runtime_value(
+                                     policy.reject { |key, _value| %w[$ID $Type].include?(key) }
+                                   )
+                                 }
+                               end
+        }
+        write(relative, project_security_source(manifest))
+        add_coverage(id, 'ProjectSecurity', 'project_security', relative, 'executable_bidirectional')
+        manifest.merge('path' => relative)
+      end
+
+      def project_user_role_manifest(role)
+        {
+          'id' => native_identifier(role['$ID']), 'name' => role['Name'].to_s,
+          'description' => role['Description'].to_s,
+          'check_security' => role['CheckSecurity'] == true,
+          'guid' => native_identifier(role['GUID']),
+          'manageable_roles' => native_items(role['ManageableRoles']).map(&:to_s),
+          'manage_all_roles' => role['ManageAllRoles'] == true,
+          'manage_users_without_roles' => role['ManageUsersWithoutRoles'] == true,
+          'module_roles' => native_items(role['ModuleRoles']).map(&:to_s)
+        }
+      end
+
+      def project_demo_user_manifest(user)
+        {
+          'id' => native_identifier(user['$ID']), 'name' => user['UserName'].to_s,
+          'entity' => user['Entity'].to_s,
+          'roles' => native_items(user['UserRoles']).map(&:to_s),
+          'password_redacted' => true
+        }
+      end
+
+      def export_scheduled_event(mod, event, namespace, root)
+        name = event['Name'].to_s
+        qualified = "#{mod.name}.#{name}"
+        id = native_identifier(event['$ID'])
+        schedule = event['Schedule'].is_a?(Hash) ? event['Schedule'] : {}
+        relative = embedded_scheduled_event_path(id, qualified) ||
+                   File.join('app', 'scheduled_events', root, "#{underscore(name)}.rb")
+        manifest = {
+          'name' => qualified, 'id' => id, 'documentation' => event['Documentation'].to_s,
+          'export_level' => (event['ExportLevel'] || 'Hidden').to_s,
+          'microflow' => event['Microflow'].to_s,
+          'start_at' => scheduled_event_start(event['StartDateTime']),
+          'time_zone' => event['TimeZone'].to_s,
+          'on_overlap' => event['OnOverlap'].to_s,
+          'enabled' => event['Enabled'] == true,
+          'interval_type' => event['IntervalType'].to_s,
+          'interval' => event.fetch('Interval', 1),
+          'schedule' => {
+            'id' => native_identifier(schedule['$ID']), 'type' => schedule['$Type'].to_s,
+            'properties' => runtime_value(
+              schedule.reject { |key, _value| %w[$ID $Type].include?(key) }
+            )
+          },
+          'path' => relative
+        }
+        write(relative, scheduled_event_source(namespace, ruby_constant(name), manifest))
+        add_coverage(id, qualified, 'scheduled_event', relative, 'executable_bidirectional')
+        manifest
       end
 
       def export_entity(entity, mod, namespace, root)
@@ -890,6 +1006,41 @@ module Mxrb
         end&.fetch(:path)
       end
 
+      def embedded_security_path(id, name, module_security: false)
+        Array(@embedded_sources).find do |file|
+          next unless file.fetch(:path).match?(%r{\Aapp/security/.+\.rb\z})
+
+          source = file.fetch(:contents).to_s
+          id_match = !id.to_s.empty? && source.match?(
+            /^\s*(?:mendix_name\s+['"][^'"]+['"],\s+id:|mendix_id)\s+['"]#{Regexp.escape(id)}['"]/
+          )
+          name_match = module_security && source.match?(
+            /^\s*mendix_name\s+['"]#{Regexp.escape(name.to_s)}['"]/
+          )
+          id_match || name_match
+        end&.fetch(:path)
+      end
+
+      def embedded_scheduled_event_path(id, qualified)
+        Array(@embedded_sources).find do |file|
+          next unless file.fetch(:path).match?(%r{\Aapp/scheduled_events/.+\.rb\z})
+
+          source = file.fetch(:contents).to_s
+          id_match = !id.to_s.empty? && source.match?(
+            /^\s*mendix_name\s+['"][^'"]+['"],\s+id:\s+['"]#{Regexp.escape(id)}['"]/
+          )
+          id_match || source.match?(
+            /^\s*mendix_name\s+['"]#{Regexp.escape(qualified)}['"]/
+          )
+        end&.fetch(:path)
+      end
+
+      def scheduled_event_start(value)
+        return value.utc.iso8601 if value.respond_to?(:utc) && value.respond_to?(:iso8601)
+
+        value.to_s
+      end
+
       def translated_caption(caption, fallback)
         text = translated_captions(caption).values.first.to_s
         text.empty? ? fallback : text
@@ -1113,6 +1264,87 @@ module Mxrb
         RUBY
       end
 
+      def module_security_source(namespace, module_name, security)
+        roles = security.fetch('roles').map do |role|
+          "    module_role #{role.fetch('name').inspect}, id: #{role.fetch('id').inspect}, " \
+            "description: #{role.fetch('description').inspect}"
+        end
+        roles = ['    clear_module_roles!'] if roles.empty?
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module #{namespace}
+            class Security < Mxrb::RubyApp::ModuleSecurity
+              mendix_name #{module_name.inspect}, id: #{security.fetch('id').inspect}
+          #{roles.join("\n")}
+            end
+          end
+        RUBY
+      end
+
+      def project_security_source(security)
+        user_roles = security.fetch('user_roles').map do |role|
+          "    user_role #{role.fetch('name').inspect}, id: #{role.fetch('id').inspect}, " \
+            "guid: #{role.fetch('guid').inspect}, description: #{role.fetch('description').inspect}, " \
+            "check_security: #{role.fetch('check_security')}, " \
+            "manageable_roles: #{role.fetch('manageable_roles').inspect}, " \
+            "manage_all_roles: #{role.fetch('manage_all_roles')}, " \
+            "manage_users_without_roles: #{role.fetch('manage_users_without_roles')}, " \
+            "module_roles: #{role.fetch('module_roles').inspect}"
+        end
+        user_roles = ['    clear_user_roles!'] if user_roles.empty?
+        demo_users = security.fetch('demo_users').map do |user|
+          "    demo_user #{user.fetch('name').inspect}, id: #{user.fetch('id').inspect}, " \
+            "entity: #{user.fetch('entity').inspect}, roles: #{user.fetch('roles').inspect}, " \
+            'password: nil'
+        end
+        demo_users = ['    clear_demo_users!'] if demo_users.empty?
+        policy = security['password_policy']
+        policy_source = if policy
+                          "    password_policy id: #{policy.fetch('id').inspect}, " \
+                            "properties: #{policy.fetch('properties').inspect}"
+                        end
+        <<~RUBY
+          # frozen_string_literal: true
+
+          class ApplicationSecurity < Mxrb::RubyApp::ProjectSecurity
+            mendix_id #{security.fetch('id').inspect}
+            security_level #{security.fetch('security_level').inspect}
+            admin_user_role #{security.fetch('admin_user_role').inspect}
+            demo_users enabled: #{security.fetch('demo_users_enabled')}
+            guest_access enabled: #{security.fetch('guest_access_enabled')}, role: #{security.fetch('guest_user_role').inspect}
+            sign_in_microflow #{security.fetch('sign_in_microflow').inspect}
+          #{user_roles.join("\n")}
+          #{demo_users.join("\n")}
+          #{policy_source}
+          end
+        RUBY
+      end
+
+      def scheduled_event_source(namespace, class_name, event)
+        schedule = event.fetch('schedule')
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module #{namespace}
+            class #{class_name} < Mxrb::RubyApp::ScheduledEvent
+              mendix_name #{event.fetch('name').inspect}, id: #{event.fetch('id').inspect}
+              documentation #{event.fetch('documentation').inspect}
+              export_level #{event.fetch('export_level').inspect}
+              microflow #{event.fetch('microflow').inspect}
+              start_at #{event.fetch('start_at').inspect}
+              time_zone #{event.fetch('time_zone').inspect}
+              on_overlap #{event.fetch('on_overlap').inspect}
+              enabled value: #{event.fetch('enabled')}
+              interval_type #{event.fetch('interval_type').inspect}
+              interval #{event.fetch('interval').inspect}
+              schedule #{schedule.fetch('type').inspect}, id: #{schedule.fetch('id').inspect},
+                       properties: #{schedule.fetch('properties').inspect}
+            end
+          end
+        RUBY
+      end
+
       def service_source(namespace, class_name, qualified, id, native_source: nil,
                          native_kind: :microflow)
         native = if native_source
@@ -1254,6 +1486,7 @@ module Mxrb
         payload = {
           'format_version' => 1, 'mode' => 'ruby',
           'project' => { 'name' => project.name, 'mendix_version' => project.mendix_version },
+          'security' => @security_manifest,
           'navigation' => runtime_value(project.navigation.to_h),
           'source' => {
             'name' => File.basename(@mpr_path),

@@ -6,6 +6,7 @@ require "fileutils"
 require "json"
 require "securerandom"
 require "sqlite3"
+require "time"
 
 module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
@@ -305,6 +306,102 @@ module Mxrb
         payload.fetch(:items), marker: payload.fetch(:marker)
       )
       mpr.transaction { mpr.update_unit(raw_domain.fetch("UnitID"), domain) }
+      self
+    end
+
+    # Applies an authoritative module-role collection while preserving
+    # unsupported role entries and native document metadata.
+    def synchronize_ruby_module_security!(mpr, module_name:, security:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch("UnitID")
+      raw = mpr.children_of(module_id).find { _1["ContainmentName"] == "ModuleSecurity" }
+      if raw.nil? && security[:id].to_s.empty? && Array(security[:roles]).empty?
+        return self
+      end
+
+      previous = raw ? mpr.parse_contents(raw) : {}
+      document = ruby_module_security_doc(security, previous, module_name.to_s)
+      mpr.transaction do
+        if raw
+          mpr.update_unit(raw.fetch("UnitID"), document)
+        else
+          mpr.insert_unit(
+            container_uuid: module_id, containment_name: "ModuleSecurity",
+            contents_doc: document, unit_uuid: document.fetch("$ID")
+          )
+        end
+      end
+      self
+    end
+
+    # Applies the editable project-security surface without exposing stored
+    # passwords or replacing native access containers and unknown properties.
+    def synchronize_ruby_project_security!(mpr, security:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw = mpr.children_of(root_id).find do |unit|
+        unit["ContainmentName"] == "ProjectDocuments" &&
+          mpr.parse_contents(unit)["$Type"] == "Security$ProjectSecurity"
+      end
+      previous = raw ? mpr.parse_contents(raw) : {}
+      document = ruby_project_security_doc(security, previous)
+      mpr.transaction do
+        if raw
+          mpr.update_unit(raw.fetch("UnitID"), document)
+        else
+          mpr.insert_unit(
+            container_uuid: root_id, containment_name: "ProjectDocuments",
+            contents_doc: document, unit_uuid: document.fetch("$ID")
+          )
+        end
+      end
+      self
+    end
+
+    # Applies the authoritative scheduled-event collection for one module.
+    def synchronize_ruby_scheduled_events!(mpr, module_name:, events:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      declarations = Array(events)
+      validate_ruby_scheduled_events!(module_name, declarations)
+      module_id = raw_module.fetch("UnitID")
+      existing = collect_documents(mpr, module_id).filter_map do |raw|
+        document = mpr.parse_contents(raw)
+        [raw, document] if document["$Type"] == "ScheduledEvents$ScheduledEvent"
+      end
+      by_id = existing.to_h do |raw, document|
+        [IO::BsonCodec.extract_id(document["$ID"]) || raw["UnitID"], [raw, document]]
+      end
+      by_name = existing.to_h { |raw, document| [document["Name"].to_s, [raw, document]] }
+      retained = []
+      mpr.transaction do
+        declarations.each do |declaration|
+          id = declaration[:id].to_s
+          named = by_name[declaration.fetch(:name).to_s]
+          validate_ruby_identity!(
+            id, by_id, named,
+            "scheduled event #{module_name}.#{declaration.fetch(:name)}"
+          )
+          raw, previous = (!id.empty? && by_id[id]) || named
+          document = ruby_scheduled_event_doc(declaration, previous, module_name.to_s)
+          if raw
+            retained << raw.fetch("UnitID")
+            mpr.update_unit(raw.fetch("UnitID"), document)
+          else
+            retained << mpr.insert_unit(
+              container_uuid: module_id, containment_name: "Documents",
+              contents_doc: document, unit_uuid: document.fetch("$ID")
+            )
+          end
+        end
+        existing.each do |raw,|
+          mpr.delete_unit(raw.fetch("UnitID")) unless retained.include?(raw.fetch("UnitID"))
+        end
+      end
       self
     end
 
@@ -627,6 +724,287 @@ module Mxrb
         ruby_lifecycle_doc(declaration, current, "#{module_name}.#{entity_name}")
       end
       IO::BsonCodec.build_array(handlers + opaque, marker: payload.fetch(:marker))
+    end
+
+    def ruby_module_security_doc(declaration, previous, module_name)
+      current = previous || {}
+      id = ruby_existing_or_stable_id(
+        declaration[:id], current["$ID"], "module security #{module_name}",
+        'module-security', module_name
+      )
+      payload = IO::BsonCodec.parse_array(current["ModuleRoles"])
+      supported, opaque = payload.fetch(:items).partition do |role|
+        role.is_a?(Hash) && role["$Type"] == "Security$ModuleRole"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_name = supported.group_by { _1["Name"].to_s }
+      declarations = Array(declaration[:roles])
+      validate_ruby_security_declarations!(declarations, "module roles in #{module_name}")
+      roles = declarations.map do |role|
+        role_id = role[:id].to_s
+        matches = Array(by_name[role.fetch(:name).to_s])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(role_id, by_id, semantic_match, "module role #{role.fetch(:name)}")
+        prior = (!role_id.empty? && by_id[role_id]) || semantic_match || {}
+        prior.merge(
+          "$ID" => ruby_existing_or_stable_id(
+            role_id, prior["$ID"], "module role #{role.fetch(:name)}",
+            'module-role', module_name, role.fetch(:name)
+          ),
+          "$Type" => "Security$ModuleRole",
+          "Name" => role.fetch(:name).to_s,
+          "Description" => role.fetch(:description, '').to_s
+        )
+      end
+      current.merge(
+        "$ID" => id, "$Type" => "Security$ModuleSecurity",
+        "ModuleRoles" => IO::BsonCodec.build_array(roles + opaque, marker: payload.fetch(:marker))
+      )
+    end
+
+    def ruby_project_security_doc(declaration, previous)
+      current = previous.empty? ? project_security_doc({}) : previous
+      id = ruby_existing_or_stable_id(
+        declaration[:id], current["$ID"], "project security", 'project-security'
+      )
+      document = current.merge("$ID" => id, "$Type" => "Security$ProjectSecurity")
+      {
+        security_level: "SecurityLevel",
+        admin_user_role: "AdminUserRole",
+        demo_users_enabled: "EnableDemoUsers",
+        guest_access_enabled: "EnableGuestAccess",
+        guest_user_role: "GuestUserRole",
+        sign_in_microflow: "SignInMicroflow"
+      }.each do |definition_key, native_key|
+        next unless declaration.key?(definition_key)
+
+        value = declaration[definition_key]
+        document[native_key] = if %i[demo_users_enabled guest_access_enabled].include?(definition_key)
+                                 value == true
+                               else
+                                 value.to_s
+                               end
+      end
+      document["UserRoles"] = ruby_project_user_roles(
+        declaration.fetch(:user_roles, []), current["UserRoles"]
+      )
+      document["DemoUsers"] = ruby_project_demo_users(
+        declaration.fetch(:demo_users, []), current["DemoUsers"]
+      )
+      if declaration.key?(:password_policy)
+        if declaration[:password_policy]
+          document["PasswordPolicySettings"] = ruby_password_policy_doc(
+            declaration.fetch(:password_policy), current["PasswordPolicySettings"], id
+          )
+        else
+          document.delete("PasswordPolicySettings")
+        end
+      end
+      admin_role = document["AdminUserRole"].to_s
+      role_names = IO::BsonCodec.parse_array(document["UserRoles"]).fetch(:items).filter_map do |role|
+        role["Name"].to_s if role.is_a?(Hash) && role["$Type"] == "Security$UserRole"
+      end
+      if !admin_role.empty? && !role_names.include?(admin_role)
+        raise ValidationError, "project admin user role #{admin_role} is not declared"
+      end
+      document
+    end
+
+    def ruby_project_user_roles(declarations, previous)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |role|
+        role.is_a?(Hash) && role["$Type"] == "Security$UserRole"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_name = supported.group_by { _1["Name"].to_s }
+      declarations = Array(declarations)
+      validate_ruby_security_declarations!(declarations, "project user roles")
+      roles = declarations.map do |role|
+        declared_module_roles = Array(role[:module_roles]).map(&:to_s)
+        unless declared_module_roles.any? { _1.start_with?('System.') }
+          raise ValidationError,
+                "project user role #{role.fetch(:name)} requires at least one System module role"
+        end
+
+        role_id = role[:id].to_s
+        matches = Array(by_name[role.fetch(:name).to_s])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(role_id, by_id, semantic_match, "project role #{role.fetch(:name)}")
+        prior = (!role_id.empty? && by_id[role_id]) || semantic_match || {}
+        id = ruby_existing_or_stable_id(
+          role_id, prior["$ID"], "project role #{role.fetch(:name)}",
+          'project-role', role.fetch(:name)
+        )
+        guid = ruby_project_role_guid(role, prior, id)
+        manageable = IO::BsonCodec.parse_array(prior["ManageableRoles"])
+        module_roles = IO::BsonCodec.parse_array(prior["ModuleRoles"])
+        prior.merge(
+          "$ID" => id, "$Type" => "Security$UserRole",
+          "Name" => role.fetch(:name).to_s,
+          "Description" => role.fetch(:description, '').to_s,
+          "CheckSecurity" => role.fetch(:check_security, true) == true,
+          "GUID" => BSON::Binary.new(IO::BsonCodec.uuid_to_blob(guid)),
+          "ManageableRoles" => IO::BsonCodec.build_array(
+            Array(role[:manageable_roles]).map(&:to_s), marker: manageable.fetch(:marker)
+          ),
+          "ManageAllRoles" => role.fetch(:manage_all_roles, false) == true,
+          "ManageUsersWithoutRoles" => role.fetch(:manage_users_without_roles, false) == true,
+          "ModuleRoles" => IO::BsonCodec.build_array(
+            declared_module_roles, marker: module_roles.fetch(:marker)
+          )
+        )
+      end
+      IO::BsonCodec.build_array(roles + opaque, marker: payload.fetch(:marker))
+    end
+
+    def ruby_project_role_guid(declaration, previous, role_id)
+      declared = declaration[:guid].to_s
+      validate_ruby_uuid!(declared, "project role GUID #{declaration.fetch(:name)}")
+      prior = IO::BsonCodec.extract_id(previous["GUID"])
+      if !declared.empty? && prior && declared != prior
+        raise ValidationError,
+              "native identity mismatch for project role GUID #{declaration.fetch(:name)}: " \
+              "expected #{prior}, received #{declared}"
+      end
+      declared.empty? ? (prior || ruby_stable_uuid('project-role-guid', role_id)) : declared
+    end
+
+    def ruby_project_demo_users(declarations, previous)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |user|
+        user.is_a?(Hash) && user["$Type"] == "Security$DemoUserImpl"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_name = supported.group_by { _1["UserName"].to_s }
+      declarations = Array(declarations)
+      validate_ruby_security_declarations!(declarations, "demo users")
+      users = declarations.map do |user|
+        user_id = user[:id].to_s
+        matches = Array(by_name[user.fetch(:name).to_s])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(user_id, by_id, semantic_match, "demo user #{user.fetch(:name)}")
+        prior = (!user_id.empty? && by_id[user_id]) || semantic_match || {}
+        password = user[:password]
+        if password.nil? && prior.empty?
+          raise ValidationError, "new demo user #{user.fetch(:name)} requires an explicit password"
+        end
+        prior.merge(
+          "$ID" => ruby_existing_or_stable_id(
+            user_id, prior["$ID"], "demo user #{user.fetch(:name)}",
+            'demo-user', user.fetch(:name)
+          ),
+          "$Type" => "Security$DemoUserImpl",
+          "UserName" => user.fetch(:name).to_s,
+          "Password" => password.nil? ? prior["Password"].to_s : password.to_s,
+          "Entity" => user.fetch(:entity).to_s,
+          "UserRoles" => IO::BsonCodec.build_array(
+            Array(user[:roles]).map(&:to_s),
+            marker: IO::BsonCodec.parse_array(prior["UserRoles"]).fetch(:marker)
+          )
+        )
+      end
+      IO::BsonCodec.build_array(users + opaque, marker: payload.fetch(:marker))
+    end
+
+    def ruby_password_policy_doc(declaration, previous, security_id)
+      current = previous.is_a?(Hash) ? previous : {}
+      id = ruby_existing_or_stable_id(
+        declaration[:id], current["$ID"], "password policy",
+        'password-policy', security_id
+      )
+      {
+        "$ID" => id, "$Type" => "Security$PasswordPolicySettings"
+      }.merge(
+        current.reject { |key, _value| %w[$ID $Type].include?(key) }
+      ).merge(declaration.fetch(:properties, {}).to_h.transform_keys(&:to_s))
+    end
+
+    def validate_ruby_security_declarations!(declarations, label)
+      names = declarations.map { _1.fetch(:name).to_s }
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      duplicates = names.tally.select { |_name, count| count > 1 }.keys +
+                   ids.tally.select { |_id, count| count > 1 }.keys
+      raise ValidationError, "duplicate #{label}: #{duplicates.join(', ')}" unless duplicates.empty?
+
+      declarations.each do |declaration|
+        raise ValidationError, "empty name in #{label}" if declaration.fetch(:name).to_s.empty?
+
+        validate_ruby_uuid!(declaration[:id], "#{label} #{declaration.fetch(:name)}")
+      end
+    end
+
+    def validate_ruby_scheduled_events!(module_name, declarations)
+      validate_ruby_security_declarations!(declarations, "scheduled events in #{module_name}")
+      declarations.each do |declaration|
+        handler = declaration[:microflow].to_s
+        raise ValidationError, "scheduled event #{module_name}.#{declaration.fetch(:name)} has no microflow" \
+          if handler.empty?
+
+        schedule = declaration[:schedule]
+        raise ValidationError, "scheduled event #{module_name}.#{declaration.fetch(:name)} has no schedule" \
+          unless schedule.is_a?(Hash)
+
+        type = schedule[:type].to_s
+        unless type.start_with?('ScheduledEvents$') && type.end_with?('Schedule')
+          raise ValidationError, "unsupported scheduled event schedule #{type.inspect}"
+        end
+        validate_ruby_uuid!(schedule[:id], "schedule for #{module_name}.#{declaration.fetch(:name)}")
+        Integer(declaration.fetch(:interval, 1))
+      rescue ArgumentError, TypeError
+        raise ValidationError, "invalid interval for scheduled event #{module_name}.#{declaration.fetch(:name)}"
+      end
+    end
+
+    def ruby_scheduled_event_doc(declaration, previous, module_name)
+      current = previous || {}
+      id = ruby_existing_or_stable_id(
+        declaration[:id], current["$ID"],
+        "scheduled event #{module_name}.#{declaration.fetch(:name)}",
+        'scheduled-event', module_name, declaration.fetch(:name)
+      )
+      schedule = declaration.fetch(:schedule)
+      prior_schedule = current["Schedule"].is_a?(Hash) ? current["Schedule"] : {}
+      schedule_id = ruby_existing_or_stable_id(
+        schedule[:id], prior_schedule["$ID"],
+        "schedule for #{module_name}.#{declaration.fetch(:name)}",
+        'scheduled-event-schedule', id
+      )
+      start_at = declaration[:start_at]
+      start_at = current["StartDateTime"] || Time.utc(2000, 1, 1) if start_at.to_s.empty?
+      start_at = Time.parse(start_at.to_s).utc unless start_at.is_a?(Time)
+      schedule_doc = {
+        "$ID" => schedule_id, "$Type" => schedule.fetch(:type).to_s
+      }.merge(
+        prior_schedule.reject { |key, _value| %w[$ID $Type].include?(key) }
+      ).merge(schedule.fetch(:properties, {}).to_h.transform_keys(&:to_s))
+      current.merge(
+        "$ID" => id, "$Type" => "ScheduledEvents$ScheduledEvent",
+        "Name" => declaration.fetch(:name).to_s,
+        "Documentation" => declaration.fetch(:documentation, '').to_s,
+        "ExportLevel" => declaration.fetch(:export_level, 'Hidden').to_s,
+        "Microflow" => declaration.fetch(:microflow).to_s,
+        "StartDateTime" => start_at,
+        "TimeZone" => declaration.fetch(:time_zone, 'UTC').to_s,
+        "Schedule" => schedule_doc,
+        "OnOverlap" => declaration.fetch(:on_overlap, 'SkipNext').to_s,
+        "Enabled" => declaration.fetch(:enabled, true) == true,
+        "IntervalType" => declaration.fetch(:interval_type, '').to_s,
+        "Interval" => Integer(declaration.fetch(:interval, 1))
+      )
+    rescue ArgumentError
+      raise ValidationError,
+            "invalid start time for scheduled event #{module_name}.#{declaration.fetch(:name)}"
+    end
+
+    def ruby_existing_or_stable_id(declared, previous, label, *stable_parts)
+      id = declared.to_s
+      validate_ruby_uuid!(id, label)
+      previous_id = IO::BsonCodec.extract_id(previous)
+      if !id.empty? && previous_id && id != previous_id
+        raise ValidationError,
+              "native identity mismatch for #{label}: expected #{previous_id}, received #{id}"
+      end
+      id.empty? ? (previous_id || ruby_stable_uuid(*stable_parts)) : id
     end
 
     def lifecycle_signature(handler)
@@ -1860,6 +2238,11 @@ module Mxrb
       )
       if raw
         existing = mpr.parse_contents(raw)
+        existing_roles = IO::BsonCodec.parse_array(existing["ModuleRoles"])
+        generated_roles = IO::BsonCodec.parse_array(doc["ModuleRoles"])
+        doc["ModuleRoles"] = IO::BsonCodec.build_array(
+          generated_roles.fetch(:items), marker: existing_roles.fetch(:marker)
+        )
         doc = existing.merge(doc)
         doc["$ID"] = existing["$ID"] || raw.fetch("UnitID")
         mpr.update_unit(raw.fetch("UnitID"), doc)
@@ -3291,7 +3674,8 @@ module Mxrb
       default_admin = role_definitions.find { _1[:admin] == true }&.fetch(:name, nil)
       default_admin ||= roles.first.fetch("Name")
       password_policy = {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => security[:password_policy_id].to_s.empty? ?
+          SecureRandom.uuid : security[:password_policy_id].to_s,
         "$Type" => "Security$PasswordPolicySettings",
         "MinimumLength" => 6,
         "RequireDigit" => true,
@@ -3308,7 +3692,7 @@ module Mxrb
         password_policy[native_key] = value
       end
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => security[:id].to_s.empty? ? SecureRandom.uuid : security[:id].to_s,
         "$Type" => "Security$ProjectSecurity",
         "SecurityLevel" => security[:security_level] || "CheckNothing",
         "CheckSecurity" => true,
@@ -3332,23 +3716,29 @@ module Mxrb
     end
 
     def user_role_doc(role)
+      id = role[:id].to_s
+      guid = role[:guid].to_s
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => id.empty? ? SecureRandom.uuid : id,
         "$Type" => "Security$UserRole",
         "Name" => role.fetch(:name),
-        "Description" => "",
-        "CheckSecurity" => true,
-        "GUID" => BSON::Binary.new(IO::BsonCodec.uuid_to_blob(SecureRandom.uuid)),
-        "ManageableRoles" => IO::BsonCodec.build_array([], marker: 1),
+        "Description" => role.fetch(:description, '').to_s,
+        "CheckSecurity" => role.fetch(:check_security, true) == true,
+        "GUID" => BSON::Binary.new(
+          IO::BsonCodec.uuid_to_blob(guid.empty? ? SecureRandom.uuid : guid)
+        ),
+        "ManageableRoles" => IO::BsonCodec.build_array(
+          Array(role[:manageable_roles]).map(&:to_s), marker: 1
+        ),
         "ManageAllRoles" => role[:admin] == true,
-        "ManageUsersWithoutRoles" => false,
+        "ManageUsersWithoutRoles" => role.fetch(:manage_users_without_roles, false) == true,
         "ModuleRoles" => IO::BsonCodec.build_array(role.fetch(:module_roles, []), marker: 1)
       }
     end
 
     def demo_user_doc(user)
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => user[:id].to_s.empty? ? SecureRandom.uuid : user[:id].to_s,
         "$Type" => "Security$DemoUserImpl",
         "UserName" => user.fetch(:name),
         "Password" => user.fetch(:password),
@@ -3369,7 +3759,7 @@ module Mxrb
 
     def module_role_doc(role)
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => role[:id].to_s.empty? ? SecureRandom.uuid : role[:id].to_s,
         "$Type" => "Security$ModuleRole",
         "Name" => role.fetch(:name),
         "Description" => role.fetch(:description, "")

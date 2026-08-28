@@ -20,7 +20,9 @@ module Mxrb
       'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
-    ARTIFACT_DIRECTORIES = %w[constants enumerations models dtos services pages].freeze
+    ARTIFACT_DIRECTORIES = %w[
+      constants enumerations models dtos services pages security scheduled_events
+    ].freeze
 
     def self.application_files(root)
       ARTIFACT_DIRECTORIES.flat_map do |directory|
@@ -137,6 +139,9 @@ module Mxrb
         @records = {}
         @services = {}
         @pages = {}
+        @module_security = {}
+        @project_security = {}
+        @scheduled_events = {}
         @adapters = {}
         @java_custom_actions = {}
       end
@@ -180,7 +185,9 @@ module Mxrb
         reset! unless defined?(@records) && @records
         {
           constant: @constants, enumeration: @enumerations, record: @records, service: @services,
-          page: @pages, adapter: @adapters,
+          page: @pages, module_security: @module_security,
+          project_security: @project_security, scheduled_event: @scheduled_events,
+          adapter: @adapters,
           java_custom_action: @java_custom_actions
         }.fetch(kind)
       end
@@ -604,6 +611,163 @@ module Mxrb
             exposed_to_client: @exposed_to_client == true, excluded: @excluded == true,
             export_level: @export_level.to_s
           }
+        end
+      end
+    end
+
+    # Authoritative module-role collection with stable Mendix identities.
+    class ModuleSecurity
+      class << self
+        attr_reader :mendix_id, :roles
+
+        def inherited(child)
+          super
+          child.instance_variable_set(:@roles, [])
+        end
+
+        def mendix_name(value = nil, id: nil)
+          return @mendix_name unless value
+
+          @mendix_name = value.to_s
+          @mendix_id = id.to_s
+          Registry.register(:module_security, @mendix_name, self)
+        end
+
+        def module_role(name, id: nil, description: '')
+          @roles ||= []
+          @roles << { name: name.to_s, id: id.to_s, description: description.to_s }
+        end
+
+        def clear_module_roles! = (@roles = [])
+
+        def native_definition
+          { module_name: @mendix_name.to_s, id: @mendix_id.to_s, roles: Array(@roles) }
+        end
+      end
+    end
+
+    # Authoritative project-security declaration. Passwords remain private and
+    # are only replaced when explicitly supplied by application code.
+    class ProjectSecurity
+      OPTION_UNSET = Object.new.freeze
+
+      class << self
+        attr_reader :user_roles, :demo_user_definitions
+
+        def inherited(child)
+          super
+          child.instance_variable_set(:@mendix_id, '')
+          child.instance_variable_set(:@user_roles, [])
+          child.instance_variable_set(:@demo_user_definitions, [])
+          child.instance_variable_set(:@settings, {})
+          child.instance_variable_set(:@password_policy, nil)
+        end
+
+        def mendix_id(value = OPTION_UNSET)
+          return @mendix_id.to_s if value.equal?(OPTION_UNSET)
+
+          @mendix_id = value.to_s
+          Registry.register(:project_security, 'project', self)
+        end
+
+        def security_level(value) = (@settings[:security_level] = value.to_s)
+        def admin_user_role(value) = (@settings[:admin_user_role] = value.to_s)
+        def demo_users(enabled: true) = (@settings[:demo_users_enabled] = enabled == true)
+        def sign_in_microflow(value) = (@settings[:sign_in_microflow] = value.to_s)
+
+        def guest_access(enabled: true, role: nil)
+          @settings[:guest_access_enabled] = enabled == true
+          @settings[:guest_user_role] = role.to_s
+        end
+
+        def user_role(name, id: nil, guid: nil, description: '', check_security: true,
+                      manageable_roles: [], manage_all_roles: false,
+                      manage_users_without_roles: false, module_roles: [])
+          @user_roles ||= []
+          @user_roles << {
+            name: name.to_s, id: id.to_s, guid: guid.to_s,
+            description: description.to_s, check_security: check_security == true,
+            manageable_roles: Array(manageable_roles).map(&:to_s),
+            manage_all_roles: manage_all_roles == true,
+            manage_users_without_roles: manage_users_without_roles == true,
+            module_roles: Array(module_roles).map(&:to_s)
+          }
+        end
+
+        def clear_user_roles! = (@user_roles = [])
+
+        def demo_user(name, entity:, roles:, id: nil, password: nil)
+          @demo_user_definitions ||= []
+          @demo_user_definitions << {
+            name: name.to_s, id: id.to_s, entity: entity.to_s,
+            roles: Array(roles).map(&:to_s), password: password
+          }
+        end
+
+        def clear_demo_users! = (@demo_user_definitions = [])
+
+        def password_policy(id: nil, properties: {}, **options)
+          @password_policy = {
+            id: id.to_s,
+            properties: properties.to_h.merge(options).transform_keys(&:to_s)
+          }
+        end
+
+        def native_definition
+          @settings.to_h.merge(
+            id: @mendix_id.to_s, user_roles: Array(@user_roles),
+            demo_users: Array(@demo_user_definitions), password_policy: @password_policy
+          )
+        end
+      end
+    end
+
+    # Editable Mendix scheduled event, including its nested schedule identity
+    # and version-specific schedule properties.
+    class ScheduledEvent
+      OPTION_UNSET = Object.new.freeze
+
+      class << self
+        attr_reader :mendix_id
+
+        def inherited(child)
+          super
+          child.instance_variable_set(
+            :@definition,
+            { documentation: '', export_level: 'Hidden', enabled: true, interval: 1 }
+          )
+        end
+
+        def mendix_name(value = nil, id: nil)
+          return @mendix_name unless value
+
+          @mendix_name = value.to_s
+          @mendix_id = id.to_s
+          Registry.register(:scheduled_event, @mendix_name, self)
+        end
+
+        def documentation(value) = (@definition[:documentation] = value.to_s)
+        def export_level(value) = (@definition[:export_level] = value.to_s)
+        def microflow(value) = (@definition[:microflow] = value.to_s)
+        def start_at(value) = (@definition[:start_at] = value)
+        def time_zone(value) = (@definition[:time_zone] = value.to_s)
+        def on_overlap(value) = (@definition[:on_overlap] = value.to_s)
+        def enabled(value: true) = (@definition[:enabled] = value == true)
+        def interval_type(value) = (@definition[:interval_type] = value.to_s)
+        def interval(value) = (@definition[:interval] = Integer(value))
+
+        def schedule(type, id: nil, properties: {}, **options)
+          @definition[:schedule] = {
+            type: type.to_s, id: id.to_s,
+            properties: properties.to_h.merge(options).transform_keys(&:to_s)
+          }
+        end
+
+        def native_definition
+          @definition.to_h.merge(
+            name: @mendix_name.to_s.split('.', 2).last,
+            qualified_name: @mendix_name.to_s, id: @mendix_id.to_s
+          )
         end
       end
     end
@@ -1285,6 +1449,8 @@ module Mxrb
         project = Model::Project.open(@target, readonly: false)
         synchronize_constant_definitions(project)
         synchronize_enumeration_definitions(project)
+        synchronize_module_security(project)
+        synchronize_project_security(project)
         synchronize_entity_structures(project, existing_only: true)
         synchronize_entity_access(project, existing_only: true)
         synchronize_entities(project)
@@ -1295,6 +1461,7 @@ module Mxrb
         prune_constants(project)
         prune_enumerations(project)
         synchronize_native_documents(project)
+        synchronize_scheduled_events(project)
         project.close
         project = nil
         embed_sources!
@@ -1358,6 +1525,52 @@ module Mxrb
           writer.synchronize_ruby_constants!(
             project.mpr, module_name: name,
                          constants: implementations.map(&:native_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_module_security(project)
+        declarations = Registry.all(:module_security).values
+        return if declarations.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        declarations.each do |implementation|
+          writer.synchronize_ruby_module_security!(
+            project.mpr, module_name: implementation.mendix_name,
+                         security: implementation.native_definition
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_project_security(project)
+        implementation = Registry.all(:project_security).values.first
+        return unless implementation
+
+        Writer.new(@target, version: project.mendix_version, modules: [])
+              .synchronize_ruby_project_security!(
+                project.mpr, security: implementation.native_definition
+              )
+        project.refresh!
+      end
+
+      def synchronize_scheduled_events(project)
+        registered = Registry.all(:scheduled_event).values.group_by do |implementation|
+          module_name(implementation.mendix_name)
+        end
+        authoritative_modules = @manifest.modules.select do |mod|
+          mod['scheduled_events_authoritative'] == true
+        end
+        manifest_modules = authoritative_modules.map { _1.fetch('name') }
+        modules = (manifest_modules + registered.keys).uniq
+        return if modules.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        modules.each do |name|
+          writer.synchronize_ruby_scheduled_events!(
+            project.mpr, module_name: name,
+                         events: Array(registered[name]).map(&:native_definition)
           )
         end
         project.refresh!

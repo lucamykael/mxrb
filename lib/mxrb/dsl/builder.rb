@@ -470,7 +470,11 @@ module Mxrb
         @guest_user_role = nil
         @sign_in_microflow = nil
         @password_policy = nil
+        @password_policy_id = nil
+        @id = nil
       end
+
+      def mendix_id(value) = (@id = value.to_s)
 
       # Mendix stores the project security mode as an enum-like string such as
       # "CheckNothing" or "CheckEverything". Keep the native value explicit so
@@ -479,11 +483,16 @@ module Mxrb
         @security_level = value.to_s
       end
 
-      def user_role(name, module_roles: [], admin: false)
+      def user_role(name, module_roles: [], admin: false, id: nil, guid: nil,
+                    description: '', check_security: true, manageable_roles: [],
+                    manage_users_without_roles: false)
         @user_roles << {
           name: name.to_s,
           module_roles: Array(module_roles).map(&:to_s),
-          admin: admin
+          admin: admin, id: id.to_s, guid: guid.to_s,
+          description: description.to_s, check_security: check_security == true,
+          manageable_roles: Array(manageable_roles).map(&:to_s),
+          manage_users_without_roles: manage_users_without_roles == true
         }
       end
 
@@ -495,7 +504,7 @@ module Mxrb
         @demo_users_enabled = enabled == true
       end
 
-      def demo_user(name, entity:, roles:, password:)
+      def demo_user(name, entity:, roles:, password:, id: nil)
         user_name = name.to_s
         entity_name = entity.to_s
         role_names = Array(roles).map(&:to_s).uniq
@@ -509,7 +518,7 @@ module Mxrb
         raise ArgumentError, 'demo user password must not be empty' if secret.empty?
 
         @demo_users << {
-          name: user_name, entity: entity_name, roles: role_names, password: secret
+          name: user_name, id: id.to_s, entity: entity_name, roles: role_names, password: secret
         }
         @demo_users_declared = true
         @demo_users_enabled = true
@@ -534,7 +543,8 @@ module Mxrb
         @sign_in_microflow = name&.to_s
       end
 
-      def password_policy(**options)
+      def password_policy(id: nil, **options)
+        @password_policy_id = id.to_s
         @password_policy = options.transform_keys(&:to_sym)
       end
 
@@ -548,7 +558,9 @@ module Mxrb
           guest_access_enabled: @guest_access_enabled,
           guest_user_role: @guest_user_role,
           sign_in_microflow: @sign_in_microflow,
-          password_policy: @password_policy
+          password_policy: @password_policy,
+          password_policy_id: @password_policy_id,
+          id: @id
         }
       end
     end
@@ -859,8 +871,8 @@ module Mxrb
         @menus << mb.to_h
       end
 
-      def module_role(name, description: "")
-        @module_roles << { name: name.to_s, description: description.to_s }
+      def module_role(name, id: nil, description: "")
+        @module_roles << { name: name.to_s, id: id.to_s, description: description.to_s }
       end
 
       def microflow(name, kind: :use_case, public: false, &block)

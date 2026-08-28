@@ -146,12 +146,23 @@ module Mxrb
           if raw
             doc = @mpr.parse_contents(raw)
             parse_array(doc["ModuleRoles"]).map do |role|
-              { name: role["Name"], description: role["Description"].to_s }
+              {
+                id: IO::BsonCodec.extract_id(role["$ID"]),
+                name: role["Name"], description: role["Description"].to_s
+              }
             end
           else
             []
           end
         end
+      end
+
+      def module_security_id
+        raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
+        return '' unless raw
+
+        doc = @mpr.parse_contents(raw)
+        IO::BsonCodec.extract_id(doc["$ID"]) || raw.fetch("UnitID")
       end
 
       def inspect
