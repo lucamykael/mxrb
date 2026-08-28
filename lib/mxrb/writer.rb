@@ -99,6 +99,45 @@ module Mxrb
       self
     end
 
+    # Incrementally applies authoritative Ruby enumeration declarations while
+    # retaining native fields, localization structures, and stable ids.
+    def synchronize_ruby_enumerations!(mpr, module_name:, enumerations:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      declarations = Array(enumerations)
+      validate_ruby_enumerations!(module_name, declarations)
+      module_id = raw_module.fetch("UnitID")
+      existing = collect_documents(mpr, module_id).filter_map do |raw|
+        document = mpr.parse_contents(raw)
+        [raw, document] if document["$Type"] == "Enumerations$Enumeration"
+      end
+      by_id = existing.to_h { |raw, doc| [IO::BsonCodec.extract_id(doc["$ID"]) || raw["UnitID"], [raw, doc]] }
+      by_name = existing.to_h { |raw, doc| [doc["Name"].to_s, [raw, doc]] }
+
+      mpr.transaction do
+        declarations.each do |declaration|
+          id = declaration[:id].to_s
+          named = by_name[declaration.fetch(:name).to_s]
+          validate_ruby_identity!(id, by_id, named, "enumeration #{module_name}.#{declaration.fetch(:name)}")
+          pair = (!id.empty? && by_id[id]) || named
+          raw, previous = pair
+          document = ruby_enumeration_doc(declaration, previous:)
+          if raw
+            mpr.update_unit(raw.fetch("UnitID"), document)
+          else
+            unit_id = id.empty? ? nil : id
+            mpr.insert_unit(
+              container_uuid: module_id, containment_name: "Documents",
+              contents_doc: document, unit_uuid: unit_id
+            )
+          end
+        end
+      end
+      self
+    end
+
     # Canonical editor-shape serializers shared by incremental semantic plans.
     def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
       entity_doc(entity, module_name, previous, index)
@@ -109,6 +148,121 @@ module Mxrb
     end
 
     private
+
+    def validate_ruby_enumerations!(module_name, declarations)
+      duplicate_names = declarations.group_by { _1.fetch(:name).to_s }.select { |_key, values| values.size > 1 }.keys
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      duplicate_ids = ids.tally.select { |_key, count| count > 1 }.keys
+      unless duplicate_names.empty? && duplicate_ids.empty?
+        details = []
+        details << "names #{duplicate_names.join(', ')}" unless duplicate_names.empty?
+        details << "ids #{duplicate_ids.join(', ')}" unless duplicate_ids.empty?
+        raise ValidationError, "duplicate Ruby enumerations in #{module_name}: #{details.join('; ')}"
+      end
+
+      declarations.each do |declaration|
+        validate_ruby_uuid!(declaration[:id], "enumeration #{module_name}.#{declaration.fetch(:name)}")
+        values = Array(declaration[:values])
+        duplicate_values = values.group_by { _1.fetch(:name).to_s }
+                                 .select { |_key, entries| entries.size > 1 }.keys
+        value_ids = values.map { _1[:id].to_s }.reject(&:empty?)
+        duplicate_value_ids = value_ids.tally.select { |_key, count| count > 1 }.keys
+        unless duplicate_values.empty? && duplicate_value_ids.empty?
+          raise ValidationError,
+                "duplicate values in #{module_name}.#{declaration.fetch(:name)}: " \
+                "#{(duplicate_values + duplicate_value_ids).join(', ')}"
+        end
+        values.each do |value|
+          validate_ruby_uuid!(value[:id], "enumeration value #{value.fetch(:name)}")
+        end
+      end
+    end
+
+    def validate_ruby_uuid!(value, label)
+      id = value.to_s
+      return if id.empty? || id.match?(IO::BsonCodec::UUID_PATTERN)
+
+      raise ValidationError, "invalid native id for #{label}: #{id.inspect}"
+    end
+
+    def validate_ruby_identity!(id, by_id, named, label)
+      return if id.empty? || by_id.key?(id) || named.nil?
+
+      previous_id = IO::BsonCodec.extract_id(named.last["$ID"]) || named.first["UnitID"]
+      raise ValidationError,
+            "native identity mismatch for #{label}: expected #{previous_id}, received #{id}"
+    end
+
+    def ruby_enumeration_doc(declaration, previous: nil)
+      current = previous || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(current["$ID"]) || SecureRandom.uuid if id.empty?
+      values_payload = IO::BsonCodec.parse_array(current["Values"])
+      previous_values = values_payload.fetch(:items)
+      by_id = previous_values.to_h do |value|
+        [IO::BsonCodec.extract_id(value["$ID"]), value]
+      end
+      by_name = previous_values.to_h { [_1["Name"].to_s, _1] }
+      values = Array(declaration[:values]).map do |value|
+        value_id = value[:id].to_s
+        named = by_name[value.fetch(:name).to_s]
+        if !value_id.empty? && !by_id.key?(value_id) && named
+          previous_id = IO::BsonCodec.extract_id(named["$ID"])
+          raise ValidationError,
+                "native identity mismatch for enumeration value #{value.fetch(:name)}: " \
+                "expected #{previous_id}, received #{value_id}"
+        end
+        prior = (!value_id.empty? && by_id[value_id]) || named
+        ruby_enumeration_value_doc(value, previous: prior)
+      end
+
+      current.merge(
+        "$ID" => id,
+        "$Type" => current["$Type"] || "Enumerations$Enumeration",
+        "Name" => declaration.fetch(:name).to_s,
+        "Documentation" => declaration.fetch(:documentation, '').to_s,
+        "Excluded" => current.fetch("Excluded", false),
+        "ExportLevel" => current.fetch("ExportLevel", "Hidden"),
+        "Values" => IO::BsonCodec.build_array(values, marker: values_payload.fetch(:marker))
+      )
+    end
+
+    def ruby_enumeration_value_doc(declaration, previous: nil)
+      current = previous || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(current["$ID"]) || SecureRandom.uuid if id.empty?
+      current.merge(
+        "$ID" => id,
+        "$Type" => current["$Type"] || "Enumerations$EnumerationValue",
+        "Name" => declaration.fetch(:name).to_s,
+        "Caption" => ruby_enumeration_caption_doc(declaration, current["Caption"]),
+        "Image" => current.fetch("Image", ""),
+        "ExportLevel" => current.fetch("ExportLevel", "Hidden")
+      )
+    end
+
+    def ruby_enumeration_caption_doc(declaration, previous)
+      current = previous.is_a?(Hash) ? previous : {}
+      items_payload = IO::BsonCodec.parse_array(current["Items"])
+      previous_items = items_payload.fetch(:items)
+      translations = previous_items.select { _1.is_a?(Hash) && !_1["LanguageCode"].to_s.empty? }
+                                   .to_h { [_1["LanguageCode"].to_s, _1] }
+      opaque_items = previous_items.reject { _1.is_a?(Hash) && !_1["LanguageCode"].to_s.empty? }
+      captions = declaration.fetch(:captions, {}).to_h.transform_keys(&:to_s).transform_values(&:to_s)
+      localized = captions.map do |language, text|
+        prior = translations[language] || {}
+        prior.merge(
+          "$ID" => IO::BsonCodec.extract_id(prior["$ID"]) || SecureRandom.uuid,
+          "$Type" => prior["$Type"] || "Texts$Translation",
+          "LanguageCode" => language, "Text" => text
+        )
+      end
+      current.merge(
+        "$ID" => IO::BsonCodec.extract_id(current["$ID"]) || SecureRandom.uuid,
+        "$Type" => current["$Type"] || "Texts$Text",
+        "Items" => IO::BsonCodec.build_array(localized + opaque_items, marker: items_payload.fetch(:marker))
+      )
+    end
 
     def synchronize_ruby_domain_associations!(mpr, raw_domain, module_name, entities)
       doc = mpr.parse_contents(raw_domain)

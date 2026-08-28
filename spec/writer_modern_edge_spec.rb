@@ -461,5 +461,67 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
       writer.send(:scheduled_event_schedule_doc, unit: :weeks, interval: 1)
     end.to raise_error(ArgumentError, /modern schedules/)
   end
+
+  it 'fails closed for missing modules and ambiguous Ruby enumeration identities' do
+    mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.synchronize_ruby_enumerations!(mpr, module_name: 'Missing', enumerations: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing/)
+
+    first_id = '11111111-1111-4111-8111-111111111111'
+    second_id = '22222222-2222-4222-8222-222222222222'
+    expect do
+      writer.send(
+        :validate_ruby_enumerations!, 'App',
+        [{ name: 'State', id: first_id }, { name: 'State', id: second_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /names State/)
+    expect do
+      writer.send(
+        :validate_ruby_enumerations!, 'App',
+        [{ name: 'State', id: first_id }, { name: 'Priority', id: first_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /ids #{first_id}/)
+
+    duplicate_name = [{ name: 'State', values: [
+      { name: 'Open', id: first_id }, { name: 'Open', id: second_id }
+    ] }]
+    duplicate_id = [{ name: 'State', values: [
+      { name: 'Open', id: first_id }, { name: 'Closed', id: first_id }
+    ] }]
+    expect { writer.send(:validate_ruby_enumerations!, 'App', duplicate_name) }
+      .to raise_error(Mxrb::ValidationError, /duplicate values.*Open/)
+    expect { writer.send(:validate_ruby_enumerations!, 'App', duplicate_id) }
+      .to raise_error(Mxrb::ValidationError, /duplicate values.*#{first_id}/)
+    expect do
+      writer.send(:validate_ruby_enumerations!, 'App', [{ name: 'State', id: 'invalid' }])
+    end.to raise_error(Mxrb::ValidationError, /invalid native id/)
+
+    existing_id = '33333333-3333-4333-8333-333333333333'
+    document = writer.send(
+      :ruby_enumeration_doc, { name: 'State', values: [] },
+      previous: { '$ID' => existing_id, 'Values' => [3] }
+    )
+    expect(document['$ID']).to eq(existing_id)
+
+    replacement_id = '44444444-4444-4444-8444-444444444444'
+    expect do
+      writer.send(
+        :validate_ruby_identity!, replacement_id, {},
+        [{ 'UnitID' => existing_id }, { '$ID' => existing_id }], 'enumeration App.State'
+      )
+    end.to raise_error(Mxrb::ValidationError, /identity mismatch.*expected #{existing_id}/)
+    expect do
+      writer.send(
+        :ruby_enumeration_doc,
+        { name: 'State', values: [{ name: 'Open', id: replacement_id, captions: {} }] },
+        previous: {
+          '$ID' => existing_id,
+          'Values' => [3, { '$ID' => first_id, 'Name' => 'Open' }]
+        }
+      )
+    end.to raise_error(Mxrb::ValidationError, /identity mismatch.*value Open/)
+  end
 end
 # rubocop:enable Metrics/BlockLength

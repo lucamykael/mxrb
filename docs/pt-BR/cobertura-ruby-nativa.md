@@ -17,7 +17,7 @@ Estados:
 | Entidades e DTOs não persistentes | native | criar/remover, persistência estável |
 | Atributos | native | tipos, required, unique, default, docs, length, localize date e referência de enum |
 | Associações locais e cross-module | native | criar/alterar/remover, tipo, owner, storage, docs, delete behavior e ID estável |
-| Definições de enumeração | preserved_native | próximo: valores, captions traduzidas, documentação e ID |
+| Definições de enumeração | native | criar/renomear/remover, valores ordenados, captions por idioma, documentação e IDs estáveis |
 | Constantes | preserved_native | próximo: tipo, valor padrão, documentação e ID |
 | Regras de acesso de entidade | preserved_native | próximo: roles, CRUD, XPath, direitos default e member access |
 | Índices, system members, generalização e OQL view | preserved_native | projetar contrato Ruby autoritativo e regressão por versão |
@@ -50,3 +50,27 @@ Estados:
 
 Cada fase deve manter o comportamento fail-closed: uma variante desconhecida é
 preservada e relatada, nunca silenciosamente convertida nem descartada.
+
+## Enumerações em aplicações Ruby
+
+O export `--mode ruby` cria uma classe em `app/enumerations/<módulo>/`. O ID da
+enumeração e os IDs dos valores fazem parte do contrato de identidade:
+
+```ruby
+module Pedidos
+  class Status < Mxrb::RubyApp::Enumeration
+    mendix_name 'Pedidos.Status', id: '11111111-1111-4111-8111-111111111111'
+    documentation 'Situação atual do pedido'
+
+    value 'Aberto', id: '22222222-2222-4222-8222-222222222222',
+                    captions: { en_US: 'Open', pt_BR: 'Aberto' }
+    value 'Fechado', captions: { en_US: 'Closed', pt_BR: 'Fechado' }
+  end
+end
+```
+
+Alterar o nome mantendo `id:` renomeia o documento ou valor nativo. A ordem das
+chamadas `value` é autoritativa. Remover o arquivo exclui a enumeração somente
+quando não há atributo que a referencie; caso contrário a compilação falha antes
+de escrever uma remoção insegura. Estruturas de localização e campos BSON não
+representados na DSL são preservados pelo merge incremental.

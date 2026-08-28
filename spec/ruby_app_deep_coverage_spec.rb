@@ -5,6 +5,48 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Ruby application internal contracts' do
+  it 'covers enumeration DSL defaults, caption filters, and generic unsafe removal' do
+    implementation = Class.new(Mxrb::RubyApp::Enumeration)
+    expect(implementation.mendix_name).to be_nil
+    expect(implementation.documentation).to eq('')
+    implementation.mendix_name 'App.State'
+    implementation.documentation 'States'
+    implementation.value :Open, caption: 'Open caption'
+    implementation.value :Closed
+    implementation.value :Localized, captions: { pt_BR: 'Localizado' }
+    expect(implementation.native_definition).to include(
+      name: 'State', documentation: 'States',
+      values: include(
+        include(name: 'Open', captions: { 'en_US' => 'Open caption' }),
+        include(name: 'Closed', captions: { 'en_US' => 'Closed' }),
+        include(name: 'Localized', captions: { 'pt_BR' => 'Localizado' })
+      )
+    )
+
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    expect(exporter.send(:translated_caption, nil, 'Fallback')).to eq('Fallback')
+    caption = {
+      'Items' => Mxrb::IO::BsonCodec.build_array(
+        [
+          'opaque', { 'LanguageCode' => '', 'Text' => 'ignored' },
+          { 'LanguageCode' => 'en_US', 'Text' => 'Visible' }
+        ]
+      )
+    }
+    expect(exporter.send(:translated_caption, caption, 'Fallback')).to eq('Visible')
+
+    Mxrb::RubyApp::Registry.reset!
+    sync = Mxrb::RubyApp::Synchronizer.allocate
+    sync.instance_variable_set(
+      :@manifest,
+      double(modules: [{ 'enumerations' => [{ 'name' => 'App.State', 'id' => 'state' }] }])
+    )
+    plan = double(safe?: false, incoming: [:reference], children: [:child])
+    project = double(modules: [], plan_remove: plan)
+    expect { sync.send(:prune_enumerations, project) }
+      .to raise_error(Mxrb::ValidationError, /1 incoming reference.*1 child/)
+  end
+
   it 'covers exporter artifact, endpoint, source restoration, and frontend helpers' do
     Dir.mktmpdir('mxrb-exporter-internals-') do |dir|
       exp = Mxrb::RubyApp::Exporter.allocate
