@@ -3900,7 +3900,11 @@ module Mxrb
         "Class" => "",
         "Style" => ""
       }
-      doc["AttributePath"] = options[:attribute].to_s if options[:attribute]
+      if type == :radio_button_group
+        doc["AttributeRef"] = attribute_ref_doc(options[:attribute], entity: context_entity)
+      elsif options[:attribute]
+        doc["AttributePath"] = options[:attribute].to_s
+      end
       doc["LabelText"] = text_doc(options[:caption]) if input_widget?(type) && options.key?(:caption)
       doc["Caption"] = text_doc(options[:caption]) if type == :button
       doc["Content"] = client_template_doc(options[:caption]) if type == :text
@@ -4016,7 +4020,7 @@ module Mxrb
     end
 
     def input_widget?(type)
-      %i[text_box number_input text_area check_box date_picker]
+      %i[text_box number_input text_area check_box date_picker radio_button_group]
         .include?(type.to_sym)
     end
 
@@ -4028,7 +4032,10 @@ module Mxrb
         text_area:          "Forms$TextArea",
         check_box:          "Forms$CheckBox",
         date_picker:        "Forms$DatePicker",
+        radio_button_group: "Forms$RadioButtonGroup",
         text:               "Forms$DynamicText",
+        page_title:         "Forms$Title",
+        static_image:       "Forms$StaticImageViewer",
         tab_control:        "Forms$TabControl",
         container:          "Forms$DivContainer"
       }.fetch(type.to_sym)
@@ -4192,6 +4199,29 @@ module Mxrb
       when :text_area               then text_area_properties(options)
       when :check_box                then check_box_properties(options)
       when :date_picker              then date_picker_properties(options)
+      when :radio_button_group
+        editable_widget_properties(options).tap do |properties|
+          properties.delete("NativeAccessibilitySettings")
+          properties["RenderHorizontal"] = options[:horizontal] == true
+        end
+      when :page_title
+        {
+          "ConditionalVisibilitySettings" => nil,
+          "NativeAccessibilitySettings" => nil, "TabIndex" => 0
+        }
+      when :static_image
+        {
+          "AlternativeText" => client_template_doc(options[:alternative_text]),
+          "ClickAction" => no_action_doc(disabled: true),
+          "ConditionalVisibilitySettings" => nil,
+          "Height" => options.fetch(:height, 0).to_i,
+          "HeightUnit" => options.fetch(:height_unit, :pixels).to_s.capitalize,
+          "Image" => options.fetch(:image).to_s,
+          "NativeAccessibilitySettings" => nil,
+          "Responsive" => options.fetch(:responsive, true) == true,
+          "TabIndex" => 0, "Width" => options.fetch(:width, 0).to_i,
+          "WidthUnit" => options.fetch(:width_unit, :pixels).to_s.capitalize
+        }
       when :tab_control
         {
           "ActivePageAttributeRef" => nil, "ActivePageOnChangeAction" => no_action_doc,

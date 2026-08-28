@@ -413,6 +413,48 @@ RSpec.describe 'modern page widgets' do
       .to raise_error(ArgumentError, /requires a Hash/)
   end
 
+  it 'projects canonical title, radio, and static image widgets as typed Ruby' do
+    raw = [
+      {
+        '$Type' => 'Forms$Title', 'Name' => 'PageTitle',
+        'ConditionalVisibilitySettings' => nil, 'TabIndex' => 0
+      },
+      {
+        '$Type' => 'Forms$RadioButtonGroup', 'Name' => 'Status',
+        'AttributeRef' => { 'Attribute' => 'Ui.Order.Status' },
+        'LabelTemplate' => 'Status', 'RenderHorizontal' => true
+      },
+      {
+        '$Type' => 'Forms$StaticImageViewer', 'Name' => 'Logo',
+        'Image' => 'Ui.Images.Logo', 'AlternativeText' => 'Logo',
+        'Width' => 80, 'Height' => 50, 'WidthUnit' => 'Pixels',
+        'HeightUnit' => 'Pixels', 'Responsive' => true
+      }
+    ]
+    parsed = []
+    page = Mxrb::Model::Page.allocate
+    page.send(:parse_widgets, raw, parsed)
+
+    expect(parsed.map { _1.fetch(:type) }).to eq(%i[page_title radio_button_group static_image])
+    expect(parsed[1].fetch(:options)).to include(
+      attribute: 'Ui.Order.Status', caption: 'Status', horizontal: true
+    )
+    expect(parsed[2].fetch(:options)).to include(
+      image: 'Ui.Images.Logo', alternative_text: 'Logo', width: 80, height: 50
+    )
+    source = parsed.flat_map { Mxrb::Exporter.allocate.send(:render_widget, _1, 2) }.join("\n")
+    expect(source).to include(
+      'page_title :PageTitle', 'radio_button_group :Status', 'horizontal: true',
+      'static_image :Logo', 'image: "Ui.Images.Logo"'
+    )
+    expect(source).not_to include('native_widget', 'deep_structure:')
+
+    rebuilt = parsed.map { writer.send(:widget_doc, _1) }
+    expect(rebuilt.map { _1.fetch('$Type') }).to eq(
+      %w[Forms$Title Forms$RadioButtonGroup Forms$StaticImageViewer]
+    )
+  end
+
   it 'reconstructs BSON values in native widgets nested inside containers and tabs' do
     encoded = Base64.strict_encode64("\x01\x02".b)
     page = Mxrb::Dsl::PageBuilder.new(:P)

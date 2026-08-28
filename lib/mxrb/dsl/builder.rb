@@ -75,6 +75,12 @@ module Mxrb
         _add_widget(:date_picker, name, attribute: attribute, caption: caption, &block)
       end
 
+      def radio_button_group(name, attribute: nil, caption: nil, horizontal: false, &block)
+        _add_widget(
+          :radio_button_group, name, attribute:, caption:, horizontal: horizontal == true, &block
+        )
+      end
+
       def reference_selector(name, attribute: nil, caption: nil, display_attribute: nil, &block)
         _add_widget(
           :reference_selector, name, attribute: attribute, caption: caption,
@@ -84,6 +90,20 @@ module Mxrb
 
       def text(name, caption: nil, &block)
         _add_widget(:text, name, caption: caption || name.to_s, &block)
+      end
+
+      def page_title(name, &block)
+        _add_widget(:page_title, name, &block)
+      end
+
+      def static_image(name, image:, alternative_text: '', width: 0, height: 0,
+                       width_unit: :pixels, height_unit: :pixels, responsive: true, &block)
+        _add_widget(
+          :static_image, name, image: image.to_s, alternative_text: alternative_text.to_s,
+                               width: width.to_i, height: height.to_i,
+                               width_unit: width_unit.to_sym, height_unit: height_unit.to_sym,
+                               responsive: responsive == true, &block
+        )
       end
 
       def data_grid(name, entity: nil, selection: nil, &block)

@@ -1541,6 +1541,21 @@ module Mxrb
         return ["#{pad}pluggable_widget #{args.join(', ')}"]
       end
 
+      if type == :page_title
+        return ["#{pad}page_title #{symbol(widget.fetch(:name))}"]
+      end
+
+      if type == :static_image
+        args = [symbol(widget.fetch(:name)), "image: #{ruby(options.fetch(:image))}"]
+        args << "alternative_text: #{ruby(options[:alternative_text])}" unless options[:alternative_text].to_s.empty?
+        args << "width: #{options[:width]}" if options[:width].to_i.positive?
+        args << "height: #{options[:height]}" if options[:height].to_i.positive?
+        args << "width_unit: #{symbol(options[:width_unit])}" if options[:width_unit]
+        args << "height_unit: #{symbol(options[:height_unit])}" if options[:height_unit]
+        args << "responsive: false" if options[:responsive] == false
+        return ["#{pad}static_image #{args.join(', ')}"]
+      end
+
       # drop_down
       if type == :drop_down
         args = [symbol(widget.fetch(:name))]
@@ -1569,6 +1584,7 @@ module Mxrb
       args << "caption: #{ruby(options[:caption])}" if options.key?(:caption) && !options[:caption].nil?
       args << "entity: #{ruby(options[:entity])}" if options[:entity]
       args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
+      args << "horizontal: true" if type == :radio_button_group && options[:horizontal]
       if type == :reference_selector && options[:display_attribute]
         args << "display_attribute: #{ruby(options[:display_attribute])}"
       end

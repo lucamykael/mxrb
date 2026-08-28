@@ -171,10 +171,19 @@ module Mxrb
           :text
         when "Pages$DropDownWidget", "Forms$DropDownWidget", "Forms$DropDown"
           :drop_down
+        when "Forms$RadioButtonGroup"
+          :radio_button_group
+        when "Forms$StaticImageViewer"
+          :static_image
+        when "Forms$Title"
+          :page_title
         end
       end
 
       def widget_options(widget, widget_type)
+        return appearance_options(widget) if widget_type == :page_title
+        return static_image_options(widget) if widget_type == :static_image
+
         options = appearance_options(widget).merge(
           attribute: attribute_path(widget),
           caption: widget_caption(widget, widget_type)
@@ -182,7 +191,19 @@ module Mxrb
         parameters = template_parameters(widget)
         options[:parameters] = parameters unless parameters.empty?
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
+        options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
         options
+      end
+
+      def static_image_options(widget)
+        appearance_options(widget).merge(
+          image: widget["Image"].to_s,
+          alternative_text: extract_text(widget["AlternativeText"]),
+          width: widget.fetch("Width", 0), height: widget.fetch("Height", 0),
+          width_unit: widget.fetch("WidthUnit", "Pixels").to_s.downcase.to_sym,
+          height_unit: widget.fetch("HeightUnit", "Pixels").to_s.downcase.to_sym,
+          responsive: widget.fetch("Responsive", true) == true
+        )
       end
 
       def container_options(widget)
