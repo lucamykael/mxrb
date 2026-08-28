@@ -34,6 +34,7 @@ module Mxrb
         FileUtils.mkdir_p(@output_dir)
         runtime_mpr = copy_runtime_mpr
         embedded_sources = read_embedded_sources
+        @embedded_sources = embedded_sources
         Mxrb.open(@mpr_path) do |project|
           @project = project
           @known_entity_names = project.modules.flat_map do |mod|
@@ -53,6 +54,7 @@ module Mxrb
         @output_dir
       ensure
         @project = nil
+        @embedded_sources = nil
         @module_manifests = nil
         @known_entity_names = nil
       end
@@ -153,7 +155,7 @@ module Mxrb
           'dtos' => entities.select { _1['dto'] },
           'services' => microflows, 'nanoflows' => nanoflows, 'pages' => pages,
           'endpoints' => endpoints,
-          'enumerations' => mod.enumerations.map { enumeration_manifest(mod, _1) },
+          'enumerations' => mod.enumerations.map { export_enumeration(mod, _1, namespace, root) },
           'associations' => mod.associations.map { association_manifest(mod, _1) },
           'scheduled_events' => mod.scheduled_events.map { runtime_value(_1) }
         }
@@ -699,22 +701,60 @@ module Mxrb
         attribute.public_send(name) if attribute.respond_to?(name)
       end
 
-      def enumeration_manifest(mod, enumeration)
+      def export_enumeration(mod, enumeration, namespace, root)
         name = enumeration['Name'].to_s
-        {
-          'name' => "#{mod.name}.#{name}",
-          'id' => native_identifier(enumeration['$ID']),
+        class_name = ruby_constant(name)
+        id = native_identifier(enumeration['$ID'])
+        qualified = "#{mod.name}.#{name}"
+        relative = embedded_enumeration_path(id, qualified) ||
+                   File.join('app', 'enumerations', root, "#{underscore(name)}.rb")
+        manifest = {
+          'name' => qualified,
+          'id' => id,
+          'ruby_class' => "#{namespace}::#{class_name}",
+          'path' => relative,
+          'documentation' => enumeration['Documentation'].to_s,
           'values' => native_items(enumeration['Values']).map do |value|
             value_name = value['Name'].to_s
-            { 'name' => value_name, 'caption' => translated_caption(value['Caption'], value_name) }
+            captions = translated_captions(value['Caption'])
+            {
+              'name' => value_name, 'id' => native_identifier(value['$ID']),
+              'caption' => captions['en_US'] || captions.values.first || value_name,
+              'captions' => captions
+            }
           end
         }
+        write(relative, enumeration_source(namespace, class_name, manifest))
+        add_coverage(manifest.fetch('id'), manifest.fetch('name'), 'enumeration', relative,
+                     'executable_bidirectional')
+        manifest
+      end
+
+      def embedded_enumeration_path(id, qualified)
+        Array(@embedded_sources).find do |file|
+          next unless file.fetch(:path).match?(%r{\Aapp/enumerations/.+\.rb\z})
+
+          source = file.fetch(:contents).to_s
+          source.match?(
+            /^\s*mendix_name\s+['"][^'"]+['"],\s+id:\s+['"]#{Regexp.escape(id)}['"]/
+          ) || source.match?(/^\s*mendix_name\s+['"]#{Regexp.escape(qualified)}['"]/)
+        end&.fetch(:path)
       end
 
       def translated_caption(caption, fallback)
-        translation = native_items(caption.is_a?(Hash) ? caption['Items'] : nil).first
-        text = translation.is_a?(Hash) ? translation['Text'].to_s : ''
+        text = translated_captions(caption).values.first.to_s
         text.empty? ? fallback : text
+      end
+
+      def translated_captions(caption)
+        native_items(caption.is_a?(Hash) ? caption['Items'] : nil).filter_map do |translation|
+          next unless translation.is_a?(Hash)
+
+          language = translation['LanguageCode'].to_s
+          next if language.empty?
+
+          [language, translation['Text'].to_s]
+        end.to_h
       end
 
       def widget_manifest(widget)
@@ -791,6 +831,24 @@ module Mxrb
               mendix_name #{qualified.inspect}, id: #{id.inspect}
               persistence #{persistable}
           #{(declarations + association_declarations).join("\n")}
+            end
+          end
+        RUBY
+      end
+
+      def enumeration_source(namespace, class_name, enumeration)
+        declarations = enumeration.fetch('values').map do |value|
+          "    value #{value.fetch('name').inspect}, id: #{value.fetch('id').inspect}, " \
+            "captions: #{value.fetch('captions').inspect}"
+        end
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module #{namespace}
+            class #{class_name} < Mxrb::RubyApp::Enumeration
+              mendix_name #{enumeration.fetch('name').inspect}, id: #{enumeration.fetch('id').inspect}
+              documentation #{enumeration.fetch('documentation').inspect}
+          #{declarations.join("\n")}
             end
           end
         RUBY

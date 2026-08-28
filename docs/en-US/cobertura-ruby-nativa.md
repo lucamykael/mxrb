@@ -10,7 +10,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 |---|---|
 | Entities, non-persistent DTOs and attributes | native |
 | Local and cross-module associations | native |
-| Enumeration definitions, constants and entity access rules | preserved_native |
+| Enumeration definitions | native |
+| Constants and entity access rules | preserved_native |
 | Indexes, system members, generalization and OQL views | preserved_native |
 | Entity lifecycle | partial |
 | Module roles and project security | preserved_native |
@@ -30,3 +31,12 @@ per Mendix version with `mxbuild`, Studio Pro, and semantic comparison.
 
 Unknown variants remain fail-closed: they are preserved and reported, never
 silently converted or discarded.
+
+## Enumerations in Ruby applications
+
+`--mode ruby` exports enumeration classes under `app/enumerations/<module>/`.
+`mendix_name` and each `value` accept a stable native `id:`; values accept a
+`captions:` hash for every language. Declaration order is authoritative. A
+rename retains identity when its ID is retained, while removing a referenced
+enumeration fails closed. Incremental merges preserve native BSON fields and
+unknown localization structures that are not represented by the Ruby DSL.

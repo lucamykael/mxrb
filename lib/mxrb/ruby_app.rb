@@ -20,7 +20,7 @@ module Mxrb
       'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
-    ARTIFACT_DIRECTORIES = %w[models dtos services pages].freeze
+    ARTIFACT_DIRECTORIES = %w[enumerations models dtos services pages].freeze
 
     def self.application_files(root)
       ARTIFACT_DIRECTORIES.flat_map do |directory|
@@ -132,6 +132,7 @@ module Mxrb
       module_function
 
       def reset!
+        @enumerations = {}
         @records = {}
         @services = {}
         @pages = {}
@@ -177,7 +178,8 @@ module Mxrb
       def collection(kind)
         reset! unless defined?(@records) && @records
         {
-          record: @records, service: @services, page: @pages, adapter: @adapters,
+          enumeration: @enumerations, record: @records, service: @services,
+          page: @pages, adapter: @adapters,
           java_custom_action: @java_custom_actions
         }.fetch(kind)
       end
@@ -301,6 +303,55 @@ module Mxrb
     # Explicit non-persistent model. Its generated filename and class always
     # end in `_dto` / `Dto`, avoiding ambiguous `_2` fallbacks.
     class DTO < Record; end
+
+    # Editable Mendix enumeration definition. Generated Ruby sources retain
+    # document/value ids and every standard localized caption.
+    class Enumeration
+      OPTION_UNSET = Object.new.freeze
+
+      class << self
+        attr_reader :mendix_id, :values
+
+        def inherited(child)
+          super
+          child.instance_variable_set(:@values, [])
+          child.instance_variable_set(:@documentation, '')
+        end
+
+        def mendix_name(value = nil, id: nil)
+          return @mendix_name unless value
+
+          @mendix_name = value.to_s
+          @mendix_id = id.to_s
+          Registry.register(:enumeration, @mendix_name, self)
+        end
+
+        def documentation(value = OPTION_UNSET)
+          return @documentation.to_s if value.equal?(OPTION_UNSET)
+
+          @documentation = value.to_s
+        end
+
+        def value(name, id: nil, caption: OPTION_UNSET, captions: nil)
+          localized = if captions.nil?
+                        {}
+                      else
+                        captions.to_h.transform_keys(&:to_s).transform_values(&:to_s)
+                      end
+          localized['en_US'] = caption.to_s unless caption.equal?(OPTION_UNSET)
+          localized['en_US'] = name.to_s if captions.nil? && caption.equal?(OPTION_UNSET)
+          @values ||= []
+          @values << { name: name.to_s, id: id.to_s, captions: localized.freeze }.freeze
+        end
+
+        def native_definition
+          {
+            name: @mendix_name.to_s.split('.', 2).last, id: @mendix_id.to_s,
+            documentation: @documentation.to_s, values: Array(@values)
+          }
+        end
+      end
+    end
 
     # Base for generated services. The default body executes through MXRB's
     # pure-Ruby native interpreter and can be replaced with idiomatic Ruby.
@@ -975,8 +1026,10 @@ module Mxrb
         Registry.reset!
         RubyApp.application_files(@root).each { load _1, true }
         project = Model::Project.open(@target, readonly: false)
+        synchronize_enumeration_definitions(project)
         synchronize_entities(project)
         synchronize_associations(project)
+        prune_enumerations(project)
         synchronize_native_documents(project)
         project.close
         project = nil
@@ -1011,6 +1064,61 @@ module Mxrb
         end
         (registered.keys - source_names).each { add_entity(project, _1, registered.fetch(_1)) }
         (source_names & registered.keys).each { synchronize_entity(project, _1, registered.fetch(_1)) }
+      end
+
+      def synchronize_enumeration_definitions(project)
+        enumerations = Registry.all(:enumeration).values.group_by do |implementation|
+          module_name(implementation.mendix_name)
+        end
+        return if enumerations.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        enumerations.each do |name, implementations|
+          writer.synchronize_ruby_enumerations!(
+            project.mpr, module_name: name,
+                         enumerations: implementations.map(&:native_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def prune_enumerations(project)
+        registered = Registry.all(:enumeration)
+        registered_ids = registered.values.map(&:mendix_id).reject(&:empty?)
+        @manifest.modules.flat_map { _1.fetch('enumerations', []) }.each do |source|
+          retained = registered.key?(source.fetch('name')) ||
+                     registered_ids.include?(source.fetch('id', '').to_s)
+          next if retained
+
+          attribute_references = enumeration_attribute_references(project, source.fetch('name'))
+          unless attribute_references.empty?
+            raise ValidationError,
+                  "cannot remove enumeration #{source.fetch('name')}: incoming reference(s) from " \
+                  "#{attribute_references.join(', ')}"
+          end
+
+          plan = project.plan_remove(source.fetch('name'))
+          unless plan.safe?
+            raise ValidationError,
+                  "cannot remove enumeration #{source.fetch('name')}: " \
+                  "#{plan.incoming.size} incoming reference(s), #{plan.children.size} child unit(s)"
+          end
+
+          plan.apply!
+        end
+      end
+
+      def enumeration_attribute_references(project, enumeration_name)
+        project.modules.flat_map do |mod|
+          mod.entities.flat_map do |entity|
+            entity.attributes.filter_map do |attribute|
+              next unless attribute.respond_to?(:enumeration) &&
+                          attribute.enumeration.to_s == enumeration_name
+
+              "#{mod.name}.#{entity.name}/#{attribute.name}"
+            end
+          end
+        end
       end
 
       def synchronize_native_documents(project)
