@@ -1338,6 +1338,7 @@ module Mxrb
             Microflows$BasicCodeActionParameterValue
             Microflows$EntityTypeJavaActionParameterValue
             Microflows$MicroflowJavaActionParameterValue
+            Microflows$MicroflowParameterValue
             Microflows$ImportMappingJavaActionParameterValue
             Microflows$ExportMappingJavaActionParameterValue
           ].include?(value["$Type"])
@@ -1377,9 +1378,19 @@ module Mxrb
                             end
         result = action["ResultHandling"] || {}
         result_mapping = result["ImportMappingCall"] || {}
-        result_supported = action["ResultHandlingType"] == "Mapping" &&
-          !result_mapping["ReturnValueMapping"].to_s.empty? &&
-          result_mapping.dig("Range", "$Type") == "Microflows$ConstantRange"
+        result_supported = case action["ResultHandlingType"]
+                           when "Mapping"
+                             !result_mapping["ReturnValueMapping"].to_s.empty? &&
+                               result_mapping.dig("Range", "$Type") ==
+                                 "Microflows$ConstantRange"
+                           when "HttpResponse"
+                             result["Bind"] == true &&
+                               result["ImportMappingCall"].nil? &&
+                               !result["ResultVariableName"].to_s.empty? &&
+                               !result.dig("VariableType", "Entity").to_s.empty?
+                           else
+                             false
+                           end
         !http["HttpMethod"].to_s.empty? &&
           bson_items(http["HttpHeaderEntries"]).all? { _1["Key"] && _1["Value"] } &&
           bson_items(http.dig("CustomLocationTemplate", "Parameters")).all? {
@@ -1939,6 +1950,9 @@ module Mxrb
         args << "request_variable: :#{request["MappingVariableName"]}" if request["MappingVariableName"]
       end
       args << "result_mapping: #{ruby(import_call["ReturnValueMapping"])}" if import_call["ReturnValueMapping"]
+      if action["ResultHandlingType"] == "HttpResponse"
+        args << "result_handling: :http_response"
+      end
       args << "as: :#{result["ResultVariableName"]}" unless result["ResultVariableName"].to_s.empty?
       args << "result_entity: #{ruby(result.dig("VariableType", "Entity"))}" if result.dig("VariableType", "Entity")
       args << "timeout: #{ruby(action["TimeOutExpression"])}" if action["UseRequestTimeOut"] == true
@@ -1991,7 +2005,7 @@ module Mxrb
 
       field, kind = case type
       when /EntityType/     then ["Entity", :entity]
-      when /MicroflowJava/  then ["Microflow", :microflow]
+      when /Microflow(?:Java)?/ then ["Microflow", :microflow]
       when /ImportMapping/  then ["ImportMapping", :import_mapping]
       when /ExportMapping/  then ["ExportMapping", :export_mapping]
       else

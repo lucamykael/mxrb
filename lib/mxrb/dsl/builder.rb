@@ -1512,6 +1512,7 @@ module Mxrb
                     request_body: nil, request_parameters: [],
                     result_mapping: nil, as: nil, result_entity: nil,
                     timeout: nil, commit: :yes_without_events,
+                    result_handling: :mapping,
                     result_content_type: :json, force_single: false, single: false,
                     object_handling: :create, parameter_variable: nil,
                     error_result: :http_response, error: :rollback)
@@ -1525,7 +1526,8 @@ module Mxrb
           request_parameters: Array(request_parameters),
           result_mapping: result_mapping.to_s, variable: as.to_s,
           result_entity: result_entity.to_s, timeout: timeout.to_s,
-          commit: commit.to_s, result_content_type: result_content_type.to_s,
+          commit: commit.to_s, result_handling: result_handling.to_s,
+          result_content_type: result_content_type.to_s,
           force_single: force_single == true, single: single == true,
           object_handling: object_handling.to_s,
           parameter_variable: parameter_variable.to_s,

@@ -5293,7 +5293,7 @@ module Mxrb
         "RequestHandlingType" => activity[:request_body].nil? ? "Mapping" : "Custom",
         "RequestProxyType" => "DefaultProxy",
         "ResultHandling" => rest_result_handling_doc(activity),
-        "ResultHandlingType" => "Mapping",
+        "ResultHandlingType" => mendix_enum(activity.fetch(:result_handling, "mapping")),
         "TimeOutExpression" => activity[:timeout].to_s,
         "UseRequestTimeOut" => !activity[:timeout].to_s.empty?
       }
@@ -5325,6 +5325,26 @@ module Mxrb
     end
 
     def rest_result_handling_doc(activity)
+      if activity.fetch(:result_handling, "mapping").to_s == "http_response"
+        if activity[:variable].to_s.empty? || activity[:result_entity].to_s.empty?
+          raise ValidationError,
+                "HTTP response result handling requires as and result_entity"
+        end
+
+        return {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$ResultHandling",
+          "Bind" => true,
+          "ImportMappingCall" => nil,
+          "ResultVariableName" => activity[:variable].to_s,
+          "VariableType" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "DataTypes$ObjectType",
+            "Entity" => activity[:result_entity].to_s
+          }
+        }
+      end
+
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Microflows$ResultHandling",
@@ -5474,7 +5494,8 @@ module Mxrb
         "Microflows$BasicJavaActionParameterValue"
       mappings = Array(activity[:mappings]).map do |mapping|
         value = code_action_parameter_doc(
-          mapping[:value], basic_type: value_type, code: false
+          mapping[:value], basic_type: value_type, code: false,
+          modern_java: major >= 11
         )
         if value["Argument"] &&
            (major.between?(8, 10) || (major == 7 && minor >= 11))
@@ -5526,7 +5547,7 @@ module Mxrb
       }
     end
 
-    def code_action_parameter_doc(value, basic_type:, code:)
+    def code_action_parameter_doc(value, basic_type:, code:, modern_java: false)
       unless value.is_a?(Hash) && value[:kind]
         return {
           "$ID" => SecureRandom.uuid,
@@ -5536,6 +5557,14 @@ module Mxrb
       end
 
       kind = value[:kind].to_sym
+      if modern_java && kind == :microflow
+        return {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$MicroflowParameterValue",
+          "Microflow" => value[:value]
+        }
+      end
+
       suffix = code ? "CodeActionParameterValue" : "JavaActionParameterValue"
       prefix, field = case kind
       when :entity         then ["EntityType", "Entity"]
