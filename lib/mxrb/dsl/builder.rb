@@ -832,7 +832,7 @@ module Mxrb
     class ModuleBuilder # rubocop:disable Metrics/ClassLength
       attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
                   :associations, :menus, :module_roles, :enumerations, :constants,
-                  :scheduled_events, :native_documents
+                  :scheduled_events, :native_documents, :managed_native_document_types
 
       def initialize(name)
         @name             = name.to_s
@@ -848,6 +848,7 @@ module Mxrb
         @constants        = []
         @scheduled_events = []
         @native_documents = []
+        @managed_native_document_types = []
       end
 
       def entity(name, &block)
@@ -927,6 +928,13 @@ module Mxrb
           unit_id: unit_id&.to_s, container_id: container_id&.to_s,
           doc: { '$Type' => type.to_s, 'Name' => name.to_s }.merge(deep_structure)
         }
+      end
+
+      # Marks routed native documents as authoritative for this module. The
+      # compiler may then remove a document when its Ruby declaration is
+      # removed, while unrelated and unknown document types remain untouched.
+      def manage_native_documents(*types)
+        @managed_native_document_types |= types.flatten.map(&:to_s)
       end
 
       def bson_binary(base64, subtype: :generic)
@@ -1077,7 +1085,8 @@ module Mxrb
           microflows: @microflows, nanoflows: @nanoflows,
           repositories: @repositories, menus: @menus, module_roles: @module_roles,
           enumerations: @enumerations, constants: @constants,
-          scheduled_events: @scheduled_events, native_documents: @native_documents
+          scheduled_events: @scheduled_events, native_documents: @native_documents,
+          managed_native_document_types: @managed_native_document_types
         }
       end
     end

@@ -1847,6 +1847,7 @@ module Mxrb
     end
 
     def write_native_documents(mpr, module_id, mod)
+      retained = []
       mod.fetch(:native_documents, []).each do |document|
         doc = document.fetch(:doc)
         doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout?
@@ -1858,15 +1859,31 @@ module Mxrb
             '$Type' => doc['$Type'] || doc[:'$Type'] || document.fetch(:type)
           )
           mpr.update_unit(existing.fetch('UnitID'), preserved)
+          retained << existing.fetch('UnitID')
           next
         end
 
         requested_container = document[:container_id]
         target_container = requested_container && mpr.unit(requested_container) ? requested_container : module_id
-        upsert_native_unit(
+        retained << upsert_native_unit(
           mpr, target_container,
           'containment' => document.fetch(:containment), 'doc' => doc
         )
+      end
+
+      managed = mod.fetch(:managed_native_document_types, []).map(&:to_s)
+      return if managed.empty?
+
+      declared = mod.fetch(:native_documents, []).to_h do |document|
+        [[document.fetch(:type).to_s, document.fetch(:name).to_s], true]
+      end
+      collect_documents(mpr, module_id).each do |raw|
+        document = mpr.parse_contents(raw)
+        next unless managed.include?(document['$Type'].to_s)
+        next if retained.include?(raw.fetch('UnitID'))
+        next if declared[[document['$Type'].to_s, document['Name'].to_s]]
+
+        mpr.delete_unit(raw.fetch('UnitID'))
       end
     end
 

@@ -22,7 +22,8 @@ module Mxrb
         'Rest$ConsumedRestService' => 'integrations',
         'Rest$ConsumedODataService' => 'integrations',
         'AppServices$ConsumedAppService' => 'integrations',
-        'ODataImport$ConsumedODataService' => 'integrations'
+        'ODataImport$ConsumedODataService' => 'integrations',
+        'DatabaseConnector$DatabaseConnection' => 'persistence/external'
       }.freeze
       MAPPING_DOCUMENT_TYPES = INFRASTRUCTURE_DOCUMENT_ROUTES.keys.grep(
         /Mappings|JsonStructures|MessageDefinitions|XmlSchemas/

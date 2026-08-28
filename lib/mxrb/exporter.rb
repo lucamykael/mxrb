@@ -425,7 +425,10 @@ module Mxrb
         write(File.join(infrastructure, relative), mapping_document_source(document))
         relative
       end
-      append_to_aggregator(File.join(infrastructure, "infrastructure.rb"), paths)
+      append_to_aggregator(
+        File.join(infrastructure, "infrastructure.rb"), paths,
+        managed_types: documents.map { _1.fetch(:type) }
+      )
     end
 
     def export_application_documents(root, mod)
@@ -472,13 +475,16 @@ module Mxrb
       RUBY
     end
 
-    def append_to_aggregator(path, relative_paths)
+    def append_to_aggregator(path, relative_paths, managed_types: [])
       existing = File.exist?(path) ? File.read(path).lines : []
+      management = Array(managed_types).uniq.sort.map do |type|
+        "manage_native_documents #{ruby(type)}\n"
+      end
       additions = relative_paths.sort.map do |relative|
         segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
         "evaluate File.join(__dir__, #{segments})\n"
       end
-      write(path, (existing + additions).uniq.join)
+      write(path, (existing + management + additions).uniq.join)
     end
 
     def export_menus(root, mod)
