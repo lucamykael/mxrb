@@ -360,7 +360,8 @@ RSpec.describe 'modern page widgets' do
   it 'preserves an unknown native widget as deep structure' do
     raw = {
       '$ID' => 'old-id', '$Type' => 'Vendor$ModernWidget', 'Name' => 'VendorMap',
-      'Mode' => '3d', 'Settings' => { 'Zoom' => 12 }, 'Layers' => %w[roads labels]
+      'Type' => 'LegacyWidgetKind', 'Mode' => '3d',
+      'Settings' => { 'Zoom' => 12 }, 'Layers' => %w[roads labels]
     }
     page = Mxrb::Model::Page.allocate
     native = page.send(:native_widget, raw)

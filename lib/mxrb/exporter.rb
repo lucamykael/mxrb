@@ -184,7 +184,11 @@ module Mxrb
       end
       write(
         File.join(@output_dir, ".mxrb", "native_units.json"),
-        JSON.pretty_generate("format_version" => project.format_version.to_s, "units" => units)
+        JSON.pretty_generate(
+          "format_version" => project.format_version.to_s,
+          "source_filename" => File.basename(@mpr_path),
+          "units" => units
+        )
       )
       source = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)

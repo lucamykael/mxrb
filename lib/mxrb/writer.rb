@@ -36,6 +36,7 @@ module Mxrb
 
     def write!
       mpr = nil
+      validate_native_output_filename!
       native_units = prepared_native_units
       asset_manifest = project_asset_manifest
       total = 4 + native_units.count { _1["containment"] != "Modules" } +
@@ -223,10 +224,30 @@ module Mxrb
     end
 
     def native_format_version
-      path = @definition[:native_units_path]
-      return nil if path.to_s.empty? || !File.file?(path)
+      native_manifest&.fetch("format_version", nil)
+    end
 
-      JSON.parse(File.read(path))["format_version"]
+    def native_manifest
+      return @native_manifest if defined?(@native_manifest)
+
+      path = @definition[:native_units_path]
+      @native_manifest = if path.to_s.empty? || !File.file?(path)
+                           nil
+                         else
+                           JSON.parse(File.read(path))
+                         end
+    end
+
+    def validate_native_output_filename!
+      manifest = native_manifest
+      return unless manifest&.fetch("format_version", nil) == "v2"
+
+      expected = manifest.fetch("source_filename", "").to_s
+      return if expected.empty? || File.basename(@path) == expected
+
+      raise ValidationError,
+            "Mendix v2 mprcontents belong to #{expected}; " \
+            "refusing incompatible output filename #{File.basename(@path)}"
     end
 
     def apply(mpr, native_units)
