@@ -1146,8 +1146,8 @@ module Mxrb
         @persistable = false
       end
 
-      def generalizes(entity)
-        @generalization = entity.to_s
+      def generalizes(entity, id: nil)
+        @generalization = { target: entity.to_s, id: id&.to_s }
       end
 
       def system_members(owner: false, created_date: false, changed_date: false, changed_by: false)
@@ -1157,18 +1157,17 @@ module Mxrb
         }
       end
 
-      def index(*attributes, include_offline: false, ascending: true)
-        members = attributes.flatten.map(&:to_s)
-        raise ArgumentError, 'index requires at least one attribute' if members.empty?
+      def index(*attributes, id: nil, guid: nil, include_offline: false, ascending: true,
+                members: nil)
+        names = attributes.flatten.map(&:to_s)
+        raise ArgumentError, 'index requires at least one attribute' if names.empty? && !members
 
         @indexes ||= []
-        directions = Array(ascending)
-        if directions.size != 1 && directions.size != members.size
-          raise ArgumentError, 'ascending must be one boolean or one value per indexed attribute'
-        end
-        directions *= members.size if directions.size == 1
+        declarations = normalize_index_declarations(names, ascending, members)
         @indexes << {
-          attributes: members, ascending: directions.map { _1 == true },
+          id: id&.to_s, guid: guid&.to_s, members: declarations,
+          attributes: declarations.map { _1.fetch(:name).to_s },
+          ascending: declarations.map { _1.fetch(:ascending, true) == true },
           include_offline: include_offline == true
         }
       end
@@ -1238,6 +1237,20 @@ module Mxrb
       end
 
       private
+
+      def normalize_index_declarations(names, ascending, members)
+        return members.map { _1.transform_keys(&:to_sym) } if members
+
+        directions = Array(ascending)
+        if directions.size != 1 && directions.size != names.size
+          raise ArgumentError, 'ascending must be one boolean or one value per indexed attribute'
+        end
+
+        directions *= names.size if directions.size == 1
+        names.zip(directions).map do |name, direction|
+          { name:, ascending: direction == true, type: :Normal }
+        end
+      end
 
       def normalize_association_storage_format(value)
         return if value.nil?

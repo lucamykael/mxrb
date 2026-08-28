@@ -198,7 +198,7 @@ module Mxrb
 
       class << self
         attr_reader :mendix_id, :attributes, :associations, :persistable, :lifecycle_callbacks,
-                    :access_rules
+                    :access_rules, :indexes, :generalization, :oql_view_definition
 
         def inherited(child)
           super
@@ -206,6 +206,10 @@ module Mxrb
           child.instance_variable_set(:@associations, [])
           child.instance_variable_set(:@lifecycle_callbacks, {})
           child.instance_variable_set(:@access_rules, nil)
+          child.instance_variable_set(:@indexes, nil)
+          child.instance_variable_set(:@system_members, nil)
+          child.instance_variable_set(:@generalization, nil)
+          child.instance_variable_set(:@oql_view_definition, nil)
         end
 
         def mendix_name(value = nil, id: nil)
@@ -272,6 +276,48 @@ module Mxrb
 
         def clear_access_rules! = (@access_rules = [])
 
+        def index(*attributes, id: nil, guid: nil, include_offline: false, ascending: true,
+                  members: nil)
+          declarations = members || index_members(attributes, ascending)
+          raise ArgumentError, 'index requires at least one attribute' if declarations.empty?
+
+          @indexes ||= []
+          @indexes << {
+            id: id.to_s, guid: guid.to_s, include_offline: include_offline == true,
+            members: declarations.map { normalize_index_member(_1) }
+          }
+        end
+
+        def clear_indexes! = (@indexes = [])
+
+        def system_members(owner: ATTRIBUTE_OPTION_UNSET, created_date: ATTRIBUTE_OPTION_UNSET,
+                           changed_date: ATTRIBUTE_OPTION_UNSET, changed_by: ATTRIBUTE_OPTION_UNSET)
+          values = [owner, created_date, changed_date, changed_by]
+          return @system_members if values.all? { _1.equal?(ATTRIBUTE_OPTION_UNSET) }
+
+          @system_members = {
+            owner: owner == true, created_date: created_date == true,
+            changed_date: changed_date == true, changed_by: changed_by == true
+          }
+        end
+
+        def generalizes(entity, id: nil)
+          target = entity.to_s
+          raise ArgumentError, 'generalizes requires a qualified entity name' if target.empty?
+
+          @generalization = { target:, id: id&.to_s }
+        end
+
+        def oql_view(source: nil, query: nil, document_id: nil, source_id: nil)
+          raise ArgumentError, 'oql_view requires source or query' \
+            if source.to_s.empty? && query.to_s.empty?
+
+          @oql_view_definition = {
+            source: source&.to_s, query: query&.to_s,
+            document_id: document_id&.to_s, source_id: source_id&.to_s
+          }.compact
+        end
+
         def lifecycle(event, method_name = nil, &block)
           event = event.to_sym
           raise ArgumentError, "unknown lifecycle event #{event}" unless LIFECYCLE_EVENTS.include?(event)
@@ -312,6 +358,26 @@ module Mxrb
             id: declaration[:id].to_s, name: declaration.fetch(:name).to_s,
             reference: declaration[:reference].to_s,
             rights: normalize_access_right(declaration.fetch(:rights)), kind:
+          }
+        end
+
+        def index_members(attributes, ascending)
+          names = attributes.flatten.map(&:to_s)
+          directions = Array(ascending)
+          if directions.size != 1 && directions.size != names.size
+            raise ArgumentError, 'ascending must be one boolean or one value per indexed attribute'
+          end
+
+          directions *= names.size if directions.size == 1
+          names.zip(directions).map { |name, direction| { name:, ascending: direction } }
+        end
+
+        def normalize_index_member(member)
+          declaration = member.to_h.transform_keys(&:to_sym)
+          {
+            id: declaration[:id].to_s, name: declaration.fetch(:name).to_s,
+            ascending: declaration.fetch(:ascending, true) == true,
+            type: declaration.fetch(:type, :Normal).to_sym
           }
         end
       end
@@ -1159,8 +1225,10 @@ module Mxrb
         project = Model::Project.open(@target, readonly: false)
         synchronize_constant_definitions(project)
         synchronize_enumeration_definitions(project)
+        synchronize_entity_structures(project, existing_only: true)
         synchronize_entity_access(project, existing_only: true)
         synchronize_entities(project)
+        synchronize_entity_structures(project, existing_only: false)
         synchronize_entity_access(project, existing_only: false)
         synchronize_associations(project)
         prune_constants(project)
@@ -1340,7 +1408,8 @@ module Mxrb
                          entities: implementations.map do |implementation|
                            {
                              name: qualified_parts(implementation.mendix_name).last,
-                             associations: implementation.associations.to_a
+                             associations: implementation.associations.to_a,
+                             oql_view: implementation.oql_view_definition
                            }
                          end
           )
@@ -1366,6 +1435,37 @@ module Mxrb
                            {
                              name: qualified_parts(implementation.mendix_name).last,
                              access_rules: implementation.access_rules
+                           }
+                         end
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_entity_structures(project, existing_only:)
+        existing_names = project.modules.flat_map do |mod|
+          mod.entities.map { "#{mod.name}.#{_1.name}" }
+        end
+        existing = existing_names.to_h { [_1, true] }
+        records = Registry.all(:record).values.reject do |implementation|
+          implementation.indexes.nil? && implementation.system_members.nil? &&
+            implementation.generalization.nil? && implementation.oql_view_definition.nil?
+        end
+        records.select! { existing.key?(_1.mendix_name) } if existing_only
+        records = records.group_by { module_name(_1.mendix_name) }
+        return if records.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        records.each do |name, implementations|
+          writer.synchronize_ruby_entity_structures!(
+            project.mpr, module_name: name,
+                         entities: implementations.map do |implementation|
+                           {
+                             name: qualified_parts(implementation.mendix_name).last,
+                             indexes: implementation.indexes,
+                             system_members: implementation.system_members,
+                             generalization: implementation.generalization,
+                             oql_view: implementation.oql_view_definition
                            }
                          end
           )

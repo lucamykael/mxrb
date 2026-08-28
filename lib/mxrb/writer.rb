@@ -216,6 +216,50 @@ module Mxrb
       self
     end
 
+    # Applies authoritative indexes and system-member flags without replacing
+    # the surrounding entity/generalization documents.
+    def synchronize_ruby_entity_structures!(mpr, module_name:, entities:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch("UnitID")
+      raw_domain = mpr.units_by_containment("DomainModel").find { _1["ContainerID"] == module_id }
+      raise ValidationError, "Mendix module #{module_name} has no domain model" unless raw_domain
+
+      domain = mpr.parse_contents(raw_domain)
+      entities_key = native_key(domain, "entities", "Entities")
+      payload = IO::BsonCodec.parse_array(domain[entities_key])
+      existing = payload.fetch(:items).to_h do |entity|
+        [(entity["name"] || entity["Name"]).to_s, entity]
+      end
+      declarations = Array(entities)
+      declarations.each do |declaration|
+        name = declaration.fetch(:name).to_s
+        entity = existing[name]
+        raise ValidationError, "entity #{module_name}.#{name} does not exist" unless entity
+
+        synchronize_ruby_indexes!(entity, declaration[:indexes], module_name.to_s, name) \
+          unless declaration[:indexes].nil?
+        synchronize_ruby_system_members!(entity, declaration[:system_members]) \
+          unless declaration[:system_members].nil?
+        synchronize_ruby_generalization!(entity, declaration[:generalization]) \
+          unless declaration[:generalization].nil?
+        unless declaration[:oql_view].nil?
+          synchronize_ruby_oql_view!(entity, declaration[:oql_view], module_name.to_s, name)
+          synchronize_ruby_oql_member_values!(entity)
+        end
+      end
+      domain[entities_key] = IO::BsonCodec.build_array(
+        payload.fetch(:items), marker: payload.fetch(:marker)
+      )
+      mpr.transaction do
+        mpr.update_unit(raw_domain.fetch("UnitID"), domain)
+        synchronize_ruby_oql_documents!(mpr, module_id, module_name.to_s, declarations)
+      end
+      self
+    end
+
     # Canonical editor-shape serializers shared by incremental semantic plans.
     def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
       entity_doc(entity, module_name, previous, index)
@@ -248,6 +292,259 @@ module Mxrb
         ruby_access_rule_doc(declaration, current, module_name, entity_name)
       end
       IO::BsonCodec.build_array(rules + opaque, marker: payload.fetch(:marker))
+    end
+
+    def synchronize_ruby_indexes!(entity, declarations, module_name, entity_name)
+      attributes_key = native_key(entity, "attributes", "Attributes")
+      attributes = IO::BsonCodec.parse_array(entity[attributes_key])[:items]
+      attribute_ids = attributes.to_h do |attribute|
+        [(attribute["name"] || attribute["Name"]).to_s,
+         IO::BsonCodec.extract_id(attribute["$ID"])]
+      end
+      indexes_key = native_key(entity, "indexes", "Indexes")
+      entity[indexes_key] = ruby_index_docs(
+        Array(declarations), entity[indexes_key], attribute_ids, module_name, entity_name
+      )
+    end
+
+    def ruby_index_docs(declarations, previous, attribute_ids, module_name, entity_name)
+      validate_ruby_indexes!(declarations, attribute_ids, module_name, entity_name)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |index|
+        index.is_a?(Hash) && index["$Type"] == "DomainModels$EntityIndex"
+      end
+      names_by_id = attribute_ids.to_h { |name, id| [id, name] }
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_signature = supported.group_by { ruby_index_signature(_1, names_by_id) }
+      indexes = declarations.map do |declaration|
+        id = declaration[:id].to_s
+        matches = Array(by_signature[ruby_index_declaration_signature(declaration)])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(id, by_id, semantic_match, "index")
+        current = (!id.empty? && by_id[id]) || semantic_match
+        ruby_index_doc(declaration, current, attribute_ids)
+      end
+      IO::BsonCodec.build_array(indexes + opaque, marker: payload.fetch(:marker))
+    end
+
+    def validate_ruby_indexes!(declarations, attribute_ids, module_name, entity_name)
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      signatures = declarations.map { ruby_index_declaration_signature(_1) }
+      if ids.uniq.size != ids.size || signatures.uniq.size != signatures.size
+        raise ValidationError, "duplicate indexes for #{module_name}.#{entity_name}"
+      end
+      declarations.each do |index|
+        validate_ruby_uuid!(index[:id], "index for #{module_name}.#{entity_name}")
+        validate_ruby_uuid!(index[:guid], "index GUID for #{module_name}.#{entity_name}")
+        members = Array(index[:members])
+        raise ValidationError, "empty index for #{module_name}.#{entity_name}" if members.empty?
+
+        member_ids = members.map { _1[:id].to_s }.reject(&:empty?)
+        raise ValidationError, "duplicate index members for #{module_name}.#{entity_name}" \
+          unless member_ids.uniq.size == member_ids.size
+        members.each do |member|
+          validate_ruby_uuid!(member[:id], "index member for #{module_name}.#{entity_name}")
+          name = member.fetch(:name).to_s
+          raise ValidationError, "unknown indexed attribute #{module_name}.#{entity_name}.#{name}" \
+            unless attribute_ids.key?(name)
+        end
+      end
+    end
+
+    def ruby_index_doc(declaration, current, attribute_ids)
+      previous = current || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
+      guid = declaration[:guid].to_s
+      guid = IO::BsonCodec.extract_id(previous["GUID"]) || id if guid.empty?
+      members_payload = IO::BsonCodec.parse_array(previous["Attributes"])
+      previous_members = members_payload.fetch(:items)
+      by_id = previous_members.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_name = previous_members.to_h do |member|
+        pointer = IO::BsonCodec.extract_id(member["AttributePointer"])
+        [attribute_ids.key(pointer), member]
+      end
+      members = Array(declaration[:members]).map do |member|
+        member_id = member[:id].to_s
+        prior = (!member_id.empty? && by_id[member_id]) || by_name[member.fetch(:name).to_s]
+        ruby_index_member_doc(member, prior, attribute_ids)
+      end
+      previous.merge(
+        "$ID" => id, "$Type" => previous["$Type"] || "DomainModels$EntityIndex",
+        "GUID" => binary_uuid(guid),
+        "Attributes" => IO::BsonCodec.build_array(members, marker: members_payload.fetch(:marker)),
+        "IncludeInOffline" => declaration.fetch(:include_offline, false) == true
+      )
+    end
+
+    def ruby_index_member_doc(declaration, current, attribute_ids)
+      previous = current || {}
+      id = declaration[:id].to_s
+      id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
+      previous.merge(
+        "$ID" => id, "$Type" => previous["$Type"] || "DomainModels$IndexedAttribute",
+        "Type" => declaration.fetch(:type, :Normal).to_s,
+        "AttributePointer" => binary_uuid(attribute_ids.fetch(declaration.fetch(:name).to_s)),
+        "AssociationPointer" => previous.fetch(
+          "AssociationPointer", binary_uuid("00000000-0000-0000-0000-000000000000")
+        ),
+        "Ascending" => declaration.fetch(:ascending, true) == true
+      )
+    end
+
+    def ruby_index_signature(index, names_by_id)
+      members = IO::BsonCodec.parse_array(index["Attributes"])[:items]
+      members.map { names_by_id[IO::BsonCodec.extract_id(_1["AttributePointer"])] }
+    end
+
+    def ruby_index_declaration_signature(index)
+      Array(index[:members]).map { _1.fetch(:name).to_s }
+    end
+
+    def synchronize_ruby_system_members!(entity, declaration)
+      key = native_existing_key(
+        entity, "generalization", "Generalization", "maybeGeneralization", "MaybeGeneralization"
+      ) || "MaybeGeneralization"
+      generalization = entity[key]
+      unless generalization.is_a?(Hash) && generalization["$Type"].to_s.end_with?("NoGeneralization")
+        raise ValidationError, "system members require an entity without generalization"
+      end
+      fields = {
+        owner: %w[hasOwner HasOwnerAttr], created_date: %w[hasCreatedDate HasCreatedDateAttr],
+        changed_date: %w[hasChangedDate HasChangedDateAttr],
+        changed_by: %w[hasChangedBy HasChangedByAttr]
+      }
+      fields.each do |name, variants|
+        field = native_existing_key(generalization, *variants) || variants.last
+        generalization[field] = declaration.fetch(name, false) == true
+      end
+    end
+
+    def synchronize_ruby_generalization!(entity, target)
+      declaration = target.respond_to?(:to_h) ? target.to_h.transform_keys(&:to_sym) : { target: }
+      target = declaration.fetch(:target).to_s
+      raise ValidationError, 'generalization target cannot be empty' if target.empty?
+      validate_ruby_uuid!(declaration[:id], "generalization for #{target}")
+
+      key = native_existing_key(
+        entity, "generalization", "Generalization", "maybeGeneralization", "MaybeGeneralization"
+      ) || "MaybeGeneralization"
+      previous = entity[key].is_a?(Hash) ? entity[key] : {}
+      reference_key = native_existing_key(previous, "generalization", "Generalization") || "Generalization"
+      type = previous["$Type"].to_s
+      declared_id = declaration[:id].to_s
+      document = previous.merge(
+        "$ID" => declared_id.empty? ? (previous["$ID"] || SecureRandom.uuid) : declared_id,
+        "$Type" => type.end_with?("Generalization") && !type.end_with?("NoGeneralization") ?
+          type : "DomainModels$Generalization",
+        reference_key => target
+      )
+      if target.start_with?("System.") && type.end_with?("NoGeneralization")
+        {
+          "Persistable" => true, "HasCreatedDateAttr" => true,
+          "HasChangedDateAttr" => true, "HasOwnerAttr" => true,
+          "HasChangedByAttr" => true
+        }.each do |name, value|
+          field = native_existing_key(document, name.sub(/Attr\z/, ''), name) || name
+          document[field] = value
+        end
+      end
+      entity[key] = document
+    end
+
+    def synchronize_ruby_oql_view!(entity, declaration, module_name, entity_name)
+      validate_ruby_uuid!(declaration[:source_id], "OQL source for #{module_name}.#{entity_name}")
+      validate_ruby_uuid!(declaration[:document_id], "OQL document for #{module_name}.#{entity_name}")
+      source = declaration[:source].to_s
+      query = declaration[:query]
+      if source.empty? && query.to_s.empty?
+        raise ValidationError, "OQL view #{module_name}.#{entity_name} requires source or query"
+      end
+
+      unless source.empty?
+        key = native_existing_key(entity, "source", "Source") || "Source"
+        previous = entity[key].is_a?(Hash) ? entity[key] : {}
+        declared_id = declaration[:source_id].to_s
+        previous_id = IO::BsonCodec.extract_id(previous["$ID"])
+        if !declared_id.empty? && previous_id && declared_id != previous_id
+          raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
+        end
+        source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
+                     "SourceDocument"
+        entity[key] = previous.merge(
+          "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
+          "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
+        )
+      end
+      return if query.nil? || !source.empty?
+
+      query_key = native_existing_key(entity, "oqlQuery", "OqlQuery", "OQLQuery") || "OqlQuery"
+      entity[query_key] = query.to_s
+    end
+
+    def synchronize_ruby_oql_member_values!(entity)
+      attributes_key = native_existing_key(entity, "attributes", "Attributes") || "Attributes"
+      payload = IO::BsonCodec.parse_array(entity[attributes_key])
+      payload.fetch(:items).each do |attribute|
+        name = (attribute["name"] || attribute["Name"]).to_s
+        next if name.empty?
+
+        value_key = native_existing_key(attribute, "value", "Value") || "Value"
+        previous = attribute[value_key].is_a?(Hash) ? attribute[value_key] : {}
+        reference_key = native_existing_key(previous, "reference", "Reference") || "Reference"
+        value = previous.merge(
+          "$ID" => previous["$ID"] || SecureRandom.uuid,
+          "$Type" => "DomainModels$OqlViewValue",
+          reference_key => name
+        )
+        value.delete("DefaultValue")
+        value.delete("defaultValue")
+        attribute[value_key] = value
+      end
+      entity[attributes_key] = IO::BsonCodec.build_array(
+        payload.fetch(:items), marker: payload.fetch(:marker)
+      )
+    end
+
+    def synchronize_ruby_oql_documents!(mpr, module_id, module_name, entities)
+      declarations = entities.filter_map do |entity|
+        view = entity[:oql_view]
+        next if view.nil? || view[:query].nil? || view[:source].to_s.empty?
+
+        [entity.fetch(:name).to_s, view]
+      end
+      return if declarations.empty?
+
+      existing = collect_documents(mpr, module_id).filter_map do |raw|
+        document = mpr.parse_contents(raw)
+        [raw, document] if document["$Type"] == "DomainModels$ViewEntitySourceDocument"
+      end
+      by_id = existing.to_h do |raw, document|
+        [IO::BsonCodec.extract_id(document["$ID"]) || raw["UnitID"], [raw, document]]
+      end
+      by_name = existing.to_h { |raw, document| [document["Name"].to_s, [raw, document]] }
+      declarations.each do |entity_name, view|
+        name = view.fetch(:source).to_s.split('.').last
+        id = view[:document_id].to_s
+        named = by_name[name]
+        validate_ruby_identity!(id, by_id, named, "OQL document #{module_name}.#{name}")
+        raw, previous = (!id.empty? && by_id[id]) || named
+        document = (previous || {}).merge(
+          "$ID" => id.empty? ? (previous&.dig("$ID") || SecureRandom.uuid) : id,
+          "$Type" => "DomainModels$ViewEntitySourceDocument",
+          "Name" => name, "Oql" => view.fetch(:query).to_s
+        )
+        if raw
+          mpr.update_unit(raw.fetch("UnitID"), document)
+        else
+          mpr.insert_unit(
+            container_uuid: module_id, containment_name: "Documents",
+            contents_doc: document, unit_uuid: id.empty? ? nil : id
+          )
+        end
+      rescue KeyError
+        raise ValidationError, "OQL view #{module_name}.#{entity_name} has an invalid declaration"
+      end
     end
 
     def validate_ruby_access_rules!(declarations, module_name, entity_name)
@@ -597,10 +894,13 @@ module Mxrb
             to_id = entity_ids[target_name]
             raise ValidationError, "unknown association target #{association.fetch(:target).inspect}" unless to_id
 
-            local << association_doc(association, from_id:, to_id:, previous: prior)
+            local << association_doc(
+              association, from_id:, to_id:, previous: prior, oql_view: !entity[:oql_view].nil?
+            )
           else
             cross << cross_association_doc(
-              association, from_id:, target: "#{target_module}.#{target_name}", previous: prior
+              association, from_id:, target: "#{target_module}.#{target_name}", previous: prior,
+              oql_view: !entity[:oql_view].nil?
             )
           end
         end
@@ -1380,7 +1680,8 @@ module Mxrb
               to_id: entity_ids.fetch(target_name) {
                 raise ArgumentError, "unknown association target #{association.fetch(:target).inspect}"
               },
-              previous: existing_associations[association.fetch(:name)]
+              previous: existing_associations[association.fetch(:name)],
+              oql_view: !entity[:oql_view].nil?
             )
             associations = associations.reject { _1["Name"] == generated["Name"] } + [generated]
             cross_associations = cross_associations.reject { _1["Name"] == generated["Name"] }
@@ -1389,7 +1690,8 @@ module Mxrb
               association,
               from_id: entity_ids.fetch(entity.fetch(:name)),
               target: "#{target_module}.#{target_name}",
-              previous: existing_cross_associations[association.fetch(:name)]
+              previous: existing_cross_associations[association.fetch(:name)],
+              oql_view: !entity[:oql_view].nil?
             )
             cross_associations = cross_associations.reject { _1["Name"] == generated["Name"] } + [generated]
             associations = associations.reject { _1["Name"] == generated["Name"] }
@@ -2146,7 +2448,9 @@ module Mxrb
         [attribute["name"] || attribute["Name"], attribute]
       end
       attrs = entity.fetch(:attributes).map do |attr|
-        attribute_doc(attr, previous_attrs[attr.fetch(:name)])
+        attribute_doc(
+          attr, previous_attrs[attr.fetch(:name)], oql_view: !entity[:oql_view].nil?
+        )
       end
       attribute_ids = attrs.to_h { [_1['Name'] || _1.fetch('name'), _1.fetch('$ID')] }
       rules_declared = !entity[:access_rules].nil?
@@ -2221,7 +2525,7 @@ module Mxrb
       doc[query_key] = view.fetch(:query)
     end
 
-    def attribute_doc(attr, previous)
+    def attribute_doc(attr, previous, oql_view: false)
       storage_type = Model::Attribute::TYPE_MAP.fetch(attr.fetch(:type).to_sym)
       type_key = native_existing_key(previous, "type", "Type", "newType", "NewType") || "NewType"
       value_key = native_existing_key(previous, "value", "Value") || "Value"
@@ -2249,7 +2553,18 @@ module Mxrb
         type_doc = type_doc.merge(localize_key => (attr[:localize_date] == true))
       end
       previous_value = previous&.dig(value_key)
-      value_doc = if previous_value && !attr.key?(:default)
+      value_doc = if oql_view
+        current = previous_value.is_a?(Hash) ? previous_value : {}
+        current = current.merge(
+          "$ID" => current["$ID"] || SecureRandom.uuid,
+          "$Type" => "DomainModels$OqlViewValue",
+          "Reference" => attr.fetch(:name)
+        )
+        current.delete("DefaultValue")
+        current.delete("defaultValue")
+        current
+      elsif previous_value && !attr.key?(:default) &&
+            previous_value["$Type"] != "DomainModels$OqlViewValue"
         previous_value
       elsif previous_value.is_a?(Hash) && previous_value["$Type"] == "DomainModels$StoredValue"
         updated = previous_value.dup
@@ -2297,9 +2612,11 @@ module Mxrb
     end
 
     def generalization_doc(target)
+      declaration = target.respond_to?(:to_h) ? target.to_h.transform_keys(&:to_sym) : { target: }
       {
-        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$Generalization',
-        'Generalization' => target.to_s
+        '$ID' => declaration[:id].to_s.empty? ? SecureRandom.uuid : declaration[:id].to_s,
+        '$Type' => 'DomainModels$Generalization',
+        'Generalization' => declaration.fetch(:target).to_s
       }
     end
 
@@ -2355,19 +2672,25 @@ module Mxrb
     end
 
     def index_doc(index, attribute_ids:)
-      members = index.fetch(:attributes).zip(index.fetch(:ascending)).map do |attribute, ascending|
+      declarations = index[:members] || index.fetch(:attributes).zip(index.fetch(:ascending)).map do |name, ascending|
+        { name:, ascending: }
+      end
+      members = declarations.map do |member|
+        attribute = member.fetch(:name).to_s
         {
-          '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$IndexedAttribute',
-          'Type' => 'Normal',
+          '$ID' => member.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : member.fetch(:id).to_s,
+          '$Type' => 'DomainModels$IndexedAttribute',
+          'Type' => member.fetch(:type, :Normal).to_s,
           'AttributePointer' => binary_uuid(attribute_ids.fetch(attribute)),
           'AssociationPointer' => binary_uuid('00000000-0000-0000-0000-000000000000'),
-          'Ascending' => ascending
+          'Ascending' => member.fetch(:ascending, true) == true
         }
       end
-      id = SecureRandom.uuid
+      id = index.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : index.fetch(:id).to_s
+      guid = index.fetch(:guid, nil).to_s.empty? ? id : index.fetch(:guid).to_s
       {
         '$ID' => id, '$Type' => 'DomainModels$EntityIndex',
-        'GUID' => id,
+        'GUID' => binary_uuid(guid),
         'Attributes' => IO::BsonCodec.build_array(members, marker: 2),
         'IncludeInOffline' => index.fetch(:include_offline, false)
       }
@@ -2454,7 +2777,7 @@ module Mxrb
       end
     end
 
-    def association_doc(association, from_id:, to_id:, previous:)
+    def association_doc(association, from_id:, to_id:, previous:, oql_view: false)
       doc = (previous || {}).merge(
         "$ID" => previous&.dig("$ID") || SecureRandom.uuid,
         "$Type" => "DomainModels$Association",
@@ -2483,12 +2806,24 @@ module Mxrb
         parent_error_key => behavior[parent_error_key], child_error_key => behavior[child_error_key]
       )
       doc[native_key(previous, 'deleteBehavior', 'DeleteBehavior')] = behavior
+      source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
+      if oql_view
+        source = previous&.dig(source_key)
+        source = {} unless source.is_a?(Hash)
+        doc[source_key] = source.merge(
+          '$ID' => source['$ID'] || SecureRandom.uuid,
+          '$Type' => 'DomainModels$OqlViewAssociationSource',
+          'Reference' => association.fetch(:name)
+        )
+      elsif doc.dig(source_key, '$Type') == 'DomainModels$OqlViewAssociationSource'
+        doc.delete(source_key)
+      end
       doc
     end
 
-    def cross_association_doc(association, from_id:, target:, previous:)
+    def cross_association_doc(association, from_id:, target:, previous:, oql_view: false)
       doc = association_doc(
-        association, from_id:, to_id: nil, previous:
+        association, from_id:, to_id: nil, previous:, oql_view:
       ).merge(
         '$Type' => 'DomainModels$CrossAssociation',
         'Child' => target,

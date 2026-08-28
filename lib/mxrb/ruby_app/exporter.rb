@@ -181,11 +181,20 @@ module Mxrb
         end
         associations = associations.map { association_manifest(mod, _1) }
         access_rules = runtime_value(entity.access_rules || [])
+        indexes = entity.indexes.to_a.map { index_manifest(entity, _1) }
+        generalization = generalization_manifest(entity)
+        oql_view = oql_view_manifest(entity, mod)
+        system_members = if entity.respond_to?(:generalization_target) && entity.generalization_target
+                           nil
+                         else
+                           runtime_value(entity.system_members || {})
+                         end
         write(
           relative,
           entity_source(
             namespace, class_name, qualified, entity.id, attributes, associations,
-            access_rules:, dto:, persistable: entity.persistable == true
+            access_rules:, indexes:, system_members:, generalization:, oql_view:,
+            dto:, persistable: entity.persistable == true
           )
         )
         add_coverage(entity.id, qualified, dto ? 'dto' : 'model', relative, 'executable_bidirectional')
@@ -194,7 +203,10 @@ module Mxrb
           'path' => relative, 'dto' => dto, 'persistable' => entity.persistable == true,
           'attributes' => attributes,
           'associations' => associations,
-          'system_members' => runtime_value(entity.system_members || {}),
+          'system_members' => system_members,
+          'indexes' => indexes,
+          'generalization' => generalization,
+          'oql_view' => oql_view,
           'access_rules' => access_rules,
           'lifecycle' => runtime_value(entity.respond_to?(:lifecycle) ? entity.lifecycle : [])
         }
@@ -217,6 +229,55 @@ module Mxrb
           'parent_delete' => association.parent_delete_behavior.to_s,
           'child_delete' => association.child_delete_behavior.to_s
         }
+      end
+
+      def index_manifest(entity, index)
+        members = IO::BsonCodec.parse_array(index['Attributes'] || index['attributes'])[:items]
+        {
+          'id' => IO::BsonCodec.extract_id(index['$ID']),
+          'guid' => IO::BsonCodec.extract_id(index['GUID']),
+          'include_offline' => index.fetch('IncludeInOffline', false) == true,
+          'members' => members.map do |member|
+            name = member['Attribute'].to_s.split('.').last
+            raise SerializationError, "unsupported index member in #{entity.qualified_name}" if name.empty?
+
+            {
+              'id' => IO::BsonCodec.extract_id(member['$ID']), 'name' => name,
+              'ascending' => member.fetch('Ascending', true) == true,
+              'type' => member.fetch('Type', 'Normal').to_s
+            }
+          end
+        }
+      end
+
+      def oql_view_manifest(entity, mod)
+        return unless entity.respond_to?(:oql_view?) && entity.oql_view?
+
+        source = entity.oql_source_document
+        document = mod.oql_view_documents.find do |candidate|
+          [candidate.fetch(:name), "#{mod.name}.#{candidate.fetch(:name)}"].include?(source.to_s)
+        end
+        result = {
+          'source' => source,
+          'source_id' => IO::BsonCodec.extract_id(entity.source&.fetch('$ID', nil))
+        }
+        if document
+          result['document_id'] = document.fetch(:id)
+          result['query'] = document.fetch(:doc).fetch('Oql', '')
+        elsif !entity.oql_query.to_s.empty?
+          result['query'] = entity.oql_query
+        end
+        result.compact
+      end
+
+      def generalization_manifest(entity)
+        target = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
+        return unless target
+
+        {
+          'target' => target,
+          'id' => IO::BsonCodec.extract_id(entity.generalization&.fetch('$ID', nil))
+        }.compact
       end
 
       def export_service(flow, mod, namespace, root, kind)
@@ -851,7 +912,8 @@ module Mxrb
       end
 
       def entity_source(namespace, class_name, qualified, id, attributes, associations = [],
-                        access_rules:, dto:, persistable:)
+                        access_rules:, indexes:, system_members:, generalization:, oql_view:,
+                        dto:, persistable:)
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
                             ", localize_date: #{attribute.fetch('localize_date').inspect}"
@@ -880,6 +942,26 @@ module Mxrb
                               else
                                 access_rules.map { access_rule_source(_1) }
                               end
+        index_declarations = if indexes.empty?
+                               ['    clear_indexes!']
+                             else
+                               indexes.map { index_source(_1) }
+                             end
+        system_declarations = if system_members
+                                ['    system_members ' \
+                                 "owner: #{system_members.fetch('owner', false)}, " \
+                                 "created_date: #{system_members.fetch('created_date', false)}, " \
+                                 "changed_date: #{system_members.fetch('changed_date', false)}, " \
+                                 "changed_by: #{system_members.fetch('changed_by', false)}"]
+                              else
+                                []
+                              end
+        semantic_declarations = []
+        if generalization
+          semantic_declarations << "    generalizes #{generalization.fetch('target').inspect}, " \
+                                   "id: #{generalization.fetch('id', nil).inspect}"
+        end
+        semantic_declarations << oql_view_source(oql_view) if oql_view
         <<~RUBY
           # frozen_string_literal: true
 
@@ -887,10 +969,27 @@ module Mxrb
             class #{class_name} < Mxrb::RubyApp::#{dto ? 'DTO' : 'Record'}
               mendix_name #{qualified.inspect}, id: #{id.inspect}
               persistence #{persistable}
-          #{(declarations + association_declarations + access_declarations).join("\n")}
+          #{(declarations + association_declarations + index_declarations + system_declarations + semantic_declarations + access_declarations).join("\n")}
             end
           end
         RUBY
+      end
+
+      def index_source(index)
+        members = index.fetch('members').map do |member|
+          "{ id: #{member.fetch('id').inspect}, name: #{member.fetch('name').inspect}, " \
+            "ascending: #{member.fetch('ascending')}, type: :#{member.fetch('type')} }"
+        end
+        "    index id: #{index.fetch('id').inspect}, guid: #{index.fetch('guid').inspect}, " \
+          "include_offline: #{index.fetch('include_offline')}, members: [#{members.join(', ')}]"
+      end
+
+      def oql_view_source(view)
+        options = %w[source query document_id source_id].filter_map do |name|
+          value = view[name]
+          "#{name}: #{value.inspect}" unless value.nil?
+        end
+        "    oql_view #{options.join(', ')}"
       end
 
       def access_rule_source(rule)

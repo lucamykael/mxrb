@@ -783,7 +783,10 @@ module Mxrb
       end
       flags << "  documentation #{ruby(entity.documentation)}" unless entity.documentation.to_s.empty?
       generalization = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
-      flags << "  generalizes #{ruby(generalization)}" if generalization
+      if generalization
+        generalization_id = IO::BsonCodec.extract_id(entity.generalization&.fetch('$ID', nil))
+        flags << "  generalizes #{ruby(generalization)}, id: #{ruby(generalization_id)}"
+      end
       system_members = entity.respond_to?(:system_members) ? entity.system_members : {}
       system_options = system_members.to_h.select { |_key, value| value }
       unless system_options.empty?
@@ -799,9 +802,22 @@ module Mxrb
 
         directions = indexed.map { |member| member.fetch('ascending', member.fetch('Ascending', true)) }
         options = []
+        index_id = IO::BsonCodec.extract_id(index['$ID'])
+        guid = IO::BsonCodec.extract_id(index['GUID'])
+        options << "id: #{ruby(index_id)}" if index_id
+        options << "guid: #{ruby(guid)}" if guid
         options << "ascending: #{ruby(directions)}" unless directions.all?
         include_offline = index['includeInOffline'] || index['IncludeInOffline']
         options << 'include_offline: true' if include_offline
+        member_declarations = indexed.map do |member|
+          {
+            id: IO::BsonCodec.extract_id(member['$ID']),
+            name: (member['attribute'] || member['Attribute']).to_s.split('.').last,
+            ascending: member.fetch('ascending', member.fetch('Ascending', true)),
+            type: (member['type'] || member['Type'] || 'Normal').to_sym
+          }
+        end
+        options << "members: #{native_ruby(member_declarations)}"
         flags << "  index #{members.map { symbol(_1) }.join(', ')}#{options.empty? ? '' : ", #{options.join(', ')}"}"
       end
       metadata&.fetch(:lifecycle, [])&.each do |callback|
