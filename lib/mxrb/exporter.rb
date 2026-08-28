@@ -460,8 +460,191 @@ module Mxrb
       <<~RUBY
         # frozen_string_literal: true
 
-        #{native_document_declaration(document)}
+        #{integration_document_declaration(document)}
       RUBY
+    end
+
+    def integration_document_declaration(document)
+      doc = document.fetch(:doc)
+      case document.fetch(:type)
+      when "JsonStructures$JsonStructure"
+        return json_structure_declaration(document) if doc.key?("JsonSnippet")
+      when "ImportMappings$ImportMapping"
+        return mapping_declaration(document, :import) if doc.key?("JsonStructure")
+      when "ExportMappings$ExportMapping"
+        return mapping_declaration(document, :export) if doc.key?("JsonStructure")
+      when "Rest$PublishedRestService"
+        return published_rest_declaration(document) if semantic_rest_service?(doc)
+      end
+      native_document_declaration(document)
+    end
+
+    def json_structure_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:json_structure, document, {
+        snippet: doc.fetch("JsonSnippet", ""),
+        documentation: doc.fetch("Documentation", ""),
+        excluded: doc["Excluded"] == true,
+        export_level: doc.fetch("ExportLevel", "Hidden"),
+        elements: bson_items(doc["Elements"]).map { json_element_spec(_1) }
+      })
+    end
+
+    def mapping_declaration(document, direction)
+      doc = document.fetch(:doc)
+      options = {
+        json_structure: doc.fetch("JsonStructure", ""),
+        documentation: doc.fetch("Documentation", ""),
+        excluded: doc["Excluded"] == true,
+        export_level: doc.fetch("ExportLevel", "Hidden"),
+        elements: bson_items(doc["Elements"]).map { mapping_element_spec(_1) },
+        message_definition: doc.fetch("MessageDefinition", ""),
+        message_definition2: doc.fetch("MessageDefinition2", ""),
+        operation_name: doc.fetch("OperationName", ""),
+        public_name: doc.fetch("PublicName", ""),
+        service_name: doc.fetch("ServiceName", ""),
+        wsdl_file: doc.fetch("WsdlFile", ""),
+        xml_schema: doc.fetch("XmlSchema", ""),
+        xsd_root_element_name: doc.fetch("XsdRootElementName", "")
+      }
+      if direction == :import
+        options[:parameter_type] = data_type_spec(doc["ParameterType"])
+        options[:parameter_type_id] = document_id(doc["ParameterType"])
+        options[:use_subtransactions] = doc["UseSubtransactionsForMicroflows"] == true
+      else
+        options[:null_value] = doc.fetch("NullValueOption", "LeaveOutElement")
+        options[:header_parameter] = doc["IsHeaderParameter"] == true
+        options[:parameter_name] = doc.fetch("ParameterName", "")
+      end
+      semantic_call_source("#{direction}_mapping", document, options)
+    end
+
+    def published_rest_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:published_rest_service, document, {
+        path: doc.fetch("Path", ""),
+        version: doc.fetch("Version", ""),
+        service_name: doc.fetch("ServiceName", document.fetch(:name)),
+        allowed_roles: bson_items(doc["AllowedRoles"]),
+        authentication_types: bson_items(doc["AuthenticationTypes"]).map { underscore(_1) },
+        authentication_microflow: doc.fetch("AuthenticationMicroflow", ""),
+        documentation: doc.fetch("Documentation", ""),
+        public_documentation: doc.fetch("PublicDocumentation", ""),
+        excluded: doc["Excluded"] == true,
+        export_level: doc.fetch("ExportLevel", "Hidden"),
+        enable_cors: doc["EnableCors"],
+        requires_authentication: doc["RequiresAuthentication"],
+        resources: bson_items(doc["Resources"]).map { rest_resource_spec(_1) }
+      }.reject { |key, _| %i[enable_cors requires_authentication].include?(key) && !doc.key?(camelize_key(key)) })
+    end
+
+    def semantic_call_source(method, document, options)
+      identity = {
+        unit_id: document.fetch(:id),
+        container_id: document.fetch(:container_id)
+      }
+      values = identity.merge(options)
+      lines = ["#{method} #{symbol(document.fetch(:name))},"]
+      values.each_with_index do |(key, value), index|
+        rendered = native_ruby(value, 16)
+        comma = index == values.size - 1 ? "" : ","
+        lines << "                #{key}: #{rendered}#{comma}"
+      end
+      lines.join("\n")
+    end
+
+    def json_element_spec(element)
+      {
+        id: document_id(element), kind: underscore(element["ElementType"]).to_sym,
+        name: element.fetch("ExposedName", ""), item_name: element.fetch("ExposedItemName", ""),
+        path: element.fetch("Path", ""), primitive: underscore(element["PrimitiveType"]).to_sym,
+        original: element.fetch("OriginalValue", ""), min_occurs: element.fetch("MinOccurs", 0),
+        max_occurs: element.fetch("MaxOccurs", 1), nillable: element["Nillable"] == true,
+        max_length: element.fetch("MaxLength", -1), total_digits: element.fetch("TotalDigits", -1),
+        fraction_digits: element.fetch("FractionDigits", -1),
+        default_type: element["IsDefaultType"] == true,
+        error: element.fetch("ErrorMessage", ""), warning: element.fetch("WarningMessage", ""),
+        children: bson_items(element["Children"]).map { json_element_spec(_1) }
+      }
+    end
+
+    def mapping_element_spec(element)
+      object = element["$Type"].to_s.include?("ObjectMappingElement")
+      common = {
+        id: document_id(element), kind: object ? :object : :value,
+        name: element.fetch("ExposedName", ""),
+        documentation: element.fetch("Documentation", ""),
+        json_path: element.fetch("JsonPath", ""), xml_path: element.fetch("XmlPath", ""),
+        min_occurs: element.fetch("MinOccurs", 0), max_occurs: element.fetch("MaxOccurs", 1),
+        nillable: element["Nillable"] == true,
+        children: bson_items(element["Children"]).map { mapping_element_spec(_1) }
+      }
+      if object
+        return common.merge(
+          association: element.fetch("Association", ""), entity: element.fetch("Entity", ""),
+          default_type: element["IsDefaultType"] == true,
+          object_handling: underscore(element.fetch("ObjectHandling", "Create")).to_sym,
+          backup_handling: underscore(element.fetch("ObjectHandlingBackup", "Create")).to_sym,
+          allow_override: element["ObjectHandlingBackupAllowOverride"] == true
+        )
+      end
+
+      common.merge(
+        attribute: element.fetch("Attribute", ""), converter: element.fetch("Converter", ""),
+        type: data_type_spec(element["Type"]), type_id: document_id(element["Type"]),
+        primitive: underscore(element.fetch("XmlPrimitiveType", "Unknown")).to_sym,
+        fraction_digits: element.fetch("FractionDigits", -1),
+        max_length: element.fetch("MaxLength", -1), total_digits: element.fetch("TotalDigits", -1),
+        content: element["IsContent"] == true, key: element["IsKey"] == true,
+        xml_attribute: element["IsXmlAttribute"] == true,
+        original: element.fetch("OriginalValue", "")
+      )
+    end
+
+    def rest_resource_spec(resource)
+      {
+        id: document_id(resource), name: resource.fetch("Name"),
+        documentation: resource.fetch("Documentation", ""),
+        operations: bson_items(resource["Operations"]).map { rest_operation_spec(_1) }
+      }
+    end
+
+    def rest_operation_spec(operation)
+      {
+        id: document_id(operation), method: underscore(operation.fetch("HttpMethod", "Get")).to_sym,
+        path: operation.fetch("Path", ""), microflow: operation.fetch("Microflow", ""),
+        import_mapping: operation.fetch("ImportMapping", ""),
+        export_mapping: operation.fetch("ExportMapping", ""),
+        commit: underscore(operation.fetch("Commit", "No")).to_sym,
+        object_handling: underscore(operation.fetch("ObjectHandlingBackup", "Create")).to_sym,
+        deprecated: operation["Deprecated"] == true,
+        documentation: operation.fetch("Documentation", ""),
+        summary: operation.fetch("Summary", "")
+      }
+    end
+
+    def semantic_rest_service?(doc)
+      return false unless doc.key?("Resources") && doc.key?("Path")
+      return false unless bson_items(doc["Parameters"]).empty?
+
+      bson_items(doc["Resources"]).all? do |resource|
+        bson_items(resource["Operations"]).all? do |operation|
+          bson_items(operation["Parameters"]).empty?
+        end
+      end
+    end
+
+    def data_type_spec(type_doc)
+      type = type_doc.to_h.fetch("$Type", "DataTypes$UnknownType")
+      underscore(type.delete_prefix("DataTypes$").delete_suffix("Type")).to_sym
+    end
+
+    def document_id(document)
+      IO::BsonCodec.extract_id(document.to_h["$ID"]).to_s
+    end
+
+    def camelize_key(key)
+      key.to_s.split("_").map!(&:capitalize).join
     end
 
     def native_document_declaration(document)
