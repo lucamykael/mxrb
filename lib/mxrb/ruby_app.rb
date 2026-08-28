@@ -189,6 +189,7 @@ module Mxrb
     # Base for generated persistent models.
     class Record
       LIFECYCLE_EVENTS = Runtime::Native::Store::LIFECYCLE_EVENTS
+      NATIVE_LIFECYCLE_EVENTS = %i[before_commit after_commit before_delete after_delete].freeze
       ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
       ASSOCIATION_OWNERS = %i[Default Both].freeze
       ASSOCIATION_STORAGE_FORMATS = %i[Column Table].freeze
@@ -198,7 +199,8 @@ module Mxrb
 
       class << self
         attr_reader :mendix_id, :attributes, :associations, :persistable, :lifecycle_callbacks,
-                    :access_rules, :indexes, :generalization, :oql_view_definition
+                    :access_rules, :indexes, :generalization, :oql_view_definition,
+                    :native_lifecycle_definitions, :validation_rules
 
         def inherited(child)
           super
@@ -210,6 +212,8 @@ module Mxrb
           child.instance_variable_set(:@system_members, nil)
           child.instance_variable_set(:@generalization, nil)
           child.instance_variable_set(:@oql_view_definition, nil)
+          child.instance_variable_set(:@native_lifecycle_definitions, nil)
+          child.instance_variable_set(:@validation_rules, nil)
         end
 
         def mendix_name(value = nil, id: nil)
@@ -318,9 +322,30 @@ module Mxrb
           }.compact
         end
 
-        def lifecycle(event, method_name = nil, &block)
+        def lifecycle(event, method_name = nil, microflow: nil, id: nil, pass_event_object: true,
+                      raise_error_on_false: nil, &block)
           event = event.to_sym
           raise ArgumentError, "unknown lifecycle event #{event}" unless LIFECYCLE_EVENTS.include?(event)
+
+          if microflow
+            raise ArgumentError, "#{event} is not a native Mendix lifecycle event" \
+              unless NATIVE_LIFECYCLE_EVENTS.include?(event)
+            raise ArgumentError, 'native lifecycle cannot also declare a Ruby callback' \
+              if method_name || block
+
+            raise_error = if raise_error_on_false.nil?
+                            event.to_s.start_with?('before_')
+                          else
+                            raise_error_on_false == true
+                          end
+            @native_lifecycle_definitions ||= []
+            @native_lifecycle_definitions << {
+              id: id.to_s, event:, handler: microflow.to_s,
+              pass_event_object: pass_event_object == true,
+              raise_error_on_false: raise_error
+            }
+            return
+          end
           raise ArgumentError, 'callback method or block is required' unless method_name || block
 
           @lifecycle_callbacks ||= {}
@@ -328,8 +353,34 @@ module Mxrb
         end
 
         LIFECYCLE_EVENTS.each do |event|
-          define_method(event) { |method_name = nil, &block| lifecycle(event, method_name, &block) }
+          define_method(event) do |method_name = nil, **options, &block|
+            lifecycle(event, method_name, **options, &block)
+          end
         end
+
+        def clear_native_lifecycle! = (@native_lifecycle_definitions = [])
+
+        def validation_rule(attribute, kind:, id: nil, message_id: nil, translations: [],
+                            rule_info_id: nil, rule_info: {})
+          name = attribute.to_s
+          raise ArgumentError, 'validation_rule requires an attribute' if name.empty?
+
+          @validation_rules ||= []
+          @validation_rules << {
+            id: id.to_s, attribute: name, kind: kind.to_s,
+            message_id: message_id.to_s,
+            translations: Array(translations).map { normalize_validation_translation(_1) },
+            rule_info_id: rule_info_id.to_s,
+            rule_info: rule_info.to_h.transform_keys(&:to_s)
+          }
+          option = { 'required' => :required, 'unique' => :unique }[kind.to_s.downcase]
+          declared_attribute = @attributes&.find do |candidate|
+            [candidate[:name], candidate[:mendix_name]].map(&:to_s).include?(name)
+          end
+          declared_attribute[option] = true if option && declared_attribute
+        end
+
+        def clear_validation_rules! = (@validation_rules = [])
 
         def from_native(value)
           values = attributes.to_a.to_h do |attribute|
@@ -378,6 +429,15 @@ module Mxrb
             id: declaration[:id].to_s, name: declaration.fetch(:name).to_s,
             ascending: declaration.fetch(:ascending, true) == true,
             type: declaration.fetch(:type, :Normal).to_sym
+          }
+        end
+
+        def normalize_validation_translation(translation)
+          value = translation.to_h.transform_keys(&:to_sym)
+          {
+            id: value[:id].to_s,
+            language_code: value.fetch(:language_code, value[:language]).to_s,
+            text: value.fetch(:text).to_s
           }
         end
       end
@@ -1231,6 +1291,7 @@ module Mxrb
         synchronize_entity_structures(project, existing_only: false)
         synchronize_entity_access(project, existing_only: false)
         synchronize_associations(project)
+        synchronize_entity_behaviors(project)
         prune_constants(project)
         prune_enumerations(project)
         synchronize_native_documents(project)
@@ -1466,6 +1527,29 @@ module Mxrb
                              system_members: implementation.system_members,
                              generalization: implementation.generalization,
                              oql_view: implementation.oql_view_definition
+                           }
+                         end
+          )
+        end
+        project.refresh!
+      end
+
+      def synchronize_entity_behaviors(project)
+        implementations = Registry.all(:record).values.reject do |implementation|
+          implementation.native_lifecycle_definitions.nil? && implementation.validation_rules.nil?
+        end
+        records = implementations.group_by { module_name(_1.mendix_name) }
+        return if records.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        records.each do |name, implementations|
+          writer.synchronize_ruby_entity_behaviors!(
+            project.mpr, module_name: name,
+                         entities: implementations.map do |implementation|
+                           {
+                             name: qualified_parts(implementation.mendix_name).last,
+                             lifecycle: implementation.native_lifecycle_definitions,
+                             validation_rules: implementation.validation_rules
                            }
                          end
           )

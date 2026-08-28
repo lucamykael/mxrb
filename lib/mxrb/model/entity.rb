@@ -10,7 +10,8 @@ module Mxrb
       attr_accessor :id, :name, :qualified_name, :documentation,
                     :persistable, :location, :data_storage_guid,
                     :export_level, :generalization, :access_rules, :indexes,
-                    :system_members, :lifecycle, :source, :oql_query, :native_type
+                    :system_members, :lifecycle, :validation_rules, :source, :oql_query,
+                    :native_type
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
       def self.from_bson(doc, _domain_model_id, mpr)
@@ -42,6 +43,7 @@ module Mxrb
         attr_arr   = IO::BsonCodec.parse_array(doc["attributes"] || doc["Attributes"])[:items]
         e.instance_variable_set(:@attributes, attr_arr.map { Attribute.from_bson(_1) })
         rules = IO::BsonCodec.parse_array(doc['validationRules'] || doc['ValidationRules'])[:items]
+        e.validation_rules = rules
         apply_validation_rules(e.attributes, rules)
         raw_indexes = IO::BsonCodec.parse_array(doc['indexes'] || doc['Indexes'])[:items]
         e.indexes = normalize_indexes(raw_indexes, e.attributes, e.qualified_name)
@@ -87,7 +89,7 @@ module Mxrb
           "location"        => serialize_location(@location),
           "generalization"  => serialize_generalization,
           "attributes"      => IO::BsonCodec.build_array(@attributes.map(&:to_bson)),
-          "validationRules" => IO::BsonCodec.build_array([]),  # must come after attributes
+          "validationRules" => IO::BsonCodec.build_array(@validation_rules.to_a),
           "eventHandlers"   => IO::BsonCodec.build_array(@lifecycle.to_a.map { lifecycle_bson(_1) }),
           "indexes"         => IO::BsonCodec.build_array([]),
           "accessRules"     => IO::BsonCodec.build_array(@access_rules.to_a),
@@ -176,6 +178,7 @@ module Mxrb
         moment = doc["Moment"].to_s.downcase
         event = doc["Event"].to_s.downcase
         {
+          id: IO::BsonCodec.extract_id(doc["$ID"]),
           event: [moment, event].reject(&:empty?).join("_").to_sym,
           handler: doc["Microflow"].to_s,
           pass_event_object: doc.fetch("PassEventObject", true) == true,

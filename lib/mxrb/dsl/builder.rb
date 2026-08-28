@@ -1201,9 +1201,19 @@ module Mxrb
       end
 
       %i[before_commit after_commit before_delete after_delete].each do |event|
-        define_method(event) do |microflow:|
+        define_method(event) do |microflow:, id: nil, pass_event_object: true,
+                                raise_error_on_false: nil|
           @lifecycle ||= []
-          @lifecycle << { event: event, handler: microflow.to_s }
+          raise_error = if raise_error_on_false.nil?
+                          event.to_s.start_with?('before_')
+                        else
+                          raise_error_on_false == true
+                        end
+          @lifecycle << {
+            id: id&.to_s, event:, handler: microflow.to_s,
+            pass_event_object: pass_event_object == true,
+            raise_error_on_false: raise_error
+          }
         end
       end
 

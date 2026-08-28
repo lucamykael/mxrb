@@ -184,6 +184,8 @@ module Mxrb
         indexes = entity.indexes.to_a.map { index_manifest(entity, _1) }
         generalization = generalization_manifest(entity)
         oql_view = oql_view_manifest(entity, mod)
+        lifecycle = entity.lifecycle.to_a.map { lifecycle_manifest(_1) }
+        validation_rules = entity.validation_rules.to_a.map { validation_rule_manifest(_1) }
         system_members = if entity.respond_to?(:generalization_target) && entity.generalization_target
                            nil
                          else
@@ -194,6 +196,7 @@ module Mxrb
           entity_source(
             namespace, class_name, qualified, entity.id, attributes, associations,
             access_rules:, indexes:, system_members:, generalization:, oql_view:,
+            lifecycle:, validation_rules:,
             dto:, persistable: entity.persistable == true
           )
         )
@@ -208,7 +211,8 @@ module Mxrb
           'generalization' => generalization,
           'oql_view' => oql_view,
           'access_rules' => access_rules,
-          'lifecycle' => runtime_value(entity.respond_to?(:lifecycle) ? entity.lifecycle : [])
+          'lifecycle' => lifecycle,
+          'validation_rules' => validation_rules
         }
       end
 
@@ -278,6 +282,39 @@ module Mxrb
           'target' => target,
           'id' => IO::BsonCodec.extract_id(entity.generalization&.fetch('$ID', nil))
         }.compact
+      end
+
+      def lifecycle_manifest(callback)
+        {
+          'id' => callback.fetch(:id, '').to_s,
+          'event' => callback.fetch(:event).to_s,
+          'handler' => callback.fetch(:handler).to_s,
+          'pass_event_object' => callback.fetch(:pass_event_object, true) == true,
+          'raise_error_on_false' => callback.fetch(:raise_error_on_false, false) == true
+        }
+      end
+
+      def validation_rule_manifest(rule)
+        info = rule['RuleInfo'].is_a?(Hash) ? rule['RuleInfo'] : {}
+        type = info['$Type'].to_s
+        short_kind = type.sub(/\ADomainModels\$/, '').sub(/RuleInfo\z/, '')
+        kind = %w[Required Unique].include?(short_kind) ? short_kind.downcase : type
+        message = rule['Message'].is_a?(Hash) ? rule['Message'] : {}
+        {
+          'id' => native_identifier(rule['$ID']),
+          'attribute' => rule['Attribute'].to_s.split('.').last,
+          'kind' => kind,
+          'message_id' => native_identifier(message['$ID']),
+          'translations' => native_items(message['Items']).map do |translation|
+            {
+              'id' => native_identifier(translation['$ID']),
+              'language_code' => translation['LanguageCode'].to_s,
+              'text' => translation['Text'].to_s
+            }
+          end,
+          'rule_info_id' => native_identifier(info['$ID']),
+          'rule_info' => runtime_value(info.reject { |key, _value| %w[$ID $Type].include?(key) })
+        }
       end
 
       def export_service(flow, mod, namespace, root, kind)
@@ -913,6 +950,7 @@ module Mxrb
 
       def entity_source(namespace, class_name, qualified, id, attributes, associations = [],
                         access_rules:, indexes:, system_members:, generalization:, oql_view:,
+                        lifecycle:, validation_rules:,
                         dto:, persistable:)
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
@@ -962,6 +1000,16 @@ module Mxrb
                                    "id: #{generalization.fetch('id', nil).inspect}"
         end
         semantic_declarations << oql_view_source(oql_view) if oql_view
+        lifecycle_declarations = if lifecycle.empty?
+                                   ['    clear_native_lifecycle!']
+                                 else
+                                   lifecycle.map { lifecycle_source(_1) }
+                                 end
+        validation_declarations = if validation_rules.empty?
+                                    ['    clear_validation_rules!']
+                                  else
+                                    validation_rules.map { validation_rule_source(_1) }
+                                  end
         <<~RUBY
           # frozen_string_literal: true
 
@@ -969,7 +1017,7 @@ module Mxrb
             class #{class_name} < Mxrb::RubyApp::#{dto ? 'DTO' : 'Record'}
               mendix_name #{qualified.inspect}, id: #{id.inspect}
               persistence #{persistable}
-          #{(declarations + association_declarations + index_declarations + system_declarations + semantic_declarations + access_declarations).join("\n")}
+          #{(declarations + association_declarations + index_declarations + system_declarations + semantic_declarations + lifecycle_declarations + validation_declarations + access_declarations).join("\n")}
             end
           end
         RUBY
@@ -990,6 +1038,23 @@ module Mxrb
           "#{name}: #{value.inspect}" unless value.nil?
         end
         "    oql_view #{options.join(', ')}"
+      end
+
+      def lifecycle_source(callback)
+        "    #{callback.fetch('event')} microflow: #{callback.fetch('handler').inspect}, " \
+          "id: #{callback.fetch('id').inspect}, " \
+          "pass_event_object: #{callback.fetch('pass_event_object')}, " \
+          "raise_error_on_false: #{callback.fetch('raise_error_on_false')}"
+      end
+
+      def validation_rule_source(rule)
+        kind = rule.fetch('kind')
+        kind = %w[required unique].include?(kind) ? ":#{kind}" : kind.inspect
+        "    validation_rule #{rule.fetch('attribute').inspect}, kind: #{kind}, " \
+          "id: #{rule.fetch('id').inspect}, message_id: #{rule.fetch('message_id').inspect}, " \
+          "translations: #{rule.fetch('translations').inspect}, " \
+          "rule_info_id: #{rule.fetch('rule_info_id').inspect}, " \
+          "rule_info: #{rule.fetch('rule_info').inspect}"
       end
 
       def access_rule_source(rule)

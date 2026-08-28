@@ -28,6 +28,10 @@ module Mxrb
       "HybridTablet" => "HybridTabletProfile6"
     }.freeze
 
+    RUBY_NATIVE_LIFECYCLE_EVENTS = %i[
+      before_commit after_commit before_delete after_delete
+    ].freeze
+
     def initialize(path, definition)
       @path = File.expand_path(path)
       @definition = definition
@@ -257,6 +261,50 @@ module Mxrb
         mpr.update_unit(raw_domain.fetch("UnitID"), domain)
         synchronize_ruby_oql_documents!(mpr, module_id, module_name.to_s, declarations)
       end
+      self
+    end
+
+    # Applies authoritative native validation rules and Mendix lifecycle
+    # handlers while keeping unrelated entity metadata opaque.
+    def synchronize_ruby_entity_behaviors!(mpr, module_name:, entities:)
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch("UnitID")
+      raw_domain = mpr.units_by_containment("DomainModel").find { _1["ContainerID"] == module_id }
+      raise ValidationError, "Mendix module #{module_name} has no domain model" unless raw_domain
+
+      domain = mpr.parse_contents(raw_domain)
+      entities_key = native_key(domain, "entities", "Entities")
+      payload = IO::BsonCodec.parse_array(domain[entities_key])
+      existing = payload.fetch(:items).to_h do |entity|
+        [(entity["name"] || entity["Name"]).to_s, entity]
+      end
+      Array(entities).each do |declaration|
+        name = declaration.fetch(:name).to_s
+        entity = existing[name]
+        raise ValidationError, "entity #{module_name}.#{name} does not exist" unless entity
+
+        unless declaration[:lifecycle].nil?
+          key = native_existing_key(entity, "eventHandlers", "EventHandlers") || "EventHandlers"
+          entity[key] = ruby_lifecycle_docs(declaration[:lifecycle], entity[key], module_name, name)
+        end
+        next if declaration[:validation_rules].nil?
+
+        key = native_existing_key(entity, "validationRules", "ValidationRules") || "ValidationRules"
+        attributes_key = native_existing_key(entity, "attributes", "Attributes") || "Attributes"
+        attribute_names = IO::BsonCodec.parse_array(entity[attributes_key]).fetch(:items).map do |attribute|
+          (attribute["name"] || attribute["Name"]).to_s
+        end
+        entity[key] = ruby_validation_rule_docs(
+          declaration[:validation_rules], entity[key], module_name, name, attribute_names
+        )
+      end
+      domain[entities_key] = IO::BsonCodec.build_array(
+        payload.fetch(:items), marker: payload.fetch(:marker)
+      )
+      mpr.transaction { mpr.update_unit(raw_domain.fetch("UnitID"), domain) }
       self
     end
 
@@ -545,6 +593,187 @@ module Mxrb
       rescue KeyError
         raise ValidationError, "OQL view #{module_name}.#{entity_name} has an invalid declaration"
       end
+    end
+
+    def ruby_lifecycle_docs(declarations, previous, module_name, entity_name)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |handler|
+        handler.is_a?(Hash) && handler["$Type"] == "DomainModels$EventHandler"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_event = supported.group_by { lifecycle_signature(_1) }
+      declarations = Array(declarations)
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      events = declarations.map { _1.fetch(:event).to_sym }
+      if ids.uniq.size != ids.size || events.uniq.size != events.size
+        raise ValidationError, "duplicate lifecycle handlers for #{module_name}.#{entity_name}"
+      end
+
+      handlers = declarations.map do |declaration|
+        event = declaration.fetch(:event).to_sym
+        unless RUBY_NATIVE_LIFECYCLE_EVENTS.include?(event)
+          raise ValidationError, "unsupported native lifecycle event #{event}"
+        end
+        handler = declaration.fetch(:handler).to_s
+        raise ValidationError, "lifecycle handler for #{module_name}.#{entity_name} is empty" \
+          if handler.empty?
+
+        id = declaration[:id].to_s
+        validate_ruby_uuid!(id, "lifecycle handler for #{module_name}.#{entity_name}")
+        matches = Array(by_event[event])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(id, by_id, semantic_match, "lifecycle handler #{event}")
+        current = (!id.empty? && by_id[id]) || semantic_match
+        ruby_lifecycle_doc(declaration, current, "#{module_name}.#{entity_name}")
+      end
+      IO::BsonCodec.build_array(handlers + opaque, marker: payload.fetch(:marker))
+    end
+
+    def lifecycle_signature(handler)
+      "#{handler['Moment'].to_s.downcase}_#{handler['Event'].to_s.downcase}".to_sym
+    end
+
+    def ruby_lifecycle_doc(declaration, current, entity_name)
+      previous = current || {}
+      id = declaration[:id].to_s
+      if id.empty?
+        id = IO::BsonCodec.extract_id(previous["$ID"]) ||
+             ruby_stable_uuid('lifecycle', entity_name, declaration.fetch(:event))
+      end
+      moment, event = declaration.fetch(:event).to_s.split('_', 2)
+      previous.merge(
+        "$ID" => id, "$Type" => "DomainModels$EventHandler",
+        "Event" => event.capitalize, "Moment" => moment.capitalize,
+        "Microflow" => declaration.fetch(:handler).to_s,
+        "PassEventObject" => declaration.fetch(:pass_event_object, true) == true,
+        "RaiseErrorOnFalse" => declaration.fetch(:raise_error_on_false, moment == 'before') == true
+      )
+    end
+
+    def ruby_validation_rule_docs(declarations, previous, module_name, entity_name, attributes)
+      payload = IO::BsonCodec.parse_array(previous)
+      supported, opaque = payload.fetch(:items).partition do |rule|
+        rule.is_a?(Hash) && rule["$Type"] == "DomainModels$ValidationRule"
+      end
+      by_id = supported.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_signature = supported.group_by { validation_rule_signature(_1) }
+      declarations = Array(declarations)
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      signatures = declarations.map { validation_declaration_signature(_1) }
+      if ids.uniq.size != ids.size || signatures.uniq.size != signatures.size
+        raise ValidationError, "duplicate validation rules for #{module_name}.#{entity_name}"
+      end
+
+      rules = declarations.map do |declaration|
+        attribute = declaration.fetch(:attribute).to_s
+        unless attributes.include?(attribute)
+          raise ValidationError, "unknown validation attribute #{module_name}.#{entity_name}.#{attribute}"
+        end
+
+        id = declaration[:id].to_s
+        validate_ruby_uuid!(id, "validation rule for #{module_name}.#{entity_name}.#{attribute}")
+        matches = Array(by_signature[validation_declaration_signature(declaration)])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(id, by_id, semantic_match, "validation rule #{attribute}")
+        current = (!id.empty? && by_id[id]) || semantic_match
+        ruby_validation_rule_doc(declaration, current, module_name, entity_name)
+      end
+      IO::BsonCodec.build_array(rules + opaque, marker: payload.fetch(:marker))
+    end
+
+    def validation_rule_signature(rule)
+      [rule["Attribute"].to_s.split('.').last, rule.dig("RuleInfo", "$Type").to_s]
+    end
+
+    def validation_declaration_signature(declaration)
+      [declaration.fetch(:attribute).to_s, validation_rule_type(declaration.fetch(:kind))]
+    end
+
+    def validation_rule_type(kind)
+      value = kind.to_s
+      return "DomainModels$RequiredRuleInfo" if value.casecmp('required').zero?
+      return "DomainModels$UniqueRuleInfo" if value.casecmp('unique').zero?
+      return value if value.start_with?('DomainModels$') && value.end_with?('RuleInfo')
+
+      raise ValidationError, "unsupported validation rule kind #{kind.inspect}"
+    end
+
+    def ruby_validation_rule_doc(declaration, current, module_name, entity_name)
+      previous = current || {}
+      id = ruby_nested_document_id(
+        declaration[:id], previous["$ID"], "validation rule #{declaration.fetch(:attribute)}",
+        fallback: ruby_stable_uuid(
+          'validation-rule', module_name, entity_name, declaration.fetch(:attribute),
+          validation_rule_type(declaration.fetch(:kind))
+        )
+      )
+      {
+        "$ID" => id, "$Type" => "DomainModels$ValidationRule",
+        "Attribute" => "#{module_name}.#{entity_name}.#{declaration.fetch(:attribute)}",
+        "Message" => ruby_validation_message_doc(declaration, previous["Message"], id),
+        "RuleInfo" => ruby_validation_info_doc(declaration, previous["RuleInfo"], id)
+      }
+    end
+
+    def ruby_validation_message_doc(declaration, current, rule_id)
+      previous = current.is_a?(Hash) ? current : {}
+      id = ruby_nested_document_id(
+        declaration[:message_id], previous["$ID"], "validation rule message",
+        fallback: ruby_stable_uuid('validation-message', rule_id)
+      )
+      payload = IO::BsonCodec.parse_array(previous["Items"])
+      prior_items = payload.fetch(:items)
+      by_id = prior_items.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
+      by_language = prior_items.group_by { _1["LanguageCode"].to_s }
+      translations = Array(declaration[:translations]).map.with_index do |translation, index|
+        translation_id = translation[:id].to_s
+        validate_ruby_uuid!(translation_id, "validation translation")
+        matches = Array(by_language[translation.fetch(:language_code).to_s])
+        semantic_match = matches.one? ? matches.first : nil
+        validate_ruby_nested_identity!(translation_id, by_id, semantic_match, "validation translation")
+        {
+          "$ID" => translation_id.empty? ?
+            ruby_stable_uuid(
+              'validation-translation', rule_id, translation.fetch(:language_code), index
+            ) : translation_id,
+          "$Type" => "Texts$Translation",
+          "LanguageCode" => translation.fetch(:language_code).to_s,
+          "Text" => translation.fetch(:text).to_s
+        }
+      end
+      {
+        "$ID" => id, "$Type" => "Texts$Text",
+        "Items" => IO::BsonCodec.build_array(translations, marker: payload.fetch(:marker))
+      }
+    end
+
+    def ruby_validation_info_doc(declaration, current, rule_id)
+      previous = current.is_a?(Hash) ? current : {}
+      id = ruby_nested_document_id(
+        declaration[:rule_info_id], previous["$ID"], "validation rule info",
+        fallback: ruby_stable_uuid('validation-info', rule_id)
+      )
+      declaration.fetch(:rule_info, {}).to_h.transform_keys(&:to_s).merge(
+        "$ID" => id, "$Type" => validation_rule_type(declaration.fetch(:kind))
+      )
+    end
+
+    def ruby_nested_document_id(declared, previous, label, fallback: nil)
+      id = declared.to_s
+      validate_ruby_uuid!(id, label)
+      previous_id = IO::BsonCodec.extract_id(previous)
+      if !id.empty? && previous_id && id != previous_id
+        raise ValidationError,
+              "native identity mismatch for #{label}: expected #{previous_id}, received #{id}"
+      end
+      id.empty? ? (fallback || previous_id || SecureRandom.uuid) : id
+    end
+
+    def ruby_stable_uuid(*parts)
+      hex = Digest::SHA256.hexdigest(parts.map(&:to_s).join("\0"))[0, 32]
+      hex[12] = '5'
+      hex[16] = (8 + (hex[16].to_i(16) % 4)).to_s(16)
+      [hex[0, 8], hex[8, 4], hex[12, 4], hex[16, 4], hex[20, 12]].join('-')
     end
 
     def validate_ruby_access_rules!(declarations, module_name, entity_name)
@@ -2838,13 +3067,13 @@ module Mxrb
     def lifecycle_doc(callback)
       event, moment = callback.fetch(:event).to_s.split("_", 2)
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => callback.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : callback.fetch(:id).to_s,
         "$Type" => "DomainModels$EventHandler",
         "Event" => event == "before" || event == "after" ? moment.capitalize : event.capitalize,
         "Moment" => event.capitalize,
         "Microflow" => callback.fetch(:handler),
-        "PassEventObject" => true,
-        "RaiseErrorOnFalse" => event == "before"
+        "PassEventObject" => callback.fetch(:pass_event_object, true) == true,
+        "RaiseErrorOnFalse" => callback.fetch(:raise_error_on_false, event == "before") == true
       }
     end
 

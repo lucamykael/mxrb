@@ -820,8 +820,16 @@ module Mxrb
         options << "members: #{native_ruby(member_declarations)}"
         flags << "  index #{members.map { symbol(_1) }.join(', ')}#{options.empty? ? '' : ", #{options.join(', ')}"}"
       end
-      metadata&.fetch(:lifecycle, [])&.each do |callback|
-        flags << "  #{callback.fetch(:event)} microflow: #{symbol(callback.fetch(:handler))}"
+      lifecycle = if entity.respond_to?(:lifecycle)
+                    entity.lifecycle
+                  else
+                    metadata&.fetch(:lifecycle, [])
+                  end
+      lifecycle.to_a.each do |callback|
+        flags << "  #{callback.fetch(:event)} microflow: #{ruby(callback.fetch(:handler))}, " \
+                 "id: #{ruby(callback.fetch(:id, nil))}, " \
+                 "pass_event_object: #{callback.fetch(:pass_event_object, true)}, " \
+                 "raise_error_on_false: #{callback.fetch(:raise_error_on_false, false)}"
       end
       access_rules = Array(entity.access_rules)
       access_lines = access_rules.filter_map { |rule| access_rule_source(rule) }
