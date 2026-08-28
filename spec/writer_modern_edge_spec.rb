@@ -164,6 +164,67 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect(writer.send(:ruby_navigation_profile, legacy, 'Phone')).to be_nil
   end
 
+  it 'fails closed for invalid incremental Ruby association inputs' do
+    raw_module = { 'UnitID' => 'module', 'ContainerID' => 'root' }
+    raw_domain = { 'UnitID' => 'domain', 'ContainerID' => 'module' }
+    build_mpr = lambda do |domain_document: nil, include_module: true|
+      mpr = double(root_unit: { 'UnitID' => 'root' })
+      allow(mpr).to receive(:units_by_containment)
+        .with('Modules')
+        .and_return(include_module ? [raw_module] : [])
+      allow(mpr).to receive(:parse_contents).with(raw_module).and_return('Name' => 'App')
+      allow(mpr).to receive(:units_by_containment)
+        .with('DomainModel')
+        .and_return(domain_document ? [raw_domain] : [])
+      allow(mpr).to receive(:parse_contents).with(raw_domain).and_return(domain_document) if domain_document
+      mpr
+    end
+
+    missing_module = build_mpr.call(include_module: false)
+    expect do
+      writer.synchronize_ruby_associations!(missing_module, module_name: 'App', entities: [])
+    end.to raise_error(Mxrb::ValidationError, /module App does not exist/)
+
+    missing_domain = build_mpr.call
+    expect do
+      writer.synchronize_ruby_associations!(missing_domain, module_name: 'App', entities: [])
+    end.to raise_error(Mxrb::ValidationError, /module App has no domain model/)
+
+    domain_document = {
+      'Entities' => Mxrb::IO::BsonCodec.build_array([
+                                                      { '$ID' => 'order-id', 'Name' => 'Order' },
+                                                      { '$ID' => 'customer-id', 'Name' => 'Customer' }
+                                                    ]),
+      'Associations' => Mxrb::IO::BsonCodec.build_array([]),
+      'CrossAssociations' => Mxrb::IO::BsonCodec.build_array([])
+    }
+    mpr = build_mpr.call(domain_document:)
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr, module_name: 'App', entities: [{ name: 'Missing', associations: [] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /entities missing from App: Missing/)
+
+    duplicate = { name: 'Order_Customer', target: 'Customer', type: :Reference }
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr,
+        module_name: 'App',
+        entities: [{ name: 'Order', associations: [duplicate, duplicate.dup] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /duplicate Ruby association App.Order_Customer/)
+
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr,
+        module_name: 'App',
+        entities: [{ name: 'Order', associations: [
+          { name: 'Order_Missing', target: 'Missing', type: :Reference }
+        ] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /unknown association target "Missing"/)
+  end
+
   it 'normalizes explicitly supplied native layouts before writing Mendix 6 documents' do
     legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
     mpr = double

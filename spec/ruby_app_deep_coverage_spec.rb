@@ -364,6 +364,14 @@ RSpec.describe 'Ruby application internal contracts' do
       attribute :occurred_at, type: :datetime, mendix_name: 'OccurredAt', localize_date: false
     end
     expect(record_class.attributes.first).to include(localize_date: false)
+    record_class.association 'M.Owner', name: :Timestamped_Owner
+    expect(record_class.associations.first).to include(storage_format: nil)
+    expect { record_class.association('M.Owner', name: :BadType, type: :Unknown) }
+      .to raise_error(ArgumentError, /association type/)
+    expect { record_class.association('M.Owner', name: :BadOwner, owner: :Unknown) }
+      .to raise_error(ArgumentError, /association owner/)
+    expect { record_class.association('M.Owner', name: :BadStorage, storage_format: :Unknown) }
+      .to raise_error(ArgumentError, /association storage format/)
 
     unnamed_service = Class.new(Mxrb::RubyApp::Service)
     expect { unnamed_service.native }.to raise_error(ArgumentError, /mendix_name/)
