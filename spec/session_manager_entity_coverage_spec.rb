@@ -28,6 +28,11 @@ RSpec.describe Mxrb::RubyApp::SessionManager, 'credentials and profile edges' do
     expect(manager.authenticate('Basic credentials').attributes).to eq({})
     expect(manager.logout(nil)).to be_nil
     expect(manager.logout('Bearer unknown')).to be(false)
+    expect(manager.csrf_token(nil)).to be_nil
+    original_store = manager.instance_variable_get(:@store)
+    manager.instance_variable_set(:@store, double(read_session: double(identity: nil)))
+    expect(manager.csrf_token('Bearer token-without-identity')).to be_nil
+    manager.instance_variable_set(:@store, original_store)
     expect { manager.authenticate('Bearer unknown') }
       .to raise_error(Mxrb::RubyApp::AuthenticationError, /invalid or expired/)
     expect { manager.login('missing', 'password') }

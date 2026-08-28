@@ -51,4 +51,11 @@ RSpec.describe Mxrb::WidgetDevelopment do # rubocop:disable Metrics/BlockLength
       end
     end.to raise_error(Mxrb::CompilationError, /no MPK/)
   end
+
+  it 'uses the default argv-safe system runner' do
+    development = described_class.new
+    expect(development).to receive(:system).with({}, 'true', chdir: '/tmp').and_return(true)
+
+    expect(development.send(:run!, {}, ['true'], '/tmp')).to be_nil
+  end
 end

@@ -239,6 +239,7 @@ module Mxrb
         options = { entity: grid_entity(widget), columns: columns }.compact
         options[:search_bar] = parse_search_bar(widget["SearchBar"]) if widget["SearchBar"].is_a?(Hash)
         options[:toolbar]    = parse_toolbar(widget["ToolBar"])       if widget["ToolBar"].is_a?(Hash)
+        options.compact!
         { type: :data_grid, name: widget["Name"], options: options, events: grid_events(widget) }
       end
 

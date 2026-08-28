@@ -317,6 +317,90 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       output = StringIO.new
       expect(subject.up(input: answer, output:).disposition).to eq(:kept_current)
       expect(output.string).to include('Active fingerprint', 'Current fingerprint')
+
+      yes = StringIO.new("yes\n")
+      def yes.tty? = true
+      expect(subject.send(:reconciliation_decision, :prompt, input: yes, output: StringIO.new))
+        .to eq(:recreate)
+      expect do
+        subject.send(:reconciliation_decision, :invalid, input: yes, output: StringIO.new)
+      end.to raise_error(ArgumentError, /prompt, recreate, or keep_current/)
+    end
+  end
+
+  it 'covers lock cleanup and malformed runtime marker recovery' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { ['', '', status(true)] }
+      FileUtils.mkdir_p(File.join(state, 'runtime'))
+      File.write(File.join(state, 'runtime.json'), '{')
+
+      expect(subject.send(:stale_runtime?)).to be true
+      expect(subject.send(:stored_runtime_fingerprint)).to be_nil
+      allow(subject).to receive(:stored_runtime_fingerprint).and_raise(JSON::ParserError)
+      expect(subject.send(:stale_runtime?)).to be true
+
+      lock = double
+      allow(lock).to receive(:flock).with(File::LOCK_EX).and_return(true)
+      allow(lock).to receive(:flock).with(File::LOCK_UN).and_raise(IOError)
+      allow(File).to receive(:open).with(
+        subject.send(:workspace_lock), File::RDWR | File::CREAT, 0o600
+      ).and_yield(lock)
+      expect(subject.send(:with_workspace_lock) { :locked }).to eq(:locked)
+    end
+  end
+
+  it 'cleans partial runtime candidates and starts stopped or absent containers' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { |*| ['', 'failed', status(false)] }
+      allow(subject).to receive(:build_native_package).and_raise(IOError, 'build failed')
+      expect { subject.send(:build_runtime_candidate!) }.to raise_error(IOError, /build failed/)
+
+      allow(subject).to receive(:build_native_package).and_return(nil)
+      expect { subject.send(:build_runtime_candidate!) }.to raise_error(Mxrb::ToolchainError)
+      expect(Dir.glob(File.join(state, 'runtime.next-*'))).to be_empty
+
+      allow(subject).to receive_messages(
+        container_exists?: true, container_running?: false,
+        wait_for_runtime!: nil, assert_owned_container!: nil
+      )
+      expect(subject).to receive(:run!).with('docker', 'start', subject.send(:runtime_container))
+      expect(subject.send(:ensure_runtime_started!)).to eq(:started)
+
+      allow(subject).to receive(:container_exists?).and_return(false)
+      expect(subject).to receive(:restart_runtime!)
+      expect(subject.send(:ensure_runtime_started!)).to eq(:started)
+    end
+  end
+
+  it 'covers rollback without and with a previous runtime directory' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { ['', '', status(true)] }
+      allow(subject).to receive(:remove_container)
+      allow(subject).to receive(:restart_runtime!)
+      allow(subject).to receive(:wait_for_runtime!)
+
+      expect(subject.send(:rollback_runtime!, File.join(state, 'missing'), nil)).to be_nil
+
+      backup = File.join(state, 'backup')
+      FileUtils.mkdir_p(backup)
+      File.write(File.join(backup, 'old.txt'), 'old')
+      subject.send(:rollback_runtime!, backup, nil)
+      expect(subject).to have_received(:restart_runtime!).with(fingerprint: 'unknown')
+      expect(File).to exist(File.join(state, 'runtime', 'old.txt'))
+
+      allow(subject).to receive(:remove_container).and_raise(IOError, 'rollback unavailable')
+      expect { subject.send(:rollback_runtime!, backup, nil) }
+        .to raise_error(Mxrb::ToolchainError, /rollback failed.*rollback unavailable/)
+
+      marker_writer = workspace(path, File.join(dir, 'marker')) { ['', '', status(true)] }
+      allow(marker_writer).to receive(:runtime_marker).and_raise(IOError, 'marker unavailable')
+      expect { marker_writer.send(:write_runtime_marker) }.to raise_error(IOError, /marker unavailable/)
     end
   end
 
@@ -423,6 +507,13 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       )
       expect(commands).not_to include(include('docker', 'volume', 'rm', a_string_ending_with('-data')))
       expect(commands.flatten).not_to include('system', 'prune')
+
+      project_id = subject.instance_variable_get(:@project_id)
+      allow(subject).to receive(:listed_resources).with('container', 'ls', '-a')
+                                                  .and_return(["mxrb-#{project_id}-running"])
+      allow(subject).to receive(:container_running?).and_return(true)
+      expect(subject).not_to receive(:remove_container)
+      subject.send(:cleanup_owned_containers!)
     end
   end
 

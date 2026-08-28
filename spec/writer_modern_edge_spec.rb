@@ -112,6 +112,58 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     )
   end
 
+  it 'validates incremental navigation targets and updates existing menu items' do
+    missing_module = double(root_unit: { 'UnitID' => 'root' }, units_by_containment: [])
+    expect do
+      writer.synchronize_ruby_documents!(missing_module, module_name: 'Missing')
+    end.to raise_error(Mxrb::ValidationError, /module Missing does not exist/)
+
+    expect do
+      writer.send(:synchronize_ruby_navigation_item!, double(children_of: []), 'root',
+                  profile: 'Responsive', page: 'App.Home', caption: 'Home')
+    end.to raise_error(Mxrb::ValidationError, /navigation document does not exist/)
+
+    raw = { 'UnitID' => 'navigation' }
+    missing_profile = { '$Type' => 'Navigation$NavigationDocument', 'Profiles' => [2] }
+    mpr = double(children_of: [raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(missing_profile)
+    expect do
+      writer.send(:synchronize_ruby_navigation_item!, mpr, 'root',
+                  profile: 'Missing', page: 'App.Home', caption: 'Home')
+    end.to raise_error(Mxrb::ValidationError, /profile Missing does not exist/)
+
+    profile = { 'Name' => 'Responsive' }
+    document = { '$Type' => 'Navigation$NavigationDocument', 'Profiles' => [2, profile] }
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(document)
+    expect do
+      writer.send(:synchronize_ruby_navigation_item!, mpr, 'root',
+                  profile: 'Responsive', page: 'App.Home', caption: 'Home')
+    end.to raise_error(Mxrb::ValidationError, /has no menu/)
+
+    existing = writer.send(
+      :navigation_menu_item_doc, caption: { en_US: 'Old' }, page: 'App.Home', items: []
+    )
+    existing['$ID'] = 'existing-id'
+    profile['Menu'] = { 'Items' => Mxrb::IO::BsonCodec.build_array([existing], marker: 2) }
+    expect(mpr).to receive(:update_unit).with('navigation', document)
+    writer.send(:synchronize_ruby_navigation_item!, mpr, 'root',
+                profile: 'Responsive', page: 'App.Home', caption: { en_US: 'New' }, home: true)
+    updated = Mxrb::IO::BsonCodec.parse_array(profile.dig('Menu', 'Items'))[:items].first
+    expect(updated['$ID']).to eq('existing-id')
+    expect(profile.dig('HomePage', 'Page')).to eq('App.Home')
+
+    updated.delete('$ID')
+    expect(mpr).to receive(:update_unit).with('navigation', document)
+    writer.send(:synchronize_ruby_navigation_item!, mpr, 'root',
+                profile: 'Responsive', page: 'App.Home', caption: 'Again')
+    expect(Mxrb::IO::BsonCodec.parse_array(profile.dig('Menu', 'Items'))[:items].first.fetch('$ID'))
+      .not_to eq('existing-id')
+
+    legacy = { 'DesktopProfile' => { 'Menu' => {} } }
+    expect(writer.send(:ruby_navigation_profile, legacy, 'Desktop')).to eq(legacy['DesktopProfile'])
+    expect(writer.send(:ruby_navigation_profile, legacy, 'Phone')).to be_nil
+  end
+
   it 'normalizes explicitly supplied native layouts before writing Mendix 6 documents' do
     legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
     mpr = double

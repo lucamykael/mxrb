@@ -52,6 +52,7 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       expect(report.summary).to eq('native' => 2, 'runtime_only' => 2, 'preserved_native' => 1)
       expect(report.entries.find { _1.name == 'App.NativePage' }.status).to eq('native')
       expect(report.entries.find { _1.name == 'App.RuntimeFlow' }.status).to eq('runtime_only')
+      expect(report.to_h).to include(root: root, native: false, summary: report.summary)
     end
   end
 
@@ -68,6 +69,14 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       expect(status).to be_success
       expect(stderr).to be_empty
       expect(JSON.parse(stdout)).to include('native' => true)
+    end
+  end
+
+  it 'omits the frontend entry when the application-owned roots are empty' do
+    Dir.mktmpdir('mxrb-portability-no-frontend-') do |root|
+      write_app(root, coverage: [])
+
+      expect(described_class.new(root).entries).to be_empty
     end
   end
 end

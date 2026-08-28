@@ -89,6 +89,9 @@ RSpec.describe 'Ruby application internal contracts' do
       expect(exp.send(:typescript_flow_type, '$Type' => 'UnsupportedType')).to eq('RuntimeValue | undefined')
       expect(exp.send(:typescript_flow_type,
                       '$Type' => 'ObjectType', 'Entity' => 'System.User')).to eq('EntityRecord | null')
+      exp.instance_variable_set(:@known_entity_names, Set['Sales.Order'])
+      expect(exp.send(:typescript_entity_reference, 'Sales.Order')).to include('EntityTypeMap')
+      expect(exp.send(:typescript_entity_reference, 'Sales.Missing')).to eq('EntityRecord')
 
       boolean_end = { 'id' => 'end', 'type' => 'EndEvent', 'return' => 'true' }
       expect(exp.send(:nanoflow_typescript_case,
@@ -131,6 +134,9 @@ RSpec.describe 'Ruby application internal contracts' do
       expect(exp.send(:nanoflow_action_source,
                       'type' => 'ShowMessage', 'message' => 'Ready', 'level' => 'Information'))
         .to include('runtime.showMessage("Ready".replace(/\\{(\\d+)\\}/g')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'MicroflowCall', 'microflow' => 'Sales.Refresh',
+                      'arguments' => {}, 'result_variable' => '')).to start_with('await ')
       expect(exp.send(:nanoflow_action_source, nil)).to include('runtime.unsupported')
       expect(exp.send(:nanoflow_typescript_case,
                       { 'id' => 'unknown', 'type' => 'Unknown' }, [], 'undefined'))
@@ -149,6 +155,12 @@ RSpec.describe 'Ruby application internal contracts' do
         .to include('class E < Mxrb::RubyApp::Record')
       expect(exp.send(:entity_source, 'M', 'D', 'M.D', 'id', [], dto: true, persistable: false))
         .to include('class D < Mxrb::RubyApp::DTO')
+      localized = [{ 'ruby_name' => 'occurred_at', 'type' => 'datetime', 'name' => 'OccurredAt',
+                     'required' => false, 'unique' => false, 'default' => nil,
+                     'documentation' => '', 'length' => nil, 'enumeration' => nil,
+                     'localize_date' => false }]
+      expect(exp.send(:entity_source, 'M', 'E', 'M.E', 'id', localized,
+                      dto: false, persistable: true)).to include('localize_date: false')
       expect(exp.send(:ruby_constant, '123')).to eq('Artifact123')
       expect(exp.send(:ruby_constant, 'input', suffix: 'Dto')).to eq('InputDto')
       expect(exp.send(:ruby_method_name, 'class')).to eq('field_class')
@@ -163,6 +175,22 @@ RSpec.describe 'Ruby application internal contracts' do
       )
       expect(widget).to include('caption' => 'Caption', 'events' => [include('event' => 'click')])
       expect(exp.send(:runtime_value, deep_structure: true, kept: :yes)).to eq('kept' => 'yes')
+
+      parameter_mappings = Mxrb::IO::BsonCodec.build_array(
+        [{ 'Parameter' => 'Sales.Refresh.Order', 'Argument' => '$Order' }]
+      )
+      call_action = {
+        '$Type' => 'Microflows$MicroflowCallAction', 'UseReturnVariable' => false,
+        'MicroflowCall' => {
+          'Microflow' => 'Sales.Refresh', 'ParameterMappings' => parameter_mappings
+        }
+      }
+      allow(Mxrb::IO::BsonCodec).to receive(:parse_array).and_call_original
+      expect(exp.send(:nanoflow_action, call_action)).to include(
+        'arguments' => { 'Order' => '$Order' }, 'result_variable' => ''
+      )
+      expect(exp.send(:translated_text_template, 'plain')).to eq('')
+      expect(exp.send(:translated_text_template, 'Text' => { 'Items' => [2, 'invalid'] })).to eq('')
 
       exp.instance_variable_set(:@project, double(modules: []))
       expect(exp.send(:runtime_widget_type, type: :button)).to eq('button')
@@ -211,10 +239,53 @@ RSpec.describe 'Ruby application internal contracts' do
       FileUtils.mkdir_p(source_contents)
       File.write(File.join(source_contents, 'x'), 'x')
       expect(exp.send(:copy_runtime_mpr)).to end_with('source.mpr')
+
+      project = double(modules: [double(name: 'Sales', nanoflows: [nanoflow])])
+      exp.instance_variable_set(:@page_entries, [])
+      allow(exp).to receive(:write)
+      allow(exp).to receive(:nanoflow_typescript).and_return('source')
+      allow(exp).to receive(:write_generated_frontend_contract)
+      exp.send(
+        :refresh_native_frontend_sources, project,
+        [{ 'name' => 'Sales', 'pages' => [] }],
+        [{ path: 'app/services/sales/client.rb',
+           contents: "mendix_name 'Sales.Client'\nnative :nanoflow\n" }]
+      )
+      expect(exp).to have_received(:write).with(
+        'frontend/src/generated/nanoflows/sales/client.ts', 'source'
+      )
+      project = double(modules: [double(name: 'Sales', nanoflows: [double(name: 'Other')])])
+      exp.send(
+        :refresh_native_frontend_sources, project,
+        [{ 'name' => 'Sales', 'pages' => [] }],
+        [{ path: 'app/services/sales/client.rb',
+           contents: "mendix_name 'Sales.Client'\nnative :nanoflow\n" }]
+      )
+
+      localized_attribute = double(
+        name: 'OccurredAt', type: :datetime, required: false, default_value: nil, id: 'date',
+        unique: false, documentation: '', length: nil, localize_date: false, enumeration: nil
+      )
+      expect(exp.send(:attribute_manifest, localized_attribute)).to include('localize_date' => false)
     end
 
     allow(Mxrb::IO::MprFile).to receive(:open).and_raise(IOError, 'broken')
     expect { Mxrb::RubyApp::Exporter.allocate.send(:read_embedded_sources) }.to raise_error(IOError)
+  end
+
+  it 'handles native flow sources that cannot become editable declarations' do
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    flow = Mxrb::Model::Microflow.allocate
+
+    allow_any_instance_of(Mxrb::Exporter).to receive(:microflow_source).and_return('plain source')
+    expect(exporter.send(:native_flow_source, flow, :microflow)).to be_nil
+
+    allow_any_instance_of(Mxrb::Exporter).to receive(:microflow_source)
+      .and_return("body_fingerprint 'hash'\n")
+    expect(exporter.send(:native_flow_source, flow, :microflow)).to be_nil
+
+    allow_any_instance_of(Mxrb::Exporter).to receive(:microflow_source).and_raise(SyntaxError)
+    expect(exporter.send(:native_flow_source, flow, :microflow)).to be_nil
   end
 
   it 'covers record native synchronization and application CRUD/service branches' do
@@ -287,6 +358,25 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(app.native_call('M.Native', { value: 1 }, context: Object.new)).to eq('native')
   end
 
+  it 'covers native declaration validation and optional record metadata' do
+    record_class = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'M.Timestamped', id: 'timestamped'
+      attribute :occurred_at, type: :datetime, mendix_name: 'OccurredAt', localize_date: false
+    end
+    expect(record_class.attributes.first).to include(localize_date: false)
+
+    unnamed_service = Class.new(Mxrb::RubyApp::Service)
+    expect { unnamed_service.native }.to raise_error(ArgumentError, /mendix_name/)
+    service = Class.new(Mxrb::RubyApp::Service) { mendix_name 'M.Valid', id: 'service-id' }
+    expect { service.native(:invalid) }.to raise_error(ArgumentError, /microflow or nanoflow/)
+    expect(service.native(:nanoflow)).to include(unit_id: 'service-id')
+
+    unnamed_page = Class.new(Mxrb::RubyApp::Page)
+    expect { unnamed_page.native }.to raise_error(ArgumentError, /mendix_name/)
+    page = Class.new(Mxrb::RubyApp::Page) { mendix_name 'M.Home', id: 'page-id' }
+    expect(page.native).to include(unit_id: 'page-id')
+  end
+
   it 'covers native bridge cleanup and entity synchronization validation' do
     scheduler = double(jobs: [], shutdown: nil)
     store = double(close: nil)
@@ -337,6 +427,31 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(sync.send(:synchronize_attribute, model_project, 'M.E', same, valid)).to be_nil
     required_existing = double(name: 'Name', required: true, type: :string, default_value: nil)
     sync.send(:synchronize_attribute, model_project, 'M.E', required_existing, valid)
+
+    rich = double(
+      name: 'Name', required: false, unique: false, type: :string, default_value: 'old',
+      documentation: 'old', length: 10, localize_date: true, enumeration: 'M.Old'
+    )
+    sync.send(
+      :synchronize_attribute, model_project, 'M.E', rich,
+      valid.merge(unique: true, type: :integer, default: 'new', documentation: 'new',
+                  length: 20, localize_date: false, enumeration: 'M.New')
+    )
+    bare = double(name: 'Bare', required: false, type: :datetime, default_value: nil)
+    sync.send(
+      :synchronize_attribute, model_project, 'M.E', bare,
+      { required: false, unique: false, type: :datetime, default: nil,
+        documentation: '', length: nil, localize_date: nil, enumeration: nil }
+    )
+    localized = double(
+      name: 'When', required: false, unique: false, type: :datetime, default_value: nil,
+      documentation: '', length: nil, localize_date: false, enumeration: nil
+    )
+    expect(sync.send(
+             :synchronize_attribute, model_project, 'M.E', localized,
+             { required: false, unique: false, type: :datetime, default: nil,
+               documentation: '', length: nil, localize_date: nil, enumeration: nil }
+           )).to be_nil
   end
 
   it 'covers server lifecycle and supervisor internal/external process paths' do
@@ -356,6 +471,26 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(yielded).to be(true)
     server.start
     server.shutdown
+
+    request = Struct.new(:headers) { def [](name) = headers[name] }
+    expect(server.send(:request_authorization, request.new({ 'Authorization' => 'Token direct' })))
+      .to eq('Token direct')
+    expect(server.send(:request_authorization,
+                       request.new({ 'Authorization' => '',
+                                     'Cookie' => 'other=1; mxrb_session=cookie-token' })))
+      .to eq('Bearer cookie-token')
+    expect(server.send(:request_authorization,
+                       request.new({ 'Authorization' => '', 'Cookie' => 'other=1' }))).to be_nil
+
+    server.instance_variable_set(:@sessions, double(ttl: 60))
+    response = {}
+    allow(ENV).to receive(:[]).and_call_original
+    allow(ENV).to receive(:[]).with('MXRB_SECURE_COOKIES').and_return('true')
+    server.send(:set_session_cookie, response, 'token')
+    expect(response.fetch('Set-Cookie')).to include('Secure')
+    allow(ENV).to receive(:[]).with('MXRB_SECURE_COOKIES').and_return('false')
+    server.send(:set_session_cookie, response, 'token')
+    expect(response.fetch('Set-Cookie')).not_to include('Secure')
 
     environment = Mxrb::Environment.new('qa', root: '.', process: { 'VITE_X' => '1', 'IGNORED' => '2' })
     supervisor = Mxrb::RubyApp::Supervisor.new('.', environment:, frontend: false)
@@ -385,6 +520,18 @@ RSpec.describe 'Ruby application internal contracts' do
       allow(Process).to receive(:spawn).and_return(13)
       expect(local.send(:spawn_frontend)).to eq(13)
     end
+
+    failed = double(success?: false, exitstatus: 7, termsig: nil)
+    allow(Process).to receive(:wait2).with(99).and_return([99, failed])
+    expect { supervisor.send(:wait_for_process, 99, 'backend') }
+      .to raise_error(Mxrb::Error, /status 7/)
+    signaled = double(success?: false, exitstatus: nil, termsig: 9)
+    allow(Process).to receive(:wait2).with(100).and_return([100, signaled])
+    expect { supervisor.send(:wait_for_process, 100, 'frontend') }
+      .to raise_error(Mxrb::Error, /signal 9/)
+    supervisor.instance_variable_set(:@shutting_down, true)
+    allow(Process).to receive(:wait2).with(101).and_return([101, failed])
+    expect(supervisor.send(:wait_for_process, 101, 'backend')).to be_nil
   end
 
   it 'covers compilation cleanup, transition, initialization, and native bridge failure paths' do

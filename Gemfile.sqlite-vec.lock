@@ -3,7 +3,7 @@ PATH
   specs:
     mxrb (0.1.5)
       base64 (~> 0.2)
-      bigdecimal (~> 3.1)
+      bigdecimal (>= 3.1, < 5)
       bson (~> 5.2)
       csv (~> 3.3)
       dotenv (~> 3.0)

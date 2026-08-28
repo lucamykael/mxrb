@@ -296,9 +296,23 @@ RSpec.describe 'modern page widgets' do
     expect(writer.send(:array_items, values.dig('filtersPlaceholder', 'Value', 'Widgets')).length).to eq(1)
     writer.send(:configure_data_grid2!, grid, filters: [filter])
     expect(writer.send(:array_items, values.dig('filtersPlaceholder', 'Value', 'Widgets')).length).to eq(1)
+    expect { writer.send(:configure_data_grid2!, grid, selection: :invalid) }
+      .to raise_error(Mxrb::ValidationError, /selection must be none, single, or multi/)
     column = writer.send(:array_items, values.dig('columns', 'Value', 'Objects')).first
     column_values = writer.send(:widget_object_properties, column_type, column)
     expect(writer.send(:array_items, column_values.dig('filter', 'Value', 'Widgets')).length).to eq(2)
+
+    event_grid = schema_widget('grid-events', {
+      itemSelection: { type: 'Selection' }, onSelectionChange: { type: 'Action' }
+    })
+    event_properties = writer.send(:custom_widget_properties, event_grid)
+    event_properties['itemSelection']['Value']['Selection'] = 'Single'
+    event_properties['onSelectionChange']['Value']['Action'] = {
+      '$Type' => 'Forms$SaveChangesClientAction'
+    }
+    parsed = Mxrb::Model::Page.allocate.send(:data_grid2_widget, event_grid)
+    expect(parsed.dig(:options, :selection)).to eq(:single)
+    expect(parsed.fetch(:events)).to include(include(kind: :action, event: :on_change))
   end
 
   it 'fails before emitting unsupported official Data Grid 2 toolbar and selection events' do
@@ -321,6 +335,27 @@ RSpec.describe 'modern page widgets' do
     expect do
       writer.send(:validate_official_data_grid2_contract!, selection_event, descriptor, nil)
     end.not_to raise_error
+    expect do
+      writer.send(:validate_official_data_grid2_contract!, toolbar.merge(options: {}), descriptor, Object.new)
+    end.not_to raise_error
+  end
+
+  it 'writes a hydrated official Data Grid 2 selection action property' do
+    current_writer = writer
+    template = schema_widget('grid-template', { onSelectionChange: { type: 'Action' } })
+    allow(Mxrb::WidgetPackage).to receive(:find).and_return(Object.new)
+    allow(Mxrb::WidgetPackage).to receive(:template)
+      .and_return([template.fetch('Type'), template.fetch('Object')])
+    allow(current_writer).to receive(:validate_official_data_grid2_contract!)
+
+    generated = current_writer.send(:pluggable_widget_doc, {
+      type: :data_grid, name: 'Grid', options: {},
+      events: [{ event: :on_change, kind: :nanoflow, handler: 'Ui.Refresh' }]
+    }, current_writer.send(:data_grid2_descriptor))
+    action = current_writer.send(:custom_widget_properties, generated)
+                           .dig('onSelectionChange', 'Value', 'Action')
+
+    expect(action.fetch('$Type')).to eq('Forms$CallNanoflowClientAction')
   end
 
   it 'hydrates Combo Box enumeration and association modes' do

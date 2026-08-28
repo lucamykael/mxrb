@@ -747,7 +747,7 @@ module Mxrb
         File.write(temporary, JSON.generate(payload))
         File.rename(temporary, runtime_marker)
       ensure
-        FileUtils.rm_f(temporary) if defined?(temporary)
+        FileUtils.rm_f(temporary.to_s)
       end
 
       def cleanup_owned_obsolete_resources!

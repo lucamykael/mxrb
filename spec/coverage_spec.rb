@@ -924,6 +924,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       double(parse_contents: doc)
     )
     expect(page.widgets.map { _1[:type] }).to include(:data_grid)
+    empty_grid = page.widgets.find { _1[:name] == "EmptyGrid" }
+    expect(empty_grid.fetch(:options)).not_to include(:search_bar, :toolbar)
 
     expect(page.send(:parse_search_bar, "not-a-hash")).to be_nil
     expect(page.send(:parse_toolbar, "not-a-hash")).to be_nil
@@ -932,6 +934,20 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     expect(page.send(:parse_action, "$Type" => "Pages$SaveChangesClientAction")).not_to be_nil
     expect(page.send(:parse_action, "$Type" => "Pages$ClosePageClientAction")).not_to be_nil
     expect(page.send(:parse_action, "$Type" => "Pages$UnknownAction")).to be_nil
+  end
+
+  it "covers domain validation rule key and predicate variants" do
+    rules = Mxrb::Semantic::DomainValidationRules
+    required = rules.build('M', 'E', 'Name', :required)
+    unique = rules.build('M', 'E', 'Name', :unique)
+    document = { 'validationRules' => [2] }
+    rules.put(document, [required, unique])
+
+    expect(document).to have_key('validationRules')
+    expect(rules.for_attribute?(required, 'Name')).to be true
+    expect(rules.for_attribute?(required, 'Name', :required)).to be true
+    expect(rules.for_attribute?(unique, 'Name', :required)).to be false
+    expect(rules.for_attribute?(required, 'Other', :required)).to be false
   end
 
   it "covers MprFile readonly guards and format edge cases" do

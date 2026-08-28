@@ -243,6 +243,21 @@ RSpec.describe "new features" do
       end
     end
 
+    it "removes validation rules owned by the deleted attribute" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) { entity(:E) { string :Name, required: true } }
+        end
+
+        Mxrb.open(path, readonly: false) do |project|
+          plan = project.plan_remove_attribute("M.E/Name")
+          plan.instance_variable_set(:@incoming, [].freeze)
+          plan.apply!
+          expect(project.modules.first.entities.first.attributes).to be_empty
+        end
+      end
+    end
+
     it "is not safe when other artifacts reference the attribute" do
       Dir.mktmpdir do |dir|
         path = make_project(dir) do
@@ -303,6 +318,9 @@ RSpec.describe "new features" do
           expect(score_doc).to include("Name" => "Score")
           expect(score_doc.fetch("GUID")).not_to be_nil
           expect(score_doc).not_to have_key("name")
+
+          project.plan_change_attribute("M.E/Score", required: false).apply!
+          expect(project.modules.first.entities.first.attributes.first.required).to be_falsey
         end
       end
     end
