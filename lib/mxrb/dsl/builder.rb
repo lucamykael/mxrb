@@ -4,6 +4,7 @@ require "digest"
 require "json"
 require "base64"
 require_relative "integration_documents"
+require_relative "code_actions"
 
 module Mxrb
   module Dsl
@@ -889,6 +890,7 @@ module Mxrb
 
     class ModuleBuilder # rubocop:disable Metrics/ClassLength
       include IntegrationDocuments
+      include CodeActions
 
       attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
                   :associations, :menus, :module_roles, :enumerations, :constants,

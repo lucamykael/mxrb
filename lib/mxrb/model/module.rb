@@ -30,7 +30,9 @@ module Mxrb
       ).freeze
       APPLICATION_DOCUMENT_ROUTES = {
         'DataSets$DataSet' => 'queries/datasets',
-        'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events'
+        'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events',
+        'JavaActions$JavaAction' => 'actions/java',
+        'JavaScriptActions$JavaScriptAction' => 'actions/javascript'
       }.freeze
       DOMAIN_DOCUMENT_ROUTES = {
         'DomainModels$ViewEntitySourceDocument' => 'oql_views',
