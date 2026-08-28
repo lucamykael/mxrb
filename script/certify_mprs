@@ -55,7 +55,8 @@ results = files.map do |source|
       end
       options[:cycles].times do |index|
         exported = File.join(directory, "source-#{index + 1}")
-        rebuilt = File.join(directory, "roundtrip-#{index + 1}.mpr")
+        cycle_directory = File.join(directory, "roundtrip-#{index + 1}")
+        rebuilt = File.join(cycle_directory, File.basename(source))
         previous = ENV['MXRB_OUTPUT_PATH']
         Mxrb::Exporter.new(current, exported).export!
         begin

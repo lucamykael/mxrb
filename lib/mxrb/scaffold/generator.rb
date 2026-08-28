@@ -46,6 +46,7 @@ module Mxrb
       def assign_options(options)
         @page_chain = options.delete(:page_chain)
         @page_template = options.delete(:page_template)
+        @page_roles = options.delete(:page_roles)
         @demo_entity = options.delete(:demo_entity)
         @demo_roles = options.delete(:demo_roles)
       end
@@ -60,6 +61,13 @@ module Mxrb
 
       def selected_page_template
         PageTemplates.fetch(@page_template)&.name
+      end
+
+      def page_roles
+        Array(@page_roles).map(&:to_s).reject(&:empty?).uniq.tap do |roles|
+          invalid = roles.reject { _1.match?(/\A[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*\z/) }
+          raise ArgumentError, "invalid page role(s): #{invalid.join(', ')}" unless invalid.empty?
+        end
       end
 
       def stage_registry
@@ -265,17 +273,19 @@ module Mxrb
         lines.join
       end
 
-      def create_module_file(module_name, directories, artifact_name, template, suffix: nil)
+      def create_module_file(module_name, directories, artifact_name, template, **options)
         ensure_module(module_name)
+        suffix = options.delete(:suffix)
         filename = "#{Templates.snake_case(artifact_name)}#{suffix}.rb"
         path = module_path(module_name, *directories, filename)
-        @transaction.create(path, Templates.render(template, module_name:, name: artifact_name))
+        @transaction.create(path, Templates.render(template, module_name:, name: artifact_name, **options))
         filename
       end
 
-      def create_connected_module_file(module_name, directories, artifact_name, template, suffix: nil)
+      def create_connected_module_file(module_name, directories, artifact_name, template, **options)
+        suffix = options.delete(:suffix)
         filename = create_module_file(
-          module_name, directories, artifact_name, template, suffix:
+          module_name, directories, artifact_name, template, suffix:, **options
         )
         layer, *relative = directories
         aggregator = module_path(module_name, layer, LAYER_AGGREGATORS.fetch(layer))
@@ -297,7 +307,8 @@ module Mxrb
       def create_page_template(module_name, artifact_name, template:, chain:)
         content = Templates.render(
           :page_from_template, module_name:, name: artifact_name,
-                               template:, refresh_action: page_refresh_action(module_name, artifact_name, chain)
+                               template:, refresh_action: page_refresh_action(module_name, artifact_name, chain),
+                               roles: page_roles
         )
         create_connected_module_content(
           module_name, %w[presentation pages], artifact_name, content
@@ -313,8 +324,7 @@ module Mxrb
       end
 
       def create_page_navigation(module_name, artifact_name)
-        project = @transaction.content(project_path('project.rb')).to_s
-        unless project.include?('evaluate_dir File.join(__dir__, "app", "navigation", "responsive")')
+        unless responsive_navigation_aggregator?
           raise ArgumentError,
                 'page chain requires the generated Responsive navigation aggregator'
         end
@@ -324,6 +334,18 @@ module Mxrb
           project_path('app', 'navigation', 'responsive', filename),
           Templates.render(:page_chain_navigation, module_name:, name: artifact_name)
         )
+      end
+
+      def responsive_navigation_aggregator?
+        sources = [
+          @transaction.content(project_path('project.rb')).to_s,
+          @transaction.content(project_path('app', 'navigation', 'navigation.rb')).to_s
+        ]
+        expected = [
+          'evaluate_dir File.join(__dir__, "app", "navigation", "responsive")',
+          'evaluate_dir File.join(__dir__, "responsive")'
+        ]
+        sources.any? { |source| expected.any? { source.include?(_1) } }
       end
 
       def create_project_file(directories, artifact_name, content)

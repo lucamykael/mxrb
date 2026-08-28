@@ -33,6 +33,46 @@ RSpec.describe 'round-trip demand regressions' do
     expect(gallery.dig(:options, :entity)).to eq('Sales.Order')
   end
 
+  it 'rejects an output filename that conflicts with Mendix v2 mprcontents' do
+    Dir.mktmpdir do |dir|
+      original = File.join(dir, 'StudioProject.mpr')
+      mendix_export = File.join(dir, 'mendix')
+      manifest = File.join(dir, 'native-units.json')
+
+      File.write(
+        manifest,
+        JSON.generate(
+          'format_version' => 'v2',
+          'source_filename' => 'StudioProject.mpr',
+          'units' => []
+        )
+      )
+
+      Mxrb.define(original) do
+        mendix_version '11.12.1'
+        native_units manifest
+        self.module(:App) { page(:Home) { title 'Home' } }
+      end
+
+      Mxrb::Exporter.new(original, mendix_export).export!
+      exported_manifest = JSON.parse(
+        File.read(File.join(mendix_export, '.mxrb', 'native_units.json'))
+      )
+      expect(exported_manifest).to include(
+        'format_version' => 'v2', 'source_filename' => 'StudioProject.mpr'
+      )
+
+      incompatible = File.join(dir, 'StudioProject-mxrb.mpr')
+      expect { rebuild_export(mendix_export, incompatible) }
+        .to raise_error(Mxrb::ValidationError, /mprcontents belong to StudioProject\.mpr/)
+      expect(File).not_to exist(incompatible)
+
+      rebuilt = File.join(dir, 'rebuilt', 'StudioProject.mpr')
+      rebuild_export(mendix_export, rebuilt)
+      expect(Mxrb.compare(original, rebuilt)).to be_identical
+    end
+  end
+
   it 'preserves qualified page data sources and infers public native targets' do
     Dir.mktmpdir do |dir|
       original = File.join(dir, 'cross-module.mpr')

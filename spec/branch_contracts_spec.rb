@@ -118,6 +118,8 @@ RSpec.describe 'remaining branch contracts' do
     mod = double(name: 'App')
     entity = double(name: 'Entity', qualified_name: 'Qualified.Entity')
     expect(index.send(:qualified_entity_name, mod, entity)).to eq('Qualified.Entity')
+    expect(index.send(:qualified_entity_name, mod, double(name: 'Fallback', qualified_name: '')))
+      .to eq('App.Fallback')
 
     writer = Mxrb::Writer.new('x', version: '11.12.1', modules: [])
     ordered = writer.send(

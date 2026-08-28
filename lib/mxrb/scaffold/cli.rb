@@ -29,15 +29,21 @@ module Mxrb
       private
 
       def generator
-        chain = extract_option('--chain') if @command == 'page'
-        template = extract_option('--template') if @command == 'page'
-        entity = extract_option('--entity') if @command == 'demo-user'
-        roles = extract_options('--role') if @command == 'demo-user'
+        options = command_generator_options
         Generator.new(
           kind, scaffold_name, target: target, dry_run: @dry_run,
-                               page_chain: chain, page_template: template,
-                               demo_entity: entity, demo_roles: roles
+                               **options
         )
+      end
+
+      def command_generator_options
+        case @command
+        when 'page' then { page_chain: extract_option('--chain'), page_template: extract_option('--template'),
+                           page_roles: extract_options('--role') }
+        when 'demo-user' then { demo_entity: extract_option('--entity'),
+                                demo_roles: extract_options('--role') }
+        else {}
+        end
       end
 
       def page_templates? = @command == 'page' && @argv.first == 'templates'
@@ -50,13 +56,8 @@ module Mxrb
         @output.puts(json ? JSON.pretty_generate(PageTemplates.payload) : PageTemplates.tree)
       end
 
-      def help?
-        @argv.first == '--help' || @argv.delete('--help')
-      end
-
-      def show_help
-        @output.puts Help.text(@command)
-      end
+      def help? = @argv.first == '--help' || @argv.delete('--help')
+      def show_help = @output.puts Help.text(@command)
 
       def validate_action!
         if @command == 'demo-user'

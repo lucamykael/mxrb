@@ -247,15 +247,23 @@ module MxrbFrontendBrowserAcceptance
           const password = document.querySelector("#passwordInput");
           const form = document.querySelector("#loginForm");
           if (!username || !password || !form) return false;
-          username.value = #{JSON.generate(username)};
-          password.value = #{JSON.generate(password)};
+          const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+          setter.call(username, #{JSON.generate(username)});
+          setter.call(password, #{JSON.generate(password)});
           username.dispatchEvent(new Event("input", { bubbles: true }));
           password.dispatchEvent(new Event("input", { bubbles: true }));
-          form.requestSubmit();
           return true;
         })()
       JS
-      wait('!location.pathname.endsWith("/login.html")', 'authenticated redirect', timeout: 30)
+      wait(
+        '!document.querySelector("#loginForm button[type=submit]")?.disabled',
+        'enabled login submit', timeout: 10
+      )
+      evaluate('document.querySelector("#loginForm").requestSubmit()')
+      wait(
+        '!location.pathname.endsWith("/login.html") || document.querySelector("#loginForm") === null',
+        'authenticated redirect or application login completion', timeout: 30
+      )
       wait('document.readyState === "complete"', 'authenticated page load', timeout: 30)
       raise Failure, 'login returned to the Mendix login form' if evaluate(
         'document.querySelector("#loginForm") !== null'

@@ -62,10 +62,6 @@ module Mxrb
       type = {
         '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$CustomWidgetType',
         'HelpUrl' => definition.help_url,
-        'ObjectType' => {
-          '$ID' => object_type_id, '$Type' => 'CustomWidgets$WidgetObjectType',
-          'PropertyTypes' => IO::BsonCodec.build_array(property_types, marker: 2)
-        },
         'OfflineCapable' => definition.offline,
         'StudioCategory' => definition.studio_category,
         'StudioProCategory' => definition.studio_pro_category,
@@ -73,12 +69,19 @@ module Mxrb
         'WidgetDescription' => definition.description,
         'WidgetId' => definition.id, 'WidgetName' => definition.name,
         'WidgetNeedsEntityContext' => definition.needs_context,
-        'WidgetPluginWidget' => definition.plugin
+        'WidgetPluginWidget' => definition.plugin,
+        # Mendix computes the embedded widget-definition fingerprint from the
+        # BSON member order as well as its values. Studio Pro writes ObjectType
+        # last; putting it earlier produces CE0463 despite an identical schema.
+        'ObjectType' => {
+          '$ID' => object_type_id, '$Type' => 'CustomWidgets$WidgetObjectType',
+          'PropertyTypes' => IO::BsonCodec.build_array(property_types, marker: 2)
+        }
       }
       object = {
         '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetObject',
-        'Properties' => IO::BsonCodec.build_array(properties, marker: 2),
-        'TypePointer' => object_type_id
+        'TypePointer' => object_type_id,
+        'Properties' => IO::BsonCodec.build_array(properties, marker: 2)
       }
       [type, object]
     end

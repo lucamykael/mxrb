@@ -53,6 +53,16 @@ RSpec.describe Mxrb::CLI::Help do
     )
   end
 
+  it 'documents deterministic Docker reconciliation choices' do
+    expect(described_class.command('db')).to include(
+      '--runtime-port PORT', '--recreate', '--keep-current',
+      'start no second stack'
+    )
+    expect(described_class.command(%w[db up])).to include(
+      '[--recreate|--keep-current]', 'Reconcile and start'
+    )
+  end
+
   it 'handles detailed, plain, unknown, and scaffold commands' do
     expect(described_class.command(%w[cache warm])).to include(
       'Usage: mxrb cache warm', 'Parent help: mxrb cache --help'

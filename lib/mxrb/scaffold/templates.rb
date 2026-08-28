@@ -46,14 +46,14 @@ module Mxrb
         RUBY
       end
 
-      def page(module_name, name)
+      def page(module_name, name, roles: [])
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
-            # allowed_roles "Module.User"
+          #{allowed_roles_line(roles)}
 
             container :pageHeader, class_name: "mxrb-page-header" do
               text :pageTitle, caption: "#{humanize(name)}"
@@ -72,7 +72,7 @@ module Mxrb
         RUBY
       end
 
-      def page_chain_entity(_module_name, name)
+      def page_chain_entity(_module_name, name, **_options)
         <<~RUBY
           # frozen_string_literal: true
 
@@ -85,13 +85,14 @@ module Mxrb
         RUBY
       end
 
-      def page_chain_loader(module_name, name)
+      def page_chain_loader(module_name, name, roles: [])
         feature = name.to_s.delete_prefix('ACT_Load')
         <<~RUBY
           # frozen_string_literal: true
 
           microflow :#{name} do
             mark_as_used
+          #{allowed_roles_line(roles)}
             return_type :#{feature}
             create_object "#{module_name}.#{feature}", as: :record,
                           set: { Reference: "'NEW'", Total: 0, Active: true }
@@ -100,54 +101,58 @@ module Mxrb
         RUBY
       end
 
-      def page_chain_action(_module_name, name)
+      def page_chain_action(_module_name, name, roles: [])
         feature = name.to_s.delete_prefix('ACT_Refresh')
         <<~RUBY
           # frozen_string_literal: true
 
           microflow :#{name} do
             mark_as_used
+          #{allowed_roles_line(roles)}
             log_message "#{humanize(feature)} refreshed from the page scaffold"
           end
         RUBY
       end
 
-      def page_chain_nanoflow(_module_name, name)
+      def page_chain_nanoflow(_module_name, name, roles: [])
         feature = name.to_s.delete_prefix('NAN_Refresh')
         <<~RUBY
           # frozen_string_literal: true
 
           nanoflow :#{name} do
             mark_as_used
+          #{allowed_roles_line(roles)}
             show_message "#{humanize(feature)} refreshed", type: :information
           end
         RUBY
       end
 
-      def page_chain_client_server(module_name, name)
+      def page_chain_client_server(module_name, name, roles: [])
         feature = name.to_s.delete_prefix('NAN_Refresh')
         <<~RUBY
           # frozen_string_literal: true
 
           nanoflow :#{name} do
             mark_as_used
+          #{allowed_roles_line(roles)}
             call_microflow "#{module_name}.ACT_Refresh#{feature}"
             show_message "#{humanize(feature)} refreshed", type: :information
           end
         RUBY
       end
 
-      def page_from_template(module_name, name, template:, refresh_action: nil)
-        public_send("page_template_#{template.tr('-', '_')}", module_name, name, refresh_action)
+      def page_from_template(module_name, name, template:, refresh_action: nil, roles: [])
+        public_send("page_template_#{template.tr('-', '_')}", module_name, name, refresh_action, roles)
       end
 
-      def page_template_starter(module_name, name, refresh_action)
+      def page_template_starter(module_name, name, refresh_action, roles = [])
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
+          #{allowed_roles_line(roles)}
 
             container :pageHeader, class_name: "mxrb-page-header" do
               text :pageTitle, caption: "#{humanize(name)}"
@@ -158,13 +163,14 @@ module Mxrb
         RUBY
       end
 
-      def page_template_blank(module_name, name, refresh_action)
+      def page_template_blank(module_name, name, refresh_action, roles = [])
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
+          #{allowed_roles_line(roles)}
 
             container :content, class_name: "mxrb-page-content" do
           #{refresh_button(refresh_action, indentation: 4)}
@@ -173,13 +179,14 @@ module Mxrb
         RUBY
       end
 
-      def page_template_dashboard(module_name, name, refresh_action)
+      def page_template_dashboard(module_name, name, refresh_action, roles = [])
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
+          #{allowed_roles_line(roles)}
 
             container :pageHeader, class_name: "mxrb-page-header" do
               text :pageTitle, caption: "#{humanize(name)}"
@@ -208,13 +215,14 @@ module Mxrb
         RUBY
       end
 
-      def page_template_form_vertical(module_name, name, refresh_action)
+      def page_template_form_vertical(module_name, name, refresh_action, roles = [])
         <<~RUBY
           # frozen_string_literal: true
 
           page :#{name} do
             title "#{humanize(name)}"
             layout "#{module_name}.ApplicationLayout"
+          #{allowed_roles_line(roles)}
             data_source microflow: "#{module_name}.ACT_Load#{name}"
 
             container :pageHeader, class_name: "mxrb-page-header" do
@@ -248,6 +256,13 @@ module Mxrb
             on_click #{action}
           end
         RUBY
+      end
+
+      def allowed_roles_line(roles)
+        values = Array(roles).map(&:to_s).reject(&:empty?).uniq
+        return '  # allowed_roles "Module.User"' if values.empty?
+
+        "  allowed_roles #{values.map(&:inspect).join(', ')}"
       end
 
       def page_chain_navigation(module_name, name)

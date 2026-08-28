@@ -28,6 +28,7 @@ o hash criado pelo gerador, protegendo edições posteriores.
 | `mxrb page templates` | Árvore de modelos de página auditados |
 | `mxrb page new App.Dashboard --template dashboard` | Página baseada em modelo |
 | `mxrb page new App.Order --chain page:nanoflow:microflow` | Fatia vertical executável |
+| `mxrb page new App.Order --role App.User --role App.Admin` | Página e fluxos com papéis explícitos |
 | `mxrb nanoflow new App.NAN_OpenCustomer` | Nanoflow cliente |
 | `mxrb security init App` | Papéis, `CheckEverything` no projeto e orientação de acesso |
 | `mxrb demo-user new manager --role User` | Demo user com segredo local em `.env` |
@@ -61,6 +62,8 @@ três cadeias de ação Mendix explícitas:
 mxrb page new App.Order --chain page:microflow
 mxrb page generate App.Order --chain page:nanoflow
 mxrb page g App.Order --chain page:nanoflow:microflow
+mxrb page g App.Order --chain page:nanoflow:microflow \
+  --role App.User --role App.Administrator
 ```
 
 `page:microflow` chama o Runtime diretamente; `page:nanoflow` mantém a ação no
@@ -71,6 +74,12 @@ as cadeias que terminam em microflow criam também `ACT_RefreshOrder`. Sem
 são aliases de `page new`. Cada cadeia é materializada em um MPR válido, serve
 como ponto de partida removível e exercita o preflight do compilador; arquivos
 existentes nunca são sobrescritos.
+
+`--role Module.Role` pode ser repetido e aplica os papéis à página, ao data
+source e aos fluxos de ação gerados. Isso é especialmente importante em
+projetos exportados com `CheckEverything`: sem papel explícito, o Runtime deve
+negar a execução. O scaffold valida o formato qualificado do papel; a validação
+semântica do projeto continua responsável por confirmar que o papel existe.
 
 ## Demo users
 

@@ -1,0 +1,42 @@
+{
+  "name": "mxrb-care-portal-zero-project-flow",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "ruby-typescript-to-portable-project",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "CarePortal Operations" },
+        { "measure_click": { "selector": ".mx-name-checkStatus", "max_ms": 500, "min_requests": 1 } },
+        { "wait_for_text": "Care portal backend is ready" },
+        { "click_text": "Operations" },
+        { "wait_for_text": "Operations Queue" },
+        { "measure_click": { "selector": ".mx-name-syncQueue", "max_ms": 500, "min_requests": 1 } },
+        { "wait_for_text": "Queue synchronized" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".mxrb-navigation",
+        ".mxrb-page-header",
+        ".mxrb-runtime-notice"
+      ]
+    },
+    {
+      "name": "application-owned-typescript-route",
+      "path": "/workspace",
+      "steps": [
+        { "wait_for_text": "Ruby TypeScript Workspace" },
+        { "click_text": "Local deployments: 0" },
+        { "wait_for_text": "Local deployments: 1" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ],
+      "selectors": [
+        ".developer-workspace"
+      ]
+    }
+  ]
+}

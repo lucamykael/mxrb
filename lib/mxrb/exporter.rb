@@ -127,7 +127,7 @@ module Mxrb
 
     def export_app_structure
       %w[
-        app/security app/navigation app/design_system
+        app/security app/navigation app/navigation/responsive app/design_system
         theme resources themesource widgets javasource javascriptsource
       ].each { write(File.join(@output_dir, _1, ".keep"), "") }
     end
@@ -184,7 +184,11 @@ module Mxrb
       end
       write(
         File.join(@output_dir, ".mxrb", "native_units.json"),
-        JSON.pretty_generate("format_version" => project.format_version.to_s, "units" => units)
+        JSON.pretty_generate(
+          "format_version" => project.format_version.to_s,
+          "source_filename" => File.basename(@mpr_path),
+          "units" => units
+        )
       )
       source = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
@@ -544,7 +548,7 @@ module Mxrb
       source = <<~RUBY
         # frozen_string_literal: true
 
-        require "mxrb"
+        require "mxrb" unless defined?(Mxrb::Dsl)
 
         output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
 
@@ -674,7 +678,12 @@ module Mxrb
         "    home_for #{ruby(home.fetch(:role))}#{suffix}"
       end
       items = profile.fetch(:items, []).flat_map { navigation_item_source(_1, 4) }
-      titles + homes + items
+      extensions = if profile.fetch(:name).to_s == "Responsive"
+                     ['    evaluate_dir File.join(__dir__, "responsive")']
+                   else
+                     []
+                   end
+      titles + homes + items + extensions
     end
 
     def design_system_source(design_system)

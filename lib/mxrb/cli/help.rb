@@ -73,6 +73,9 @@ module Mxrb
          'mxrb pack Shop.mpr --output Shop.mda'],
         ['portable', 'portable FILE.mpr --output runtime.zip', 'Build a portable executable Runtime ZIP',
          'mxrb portable Shop.mpr --output Shop.zip'],
+        ['portability', 'portability [DIR] [--json] [--require-native]',
+         'Audit what Ruby/TypeScript code materializes in Mendix',
+         'mxrb portability . --require-native'],
         ['preflight', 'preflight FILE.mpr [--json]', 'Audit compiler and Runtime compatibility',
          'mxrb preflight Shop.mpr'],
         ['project', 'project inspect [DIR] [--json]', 'Inspect an MXRB project workspace', 'mxrb project inspect .'],
@@ -108,8 +111,8 @@ module Mxrb
         ['upgrade', 'upgrade --mendix VERSION [--target DIR] [--apply]', 'Transition the Mendix version in project.rb',
          'mxrb upgrade --mendix 11.12.1 --apply'],
         ['validate', 'validate FILE.mpr', 'Validate MPR structure, hashes and contents', 'mxrb validate Shop.mpr'],
-        ['widgets', 'widgets sync DEFINITION.rb FILE.mpr', 'Synchronize pluggable widget schemas',
-         'mxrb widgets sync project.rb Shop.mpr']
+        ['widgets', 'widgets <new|build|sync> ...', 'Develop TypeScript widgets and synchronize MPK schemas',
+         'mxrb widgets new OrderSummary ./widgets-src']
       ].to_h { |values| [values.first, Command.new(*values)] }.freeze
 
       SUBCOMMANDS = {
@@ -176,6 +179,12 @@ module Mxrb
         ],
         'test' => [
           ['--environment NAME', 'Apply the selected profile while the test runtime executes']
+        ],
+        'db' => [
+          ['--port PORT', 'PostgreSQL loopback port (default: 55432)'],
+          ['--runtime-port PORT', 'Mendix Runtime loopback port (default: 18080)'],
+          ['--recreate', 'Replace a running stale Runtime without prompting'],
+          ['--keep-current', 'Keep a running stale Runtime and start no second stack']
         ]
       }.freeze
 
@@ -206,9 +215,11 @@ module Mxrb
         'diagram-er destroy' => ['diagram-er destroy FILE.mpr --yes',
                                  'Stop the ER editor and remove only its managed files',
                                  'mxrb diagram-er destroy Shop.mpr --yes'],
-        'db up' => ['db up FILE.mpr [--port PORT]', 'Build, synchronize and start PostgreSQL and Runtime',
+        'db up' => ['db up FILE.mpr [--port PORT] [--recreate|--keep-current]',
+                    'Reconcile and start PostgreSQL and Runtime',
                     'mxrb db up Shop.mpr'],
-        'db sync' => ['db sync FILE.mpr [--port PORT]', 'Rebuild and synchronize the retained database',
+        'db sync' => ['db sync FILE.mpr [--port PORT] [--recreate|--keep-current]',
+                      'Rebuild and synchronize the retained database',
                       'mxrb db sync Shop.mpr'],
         'db down' => ['db down FILE.mpr', 'Stop containers while preserving data', 'mxrb db down Shop.mpr'],
         'db destroy' => ['db destroy FILE.mpr --yes', 'Remove the isolated containers, data and state',

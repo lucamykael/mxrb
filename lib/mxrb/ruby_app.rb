@@ -17,7 +17,7 @@ module Mxrb
     SOURCE_GLOBS = [
       'app/**/*.rb', 'config/**/*', 'frontend/**/*', 'spec/**/*.rb',
       'db/migrate/**/*', 'bin/**/*', '.rspec', 'config.ru',
-      'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example'
+      'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[models dtos services pages].freeze
@@ -186,6 +186,7 @@ module Mxrb
     # Base for generated persistent models.
     class Record
       LIFECYCLE_EVENTS = Runtime::Native::Store::LIFECYCLE_EVENTS
+      ATTRIBUTE_OPTION_UNSET = Object.new.freeze
 
       class << self
         attr_reader :mendix_id, :attributes, :persistable, :lifecycle_callbacks
@@ -206,13 +207,19 @@ module Mxrb
 
         def persistence(value) = (@persistable = value == true)
 
-        def attribute(name, type:, mendix_name:, required: false, default: nil)
+        def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil,
+                      documentation: '', length: nil, localize_date: ATTRIBUTE_OPTION_UNSET,
+                      enumeration: nil)
           @attributes ||= []
-          @attributes << {
+          declaration = {
             name: name.to_sym, type: type.to_sym,
             mendix_name: mendix_name.to_s, required: required == true,
-            default: default
+            unique: unique == true, default: default,
+            documentation: documentation.to_s, length: length,
+            enumeration: enumeration
           }
+          declaration[:localize_date] = localize_date unless localize_date.equal?(ATTRIBUTE_OPTION_UNSET)
+          @attributes << declaration
           attr_accessor name
         end
 
@@ -273,7 +280,7 @@ module Mxrb
     # pure-Ruby native interpreter and can be replaced with idiomatic Ruby.
     class Service
       class << self
-        attr_reader :mendix_id
+        attr_reader :mendix_id, :native_definition, :native_kind
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -281,6 +288,41 @@ module Mxrb
           @mendix_name = value.to_s
           @mendix_id = id.to_s
           Registry.register(:service, @mendix_name, self)
+        end
+
+        # Declares the Mendix-native representation of this Ruby service.
+        # The block uses the same typed flow DSL as project.rb, so one source
+        # can run through MXRB and materialize as a microflow or nanoflow.
+        def native(kind = :microflow, public: false, &block)
+          qualified = require_qualified_mendix_name!
+          runtime, flow_kind = case kind.to_sym
+                               when :microflow then %i[server use_case]
+                               when :nanoflow then %i[client client_action]
+                               else
+                                 raise ArgumentError, 'native service kind must be microflow or nanoflow'
+                               end
+          builder = Dsl::FlowBuilder.new(
+            qualified.split('.', 2).last, runtime:, kind: flow_kind, public:
+          )
+          builder.instance_eval(&block) if block
+          @native_kind = kind.to_sym
+          @native_definition = builder.to_h.merge(unit_id: native_unit_id(@native_kind))
+        end
+
+        private
+
+        def require_qualified_mendix_name!
+          value = @mendix_name.to_s
+          return value if value.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+
+          raise ArgumentError, 'call mendix_name with Module.Document before native'
+        end
+
+        def native_unit_id(kind)
+          return @mendix_id unless @mendix_id.to_s.empty?
+
+          hex = Digest::SHA1.hexdigest("mxrb:ruby:#{kind}:#{@mendix_name}")
+          "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}"
         end
       end
 
@@ -303,7 +345,8 @@ module Mxrb
     class Page
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
-                    :appearance_style, :data_source
+                    :appearance_style, :data_source, :native_definition,
+                    :navigation_definition
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -319,6 +362,49 @@ module Mxrb
           @appearance_class = appearance_class.to_s
           @appearance_style = appearance_style.to_s
           @data_source = data_source
+        end
+
+        # Declares an editable native Mendix page with the typed page/widget
+        # DSL. Existing exported pages may keep using #configure and remain
+        # untouched; only pages with #native are synchronized back to the MPR.
+        def native(&block)
+          qualified = require_qualified_mendix_name!
+          builder = Dsl::PageBuilder.new(qualified.split('.', 2).last)
+          builder.instance_eval(&block) if block
+          definition = builder.to_h.merge(unit_id: native_unit_id)
+          @native_definition = definition
+          @title = definition.fetch(:title).to_s
+          @widgets = definition.fetch(:widgets).freeze
+          @data_source = definition[:data_source]
+          @appearance_class ||= ''
+          @appearance_style ||= ''
+          definition
+        end
+
+        # Adds or updates one navigation item without replacing unrelated
+        # native menu entries. Set home: true only when this page must become
+        # the profile's home page.
+        def navigation(caption:, profile: 'Responsive', icon: nil, home: false)
+          qualified = require_qualified_mendix_name!
+          @navigation_definition = {
+            page: qualified, caption:, profile: profile.to_s, icon:, home: home == true
+          }
+        end
+
+        private
+
+        def require_qualified_mendix_name!
+          value = @mendix_name.to_s
+          return value if value.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+
+          raise ArgumentError, 'call mendix_name with Module.Document before native'
+        end
+
+        def native_unit_id
+          return @mendix_id unless @mendix_id.to_s.empty?
+
+          hex = Digest::SHA1.hexdigest("mxrb:ruby:page:#{@mendix_name}")
+          "#{hex[0, 8]}-#{hex[8, 4]}-#{hex[12, 4]}-#{hex[16, 4]}-#{hex[20, 12]}"
         end
       end
     end
@@ -406,7 +492,9 @@ module Mxrb
 
       def native_call(name, arguments = {}, context: nil)
         runtime_synchronize do
-          authorize_document!(:microflow, name, :execute, context)
+          service = Registry.all(:service)[name.to_s]
+          kind = service&.native_kind == :nanoflow ? :nanoflow : :microflow
+          authorize_document!(kind, name, :execute, context)
           serialize(
             bridge.interpreter.call(name.to_s, arguments.to_h.transform_keys(&:to_s), context:), context:
           )
@@ -862,6 +950,7 @@ module Mxrb
         RubyApp.application_files(@root).each { load _1, true }
         project = Model::Project.open(@target, readonly: false)
         synchronize_entities(project)
+        synchronize_native_documents(project)
         project.close
         project = nil
         embed_sources!
@@ -897,13 +986,40 @@ module Mxrb
         (source_names & registered.keys).each { synchronize_entity(project, _1, registered.fetch(_1)) }
       end
 
+      def synchronize_native_documents(project)
+        services = Registry.all(:service).values.select(&:native_definition)
+        pages = Registry.all(:page).values.select(&:native_definition)
+        modules = (services + pages).group_by { module_name(_1.mendix_name) }
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        modules.each do |name, implementations|
+          module_services = implementations.grep(Class).select { _1 <= Service }
+          module_pages = implementations.grep(Class).select { _1 <= Page }
+          writer.synchronize_ruby_documents!(
+            project.mpr, module_name: name,
+                         pages: module_pages.map(&:native_definition),
+                         microflows: module_services.select { _1.native_kind == :microflow }
+                                                    .map(&:native_definition),
+                         nanoflows: module_services.select { _1.native_kind == :nanoflow }
+                                                   .map(&:native_definition),
+                         navigation_items: module_pages.filter_map(&:navigation_definition)
+          )
+        end
+        project.refresh!
+      end
+
+      def module_name(qualified)
+        qualified_parts(qualified).first
+      end
+
       def add_entity(project, name, implementation)
         module_name, entity_name = qualified_parts(name)
         attributes = implementation.attributes.to_a.map do |attribute|
-          reject_unsupported_required!(name, attribute)
           {
             name: attribute.fetch(:mendix_name), type: attribute.fetch(:type),
-            default: attribute[:default]
+            default: attribute[:default], required: attribute.fetch(:required, false),
+            unique: attribute.fetch(:unique, false), documentation: attribute[:documentation],
+            length: attribute[:length], localize_date: attribute[:localize_date],
+            enumeration: attribute[:enumeration]
           }
         end
         project.plan_add_entity(
@@ -936,10 +1052,12 @@ module Mxrb
         end
         (declared.keys - existing.keys).each do |name|
           declaration = declared.fetch(name)
-          reject_unsupported_required!(entity_name, declaration)
           project.plan_add_attribute(
             entity_name, name:, type: declaration.fetch(:type),
-                         default: declaration[:default]
+                         default: declaration[:default], required: declaration.fetch(:required, false),
+                         unique: declaration.fetch(:unique, false),
+                         documentation: declaration[:documentation], length: declaration[:length],
+                         localize_date: declaration[:localize_date], enumeration: declaration[:enumeration]
           ).apply!
         end
         (declared.keys & existing.keys).each do |name|
@@ -948,27 +1066,45 @@ module Mxrb
       end
 
       def synchronize_attribute(project, entity_name, attribute, declaration)
-        if (attribute.required == true) != declaration.fetch(:required)
-          raise ValidationError,
-                "changing required for #{entity_name}/#{attribute.name} is outside the reversible Ruby contract"
-        end
         updates = {}
+        declared_required = declaration.fetch(:required, false)
+        updates[:required] = declared_required if (attribute.required == true) != declared_required
+        declared_unique = declaration.fetch(:unique, false)
+        existing_unique = attribute.respond_to?(:unique) && attribute.unique == true
+        updates[:unique] = declared_unique if existing_unique != declared_unique
         declared_type = declaration.fetch(:type).to_sym
         updates[:type] = declared_type if attribute.type != declared_type
         current_default = attribute.default_value.to_s
         declared_default = declaration[:default].to_s
         updates[:default] = declaration[:default] if current_default != declared_default
+        if declaration.key?(:documentation)
+          declared_documentation = declaration[:documentation].to_s
+          existing_documentation = attribute.documentation if attribute.respond_to?(:documentation)
+          updates[:documentation] = declared_documentation \
+            if existing_documentation.to_s != declared_documentation
+        end
+        if declaration.key?(:length)
+          declared_length = declaration[:length]
+          declared_length = Model::Attribute::DEFAULT_STRING_LENGTH \
+            if declared_type == :string && declared_length.nil?
+          existing_length = attribute.length if attribute.respond_to?(:length)
+          updates[:length] = declared_length if existing_length != declared_length
+        end
+        if declaration.key?(:localize_date)
+          declared_localize_date = declaration[:localize_date]
+          declared_localize_date = false if declared_type == :datetime && declared_localize_date.nil?
+          existing_localize_date = attribute.localize_date if attribute.respond_to?(:localize_date)
+          updates[:localize_date] = declared_localize_date \
+            if existing_localize_date != declared_localize_date
+        end
+        if declaration.key?(:enumeration)
+          existing_enumeration = attribute.enumeration if attribute.respond_to?(:enumeration)
+          updates[:enumeration] = declaration[:enumeration] \
+            if existing_enumeration.to_s != declaration[:enumeration].to_s
+        end
         return if updates.empty?
 
         project.plan_change_attribute("#{entity_name}/#{attribute.name}", **updates).apply!
-      end
-
-      def reject_unsupported_required!(entity_name, declaration)
-        return unless declaration.fetch(:required)
-
-        raise ValidationError,
-              "adding required attribute #{entity_name}/#{declaration.fetch(:mendix_name)} " \
-              'is outside the reversible Ruby contract'
       end
 
       def qualified_parts(name)
@@ -1021,18 +1157,25 @@ module Mxrb
         if method == 'POST' && path == '/api/login'
           credentials = request_json(request)
           session = @sessions.login(credentials['username'], credentials['password'])
-          return render_json(response, 200, { ok: true }.merge(session))
+          set_session_cookie(response, session.fetch(:token))
+          public_session = session.reject { |key, _value| key == :token }
+          return render_json(response, 200, { ok: true }.merge(public_session))
         end
 
-        context = @sessions.authenticate(request['Authorization'])
+        authorization = request_authorization(request)
+        validate_csrf!(request, authorization) if unsafe_request?(method) && cookie_authenticated?(request)
+        context = @sessions.authenticate(authorization)
         if method == 'GET' && path == '/api/session'
           return render_json(
             response, 200,
-            user: context.user, roles: context.user_roles, module_roles: context.module_roles
+            user: context.user, roles: context.user_roles, module_roles: context.module_roles,
+            csrf: @sessions.csrf_token(authorization)
           )
         end
         if method == 'POST' && path == '/api/logout'
-          return render_json(response, 200, ok: @sessions.logout(request['Authorization']))
+          logged_out = @sessions.logout(authorization)
+          clear_session_cookie(response)
+          return render_json(response, 200, ok: logged_out)
         end
         return render_json(response, 200, application.schema(context:)) if method == 'GET' && path == '/api/schema'
         return render_json(response, 200, application.schema(context:)[:navigation]) \
@@ -1092,8 +1235,8 @@ module Mxrb
 
         if (match = rest_route(method, path))
           route, path_parameters = match
-          return render_json(response, 401, error('unauthorized', 'Authorization header required')) \
-            if route['requires_authentication'] && request['Authorization'].to_s.empty?
+          return render_json(response, 401, error('unauthorized', 'Authenticated session required')) \
+            if route['requires_authentication'] && authorization.to_s.empty?
 
           body = request.body.to_s.empty? ? nil : request_json(request)
           result = application.invoke_rest(
@@ -1155,6 +1298,40 @@ module Mxrb
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
         response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+      end
+
+      def request_authorization(request)
+        header = request['Authorization'].to_s
+        return header unless header.empty?
+
+        token = request['Cookie'].to_s.split(';').filter_map do |part|
+          name, value = part.strip.split('=', 2)
+          value if name == 'mxrb_session'
+        end.first
+        token && "Bearer #{token}"
+      end
+
+      def cookie_authenticated?(request)
+        request['Authorization'].to_s.empty? && request['Cookie'].to_s.match?(/(?:\A|;\s*)mxrb_session=/)
+      end
+
+      def unsafe_request?(method) = !%w[GET HEAD OPTIONS].include?(method)
+
+      def validate_csrf!(request, authorization)
+        return if @sessions.valid_csrf?(authorization, request['X-CSRF-Token'])
+
+        raise AuthenticationError, 'invalid or missing CSRF token'
+      end
+
+      def set_session_cookie(response, token)
+        attributes = ["mxrb_session=#{token}", 'Path=/', 'HttpOnly', 'SameSite=Strict',
+                      "Max-Age=#{@sessions.ttl}"]
+        attributes << 'Secure' if ENV['MXRB_SECURE_COOKIES'] == 'true'
+        response['Set-Cookie'] = attributes.join('; ')
+      end
+
+      def clear_session_cookie(response)
+        response['Set-Cookie'] = 'mxrb_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
       end
 
       def route_name(path, prefix)
@@ -1259,7 +1436,11 @@ module Mxrb
         body = input ? input.read.to_s : ''
         input.rewind if input.respond_to?(:rewind)
         query = URI.decode_www_form(environment['QUERY_STRING'].to_s).to_h
-        headers = { 'Authorization' => environment['HTTP_AUTHORIZATION'].to_s }
+        headers = {
+          'Authorization' => environment['HTTP_AUTHORIZATION'].to_s,
+          'Cookie' => environment['HTTP_COOKIE'].to_s,
+          'X-CSRF-Token' => environment['HTTP_X_CSRF_TOKEN'].to_s
+        }
         path = "#{environment['SCRIPT_NAME']}#{environment.fetch('PATH_INFO', '/')}"
         Request.new(
           path, environment.fetch('REQUEST_METHOD', 'GET'),
@@ -1299,9 +1480,9 @@ module Mxrb
         @frontend_pid = spawn_frontend if @frontend
         yield(self) if block_given?
         if @frontend_pid
-          Process.wait(@frontend_pid)
+          wait_for_process(@frontend_pid, 'frontend')
         elsif @backend_pid
-          Process.wait(@backend_pid)
+          wait_for_process(@backend_pid, 'backend')
         else
           @backend.join
         end
@@ -1312,6 +1493,7 @@ module Mxrb
       end
 
       def shutdown
+        @shutting_down = true
         @server&.shutdown
         terminate(@frontend_pid)
         terminate(@backend_pid)
@@ -1342,6 +1524,14 @@ module Mxrb
         Process.wait(pid)
       end
 
+      def wait_for_process(pid, label)
+        _waited, status = Process.wait2(pid)
+        return if status.success? || @shutting_down
+
+        reason = status.exitstatus ? "status #{status.exitstatus}" : "signal #{status.termsig}"
+        raise Error, "#{label} process exited with #{reason}"
+      end
+
       def spawn_frontend
         directory = File.join(root, 'frontend')
         package = File.join(directory, 'package.json')
@@ -1355,7 +1545,7 @@ module Mxrb
         frontend_environment['MXRB_API_PORT'] = api_port.to_s
         Process.spawn(
           frontend_environment, @npm, 'run', 'dev', '--',
-          '--host', host, '--port', frontend_port.to_s, chdir: directory
+          '--host', host, '--port', frontend_port.to_s, '--strictPort', chdir: directory
         )
       end
 

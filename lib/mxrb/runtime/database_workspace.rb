@@ -12,7 +12,7 @@ module Mxrb
     DatabaseInfo = Data.define(
       :project_id, :state_dir, :database_container, :runtime_container,
       :host, :port, :database, :reader_user, :running, :model_fingerprint,
-      :runtime_url
+      :runtime_url, :active_fingerprint, :disposition
     )
     AdminCredentials = Data.define(:username, :password, :state_dir, :path)
 
@@ -44,35 +44,40 @@ module Mxrb
         @plan = Toolchain.new(@project_path).plan
       end
 
-      def up(force_build: false)
+      def up(force_build: false, reconcile: :prompt, input: $stdin, output: $stderr)
         validate!
         prepare_state
-        refresh_runtime_package(force_build)
-        prepare_database!
-        configure_reader!
-        restart_runtime!
-        wait_for_runtime!
-        configure_reader!
-        info(running: true)
+        with_workspace_lock do
+          reconcile_up(force_build:, reconcile:, input:, output:)
+        end
       end
 
-      def sync = up(force_build: true)
+      def sync(reconcile: :prompt, input: $stdin, output: $stderr) =
+        up(force_build: true, reconcile:, input:, output:)
 
       def down
-        stop_container(runtime_container)
-        stop_container(database_container)
-        info(running: false)
+        prepare_lock_directory
+        with_workspace_lock do
+          stop_container(runtime_container)
+          stop_container(database_container)
+          info(running: false, disposition: :stopped)
+        end
       end
 
-      def destroy(confirm: false)
+      def destroy(confirm: false) # rubocop:disable Metrics/MethodLength
         raise ArgumentError, 'destroy requires explicit confirmation' unless confirm
 
-        remove_container(runtime_container)
-        remove_container(database_container)
-        remove_owned_resource('volume', database_volume)
-        remove_owned_resource('network', network_name)
+        prepare_lock_directory
+        result = nil
+        with_workspace_lock do
+          remove_container(runtime_container)
+          remove_container(database_container)
+          remove_owned_resource('volume', database_volume)
+          remove_owned_resource('network', network_name)
+          result = info(running: false, disposition: :destroyed)
+        end
         FileUtils.rm_rf(@state_dir)
-        info(running: false)
+        result
       end
 
       def status
@@ -266,12 +271,57 @@ module Mxrb
         SQL
       end
 
-      def refresh_runtime_package(force)
-        return unless force || stale_runtime?
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength,
+      # rubocop:disable Metrics/PerceivedComplexity
+      def reconcile_up(force_build:, reconcile:, input:, output:)
+        rebuild = force_build || stale_runtime?
+        if rebuild && container_running?(runtime_container)
+          decision = reconciliation_decision(reconcile, input:, output:)
+          if decision == :keep_current
+            return info(
+              running: true, active_fingerprint: stored_runtime_fingerprint,
+              disposition: :kept_current
+            )
+          end
+        end
 
-        remove_container(runtime_container)
-        build_runtime!
+        candidate = build_runtime_candidate! if rebuild
+        prepare_database!
+        disposition = if rebuild
+                        deploy_runtime_candidate!(candidate)
+                        :recreated
+                      else
+                        ensure_runtime_started!
+                      end
+        configure_reader!
+        cleanup_owned_obsolete_resources! if rebuild
+        info(running: true, active_fingerprint: runtime_fingerprint, disposition:)
+      ensure
+        FileUtils.rm_rf(candidate) if defined?(candidate) && candidate && File.exist?(candidate)
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength,
+      # rubocop:enable Metrics/PerceivedComplexity
+
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+      def reconciliation_decision(policy, input:, output:)
+        choice = policy.to_sym
+        return :recreate if choice == :recreate
+        return :keep_current if choice == :keep_current
+        raise ArgumentError, 'reconcile must be prompt, recreate, or keep_current' unless choice == :prompt
+
+        unless input.respond_to?(:tty?) && input.tty?
+          raise ToolchainError,
+                'a previous Docker version is running; use --recreate or --keep-current'
+        end
+
+        output.puts '[mxrb] A running Docker runtime is older than the current project.'
+        output.puts "[mxrb] Active fingerprint : #{stored_runtime_fingerprint || '(unknown)'}"
+        output.puts "[mxrb] Current fingerprint: #{runtime_fingerprint}"
+        output.print '[mxrb] Stop the active runtime and recreate it? [y/N] '
+        answer = input.gets.to_s.strip.downcase
+        %w[y yes s sim].include?(answer) ? :recreate : :keep_current
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
 
       def validate!
         raise ArgumentError, "#{@project_path}: file not found" unless File.file?(@project_path)
@@ -284,6 +334,24 @@ module Mxrb
         FileUtils.mkdir_p(@state_dir)
         File.chmod(0o700, @state_dir)
         credentials
+      end
+
+      def prepare_lock_directory
+        FileUtils.mkdir_p(@state_dir)
+        File.chmod(0o700, @state_dir)
+      end
+
+      def with_workspace_lock
+        File.open(workspace_lock, File::RDWR | File::CREAT, 0o600) do |lock|
+          lock.flock(File::LOCK_EX)
+          yield
+        ensure
+          begin
+            lock.flock(File::LOCK_UN)
+          rescue StandardError
+            nil
+          end
+        end
       end
 
       def credentials
@@ -307,24 +375,37 @@ module Mxrb
       end
 
       def stale_runtime?
-        !File.file?(runtime_marker) ||
-          JSON.parse(File.read(runtime_marker)).fetch('fingerprint') != model_fingerprint
+        !File.directory?(runtime_dir) || !File.file?(runtime_marker) ||
+          stored_runtime_fingerprint != runtime_fingerprint
       rescue JSON::ParserError, KeyError
         true
       end
 
-      def build_runtime!
-        FileUtils.rm_rf(runtime_dir)
+      def stored_runtime_fingerprint
+        return unless File.file?(runtime_marker)
+
+        JSON.parse(File.read(runtime_marker)).fetch('fingerprint')
+      rescue JSON::ParserError, KeyError
+        nil
+      end
+
+      def build_runtime_candidate! # rubocop:disable Metrics/MethodLength
         FileUtils.mkdir_p(build_dir)
         package = File.join(build_dir, 'runtime.zip')
         FileUtils.rm_f(package)
         build_native_package(package)
-        FileUtils.mkdir_p(runtime_dir)
+        candidate = File.join(
+          @state_dir, "runtime.next-#{Process.pid}-#{SecureRandom.hex(6)}"
+        )
+        FileUtils.mkdir_p(candidate)
         # The package is always authoritative for this generated directory.
         # Some unzip builds can still observe files created by a just-removed
         # bind-mounted Runtime and prompt on stdin unless overwrite is explicit.
-        run!('unzip', '-oq', package, '-d', runtime_dir)
-        File.write(runtime_marker, JSON.generate('fingerprint' => model_fingerprint))
+        run!('unzip', '-oq', package, '-d', candidate)
+        candidate
+      rescue StandardError
+        FileUtils.rm_rf(candidate) if defined?(candidate) && candidate
+        raise
       end
 
       def build_native_package(output)
@@ -383,7 +464,10 @@ module Mxrb
           return
         end
 
-        run!('docker', 'network', 'create', '--label', ownership_label, network_name)
+        run!(
+          'docker', 'network', 'create', '--label', ownership_label,
+          '--label', 'mxrb.resource=network', network_name
+        )
       end
 
       def ensure_database!
@@ -420,7 +504,8 @@ module Mxrb
         ensure_database_volume!
         run!(
           'docker', 'run', '-d', '--name', database_container,
-          '--label', ownership_label, '--network', network_name,
+          '--label', ownership_label, '--label', 'mxrb.resource=database',
+          '--network', network_name,
           '--mount', "type=volume,source=#{database_volume},target=/var/lib/postgresql/data",
           '-p', "127.0.0.1:#{@port}:5432",
           '-e', "POSTGRES_DB=#{DATABASE}", '-e', "POSTGRES_USER=#{OWNER}",
@@ -435,7 +520,11 @@ module Mxrb
         if successful?('docker', 'volume', 'inspect', database_volume)
           assert_owned_resource!('volume', database_volume)
         else
-          run!('docker', 'volume', 'create', '--label', ownership_label, database_volume)
+          run!(
+            'docker', 'volume', 'create', '--label', ownership_label,
+            '--label', 'mxrb.resource=data', '--label', 'mxrb.persistent=true',
+            database_volume
+          )
         end
       end
 
@@ -576,12 +665,13 @@ module Mxrb
       # Runtime database settings stay adjacent so no credential or safety
       # override can be omitted from one execution path.
       # rubocop:disable Metrics/MethodLength
-      def restart_runtime!
+      def restart_runtime!(fingerprint: runtime_fingerprint)
         remove_container(runtime_container)
         secret = credentials
         run!(
           'docker', 'run', '-d', '--name', runtime_container,
-          '--label', ownership_label, '--network', network_name,
+          '--label', ownership_label, '--label', 'mxrb.resource=runtime',
+          '--label', "mxrb.fingerprint=#{fingerprint}", '--network', network_name,
           '--publish', "127.0.0.1:#{@runtime_port}:8080",
           '--mount', bind_mount(runtime_dir, '/mendix', readonly: false),
           '-e', 'HOME=/tmp', '-e', "M2EE_ADMIN_PASS=#{secret.fetch('admin_password')}",
@@ -597,6 +687,124 @@ module Mxrb
         )
       end
       # rubocop:enable Metrics/MethodLength
+
+      def ensure_runtime_started!
+        if container_exists?(runtime_container)
+          assert_owned_container!(runtime_container)
+          return :reused if container_running?(runtime_container)
+
+          run!('docker', 'start', runtime_container)
+        else
+          restart_runtime!
+        end
+        wait_for_runtime!
+        :started
+      end
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def deploy_runtime_candidate!(candidate)
+        backup = File.join(@state_dir, "runtime.previous-#{Process.pid}")
+        previous_marker = File.file?(runtime_marker) ? File.binread(runtime_marker) : nil
+        remove_container(runtime_container)
+        FileUtils.rm_rf(backup)
+        FileUtils.mv(runtime_dir, backup) if File.directory?(runtime_dir)
+        FileUtils.mv(candidate, runtime_dir)
+        write_runtime_marker
+        restart_runtime!
+        wait_for_runtime!
+        FileUtils.rm_rf(backup)
+      rescue StandardError => e
+        rollback_runtime!(backup, previous_marker)
+        raise ToolchainError, "new Docker runtime failed; previous version restored: #{e.message}"
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+      def rollback_runtime!(backup, previous_marker) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        remove_container(runtime_container)
+        FileUtils.rm_rf(runtime_dir)
+        FileUtils.mv(backup, runtime_dir) if File.directory?(backup)
+        if previous_marker
+          File.binwrite(runtime_marker, previous_marker)
+        else
+          FileUtils.rm_f(runtime_marker)
+        end
+        return unless File.directory?(runtime_dir)
+
+        previous_fingerprint = JSON.parse(previous_marker).fetch('fingerprint') if previous_marker
+        restart_runtime!(fingerprint: previous_fingerprint || 'unknown')
+        wait_for_runtime!
+      rescue StandardError => e
+        raise ToolchainError, "Docker rollback failed: #{e.message}"
+      end
+
+      def write_runtime_marker
+        temporary = "#{runtime_marker}.#{Process.pid}.tmp"
+        payload = {
+          'fingerprint' => runtime_fingerprint,
+          'runtime_image' => @plan.runtime_image,
+          'postgres_image' => POSTGRES_IMAGE
+        }
+        File.write(temporary, JSON.generate(payload))
+        File.rename(temporary, runtime_marker)
+      ensure
+        FileUtils.rm_f(temporary.to_s)
+      end
+
+      def cleanup_owned_obsolete_resources!
+        cleanup_owned_containers!
+        cleanup_owned_networks!
+        cleanup_owned_ephemeral_volumes!
+        cleanup_owned_dangling_images!
+      end
+
+      def cleanup_owned_containers!
+        listed_resources('container', 'ls', '-a').each do |name|
+          next if [database_container, runtime_container].include?(name)
+          next if container_running?(name)
+
+          remove_container(name)
+        end
+      end
+
+      def cleanup_owned_networks!
+        listed_resources('network', 'ls').each do |name|
+          next if name == network_name
+
+          remove_owned_resource('network', name)
+        end
+      end
+
+      def cleanup_owned_ephemeral_volumes!
+        listed_resources('volume', 'ls', '--filter', 'label=mxrb.ephemeral=true').each do |name|
+          remove_owned_resource('volume', name)
+        end
+      end
+
+      def cleanup_owned_dangling_images!
+        listed_resources('image', 'ls', '--filter', 'dangling=true').each do |identifier|
+          assert_owned_resource!('image', identifier)
+          run!('docker', 'image', 'rm', identifier)
+        end
+      end
+
+      def listed_resources(kind, action, *extra)
+        format = case kind
+                 when 'container' then '{{.Names}}'
+                 when 'image' then '{{.ID}}'
+                 else '{{.Name}}'
+                 end
+        output = run!(
+          'docker', kind, action, '--filter', "label=#{ownership_label}", *extra,
+          '--format', format
+        )
+        output.lines.map(&:strip).select { resource_identifier?(kind, _1) }.uniq
+      end
+
+      def resource_identifier?(kind, value)
+        return value.start_with?("mxrb-#{@project_id}") unless kind == 'image'
+
+        value.match?(/\A(?:sha256:)?[0-9a-f]{12,64}\z/i)
+      end
 
       def stop_container(name)
         return unless container_running?(name)
@@ -665,18 +873,47 @@ module Mxrb
         Open3.capture3(*command)
       end
 
-      def info(running:)
+      def info(running:, active_fingerprint: stored_runtime_fingerprint,
+               disposition: running ? :status : :stopped)
         DatabaseInfo.new(
           @project_id, @state_dir, database_container, runtime_container,
           '127.0.0.1', @port, DATABASE, READER, running, model_fingerprint,
-          "http://127.0.0.1:#{@runtime_port}/"
+          "http://127.0.0.1:#{@runtime_port}/", active_fingerprint, disposition
         )
       end
 
       def model_fingerprint
-        @model_fingerprint ||= Mxrb.open(@project_path) do |project|
-          Semantic::Index.fingerprint(project)
+        runtime_fingerprint
+      end
+
+      def runtime_fingerprint # rubocop:disable Metrics/AbcSize
+        @runtime_fingerprint ||= begin
+          digest = Digest::SHA256.new
+          digest << "mxrb-docker-workspace-v2\0"
+          digest << @plan.runtime_image.to_s << "\0" << POSTGRES_IMAGE << "\0"
+          digest << @port.to_s << "\0" << @runtime_port.to_s << "\0"
+          fingerprint_input_files.each do |relative, path|
+            digest << relative << "\0" << Digest::SHA256.file(path).hexdigest << "\0"
+          end
+          digest.hexdigest
         end
+      end
+
+      def fingerprint_input_files # rubocop:disable Metrics/MethodLength
+        root = File.dirname(@project_path)
+        files = [[File.basename(@project_path), @project_path]]
+        NATIVE_INPUT_DIRECTORIES.each do |directory|
+          base = File.join(root, directory)
+          next unless File.directory?(base)
+
+          Dir.glob(File.join(base, '**', '*'), File::FNM_DOTMATCH).sort.each do |path|
+            next unless File.file?(path)
+
+            relative = Pathname.new(path).relative_path_from(Pathname.new(root)).to_s
+            files << [relative, path]
+          end
+        end
+        files
       end
 
       def bind_mount(source, target, readonly:)
@@ -692,6 +929,7 @@ module Mxrb
 
       def credentials_path = File.join(@state_dir, 'credentials.json')
       def runtime_marker = File.join(@state_dir, 'runtime.json')
+      def workspace_lock = File.join(@state_dir, 'workspace.lock')
       def runtime_dir = File.join(@state_dir, 'runtime')
       def build_dir = File.join(@state_dir, 'build')
       def network_name = "mxrb-#{@project_id}"

@@ -507,12 +507,6 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     synchronizer = Mxrb::RubyApp::Synchronizer.allocate
     expect { synchronizer.send(:qualified_parts, 'Unqualified') }
       .to raise_error(Mxrb::ValidationError, /Module.Entity/)
-    expect do
-      synchronizer.send(
-        :reject_unsupported_required!, 'Sales.Order',
-        { required: true, mendix_name: 'Required' }
-      )
-    end.to raise_error(Mxrb::ValidationError, /adding required/)
 
     attribute = Struct.new(:name, :required, :type, :default_value).new('Number', false, :string, '')
     unsafe_plan = double(safe?: false, changes: ['unsafe'])
@@ -521,12 +515,13 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     expect do
       synchronizer.send(:synchronize_attributes, project, 'Sales.Order', entity, [])
     end.to raise_error(Mxrb::ValidationError, /unsafe/)
-    expect do
-      synchronizer.send(
-        :synchronize_attribute, project, 'Sales.Order', attribute,
-        { required: true, type: :string, default: nil }
-      )
-    end.to raise_error(Mxrb::ValidationError, /changing required/)
+    required_plan = double
+    expect(required_plan).to receive(:apply!)
+    required_project = double(plan_change_attribute: required_plan)
+    synchronizer.send(
+      :synchronize_attribute, required_project, 'Sales.Order', attribute,
+      { required: true, type: :string, default: nil }
+    )
     expect do
       synchronizer.send(:synchronize_entity, double(find_artifact: nil), 'Sales.Missing', record_class)
     end.to raise_error(Mxrb::ValidationError, /missing/)
@@ -744,7 +739,8 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       supervisor = Mxrb::RubyApp::Supervisor.new(root, frontend: false)
       allow(supervisor).to receive(:external_backend?).and_return(true)
       allow(supervisor).to receive(:spawn_backend).and_return(101)
-      allow(Process).to receive(:wait).with(101)
+      status = instance_double(Process::Status, success?: true)
+      allow(Process).to receive(:wait2).with(101).and_return([101, status])
       allow(supervisor).to receive(:shutdown)
       expect { |block| supervisor.start(&block) }.to yield_with_args(supervisor)
 
@@ -752,9 +748,18 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       allow(frontend).to receive(:external_backend?).and_return(true)
       allow(frontend).to receive(:spawn_backend).and_return(102)
       allow(frontend).to receive(:spawn_frontend).and_return(202)
-      allow(Process).to receive(:wait).with(202).and_raise(Errno::ECHILD)
+      allow(Process).to receive(:wait2).with(202).and_raise(Errno::ECHILD)
       allow(frontend).to receive(:shutdown)
       expect(frontend.start).to be_nil
+
+      failed = Mxrb::RubyApp::Supervisor.new(root, frontend: true)
+      allow(failed).to receive(:external_backend?).and_return(true)
+      allow(failed).to receive(:spawn_backend).and_return(103)
+      allow(failed).to receive(:spawn_frontend).and_return(203)
+      failure = instance_double(Process::Status, success?: false, exitstatus: 1, termsig: nil)
+      allow(Process).to receive(:wait2).with(203).and_return([203, failure])
+      allow(failed).to receive(:shutdown)
+      expect { failed.start }.to raise_error(Mxrb::Error, /frontend process exited with status 1/)
 
       internal = Mxrb::RubyApp::Supervisor.new(root, frontend: false)
       allow(internal).to receive(:external_backend?).and_return(false)

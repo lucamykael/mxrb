@@ -149,7 +149,10 @@ RSpec.describe "new features" do
         end
 
         Mxrb.open(path, readonly: false) do |project|
-          plan = project.plan_add_attribute("Shop.Product", name: :Price, type: :decimal, default: "0.0")
+          plan = project.plan_add_attribute(
+            "Shop.Product", name: :Price, type: :decimal, default: "0.0",
+                            documentation: "Current list price", required: true, unique: true
+          )
 
           expect(plan.changes).to include(match(/Price.*decimal.*Shop\.Product/i))
           expect(plan.empty?).to be false
@@ -163,6 +166,16 @@ RSpec.describe "new features" do
           price = product.attributes.find { _1.name == "Price" }
           expect(price.type).to eq(:decimal)
           expect(price.default_value).to eq("0.0")
+          expect(price.required).to be true
+          expect(price.unique).to be true
+          expect(price.documentation).to eq("Current list price")
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_doc = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items].first
+          price_docs = Mxrb::IO::BsonCodec.parse_array(entity_doc.fetch("Attributes"))[:items]
+          price_doc = price_docs.find { _1["Name"] == "Price" }
+          expect(price_doc).to include("Name" => "Price")
+          expect(price_doc.fetch("GUID")).not_to be_nil
+          expect(price_doc).not_to have_key("name")
         end
       end
     end
@@ -230,6 +243,21 @@ RSpec.describe "new features" do
       end
     end
 
+    it "removes validation rules owned by the deleted attribute" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) { entity(:E) { string :Name, required: true } }
+        end
+
+        Mxrb.open(path, readonly: false) do |project|
+          plan = project.plan_remove_attribute("M.E/Name")
+          plan.instance_variable_set(:@incoming, [].freeze)
+          plan.apply!
+          expect(project.modules.first.entities.first.attributes).to be_empty
+        end
+      end
+    end
+
     it "is not safe when other artifacts reference the attribute" do
       Dir.mktmpdir do |dir|
         path = make_project(dir) do
@@ -274,13 +302,51 @@ RSpec.describe "new features" do
         end
 
         Mxrb.open(path, readonly: false) do |project|
-          plan = project.plan_change_attribute("M.E/Score", type: :integer, default: "0")
+          plan = project.plan_change_attribute(
+            "M.E/Score", type: :integer, default: "0", required: true
+          )
           expect(plan.changes.first).to match(/Score/)
           plan.apply!
 
           attr = project.modules.first.entities.first.attributes.first
           expect(attr.type).to eq(:integer)
           expect(attr.default_value).to eq("0")
+          expect(attr.required).to be true
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_doc = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items].first
+          score_doc = Mxrb::IO::BsonCodec.parse_array(entity_doc.fetch("Attributes"))[:items].first
+          expect(score_doc).to include("Name" => "Score")
+          expect(score_doc.fetch("GUID")).not_to be_nil
+          expect(score_doc).not_to have_key("name")
+
+          project.plan_change_attribute("M.E/Score", required: false).apply!
+          expect(project.modules.first.entities.first.attributes.first.required).to be_falsey
+        end
+      end
+    end
+
+    it "round-trips string length, date localization, enumeration, and uniqueness" do
+      Dir.mktmpdir do |dir|
+        path = make_project(dir) do
+          self.module(:M) do
+            enumeration(:Status) { value :Open; value :Closed }
+            entity :E do
+              string :Code, length: 32
+              datetime :OccurredAt, localize_date: true
+              enum :State, enumeration: "M.Status"
+            end
+          end
+        end
+
+        Mxrb.open(path, readonly: false) do |project|
+          project.plan_change_attribute("M.E/Code", length: 80, unique: true).apply!
+          project.plan_change_attribute("M.E/OccurredAt", localize_date: false).apply!
+          project.plan_change_attribute("M.E/State", enumeration: nil).apply!
+
+          code, occurred_at, state = project.modules.first.entities.first.attributes
+          expect(code).to have_attributes(length: 80, unique: true)
+          expect(occurred_at.localize_date).to be(false)
+          expect(state.enumeration).to be_nil
         end
       end
     end
@@ -307,7 +373,7 @@ RSpec.describe "new features" do
         Mxrb.open(path, readonly: false) do |project|
           plan = project.plan_add_entity("M", name: :NewEntity,
                                          attributes: [
-                                           { name: :Label, type: :string },
+                                           { name: :Label, type: :string, required: true },
                                            { name: :Active, type: :boolean, default: "true" }
                                          ])
           expect(plan.changes).to include(match(/NewEntity/))
@@ -317,9 +383,17 @@ RSpec.describe "new features" do
           expect(names).to include("NewEntity")
           entity = project.modules.first.entities.find { _1.name == "NewEntity" }
           expect(entity.attributes.map(&:name)).to eq(%w[Label Active])
+          expect(entity.attributes.find { _1.name == "Label" }.required).to be true
           active = entity.attributes.find { _1.name == "Active" }
           expect(active.type).to eq(:boolean)
           expect(active.default_value).to eq("true")
+          domain = project.parse_bson(project.raw_unit(project.modules.first.domain_model.id))
+          entity_docs = Mxrb::IO::BsonCodec.parse_array(domain.fetch("Entities"))[:items]
+          entity_doc = entity_docs.find { _1["Name"] == "NewEntity" }
+          expect(entity_doc).to include("Name" => "NewEntity")
+          expect(entity_doc.fetch("GUID")).not_to be_nil
+          expect(entity_doc).to include("Attributes", "ValidationRules", "MaybeGeneralization")
+          expect(entity_doc).not_to have_key("name")
         end
       end
     end

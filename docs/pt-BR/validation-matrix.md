@@ -120,9 +120,12 @@ Runtime para dashboard e formulário vertical com CSS computado auditado.
 Os projetos Mendix reais são entradas externas de certificação e nunca ficam
 neste repositório. Defina `MXRB_FIXTURES_ROOT` para `script/validate_matrix`,
 `MXRB_BENCHMARK_MPR` para `script/benchmark` e `MXRB_CONNECTOR_FIXTURE` para os
-specs opcionais do conector. `.env.example` documenta somente os nomes; valores
-específicos da estação devem permanecer no `.env` ignorado ou no ambiente do
-shell.
+specs opcionais do conector. `MXRB_ACCEPTANCE_MPRS` aceita um ou mais MPRs,
+separados pelo separador de paths do sistema, para o gate de compatibilidade
+web. A suíte carrega essas quatro chaves do `.env` ignorado sem sobrescrever
+variáveis já definidas pelo processo. `.env.example` documenta somente os
+nomes; valores específicos da estação devem permanecer no `.env` ignorado ou
+no ambiente do shell.
 
 `script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 16,381 s.
 `script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing

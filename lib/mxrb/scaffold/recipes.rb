@@ -42,7 +42,7 @@ module Mxrb
       def scaffold_templated_page(module_name, artifact_name, template, chain)
         ensure_presentation(module_name)
         page_support_specs(artifact_name, chain, template).each do |directories, name, source|
-          create_connected_module_file(module_name, directories, name, source)
+          create_connected_module_file(module_name, directories, name, source, roles: page_roles)
         end
         create_page_template(module_name, artifact_name, template:, chain:)
         create_page_navigation(module_name, artifact_name)
@@ -50,7 +50,9 @@ module Mxrb
 
       def scaffold_basic_page(module_name, artifact_name)
         ensure_presentation(module_name)
-        create_connected_module_file(module_name, %w[presentation pages], artifact_name, :page)
+        create_connected_module_file(
+          module_name, %w[presentation pages], artifact_name, :page, roles: page_roles
+        )
       end
 
       def page_support_specs(name, chain, template)

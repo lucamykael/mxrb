@@ -412,7 +412,7 @@ RSpec.describe Mxrb do
         security_doc = project.all_units.map { project.parse_bson(_1) }.find { _1["$Type"] == "Security$ProjectSecurity" }
         expect(security_doc["SecurityLevel"]).to eq("CheckEverything")
         expect(security_doc["UserRoles"][1]["Name"]).to eq("Administrator")
-        expect(project.all_units.size).to eq(9)
+        expect(project.all_units.size).to eq(10)
       end
     end
 
@@ -660,7 +660,7 @@ RSpec.describe Mxrb do
       expect(Mxrb.validate(path)).to be_valid
 
       mpr = Mxrb::IO::MprFile.open(path, readonly: true)
-      expect(mpr.query("SELECT COUNT(*) FROM Unit").first.first).to eq(11)
+      expect(mpr.query("SELECT COUNT(*) FROM Unit").first.first).to eq(12)
       raw_module = mpr.units_by_containment("Modules").first
       module_doc = mpr.parse_contents(raw_module)
       expect(Mxrb::IO::BsonCodec.extract_id(module_doc["$ID"])).to eq(module_id)

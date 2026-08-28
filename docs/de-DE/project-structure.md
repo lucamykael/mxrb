@@ -47,7 +47,7 @@ Der Ruby-Modus kann auch ohne vorhandenes Mendix-Projekt beginnen:
 bundle exec mxrb init CustomerPortal --mode ruby
 cd CustomerPortal
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 
@@ -82,9 +82,20 @@ app/
 config/application.rb
 frontend/
   package.json
+  package-lock.json
   vite.config.ts
   tsconfig.json
-  src/{main.tsx,App.tsx,types.ts,nanoflows.ts,app.css}
+  eslint.config.js
+  .prettierrc.json
+  src/
+    app/{App.tsx,router.tsx}
+    components/{auth,feedback,navigation}/
+    core/
+    features/
+    hooks/
+    layouts/
+    styles/
+    generated/{bridge,pages,nanoflows,types.ts}
 project.rb
 .mxrb/
   ruby-app.json
@@ -94,18 +105,20 @@ project.rb
 
 Persistente Entitäten werden Records. Nicht persistente Entitäten werden
 DTO-Klassen und verwenden immer das Suffix `_dto.rb`, wodurch mehrdeutige
-`_2.rb`-Namen entfallen. Services sind normale Ruby-Klassen und delegieren
-anfangs an den nativen Pure-Ruby-Interpreter. Pages stellen dem React-TypeScript-
-Frontend native Metadaten bereit. Der Export leitet `types.ts` aus Entitäten,
-Enumerationen, Pages, Widgets, Kontexten, Effekten und API-Verträgen ab;
-`npm run typecheck` ist Bestandteil des Vite-Builds.
+`_2.rb`-Namen entfallen. Services sind normale Ruby-Klassen und delegieren an
+den nativen Pure-Ruby-Interpreter. Editierbarer React-Code folgt einer
+konventionellen Struktur. Nur `src/generated` gehört MXRB; Anwendungscode unter
+`app`, `components`, `core`, `features`, `hooks`, `layouts` und `styles` bleibt
+im Round-trip bytegenau erhalten. Das Scaffold enthält striktes TypeScript,
+ESLint, Prettier, Vitest, React Testing Library und ein reproduzierbares
+npm-Lockfile.
 
 Nach der einmaligen Installation der Ruby- und Frontend-Abhängigkeiten startet
 ein einziger Befehl beide Prozesse:
 
 ```sh
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 

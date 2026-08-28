@@ -275,6 +275,58 @@ RSpec.describe Mxrb::Scaffold::Generator do
     end
   end
 
+  it 'applies repeatable module roles to a page and every generated flow' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      described_class.new(
+        :page, 'ScaffoldApp.SecureBoard', target: root, page_template: 'dashboard',
+                                          page_chain: 'page:nanoflow:microflow',
+                                          page_roles: %w[
+                                            ScaffoldApp.User ScaffoldApp.Administrator
+                                          ]
+      ).scaffold
+
+      paths = %w[
+        modules/ScaffoldApp/presentation/pages/secure_board.rb
+        modules/ScaffoldApp/application/use_cases/act_refresh_secure_board.rb
+        modules/ScaffoldApp/presentation/client_actions/nan_refresh_secure_board.rb
+      ].map { File.join(root, _1) }
+      paths.each do |path|
+        expect(File.read(path)).to include(
+          'allowed_roles "ScaffoldApp.User", "ScaffoldApp.Administrator"'
+        )
+      end
+    end
+  end
+
+  it 'connects page navigation through an exported Responsive aggregator' do
+    Dir.mktmpdir do |dir|
+      root = project_in(dir)
+      project = File.join(root, 'project.rb')
+      aggregator = 'evaluate_dir File.join(__dir__, "app", "navigation", "responsive")'
+      navigation_loader = 'evaluate File.join(__dir__, "app", "navigation", "navigation.rb")'
+      File.write(project, File.read(project).sub(aggregator, navigation_loader))
+      navigation = File.join(root, 'app', 'navigation', 'navigation.rb')
+      File.write(navigation, <<~RUBY)
+        navigation do
+          profile :Responsive, home_page: "ScaffoldApp.Home" do
+            evaluate_dir File.join(__dir__, "responsive")
+          end
+        end
+      RUBY
+
+      expect do
+        described_class.new(
+          :page, 'ScaffoldApp.ExportedBoard', target: root, page_template: 'dashboard',
+                                              page_chain: 'page:microflow'
+        ).scaffold
+      end.not_to raise_error
+      expect(File).to exist(
+        File.join(root, 'app', 'navigation', 'responsive', 'scaffold_app_exported_board.rb')
+      )
+    end
+  end
+
   it 'scaffolds a page that calls a client nanoflow without a server action' do
     Dir.mktmpdir do |dir|
       root = project_in(dir)
@@ -379,6 +431,11 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect do
         described_class.new(:entity, 'ScaffoldApp.Other', target: root, unsupported: true)
       end.to raise_error(ArgumentError, /unknown generator options/)
+      expect do
+        described_class.new(
+          :page, 'ScaffoldApp.InvalidRole', target: root, page_roles: ['User']
+        ).scaffold
+      end.to raise_error(ArgumentError, /invalid page role/)
       expect(File).not_to exist(File.join(root, 'modules/ScaffoldApp/domain/entities/order.rb'))
     end
   end
@@ -720,6 +777,14 @@ RSpec.describe Mxrb::Scaffold::CLI do
         ).run
         expect(output.string).to include('would create', 'order.rb')
       end
+
+      roles = StringIO.new
+      described_class.new(
+        'page', ['new', 'CliApp.Secure', '--template', 'dashboard',
+                 '--role', 'CliApp.User', '--role', 'CliApp.Administrator',
+                 '--target', root, '--dry-run'], output: roles
+      ).run
+      expect(roles.string).to include('would create', 'secure.rb')
 
       minimal = StringIO.new
       described_class.new(

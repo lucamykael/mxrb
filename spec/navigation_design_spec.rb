@@ -105,7 +105,11 @@ RSpec.describe 'native navigation and design systems' do
 
       Mxrb::Exporter.new(path, exported).export!
       expect(File.read(File.join(exported, 'app', 'navigation', 'navigation.rb')))
-        .to include('home_for', 'item "Home"', 'Applicatie')
+        .to include(
+          'home_for', 'item "Home"', 'Applicatie',
+          'evaluate_dir File.join(__dir__, "responsive")'
+        )
+      expect(File).to exist(File.join(exported, 'app', 'navigation', 'responsive', '.keep'))
       manifest = JSON.parse(File.read(File.join(exported, '.mxrb', 'assets.json')))
       expect(manifest.fetch('files')).to include(
         include('path' => 'theme/web/_theme-dark.scss'),

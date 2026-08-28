@@ -212,7 +212,7 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
     end
   end
 
-  it 'reuses a current package and database while restarting only what is needed' do
+  it 'reuses an unchanged running Runtime without recreating its container' do
     Dir.mktmpdir do |dir|
       path = make_project(dir)
       state = File.join(dir, 'state')
@@ -224,8 +224,6 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
           'admin_password' => 'admin'
         )
       )
-      fingerprint = Mxrb.open(path) { Mxrb::Semantic::Index.fingerprint(_1) }
-      File.write(File.join(state, 'runtime.json'), JSON.generate('fingerprint' => fingerprint))
       commands = []
       runner = lambda do |*command|
         commands << command
@@ -239,12 +237,18 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
                  end
         [output, '', status(true)]
       end
+      subject = workspace(path, state, &runner)
+      fingerprint = subject.send(:runtime_fingerprint)
+      FileUtils.mkdir_p(File.join(state, 'runtime'))
+      File.write(File.join(state, 'runtime.json'), JSON.generate('fingerprint' => fingerprint))
 
-      info = workspace(path, state, &runner).up
+      info = subject.up
 
       expect(info.running).to be true
       expect(commands).to include(include('docker', 'start'))
-      expect(commands).to include(include('docker', 'rm', '-f'))
+      expect(info.disposition).to eq(:reused)
+      expect(commands).not_to include(include('docker', 'rm', '-f'))
+      expect(commands).not_to include(include('docker', 'run'))
       expect(commands.flatten).not_to include('build')
       expect(commands.flatten).not_to include('POSTGRES_PASSWORD=owner')
     end
@@ -270,10 +274,246 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
         end
 
         subject = workspace(path, state, &runner)
-        subject.up
+        subject.up(reconcile: :recreate)
         expect(commands).to include(include('unzip', '-oq'))
-        subject.sync if name == 'missing'
+        subject.sync(reconcile: :recreate) if name == 'missing'
       end
+    end
+  end
+
+  it 'requires an explicit non-interactive choice for a stale running Runtime' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      FileUtils.mkdir_p(File.join(state, 'runtime'))
+      File.write(File.join(state, 'runtime.json'), JSON.generate('fingerprint' => 'old'))
+      File.write(
+        File.join(state, 'credentials.json'),
+        JSON.generate(
+          'owner_password' => 'owner', 'reader_password' => 'reader',
+          'admin_password' => 'admin'
+        )
+      )
+      commands = []
+      runner = lambda do |*command|
+        commands << command
+        output = command.include?('--format') ? inspect_output(command) : 'ok'
+        [output, '', status(true)]
+      end
+      subject = workspace(path, state, &runner)
+      input = StringIO.new
+      def input.tty? = false
+
+      expect { subject.up(input:) }
+        .to raise_error(Mxrb::ToolchainError, /--recreate or --keep-current/)
+      kept = subject.up(reconcile: :keep_current)
+      expect(kept.disposition).to eq(:kept_current)
+      expect(kept.active_fingerprint).to eq('old')
+      expect(commands).not_to include(include('docker', 'rm', '-f'))
+      expect(commands).not_to include(include('unzip', '-oq'))
+
+      answer = StringIO.new("no\n")
+      def answer.tty? = true
+      output = StringIO.new
+      expect(subject.up(input: answer, output:).disposition).to eq(:kept_current)
+      expect(output.string).to include('Active fingerprint', 'Current fingerprint')
+
+      yes = StringIO.new("yes\n")
+      def yes.tty? = true
+      expect(subject.send(:reconciliation_decision, :prompt, input: yes, output: StringIO.new))
+        .to eq(:recreate)
+      expect do
+        subject.send(:reconciliation_decision, :invalid, input: yes, output: StringIO.new)
+      end.to raise_error(ArgumentError, /prompt, recreate, or keep_current/)
+    end
+  end
+
+  it 'covers lock cleanup and malformed runtime marker recovery' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { ['', '', status(true)] }
+      FileUtils.mkdir_p(File.join(state, 'runtime'))
+      File.write(File.join(state, 'runtime.json'), '{')
+
+      expect(subject.send(:stale_runtime?)).to be true
+      expect(subject.send(:stored_runtime_fingerprint)).to be_nil
+      allow(subject).to receive(:stored_runtime_fingerprint).and_raise(JSON::ParserError)
+      expect(subject.send(:stale_runtime?)).to be true
+
+      lock = double
+      allow(lock).to receive(:flock).with(File::LOCK_EX).and_return(true)
+      allow(lock).to receive(:flock).with(File::LOCK_UN).and_raise(IOError)
+      allow(File).to receive(:open).with(
+        subject.send(:workspace_lock), File::RDWR | File::CREAT, 0o600
+      ).and_yield(lock)
+      expect(subject.send(:with_workspace_lock) { :locked }).to eq(:locked)
+    end
+  end
+
+  it 'cleans partial runtime candidates and starts stopped or absent containers' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { |*| ['', 'failed', status(false)] }
+      allow(subject).to receive(:build_native_package).and_raise(IOError, 'build failed')
+      expect { subject.send(:build_runtime_candidate!) }.to raise_error(IOError, /build failed/)
+
+      allow(subject).to receive(:build_native_package).and_return(nil)
+      expect { subject.send(:build_runtime_candidate!) }.to raise_error(Mxrb::ToolchainError)
+      expect(Dir.glob(File.join(state, 'runtime.next-*'))).to be_empty
+
+      allow(subject).to receive_messages(
+        container_exists?: true, container_running?: false,
+        wait_for_runtime!: nil, assert_owned_container!: nil
+      )
+      expect(subject).to receive(:run!).with('docker', 'start', subject.send(:runtime_container))
+      expect(subject.send(:ensure_runtime_started!)).to eq(:started)
+
+      allow(subject).to receive(:container_exists?).and_return(false)
+      expect(subject).to receive(:restart_runtime!)
+      expect(subject.send(:ensure_runtime_started!)).to eq(:started)
+    end
+  end
+
+  it 'covers rollback without and with a previous runtime directory' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      subject = workspace(path, state) { ['', '', status(true)] }
+      allow(subject).to receive(:remove_container)
+      allow(subject).to receive(:restart_runtime!)
+      allow(subject).to receive(:wait_for_runtime!)
+
+      expect(subject.send(:rollback_runtime!, File.join(state, 'missing'), nil)).to be_nil
+
+      backup = File.join(state, 'backup')
+      FileUtils.mkdir_p(backup)
+      File.write(File.join(backup, 'old.txt'), 'old')
+      subject.send(:rollback_runtime!, backup, nil)
+      expect(subject).to have_received(:restart_runtime!).with(fingerprint: 'unknown')
+      expect(File).to exist(File.join(state, 'runtime', 'old.txt'))
+
+      allow(subject).to receive(:remove_container).and_raise(IOError, 'rollback unavailable')
+      expect { subject.send(:rollback_runtime!, backup, nil) }
+        .to raise_error(Mxrb::ToolchainError, /rollback failed.*rollback unavailable/)
+
+      marker_writer = workspace(path, File.join(dir, 'marker')) { ['', '', status(true)] }
+      allow(marker_writer).to receive(:runtime_marker).and_raise(IOError, 'marker unavailable')
+      expect { marker_writer.send(:write_runtime_marker) }.to raise_error(IOError, /marker unavailable/)
+    end
+  end
+
+  it 'fingerprints native assets and Docker configuration without credentials' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      FileUtils.mkdir_p(File.join(dir, 'theme'))
+      File.write(File.join(dir, 'theme', 'main.scss'), '$color: red;')
+      first = workspace(path, state) { ['', '', status(true)] }.send(:runtime_fingerprint)
+
+      FileUtils.mkdir_p(state)
+      File.write(File.join(state, 'credentials.json'), JSON.generate('owner_password' => 'changed'))
+      unchanged = workspace(path, state) { ['', '', status(true)] }.send(:runtime_fingerprint)
+      expect(unchanged).to eq(first)
+
+      File.write(File.join(dir, 'theme', 'main.scss'), '$color: blue;')
+      changed = workspace(path, state) { ['', '', status(true)] }.send(:runtime_fingerprint)
+      expect(changed).not_to eq(first)
+    end
+  end
+
+  it 'rolls back the previous Runtime when the replacement cannot start' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      runtime = File.join(state, 'runtime')
+      candidate = File.join(state, 'candidate')
+      FileUtils.mkdir_p(runtime)
+      FileUtils.mkdir_p(candidate)
+      File.write(File.join(runtime, 'old.txt'), 'old')
+      File.write(File.join(candidate, 'new.txt'), 'new')
+      File.write(File.join(state, 'runtime.json'), JSON.generate('fingerprint' => 'old'))
+      File.write(
+        File.join(state, 'credentials.json'),
+        JSON.generate(
+          'owner_password' => 'owner', 'reader_password' => 'reader',
+          'admin_password' => 'admin'
+        )
+      )
+      starts = 0
+      commands = []
+      runner = lambda do |*command|
+        commands << command
+        starts += 1 if command[0, 3] == %w[docker run -d]
+        output = if command[0, 2] == %w[docker logs]
+                   starts == 1 ? 'replacement stopped' : 'Mendix Runtime successfully started'
+                 elsif command.include?('--format') && command.include?('{{.State.Running}}')
+                   starts == 1 ? 'false' : 'true'
+                 elsif command.include?('--format')
+                   inspect_output(command)
+                 else
+                   'ok'
+                 end
+        [output, '', status(true)]
+      end
+      subject = workspace(path, state, &runner)
+
+      expect { subject.send(:deploy_runtime_candidate!, candidate) }
+        .to raise_error(Mxrb::ToolchainError, /previous version restored/)
+      expect(File.read(File.join(runtime, 'old.txt'))).to eq('old')
+      expect(File).not_to exist(File.join(runtime, 'new.txt'))
+      expect(JSON.parse(File.read(File.join(state, 'runtime.json'))).fetch('fingerprint')).to eq('old')
+      expect(starts).to eq(2)
+    end
+  end
+
+  it 'collects only obsolete owned resources and ephemeral volumes' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      state = File.join(dir, 'state')
+      commands = []
+      subject = workspace(path, state) do |*command|
+        commands << command
+        project_id = Digest::SHA256.hexdigest(File.expand_path(path))[0, 12]
+        prefix = "mxrb-#{project_id}"
+        output = case command[0, 3]
+                 when %w[docker container ls]
+                   "#{prefix}-runtime\n#{prefix}-old-runtime\nforeign\n"
+                 when %w[docker network ls]
+                   "#{prefix}\n#{prefix}-old-network\n"
+                 when %w[docker volume ls]
+                   "#{prefix}-scratch\n"
+                 when %w[docker image ls]
+                   "abcdef123456\n"
+                 else
+                   if command.include?('{{.State.Running}}')
+                     'false'
+                   elsif command.include?('--format')
+                     project_id
+                   else
+                     'ok'
+                   end
+                 end
+        [output, '', status(true)]
+      end
+
+      subject.send(:cleanup_owned_obsolete_resources!)
+      expect(commands).to include(
+        include('docker', 'rm', '-f', a_string_ending_with('-old-runtime')),
+        include('docker', 'network', 'rm', a_string_ending_with('-old-network')),
+        include('docker', 'volume', 'rm', a_string_ending_with('-scratch')),
+        include('docker', 'image', 'rm', 'abcdef123456')
+      )
+      expect(commands).not_to include(include('docker', 'volume', 'rm', a_string_ending_with('-data')))
+      expect(commands.flatten).not_to include('system', 'prune')
+
+      project_id = subject.instance_variable_get(:@project_id)
+      allow(subject).to receive(:listed_resources).with('container', 'ls', '-a')
+                                                  .and_return(["mxrb-#{project_id}-running"])
+      allow(subject).to receive(:container_running?).and_return(true)
+      expect(subject).not_to receive(:remove_container)
+      subject.send(:cleanup_owned_containers!)
     end
   end
 

@@ -239,6 +239,7 @@ module Mxrb
         options = { entity: grid_entity(widget), columns: columns }.compact
         options[:search_bar] = parse_search_bar(widget["SearchBar"]) if widget["SearchBar"].is_a?(Hash)
         options[:toolbar]    = parse_toolbar(widget["ToolBar"])       if widget["ToolBar"].is_a?(Hash)
+        options.compact!
         { type: :data_grid, name: widget["Name"], options: options, events: grid_events(widget) }
       end
 
@@ -405,8 +406,9 @@ module Mxrb
 
       def native_widget(widget)
         deep = widget.reject { |key, _| %w[$ID $Type Name].include?(key.to_s) }
-        widget_id = widget.dig("Type", "WidgetId").to_s
-        platform = widget.dig("Type", "SupportedPlatform").to_s
+        type_metadata = widget["Type"].is_a?(Hash) ? widget["Type"] : {}
+        widget_id = type_metadata["WidgetId"].to_s
+        platform = type_metadata["SupportedPlatform"].to_s
         options = { native_type: widget["$Type"], deep_structure: deep }
         options[:widget_id] = widget_id unless widget_id.empty?
         options[:platform] = platform unless platform.empty?
@@ -421,6 +423,7 @@ module Mxrb
         return data_grid_widget(widget) if properties.empty? && widget["DataSource"]
 
         entity = properties.dig("datasource", "DataSource", "EntityRef", "Entity")
+        selection = properties.dig('itemSelection', 'Selection').to_s
         column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
                       &.dig("ValueType", "ObjectType")
         columns = parse_array(properties.dig("columns", "Objects")).map do |object|
@@ -431,9 +434,20 @@ module Mxrb
             caption: extract_text(values.dig("header", "TextTemplate"))
           }.compact
         end
+        property_events = {
+          'onSelectionChange' => :on_change,
+          'onClick' => :on_click
+        }.filter_map do |property, event|
+          action = parse_action(properties.dig(property, 'Action'))
+          action&.merge(event:)
+        end
         {
           type: :data_grid, name: widget["Name"],
-          options: { entity: entity, columns: columns }.compact, events: grid_events(widget)
+          options: {
+            entity: entity, columns: columns,
+            selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym)
+          }.compact,
+          events: (grid_events(widget) + property_events).uniq
         }
       end
 

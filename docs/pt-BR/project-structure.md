@@ -47,7 +47,7 @@ O modo Ruby também pode começar sem um projeto Mendix existente:
 bundle exec mxrb init CustomerPortal --mode ruby
 cd CustomerPortal
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 
@@ -81,9 +81,20 @@ app/
 config/application.rb
 frontend/
   package.json
+  package-lock.json
   vite.config.ts
   tsconfig.json
-  src/{main.tsx,App.tsx,types.ts,nanoflows.ts,app.css}
+  eslint.config.js
+  .prettierrc.json
+  src/
+    app/{App.tsx,router.tsx}
+    components/{auth,feedback,navigation}/
+    core/
+    features/
+    hooks/
+    layouts/
+    styles/
+    generated/{bridge,pages,nanoflows,types.ts}
 project.rb
 .mxrb/
   ruby-app.json
@@ -94,16 +105,33 @@ project.rb
 Entidades persistentes viram records. Entidades non-persistent viram classes
 DTO e sempre usam o sufixo `_dto.rb`, evitando nomes ambíguos como `_2.rb`.
 Services são classes Ruby comuns e inicialmente delegam ao interpretador nativo
-em Ruby puro. Pages expõem metadados nativos ao frontend React + TypeScript.
-O export gera `types.ts` a partir de entidades, enumerações, páginas, widgets,
-contextos, efeitos e contratos de API; `npm run typecheck` integra o build Vite.
+em Ruby puro. A aplicação React editável usa componentes, hooks, features,
+layouts, rotas, serviços e estilos convencionais. A tradução necessária para o
+modelo portátil fica isolada em `src/generated`: páginas, fluxos, tipos e bridge.
+
+O desenvolvedor não edita `src/generated`. O MXRB regenera somente essa pasta;
+todo arquivo em `app`, `components`, `core`, `features`, `hooks`, `layouts` e
+`styles` é código da aplicação, incorporado ao MPR com checksum e restaurado
+byte a byte no próximo round-trip. Classes CSS `mx-*` podem existir na saída
+renderizada como compatibilidade visual/seletor, mas não definem a arquitetura.
+
+O scaffold inclui React Router, TypeScript estrito, lockfile npm, ESLint,
+Prettier, Vitest, jsdom e React Testing Library. O gate local completo é:
+
+```sh
+cd frontend
+npm ci
+npm run check
+```
+
+`check` executa formatação, lint sem warnings, testes, typecheck e build Vite.
 
 Instale as dependências Ruby e do frontend uma vez e depois suba os dois
 processos com um único comando:
 
 ```sh
 bundle install
-npm install --prefix frontend
+npm ci --prefix frontend
 bundle exec mxrb run .
 ```
 

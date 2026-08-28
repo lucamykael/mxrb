@@ -79,7 +79,9 @@ RSpec.describe 'Ruby application export mode' do
       expect(manifest).to include('mode' => 'ruby')
       expect(manifest.fetch('frontend')).to include(
         'framework' => 'react', 'language' => 'typescript', 'bundler' => 'vite',
-        'types' => 'frontend/src/types.ts', 'typecheck' => 'npm run typecheck'
+        'types' => 'frontend/src/generated/types.ts', 'typecheck' => 'npm run typecheck',
+        'generated' => 'frontend/src/generated', 'lint' => 'npm run lint',
+        'test' => 'npm run test', 'format_check' => 'npm run format:check'
       )
       expect(File).to exist(File.join(root, 'app', 'models', 'sales', 'order.rb'))
       expect(File).to exist(File.join(root, 'app', 'dtos', 'sales', 'order_input_dto.rb'))
@@ -87,50 +89,80 @@ RSpec.describe 'Ruby application export mode' do
       expect(File.read(File.join(root, 'frontend', 'package.json'))).to include(
         'react', 'vite'
       )
-      expect(File.read(File.join(root, 'frontend', 'src', 'App.tsx')))
-        .to eq("export { default } from './app/App';\n")
+      expect(File.read(File.join(root, '.ruby-version'))).to eq("4.0\n")
+      expect(File.read(File.join(root, 'Gemfile'))).to include("gem 'ruby-lsp', require: false")
+      expect(File).not_to exist(File.join(root, 'frontend', 'src', 'App.tsx'))
+      expect(File).not_to exist(File.join(root, 'frontend', 'src', 'app.css'))
       frontend_source = File.read(File.join(root, 'frontend', 'src', 'app', 'App.tsx'))
-      api_source = File.read(File.join(root, 'frontend', 'src', 'api', 'client.ts'))
-      expect(frontend_source).to include(
-        "api<ApplicationSchema>('/api/schema', {}, activeToken)", 'useState',
+      api_source = File.read(File.join(
+                               root, 'frontend', 'src', 'generated', 'bridge', 'api.ts'
+                             ))
+      application_source = File.read(File.join(
+                                       root, 'frontend', 'src', 'generated', 'bridge',
+                                       'ApplicationRuntime.tsx'
+                                     ))
+      widget_source = File.read(File.join(
+                                  root, 'frontend', 'src', 'generated', 'bridge', 'components',
+                                  'WidgetRenderer.tsx'
+                                ))
+      expect(frontend_source).to include('AppRouter')
+      expect(application_source).to include(
+        "api<ApplicationSchema>('/api/schema')", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
-        'const execution = await definition.execute(resolvedParameters)',
-        'function BoundField', "method: 'PATCH'", 'function DataGrid',
-        'mxrb-grid-pagination', "api<LoginResponse>('/api/login'", 'localStorage.setItem(TOKEN_KEY',
+        'const execution = await definition.execute(resolvedParameters, invoke)',
+        "effect): effect is ShowMessageEffect => effect.type === 'show_message'",
+        "method: 'PATCH'", "api<LoginResponse>('/api/login'",
         "api<Session>('/api/session'", "api('/api/logout'",
-        'payload.records || []', 'records.slice(', "method: 'POST'", "method: 'DELETE'", '>Reload</button>',
-        "options.toolbar?.buttons || [{ type: 'new' }, { type: 'delete' }]",
-        'entityCollectionPath(options.entity, options.association, pageContext)',
-        'association, context_type: context.type, context_id: context.id',
         'if (payload.context) setPageContext(payload.context)',
-        'const activeContext = pageContext || contextOverride;',
+        'const activeContext = contextOverride || pageContext;',
         'if (invocationInFlight.current) return Promise.resolve(null)',
-        '|| payload.context || payload.result || null'
+        'payload.context ||', 'payload.result ||'
       )
-      expect(api_source).to include("headers.set('Authorization', `Bearer ${token}`)")
-      expect(File).to exist(File.join(root, 'frontend', 'src', 'runtime', 'nanoflow.ts'))
-      expect(File).to exist(File.join(root, 'frontend', 'src', 'runtime', 'marketplace.tsx'))
-      page_source = File.read(File.join(root, 'frontend', 'src', 'pages', 'sales', 'dashboard.tsx'))
+      expect(Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join)
+        .to include('native :microflow do', 'body_fingerprint')
+      expect(widget_source).to include('WidgetRenderer', 'BoundField', 'DataGrid')
+      expect(api_source).to include("headers.set('X-CSRF-Token', csrfToken)")
+      expect(api_source).to include("credentials: 'same-origin'")
+      expect(api_source).not_to include('Authorization')
+      expect(File).to exist(File.join(
+                              root, 'frontend', 'src', 'generated', 'bridge', 'nanoflow.ts'
+                            ))
+      expect(File).to exist(File.join(
+                              root, 'frontend', 'src', 'generated', 'bridge', 'marketplace.tsx'
+                            ))
+      page_source = File.read(File.join(
+                                root, 'frontend', 'src', 'generated', 'pages', 'sales', 'dashboard.tsx'
+                              ))
       expect(page_source).to include(
         'const widget0 =', 'satisfies WidgetDefinition', '<PageWidget widget={widget0}'
       )
       expect(page_source).not_to include('definition.widgets.map', 'renderWidget')
-      marketplace_source = File.read(File.join(root, 'frontend', 'src', 'runtime', 'marketplace.tsx'))
+      marketplace_source = File.read(File.join(
+                                       root, 'frontend', 'src', 'generated', 'bridge', 'marketplace.tsx'
+                                     ))
       expect(marketplace_source).to include(
         'export function MarketplaceWidget', 'mxrb-marketplace-chart', "id.includes('slider')"
       )
-      expect(File.read(File.join(root, 'frontend', 'src', 'app.css'))).to include(
-        ".mxrb-page[aria-busy='true'] { cursor: progress; pointer-events: none; }"
-      )
-      expect(frontend_source).to include('module.enumerations || []', 'enumeration?.values || []')
-      expect(frontend_source).to include(
+      expect(File.read(File.join(root, 'frontend', 'src', 'styles', 'index.css')))
+        .to include(".app-page[aria-busy='true']")
+      bound_field_source = File.read(File.join(
+                                       root, 'frontend', 'src', 'generated', 'bridge', 'components',
+                                       'BoundField.tsx'
+                                     ))
+      page_outlet_source = File.read(File.join(
+                                       root, 'frontend', 'src', 'generated', 'bridge', 'components',
+                                       'PageOutlet.tsx'
+                                     ))
+      expect(bound_field_source).to include('module.enumerations || []', 'enumeration?.values || []')
+      expect(application_source).to include(
         'value.data_source?.name', 'transient: true', 'if (record.transient)',
-        '<PageComponent busy={busy} Widget={PageWidget} />'
+        '<PageOutlet page={page} busy={busy} Widget={PageWidget} />'
       )
-      expect(frontend_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
-      expect(frontend_source.scan('const activeContext = pageContext || contextOverride;').size).to eq(1)
-      expect(frontend_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(1)
-      types = File.read(File.join(root, 'frontend', 'src', 'types.ts'))
+      expect(page_outlet_source).to include('<PageComponent busy={busy} Widget={Widget} />')
+      expect(application_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
+      expect(application_source).not_to include('const activeContext = pageContext || contextOverride;')
+      expect(application_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(2)
+      types = File.read(File.join(root, 'frontend', 'src', 'generated', 'types.ts'))
       expect(types).to include(
         'export interface SalesOrderAttributes', '"Number"?: string', '"Paid"?: boolean',
         'export type SalesOrderStatus = "New" | "Done"', 'export interface EntityTypeMap',
@@ -144,6 +176,12 @@ RSpec.describe 'Ruby application export mode' do
       )
       expect(File.read(File.join(root, 'frontend', 'package.json'))).to include(
         '"typecheck": "tsc --noEmit"', '"typescript"', '"sass-embedded"'
+      )
+      manual_frontend = Dir.glob(File.join(root, 'frontend', 'src', '**', '*.{ts,tsx}'))
+                           .reject { _1.include?('/generated/') }
+                           .map { File.read(_1) }.join("\n")
+      expect(manual_frontend).not_to match(
+        /\b(?:Mendix|microflow|nanoflow|WidgetDefinition|PageDefinition|mendix_name)\b/i
       )
       expect(File.read(File.join(root, 'frontend', 'vite.config.ts'))).to include(
         "silenceDeprecations: ['import', 'global-builtin']"
@@ -189,17 +227,22 @@ RSpec.describe 'Ruby application export mode' do
       expect(sales.fetch('nanoflows')).to include(
         include('name' => 'Sales.ClientPing', 'runtime' => 'frontend')
       )
-      expect(File).to exist(File.join(root, 'frontend', 'src', 'nanoflows', 'sales', 'client_ping.ts'))
+      expect(File).to exist(File.join(
+                              root, 'frontend', 'src', 'generated', 'nanoflows',
+                              'sales', 'client_ping.ts'
+                            ))
       nanoflow_source = File.read(
-        File.join(root, 'frontend', 'src', 'nanoflows', 'sales', 'client_ping.ts')
+        File.join(root, 'frontend', 'src', 'generated', 'nanoflows', 'sales', 'client_ping.ts')
       )
       expect(nanoflow_source).to include(
         'defineNanoflow<Parameters,', 'switch (current)', 'return runtime.complete('
       )
       expect(nanoflow_source).not_to include('NanoflowPlan', '"objects":', '"flows":')
-      expect(File.read(File.join(root, 'frontend', 'src', 'runtime', 'nanoflow.ts'))).to include(
-        'export class NanoflowRuntime', 'changes: [...this.#changes.values()]'
-      )
+      expect(File.read(File.join(
+                         root, 'frontend', 'src', 'generated', 'bridge', 'nanoflow.ts'
+                       ))).to include(
+                         'export class NanoflowRuntime', 'changes: [...this.#changes.values()]'
+                       )
       expect(File).not_to exist(File.join(root, 'app', 'services', 'sales', 'client_ping.rb'))
 
       application = Mxrb::RubyApp::Application.new(root)
@@ -376,6 +419,37 @@ RSpec.describe 'Ruby application export mode' do
     end
   end
 
+  it 'preserves application features and always regenerates the isolated frontend bridge' do
+    Dir.mktmpdir('mxrb-frontend-boundary-') do |dir|
+      source = File.join(dir, 'Sales.mpr')
+      root = File.join(dir, 'sales_app')
+      rebuilt = File.join(dir, 'Sales-rebuilt.mpr')
+      restored = File.join(dir, 'restored')
+      define_source(source)
+      Mxrb::Exporter.new(source, root, mode: :ruby).export!
+
+      feature = File.join(root, 'frontend', 'src', 'features', 'orders', 'use_orders.ts')
+      FileUtils.mkdir_p(File.dirname(feature))
+      File.write(feature, "export const useOrders = () => ['application-owned'];\n")
+      generated = File.join(root, 'frontend', 'src', 'generated', 'types.ts')
+      File.write(generated, "// stale generated bridge\n")
+
+      Mxrb::RubyApp.compile(root, rebuilt)
+      Mxrb::Exporter.new(rebuilt, restored, mode: :ruby).export!
+
+      expect(File.read(File.join(
+                         restored, 'frontend', 'src', 'features', 'orders', 'use_orders.ts'
+                       ))).to eq("export const useOrders = () => ['application-owned'];\n")
+      expect(File.read(File.join(restored, 'frontend', 'src', 'generated', 'types.ts')))
+        .to include('export interface EntityTypeMap')
+      expect(File.read(File.join(restored, 'frontend', 'src', 'generated', 'types.ts')))
+        .not_to include('stale generated bridge')
+      expect(File).to exist(File.join(restored, 'frontend', 'package-lock.json'))
+      expect(JSON.parse(File.read(File.join(restored, 'frontend', 'package-lock.json'))))
+        .to include('lockfileVersion' => 3)
+    end
+  end
+
   it 'documents readable run ports and supervises Vite with the server port' do
     Dir.mktmpdir('mxrb-ruby-cli-') do |dir|
       source = File.join(dir, 'Sales.mpr')
@@ -404,7 +478,7 @@ RSpec.describe 'Ruby application export mode' do
       )
       expect(Process).to receive(:spawn).with(
         { 'MXRB_ENV' => 'development', 'MXRB_API_PORT' => '9393' }, 'npm', 'run', 'dev', '--',
-        '--host', '127.0.0.1', '--port', '5393', chdir: frontend
+        '--host', '127.0.0.1', '--port', '5393', '--strictPort', chdir: frontend
       ).and_return(12_345)
       expect(supervisor.send(:spawn_frontend)).to eq(12_345)
     end

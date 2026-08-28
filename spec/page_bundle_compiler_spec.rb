@@ -1259,7 +1259,9 @@ RSpec.describe Mxrb::Compiler::PageBundleBuilder do
       FileUtils.mkdir_p(File.join(web, 'pages'))
       File.write(File.join(web, 'pages', 'Stale.js'), 'stale')
       bundles = described_class.new(Mxrb::Compiler::SourceModel.read(mpr), web).build
-      expect(bundles.map(&:qualified_name)).to eq(['Demo.Home'])
+      expect(bundles.map(&:qualified_name)).to contain_exactly(
+        'Demo.Home', 'Demo.ApplicationLayout'
+      )
       expect(File).not_to exist(File.join(web, 'pages', 'Stale.js'))
       expect(JSON.parse(File.read(File.join(web, 'mxrb-pages.json')))).to eq('Demo.Home' => [])
     end

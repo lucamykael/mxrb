@@ -113,14 +113,21 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
   end
 
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do
-    fields = { 'Microflows$AggregateAction' => %w[$ID $Type Type] }
+    fields = {
+      'Microflows$AggregateAction' => %w[
+        $ID $Type Expression UseExpression ReduceInitialValueExpression Type
+      ]
+    }
     schema = Struct.new(:fields) do
       def fields_for(source) = fields.fetch(source['$Type'])
       def counterpart(_source) = nil
     end.new(fields)
     compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema)
     count = compiler.compile('$Type' => 'Microflows$AggregateAction', 'AggregateFunction' => 'Count')
-    expect(count['Type']).to eq('Integer')
+    expect(count).to include(
+      'Type' => 'Integer', 'Expression' => '', 'UseExpression' => false,
+      'ReduceInitialValueExpression' => ''
+    )
     expect do
       compiler.compile('$Type' => 'Microflows$AggregateAction', 'AggregateFunction' => 'Sum')
     end.to raise_error(Mxrb::CompilationError, /without an audited attribute type/)

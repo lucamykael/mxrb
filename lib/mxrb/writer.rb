@@ -16,7 +16,7 @@ module Mxrb
       'calendar' => 57_609, 'calendar_today' => 57_609,
       'user' => 57_352, 'search' => 57_347, 'settings' => 57_369,
       'trash' => 57_376, 'file' => 57_378, 'time' => 57_379,
-      'shopping_cart' => 57_622
+      'shopping_cart' => 57_622, 'tasks' => 57_655, 'checklist' => 57_655
     }.freeze
 
     LEGACY_NAVIGATION_PROFILES = {
@@ -36,6 +36,7 @@ module Mxrb
 
     def write!
       mpr = nil
+      validate_native_output_filename!
       native_units = prepared_native_units
       asset_manifest = project_asset_manifest
       total = 4 + native_units.count { _1["containment"] != "Modules" } +
@@ -60,6 +61,36 @@ module Mxrb
     ensure
       @progress = Progress::NullTask.instance
       mpr&.close
+    end
+
+    # Incrementally applies Ruby-first pages and flows to an existing module.
+    # Unlike #write!, this deliberately does not rewrite the domain model,
+    # security, settings, or unrelated native documents.
+    def synchronize_ruby_documents!(mpr, module_name:, pages: [], microflows: [], nanoflows: [],
+                                    navigation_items: [])
+      root_id = mpr.root_unit.fetch("UnitID")
+      raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      definition = {
+        name: module_name.to_s, pages: Array(pages), microflows: Array(microflows),
+        nanoflows: Array(nanoflows), menus: [], enumerations: [], constants: [],
+        scheduled_events: []
+      }
+      mpr.transaction do
+        write_documents(mpr, raw_module.fetch("UnitID"), definition)
+        synchronize_ruby_navigation!(mpr, root_id, navigation_items)
+      end
+      self
+    end
+
+    # Canonical editor-shape serializers shared by incremental semantic plans.
+    def build_domain_entity_document(entity, module_name:, previous: nil, index: 0)
+      entity_doc(entity, module_name, previous, index)
+    end
+
+    def build_domain_attribute_document(attribute, previous: nil)
+      attribute_doc(attribute, previous)
     end
 
     private
@@ -193,10 +224,30 @@ module Mxrb
     end
 
     def native_format_version
-      path = @definition[:native_units_path]
-      return nil if path.to_s.empty? || !File.file?(path)
+      native_manifest&.fetch("format_version", nil)
+    end
 
-      JSON.parse(File.read(path))["format_version"]
+    def native_manifest
+      return @native_manifest if defined?(@native_manifest)
+
+      path = @definition[:native_units_path]
+      @native_manifest = if path.to_s.empty? || !File.file?(path)
+                           nil
+                         else
+                           JSON.parse(File.read(path))
+                         end
+    end
+
+    def validate_native_output_filename!
+      manifest = native_manifest
+      return unless manifest&.fetch("format_version", nil) == "v2"
+
+      expected = manifest.fetch("source_filename", "").to_s
+      return if expected.empty? || File.basename(@path) == expected
+
+      raise ValidationError,
+            "Mendix v2 mprcontents belong to #{expected}; " \
+            "refusing incompatible output filename #{File.basename(@path)}"
     end
 
     def apply(mpr, native_units)
@@ -676,8 +727,8 @@ module Mxrb
         "$ID" => SecureRandom.uuid,
         "$Type" => "Navigation$RoleBasedHomePage",
         "UserRole" => home.fetch(:role).to_s,
-        "Page" => home[:page],
-        "Microflow" => home[:microflow]
+        "Page" => home[:page].to_s,
+        "Microflow" => home[:microflow].to_s
       }
     end
 
@@ -888,6 +939,7 @@ module Mxrb
     end
 
     def upsert_document(mpr, module_id, candidates, doc)
+      requested_unit_id = doc.delete("__mxrb_unit_id").to_s
       raw = Array(candidates).find do |candidate|
         mpr.parse_contents(candidate)["$Type"] == doc["$Type"]
       end
@@ -900,8 +952,70 @@ module Mxrb
         mpr.update_unit(raw.fetch("UnitID"), doc)
       else
         strip_internal_keys(doc)
-        mpr.insert_unit(container_uuid: module_id, containment_name: "Documents", contents_doc: doc)
+        unit_id = requested_unit_id.empty? ? nil : requested_unit_id
+        doc["$ID"] = unit_id if unit_id
+        mpr.insert_unit(
+          container_uuid: module_id, containment_name: "Documents",
+          contents_doc: doc, unit_uuid: unit_id
+        )
       end
+    end
+
+    def synchronize_ruby_navigation!(mpr, root_id, declarations)
+      Array(declarations).each do |declaration|
+        synchronize_ruby_navigation_item!(mpr, root_id, declaration)
+      end
+    end
+
+    def synchronize_ruby_navigation_item!(mpr, root_id, declaration)
+      raw = mpr.children_of(root_id).find do |unit|
+        mpr.parse_contents(unit)["$Type"] == "Navigation$NavigationDocument"
+      end
+      raise ValidationError, "Mendix navigation document does not exist" unless raw
+
+      document = mpr.parse_contents(raw)
+      profile = ruby_navigation_profile(document, declaration.fetch(:profile).to_s)
+      raise ValidationError, "Mendix navigation profile #{declaration.fetch(:profile)} does not exist" unless profile
+
+      menu = profile["Menu"] || profile["MenuItemCollection"]
+      raise ValidationError, "navigation profile #{declaration.fetch(:profile)} has no menu" unless menu
+
+      parsed = IO::BsonCodec.parse_array(menu["Items"])
+      items = parsed.fetch(:items)
+      generated = navigation_menu_item_doc(
+        caption: normalize_navigation_caption(declaration.fetch(:caption)),
+        page: declaration.fetch(:page), icon: declaration[:icon], items: []
+      )
+      index = items.index { ruby_navigation_page(_1) == declaration.fetch(:page).to_s }
+      if index
+        generated["$ID"] = items[index]["$ID"] if items[index]["$ID"]
+        items[index] = items[index].merge(generated)
+      else
+        items << generated
+      end
+      menu["Items"] = IO::BsonCodec.build_array(items, marker: parsed.fetch(:marker))
+      if declaration[:home]
+        profile["HomePage"] = navigation_home_doc(declaration.fetch(:page), nil)
+      end
+      mpr.update_unit(raw.fetch("UnitID"), document)
+    end
+
+    def ruby_navigation_profile(document, name)
+      modern = array_items(document["Profiles"]).find { _1["Name"].to_s == name }
+      return modern if modern
+
+      key = LEGACY_NAVIGATION_PROFILES[name] || LEGACY_NAVIGATION_PROFILES.fetch("Desktop")
+      document[key] if name == "Desktop" || LEGACY_NAVIGATION_PROFILES[name]
+    end
+
+    def ruby_navigation_page(item)
+      item.dig("Action", "FormSettings", "Form").to_s
+    end
+
+    def normalize_navigation_caption(value)
+      return value.to_h.transform_keys(&:to_s).transform_values(&:to_s) if value.respond_to?(:to_h)
+
+      { "en_US" => value.to_s }
     end
 
     def merge_existing_document(existing, generated)
@@ -1087,7 +1201,12 @@ module Mxrb
         properties["datasource"]["Value"]["DataSource"] = custom_xpath_source_doc(options[:entity])
       end
       if options[:selection] && properties['itemSelection']
-        properties.dig('itemSelection', 'Value')['Selection'] = options[:selection].to_s
+        selection = {
+          none: 'None', single: 'Single', multi: 'Multi', multiple: 'Multi'
+        }.fetch(options[:selection].to_s.downcase.to_sym) do
+          raise ValidationError, 'data grid selection must be none, single, or multi'
+        end
+        properties.dig('itemSelection', 'Value')['Selection'] = selection
       end
       if properties['filtersPlaceholder'] && options[:filters]
         configured_filters = options[:filters].is_a?(Array) ? options[:filters] : [options[:filters]]
@@ -1588,14 +1707,18 @@ module Mxrb
       else
         { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
       end
-      type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
+      if attr.key?(:enumeration)
+        type_doc = type_doc.reject { |key, _value| %w[enumeration Enumeration].include?(key) }
+        type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
+      end
       string_type = storage_type == Model::Attribute::TYPE_MAP[:string]
-      if attr[:length] || (string_type && !previous_type&.key?('length') && !previous_type&.key?('Length'))
+      if string_type && (attr.key?(:length) || (!previous_type&.key?('length') && !previous_type&.key?('Length')))
         length_key = native_key(previous_type, 'length', 'Length')
         length = attr[:length] || Model::Attribute::DEFAULT_STRING_LENGTH
         type_doc = type_doc.merge(length_key => Integer(length))
       end
-      if attr.key?(:localize_date)
+      datetime_type = storage_type == Model::Attribute::TYPE_MAP[:datetime]
+      if attr.key?(:localize_date) && (datetime_type || !attr[:localize_date].nil?)
         localize_key = native_key(previous_type, 'localizeDate', 'LocalizeDate')
         type_doc = type_doc.merge(localize_key => (attr[:localize_date] == true))
       end
@@ -1901,6 +2024,7 @@ module Mxrb
         "Form" => page.fetch(:layout)
       }
       doc = { "$ID" => SecureRandom.uuid, "$Type" => "Forms$Page", "Name" => page.fetch(:name),
+        "__mxrb_unit_id" => page[:unit_id],
         "Documentation" => "", "Url" => "", "FormCall" => form_call,
         "Title" => text_doc(page.fetch(:title)), "MarkAsUsed" => false, "Excluded" => false,
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
@@ -2430,6 +2554,7 @@ module Mxrb
 
     def pluggable_widget_doc(widget, descriptor)
       definition = WidgetPackage.find(File.dirname(@path), descriptor.fetch(:id))
+      validate_official_data_grid2_contract!(widget, descriptor, definition)
       if definition
         type, object = WidgetPackage.template(definition)
       else
@@ -2474,9 +2599,34 @@ module Mxrb
         configure_fallback_combo_box!(doc, options)
       end
       widget.fetch(:events, []).each do |event|
-        doc[event_property(event.fetch(:event))] = client_action_doc(event)
+        if descriptor.fetch(:id) == data_grid2_descriptor[:id] && event.fetch(:event).to_sym == :on_change
+          property = custom_widget_properties(doc)['onSelectionChange']
+          if property
+            property['Value']['Action'] = client_action_doc(event)
+          else
+            doc[event_property(event.fetch(:event))] = client_action_doc(event)
+          end
+        else
+          doc[event_property(event.fetch(:event))] = client_action_doc(event)
+        end
       end
       doc
+    end
+
+    def validate_official_data_grid2_contract!(widget, descriptor, definition)
+      return unless definition && descriptor.fetch(:id) == data_grid2_descriptor[:id]
+
+      toolbar = Array(widget.dig(:options, :toolbar, :buttons))
+      unless toolbar.empty?
+        raise ValidationError,
+              'Data Grid 2 toolbar buttons are not portable to the official widget schema; ' \
+              'use explicit page buttons or a pluggable widget'
+      end
+      return unless widget.fetch(:events, []).any? { _1.fetch(:event).to_sym == :on_change }
+
+      raise ValidationError,
+            'Data Grid 2 on_change is not certified against the official widget schema; ' \
+            'use an explicit action button to call the nanoflow or microflow'
     end
 
     def modern_widget_properties(type, options)
@@ -2642,8 +2792,8 @@ module Mxrb
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$CallNanoflowClientAction",
-          "Nanoflow" => event.fetch(:handler),
           "ConfirmationInfo" => nil, "DisabledDuringExecution" => true,
+          "Nanoflow" => event.fetch(:handler),
           "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
           "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
           "ProgressBar" => "None", "ProgressMessage" => nil
@@ -2772,6 +2922,7 @@ module Mxrb
       }
 
       { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$Microflow",
+        "__mxrb_unit_id" => flow[:unit_id],
         "Name" => flow_name, "Documentation" => flow.fetch(:documentation, ""),
         "ReturnVariableName" => return_var_name,
         "AllowConcurrentExecution" => allow_concurrent.nil? ? true : allow_concurrent,

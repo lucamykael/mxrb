@@ -19,6 +19,7 @@ module Mxrb
 
         entity_docs = parse_array(doc["entities"] || doc["Entities"])
         @entities   = entity_docs.map { Entity.from_bson(_1, @id, @mpr) }
+        qualify_entities
 
         assoc_docs   = parse_array(doc["associations"] || doc["Associations"])
         @associations = assoc_docs.map { Association.from_bson(_1, @id, @mpr) }
@@ -45,6 +46,22 @@ module Mxrb
 
       def inspect
         "#<Mxrb::DomainModel entities=#{entities.size} associations=#{associations.size}>"
+      end
+
+      private
+
+      def parent_module_name
+        return unless @container_id && @mpr.respond_to?(:unit)
+
+        raw = @mpr.unit(@container_id)
+        raw && @mpr.parse_contents(raw)["Name"]
+      end
+
+      def qualify_entities
+        module_name = parent_module_name
+        return unless module_name
+
+        @entities.each { _1.qualified_name ||= "#{module_name}.#{_1.name}" }
       end
     end
   end
