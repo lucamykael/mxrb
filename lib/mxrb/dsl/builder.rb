@@ -7,6 +7,7 @@ require_relative "integration_documents"
 require_relative "code_actions"
 require_relative "presentation_documents"
 require_relative "asset_documents"
+require_relative "project_documents"
 
 module Mxrb
   module Dsl
@@ -361,6 +362,7 @@ module Mxrb
 
     class Builder
       include ConnectorDeclarations
+      include ProjectDocuments
 
       attr_reader :path
 

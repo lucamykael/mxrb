@@ -16,6 +16,9 @@ module Mxrb
       ".mxrb/marketplace",
       ".mxrb/marketplace-originals"
     ].freeze
+    GLOBAL_EDITABLE_DOCUMENT_TYPES = %w[
+      Settings$ProjectSettings Texts$SystemTextCollection
+    ].freeze
     EDITABLE_FLOW_OBJECT_TYPES = %w[
       Microflows$StartEvent
       Microflows$EndEvent
@@ -74,7 +77,7 @@ module Mxrb
     def export!(parallel: true)
       return export_ruby!(parallel:) if mode == :ruby
 
-      Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress|
+      Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress| # rubocop:disable Metrics/BlockLength
         FileUtils.mkdir_p(@output_dir)
         Mxrb.open(@mpr_path) do |project|
           @architecture = project.architecture_definition
@@ -91,6 +94,7 @@ module Mxrb
           progress.advance(detail: "project structure")
           export_project_assets(assets, progress)
           export_native_units(project, units, progress)
+          export_global_documents(project)
           ruby_sources = export_ruby_app_sources(project)
           export_security(project)
           progress.advance(detail: "project security")
@@ -133,6 +137,7 @@ module Mxrb
     def export_app_structure
       %w[
         app/security app/navigation app/navigation/responsive app/design_system
+        app/settings app/texts
         theme resources themesource widgets javasource javascriptsource
       ].each { write(File.join(@output_dir, _1, ".keep"), "") }
     end
@@ -198,7 +203,7 @@ module Mxrb
       source = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
         next if doc["$Type"].to_s.empty? || doc["$Type"] == "Projects$Project"
-        next if Model::Module::EDITABLE_DOCUMENT_TYPES.include?(doc["$Type"])
+        next if editable_document_type?(doc["$Type"])
 
         native_unit_source(project, unit, doc)
       ensure
@@ -208,6 +213,47 @@ module Mxrb
         File.join(@output_dir, ".mxrb", "native_units.rb"),
         "# frozen_string_literal: true\n\n#{source.join("\n")}"
       )
+    end
+
+    def editable_document_type?(type)
+      Model::Module::EDITABLE_DOCUMENT_TYPES.include?(type) ||
+        GLOBAL_EDITABLE_DOCUMENT_TYPES.include?(type)
+    end
+
+    def export_global_documents(project)
+      documents = project.all_units.filter_map do |unit|
+        document = project.parse_bson(unit)
+        [unit, document] if GLOBAL_EDITABLE_DOCUMENT_TYPES.include?(document['$Type'])
+      end
+      settings = documents.filter_map do |unit, document|
+        project_document_declaration(:project_settings_document, unit, document, 'Settings') \
+          if document['$Type'] == 'Settings$ProjectSettings'
+      end
+      texts = documents.filter_map do |unit, document|
+        project_document_declaration(:system_text_collection, unit, document, 'SystemTexts') \
+          if document['$Type'] == 'Texts$SystemTextCollection'
+      end
+      write(File.join(@output_dir, 'app', 'settings', 'settings.rb'), ruby_file(settings))
+      write(File.join(@output_dir, 'app', 'texts', 'system_texts.rb'), ruby_file(texts))
+    end
+
+    def project_document_declaration(method, unit, document, field)
+      options = {
+        unit_id: unit.fetch('UnitID'), container_id: unit.fetch('ContainerID'),
+        containment: unit.fetch('ContainmentName'), id: document_id(document),
+        (field == 'Settings' ? :settings : :system_texts) => presentation_value_spec(document[field])
+      }
+      lines = ["#{method}("]
+      options.each_with_index do |(key, value), index|
+        comma = index == options.size - 1 ? '' : ','
+        lines << "  #{key}: #{native_ruby(value, 2)}#{comma}"
+      end
+      lines << ')'
+      lines.join("\n")
+    end
+
+    def ruby_file(declarations)
+      "# frozen_string_literal: true\n\n#{declarations.join("\n\n")}\n"
     end
 
     def export_ruby_app_sources(project)
@@ -1252,6 +1298,8 @@ module Mxrb
           evaluate File.join(__dir__, "app", "security", "security.rb")
           evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
           evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
+          evaluate File.join(__dir__, "app", "settings", "settings.rb")
+          evaluate File.join(__dir__, "app", "texts", "system_texts.rb")
       #{module_loads}
         end
       RUBY
