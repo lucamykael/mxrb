@@ -1582,12 +1582,16 @@ module Mxrb
         next unless param.is_a?(Hash)
         name = param["Name"] || param["name"]
         type = param["VariableType"] || param["Type"] || param["type"]
-        type_source = type.is_a?(Hash) ? native_ruby(type) : symbol(type)
+        type_source = if type.is_a?(Hash)
+                        "flow_type(#{native_ruby(flow_type_spec(type))})"
+                      else
+                        symbol(type)
+                      end
         "  parameter #{symbol(name)}, type: #{type_source}" if name && type
       end
       body = parameters
       return_type = if flow.respond_to?(:return_type_document) && flow.return_type_document
-                      "return_type(#{native_ruby(flow.return_type_document)})"
+                      "return_type(flow_type(#{native_ruby(flow_type_spec(flow.return_type_document))}))"
                     elsif flow.return_type.is_a?(String)
                       "return_type #{symbol(flow.return_type)}"
                     end
@@ -1624,6 +1628,13 @@ module Mxrb
       #{body.join("\n")}
         end
       RUBY
+    end
+
+    def flow_type_spec(type)
+      name = type.fetch('$Type').to_s.delete_prefix('DataTypes$').delete_suffix('Type')
+      spec = { id: document_id(type), kind: underscore(name).to_sym }
+      spec[:entity] = type.fetch('Entity', '') if %w[Object List].include?(name)
+      spec
     end
 
     def nanoflow_source(flow, metadata = nil)

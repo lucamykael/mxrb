@@ -1729,7 +1729,7 @@ module Mxrb
       end
     end
 
-    class FlowBuilder
+    class FlowBuilder # rubocop:disable Metrics/ClassLength
       include FlowBodyDsl
 
       def initialize(name, runtime:, kind:, public:)
@@ -1759,6 +1759,22 @@ module Mxrb
 
       def bson_binary(base64, subtype: :generic)
         BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
+      end
+
+      def flow_type(value)
+        spec = value.to_h.transform_keys(&:to_sym)
+        kind = spec.fetch(:kind).to_sym
+        native = {
+          void: 'Void', boolean: 'Boolean', string: 'String', integer: 'Integer',
+          long: 'Long', decimal: 'Decimal', float: 'Float', datetime: 'DateTime',
+          object: 'Object', list: 'List'
+        }.fetch(kind) { raise ArgumentError, "unsupported flow data type #{kind.inspect}" }
+        document = {
+          '$ID' => spec[:id].to_s.empty? ? SecureRandom.uuid : spec[:id].to_s,
+          '$Type' => "DataTypes$#{native}Type"
+        }
+        document['Entity'] = spec.fetch(:entity, '').to_s if %i[object list].include?(kind)
+        document
       end
 
       def return_type(type) = (@return_type = type.is_a?(Hash) ? type : type.to_s)
