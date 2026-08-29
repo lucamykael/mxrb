@@ -122,7 +122,7 @@ RSpec.describe 'Ruby application internal contracts' do
         name: 'View', persistable: false, oql_view?: true, attributes: [], id: 'v',
         system_members: {}, access_rules: {}
       )
-      allow(no_lifecycle_entity).to receive(:respond_to?).with(:lifecycle).and_return(false)
+      allow(no_lifecycle_entity).to receive(:respond_to?).and_return(false)
       mod = double(name: 'Sales')
       dto = exp.send(:export_entity, lifecycle_entity, mod, 'Sales', 'sales')
       view = exp.send(:export_entity, no_lifecycle_entity, mod, 'Sales', 'sales')
@@ -477,7 +477,7 @@ RSpec.describe 'Ruby application internal contracts' do
   it 'covers native bridge cleanup and entity synchronization validation' do
     scheduler = double(jobs: [], shutdown: nil)
     store = double(close: nil)
-    project = double(close: nil, all_units: [])
+    project = double(close: nil, all_units: [], modules: [])
     bridge = Mxrb::RubyApp::NativeBridge.allocate
     bridge.instance_variable_set(:@scheduler, scheduler)
     bridge.instance_variable_set(:@store, store)
@@ -777,7 +777,7 @@ RSpec.describe 'Ruby application internal contracts' do
     sync = Mxrb::RubyApp::Synchronizer.allocate
     sync.instance_variable_set(:@root, '/tmp/none')
     sync.instance_variable_set(:@target, '/tmp/target.mpr')
-    project = double(close: nil, all_units: [])
+    project = double(close: nil, all_units: [], modules: [])
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)
     allow(sync).to receive(:synchronize_entities).and_raise(Mxrb::ValidationError, 'stop')
     expect { sync.synchronize! }.to raise_error(Mxrb::ValidationError)

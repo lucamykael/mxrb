@@ -183,7 +183,7 @@ module Mxrb
           handler: doc["Microflow"].to_s,
           pass_event_object: doc.fetch("PassEventObject", true) == true,
           raise_error_on_false: doc["RaiseErrorOnFalse"] == true
-        }
+        }.compact
       end
 
       def self.parse_location(loc)
@@ -215,7 +215,7 @@ module Mxrb
       def lifecycle_bson(callback)
         moment, event = callback.fetch(:event).to_s.split("_", 2)
         {
-          "$ID" => SecureRandom.uuid,
+          "$ID" => callback[:id].to_s.empty? ? SecureRandom.uuid : callback[:id].to_s,
           "$Type" => "DomainModels$EventHandler",
           "Event" => event.to_s.capitalize,
           "Moment" => moment.to_s.capitalize,

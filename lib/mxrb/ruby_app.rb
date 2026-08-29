@@ -1592,6 +1592,7 @@ module Mxrb
                 "cannot rename constant #{source.fetch('name')}: " \
                 "#{incoming.size} incoming reference(s)"
         end
+        nil
       end
 
       def prune_constants(project)

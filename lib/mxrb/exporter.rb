@@ -870,12 +870,18 @@ module Mxrb
 
     def constant_declaration(document)
       doc = document.fetch(:doc)
+      properties = doc.reject do |key, _value|
+        %w[$ID $Type Name Documentation Excluded ExportLevel ExposedToClient Type DefaultValue].include?(key)
+      end
+      type_properties = doc.fetch("Type").reject { |key, _value| %w[$ID $Type].include?(key) }
       domain_call_lines(:constant, document.fetch(:name), {
         type: data_type_spec(doc.fetch("Type")), value: doc.fetch("DefaultValue", ""),
         id: document_id(doc), type_id: document_id(doc.fetch("Type")),
         unit_id: document.fetch(:id), documentation: doc.fetch("Documentation", ""),
         excluded: doc["Excluded"] == true, export_level: doc.fetch("ExportLevel", "Hidden"),
-        exposed_to_client: doc["ExposedToClient"] == true
+        exposed_to_client: doc["ExposedToClient"] == true,
+        properties: presentation_value_spec(properties),
+        type_properties: presentation_value_spec(type_properties)
       }).join("\n")
     end
 
@@ -1548,7 +1554,8 @@ module Mxrb
       flags << "  documentation #{ruby(entity.documentation)}" unless entity.documentation.to_s.empty?
       generalization = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
       if generalization
-        generalization_id = IO::BsonCodec.extract_id(entity.generalization&.fetch('$ID', nil))
+        native_generalization = entity.respond_to?(:generalization) ? entity.generalization : nil
+        generalization_id = IO::BsonCodec.extract_id(native_generalization&.fetch('$ID', nil))
         flags << "  generalizes #{ruby(generalization)}, id: #{ruby(generalization_id)}"
       end
       system_members = entity.respond_to?(:system_members) ? entity.system_members : {}

@@ -1054,7 +1054,7 @@ module Mxrb
             @expression.evaluate(value['Argument'], variables)
           when 'EntityTypeJavaActionParameterValue'
             value['Entity'].to_s
-          when 'MicroflowJavaActionParameterValue'
+          when 'MicroflowJavaActionParameterValue', 'MicroflowParameterValue'
             value['Microflow'].to_s
           when 'ImportMappingJavaActionParameterValue'
             value['ImportMapping'].to_s

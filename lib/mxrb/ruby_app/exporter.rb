@@ -297,11 +297,15 @@ module Mxrb
         end
         associations = associations.map { association_manifest(mod, _1) }
         access_rules = runtime_value(entity.access_rules || [])
-        indexes = entity.indexes.to_a.map { index_manifest(entity, _1) }
+        indexes = entity.respond_to?(:indexes) ? entity.indexes.to_a.map { index_manifest(entity, _1) } : []
         generalization = generalization_manifest(entity)
         oql_view = oql_view_manifest(entity, mod)
-        lifecycle = entity.lifecycle.to_a.map { lifecycle_manifest(_1) }
-        validation_rules = entity.validation_rules.to_a.map { validation_rule_manifest(_1) }
+        lifecycle = entity.respond_to?(:lifecycle) ? entity.lifecycle.to_a.map { lifecycle_manifest(_1) } : []
+        validation_rules = if entity.respond_to?(:validation_rules)
+                             entity.validation_rules.to_a.map { validation_rule_manifest(_1) }
+                           else
+                             []
+                           end
         system_members = if entity.respond_to?(:generalization_target) && entity.generalization_target
                            nil
                          else
@@ -373,18 +377,21 @@ module Mxrb
       def oql_view_manifest(entity, mod)
         return unless entity.respond_to?(:oql_view?) && entity.oql_view?
 
-        source = entity.oql_source_document
-        document = mod.oql_view_documents.find do |candidate|
+        source = entity.oql_source_document if entity.respond_to?(:oql_source_document)
+        documents = mod.respond_to?(:oql_view_documents) ? mod.oql_view_documents : []
+        document = documents.find do |candidate|
           [candidate.fetch(:name), "#{mod.name}.#{candidate.fetch(:name)}"].include?(source.to_s)
         end
         result = {
           'source' => source,
-          'source_id' => IO::BsonCodec.extract_id(entity.source&.fetch('$ID', nil))
+          'source_id' => IO::BsonCodec.extract_id(
+            entity.respond_to?(:source) ? entity.source&.fetch('$ID', nil) : nil
+          )
         }
         if document
           result['document_id'] = document.fetch(:id)
           result['query'] = document.fetch(:doc).fetch('Oql', '')
-        elsif !entity.oql_query.to_s.empty?
+        elsif entity.respond_to?(:oql_query) && !entity.oql_query.to_s.empty?
           result['query'] = entity.oql_query
         end
         result.compact
@@ -396,7 +403,9 @@ module Mxrb
 
         {
           'target' => target,
-          'id' => IO::BsonCodec.extract_id(entity.generalization&.fetch('$ID', nil))
+          'id' => IO::BsonCodec.extract_id(
+            entity.respond_to?(:generalization) ? entity.generalization&.fetch('$ID', nil) : nil
+          )
         }.compact
       end
 
@@ -1100,9 +1109,9 @@ module Mxrb
       end
 
       def entity_source(namespace, class_name, qualified, id, attributes, associations = [],
-                        access_rules:, indexes:, system_members:, generalization:, oql_view:,
-                        lifecycle:, validation_rules:,
-                        dto:, persistable:)
+                        dto:, persistable:,
+                        access_rules: [], indexes: [], system_members: nil,
+                        generalization: nil, oql_view: nil, lifecycle: [], validation_rules: [])
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
                             ", localize_date: #{attribute.fetch('localize_date').inspect}"

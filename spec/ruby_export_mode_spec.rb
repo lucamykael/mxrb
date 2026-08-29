@@ -219,7 +219,7 @@ RSpec.describe 'Ruby application export mode' do
         include('name' => 'Status', 'type' => 'enum', 'enumeration' => 'Sales.OrderStatus')
       )
       expect(sales.fetch('scheduled_events')).to include(
-        include('Name' => 'Cleanup', 'Microflow' => 'Sales.Cleanup')
+        include('name' => 'Sales.Cleanup', 'microflow' => 'Sales.Cleanup')
       )
       expect(order).to include(
         'system_members', 'access_rules', 'lifecycle'

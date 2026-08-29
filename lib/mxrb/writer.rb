@@ -821,10 +821,8 @@ module Mxrb
       validate_ruby_security_declarations!(declarations, "project user roles")
       roles = declarations.map do |role|
         declared_module_roles = Array(role[:module_roles]).map(&:to_s)
-        unless declared_module_roles.any? { _1.start_with?('System.') }
-          raise ValidationError,
-                "project user role #{role.fetch(:name)} requires at least one System module role"
-        end
+        declared_module_roles << ruby_default_system_role(role) unless
+          declared_module_roles.any? { _1.start_with?('System.') }
 
         role_id = role[:id].to_s
         matches = Array(by_name[role.fetch(:name).to_s])
@@ -855,6 +853,12 @@ module Mxrb
         )
       end
       IO::BsonCodec.build_array(roles + opaque, marker: payload.fetch(:marker))
+    end
+
+    def ruby_default_system_role(role)
+      administrator = role.fetch(:manage_all_roles, false) == true ||
+                      role.fetch(:name).to_s.casecmp('Administrator').zero?
+      administrator ? 'System.Administrator' : 'System.User'
     end
 
     def ruby_project_role_guid(declaration, previous, role_id)
@@ -2519,6 +2523,12 @@ module Mxrb
       hydrate_pluggable_widgets!(generated, existing)
       merged = existing.merge(generated)
       case existing["$Type"]
+      when "Constants$Constant"
+        previous_type = existing["Type"]
+        generated_type = generated["Type"]
+        merged["Type"] = previous_type.merge(generated_type) if
+          previous_type.is_a?(Hash) && generated_type.is_a?(Hash)
+        merged
       when "Microflows$Microflow", "Microflows$Nanoflow"
         preserve_keys(merged, existing, %w[
           MicroflowParameterCollection MicroflowReturnType UseListParameterByReference
@@ -3698,7 +3708,7 @@ module Mxrb
         raise ArgumentError, "unsupported constant type #{type_sym.inspect}; " \
                              "use one of: #{CONSTANT_TYPE_MAP.keys.join(', ')}"
       end
-      document = {
+      document = constant.fetch(:properties, {}).to_h.merge(
         "$ID" => constant[:id].to_s.empty? ? SecureRandom.uuid : constant[:id].to_s,
         "$Type" => "Constants$Constant",
         "Name" => constant.fetch(:name),
@@ -3706,12 +3716,12 @@ module Mxrb
         "Excluded" => constant.fetch(:excluded, false) == true,
         "ExportLevel" => constant.fetch(:export_level, "Hidden"),
         "ExposedToClient" => constant.fetch(:exposed_to_client, false) == true,
-        "Type" => {
+        "Type" => constant.fetch(:type_properties, {}).to_h.merge(
           "$ID" => constant[:type_id].to_s.empty? ? SecureRandom.uuid : constant[:type_id].to_s,
           "$Type" => type_str
-        },
+        ),
         "DefaultValue" => constant.fetch(:value, "").to_s
-      }
+      )
       document["__mxrb_unit_id"] = constant[:unit_id].to_s unless constant[:unit_id].to_s.empty?
       document
     end
@@ -3813,6 +3823,10 @@ module Mxrb
     def user_role_doc(role)
       id = role[:id].to_s
       guid = role[:guid].to_s
+      module_roles = Array(role[:module_roles]).map(&:to_s)
+      unless module_roles.any? { _1.start_with?('System.') }
+        module_roles << (role[:admin] == true ? 'System.Administrator' : 'System.User')
+      end
       {
         "$ID" => id.empty? ? SecureRandom.uuid : id,
         "$Type" => "Security$UserRole",
@@ -3827,7 +3841,7 @@ module Mxrb
         ),
         "ManageAllRoles" => role[:admin] == true,
         "ManageUsersWithoutRoles" => role.fetch(:manage_users_without_roles, false) == true,
-        "ModuleRoles" => IO::BsonCodec.build_array(role.fetch(:module_roles, []), marker: 1)
+        "ModuleRoles" => IO::BsonCodec.build_array(module_roles, marker: 1)
       }
     end
 

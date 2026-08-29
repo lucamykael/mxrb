@@ -512,9 +512,12 @@ module Mxrb
       def user_role(name, module_roles: [], admin: false, id: nil, guid: nil,
                     description: '', check_security: true, manageable_roles: [],
                     manage_users_without_roles: false)
+        native_roles = Array(module_roles).map(&:to_s)
+        unless native_roles.any? { _1.start_with?('System.') }
+          native_roles << (admin ? 'System.Administrator' : 'System.User')
+        end
         @user_roles << {
-          name: name.to_s,
-          module_roles: Array(module_roles).map(&:to_s),
+          name: name.to_s, module_roles: native_roles,
           admin: admin, id: id.to_s, guid: guid.to_s,
           description: description.to_s, check_security: check_security == true,
           manageable_roles: Array(manageable_roles).map(&:to_s),
@@ -833,6 +836,8 @@ module Mxrb
     end
 
     class ConstantBuilder
+      include PresentationValues
+
       CONSTANT_TYPES = {
         string: "DataTypes$StringType", integer: "DataTypes$IntegerType",
         boolean: "DataTypes$BooleanType", decimal: "DataTypes$DecimalType",
@@ -852,6 +857,8 @@ module Mxrb
         @excluded = options.fetch(:excluded, false) == true
         @export_level = options.fetch(:export_level, 'Hidden').to_s
         @exposed_to_client = options.fetch(:exposed_to_client, false) == true
+        @properties = presentation_value_document(options.fetch(:properties, {}))
+        @type_properties = presentation_value_document(options.fetch(:type_properties, {}))
       end
 
       def documentation(d) = (@doc = d)
@@ -860,7 +867,8 @@ module Mxrb
         {
           name: @name, type: @type, value: @value, documentation: @doc,
           id: @id, type_id: @type_id, unit_id: @unit_id, excluded: @excluded,
-          export_level: @export_level, exposed_to_client: @exposed_to_client
+          export_level: @export_level, exposed_to_client: @exposed_to_client,
+          properties: @properties, type_properties: @type_properties
         }
       end
     end
