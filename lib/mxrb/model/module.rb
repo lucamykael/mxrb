@@ -40,6 +40,10 @@ module Mxrb
         'Forms$BuildingBlock' => 'building_blocks',
         'Forms$Snippet' => 'snippets'
       }.freeze
+      ASSET_DOCUMENT_ROUTES = {
+        'Images$ImageCollection' => 'assets/images',
+        'CustomIcons$CustomIconCollection' => 'assets/icons'
+      }.freeze
       DOMAIN_DOCUMENT_ROUTES = {
         'DomainModels$ViewEntitySourceDocument' => 'oql_views',
         'Enumerations$Enumeration' => 'enumerations',
@@ -48,6 +52,7 @@ module Mxrb
       EDITABLE_DOCUMENT_TYPES = (
         INFRASTRUCTURE_DOCUMENT_ROUTES.keys + APPLICATION_DOCUMENT_ROUTES.keys +
         PRESENTATION_DOCUMENT_ROUTES.keys +
+        ASSET_DOCUMENT_ROUTES.keys +
         DOMAIN_DOCUMENT_ROUTES.keys
       ).freeze
 
@@ -142,6 +147,10 @@ module Mxrb
 
       def presentation_documents
         @presentation_documents ||= routed_documents(PRESENTATION_DOCUMENT_ROUTES)
+      end
+
+      def asset_documents
+        @asset_documents ||= routed_documents(ASSET_DOCUMENT_ROUTES)
       end
 
       def domain_documents

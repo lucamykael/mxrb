@@ -6,6 +6,7 @@ require "base64"
 require_relative "integration_documents"
 require_relative "code_actions"
 require_relative "presentation_documents"
+require_relative "asset_documents"
 
 module Mxrb
   module Dsl
@@ -893,6 +894,7 @@ module Mxrb
       include IntegrationDocuments
       include CodeActions
       include PresentationDocuments
+      include AssetDocuments
 
       attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
                   :associations, :menus, :module_roles, :enumerations, :constants,

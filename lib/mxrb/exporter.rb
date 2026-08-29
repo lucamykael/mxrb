@@ -121,6 +121,7 @@ module Mxrb
       export_application_documents(root, mod)
       export_infrastructure_documents(root, mod)
       export_presentation_documents(root, mod)
+      export_asset_documents(root, mod)
       export_pages(root, mod)
       export_menus(root, mod)
       export_nanoflows(root, mod)
@@ -465,6 +466,25 @@ module Mxrb
       )
     end
 
+    def export_asset_documents(root, mod)
+      documents = mod.asset_documents
+      return if documents.empty?
+
+      presentation = File.join(root, 'presentation')
+      used = {}
+      paths = documents.map do |document|
+        relative = unique_relative_path(
+          document.fetch(:route), underscore(document.fetch(:name)), used
+        )
+        write(File.join(presentation, relative), mapping_document_source(document))
+        relative
+      end
+      append_to_aggregator(
+        File.join(presentation, 'presentation.rb'), paths,
+        managed_types: documents.map { _1.fetch(:type) }
+      )
+    end
+
     def unique_relative_path(directory, base, used)
       candidate = File.join(directory, "#{base}.rb")
       suffix = 2
@@ -515,8 +535,46 @@ module Mxrb
         return building_block_document_declaration(document)
       when "Forms$Snippet"
         return snippet_document_declaration(document)
+      when "Images$ImageCollection"
+        return image_collection_declaration(document)
+      when "CustomIcons$CustomIconCollection"
+        return custom_icon_collection_declaration(document)
       end
       native_document_declaration(document)
+    end
+
+    def image_collection_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:image_collection, document, {
+        images: bson_items(doc['Images']).map do |image|
+          {
+            id: document_id(image), name: image.fetch('Name'),
+            format: image.fetch('ImageFormat', ''),
+            data: code_action_binary_spec(image.fetch('Image'))
+          }
+        end,
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        images_marker: bson_marker(doc['Images'], 2)
+      })
+    end
+
+    def custom_icon_collection_declaration(document)
+      doc = document.fetch(:doc)
+      semantic_call_source(:custom_icon_collection, document, {
+        collection_class: doc.fetch('CollectionClass', ''), prefix: doc.fetch('Prefix', ''),
+        font: code_action_binary_spec(doc.fetch('FontData')),
+        icons: bson_items(doc['Icons']).map do |icon|
+          {
+            id: document_id(icon), name: icon.fetch('Name'),
+            character_code: icon.fetch('CharacterCode', 0),
+            tags: bson_items(icon['Tags']), tags_marker: bson_marker(icon['Tags'], 2)
+          }
+        end,
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        icons_marker: bson_marker(doc['Icons'], 2)
+      })
     end
 
     def layout_document_declaration(document)
