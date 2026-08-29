@@ -6,6 +6,8 @@ module Mxrb
     module ProjectDocuments
       include PresentationValues
 
+      def mendix_project_id(value) = (@project_id = value.to_s)
+
       def project_settings_document(settings:, unit_id:, container_id:, id: nil,
                                     containment: 'ProjectDocuments')
         project_native_document(

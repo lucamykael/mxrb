@@ -1630,7 +1630,8 @@ module Mxrb
           [@definition.fetch(:version), @definition.fetch(:version)]
         )
       end
-      root_id = SecureRandom.uuid
+      root_id = @definition[:project_id].to_s
+      root_id = SecureRandom.uuid if root_id.empty?
       doc = {
         "$ID" => root_id,
         "$Type" => "Projects$Project",
@@ -2092,9 +2093,13 @@ module Mxrb
       title = profile.fetch(:app_title, {})
       title = title.values.first.to_s if title.is_a?(Hash)
       editable = {
-        'HomePage' => navigation_home_doc(profile[:home_page], profile[:home_microflow]),
-        'HomeItems' => IO::BsonCodec.build_array(role_homes.map { navigation_role_home_doc(_1) }, marker: 2),
-        'Menu' => navigation_menu_doc(profile.fetch(:items, [])),
+        'HomePage' => navigation_home_doc(
+          profile[:home_page], profile[:home_microflow], previous: previous['HomePage']
+        ),
+        'HomeItems' => navigation_array(role_homes, previous['HomeItems']) do |home, prior|
+          navigation_role_home_doc(home, previous: prior)
+        end,
+        'Menu' => navigation_menu_doc(profile.fetch(:items, []), previous: previous['Menu']),
         'Enabled' => true,
         'ApplicationTitle' => title.to_s.empty? ? previous.fetch('ApplicationTitle', 'Mendix') : title.to_s
       }
@@ -2121,9 +2126,13 @@ module Mxrb
       end + profile.fetch(:role_home_details, [])
       editable = {
         "Name" => profile.fetch(:name).to_s,
-        "HomePage" => navigation_home_doc(profile[:home_page], profile[:home_microflow]),
-        "HomeItems" => IO::BsonCodec.build_array(role_homes.map { navigation_role_home_doc(_1) }),
-        "Menu" => navigation_menu_doc(profile.fetch(:items, [])),
+        "HomePage" => navigation_home_doc(
+          profile[:home_page], profile[:home_microflow], previous: previous["HomePage"]
+        ),
+        "HomeItems" => navigation_array(role_homes, previous["HomeItems"]) do |home, prior|
+          navigation_role_home_doc(home, previous: prior)
+        end,
+        "Menu" => navigation_menu_doc(profile.fetch(:items, []), previous: previous["Menu"]),
         "OfflineEntityConfigs" => IO::BsonCodec.build_array([], marker: 3),
         "ProgressiveWebAppSettings" => nil,
         "NotFoundHomepage" => nil,
@@ -2138,7 +2147,9 @@ module Mxrb
       end
       editable["AppIcon"] = profile[:app_icon] unless profile[:app_icon].nil?
       unless profile.fetch(:app_title, {}).empty?
-        editable["AppTitle"] = translated_text_doc(profile.fetch(:app_title))
+        editable["AppTitle"] = translated_text_doc(
+          profile.fetch(:app_title), previous: previous["AppTitle"]
+        )
       end
       if profile[:sign_in_page]
         editable["LoginPageSettings"] = {
@@ -2163,87 +2174,116 @@ module Mxrb
       }.merge(previous).merge(editable)
     end
 
-    def navigation_home_doc(page, microflow)
+    def navigation_home_doc(page, microflow, previous: nil)
+      previous ||= {}
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Navigation$HomePage",
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Navigation$HomePage",
         "Microflow" => microflow.to_s,
         "Page" => page.to_s
       }
     end
 
-    def navigation_role_home_doc(home)
+    def navigation_role_home_doc(home = nil, previous: nil, **attributes)
+      home ||= attributes
+      previous ||= {}
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Navigation$RoleBasedHomePage",
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Navigation$RoleBasedHomePage",
         "UserRole" => home.fetch(:role).to_s,
         "Page" => home[:page].to_s,
         "Microflow" => home[:microflow].to_s
       }
     end
 
-    def navigation_menu_doc(items)
+    def navigation_menu_doc(items, previous: nil)
+      previous ||= {}
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Menus$MenuItemCollection",
-        "Items" => IO::BsonCodec.build_array(items.map { navigation_menu_item_doc(_1) })
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Menus$MenuItemCollection",
+        "Items" => navigation_array(items, previous["Items"]) do |item, prior|
+          navigation_menu_item_doc(item, previous: prior)
+        end
       }
     end
 
-    def navigation_menu_item_doc(item)
+    def navigation_menu_item_doc(item = nil, previous: nil, **attributes)
+      item ||= attributes
+      previous ||= {}
       action = if item[:page]
-                 form_action_doc(item.fetch(:page))
+                 form_action_doc(item.fetch(:page), previous: previous["Action"])
                elsif item[:microflow]
-                 navigation_microflow_action_doc(item.fetch(:microflow))
+                 navigation_microflow_action_doc(
+                   item.fetch(:microflow), previous: previous["Action"]
+                 )
                else
-                 { "$ID" => SecureRandom.uuid, "$Type" => "Forms$NoAction" }
+                 prior = previous["Action"] || {}
+                 { "$ID" => prior["$ID"] || SecureRandom.uuid,
+                   "$Type" => prior["$Type"] || "Forms$NoAction" }
                end
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Menus$MenuItem",
-        "Caption" => translated_text_doc(item.fetch(:caption)),
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Menus$MenuItem",
+        "Caption" => translated_text_doc(item.fetch(:caption), previous: previous["Caption"]),
         "Action" => action,
-        "Icon" => glyph_icon_doc(item[:icon]),
-        "Items" => IO::BsonCodec.build_array(
-          item.fetch(:items, []).map { navigation_menu_item_doc(_1) }
-        )
+        "Icon" => glyph_icon_doc(item[:icon], previous: previous["Icon"]),
+        "Items" => navigation_array(item.fetch(:items, []), previous["Items"]) do |child, prior|
+          navigation_menu_item_doc(child, previous: prior)
+        end
       }
     end
 
-    def glyph_icon_doc(icon)
+    def glyph_icon_doc(icon, previous: nil)
       return unless icon
 
       code = icon.is_a?(Integer) ? icon : GLYPH_ICON_CODES[icon.to_s.downcase]
       raise ArgumentError, "unsupported navigation icon #{icon.inspect}" unless code
 
-      { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$GlyphIcon', 'Code' => code }
+      previous ||= {}
+      { '$ID' => previous['$ID'] || SecureRandom.uuid,
+        '$Type' => previous['$Type'] || 'Forms$GlyphIcon', 'Code' => code }
     end
 
-    def navigation_microflow_action_doc(microflow)
+    def navigation_microflow_action_doc(microflow, previous: nil)
+      previous ||= {}
+      settings = previous["MicroflowSettings"] || {}
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$MicroflowAction",
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Forms$MicroflowAction",
         "MicroflowSettings" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$MicroflowSettings",
+          "$ID" => settings["$ID"] || SecureRandom.uuid,
+          "$Type" => settings["$Type"] || "Forms$MicroflowSettings",
           "Microflow" => microflow
         }
       }
     end
 
-    def translated_text_doc(translations)
+    def translated_text_doc(translations, previous: nil)
+      previous ||= {}
+      previous_items = array_items(previous["Items"]).to_h { [_1["LanguageCode"].to_s, _1] }
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Texts$Text",
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Texts$Text",
         "Items" => IO::BsonCodec.build_array(translations.map do |locale, value|
+          prior = previous_items[locale.to_s] || {}
           {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Texts$Translation",
+            "$ID" => prior["$ID"] || SecureRandom.uuid,
+            "$Type" => prior["$Type"] || "Texts$Translation",
             "LanguageCode" => locale.to_s,
             "Text" => value.to_s
           }
-        end)
+        end, marker: navigation_array_marker(previous["Items"]))
       }
+    end
+
+    def navigation_array(values, previous)
+      prior_items = array_items(previous)
+      generated = values.each_with_index.map { |value, index| yield(value, prior_items[index]) }
+      IO::BsonCodec.build_array(generated, marker: navigation_array_marker(previous))
+    end
+
+    def navigation_array_marker(value)
+      value.nil? ? 2 : IO::BsonCodec.parse_array(value).fetch(:marker)
     end
 
     def write_module_security(mpr, module_id, mod)
@@ -3840,14 +3880,16 @@ module Mxrb
       }
     end
 
-    def form_action_doc(page)
+    def form_action_doc(page, previous: nil)
+      previous ||= {}
+      settings = previous["FormSettings"] || {}
       {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$FormAction",
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Forms$FormAction",
         "DisabledDuringExecution" => false,
         "FormSettings" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$FormSettings",
+          "$ID" => settings["$ID"] || SecureRandom.uuid,
+          "$Type" => settings["$Type"] || "Forms$FormSettings",
           "Form" => page.to_s,
           "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
           "TitleOverride" => nil

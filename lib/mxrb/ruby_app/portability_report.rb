@@ -62,18 +62,22 @@ module Mxrb
       end
 
       def portability_for(coverage)
-        name = coverage.fetch('name')
-        kind = coverage.fetch('kind')
+        name, kind = coverage.values_at('name', 'kind')
         return ['native', 'Ruby domain declarations synchronize into the Mendix domain model'] \
           if %w[model dto].include?(kind)
 
         implementation = Registry.fetch(:service, name) || Registry.fetch(:page, name)
         return ['native', "Ruby #{kind} declares a native Mendix projection"] \
           if implementation&.native_definition
+        return ['native', 'Editable Ruby declaration rebuilds this Mendix document'] if bidirectional?(coverage)
         return ['preserved_native', 'Original Mendix document is retained byte-for-byte in the sidecar'] \
           if coverage.fetch('status') == 'preserved_native'
 
         ['runtime_only', "#{kind} has no Ruby native declaration and runs through MXRB"]
+      end
+
+      def bidirectional?(coverage)
+        %w[executable_bidirectional mendix_dsl_bidirectional].include?(coverage.fetch('status'))
       end
 
       def frontend_application_entries

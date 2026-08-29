@@ -19,6 +19,19 @@ module Mxrb
     GLOBAL_EDITABLE_DOCUMENT_TYPES = %w[
       Settings$ProjectSettings Texts$SystemTextCollection
     ].freeze
+    RUBY_PROJECTED_DOCUMENT_TYPES = (
+      Model::Module::EDITABLE_DOCUMENT_TYPES + GLOBAL_EDITABLE_DOCUMENT_TYPES + %w[
+        DomainModels$DomainModel Forms$Page Menus$MenuDocument
+        Microflows$Microflow Microflows$Nanoflow Navigation$NavigationDocument
+        Projects$Folder Projects$ModuleGuidMapping Projects$ModuleImpl
+        Projects$ModuleSettings Projects$Project Projects$ProjectConversion
+        Security$ModuleSecurity Security$ProjectSecurity
+      ]
+    ).freeze
+
+    def self.ruby_projected_document_type?(type)
+      RUBY_PROJECTED_DOCUMENT_TYPES.include?(type.to_s)
+    end
     EDITABLE_FLOW_OBJECT_TYPES = %w[
       Microflows$StartEvent
       Microflows$EndEvent
@@ -216,8 +229,7 @@ module Mxrb
     end
 
     def editable_document_type?(type)
-      Model::Module::EDITABLE_DOCUMENT_TYPES.include?(type) ||
-        GLOBAL_EDITABLE_DOCUMENT_TYPES.include?(type)
+      self.class.ruby_projected_document_type?(type)
     end
 
     def export_global_documents(project)
@@ -1291,6 +1303,7 @@ module Mxrb
 
         Mxrb.define(output) do
           mendix_version #{ruby(project.mendix_version || "10.18.0")}
+          mendix_project_id #{ruby(project.mpr.root_unit.fetch("UnitID"))}
           native_units File.join(__dir__, ".mxrb", "native_units.json")
           project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
       #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}

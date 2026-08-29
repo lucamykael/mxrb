@@ -1524,9 +1524,11 @@ module Mxrb
 
           document = project.parse_bson(unit)
           name = document['Name'] || document['name'] || document['$Type']
+          projected = Mxrb::Exporter.ruby_projected_document_type?(document['$Type'])
           add_coverage(
             unit['UnitID'], name.to_s, document['$Type'].to_s,
-            relative(@mendix_sidecar), 'preserved_native'
+            relative(@mendix_sidecar),
+            projected ? 'mendix_dsl_bidirectional' : 'preserved_native'
           )
         end
       end

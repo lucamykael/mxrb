@@ -470,7 +470,7 @@ module Mxrb
 
       def definition
         {
-          version: @mendix_version,
+          version: @mendix_version, project_id: @project_id,
           modules: @modules.map(&:to_h),
           security: @security,
           navigation: @navigation,

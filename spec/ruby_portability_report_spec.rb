@@ -40,7 +40,9 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
         { id: '3', name: 'App.RuntimeFlow', kind: 'microflow', ruby_path: 'app/services/runtime.rb',
           status: 'runtime_source_preserved' },
         { id: '4', name: 'Settings', kind: 'Settings$ProjectSettings', ruby_path: 'mendix',
-          status: 'preserved_native' }
+          status: 'preserved_native' },
+        { id: '5', name: 'SystemTexts', kind: 'Texts$SystemTextCollection', ruby_path: 'mendix',
+          status: 'mendix_dsl_bidirectional' }
       ]
       write_app(root, coverage:, source:)
       FileUtils.mkdir_p(File.join(root, 'frontend', 'src', 'features'))
@@ -49,7 +51,7 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       report = described_class.new(root)
 
       expect(report).not_to be_native
-      expect(report.summary).to eq('native' => 2, 'runtime_only' => 2, 'preserved_native' => 1)
+      expect(report.summary).to eq('native' => 3, 'runtime_only' => 2, 'preserved_native' => 1)
       expect(report.entries.find { _1.name == 'App.NativePage' }.status).to eq('native')
       expect(report.entries.find { _1.name == 'App.RuntimeFlow' }.status).to eq('runtime_only')
       expect(report.to_h).to include(root: root, native: false, summary: report.summary)
