@@ -763,9 +763,11 @@ module Mxrb
     end
 
     def ruby_project_security_doc(declaration, previous)
-      current = previous.empty? ? project_security_doc({}) : previous
+      fresh = previous.empty?
+      current = fresh ? project_security_doc(id: declaration[:id]) : previous
       id = ruby_existing_or_stable_id(
-        declaration[:id], current["$ID"], "project security", 'project-security'
+        declaration[:id], fresh ? nil : current["$ID"],
+        "project security", 'project-security'
       )
       document = current.merge("$ID" => id, "$Type" => "Security$ProjectSecurity")
       {
@@ -786,15 +788,15 @@ module Mxrb
                                end
       end
       document["UserRoles"] = ruby_project_user_roles(
-        declaration.fetch(:user_roles, []), current["UserRoles"]
+        declaration.fetch(:user_roles, []), fresh ? nil : current["UserRoles"]
       )
       document["DemoUsers"] = ruby_project_demo_users(
-        declaration.fetch(:demo_users, []), current["DemoUsers"]
+        declaration.fetch(:demo_users, []), fresh ? nil : current["DemoUsers"]
       )
       if declaration.key?(:password_policy)
         if declaration[:password_policy]
           document["PasswordPolicySettings"] = ruby_password_policy_doc(
-            declaration.fetch(:password_policy), current["PasswordPolicySettings"], id
+            declaration.fetch(:password_policy), fresh ? nil : current["PasswordPolicySettings"], id
           )
         else
           document.delete("PasswordPolicySettings")
