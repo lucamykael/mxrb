@@ -17,6 +17,7 @@ module Mxrb
         decimal: 'DataTypes$DecimalType',
         boolean: 'DataTypes$BooleanType',
         datetime: 'DataTypes$DateTimeType',
+        date_time: 'DataTypes$DateTimeType',
         binary: 'DataTypes$BinaryType'
       }.freeze
       DATABASE_QUERY_TYPES = { select: 1, execute: 2 }.freeze
@@ -227,7 +228,7 @@ module Mxrb
           'Association' => spec.fetch(:association, '').to_s,
           'CustomHandlerCall' => nil,
           'Documentation' => spec.fetch(:documentation, '').to_s,
-          'ElementType' => 'Object',
+          'ElementType' => spec.fetch(:element_type, 'Object').to_s,
           'Entity' => spec.fetch(:entity, '').to_s,
           'ExposedName' => spec.fetch(:name, '').to_s,
           'IsDefaultType' => spec.fetch(:default_type, false) == true,

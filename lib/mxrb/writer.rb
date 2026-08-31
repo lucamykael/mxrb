@@ -7,6 +7,7 @@ require "json"
 require "securerandom"
 require "sqlite3"
 require "time"
+require_relative "writer/page_overlay"
 
 module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
@@ -418,6 +419,8 @@ module Mxrb
 
     ACCESS_RIGHTS = %i[None ReadOnly ReadWrite].freeze
     ACCESS_MEMBER_KINDS = %i[attribute association].freeze
+    SYSTEM_INDEX_MEMBERS = %w[CreatedDate ChangedDate Owner ChangedBy].freeze
+    ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
     def ruby_access_rule_docs(declarations, previous, module_name, entity_name)
       validate_ruby_access_rules!(declarations, module_name, entity_name)
@@ -490,6 +493,14 @@ module Mxrb
         members.each do |member|
           validate_ruby_uuid!(member[:id], "index member for #{module_name}.#{entity_name}")
           name = member.fetch(:name).to_s
+          type = member.fetch(:type, :Normal).to_s
+          if type != "Normal"
+            raise ValidationError, "unknown indexed system member #{module_name}.#{entity_name}.#{name}" \
+              unless ruby_system_index_member?(member)
+
+            next
+          end
+
           raise ValidationError, "unknown indexed attribute #{module_name}.#{entity_name}.#{name}" \
             unless attribute_ids.key?(name)
         end
@@ -506,12 +517,12 @@ module Mxrb
       previous_members = members_payload.fetch(:items)
       by_id = previous_members.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
       by_name = previous_members.to_h do |member|
-        pointer = IO::BsonCodec.extract_id(member["AttributePointer"])
-        [attribute_ids.key(pointer), member]
+        [ruby_index_member_signature(member, attribute_ids.invert), member]
       end
       members = Array(declaration[:members]).map do |member|
         member_id = member[:id].to_s
-        prior = (!member_id.empty? && by_id[member_id]) || by_name[member.fetch(:name).to_s]
+        prior = (!member_id.empty? && by_id[member_id]) ||
+                by_name[ruby_index_member_declaration_signature(member)]
         ruby_index_member_doc(member, prior, attribute_ids)
       end
       previous.merge(
@@ -529,9 +540,9 @@ module Mxrb
       previous.merge(
         "$ID" => id, "$Type" => previous["$Type"] || "DomainModels$IndexedAttribute",
         "Type" => declaration.fetch(:type, :Normal).to_s,
-        "AttributePointer" => binary_uuid(attribute_ids.fetch(declaration.fetch(:name).to_s)),
+        "AttributePointer" => binary_uuid(ruby_index_member_pointer(declaration, attribute_ids)),
         "AssociationPointer" => previous.fetch(
-          "AssociationPointer", binary_uuid("00000000-0000-0000-0000-000000000000")
+          "AssociationPointer", binary_uuid(ZERO_UUID)
         ),
         "Ascending" => declaration.fetch(:ascending, true) == true
       )
@@ -539,11 +550,34 @@ module Mxrb
 
     def ruby_index_signature(index, names_by_id)
       members = IO::BsonCodec.parse_array(index["Attributes"])[:items]
-      members.map { names_by_id[IO::BsonCodec.extract_id(_1["AttributePointer"])] }
+      members.map { ruby_index_member_signature(_1, names_by_id) }
     end
 
     def ruby_index_declaration_signature(index)
-      Array(index[:members]).map { _1.fetch(:name).to_s }
+      Array(index[:members]).map { ruby_index_member_declaration_signature(_1) }
+    end
+
+    def ruby_index_member_signature(member, names_by_id)
+      type = member.fetch("Type", "Normal").to_s
+      name = type == "Normal" ? names_by_id[IO::BsonCodec.extract_id(member["AttributePointer"])] : type
+      [name, type]
+    end
+
+    def ruby_index_member_declaration_signature(member)
+      [member.fetch(:name).to_s, member.fetch(:type, :Normal).to_s]
+    end
+
+    def ruby_system_index_member?(member)
+      name, type = ruby_index_member_declaration_signature(member)
+      type != "Normal" && SYSTEM_INDEX_MEMBERS.include?(name) && name == type
+    end
+
+    def ruby_index_member_pointer(member, attribute_ids)
+      name, type = ruby_index_member_declaration_signature(member)
+      return attribute_ids.fetch(name) if type == "Normal"
+      return ZERO_UUID if ruby_system_index_member?(member)
+
+      raise ValidationError, "unknown indexed system member #{name}"
     end
 
     def synchronize_ruby_system_members!(entity, declaration)
@@ -606,10 +640,27 @@ module Mxrb
         raise ValidationError, "OQL view #{module_name}.#{entity_name} requires source or query"
       end
 
+      declared_id = declaration[:source_id].to_s
+      if source.empty? && !query.nil? && !declared_id.empty?
+        key = native_existing_key(entity, "source", "Source") || "Source"
+        previous = entity[key].is_a?(Hash) ? entity[key] : {}
+        previous_id = IO::BsonCodec.extract_id(previous["$ID"])
+        if previous_id && declared_id != previous_id
+          raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
+        end
+        source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
+                     "SourceDocument"
+        query_key = native_existing_key(previous, "oql", "Oql", "OQL") || "Oql"
+        entity[key] = previous.merge(
+          "$ID" => declared_id, "$Type" => "DomainModels$OqlViewEntitySource",
+          source_key => "", query_key => query.to_s
+        )
+        return
+      end
+
       unless source.empty?
         key = native_existing_key(entity, "source", "Source") || "Source"
         previous = entity[key].is_a?(Hash) ? entity[key] : {}
-        declared_id = declaration[:source_id].to_s
         previous_id = IO::BsonCodec.extract_id(previous["$ID"])
         if !declared_id.empty? && previous_id && declared_id != previous_id
           raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
@@ -943,6 +994,14 @@ module Mxrb
       validate_ruby_security_declarations!(declarations, "scheduled events in #{module_name}")
       declarations.each do |declaration|
         handler = declaration[:microflow].to_s
+        if declaration[:unbound] == true
+          if declaration.fetch(:enabled, true) == true || !handler.empty? || declaration[:schedule]
+            raise ValidationError,
+                  "unbound scheduled event #{module_name}.#{declaration.fetch(:name)} must be disabled"
+          end
+          next
+        end
+
         raise ValidationError, "scheduled event #{module_name}.#{declaration.fetch(:name)} has no microflow" \
           if handler.empty?
 
@@ -968,6 +1027,8 @@ module Mxrb
         "scheduled event #{module_name}.#{declaration.fetch(:name)}",
         'scheduled-event', module_name, declaration.fetch(:name)
       )
+      return ruby_unbound_scheduled_event_doc(declaration, current, id) if declaration[:unbound] == true
+
       schedule = declaration.fetch(:schedule)
       prior_schedule = current["Schedule"].is_a?(Hash) ? current["Schedule"] : {}
       schedule_id = ruby_existing_or_stable_id(
@@ -1000,6 +1061,27 @@ module Mxrb
     rescue ArgumentError
       raise ValidationError,
             "invalid start time for scheduled event #{module_name}.#{declaration.fetch(:name)}"
+    end
+
+    def ruby_unbound_scheduled_event_doc(declaration, current, id)
+      start_at = declaration[:start_at]
+      start_at = current["StartDateTime"] || Time.utc(2000, 1, 1) if start_at.to_s.empty?
+      start_at = Time.parse(start_at.to_s).utc unless start_at.is_a?(Time)
+      current.merge(
+        "$ID" => id, "$Type" => "ScheduledEvents$ScheduledEvent",
+        "Name" => declaration.fetch(:name).to_s,
+        "Documentation" => declaration.fetch(:documentation, '').to_s,
+        "ExportLevel" => declaration.fetch(:export_level, 'Hidden').to_s,
+        "Microflow" => "", "Schedule" => nil, "Enabled" => false,
+        "StartDateTime" => start_at,
+        "TimeZone" => declaration.fetch(:time_zone, 'UTC').to_s,
+        "OnOverlap" => declaration.fetch(:on_overlap, 'SkipNext').to_s,
+        "IntervalType" => declaration.fetch(:interval_type, '').to_s,
+        "Interval" => Integer(declaration.fetch(:interval, 1))
+      )
+    rescue ArgumentError
+      raise ValidationError,
+            "invalid start time for scheduled event #{declaration.fetch(:name)}"
     end
 
     def ruby_existing_or_stable_id(declared, previous, label, *stable_parts)
@@ -1137,9 +1219,9 @@ module Mxrb
         declaration[:rule_info_id], previous["$ID"], "validation rule info",
         fallback: ruby_stable_uuid('validation-info', rule_id)
       )
-      declaration.fetch(:rule_info, {}).to_h.transform_keys(&:to_s).merge(
+      {
         "$ID" => id, "$Type" => validation_rule_type(declaration.fetch(:kind))
-      )
+      }.merge(declaration.fetch(:rule_info, {}).to_h.transform_keys(&:to_s))
     end
 
     def ruby_nested_document_id(declared, previous, label, fallback: nil)
@@ -1700,6 +1782,7 @@ module Mxrb
         "IsSystemProject" => false
       }
       mpr.update_unit(root_id, root_doc)
+      preflight_page_overlays!(mpr, root_id)
       apply_native_project_units(mpr, root_id, native_units)
       apply_default_project_units(mpr, root_id)
       ensure_project_documents(mpr, root_id)
@@ -1724,6 +1807,61 @@ module Mxrb
       write_project_security(mpr, root_id, @definition[:security]) if @definition[:security]
       write_project_navigation(mpr, root_id, @definition[:navigation]) if @definition[:navigation]
       @progress.advance(detail: "project security and navigation")
+    end
+
+    def preflight_page_overlays!(mpr, root_id)
+      return if mpr.all_units.one?
+
+      @definition.fetch(:modules).each do |mod|
+        mod.fetch(:pages).each do |page|
+          next unless page.fetch(:write_mode, :replace).to_sym == :overlay
+
+          baseline = deep_copy(page.fetch(:deep_structure))
+          metadata = baseline[PageOverlay::METADATA_KEY]
+          raw_module = overlay_module_target(mpr, root_id, mod, metadata)
+          raw_page = overlay_page_target(mpr, raw_module, page, metadata)
+          verify_page_overlay_target!(mpr.parse_contents(raw_page), page, mod.fetch(:name))
+        end
+      end
+    end
+
+    def overlay_module_target(mpr, root_id, mod, metadata)
+      expected_name = mod.fetch(:name).to_s
+      candidates = mpr.children_of(root_id).select do |unit|
+        document = mpr.parse_contents(unit)
+        unit['ContainmentName'] == 'Modules' && document['Name'].to_s == expected_name
+      end
+      unit_id = metadata&.fetch('module_unit_id', nil).to_s
+      stable = unit_id.empty? ? nil : mpr.unit(unit_id)
+      unless stable && candidates.one? && stable['UnitID'] == candidates.first['UnitID']
+        raise ValidationError, "page overlay module identity changed for #{expected_name}"
+      end
+
+      stable
+    end
+
+    def overlay_page_target(mpr, raw_module, page, metadata)
+      expected_name = page.fetch(:name).to_s
+      candidates = Array(documents_by_name(mpr, raw_module.fetch('UnitID'))[expected_name]).select do |unit|
+        mpr.parse_contents(unit)['$Type'] == 'Forms$Page'
+      end
+      unit_id = metadata&.fetch('page_unit_id', nil).to_s
+      stable = unit_id.empty? ? nil : mpr.unit(unit_id)
+      unless stable && candidates.one? && stable['UnitID'] == candidates.first['UnitID']
+        raise ValidationError, "page overlay identity changed for #{expected_name}"
+      end
+
+      stable
+    end
+
+    def verify_page_overlay_target!(target, page, module_name)
+      baseline = deep_copy(page.fetch(:deep_structure))
+      metadata = baseline.delete(PageOverlay::METADATA_KEY)
+      widgets = page.fetch(:widgets, [])
+      PageOverlay.new(
+        baseline:, target:, widgets:, metadata:,
+        encoded_widgets: widgets.map { widget_doc(_1, module_name:) }
+      ).apply
     end
 
     def prepared_native_units
@@ -1961,17 +2099,32 @@ module Mxrb
       requested_id = unit["unit_id"].to_s
       requested_id = nil if requested_id.empty?
       stable = mpr.unit(requested_id) if requested_id
-      existing = stable if stable && mpr.parse_contents(stable)["$Type"] == doc["$Type"]
+      if stable
+        stable_doc = mpr.parse_contents(stable)
+        stable_name = stable_doc["Name"] || stable_doc["name"]
+        unless stable_doc["$Type"] == doc["$Type"] &&
+               (name.to_s.empty? || stable_name.to_s == name.to_s)
+          raise ValidationError,
+                "native unit #{requested_id} is #{stable_doc['$Type']} #{stable_name.inspect}, " \
+                "expected #{doc['$Type']} #{name.inspect}"
+        end
+      end
+      existing = stable
       candidates = mpr.children_of(container_id)
-      existing ||= if name.to_s.empty?
-                     candidates.find { mpr.parse_contents(_1)["$Type"] == doc["$Type"] }
-                   else
-                     candidates.find do |raw|
-                       existing_doc = mpr.parse_contents(raw)
-                       (existing_doc["Name"] || existing_doc["name"]) == name &&
-                         existing_doc["$Type"] == doc["$Type"]
-                     end
-                   end
+      unless existing || requested_id
+        matches = candidates.select do |raw|
+          existing_doc = mpr.parse_contents(raw)
+          names_match = name.to_s.empty? ||
+                        (existing_doc["Name"] || existing_doc["name"]) == name
+          names_match && existing_doc["$Type"] == doc["$Type"]
+        end
+        if matches.size > 1 && %w[Microflows$Microflow Microflows$Nanoflow].include?(doc["$Type"])
+          raise ValidationError,
+                "ambiguous native #{doc['$Type']} #{name.inspect} without a unit id: " \
+                "#{matches.size} name matches"
+        end
+        existing = matches.first
+      end
       if existing
         current = mpr.parse_contents(existing)
         preserved = {
@@ -2412,6 +2565,8 @@ module Mxrb
 
     def write_documents(mpr, module_id, mod)
       existing = documents_by_name(mpr, module_id)
+      validate_flow_identities!(mod.fetch(:microflows), "Microflows$Microflow")
+      validate_flow_identities!(mod.fetch(:nanoflows, []), "Microflows$Nanoflow")
 
       mod.fetch(:pages).each do |page|
         upsert_document(
@@ -2419,13 +2574,20 @@ module Mxrb
         )
       end
       mod.fetch(:microflows).each do |flow|
+        unique_name = unique_flow_name?(mod.fetch(:microflows), flow)
         upsert_document(
           mpr, module_id, existing[flow.fetch(:name)],
-          microflow_doc(flow, mod.fetch(:name))
+          microflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          allow_name_fallback: unique_name
         )
       end
       mod.fetch(:nanoflows, []).each do |flow|
-        upsert_document(mpr, module_id, existing[flow.fetch(:name)], nanoflow_doc(flow))
+        unique_name = unique_flow_name?(mod.fetch(:nanoflows, []), flow)
+        upsert_document(
+          mpr, module_id, existing[flow.fetch(:name)],
+          nanoflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          allow_name_fallback: unique_name
+        )
       end
       mod.fetch(:menus, []).each do |menu|
         upsert_document(mpr, module_id, existing[menu.fetch(:name)], menu_doc(menu))
@@ -2441,19 +2603,38 @@ module Mxrb
       end
     end
 
-    def upsert_document(mpr, module_id, candidates, doc)
-      requested_unit_id = doc.delete("__mxrb_unit_id").to_s
-      raw = Array(candidates).find do |candidate|
-        mpr.parse_contents(candidate)["$Type"] == doc["$Type"]
+    def validate_flow_identities!(flows, native_type)
+      Array(flows).group_by { _1.fetch(:name).to_s }.each do |name, declarations|
+        next if declarations.one?
+
+        ids = declarations.map { _1[:unit_id].to_s }
+        if ids.any?(&:empty?) || ids.uniq.size != ids.size
+          raise ValidationError,
+                "ambiguous #{native_type} #{name.inspect}: duplicate names require distinct unit ids"
+        end
       end
+    end
+
+    def unique_flow_name?(flows, flow)
+      Array(flows).count { _1.fetch(:name).to_s == flow.fetch(:name).to_s } == 1
+    end
+
+    def upsert_document(mpr, module_id, candidates, doc, allow_name_fallback: true)
+      requested_unit_id = doc.delete("__mxrb_unit_id").to_s
+      raw = resolve_document_target(
+        mpr, module_id, candidates, doc, requested_unit_id,
+        allow_name_fallback:
+      )
       if raw
         existing = mpr.parse_contents(raw)
+        doc = apply_page_overlay(existing, doc)
         doc = merge_existing_document(existing, doc)
         strip_internal_keys(doc)
         doc["$ID"] = existing["$ID"] || raw.fetch("UnitID")
         doc["$Type"] = existing["$Type"] || doc["$Type"]
         mpr.update_unit(raw.fetch("UnitID"), doc)
       else
+        validate_new_pluggable_widget_slots!(doc)
         strip_internal_keys(doc)
         unit_id = requested_unit_id.empty? ? nil : requested_unit_id
         doc["$ID"] = unit_id if unit_id
@@ -2462,6 +2643,77 @@ module Mxrb
           contents_doc: doc, unit_uuid: unit_id
         )
       end
+    end
+
+    def resolve_document_target(
+      mpr, module_id, candidates, document, requested_unit_id, allow_name_fallback:
+    )
+      expected_name = document["Name"].to_s
+      expected_type = document["$Type"].to_s
+      if expected_name.empty? || expected_type.empty?
+        return Array(candidates).find do |candidate|
+          mpr.parse_contents(candidate)["$Type"] == document["$Type"]
+        end
+      end
+      unless requested_unit_id.empty?
+        stable = mpr.unit(requested_unit_id)
+        if stable
+          stable_document = mpr.parse_contents(stable)
+          unless stable_document["Name"].to_s == expected_name &&
+                 stable_document["$Type"].to_s == expected_type
+            raise ValidationError,
+                  "document unit #{requested_unit_id} is " \
+                  "#{stable_document['$Type']} #{stable_document['Name'].inspect}, expected " \
+                  "#{expected_type} #{expected_name.inspect}"
+          end
+          in_module = collect_documents(mpr, module_id).any? do |candidate|
+            candidate.fetch("UnitID").to_s == requested_unit_id
+          end
+          unless in_module
+            raise ValidationError,
+                  "document unit #{requested_unit_id} is outside module for #{expected_name}"
+          end
+
+          return stable
+        end
+        return unless allow_name_fallback
+      end
+
+      matching = Array(candidates).select do |candidate|
+        mpr.parse_contents(candidate)["$Type"].to_s == expected_type
+      end
+      if matching.size > 1 && %w[Microflows$Microflow Microflows$Nanoflow].include?(expected_type)
+        identity = requested_unit_id.empty? ? "without a unit id" : "with missing unit id #{requested_unit_id}"
+        raise ValidationError,
+              "ambiguous #{expected_type} #{expected_name.inspect} #{identity}: " \
+              "#{matching.size} name matches"
+      end
+      matching.first
+    end
+
+    def validate_new_pluggable_widget_slots!(document)
+      custom_widgets(document).each do |widget|
+        options = widget['__mxrb_widget_options']
+        validate_available_pluggable_slots!(widget, options) unless
+          complete_widget_definition?(widget)
+      end
+    end
+
+    def apply_page_overlay(existing, generated)
+      overlay = generated.delete("__mxrb_page_overlay")
+      return generated unless overlay
+
+      result = PageOverlay.new(
+        baseline: overlay.fetch(:baseline), target: existing,
+        widgets: overlay.fetch(:widgets), encoded_widgets: overlay.fetch(:encoded_widgets),
+        metadata: overlay.fetch(:metadata)
+      ).apply
+      %w[__mxrb_allowed_roles_declared __mxrb_deep_structure_declared].each do |key|
+        result[key] = generated[key] if generated.key?(key)
+      end
+      result
+    rescue ValidationError => e
+      raise ValidationError, "page overlay #{generated['Name']}: #{e.message}"
     end
 
     def synchronize_ruby_navigation!(mpr, root_id, declarations)
@@ -2533,11 +2785,11 @@ module Mxrb
         merged
       when "Microflows$Microflow", "Microflows$Nanoflow"
         preserve_keys(merged, existing, %w[
-          MicroflowParameterCollection MicroflowReturnType UseListParameterByReference
+          MicroflowParameterCollection UseListParameterByReference
         ])
         if generated["__mxrb_preserve_native_body"]
           preserve_keys(
-            merged, existing, %w[ObjectCollection Flows ReturnVariableName]
+            merged, existing, %w[ObjectCollection Flows ReturnVariableName MicroflowReturnType]
           )
           %w[
             MicroflowParameterCollection MicroflowReturnType
@@ -2546,9 +2798,13 @@ module Mxrb
             merged.delete(key) unless existing.key?(key)
           end
         elsif generated["__mxrb_body_declared"]
+          preserve_keys(merged, existing, %w[MicroflowReturnType]) unless
+            generated["__mxrb_return_type_declared"]
           preserve_flow_auxiliary_objects(merged, existing)
         else
           preserve_keys(merged, existing, %w[ObjectCollection Flows ReturnVariableName])
+          preserve_keys(merged, existing, %w[MicroflowReturnType]) unless
+            generated["__mxrb_return_type_declared"]
         end
         preserve_flow_metadata(merged, existing, generated)
         preserve_allowed_roles(merged, existing, generated)
@@ -2571,6 +2827,7 @@ module Mxrb
     def strip_internal_keys(doc)
       doc.delete("__mxrb_allowed_roles_declared")
       doc.delete("__mxrb_body_declared")
+      doc.delete("__mxrb_return_type_declared")
       doc.delete("__mxrb_preserve_native_body")
       doc.delete("__mxrb_deep_structure_declared")
       doc.delete("__mxrb_allow_concurrent_execution_declared")
@@ -2598,7 +2855,10 @@ module Mxrb
         next if options && complete_widget_definition?(widget)
 
         baseline = existing_widgets[widget["Name"]]
-        next unless options && compatible_widget_baseline?(widget, baseline)
+        unless options && compatible_widget_baseline?(widget, baseline)
+          validate_available_pluggable_slots!(widget, options)
+          next
+        end
 
         widget["Type"] = baseline["Type"]
         widget["Object"] = baseline["Object"]
@@ -2612,11 +2872,20 @@ module Mxrb
       properties = custom_widget_properties(widget)
       options.fetch(:properties, {}).each do |key, configured|
         property = properties[key.to_s]
-        configure_custom_widget_value!(property, configured) if property
+        next unless property
+
+        configure_custom_widget_value!(
+          property, configured,
+          context_entity: options[:__context_entity], module_name: options[:__module_name]
+        )
       end
+      configure_pluggable_widget_slots!(
+        widget, options.fetch(:__slots, []),
+        context_entity: options[:__context_entity], module_name: options[:__module_name]
+      )
     end
 
-    def configure_custom_widget_value!(property, configured)
+    def configure_custom_widget_value!(property, configured, context_entity: nil, module_name: nil)
       value = property.fetch('Value')
       unless configured.is_a?(Hash)
         value['PrimitiveValue'] = configured.to_s unless configured.nil?
@@ -2632,8 +2901,16 @@ module Mxrb
       value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
       value['EntityRef'] = indirect_entity_ref_doc(configured[:association]) if configured.key?(:association)
       configure_widget_data_source!(value, configured[:data_source]) if configured.key?(:data_source)
-      configure_widget_children!(value, configured[:widgets]) if configured.key?(:widgets)
-      configure_widget_objects!(property, value, configured[:objects]) if configured.key?(:objects)
+      if configured.key?(:widgets)
+        configure_widget_children!(
+          value, configured[:widgets], context_entity:, module_name:
+        )
+      end
+      if configured.key?(:objects)
+        configure_widget_objects!(
+          property, value, configured[:objects], context_entity:, module_name:
+        )
+      end
       value
     end
 
@@ -2650,22 +2927,137 @@ module Mxrb
       )
     end
 
-    def configure_widget_children!(value, widgets)
-      children = (widgets.is_a?(Array) ? widgets : [widgets]).compact.map { widget_doc(_1) }
+    def configure_widget_children!(value, widgets, context_entity: nil, module_name: nil)
+      children = (widgets.is_a?(Array) ? widgets : [widgets]).compact.map do |child|
+        widget_doc(child, context_entity:, module_name:)
+      end
       value['Widgets'] = IO::BsonCodec.build_array(children, marker: 2)
     end
 
-    def configure_widget_objects!(property, value, configurations)
+    def configure_widget_objects!(property, value, configurations, context_entity: nil,
+                                  module_name: nil)
       object_type = property.dig('ValueType', 'ObjectType')
       objects = Array(configurations).map do |configuration|
         object = custom_widget_object_doc(object_type)
         nested = widget_object_properties(object_type, object)
         configuration.each do |key, configured|
-          configure_custom_widget_value!(nested.fetch(key.to_s), configured)
+          configure_custom_widget_value!(
+            nested.fetch(key.to_s), configured, context_entity:, module_name:
+          )
         end
         object
       end
       value['Objects'] = IO::BsonCodec.build_array(objects, marker: 2)
+    end
+
+    def configure_pluggable_widget_slots!(widget, slots, context_entity: nil, module_name: nil)
+      declared_paths = {}
+      Array(slots).each do |slot|
+        path = Array(slot[:path] || slot['path'])
+        signature = path.map(&:to_s)
+        if declared_paths.key?(signature)
+          raise ValidationError,
+                "duplicate pluggable widget slot #{pluggable_slot_path(path)}"
+        end
+        declared_paths[signature] = true
+        property = pluggable_slot_property!(
+          widget.dig('Type', 'ObjectType'), widget['Object'], path, path
+        )
+        type = property.dig('ValueType', 'Type').to_s.downcase
+        unless type == 'widgets'
+          raise ValidationError,
+                "pluggable widget slot #{pluggable_slot_path(path)} is not a widgets property"
+        end
+
+        configure_widget_children!(
+          property.fetch('Value'), slot[:widgets] || slot['widgets'],
+          context_entity:, module_name:
+        )
+      end
+    end
+
+    def pluggable_slot_property!(object_type, object, remaining, full_path)
+      if remaining.empty?
+        raise ValidationError, 'pluggable widget slot path cannot be empty'
+      end
+      validate_pluggable_widget_object!(object_type, object, full_path)
+
+      property_name, *tail = remaining
+      property = widget_object_properties(object_type, object)[property_name.to_s]
+      unless property
+        raise ValidationError,
+              "pluggable widget slot #{pluggable_slot_path(full_path)} has no property " \
+              "#{property_name.inspect}"
+      end
+      validate_pluggable_widget_value!(property, full_path)
+      return property if tail.empty?
+
+      collection, index, *nested = tail
+      unless collection.to_s == 'objects' && !index.nil? && !nested.empty?
+        raise ValidationError,
+              "pluggable widget slot #{pluggable_slot_path(full_path)} must descend through " \
+              ':objects, an index, and a nested property'
+      end
+
+      nested_type = property.dig('ValueType', 'ObjectType')
+      unless property.dig('ValueType', 'Type').to_s.casecmp('Object').zero? &&
+             nested_type.is_a?(Hash)
+        raise ValidationError,
+              "pluggable widget slot #{pluggable_slot_path(full_path)} property " \
+              "#{property_name.inspect} has no ObjectType"
+      end
+      objects = array_items(property.dig('Value', 'Objects'))
+      object_index = Integer(index)
+      raise IndexError if object_index.negative?
+
+      nested_object = objects.fetch(object_index)
+      unless nested_object.is_a?(Hash) && nested_object['$Type'] == 'CustomWidgets$WidgetObject'
+        raise ValidationError,
+              "pluggable widget slot #{pluggable_slot_path(full_path)} does not resolve to " \
+              'a WidgetObject'
+      end
+
+      pluggable_slot_property!(nested_type, nested_object, nested, full_path)
+    rescue ArgumentError, TypeError, IndexError
+      raise ValidationError,
+            "pluggable widget slot #{pluggable_slot_path(full_path)} has no object at " \
+            "index #{index.inspect}"
+    end
+
+    def validate_pluggable_widget_object!(object_type, object, path)
+      type_id = IO::BsonCodec.extract_id(object_type&.fetch('$ID', nil))
+      pointer = IO::BsonCodec.extract_id(object&.fetch('TypePointer', nil))
+      valid = object_type.is_a?(Hash) && object.is_a?(Hash) &&
+              object['$Type'] == 'CustomWidgets$WidgetObject' && type_id && pointer == type_id
+      return if valid
+
+      raise ValidationError,
+            "pluggable widget slot #{pluggable_slot_path(path)} has an invalid " \
+            'ObjectType/WidgetObject pointer'
+    end
+
+    def validate_pluggable_widget_value!(property, path)
+      value_type = property['ValueType']
+      value = property['Value']
+      type_id = IO::BsonCodec.extract_id(value_type&.fetch('$ID', nil))
+      pointer = IO::BsonCodec.extract_id(value&.fetch('TypePointer', nil))
+      return if value_type.is_a?(Hash) && value.is_a?(Hash) && type_id && pointer == type_id
+
+      raise ValidationError,
+            "pluggable widget slot #{pluggable_slot_path(path)} has an invalid " \
+            'WidgetValue/ValueType pointer'
+    end
+
+    def pluggable_slot_path(path)
+      Array(path).map(&:inspect).join(' -> ')
+    end
+
+    def validate_available_pluggable_slots!(widget, options)
+      return if options.nil? || Array(options[:__slots]).empty?
+
+      raise ValidationError,
+            "pluggable widget #{widget['Name'].inspect} has declared slots, but its " \
+            'ObjectType/WidgetObject definition is unavailable'
     end
 
     def stringify_keys(value)
@@ -2922,10 +3314,12 @@ module Mxrb
           Microflows$Annotation
           Microflows$MicroflowParameter
         ].include?(object["$Type"])
-        if object["$Type"] == 'Microflows$MicroflowParameter' &&
-           generated_objects.any? do |generated|
-             generated["$Type"] == object["$Type"] && generated["Name"] == object["Name"]
-           end
+        generated_parameter = generated_objects.find do |generated|
+          object["$Type"] == 'Microflows$MicroflowParameter' &&
+            generated["$Type"] == object["$Type"] && generated["Name"] == object["Name"]
+        end
+        if generated_parameter
+          preserve_flow_parameter_metadata(generated_parameter, object)
           next
         end
 
@@ -2973,6 +3367,16 @@ module Mxrb
       target["ObjectCollection"] = generated_collection
       target["Flows"] = IO::BsonCodec.build_array(generated_flows)
       target
+    end
+
+    def preserve_flow_parameter_metadata(generated, existing)
+      preserve_keys(generated, existing, %w[$ID RelativeMiddlePoint Size])
+      generated_type = generated["VariableType"]
+      existing_type = existing["VariableType"]
+      return unless generated_type.is_a?(Hash) && existing_type.is_a?(Hash)
+      return unless existing_type.key?("$ID")
+
+      generated_type["$ID"] = existing_type["$ID"]
     end
 
     def preserve_flow_object_metadata(generated, original)
@@ -3371,13 +3775,12 @@ module Mxrb
         { name:, ascending: }
       end
       members = declarations.map do |member|
-        attribute = member.fetch(:name).to_s
         {
           '$ID' => member.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : member.fetch(:id).to_s,
           '$Type' => 'DomainModels$IndexedAttribute',
           'Type' => member.fetch(:type, :Normal).to_s,
-          'AttributePointer' => binary_uuid(attribute_ids.fetch(attribute)),
-          'AssociationPointer' => binary_uuid('00000000-0000-0000-0000-000000000000'),
+          'AttributePointer' => binary_uuid(ruby_index_member_pointer(member, attribute_ids)),
+          'AssociationPointer' => binary_uuid(ZERO_UUID),
           'Ascending' => member.fetch(:ascending, true) == true
         }
       end
@@ -3545,16 +3948,28 @@ module Mxrb
 
     def page_doc(page, module_name = nil)
       if page[:deep_structure].is_a?(Hash)
-        return page[:deep_structure].merge(
+        overlay = page.fetch(:write_mode, :replace).to_sym == :overlay
+        deep_structure = deep_copy(page[:deep_structure])
+        metadata = deep_structure.delete(PageOverlay::METADATA_KEY)
+        doc = deep_structure.merge(
           "$ID" => SecureRandom.uuid,
           "Name" => page.fetch(:name),
           "__mxrb_allowed_roles_declared" => !page[:allowed_roles].nil?,
           "__mxrb_deep_structure_declared" => true
         )
+        if overlay
+          widgets = page.fetch(:widgets, [])
+          doc["__mxrb_page_overlay"] = {
+            baseline: deep_structure, metadata:, widgets:,
+            encoded_widgets: widgets.map { widget_doc(_1, module_name:) }
+          }
+        end
+        doc["ExportLevel"] = "Public" if page[:public] == true
+        return doc
       end
 
       context_entity = page_context_entity(page, module_name)
-      widgets = page.fetch(:widgets, []).map { widget_doc(_1, context_entity:) }
+      widgets = page.fetch(:widgets, []).map { widget_doc(_1, context_entity:, module_name:) }
       # Backwards-compatible page-level bindings target widgets by name.
       page.fetch(:events, []).each do |event|
         next unless event[:target]
@@ -3562,7 +3977,7 @@ module Mxrb
         target[event_property(event.fetch(:event))] = client_action_doc(event) if target
       end
       content = if page[:data_source]
-        [data_view_doc(page.fetch(:data_source), widgets)]
+        [data_view_doc(page.fetch(:data_source), widgets, module_name:)]
       else
         widgets
       end
@@ -3592,7 +4007,8 @@ module Mxrb
         "Parameters" => IO::BsonCodec.build_array([]),
         "PopupWidth" => page.fetch(:popup) ? 600 : 0,
         "PopupHeight" => page.fetch(:popup) ? 400 : 0,
-        "PopupResizable" => page.fetch(:popup), "ExportLevel" => "Hidden" }
+        "PopupResizable" => page.fetch(:popup),
+        "ExportLevel" => page[:public] == true ? "Public" : "Hidden" }
       doc
     end
 
@@ -3798,7 +4214,7 @@ module Mxrb
         }.fetch(key.to_sym, key.to_s)
         password_policy[native_key] = value
       end
-      {
+      document = {
         "$ID" => security[:id].to_s.empty? ? SecureRandom.uuid : security[:id].to_s,
         "$Type" => "Security$ProjectSecurity",
         "SecurityLevel" => security[:security_level] || "CheckNothing",
@@ -3809,7 +4225,6 @@ module Mxrb
         "EnableDemoUsers" => security.fetch(:demo_users_enabled, false) == true,
         "EnableGuestAccess" => security.fetch(:guest_access_enabled, false) == true,
         "GuestUserRole" => security[:guest_user_role].to_s,
-        "SignInMicroflow" => security[:sign_in_microflow].to_s,
         "StrictMode" => false,
         "StrictPageUrlCheck" => true,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
@@ -3820,6 +4235,8 @@ module Mxrb
         "ImageAccess" => access_container("Security$ImageAccessRuleContainer"),
         "PasswordPolicySettings" => password_policy
       }
+      document["SignInMicroflow"] = security[:sign_in_microflow].to_s unless security[:sign_in_microflow].nil?
+      document
     end
 
     def user_role_doc(role)
@@ -3896,7 +4313,7 @@ module Mxrb
       }
     end
 
-    def form_action_doc(page, previous: nil)
+    def form_action_doc(page, previous: nil, arguments: {})
       previous ||= {}
       settings = previous["FormSettings"] || {}
       {
@@ -3907,7 +4324,9 @@ module Mxrb
           "$ID" => settings["$ID"] || SecureRandom.uuid,
           "$Type" => settings["$Type"] || "Forms$FormSettings",
           "Form" => page.to_s,
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "ParameterMappings" => client_parameter_mapping_docs(
+            arguments, handler: page, kind: :page
+          ),
           "TitleOverride" => nil
         },
         "NumberOfPagesToClose2" => "",
@@ -3922,7 +4341,7 @@ module Mxrb
       }
     end
 
-    def widget_doc(widget = nil, context_entity: nil, **keyword_widget)
+    def widget_doc(widget = nil, context_entity: nil, module_name: nil, **keyword_widget)
       widget ||= keyword_widget
       type = widget.fetch(:type)
       widget = qualify_page_widget_attribute(widget, context_entity)
@@ -3930,16 +4349,22 @@ module Mxrb
       if type == :snippet
         return snippet_call_doc(widget)
       end
-      return pluggable_widget_doc(widget, data_grid2_descriptor) if type == :data_grid
+      if type == :data_grid
+        return pluggable_widget_doc(
+          widget, data_grid2_descriptor, context_entity:, module_name:
+        )
+      end
       if %i[drop_down reference_selector].include?(type)
-        return pluggable_widget_doc(widget, combo_box_descriptor)
+        return pluggable_widget_doc(
+          widget, combo_box_descriptor, context_entity:, module_name:
+        )
       end
       if type == :pluggable_widget
         options = widget.fetch(:options)
         return pluggable_widget_doc(widget, {
           id: options.fetch(:widget_id), name: options.fetch(:widget_name),
           studio_category: "Custom", studio_pro_category: "Custom"
-        })
+        }, context_entity:, module_name:)
       end
       if type == :native_widget
         options = widget.fetch(:options)
@@ -3948,13 +4373,16 @@ module Mxrb
           "Name" => widget.fetch(:name)
         )
       end
+      return table_widget_doc(widget, context_entity:, module_name:) if type == :table
+      return layout_grid_widget_doc(widget, context_entity:, module_name:) if type == :layout_grid
+      return data_view_widget_doc(widget, context_entity:, module_name:) if type == :data_view
 
       options = widget.fetch(:options, {})
       doc = {
         "$ID" => SecureRandom.uuid,
         "$Type" => widget_storage_type(type),
         "Name" => widget.fetch(:name),
-        "Appearance" => appearance_doc(options.fetch(:class, "")),
+        "Appearance" => semantic_appearance_doc(options),
         "Class" => "",
         "Style" => ""
       }
@@ -3965,17 +4393,23 @@ module Mxrb
       end
       doc["LabelText"] = text_doc(options[:caption]) if input_widget?(type) && options.key?(:caption)
       doc["Caption"] = text_doc(options[:caption]) if type == :button
-      doc["Content"] = client_template_doc(options[:caption]) if type == :text
-      doc.merge!(modern_widget_properties(type, options))
+      if type == :text
+        doc["Appearance"] = semantic_appearance_doc(options)
+        doc["Content"] = client_template_doc(
+          options[:caption], parameters: options[:parameters], entity: context_entity
+        )
+      end
+      doc["Appearance"] = semantic_appearance_doc(options) if %i[button container].include?(type)
+      doc.merge!(modern_widget_properties(type, options, context_entity:))
 
       if type == :tab_control
-        pages = tab_pages(options[:tabs])
+        pages = tab_pages(options[:tabs], context_entity:, module_name:)
         doc["TabPages"] = IO::BsonCodec.build_array(pages)
         doc["DefaultPagePointer"] = pages.first&.fetch("$ID", nil)
       end
 
       if type == :container
-        children = Array(widget[:children]).map { widget_doc(_1, context_entity:) }
+        children = Array(widget[:children]).map { widget_doc(_1, context_entity:, module_name:) }
         doc["Widgets"] = IO::BsonCodec.build_array(children)
         doc["Class"] = options[:class].to_s if options[:class]
       end
@@ -4000,7 +4434,15 @@ module Mxrb
 
     def page_context_entity(page, module_name)
       source = page[:data_source]
+      return source[:entity].to_s unless source&.dig(:entity).to_s.empty?
+
       entity = flow_return_entity(source&.dig(:name), module_name)
+      return entity if entity
+
+      data_view_source = first_data_view_source(page.fetch(:widgets, []))
+      return data_view_source[:entity].to_s unless data_view_source&.dig(:entity).to_s.empty?
+
+      entity = flow_return_entity(data_view_source&.dig(:name), module_name)
       return entity if entity
 
       attributes = simple_page_attributes(page.fetch(:widgets, []))
@@ -4025,8 +4467,40 @@ module Mxrb
         else
           []
         end
-        own + simple_page_attributes(widget[:children])
+        nested = direct_widget_children(widget)
+        nested.concat(
+          Array(widget.dig(:options, :rows)).flat_map do |row|
+            Array(row[:cells]).flat_map { Array(_1[:widgets]) } +
+              Array(row[:columns]).flat_map { Array(_1[:widgets]) }
+          end
+        )
+        own + simple_page_attributes(nested)
       end.uniq
+    end
+
+    def first_data_view_source(widgets)
+      Array(widgets).each do |widget|
+        return symbolize_data_view_value(widget.dig(:options, :source)) if
+          widget.fetch(:type).to_sym == :data_view
+
+        nested = direct_widget_children(widget)
+        source = first_data_view_source(nested)
+        return source if source
+      end
+      nil
+    end
+
+    def direct_widget_children(widget)
+      regions = widget[:regions]
+      region_widgets = regions.is_a?(Hash) ? regions.values.flat_map { Array(_1) } : []
+
+      (
+        Array(widget[:children]) +
+        Array(widget[:slots]).flat_map { Array(_1[:widgets]) } +
+        Array(widget[:body]) +
+        Array(widget[:footer]) +
+        region_widgets
+      ).uniq
     end
 
     def flow_return_entity(name, module_name)
@@ -4099,6 +4573,218 @@ module Mxrb
       }.fetch(type.to_sym)
     end
 
+    def table_widget_doc(widget, context_entity: nil, module_name: nil)
+      options = widget.fetch(:options, {})
+      rows = Array(options[:rows])
+      cells = []
+      row_docs = rows.map.with_index do |row, row_index|
+        cursor = 0
+        Array(row[:cells]).each do |cell|
+          column = cell.fetch(:column, cursor).to_i
+          colspan = [cell.fetch(:colspan, 1).to_i, 1].max
+          rowspan = [cell.fetch(:rowspan, 1).to_i, 1].max
+          cells << {
+            "$ID" => SecureRandom.uuid, "$Type" => "Forms$DbTableCell",
+            "Appearance" => semantic_appearance_doc(cell.fetch(:options, {})),
+            "Height" => rowspan, "IsHeader" => cell[:header] == true,
+            "LeftColumnIndex" => column, "TopRowIndex" => row_index,
+            "Widgets" => IO::BsonCodec.build_array(
+              Array(cell[:widgets]).map { widget_doc(_1, context_entity:, module_name:) }, marker: 2
+            ),
+            "Width" => colspan
+          }
+          cursor = column + colspan
+        end
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$TableRow",
+          "Appearance" => semantic_appearance_doc(row.fetch(:options, {})),
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(row.dig(:options, :visible))
+        }
+      end
+      columns = Array(options[:columns]).map do |column|
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$TableColumn",
+          "Value" => column.fetch(:width, 0).to_i
+        }
+      end
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$Table",
+        "Appearance" => semantic_appearance_doc(options),
+        "Cells" => IO::BsonCodec.build_array(cells, marker: 2),
+        "ColumnWidths" => IO::BsonCodec.build_array(columns, marker: 2),
+        "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
+        "Name" => widget.fetch(:name),
+        "Rows" => IO::BsonCodec.build_array(row_docs, marker: 2),
+        "TabIndex" => options.fetch(:tab_index, 0).to_i,
+        "WidthUnit" => options.fetch(:width_unit, :weight).to_s.capitalize
+      }
+    end
+
+    def layout_grid_widget_doc(widget, context_entity: nil, module_name: nil)
+      options = widget.fetch(:options, {})
+      rows = Array(options[:rows]).map do |row|
+        row_options = row.fetch(:options, {})
+        columns = Array(row[:columns]).map do |column|
+          column_options = column.fetch(:options, {})
+          {
+            "$ID" => SecureRandom.uuid, "$Type" => "Forms$LayoutGridColumn",
+            "Appearance" => semantic_appearance_doc(column_options),
+            "PhoneWeight" => layout_grid_weight_value(column_options.fetch(:phone, :grow)),
+            "PreviewWidth" => -1,
+            "TabletWeight" => layout_grid_weight_value(column_options.fetch(:tablet, :grow)),
+            "VerticalAlignment" => layout_grid_enum_value(
+              column_options.fetch(:vertical_alignment, :none)
+            ),
+            "Weight" => layout_grid_weight_value(column_options.fetch(:desktop, :grow)),
+            "Widgets" => IO::BsonCodec.build_array(
+              Array(column[:widgets]).map { widget_doc(_1, context_entity:, module_name:) }, marker: 2
+            )
+          }
+        end
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$LayoutGridRow",
+          "Appearance" => semantic_appearance_doc(row_options),
+          "Columns" => IO::BsonCodec.build_array(columns, marker: 2),
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(row_options[:visible]),
+          "HorizontalAlignment" => layout_grid_enum_value(
+            row_options.fetch(:horizontal_alignment, :none)
+          ),
+          "SpacingBetweenColumns" => row_options.fetch(:gutters, true) == true,
+          "VerticalAlignment" => layout_grid_enum_value(
+            row_options.fetch(:vertical_alignment, :none)
+          )
+        }
+      end
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$LayoutGrid",
+        "Appearance" => semantic_appearance_doc(options),
+        "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
+        "Name" => widget.fetch(:name),
+        "Rows" => IO::BsonCodec.build_array(rows, marker: 2),
+        "TabIndex" => options.fetch(:tab_index, 0).to_i,
+        "Width" => options.fetch(:width, :full).to_sym == :fixed ? "FixedWidth" : "FullWidth"
+      }
+    end
+
+    def data_view_widget_doc(widget, context_entity: nil, module_name: nil)
+      options = widget.fetch(:options, {})
+      source = symbolize_data_view_value(options.fetch(:source))
+      source = qualify_data_view_source(source, module_name)
+      child_entity = data_view_source_entity(source) || context_entity
+      body = Array(widget[:body]).map do |child|
+        widget_doc(child, context_entity: child_entity, module_name:)
+      end
+      footer = Array(widget[:footer]).map do |child|
+        widget_doc(child, context_entity: child_entity, module_name:)
+      end
+      native = deep_copy(options.fetch(:unknown_native, {}))
+      native.merge(
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$DataView",
+        "Appearance" => data_view_appearance_doc(options),
+        "ConditionalEditabilitySettings" => data_view_condition_doc(
+          options[:editability], type: "Forms$ConditionalEditabilitySettings"
+        ),
+        "ConditionalVisibilitySettings" => data_view_condition_doc(
+          options[:visibility], type: "Forms$ConditionalVisibilitySettings"
+        ),
+        "DataSource" => data_view_source_doc(source),
+        "Editability" => data_view_enum_value(options.fetch(:editable, :always)),
+        "FooterWidgets" => IO::BsonCodec.build_array(footer, marker: 2),
+        "LabelWidth" => options.fetch(:label_width, 0).to_i,
+        "Name" => widget.fetch(:name),
+        "NoEntityMessage" => text_doc(options.fetch(:no_entity_message, "")),
+        "ReadOnlyStyle" => data_view_enum_value(options.fetch(:read_only_style, :control)),
+        "ShowFooter" => options.fetch(:show_footer, true) == true,
+        "TabIndex" => options.fetch(:tab_index, 0).to_i,
+        "Widgets" => IO::BsonCodec.build_array(body, marker: 2)
+      )
+    end
+
+    def data_view_appearance_doc(options)
+      semantic_appearance_doc(options).merge(
+        "DesignProperties" => IO::BsonCodec.build_array(
+          Array(options[:design_properties]), marker: 3
+        )
+      )
+    end
+
+    def data_view_condition_doc(raw_condition, type:)
+      return nil unless raw_condition
+
+      condition = symbolize_data_view_value(raw_condition)
+      native = deep_copy(condition.fetch(:unknown_native, {}))
+      native.merge(
+        "$ID" => SecureRandom.uuid, "$Type" => type,
+        "Attribute" => condition.fetch(:attribute, "").to_s,
+        "Conditions" => IO::BsonCodec.build_array(Array(condition[:conditions]), marker: 2),
+        "Expression" => condition.fetch(:expression, "").to_s,
+        "IgnoreSecurity" => condition[:ignore_security] == true,
+        "ModuleRoles" => IO::BsonCodec.build_array(Array(condition[:roles]).map(&:to_s), marker: 1),
+        "SourceVariable" => data_view_page_variable_doc(condition[:source_variable])
+      )
+    end
+
+    def data_view_source_entity(source)
+      return source[:entity].to_s unless source[:entity].to_s.empty?
+
+      Array(source[:steps]).last&.fetch(:entity, nil).to_s.then { _1.empty? ? nil : _1 }
+    end
+
+    def qualify_data_view_source(source, module_name)
+      return source unless %i[microflow nanoflow].include?(source.fetch(:kind).to_sym)
+      return source if source[:name].to_s.include?(".") || module_name.to_s.empty?
+
+      source.merge(name: "#{module_name}.#{source.fetch(:name)}")
+    end
+
+    def data_view_enum_value(value)
+      value.to_s.split("_").map(&:capitalize).join
+    end
+
+    def symbolize_data_view_value(value)
+      case value
+      when Hash
+        value.to_h do |key, item|
+          normalized = key.respond_to?(:to_sym) ? key.to_sym : key
+          [normalized, symbolize_data_view_value(item)]
+        end
+      when Array then value.map { symbolize_data_view_value(_1) }
+      else value
+      end
+    end
+
+    def layout_grid_weight_value(value)
+      return -1 if value.to_s == "grow"
+      return -2 if value.to_s == "auto"
+
+      weight = Integer(value)
+      return weight if (1..12).cover?(weight) || [-1, -2].include?(weight)
+
+      raise ArgumentError, "layout grid weight must be 1..12, :grow, or :auto"
+    end
+
+    def layout_grid_enum_value(value)
+      value.to_s.capitalize
+    end
+
+    def semantic_appearance_doc(options)
+      appearance_doc(options[:class]).merge(
+        "DynamicClasses" => options[:dynamic_class].to_s,
+        "Style" => options[:style].to_s
+      )
+    end
+
+    def conditional_visibility_doc(expression)
+      return nil if expression.to_s.empty?
+
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$ConditionalVisibilitySettings",
+        "Attribute" => "", "Conditions" => IO::BsonCodec.build_array([], marker: 2),
+        "Expression" => expression.to_s, "IgnoreSecurity" => false,
+        "ModuleRoles" => IO::BsonCodec.build_array([], marker: 1), "SourceVariable" => nil
+      }
+    end
+
     def data_grid2_descriptor
       {
         id: "com.mendix.widget.web.datagrid.Datagrid", name: "Data grid 2",
@@ -4155,7 +4841,13 @@ module Mxrb
       }
     end
 
-    def pluggable_widget_doc(widget, descriptor)
+    def pluggable_widget_doc(
+      widget, descriptor = nil, context_entity: nil, module_name: nil,
+      id: nil, name: nil, studio_category: nil, studio_pro_category: nil
+    )
+      descriptor ||= {
+        id:, name:, studio_category:, studio_pro_category:
+      }
       definition = WidgetPackage.find(File.dirname(@path), descriptor.fetch(:id))
       validate_official_data_grid2_contract!(widget, descriptor, definition)
       if definition
@@ -4181,20 +4873,28 @@ module Mxrb
           "WidgetNeedsEntityContext" => false, "WidgetPluginWidget" => true
         }
       end
+      widget_options = widget.fetch(:options, {}).merge(
+        __kind: widget.fetch(:type), __slots: widget.fetch(:slots, []),
+        __context_entity: context_entity, __module_name: module_name
+      )
       doc = {
         "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidget",
-        "Appearance" => appearance_doc(widget.dig(:options, :class).to_s),
-        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
+        "Appearance" => semantic_appearance_doc(widget.fetch(:options, {})),
+        "ConditionalEditabilitySettings" => nil,
+        "ConditionalVisibilitySettings" => conditional_visibility_doc(widget.dig(:options, :visible)),
         "Editable" => "Always", "LabelTemplate" => nil, "Name" => widget.fetch(:name),
         "Object" => object,
         "TabIndex" => 0,
         "Type" => type,
-        "__mxrb_widget_options" => widget.fetch(:options, {}).merge(__kind: widget.fetch(:type))
+        "__mxrb_widget_options" => widget_options
       }
       options = doc.fetch('__mxrb_widget_options')
+      type['SupportedPlatform'] = options[:platform].to_s if options[:platform]
       configure_data_grid2!(doc, options) if descriptor.fetch(:id) == data_grid2_descriptor[:id]
       configure_combo_box!(doc, options) if descriptor.fetch(:id) == combo_box_descriptor[:id]
-      configure_pluggable_widget!(doc, options) if widget.fetch(:type) == :pluggable_widget
+      if widget.fetch(:type) == :pluggable_widget && definition
+        configure_pluggable_widget!(doc, options)
+      end
       if definition.nil? && descriptor.fetch(:id) == data_grid2_descriptor[:id]
         configure_fallback_data_grid!(doc, options)
       end
@@ -4232,24 +4932,28 @@ module Mxrb
             'use an explicit action button to call the nanoflow or microflow'
     end
 
-    def modern_widget_properties(type, options)
+    def modern_widget_properties(type, options, context_entity: nil)
       case type.to_sym
       when :text
         {
-          "ConditionalVisibilitySettings" => nil, "NativeAccessibilitySettings" => nil,
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
+          "NativeAccessibilitySettings" => nil,
           "NativeTextStyle" => "Text", "RenderMode" => "Text", "TabIndex" => 0
         }
       when :container
         {
-          "ConditionalVisibilitySettings" => nil, "NativeAccessibilitySettings" => nil,
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
+          "NativeAccessibilitySettings" => nil,
           "OnClickAction" => no_action_doc(disabled: true), "RenderMode" => "Div",
           "ScreenReaderHidden" => false, "TabIndex" => 0
         }
       when :button
         {
           "Action" => no_action_doc(disabled: true), "AriaRole" => "Button", "ButtonStyle" => "Default",
-          "CaptionTemplate" => client_template_doc(options[:caption]),
-          "ConditionalVisibilitySettings" => nil, "Icon" => nil,
+          "CaptionTemplate" => client_template_doc(
+            options[:caption], parameters: options[:parameters], entity: context_entity
+          ),
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]), "Icon" => nil,
           "NativeAccessibilitySettings" => nil, "RenderType" => "Button", "TabIndex" => 0,
           "Tooltip" => text_doc("")
         }
@@ -4264,14 +4968,14 @@ module Mxrb
         end
       when :page_title
         {
-          "ConditionalVisibilitySettings" => nil,
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
           "NativeAccessibilitySettings" => nil, "TabIndex" => 0
         }
       when :static_image
         {
           "AlternativeText" => client_template_doc(options[:alternative_text]),
           "ClickAction" => no_action_doc(disabled: true),
-          "ConditionalVisibilitySettings" => nil,
+          "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
           "Height" => options.fetch(:height, 0).to_i,
           "HeightUnit" => options.fetch(:height_unit, :pixels).to_s.capitalize,
           "Image" => options.fetch(:image).to_s,
@@ -4324,7 +5028,8 @@ module Mxrb
     def editable_widget_properties(options)
       {
         "AriaRequired" => false, "AttributeRef" => attribute_ref_doc(options[:attribute]),
-        "ConditionalEditabilitySettings" => nil, "ConditionalVisibilitySettings" => nil,
+        "ConditionalEditabilitySettings" => nil,
+        "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
         "Editable" => "Always", "LabelTemplate" => client_template_doc(options[:caption]),
         "NativeAccessibilitySettings" => nil,
         "OnChangeAction" => no_action_doc, "OnEnterAction" => no_action_doc,
@@ -4386,7 +5091,7 @@ module Mxrb
       }
     end
 
-    def tab_pages(tabs)
+    def tab_pages(tabs, context_entity: nil, module_name: nil)
       Array(tabs).map do |tab|
         {
           "$ID" => SecureRandom.uuid,
@@ -4394,7 +5099,7 @@ module Mxrb
           "Name" => tab.fetch(:name),
           "Caption" => text_doc(tab[:caption].to_s),
           "Widgets" => IO::BsonCodec.build_array(
-            Array(tab[:widgets]).map { widget_doc(_1) }, marker: 2
+            Array(tab[:widgets]).map { widget_doc(_1, context_entity:, module_name:) }, marker: 2
           )
         }
       end
@@ -4409,11 +5114,12 @@ module Mxrb
     end
 
     def client_action_doc(event)
-      case event.fetch(:kind).to_sym
+      kind = event.fetch(:kind).to_sym
+      case kind
       when :action
         native_action_doc(event.fetch(:handler))
       when :page
-        form_action_doc(event.fetch(:handler))
+        form_action_doc(event.fetch(:handler), arguments: event.fetch(:arguments, {}))
       when :nanoflow
         {
           "$ID" => SecureRandom.uuid,
@@ -4421,10 +5127,12 @@ module Mxrb
           "ConfirmationInfo" => nil, "DisabledDuringExecution" => true,
           "Nanoflow" => event.fetch(:handler),
           "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+          "ParameterMappings" => client_parameter_mapping_docs(
+            event.fetch(:arguments, {}), handler: event.fetch(:handler), kind: :nanoflow
+          ),
           "ProgressBar" => "None", "ProgressMessage" => nil
         }
-      else
+      when :microflow
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$MicroflowAction",
@@ -4435,12 +5143,36 @@ module Mxrb
             "Asynchronous" => false, "ConfirmationInfo" => nil,
             "FormValidations" => "All",
             "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
-            "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
+            "ParameterMappings" => client_parameter_mapping_docs(
+              event.fetch(:arguments, {}), handler: event.fetch(:handler), kind: :microflow
+            ),
             "ProgressBar" => "None", "ProgressMessage" => nil
           },
           "DisabledDuringExecution" => true
         }
+      else
+        raise ValidationError, "unknown client action kind #{kind.inspect}"
       end
+    end
+
+    def client_parameter_mapping_docs(arguments, handler:, kind:)
+      mappings = arguments.map do |parameter, configured|
+        variable = configured if configured.is_a?(Hash)
+        value_field = kind.to_sym == :page ? "Argument" : "Expression"
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Forms$#{kind.to_s.capitalize}ParameterMapping",
+          value_field => variable ? "" : configured.to_s,
+          "Parameter" => qualify_action_parameter(handler, parameter),
+          "Variable" => data_view_page_variable_doc(variable)
+        }
+      end
+      IO::BsonCodec.build_array(mappings, marker: 2)
+    end
+
+    def qualify_action_parameter(handler, parameter)
+      parameter = parameter.to_s
+      parameter.include?('.') ? parameter : "#{handler}.#{parameter}"
     end
 
     def native_action_doc(handler)
@@ -4478,7 +5210,8 @@ module Mxrb
       end
     end
 
-    def data_view_doc(source, widgets)
+    def data_view_doc(source, widgets, module_name: nil)
+      source = qualify_data_view_source(symbolize_data_view_value(source), module_name)
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Forms$DataView",
@@ -4493,19 +5226,99 @@ module Mxrb
     end
 
     def data_view_source_doc(source)
-      if source.fetch(:kind).to_sym == :nanoflow
-        {
-          "$ID" => SecureRandom.uuid, "$Type" => "Forms$NanoflowSource",
-          "ForceFullObjects" => false, "Nanoflow" => source.fetch(:name),
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2)
-        }
+      source = symbolize_data_view_value(source)
+      native = deep_copy(source.fetch(:unknown_native, {}))
+      type, fields = case source.fetch(:kind).to_sym
+      when :context, :association
+        [
+          "Forms$DataViewSource",
+          {
+            "EntityRef" => data_view_entity_ref_doc(source),
+            "SourceVariable" => data_view_page_variable_doc(source[:variable])
+          }
+        ]
+      when :nanoflow
+        [
+          "Forms$NanoflowSource",
+          {
+            "Nanoflow" => source.fetch(:name),
+            "ParameterMappings" => data_view_mappings_doc(source[:mappings], :nanoflow)
+          }
+        ]
+      when :microflow
+        settings = client_microflow_settings_doc(source.fetch(:name)).merge(
+          deep_copy(source.fetch(:settings_native, {}))
+        )
+        settings["ParameterMappings"] = data_view_mappings_doc(source[:mappings], :microflow)
+        ["Forms$MicroflowSource", { "MicroflowSettings" => settings }]
+      when :listen
+        ["Forms$ListenTargetSource", { "ListenTarget" => source.fetch(:target) }]
+      when :native
+        [source.fetch(:native_type), {}]
       else
-        {
-          "$ID" => SecureRandom.uuid, "$Type" => "Forms$MicroflowSource",
-          "ForceFullObjects" => false,
-          "MicroflowSettings" => client_microflow_settings_doc(source.fetch(:name))
-        }
+        raise ArgumentError, "unsupported data view source #{source.fetch(:kind).inspect}"
       end
+      storage = { "$ID" => SecureRandom.uuid, "$Type" => type }
+      native.each { |key, value| storage[key] = value unless %w[$ID $Type].include?(key.to_s) }
+      storage["ForceFullObjects"] = source[:force_full_objects] == true
+      storage.merge(fields)
+    end
+
+    def data_view_entity_ref_doc(source)
+      native = deep_copy(source.fetch(:entity_ref_native, {}))
+      if source.fetch(:kind).to_sym == :association
+        steps = Array(source[:steps]).map do |step|
+          step = symbolize_data_view_value(step)
+          deep_copy(step.fetch(:unknown_native, {})).merge(
+            "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$EntityRefStep",
+            "Association" => step.fetch(:association).to_s,
+            "DestinationEntity" => step.fetch(:entity).to_s
+          )
+        end
+        native.merge(
+          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$IndirectEntityRef",
+          "Steps" => IO::BsonCodec.build_array(steps, marker: 2)
+        )
+      else
+        native.merge(
+          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$DirectEntityRef",
+          "Entity" => source.fetch(:entity).to_s
+        )
+      end
+    end
+
+    def data_view_mappings_doc(mappings, kind)
+      docs = Array(mappings).map do |mapping|
+        mapping = symbolize_data_view_value(mapping)
+        type = kind == :nanoflow ? "Forms$NanoflowParameterMapping" : "Forms$MicroflowParameterMapping"
+        deep_copy(mapping.fetch(:unknown_native, {})).merge(
+          "$ID" => SecureRandom.uuid, "$Type" => type,
+          "Expression" => mapping.fetch(:expression, "").to_s,
+          "Parameter" => mapping.fetch(:parameter).to_s,
+          "Variable" => data_view_page_variable_doc(mapping[:variable])
+        )
+      end
+      IO::BsonCodec.build_array(docs, marker: 2)
+    end
+
+    def data_view_page_variable_doc(raw_variable)
+      return nil unless raw_variable
+
+      variable = symbolize_data_view_value(raw_variable)
+      fields = {
+        local_variable: "LocalVariable", page_parameter: "PageParameter",
+        snippet_parameter: "SnippetParameter", widget: "Widget"
+      }
+      native = deep_copy(variable.fetch(:unknown_native, {}))
+      doc = native.merge(
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$PageVariable",
+        "LocalVariable" => "", "PageParameter" => "", "SnippetParameter" => "",
+        "SubKey" => variable.fetch(:sub_key, "").to_s,
+        "UseAllPages" => variable[:use_all_pages] == true, "Widget" => ""
+      )
+      field = fields[variable.fetch(:kind, :page_parameter).to_sym]
+      doc[field] = variable.fetch(:name, "").to_s if field
+      doc
     end
 
     def client_microflow_settings_doc(name)
@@ -4518,15 +5331,19 @@ module Mxrb
       }
     end
 
-    def microflow_doc(flow, module_name = nil)
+    def microflow_doc(flow, module_name = nil, identity_by_unit_id: false)
       flow_name = flow.fetch(:name)
+      identity = identity_by_unit_id ? flow.fetch(:unit_id) : flow_name
       params = flow.fetch(:parameters).map do |param|
-        { "$ID" => stable_id(flow_name, "parameter", param.fetch(:name)),
+        parameter_id = param[:id].to_s.empty? ?
+          stable_id(identity, "parameter", param.fetch(:name)) : param.fetch(:id)
+        { "$ID" => parameter_id,
           "$Type" => "Microflows$MicroflowParameter",
           "DefaultValue" => "", "Documentation" => "",
           "HasVariableNameBeenChanged" => false, "IsRequired" => true,
-          "Name" => param.fetch(:name), "RelativeMiddlePoint" => "0;0",
-          "Size" => "30;30",
+          "Name" => param.fetch(:name),
+          "RelativeMiddlePoint" => param.fetch(:relative_middle_point, "0;0"),
+          "Size" => param.fetch(:size, "30;30"),
           "VariableType" => microflow_data_type_doc(param.fetch(:type), module_name) }
       end
       roles_declared  = !flow[:allowed_roles].nil?
@@ -4542,7 +5359,7 @@ module Mxrb
         body, flow[:return_expression] || flow[:return_variable_name]
       )
       object_collection = {
-        "$ID" => stable_id(flow_name, "object_collection"),
+        "$ID" => stable_id(identity, "object_collection"),
         "$Type" => "Microflows$MicroflowObjectCollection",
         "Objects" => IO::BsonCodec.build_array(params + graph[:objects])
       }
@@ -4558,6 +5375,7 @@ module Mxrb
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(flow[:allowed_roles]), marker: 1),
         "__mxrb_allowed_roles_declared" => roles_declared,
         "__mxrb_body_declared" => body_declared,
+        "__mxrb_return_type_declared" => !flow[:return_type].nil?,
         "__mxrb_preserve_native_body" => flow[:preserve_native_body] == true,
         "__mxrb_allow_concurrent_execution_declared" => !allow_concurrent.nil?,
         "__mxrb_apply_entity_access_declared" => !apply_entity_access.nil?,
@@ -4570,7 +5388,8 @@ module Mxrb
 
     def microflow_data_type_doc(type, module_name)
       if type.is_a?(Hash)
-        return type.merge("$ID" => stable_id("data_type", module_name, type.to_s))
+        id = type["$ID"] || type[:$ID] || stable_id("data_type", module_name, type.to_s)
+        return type.merge("$ID" => id)
       end
 
       name = type.to_s
@@ -4732,6 +5551,9 @@ module Mxrb
           when :continue_event
             terminal = true
             flow_object_doc(act_id, "Microflows$ContinueEvent", x_err, y_err, "20;20")
+          when :break_event
+            terminal = true
+            flow_object_doc(act_id, "Microflows$BreakEvent", x_err, y_err, "20;20")
           else
             build_activity(act, act_id, x_err, y_err)
           end
@@ -4769,12 +5591,13 @@ module Mxrb
         objects << loop_activity_doc(activity, act_id, x, y, flows)
         flows << sequence_flow_doc(prev_id, act_id) if prev_id
         [act_id, x + 140]
-      when :return_event, :error_event, :continue_event
+      when :return_event, :error_event, :continue_event, :break_event
         act_id = SecureRandom.uuid
         type = {
           return_event: "Microflows$EndEvent",
           error_event: "Microflows$ErrorEvent",
-          continue_event: "Microflows$ContinueEvent"
+          continue_event: "Microflows$ContinueEvent",
+          break_event: "Microflows$BreakEvent"
         }.fetch(activity[:type].to_sym)
         object = flow_object_doc(act_id, type, x, y, "20;20")
         if activity[:type].to_sym == :return_event
@@ -5288,6 +6111,8 @@ module Mxrb
         database_query_action_doc(activity)
       when :import_xml
         import_xml_action_doc(activity)
+      when :export_xml
+        export_xml_action_doc(activity)
       when :download_file
         download_file_action_doc(activity)
       end
@@ -5371,6 +6196,36 @@ module Mxrb
       }
     end
 
+    def export_xml_action_doc(activity)
+      if activity[:variable].to_s.empty? || activity[:mapping].to_s.empty? ||
+         activity[:output].to_s.empty?
+        raise ValidationError, "export_xml requires variable, mapping, and as"
+      end
+      content_type = activity.fetch(:content_type, "xml").to_s
+      unless %w[xml json].include?(content_type)
+        raise ValidationError, "unsupported export mapping content type #{content_type.inspect}"
+      end
+
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$ExportXmlAction",
+        "ErrorHandlingType" => mendix_enum(activity[:error]),
+        "IsValidationRequired" => activity[:validate] == true,
+        "OutputMethod" => {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "ExportXmlAction$StringExport",
+          "OutputVariableName" => activity[:output].to_s
+        },
+        "ResultHandling" => {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$MappingRequestHandling",
+          "ContentType" => mendix_enum(content_type),
+          "MappingId" => activity[:mapping].to_s,
+          "MappingVariableName" => activity[:variable].to_s
+        }
+      }
+    end
+
     def download_file_action_doc(activity)
       raise ValidationError, "download_file requires a variable" if activity[:variable].to_s.empty?
 
@@ -5384,6 +6239,11 @@ module Mxrb
     end
 
     def rest_call_action_doc(activity)
+      result_handling = activity.fetch(:result_handling, "mapping").to_s
+      unless %w[mapping http_response string].include?(result_handling)
+        raise ValidationError, "unsupported REST result handling #{result_handling.inspect}"
+      end
+
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Microflows$RestCallAction",
@@ -5422,7 +6282,7 @@ module Mxrb
         "RequestHandlingType" => activity[:request_body].nil? ? "Mapping" : "Custom",
         "RequestProxyType" => "DefaultProxy",
         "ResultHandling" => rest_result_handling_doc(activity),
-        "ResultHandlingType" => mendix_enum(activity.fetch(:result_handling, "mapping")),
+        "ResultHandlingType" => mendix_enum(result_handling),
         "TimeOutExpression" => activity[:timeout].to_s,
         "UseRequestTimeOut" => !activity[:timeout].to_s.empty?
       }
@@ -5454,7 +6314,8 @@ module Mxrb
     end
 
     def rest_result_handling_doc(activity)
-      if activity.fetch(:result_handling, "mapping").to_s == "http_response"
+      result_handling = activity.fetch(:result_handling, "mapping").to_s
+      if result_handling == "http_response"
         if activity[:variable].to_s.empty? || activity[:result_entity].to_s.empty?
           raise ValidationError,
                 "HTTP response result handling requires as and result_entity"
@@ -5472,6 +6333,32 @@ module Mxrb
             "Entity" => activity[:result_entity].to_s
           }
         }
+      end
+
+      if result_handling == "string"
+        if activity[:variable].to_s.empty?
+          raise ValidationError, "string REST result handling requires as"
+        end
+        unless activity[:result_entity].to_s.empty? && activity[:result_mapping].to_s.empty?
+          raise ValidationError,
+                "string REST result handling does not accept a result mapping or entity"
+        end
+
+        return {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$ResultHandling",
+          "Bind" => true,
+          "ImportMappingCall" => nil,
+          "ResultVariableName" => activity[:variable].to_s,
+          "VariableType" => {
+            "$ID" => SecureRandom.uuid,
+            "$Type" => "DataTypes$StringType"
+          }
+        }
+      end
+
+      unless result_handling == "mapping"
+        raise ValidationError, "unsupported REST result handling #{result_handling.inspect}"
       end
 
       {
@@ -5686,6 +6573,16 @@ module Mxrb
       end
 
       kind = value[:kind].to_sym
+      if kind == :entity_type
+        entity = value[:value].to_s
+        raise ValidationError, "entity type code action parameter requires an entity" if entity.empty?
+
+        return {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$EntityTypeCodeActionParameterValue",
+          "Entity" => entity
+        }
+      end
       if modern_java && kind == :microflow
         return {
           "$ID" => SecureRandom.uuid,
@@ -5878,8 +6775,8 @@ module Mxrb
       end
     end
 
-    def nanoflow_doc(flow)
-      doc = microflow_doc(flow)
+    def nanoflow_doc(flow, module_name = nil, identity_by_unit_id: false)
+      doc = microflow_doc(flow, module_name, identity_by_unit_id:)
       normalize_nanoflow_error_handling!(doc)
       doc.merge(
         "$Type" => "Microflows$Nanoflow",
@@ -5907,12 +6804,26 @@ module Mxrb
         ]) }
     end
 
-    def client_template_doc(text)
+    def client_template_doc(text, parameters: [], entity: nil)
       {
         "$ID" => SecureRandom.uuid, "$Type" => "Forms$ClientTemplate",
         "Fallback" => text_doc(""),
-        "Parameters" => IO::BsonCodec.build_array([], marker: 2),
+        "Parameters" => IO::BsonCodec.build_array(
+          Array(parameters).map { client_template_parameter_doc(_1, entity:) }, marker: 2
+        ),
         "Template" => text_doc(text.to_s)
+      }
+    end
+
+    def client_template_parameter_doc(expression, entity: nil)
+      expression = expression.to_s
+      attribute = expression.delete_prefix('$currentObject/') if expression.start_with?('$currentObject/')
+      {
+        "$ID" => SecureRandom.uuid, "$Type" => "Forms$ClientTemplateParameter",
+        "AttributeRef" => attribute_ref_doc(attribute, entity:),
+        "Expression" => attribute ? "" : expression,
+        "FormattingInfo" => formatting_info_doc,
+        "SourceVariable" => nil
       }
     end
 

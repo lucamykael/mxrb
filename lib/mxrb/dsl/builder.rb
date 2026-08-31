@@ -3,6 +3,7 @@
 require "digest"
 require "json"
 require "base64"
+require_relative "../native_fragment_store"
 require_relative "integration_documents"
 require_relative "code_actions"
 require_relative "presentation_documents"
@@ -11,6 +12,18 @@ require_relative "project_documents"
 
 module Mxrb
   module Dsl
+    UNSET = Object.new.freeze
+
+    module OverlayFields
+      private
+
+      def declared_fields(**values)
+        values.filter_map { |field, value| field unless value.equal?(UNSET) }
+      end
+
+      def default_value(value, default) = value.equal?(UNSET) ? default : value
+    end
+
     # Validates project-security references that cross DSL builders.
     class SecurityValidator
       def initialize(modules, security)
@@ -57,61 +70,95 @@ module Mxrb
     # Shared widget-building methods for PageBuilder and ContainerBuilder.
     # Includers must implement private `_widget_list` returning the target array.
     module WidgetDsl
-      def text_box(name, attribute: nil, caption: nil, &block)
-        _add_widget(:text_box, name, attribute: attribute, caption: caption, &block)
-      end
+      include NativeFragmentAccess
 
-      def number_input(name, attribute: nil, caption: nil, &block)
-        _add_widget(:number_input, name, attribute: attribute, caption: caption, &block)
-      end
-
-      def text_area(name, attribute: nil, caption: nil, lines: 5, &block)
+      def text_box(name, attribute: nil, caption: nil, class_name: nil, style: nil,
+                   dynamic_class: nil, visible: nil, &block)
         _add_widget(
-          :text_area, name, attribute: attribute, caption: caption, lines: lines, &block
+          :text_box, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
+                           visible:, &block
         )
       end
 
-      def check_box(name, attribute: nil, caption: nil, &block)
-        _add_widget(:check_box, name, attribute: attribute, caption: caption, &block)
-      end
-
-      def date_picker(name, attribute: nil, caption: nil, &block)
-        _add_widget(:date_picker, name, attribute: attribute, caption: caption, &block)
-      end
-
-      def radio_button_group(name, attribute: nil, caption: nil, horizontal: false, &block)
+      def number_input(name, attribute: nil, caption: nil, class_name: nil, style: nil,
+                       dynamic_class: nil, visible: nil, &block)
         _add_widget(
-          :radio_button_group, name, attribute:, caption:, horizontal: horizontal == true, &block
+          :number_input, name,
+          attribute:, caption:, class: class_name, style:, dynamic_class:, visible:, &block
         )
       end
 
-      def reference_selector(name, attribute: nil, caption: nil, display_attribute: nil, &block)
+      def text_area(name, attribute: nil, caption: nil, lines: 5, class_name: nil, style: nil,
+                    dynamic_class: nil, visible: nil, &block)
         _add_widget(
-          :reference_selector, name, attribute: attribute, caption: caption,
-                                     display_attribute: display_attribute, &block
+          :text_area, name, attribute:, caption:, lines:, class: class_name, style:,
+                            dynamic_class:, visible:, &block
         )
       end
 
-      def text(name, caption: nil, &block)
-        _add_widget(:text, name, caption: caption || name.to_s, &block)
+      def check_box(name, attribute: nil, caption: nil, class_name: nil, style: nil,
+                    dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :check_box, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
+                            visible:, &block
+        )
       end
 
-      def page_title(name, &block)
-        _add_widget(:page_title, name, &block)
+      def date_picker(name, attribute: nil, caption: nil, class_name: nil, style: nil,
+                      dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :date_picker, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
+                              visible:, &block
+        )
+      end
+
+      def radio_button_group(name, attribute: nil, caption: nil, horizontal: false,
+                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :radio_button_group, name, attribute:, caption:, horizontal: horizontal == true,
+                                     class: class_name, style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def reference_selector(name, attribute: nil, caption: nil, display_attribute: nil,
+                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :reference_selector, name, attribute:, caption:, display_attribute:,
+                                     class: class_name, style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def text(name, caption: nil, parameters: [], class_name: nil, style: nil,
+               dynamic_class: nil, visible: nil, &block)
+        options = {
+          caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
+          class: class_name, style:, dynamic_class:, visible:
+        }.compact
+        options.delete(:parameters) if options[:parameters].empty?
+        _add_widget(:text, name, **options, &block)
+      end
+
+      def page_title(name, class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :page_title, name, class: class_name, style:, dynamic_class:, visible:, &block
+        )
       end
 
       def static_image(name, image:, alternative_text: '', width: 0, height: 0,
-                       width_unit: :pixels, height_unit: :pixels, responsive: true, &block)
+                       width_unit: :pixels, height_unit: :pixels, responsive: true,
+                       class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
         _add_widget(
           :static_image, name, image: image.to_s, alternative_text: alternative_text.to_s,
                                width: width.to_i, height: height.to_i,
                                width_unit: width_unit.to_sym, height_unit: height_unit.to_sym,
-                               responsive: responsive == true, &block
+                               responsive: responsive == true, class: class_name, style:,
+                               dynamic_class:, visible:, &block
         )
       end
 
       def data_grid(name, entity: nil, selection: nil, &block)
-        _add_widget(:data_grid, name, entity: entity, selection: selection, &block)
+        options = { entity:, selection: }.compact
+        _add_widget(:data_grid, name, **options, &block)
       end
 
       # Gallery projections remain present beside an authoritative page
@@ -126,16 +173,112 @@ module Mxrb
         _add_widget(:tab_control, name, &block)
       end
 
-      def button(name, caption: nil, &block)
-        _add_widget(:button, name, caption: caption || name.to_s, &block)
+      def table(name, width_unit: UNSET, tab_index: UNSET, class_name: UNSET, style: UNSET,
+                dynamic_class: UNSET, visible: UNSET, &block)
+        builder = TableBuilder.new(
+          name, width_unit:, tab_index:, class_name:, style:, dynamic_class:, visible:
+        )
+        builder.instance_eval(&block) if block
+        _widget_list << builder.to_h
       end
 
-      def drop_down(name, attribute: nil, caption: nil)
-        _widget_list << {
-          type: :drop_down, name: name.to_s,
-          options: { attribute: attribute&.to_s, caption: caption }.compact,
-          events: []
-        }
+      def layout_grid(name, width: UNSET, tab_index: UNSET, class_name: UNSET, style: UNSET,
+                      dynamic_class: UNSET, visible: UNSET, &block)
+        builder = LayoutGridBuilder.new(
+          name, width:, tab_index:, class_name:, style:, dynamic_class:, visible:
+        )
+        builder.instance_eval(&block) if block
+        _widget_list << builder.to_h
+      end
+
+      def data_view(name, from:, editable: UNSET, read_only_style: UNSET,
+                    label_width: UNSET, show_footer: UNSET, no_entity_message: UNSET,
+                    tab_index: UNSET, class_name: UNSET, style: UNSET,
+                    dynamic_class: UNSET, visible: UNSET, &block)
+        builder = DataViewBuilder.new(
+          name, from:, editable:, read_only_style:, label_width:, show_footer:,
+                no_entity_message:, tab_index:, class_name:, style:, dynamic_class:
+        )
+        builder.visible_when(visible) unless visible.equal?(UNSET)
+        builder.instance_eval(&block) if block
+        _widget_list << builder.to_h
+      end
+
+      def context(name = nil, entity:, kind: :page_parameter, sub_key: nil,
+                  use_all_pages: false, force_full_objects: false, native: nil)
+        variable = (name || kind.to_sym == :current) && page_variable(
+          name, kind:, sub_key:, use_all_pages:
+        )
+        compact_data_view_source(
+          kind: :context, entity: entity.to_s, variable:,
+          force_full_objects: force_full_objects == true, unknown_native: native
+        )
+      end
+
+      def association(name, entity:, from: nil, force_full_objects: false, native: nil)
+        steps = Array(name).map do |step|
+          if step.is_a?(Hash)
+            step.transform_keys(&:to_sym)
+          elsif step.is_a?(Array)
+            { association: step.fetch(0).to_s, entity: step.fetch(1).to_s }
+          else
+            { association: step.to_s, entity: entity.to_s }
+          end
+        end
+        compact_data_view_source(
+          kind: :association, entity: entity.to_s, steps:,
+          variable: from, force_full_objects: force_full_objects == true,
+          unknown_native: native
+        )
+      end
+
+      def microflow_source(name, pass: {}, force_full_objects: false, native: nil)
+        flow_data_view_source(:microflow, name, pass, force_full_objects, native)
+      end
+
+      def nanoflow_source(name, pass: {}, force_full_objects: false, native: nil)
+        flow_data_view_source(:nanoflow, name, pass, force_full_objects, native)
+      end
+
+      def listen_to(widget, force_full_objects: false, native: nil)
+        compact_data_view_source(
+          kind: :listen, target: widget.to_s, force_full_objects: force_full_objects == true,
+          unknown_native: native
+        )
+      end
+
+      def view_source(kind, **options)
+        compact_data_view_source(kind: kind.to_sym, **options)
+      end
+
+      def page_variable(name, kind: :page_parameter, sub_key: nil, use_all_pages: false,
+                        native: nil)
+        allowed = %i[page_parameter snippet_parameter local_variable widget current]
+        kind = kind.to_sym
+        raise ArgumentError, "unsupported page variable kind #{kind.inspect}" unless allowed.include?(kind)
+
+        compact_data_view_source(
+          kind:, name: name&.to_s, sub_key: sub_key&.to_s,
+          use_all_pages: use_all_pages == true, unknown_native: native
+        )
+      end
+
+      def button(name, caption: nil, parameters: [], class_name: nil, style: nil,
+                 dynamic_class: nil, visible: nil, &block)
+        options = {
+          caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
+          class: class_name, style:, dynamic_class:, visible:
+        }.compact
+        options.delete(:parameters) if options[:parameters].empty?
+        _add_widget(:button, name, **options, &block)
+      end
+
+      def drop_down(name, attribute: nil, caption: nil, class_name: nil, style: nil,
+                    dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :drop_down, name, attribute: attribute&.to_s, caption:, class: class_name,
+                            style:, dynamic_class:, visible:, &block
+        )
       end
 
       def snippet(name, from: nil)
@@ -146,21 +289,23 @@ module Mxrb
         }
       end
 
-      def container(name, class_name: nil, &block)
-        cb = ContainerBuilder.new(name, class_name: class_name)
+      def container(name, class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        cb = ContainerBuilder.new(
+          name, class_name:, style:, dynamic_class:, visible:
+        )
         cb.instance_eval(&block) if block
         _widget_list << cb.to_h
       end
 
-      def pluggable_widget(name, widget_id:, widget_name: nil, properties: {}, class_name: nil)
-        _widget_list << {
-          type: :pluggable_widget, name: name.to_s,
-          options: {
-            widget_id: widget_id.to_s, widget_name: (widget_name || name).to_s,
-            properties: properties, class: class_name
-          }.compact,
-          events: []
-        }
+      def pluggable_widget(name, widget_id:, widget_name: nil, properties: {}, class_name: nil,
+                           style: nil, dynamic_class: nil, visible: nil, platform: nil, &block)
+        options = {
+          widget_id: widget_id.to_s, widget_name: (widget_name || name).to_s,
+          properties:, class: class_name, style:, dynamic_class:, visible:, platform:
+        }.compact
+        builder = PluggableWidgetBuilder.new(name, options:)
+        builder.instance_eval(&block) if block
+        _widget_list << builder.to_h
       end
 
       def native_widget(name, type:, deep_structure:)
@@ -170,6 +315,16 @@ module Mxrb
           type: :native_widget, name: name.to_s,
           options: { native_type: type.to_s, deep_structure: deep_structure }, events: []
         }
+      end
+
+      # Lossless sink used by projections whose surrounding semantic builder
+      # cannot assume a narrower widget signature. Known widgets should keep
+      # using the named methods above; this preserves future contracts without
+      # teaching every container a second, incompatible vocabulary.
+      def widget(type, name = '', options: {}, events: [], &block)
+        builder = GenericWidgetBuilder.new(type, name, options:, events:)
+        builder.instance_eval(&block) if block
+        _widget_list << builder.to_h
       end
 
       # Exported native widget payloads can contain BSON identifiers at any
@@ -182,15 +337,52 @@ module Mxrb
       private
 
       def _add_widget(type, name, **options, &block)
-        builder = WidgetBuilder.new(type, name, **options)
+        builder = WidgetBuilder.new(type, name, **options.compact)
         builder.instance_eval(&block) if block
         _widget_list << builder.to_h
+      end
+
+      def flow_data_view_source(kind, name, pass, force_full_objects, native)
+        mappings = pass.map do |parameter, value|
+          if value.is_a?(Hash) && value[:kind]
+            { parameter: parameter.to_s, variable: value }
+          else
+            { parameter: parameter.to_s, expression: value.to_s }
+          end
+        end
+        compact_data_view_source(
+          kind:, name: name.to_s, mappings:,
+          force_full_objects: force_full_objects == true, unknown_native: native
+        )
+      end
+
+      def compact_data_view_source(**values)
+        values.reject do |_key, value|
+          value.nil? || value == false || (value.respond_to?(:empty?) && value.empty?)
+        end
+      end
+    end
+
+    module WidgetEvents
+      %i[on_change on_click on_enter on_leave].each do |event|
+        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: {}|
+          choices = { microflow:, nanoflow:, page:, action: }.compact
+          raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
+          raise ArgumentError, "#{event} pass: must be a Hash" unless pass.is_a?(Hash)
+
+          declaration = {
+            event:, kind: choices.keys.first, handler: choices.values.first.to_s
+          }
+          declaration[:arguments] = pass unless pass.empty?
+          @events << declaration
+        end
       end
     end
 
     # Builds sub-widgets inside a data_grid column sub-items or inside a container.
     class WidgetBuilder
       include WidgetDsl
+      include WidgetEvents
 
       def initialize(type, name, **options)
         @type        = type
@@ -231,14 +423,6 @@ module Mxrb
         @toolbar = tb.to_h
       end
 
-      %i[on_change on_click on_enter on_leave].each do |event|
-        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil|
-          choices = { microflow: microflow, nanoflow: nanoflow, page: page, action: action }.compact
-          raise ArgumentError, "#{event} requires exactly one handler" unless choices.size == 1
-          @events << { event: event, kind: choices.keys.first, handler: choices.values.first.to_s }
-        end
-      end
-
       def to_h
         options = @options.dup
         options[:columns]    = @columns    unless @columns.empty?
@@ -256,6 +440,133 @@ module Mxrb
       def _widget_list = @children
     end
 
+    # Composite shared by native and runtime page trees. Includers supply the
+    # child builder and key/path normalization while this module owns the
+    # region and slot lifecycle.
+    module WidgetComposite
+      def body(&block) = set_widget_region(:body, &block)
+      def footer(&block) = set_widget_region(:footer, &block)
+      def region(name, &block) = set_widget_region(name, &block)
+
+      def slot(path:, role: UNSET, &block)
+        append_widget_slot(path:, role:, &block)
+      end
+
+      private
+
+      def initialize_widget_composite(key_transform:, path_normalizer:, child_factory:)
+        @widget_composite_key_transform = key_transform
+        @widget_composite_path_normalizer = path_normalizer
+        @widget_composite_child_factory = child_factory
+        @widget_regions = {}
+        @widget_slots = []
+      end
+
+      def set_widget_region(name, &block)
+        key = widget_composite_key(name)
+        raise ArgumentError, "duplicate widget region #{name}" if @widget_regions.key?(key)
+
+        @widget_regions[key] = widget_composite_content(&block)
+      end
+
+      def append_widget_slot(path:, role: UNSET, &block)
+        value = {
+          widget_composite_key(:path) => @widget_composite_path_normalizer.call(Array(path)),
+          widget_composite_key(:widgets) => widget_composite_content(&block)
+        }
+        value[widget_composite_key(:role)] = role&.to_s unless role.equal?(UNSET)
+        @widget_slots << value
+      end
+
+      def append_widget_composite(value, children:)
+        value[widget_composite_key(:children)] = children unless children.empty?
+        %i[body footer].each do |name|
+          key = widget_composite_key(name)
+          value[key] = @widget_regions.fetch(key) if @widget_regions.key?(key)
+        end
+        reserved = %i[body footer].map { widget_composite_key(_1) }
+        regions = @widget_regions.reject { |name, _widgets| reserved.include?(name) }
+        value[widget_composite_key(:regions)] = regions unless regions.empty?
+        value[widget_composite_key(:slots)] = @widget_slots unless @widget_slots.empty?
+        value
+      end
+
+      def widget_composite_content(&block)
+        builder = @widget_composite_child_factory.call
+        builder.instance_eval(&block) if block
+        builder.widgets
+      end
+
+      def widget_composite_key(name) = @widget_composite_key_transform.call(name)
+    end
+
+    class GenericWidgetBuilder
+      include WidgetDsl
+      include WidgetEvents
+      include WidgetComposite
+
+      def initialize(type, name, options:, events:)
+        raise ArgumentError, 'generic widget options must be a Hash' unless options.is_a?(Hash)
+        raise ArgumentError, 'generic widget events must be an Array' unless events.is_a?(Array)
+        raise ArgumentError, 'generic widget events must contain only Hash values' unless
+          events.all? { _1.is_a?(Hash) }
+
+        @type = type.to_sym
+        @name = name.to_s
+        @options = options
+        @events = events
+        @children = []
+        initialize_widget_composite(
+          key_transform: :to_sym.to_proc,
+          path_normalizer: ->(path) { path },
+          child_factory: -> { WidgetSlotBuilder.new }
+        )
+      end
+
+      def to_h
+        value = { type: @type, name: @name, options: @options, events: @events }
+        append_widget_composite(value, children: @children)
+      end
+
+      private
+
+      def _widget_list = @children
+    end
+
+    class PluggableWidgetBuilder < GenericWidgetBuilder
+      def initialize(name, options:)
+        super(:pluggable_widget, name, options:, events: [])
+      end
+
+      def slot(name = nil, within: nil, item: nil, path: nil, role: UNSET, &block)
+        resolved_path = pluggable_slot_path(name, within:, item:, path:)
+        append_widget_slot(path: resolved_path, role:, &block)
+      end
+
+      private
+
+      def pluggable_slot_path(name, within:, item:, path:)
+        return Array(path) if path
+        return [name] unless within
+
+        raise ArgumentError, 'slot within: requires item:' if item.nil?
+
+        [within, :objects, Integer(item), name]
+      end
+    end
+
+    class WidgetSlotBuilder
+      include WidgetDsl
+
+      attr_reader :widgets
+
+      def initialize = (@widgets = [])
+
+      private
+
+      def _widget_list = @widgets
+    end
+
     class TabPageBuilder
       include WidgetDsl
 
@@ -268,6 +579,410 @@ module Mxrb
       def to_h = { name: @name, caption: @caption, widgets: @widgets }
 
       private
+
+      def _widget_list = @widgets
+    end
+
+    class TableBuilder
+      include OverlayFields
+
+      WIDTH_UNITS = %i[weight percentage pixels].freeze
+
+      def initialize(name, width_unit:, tab_index:, class_name:, style:, dynamic_class:, visible:)
+        @declared_fields = declared_fields(
+          width_unit:, tab_index:, class: class_name, style:, dynamic_class:, visible:
+        )
+        width_unit = default_value(width_unit, :weight)
+        tab_index = default_value(tab_index, 0)
+        class_name = default_value(class_name, nil)
+        style = default_value(style, nil)
+        dynamic_class = default_value(dynamic_class, nil)
+        visible = default_value(visible, nil)
+        width_unit = width_unit.to_sym
+        raise ArgumentError, "table width_unit must be weight, percentage, or pixels" unless
+          WIDTH_UNITS.include?(width_unit)
+
+        @name = name.to_s
+        @options = {
+          width_unit: width_unit.to_sym, tab_index: tab_index.to_i,
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s, visible: visible&.to_s
+        }.compact
+        @columns = []
+        @rows = []
+      end
+
+      def column(width: nil, &block)
+        builder = TableColumnBuilder.new(width)
+        builder.instance_eval(&block) if block
+        @columns << builder.to_h
+      end
+
+      def row(class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        builder = TableRowBuilder.new(
+          class_name:, style:, dynamic_class:, visible:
+        )
+        builder.instance_eval(&block) if block
+        @rows << builder.to_h
+      end
+
+      def to_h
+        validate_layout!
+        options = @options.merge(columns: @columns, rows: @rows)
+        { type: :table, name: @name, options:, events: [], declared_fields: @declared_fields }
+      end
+
+      private
+
+      def validate_layout!
+        raise ArgumentError, "table requires at least one column" if @columns.empty?
+
+        occupied = {}
+        @rows.each_with_index do |row, row_index|
+          cursor = 0
+          row.fetch(:cells).each do |cell|
+            column = cell[:column] || next_available_column(occupied, row_index, cursor)
+            validate_cell_bounds!(cell, row_index, column)
+            occupy_cell!(occupied, cell, row_index, column)
+            cell[:column] = column
+            cursor = column + cell.fetch(:colspan)
+          end
+        end
+      end
+
+      def next_available_column(occupied, row, cursor)
+        cursor += 1 while occupied[[row, cursor]]
+        cursor
+      end
+
+      def validate_cell_bounds!(cell, row, column)
+        right = column + cell.fetch(:colspan)
+        bottom = row + cell.fetch(:rowspan)
+        raise ArgumentError, "table cell exceeds column count" if right > @columns.size
+        raise ArgumentError, "table cell rowspan exceeds row count" if bottom > @rows.size
+      end
+
+      def occupy_cell!(occupied, cell, row, column)
+        coordinates = (row...(row + cell.fetch(:rowspan))).to_a.product(
+          (column...(column + cell.fetch(:colspan))).to_a
+        )
+        raise ArgumentError, "table cells cannot overlap" if coordinates.any? { occupied[_1] }
+
+        coordinates.each { occupied[_1] = true }
+      end
+    end
+
+    module LayoutGridValues
+      GRID_WIDTHS = %i[full fixed].freeze
+      ALIGNMENTS = %i[none start center end].freeze
+
+      private
+
+      def normalize_grid_width(value)
+        width = value.to_s.downcase.delete_suffix('_width').to_sym
+        raise ArgumentError, "layout grid width must be :full or :fixed" unless GRID_WIDTHS.include?(width)
+
+        width
+      end
+
+      def normalize_grid_alignment(value)
+        alignment = value.to_s
+                         .gsub(/([a-z\d])([A-Z])/, '\\1_\\2')
+                         .downcase.to_sym
+        raise ArgumentError, "unsupported layout grid alignment #{value.inspect}" unless
+          ALIGNMENTS.include?(alignment)
+
+        alignment
+      end
+
+      def normalize_grid_weight(value)
+        return value if %i[grow auto].include?(value)
+
+        weight = Integer(value)
+        return :grow if weight == -1
+        return :auto if weight == -2
+        return weight if (1..12).cover?(weight)
+
+        raise ArgumentError, "layout grid weight must be 1..12, :grow, or :auto"
+      rescue ArgumentError, TypeError
+        raise ArgumentError, "layout grid weight must be 1..12, :grow, or :auto"
+      end
+    end
+
+    class LayoutGridBuilder
+      include LayoutGridValues
+      include OverlayFields
+
+      def initialize(name, width:, tab_index:, class_name:, style:, dynamic_class:, visible:)
+        @declared_fields = declared_fields(
+          width:, tab_index:, class: class_name, style:, dynamic_class:, visible:
+        )
+        width = default_value(width, :full)
+        tab_index = default_value(tab_index, 0)
+        class_name = default_value(class_name, nil)
+        style = default_value(style, nil)
+        dynamic_class = default_value(dynamic_class, nil)
+        visible = default_value(visible, nil)
+        @name = name.to_s
+        @options = {
+          width: normalize_grid_width(width), tab_index: tab_index.to_i,
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s, visible: visible&.to_s
+        }.compact
+        @rows = []
+      end
+
+      def row(horizontal_alignment: :none, vertical_alignment: :none, gutters: true,
+              class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        builder = LayoutGridRowBuilder.new(
+          horizontal_alignment:, vertical_alignment:, gutters:, class_name:, style:,
+          dynamic_class:, visible:
+        )
+        builder.instance_eval(&block) if block
+        @rows << builder.to_h
+      end
+
+      def to_h
+        {
+          type: :layout_grid, name: @name, options: @options.merge(rows: @rows), events: [],
+          declared_fields: @declared_fields
+        }
+      end
+    end
+
+    class LayoutGridRowBuilder
+      include LayoutGridValues
+
+      def initialize(horizontal_alignment:, vertical_alignment:, gutters:, class_name:, style:,
+                     dynamic_class:, visible:)
+        @options = {
+          horizontal_alignment: normalize_grid_alignment(horizontal_alignment),
+          vertical_alignment: normalize_grid_alignment(vertical_alignment), gutters: gutters == true,
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s, visible: visible&.to_s
+        }.compact
+        @columns = []
+      end
+
+      def column(desktop: :grow, tablet: :grow, phone: :grow, vertical_alignment: :none,
+                 class_name: nil, style: nil, dynamic_class: nil, &block)
+        builder = LayoutGridColumnBuilder.new(
+          desktop:, tablet:, phone:, vertical_alignment:, class_name:, style:, dynamic_class:
+        )
+        builder.instance_eval(&block) if block
+        @columns << builder.to_h
+      end
+
+      def to_h = { options: @options, columns: @columns }
+    end
+
+    class LayoutGridColumnBuilder
+      include WidgetDsl
+      include LayoutGridValues
+
+      def initialize(desktop:, tablet:, phone:, vertical_alignment:, class_name:, style:, dynamic_class:)
+        @options = {
+          desktop: normalize_grid_weight(desktop), tablet: normalize_grid_weight(tablet),
+          phone: normalize_grid_weight(phone),
+          vertical_alignment: normalize_grid_alignment(vertical_alignment),
+          class: class_name&.to_s, style: style&.to_s, dynamic_class: dynamic_class&.to_s
+        }.compact
+        @widgets = []
+      end
+
+      def to_h = { options: @options, widgets: @widgets }
+
+      private
+
+      def _widget_list = @widgets
+    end
+
+    class DataViewBuilder
+      include WidgetDsl
+      include OverlayFields
+
+      EDITABILITY = %i[always never conditional].freeze
+      READ_ONLY_STYLES = %i[control text inherit].freeze
+
+      def initialize(name, from:, editable:, read_only_style:, label_width:, show_footer:,
+                     no_entity_message:, tab_index:, class_name:, style:, dynamic_class:)
+        @declared_fields = declared_fields(
+          source: from, editable:, read_only_style:, label_width:, show_footer:,
+          no_entity_message:, tab_index:, class: class_name, style:, dynamic_class:
+        )
+        editable = default_value(editable, :always)
+        read_only_style = default_value(read_only_style, :control)
+        label_width = default_value(label_width, 0)
+        show_footer = default_value(show_footer, true)
+        no_entity_message = default_value(no_entity_message, '')
+        tab_index = default_value(tab_index, 0)
+        class_name = default_value(class_name, nil)
+        style = default_value(style, nil)
+        dynamic_class = default_value(dynamic_class, nil)
+        @name = name.to_s
+        @source = normalize_source(from)
+        @options = {
+          editable: normalize_enum(editable, EDITABILITY, 'editability'),
+          read_only_style: normalize_enum(read_only_style, READ_ONLY_STYLES, 'read-only style'),
+          label_width: Integer(label_width), show_footer: show_footer == true,
+          no_entity_message: no_entity_message.to_s, tab_index: Integer(tab_index),
+          class: class_name&.to_s, style: style&.to_s, dynamic_class: dynamic_class&.to_s
+        }.compact
+        raise ArgumentError, 'data view label_width cannot be negative' if @options[:label_width].negative?
+
+        @body = []
+        @footer = []
+        @target = @body
+        @visibility = nil
+        @editability = nil
+        @design_properties = []
+        @unknown_native = {}
+      end
+
+      def body(&block) = evaluate_region(@body, &block)
+      def footer(&block) = evaluate_region(@footer, &block)
+
+      def visible_when(expression = nil, roles: [], attribute: nil, conditions: [],
+                       ignore_security: false, source: nil, native: nil)
+        @declared_fields << :visibility unless @declared_fields.include?(:visibility)
+        @visibility = condition(
+          expression:, roles:, attribute:, conditions:, ignore_security:, source:, native:
+        )
+      end
+
+      def editable_when(expression = nil, roles: [], attribute: nil, conditions: [],
+                        ignore_security: false, source: nil, native: nil)
+        @declared_fields << :editability_condition unless
+          @declared_fields.include?(:editability_condition)
+        @editability = condition(
+          expression:, roles:, attribute:, conditions:, ignore_security:, source:, native:
+        )
+      end
+
+      def design_properties(*values) = (@design_properties = values.flatten)
+
+      def unknown_native(value)
+        raise ArgumentError, 'unknown_native requires a Hash' unless value.is_a?(Hash)
+
+        @unknown_native = value
+      end
+
+      def to_h
+        options = @options.merge(source: @source)
+        options[:visibility] = @visibility if @visibility
+        options[:editability] = @editability if @editability
+        options[:design_properties] = @design_properties unless @design_properties.empty?
+        options[:unknown_native] = @unknown_native unless @unknown_native.empty?
+        {
+          type: :data_view, name: @name, options:, body: @body, footer: @footer, events: [],
+          declared_fields: @declared_fields
+        }
+      end
+
+      private
+
+      def _widget_list = @target
+
+      def evaluate_region(target, &block)
+        previous = @target
+        @target = target
+        instance_eval(&block) if block
+        self
+      ensure
+        @target = previous
+      end
+
+      def normalize_source(source)
+        raise ArgumentError, 'data view from: must be a semantic source' unless source.is_a?(Hash)
+        raise ArgumentError, 'data view source requires kind' unless source[:kind] || source['kind']
+
+        source.transform_keys(&:to_sym)
+      end
+
+      def normalize_enum(value, allowed, label)
+        normalized = value.to_s.downcase.to_sym
+        normalized = :conditional if allowed.equal?(EDITABILITY) && normalized == :conditionally
+        return normalized if allowed.include?(normalized)
+
+        raise ArgumentError, "unsupported data view #{label} #{value.inspect}"
+      end
+
+      def condition(expression:, roles:, attribute:, conditions:, ignore_security:, source:, native:)
+        compact_data_view_source(
+          expression: expression&.to_s, roles: Array(roles).map(&:to_s),
+          attribute: attribute&.to_s, conditions: Array(conditions),
+          ignore_security: ignore_security == true, source_variable: source,
+          unknown_native: native
+        )
+      end
+    end
+
+    class TableColumnBuilder
+      def initialize(width = nil) = (@width = width)
+
+      def width(value) = (@width = value)
+
+      def to_h
+        value = @width.to_i
+        raise ArgumentError, "table column width must be positive" unless value.positive?
+
+        { width: value }
+      end
+    end
+
+    class TableRowBuilder
+      def initialize(class_name:, style:, dynamic_class:, visible:)
+        @options = {
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s, visible: visible&.to_s
+        }.compact
+        @cells = []
+      end
+
+      def cell(column: nil, colspan: 1, rowspan: 1, header: false, class_name: nil,
+               style: nil, dynamic_class: nil, &block)
+        builder = TableCellBuilder.new(
+          column:, colspan:, rowspan:, header:, class_name:, style:,
+          dynamic_class:
+        )
+        builder.instance_eval(&block) if block
+        @cells << builder.to_h
+      end
+
+      def to_h = { options: @options, cells: @cells }
+    end
+
+    class TableCellBuilder
+      include WidgetDsl
+
+      def initialize(column:, colspan:, rowspan:, header:, class_name:, style:, dynamic_class:)
+        @column = column&.to_i
+        @colspan = colspan.to_i
+        @rowspan = rowspan.to_i
+        validate_dimensions!
+
+        @header = header == true
+        @options = {
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s
+        }.compact
+        @widgets = []
+      end
+
+      def to_h
+        {
+          column: @column, colspan: @colspan, rowspan: @rowspan,
+          header: @header, options: @options, widgets: @widgets
+        }.compact
+      end
+
+      private
+
+      def validate_dimensions!
+        raise ArgumentError, "table cell column cannot be negative" if @column&.negative?
+        raise ArgumentError, "table cell colspan must be positive" unless @colspan.positive?
+        raise ArgumentError, "table cell rowspan must be positive" unless @rowspan.positive?
+      end
 
       def _widget_list = @widgets
     end
@@ -315,17 +1030,20 @@ module Mxrb
     # Builds nested widgets inside a container widget.
     class ContainerBuilder
       include WidgetDsl
+      include WidgetEvents
 
-      def initialize(name, class_name: nil)
-        @name       = name.to_s
-        @class_name = class_name&.to_s
-        @children   = []
+      def initialize(name, class_name: nil, style: nil, dynamic_class: nil, visible: nil)
+        @name = name.to_s
+        @appearance = {
+          class: class_name&.to_s, style: style&.to_s,
+          dynamic_class: dynamic_class&.to_s, visible: visible&.to_s
+        }.compact.reject { |_key, value| value.empty? }
+        @children = []
+        @events = []
       end
 
       def to_h
-        opts = {}
-        opts[:class] = @class_name if @class_name && !@class_name.empty?
-        { type: :container, name: @name, options: opts, children: @children, events: [] }
+        { type: :container, name: @name, options: @appearance, children: @children, events: @events }
       end
 
       private
@@ -363,6 +1081,7 @@ module Mxrb
     class Builder
       include ConnectorDeclarations
       include ProjectDocuments
+      include NativeFragmentEvaluation
 
       attr_reader :path
 
@@ -374,6 +1093,7 @@ module Mxrb
         @navigation        = nil
         @design_system     = nil
         @native_units_path = nil
+        @native_fragment_store = nil
         @native_unit_overrides = []
         @project_assets = nil
         @ruby_app_sources_path = nil
@@ -436,16 +1156,6 @@ module Mxrb
 
       def bson_binary(base64, subtype: :generic)
         BSON::Binary.new(Base64.strict_decode64(base64), subtype)
-      end
-
-      def evaluate(path)
-        instance_eval(File.read(path), path, 1)
-      end
-
-      def evaluate_dir(dir)
-        return unless File.directory?(dir)
-
-        Dir[File.join(dir, '*.rb')].sort.each { |path| evaluate(path) }
       end
 
       def build!
@@ -818,6 +1528,10 @@ module Mxrb
 
       def documentation(d) = (@doc = d)
 
+      def bson_binary(base64, subtype: :generic)
+        BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
+      end
+
       def to_h
         {
           name: @name, id: @id, unit_id: @unit_id, values: @values,
@@ -901,6 +1615,7 @@ module Mxrb
     end
 
     class ModuleBuilder # rubocop:disable Metrics/ClassLength
+      include NativeFragmentAccess
       include IntegrationDocuments
       include CodeActions
       include PresentationDocuments
@@ -933,9 +1648,9 @@ module Mxrb
         @entities << eb.to_h
       end
 
-      def page(name, &block)
+      def page(name, public: false, &block)
         default_layout = "#{@name}.ApplicationLayout"
-        pb = PageBuilder.new(name, default_layout:)
+        pb = PageBuilder.new(name, default_layout:, public:)
         pb.instance_eval(&block) if block
         page = pb.to_h
         ensure_application_layout if page.fetch(:layout) == default_layout
@@ -952,20 +1667,24 @@ module Mxrb
         @module_roles << { name: name.to_s, id: id.to_s, description: description.to_s }
       end
 
-      def microflow(name, kind: :use_case, public: false, &block)
-        fb = FlowBuilder.new(name, runtime: :server, kind: kind, public: public)
+      def microflow(name, kind: :use_case, public: false, unit_id: nil, &block)
+        fb = FlowBuilder.new(
+          name, runtime: :server, kind: kind, public: public, unit_id:
+        )
         fb.instance_eval(&block) if block
         @microflows << fb.to_h
       end
 
-      def nanoflow(name, public: false, &block)
-        fb = FlowBuilder.new(name, runtime: :client, kind: :client_action, public: public)
+      def nanoflow(name, public: false, unit_id: nil, &block)
+        fb = FlowBuilder.new(
+          name, runtime: :client, kind: :client_action, public: public, unit_id:
+        )
         fb.instance_eval(&block) if block
         @nanoflows << fb.to_h
       end
 
-      def query(name, public: false, &block)
-        microflow(name, kind: :query, public: public, &block)
+      def query(name, public: false, unit_id: nil, &block)
+        microflow(name, kind: :query, public: public, unit_id:, &block)
       end
 
       def repository(name, implementation: nil, public: false, documentation: "")
@@ -1169,6 +1888,7 @@ module Mxrb
 
     class MenuBuilder
       include PresentationValues
+      include NativeFragmentAccess
 
       def initialize(name)
         @name  = name.to_s
@@ -1389,8 +2109,11 @@ module Mxrb
       include WidgetDsl
       include PresentationValues
 
-      def initialize(name, default_layout: 'Atlas_Default')
+      WRITE_MODES = %i[replace overlay].freeze
+
+      def initialize(name, default_layout: 'Atlas_Default', public: false)
         @name          = name.to_s
+        @public        = public == true
         @layout        = default_layout.to_s
         @title         = name.to_s
         @popup         = false
@@ -1399,11 +2122,20 @@ module Mxrb
         @widgets       = []
         @allowed_roles = nil
         @deep_structure = nil
+        @write_mode = :replace
       end
 
       def layout(l) = (@layout = l)
       def title(t)  = (@title = t)
       def popup!    = (@popup = true)
+
+      def write_mode(mode)
+        normalized = mode.to_sym
+        raise ArgumentError, "page write_mode must be :replace or :overlay" unless
+          WRITE_MODES.include?(normalized)
+
+        @write_mode = normalized
+      end
 
       # Full, editable Mendix page payload for structures without a concise
       # typed DSL yet (layout grids, custom widgets, list views, etc.).
@@ -1413,9 +2145,15 @@ module Mxrb
         @deep_structure = value
       end
 
-      def form_structure(value)
+      def form_structure(value = nil, mode: :replace, **keyword_value)
+        unless keyword_value.empty?
+          raise ArgumentError, "form_structure accepts one structure" unless value.nil?
+
+          value = keyword_value
+        end
         raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
 
+        write_mode(mode)
         @deep_structure = presentation_value_document(value)
       end
 
@@ -1434,21 +2172,26 @@ module Mxrb
       end
 
       %i[on_change on_click on_submit on_load].each do |event|
-        define_method(event) do |target: nil, microflow: nil, nanoflow: nil, page: nil, action: nil|
+        define_method(event) do |target: nil, microflow: nil, nanoflow: nil, page: nil,
+                                action: nil, pass: {}|
           choices = { microflow: microflow, nanoflow: nanoflow, page: page, action: action }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.size == 1
-          @events << {
+          raise ArgumentError, "#{event} pass: must be a Hash" unless pass.is_a?(Hash)
+
+          declaration = {
             event: event, target: target&.to_s,
             kind: choices.keys.first, handler: choices.values.first.to_s
           }
+          declaration[:arguments] = pass unless pass.empty?
+          @events << declaration
         end
       end
 
       def to_h
         {
-          name: @name, layout: @layout, title: @title, popup: @popup,
+          name: @name, public: @public, layout: @layout, title: @title, popup: @popup,
           data_source: @data_source, events: @events, widgets: @widgets,
-          allowed_roles: @allowed_roles, deep_structure: @deep_structure
+          allowed_roles: @allowed_roles, deep_structure: @deep_structure, write_mode: @write_mode
         }
       end
 
@@ -1459,6 +2202,12 @@ module Mxrb
 
     # Shared activity DSL mixed into FlowBuilder, BranchBuilder, LoopBuilder, RescueBuilder
     module FlowBodyDsl
+      CODE_ACTION_PARAMETER_KINDS = %i[
+        entity entity_type microflow import_mapping export_mapping
+      ].freeze
+      REST_RESULT_HANDLING_TYPES = %i[mapping http_response string].freeze
+      MAPPING_CONTENT_TYPES = %i[xml json].freeze
+
       def create_object(entity, as:, set: {}, commit: false, with_events: true,
                         refresh: false, &block)
         _acts << { type: :create_object, entity: entity.to_s, variable: as.to_s,
@@ -1507,7 +2256,16 @@ module Mxrb
         }
       end
 
-      %i[java javascript nanoflow app_service].each do |runtime|
+      def call_java(name, as: nil, pass: {}, result_name: nil, use_return: nil)
+        _acts << {
+          type: :call_java, name: name.to_s,
+          variable: as&.to_s, result_name: result_name&.to_s,
+          use_return: use_return.nil? ? !as.nil? : use_return == true,
+          mappings: _code_action_mappings(pass)
+        }
+      end
+
+      %i[javascript nanoflow app_service].each do |runtime|
         define_method(:"call_#{runtime}") do |name, as: nil, pass: {},
                                                 result_name: nil, use_return: nil|
           mappings = pass.map { |param, value| { param: param.to_s, value: value } }
@@ -1616,6 +2374,16 @@ module Mxrb
                     result_content_type: :json, force_single: false, single: false,
                     object_handling: :create, parameter_variable: nil,
                     error_result: :http_response, error: :rollback)
+        handling = result_handling.to_sym
+        unless REST_RESULT_HANDLING_TYPES.include?(handling)
+          raise ArgumentError, "unsupported REST result handling #{result_handling.inspect}"
+        end
+        raise ArgumentError, "string REST result handling requires as" if
+          handling == :string && as.to_s.empty?
+        if handling == :string && (!result_entity.to_s.empty? || !result_mapping.to_s.empty?)
+          raise ArgumentError, "string REST result handling does not accept a result mapping or entity"
+        end
+
         _acts << {
           type: :call_rest, method: method.to_s, location: location.to_s,
           location_parameters: Array(location_parameters),
@@ -1626,7 +2394,7 @@ module Mxrb
           request_parameters: Array(request_parameters),
           result_mapping: result_mapping.to_s, variable: as.to_s,
           result_entity: result_entity.to_s, timeout: timeout.to_s,
-          commit: commit.to_s, result_handling: result_handling.to_s,
+          commit: commit.to_s, result_handling: handling.to_s,
           result_content_type: result_content_type.to_s,
           force_single: force_single == true, single: single == true,
           object_handling: object_handling.to_s,
@@ -1664,6 +2432,23 @@ module Mxrb
         }
       end
 
+      def export_xml(variable, mapping:, as:, content_type: :xml, validate: false,
+                     error: :rollback)
+        content_type = content_type.to_sym
+        unless MAPPING_CONTENT_TYPES.include?(content_type)
+          raise ArgumentError, "unsupported export mapping content type #{content_type.inspect}"
+        end
+        if variable.to_s.empty? || mapping.to_s.empty? || as.to_s.empty?
+          raise ArgumentError, "export_xml requires variable, mapping, and as"
+        end
+
+        _acts << {
+          type: :export_xml, variable: variable.to_s, mapping: mapping.to_s,
+          output: as.to_s, content_type: content_type.to_s,
+          validate: validate == true, error: error.to_s
+        }
+      end
+
       def download_file(variable, show_in_browser: false, error: :rollback)
         _acts << {
           type: :download_file, variable: variable.to_s,
@@ -1688,8 +2473,14 @@ module Mxrb
         _acts << { type: :continue_event }
       end
 
+      def break_loop
+        raise ArgumentError, "break_loop is only valid inside a loop" unless _break_allowed?
+
+        _acts << { type: :break_event }
+      end
+
       def rescue_all(&block)
-        rescue_builder = RescueBuilder.new
+        rescue_builder = RescueBuilder.new(allow_break: _break_allowed?)
         rescue_builder.instance_eval(&block) if block
         _acts << {
           type: :rescue_all,
@@ -1698,13 +2489,16 @@ module Mxrb
       end
 
       def decision(condition, &block)
-        db = DecisionBuilder.new(condition.is_a?(Hash) ? condition : condition.to_s)
+        db = DecisionBuilder.new(
+          condition.is_a?(Hash) ? condition : condition.to_s,
+          allow_break: _break_allowed?
+        )
         db.instance_eval(&block) if block
         _acts << db.to_h
       end
 
       def type_decision(variable, &block)
-        builder = TypeDecisionBuilder.new(variable.to_s)
+        builder = TypeDecisionBuilder.new(variable.to_s, allow_break: _break_allowed?)
         builder.instance_eval(&block) if block
         _acts << builder.to_h
       end
@@ -1726,9 +2520,23 @@ module Mxrb
 
       private
 
+      def _code_action_mappings(pass)
+        pass.map do |parameter, value|
+          if value.is_a?(Hash) && value.key?(:kind)
+            kind = value.fetch(:kind).to_sym
+            unless CODE_ACTION_PARAMETER_KINDS.include?(kind)
+              raise ArgumentError, "unsupported code action parameter kind #{kind.inspect}"
+            end
+          end
+          { param: parameter.to_s, value: value }
+        end
+      end
+
       def _optional_string(value)
         value&.to_s
       end
+
+      def _break_allowed? = false
 
       def _build_members(set_hash, &block)
         if block
@@ -1744,8 +2552,9 @@ module Mxrb
     class FlowBuilder # rubocop:disable Metrics/ClassLength
       include FlowBodyDsl
 
-      def initialize(name, runtime:, kind:, public:)
+      def initialize(name, runtime:, kind:, public:, unit_id: nil)
         @name                 = name.to_s
+        @unit_id              = unit_id&.to_s
         @runtime              = runtime
         @kind                 = kind
         @public               = public
@@ -1765,8 +2574,12 @@ module Mxrb
         @excluded = nil
       end
 
-      def parameter(name, type:)
-        @parameters << { name: name.to_s, type: type.is_a?(Hash) ? type : type.to_s }
+      def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
+        @parameters << {
+          name: name.to_s, type: type.is_a?(Hash) ? type : type.to_s,
+          id: id&.to_s, relative_middle_point: relative_middle_point&.to_s,
+          size: size&.to_s
+        }.compact
       end
 
       def bson_binary(base64, subtype: :generic)
@@ -1776,16 +2589,18 @@ module Mxrb
       def flow_type(value)
         spec = value.to_h.transform_keys(&:to_sym)
         kind = spec.fetch(:kind).to_sym
+        kind = :datetime if %i[DateTime date_time].include?(kind)
         native = {
           void: 'Void', boolean: 'Boolean', string: 'String', integer: 'Integer',
           long: 'Long', decimal: 'Decimal', float: 'Float', datetime: 'DateTime',
-          object: 'Object', list: 'List'
+          object: 'Object', list: 'List', enumeration: 'Enumeration'
         }.fetch(kind) { raise ArgumentError, "unsupported flow data type #{kind.inspect}" }
         document = {
           '$ID' => spec[:id].to_s.empty? ? SecureRandom.uuid : spec[:id].to_s,
           '$Type' => "DataTypes$#{native}Type"
         }
         document['Entity'] = spec.fetch(:entity, '').to_s if %i[object list].include?(kind)
+        document['Enumeration'] = spec.fetch(:enumeration).to_s if kind == :enumeration
         document
       end
 
@@ -1811,7 +2626,7 @@ module Mxrb
       end
 
       def rescue_all(&block)
-        rb = RescueBuilder.new
+        rb = RescueBuilder.new(allow_break: false)
         rb.instance_eval(&block) if block
         _acts << { type: :rescue_all, activities: rb.activities }
       end
@@ -1862,7 +2677,7 @@ module Mxrb
           mark_as_used: @mark_as_used, excluded: @excluded,
           preserve_native_body: !@expected_body_fingerprint.nil? &&
             @expected_body_fingerprint == current_fingerprint
-        }
+        }.tap { _1[:unit_id] = @unit_id unless @unit_id.nil? }
       end
 
       private
@@ -1871,15 +2686,16 @@ module Mxrb
     end
 
     class DecisionBuilder
-      def initialize(condition)
+      def initialize(condition, allow_break: false)
         @condition      = condition
+        @allow_break    = allow_break
         @true_branch    = []
         @false_branch   = []
         @branches       = {}
       end
 
       def on(value, &block)
-        bb = BranchBuilder.new
+        bb = BranchBuilder.new(allow_break: @allow_break)
         bb.instance_eval(&block) if block
         case value
         when true  then @true_branch  = bb.activities
@@ -1899,18 +2715,21 @@ module Mxrb
       include FlowBodyDsl
       attr_reader :activities
 
-      def initialize
+      def initialize(allow_break: false)
+        @allow_break = allow_break
         @activities = []
       end
 
       private
 
       def _acts = @activities
+      def _break_allowed? = @allow_break
     end
 
     class TypeDecisionBuilder
-      def initialize(variable)
+      def initialize(variable, allow_break: false)
         @variable = variable
+        @allow_break = allow_break
         @branches = {}
       end
 
@@ -1929,7 +2748,7 @@ module Mxrb
       private
 
       def add_branch(value, &block)
-        branch = BranchBuilder.new
+        branch = BranchBuilder.new(allow_break: @allow_break)
         branch.instance_eval(&block) if block
         @branches[value] = branch.activities
       end
@@ -1951,19 +2770,22 @@ module Mxrb
       private
 
       def _acts = @activities
+      def _break_allowed? = true
     end
 
     class RescueBuilder
       include FlowBodyDsl
       attr_reader :activities
 
-      def initialize
+      def initialize(allow_break: false)
+        @allow_break = allow_break
         @activities = []
       end
 
       private
 
       def _acts = @activities
+      def _break_allowed? = @allow_break
     end
 
     class SetBuilder

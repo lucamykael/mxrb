@@ -4,10 +4,13 @@ require "base64"
 require "fileutils"
 require "json"
 require "digest"
+require_relative "native_fragment_store"
 
 module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
   class Exporter
+    INLINE_NATIVE_MAX_BYTES = 96 * 1024
+    INLINE_NATIVE_MAX_LINE_BYTES = 1_600
     MODES = %i[mendix ruby].freeze
     LAYERS = %w[domain application presentation infrastructure].freeze
     MODULE_PROGRESS_WEIGHT = 10
@@ -42,6 +45,7 @@ module Mxrb
       Microflows$LoopedActivity
       Microflows$ErrorEvent
       Microflows$ContinueEvent
+      Microflows$BreakEvent
       Microflows$Annotation
       Microflows$MicroflowParameter
     ].freeze
@@ -75,6 +79,7 @@ module Mxrb
       Microflows$RestCallAction
       DatabaseConnector$ExecuteDatabaseQueryAction
       Microflows$ImportXmlAction
+      Microflows$ExportXmlAction
       Microflows$DownloadFileAction
     ].freeze
 
@@ -92,6 +97,9 @@ module Mxrb
 
       Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress| # rubocop:disable Metrics/BlockLength
         FileUtils.mkdir_p(@output_dir)
+        @native_fragment_store = NativeFragmentStore.new(
+          File.join(@output_dir, ".mxrb", "native_fragments")
+        )
         Mxrb.open(@mpr_path) do |project|
           @architecture = project.architecture_definition
           units = project.all_units
@@ -304,7 +312,7 @@ module Mxrb
                     container_id: #{ruby(unit.fetch("ContainerID"))},
                     containment: #{ruby(unit.fetch("ContainmentName"))},
                     module_name: #{ruby(module_name_for(project, unit))},
-                    deep_structure: #{native_ruby(doc, 20)}
+                    deep_structure: #{native_fragment_ruby(doc)}
       RUBY
     end
 
@@ -331,7 +339,7 @@ module Mxrb
 
     def export_architecture_contracts(project)
       navigation = @architecture&.fetch(:navigation, nil)
-      navigation ||= project.navigation.to_h unless project.navigation.empty?
+      navigation ||= project.navigation.to_h if @architecture && !project.navigation.empty?
       design_system = @architecture&.fetch(:design_system, nil)
       write(
         File.join(@output_dir, "app", "navigation", "navigation.rb"),
@@ -466,8 +474,14 @@ module Mxrb
       paths = []
       mod.pages.each do |page|
         relative = File.join("pages", files.fetch(page.id))
-        metadata = architecture&.fetch(:pages, [])&.find { _1[:name] == page.name }
-        write(File.join(presentation, relative), page_source(page, metadata))
+        metadata = artifact_metadata(
+          mod.name, :page, page.name,
+          architecture&.fetch(:pages, [])&.find { _1[:name] == page.name }
+        )
+        write(
+          File.join(presentation, relative),
+          page_source(page, metadata, module_unit_id: mod.id)
+        )
         paths << relative
       end
       write_path_aggregator(File.join(presentation, "presentation.rb"), paths)
@@ -1133,6 +1147,7 @@ module Mxrb
       object = element["$Type"].to_s.include?("ObjectMappingElement")
       common = {
         id: document_id(element), kind: object ? :object : :value,
+        element_type: element.fetch("ElementType", object ? "Object" : "Value"),
         name: element.fetch("ExposedName", ""),
         documentation: element.fetch("Documentation", ""),
         json_path: element.fetch("JsonPath", ""), xml_path: element.fetch("XmlPath", ""),
@@ -1215,7 +1230,8 @@ module Mxrb
                         unit_id: #{ruby(document.fetch(:id))},
                         container_id: #{ruby(document.fetch(:container_id))},
                         containment: #{ruby(document.fetch(:containment))},
-                        deep_structure: #{native_ruby(document.fetch(:doc), 24)}
+                        # Native BSON, including bson_binary(...) values, is content-addressed.
+                        deep_structure: #{native_fragment_ruby(document.fetch(:doc))}
       RUBY
     end
 
@@ -1311,6 +1327,7 @@ module Mxrb
           mendix_version #{ruby(project.mendix_version || "10.18.0")}
           mendix_project_id #{ruby(project.mpr.root_unit.fetch("UnitID"))}
           native_units File.join(__dir__, ".mxrb", "native_units.json")
+          native_fragments File.join(__dir__, ".mxrb", "native_fragments")
           project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
       #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
           evaluate File.join(__dir__, ".mxrb", "native_units.rb")
@@ -1706,14 +1723,8 @@ module Mxrb
     def microflow_source(flow, metadata = nil)
       parameters = flow.parameters.filter_map do |param|
         next unless param.is_a?(Hash)
-        name = param["Name"] || param["name"]
-        type = param["VariableType"] || param["Type"] || param["type"]
-        type_source = if type.is_a?(Hash)
-                        "flow_type(#{native_ruby(flow_type_spec(type))})"
-                      else
-                        symbol(type)
-                      end
-        "  parameter #{symbol(name)}, type: #{type_source}" if name && type
+
+        flow_parameter_source(param)
       end
       body = parameters
       return_type = if flow.respond_to?(:return_type_document) && flow.return_type_document
@@ -1747,6 +1758,7 @@ module Mxrb
       end
       declaration = [symbol(flow.name)]
       declaration << "public: true" if metadata&.fetch(:public, false)
+      declaration << "unit_id: #{ruby(flow.id)}" if flow.respond_to?(:id) && !flow.id.to_s.empty?
       <<~RUBY
         # frozen_string_literal: true
 
@@ -1756,10 +1768,31 @@ module Mxrb
       RUBY
     end
 
+    def flow_parameter_source(parameter)
+      name = parameter["Name"] || parameter["name"]
+      type = parameter["VariableType"] || parameter["Type"] || parameter["type"]
+      return unless name && type
+
+      type_source = if type.is_a?(Hash)
+                      "flow_type(#{native_ruby(flow_type_spec(type))})"
+                    else
+                      symbol(type)
+                    end
+      options = ["type: #{type_source}"]
+      id = document_id(parameter)
+      options << "id: #{ruby(id)}" unless id.empty?
+      if parameter.key?("RelativeMiddlePoint")
+        options << "relative_middle_point: #{ruby(parameter.fetch('RelativeMiddlePoint'))}"
+      end
+      options << "size: #{ruby(parameter.fetch('Size'))}" if parameter.key?("Size")
+      "  parameter #{symbol(name)}, #{options.join(', ')}"
+    end
+
     def flow_type_spec(type)
       name = type.fetch('$Type').to_s.delete_prefix('DataTypes$').delete_suffix('Type')
       spec = { id: document_id(type), kind: underscore(name).to_sym }
       spec[:entity] = type.fetch('Entity', '') if %w[Object List].include?(name)
+      spec[:enumeration] = type.fetch('Enumeration', '') if name == 'Enumeration'
       spec
     end
 
@@ -1790,34 +1823,49 @@ module Mxrb
       end.join("\n") + "\n"
     end
 
-    def page_source(page, metadata = nil)
+    def page_source(page, metadata = nil, module_unit_id: nil)
       body = []
       body << "  layout #{ruby(page.layout_id)}" if page.layout_id
       body << "  title #{ruby(page.title)}"
       body << "  popup!" if page.popup_width.to_i.positive? || page.popup_height.to_i.positive?
       body << "  allowed_roles #{page.allowed_module_roles.map { symbol(_1) }.join(', ')}" unless page.allowed_module_roles.empty?
       deep = page_deep_structure(page)
-      if (source = metadata&.dig(:data_source) || page.data_source)
+      widgets = metadata ? metadata.fetch(:widgets, []) : page.widgets
+      source = metadata&.dig(:data_source) || page.data_source
+      if source && %i[microflow nanoflow].include?(source.fetch(:kind).to_sym)
         body << "  data_source #{source.fetch(:kind)}: #{reference(source.fetch(:name))}"
       end
       if deep
-        body << "  form_structure(#{native_ruby(presentation_value_spec(deep), 2)})"
+        mode = page_overlay_exportable?(page, widgets) ? :overlay : :replace
+        if mode == :overlay
+          deep = deep.merge(
+            Writer::PageOverlay::METADATA_KEY => Writer::PageOverlay.metadata(
+              widgets, page_unit_id: page.id, module_unit_id:
+            )
+          )
+        end
+        mode_argument = mode == :overlay ? ", mode: :overlay" : ""
+        body << "  form_structure(#{native_fragment_ruby(presentation_value_spec(deep))}#{mode_argument})"
       end
       metadata&.fetch(:events, [])&.each do |event|
         args = []
         args << "target: #{symbol(event[:target])}" if event[:target]
         args << "#{event.fetch(:kind)}: #{symbol(event.fetch(:handler))}"
+        unless event.fetch(:arguments, {}).empty?
+          args << "pass: #{native_ruby(event.fetch(:arguments), 2)}"
+        end
         body << "  #{event.fetch(:event)} #{args.join(', ')}"
       end
-      widgets = metadata ? metadata.fetch(:widgets, []) : page.widgets
       widgets.each do |widget|
         rendered = render_widget(widget, 2)
         body.concat(rendered)
       end
+      declaration = [symbol(page.name)]
+      declaration << "public: true" if metadata&.fetch(:public, false)
       <<~RUBY
         # frozen_string_literal: true
 
-        page #{symbol(page.name)} do
+        page #{declaration.join(', ')} do
       #{body.join("\n")}
         end
       RUBY
@@ -1829,6 +1877,46 @@ module Mxrb
       return nil unless raw.is_a?(Hash)
 
       raw.reject { |key, _| PAGE_TYPED_KEYS.include?(key.to_s) }
+    end
+
+    OVERLAY_WIDGET_TYPES = {
+      table: "Forms$Table", layout_grid: "Forms$LayoutGrid", data_view: "Forms$DataView"
+    }.freeze
+
+    def page_overlay_exportable?(page, widgets)
+      slots = page_root_widget_slots(page.raw_document)
+      return false unless slots.one?
+
+      native_roots = slots.first
+      candidates = Array(widgets).filter_map do |widget|
+        type = OVERLAY_WIDGET_TYPES[widget.fetch(:type).to_sym]
+        [widget, type] if type
+      end
+      return false if candidates.empty?
+
+      candidates.all? do |widget, type|
+        native_roots.one? do |native|
+          native.is_a?(Hash) && native["$Type"] == type &&
+            native["Name"].to_s == widget.fetch(:name).to_s
+        end
+      end
+    end
+
+    def page_root_widget_slots(document)
+      return [] unless document.is_a?(Hash)
+
+      slots = []
+      slots << bson_items(document["Widgets"]) if document.key?("Widgets")
+      form_call = document["FormCall"]
+      return slots unless form_call.is_a?(Hash)
+
+      bson_items(form_call["Arguments"]).each do |argument|
+        next unless argument.is_a?(Hash)
+
+        slots << bson_items(argument["Widgets"]) if argument.key?("Widgets")
+        slots << [argument["Widget"]].compact if argument.key?("Widget")
+      end
+      slots
     end
 
     def native_ruby(value, indent = 0)
@@ -1859,12 +1947,91 @@ module Mxrb
       end
     end
 
+    def native_fragment_ruby(document)
+      return native_ruby(document) unless instance_variable_defined?(:@native_fragment_store)
+
+      raise ValidationError, 'native fragment store is not initialized' unless @native_fragment_store
+
+      inline = native_ruby(document)
+      return inline if inline_native_fragment?(document, inline)
+
+      digest = @native_fragment_store.put(document)
+      types = native_fragment_types(document)
+      hints = native_fragment_hints(document)
+      overrides = native_fragment_overrides(document)
+      arguments = [ruby(digest)]
+      arguments << "types: #{ruby(types)}" unless types.empty?
+      arguments << "hints: #{ruby(hints)}" unless hints.empty?
+      arguments << "overrides: #{ruby(overrides)}" unless overrides.empty?
+      "native_fragment(#{arguments.join(', ')})"
+    end
+
+    def inline_native_fragment?(document, source)
+      return false if source.bytesize > INLINE_NATIVE_MAX_BYTES
+      return false if source.each_line.any? { _1.bytesize > INLINE_NATIVE_MAX_LINE_BYTES }
+
+      native_fragment_readable?(document)
+    end
+
+    def native_fragment_readable?(value)
+      case value
+      when BSON::Binary
+        false
+      when Hash
+        value.all? { native_fragment_readable?(_1) && native_fragment_readable?(_2) }
+      when Array
+        value.all? { native_fragment_readable?(_1) }
+      else
+        true
+      end
+    end
+
+    def native_fragment_types(value, found = [])
+      case value
+      when Hash
+        found << value['$Type'].to_s unless value['$Type'].to_s.empty?
+        value.each_value { native_fragment_types(_1, found) }
+      when Array
+        value.each { native_fragment_types(_1, found) }
+      end
+      found.uniq.sort
+    end
+
+    def native_fragment_hints(value, found = [])
+      case value
+      when Hash
+        value.each do |key, child|
+          found << child.to_s if key.to_s.match?(/(?:url|uri|endpoint|host)\z/i) &&
+                                child.is_a?(String) && child.bytesize.between?(1, 512)
+          native_fragment_hints(child, found)
+        end
+      when Array
+        value.each { native_fragment_hints(_1, found) }
+      end
+      found.uniq.sort.first(16)
+    end
+
+    def native_fragment_overrides(document)
+      document.each_with_object({}) do |(key, value), overrides|
+        next if %w[$ID $Type Name].include?(key.to_s)
+        next unless native_fragment_override_value?(value)
+
+        overrides[key.to_s] = value
+      end
+    end
+
+    def native_fragment_override_value?(value)
+      return value.bytesize <= 512 if value.is_a?(String)
+
+      value.nil? || value.is_a?(Numeric) || value == true || value == false
+    end
+
     def menu_source(menu)
       body = menu.items.flat_map { menu_item_source(_1, 2) }
       if menu.raw_document.is_a?(Hash)
         deep = menu.raw_document.reject { |key, _| %w[$ID Name name].include?(key.to_s) }
         body.unshift(
-          "  form_structure(#{native_ruby(presentation_value_spec(deep), 2)})"
+          "  form_structure(#{native_fragment_ruby(presentation_value_spec(deep))})"
         )
       end
       <<~RUBY
@@ -1908,7 +2075,7 @@ module Mxrb
         return [
           "#{pad}native_widget #{symbol(widget.fetch(:name))},",
           "#{child_pad}type: #{ruby(options.fetch(:native_type))},",
-          "#{child_pad}deep_structure: #{native_ruby(options.fetch(:deep_structure), indent + 2)}"
+          "#{child_pad}deep_structure: #{native_fragment_ruby(options.fetch(:deep_structure))}"
         ]
       end
 
@@ -1916,12 +2083,23 @@ module Mxrb
         args = [symbol(widget.fetch(:name)), "widget_id: #{ruby(options.fetch(:widget_id))}"]
         args << "widget_name: #{ruby(options[:widget_name])}" if options[:widget_name]
         args << "properties: #{native_ruby(options[:properties])}" if options[:properties]
-        args << "class_name: #{ruby(options[:class])}" if options[:class]
-        return ["#{pad}pluggable_widget #{args.join(', ')}"]
+        append_appearance_ruby_args(args, options)
+        args << "platform: #{ruby(options[:platform])}" if options[:platform]
+        body = Array(widget[:slots]).flat_map { render_pluggable_slot(_1, indent + 2) }
+        body.concat(widget.fetch(:events, []).map { render_widget_event(_1, indent + 2) })
+        return ["#{pad}pluggable_widget #{args.join(', ')}"] if body.empty?
+
+        return ["#{pad}pluggable_widget #{args.join(', ')} do", *body, "#{pad}end"]
       end
 
+      return render_table_widget(widget, indent) if type == :table
+      return render_layout_grid_widget(widget, indent) if type == :layout_grid
+      return render_data_view_widget(widget, indent) if type == :data_view
+
       if type == :page_title
-        return ["#{pad}page_title #{symbol(widget.fetch(:name))}"]
+        args = [symbol(widget.fetch(:name))]
+        append_appearance_ruby_args(args, options)
+        return ["#{pad}page_title #{args.join(', ')}"]
       end
 
       if type == :static_image
@@ -1932,22 +2110,18 @@ module Mxrb
         args << "width_unit: #{symbol(options[:width_unit])}" if options[:width_unit]
         args << "height_unit: #{symbol(options[:height_unit])}" if options[:height_unit]
         args << "responsive: false" if options[:responsive] == false
+        append_appearance_ruby_args(args, options)
         return ["#{pad}static_image #{args.join(', ')}"]
-      end
-
-      # drop_down
-      if type == :drop_down
-        args = [symbol(widget.fetch(:name))]
-        args << "attribute: #{symbol(options[:attribute])}" if options[:attribute]
-        args << "caption: #{ruby(options[:caption])}" if options.key?(:caption) && !options[:caption].nil?
-        return ["#{pad}drop_down #{args.join(', ')}"]
       end
 
       # Container: recurse into children
       if type == :container
         children_lines = Array(widget[:children]).flat_map { render_widget(_1, indent + 2) }
+        children_lines.concat(
+          widget.fetch(:events, []).map { render_widget_event(_1, indent + 2) }
+        )
         args = [symbol(widget.fetch(:name))]
-        args << "class_name: #{ruby(options[:class])}" if options[:class]
+        append_appearance_ruby_args(args, options)
         if children_lines.empty?
           return ["#{pad}container #{args.join(', ')}"]
         else
@@ -1962,6 +2136,15 @@ module Mxrb
       args << "attribute: #{symbol(options[:attribute])}" if options[:attribute]
       args << "caption: #{ruby(options[:caption])}" if options.key?(:caption) && !options[:caption].nil?
       args << "entity: #{ruby(options[:entity])}" if options[:entity]
+      args << "selection: #{symbol(options[:selection])}" if type == :data_grid && options.key?(:selection)
+      if %i[text_box number_input text_area check_box date_picker radio_button_group
+            reference_selector drop_down].include?(type)
+        append_appearance_ruby_args(args, options)
+      end
+      if %i[button text].include?(type)
+        args << "parameters: #{native_ruby(options[:parameters])}" unless Array(options[:parameters]).empty?
+        append_appearance_ruby_args(args, options)
+      end
       args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
       args << "horizontal: true" if type == :radio_button_group && options[:horizontal]
       if type == :reference_selector && options[:display_attribute]
@@ -2017,7 +2200,7 @@ module Mxrb
       end
 
       widget.fetch(:events, []).each do |event|
-        widget_body << "#{child_pad}#{event.fetch(:event)} #{event.fetch(:kind)}: #{symbol(event.fetch(:handler))}"
+        widget_body << render_widget_event(event, indent + 2)
       end
 
       if widget_body.empty?
@@ -2027,6 +2210,274 @@ module Mxrb
         lines.concat(widget_body)
         lines << "#{pad}end"
       end
+    end
+
+    def render_widget_event(event, indent)
+      arguments = event.fetch(:arguments, {})
+      handler = if event.fetch(:kind).to_sym == :page
+                  symbol(event.fetch(:handler))
+                else
+                  reference(event.fetch(:handler))
+                end
+      declaration = "#{' ' * indent}#{event.fetch(:event)} " \
+                    "#{event.fetch(:kind)}: #{handler}"
+      return declaration if arguments.empty?
+
+      "#{declaration}, pass: #{native_ruby(arguments, indent)}"
+    end
+
+    def render_pluggable_slot(slot, indent)
+      path = Array(slot.fetch(:path))
+      widgets = Array(slot[:widgets])
+      declaration = pluggable_slot_declaration(path, indent)
+      return [declaration] if widgets.empty?
+
+      ["#{declaration} do", *widgets.flat_map { render_widget(_1, indent + 2) },
+       "#{' ' * indent}end"]
+    end
+
+    def pluggable_slot_declaration(path, indent)
+      pad = ' ' * indent
+      if path.size == 1
+        "#{pad}slot #{symbol(path.first)}"
+      elsif path.size == 4 && path[1].to_s == 'objects' && path[2].is_a?(Integer)
+        "#{pad}slot #{symbol(path[3])}, within: #{symbol(path[0])}, item: #{path[2]}"
+      else
+        "#{pad}slot path: #{native_ruby(path, indent)}"
+      end
+    end
+
+    def render_data_view_widget(widget, indent)
+      pad = " " * indent
+      child_pad = " " * (indent + 2)
+      options = widget.fetch(:options, {})
+      args = [symbol(widget.fetch(:name)), "from: #{data_view_source_ruby(options.fetch(:source))}"]
+      args << "editable: #{symbol(options[:editable])}" if options.fetch(:editable, :always).to_sym != :always
+      if options.fetch(:read_only_style, :control).to_sym != :control
+        args << "read_only_style: #{symbol(options[:read_only_style])}"
+      end
+      args << "label_width: #{options[:label_width]}" if options[:label_width].to_i != 0
+      args << "show_footer: false" if options[:show_footer] == false
+      unless options[:no_entity_message].to_s.empty?
+        args << "no_entity_message: #{ruby(options[:no_entity_message])}"
+      end
+      args << "tab_index: #{options[:tab_index]}" if options[:tab_index].to_i != 0
+      append_appearance_ruby_args(args, options)
+      body = Array(widget[:body]).flat_map { render_widget(_1, indent + 4) }
+      footer = Array(widget[:footer]).flat_map { render_widget(_1, indent + 4) }
+      lines = ["#{pad}data_view #{args.join(', ')} do"]
+      unless body.empty?
+        lines << "#{child_pad}body do"
+        lines.concat(body)
+        lines << "#{child_pad}end"
+      end
+      unless footer.empty?
+        lines << "#{child_pad}footer do"
+        lines.concat(footer)
+        lines << "#{child_pad}end"
+      end
+      lines.concat(data_view_condition_ruby(:visible_when, options[:visibility], indent + 2))
+      lines.concat(data_view_condition_ruby(:editable_when, options[:editability], indent + 2))
+      unless Array(options[:design_properties]).empty?
+        values = Array(options[:design_properties]).map { native_ruby(_1, indent + 2) }
+        lines << "#{child_pad}design_properties(#{values.join(', ')})"
+      end
+      unless options.fetch(:unknown_native, {}).empty?
+        lines << "#{child_pad}unknown_native(#{native_ruby(options[:unknown_native], indent + 2)})"
+      end
+      lines << "#{pad}end"
+    end
+
+    def data_view_source_ruby(raw_source)
+      source = raw_source.transform_keys(&:to_sym)
+      kind = source.fetch(:kind).to_sym
+      return complex_data_view_source_ruby(source) if complex_data_view_source?(source)
+
+      common = []
+      common << "force_full_objects: true" if source[:force_full_objects] == true
+      common << "native: #{native_ruby(source[:unknown_native])}" unless source.fetch(:unknown_native, {}).empty?
+      case kind
+      when :context
+        variable = source[:variable]&.transform_keys(&:to_sym)
+        args = []
+        args << symbol(variable[:name]) if variable&.fetch(:name, nil)
+        args << "entity: #{ruby(source.fetch(:entity))}"
+        args << "kind: #{symbol(variable[:kind])}" if variable && variable.fetch(:kind, :page_parameter).to_sym != :page_parameter
+        args << "sub_key: #{ruby(variable[:sub_key])}" if variable&.fetch(:sub_key, nil)
+        args << "use_all_pages: true" if variable&.fetch(:use_all_pages, false)
+        "context(#{(args + common).join(', ')})"
+      when :association
+        steps = Array(source[:steps])
+        step_value = if steps.one?
+          ruby(steps.first[:association] || steps.first['association'])
+        else
+          native_ruby(steps.map { |step| [step[:association], step[:entity]] })
+        end
+        args = [step_value, "entity: #{ruby(source.fetch(:entity))}"]
+        args << "from: #{page_variable_ruby(source[:variable])}" if source[:variable]
+        "association(#{(args + common).join(', ')})"
+      when :microflow, :nanoflow
+        args = [reference(source.fetch(:name))]
+        pass = data_view_pass_ruby(source[:mappings])
+        args << "pass: #{pass}" if pass
+        "#{kind}_source(#{(args + common).join(', ')})"
+      when :listen
+        "listen_to(#{symbol(source.fetch(:target))}#{common.empty? ? '' : ", #{common.join(', ')}"})"
+      else
+        complex_data_view_source_ruby(source)
+      end
+    end
+
+    def complex_data_view_source?(source)
+      return true if source[:settings_native] || source[:entity_ref_native]
+
+      Array(source[:mappings]).any? { _1[:unknown_native] || _1['unknown_native'] }
+    end
+
+    def complex_data_view_source_ruby(source)
+      kind = source.fetch(:kind).to_sym
+      options = source.reject { |key, _value| key == :kind }
+      "view_source(#{symbol(kind)}, **#{native_ruby(options)})"
+    end
+
+    def data_view_pass_ruby(mappings)
+      values = Array(mappings)
+      return if values.empty?
+
+      pairs = values.map do |mapping|
+        mapping = mapping.transform_keys(&:to_sym)
+        value = mapping[:variable] ? page_variable_ruby(mapping[:variable]) : ruby(mapping[:expression])
+        "#{symbol(mapping.fetch(:parameter))} => #{value}"
+      end
+      "{ #{pairs.join(', ')} }"
+    end
+
+    def page_variable_ruby(raw_variable)
+      variable = raw_variable.transform_keys(&:to_sym)
+      args = [symbol(variable[:name] || :current)]
+      args << "kind: #{symbol(variable[:kind])}" if variable.fetch(:kind, :page_parameter).to_sym != :page_parameter
+      args << "sub_key: #{ruby(variable[:sub_key])}" if variable[:sub_key]
+      args << "use_all_pages: true" if variable[:use_all_pages] == true
+      unless variable.fetch(:unknown_native, {}).empty?
+        args << "native: #{native_ruby(variable[:unknown_native])}"
+      end
+      "page_variable(#{args.join(', ')})"
+    end
+
+    def data_view_condition_ruby(method, raw_condition, indent)
+      return [] unless raw_condition
+
+      condition = raw_condition.transform_keys(&:to_sym)
+      args = []
+      args << ruby(condition[:expression]) if condition[:expression]
+      args << "roles: #{ruby(Array(condition[:roles]))}" unless Array(condition[:roles]).empty?
+      args << "attribute: #{ruby(condition[:attribute])}" if condition[:attribute]
+      args << "conditions: #{native_ruby(condition[:conditions], indent)}" unless Array(condition[:conditions]).empty?
+      args << "ignore_security: true" if condition[:ignore_security] == true
+      args << "source: #{page_variable_ruby(condition[:source_variable])}" if condition[:source_variable]
+      unless condition.fetch(:unknown_native, {}).empty?
+        args << "native: #{native_ruby(condition[:unknown_native], indent)}"
+      end
+      [(" " * indent) + "#{method} #{args.join(', ')}"]
+    end
+
+    def render_table_widget(widget, indent)
+      pad = " " * indent
+      child_pad = " " * (indent + 2)
+      options = widget.fetch(:options, {})
+      args = [symbol(widget.fetch(:name))]
+      args << "width_unit: #{symbol(options[:width_unit])}" if
+        options[:width_unit] && options[:width_unit].to_sym != :weight
+      args << "tab_index: #{options[:tab_index]}" if options[:tab_index].to_i != 0
+      append_appearance_ruby_args(args, options)
+      lines = ["#{pad}table #{args.join(', ')} do"]
+      Array(options[:columns]).each do |column|
+        lines << "#{child_pad}column width: #{column.fetch(:width, 0).to_i}"
+      end
+      Array(options[:rows]).each do |row|
+        row_args = []
+        append_appearance_ruby_args(row_args, row.fetch(:options, {}))
+        lines << "#{child_pad}row#{row_args.empty? ? '' : " #{row_args.join(', ')}"} do"
+        cursor = 0
+        Array(row[:cells]).each do |cell|
+          cell_args = []
+          column = cell.fetch(:column, cursor).to_i
+          cell_args << "column: #{column}" unless column == cursor
+          cell_args << "colspan: #{cell[:colspan]}" if cell[:colspan].to_i > 1
+          cell_args << "rowspan: #{cell[:rowspan]}" if cell[:rowspan].to_i > 1
+          cell_args << "header: true" if cell[:header] == true
+          append_appearance_ruby_args(cell_args, cell.fetch(:options, {}))
+          widgets = Array(cell[:widgets])
+          declaration = "#{child_pad}  cell#{cell_args.empty? ? '' : " #{cell_args.join(', ')}"}"
+          if widgets.empty?
+            lines << declaration
+          else
+            lines << "#{declaration} do"
+            lines.concat(widgets.flat_map { render_widget(_1, indent + 6) })
+            lines << "#{child_pad}  end"
+          end
+          cursor = column + [cell.fetch(:colspan, 1).to_i, 1].max
+        end
+        lines << "#{child_pad}end"
+      end
+      lines << "#{pad}end"
+    end
+
+    def render_layout_grid_widget(widget, indent)
+      pad = " " * indent
+      options = widget.fetch(:options, {})
+      args = [symbol(widget.fetch(:name))]
+      args << "width: #{symbol(options[:width])}" if options.fetch(:width, :full).to_sym != :full
+      args << "tab_index: #{options[:tab_index]}" if options[:tab_index].to_i != 0
+      append_appearance_ruby_args(args, options)
+      lines = ["#{pad}layout_grid #{args.join(', ')} do"]
+      lines.concat(Array(options[:rows]).flat_map { render_layout_grid_row(_1, indent + 2) })
+      lines << "#{pad}end"
+    end
+
+    def render_layout_grid_row(row, indent)
+      pad = " " * indent
+      options = row.fetch(:options, {})
+      args = []
+      args << "horizontal_alignment: #{symbol(options[:horizontal_alignment])}" if
+        options.fetch(:horizontal_alignment, :none).to_sym != :none
+      args << "vertical_alignment: #{symbol(options[:vertical_alignment])}" if
+        options.fetch(:vertical_alignment, :none).to_sym != :none
+      args << "gutters: false" if options[:gutters] == false
+      append_appearance_ruby_args(args, options)
+      declaration = "#{pad}row#{args.empty? ? '' : " #{args.join(', ')}"}"
+      columns = Array(row[:columns])
+      return [declaration] if columns.empty?
+
+      ["#{declaration} do", *columns.flat_map { render_layout_grid_column(_1, indent + 2) },
+       "#{pad}end"]
+    end
+
+    def render_layout_grid_column(column, indent)
+      pad = " " * indent
+      options = column.fetch(:options, {})
+      args = %i[desktop tablet phone].filter_map do |viewport|
+        value = options.fetch(viewport, :grow)
+        next if value.to_s == "grow"
+
+        rendered = value.to_s == "auto" ? symbol(value) : Integer(value)
+        "#{viewport}: #{rendered}"
+      end
+      alignment = options.fetch(:vertical_alignment, :none)
+      args << "vertical_alignment: #{symbol(alignment)}" if alignment.to_sym != :none
+      append_appearance_ruby_args(args, options)
+      declaration = "#{pad}column#{args.empty? ? '' : " #{args.join(', ')}"}"
+      widgets = Array(column[:widgets])
+      return [declaration] if widgets.empty?
+
+      ["#{declaration} do", *widgets.flat_map { render_widget(_1, indent + 2) }, "#{pad}end"]
+    end
+
+    def append_appearance_ruby_args(args, options)
+      args << "class_name: #{ruby(options[:class])}" unless options[:class].to_s.empty?
+      args << "style: #{ruby(options[:style])}" unless options[:style].to_s.empty?
+      args << "dynamic_class: #{ruby(options[:dynamic_class])}" unless options[:dynamic_class].to_s.empty?
+      args << "visible: #{ruby(options[:visible])}" unless options[:visible].to_s.empty?
     end
 
     # ── Microflow / nanoflow body export ─────────────────────────────────────
@@ -2043,6 +2494,7 @@ module Mxrb
       end
       return false if connected_objects.size > 1 && local_flows.empty?
       return false unless objects.all? { EDITABLE_FLOW_OBJECT_TYPES.include?(_1["$Type"]) }
+      return false if !nested && objects.any? { _1["$Type"] == "Microflows$BreakEvent" }
       return false unless local_flows.all? do
         %w[Microflows$SequenceFlow Microflows$AnnotationFlow].include?(_1["$Type"])
       end
@@ -2121,6 +2573,7 @@ module Mxrb
           mapping["Parameter"] && %w[
             Microflows$BasicJavaActionParameterValue
             Microflows$BasicCodeActionParameterValue
+            Microflows$EntityTypeCodeActionParameterValue
             Microflows$EntityTypeJavaActionParameterValue
             Microflows$MicroflowJavaActionParameterValue
             Microflows$MicroflowParameterValue
@@ -2173,6 +2626,11 @@ module Mxrb
                                result["ImportMappingCall"].nil? &&
                                !result["ResultVariableName"].to_s.empty? &&
                                !result.dig("VariableType", "Entity").to_s.empty?
+                           when "String"
+                             result["Bind"] == true &&
+                               result["ImportMappingCall"].nil? &&
+                               !result["ResultVariableName"].to_s.empty? &&
+                               result.dig("VariableType", "$Type") == "DataTypes$StringType"
                            else
                              false
                            end
@@ -2198,6 +2656,16 @@ module Mxrb
           !result.dig("VariableType", "Entity").to_s.empty? &&
           !mapping["ReturnValueMapping"].to_s.empty? &&
           mapping.dig("Range", "$Type") == "Microflows$ConstantRange"
+      when "Microflows$ExportXmlAction"
+        output = action["OutputMethod"] || {}
+        handling = action["ResultHandling"] || {}
+        output["$Type"] == "ExportXmlAction$StringExport" &&
+          !output["OutputVariableName"].to_s.empty? &&
+          handling["$Type"] == "Microflows$MappingRequestHandling" &&
+          %w[Xml Json].include?(handling["ContentType"]) &&
+          !handling["MappingId"].to_s.empty? &&
+          !handling["MappingVariableName"].to_s.empty? &&
+          [true, false].include?(action["IsValidationRequired"])
       when "Microflows$DownloadFileAction"
         !action["FileDocumentVariableName"].to_s.empty?
       else
@@ -2380,6 +2848,10 @@ module Mxrb
 
         when "Microflows$ContinueEvent"
           lines << "#{' ' * indent}continue_loop"
+          break
+
+        when "Microflows$BreakEvent"
+          lines << "#{' ' * indent}break_loop"
           break
 
         else
@@ -2651,6 +3123,8 @@ module Mxrb
         database_query_line(pad, action)
       when "Microflows$ImportXmlAction"
         import_xml_line(pad, action)
+      when "Microflows$ExportXmlAction"
+        export_xml_line(pad, action)
       when "Microflows$DownloadFileAction"
         args = [":#{action['FileDocumentVariableName']}"]
         args << "show_in_browser: true" if action["ShowFileInBrowser"] == true
@@ -2707,6 +3181,20 @@ module Mxrb
       "#{pad}import_xml #{args.join(', ')}"
     end
 
+    def export_xml_line(pad, action)
+      output = action["OutputMethod"] || {}
+      handling = action["ResultHandling"] || {}
+      args = [":#{handling['MappingVariableName']}"]
+      args << "mapping: #{ruby(handling['MappingId'])}"
+      args << "as: :#{output['OutputVariableName']}"
+      content_type = underscore(handling["ContentType"])
+      args << "content_type: :#{content_type}" unless content_type == "xml"
+      args << "validate: true" if action["IsValidationRequired"] == true
+      error = underscore(action["ErrorHandlingType"])
+      args << "error: :#{error}" unless error == "rollback"
+      "#{pad}export_xml #{args.join(', ')}"
+    end
+
     def rest_call_line(pad, action)
       http = action["HttpConfiguration"] || {}
       location = http["CustomLocationTemplate"] || {}
@@ -2737,6 +3225,8 @@ module Mxrb
       args << "result_mapping: #{ruby(import_call["ReturnValueMapping"])}" if import_call["ReturnValueMapping"]
       if action["ResultHandlingType"] == "HttpResponse"
         args << "result_handling: :http_response"
+      elsif action["ResultHandlingType"] == "String"
+        args << "result_handling: :string"
       end
       args << "as: :#{result["ResultVariableName"]}" unless result["ResultVariableName"].to_s.empty?
       args << "result_entity: #{ruby(result.dig("VariableType", "Entity"))}" if result.dig("VariableType", "Entity")
@@ -2789,6 +3279,7 @@ module Mxrb
       return value["Argument"] if type.include?("$Basic")
 
       field, kind = case type
+      when /EntityTypeCodeActionParameterValue/ then ["Entity", :entity_type]
       when /EntityType/     then ["Entity", :entity]
       when /Microflow(?:Java)?/ then ["Microflow", :microflow]
       when /ImportMapping/  then ["ImportMapping", :import_mapping]
@@ -2874,23 +3365,79 @@ module Mxrb
     def infer_public_artifacts(modules)
       modules.each_with_object({}) do |mod, public_artifacts|
         mod.pages.each do |page|
-          source = page.data_source
-          next unless source
-
-          target_module, target_name = source.fetch(:name).to_s.split(".", 2)
-          next if target_name.to_s.empty? || target_module == mod.name
-
-          public_artifacts[[target_module, source.fetch(:kind).to_sym, target_name]] = true
+          infer_public_reference(public_artifacts, mod.name, page.data_source)
+          each_page_widget(page.widgets) do |widget|
+            infer_public_reference(public_artifacts, mod.name, widget.dig(:options, :source)) if
+              widget[:type].to_sym == :data_view
+          end
+          each_widget_event(page.widgets) do |event|
+            infer_public_reference(
+              public_artifacts, mod.name,
+              { kind: event.fetch(:kind), name: event.fetch(:handler) }
+            )
+          end
         end
       end
     end
 
-    def flow_metadata(module_name, kind, name, metadata)
-      result = metadata ? metadata.dup : {}
-      if @inferred_public_artifacts&.include?([module_name, kind, name])
-        result[:public] = true
+    def each_widget_event(widgets, &block)
+      Array(widgets).each do |widget|
+        Array(widget[:events]).each(&block)
+        each_widget_event(direct_widget_children(widget), &block)
+        Array(widget.dig(:options, :tabs)).each do |tab|
+          each_widget_event(tab[:widgets], &block)
+        end
+        Array(widget.dig(:options, :rows)).each do |row|
+          Array(row[:columns]).each { each_widget_event(_1[:widgets], &block) }
+          Array(row[:cells]).each { each_widget_event(_1[:widgets], &block) }
+        end
       end
+    end
+
+    def each_page_widget(widgets, &block)
+      Array(widgets).each do |widget|
+        yield widget
+        each_page_widget(direct_widget_children(widget), &block)
+        Array(widget.dig(:options, :tabs)).each { each_page_widget(_1[:widgets], &block) }
+        Array(widget.dig(:options, :rows)).each do |row|
+          Array(row[:columns]).each { each_page_widget(_1[:widgets], &block) }
+          Array(row[:cells]).each { each_page_widget(_1[:widgets], &block) }
+        end
+      end
+    end
+
+    def direct_widget_children(widget)
+      regions = widget[:regions]
+      region_widgets = regions.is_a?(Hash) ? regions.values.flat_map { Array(_1) } : []
+
+      (
+        Array(widget[:children]) +
+        Array(widget[:slots]).flat_map { Array(_1[:widgets]) } +
+        Array(widget[:body]) +
+        Array(widget[:footer]) +
+        region_widgets
+      ).uniq
+    end
+
+    def infer_public_reference(public_artifacts, current_module, reference)
+      return unless reference
+      return if reference.fetch(:kind).to_sym == :action
+      return if reference[:name].to_s.empty?
+
+      target_module, target_name = reference.fetch(:name).to_s.split(".", 2)
+      return if target_name.to_s.empty? || target_module == current_module
+
+      public_artifacts[[target_module, reference.fetch(:kind).to_sym, target_name]] = true
+    end
+
+    def artifact_metadata(module_name, kind, name, metadata)
+      result = metadata ? metadata.dup : {}
+      result[:public] = true if @inferred_public_artifacts&.include?([module_name, kind, name])
       result.empty? ? nil : result
+    end
+
+    def flow_metadata(module_name, kind, name, metadata)
+      artifact_metadata(module_name, kind, name, metadata)
     end
 
     def reference(value)

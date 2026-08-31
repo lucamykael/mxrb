@@ -272,8 +272,22 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       { "UnitID" => "page-id", "ContainmentName" => "Documents" },
       double(parse_contents: page_doc)
     )
-    expect(page.widgets.map { _1[:type] })
-      .to contain_exactly(:check_box, :date_picker, :reference_selector, :text)
+    typed_widgets = lambda do |value|
+      case value
+      when Array
+        value.flat_map { typed_widgets.call(_1) }
+      when Hash
+        current = value[:type].is_a?(Symbol) ? [value] : []
+        current + value.values.flat_map { typed_widgets.call(_1) }
+      else
+        []
+      end
+    end
+    expect(page.widgets.map { _1[:type] }).to eq([:layout_grid])
+    expect(typed_widgets.call(page.widgets).map { _1[:type] })
+      .to contain_exactly(
+        :layout_grid, :check_box, :date_picker, :reference_selector, :text
+      )
     expect(page.to_bson["$Type"]).to eq("Forms$Page")
     expect(page.inspect).to include("LegacyPage")
   end

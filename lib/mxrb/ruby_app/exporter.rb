@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
+require 'base64'
 require 'digest'
 require 'fileutils'
 require 'find'
 require 'json'
+require 'pp'
 require 'time'
+require_relative '../native_fragment_store'
 
 module Mxrb
   module RubyApp
@@ -28,6 +31,8 @@ module Mxrb
         true undef unless until when while yield
       ].freeze
       RECORD_RESERVED = %w[attributes id initialize mendix_id mendix_name to_h type].freeze
+      ZERO_UUID = '00000000-0000-0000-0000-000000000000'
+      SYSTEM_INDEX_MEMBER_TYPES = %w[Owner CreatedDate ChangedDate ChangedBy].freeze
 
       def initialize(mpr_path, output_dir, mendix_sidecar:)
         @mpr_path = File.expand_path(mpr_path)
@@ -37,6 +42,9 @@ module Mxrb
 
       def export!
         FileUtils.mkdir_p(@output_dir)
+        @native_fragment_store = NativeFragmentStore.new(
+          File.join(@output_dir, '.mxrb', 'native_fragments')
+        )
         runtime_mpr = copy_runtime_mpr
         embedded_sources = read_embedded_sources
         @embedded_sources = embedded_sources
@@ -64,6 +72,7 @@ module Mxrb
         @module_manifests = nil
         @security_manifest = nil
         @known_entity_names = nil
+        @native_fragment_store = nil
       end
 
       private
@@ -151,8 +160,19 @@ module Mxrb
         namespace = ruby_constant(mod.name)
         root = underscore(mod.name)
         entities = mod.entities.map { export_entity(_1, mod, namespace, root) }
-        microflows = mod.microflows.map { export_service(_1, mod, namespace, root, :microflow) }
-        nanoflows = mod.nanoflows.map { export_nanoflow(_1, mod, namespace, root) }
+        duplicate_flows = duplicate_flow_ids(mod.microflows + mod.nanoflows)
+        microflows = mod.microflows.map do |flow|
+          export_service(
+            flow, mod, namespace, root, :microflow,
+            duplicate_name: duplicate_flows.include?(flow.id.to_s)
+          )
+        end
+        nanoflows = mod.nanoflows.map do |flow|
+          export_nanoflow(
+            flow, mod, namespace, root,
+            duplicate_name: duplicate_flows.include?(flow.id.to_s)
+          )
+        end
         pages = mod.pages.map { export_page(_1, mod, namespace, root) }
         endpoints = export_endpoints(mod)
         module_security = export_module_security(mod, namespace, root)
@@ -213,7 +233,7 @@ module Mxrb
           'demo_users_enabled' => document['EnableDemoUsers'] == true,
           'guest_access_enabled' => document['EnableGuestAccess'] == true,
           'guest_user_role' => document['GuestUserRole'].to_s,
-          'sign_in_microflow' => document['SignInMicroflow'].to_s,
+          'sign_in_microflow' => document['SignInMicroflow']&.to_s,
           'user_roles' => native_items(document['UserRoles']).map { project_user_role_manifest(_1) },
           'demo_users' => native_items(document['DemoUsers']).map { project_demo_user_manifest(_1) },
           'password_policy' => if policy
@@ -257,6 +277,19 @@ module Mxrb
         qualified = "#{mod.name}.#{name}"
         id = native_identifier(event['$ID'])
         schedule = event['Schedule'].is_a?(Hash) ? event['Schedule'] : {}
+        enabled = event['Enabled'] == true
+        unbound = !enabled && event['Microflow'].to_s.empty? && schedule.empty?
+        schedule_manifest = if schedule.empty?
+                              nil
+                            else
+                              {
+                                'id' => native_identifier(schedule['$ID']),
+                                'type' => schedule['$Type'].to_s,
+                                'properties' => runtime_value(
+                                  schedule.reject { |key, _value| %w[$ID $Type].include?(key) }
+                                )
+                              }
+                            end
         relative = embedded_scheduled_event_path(id, qualified) ||
                    File.join('app', 'scheduled_events', root, "#{underscore(name)}.rb")
         manifest = {
@@ -266,15 +299,10 @@ module Mxrb
           'start_at' => scheduled_event_start(event['StartDateTime']),
           'time_zone' => event['TimeZone'].to_s,
           'on_overlap' => event['OnOverlap'].to_s,
-          'enabled' => event['Enabled'] == true,
+          'enabled' => enabled, 'unbound' => unbound,
           'interval_type' => event['IntervalType'].to_s,
           'interval' => event.fetch('Interval', 1),
-          'schedule' => {
-            'id' => native_identifier(schedule['$ID']), 'type' => schedule['$Type'].to_s,
-            'properties' => runtime_value(
-              schedule.reject { |key, _value| %w[$ID $Type].include?(key) }
-            )
-          },
+          'schedule' => schedule_manifest,
           'path' => relative
         }
         write(relative, scheduled_event_source(namespace, ruby_constant(name), manifest))
@@ -362,16 +390,33 @@ module Mxrb
           'guid' => IO::BsonCodec.extract_id(index['GUID']),
           'include_offline' => index.fetch('IncludeInOffline', false) == true,
           'members' => members.map do |member|
-            name = member['Attribute'].to_s.split('.').last
-            raise SerializationError, "unsupported index member in #{entity.qualified_name}" if name.empty?
+            type = (member['Type'] || member['type'] || 'Normal').to_s
+            name = index_member_name(entity, member, type)
 
             {
               'id' => IO::BsonCodec.extract_id(member['$ID']), 'name' => name,
               'ascending' => member.fetch('Ascending', true) == true,
-              'type' => member.fetch('Type', 'Normal').to_s
+              'type' => type
             }
           end
         }
+      end
+
+      def index_member_name(entity, member, type)
+        explicit = (member['Attribute'] || member['attribute']).to_s.split('.').last.to_s
+        return explicit unless explicit.empty?
+
+        pointer = IO::BsonCodec.extract_id(member['AttributePointer'] || member['attributePointer'])
+        unless pointer.nil? || pointer == ZERO_UUID
+          attribute = entity.attributes.find { _1.id.to_s == pointer }
+          return attribute.name unless attribute.nil?
+
+          raise SerializationError,
+                "unresolved index attribute pointer #{pointer} in #{entity.qualified_name}"
+        end
+        return type if SYSTEM_INDEX_MEMBER_TYPES.include?(type)
+
+        raise SerializationError, "unsupported index member in #{entity.qualified_name}"
       end
 
       def oql_view_manifest(entity, mod)
@@ -442,9 +487,11 @@ module Mxrb
         }
       end
 
-      def export_service(flow, mod, namespace, root, kind)
-        class_name = ruby_constant(flow.name)
-        relative = File.join('app', 'services', root, "#{underscore(flow.name)}.rb")
+      def export_service(flow, mod, namespace, root, kind, duplicate_name: false)
+        class_name = flow_ruby_constant(flow, duplicate_name:)
+        relative = File.join(
+          'app', 'services', root, "#{flow_file_stem(flow, duplicate_name:)}.rb"
+        )
         qualified = "#{mod.name}.#{flow.name}"
         native_source = native_flow_source(flow, kind)
         write(
@@ -520,21 +567,24 @@ module Mxrb
         REST_STATUS_CODES.fetch(raw.to_s.gsub(/[^A-Za-z]/, '').downcase, 200)
       end
 
-      def export_nanoflow(flow, mod, namespace, root = nil)
+      def export_nanoflow(flow, mod, namespace, root = nil, duplicate_name: false)
         root ||= namespace
         namespace = ruby_constant(mod.name) if root == namespace
         qualified = "#{mod.name}.#{flow.name}"
         relative = File.join(
-          'frontend', 'src', 'generated', 'nanoflows', root, "#{underscore(flow.name)}.ts"
+          'frontend', 'src', 'generated', 'nanoflows', root,
+          "#{flow_file_stem(flow, duplicate_name:)}.ts"
         )
         write(relative, nanoflow_typescript(flow, qualified))
         native_source = native_flow_source(flow, :nanoflow)
-        ruby_path = File.join('app', 'services', root, "#{underscore(flow.name)}_nanoflow.rb")
+        ruby_path = File.join(
+          'app', 'services', root, "#{flow_file_stem(flow, duplicate_name:)}_nanoflow.rb"
+        )
         if native_source
           write(
             ruby_path,
             service_source(
-              namespace, ruby_constant(flow.name), qualified, flow.id,
+              namespace, flow_ruby_constant(flow, duplicate_name:), qualified, flow.id,
               native_source:, native_kind: :nanoflow
             )
           )
@@ -1067,8 +1117,12 @@ module Mxrb
       end
 
       def widget_manifest(widget)
-        options = runtime_value(widget.fetch(:options, {}))
-        value = { 'type' => runtime_widget_type(widget), 'name' => widget.fetch(:name, '').to_s }
+        type = runtime_widget_type(widget)
+        raw_options = widget.fetch(:options, {})
+        options = runtime_widget_options(raw_options)
+        options['native_fragment'] = native_widget_fragment_manifest(raw_options) if
+          type == 'native_widget'
+        value = { 'type' => type, 'name' => widget.fetch(:name, '').to_s }
         value['options'] = options unless options.empty?
         caption = options['caption']
         value['caption'] = caption unless caption.to_s.empty?
@@ -1076,7 +1130,64 @@ module Mxrb
         value['events'] = events unless events.empty?
         children = Array(widget[:children]).map { widget_manifest(_1) }
         value['children'] = children unless children.empty?
+        %i[body footer].each do |region|
+          widgets = Array(widget[region]).map { widget_manifest(_1) }
+          value[region.to_s] = widgets unless widgets.empty?
+        end
+        regions = widget[:regions]
+        if regions.is_a?(Hash)
+          value['regions'] = regions.to_h do |name, widgets|
+            [name.to_s, Array(widgets).map { widget_manifest(_1) }]
+          end
+        end
+        slots = Array(widget[:slots]).map do |slot|
+          manifest = {
+            'path' => runtime_value(slot.fetch(:path)),
+            'widgets' => Array(slot[:widgets]).map { widget_manifest(_1) }
+          }
+          manifest['role'] = slot.fetch(:role).to_s if slot.key?(:role)
+          manifest
+        end
+        value['slots'] = slots unless slots.empty?
         value
+      end
+
+      def runtime_widget_options(value)
+        if runtime_native_widget_hash?(value)
+          manifest = runtime_value(value)
+          raw_options = value[:options] || value['options']
+          manifest.fetch('options')['native_fragment'] = native_widget_fragment_manifest(raw_options)
+          return manifest
+        end
+
+        case value
+        when Hash
+          value.each_with_object({}) do |(key, child), result|
+            next if key.to_s == 'deep_structure'
+
+            result[key.to_s] = runtime_widget_options(child)
+          end
+        when Array then value.map { runtime_widget_options(_1) }
+        else runtime_value(value)
+        end
+      end
+
+      def runtime_native_widget_hash?(value)
+        return false unless value.is_a?(Hash)
+
+        type = value[:type] || value['type']
+        options = value[:options] || value['options']
+        type.to_s == 'native_widget' && options.is_a?(Hash)
+      end
+
+      def native_widget_fragment_manifest(options)
+        deep_structure = options[:deep_structure] || options['deep_structure']
+        raise SerializationError, 'native widget deep_structure must be a Hash' unless
+          deep_structure.is_a?(Hash)
+        raise SerializationError, 'native fragment store is not initialized' unless
+          @native_fragment_store
+
+        { 'digest' => @native_fragment_store.put(deep_structure) }
       end
 
       def runtime_widget_type(widget)
@@ -1095,6 +1206,11 @@ module Mxrb
 
       def runtime_value(value)
         case value
+        when BSON::Binary
+          {
+            '$binary' => Base64.strict_encode64(value.data),
+            '$subtype' => value.type.to_s
+          }
         when Hash
           value.each_with_object({}) do |(key, child), result|
             next if key.to_s == 'deep_structure'
@@ -1313,6 +1429,9 @@ module Mxrb
                           "    password_policy id: #{policy.fetch('id').inspect}, " \
                             "properties: #{policy.fetch('properties').inspect}"
                         end
+        sign_in_source = if security['sign_in_microflow']
+                           "    sign_in_microflow #{security.fetch('sign_in_microflow').inspect}"
+                         end
         <<~RUBY
           # frozen_string_literal: true
 
@@ -1322,7 +1441,7 @@ module Mxrb
             admin_user_role #{security.fetch('admin_user_role').inspect}
             demo_users enabled: #{security.fetch('demo_users_enabled')}
             guest_access enabled: #{security.fetch('guest_access_enabled')}, role: #{security.fetch('guest_user_role').inspect}
-            sign_in_microflow #{security.fetch('sign_in_microflow').inspect}
+          #{sign_in_source}
           #{user_roles.join("\n")}
           #{demo_users.join("\n")}
           #{policy_source}
@@ -1331,7 +1450,19 @@ module Mxrb
       end
 
       def scheduled_event_source(namespace, class_name, event)
-        schedule = event.fetch('schedule')
+        schedule = event['schedule']
+        binding = if event.fetch('unbound', false)
+                    "    unbound\n"
+                  else
+                    "    microflow #{event.fetch('microflow').inspect}\n"
+                  end
+        schedule_source = if schedule
+                            "    schedule #{schedule.fetch('type').inspect}, " \
+                              "id: #{schedule.fetch('id').inspect},\n" \
+                              "             properties: #{schedule.fetch('properties').inspect}\n"
+                          else
+                            ''
+                          end
         <<~RUBY
           # frozen_string_literal: true
 
@@ -1340,15 +1471,14 @@ module Mxrb
               mendix_name #{event.fetch('name').inspect}, id: #{event.fetch('id').inspect}
               documentation #{event.fetch('documentation').inspect}
               export_level #{event.fetch('export_level').inspect}
-              microflow #{event.fetch('microflow').inspect}
+          #{binding.rstrip}
               start_at #{event.fetch('start_at').inspect}
               time_zone #{event.fetch('time_zone').inspect}
               on_overlap #{event.fetch('on_overlap').inspect}
               enabled value: #{event.fetch('enabled')}
               interval_type #{event.fetch('interval_type').inspect}
               interval #{event.fetch('interval').inspect}
-              schedule #{schedule.fetch('type').inspect}, id: #{schedule.fetch('id').inspect},
-                       properties: #{schedule.fetch('properties').inspect}
+          #{schedule_source.rstrip}
             end
           end
         RUBY
@@ -1380,19 +1510,761 @@ module Mxrb
 
       def page_source(namespace, class_name, qualified, id, title, widgets,
                       appearance_class:, appearance_style:, data_source:)
+        widget_source = runtime_widget_dsl_source(widgets, 6)
         <<~RUBY
           # frozen_string_literal: true
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Page
               mendix_name #{qualified.inspect}, id: #{id.inspect}
-              configure title: #{title.inspect}, widgets: #{widgets.inspect},
-                        appearance_class: #{appearance_class.inspect},
-                        appearance_style: #{appearance_style.inspect},
-                        data_source: #{data_source.inspect}
+              configure(
+                title: #{title.inspect},
+                appearance_class: #{appearance_class.inspect},
+                appearance_style: #{appearance_style.inspect},
+                data_source: #{data_source.inspect}
+              ) do
+          #{widget_source}
+              end
             end
           end
         RUBY
+      end
+
+      def runtime_widget_dsl_source(widgets, indentation, generic_sink: false)
+        Array(widgets).map do |widget|
+          runtime_widget_call_source(widget, indentation, generic_sink:)
+        end.join("\n")
+      end
+
+      def runtime_widget_call_source(widget, indentation, generic_sink: false)
+        padding = ' ' * indentation
+        type = widget.fetch('type').to_sym
+        options = widget.fetch('options', {})
+        if type == :data_view && runtime_data_view_supported?(options, widget)
+          return runtime_data_view_source(widget, indentation)
+        end
+        if type == :native_widget && runtime_native_widget_supported?(options, widget)
+          return runtime_native_widget_source(widget, indentation)
+        end
+        if type == :tab_control && runtime_tab_control_supported?(options, widget)
+          return runtime_tab_control_source(widget, indentation)
+        end
+
+        if runtime_structured_widget?(type, options, widget)
+          return runtime_table_source(widget, indentation) if type == :table
+
+          return runtime_layout_grid_source(widget, indentation)
+        end
+        if generic_sink && runtime_data_grid_supported?(type, options, widget)
+          return runtime_data_grid_source(widget, indentation)
+        end
+
+        typed = if generic_sink
+                  runtime_dsl_sink_typed?(type, options, widget)
+                else
+                  Page::WidgetTree::WIDGET_METHODS.include?(type) &&
+                    !Page::WidgetTree::STRUCTURED_METHODS.include?(type) &&
+                    runtime_keywords_safe?(options)
+                end
+        method_name = typed ? type.to_s : 'widget'
+        arguments = []
+        arguments << type.inspect unless typed
+        arguments << widget.fetch('name', '').inspect
+        if typed
+          options.each do |key, value|
+            keyword = runtime_widget_keyword(type, key, generic_sink:)
+            arguments << "#{keyword}: #{pretty_ruby_value(value, indentation + 2)}"
+          end
+        elsif widget.key?('options')
+          arguments << "options: #{pretty_ruby_value(options, indentation + 2)}"
+        end
+        event_source = generic_sink && typed ? runtime_widget_event_source(widget, indentation + 2) : ''
+        emit_events = widget.key?('events') && (!generic_sink || !typed)
+        arguments << "events: #{pretty_ruby_value(widget.fetch('events'), indentation + 2)}" if emit_events
+        children = Array(widget['children'])
+        region_source = runtime_widget_regions_source(widget, indentation + 2, generic_sink:)
+        block = !event_source.empty? || !children.empty? || !region_source.empty?
+        declaration = runtime_widget_declaration(method_name, arguments, indentation, block)
+        return declaration unless block
+
+        nested = runtime_widget_dsl_source(children, indentation + 2, generic_sink:)
+        body = [event_source, nested, region_source].reject(&:empty?).join("\n")
+        "#{declaration}\n#{body}\n#{padding}end"
+      end
+
+      STRUCTURED_OPTION_KEYS = {
+        table: %w[width_unit tab_index class style dynamic_class visible columns rows],
+        layout_grid: %w[width tab_index class style dynamic_class visible rows]
+      }.freeze
+      DSL_SINK_OPTIONS = {
+        button: %w[caption parameters class style dynamic_class visible],
+        check_box: %w[attribute caption class style dynamic_class visible],
+        container: %w[class style dynamic_class visible],
+        date_picker: %w[attribute caption class style dynamic_class visible],
+        drop_down: %w[attribute caption class style dynamic_class visible],
+        number_input: %w[attribute caption class style dynamic_class visible],
+        page_title: %w[class style dynamic_class visible],
+        pluggable_widget: %w[
+          widget_id widget_name properties class style dynamic_class visible platform
+        ],
+        radio_button_group: %w[attribute caption horizontal class style dynamic_class visible],
+        reference_selector: %w[attribute caption display_attribute class style dynamic_class visible],
+        snippet: %w[snippet],
+        static_image: %w[
+          image alternative_text width height width_unit height_unit responsive
+          class style dynamic_class visible
+        ],
+        text: %w[caption parameters class style dynamic_class visible],
+        text_area: %w[attribute caption lines class style dynamic_class visible],
+        text_box: %w[attribute caption class style dynamic_class visible]
+      }.freeze
+      DSL_SINK_BLOCK_METHODS = (DSL_SINK_OPTIONS.keys - [:snippet]).freeze
+      DSL_SINK_REQUIRED_OPTIONS = {
+        button: %w[caption], pluggable_widget: %w[widget_id widget_name properties],
+        radio_button_group: %w[horizontal],
+        snippet: %w[snippet],
+        static_image: %w[image alternative_text width height width_unit height_unit responsive],
+        text: %w[caption], text_area: %w[lines]
+      }.freeze
+      WIDGET_EVENT_METHODS = %w[on_change on_click on_enter on_leave].freeze
+      WIDGET_EVENT_HANDLERS = %w[microflow nanoflow page action].freeze
+
+      def runtime_native_widget_supported?(options, widget)
+        return false unless runtime_keys?(widget, %w[type name options events])
+        return false unless widget['name'].is_a?(String) && widget.key?('options')
+        return false unless options.keys.map(&:to_s).sort == %w[native_fragment native_type]
+        return false unless options['native_type'].is_a?(String) && !options['native_type'].empty?
+        return false unless Array(widget['events']).empty?
+
+        fragment = options['native_fragment']
+        runtime_keys?(fragment, %w[digest]) && fragment.keys.map(&:to_s) == %w[digest] &&
+          fragment['digest'].to_s.match?(NativeFragmentStore::DIGEST_PATTERN)
+      end
+
+      def runtime_native_widget_source(widget, indentation)
+        options = widget.fetch('options')
+        fragment = options.fetch('native_fragment')
+        arguments = [
+          widget.fetch('name').inspect,
+          "type: #{options.fetch('native_type').inspect}",
+          "deep_structure: native_fragment(#{fragment.fetch('digest').inspect})"
+        ]
+        runtime_widget_declaration('native_widget', arguments, indentation, false)
+      end
+
+      def runtime_tab_control_supported?(options, widget)
+        return false unless runtime_keys?(widget, %w[type name options events])
+        return false unless widget['name'].is_a?(String) && widget.key?('options')
+        return false unless options.keys.map(&:to_s).sort == %w[tabs]
+        return false unless Array(widget['events']).empty?
+        return false unless options.fetch('tabs').is_a?(Array) && options.fetch('tabs').any?
+
+        options.fetch('tabs').all? do |tab|
+          runtime_keys?(tab, %w[name caption widgets]) &&
+            tab['name'].is_a?(String) && tab['caption'].is_a?(String) &&
+            tab['widgets'].is_a?(Array) && runtime_widget_collection_supported?(tab['widgets'])
+        end
+      end
+
+      def runtime_tab_control_source(widget, indentation)
+        padding = ' ' * indentation
+        lines = [runtime_widget_declaration(
+          'tab_control', [widget.fetch('name', '').inspect], indentation, true
+        )]
+        widget.fetch('options', {}).fetch('tabs', []).each do |tab|
+          arguments = [tab.fetch('name').inspect, "caption: #{tab.fetch('caption').inspect}"]
+          widgets = tab.fetch('widgets')
+          lines << runtime_widget_declaration('tab_page', arguments, indentation + 2, widgets.any?)
+          next if widgets.empty?
+
+          lines << runtime_widget_dsl_source(widgets, indentation + 4, generic_sink: true)
+          lines << "#{' ' * (indentation + 2)}end"
+        end
+        lines << "#{padding}end"
+        lines.join("\n")
+      end
+
+      def runtime_dsl_sink_typed?(type, options, widget)
+        allowed = DSL_SINK_OPTIONS[type]
+        return false unless allowed && (options.keys.map(&:to_s) - allowed).empty?
+        return false unless (DSL_SINK_REQUIRED_OPTIONS.fetch(type, []) - options.keys.map(&:to_s)).empty?
+        return false if !DSL_SINK_BLOCK_METHODS.include?(type) && widget_block?(widget)
+        return false unless runtime_dsl_sink_regions_supported?(type, widget)
+
+        runtime_widget_events_supported?(widget)
+      end
+
+      def runtime_dsl_sink_regions_supported?(type, widget)
+        named_regions = %w[body footer regions].any? { widget.key?(_1) }
+        return false if named_regions
+        return true unless widget.key?('slots')
+
+        type == :pluggable_widget && Array(widget['slots']).all? { !_1.key?('role') }
+      end
+
+      def widget_block?(widget)
+        Array(widget['events']).any? || Array(widget['children']).any?
+      end
+
+      def runtime_widget_events_supported?(widget)
+        Array(widget['events']).all? do |event|
+          runtime_keys?(event, %w[event kind handler arguments]) &&
+            WIDGET_EVENT_METHODS.include?(event['event'].to_s) &&
+            WIDGET_EVENT_HANDLERS.include?(event['kind'].to_s) &&
+            !event['handler'].to_s.empty? &&
+            (!event.key?('arguments') || event['arguments'].is_a?(Hash))
+        end
+      end
+
+      def runtime_widget_event_source(widget, indentation)
+        Array(widget['events']).map do |event|
+          arguments = ["#{event.fetch('kind')}: #{event.fetch('handler').inspect}"]
+          pass = event.fetch('arguments', {})
+          arguments << "pass: #{pretty_ruby_value(pass, indentation + 2)}" unless pass.empty?
+          runtime_widget_declaration(event.fetch('event'), arguments, indentation, false)
+        end.join("\n")
+      end
+
+      def runtime_widget_regions_source(widget, indentation, generic_sink:)
+        sources = %w[body footer].filter_map do |name|
+          next unless widget.key?(name)
+
+          runtime_named_widget_region_source(name, widget.fetch(name), indentation, generic_sink:)
+        end
+        widget.fetch('regions', {}).each do |name, widgets|
+          sources << runtime_named_widget_region_source(
+            'region', widgets, indentation, generic_sink:, name:
+          )
+        end
+        Array(widget['slots']).each do |slot|
+          sources << runtime_widget_slot_source(slot, indentation, generic_sink:)
+        end
+        sources.join("\n")
+      end
+
+      def runtime_named_widget_region_source(method_name, widgets, indentation, generic_sink:, name: nil)
+        arguments = name.nil? ? [] : [name.inspect]
+        declaration = runtime_widget_declaration(method_name, arguments, indentation, Array(widgets).any?)
+        return declaration if Array(widgets).empty?
+
+        padding = ' ' * indentation
+        nested = runtime_widget_dsl_source(widgets, indentation + 2, generic_sink:)
+        "#{declaration}\n#{nested}\n#{padding}end"
+      end
+
+      def runtime_widget_slot_source(slot, indentation, generic_sink:)
+        arguments = ["path: #{pretty_ruby_value(slot.fetch('path'), indentation + 2)}"]
+        arguments << "role: #{slot.fetch('role').inspect}" if slot.key?('role')
+        widgets = Array(slot['widgets'])
+        declaration = runtime_widget_declaration('slot', arguments, indentation, widgets.any?)
+        return declaration if widgets.empty?
+
+        padding = ' ' * indentation
+        nested = runtime_widget_dsl_source(widgets, indentation + 2, generic_sink:)
+        "#{declaration}\n#{nested}\n#{padding}end"
+      end
+
+      def runtime_widget_keyword(type, key, generic_sink:)
+        return 'from' if generic_sink && type == :snippet && key.to_s == 'snippet'
+        return 'class_name' if key.to_s == 'class'
+
+        key.to_s
+      end
+
+      def runtime_structured_widget?(type, options, widget)
+        allowed = STRUCTURED_OPTION_KEYS[type]
+        return false unless allowed && (options.keys.map(&:to_s) - allowed).empty?
+        return false unless Array(widget['events']).empty? && Array(widget['children']).empty?
+
+        type == :table ? runtime_table_supported?(options) : runtime_layout_grid_supported?(options)
+      end
+
+      def runtime_table_supported?(options)
+        return false unless %w[weight percentage pixels].include?(options.fetch('width_unit', 'weight').to_s)
+
+        columns = Array(options['columns'])
+        rows = Array(options['rows'])
+        return false if columns.empty? || columns.any? { !runtime_keys?(_1, %w[width]) || _1['width'].to_i <= 0 }
+        return false unless rows.all? { runtime_table_row_supported?(_1) }
+
+        runtime_table_geometry_supported?(columns.size, rows)
+      end
+
+      def runtime_table_row_supported?(row)
+        return false unless runtime_keys?(row, %w[options cells])
+        return false unless runtime_keys?(row.fetch('options', {}), %w[class style dynamic_class visible])
+
+        Array(row['cells']).all? do |cell|
+          runtime_keys?(cell, %w[column colspan rowspan header options widgets]) &&
+            runtime_keys?(cell.fetch('options', {}), %w[class style dynamic_class]) &&
+            cell.fetch('colspan', 1).to_i.positive? && cell.fetch('rowspan', 1).to_i.positive? &&
+            (!cell.key?('column') || cell['column'].to_i >= 0) &&
+            Array(cell['widgets']).all? { runtime_nested_widget_supported?(_1) }
+        end
+      end
+
+      def runtime_table_geometry_supported?(column_count, rows)
+        occupied = {}
+        rows.each_with_index do |row, row_index|
+          cursor = 0
+          Array(row['cells']).each do |cell|
+            cursor += 1 while occupied[[row_index, cursor]]
+            column = cell.fetch('column', cursor).to_i
+            right = column + cell.fetch('colspan', 1).to_i
+            bottom = row_index + cell.fetch('rowspan', 1).to_i
+            return false if right > column_count || bottom > rows.size
+
+            coordinates = (row_index...bottom).to_a.product((column...right).to_a)
+            return false if coordinates.any? { occupied[_1] }
+
+            coordinates.each { occupied[_1] = true }
+            cursor = right
+          end
+        end
+        true
+      end
+
+      def runtime_layout_grid_supported?(options)
+        return false unless %w[full fixed].include?(options.fetch('width', 'full').to_s)
+
+        Array(options['rows']).all? do |row|
+          runtime_keys?(row, %w[options columns]) && runtime_layout_grid_row_supported?(row)
+        end
+      end
+
+      def runtime_layout_grid_row_supported?(row)
+        options = row.fetch('options', {})
+        return false unless runtime_keys?(
+          options,
+          %w[horizontal_alignment vertical_alignment gutters class style dynamic_class visible]
+        )
+        return false unless %w[horizontal_alignment vertical_alignment].all? do |name|
+          runtime_alignment?(options.fetch(name, 'none'))
+        end
+
+        Array(row['columns']).all? do |column|
+          runtime_keys?(column, %w[options widgets]) &&
+            runtime_layout_grid_column_supported?(column)
+        end
+      end
+
+      def runtime_layout_grid_column_supported?(column)
+        options = column.fetch('options', {})
+        return false unless runtime_keys?(
+          options, %w[desktop tablet phone vertical_alignment class style dynamic_class]
+        )
+        return false unless runtime_alignment?(options.fetch('vertical_alignment', 'none'))
+        return false unless %w[desktop tablet phone].all? { runtime_grid_weight?(options.fetch(_1, 'grow')) }
+
+        Array(column['widgets']).all? { runtime_nested_widget_supported?(_1) }
+      end
+
+      def runtime_nested_widget_supported?(widget)
+        return false unless runtime_keys?(
+          widget, %w[type name caption options events children body footer regions slots]
+        )
+        return false unless widget.key?('type') && widget.key?('name')
+        return false if widget.key?('caption')
+        return false unless widget.key?('options') && widget['options'].is_a?(Hash)
+        return false if widget.key?('events') && !widget['events'].is_a?(Array)
+        return false unless %w[children body footer].all? do |name|
+          !widget.key?(name) || runtime_widget_collection_supported?(widget[name])
+        end
+        return false unless widget.fetch('regions', {}).is_a?(Hash)
+        return false unless widget.fetch('regions', {}).values.all? do |widgets|
+          runtime_widget_collection_supported?(widgets)
+        end
+
+        Array(widget['slots']).all? do |slot|
+          runtime_keys?(slot, %w[path role widgets]) && slot.key?('path') && slot.key?('widgets') &&
+            slot['path'].is_a?(Array) && slot['path'].all? { _1.is_a?(String) || _1.is_a?(Integer) } &&
+            (!slot.key?('role') || slot['role'].is_a?(String)) &&
+            runtime_widget_collection_supported?(slot.fetch('widgets'))
+        end
+      end
+
+      def runtime_widget_collection_supported?(widgets)
+        widgets.is_a?(Array) && widgets.all? { runtime_nested_widget_supported?(_1) }
+      end
+
+      DATA_VIEW_OPTION_KEYS = %w[
+        source editable read_only_style label_width show_footer no_entity_message tab_index
+        class style dynamic_class visibility editability design_properties unknown_native
+      ].freeze
+      DATA_VIEW_DECLARATION_KEYS = %w[
+        editable read_only_style label_width show_footer no_entity_message tab_index
+        class style dynamic_class
+      ].freeze
+      DATA_VIEW_SOURCE_KEYS = {
+        'context' => %w[kind entity variable force_full_objects unknown_native entity_ref_native],
+        'association' => %w[
+          kind entity steps variable force_full_objects unknown_native entity_ref_native
+        ],
+        'microflow' => %w[kind name mappings force_full_objects unknown_native settings_native],
+        'nanoflow' => %w[kind name mappings force_full_objects unknown_native],
+        'listen' => %w[kind target force_full_objects unknown_native],
+        'native' => %w[kind native_type force_full_objects unknown_native]
+      }.freeze
+      DATA_VIEW_CONDITION_KEYS = %w[
+        expression roles attribute conditions ignore_security source_variable unknown_native
+      ].freeze
+      PAGE_VARIABLE_KEYS = %w[kind name sub_key use_all_pages unknown_native].freeze
+
+      def runtime_data_view_supported?(options, widget)
+        return false unless runtime_keys?(
+          widget, %w[type name options events body footer]
+        )
+        return false unless runtime_keys?(options, DATA_VIEW_OPTION_KEYS)
+        return false unless runtime_data_view_options_supported?(options)
+        return false unless Array(widget['events']).empty?
+        return false unless widget.key?('body') && runtime_data_view_region_supported?(widget['body'])
+        return false if widget.key?('footer') && !runtime_data_view_region_supported?(widget['footer'])
+
+        true
+      end
+
+      def runtime_data_view_region_supported?(widgets)
+        widgets.is_a?(Array) && widgets.all? do |widget|
+          widget.is_a?(Hash) && widget.key?('type')
+        end
+      end
+
+      def runtime_data_view_options_supported?(options)
+        source = options['source']
+        return false unless runtime_data_view_source_supported?(source)
+        return false unless %w[always never conditional conditionally].include?(options['editable'].to_s)
+        return false unless %w[control text inherit].include?(options['read_only_style'].to_s)
+        return false unless non_negative_integer?(options['label_width'])
+        return false unless non_negative_integer?(options['tab_index'])
+        return false unless [true, false].include?(options['show_footer'])
+        return false unless options['no_entity_message'].is_a?(String)
+        return false unless %w[class style dynamic_class].all? do |name|
+          !options.key?(name) || options[name].is_a?(String)
+        end
+        return false if options.key?('visibility') &&
+                        !runtime_data_view_condition_supported?(options['visibility'])
+        return false if options.key?('editability') &&
+                        !runtime_data_view_condition_supported?(options['editability'])
+        return false if options.key?('design_properties') && !options['design_properties'].is_a?(Array)
+        return false if options.key?('unknown_native') && !options['unknown_native'].is_a?(Hash)
+
+        true
+      end
+
+      def runtime_data_view_source_supported?(source)
+        return false unless source.is_a?(Hash)
+
+        kind = source['kind'].to_s
+        allowed = DATA_VIEW_SOURCE_KEYS[kind]
+        return false unless allowed && runtime_keys?(source, allowed)
+        return false unless runtime_page_variable_supported?(source['variable'])
+        return false if %w[context association].include?(kind) && source['entity'].to_s.empty?
+        return false if %w[microflow nanoflow].include?(kind) && source['name'].to_s.empty?
+        return false if kind == 'listen' && source['target'].to_s.empty?
+        return false unless runtime_data_view_steps_supported?(source['steps'])
+        return false unless runtime_data_view_mappings_supported?(source['mappings'])
+
+        true
+      end
+
+      def runtime_page_variable_supported?(variable)
+        return true if variable.nil?
+        return false unless runtime_keys?(variable, PAGE_VARIABLE_KEYS)
+
+        kind = variable.fetch('kind', 'page_parameter').to_s
+        return false unless %w[page_parameter snippet_parameter local_variable widget current].include?(kind)
+
+        kind == 'current' || !variable['name'].to_s.empty?
+      end
+
+      def runtime_data_view_steps_supported?(steps)
+        return true if steps.nil?
+
+        steps.is_a?(Array) && steps.all? do |step|
+          runtime_keys?(step, %w[association entity unknown_native]) &&
+            !step['association'].to_s.empty? && !step['entity'].to_s.empty?
+        end
+      end
+
+      def runtime_data_view_mappings_supported?(mappings)
+        return true if mappings.nil?
+
+        mappings.is_a?(Array) && mappings.all? do |mapping|
+          runtime_keys?(mapping, %w[parameter expression variable unknown_native]) &&
+            !mapping['parameter'].to_s.empty? &&
+            runtime_page_variable_supported?(mapping['variable'])
+        end
+      end
+
+      def runtime_data_view_condition_supported?(condition)
+        runtime_keys?(condition, DATA_VIEW_CONDITION_KEYS) &&
+          runtime_page_variable_supported?(condition['source_variable']) &&
+          (!condition.key?('expression') || condition['expression'].is_a?(String)) &&
+          (!condition.key?('attribute') || condition['attribute'].is_a?(String)) &&
+          (!condition.key?('roles') ||
+            Array(condition['roles']).all? { _1.is_a?(String) }) &&
+          (!condition.key?('conditions') || condition['conditions'].is_a?(Array)) &&
+          (!condition.key?('ignore_security') ||
+            [true, false].include?(condition['ignore_security'])) &&
+          (!condition.key?('unknown_native') || condition['unknown_native'].is_a?(Hash))
+      end
+
+      def runtime_data_view_source(widget, indentation)
+        padding = ' ' * indentation
+        options = widget.fetch('options')
+        arguments = [widget.fetch('name', '').inspect]
+        arguments << "from: #{pretty_ruby_value(options.fetch('source'), indentation + 2)}"
+        DATA_VIEW_DECLARATION_KEYS.each do |name|
+          next unless options.key?(name)
+
+          keyword = name == 'class' ? 'class_name' : name
+          arguments << "#{keyword}: #{pretty_ruby_value(options.fetch(name), indentation + 2)}"
+        end
+        body = runtime_data_view_body_source(widget, options, indentation + 2)
+        declaration = runtime_widget_declaration('data_view', arguments, indentation, !body.empty?)
+        return declaration if body.empty?
+
+        "#{declaration}\n#{body.join("\n")}\n#{padding}end"
+      end
+
+      def runtime_data_view_body_source(widget, options, indentation)
+        lines = %w[body footer].filter_map do |name|
+          next unless widget.key?(name)
+
+          runtime_named_widget_region_source(
+            name, widget.fetch(name), indentation, generic_sink: true
+          )
+        end
+        %w[visibility editability].each do |name|
+          next unless options.key?(name)
+
+          method_name = name == 'visibility' ? 'visible_when' : 'editable_when'
+          lines << runtime_data_view_condition_source(
+            method_name, options.fetch(name), indentation
+          )
+        end
+        if options.key?('design_properties')
+          arguments = options.fetch('design_properties').map do |value|
+            pretty_ruby_value(value, indentation + 2)
+          end
+          lines << runtime_widget_declaration('design_properties', arguments, indentation, false)
+        end
+        if options.key?('unknown_native')
+          lines << runtime_widget_declaration(
+            'unknown_native', [pretty_ruby_value(options.fetch('unknown_native'), indentation + 2)],
+            indentation, false
+          )
+        end
+        lines
+      end
+
+      def runtime_data_view_condition_source(method_name, condition, indentation)
+        arguments = []
+        arguments << pretty_ruby_value(condition.fetch('expression'), indentation + 2) if
+          condition.key?('expression')
+        {
+          'roles' => 'roles', 'attribute' => 'attribute', 'conditions' => 'conditions',
+          'ignore_security' => 'ignore_security', 'source_variable' => 'source',
+          'unknown_native' => 'native'
+        }.each do |name, keyword|
+          arguments << "#{keyword}: #{pretty_ruby_value(condition.fetch(name), indentation + 2)}" if
+            condition.key?(name)
+        end
+        runtime_widget_declaration(method_name, arguments, indentation, false)
+      end
+
+      def non_negative_integer?(value)
+        Integer(value) >= 0
+      rescue ArgumentError, TypeError
+        false
+      end
+
+      def runtime_data_grid_supported?(type, options, widget)
+        return false unless type == :data_grid
+        return false unless runtime_keys?(options, %w[entity selection columns])
+        return false unless Array(widget['children']).empty?
+        return false unless runtime_dsl_sink_regions_supported?(type, widget)
+        return false unless runtime_widget_events_supported?(widget)
+
+        Array(options['columns']).all? do |column|
+          runtime_keys?(column, %w[name attribute caption filter]) && column.key?('name')
+        end
+      end
+
+      def runtime_data_grid_source(widget, indentation)
+        padding = ' ' * indentation
+        options = widget.fetch('options')
+        arguments = [widget.fetch('name', '').inspect]
+        %w[entity selection].each do |name|
+          arguments << "#{name}: #{pretty_ruby_value(options.fetch(name), indentation + 2)}" if options.key?(name)
+        end
+        lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
+        Array(options['columns']).each do |column|
+          column_arguments = [column.fetch('name').inspect]
+          %w[attribute caption filter].each do |name|
+            column_arguments << "#{name}: #{pretty_ruby_value(column.fetch(name), indentation + 4)}" if
+              column.key?(name)
+          end
+          lines << runtime_widget_declaration('column', column_arguments, indentation + 2, false)
+        end
+        events = runtime_widget_event_source(widget, indentation + 2)
+        lines << events unless events.empty?
+        lines << "#{padding}end"
+        lines.join("\n")
+      end
+
+      def runtime_keys?(value, allowed)
+        value.is_a?(Hash) && (value.keys.map(&:to_s) - allowed).empty?
+      end
+
+      def runtime_alignment?(value)
+        %w[none start center end].include?(value.to_s)
+      end
+
+      def runtime_grid_weight?(value)
+        %w[grow auto].include?(value.to_s) || (1..12).cover?(Integer(value))
+      rescue ArgumentError, TypeError
+        false
+      end
+
+      def runtime_table_source(widget, indentation)
+        padding = ' ' * indentation
+        options = widget.fetch('options')
+        arguments = [widget.fetch('name', '').inspect]
+        arguments << "width_unit: #{options.fetch('width_unit').to_sym.inspect}" if
+          options.fetch('width_unit', 'weight').to_s != 'weight'
+        arguments << "tab_index: #{options.fetch('tab_index').to_i}" if options.fetch('tab_index', 0).to_i != 0
+        append_runtime_appearance(arguments, options)
+        lines = [runtime_widget_declaration('table', arguments, indentation, true)]
+        Array(options['columns']).each do |column|
+          lines << "#{padding}  column width: #{column.fetch('width').to_i}"
+        end
+        Array(options['rows']).each do |row|
+          lines.concat(runtime_table_row_source(row, indentation + 2))
+        end
+        lines << "#{padding}end"
+        lines.join("\n")
+      end
+
+      def runtime_table_row_source(row, indentation)
+        padding = ' ' * indentation
+        arguments = []
+        append_runtime_appearance(arguments, row.fetch('options', {}))
+        declaration = runtime_widget_declaration('row', arguments, indentation, true)
+        lines = [declaration]
+        cursor = 0
+        Array(row['cells']).each do |cell|
+          lines.concat(runtime_table_cell_source(cell, indentation + 2, cursor))
+          cursor = cell.fetch('column', cursor).to_i + [cell.fetch('colspan', 1).to_i, 1].max
+        end
+        lines << "#{padding}end"
+      end
+
+      def runtime_table_cell_source(cell, indentation, cursor)
+        padding = ' ' * indentation
+        arguments = []
+        column = cell.fetch('column', cursor).to_i
+        arguments << "column: #{column}" unless column == cursor
+        arguments << "colspan: #{cell.fetch('colspan').to_i}" if cell.fetch('colspan', 1).to_i > 1
+        arguments << "rowspan: #{cell.fetch('rowspan').to_i}" if cell.fetch('rowspan', 1).to_i > 1
+        arguments << 'header: true' if cell['header'] == true
+        append_runtime_appearance(arguments, cell.fetch('options', {}))
+        widgets = Array(cell['widgets'])
+        declaration = runtime_widget_declaration('cell', arguments, indentation, !widgets.empty?)
+        return [declaration] if widgets.empty?
+
+        [declaration, runtime_widget_dsl_source(widgets, indentation + 2, generic_sink: true),
+         "#{padding}end"]
+      end
+
+      def runtime_layout_grid_source(widget, indentation)
+        padding = ' ' * indentation
+        options = widget.fetch('options')
+        arguments = [widget.fetch('name', '').inspect]
+        arguments << "width: #{options.fetch('width').to_sym.inspect}" if
+          options.fetch('width', 'full').to_s != 'full'
+        arguments << "tab_index: #{options.fetch('tab_index').to_i}" if options.fetch('tab_index', 0).to_i != 0
+        append_runtime_appearance(arguments, options)
+        lines = [runtime_widget_declaration('layout_grid', arguments, indentation, true)]
+        Array(options['rows']).each do |row|
+          lines.concat(runtime_layout_grid_row_source(row, indentation + 2))
+        end
+        lines << "#{padding}end"
+        lines.join("\n")
+      end
+
+      def runtime_layout_grid_row_source(row, indentation)
+        padding = ' ' * indentation
+        options = row.fetch('options', {})
+        arguments = []
+        %w[horizontal_alignment vertical_alignment].each do |name|
+          value = options.fetch(name, 'none')
+          arguments << "#{name}: #{value.to_sym.inspect}" unless value.to_s == 'none'
+        end
+        arguments << 'gutters: false' if options['gutters'] == false
+        append_runtime_appearance(arguments, options)
+        columns = Array(row['columns'])
+        declaration = runtime_widget_declaration('row', arguments, indentation, !columns.empty?)
+        return [declaration] if columns.empty?
+
+        lines = [declaration]
+        columns.each { lines.concat(runtime_layout_grid_column_source(_1, indentation + 2)) }
+        lines << "#{padding}end"
+      end
+
+      def runtime_layout_grid_column_source(column, indentation)
+        padding = ' ' * indentation
+        options = column.fetch('options', {})
+        arguments = %w[desktop tablet phone].filter_map do |viewport|
+          value = options.fetch(viewport, 'grow')
+          next if value.to_s == 'grow'
+
+          "#{viewport}: #{value.to_s == 'auto' ? value.to_sym.inspect : value.to_i}"
+        end
+        alignment = options.fetch('vertical_alignment', 'none')
+        arguments << "vertical_alignment: #{alignment.to_sym.inspect}" unless alignment.to_s == 'none'
+        append_runtime_appearance(arguments, options)
+        widgets = Array(column['widgets'])
+        declaration = runtime_widget_declaration('column', arguments, indentation, !widgets.empty?)
+        return [declaration] if widgets.empty?
+
+        [declaration, runtime_widget_dsl_source(widgets, indentation + 2, generic_sink: true),
+         "#{padding}end"]
+      end
+
+      def append_runtime_appearance(arguments, options)
+        %w[style dynamic_class visible].each do |name|
+          arguments << "#{name}: #{options.fetch(name).inspect}" unless options[name].to_s.empty?
+        end
+        arguments << "class_name: #{options.fetch('class').inspect}" unless options['class'].to_s.empty?
+      end
+
+      def runtime_keywords_safe?(options)
+        reserved = %w[events options class_name]
+        options.keys.all? do |key|
+          raw = key.to_s
+          keyword = raw == 'class' ? 'class_name' : raw
+          keyword.match?(/\A[a-z_]\w*\z/) && !reserved.include?(raw)
+        end
+      end
+
+      def runtime_widget_declaration(method_name, arguments, indentation, block)
+        padding = ' ' * indentation
+        invocation = [method_name, arguments.join(', ')].reject(&:empty?).join(' ')
+        single_line = "#{padding}#{invocation}"
+        return "#{single_line}#{' do' if block}" if
+          arguments.none? { _1.include?("\n") } && single_line.length <= 100
+
+        invocation = arguments.each_with_index.map do |argument, index|
+          suffix = index == arguments.length - 1 ? '' : ','
+          "#{padding}  #{argument}#{suffix}"
+        end.join("\n")
+        "#{padding}#{method_name}(\n#{invocation}\n#{padding})#{' do' if block}"
+      end
+
+      def pretty_ruby_value(value, continuation_indent)
+        source = PP.pp(value, +'', 100).chomp
+        source.gsub("\n", "\n#{' ' * continuation_indent}")
       end
 
       def write_support_files
@@ -1556,6 +2428,39 @@ module Mxrb
         constant = "Artifact#{constant}" if constant.empty? || constant.match?(/\A\d/)
         constant = "#{constant}#{suffix}" if suffix && !constant.end_with?(suffix)
         constant
+      end
+
+      def duplicate_flow_ids(flows)
+        duplicate_groups = Array(flows).group_by { _1.name.to_s }
+                                       .select { |_name, group| group.size > 1 }
+        duplicate_groups.each do |name, group|
+          ids = group.map { _1.id.to_s }
+          if ids.any?(&:empty?) || ids.uniq.size != ids.size
+            raise SerializationError,
+                  "duplicate flow #{name} requires distinct explicit unit ids"
+          end
+        end
+        duplicate_groups.values.flatten.map { _1.id.to_s }.uniq.freeze
+      end
+
+      def flow_file_stem(flow, duplicate_name:)
+        base = underscore(flow.name)
+        return base unless duplicate_name
+
+        "#{base}_#{flow_identity_suffix(flow)}"
+      end
+
+      def flow_ruby_constant(flow, duplicate_name:)
+        return ruby_constant(flow.name) unless duplicate_name
+
+        ruby_constant("#{flow.name}_#{flow_identity_suffix(flow)}")
+      end
+
+      def flow_identity_suffix(flow)
+        identifier = underscore(flow.id)
+        raise SerializationError, "duplicate flow #{flow.name} has no unit id" if identifier.empty?
+
+        identifier
       end
 
       def ruby_method_name(value)
@@ -2080,10 +2985,17 @@ module Mxrb
           import type { ReactNode } from 'react';
           import type { EntityRecord, RuntimeValue, WidgetDefinition } from '../types';
 
+          export interface MarketplaceWidgetRegion {
+            path: Array<string | number>;
+            role: string;
+            content: ReactNode;
+          }
+
           export interface MarketplaceWidgetProps {
             widget: WidgetDefinition;
             context: EntityRecord | null;
             children?: ReactNode;
+            regions?: MarketplaceWidgetRegion[];
             onChange(attribute: string | undefined, value: RuntimeValue): unknown;
           }
 
@@ -2126,6 +3038,65 @@ module Mxrb
             return Number.isFinite(number) ? number : fallback;
           };
 
+          const normalizedRole = (role: string): string => role.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+          const regionsByRole = (regions: MarketplaceWidgetRegion[], role: string): MarketplaceWidgetRegion[] =>
+            regions.filter(region => normalizedRole(region.role) === normalizedRole(role));
+
+          const regionsByPath = (
+            regions: MarketplaceWidgetRegion[],
+            path: Array<string | number>
+          ): MarketplaceWidgetRegion[] => regions.filter(region => path.every(
+            (part, index) => String(region.path[index]) === String(part)
+          ));
+
+          const regionContent = (
+            regions: MarketplaceWidgetRegion[],
+            role: string,
+            fallback?: ReactNode
+          ): ReactNode => {
+            const matches = regionsByRole(regions, role);
+            return matches.length ? matches.map(region => region.content) : fallback;
+          };
+
+          const renderRegions = (regions: MarketplaceWidgetRegion[], fallback?: ReactNode): ReactNode =>
+            regions.length ? regions.map((region, index) => (
+              <div key={`${region.path.map(String).join('.')}-${region.role}-${index}`}
+                className="mxrb-marketplace-region" data-region-role={region.role}
+                data-region-path={region.path.map(String).join('.')}>
+                {region.content}
+              </div>
+            )) : fallback;
+
+          const groupIndex = (region: MarketplaceWidgetRegion): string | undefined => {
+            const groupPath = region.path.map(String);
+            const groups = groupPath.findIndex((part, index) =>
+              part === 'groups' && groupPath[index + 1] === 'objects'
+            );
+            return groups >= 0 ? groupPath[groups + 2] : undefined;
+          };
+
+          const accordion = (
+            label: string,
+            regions: MarketplaceWidgetRegion[],
+            fallback?: ReactNode
+          ): ReactNode => {
+            const indices = [...new Set(regions.map(groupIndex).filter((index): index is string => Boolean(index)))];
+            if (!indices.length) return <details><summary>{label}</summary>{renderRegions(regions, fallback)}</details>;
+
+            const ungrouped = regions.filter(region => groupIndex(region) === undefined);
+            return <div className="mxrb-marketplace-accordion">
+              {indices.map(index => {
+                const group = regionsByPath(regions, ['groups', 'objects', index]);
+                return <details key={index}>
+                  <summary>{regionContent(group, 'headerContent', label)}</summary>
+                  {regionContent(group, 'content')}
+                </details>;
+              })}
+              {renderRegions(ungrouped)}
+            </div>;
+          };
+
           const chart = (name: string, children?: ReactNode) => <>
             <figure className="mxrb-marketplace-chart">
               <svg viewBox="0 0 240 100" role="img" aria-label={name}>
@@ -2139,7 +3110,9 @@ module Mxrb
             {children}
           </>;
 
-          export function MarketplaceWidget({ widget, context, children, onChange }: MarketplaceWidgetProps) {
+          export function MarketplaceWidget({
+            widget, context, children, regions = [], onChange
+          }: MarketplaceWidgetProps) {
             const options = widget.options || {};
             const properties = asProperties(options.properties);
             const id = String(options.widget_id || options.native_type || widget.name).toLowerCase();
@@ -2156,9 +3129,10 @@ module Mxrb
               ['label', 'value', 'caption', 'title', 'legend', 'textMessage', 'alternativeText'],
               name
             );
+            const content = renderRegions(regions, children);
 
             if (/(area|bar|bubble|column|custom|heatmap|line|pie|time)chart/.test(id)
-                || id.includes('timeseries') || id.includes('heatmap')) return chart(name, children);
+                || id.includes('timeseries') || id.includes('heatmap')) return chart(name, content);
             if (id.includes('progresscircle') || id.includes('progressbar')) {
               const value = numericValue(current ?? localValue, 50);
               return <label>{label}<progress value={value} max={100}>{value}%</progress></label>;
@@ -2187,10 +3161,14 @@ module Mxrb
             }
             if (id.includes('badgebutton')) return <button type="button">{label}</button>;
             if (id.includes('badge')) return <output className="mxrb-marketplace-badge">{label}</output>;
-            if (id.includes('accordion')) return <details><summary>{label}</summary>{children}</details>;
-            if (id.includes('fieldset')) return <fieldset><legend>{label}</legend>{children}</fieldset>;
-            if (id.includes('accessibilityhelper')) return <div aria-live="polite">{children}</div>;
-            if (id.includes('htmlelement')) return <article>{children || label}</article>;
+            if (id.includes('accordion')) return accordion(label, regions, children);
+            if (id.includes('fieldset')) return <fieldset><legend>{label}</legend>
+              {regionContent(regions, 'content', children)}
+            </fieldset>;
+            if (id.includes('accessibilityhelper')) return <div aria-live="polite">
+              {regionContent(regions, 'content', children)}
+            </div>;
+            if (id.includes('htmlelement')) return <article>{content || label}</article>;
             if (id.endsWith('.image')) {
               const source = firstText(properties, ['imageUrl', 'url'], '');
               return source ? <img src={source} alt={label} /> : <span>{label}</span>;
@@ -2198,10 +3176,19 @@ module Mxrb
             if (id.includes('languageselector')) return <label>{label}<select defaultValue="pt-BR">
               <option value="pt-BR">Português</option><option value="en-US">English</option>
             </select></label>;
-            if (id.includes('popupmenu')) return <details><summary>{label}</summary>{children || 'Menu'}</details>;
-            if (id.includes('timeline')) return <ol className="mxrb-marketplace-timeline"><li>{label}</li>{children}</ol>;
-            if (id.includes('tooltip')) return <span title={label}>{children || label}</span>;
-            if (id.includes('treenode') || id.includes('treeview')) return <ul><li>{label}{children}</li></ul>;
+            if (id.includes('popupmenu')) return <details><summary>{label}</summary>{content || 'Menu'}</details>;
+            if (id.includes('timeline')) return <ol className="mxrb-marketplace-timeline"><li>{label}</li>{content}</ol>;
+            if (id.includes('tooltip')) return <span className="mxrb-marketplace-tooltip">
+              {regionContent(regions, 'trigger', children || label)}
+              <span role="tooltip">{regionContent(regions, 'htmlMessage')}</span>
+            </span>;
+            if (id.includes('carousel')) return <div className="mxrb-marketplace-carousel">
+              {regionContent(regions, 'content', children)}
+            </div>;
+            if (id.includes('safearea')) return <div className="mxrb-marketplace-safe-area">
+              {regionContent(regions, 'content', children)}
+            </div>;
+            if (id.includes('treenode') || id.includes('treeview')) return <ul><li>{label}{content}</li></ul>;
             if (id.includes('videoplayer')) {
               const source = firstText(properties, ['videoUrl', 'videoURL', 'url'], '');
               return <video controls src={source || undefined}>{label}</video>;
@@ -2209,7 +3196,7 @@ module Mxrb
             if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
             return <section className="mxrb-marketplace-generic" aria-label={name}>
-              <strong>{name}</strong>{children}
+              <strong>{name}</strong>{content}
             </section>;
           }
         TS
@@ -2273,19 +3260,41 @@ module Mxrb
             event: string;
             kind: 'microflow' | 'nanoflow' | 'page' | string;
             handler: string;
-            arguments?: Record<string, string>;
+            arguments?: RuntimeVariables;
           }
 
           export interface WidgetColumn {
             name?: string;
             attribute?: string;
             caption?: string;
+            width?: number;
+          }
+
+          export interface DataViewSource {
+            kind: 'context' | 'association' | 'microflow' | 'nanoflow' | 'listen' | 'native' | string;
+            name?: string;
+            entity?: string;
+            target?: string;
+            variable?: {
+              kind?: string;
+              name?: string;
+              sub_key?: string;
+              use_all_pages?: boolean;
+            };
+            steps?: Array<{ association?: string; entity?: string }>;
+            mappings?: Array<Record<string, RuntimeValue>>;
           }
 
           export interface WidgetTab {
             name: string;
             caption?: string;
             widgets?: WidgetDefinition[];
+          }
+
+          export interface WidgetSlot {
+            path: Array<string | number>;
+            role?: string;
+            widgets: WidgetDefinition[];
           }
 
           export interface WidgetOptions {
@@ -2307,6 +3316,7 @@ module Mxrb
             parameters?: string[];
             read_only?: boolean;
             sort?: Array<{ attribute: string; direction?: string }>;
+            source?: DataViewSource;
             style?: string;
             tabs?: WidgetTab[];
             target_entity?: string;
@@ -2326,6 +3336,10 @@ module Mxrb
             options?: WidgetOptions;
             events?: WidgetEvent[];
             children?: WidgetDefinition[];
+            body?: WidgetDefinition[];
+            footer?: WidgetDefinition[];
+            regions?: Record<string, WidgetDefinition[]>;
+            slots?: WidgetSlot[];
           }
 
           export interface PageDefinition<Name extends string = string, WidgetName extends string = string> {
@@ -2491,8 +3505,16 @@ module Mxrb
       end # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def frontend_widget_names(widget)
-        [widget['name'].to_s, *Array(widget['children']).flat_map { frontend_widget_names(_1) }]
-          .reject(&:empty?)
+        nested = Array(widget['children']) + Array(widget['body']) + Array(widget['footer'])
+        nested.concat(Array(widget['slots']).flat_map { Array(_1['widgets']) })
+        regions = widget.fetch('regions', {})
+        nested.concat(regions.values.flat_map { Array(_1) }) if regions.is_a?(Hash)
+        Array(widget.dig('options', 'rows')).each do |row|
+          nested.concat(Array(row['widgets']))
+          nested.concat(Array(row['columns']).flat_map { Array(_1['widgets']) })
+          nested.concat(Array(row['cells']).flat_map { Array(_1['widgets']) })
+        end
+        [widget['name'].to_s, *nested.flat_map { frontend_widget_names(_1) }].reject(&:empty?)
       end
 
       def typescript_attribute_type(attribute, enumerations)

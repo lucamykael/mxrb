@@ -1054,6 +1054,14 @@ module Mxrb
             @expression.evaluate(value['Argument'], variables)
           when 'EntityTypeJavaActionParameterValue'
             value['Entity'].to_s
+          when 'EntityTypeCodeActionParameterValue'
+            entity = value['Entity'].to_s
+            if entity.empty?
+              raise NativeRuntimeError,
+                    "Java Custom Action #{action_name} parameter #{parameter_name} " \
+                    'has an empty entity type'
+            end
+            entity
           when 'MicroflowJavaActionParameterValue', 'MicroflowParameterValue'
             value['Microflow'].to_s
           when 'ImportMappingJavaActionParameterValue'
@@ -1142,6 +1150,32 @@ module Mxrb
           )
         end
 
+        def action_export_xml(action, variables)
+          output = action['OutputMethod'] || {}
+          handling = action['ResultHandling'] || {}
+          unless output['$Type'] == 'ExportXmlAction$StringExport' &&
+                 handling['$Type'] == 'Microflows$MappingRequestHandling' &&
+                 %w[Xml Json].include?(handling['ContentType']) &&
+                 [true, false].include?(action['IsValidationRequired'])
+            raise NativeRuntimeError, 'unsupported export XML configuration'
+          end
+
+          output_name = output['OutputVariableName'].to_s
+          mapping = handling['MappingId'].to_s
+          source = handling['MappingVariableName'].to_s
+          if output_name.empty? || mapping.empty? || source.empty?
+            raise NativeRuntimeError, 'export XML requires output, mapping, and source variables'
+          end
+
+          variables.fetch(source)
+          result = invoke_adapter(
+            :export_mapping, mapping, action, variables, result_name: output_name
+          )
+          raise NativeRuntimeError, 'string export mapping returned a non-string value' unless result.is_a?(String)
+
+          result
+        end
+
         def action_rest_call(action, variables)
           configuration = action['HttpConfiguration'] || {}
           location = render_template(configuration['CustomLocationTemplate'], variables)
@@ -1159,7 +1193,10 @@ module Mxrb
             raise NativeRuntimeError, "REST call returned HTTP #{response.code}"
           end
 
-          bind_rest_result(action['ResultHandling'] || {}, response.body.to_s, variables)
+          bind_rest_result(
+            action['ResultHandling'] || {}, response.body.to_s, variables,
+            result_handling_type: action.fetch('ResultHandlingType', 'Mapping')
+          )
         rescue URI::InvalidURIError, JSON::ParserError => e
           raise NativeRuntimeError, "REST call failed: #{e.message}"
         end
@@ -1206,10 +1243,23 @@ module Mxrb
           result
         end
 
-        def bind_rest_result(handling, body, variables)
+        def bind_rest_result(handling, body, variables, result_handling_type: 'Mapping')
           return unless handling['Bind'] == true
 
-          result = JSON.parse(body)
+          result = case result_handling_type.to_s
+                   when 'String'
+                     unless handling.dig('VariableType', '$Type') == 'DataTypes$StringType' &&
+                            handling['ImportMappingCall'].nil?
+                       raise NativeRuntimeError, 'invalid string REST result handling'
+                     end
+
+                     body
+                   when '', 'Mapping', 'HttpResponse'
+                     JSON.parse(body)
+                   else
+                     raise NativeRuntimeError,
+                           "unsupported REST result handling #{result_handling_type.inspect}"
+                   end
           entity = handling.dig('VariableType', 'Entity').to_s
           result = rest_object(entity, result) unless entity.empty?
           variables[handling['ResultVariableName'].to_s] = result

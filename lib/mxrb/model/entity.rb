@@ -22,7 +22,8 @@ module Mxrb
         e.documentation      = doc["documentation"] || doc["Documentation"] || ""
         e.native_type        = doc["$Type"]
         e.source             = doc["source"] || doc["Source"]
-        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"]
+        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"] ||
+                               (e.source["Oql"] if e.source.is_a?(Hash))
         e.data_storage_guid  = doc["dataStorageGuid"] || doc["DataStorageGuid"]
         e.export_level       = doc["exportLevel"] || doc["ExportLevel"] || "Hidden"
         e.location           = parse_location(doc["location"] || doc["Location"])

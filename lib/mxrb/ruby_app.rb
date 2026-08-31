@@ -5,6 +5,7 @@ require 'fileutils'
 require 'json'
 require 'monitor'
 require 'uri'
+require_relative 'native_fragment_store'
 require_relative 'ruby_app/session_manager'
 require_relative 'http/server'
 
@@ -28,6 +29,11 @@ module Mxrb
       ARTIFACT_DIRECTORIES.flat_map do |directory|
         Dir.glob(File.join(root, 'app', directory, '**', '*.rb'))
       end.sort
+    end
+
+    def self.with_native_fragments(root, &block)
+      store = NativeFragmentStore.new(File.join(File.expand_path(root), '.mxrb', 'native_fragments'))
+      NativeFragmentStore.with(store, &block)
     end
 
     def self.source_bundle(root)
@@ -146,12 +152,64 @@ module Mxrb
         @java_custom_actions = {}
       end
 
-      def register(kind, name, implementation)
+      def register(kind, name, implementation, unit_id: nil)
+        return register_service(name, implementation, unit_id:) if kind == :service
+
         collection(kind)[name] = implementation
       end
 
-      def fetch(kind, name) = collection(kind)[name]
+      def fetch(kind, name, unit_id: nil)
+        return fetch_service(name, unit_id:) if kind == :service
+
+        collection(kind)[name]
+      end
+
       def all(kind) = collection(kind).dup.freeze
+
+      def register_service(name, implementation, unit_id: nil)
+        services = collection(:service)
+        qualified_name = name.to_s
+        identifier = unit_id.to_s
+        matches = services.select do |_key, candidate|
+          candidate.mendix_name.to_s == qualified_name
+        end
+        if matches.empty?
+          services[qualified_name] = implementation
+          return implementation
+        end
+
+        existing_ids = matches.values.map { _1.mendix_id.to_s }
+        if identifier.empty? || existing_ids.any?(&:empty?)
+          raise ValidationError,
+                "ambiguous Ruby service #{qualified_name}: duplicate names require explicit unit ids"
+        end
+
+        if services.key?(qualified_name)
+          existing = services.delete(qualified_name)
+          services[service_key(qualified_name, existing.mendix_id)] = existing
+        end
+        services[service_key(qualified_name, identifier)] = implementation
+        implementation
+      end
+
+      def fetch_service(name, unit_id: nil)
+        services = collection(:service)
+        qualified_name = name.to_s
+        direct = services[qualified_name]
+        return direct if direct && (unit_id.nil? || direct.mendix_id.to_s == unit_id.to_s)
+
+        matches = services.values.select do |candidate|
+          candidate.mendix_name.to_s == qualified_name &&
+            (unit_id.nil? || candidate.mendix_id.to_s == unit_id.to_s)
+        end
+        return matches.first if matches.one?
+        return nil if matches.empty?
+
+        raise ValidationError,
+              "ambiguous Ruby service #{qualified_name}: specify its unit id"
+      end
+
+      def service_key(name, unit_id) = [name.to_s, unit_id.to_s].freeze
 
       def register_adapter(kind, implementation = nil, &block)
         key = kind.to_sym
@@ -748,6 +806,7 @@ module Mxrb
 
         def documentation(value) = (@definition[:documentation] = value.to_s)
         def export_level(value) = (@definition[:export_level] = value.to_s)
+        def unbound = (@definition[:unbound] = true)
         def microflow(value) = (@definition[:microflow] = value.to_s)
         def start_at(value) = (@definition[:start_at] = value)
         def time_zone(value) = (@definition[:time_zone] = value.to_s)
@@ -783,7 +842,7 @@ module Mxrb
 
           @mendix_name = value.to_s
           @mendix_id = id.to_s
-          Registry.register(:service, @mendix_name, self)
+          Registry.register(:service, @mendix_name, self, unit_id: @mendix_id)
         end
 
         # Declares the Mendix-native representation of this Ruby service.
@@ -797,12 +856,14 @@ module Mxrb
                                else
                                  raise ArgumentError, 'native service kind must be microflow or nanoflow'
                                end
+          unit_id = native_unit_id(kind)
+          @mendix_id = unit_id if @mendix_id.to_s.empty?
           builder = Dsl::FlowBuilder.new(
-            qualified.split('.', 2).last, runtime:, kind: flow_kind, public:
+            qualified.split('.', 2).last, runtime:, kind: flow_kind, public:, unit_id:
           )
           builder.instance_eval(&block) if block
           @native_kind = kind.to_sym
-          @native_definition = builder.to_h.merge(unit_id: native_unit_id(@native_kind))
+          @native_definition = builder.to_h
         end
 
         private
@@ -839,6 +900,131 @@ module Mxrb
     # Page metadata remains ordinary Ruby while the browser receives its JSON
     # projection from the integrated backend.
     class Page
+      # Builds the runtime-facing widget projection without making the page an
+      # authoritative native document. This keeps exported pages lossless via
+      # the MPR sidecar while presenting their structure as editable Ruby.
+      class WidgetTree
+        include Dsl::WidgetComposite
+        include NativeFragmentAccess
+
+        OPTION_UNSET = Object.new.freeze
+        STRUCTURED_METHODS = %i[data_view layout_grid native_widget tab_control table].freeze
+        WIDGET_METHODS = %i[
+          button check_box container data_grid data_view date_picker drop_down gallery
+          native_widget layout_grid
+          number_input page_title pluggable_widget radio_button_group reference_selector
+          snippet static_image tab_control table text text_area text_box
+        ].freeze
+
+        attr_reader :widgets
+
+        def initialize
+          @widgets = []
+          initialize_widget_composite(
+            key_transform: :to_s.to_proc,
+            path_normalizer: method(:normalize),
+            child_factory: -> { self.class.new }
+          )
+        end
+
+        def widget(type, name = '', options: {}, events: [], caption: OPTION_UNSET, &block)
+          options = normalize(options)
+          value = { 'type' => type.to_s, 'name' => name.to_s }
+          value['options'] = options unless options.empty?
+          caption = options['caption'] if caption.equal?(OPTION_UNSET) && options.key?('caption')
+          value['caption'] = caption unless caption.equal?(OPTION_UNSET) || caption.to_s.empty?
+          events = normalize(events)
+          value['events'] = events unless events.empty?
+
+          if block
+            content = self.class.new
+            block.arity.zero? ? content.instance_eval(&block) : block.call(content)
+            content.send(:append_to, value)
+          end
+
+          @widgets << value
+          value
+        end
+
+        (WIDGET_METHODS - STRUCTURED_METHODS).each do |type|
+          define_method(type) do |name = '', caption: OPTION_UNSET, events: [], **options, &block|
+            options[:class] = options.delete(:class_name) if options.key?(:class_name)
+            options[:caption] = caption unless caption.equal?(OPTION_UNSET)
+            widget(type, name, options:, events:, &block)
+          end
+        end
+
+        def table(name = '', width_unit: :weight, tab_index: 0, class_name: nil, style: nil,
+                  dynamic_class: nil, visible: nil, &block)
+          builder = Dsl::TableBuilder.new(
+            name, width_unit:, tab_index:, class_name:, style:, dynamic_class:, visible:
+          )
+          builder.instance_eval(&block) if block
+          append_structured(builder)
+        end
+
+        def layout_grid(name = '', width: :full, tab_index: 0, class_name: nil, style: nil,
+                        dynamic_class: nil, visible: nil, &block)
+          builder = Dsl::LayoutGridBuilder.new(
+            name, width:, tab_index:, class_name:, style:, dynamic_class:, visible:
+          )
+          builder.instance_eval(&block) if block
+          append_structured(builder)
+        end
+
+        def data_view(name = '', from:, editable: Dsl::UNSET, read_only_style: Dsl::UNSET,
+                      label_width: Dsl::UNSET, show_footer: Dsl::UNSET,
+                      no_entity_message: Dsl::UNSET, tab_index: Dsl::UNSET,
+                      class_name: Dsl::UNSET, style: Dsl::UNSET,
+                      dynamic_class: Dsl::UNSET, &block)
+          builder = Dsl::DataViewBuilder.new(
+            name, from:, editable:, read_only_style:, label_width:, show_footer:,
+                  no_entity_message:, tab_index:, class_name:, style:, dynamic_class:
+          )
+          builder.instance_eval(&block) if block
+          append_structured(builder, declared_fields: false)
+        end
+
+        def tab_control(name = '', &block)
+          builder = Dsl::WidgetBuilder.new(:tab_control, name)
+          builder.instance_eval(&block) if block
+          append_structured(builder, declared_fields: false)
+        end
+
+        def native_widget(name = '', type:, deep_structure:)
+          raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
+
+          value = {
+            type: :native_widget, name: name.to_s,
+            options: { native_type: type.to_s, deep_structure: }, events: []
+          }
+          append_structured(value, declared_fields: false)
+        end
+
+        private
+
+        def append_to(value)
+          append_widget_composite(value, children: @widgets)
+        end
+
+        def append_structured(builder, declared_fields: true)
+          value = normalize(builder.to_h)
+          value.delete('events') if Array(value['events']).empty?
+          value.delete('declared_fields') unless declared_fields
+          @widgets << value
+          value
+        end
+
+        def normalize(value)
+          case value
+          when Hash then value.to_h { |key, child| [key.to_s, normalize(child)] }
+          when Array then value.map { normalize(_1) }
+          when Symbol then value.to_s
+          else value
+          end
+        end
+      end
+
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
                     :appearance_style, :data_source, :native_definition,
@@ -852,9 +1038,19 @@ module Mxrb
           Registry.register(:page, @mendix_name, self)
         end
 
-        def configure(title:, widgets: [], appearance_class: '', appearance_style: '', data_source: nil)
+        def configure(title:, widgets: nil, appearance_class: '', appearance_style: '', data_source: nil,
+                      &block)
+          raise ArgumentError, 'configure accepts either widgets: or a widget block, not both' \
+            if widgets && block
+
           @title = title.to_s
-          @widgets = widgets.freeze
+          @widgets = if block
+                       tree = WidgetTree.new
+                       block.arity.zero? ? tree.instance_eval(&block) : block.call(tree)
+                       tree.widgets.freeze
+                     else
+                       Array(widgets).freeze
+                     end
           @appearance_class = appearance_class.to_s
           @appearance_style = appearance_style.to_s
           @data_source = data_source
@@ -988,7 +1184,7 @@ module Mxrb
 
       def native_call(name, arguments = {}, context: nil)
         runtime_synchronize do
-          service = Registry.all(:service)[name.to_s]
+          service = Registry.fetch(:service, name.to_s)
           kind = service&.native_kind == :nanoflow ? :nanoflow : :microflow
           authorize_document!(kind, name, :execute, context)
           serialize(
@@ -1235,7 +1431,9 @@ module Mxrb
       end
 
       def load_application_files
-        RubyApp.application_files(root).each { load _1, true }
+        RubyApp.with_native_fragments(root) do
+          RubyApp.application_files(root).each { load _1, true }
+        end
       end
 
       def load_adapters
@@ -1444,7 +1642,9 @@ module Mxrb
       def synchronize!
         Registry.reset!
         Environment.load(root: @root).with do
-          RubyApp.application_files(@root).each { load _1, true }
+          RubyApp.with_native_fragments(@root) do
+            RubyApp.application_files(@root).each { load _1, true }
+          end
         end
         project = Model::Project.open(@target, readonly: false)
         synchronize_constant_definitions(project)
