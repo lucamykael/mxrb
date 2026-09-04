@@ -406,6 +406,51 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect(objects.map { _1['$Type'] }).to include('Microflows$Annotation')
   end
 
+  it 'repairs duplicate nested parameter type identities while preserving unique native ones' do
+    duplicate = SecureRandom.uuid
+    retained = SecureRandom.uuid
+    source_parameters = [
+      ['First', duplicate], ['Second', duplicate], ['Third', retained]
+    ].map do |name, type_id|
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Microflows$MicroflowParameter',
+        'Name' => name, 'VariableType' => { '$ID' => type_id, '$Type' => 'DataTypes$StringType' }
+      }
+    end
+    generated_parameters = source_parameters.map do |parameter|
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Microflows$MicroflowParameter',
+        'Name' => parameter['Name'],
+        'VariableType' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'DataTypes$StringType'
+        }
+      }
+    end
+    generated_type_ids = generated_parameters.map { _1.dig('VariableType', '$ID') }
+    target = {
+      'ObjectCollection' => {
+        'Objects' => Mxrb::IO::BsonCodec.build_array(generated_parameters)
+      },
+      'Flows' => Mxrb::IO::BsonCodec.build_array([])
+    }
+    source = {
+      'ObjectCollection' => {
+        'Objects' => Mxrb::IO::BsonCodec.build_array(source_parameters)
+      },
+      'Flows' => Mxrb::IO::BsonCodec.build_array([])
+    }
+
+    writer.send(:preserve_flow_auxiliary_objects, target, source)
+
+    parameters = Mxrb::IO::BsonCodec.parse_array(
+      target.dig('ObjectCollection', 'Objects')
+    )[:items]
+    type_ids = parameters.map { _1.dig('VariableType', '$ID') }
+    expect(type_ids.first(2)).to eq(generated_type_ids.first(2))
+    expect(type_ids.last).to eq(retained)
+    expect(type_ids).to contain_exactly(*type_ids.uniq)
+  end
+
   it 'preserves localized native validation rules until explicitly disabled' do
     native_rule = {
       '$ID' => 'rule', '$Type' => 'DomainModels$ValidationRule',

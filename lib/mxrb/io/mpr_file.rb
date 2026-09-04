@@ -3,8 +3,10 @@
 require "sqlite3"
 require "securerandom"
 require "json"
+require "fileutils"
 require_relative "bson_codec"
 require_relative "mxunit_codec"
+require_relative "../studio_compatibility"
 
 module Mxrb
   module IO
@@ -28,17 +30,20 @@ module Mxrb
 
       def readonly? = @readonly
 
-      def initialize(path, readonly: false)
-        @path     = File.expand_path(path)
+      def initialize(path, readonly: false, apply_studio_compatibility: true)
+        @path = File.expand_path(path)
         @readonly = readonly
-        @db       = open_db
+        @apply_studio_compatibility = apply_studio_compatibility
+        @db = open_db
         @write_stats = { inserted: 0, updated: 0, skipped: 0, deleted: 0 }
+        @v2_transaction = nil
         validate!
+        recover_interrupted_v2_transaction!
         @format_version = detect_format
       end
 
-      def self.open(path, readonly: false)
-        new(path, readonly: readonly)
+      def self.open(path, readonly: false, apply_studio_compatibility: true)
+        new(path, readonly:, apply_studio_compatibility:)
       end
 
       # ── Metadata ─────────────────────────────────────────────────────────
@@ -53,10 +58,13 @@ module Mxrb
 
       def update_version!(version)
         version_str = version.to_s
+        schema_hash = StudioCompatibility.new(version_str).schema_hash
         # Try new-style column first, fall back to old-style
         begin
-          @db.execute("UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?",
-                      [version_str, version_str])
+          @db.execute(
+            "UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?, _SchemaHash = ?",
+            [version_str, version_str, schema_hash]
+          )
         rescue SQLite3::Exception
           @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str])
         end
@@ -127,6 +135,9 @@ module Mxrb
       def parse_contents(raw_unit)
         blob = raw_unit["Contents"]
         if (blob.nil? || blob.empty?) && @format_version == :v2
+          staged, bytes = staged_v2_content(raw_unit.fetch("UnitID"))
+          return bytes ? BsonCodec.parse(bytes) : {} if staged
+
           unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
           return {} unless File.file?(unit_path)
           return MxunitCodec.read(unit_path)
@@ -139,6 +150,9 @@ module Mxrb
       def content_bytes(raw_unit)
         blob = raw_unit["Contents"]
         if (blob.nil? || blob.empty?) && @format_version == :v2
+          staged, bytes = staged_v2_content(raw_unit.fetch("UnitID"))
+          return bytes if staged
+
           unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
           return nil unless File.file?(unit_path)
 
@@ -159,19 +173,63 @@ module Mxrb
         Dir.glob(File.join(contents_dir, "**", "*.mxunit")).sort
       end
 
+      # Studio Pro 11 requires both the transaction marker table and a
+      # filename sidecar for externally stored v2 unit contents.
+      def ensure_v2_contract!
+        return self unless @format_version == :v2
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        @db.execute('CREATE TABLE IF NOT EXISTS _Transaction (LastTransactionID TEXT)')
+        if @db.get_first_value('SELECT LastTransactionID FROM _Transaction LIMIT 1').to_s.empty?
+          @db.execute('INSERT INTO _Transaction (LastTransactionID) VALUES (?)', [SecureRandom.uuid])
+        end
+        write_mpr_name!
+        self
+      end
+
+      # Studio Pro 11 requires split v2 storage, while Studio Pro 9 only
+      # understands monolithic v1 storage.
+      def ensure_storage_for_version!(version)
+        major = version.to_s.split('.').first.to_i
+        target = if major >= 11
+                   :v2
+                 elsif major <= 9
+                   :v1
+                 else
+                   @format_version
+                 end
+        migrate_storage_format!(target)
+      end
+
+      def migrate_storage_format!(target)
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        requested = target.to_sym
+        raise ArgumentError, "storage format must be v1 or v2" unless %i[v1 v2].include?(requested)
+        return self if requested == @format_version
+
+        units = storage_migration_units
+        requested == :v2 ? migrate_units_to_v2!(units) : migrate_units_to_v1!(units)
+        @unit_columns = nil
+        @format_version = requested
+        ensure_v2_contract! if requested == :v2
+        self
+      end
+
       # ── Writes ────────────────────────────────────────────────────────────
 
       # Insert a new unit. Returns the assigned UUID.
       def insert_unit(container_uuid:, containment_name:, contents_doc:, unit_uuid: nil)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
+        contents_doc = compatible_document(contents_doc)
         uuid = unit_uuid || BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
         unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
           contents_doc = { "$ID" => uuid }.merge(contents_doc)
         end
         unit_blob    = BsonCodec.uuid_to_blob(uuid)
         parent_blob  = BsonCodec.uuid_to_blob(container_uuid)
-        bson_bytes   = BsonCodec.serialize(contents_doc)
+        bson_bytes   = serialize_contents(contents_doc)
         hash         = BsonCodec.contents_hash(bson_bytes)
         stored_bytes = @format_version == :v2 ? nil : bson_bytes
         columns = %w[UnitID ContainerID ContainmentName TreeConflict ContentsHash]
@@ -198,8 +256,9 @@ module Mxrb
       def update_unit(uuid, contents_doc)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
+        contents_doc = compatible_document(contents_doc)
         blob       = BsonCodec.uuid_to_blob(uuid)
-        bson_bytes = BsonCodec.serialize(contents_doc)
+        bson_bytes = serialize_contents(contents_doc)
         hash       = BsonCodec.contents_hash(bson_bytes)
         current = unit(uuid)
         if current && current['ContentsHash'] == hash
@@ -221,6 +280,23 @@ module Mxrb
         write_v2_unit(uuid, bson_bytes) if @format_version == :v2
         write_stats[:updated] += 1
         true
+      end
+
+      # Projects every unit only after higher-level writers have completed
+      # integrity checks against the source schema (notably page overlays).
+      def apply_studio_compatibility!
+        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+
+        previous = @apply_studio_compatibility
+        begin
+          @apply_studio_compatibility = true
+          all_units.each do |raw_unit|
+            update_unit(raw_unit.fetch('UnitID'), parse_contents(raw_unit))
+          end
+          self
+        ensure
+          @apply_studio_compatibility = previous
+        end
       end
 
       # Repairs stale Unit.ContentsHash metadata without reserializing or
@@ -251,7 +327,7 @@ module Mxrb
       def delete_unit(uuid)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
         @db.execute("DELETE FROM Unit WHERE UnitID = ?", [BsonCodec.uuid_to_blob(uuid)])
-        removed = FileUtils.rm_f(MxunitCodec.path_for(contents_dir, uuid)) if @format_version == :v2
+        removed = delete_v2_unit(uuid) if @format_version == :v2
         write_stats[:deleted] += 1
         removed
       end
@@ -269,8 +345,11 @@ module Mxrb
         )
       end
 
-      def transaction(&)
-        @db.transaction(&)
+      def transaction(&block)
+        return @db.transaction(&block) unless @format_version == :v2
+        raise ValidationError, 'nested MPR v2 transactions are not supported' if @v2_transaction
+
+        with_v2_transaction(&block)
       end
 
       # Creates a consistent point-in-time backup using SQLite's VACUUM INTO.
@@ -278,11 +357,19 @@ module Mxrb
       def backup!(dest_path)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
-        FileUtils.rm_f(dest_path)
-        @db.execute("VACUUM INTO ?", [dest_path])
-      rescue SQLite3::Exception
-        @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil
-        FileUtils.cp(@path, dest_path)
+        cleanup_backup!(dest_path)
+        begin
+          begin
+            @db.execute("VACUUM INTO ?", [dest_path])
+          rescue SQLite3::Exception
+            @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil
+            FileUtils.cp(@path, dest_path)
+          end
+          backup_v2_contents!(dest_path) if @format_version == :v2
+        rescue StandardError
+          cleanup_backup!(dest_path)
+          raise
+        end
       end
 
       # Restores the database from a backup file, replacing the current contents.
@@ -290,11 +377,22 @@ module Mxrb
       def restore_from!(backup_path)
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
 
+        needs_snapshot = preflight_backup!(backup_path)
         @db.close
         FileUtils.cp(backup_path, @path)
         @db             = open_db
         @mendix_version = nil
+        if needs_snapshot
+          FileUtils.mkdir_p(contents_dir)
+          restore_v2_contents!(backup_path)
+        end
         @format_version = detect_format
+      end
+
+      # Removes all artifacts created by backup! for the supplied destination.
+      def cleanup_backup!(dest_path)
+        FileUtils.rm_f(dest_path)
+        FileUtils.rm_rf(backup_contents_dir(dest_path))
       end
 
       # ── Exploration helpers ───────────────────────────────────────────────
@@ -630,6 +728,112 @@ module Mxrb
 
       private
 
+      def storage_migration_units
+        conflict = conflicts_column || "''"
+        contents = contents_column? ? 'Contents' : 'NULL'
+        @db.execute(<<~SQL).map do |row|
+          SELECT UnitID, ContainerID, ContainmentName, TreeConflict,
+                 ContentsHash, #{conflict}, #{contents}
+          FROM Unit
+        SQL
+          uuid = BsonCodec.blob_to_uuid(row[0])
+          bytes = row[6] || content_bytes('UnitID' => uuid, 'Contents' => nil)
+          [*row.first(6), bytes]
+        end
+      end
+
+      def migrate_units_to_v2!(units)
+        stage = "#{contents_dir}.mxrb-convert-#{Process.pid}"
+        FileUtils.rm_rf(stage)
+        units.each do |row|
+          uuid = BsonCodec.blob_to_uuid(row[0])
+          MxunitCodec.write_atomic(MxunitCodec.path_for(stage, uuid), row[6])
+        end
+        rebuild_storage_tables!(:v2, units)
+        FileUtils.rm_rf(contents_dir)
+        FileUtils.mv(stage, contents_dir)
+      ensure
+        FileUtils.rm_rf(stage) if defined?(stage) && stage && File.directory?(stage)
+      end
+
+      def migrate_units_to_v1!(units)
+        rebuild_storage_tables!(:v1, units)
+        FileUtils.rm_rf(contents_dir)
+      end
+
+      def rebuild_storage_tables!(format, units)
+        version = mendix_version
+        schema_hash = StudioCompatibility.new(version).schema_hash
+        @db.transaction do
+          @db.execute('DROP TABLE IF EXISTS Unit_MxrbStorageMigration')
+          @db.execute(storage_unit_table_sql(format))
+          insert_storage_units!(format, units)
+          @db.execute('DROP TABLE Unit')
+          @db.execute('ALTER TABLE Unit_MxrbStorageMigration RENAME TO Unit')
+          rebuild_storage_metadata!(format, version, schema_hash)
+        end
+      end
+
+      def storage_unit_table_sql(format)
+        contents = format == :v1 ? ', Contents BLOB' : ''
+        <<~SQL
+          CREATE TABLE Unit_MxrbStorageMigration (
+            UnitID BLOB PRIMARY KEY NOT NULL, ContainerID BLOB,
+            ContainmentName TEXT, TreeConflict LONG,
+            ContentsHash TEXT, ContentsConflicts TEXT#{contents}
+          )
+        SQL
+      end
+
+      def insert_storage_units!(format, units)
+        count = format == :v1 ? 7 : 6
+        placeholders = (['?'] * count).join(', ')
+        units.each do |row|
+          values = format == :v1 ? row : row.first(6)
+          @db.execute("INSERT INTO Unit_MxrbStorageMigration VALUES (#{placeholders})", values)
+        end
+      end
+
+      def rebuild_storage_metadata!(format, version, schema_hash)
+        @db.execute('DROP TABLE IF EXISTS _MetaData_MxrbStorageMigration')
+        prefix = format == :v2 ? '_FormatVersion INTEGER, ' : ''
+        @db.execute(<<~SQL)
+          CREATE TABLE _MetaData_MxrbStorageMigration (
+            #{prefix}_ProductVersion TEXT, _BuildVersion TEXT, _SchemaHash TEXT
+          )
+        SQL
+        values = format == :v2 ? [2, version, version, schema_hash] : [version, version, schema_hash]
+        placeholders = (['?'] * values.size).join(', ')
+        @db.execute("INSERT INTO _MetaData_MxrbStorageMigration VALUES (#{placeholders})", values)
+        @db.execute('DROP TABLE _MetaData')
+        @db.execute('ALTER TABLE _MetaData_MxrbStorageMigration RENAME TO _MetaData')
+      end
+
+      # Studio Pro 11 serializes integer-valued model properties as BSON
+      # int64 while retaining the Mendix array marker as BSON int32.
+      def serialize_contents(document)
+        BsonCodec.serialize(document, int64_properties: mendix_version == '11.12.1')
+      end
+
+      def compatible_document(document)
+        return document unless @apply_studio_compatibility
+
+        StudioCompatibility.new(mendix_version).apply_document!(document)
+      end
+
+      def write_mpr_name!
+        target = File.join(contents_dir, 'mprname')
+        expected = File.basename(@path)
+        return if File.file?(target) && File.binread(target) == expected
+
+        FileUtils.mkdir_p(contents_dir)
+        temporary = "#{target}.mxrb-#{Process.pid}"
+        File.binwrite(temporary, expected)
+        FileUtils.mv(temporary, target)
+      ensure
+        FileUtils.rm_f(temporary) if defined?(temporary) && temporary
+      end
+
       def ensure_vector_write!
         raise ReadOnlyError, "Opened in read-only mode" if @readonly
       end
@@ -655,13 +859,87 @@ module Mxrb
         raise NotMprError, "#{@path}: Unit table missing — not a valid .mpr file" unless tables.include?("Unit")
       end
 
+      def preflight_backup!(backup_path)
+        magic = File.binread(backup_path, 16) if File.file?(backup_path)
+        raise NotMprError, "#{backup_path}: not a valid SQLite file" \
+          unless magic&.start_with?("SQLite format 3")
+
+        backup_db = SQLite3::Database.new(
+          backup_path,
+          flags: SQLite3::Constants::Open::READONLY
+        )
+        unit_table = backup_db.get_first_value(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'Unit'"
+        )
+        raise NotMprError, "#{backup_path}: Unit table missing — not a valid .mpr file" \
+          unless unit_table
+
+        contents_column = backup_db.execute("PRAGMA table_info(Unit)").any? { _1[1] == "Contents" }
+        snapshot_dir = backup_contents_dir(backup_path)
+        needs_snapshot = !contents_column || File.directory?(snapshot_dir)
+        if needs_snapshot && !File.directory?(snapshot_dir)
+          raise IncompletePackageError,
+                "#{backup_path}: v2 MPR backup is missing contents snapshot #{snapshot_dir}"
+        end
+
+        needs_snapshot
+      ensure
+        backup_db&.close
+      end
+
       # MPR v2 stores unit contents in mprcontents/ folder next to the .mpr.
       def detect_format
+        unless contents_column?
+          unless File.directory?(contents_dir)
+            raise IncompletePackageError,
+                  "#{@path}: MPR schema stores unit contents externally but sibling " \
+                  "directory #{contents_dir} is missing"
+          end
+
+          return :v2
+        end
+
         File.directory?(contents_dir) ? :v2 : :v1
       end
 
       def contents_dir
         File.join(File.dirname(@path), "mprcontents")
+      end
+
+      def backup_contents_dir(path)
+        "#{path}.mprcontents"
+      end
+
+      def backup_v2_contents!(dest_path)
+        snapshot_dir = backup_contents_dir(dest_path)
+        FileUtils.rm_rf(snapshot_dir)
+        FileUtils.cp_r(contents_dir, snapshot_dir)
+      end
+
+      def restore_v2_contents!(backup_path)
+        snapshot_dir = backup_contents_dir(backup_path)
+        unless File.directory?(snapshot_dir)
+          raise IncompletePackageError,
+                "#{backup_path}: v2 MPR backup is missing contents snapshot #{snapshot_dir}"
+        end
+
+        snapshot_files = relative_mxunit_paths(snapshot_dir)
+        live_files = relative_mxunit_paths(contents_dir)
+        snapshot_files.each do |relative_path|
+          destination = File.join(contents_dir, relative_path)
+          FileUtils.mkdir_p(File.dirname(destination))
+          FileUtils.cp(File.join(snapshot_dir, relative_path), destination)
+        end
+        (live_files - snapshot_files).each do |relative_path|
+          FileUtils.rm_f(File.join(contents_dir, relative_path))
+        end
+      end
+
+      def relative_mxunit_paths(directory)
+        prefix_length = directory.length + 1
+        Dir.glob(File.join(directory, "**", "*.mxunit")).sort.map do |path|
+          path[prefix_length..]
+        end
       end
 
       def unit_columns
@@ -684,8 +962,194 @@ module Mxrb
         "UnitID, ContainerID, ContainmentName, ContentsHash, #{contents}"
       end
 
+      def with_v2_transaction(&block)
+        @v2_transaction = {
+          writes: {}, deletes: {}, applied: [], journal_dir: nil,
+          write_stats: write_stats.dup, id: SecureRandom.uuid
+        }
+        committed = false
+        result = @db.transaction do
+          value = block.call
+          apply_v2_transaction!
+          value
+        end
+        committed = true
+        cleanup_v2_transaction!
+        clear_v2_transaction_marker!(@v2_transaction.fetch(:id))
+        result
+      rescue StandardError
+        rollback_v2_transaction! unless committed
+        @write_stats = @v2_transaction.fetch(:write_stats) if @v2_transaction && !committed
+        raise
+      ensure
+        cleanup_v2_transaction!
+        @v2_transaction = nil
+      end
+
       def write_v2_unit(uuid, bytes)
-        MxunitCodec.write_atomic(MxunitCodec.path_for(contents_dir, uuid), bytes)
+        if @v2_transaction
+          @v2_transaction.fetch(:writes)[uuid.to_s] = bytes
+          @v2_transaction.fetch(:deletes).delete(uuid.to_s)
+        else
+          MxunitCodec.write_atomic(MxunitCodec.path_for(contents_dir, uuid), bytes)
+        end
+      end
+
+      def delete_v2_unit(uuid)
+        path = MxunitCodec.path_for(contents_dir, uuid)
+        return FileUtils.rm_f(path) unless @v2_transaction
+
+        key = uuid.to_s
+        existed = File.file?(path) || @v2_transaction.fetch(:writes).key?(key)
+        @v2_transaction.fetch(:writes).delete(key)
+        @v2_transaction.fetch(:deletes)[key] = true
+        existed ? [path] : []
+      end
+
+      def staged_v2_content(uuid)
+        return [false, nil] unless @v2_transaction
+
+        key = uuid.to_s
+        writes = @v2_transaction.fetch(:writes)
+        return [true, writes.fetch(key)] if writes.key?(key)
+        return [true, nil] if @v2_transaction.fetch(:deletes).key?(key)
+
+        [false, nil]
+      end
+
+      def apply_v2_transaction!
+        state = @v2_transaction
+        identifiers = (state.fetch(:writes).keys + state.fetch(:deletes).keys).uniq.sort
+        return if identifiers.empty?
+
+        state[:journal_dir] = transaction_journal_dir
+        if File.exist?(state.fetch(:journal_dir))
+          raise IncompletePackageError,
+                "stale MPR transaction journal exists: #{state.fetch(:journal_dir)}"
+        end
+        write_v2_transaction_manifest!(state, identifiers)
+        register_v2_transaction_marker!(state.fetch(:id))
+        identifiers.each do |uuid|
+          apply_v2_transaction_unit!(state, uuid)
+        end
+      end
+
+      def apply_v2_transaction_unit!(state, uuid)
+        path = MxunitCodec.path_for(contents_dir, uuid)
+        relative = path.delete_prefix("#{contents_dir}/")
+        backup = File.join(state.fetch(:journal_dir), 'original', relative)
+        entry = { path:, backup:, existed: File.file?(path) }
+        state.fetch(:applied) << entry
+        if entry.fetch(:existed)
+          FileUtils.mkdir_p(File.dirname(backup))
+          File.rename(path, backup)
+        end
+        bytes = state.fetch(:writes)[uuid]
+        MxunitCodec.write_atomic(path, bytes) if bytes
+      end
+
+      def rollback_v2_transaction!
+        return unless @v2_transaction
+
+        @v2_transaction.fetch(:applied).reverse_each do |entry|
+          FileUtils.rm_f(entry.fetch(:path))
+          next unless entry.fetch(:existed) && File.file?(entry.fetch(:backup))
+
+          FileUtils.mkdir_p(File.dirname(entry.fetch(:path)))
+          File.rename(entry.fetch(:backup), entry.fetch(:path))
+        end
+      end
+
+      def cleanup_v2_transaction!
+        journal_dir = @v2_transaction&.fetch(:journal_dir, nil)
+        FileUtils.rm_rf(journal_dir) if journal_dir
+      end
+
+      def transaction_journal_dir
+        "#{@path}.mxrb-transaction"
+      end
+
+      def transaction_manifest_path
+        File.join(transaction_journal_dir, 'journal.json')
+      end
+
+      def write_v2_transaction_manifest!(state, identifiers)
+        entries = identifiers.map do |uuid|
+          path = MxunitCodec.path_for(contents_dir, uuid)
+          {
+            'uuid' => uuid, 'relative_path' => path.delete_prefix("#{contents_dir}/"),
+            'existed' => File.file?(path),
+            'action' => state.fetch(:writes).key?(uuid) ? 'write' : 'delete'
+          }
+        end
+        FileUtils.mkdir_p(transaction_journal_dir)
+        write_atomic_file(
+          transaction_manifest_path,
+          JSON.generate('version' => 1, 'id' => state.fetch(:id), 'entries' => entries)
+        )
+      end
+
+      def register_v2_transaction_marker!(id)
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbFileTransaction (
+            ID TEXT PRIMARY KEY NOT NULL
+          )
+        SQL
+        @db.execute('INSERT INTO _MxrbFileTransaction (ID) VALUES (?)', [id])
+      end
+
+      def clear_v2_transaction_marker!(id)
+        return unless tables.include?('_MxrbFileTransaction')
+
+        @db.execute('DELETE FROM _MxrbFileTransaction WHERE ID = ?', [id])
+        @db.execute('DROP TABLE _MxrbFileTransaction') if
+          @db.get_first_value('SELECT COUNT(*) FROM _MxrbFileTransaction').to_i.zero?
+      rescue SQLite3::Exception
+        nil
+      end
+
+      def recover_interrupted_v2_transaction!
+        return unless File.directory?(transaction_journal_dir)
+        if @readonly
+          raise IncompletePackageError,
+                "MPR has an interrupted file transaction; open writable to recover: " \
+                "#{transaction_journal_dir}"
+        end
+
+        manifest = JSON.parse(File.read(transaction_manifest_path))
+        id = manifest.fetch('id')
+        committed = tables.include?('_MxrbFileTransaction') &&
+                    @db.get_first_value(
+                      'SELECT 1 FROM _MxrbFileTransaction WHERE ID = ?', [id]
+                    ) == 1
+        restore_interrupted_v2_files!(manifest.fetch('entries')) unless committed
+        FileUtils.rm_rf(transaction_journal_dir)
+        clear_v2_transaction_marker!(id)
+      rescue JSON::ParserError, KeyError => e
+        raise IncompletePackageError,
+              "invalid MPR transaction journal #{transaction_manifest_path}: #{e.message}"
+      end
+
+      def restore_interrupted_v2_files!(entries)
+        entries.reverse_each do |entry|
+          path = File.join(contents_dir, entry.fetch('relative_path'))
+          backup = File.join(transaction_journal_dir, 'original', entry.fetch('relative_path'))
+          if entry.fetch('existed') && File.file?(backup)
+            FileUtils.rm_f(path)
+            FileUtils.mkdir_p(File.dirname(path))
+            File.rename(backup, path)
+          elsif !entry.fetch('existed')
+            FileUtils.rm_f(path)
+          end
+        end
+      end
+
+      def write_atomic_file(path, bytes)
+        temporary = "#{path}.tmp-#{Process.pid}-#{Thread.current.object_id}"
+        File.binwrite(temporary, bytes)
+        File.rename(temporary, path)
+      ensure
+        FileUtils.rm_f(temporary) if temporary
       end
 
       def raw_to_hash(row)

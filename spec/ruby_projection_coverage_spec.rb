@@ -108,7 +108,7 @@ RSpec.describe 'complete Ruby projection contracts' do
     expect { menu.deep_structure([]) }.to raise_error(ArgumentError)
     expect { menu.form_structure([]) }.to raise_error(ArgumentError)
 
-    page = Mxrb::Dsl::PageBuilder.new('Home')
+    page = Mxrb::Dsl::PageBuilder.new('Home', unit_id: uuid)
     page.radio_button_group(:Choice, horizontal: true)
     page.page_title(:Title)
     page.static_image(:Logo, image: 'App.Images.logo')
@@ -117,6 +117,7 @@ RSpec.describe 'complete Ruby projection contracts' do
     expect(page.bson_binary(binary).data).to eq('payload')
     expect { page.deep_structure([]) }.to raise_error(ArgumentError)
     expect { page.form_structure([]) }.to raise_error(ArgumentError)
+    expect(page.to_h.fetch(:unit_id)).to eq(uuid)
 
     flow = Mxrb::Dsl::FlowBuilder.new('Run', runtime: :server, kind: :use_case, public: false)
     flow.execute_database_query('SELECT 1', as: :rows, dynamic_query: '$query',
@@ -842,7 +843,8 @@ RSpec.describe 'complete Ruby projection contracts' do
     end.to raise_error(Mxrb::ValidationError, /OQL source id does not match/)
     query_entity = {}
     writer.send(:synchronize_ruby_oql_view!, query_entity, { query: 'SELECT 1' }, 'App', 'View')
-    expect(query_entity['OqlQuery']).to eq('SELECT 1')
+    expect(query_entity.dig('Source', 'SourceDocument')).to eq('App.View')
+    expect(query_entity).not_to have_key('OqlQuery')
 
     mpr = double
     allow(mpr).to receive(:children_of).and_return([])

@@ -34,12 +34,24 @@ RSpec.describe 'Ruby application defensive coverage' do
   it 'covers source safety, manifests, registry, records, services, and pages' do
     Dir.mktmpdir('mxrb-ruby-contract-') do |dir|
       FileUtils.mkdir_p(File.join(dir, 'app', 'models', 'x'))
+      FileUtils.mkdir_p(File.join(dir, 'app', 'controllers'))
       FileUtils.mkdir_p(File.join(dir, 'frontend', 'node_modules'))
       File.write(File.join(dir, 'app', 'models', 'x', 'a.rb'), '# model')
+      File.write(
+        File.join(dir, 'app', 'controllers', 'application_controller.rb'),
+        'class ApplicationController < ActionController::Base; end'
+      )
+      File.write(
+        File.join(dir, 'app', 'controllers', 'items_controller.rb'),
+        'class ItemsController < Mxrb::RubyApp::Controller; controller_name "Items"; end'
+      )
       File.write(File.join(dir, 'frontend', 'node_modules', 'ignored.js'), 'ignored')
       bundle = Mxrb::RubyApp.source_bundle(dir)
-      expect(bundle.map { _1[:path] }).to eq(['app/models/x/a.rb'])
+      expect(bundle.map { _1[:path] }).to eq(
+        %w[app/controllers/application_controller.rb app/controllers/items_controller.rb app/models/x/a.rb]
+      )
       expect(Mxrb::RubyApp.application_files(dir)).to contain_exactly(
+        File.join(dir, 'app', 'controllers', 'items_controller.rb'),
         File.join(dir, 'app', 'models', 'x', 'a.rb')
       )
       expect(Mxrb::RubyApp.safe_source_mode(nil, 'bin/server')).to eq(0o755)

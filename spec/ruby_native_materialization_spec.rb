@@ -33,7 +33,7 @@ RSpec.describe 'Ruby-first native materialization' do
       module App
         class ActLaunch < Mxrb::RubyApp::Service
           mendix_name 'App.ACT_Launch'
-          native :microflow do
+          flow :microflow do
             allowed_roles 'App.User'
             return_type :String
             show_message 'Ruby reached Mendix', type: :success
@@ -46,7 +46,7 @@ RSpec.describe 'Ruby-first native materialization' do
       module App
         class NanLaunch < Mxrb::RubyApp::Service
           mendix_name 'App.NAN_Launch'
-          native :nanoflow do
+          flow :nanoflow do
             allowed_roles 'App.User'
             call_microflow 'App.ACT_Launch', as: :status
             show_message '{1}', type: :information, parameters: ['$status']
@@ -258,7 +258,7 @@ RSpec.describe 'Ruby-first native materialization' do
 
       Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
       expect(File.read(File.join(round_trip, 'app', 'services', 'app', 'act_launch.rb')))
-        .to include('native :microflow', "show_message 'Ruby reached Mendix'")
+        .to include('flow :microflow', "show_message 'Ruby reached Mendix'")
       expect(File).to exist(File.join(
                               round_trip, 'frontend', 'src', 'generated', 'nanoflows',
                               'app', 'nan_launch.ts'

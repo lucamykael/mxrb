@@ -119,7 +119,7 @@ RSpec.describe 'Ruby application export mode' do
         'payload.context ||', 'payload.result ||'
       )
       expect(Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join)
-        .to include('native :microflow do', 'body_fingerprint')
+        .to include('flow :microflow do', 'body_fingerprint')
       expect(widget_source).to include('WidgetRenderer', 'BoundField', 'DataGrid')
       expect(api_source).to include("headers.set('X-CSRF-Token', csrfToken)")
       expect(api_source).to include("credentials: 'same-origin'")

@@ -8,11 +8,20 @@ require "securerandom"
 require "sqlite3"
 require "time"
 require_relative "writer/page_overlay"
+require_relative "forms/mpr_codec"
+require_relative "settings/mpr_codec"
 
 module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
   # stable key, making repeated `mxrb generate` runs idempotent.
   class Writer
+    CONVENTIONAL_DOCUMENT_FOLDERS = {
+      'Microflows$Microflow' => 'Flows',
+      'Microflows$Nanoflow' => 'Flows',
+      'ExportMappings$ExportMapping' => 'Export_Mappings',
+      'ImportMappings$ImportMapping' => 'Import_Mappings',
+      'JsonStructures$JsonStructure' => 'Json_Structures'
+    }.freeze
     GLYPH_ICON_CODES = {
       'home' => 57_377, 'pets' => 57_349, 'heart' => 57_349,
       'calendar' => 57_609, 'calendar_today' => 57_609,
@@ -51,9 +60,15 @@ module Mxrb
         @progress = progress
         create_project! unless File.exist?(@path)
         progress.advance(detail: "project container")
-        mpr = IO::MprFile.open(@path)
+        mpr = IO::MprFile.open(@path, apply_studio_compatibility: false)
+        mpr.ensure_v2_contract!
         mpr.transaction do
+          # Existing projects must use the target schema while their units are
+          # rewritten. Updating metadata after the write leaves unchanged
+          # documents encoded with the source version's BSON representation.
+          mpr.update_version!(@definition.fetch(:version))
           apply(mpr, native_units)
+          mpr.apply_studio_compatibility! if studio_compatibility_required?
           write_native_compatibility(mpr, native_units)
           mpr.write_architecture_definition(@definition)
           mpr.write_ruby_app_sources(ruby_app_source_files) if @definition[:ruby_app_sources_path]
@@ -73,14 +88,14 @@ module Mxrb
     # Unlike #write!, this deliberately does not rewrite the domain model,
     # security, settings, or unrelated native documents.
     def synchronize_ruby_documents!(mpr, module_name:, pages: [], microflows: [], nanoflows: [],
-                                    navigation_items: [])
+                                    rules: [], navigation_items: [])
       root_id = mpr.root_unit.fetch("UnitID")
       raw_module = find_named(mpr, "Modules", root_id, module_name.to_s)
       raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
 
       definition = {
         name: module_name.to_s, pages: Array(pages), microflows: Array(microflows),
-        nanoflows: Array(nanoflows), menus: [], enumerations: [], constants: [],
+        nanoflows: Array(nanoflows), rules: Array(rules), menus: [], enumerations: [], constants: [],
         scheduled_events: []
       }
       mpr.transaction do
@@ -640,23 +655,11 @@ module Mxrb
         raise ValidationError, "OQL view #{module_name}.#{entity_name} requires source or query"
       end
 
+      # Studio Pro 11 converts legacy inline OQL into a named source reference,
+      # but does not create the referenced document. Normalize inline queries
+      # before writing so the converted project keeps a resolvable source.
+      source = "#{module_name}.#{entity_name}" if source.empty? && !query.nil?
       declared_id = declaration[:source_id].to_s
-      if source.empty? && !query.nil? && !declared_id.empty?
-        key = native_existing_key(entity, "source", "Source") || "Source"
-        previous = entity[key].is_a?(Hash) ? entity[key] : {}
-        previous_id = IO::BsonCodec.extract_id(previous["$ID"])
-        if previous_id && declared_id != previous_id
-          raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
-        end
-        source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
-                     "SourceDocument"
-        query_key = native_existing_key(previous, "oql", "Oql", "OQL") || "Oql"
-        entity[key] = previous.merge(
-          "$ID" => declared_id, "$Type" => "DomainModels$OqlViewEntitySource",
-          source_key => "", query_key => query.to_s
-        )
-        return
-      end
 
       unless source.empty?
         key = native_existing_key(entity, "source", "Source") || "Source"
@@ -667,10 +670,13 @@ module Mxrb
         end
         source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
                      "SourceDocument"
-        entity[key] = previous.merge(
+        normalized = previous.merge(
           "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
           "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
         )
+        %w[oql Oql OQL].each { normalized.delete(_1) }
+        entity[key] = normalized
+        %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
       end
       return if query.nil? || !source.empty?
 
@@ -705,9 +711,12 @@ module Mxrb
     def synchronize_ruby_oql_documents!(mpr, module_id, module_name, entities)
       declarations = entities.filter_map do |entity|
         view = entity[:oql_view]
-        next if view.nil? || view[:query].nil? || view[:source].to_s.empty?
+        next if view.nil? || view[:query].nil?
 
-        [entity.fetch(:name).to_s, view]
+        entity_name = entity.fetch(:name).to_s
+        source = view[:source].to_s
+        source = "#{module_name}.#{entity_name}" if source.empty?
+        [entity_name, view.merge(source:)]
       end
       return if declarations.empty?
 
@@ -1700,10 +1709,9 @@ module Mxrb
             ContentsHash TEXT, ContentsConflicts TEXT
           )
         SQL
-        db.execute(
-          "INSERT INTO _MetaData VALUES (2, ?, ?, '')",
-          [@definition.fetch(:version), @definition.fetch(:version)]
-        )
+        version = @definition.fetch(:version)
+        schema_hash = StudioCompatibility.new(version).schema_hash
+        db.execute("INSERT INTO _MetaData VALUES (2, ?, ?, ?)", [version, version, schema_hash])
       else
         db.execute("CREATE TABLE _MetaData (_ProductVersion TEXT, _BuildVersion TEXT, _SchemaHash TEXT)")
         db.execute(<<~SQL)
@@ -1713,10 +1721,9 @@ module Mxrb
             ContentsHash TEXT, ContentsConflicts TEXT, Contents BLOB
           )
         SQL
-        db.execute(
-          "INSERT INTO _MetaData VALUES (?, ?, '')",
-          [@definition.fetch(:version), @definition.fetch(:version)]
-        )
+        version = @definition.fetch(:version)
+        schema_hash = StudioCompatibility.new(version).schema_hash
+        db.execute("INSERT INTO _MetaData VALUES (?, ?, ?)", [version, version, schema_hash])
       end
       root_id = @definition[:project_id].to_s
       root_id = SecureRandom.uuid if root_id.empty?
@@ -1785,7 +1792,9 @@ module Mxrb
       preflight_page_overlays!(mpr, root_id)
       apply_native_project_units(mpr, root_id, native_units)
       apply_default_project_units(mpr, root_id)
+      write_typed_project_settings(mpr, root_id)
       ensure_project_documents(mpr, root_id)
+      write_system_texts(mpr, root_id, @definition[:system_texts]) if @definition[:system_texts]
       @definition.fetch(:modules).each_with_index do |mod, index|
         raw_module = find_named(mpr, "Modules", root_id, mod.fetch(:name))
         existing_module = raw_module ? mpr.parse_contents(raw_module) : native_module_doc(native_units, mod.fetch(:name))
@@ -1801,6 +1810,9 @@ module Mxrb
         write_native_documents(mpr, module_id, mod)
         write_module_security(mpr, module_id, mod) if mod.key?(:module_roles)
         write_domain_model(mpr, module_id, mod)
+        synchronize_ruby_oql_documents!(
+          mpr, module_id, mod.fetch(:name).to_s, mod.fetch(:entities)
+        )
         write_documents(mpr, module_id, mod)
         @progress.advance(detail: "module #{mod.fetch(:name)}")
       end
@@ -1816,13 +1828,21 @@ module Mxrb
         mod.fetch(:pages).each do |page|
           next unless page.fetch(:write_mode, :replace).to_sym == :overlay
 
-          baseline = deep_copy(page.fetch(:deep_structure))
-          metadata = baseline[PageOverlay::METADATA_KEY]
+          baseline = page[:deep_structure] && deep_copy(page.fetch(:deep_structure))
+          metadata = page[:overlay_metadata] || baseline&.fetch(PageOverlay::METADATA_KEY, nil)
           raw_module = overlay_module_target(mpr, root_id, mod, metadata)
           raw_page = overlay_page_target(mpr, raw_module, page, metadata)
           verify_page_overlay_target!(mpr.parse_contents(raw_page), page, mod.fetch(:name))
+        rescue ValidationError => e
+          raise ValidationError,
+                "page overlay #{mod.fetch(:name)}.#{page.fetch(:name)}: #{e.message}"
         end
       end
+    end
+
+    def studio_compatibility_required?
+      source = native_manifest&.fetch('source_version', nil).to_s
+      source.empty? || source != @definition.fetch(:version).to_s
     end
 
     def overlay_module_target(mpr, root_id, mod, metadata)
@@ -1833,11 +1853,10 @@ module Mxrb
       end
       unit_id = metadata&.fetch('module_unit_id', nil).to_s
       stable = unit_id.empty? ? nil : mpr.unit(unit_id)
-      unless stable && candidates.one? && stable['UnitID'] == candidates.first['UnitID']
-        raise ValidationError, "page overlay module identity changed for #{expected_name}"
-      end
+      return candidates.first if candidates.one? &&
+                                 (!stable || stable['UnitID'] == candidates.first['UnitID'])
 
-      stable
+      raise ValidationError, "page overlay module identity changed for #{expected_name}"
     end
 
     def overlay_page_target(mpr, raw_module, page, metadata)
@@ -1847,16 +1866,15 @@ module Mxrb
       end
       unit_id = metadata&.fetch('page_unit_id', nil).to_s
       stable = unit_id.empty? ? nil : mpr.unit(unit_id)
-      unless stable && candidates.one? && stable['UnitID'] == candidates.first['UnitID']
-        raise ValidationError, "page overlay identity changed for #{expected_name}"
-      end
+      return candidates.first if candidates.one? &&
+                                 (!stable || stable['UnitID'] == candidates.first['UnitID'])
 
-      stable
+      raise ValidationError, "page overlay identity changed for #{expected_name}"
     end
 
     def verify_page_overlay_target!(target, page, module_name)
-      baseline = deep_copy(page.fetch(:deep_structure))
-      metadata = baseline.delete(PageOverlay::METADATA_KEY)
+      baseline = page[:deep_structure] && deep_copy(page.fetch(:deep_structure))
+      metadata = page[:overlay_metadata] || baseline&.delete(PageOverlay::METADATA_KEY)
       widgets = page.fetch(:widgets, [])
       PageOverlay.new(
         baseline:, target:, widgets:, metadata:,
@@ -1882,7 +1900,11 @@ module Mxrb
     def apply_native_unit_overrides(native_units, overrides)
       by_id = native_units.to_h { [_1["unit_id"], _1] }
       overrides.each do |override|
-        attributes = override.transform_keys(&:to_s)
+        # Architecture definitions are persisted as JSON and restored with
+        # symbolized keys. Native BSON documents, however, require string keys
+        # such as "$ID" and "$Type". Normalize the complete override tree so a
+        # later version transition can safely replay exported project settings.
+        attributes = stringify_keys(override)
         unit_id = attributes.fetch("unit_id")
         current = by_id[unit_id]
         replacement = (current || {}).merge(attributes)
@@ -1922,6 +1944,43 @@ module Mxrb
                     array_items(mpr.parse_contents(security_unit)['UserRoles']).empty?
 
       write_project_security(mpr, root_id, {})
+    end
+
+    def write_typed_project_settings(mpr, root_id)
+      model = @definition[:project_settings_model]
+      return unless model
+      unless @definition.fetch(:version).to_s.split('.').first.to_i == 11
+        raise ValidationError, 'typed project_settings currently supports Mendix 11 only'
+      end
+
+      unit = mpr.children_of(root_id).find do |candidate|
+        mpr.parse_contents(candidate)['$Type'] == 'Settings$ProjectSettings'
+      end
+      raise ValidationError, 'Settings$ProjectSettings baseline is missing' unless unit
+
+      baseline = mpr.parse_contents(unit)
+      document = Settings::MprCodec.new.encode(model, baseline:)
+      mpr.update_unit(unit.fetch('UnitID'), document)
+    end
+
+    def write_system_texts(mpr, root_id, definition)
+      unless @definition.fetch(:version).to_s.split('.').first.to_i == 11
+        raise ValidationError, 'typed system_text_collection currently supports Mendix 11 only'
+      end
+
+      raw = mpr.children_of(root_id).find do |unit|
+        unit['ContainmentName'] == 'ProjectDocuments' &&
+          mpr.parse_contents(unit)['$Type'] == SystemTexts::MprCodec::COLLECTION_TYPE
+      end
+      baseline = raw ? mpr.parse_contents(raw) : nil
+      document = SystemTexts::MprCodec.new.encode(definition, baseline:)
+      if raw
+        mpr.update_unit(raw.fetch('UnitID'), document)
+      else
+        mpr.insert_unit(
+          container_uuid: root_id, containment_name: 'ProjectDocuments', contents_doc: document
+        )
+      end
     end
 
     def apply_default_project_units(mpr, root_id)
@@ -1994,22 +2053,40 @@ module Mxrb
     def write_native_documents(mpr, module_id, mod)
       retained = []
       mod.fetch(:native_documents, []).each do |document|
-        doc = document.fetch(:doc)
+        # Native documents are BSON-shaped hashes. Architecture metadata is
+        # restored with symbolized JSON keys during a version transition, so
+        # normalize the document boundary before matching or writing it.
+        typed_forms = document[:forms_model]
+        doc = if typed_forms
+                Forms::MprCodec.new.encode(typed_forms).merge('Name' => document.fetch(:name).to_s)
+              else
+                stringify_keys(document.fetch(:doc))
+              end
         doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout?
-        existing = mpr.unit(document[:unit_id]) if document[:unit_id]
+        existing = native_document_target(mpr, module_id, document, doc)
+        requested_container = document[:container_id]
+        target_container = if requested_container && mpr.unit(requested_container)
+                             requested_container
+                           else
+                             conventional_document_container(mpr, module_id, doc)
+                           end
         if existing
           current = mpr.parse_contents(existing)
-          preserved = current.merge(doc).merge(
+          if typed_forms
+            doc = Forms::MprCodec.new.encode(typed_forms, baseline: current)
+              .merge('Name' => document.fetch(:name).to_s)
+          end
+          base = typed_forms ? doc : current.merge(doc)
+          preserved = base.merge(
             '$ID' => current['$ID'] || existing.fetch('UnitID'),
             '$Type' => doc['$Type'] || doc[:'$Type'] || document.fetch(:type)
           )
           mpr.update_unit(existing.fetch('UnitID'), preserved)
+          relocate_root_document(mpr, existing, module_id, target_container)
           retained << existing.fetch('UnitID')
           next
         end
 
-        requested_container = document[:container_id]
-        target_container = requested_container && mpr.unit(requested_container) ? requested_container : module_id
         retained << upsert_native_unit(
           mpr, target_container,
           'containment' => document.fetch(:containment), 'doc' => doc
@@ -2171,9 +2248,9 @@ module Mxrb
         unit["ContainmentName"] == "ProjectDocuments" &&
           mpr.parse_contents(unit)["$Type"] == "Security$ProjectSecurity"
       end
-      doc = project_security_doc(security)
+      existing = raw ? mpr.parse_contents(raw) : {}
+      doc = project_security_doc(security, previous: existing)
       if raw
-        existing = mpr.parse_contents(raw)
         # The native manifest remains authoritative for security properties
         # that are not modeled by the Ruby DSL yet. Only replace the editable
         # role collection and explicitly declared security level.
@@ -2567,10 +2644,13 @@ module Mxrb
       existing = documents_by_name(mpr, module_id)
       validate_flow_identities!(mod.fetch(:microflows), "Microflows$Microflow")
       validate_flow_identities!(mod.fetch(:nanoflows, []), "Microflows$Nanoflow")
+      validate_flow_identities!(mod.fetch(:rules, []), 'Microflows$Rule')
 
       mod.fetch(:pages).each do |page|
+        candidates = existing[page.fetch(:name)]
+        baseline = page_baseline(mpr, candidates, page)
         upsert_document(
-          mpr, module_id, existing[page.fetch(:name)], page_doc(page, mod.fetch(:name))
+          mpr, module_id, candidates, page_doc(page, mod.fetch(:name), baseline:)
         )
       end
       mod.fetch(:microflows).each do |flow|
@@ -2586,6 +2666,14 @@ module Mxrb
         upsert_document(
           mpr, module_id, existing[flow.fetch(:name)],
           nanoflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          allow_name_fallback: unique_name
+        )
+      end
+      mod.fetch(:rules, []).each do |flow|
+        unique_name = unique_flow_name?(mod.fetch(:rules, []), flow)
+        upsert_document(
+          mpr, module_id, existing[flow.fetch(:name)],
+          rule_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
           allow_name_fallback: unique_name
         )
       end
@@ -2621,6 +2709,7 @@ module Mxrb
 
     def upsert_document(mpr, module_id, candidates, doc, allow_name_fallback: true)
       requested_unit_id = doc.delete("__mxrb_unit_id").to_s
+      target_container = conventional_document_container(mpr, module_id, doc)
       raw = resolve_document_target(
         mpr, module_id, candidates, doc, requested_unit_id,
         allow_name_fallback:
@@ -2633,16 +2722,51 @@ module Mxrb
         doc["$ID"] = existing["$ID"] || raw.fetch("UnitID")
         doc["$Type"] = existing["$Type"] || doc["$Type"]
         mpr.update_unit(raw.fetch("UnitID"), doc)
+        relocate_root_document(mpr, raw, module_id, target_container)
       else
         validate_new_pluggable_widget_slots!(doc)
         strip_internal_keys(doc)
         unit_id = requested_unit_id.empty? ? nil : requested_unit_id
         doc["$ID"] = unit_id if unit_id
         mpr.insert_unit(
-          container_uuid: module_id, containment_name: "Documents",
+          container_uuid: target_container, containment_name: "Documents",
           contents_doc: doc, unit_uuid: unit_id
         )
       end
+    end
+
+    def native_document_target(mpr, module_id, declaration, doc)
+      unit_id = declaration[:unit_id].to_s
+      return mpr.unit(unit_id) unless unit_id.empty?
+      return unless mpr.respond_to?(:children_of)
+
+      name = doc['Name'].to_s
+      type = doc['$Type'].to_s
+      collect_documents(mpr, module_id).find do |raw|
+        current = mpr.parse_contents(raw)
+        current['Name'].to_s == name && current['$Type'].to_s == type
+      end
+    end
+
+    def conventional_document_container(mpr, module_id, doc)
+      folder_name = CONVENTIONAL_DOCUMENT_FOLDERS[doc['$Type'].to_s]
+      return module_id unless folder_name && mpr.respond_to?(:children_of)
+
+      folder = mpr.children_of(module_id).find do |raw|
+        next false unless raw['ContainmentName'] == 'Folders'
+
+        candidate = mpr.parse_contents(raw)
+        candidate['$Type'] == 'Projects$Folder' && candidate['Name'] == folder_name
+      end
+      folder&.fetch('UnitID', module_id) || module_id
+    end
+
+    def relocate_root_document(mpr, raw, module_id, target_container)
+      return if target_container == module_id || raw['ContainerID'] != module_id
+
+      mpr.relocate_unit(
+        raw.fetch('UnitID'), container_uuid: target_container, containment_name: 'Documents'
+      )
     end
 
     def resolve_document_target(
@@ -2682,7 +2806,9 @@ module Mxrb
       matching = Array(candidates).select do |candidate|
         mpr.parse_contents(candidate)["$Type"].to_s == expected_type
       end
-      if matching.size > 1 && %w[Microflows$Microflow Microflows$Nanoflow].include?(expected_type)
+      if matching.size > 1 && %w[
+        Microflows$Microflow Microflows$Nanoflow Microflows$Rule
+      ].include?(expected_type)
         identity = requested_unit_id.empty? ? "without a unit id" : "with missing unit id #{requested_unit_id}"
         raise ValidationError,
               "ambiguous #{expected_type} #{expected_name.inspect} #{identity}: " \
@@ -2783,7 +2909,7 @@ module Mxrb
         merged["Type"] = previous_type.merge(generated_type) if
           previous_type.is_a?(Hash) && generated_type.is_a?(Hash)
         merged
-      when "Microflows$Microflow", "Microflows$Nanoflow"
+      when "Microflows$Microflow", "Microflows$Nanoflow", "Microflows$Rule"
         preserve_keys(merged, existing, %w[
           MicroflowParameterCollection UseListParameterByReference
         ])
@@ -2888,7 +3014,11 @@ module Mxrb
     def configure_custom_widget_value!(property, configured, context_entity: nil, module_name: nil)
       value = property.fetch('Value')
       unless configured.is_a?(Hash)
-        value['PrimitiveValue'] = configured.to_s unless configured.nil?
+        if configured.nil?
+          clear_custom_widget_value!(property, value)
+        else
+          value['PrimitiveValue'] = configured.to_s
+        end
         return value
       end
       return value.merge!(stringify_keys(configured)) unless semantic_widget_value?(configured)
@@ -2910,6 +3040,33 @@ module Mxrb
         configure_widget_objects!(
           property, value, configured[:objects], context_entity:, module_name:
         )
+      end
+      value
+    end
+
+    def clear_custom_widget_value!(property, value)
+      value_type = property.fetch('ValueType')
+      return value unless value_type.is_a?(Hash) && !value_type['Type'].to_s.empty?
+
+      default = value_type['DefaultValue'].to_s
+      case value_type['Type']
+      when 'String', 'Boolean', 'Integer', 'Decimal', 'Number', 'Enumeration'
+        value['PrimitiveValue'] = default
+      when 'Expression' then value['Expression'] = default
+      when 'TextTemplate'
+        value['TextTemplate'] = if value_type['Required'] || !default.empty?
+                                  client_template_doc(default)
+                                end
+      when 'Attribute' then value['AttributeRef'] = nil
+      when 'Association' then value['EntityRef'] = nil
+      when 'DataSource' then value['DataSource'] = nil
+      when 'Action' then value['Action'] = no_action_doc(disabled: true)
+      when 'Widgets' then value['Widgets'] = IO::BsonCodec.build_array([], marker: 2)
+      when 'Object' then value['Objects'] = IO::BsonCodec.build_array([], marker: 2)
+      when 'Selection' then value['Selection'] = 'None'
+      else
+        raise ValidationError,
+              "cannot clear pluggable widget value type #{value_type['Type'].inspect}"
       end
       value
     end
@@ -2937,9 +3094,23 @@ module Mxrb
     def configure_widget_objects!(property, value, configurations, context_entity: nil,
                                   module_name: nil)
       object_type = property.dig('ValueType', 'ObjectType')
-      objects = Array(configurations).map do |configuration|
-        object = custom_widget_object_doc(object_type)
-        nested = widget_object_properties(object_type, object)
+      baseline_objects = array_items(value['Objects'])
+      configurations = Array(configurations)
+      if configurations.length < baseline_objects.length
+        raise ValidationError,
+              "cannot reconcile pluggable widget objects: configuration count " \
+              "#{configurations.length} is smaller than baseline count #{baseline_objects.length}"
+      end
+
+      objects = configurations.map.with_index do |configuration, index|
+        object, nested = if index < baseline_objects.length
+                           reusable_widget_object!(
+                             object_type, baseline_objects[index], configuration, index
+                           )
+                         else
+                           new_object = custom_widget_object_doc(object_type)
+                           [new_object, widget_object_properties(object_type, new_object)]
+                         end
         configuration.each do |key, configured|
           configure_custom_widget_value!(
             nested.fetch(key.to_s), configured, context_entity:, module_name:
@@ -2948,6 +3119,22 @@ module Mxrb
         object
       end
       value['Objects'] = IO::BsonCodec.build_array(objects, marker: 2)
+    end
+
+    def reusable_widget_object!(object_type, object, configuration, index)
+      path = [:objects, index]
+      validate_pluggable_widget_object!(object_type, object, path)
+      nested = widget_object_properties(object_type, object)
+      configuration.each_key do |key|
+        property = nested[key.to_s]
+        unless property && property['$Type'] == 'CustomWidgets$WidgetProperty'
+          raise ValidationError,
+                "pluggable widget object #{pluggable_slot_path(path)} has an invalid " \
+                "WidgetProperty #{key.inspect}"
+        end
+        validate_pluggable_widget_value!(property, path + [key])
+      end
+      [object, nested]
     end
 
     def configure_pluggable_widget_slots!(widget, slots, context_entity: nil, module_name: nil)
@@ -3308,6 +3495,7 @@ module Mxrb
       generated_flows = array_items(
         target["Flows"] || generated_collection["Flows"]
       )
+      duplicate_parameter_type_ids = duplicate_flow_parameter_type_ids(original_objects)
 
       original_objects.each_with_index do |object, index|
         next unless %w[
@@ -3319,7 +3507,9 @@ module Mxrb
             generated["$Type"] == object["$Type"] && generated["Name"] == object["Name"]
         end
         if generated_parameter
-          preserve_flow_parameter_metadata(generated_parameter, object)
+          preserve_flow_parameter_metadata(
+            generated_parameter, object, duplicate_type_ids: duplicate_parameter_type_ids
+          )
           next
         end
 
@@ -3369,12 +3559,23 @@ module Mxrb
       target
     end
 
-    def preserve_flow_parameter_metadata(generated, existing)
+    def duplicate_flow_parameter_type_ids(objects)
+      ids = objects.filter_map do |object|
+        next unless object["$Type"] == "Microflows$MicroflowParameter"
+
+        IO::BsonCodec.extract_id(object.dig("VariableType", "$ID"))
+      end
+      ids.tally.select { |_id, count| count > 1 }.keys
+    end
+
+    def preserve_flow_parameter_metadata(generated, existing, duplicate_type_ids: [])
       preserve_keys(generated, existing, %w[$ID RelativeMiddlePoint Size])
       generated_type = generated["VariableType"]
       existing_type = existing["VariableType"]
       return unless generated_type.is_a?(Hash) && existing_type.is_a?(Hash)
       return unless existing_type.key?("$ID")
+      existing_id = IO::BsonCodec.extract_id(existing_type["$ID"])
+      return if duplicate_type_ids.include?(existing_id)
 
       generated_type["$ID"] = existing_type["$ID"]
     end
@@ -3575,7 +3776,10 @@ module Mxrb
         "IsRemote" => previous&.fetch("IsRemote", false) || false,
         "RemoteSource" => previous&.fetch("RemoteSource", "") || ""
       )
-      apply_oql_view!(doc, entity.fetch(:oql_view, nil), previous)
+      apply_oql_view!(
+        doc, entity.fetch(:oql_view, nil), previous,
+        module_name:, entity_name: entity.fetch(:name)
+      )
       doc[attrs_key] = IO::BsonCodec.build_array(attrs)
       doc[rules_key] = access_rules
       doc[validation_key] = validation_rules_doc(
@@ -3605,23 +3809,30 @@ module Mxrb
       doc
     end
 
-    def apply_oql_view!(doc, view, previous)
+    def apply_oql_view!(doc, view, previous, module_name:, entity_name:)
       return unless view
 
-      if view[:source]
+      query = view[:query]
+      source_reference = view[:source].to_s
+      if source_reference.empty? && !query.nil?
+        source_reference = "#{module_name}.#{entity_name}"
+      end
+      unless source_reference.empty?
         source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
         current_source = previous&.dig(source_key)
         source = (current_source.is_a?(Hash) ? current_source : {}).merge(
           '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
           '$Type' => 'DomainModels$OqlViewEntitySource',
-          'SourceDocument' => view.fetch(:source)
+          'SourceDocument' => source_reference
         )
+        %w[oql Oql OQL].each { source.delete(_1) }
         doc[source_key] = source
+        %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
       end
-      return unless view[:query]
+      return unless query && source_reference.empty?
 
       query_key = native_existing_key(previous, 'oqlQuery', 'OqlQuery', 'OQLQuery') || 'OqlQuery'
-      doc[query_key] = view.fetch(:query)
+      doc[query_key] = query
     end
 
     def attribute_doc(attr, previous, oql_view: false)
@@ -3946,14 +4157,38 @@ module Mxrb
       }
     end
 
-    def page_doc(page, module_name = nil)
+    def page_baseline(mpr, candidates, page)
+      unit_id = page[:unit_id].to_s
+      raw = if unit_id.empty?
+              Array(candidates).first
+            else
+              Array(candidates).find { _1.fetch('UnitID').to_s == unit_id }
+            end
+      raw && mpr.parse_contents(raw)
+    end
+
+    def page_doc(page, module_name = nil, baseline: nil)
+      if page[:forms_model]
+        document = Forms::MprCodec.new.encode(page.fetch(:forms_model), baseline:)
+        unit_id = page[:unit_id].to_s
+        document['$ID'] = unit_id.empty? ? document.fetch('$ID') : unit_id
+        document['Name'] = page.fetch(:name).to_s
+        document['__mxrb_unit_id'] = page[:unit_id]
+        document['__mxrb_allowed_roles_declared'] = true
+        document['__mxrb_deep_structure_declared'] = true
+        return document
+      end
+
       if page[:deep_structure].is_a?(Hash)
         overlay = page.fetch(:write_mode, :replace).to_sym == :overlay
-        deep_structure = deep_copy(page[:deep_structure])
+        deep_structure = stringify_keys(deep_copy(page[:deep_structure]))
         metadata = deep_structure.delete(PageOverlay::METADATA_KEY)
+        unit_id = page[:unit_id].to_s
         doc = deep_structure.merge(
-          "$ID" => SecureRandom.uuid,
+          "$ID" => unit_id.empty? ? SecureRandom.uuid : unit_id,
+          "$Type" => deep_structure.fetch("$Type", "Forms$Page"),
           "Name" => page.fetch(:name),
+          "__mxrb_unit_id" => page[:unit_id],
           "__mxrb_allowed_roles_declared" => !page[:allowed_roles].nil?,
           "__mxrb_deep_structure_declared" => true
         )
@@ -4009,6 +4244,12 @@ module Mxrb
         "PopupHeight" => page.fetch(:popup) ? 400 : 0,
         "PopupResizable" => page.fetch(:popup),
         "ExportLevel" => page[:public] == true ? "Public" : "Hidden" }
+      if page[:overlay_metadata]
+        doc["__mxrb_page_overlay"] = {
+          baseline: nil, metadata: page.fetch(:overlay_metadata),
+          widgets: page.fetch(:widgets, []), encoded_widgets: widgets
+        }
+      end
       doc
     end
 
@@ -4050,6 +4291,13 @@ module Mxrb
           "$ID" => SecureRandom.uuid,
           "Name" => menu.fetch(:name)
         )
+      end
+
+      unless menu[:unit_id].to_s.empty?
+        return {
+          '$ID' => menu.fetch(:unit_id).to_s, '$Type' => 'Menus$MenuDocument',
+          'Name' => menu.fetch(:name), '__mxrb_unit_id' => menu.fetch(:unit_id).to_s
+        }
       end
 
       {
@@ -4145,26 +4393,52 @@ module Mxrb
     end
 
     def scheduled_event_doc(event)
-      unit_sym = event.fetch(:unit).to_sym
-      interval_type = SCHEDULED_EVENT_INTERVAL_MAP.fetch(unit_sym) do
-        raise ArgumentError, "unsupported scheduled event unit #{unit_sym.inspect}; " \
-                             "use one of: #{SCHEDULED_EVENT_INTERVAL_MAP.keys.join(', ')}"
+      interval_type = event[:interval_type].to_s
+      if interval_type.empty?
+        unit_sym = event.fetch(:unit).to_sym
+        interval_type = SCHEDULED_EVENT_INTERVAL_MAP.fetch(unit_sym) do
+          raise ArgumentError, "unsupported scheduled event unit #{unit_sym.inspect}; " \
+                               "use one of: #{SCHEDULED_EVENT_INTERVAL_MAP.keys.join(', ')}"
+        end
       end
-      {
-        "$ID" => SecureRandom.uuid,
+      document = {
+        "$ID" => event[:unit_id].to_s.empty? ? SecureRandom.uuid : event[:unit_id].to_s,
         "$Type" => "ScheduledEvents$ScheduledEvent",
         "Name" => event.fetch(:name),
         "Documentation" => event.fetch(:documentation, ""),
-        "ExportLevel" => "Hidden",
+        "Excluded" => event.fetch(:excluded, false) == true,
+        "ExportLevel" => event.fetch(:export_level, "Hidden"),
         "Microflow" => event.fetch(:microflow),
-        "StartDateTime" => Time.utc(2000, 1, 1),
-        "TimeZone" => "UTC",
-        "Schedule" => scheduled_event_schedule_doc(event),
-        "OnOverlap" => "SkipNext",
-        "Enabled" => event.fetch(:enabled, true),
+        "StartDateTime" => scheduled_event_start_at(event[:start_at]),
+        "TimeZone" => event.fetch(:time_zone, "UTC"),
+        "Schedule" => scheduled_event_schedule(event),
+        "OnOverlap" => event.fetch(:on_overlap, "SkipNext"),
+        "Enabled" => event.fetch(:enabled, true) == true,
         "IntervalType" => interval_type,
         "Interval" => event.fetch(:interval, 1)
       }
+      document["__mxrb_unit_id"] = event[:unit_id].to_s unless event[:unit_id].to_s.empty?
+      document
+    end
+
+    def scheduled_event_start_at(value)
+      return Time.utc(2000, 1, 1) if value.to_s.empty?
+
+      Time.iso8601(value.to_s)
+    end
+
+    def scheduled_event_schedule(event)
+      return scheduled_event_schedule_doc(event) unless event[:schedule_specified]
+      return nil unless event[:schedule]
+
+      spec = event.fetch(:schedule)
+      properties = spec.fetch(:properties).to_h.transform_keys do |key|
+        key.to_s.split('_').map!(&:capitalize).join
+      end
+      properties.merge(
+        '$ID' => spec[:id].to_s.empty? ? SecureRandom.uuid : spec[:id].to_s,
+        '$Type' => spec.fetch(:type)
+      )
     end
 
     def scheduled_event_schedule_doc(event)
@@ -4186,25 +4460,32 @@ module Mxrb
       end
     end
 
-    def project_security_doc(security)
+    def project_security_doc(security = nil, previous: {}, **keywords)
+      security ||= keywords
       role_definitions = security.fetch(:user_roles, [])
       if role_definitions.empty?
         role_definitions = [
           { name: "Administrator", admin: true, module_roles: [] }
         ]
       end
-      roles = role_definitions.map { user_role_doc(_1) }
+      previous_roles = array_items(previous['UserRoles']).group_by { _1['Name'].to_s }
+      roles = role_definitions.map do |role|
+        matches = previous_roles.fetch(role.fetch(:name).to_s, [])
+        user_role_doc(role, previous: matches.one? ? matches.first : {})
+      end
       default_admin = role_definitions.find { _1[:admin] == true }&.fetch(:name, nil)
       default_admin ||= roles.first.fetch("Name")
-      password_policy = {
+      previous_policy = previous['PasswordPolicySettings']
+      previous_policy = {} unless previous_policy.is_a?(Hash)
+      password_policy = previous_policy.merge(
         "$ID" => security[:password_policy_id].to_s.empty? ?
-          SecureRandom.uuid : security[:password_policy_id].to_s,
+          (previous_policy["$ID"] || SecureRandom.uuid) : security[:password_policy_id].to_s,
         "$Type" => "Security$PasswordPolicySettings",
         "MinimumLength" => 6,
         "RequireDigit" => true,
         "RequireMixedCase" => true,
         "RequireSymbol" => false
-      }
+      )
       security.fetch(:password_policy, {}).to_h.each do |key, value|
         native_key = {
           minimum_length: "MinimumLength",
@@ -4214,8 +4495,9 @@ module Mxrb
         }.fetch(key.to_sym, key.to_s)
         password_policy[native_key] = value
       end
+      previous_demo_users = array_items(previous['DemoUsers']).group_by { _1['UserName'].to_s }
       document = {
-        "$ID" => security[:id].to_s.empty? ? SecureRandom.uuid : security[:id].to_s,
+        "$ID" => security[:id].to_s.empty? ? (previous["$ID"] || SecureRandom.uuid) : security[:id].to_s,
         "$Type" => "Security$ProjectSecurity",
         "SecurityLevel" => security[:security_level] || "CheckNothing",
         "CheckSecurity" => true,
@@ -4229,7 +4511,11 @@ module Mxrb
         "StrictPageUrlCheck" => true,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
         "DemoUsers" => IO::BsonCodec.build_array(
-          Array(security[:demo_users]).map { demo_user_doc(_1) }, marker: 2
+          Array(security[:demo_users]).map do |user|
+            matches = previous_demo_users.fetch(user.fetch(:name).to_s, [])
+            demo_user_doc(user, previous: matches.one? ? matches.first : {})
+          end,
+          marker: 2
         ),
         "FileDocumentAccess" => access_container("Security$FileDocumentAccessRuleContainer"),
         "ImageAccess" => access_container("Security$ImageAccessRuleContainer"),
@@ -4239,21 +4525,22 @@ module Mxrb
       document
     end
 
-    def user_role_doc(role)
+    def user_role_doc(role, previous: {})
       id = role[:id].to_s
       guid = role[:guid].to_s
       module_roles = Array(role[:module_roles]).map(&:to_s)
       unless module_roles.any? { _1.start_with?('System.') }
         module_roles << (role[:admin] == true ? 'System.Administrator' : 'System.User')
       end
-      {
-        "$ID" => id.empty? ? SecureRandom.uuid : id,
+      previous.merge(
+        "$ID" => id.empty? ? (previous["$ID"] || SecureRandom.uuid) : id,
         "$Type" => "Security$UserRole",
         "Name" => role.fetch(:name),
         "Description" => role.fetch(:description, '').to_s,
         "CheckSecurity" => role.fetch(:check_security, true) == true,
         "GUID" => BSON::Binary.new(
-          IO::BsonCodec.uuid_to_blob(guid.empty? ? SecureRandom.uuid : guid)
+          IO::BsonCodec.uuid_to_blob(guid.empty? ?
+            (IO::BsonCodec.extract_id(previous["GUID"]) || SecureRandom.uuid) : guid)
         ),
         "ManageableRoles" => IO::BsonCodec.build_array(
           Array(role[:manageable_roles]).map(&:to_s), marker: 1
@@ -4261,18 +4548,18 @@ module Mxrb
         "ManageAllRoles" => role[:admin] == true,
         "ManageUsersWithoutRoles" => role.fetch(:manage_users_without_roles, false) == true,
         "ModuleRoles" => IO::BsonCodec.build_array(module_roles, marker: 1)
-      }
+      )
     end
 
-    def demo_user_doc(user)
-      {
-        "$ID" => user[:id].to_s.empty? ? SecureRandom.uuid : user[:id].to_s,
+    def demo_user_doc(user, previous: {})
+      previous.merge(
+        "$ID" => user[:id].to_s.empty? ? (previous["$ID"] || SecureRandom.uuid) : user[:id].to_s,
         "$Type" => "Security$DemoUserImpl",
         "UserName" => user.fetch(:name),
         "Password" => user.fetch(:password),
         "Entity" => user.fetch(:entity),
         "UserRoles" => IO::BsonCodec.build_array(user.fetch(:roles), marker: 1)
-      }
+      )
     end
 
     def module_security_doc(roles, legacy: false)
@@ -4343,7 +4630,7 @@ module Mxrb
 
     def widget_doc(widget = nil, context_entity: nil, module_name: nil, **keyword_widget)
       widget ||= keyword_widget
-      type = widget.fetch(:type)
+      type = widget.fetch(:type).to_sym
       widget = qualify_page_widget_attribute(widget, context_entity)
 
       if type == :snippet
@@ -4376,6 +4663,12 @@ module Mxrb
       return table_widget_doc(widget, context_entity:, module_name:) if type == :table
       return layout_grid_widget_doc(widget, context_entity:, module_name:) if type == :layout_grid
       return data_view_widget_doc(widget, context_entity:, module_name:) if type == :data_view
+      if %i[
+        file_manager image_uploader image_viewer menu_bar navigation_tree
+        reference_set_selector navigation_list scroll_container
+      ].include?(type)
+        return legacy_semantic_widget_doc(widget)
+      end
 
       options = widget.fetch(:options, {})
       doc = {
@@ -4568,9 +4861,140 @@ module Mxrb
         text:               "Forms$DynamicText",
         page_title:         "Forms$Title",
         static_image:       "Forms$StaticImageViewer",
+        file_manager:       "Forms$FileManager",
+        image_viewer:       "Forms$ImageViewer",
+        image_uploader:     "Forms$ImageUploader",
+        menu_bar:           "Forms$MenuBar",
+        navigation_tree:    "Forms$NavigationTree",
+        reference_set_selector: "Forms$ReferenceSetSelector",
+        navigation_list:    "Forms$NavigationList",
+        scroll_container:   "Forms$ScrollContainer",
         tab_control:        "Forms$TabControl",
         container:          "Forms$DivContainer"
       }.fetch(type.to_sym)
+    end
+
+    def legacy_semantic_widget_doc(widget)
+      type = widget.fetch(:type).to_sym
+      options = widget.fetch(:options, {})
+      common = {
+        '$ID' => SecureRandom.uuid, '$Type' => widget_storage_type(type),
+        'Name' => widget.fetch(:name), 'Appearance' => semantic_appearance_doc(options),
+        'TabIndex' => options.fetch(:tab_index, 0).to_i
+      }
+      case type
+      when :file_manager then common.merge(file_manager_widget_fields(options))
+      when :image_viewer then common.merge(image_viewer_widget_fields(widget, options))
+      when :image_uploader then common.merge(image_uploader_widget_fields(options))
+      when :menu_bar, :navigation_tree then common.merge(menu_widget_fields(options))
+      when :reference_set_selector then common.merge(reference_set_selector_widget_fields(options))
+      when :navigation_list
+        common.merge(
+          'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+          'Items' => IO::BsonCodec.build_array([], marker: 2)
+        )
+      when :scroll_container then common.merge(scroll_container_widget_fields(options))
+      end
+    end
+
+    def image_viewer_widget_fields(widget, options)
+      click = Array(widget[:events]).find { _1.fetch(:event).to_sym == :on_click }
+      {
+        'AlternativeText' => client_template_doc(options.fetch(:alternative_text, '')),
+        'ClickAction' => click ? client_action_doc(click) : no_action_doc(disabled: true),
+        'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+        'DataSource' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ImageViewerSource',
+          'EntityRef' => {
+            '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$DirectEntityRef',
+            'Entity' => options.fetch(:entity).to_s
+          },
+          'ForceFullObjects' => options[:force_full_objects] == true,
+          'SourceVariable' => nil
+        },
+        'DefaultImage' => options.fetch(:default_image, '').to_s,
+        'Height' => options.fetch(:height, 100).to_i,
+        'HeightUnit' => camelized_enum(options.fetch(:height_unit, :auto)),
+        'NativeAccessibilitySettings' => nil,
+        'OnClickEnlarge' => options[:on_click_enlarge] == true,
+        'Responsive' => options.fetch(:responsive, true) == true,
+        'ShowAsThumbnail' => options[:show_as_thumbnail] == true,
+        'Width' => options.fetch(:width, 100).to_i,
+        'WidthUnit' => camelized_enum(options.fetch(:width_unit, :auto))
+      }
+    end
+
+    def image_uploader_widget_fields(options)
+      width = options.fetch(:thumbnail_width, 100).to_i
+      height = options.fetch(:thumbnail_height, 75).to_i
+      {
+        'AllowedExtensions' => options.fetch(:allowed_extensions, '').to_s,
+        'ConditionalEditabilitySettings' => nil,
+        'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+        'Editable' => camelized_enum(options.fetch(:editable, :always)),
+        'LabelTemplate' => client_template_doc(options.fetch(:caption, '')),
+        'MaxFileSize' => options.fetch(:max_file_size, 5).to_i,
+        'ScreenReaderLabel' => nil,
+        'ThumbnailSize' => "#{width.positive? ? width : 100};#{height.positive? ? height : 75}"
+      }
+    end
+
+    def menu_widget_fields(options)
+      {
+        'MenuSource' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MenuDocumentSource',
+          'Menu' => options.fetch(:menu).to_s
+        }
+      }
+    end
+
+    def file_manager_widget_fields(options)
+      {
+        'AllowedExtensions' => options.fetch(:allowed_extensions, '').to_s,
+        'ConditionalEditabilitySettings' => nil,
+        'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+        'Editable' => camelized_enum(options.fetch(:editable, :always)),
+        'LabelTemplate' => nil, 'MaxFileSize' => options.fetch(:max_file_size, 5).to_i,
+        'ScreenReaderLabel' => nil,
+        'ShowFileInBrowser' => options[:show_file_in_browser] == true,
+        'Type' => camelized_enum(options.fetch(:mode, :both))
+      }
+    end
+
+    def reference_set_selector_widget_fields(options)
+      {
+        'Columns' => IO::BsonCodec.build_array([], marker: 2),
+        'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+        'ConstrainedByRefs' => IO::BsonCodec.build_array([], marker: 2),
+        'ControlBar' => nil, 'DataSource' => nil,
+        'DefaultButtonTrigger' => 'Double',
+        'IsControlBarVisible' => options.fetch(:control_bar, true) == true,
+        'NumberOfRows' => options.fetch(:number_of_rows, 20).to_i,
+        'OnChangeAction' => no_action_doc,
+        'RefreshTime' => 0, 'SelectFirst' => options[:select_first] == true,
+        'SelectableXPathConstraint' => options.fetch(:selectable_xpath, '').to_s,
+        'SelectionMode' => camelized_enum(options.fetch(:selection, :multi)),
+        'ShowEmptyRows' => options[:show_empty_rows] == true,
+        'ShowPagingBar' => camelized_enum(options.fetch(:paging, :yes_with_total_count)),
+        'TooltipForm' => '', 'WidthUnit' => camelized_enum(options.fetch(:width_unit, :weight))
+      }
+    end
+
+    def scroll_container_widget_fields(options)
+      {
+        'Alignment' => camelized_enum(options.fetch(:alignment, :center)),
+        'Bottom' => nil, 'CenterRegion' => nil,
+        'LayoutMode' => camelized_enum(options.fetch(:layout_mode, :headline)),
+        'Left' => nil, 'NativeHideScrollbars' => options[:hide_scrollbars] == true,
+        'Right' => nil,
+        'ScrollBehavior' => camelized_enum(options.fetch(:scroll_behavior, :per_region)),
+        'Top' => nil, 'Width' => options.fetch(:width, 0).to_i,
+        'WidthMode' => camelized_enum(options.fetch(:width_mode, :auto))
+      }
+    end
+
+    def camelized_enum(value)
+      value.to_s.split('_').map!(&:capitalize).join
     end
 
     def table_widget_doc(widget, context_entity: nil, module_name: nil)
@@ -4703,9 +5127,23 @@ module Mxrb
     def data_view_appearance_doc(options)
       semantic_appearance_doc(options).merge(
         "DesignProperties" => IO::BsonCodec.build_array(
-          Array(options[:design_properties]), marker: 3
+          Array(options[:design_properties]).map { data_view_design_property_doc(_1) }, marker: 3
         )
       )
+    end
+
+    def data_view_design_property_doc(value)
+      return value unless value.is_a?(Hash) && value.key?(:key) && value.key?(:option)
+
+      {
+        '$ID' => value[:id].to_s.empty? ? SecureRandom.uuid : value[:id].to_s,
+        '$Type' => 'Forms$DesignPropertyValue', 'Key' => value.fetch(:key).to_s,
+        'Value' => {
+          '$ID' => value[:value_id].to_s.empty? ? SecureRandom.uuid : value[:value_id].to_s,
+          '$Type' => 'Forms$OptionDesignPropertyValue',
+          'Option' => value.fetch(:option).to_s
+        }
+      }
     end
 
     def data_view_condition_doc(raw_condition, type:)
@@ -5344,7 +5782,10 @@ module Mxrb
           "Name" => param.fetch(:name),
           "RelativeMiddlePoint" => param.fetch(:relative_middle_point, "0;0"),
           "Size" => param.fetch(:size, "30;30"),
-          "VariableType" => microflow_data_type_doc(param.fetch(:type), module_name) }
+          "VariableType" => microflow_data_type_doc(
+            param.fetch(:type), module_name,
+            identity: [identity, "parameter", param.fetch(:name), "variable_type"]
+          ) }
       end
       roles_declared  = !flow[:allowed_roles].nil?
       body_declared   = !flow[:body].nil? || !flow[:return_expression].nil?
@@ -5381,14 +5822,18 @@ module Mxrb
         "__mxrb_apply_entity_access_declared" => !apply_entity_access.nil?,
         "__mxrb_mark_as_used_declared" => !mark_as_used.nil?,
         "__mxrb_excluded_declared" => !excluded.nil?,
-        "MicroflowReturnType" => microflow_data_type_doc(flow[:return_type], module_name),
+        "MicroflowReturnType" => microflow_data_type_doc(
+          flow[:return_type], module_name, identity: [identity, "return_type"]
+        ),
         "ObjectCollection" => object_collection,
         "Flows" => IO::BsonCodec.build_array(graph[:flows]) }
     end
 
-    def microflow_data_type_doc(type, module_name)
+    def microflow_data_type_doc(type, module_name, identity: nil)
+      identity_parts = Array(identity)
       if type.is_a?(Hash)
-        id = type["$ID"] || type[:$ID] || stable_id("data_type", module_name, type.to_s)
+        id = type["$ID"] || type[:$ID] ||
+             stable_id("data_type", module_name, type.to_s, *identity_parts)
         return type.merge("$ID" => id)
       end
 
@@ -5398,14 +5843,16 @@ module Mxrb
       when "boolean", "bool" then "DataTypes$BooleanType"
       when "string" then "DataTypes$StringType"
       when "integer" then "DataTypes$IntegerType"
-      when "long" then "DataTypes$LongType"
+      when "long" then "DataTypes$IntegerType"
       when "decimal" then "DataTypes$DecimalType"
       when "float" then "DataTypes$FloatType"
       when "datetime", "date_time" then "DataTypes$DateTimeType"
       else
         "DataTypes$ObjectType"
       end
-      doc = { "$ID" => stable_id("data_type", module_name, name), "$Type" => native }
+      doc = {
+        "$ID" => stable_id("data_type", module_name, name, *identity_parts), "$Type" => native
+      }
       if native == "DataTypes$ObjectType"
         doc["Entity"] = name.include?(".") ? name : "#{module_name}.#{name}"
       end
@@ -6783,6 +7230,17 @@ module Mxrb
         "AllowConcurrentExecution" => nil,
         "UseListParameterByReference" => true
       ).compact
+    end
+
+    def rule_doc(flow, module_name = nil, identity_by_unit_id: false)
+      doc = microflow_doc(flow, module_name, identity_by_unit_id:)
+      doc.delete('AllowConcurrentExecution')
+      doc.delete('AllowedModuleRoles')
+      doc.merge(
+        '$Type' => 'Microflows$Rule',
+        'ExportLevel' => flow.fetch(:export_level, 'Hidden').to_s,
+        'ReturnVariableName' => flow[:return_variable_name].to_s
+      )
     end
 
     def normalize_nanoflow_error_handling!(value)

@@ -264,6 +264,9 @@ RSpec.describe 'Ruby application internal contracts' do
       )
       expect(widget).to include('caption' => 'Caption', 'events' => [include('event' => 'click')])
       expect(exp.send(:runtime_value, deep_structure: true, kept: :yes)).to eq('kept' => 'yes')
+      expect(
+        exp.send(:runtime_widget_declaration, 'unknown_native', ['{"Editable" => true}'], 8, false)
+      ).to eq('        unknown_native({"Editable" => true})')
 
       parameter_mappings = Mxrb::IO::BsonCodec.build_array(
         [{ 'Parameter' => 'Sales.Refresh.Order', 'Argument' => '$Order' }]
@@ -707,6 +710,17 @@ RSpec.describe 'Ruby application internal contracts' do
 
   it 'covers removal synchronization and all supervisor wait choices' do
     sync = Mxrb::RubyApp::Synchronizer.allocate
+    manifest = double(modules: [])
+    sync.instance_variable_set(:@manifest, manifest)
+    Mxrb::RubyApp::Registry.reset!
+    implementation = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'M.New'
+      persistence true
+    end
+    existing_project = double(find_artifact: double)
+    expect(sync).to receive(:synchronize_entity).with(existing_project, 'M.New', implementation)
+    sync.send(:synchronize_entities, existing_project)
+
     manifest = double(modules: [{ 'models' => [{ 'name' => 'M.Removed' }], 'dtos' => [] }])
     sync.instance_variable_set(:@manifest, manifest)
     Mxrb::RubyApp::Registry.reset!
@@ -812,6 +826,9 @@ RSpec.describe 'Ruby application internal contracts' do
     res = response_class.new
     server.send(:dispatch, request_class.new('/rest/x', 'POST', '{}', {}, {}), res)
     expect(res.headers).not_to have_key('Access-Control-Allow-Origin')
+    expect(application).to have_received(:invoke_rest).with(
+      route, path_parameters: { 'id' => 'x' }, query: {}, body: {}, context: nil
+    )
     expect(server.send(:rest_route, 'POST', '/not-rest')).to be_nil
 
     adapter = Mxrb::RubyApp::RackAdapter.new('.')

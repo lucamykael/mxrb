@@ -21,7 +21,8 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
         property_type('options', 'options', 'DataSource'),
         property_type('caption', 'caption', 'TextTemplate'),
         property_type('action', 'onClick', 'Action'),
-        property_type('content', 'content', 'Widgets')
+        property_type('content', 'content', 'Widgets'),
+        property_type('footer', 'footerContent', 'Widgets')
       ]
       index = types.to_h { [_1['$ID'], _1] }
       index['widget'] = {
@@ -52,12 +53,16 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
             }] }
           }),
           property('action', 'Action' => { '$Type' => 'Forms$SignOutClientAction' }),
-          property('content', 'Widgets' => [3, { '$Type' => 'Forms$DynamicText' }])
+          property('content', 'Widgets' => [3, { '$Type' => 'Forms$DynamicText' }]),
+          property('footer', 'Widgets' => [3, { '$Type' => 'Forms$Text' }])
         ] }
       }
       compiler = described_class.new(
         source, 'Demo.Home', widget, scope: nil, entity: nil,
-                                     render_widgets: ->(_widgets) { { '$raw' => '[content]' } },
+                                     render_widgets: lambda { |widgets|
+                                       type = widgets.first.fetch('$Type').split('$').last
+                                       { '$raw' => "[#{type}]" }
+                                     },
                                      action_property: ->(_action) { 'ActionProperty({ action: { type: "signOut" } })' }
       )
 
@@ -66,7 +71,8 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
         'React.createElement($LanguageSelector', '"enabled": true',
         'DatabaseObjectListProperty', 'System.Language', 'Description',
         'ExpressionProperty', 'Choose language', 'ActionProperty',
-        '"content": [content]', 'mx-name-language language-picker'
+        '"content": [DynamicText]', '"footerContent": [Text]',
+        'mx-name-language language-picker'
       )
     end
   end

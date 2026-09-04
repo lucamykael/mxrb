@@ -57,68 +57,93 @@ module Mxrb
       end
     end
 
-    # Reversible Ruby declarations for reusable Mendix presentation documents.
-    # Root contracts are typed; nested form nodes retain their Mendix property
-    # names while IDs, collections, and binary values use Ruby-friendly specs.
+    # Reversible declarations for reusable Mendix presentation documents.
+    # Block declarations use the schema-checked Forms model. Keyword declarations
+    # remain available only as a compatibility reader for older exported sources.
     # rubocop:disable Metrics/ParameterLists
     module PresentationDocuments
       include PresentationValues
 
-      def layout_document(name, appearance:, canvas_height:, canvas_width:, content:,
-                          documentation: '', excluded: false, export_level: 'Hidden',
-                          unit_id: nil, container_id: nil)
-        presentation_document(name, 'Forms$Layout', unit_id:, container_id:, fields: {
-          'Appearance' => appearance, 'CanvasHeight' => canvas_height.to_i,
-          'CanvasWidth' => canvas_width.to_i, 'Content' => content,
-          'Documentation' => documentation.to_s, 'Excluded' => excluded == true,
-          'ExportLevel' => export_level.to_s
+      def layout_document(name, **options, &block)
+        return typed_forms_document(name, 'Forms$Layout', &block) if block
+
+        presentation_document(
+          name, 'Forms$Layout', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
+          'Appearance' => options.fetch(:appearance),
+          'CanvasHeight' => options.fetch(:canvas_height).to_i,
+          'CanvasWidth' => options.fetch(:canvas_width).to_i,
+          'Content' => options.fetch(:content),
+          'Documentation' => options.fetch(:documentation, '').to_s,
+          'Excluded' => options.fetch(:excluded, false) == true,
+          'ExportLevel' => options.fetch(:export_level, 'Hidden').to_s
         })
       end
 
-      def page_template_document(name, appearance:, canvas_height:, canvas_width:,
-                                 display_name:, documentation:, documentation_url:,
-                                 excluded:, export_level:, image:, layout_call:,
-                                 template_category:, template_category_weight:,
-                                 template_type:, unit_id: nil, container_id: nil)
-        presentation_document(name, 'Forms$PageTemplate', unit_id:, container_id:, fields: {
-          'Appearance' => appearance, 'CanvasHeight' => canvas_height.to_i,
-          'CanvasWidth' => canvas_width.to_i, 'DisplayName' => display_name.to_s,
-          'Documentation' => documentation.to_s, 'DocumentationUrl' => documentation_url.to_s,
-          'Excluded' => excluded == true, 'ExportLevel' => export_level.to_s,
-          'ImageData' => image, 'LayoutCall' => layout_call,
-          'TemplateCategory' => template_category.to_s,
-          'TemplateCategoryWeight' => template_category_weight.to_i,
-          'TemplateType' => template_type
+      def page_template_document(name, **options, &block)
+        return typed_forms_document(name, 'Forms$PageTemplate', &block) if block
+
+        presentation_document(
+          name, 'Forms$PageTemplate', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
+          'Appearance' => options.fetch(:appearance),
+          'CanvasHeight' => options.fetch(:canvas_height).to_i,
+          'CanvasWidth' => options.fetch(:canvas_width).to_i,
+          'DisplayName' => options.fetch(:display_name).to_s,
+          'Documentation' => options.fetch(:documentation).to_s,
+          'DocumentationUrl' => options.fetch(:documentation_url).to_s,
+          'Excluded' => options.fetch(:excluded) == true,
+          'ExportLevel' => options.fetch(:export_level).to_s,
+          'ImageData' => options.fetch(:image), 'LayoutCall' => options.fetch(:layout_call),
+          'TemplateCategory' => options.fetch(:template_category).to_s,
+          'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
+          'TemplateType' => options.fetch(:template_type)
         })
       end
 
-      def building_block_document(name, canvas_height:, canvas_width:, display_name:,
-                                  documentation:, documentation_url:, excluded:, export_level:,
-                                  image:, platform:, template_category:,
-                                  template_category_weight:, widgets:,
-                                  unit_id: nil, container_id: nil)
-        presentation_document(name, 'Forms$BuildingBlock', unit_id:, container_id:, fields: {
-          'CanvasHeight' => canvas_height.to_i, 'CanvasWidth' => canvas_width.to_i,
-          'DisplayName' => display_name.to_s, 'Documentation' => documentation.to_s,
-          'DocumentationUrl' => documentation_url.to_s, 'Excluded' => excluded == true,
-          'ExportLevel' => export_level.to_s, 'ImageData' => image,
-          'Platform' => platform.to_s, 'TemplateCategory' => template_category.to_s,
-          'TemplateCategoryWeight' => template_category_weight.to_i, 'Widgets' => widgets
+      def building_block_document(name, **options, &block)
+        return typed_forms_document(name, 'Forms$BuildingBlock', &block) if block
+
+        presentation_document(
+          name, 'Forms$BuildingBlock', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
+          'CanvasHeight' => options.fetch(:canvas_height).to_i,
+          'CanvasWidth' => options.fetch(:canvas_width).to_i,
+          'DisplayName' => options.fetch(:display_name).to_s,
+          'Documentation' => options.fetch(:documentation).to_s,
+          'DocumentationUrl' => options.fetch(:documentation_url).to_s,
+          'Excluded' => options.fetch(:excluded) == true,
+          'ExportLevel' => options.fetch(:export_level).to_s,
+          'ImageData' => options.fetch(:image), 'Platform' => options.fetch(:platform).to_s,
+          'TemplateCategory' => options.fetch(:template_category).to_s,
+          'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
+          'Widgets' => options.fetch(:widgets)
         })
       end
 
-      def snippet_document(name, canvas_height:, canvas_width:, documentation:, excluded:,
-                           export_level:, parameters:, snippet_type:, variables:, widgets:,
-                           unit_id: nil, container_id: nil)
-        presentation_document(name, 'Forms$Snippet', unit_id:, container_id:, fields: {
-          'CanvasHeight' => canvas_height.to_i, 'CanvasWidth' => canvas_width.to_i,
-          'Documentation' => documentation.to_s, 'Excluded' => excluded == true,
-          'ExportLevel' => export_level.to_s, 'Parameters' => parameters,
-          'Type' => snippet_type.to_s, 'Variables' => variables, 'Widgets' => widgets
+      def snippet_document(name, **options, &block)
+        return typed_forms_document(name, 'Forms$Snippet', &block) if block
+
+        presentation_document(
+          name, 'Forms$Snippet', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
+          'CanvasHeight' => options.fetch(:canvas_height).to_i,
+          'CanvasWidth' => options.fetch(:canvas_width).to_i,
+          'Documentation' => options.fetch(:documentation).to_s,
+          'Excluded' => options.fetch(:excluded) == true,
+          'ExportLevel' => options.fetch(:export_level).to_s,
+          'Parameters' => options.fetch(:parameters),
+          'Type' => options.fetch(:snippet_type).to_s,
+          'Variables' => options.fetch(:variables), 'Widgets' => options.fetch(:widgets)
         })
       end
 
       private
+
+      def typed_forms_document(name, storage_type, &block)
+        schema_type = storage_type.delete_prefix('Forms$')
+        model = Forms::Node.build(schema_type, &block)
+        model.name(name.to_s) if model.schema_type.property(:name) && !model.assigned?(:name)
+        native_document(name, type: storage_type, deep_structure: {})
+        @native_documents.last[:forms_model] = model
+        model
+      end
 
       def presentation_document(name, type, unit_id:, container_id:, fields:)
         document = presentation_identity(unit_id)

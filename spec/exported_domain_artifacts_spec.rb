@@ -25,10 +25,13 @@ RSpec.describe 'exported domain artifacts' do
       expect(File.read(view_path)).not_to include('native_document', 'deep_structure:', 'bson_binary(')
       legacy_view_path = File.join(root, 'domain', 'oql_views', 'legacy_view.rb')
       expect(File.read(legacy_view_path)).to include(
-        'oql_view query: "SELECT Name FROM API_Rest.Product"'
+        'oql_view source: "API_Rest.LegacyView"',
+        'oql_source_document :LegacyView',
+        'query: "SELECT Name FROM API_Rest.Product"'
       )
       dataset_path = File.join(root, 'application', 'queries', 'datasets', 'product_data.rb')
-      expect(File.read(dataset_path)).to include('DataSets$DataSet', 'OqlDataSetSource')
+      expect(File.read(dataset_path)).to include('dataset :ProductData', 'oql <<~OQL')
+      expect(File.read(dataset_path)).not_to include('native_document', 'deep_structure:', 'bson_binary(')
       enumeration_path = File.join(root, 'domain', 'enumerations', 'location_type.rb')
       expect(File.read(enumeration_path)).to include('enumeration :LocationType', 'value :Warehouse')
       expect(File.read(enumeration_path)).not_to include('native_document', 'bson_binary(')
@@ -50,7 +53,10 @@ RSpec.describe 'exported domain artifacts' do
         query = project.oql_queries.find { _1.name == 'ProductViewSource' }
         expect(query.oql).to include('SELECT Name, Code')
         expect(project.oql_queries.find { _1.name == 'ProductData' }.kind).to eq(:dataset)
-        expect(project.oql_queries.find { _1.name == 'LegacyView' }.kind).to eq(:view_entity)
+        legacy = project.oql_queries.find { _1.name == 'LegacyView' }
+        expect(legacy.kind).to eq(:view_entity)
+        expect(project.modules.first.entities.find { _1.name == 'LegacyView' }.oql_source_document)
+          .to eq('API_Rest.LegacyView')
         expect(project.modules.first.enumerations.map { _1['Name'] }).to include('LocationType')
         expect(project.modules.first.constants.find { _1['Name'] == 'ApiAddress' })
           .to include('DefaultValue' => 'https://new.example')

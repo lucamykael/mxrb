@@ -8,6 +8,7 @@ require_relative "integration_documents"
 require_relative "code_actions"
 require_relative "presentation_documents"
 require_relative "asset_documents"
+require_relative "artifact_documents"
 require_relative "project_documents"
 
 module Mxrb
@@ -153,6 +154,104 @@ module Mxrb
                                width_unit: width_unit.to_sym, height_unit: height_unit.to_sym,
                                responsive: responsive == true, class: class_name, style:,
                                dynamic_class:, visible:, &block
+        )
+      end
+
+      def file_manager(name, allowed_extensions: '', editable: :always, max_file_size: 5,
+                       show_file_in_browser: false, mode: :both, tab_index: 0,
+                       class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :file_manager, name, allowed_extensions: allowed_extensions.to_s, editable:,
+                               max_file_size: max_file_size.to_i,
+                               show_file_in_browser: show_file_in_browser == true, mode:,
+                               tab_index: tab_index.to_i, class: class_name, style:,
+                               dynamic_class:, visible:, &block
+        )
+      end
+
+      def reference_set_selector(name, selection: :multi, number_of_rows: 20, selectable_xpath: '',
+                                 control_bar: true, select_first: false, show_empty_rows: false,
+                                 paging: :yes_with_total_count, tab_index: 0,
+                                 width_unit: :weight, class_name: nil, style: nil,
+                                 dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :reference_set_selector, name, selection:, number_of_rows: number_of_rows.to_i,
+                                         selectable_xpath: selectable_xpath.to_s,
+                                         control_bar: control_bar == true,
+                                         select_first: select_first == true,
+                                         show_empty_rows: show_empty_rows == true, paging:,
+                                         tab_index: tab_index.to_i, width_unit:,
+                                         class: class_name, style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def navigation_list(name, tab_index: 0, class_name: nil, style: nil,
+                          dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :navigation_list, name, tab_index: tab_index.to_i, class: class_name,
+                                  style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def scroll_container(name, alignment: :center, layout_mode: :headline,
+                           hide_scrollbars: false, scroll_behavior: :per_region,
+                           tab_index: 0, width: 0, width_mode: :auto,
+                           class_name: nil, style: nil, dynamic_class: nil,
+                           visible: nil, &block)
+        _add_widget(
+          :scroll_container, name, alignment:, layout_mode:,
+                                   hide_scrollbars: hide_scrollbars == true,
+                                   scroll_behavior:, tab_index: tab_index.to_i,
+                                   width: width.to_i, width_mode:, class: class_name,
+                                   style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def image_viewer(name, entity:, alternative_text: '', default_image: '',
+                       force_full_objects: false, width: 100, height: 100,
+                       width_unit: :auto, height_unit: :auto, responsive: true,
+                       show_as_thumbnail: false, on_click_enlarge: false, tab_index: 0,
+                       class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(
+          :image_viewer, name, entity: entity.to_s, alternative_text: alternative_text.to_s,
+                               default_image: default_image.to_s,
+                               force_full_objects: force_full_objects == true,
+                               width: width.to_i, height: height.to_i,
+                               width_unit:, height_unit:, responsive: responsive == true,
+                               show_as_thumbnail: show_as_thumbnail == true,
+                               on_click_enlarge: on_click_enlarge == true,
+                               tab_index: tab_index.to_i, class: class_name, style:,
+                               dynamic_class:, visible:, &block
+        )
+      end
+
+      def image_uploader(name, allowed_extensions: '', caption: '', editable: :always,
+                         max_file_size: 5, thumbnail_width: 100, thumbnail_height: 75,
+                         tab_index: 0, class_name: nil, style: nil, dynamic_class: nil,
+                         visible: nil, &block)
+        _add_widget(
+          :image_uploader, name, allowed_extensions: allowed_extensions.to_s,
+                                 caption: caption.to_s, editable:,
+                                 max_file_size: max_file_size.to_i,
+                                 thumbnail_width: thumbnail_width.to_i,
+                                 thumbnail_height: thumbnail_height.to_i,
+                                 tab_index: tab_index.to_i, class: class_name, style:,
+                                 dynamic_class:, visible:, &block
+        )
+      end
+
+      def menu_bar(name, menu:, tab_index: 0, class_name: nil, style: nil,
+                   dynamic_class: nil, visible: nil, &block)
+        navigation_menu_widget(
+          :menu_bar, name, menu:, tab_index:, class_name:, style:, dynamic_class:, visible:, &block
+        )
+      end
+
+      def navigation_tree(name, menu:, tab_index: 0, class_name: nil, style: nil,
+                          dynamic_class: nil, visible: nil, &block)
+        navigation_menu_widget(
+          :navigation_tree, name, menu:, tab_index:, class_name:, style:, dynamic_class:,
+                                  visible:, &block
         )
       end
 
@@ -335,6 +434,14 @@ module Mxrb
       end
 
       private
+
+      def navigation_menu_widget(type, name, menu:, tab_index:, class_name:, style:,
+                                 dynamic_class:, visible:, &block)
+        _add_widget(
+          type, name, menu: menu.to_s, tab_index: tab_index.to_i, class: class_name,
+                      style:, dynamic_class:, visible:, &block
+        )
+      end
 
       def _add_widget(type, name, **options, &block)
         builder = WidgetBuilder.new(type, name, **options.compact)
@@ -797,7 +904,7 @@ module Mxrb
       def _widget_list = @widgets
     end
 
-    class DataViewBuilder
+    class DataViewBuilder # rubocop:disable Metrics/ClassLength
       include WidgetDsl
       include OverlayFields
 
@@ -860,6 +967,12 @@ module Mxrb
       end
 
       def design_properties(*values) = (@design_properties = values.flatten)
+
+      def design_property(key, option:, id: nil, value_id: nil)
+        @design_properties << {
+          key: key.to_s, option: option.to_s, id: id&.to_s, value_id: value_id&.to_s
+        }
+      end
 
       def unknown_native(value)
         raise ArgumentError, 'unknown_native requires a Hash' unless value.is_a?(Hash)
@@ -1078,7 +1191,7 @@ module Mxrb
       def connector_requests = (@connector_requests ||= [])
     end
 
-    class Builder
+    class Builder # rubocop:disable Metrics/ClassLength
       include ConnectorDeclarations
       include ProjectDocuments
       include NativeFragmentEvaluation
@@ -1093,8 +1206,12 @@ module Mxrb
         @navigation        = nil
         @design_system     = nil
         @native_units_path = nil
+        @semantic_metadata = {}
+        @preserve_native_pages = false
         @native_fragment_store = nil
         @native_unit_overrides = []
+        @project_settings_model = nil
+        @system_texts = nil
         @project_assets = nil
         @ruby_app_sources_path = nil
       end
@@ -1104,7 +1221,10 @@ module Mxrb
       end
 
       def module(name, &block)
-        mod = ModuleBuilder.new(name)
+        flows = @semantic_metadata.dig('modules', name.to_s, 'flows') || {}
+        mod = ModuleBuilder.new(
+          name, flow_metadata: flows, preserve_native_pages: @preserve_native_pages
+        )
         mod.instance_eval(&block) if block
         @modules << mod
       end
@@ -1129,6 +1249,14 @@ module Mxrb
 
       def native_units(path)
         @native_units_path = path
+      end
+
+      def semantic_metadata(path)
+        @semantic_metadata = File.exist?(path) ? JSON.parse(File.read(path)) : {}
+      end
+
+      def preserve_native_pages(value = true)
+        @preserve_native_pages = value == true
       end
 
       def project_assets(manifest, root:)
@@ -1189,7 +1317,9 @@ module Mxrb
           project_assets: @project_assets,
           ruby_app_sources_path: @ruby_app_sources_path,
           native_units_path: @native_units_path,
-          native_unit_overrides: @native_unit_overrides
+          native_unit_overrides: @native_unit_overrides,
+          project_settings_model: @project_settings_model,
+          system_texts: @system_texts
         }
       end
     end
@@ -1510,13 +1640,29 @@ module Mxrb
         @excluded = options.fetch(:excluded, false) == true
         @export_level = options.fetch(:export_level, 'Hidden').to_s
         @remote_source = options[:remote_source]
+        if options[:remote_service]
+          remote_id = options[:remote_source_id].to_s
+          @remote_source = {
+            '$ID' => remote_id.empty? ? SecureRandom.uuid : remote_id,
+            '$Type' => 'Rest$ODataRemoteEnumerationSource',
+            'ConsumedODataService' => options.fetch(:remote_service).to_s,
+            'RemoteName' => options.fetch(:remote_name, '').to_s
+          }
+        end
         @values_marker = options.fetch(:values_marker, 3).to_i
       end
 
-      def value(name, caption: nil, captions: nil, id: nil, caption_id: nil,
-                caption_ids: {}, image: '', remote_value: nil,
+      def value(name, caption: nil, captions: nil, id: nil, caption_id: nil, # rubocop:disable Metrics/PerceivedComplexity
+                caption_ids: {}, image: '', remote_value: nil, remote_id: nil,
+                remote_name: nil,
                 translations_marker: 3, export_level: nil)
         localized = normalized_captions(name, caption, captions)
+        unless remote_name.nil?
+          remote_value = {
+            '$ID' => remote_id.to_s.empty? ? SecureRandom.uuid : remote_id.to_s,
+            '$Type' => 'Rest$ODataRemoteEnumerationValue', 'RemoteName' => remote_name.to_s
+          }
+        end
         @values << {
           name: name.to_s, id: id&.to_s, caption_id: caption_id&.to_s,
           captions: localized.transform_keys(&:to_s).transform_values(&:to_s),
@@ -1595,13 +1741,35 @@ module Mxrb
 
       attr_reader :name
 
-      def initialize(name, microflow:, interval: 1, unit: :days, enabled: true)
+      def initialize(name, microflow:, interval: 1, unit: :days, enabled: true,
+                     unit_id: nil, container_id: nil, documentation: '', excluded: false,
+                     export_level: 'Hidden', interval_type: nil, start_at: nil,
+                     time_zone: 'UTC', on_overlap: 'SkipNext', schedule: :auto,
+                     schedule_id: nil, multiplier: nil, minute_offset: nil,
+                     hour_of_day: nil, minute_of_hour: nil, weekdays: [])
         @name      = name.to_s
         @microflow = microflow.to_s
         @interval  = interval.to_i
         @unit      = unit.to_sym
-        @enabled   = enabled
-        @doc       = ""
+        @enabled   = enabled == true
+        @unit_id   = unit_id&.to_s
+        @container_id = container_id&.to_s
+        @doc       = documentation.to_s
+        @excluded  = excluded == true
+        @export_level = export_level.to_s
+        @interval_type = (interval_type || INTERVAL_UNITS.fetch(@unit) do
+          raise ArgumentError, "unsupported scheduled event unit #{@unit.inspect}"
+        end).to_s
+        @start_at = start_at&.to_s
+        @time_zone = time_zone.to_s
+        @on_overlap = on_overlap.to_s
+        @schedule_specified = schedule != :auto
+        return unless @schedule_specified && !schedule.nil?
+
+        @schedule = schedule_document(
+          schedule, schedule_id:, multiplier:, minute_offset:, hour_of_day:,
+                    minute_of_hour:, weekdays:
+        )
       end
 
       def documentation(d) = (@doc = d)
@@ -1609,8 +1777,34 @@ module Mxrb
       def to_h
         {
           name: @name, microflow: @microflow, interval: @interval,
-          unit: @unit, enabled: @enabled, documentation: @doc
+          unit: @unit, enabled: @enabled, documentation: @doc, unit_id: @unit_id,
+          container_id: @container_id,
+          excluded: @excluded, export_level: @export_level,
+          interval_type: @interval_type, start_at: @start_at,
+          time_zone: @time_zone, on_overlap: @on_overlap,
+          schedule_specified: @schedule_specified, schedule: @schedule
         }
+      end
+
+      private
+
+      def schedule_document(kind, schedule_id:, multiplier:, minute_offset:, # rubocop:disable Metrics/PerceivedComplexity
+                            hour_of_day:, minute_of_hour:, weekdays:)
+        type = kind.to_s
+        type = "ScheduledEvents$#{type.split('_').map!(&:capitalize).join}Schedule" \
+          unless type.start_with?('ScheduledEvents$')
+        properties = {}
+        properties[:multiplier] = Integer(multiplier) unless multiplier.nil?
+        properties[:minute_offset] = Integer(minute_offset) unless minute_offset.nil?
+        properties[:hour_of_day] = Integer(hour_of_day) unless hour_of_day.nil?
+        properties[:minute_of_hour] = Integer(minute_of_hour) unless minute_of_hour.nil?
+        unless Array(weekdays).empty?
+          enabled = Array(weekdays).map { _1.to_s.downcase }.to_h { [_1, true] }
+          %w[monday tuesday wednesday thursday friday saturday sunday].each do |day|
+            properties[day.to_sym] = enabled.fetch(day, false)
+          end
+        end
+        { type:, id: schedule_id&.to_s, properties: }
       end
     end
 
@@ -1620,13 +1814,18 @@ module Mxrb
       include CodeActions
       include PresentationDocuments
       include AssetDocuments
+      include ArtifactDocuments
 
       attr_reader :name, :entities, :pages, :microflows, :nanoflows, :repositories,
                   :associations, :menus, :module_roles, :enumerations, :constants,
-                  :scheduled_events, :native_documents, :managed_native_document_types
+                  :scheduled_events, :rules, :rest_response_metadata,
+                  :native_documents, :managed_native_document_types
 
-      def initialize(name)
+      def initialize(name, flow_metadata: {}, preserve_native_pages: false)
         @name             = name.to_s
+        @flow_metadata    = flow_metadata
+        @flow_metadata_offsets = Hash.new(0)
+        @preserve_native_pages = preserve_native_pages
         @entities         = []
         @pages            = []
         @microflows       = []
@@ -1638,6 +1837,8 @@ module Mxrb
         @enumerations     = []
         @constants        = []
         @scheduled_events = []
+        @rules = []
+        @rest_response_metadata = []
         @native_documents = []
         @managed_native_document_types = []
       end
@@ -1648,12 +1849,14 @@ module Mxrb
         @entities << eb.to_h
       end
 
-      def page(name, public: false, &block)
+      def page(name, public: false, unit_id: nil, &block)
+        return if @preserve_native_pages
+
         default_layout = "#{@name}.ApplicationLayout"
-        pb = PageBuilder.new(name, default_layout:, public:)
+        pb = PageBuilder.new(name, default_layout:, public:, unit_id:)
         pb.instance_eval(&block) if block
         page = pb.to_h
-        ensure_application_layout if page.fetch(:layout) == default_layout
+        ensure_application_layout if page[:forms_model].nil? && page.fetch(:layout) == default_layout
         @pages << page
       end
 
@@ -1669,7 +1872,8 @@ module Mxrb
 
       def microflow(name, kind: :use_case, public: false, unit_id: nil, &block)
         fb = FlowBuilder.new(
-          name, runtime: :server, kind: kind, public: public, unit_id:
+          name, runtime: :server, kind: kind, public: public, unit_id:,
+                metadata: flow_metadata_for(name, 'Microflows$Microflow')
         )
         fb.instance_eval(&block) if block
         @microflows << fb.to_h
@@ -1677,10 +1881,20 @@ module Mxrb
 
       def nanoflow(name, public: false, unit_id: nil, &block)
         fb = FlowBuilder.new(
-          name, runtime: :client, kind: :client_action, public: public, unit_id:
+          name, runtime: :client, kind: :client_action, public: public, unit_id:,
+                metadata: flow_metadata_for(name, 'Microflows$Nanoflow')
         )
         fb.instance_eval(&block) if block
         @nanoflows << fb.to_h
+      end
+
+      def rule(name, unit_id: nil, export_level: 'Hidden', &block)
+        fb = FlowBuilder.new(
+          name, runtime: :server, kind: :rule, public: false, unit_id:,
+                metadata: flow_metadata_for(name, 'Microflows$Rule')
+        )
+        fb.instance_eval(&block) if block
+        @rules << fb.to_h.merge(export_level: export_level.to_s)
       end
 
       def query(name, public: false, unit_id: nil, &block)
@@ -1706,9 +1920,9 @@ module Mxrb
         @constants << cb.to_h
       end
 
-      def scheduled_event(name, microflow:, interval: 1, unit: :days, enabled: true, &block)
+      def scheduled_event(name, microflow:, interval: 1, unit: :days, enabled: true, **options, &block)
         sb = ScheduledEventBuilder.new(
-          name, microflow: microflow, interval: interval, unit: unit, enabled: enabled
+          name, microflow: microflow, interval: interval, unit: unit, enabled: enabled, **options
         )
         sb.instance_eval(&block) if block
         @scheduled_events << sb.to_h
@@ -1718,11 +1932,32 @@ module Mxrb
                           unit_id: nil, container_id: nil)
         raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
 
+        identity = deep_structure['$ID'] || deep_structure[:'$ID']
+        document = {}
+        document['$ID'] = identity if identity
+        document['$Type'] = type.to_s
+        document['Name'] = name.to_s
+        document.merge!(deep_structure.except('$ID', :'$ID', '$Type', :'$Type', 'Name', :Name))
         @native_documents << {
           name: name.to_s, type: type.to_s, containment: containment.to_s,
           unit_id: unit_id&.to_s, container_id: container_id&.to_s,
-          doc: { '$Type' => type.to_s, 'Name' => name.to_s }.merge(deep_structure)
+          doc: document
         }
+      end
+
+      def flow_metadata_for(name, native_type = 'Microflows$Microflow')
+        key = name.to_s
+        metadata = @flow_metadata[key]
+        return metadata unless metadata.is_a?(Array)
+
+        candidates = metadata.select do |entry|
+          stored_type = entry['native_type'].to_s
+          stored_type.empty? || stored_type == native_type
+        end
+        offset_key = [key, native_type]
+        offset = @flow_metadata_offsets[offset_key]
+        @flow_metadata_offsets[offset_key] += 1
+        candidates[offset]
       end
 
       # Marks routed native documents as authoritative for this module. The
@@ -1878,9 +2113,11 @@ module Mxrb
         {
           name: @name, entities: @entities, pages: @pages,
           microflows: @microflows, nanoflows: @nanoflows,
+          rules: @rules,
           repositories: @repositories, menus: @menus, module_roles: @module_roles,
           enumerations: @enumerations, constants: @constants,
           scheduled_events: @scheduled_events, native_documents: @native_documents,
+          rest_responses: @rest_response_metadata,
           managed_native_document_types: @managed_native_document_types
         }
       end
@@ -1894,6 +2131,7 @@ module Mxrb
         @name  = name.to_s
         @items = []
         @deep_structure = nil
+        @unit_id = nil
       end
 
       def deep_structure(value)
@@ -1906,6 +2144,10 @@ module Mxrb
         raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
 
         @deep_structure = presentation_value_document(value)
+      end
+
+      def baseline_menu(unit_id:)
+        @unit_id = unit_id.to_s
       end
 
       def bson_binary(base64, subtype: :generic)
@@ -1921,7 +2163,7 @@ module Mxrb
       def items = @items
 
       def to_h
-        { name: @name, items: @items, deep_structure: @deep_structure }
+        { name: @name, items: @items, deep_structure: @deep_structure, unit_id: @unit_id }
       end
     end
 
@@ -1954,6 +2196,7 @@ module Mxrb
 
       ATTR_TYPES.each do |type|
         define_method(type) do |attr_name, **opts|
+          opts[:default] = '1' if type == :autonumber && !opts.key?(:default)
           @attributes << { name: attr_name.to_s, type: type, **opts }
         end
       end
@@ -1997,14 +2240,16 @@ module Mxrb
         }
       end
 
-      def association(target, type: :Reference, owner: :Default, name: nil, cardinality: nil,
+      def association(target, type: :Reference, owner: nil, name: nil, cardinality: nil,
                       documentation: '', parent_delete: :NoAction, child_delete: :NoAction,
                       storage_format: nil)
         if cardinality
-          type, owner = CARDINALITIES.fetch(cardinality.to_sym) do
+          type, inferred_owner = CARDINALITIES.fetch(cardinality.to_sym) do
             raise ArgumentError, 'cardinality must be :many_to_one, :one_to_one, or :many_to_many'
           end
+          owner ||= inferred_owner
         end
+        owner ||= :Default
         type = type.to_sym
         owner = owner.to_sym
         unless ASSOCIATION_TYPES.include?(type)
@@ -2111,7 +2356,7 @@ module Mxrb
 
       WRITE_MODES = %i[replace overlay].freeze
 
-      def initialize(name, default_layout: 'Atlas_Default', public: false)
+      def initialize(name, default_layout: 'Atlas_Default', public: false, unit_id: nil)
         @name          = name.to_s
         @public        = public == true
         @layout        = default_layout.to_s
@@ -2122,12 +2367,21 @@ module Mxrb
         @widgets       = []
         @allowed_roles = nil
         @deep_structure = nil
+        @forms_model = nil
+        @overlay_metadata = nil
+        @unit_id = unit_id&.to_s
         @write_mode = :replace
       end
 
       def layout(l) = (@layout = l)
       def title(t)  = (@title = t)
       def popup!    = (@popup = true)
+
+      # Complete schema-checked Forms representation for lossless Ruby-first
+      # pages. The block runs directly against Mxrb::Forms::Node.
+      def form(&block)
+        @forms_model = Forms::Node.build(:page, &block)
+      end
 
       def write_mode(mode)
         normalized = mode.to_sym
@@ -2155,6 +2409,25 @@ module Mxrb
 
         write_mode(mode)
         @deep_structure = presentation_value_document(value)
+      end
+
+      def baseline_overlay(page_id:, module_id:, baseline_digest:, version: 2,
+                           apply_fields: true)
+        @unit_id = page_id.to_s
+        @write_mode = :overlay
+        @overlay_metadata = {
+          'version' => version.to_i, 'page_unit_id' => page_id.to_s,
+          'module_unit_id' => module_id.to_s, 'baseline_digest' => baseline_digest.to_s,
+          'apply_fields' => apply_fields == true, 'widgets' => []
+        }
+      end
+
+      def baseline_widget(type, name, fingerprint:)
+        raise ArgumentError, 'baseline_widget requires baseline_overlay first' unless @overlay_metadata
+
+        @overlay_metadata.fetch('widgets') << {
+          'type' => type.to_s, 'name' => name.to_s, 'fingerprint' => fingerprint.to_s
+        }
       end
 
       def bson_binary(base64, subtype: :generic)
@@ -2192,12 +2465,46 @@ module Mxrb
           name: @name, public: @public, layout: @layout, title: @title, popup: @popup,
           data_source: @data_source, events: @events, widgets: @widgets,
           allowed_roles: @allowed_roles, deep_structure: @deep_structure, write_mode: @write_mode
-        }
+        }.merge(
+          unit_id: @unit_id, overlay_metadata: @overlay_metadata,
+          forms_model: @forms_model
+        )
       end
 
       private
 
       def _widget_list = @widgets
+    end
+
+    # Collects ordered call parameter mappings without exposing the BSON-shaped
+    # hashes used internally by Mendix. Keeping this as a small builder also
+    # preserves duplicate parameter names, which Ruby Hash arguments cannot do.
+    class CallArgumentsBuilder
+      CODE_ACTION_KINDS = %i[
+        entity entity_type microflow import_mapping export_mapping
+      ].freeze
+
+      attr_reader :mappings
+
+      def initialize(code_action: false)
+        @code_action = code_action
+        @mappings = []
+      end
+
+      def argument(parameter, value)
+        @mappings << { param: parameter.to_s, value: value }
+      end
+
+      CODE_ACTION_KINDS.each do |kind|
+        define_method(:"#{kind}_argument") do |parameter, value|
+          raise ArgumentError, "#{kind}_argument is only valid for code actions" unless @code_action
+
+          @mappings << {
+            param: parameter.to_s,
+            value: { kind: kind, value: value }
+          }
+        end
+      end
     end
 
     # Shared activity DSL mixed into FlowBuilder, BranchBuilder, LoopBuilder, RescueBuilder
@@ -2246,8 +2553,8 @@ module Mxrb
         _acts << { type: :delete_object, variable: variable.to_s, refresh: refresh }
       end
 
-      def call_microflow(name, as: nil, pass: {}, result_name: nil, use_return: nil)
-        mappings = pass.map { |param, var| { param: param.to_s, value: var } }
+      def call_microflow(name, as: nil, pass: nil, result_name: nil, use_return: nil, &block)
+        mappings = _call_argument_mappings(pass, &block)
         _acts << {
           type: :call_microflow, name: name.to_s, variable: as&.to_s,
           result_name: result_name&.to_s,
@@ -2256,19 +2563,21 @@ module Mxrb
         }
       end
 
-      def call_java(name, as: nil, pass: {}, result_name: nil, use_return: nil)
+      def call_java(name, as: nil, pass: nil, result_name: nil, use_return: nil, &block)
         _acts << {
           type: :call_java, name: name.to_s,
           variable: as&.to_s, result_name: result_name&.to_s,
           use_return: use_return.nil? ? !as.nil? : use_return == true,
-          mappings: _code_action_mappings(pass)
+          mappings: _call_argument_mappings(pass, code_action: true, &block)
         }
       end
 
       %i[javascript nanoflow app_service].each do |runtime|
-        define_method(:"call_#{runtime}") do |name, as: nil, pass: {},
-                                                result_name: nil, use_return: nil|
-          mappings = pass.map { |param, value| { param: param.to_s, value: value } }
+        define_method(:"call_#{runtime}") do |name, as: nil, pass: nil,
+                                                result_name: nil, use_return: nil, &block|
+          mappings = _call_argument_mappings(
+            pass, code_action: runtime == :javascript, &block
+          )
           _acts << {
             type: :"call_#{runtime}", name: name.to_s,
             variable: as&.to_s, result_name: result_name&.to_s,
@@ -2520,6 +2829,26 @@ module Mxrb
 
       private
 
+      def _call_argument_mappings(pass, code_action: false, &block)
+        _validate_call_argument_notation!(pass, block)
+        return _block_call_argument_mappings(code_action, &block) if block
+        return _code_action_mappings(pass || {}) if code_action
+
+        (pass || {}).map { |param, value| { param: param.to_s, value: value } }
+      end
+
+      def _validate_call_argument_notation!(pass, block)
+        return unless block && pass && !pass.empty?
+
+        raise ArgumentError, "call arguments must use either pass: or a block"
+      end
+
+      def _block_call_argument_mappings(code_action, &block)
+        builder = CallArgumentsBuilder.new(code_action: code_action)
+        builder.instance_eval(&block)
+        builder.mappings
+      end
+
       def _code_action_mappings(pass)
         pass.map do |parameter, value|
           if value.is_a?(Hash) && value.key?(:kind)
@@ -2552,9 +2881,10 @@ module Mxrb
     class FlowBuilder # rubocop:disable Metrics/ClassLength
       include FlowBodyDsl
 
-      def initialize(name, runtime:, kind:, public:, unit_id: nil)
+      def initialize(name, runtime:, kind:, public:, unit_id: nil, metadata: nil)
+        @metadata             = metadata || {}
         @name                 = name.to_s
-        @unit_id              = unit_id&.to_s
+        @unit_id              = (unit_id || @metadata['unit_id'])&.to_s
         @runtime              = runtime
         @kind                 = kind
         @public               = public
@@ -2567,20 +2897,26 @@ module Mxrb
         @body                 = nil
         @return_variable_name = nil
         @return_expression    = nil
-        @expected_body_fingerprint = nil
+        @expected_body_fingerprint = @metadata['body_fingerprint']&.to_s
         @allow_concurrent_execution = nil
         @apply_entity_access = nil
         @mark_as_used = nil
         @excluded = nil
       end
 
+      # rubocop:disable Metrics/PerceivedComplexity
       def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
+        metadata = Array(@metadata['parameters']).find { _1['name'].to_s == name.to_s } || {}
+        type = type.merge('$ID' => metadata['type_id']) \
+          if type.is_a?(Hash) && metadata['type_id'].to_s != ''
         @parameters << {
           name: name.to_s, type: type.is_a?(Hash) ? type : type.to_s,
-          id: id&.to_s, relative_middle_point: relative_middle_point&.to_s,
-          size: size&.to_s
+          id: (id || metadata['id'])&.to_s,
+          relative_middle_point: (relative_middle_point || metadata['relative_middle_point'])&.to_s,
+          size: (size || metadata['size'])&.to_s
         }.compact
       end
+      # rubocop:enable Metrics/PerceivedComplexity
 
       def bson_binary(base64, subtype: :generic)
         BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
@@ -2592,7 +2928,7 @@ module Mxrb
         kind = :datetime if %i[DateTime date_time].include?(kind)
         native = {
           void: 'Void', boolean: 'Boolean', string: 'String', integer: 'Integer',
-          long: 'Long', decimal: 'Decimal', float: 'Float', datetime: 'DateTime',
+          long: 'Integer', decimal: 'Decimal', float: 'Float', datetime: 'DateTime',
           object: 'Object', list: 'List', enumeration: 'Enumeration'
         }.fetch(kind) { raise ArgumentError, "unsupported flow data type #{kind.inspect}" }
         document = {
@@ -2604,7 +2940,25 @@ module Mxrb
         document
       end
 
-      def return_type(type) = (@return_type = type.is_a?(Hash) ? type : type.to_s)
+      def object_of(entity, id: nil)
+        flow_type({ kind: :object, entity:, id: })
+      end
+
+      def list_of(entity, id: nil)
+        flow_type({ kind: :list, entity:, id: })
+      end
+
+      def enum_of(enumeration, id: nil)
+        flow_type({ kind: :enumeration, enumeration:, id: })
+      end
+
+      def return_type(type)
+        if type.is_a?(Hash) && @metadata['return_type_id'].to_s != ''
+          type = type.merge('$ID' => @metadata['return_type_id'])
+        end
+        @return_type = type.is_a?(Hash) ? type : type.to_s
+      end
+
       def documentation(d) = (@doc = d)
       def allow_concurrent_execution(value = true) = (@allow_concurrent_execution = !!value)
       def apply_entity_access(value = true) = (@apply_entity_access = !!value)

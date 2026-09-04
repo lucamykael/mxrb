@@ -74,6 +74,36 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
     end
   end
 
+  it 'uses unit ids to distinguish services with the same Mendix name' do
+    Dir.mktmpdir('mxrb-portability-duplicate-services-') do |root|
+      source = <<~RUBY
+        class NativeDuplicate < Mxrb::RubyApp::Service
+          mendix_name 'App.Duplicate', id: 'native-id'
+          native(:microflow) { return_type :boolean }
+        end
+
+        class RuntimeDuplicate < Mxrb::RubyApp::Service
+          mendix_name 'App.Duplicate', id: 'runtime-id'
+        end
+      RUBY
+      coverage = [
+        { id: 'native-id', name: 'App.Duplicate', kind: 'microflow',
+          ruby_path: 'app/services/native_duplicate.rb', status: 'runtime_source_preserved' },
+        { id: 'runtime-id', name: 'App.Duplicate', kind: 'microflow',
+          ruby_path: 'app/services/runtime_duplicate.rb', status: 'runtime_source_preserved' }
+      ]
+      write_app(root, coverage:, source:)
+
+      report = described_class.new(root)
+
+      expect(report.entries.map { [_1.id, _1.status] }).to eq(
+        [%w[native-id native], %w[runtime-id runtime_only]]
+      )
+      expect(report.to_h.fetch(:entries).map { _1.fetch(:id) })
+        .to eq(%w[native-id runtime-id])
+    end
+  end
+
   it 'omits the frontend entry when the application-owned roots are empty' do
     Dir.mktmpdir('mxrb-portability-no-frontend-') do |root|
       write_app(root, coverage: [])

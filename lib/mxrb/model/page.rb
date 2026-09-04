@@ -142,6 +142,7 @@ module Mxrb
             "OnChangeAction" => :on_change,
             "OnEnterAction" => :on_enter,
             "OnLeaveAction" => :on_leave,
+            "ClickAction" => :on_click,
             "Action" => :on_click
           }.filter_map do |property, event|
             action = parse_action(widget[property])
@@ -186,12 +187,35 @@ module Mxrb
           :static_image
         when "Forms$Title"
           :page_title
+        when "Forms$FileManager"
+          :file_manager
+        when "Forms$ReferenceSetSelector"
+          :reference_set_selector
+        when "Forms$NavigationList"
+          :navigation_list
+        when "Forms$ScrollContainer"
+          :scroll_container
+        when "Forms$ImageViewer"
+          :image_viewer
+        when "Forms$ImageUploader"
+          :image_uploader
+        when "Forms$MenuBar"
+          :menu_bar
+        when "Forms$NavigationTree"
+          :navigation_tree
         end
       end
 
       def widget_options(widget, widget_type)
         return appearance_options(widget) if widget_type == :page_title
         return static_image_options(widget) if widget_type == :static_image
+        return file_manager_options(widget) if widget_type == :file_manager
+        return reference_set_selector_options(widget) if widget_type == :reference_set_selector
+        return navigation_list_options(widget) if widget_type == :navigation_list
+        return scroll_container_options(widget) if widget_type == :scroll_container
+        return image_viewer_options(widget) if widget_type == :image_viewer
+        return image_uploader_options(widget) if widget_type == :image_uploader
+        return menu_widget_options(widget) if %i[menu_bar navigation_tree].include?(widget_type)
 
         options = appearance_options(widget).merge(
           attribute: attribute_path(widget),
@@ -202,6 +226,85 @@ module Mxrb
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
         options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
         options
+      end
+
+      def file_manager_options(widget)
+        appearance_options(widget).merge(
+          allowed_extensions: widget.fetch('AllowedExtensions', ''),
+          editable: data_view_enum(widget.fetch('Editable', 'Always')),
+          max_file_size: widget.fetch('MaxFileSize', 5),
+          show_file_in_browser: widget['ShowFileInBrowser'] == true,
+          mode: data_view_enum(widget.fetch('Type', 'Both')),
+          tab_index: widget.fetch('TabIndex', 0)
+        )
+      end
+
+      def reference_set_selector_options(widget)
+        appearance_options(widget).merge(
+          selection: data_view_enum(widget.fetch('SelectionMode', 'Multi')),
+          number_of_rows: widget.fetch('NumberOfRows', 20),
+          selectable_xpath: widget.fetch('SelectableXPathConstraint', ''),
+          control_bar: widget['IsControlBarVisible'] == true,
+          select_first: widget['SelectFirst'] == true,
+          show_empty_rows: widget['ShowEmptyRows'] == true,
+          paging: data_view_enum(widget.fetch('ShowPagingBar', 'YesWithTotalCount')),
+          tab_index: widget.fetch('TabIndex', 0),
+          width_unit: data_view_enum(widget.fetch('WidthUnit', 'Weight'))
+        )
+      end
+
+      def navigation_list_options(widget)
+        appearance_options(widget).merge(tab_index: widget.fetch('TabIndex', 0))
+      end
+
+      def scroll_container_options(widget)
+        appearance_options(widget).merge(
+          alignment: data_view_enum(widget.fetch('Alignment', 'Center')),
+          layout_mode: data_view_enum(widget.fetch('LayoutMode', 'Headline')),
+          hide_scrollbars: widget['NativeHideScrollbars'] == true,
+          scroll_behavior: data_view_enum(widget.fetch('ScrollBehavior', 'PerRegion')),
+          tab_index: widget.fetch('TabIndex', 0), width: widget.fetch('Width', 0),
+          width_mode: data_view_enum(widget.fetch('WidthMode', 'Auto'))
+        )
+      end
+
+      def image_viewer_options(widget)
+        source = widget['DataSource'].is_a?(Hash) ? widget.fetch('DataSource') : {}
+        appearance_options(widget).merge(
+          entity: source.dig('EntityRef', 'Entity') || source['EntityPath'],
+          alternative_text: extract_text(widget['AlternativeText']),
+          default_image: widget.fetch('DefaultImage', '').to_s,
+          force_full_objects: source['ForceFullObjects'] == true,
+          width: widget.fetch('Width', 100).to_i,
+          height: widget.fetch('Height', 100).to_i,
+          width_unit: data_view_enum(widget.fetch('WidthUnit', 'Auto')),
+          height_unit: data_view_enum(widget.fetch('HeightUnit', 'Auto')),
+          responsive: widget.fetch('Responsive', true) == true,
+          show_as_thumbnail: widget['ShowAsThumbnail'] == true,
+          on_click_enlarge: widget['OnClickEnlarge'] == true,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        ).compact
+      end
+
+      def image_uploader_options(widget)
+        thumbnail_width, thumbnail_height = widget.fetch('ThumbnailSize', '100;75')
+                                                  .to_s.split(';', 2).map(&:to_i)
+        appearance_options(widget).merge(
+          allowed_extensions: widget.fetch('AllowedExtensions', '').to_s,
+          caption: extract_text(widget['LabelTemplate']),
+          editable: data_view_enum(widget.fetch('Editable', 'Always')),
+          max_file_size: widget.fetch('MaxFileSize', 5).to_i,
+          thumbnail_width: thumbnail_width.positive? ? thumbnail_width : 100,
+          thumbnail_height: thumbnail_height.positive? ? thumbnail_height : 75,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        )
+      end
+
+      def menu_widget_options(widget)
+        appearance_options(widget).merge(
+          menu: widget.dig('MenuSource', 'Menu').to_s,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        )
       end
 
       def static_image_options(widget)
@@ -290,7 +393,9 @@ module Mxrb
           tab_index: widget.fetch("TabIndex", 0).to_i,
           visibility: parse_data_view_condition(widget["ConditionalVisibilitySettings"]),
           editability: parse_data_view_condition(widget["ConditionalEditabilitySettings"]),
-          design_properties: parse_array(widget.dig("Appearance", "DesignProperties")),
+          design_properties: parse_array(widget.dig("Appearance", "DesignProperties")).map do |value|
+            design_property_spec(value)
+          end,
           unknown_native: unknown_native_fields(
             widget,
             %w[Appearance ConditionalEditabilitySettings ConditionalVisibilitySettings DataSource
@@ -303,6 +408,18 @@ module Mxrb
         {
           type: :data_view, name: widget["Name"] || "dataView",
           options:, body:, footer:, events: []
+        }
+      end
+
+      def design_property_spec(value)
+        option = value['Value']
+        return value unless value['$Type'] == 'Forms$DesignPropertyValue' &&
+                            option.is_a?(Hash) &&
+                            option['$Type'] == 'Forms$OptionDesignPropertyValue'
+
+        {
+          id: IO::BsonCodec.extract_id(value['$ID']), key: value.fetch('Key', ''),
+          value_id: IO::BsonCodec.extract_id(option['$ID']), option: option.fetch('Option', '')
         }
       end
 
@@ -497,10 +614,19 @@ module Mxrb
           type = types_by_id[IO::BsonCodec.extract_id(property["TypePointer"])]
           next unless type
 
-          result[type["PropertyKey"].to_s] = pluggable_value(
-            property["Value"], type["ValueType"]
-          )
+          value_type = type["ValueType"]
+          projected = pluggable_value(property["Value"], value_type)
+          next if projected.nil? && !clearable_pluggable_value_type?(value_type)
+
+          result[type["PropertyKey"].to_s] = projected
         end
+      end
+
+      def clearable_pluggable_value_type?(value_type)
+        value_type.is_a?(Hash) && %w[
+          String Boolean Integer Decimal Number Enumeration Expression TextTemplate
+          Attribute Association DataSource Action Widgets Object Selection
+        ].include?(value_type['Type'].to_s)
       end
 
       def pluggable_value(value, value_type)

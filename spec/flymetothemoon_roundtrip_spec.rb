@@ -48,7 +48,7 @@ RSpec.describe 'Flymetothemoon Ruby-to-Mendix certification' do
     source = File.read(service)
     File.write(
       service,
-      source.sub('native_call(arguments)', "arguments.fetch(:Urgent, false) ? 'ruby-high' : 'ruby-normal'")
+      source.sub('execute_flow(arguments)', "arguments.fetch(:Urgent, false) ? 'ruby-high' : 'ruby-normal'")
     )
   end
 

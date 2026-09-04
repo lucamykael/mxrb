@@ -30,6 +30,7 @@ module Mxrb
       ).freeze
       APPLICATION_DOCUMENT_ROUTES = {
         'DataSets$DataSet' => 'queries/datasets',
+        'Queues$Queue' => 'jobs/task_queues',
         'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events',
         'JavaActions$JavaAction' => 'actions/java',
         'JavaScriptActions$JavaScriptAction' => 'actions/javascript'
@@ -47,13 +48,14 @@ module Mxrb
       DOMAIN_DOCUMENT_ROUTES = {
         'DomainModels$ViewEntitySourceDocument' => 'oql_views',
         'Enumerations$Enumeration' => 'enumerations',
-        'Constants$Constant' => 'constants'
+        'Constants$Constant' => 'constants',
+        'RegularExpressions$RegularExpression' => 'regular_expressions'
       }.freeze
       EDITABLE_DOCUMENT_TYPES = (
         INFRASTRUCTURE_DOCUMENT_ROUTES.keys + APPLICATION_DOCUMENT_ROUTES.keys +
         PRESENTATION_DOCUMENT_ROUTES.keys +
         ASSET_DOCUMENT_ROUTES.keys +
-        DOMAIN_DOCUMENT_ROUTES.keys
+        DOMAIN_DOCUMENT_ROUTES.keys + ['Microflows$Rule']
       ).freeze
 
       attr_reader :name, :sort_index, :from_app_store,
@@ -107,6 +109,12 @@ module Mxrb
         @nanoflows ||= document_units
                        .select { |u| u[:type] == "Microflows$Nanoflow" }
                        .map { Microflow.new(_1[:raw], @mpr) }
+      end
+
+      def rules
+        @rules ||= document_units
+                   .select { |unit| unit[:type] == 'Microflows$Rule' }
+                   .map { Microflow.new(_1[:raw], @mpr) }
       end
 
       def menus

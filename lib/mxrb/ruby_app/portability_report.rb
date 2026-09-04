@@ -5,8 +5,8 @@ module Mxrb
     # Audits which Ruby-mode artifacts become editable Mendix documents and
     # which ones require MXRB's embedded Ruby/TypeScript runtime.
     class PortabilityReport
-      Entry = Data.define(:name, :kind, :path, :status, :reason) do
-        def to_h = { name:, kind:, path:, status:, reason: }
+      Entry = Data.define(:id, :name, :kind, :path, :status, :reason) do
+        def to_h = { id:, name:, kind:, path:, status:, reason: }
       end
 
       attr_reader :root, :entries
@@ -55,21 +55,33 @@ module Mxrb
         @manifest.coverage.map do |coverage|
           status, reason = portability_for(coverage)
           Entry.new(
-            name: coverage.fetch('name'), kind: coverage.fetch('kind'),
+            id: coverage.fetch('id', nil), name: coverage.fetch('name'), kind: coverage.fetch('kind'),
             path: coverage.fetch('ruby_path'), status:, reason:
           )
         end
       end
 
       def portability_for(coverage)
-        name, kind = coverage.values_at('name', 'kind')
+        kind = coverage.fetch('kind')
         return ['native', 'Ruby domain declarations synchronize into the Mendix domain model'] \
           if %w[model dto].include?(kind)
 
-        implementation = Registry.fetch(:service, name) || Registry.fetch(:page, name)
+        implementation = registered_implementation(coverage)
         return ['native', "Ruby #{kind} declares a native Mendix projection"] \
           if implementation&.native_definition
         return ['native', 'Editable Ruby declaration rebuilds this Mendix document'] if bidirectional?(coverage)
+
+        fallback_portability(coverage, kind)
+      end
+
+      def registered_implementation(coverage)
+        unit_id = coverage['id'].to_s
+        unit_id = nil if unit_id.empty?
+        Registry.fetch(:service, coverage.fetch('name'), unit_id:) ||
+          Registry.fetch(:page, coverage.fetch('name'), unit_id:)
+      end
+
+      def fallback_portability(coverage, kind)
         return ['preserved_native', 'Original Mendix document is retained byte-for-byte in the sidecar'] \
           if coverage.fetch('status') == 'preserved_native'
 
@@ -86,7 +98,7 @@ module Mxrb
         return [] if files.empty?
 
         [Entry.new(
-          name: 'React application sources', kind: 'typescript_frontend',
+          id: nil, name: 'React application sources', kind: 'typescript_frontend',
           path: roots.join(', '), status: 'runtime_only',
           reason: 'React routes and components are not native Mendix page documents'
         )]

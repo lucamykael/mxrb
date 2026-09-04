@@ -56,6 +56,7 @@ module Mxrb
         },
         'Forms$DataView' => {
           editable: 'Editability', label_width: 'LabelWidth',
+          no_entity_message: 'NoEntityMessage',
           read_only_style: 'ReadOnlyStyle', show_footer: 'ShowFooter',
           tab_index: 'TabIndex'
         }
@@ -64,41 +65,66 @@ module Mxrb
         class: 'Class', dynamic_class: 'DynamicClasses', style: 'Style'
       }.freeze
 
-      STRUCTURAL_SCALAR_OPTIONS = {
-        table: %i[tab_index width_unit class dynamic_class style],
-        layout_grid: %i[tab_index width class dynamic_class style],
-        data_view: %i[editable label_width read_only_style show_footer tab_index
-                      class dynamic_class style]
+      STRUCTURAL_SCALAR_OPTIONS_BY_VERSION = {
+        1 => {
+          table: %i[tab_index width_unit class dynamic_class style],
+          layout_grid: %i[tab_index width class dynamic_class style],
+          data_view: %i[editable label_width read_only_style show_footer tab_index
+                        class dynamic_class style]
+        },
+        2 => {
+          table: %i[tab_index width_unit class dynamic_class style],
+          layout_grid: %i[tab_index width class dynamic_class style],
+          data_view: %i[editable label_width no_entity_message read_only_style show_footer
+                        tab_index class dynamic_class style]
+        }
       }.freeze
+      CURRENT_METADATA_VERSION = STRUCTURAL_SCALAR_OPTIONS_BY_VERSION.keys.max
 
-      def self.metadata(widgets, page_unit_id: nil, module_unit_id: nil)
+      def self.metadata(widgets, page_unit_id: nil, module_unit_id: nil,
+                        version: CURRENT_METADATA_VERSION)
         {
-          'version' => 1,
+          'version' => version,
           'page_unit_id' => page_unit_id,
           'module_unit_id' => module_unit_id,
-          'widgets' => Array(widgets).map { widget_metadata(_1) }
+          'widgets' => Array(widgets).map { widget_metadata(_1, version) }
         }
       end
 
-      def self.widget_metadata(widget)
+      def self.baseline_digest(document, metadata)
+        overlay = new(
+          baseline: document, target: document, widgets: [], encoded_widgets: [], metadata:
+        )
+        Digest::SHA256.hexdigest(IO::BsonCodec.serialize(overlay.send(:comparable_page, document)))
+      end
+
+      def self.widget_metadata(widget, version)
         {
           'type' => widget.fetch(:type).to_s,
           'name' => widget.fetch(:name).to_s,
-          'fingerprint' => structural_fingerprint(widget)
+          'fingerprint' => structural_fingerprint(widget, version)
         }
       end
       private_class_method :widget_metadata
 
-      def self.structural_fingerprint(widget)
+      def self.structural_fingerprint(widget, version)
         projection = deep_stringify(widget)
         strip_projection_noise(projection)
         normalize_redundant_widget_children(projection)
         type = projection.fetch('type').to_sym
         normalize_table_columns(projection) if type == :table
-        options = projection['options']
-        Array(STRUCTURAL_SCALAR_OPTIONS[type]).each { options.delete(_1.to_s) } if options.is_a?(Hash)
+        strip_structural_scalar_options!(projection, type, version)
         Digest::SHA256.hexdigest(JSON.generate(canonical(projection)))
       end
+
+      def self.strip_structural_scalar_options!(projection, type, version)
+        structural_options = STRUCTURAL_SCALAR_OPTIONS_BY_VERSION.fetch(version)
+        options = projection['options']
+        return unless options.is_a?(Hash)
+
+        Array(structural_options[type]).each { options.delete(_1.to_s) }
+      end
+      private_class_method :strip_structural_scalar_options!
 
       def self.deep_stringify(value)
         case value
@@ -258,7 +284,13 @@ module Mxrb
         verify_structural_projection!
         verify_target_baseline!
         result = deep_copy(@target)
-        actionable = @widgets.select { actionable?(_1) }
+        return apply_semantic_widget_edits(result) if @structural_edit
+
+        apply_declared_fields(result)
+      end
+
+      def apply_declared_fields(result)
+        actionable = apply_fields? ? @widgets.select { actionable?(_1) } : []
         return result if actionable.empty?
 
         slot = sole_root_slot(result)
@@ -274,6 +306,10 @@ module Mxrb
         SUPPORTED_TYPES.include?(storage_type(widget)) && declared_fields(widget).any? do |field|
           scalar_field?(storage_type(widget), field) || APPEARANCE_FIELDS.key?(field)
         end
+      end
+
+      def apply_fields?
+        @metadata.fetch('apply_fields', @metadata.fetch(:apply_fields, true))
       end
 
       def match(widget, encoded, slot)
@@ -337,11 +373,94 @@ module Mxrb
         expected = @metadata.is_a?(Hash) ? @metadata['widgets'] || @metadata[:widgets] : nil
         raise ValidationError, 'page overlay has no structural baseline' unless expected.is_a?(Array)
 
-        actual = self.class.metadata(@widgets).fetch('widgets')
+        actual = self.class.metadata(@widgets, version: structural_metadata_version).fetch('widgets')
         expected_projection = expected.map { self.class.send(:deep_stringify, _1) }
         return if actual == expected_projection
 
+        unless apply_fields?
+          @structural_edit = true
+          return
+        end
+
         raise_structural_projection_error(actual, expected_projection)
+      end
+
+      def apply_semantic_widget_edits(result)
+        slot = sole_root_slot(result)
+        @encoded_widgets.each { merge_semantic_widget!(slot, _1) }
+        result
+      end
+
+      def merge_semantic_widget!(slot, encoded)
+        native = semantic_widget_match(slot, encoded)
+        native.replace(merge_semantic_value(native, encoded))
+      end
+
+      def semantic_widget_match(slot, encoded)
+        matches = slot.select { semantic_widget_match?(_1, encoded) }
+        return matches.first if matches.one?
+
+        raise ValidationError,
+              "page overlay cannot safely match edited widget #{encoded['Name'].inspect}"
+      end
+
+      def semantic_widget_match?(native, encoded)
+        native.is_a?(Hash) && native['$Type'] == encoded['$Type'] &&
+          native['Name'].to_s == encoded['Name'].to_s
+      end
+
+      def merge_semantic_value(native, generated)
+        return generated unless native.is_a?(Hash) && generated.is_a?(Hash)
+
+        native.merge(generated) do |key, previous, current|
+          next previous if key == '$ID'
+
+          merge_semantic_child(previous, current)
+        end
+      end
+
+      def merge_semantic_child(previous, current)
+        return merge_semantic_value(previous, current) if previous.is_a?(Hash) && current.is_a?(Hash)
+        return merge_semantic_array(previous, current) if previous.is_a?(Array) && current.is_a?(Array)
+
+        current
+      end
+
+      def merge_semantic_array(previous, current)
+        previous_marker, previous_items = split_array_marker(previous)
+        _current_marker, current_items = split_array_marker(current)
+        merged = current_items.map.with_index do |item, index|
+          prior = prior_array_item(previous_items, item, index)
+          prior ? merge_semantic_child(prior, item) : item
+        end
+        previous_marker ? [previous_marker, *merged] : merged
+      end
+
+      def split_array_marker(items)
+        return [items.first, items.drop(1)] if items.first.is_a?(Integer)
+
+        [nil, items]
+      end
+
+      def prior_array_item(previous_items, item, index)
+        semantic_array_match(previous_items, item) || previous_items[index]
+      end
+
+      def semantic_array_match(items, item)
+        return unless item.is_a?(Hash)
+
+        items.find do |candidate|
+          candidate.is_a?(Hash) && candidate['$Type'] == item['$Type'] &&
+            candidate['Name'].to_s == item['Name'].to_s && !item['Name'].to_s.empty?
+        end
+      end
+
+      def structural_metadata_version
+        version = @metadata['version'] || @metadata[:version] || 1
+        return version if STRUCTURAL_SCALAR_OPTIONS_BY_VERSION.key?(version)
+
+        raise ValidationError,
+              "page overlay has unknown structural baseline version #{version.inspect}"
       end
 
       def raise_structural_projection_error(actual, expected)
@@ -353,6 +472,8 @@ module Mxrb
       end
 
       def verify_target_baseline!
+        return verify_target_digest! unless @baseline
+
         baseline = comparable_page(@baseline)
         target = comparable_page(@target)
         return if baseline == target
@@ -361,15 +482,39 @@ module Mxrb
               'page changed outside the Ruby overlay since it was exported'
       end
 
+      def verify_target_digest!
+        expected = @metadata['baseline_digest'] || @metadata[:baseline_digest]
+        actual = self.class.baseline_digest(@target, @metadata)
+        return if !expected.to_s.empty? && expected == actual
+
+        raise ValidationError, 'page changed outside the Ruby overlay since it was exported'
+      end
+
       def comparable_page(document)
         copy = deep_copy(document)
-        %w[$ID Name name].each { copy.delete(_1) }
+        %w[Name name].each { copy.delete(_1) }
+        scrub_identity_fields!(copy)
         scrub_supported_fields!(copy)
         IO::BsonCodec.parse(IO::BsonCodec.serialize(copy))
       end
 
+      def scrub_identity_fields!(value)
+        case value
+        when Hash
+          value.delete('$ID')
+          value.each_value { scrub_identity_fields!(_1) }
+        when Array
+          value.each { scrub_identity_fields!(_1) }
+        end
+      end
+
       def scrub_supported_fields!(document) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
-        slot = sole_root_slot(document)
+        return unless @metadata.fetch('apply_fields', @metadata.fetch(:apply_fields, true))
+
+        slots = root_slots(document)
+        return unless slots.one?
+
+        slot = slots.first
         Array(@metadata['widgets'] || @metadata[:widgets]).each do |entry|
           type = storage_type(type: entry['type'] || entry[:type])
           next unless type

@@ -116,16 +116,17 @@ RSpec.describe 'exported mapping documents' do
       expect(ruby).to include(
         'published_rest_service :API_Service', 'orders/{id}', 'version: "1.0.0"',
         'enable_cors: true', 'requires_authentication: true', 'allowed_roles:',
-        ':method => :post'
+        'resource :Orders', 'get :get_order', 'post :create_order'
       )
-      expect(ruby).not_to include('native_document', 'deep_structure:', 'bson_binary(')
+      expect(ruby).not_to include('resources:', 'operations:', 'native_document',
+                                  'deep_structure:', 'bson_binary(')
       infrastructure = File.read(File.join(File.dirname(File.dirname(endpoint)), 'infrastructure.rb'))
       expect(infrastructure).to include('endpoints', 'api_service.rb')
       consumed = File.join(exported, 'modules', 'API_Rest', 'infrastructure',
                            'integrations', 'master_entity_domain.rb')
       expect(File.read(consumed)).to include('Rest$ConsumedODataService', 'catalog.example')
 
-      File.write(endpoint, ruby.sub(':path => "orders/{id}"', ':path => "orders/{orderId}"'))
+      File.write(endpoint, ruby.sub('path: "orders/{id}"', 'path: "orders/{orderId}"'))
       generate(exported, rebuilt)
       expect(Mxrb.validate(rebuilt)).to be_valid
       Mxrb.open(rebuilt) do |project|

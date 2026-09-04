@@ -8,6 +8,8 @@ require 'json'
 require 'pp'
 require 'time'
 require_relative '../native_fragment_store'
+require_relative 'legacy_service_source_migration'
+require_relative 'legacy_widget_source_migration'
 
 module Mxrb
   module RubyApp
@@ -45,6 +47,7 @@ module Mxrb
         @native_fragment_store = NativeFragmentStore.new(
           File.join(@output_dir, '.mxrb', 'native_fragments')
         )
+        @rest_response_metadata = read_rest_response_metadata
         runtime_mpr = copy_runtime_mpr
         embedded_sources = read_embedded_sources
         @embedded_sources = embedded_sources
@@ -73,6 +76,7 @@ module Mxrb
         @security_manifest = nil
         @known_entity_names = nil
         @native_fragment_store = nil
+        @rest_response_metadata = nil
       end
 
       private
@@ -84,6 +88,15 @@ module Mxrb
         mpr&.close
       end
 
+      def read_rest_response_metadata
+        path = File.join(@mendix_sidecar, '.mxrb', 'rest_metadata.json')
+        return [] unless File.file?(path)
+
+        JSON.parse(File.read(path)).fetch('operations')
+      rescue JSON::ParserError, KeyError => e
+        raise SerializationError, "invalid REST metadata sidecar #{path}: #{e.message}"
+      end
+
       def restore_embedded_sources(files)
         files.each do |file|
           next if file.fetch(:path).start_with?('frontend/src/generated/')
@@ -93,11 +106,29 @@ module Mxrb
           raise SerializationError, "embedded Ruby source checksum mismatch: #{file.fetch(:path)}" \
             unless checksum == file.fetch(:sha256)
 
+          contents = LegacyServiceSourceMigration.new(
+            path: file.fetch(:path), source: contents
+          ).migrate
+
           path = RubyApp.safe_source_path(@output_dir, file.fetch(:path))
           FileUtils.mkdir_p(File.dirname(path))
+          if regenerate_legacy_widget_page?(file, path)
+            File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
+            next
+          end
+
           File.binwrite(path, contents)
           File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
         end
+      end
+
+      def regenerate_legacy_widget_page?(file, generated_path)
+        return false unless File.file?(generated_path)
+
+        LegacyWidgetSourceMigration.new(
+          path: file.fetch(:path), embedded_source: file.fetch(:contents),
+          generated_source: File.binread(generated_path)
+        ).regenerate?
       end
 
       # Generated frontend projections normally remain user-editable and are
@@ -549,12 +580,55 @@ module Mxrb
         microflow = operation['Microflow'].to_s
         microflow = "#{mod.name}.#{microflow}" unless microflow.empty? || microflow.include?('.')
         service_path = service['Path'].to_s.sub(%r{\A/+}, '').sub(%r{/+\z}, '')
+        resource_path = rest_runtime_resource_path(resource, operation)
         operation_path = operation['Path'].to_s.sub(%r{\A/+}, '')
+        declared_status = operation['SuccessStatusCode']
+        declared_status = rest_metadata_success_status(service, resource, operation) \
+          if declared_status.to_s.empty?
+        declared_status = rest_documented_success_status(operation['Documentation']) \
+          if declared_status.to_s.empty?
         {
           'name' => resource['Name'].to_s, 'method' => operation['HttpMethod'].to_s.upcase,
-          'path' => "/#{[service_path, operation_path].reject(&:empty?).join('/')}",
-          'microflow' => microflow, 'success_status' => rest_success_status(operation['SuccessStatusCode'])
+          'path' => "/#{[service_path, resource_path, operation_path].reject(&:empty?).join('/')}",
+          'microflow' => microflow,
+          'success_status' => rest_success_status(declared_status)
         }
+      end
+
+      def rest_metadata_success_status(service, resource, operation)
+        service_id = native_identifier(service['$ID'])
+        resource_id = native_identifier(resource['$ID'])
+        operation_id = native_identifier(operation['$ID'])
+        entry = Array(@rest_response_metadata).find do |candidate|
+          candidate['service_id'].to_s == service_id &&
+            candidate['resource_id'].to_s == resource_id &&
+            candidate['operation_id'].to_s == operation_id
+        end
+        response = Array(entry&.fetch('responses', nil)).find do |candidate|
+          candidate.fetch('status').to_i.between?(200, 299)
+        end
+        response&.fetch('status', nil)
+      end
+
+      def rest_documented_success_status(documentation)
+        marker = Dsl::IntegrationDocuments::REST_RESPONSES_MARKER
+        value = documentation.to_s
+        encoded = if value.start_with?(marker.lstrip)
+                    value.delete_prefix(marker.lstrip)
+                  else
+                    value.split(marker, 2)[1]
+                  end
+        return unless encoded
+
+        encoded.lines.filter_map { _1[/\A-\s+(2\d{2}):/, 1] }.first
+      end
+
+      def rest_runtime_resource_path(resource, operation)
+        has_parameters = IO::BsonCodec.parse_array(operation['Parameters'])[:items].any?
+        has_mapping = %w[ImportMapping ExportMapping].any? { !operation[_1].to_s.empty? }
+        return '' unless has_parameters || has_mapping
+
+        resource['Name'].to_s.sub(%r{\A/+}, '').sub(%r{/+\z}, '')
       end
 
       def rest_success_status(value)
@@ -608,7 +682,7 @@ module Mxrb
         converter = Mxrb::Exporter.allocate
         converter.instance_variable_set(:@mpr_path, @mpr_path)
         method = kind.to_sym == :nanoflow ? :nanoflow_source : :microflow_source
-        source = converter.send(method, flow)
+        source = converter.send(method, flow, nil, internal_metadata: true)
         return unless source.include?('body_fingerprint')
 
         declaration = source.lines.index { _1.match?(/^\s*(?:microflow|nanoflow)\s/) }
@@ -1487,7 +1561,7 @@ module Mxrb
       def service_source(namespace, class_name, qualified, id, native_source: nil,
                          native_kind: :microflow)
         native = if native_source
-                   "\n    native :#{native_kind} do\n" \
+                   "\n    flow :#{native_kind} do\n" \
                      "#{indent(native_source, 6)}\n    end\n"
                  else
                    ''
@@ -1501,7 +1575,7 @@ module Mxrb
           #{native}
 
               def call(**arguments)
-                native_call(arguments)
+                execute_flow(arguments)
               end
             end
           end
@@ -1602,6 +1676,22 @@ module Mxrb
         container: %w[class style dynamic_class visible],
         date_picker: %w[attribute caption class style dynamic_class visible],
         drop_down: %w[attribute caption class style dynamic_class visible],
+        file_manager: %w[
+          allowed_extensions editable max_file_size show_file_in_browser mode tab_index
+          class style dynamic_class visible
+        ],
+        image_uploader: %w[
+          allowed_extensions caption editable max_file_size thumbnail_width thumbnail_height
+          tab_index class style dynamic_class visible
+        ],
+        image_viewer: %w[
+          entity alternative_text default_image force_full_objects width height width_unit
+          height_unit responsive show_as_thumbnail on_click_enlarge tab_index
+          class style dynamic_class visible
+        ],
+        menu_bar: %w[menu tab_index class style dynamic_class visible],
+        navigation_list: %w[tab_index class style dynamic_class visible],
+        navigation_tree: %w[menu tab_index class style dynamic_class visible],
         number_input: %w[attribute caption class style dynamic_class visible],
         page_title: %w[class style dynamic_class visible],
         pluggable_widget: %w[
@@ -1609,6 +1699,14 @@ module Mxrb
         ],
         radio_button_group: %w[attribute caption horizontal class style dynamic_class visible],
         reference_selector: %w[attribute caption display_attribute class style dynamic_class visible],
+        reference_set_selector: %w[
+          selection number_of_rows selectable_xpath control_bar select_first show_empty_rows
+          paging tab_index width_unit class style dynamic_class visible
+        ],
+        scroll_container: %w[
+          alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode
+          class style dynamic_class visible
+        ],
         snippet: %w[snippet],
         static_image: %w[
           image alternative_text width height width_unit height_unit responsive
@@ -1621,6 +1719,7 @@ module Mxrb
       DSL_SINK_BLOCK_METHODS = (DSL_SINK_OPTIONS.keys - [:snippet]).freeze
       DSL_SINK_REQUIRED_OPTIONS = {
         button: %w[caption], pluggable_widget: %w[widget_id widget_name properties],
+        image_viewer: %w[entity], menu_bar: %w[menu], navigation_tree: %w[menu],
         radio_button_group: %w[horizontal],
         snippet: %w[snippet],
         static_image: %w[image alternative_text width height width_unit height_unit responsive],
@@ -2251,7 +2350,12 @@ module Mxrb
       def runtime_widget_declaration(method_name, arguments, indentation, block)
         padding = ' ' * indentation
         invocation = [method_name, arguments.join(', ')].reject(&:empty?).join(' ')
-        single_line = "#{padding}#{invocation}"
+        positional_hash = arguments.one? && arguments.first.lstrip.start_with?('{')
+        single_line = if positional_hash
+                        "#{padding}#{method_name}(#{arguments.first})"
+                      else
+                        "#{padding}#{invocation}"
+                      end
         return "#{single_line}#{' do' if block}" if
           arguments.none? { _1.include?("\n") } && single_line.length <= 100
 
@@ -2334,14 +2438,38 @@ module Mxrb
       def copy_frontend_theme
         root = File.join(@output_dir, 'frontend', 'src', 'generated', 'platform')
         FileUtils.mkdir_p(root)
-        %w[theme themesource].each do |directory|
+        %w[theme themesource theme-cache].each do |directory|
           source = File.join(@mendix_sidecar, directory)
           next unless File.directory?(source)
 
           copy_frontend_web_assets(source, File.join(root, directory))
         end
-        fallback = File.join(root, 'theme', 'web', 'main.scss')
-        write(relative(fallback), '') unless File.file?(fallback)
+        copy_frontend_public_theme_assets(root)
+        fallback_scss = File.join(root, 'theme', 'web', 'main.scss')
+        write(relative(fallback_scss), '') unless File.file?(fallback_scss)
+        fallback_css = File.join(root, 'theme-cache', 'web', 'theme.compiled.css')
+        write(relative(fallback_css), '') unless File.file?(fallback_css)
+      end
+
+      def copy_frontend_public_theme_assets(root)
+        destination = File.join(root, 'theme-cache', 'web')
+        sources = Dir.glob(File.join(@mendix_sidecar, 'themesource', '*', 'public')).sort
+        sources << File.join(@mendix_sidecar, 'theme', 'web')
+        sources.select { File.directory?(_1) }.each do |source|
+          overlay_frontend_web_assets(source, destination)
+        end
+      end
+
+      def overlay_frontend_web_assets(source, destination)
+        Find.find(source) do |path|
+          relative_path = path.delete_prefix("#{source}/")
+          next if path == source || File.directory?(path)
+          next if %w[.js .jsx .scss].include?(File.extname(path).downcase)
+
+          target = File.join(destination, relative_path)
+          FileUtils.mkdir_p(File.dirname(target))
+          FileUtils.cp(path, target)
+        end
       end
 
       def copy_frontend_web_assets(source, destination)
@@ -2711,6 +2839,10 @@ module Mxrb
 
           export default defineConfig({
             plugins: [react()],
+            build: {
+              // Mendix accepts legacy selectors that Lightning CSS rejects while minifying.
+              cssMinify: false,
+            },
             css: {
               preprocessorOptions: {
                 scss: {

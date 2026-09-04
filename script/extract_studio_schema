@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require_relative '../lib/mxrb/studio_schema_catalog'
+
+unless (1..3).cover?(ARGV.size)
+  abort 'Usage: script/extract_studio_schema STUDIO_PAGE_EDITOR_MAIN_JS [OUTPUT.json] [MENDIX_VERSION]'
+end
+
+catalog = Mxrb::StudioSchemaCatalog.extract(ARGV.fetch(0), mendix_version: ARGV[2])
+json = "#{JSON.pretty_generate(catalog)}\n"
+ARGV[1] ? File.write(ARGV[1], json) : puts(json)

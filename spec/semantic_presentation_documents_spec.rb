@@ -24,11 +24,15 @@ RSpec.describe 'semantic presentation documents' do
       files = Dir[File.join(exported, 'modules', 'Presentation', 'presentation', '**', '*.rb')]
       ruby = files.map { File.read(_1) }.join("\n")
       expect(ruby).to include(
-        'layout_document :Shell', 'page_template_document :Starter',
-        'building_block_document :Card', 'snippet_document :Summary',
-        ':node_type => "Forms$DivContainer"', ':collection =>', ':binary =>'
+        'layout_document :Shell do', 'page_template_document :Starter do',
+        'building_block_document :Card do', 'snippet_document :Summary do',
+        'widgets(:div_container) do',
+        'image_data Mxrb::Forms::BinaryAsset.read(File.join(__dir__, '
       )
-      expect(ruby).not_to include('native_document', 'deep_structure:', 'bson_binary(')
+      expect(ruby).not_to include(
+        'native_document', 'deep_structure:', 'bson_binary(', '$ID', 'unit_id:',
+        'node_type:', 'collection:', 'binary:', '=>', '{', '}'
+      )
       native_source = File.read(File.join(exported, '.mxrb', 'native_units.rb'))
       PRESENTATION_DOCUMENT_TYPES.each { expect(native_source).not_to include(_1) }
 
@@ -114,11 +118,19 @@ RSpec.describe 'semantic presentation documents' do
 
   def presentation_documents(path)
     Mxrb.open(path) do |project|
-      documents = project.all_units.filter_map do |unit|
+      codec = Mxrb::Forms::MprCodec.new
+      project.all_units.filter_map do |unit|
         document = project.parse_bson(unit)
-        [unit['UnitID'], document] if PRESENTATION_DOCUMENT_TYPES.include?(document['$Type'])
-      end
-      documents.to_h
+        next unless PRESENTATION_DOCUMENT_TYPES.include?(document['$Type'])
+
+        model = codec.decode(document)
+        if (property = model.schema_type.property(:image_data)) &&
+           (asset = model.fetch(property.name)) && !asset.bytes.empty?
+          model.set(property.name, asset.at('preview'))
+        end
+        key = [document.fetch('$Type'), document.fetch('Name')]
+        [key, [unit.fetch('UnitID'), Mxrb::Forms::SourceEmitter.new.emit(model)]]
+      end.to_h
     end
   end
 

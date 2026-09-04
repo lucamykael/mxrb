@@ -22,13 +22,22 @@ module Mxrb
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[
-      constants enumerations models dtos services pages security scheduled_events
+      constants enumerations models dtos controllers services pages security scheduled_events
     ].freeze
 
     def self.application_files(root)
       ARTIFACT_DIRECTORIES.flat_map do |directory|
-        Dir.glob(File.join(root, 'app', directory, '**', '*.rb'))
+        files = Dir.glob(File.join(root, 'app', directory, '**', '*.rb'))
+        next files unless directory == 'controllers'
+
+        files.select { mxrb_controller_file?(_1) }
       end.sort
+    end
+
+    def self.mxrb_controller_file?(path)
+      source = File.read(path)
+      source.match?(/<\s*(?:::)?Mxrb::RubyApp::Controller\b/) ||
+        source.match?(/^\s*controller_name\b/)
     end
 
     def self.with_native_fragments(root, &block)
@@ -143,6 +152,7 @@ module Mxrb
         @constants = {}
         @enumerations = {}
         @records = {}
+        @controllers = {}
         @services = {}
         @pages = {}
         @module_security = {}
@@ -243,7 +253,7 @@ module Mxrb
         reset! unless defined?(@records) && @records
         {
           constant: @constants, enumeration: @enumerations, record: @records, service: @services,
-          page: @pages, module_security: @module_security,
+          controller: (@controllers ||= {}), page: @pages, module_security: @module_security,
           project_security: @project_security, scheduled_event: @scheduled_events,
           adapter: @adapters,
           java_custom_action: @java_custom_actions
@@ -538,6 +548,113 @@ module Mxrb
     # Explicit non-persistent model. Its generated filename and class always
     # end in `_dto` / `Dto`, avoiding ambiguous `_2` fallbacks.
     class DTO < Record; end
+
+    # Application-owned HTTP controller. Routes remain declared by published
+    # REST endpoints; controllers receive actions and use these typed CRUD helpers.
+    class Controller
+      class << self
+        attr_reader :registered_name
+
+        def controller_name(name)
+          value = name.to_s
+          raise ArgumentError, 'controller name cannot be empty' if value.empty?
+
+          @registered_name = value
+          Registry.register(:controller, value, self)
+        end
+      end
+
+      attr_reader :application, :context
+
+      def initialize(application, context: nil)
+        @application = application
+        @context = context
+      end
+
+      def all(model)
+        application.records(entity_name(model), context:)
+      end
+
+      def find(model, id)
+        application.record(entity_name(model), id, context:)
+      end
+
+      def find!(model, id)
+        find(model, id) || raise(NotFoundError, "#{entity_name(model)} #{id} not found")
+      end
+
+      def find_by(model, **attributes)
+        expected = mendix_attributes(model, attributes)
+        all(model).find do |record|
+          members = record.fetch(:attributes)
+          expected.all? do |name, value|
+            actual = members[name]
+            actual == value || (!actual.nil? && !value.nil? && actual.to_s == value.to_s)
+          end
+        end
+      end
+
+      def find_by!(model, **attributes)
+        find_by(model, **attributes) ||
+          raise(NotFoundError, "#{entity_name(model)} matching #{attributes.keys.join(', ')} not found")
+      end
+
+      def create(model, attributes = nil, **values)
+        attributes = values if attributes.nil?
+        application.create_record(
+          entity_name(model), mendix_attributes(model, attributes), context:
+        )
+      end
+
+      def update(model, id, attributes = nil, **values)
+        attributes = values if attributes.nil?
+        result = application.update_record(
+          entity_name(model), id, mendix_attributes(model, attributes), context:
+        )
+        result || raise(NotFoundError, "#{entity_name(model)} #{id} not found")
+      end
+
+      def destroy(model, id)
+        deleted = application.delete_record(entity_name(model), id, context:)
+        raise NotFoundError, "#{entity_name(model)} #{id} not found" unless deleted
+
+        true
+      end
+
+      def update_by(model, attribute:, value:, **attributes)
+        record = find_by!(model, attribute => value)
+        update(model, record.fetch(:id), attributes)
+      end
+
+      def destroy_by(model, attribute:, value:)
+        record = find_by!(model, attribute => value)
+        destroy(model, record.fetch(:id))
+      end
+
+      def model(name)
+        Registry.fetch(:record, name.to_s) ||
+          raise(ValidationError, "model #{name} is not registered")
+      end
+
+      private
+
+      def entity_name(model)
+        return model.mendix_name if model.is_a?(Class) && model <= Record
+
+        raise ArgumentError, 'CRUD helpers require an Mxrb::RubyApp::Record class'
+      end
+
+      def mendix_attributes(model, attributes)
+        attributes.to_h.to_h do |name, value|
+          member = model.attributes.find do |candidate|
+            [candidate.fetch(:name), candidate.fetch(:mendix_name)].map(&:to_s).include?(name.to_s)
+          end
+          raise ArgumentError, "unknown #{model.mendix_name} attribute #{name}" unless member
+
+          [member.fetch(:mendix_name), value]
+        end
+      end
+    end
 
     # Editable Mendix enumeration definition. Generated Ruby sources retain
     # document/value ids and every standard localized caption.
@@ -835,7 +952,7 @@ module Mxrb
     # pure-Ruby native interpreter and can be replaced with idiomatic Ruby.
     class Service
       class << self
-        attr_reader :mendix_id, :native_definition, :native_kind
+        attr_reader :mendix_id, :native_definition, :native_kind, :controller_definition
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -845,16 +962,15 @@ module Mxrb
           Registry.register(:service, @mendix_name, self, unit_id: @mendix_id)
         end
 
-        # Declares the Mendix-native representation of this Ruby service.
-        # The block uses the same typed flow DSL as project.rb, so one source
-        # can run through MXRB and materialize as a microflow or nanoflow.
-        def native(kind = :microflow, public: false, &block)
+        # Declares how this Ruby service materializes as a Mendix flow. The
+        # typed block is ordinary editable Ruby and supports both runtimes.
+        def flow(kind = :microflow, public: false, &block)
           qualified = require_qualified_mendix_name!
           runtime, flow_kind = case kind.to_sym
                                when :microflow then %i[server use_case]
                                when :nanoflow then %i[client client_action]
                                else
-                                 raise ArgumentError, 'native service kind must be microflow or nanoflow'
+                                 raise ArgumentError, 'flow kind must be microflow or nanoflow'
                                end
           unit_id = native_unit_id(kind)
           @mendix_id = unit_id if @mendix_id.to_s.empty?
@@ -866,13 +982,29 @@ module Mxrb
           @native_definition = builder.to_h
         end
 
+        # Compatibility for Ruby applications exported before `flow` became
+        # the public, domain-oriented name.
+        alias native flow
+
+        def controller(controller_class, action:)
+          unless controller_class.is_a?(String) || controller_class.is_a?(Symbol) ||
+                 (controller_class.is_a?(Class) && controller_class <= Controller)
+            raise ArgumentError, 'controller must be a registered name or RubyApp::Controller class'
+          end
+
+          action_name = action.to_sym
+          raise ArgumentError, 'controller action cannot be empty' if action_name.to_s.empty?
+
+          @controller_definition = { controller: controller_class, action: action_name }.freeze
+        end
+
         private
 
         def require_qualified_mendix_name!
           value = @mendix_name.to_s
           return value if value.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
 
-          raise ArgumentError, 'call mendix_name with Module.Document before native'
+          raise ArgumentError, 'call mendix_name with Module.Document before flow'
         end
 
         def native_unit_id(kind)
@@ -892,7 +1024,20 @@ module Mxrb
 
       private
 
+      def execute_flow(arguments) = native_call(arguments)
+
       def native_call(arguments)
+        if (definition = self.class.controller_definition)
+          controller_class = definition.fetch(:controller)
+          unless controller_class.is_a?(Class)
+            controller_class = Registry.fetch(:controller, controller_class.to_s)
+            raise ValidationError, "controller #{definition.fetch(:controller)} is not registered" \
+              unless controller_class
+          end
+          controller = controller_class.new(@application, context: @context)
+          return controller.public_send(definition.fetch(:action), **arguments.transform_keys(&:to_sym))
+        end
+
         @application.native_call(self.class.mendix_name, arguments, context: @context)
       end
     end
@@ -911,9 +1056,10 @@ module Mxrb
         STRUCTURED_METHODS = %i[data_view layout_grid native_widget tab_control table].freeze
         WIDGET_METHODS = %i[
           button check_box container data_grid data_view date_picker drop_down gallery
-          native_widget layout_grid
-          number_input page_title pluggable_widget radio_button_group reference_selector
-          snippet static_image tab_control table text text_area text_box
+          file_manager image_uploader image_viewer native_widget layout_grid menu_bar
+          navigation_list navigation_tree number_input page_title
+          pluggable_widget radio_button_group reference_selector reference_set_selector
+          scroll_container snippet static_image tab_control table text text_area text_box
         ].freeze
 
         attr_reader :widgets
@@ -985,8 +1131,8 @@ module Mxrb
           append_structured(builder, declared_fields: false)
         end
 
-        def tab_control(name = '', &block)
-          builder = Dsl::WidgetBuilder.new(:tab_control, name)
+        def tab_control(name = '', **options, &block)
+          builder = Dsl::WidgetBuilder.new(:tab_control, name, **options)
           builder.instance_eval(&block) if block
           append_structured(builder, declared_fields: false)
         end
@@ -1391,7 +1537,7 @@ module Mxrb
       def request_arguments(service, path_parameters, query, body, context: nil)
         supplied = path_parameters.to_h.merge(query.to_h).transform_keys(&:to_s)
         supplied.merge!(body.transform_keys(&:to_s)) if body.is_a?(Hash)
-        parameters = service.fetch('parameters', [])
+        parameters = service.fetch('parameters', []).reject { rest_context_parameter?(_1) }
         unresolved = parameters.reject { |parameter| request_value(supplied, parameter.fetch('name')).first }
         if body && unresolved.one? && !body_matches_parameters?(body, parameters)
           supplied[unresolved.first.fetch('name')] = body
@@ -1409,6 +1555,10 @@ module Mxrb
       def request_value(values, name)
         key = values.keys.find { _1.casecmp?(name.to_s) }
         [!key.nil?, key && values[key]]
+      end
+
+      def rest_context_parameter?(parameter)
+        %w[System.HttpRequest System.HttpResponse].include?(parameter['entity'].to_s)
       end
 
       def body_matches_parameters?(body, parameters)
@@ -1693,7 +1843,14 @@ module Mxrb
 
           plan.apply!
         end
-        (registered.keys - source_names).each { add_entity(project, _1, registered.fetch(_1)) }
+        (registered.keys - source_names).each do |name|
+          implementation = registered.fetch(name)
+          if project.find_artifact(name, kind: :entity)
+            synchronize_entity(project, name, implementation)
+          else
+            add_entity(project, name, implementation)
+          end
+        end
         (source_names & registered.keys).each { synchronize_entity(project, _1, registered.fetch(_1)) }
       end
 
@@ -1855,7 +2012,11 @@ module Mxrb
 
       def synchronize_native_documents(project)
         services = Registry.all(:service).values.select(&:native_definition)
-        pages = Registry.all(:page).values.select(&:native_definition)
+        pages = if File.exist?(File.join(@root, '.mxrb', 'preserve_native_pages'))
+                  []
+                else
+                  Registry.all(:page).values.select(&:native_definition)
+                end
         modules = (services + pages).group_by { module_name(_1.mendix_name) }
         writer = Writer.new(@target, version: project.mendix_version, modules: [])
         modules.each do |name, implementations|
@@ -2203,8 +2364,13 @@ module Mxrb
             if route['requires_authentication'] && authorization.to_s.empty?
 
           body = request.body.to_s.empty? ? nil : request_json(request)
+          route_context = if !route['requires_authentication'] && authorization.to_s.empty?
+                            nil
+                          else
+                            context
+                          end
           result = application.invoke_rest(
-            route, path_parameters:, query: request.query.to_h, body:, context:
+            route, path_parameters:, query: request.query.to_h, body:, context: route_context
           )
           cors(response) if route['enable_cors']
           status = Integer(route.fetch('success_status', 200))
@@ -2231,6 +2397,8 @@ module Mxrb
         render_json(response, 401, error('unauthorized', e.message))
       rescue Runtime::AuthorizationError => e
         render_json(response, 403, error('forbidden', e.message))
+      rescue NotFoundError => e
+        render_json(response, 404, error('not_found', e.message))
       rescue NativeRuntimeError => e
         render_json(response, 422, error('runtime_error', e.message))
       end
