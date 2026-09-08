@@ -296,7 +296,7 @@ module Mxrb
         end
 
         entity = value['EntityRef'] && decode_entity_reference(value['EntityRef'], path: "#{path}.EntityRef")
-        AttributeReference.new(value.fetch('Attribute', '').to_s.freeze, entity)
+        AttributeReference.new(value.fetch('Attribute', ''), entity)
       end
 
       def decode_entity_reference(value, path:)
@@ -625,7 +625,10 @@ module Mxrb
           value.assigned_outer.each_value { walk_typed_nodes(_1, &block) }
           walk_typed_nodes(value.object, &block)
         when Pluggable::ObjectNode
-          value.assignments.each { walk_typed_nodes(_1.value, &block) }
+          value.assignments.each do |assignment|
+            walk_typed_nodes(assignment.value, &block)
+            walk_typed_nodes(assignment.source_variable, &block)
+          end
         when Pluggable::XPathSource
           walk_typed_nodes(value.sort_bar, &block)
           walk_typed_nodes(value.source_variable, &block)

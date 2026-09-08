@@ -10,6 +10,10 @@ require_relative "presentation_documents"
 require_relative "asset_documents"
 require_relative "artifact_documents"
 require_relative "project_documents"
+require_relative "flow_page_builder"
+require_relative "flow_text_builder"
+require_relative "flow_rest_builder"
+require_relative "widget_event_arguments"
 
 module Mxrb
   module Dsl
@@ -396,13 +400,15 @@ module Mxrb
         _widget_list << cb.to_h
       end
 
-      def pluggable_widget(name, widget_id:, widget_name: nil, properties: {}, class_name: nil,
+      def pluggable_widget(name, widget_id:, widget_name: nil, properties: UNSET, class_name: nil,
                            style: nil, dynamic_class: nil, visible: nil, platform: nil, &block)
+        properties_declared = !properties.equal?(UNSET)
+        properties = {} unless properties_declared
         options = {
           widget_id: widget_id.to_s, widget_name: (widget_name || name).to_s,
           properties:, class: class_name, style:, dynamic_class:, visible:, platform:
         }.compact
-        builder = PluggableWidgetBuilder.new(name, options:)
+        builder = PluggableWidgetBuilder.new(name, options:, properties_declared:)
         builder.instance_eval(&block) if block
         _widget_list << builder.to_h
       end
@@ -472,18 +478,32 @@ module Mxrb
 
     module WidgetEvents
       %i[on_change on_click on_enter on_leave].each do |event|
-        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: {}|
+        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET, &block|
+          if block && !pass.equal?(UNSET)
+            raise ArgumentError, "#{event} accepts either pass: or an argument block"
+          end
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
+
+          pass = {} if pass.equal?(UNSET)
           raise ArgumentError, "#{event} pass: must be a Hash" unless pass.is_a?(Hash)
 
           declaration = {
             event:, kind: choices.keys.first, handler: choices.values.first.to_s
           }
-          declaration[:arguments] = pass unless pass.empty?
-          @events << declaration
+          if block
+            declaration[:arguments] = WidgetEventArguments.new.evaluate(&block).arguments
+            declaration = WidgetEventArguments.snapshot(declaration)
+          else
+            declaration[:arguments] = pass unless pass.empty?
+          end
+          widget_event_collection << declaration
         end
       end
+
+      private
+
+      def widget_event_collection = @events
     end
 
     # Builds sub-widgets inside a data_grid column sub-items or inside a container.
@@ -641,8 +661,20 @@ module Mxrb
     end
 
     class PluggableWidgetBuilder < GenericWidgetBuilder
-      def initialize(name, options:)
+      def initialize(name, options:, properties_declared: options.key?(:properties))
         super(:pluggable_widget, name, options:, events: [])
+        @properties_declared = properties_declared
+      end
+
+      def properties(&block)
+        raise ArgumentError, 'properties requires a block' unless block
+        raise ArgumentError, 'widget accepts either properties: or a properties block' if @properties_declared
+        raise ArgumentError, 'widget accepts only one properties block' if @properties_block
+
+        bridge = RubyApp::PluggableProperties.for_widget(@name, widget_id: @options.fetch(:widget_id))
+        projection = bridge.evaluate(&block).to_projection
+        @options = @options.merge(properties: projection)
+        @properties_block = true
       end
 
       def slot(name = nil, within: nil, item: nil, path: nil, role: UNSET, &block)
@@ -2599,7 +2631,18 @@ module Mxrb
       end
 
       def show_message(text = nil, type: :information, blocking: false,
-                       translations: nil, parameters: [])
+                       translations: UNSET, parameters: UNSET, &block)
+        if block
+          unless translations.equal?(UNSET) && parameters.equal?(UNSET)
+            raise ArgumentError, 'show_message accepts either translations:/parameters: or a block'
+          end
+          builder = FlowTextBuilder.new.evaluate(&block)
+          translations = builder.translations
+          parameters = builder.parameters
+        else
+          translations = nil if translations.equal?(UNSET)
+          parameters = [] if parameters.equal?(UNSET)
+        end
         _acts << {
           type: :show_message, text: text.to_s, message_type: type.to_s,
           blocking: blocking,
@@ -2616,12 +2659,25 @@ module Mxrb
         }
       end
 
-      def show_page(page, object: nil, location: nil, pass: {}, close_pages: nil,
-                    title: nil)
+      def show_page(page, object: nil, location: nil, pass: UNSET, close_pages: nil,
+                    title: nil, &block)
+        if block
+          unless pass.equal?(UNSET) && title.nil?
+            raise ArgumentError, 'show_page accepts either pass:/title: or a block'
+          end
+
+          builder = FlowPageBuilder.new
+          block.arity == 1 ? block.call(builder) : builder.instance_eval(&block)
+          mappings = builder.mappings
+          title = builder.title_translations
+        else
+          pass = {} if pass.equal?(UNSET)
+          mappings = pass.map { |parameter, value| { parameter: parameter.to_s, value: value } }
+        end
         _acts << {
           type: :show_page, page: page.to_s, variable: object&.to_s,
           location: location&.to_s,
-          mappings: pass.map { |parameter, value| { parameter: parameter.to_s, value: value } },
+          mappings: mappings,
           close_pages: close_pages, title: title
         }
       end
@@ -2665,7 +2721,18 @@ module Mxrb
       end
 
       def validation_feedback(variable, attribute: nil, association: nil,
-                              translations: {}, parameters: [], error: :rollback)
+                              translations: UNSET, parameters: UNSET, error: :rollback, &block)
+        if block
+          unless translations.equal?(UNSET) && parameters.equal?(UNSET)
+            raise ArgumentError, 'validation_feedback accepts either translations:/parameters: or a block'
+          end
+          builder = FlowTextBuilder.new.evaluate(&block)
+          translations = builder.translations
+          parameters = builder.parameters
+        else
+          translations = {} if translations.equal?(UNSET)
+          parameters = [] if parameters.equal?(UNSET)
+        end
         _acts << {
           type: :validation_feedback, variable: variable.to_s,
           attribute: attribute.to_s, association: association.to_s,
@@ -2674,7 +2741,7 @@ module Mxrb
         }
       end
 
-      def call_rest(method:, location:, location_parameters: [], headers: {},
+      def call_rest(method:, location:, location_parameters: [], headers: UNSET,
                     request_mapping: nil, request_variable: nil,
                     request_body: nil, request_parameters: [],
                     result_mapping: nil, as: nil, result_entity: nil,
@@ -2682,7 +2749,7 @@ module Mxrb
                     result_handling: :mapping,
                     result_content_type: :json, force_single: false, single: false,
                     object_handling: :create, parameter_variable: nil,
-                    error_result: :http_response, error: :rollback)
+                    error_result: :http_response, error: :rollback, &block)
         handling = result_handling.to_sym
         unless REST_RESULT_HANDLING_TYPES.include?(handling)
           raise ArgumentError, "unsupported REST result handling #{result_handling.inspect}"
@@ -2693,10 +2760,19 @@ module Mxrb
           raise ArgumentError, "string REST result handling does not accept a result mapping or entity"
         end
 
+        if block
+          raise ArgumentError, 'call_rest accepts either headers: or a header block' unless headers.equal?(UNSET)
+
+          headers = FlowRestBuilder.new.evaluate(&block).headers
+        else
+          headers = {} if headers.equal?(UNSET)
+          headers = headers.transform_keys(&:to_s)
+        end
+
         _acts << {
           type: :call_rest, method: method.to_s, location: location.to_s,
           location_parameters: Array(location_parameters),
-          headers: headers.transform_keys(&:to_s),
+          headers: headers,
           request_mapping: request_mapping.to_s,
           request_variable: request_variable.to_s,
           request_body: _optional_string(request_body),
@@ -2812,6 +2888,12 @@ module Mxrb
         _acts << builder.to_h
       end
 
+      def rule_decision(rule, &block)
+        builder = RuleDecisionBuilder.new(rule, allow_break: _break_allowed?)
+        block.arity == 1 ? block.call(builder) : builder.instance_eval(&block) if block
+        _acts << builder.to_h
+      end
+
       def loop_over(variable, as: nil, &block)
         lb = LoopBuilder.new(variable.to_s, as: (as || variable).to_s)
         lb.instance_eval(&block) if block
@@ -2880,6 +2962,7 @@ module Mxrb
 
     class FlowBuilder # rubocop:disable Metrics/ClassLength
       include FlowBodyDsl
+      attr_reader :expected_body_fingerprint
 
       def initialize(name, runtime:, kind:, public:, unit_id: nil, metadata: nil)
         @metadata             = metadata || {}
@@ -3062,6 +3145,40 @@ module Mxrb
         { type: :decision, condition: @condition,
           true_branch: @true_branch, false_branch: @false_branch,
           branches: @branches }
+      end
+    end
+
+    # Rule conditions share the ordinary branch DSL and preserve ordered
+    # argument mappings, including repeated parameter names from native flows.
+    class RuleDecisionBuilder < DecisionBuilder
+      def initialize(rule, allow_break: false)
+        super({ rule: rule.to_s.dup.freeze, pass: {} }, allow_break:)
+        @arguments = []
+      end
+
+      def argument(parameter, value)
+        value = value.dup.freeze if value.is_a?(String)
+        @arguments << [parameter.to_s.dup.freeze, value].freeze
+      end
+
+      def to_h
+        mappings = if @arguments.map(&:first).uniq.size == @arguments.size
+                     @arguments.to_h.freeze
+                   else
+                     @arguments.dup.freeze
+                   end
+        snapshot(super.merge(condition: @condition.merge(pass: mappings)))
+      end
+
+      private
+
+      def snapshot(value)
+        case value
+        when Hash then value.to_h { |key, child| [snapshot(key), snapshot(child)] }.freeze
+        when Array then value.map { snapshot(_1) }.freeze
+        when String then value.dup.freeze
+        else value
+        end
       end
     end
 

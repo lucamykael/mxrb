@@ -87,22 +87,33 @@ module Mxrb
 
       def encode_collection(collection, baseline, path)
         previous_items = bson_items(baseline)
-        consumed = {}
+        matches, consumed = collection_matches(collection.items, previous_items)
         items = collection.items.each_with_index.map do |item, index|
-          previous_index = matching_index(item, previous_items, consumed, index)
+          previous_index = matches[index] || positional_node_index(item, previous_items, consumed, index)
           consumed[previous_index] = true if previous_index
-          encode_value(item, previous_index && previous_items[previous_index], [*path, index])
+          encode_value(item, previous_index && previous_items[previous_index], [*path, index, *identity_key(item)])
         end
         IO::BsonCodec.build_array(items, marker: collection.marker)
       end
 
-      def matching_index(item, previous, consumed, index)
-        return index if !item.is_a?(Node) && index < previous.length
-        return unless item.is_a?(Node)
+      def collection_matches(items, previous)
+        consumed = {}
+        matches = items.map do |item|
+          next unless item.is_a?(Node)
 
-        key_field = %w[Name Code ActionActivityType ModuleName].find { item.fields.key?(_1) }
-        matching_node_index(item, previous, consumed, key_field) ||
-          positional_node_index(item, previous, index)
+          key_field = identity_key(item).first
+          match = matching_node_index(item, previous, consumed, key_field)
+          consumed[match] = true if match
+          match
+        end
+        [matches, consumed]
+      end
+
+      def identity_key(item)
+        return [] unless item.is_a?(Node)
+
+        field = %w[Name Code ActionActivityType ModuleName].find { item.fields.key?(_1) }
+        field ? [field, item.fields[field]] : []
       end
 
       def matching_node_index(item, previous, consumed, key_field)
@@ -114,7 +125,9 @@ module Mxrb
         end
       end
 
-      def positional_node_index(item, previous, index)
+      def positional_node_index(item, previous, consumed, index)
+        return if consumed[index] || !item.is_a?(Node)
+
         value = previous[index]
         index if value.is_a?(Hash) && value['$Type'] == item.storage_type
       end

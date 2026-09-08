@@ -343,16 +343,24 @@ RSpec.describe 'Ruby-first native materialization' do
       source_text = File.read(enumeration_path)
       expect(source_text).to include(
         'class OrderStatus < Mxrb::RubyApp::Enumeration',
-        '"pt_BR" => "Novo pedido"'
+        'translation "pt_BR", "Novo pedido"',
+        '    value "New" do', '    value "Done" do'
       )
+      expect(source_text).not_to include(original_ids[:document], *original_ids.fetch(:values).values)
+      manifest_enum = Mxrb::RubyApp::Manifest.load(ruby_root).modules.first.fetch('enumerations')
+                             .find { _1.fetch('name') == 'App.OrderStatus' }
+      expect(manifest_enum.fetch('id')).to eq(original_ids[:document])
+      expect(manifest_enum.fetch('values').to_h { [_1.fetch('name'), _1.fetch('id')] })
+        .to eq(original_ids.fetch(:values))
       source_text = source_text.sub('App.OrderStatus', 'App.FulfillmentStatus')
                                .sub('Original statuses', 'Ruby statuses')
                                .sub(
-                                 /value "New".*$/,
-                                 "value \"Open\", id: #{original_ids.dig(:values, 'New').inspect}, " \
-                                 'captions: {"en_US"=>"Open order", "pt_BR"=>"Pedido aberto"}'
+                                 /^    value "New" do\n.*?^    end$/m,
+                                 "    value \"Open\", renamed_from: \"New\" do\n" \
+                                 "      translation \"en_US\", \"Open order\"\n" \
+                                 "      translation \"pt_BR\", \"Pedido aberto\"\n    end"
                                )
-                               .lines.reject { _1.include?('value "Done"') }.join
+                               .sub(/^    value "Done" do\n.*?^    end\n/m, "    remove_value \"Done\"\n")
       source_text = source_text.sub(
         "  end\nend\n",
         "    value \"Pending\", captions: {\"en_US\"=>\"Pending\"}\n  end\nend\n"

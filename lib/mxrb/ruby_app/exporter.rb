@@ -51,6 +51,10 @@ module Mxrb
         runtime_mpr = copy_runtime_mpr
         embedded_sources = read_embedded_sources
         @embedded_sources = embedded_sources
+        @embedded_source_paths = embedded_sources.to_h { [_1.fetch(:path), true] }
+        @embedded_identities = SourceIdentity.read_bundle(embedded_sources).to_h do |identity|
+          [[identity.fetch('kind'), identity.fetch('id')], identity]
+        end
         Mxrb.open(@mpr_path) do |project|
           @project = project
           @known_entity_names = project.modules.flat_map do |mod|
@@ -59,7 +63,9 @@ module Mxrb
           @coverage = []
           @nanoflow_entries = []
           @page_entries = []
-          modules = project.modules.map { export_module(_1) }
+          modules = PluggableProperties.with_mpr(project.mpr) do
+            project.modules.map { export_module(_1) }
+          end
           @security_manifest = export_project_security(project)
           @module_manifests = modules
           write_support_files
@@ -72,6 +78,8 @@ module Mxrb
       ensure
         @project = nil
         @embedded_sources = nil
+        @embedded_source_paths = nil
+        @embedded_identities = nil
         @module_manifests = nil
         @security_manifest = nil
         @known_entity_names = nil
@@ -95,6 +103,20 @@ module Mxrb
         JSON.parse(File.read(path)).fetch('operations')
       rescue JSON::ParserError, KeyError => e
         raise SerializationError, "invalid REST metadata sidecar #{path}: #{e.message}"
+      end
+
+      def embedded_identity(kind, id)
+        identity = @embedded_identities&.fetch([kind.to_s, id.to_s], nil)
+        identity if identity && @embedded_source_paths&.key?(identity.fetch('path'))
+      end
+
+      def embedded_identity_path(kind, id)
+        embedded_identity(kind, id)&.fetch('path')
+      end
+
+      def embedded_identity_class(kind, id, fallback)
+        name = embedded_identity(kind, id)&.fetch('ruby_class', nil).to_s
+        name.empty? ? fallback : name
       end
 
       def restore_embedded_sources(files)
@@ -217,6 +239,9 @@ module Mxrb
           'endpoints' => endpoints,
           'constants' => mod.constants.map { export_constant(mod, _1, namespace, root) },
           'enumerations' => mod.enumerations.map { export_enumeration(mod, _1, namespace, root) },
+          'regular_expressions' => mod.domain_documents.filter_map do |document|
+            export_regular_expression(mod, document, namespace, root) if document[:type] == RegularExpression::TYPE
+          end,
           'associations' => mod.associations.map { association_manifest(mod, _1) },
           'scheduled_events_authoritative' => true,
           'scheduled_events' => mod.scheduled_events.map do |event|
@@ -228,7 +253,8 @@ module Mxrb
       def export_module_security(mod, namespace, root)
         id = mod.module_security_id.to_s
         qualified = "#{mod.name}.ModuleSecurity"
-        relative = embedded_security_path(id, mod.name, module_security: true) ||
+        relative = embedded_identity_path(:module_security, id) ||
+                   embedded_security_path(id, mod.name, module_security: true) ||
                    File.join('app', 'security', root, 'module_security.rb')
         roles = mod.module_roles.map do |role|
           {
@@ -237,7 +263,10 @@ module Mxrb
             'description' => role.fetch(:description, '').to_s
           }
         end
-        manifest = { 'id' => id, 'name' => qualified, 'roles' => roles, 'path' => relative }
+        manifest = {
+          'id' => id, 'name' => qualified, 'roles' => roles, 'path' => relative,
+          'ruby_class' => embedded_identity_class(:module_security, id, "#{namespace}::Security")
+        }
         write(relative, module_security_source(namespace, mod.name, manifest))
         add_coverage(id, qualified, 'module_security', relative, 'executable_bidirectional') \
           unless id.empty?
@@ -254,7 +283,7 @@ module Mxrb
         unit, document = pair
         id = native_identifier(document['$ID'])
         id = unit.fetch('UnitID').to_s if id.empty?
-        relative = embedded_security_path(id, 'ProjectSecurity') ||
+        relative = embedded_identity_path(:project_security, id) || embedded_security_path(id, 'ProjectSecurity') ||
                    File.join('app', 'security', 'project_security.rb')
         policy = document['PasswordPolicySettings'] if document['PasswordPolicySettings'].is_a?(Hash)
         manifest = {
@@ -278,7 +307,7 @@ module Mxrb
         }
         write(relative, project_security_source(manifest))
         add_coverage(id, 'ProjectSecurity', 'project_security', relative, 'executable_bidirectional')
-        manifest.merge('path' => relative)
+        manifest.merge('path' => relative, 'ruby_class' => embedded_identity_class(:project_security, id, 'ApplicationSecurity'))
       end
 
       def project_user_role_manifest(role)
@@ -321,7 +350,7 @@ module Mxrb
                                 )
                               }
                             end
-        relative = embedded_scheduled_event_path(id, qualified) ||
+        relative = embedded_identity_path(:scheduled_event, id) || embedded_scheduled_event_path(id, qualified) ||
                    File.join('app', 'scheduled_events', root, "#{underscore(name)}.rb")
         manifest = {
           'name' => qualified, 'id' => id, 'documentation' => event['Documentation'].to_s,
@@ -334,7 +363,8 @@ module Mxrb
           'interval_type' => event['IntervalType'].to_s,
           'interval' => event.fetch('Interval', 1),
           'schedule' => schedule_manifest,
-          'path' => relative
+          'path' => relative,
+          'ruby_class' => embedded_identity_class(:scheduled_event, id, "#{namespace}::#{ruby_constant(name)}")
         }
         write(relative, scheduled_event_source(namespace, ruby_constant(name), manifest))
         add_coverage(id, qualified, 'scheduled_event', relative, 'executable_bidirectional')
@@ -347,7 +377,7 @@ module Mxrb
         base_name = underscore(entity.name)
         base_name = "#{base_name}_dto" if dto && !base_name.end_with?('_dto')
         category = dto ? 'dtos' : 'models'
-        relative = File.join('app', category, root, "#{base_name}.rb")
+        relative = embedded_identity_path(:record, entity.id) || File.join('app', category, root, "#{base_name}.rb")
         qualified = "#{mod.name}.#{entity.name}"
         attributes = entity.attributes.map { attribute_manifest(_1) }
         module_associations = mod.respond_to?(:associations) ? mod.associations : []
@@ -381,7 +411,8 @@ module Mxrb
         )
         add_coverage(entity.id, qualified, dto ? 'dto' : 'model', relative, 'executable_bidirectional')
         {
-          'name' => qualified, 'id' => entity.id, 'ruby_class' => "#{namespace}::#{class_name}",
+          'name' => qualified, 'id' => entity.id,
+          'ruby_class' => embedded_identity_class(:record, entity.id, "#{namespace}::#{class_name}"),
           'path' => relative, 'dto' => dto, 'persistable' => entity.persistable == true,
           'attributes' => attributes,
           'associations' => associations,
@@ -520,7 +551,7 @@ module Mxrb
 
       def export_service(flow, mod, namespace, root, kind, duplicate_name: false)
         class_name = flow_ruby_constant(flow, duplicate_name:)
-        relative = File.join(
+        relative = embedded_identity_path(:service, flow.id) || File.join(
           'app', 'services', root, "#{flow_file_stem(flow, duplicate_name:)}.rb"
         )
         qualified = "#{mod.name}.#{flow.name}"
@@ -533,7 +564,7 @@ module Mxrb
         add_coverage(flow.id, qualified, kind.to_s, relative, status)
         {
           'name' => qualified, 'id' => flow.id,
-          'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
+          'ruby_class' => embedded_identity_class(:service, flow.id, "#{namespace}::#{class_name}"), 'path' => relative,
           'kind' => kind.to_s, 'parameters' => flow.parameters.map { flow_parameter_manifest(_1) },
           'allowed_module_roles' => flow.allowed_module_roles.map(&:to_s)
         }
@@ -651,7 +682,8 @@ module Mxrb
         )
         write(relative, nanoflow_typescript(flow, qualified))
         native_source = native_flow_source(flow, :nanoflow)
-        ruby_path = File.join(
+        embedded_ruby_path = embedded_identity_path(:service, flow.id)
+        ruby_path = embedded_ruby_path || File.join(
           'app', 'services', root, "#{flow_file_stem(flow, duplicate_name:)}_nanoflow.rb"
         )
         if native_source
@@ -667,11 +699,16 @@ module Mxrb
           'name' => qualified, 'id' => flow.id, 'path' => relative,
           'kind' => 'nanoflow', 'runtime' => 'frontend'
         }
-        entry['ruby_path'] = ruby_path if native_source
+        if native_source || embedded_ruby_path
+          entry['ruby_path'] = ruby_path
+          entry['ruby_class'] = embedded_identity_class(
+            :service, flow.id, "#{namespace}::#{flow_ruby_constant(flow, duplicate_name:)}"
+          )
+        end
         @nanoflow_entries << entry.merge('import_name' => "Nanoflow#{@nanoflow_entries.size}")
         add_coverage(
-          flow.id, qualified, 'nanoflow', native_source ? ruby_path : relative,
-          native_source ? 'native_projection_source_preserved' : 'frontend_executable'
+          flow.id, qualified, 'nanoflow', native_source || embedded_ruby_path ? ruby_path : relative,
+          native_source || embedded_ruby_path ? 'native_projection_source_preserved' : 'frontend_executable'
         )
         entry
       end
@@ -688,7 +725,9 @@ module Mxrb
         declaration = source.lines.index { _1.match?(/^\s*(?:microflow|nanoflow)\s/) }
         return unless declaration
 
-        source.lines[(declaration + 1)...-1].map { _1.delete_prefix('  ') }.join.rstrip
+        source.lines[(declaration + 1)...-1]
+              .reject { _1.match?(/^\s*body_fingerprint\b/) }
+              .map { _1.delete_prefix('  ') }.join.rstrip
       rescue StandardError, SyntaxError
         nil
       end
@@ -948,7 +987,8 @@ module Mxrb
 
       def export_page(page, mod, namespace, root)
         class_name = ruby_constant(page.name, suffix: 'Page')
-        relative = File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
+        relative = embedded_identity_path(:page, page.id) ||
+                   File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
         qualified = "#{mod.name}.#{page.name}"
         widgets = page.widgets.map { widget_manifest(_1) }
         write(
@@ -961,7 +1001,7 @@ module Mxrb
         add_coverage(page.id, qualified, 'page', relative, 'native_projection_source_preserved')
         manifest = {
           'name' => qualified, 'id' => page.id, 'title' => page.title,
-          'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
+          'ruby_class' => embedded_identity_class(:page, page.id, "#{namespace}::#{class_name}"), 'path' => relative,
           'appearance_class' => page.appearance_class,
           'appearance_style' => page.appearance_style,
           'data_source' => page.data_source,
@@ -1059,12 +1099,12 @@ module Mxrb
         class_name = ruby_constant(name)
         id = native_identifier(enumeration['$ID'])
         qualified = "#{mod.name}.#{name}"
-        relative = embedded_enumeration_path(id, qualified) ||
+        relative = embedded_identity_path(:enumeration, id) || embedded_enumeration_path(id, qualified) ||
                    File.join('app', 'enumerations', root, "#{underscore(name)}.rb")
         manifest = {
           'name' => qualified,
           'id' => id,
-          'ruby_class' => "#{namespace}::#{class_name}",
+          'ruby_class' => embedded_identity_class(:enumeration, id, "#{namespace}::#{class_name}"),
           'path' => relative,
           'documentation' => enumeration['Documentation'].to_s,
           'values' => native_items(enumeration['Values']).map do |value|
@@ -1083,17 +1123,47 @@ module Mxrb
         manifest
       end
 
+      def export_regular_expression(mod, document, namespace, root)
+        name = document.fetch(:name).to_s
+        id = document.fetch(:id).to_s
+        qualified = "#{mod.name}.#{name}"
+        class_name = ruby_constant(name)
+        relative = embedded_identity_path(:regular_expression, id) ||
+                   File.join('app', 'regular_expressions', root, "#{underscore(name)}.rb")
+        properties = document.fetch(:doc).slice(*RegularExpression::FIELDS.values)
+        manifest = {
+          'name' => qualified, 'id' => id, 'path' => relative, 'properties' => properties,
+          'ruby_class' => embedded_identity_class(:regular_expression, id, "#{namespace}::#{class_name}")
+        }
+        declarations = properties.map do |property, value|
+          field = RegularExpression::FIELDS.key(property)
+          "    #{field} #{value.inspect}"
+        end
+        write(relative, <<~RUBY)
+          # frozen_string_literal: true
+
+          module #{namespace}
+            class #{class_name} < Mxrb::RubyApp::RegularExpression
+              mendix_name #{qualified.inspect}
+          #{declarations.join("\n")}
+            end
+          end
+        RUBY
+        add_coverage(id, qualified, 'regular_expression', relative, 'executable_bidirectional')
+        manifest
+      end
+
       def export_constant(mod, constant, namespace, root)
         name = constant['Name'].to_s
         class_name = ruby_constant(name)
         id = native_identifier(constant['$ID'])
         qualified = "#{mod.name}.#{name}"
-        relative = embedded_constant_path(id, qualified) ||
+        relative = embedded_identity_path(:constant, id) || embedded_constant_path(id, qualified) ||
                    File.join('app', 'constants', root, "#{underscore(name)}.rb")
         exposed = constant['ExposedToClient'] == true
         manifest = {
           'name' => qualified, 'id' => id,
-          'ruby_class' => "#{namespace}::#{class_name}", 'path' => relative,
+          'ruby_class' => embedded_identity_class(:constant, id, "#{namespace}::#{class_name}"), 'path' => relative,
           'documentation' => constant['Documentation'].to_s,
           'type' => constant_type(constant).to_s,
           'exposed_to_client' => exposed, 'excluded' => constant['Excluded'] == true,
@@ -1318,7 +1388,7 @@ module Mxrb
         association_declarations = associations.map do |association|
           "    association #{association.fetch('to_entity').inspect}, " \
             "name: #{association.fetch('name').split('.', 2).last.inspect}, " \
-            "id: #{association.fetch('id').inspect}, type: :#{association.fetch('type')}, " \
+            "type: :#{association.fetch('type')}, " \
             "owner: :#{association.fetch('owner')}, " \
             "documentation: #{association.fetch('documentation').inspect}, " \
             "parent_delete: :#{association.fetch('parent_delete')}, " \
@@ -1328,7 +1398,11 @@ module Mxrb
         access_declarations = if access_rules.empty?
                                 ['    clear_access_rules!']
                               else
-                                access_rules.map { access_rule_source(_1) }
+                                grouped = access_rules.group_by { RecordIdentity.access_key(_1) }
+                                access_rules.map do |rule|
+                                  preserve_identity = grouped.fetch(RecordIdentity.access_key(rule)).size > 1
+                                  access_rule_source(rule, preserve_identity:)
+                                end
                               end
         index_declarations = if indexes.empty?
                                ['    clear_indexes!']
@@ -1346,8 +1420,7 @@ module Mxrb
                               end
         semantic_declarations = []
         if generalization
-          semantic_declarations << "    generalizes #{generalization.fetch('target').inspect}, " \
-                                   "id: #{generalization.fetch('id', nil).inspect}"
+          semantic_declarations << "    generalizes #{generalization.fetch('target').inspect}"
         end
         semantic_declarations << oql_view_source(oql_view) if oql_view
         lifecycle_declarations = if lifecycle.empty?
@@ -1365,7 +1438,7 @@ module Mxrb
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::#{dto ? 'DTO' : 'Record'}
-              mendix_name #{qualified.inspect}, id: #{id.inspect}
+              mendix_name #{qualified.inspect}
               persistence #{persistable}
           #{(declarations + association_declarations + index_declarations + system_declarations + semantic_declarations + lifecycle_declarations + validation_declarations + access_declarations).join("\n")}
             end
@@ -1375,15 +1448,15 @@ module Mxrb
 
       def index_source(index)
         members = index.fetch('members').map do |member|
-          "{ id: #{member.fetch('id').inspect}, name: #{member.fetch('name').inspect}, " \
-            "ascending: #{member.fetch('ascending')}, type: :#{member.fetch('type')} }"
+          "      member #{member.fetch('name').inspect}, " \
+            "ascending: #{member.fetch('ascending')}, type: #{underscore(member.fetch('type')).to_sym.inspect}"
         end
-        "    index id: #{index.fetch('id').inspect}, guid: #{index.fetch('guid').inspect}, " \
-          "include_offline: #{index.fetch('include_offline')}, members: [#{members.join(', ')}]"
+        declaration = "    index include_offline: #{index.fetch('include_offline')} do"
+        [declaration, *members, '    end'].join("\n")
       end
 
       def oql_view_source(view)
-        options = %w[source query document_id source_id].filter_map do |name|
+        options = %w[source query].filter_map do |name|
           value = view[name]
           "#{name}: #{value.inspect}" unless value.nil?
         end
@@ -1392,47 +1465,59 @@ module Mxrb
 
       def lifecycle_source(callback)
         "    #{callback.fetch('event')} microflow: #{callback.fetch('handler').inspect}, " \
-          "id: #{callback.fetch('id').inspect}, " \
           "pass_event_object: #{callback.fetch('pass_event_object')}, " \
           "raise_error_on_false: #{callback.fetch('raise_error_on_false')}"
       end
 
       def validation_rule_source(rule)
         kind = rule.fetch('kind')
-        kind = %w[required unique].include?(kind) ? ":#{kind}" : kind.inspect
-        "    validation_rule #{rule.fetch('attribute').inspect}, kind: #{kind}, " \
-          "id: #{rule.fetch('id').inspect}, message_id: #{rule.fetch('message_id').inspect}, " \
-          "translations: #{rule.fetch('translations').inspect}, " \
-          "rule_info_id: #{rule.fetch('rule_info_id').inspect}, " \
-          "rule_info: #{rule.fetch('rule_info').inspect}"
+        info = rule.fetch('rule_info')
+        regular_expression = kind == 'DomainModels$RegExRuleInfo' && info['RegExIdentifier'].is_a?(String)
+        kind = 'regular_expression' if regular_expression
+        kind = %w[required unique regular_expression].include?(kind) ? ":#{kind}" : kind.inspect
+        remaining = regular_expression ? info.reject { |key, _value| key == 'RegExIdentifier' } : info
+        declaration = "    validation_rule #{rule.fetch('attribute').inspect}, kind: #{kind}"
+        declaration += ", rule_info: #{remaining.inspect}" unless remaining.empty?
+        translations = rule.fetch('translations').map do |translation|
+          "      translation #{translation.fetch('language_code').inspect}, " \
+            "#{translation.fetch('text').inspect}"
+        end
+        options = regular_expression ? ["      regular_expression #{info.fetch('RegExIdentifier').inspect}"] : []
+        ["#{declaration} do", *translations, *options, '    end'].join("\n")
       end
 
-      def access_rule_source(rule)
+      def access_rule_source(rule, preserve_identity: false)
         roles = rule.fetch('roles').map(&:inspect).join(', ')
         members = rule.fetch('members').map do |member|
-          "{ id: #{member.fetch('id').inspect}, name: #{member.fetch('name').inspect}, " \
-            "reference: #{member.fetch('reference').inspect}, rights: :#{member.fetch('rights')}, " \
-            "kind: :#{member.fetch('kind')} }"
+          "      member #{member.fetch('name').inspect}, " \
+            "reference: #{member.fetch('reference').inspect}, rights: :#{underscore(member.fetch('rights'))}, " \
+            "kind: :#{member.fetch('kind')}"
         end
-        "    access_rule #{roles}, id: #{rule.fetch('id').inspect}, " \
+        identity = preserve_identity ? "id: #{rule.fetch('id').inspect}, " : ''
+        declaration = "    access_rule #{roles}, #{identity}" \
           "documentation: #{rule.fetch('documentation').inspect}, create: #{rule.fetch('create')}, " \
-          "delete: #{rule.fetch('delete')}, default_rights: :#{rule.fetch('default_rights')}, " \
+          "delete: #{rule.fetch('delete')}, default_rights: :#{underscore(rule.fetch('default_rights'))}, " \
           "xpath: #{rule.fetch('xpath').inspect}, " \
-          "xpath_caption: #{rule.fetch('xpath_caption', nil).inspect}, " \
-          "members: [#{members.join(', ')}]"
+          "xpath_caption: #{rule.fetch('xpath_caption', nil).inspect}"
+        return declaration if members.empty?
+
+        ["#{declaration} do", *members, '    end'].join("\n")
       end
 
       def enumeration_source(namespace, class_name, enumeration)
         declarations = enumeration.fetch('values').map do |value|
-          "    value #{value.fetch('name').inspect}, id: #{value.fetch('id').inspect}, " \
-            "captions: #{value.fetch('captions').inspect}"
+          translations = value.fetch('captions').map do |language, text|
+            "      translation #{language.inspect}, #{text.inspect}"
+          end
+          ["    value #{value.fetch('name').inspect} do",
+           *translations, '    end'].join("\n")
         end
         <<~RUBY
           # frozen_string_literal: true
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Enumeration
-              mendix_name #{enumeration.fetch('name').inspect}, id: #{enumeration.fetch('id').inspect}
+              mendix_name #{enumeration.fetch('name').inspect}
               documentation #{enumeration.fetch('documentation').inspect}
           #{declarations.join("\n")}
             end
@@ -1451,7 +1536,7 @@ module Mxrb
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Constant
-              mendix_name #{constant.fetch('name').inspect}, id: #{constant.fetch('id').inspect}
+              mendix_name #{constant.fetch('name').inspect}
               documentation #{constant.fetch('documentation').inspect}
               type #{constant.fetch('type').to_sym.inspect}
               exposed_to_client #{constant.fetch('exposed_to_client')}
@@ -1465,7 +1550,7 @@ module Mxrb
 
       def module_security_source(namespace, module_name, security)
         roles = security.fetch('roles').map do |role|
-          "    module_role #{role.fetch('name').inspect}, id: #{role.fetch('id').inspect}, " \
+          "    module_role #{role.fetch('name').inspect}, " \
             "description: #{role.fetch('description').inspect}"
         end
         roles = ['    clear_module_roles!'] if roles.empty?
@@ -1474,7 +1559,7 @@ module Mxrb
 
           module #{namespace}
             class Security < Mxrb::RubyApp::ModuleSecurity
-              mendix_name #{module_name.inspect}, id: #{security.fetch('id').inspect}
+              mendix_name #{module_name.inspect}
           #{roles.join("\n")}
             end
           end
@@ -1483,8 +1568,7 @@ module Mxrb
 
       def project_security_source(security)
         user_roles = security.fetch('user_roles').map do |role|
-          "    user_role #{role.fetch('name').inspect}, id: #{role.fetch('id').inspect}, " \
-            "guid: #{role.fetch('guid').inspect}, description: #{role.fetch('description').inspect}, " \
+          "    user_role #{role.fetch('name').inspect}, description: #{role.fetch('description').inspect}, " \
             "check_security: #{role.fetch('check_security')}, " \
             "manageable_roles: #{role.fetch('manageable_roles').inspect}, " \
             "manage_all_roles: #{role.fetch('manage_all_roles')}, " \
@@ -1493,16 +1577,13 @@ module Mxrb
         end
         user_roles = ['    clear_user_roles!'] if user_roles.empty?
         demo_users = security.fetch('demo_users').map do |user|
-          "    demo_user #{user.fetch('name').inspect}, id: #{user.fetch('id').inspect}, " \
+          "    demo_user #{user.fetch('name').inspect}, " \
             "entity: #{user.fetch('entity').inspect}, roles: #{user.fetch('roles').inspect}, " \
             'password: nil'
         end
         demo_users = ['    clear_demo_users!'] if demo_users.empty?
         policy = security['password_policy']
-        policy_source = if policy
-                          "    password_policy id: #{policy.fetch('id').inspect}, " \
-                            "properties: #{policy.fetch('properties').inspect}"
-                        end
+        policy_source = password_policy_source(policy) if policy
         sign_in_source = if security['sign_in_microflow']
                            "    sign_in_microflow #{security.fetch('sign_in_microflow').inspect}"
                          end
@@ -1510,7 +1591,7 @@ module Mxrb
           # frozen_string_literal: true
 
           class ApplicationSecurity < Mxrb::RubyApp::ProjectSecurity
-            mendix_id #{security.fetch('id').inspect}
+            project_security
             security_level #{security.fetch('security_level').inspect}
             admin_user_role #{security.fetch('admin_user_role').inspect}
             demo_users enabled: #{security.fetch('demo_users_enabled')}
@@ -1523,6 +1604,15 @@ module Mxrb
         RUBY
       end
 
+      def password_policy_source(policy)
+        typed = PasswordPolicyBuilder.new(policy.fetch('properties')).build
+        declarations = typed.to_h.compact.map { |name, value| "      #{name} #{value.inspect}" }
+        ['    password_policy do', *declarations, '    end'].join("\n")
+      rescue ArgumentError, TypeError
+        # Unknown extensions and explicit nulls retain the legacy contract.
+        "    password_policy properties: #{policy.fetch('properties').inspect}"
+      end
+
       def scheduled_event_source(namespace, class_name, event)
         schedule = event['schedule']
         binding = if event.fetch('unbound', false)
@@ -1530,19 +1620,13 @@ module Mxrb
                   else
                     "    microflow #{event.fetch('microflow').inspect}\n"
                   end
-        schedule_source = if schedule
-                            "    schedule #{schedule.fetch('type').inspect}, " \
-                              "id: #{schedule.fetch('id').inspect},\n" \
-                              "             properties: #{schedule.fetch('properties').inspect}\n"
-                          else
-                            ''
-                          end
+        schedule_source = schedule ? schedule_source(schedule) : ''
         <<~RUBY
           # frozen_string_literal: true
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::ScheduledEvent
-              mendix_name #{event.fetch('name').inspect}, id: #{event.fetch('id').inspect}
+              mendix_name #{event.fetch('name').inspect}
               documentation #{event.fetch('documentation').inspect}
               export_level #{event.fetch('export_level').inspect}
           #{binding.rstrip}
@@ -1558,6 +1642,19 @@ module Mxrb
         RUBY
       end
 
+      def schedule_source(schedule)
+        type = schedule.fetch('type')
+        properties = schedule.fetch('properties')
+        unless ScheduleBuilder.compatible?(type, properties)
+          return "    schedule #{type.inspect}, properties: #{properties.inspect}\n"
+        end
+
+        declarations = properties.map do |name, value|
+          "      #{ScheduleBuilder::PROPERTY_NAMES.fetch(name)} #{value.inspect}"
+        end
+        ["    schedule #{ScheduleBuilder.kind(type).inspect} do", *declarations, '    end'].join("\n")
+      end
+
       def service_source(namespace, class_name, qualified, id, native_source: nil,
                          native_kind: :microflow)
         native = if native_source
@@ -1571,7 +1668,7 @@ module Mxrb
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Service
-              mendix_name #{qualified.inspect}, id: #{id.inspect}
+              mendix_name #{qualified.inspect}
           #{native}
 
               def call(**arguments)
@@ -1584,18 +1681,19 @@ module Mxrb
 
       def page_source(namespace, class_name, qualified, id, title, widgets,
                       appearance_class:, appearance_style:, data_source:)
-        widget_source = runtime_widget_dsl_source(widgets, 6)
+        widget_source = PluggableProperties.with_page(id) { runtime_widget_dsl_source(widgets, 6) }
+        data_source_expression = PageDataSources.configuration_expression(data_source) || data_source.inspect
         <<~RUBY
           # frozen_string_literal: true
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Page
-              mendix_name #{qualified.inspect}, id: #{id.inspect}
+              mendix_name #{qualified.inspect}
               configure(
                 title: #{title.inspect},
                 appearance_class: #{appearance_class.inspect},
                 appearance_style: #{appearance_style.inspect},
-                data_source: #{data_source.inspect}
+                data_source: #{data_source_expression}
               ) do
           #{widget_source}
               end
@@ -1641,29 +1739,57 @@ module Mxrb
                     runtime_keywords_safe?(options)
                 end
         method_name = typed ? type.to_s : 'widget'
+        property_source = runtime_pluggable_properties_source(widget, indentation + 2) if
+          typed && type == :pluggable_widget
         arguments = []
         arguments << type.inspect unless typed
         arguments << widget.fetch('name', '').inspect
         if typed
           options.each do |key, value|
+            next if key.to_s == 'properties' && property_source
+
             keyword = runtime_widget_keyword(type, key, generic_sink:)
-            arguments << "#{keyword}: #{pretty_ruby_value(value, indentation + 2)}"
+            expression = if type == :data_grid && key.to_s == 'columns'
+                           runtime_grid_columns_expression(value)
+                         end
+            arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
         elsif widget.key?('options')
           arguments << "options: #{pretty_ruby_value(options, indentation + 2)}"
         end
-        event_source = generic_sink && typed ? runtime_widget_event_source(widget, indentation + 2) : ''
-        emit_events = widget.key?('events') && (!generic_sink || !typed)
+        typed_events = (typed || !generic_sink) && runtime_widget_events_supported?(widget)
+        event_source = if typed_events
+                         runtime_widget_event_source(widget, indentation + 2, preserve_empty: !generic_sink)
+                       else
+                         ''
+                       end
+        emit_events = widget.key?('events') && !typed_events
         arguments << "events: #{pretty_ruby_value(widget.fetch('events'), indentation + 2)}" if emit_events
         children = Array(widget['children'])
         region_source = runtime_widget_regions_source(widget, indentation + 2, generic_sink:)
-        block = !event_source.empty? || !children.empty? || !region_source.empty?
+        block = property_source || !event_source.empty? || !children.empty? || !region_source.empty?
         declaration = runtime_widget_declaration(method_name, arguments, indentation, block)
         return declaration unless block
 
         nested = runtime_widget_dsl_source(children, indentation + 2, generic_sink:)
-        body = [event_source, nested, region_source].reject(&:empty?).join("\n")
+        body = [property_source, event_source, nested, region_source].compact.reject(&:empty?).join("\n")
         "#{declaration}\n#{body}\n#{padding}end"
+      end
+
+      def runtime_pluggable_properties_source(widget, indentation)
+        options = widget.fetch('options', {})
+        return unless options.key?('properties')
+
+        bridge = PluggableProperties.try_for_widget(
+          widget.fetch('name', ''), widget_id: options['widget_id'], properties: options.fetch('properties')
+        )
+        return unless bridge
+
+        lines = options.fetch('properties').map do |key, value|
+          runtime_widget_declaration('set', [key.inspect, pretty_ruby_value(value, indentation + 2)],
+                                     indentation + 2, false)
+        end
+        ["#{' ' * indentation}properties do", *lines, "#{' ' * indentation}end"].join("\n")
       end
 
       STRUCTURED_OPTION_KEYS = {
@@ -1806,21 +1932,34 @@ module Mxrb
       end
 
       def runtime_widget_events_supported?(widget)
+        return false if widget.key?('events') && !widget['events'].is_a?(Array)
+
         Array(widget['events']).all? do |event|
           runtime_keys?(event, %w[event kind handler arguments]) &&
             WIDGET_EVENT_METHODS.include?(event['event'].to_s) &&
             WIDGET_EVENT_HANDLERS.include?(event['kind'].to_s) &&
-            !event['handler'].to_s.empty? &&
-            (!event.key?('arguments') || event['arguments'].is_a?(Hash))
+            %w[event kind handler].all? { event[_1].is_a?(String) && !event[_1].empty? } &&
+            (!event.key?('arguments') ||
+              (event['arguments'].is_a?(Hash) && event['arguments'].keys.all? { _1.is_a?(String) && !_1.empty? }))
         end
       end
 
-      def runtime_widget_event_source(widget, indentation)
+      def runtime_widget_event_source(widget, indentation, preserve_empty: false)
         Array(widget['events']).map do |event|
           arguments = ["#{event.fetch('kind')}: #{event.fetch('handler').inspect}"]
-          pass = event.fetch('arguments', {})
-          arguments << "pass: #{pretty_ruby_value(pass, indentation + 2)}" unless pass.empty?
-          runtime_widget_declaration(event.fetch('event'), arguments, indentation, false)
+          # Existing native-widget sinks compacted empty mappings. Preserve
+          # that runtime projection while migrating literal events (which did
+          # retain empty mappings) using an explicitly empty argument block.
+          present = event.key?('arguments') && (preserve_empty || !event.fetch('arguments').empty?)
+          declaration = runtime_widget_declaration(event.fetch('event'), arguments, indentation, present)
+          next declaration unless present
+
+          lines = event.fetch('arguments').map do |name, value|
+            expression = PageDataSources.variable_reference_expression(value) ||
+                         pretty_ruby_value(value, indentation + 4)
+            runtime_widget_declaration('argument', [name.inspect, expression], indentation + 2, false)
+          end
+          [declaration, *lines, "#{' ' * indentation}end"].join("\n")
         end.join("\n")
       end
 
@@ -2112,7 +2251,9 @@ module Mxrb
         padding = ' ' * indentation
         options = widget.fetch('options')
         arguments = [widget.fetch('name', '').inspect]
-        arguments << "from: #{pretty_ruby_value(options.fetch('source'), indentation + 2)}"
+        source = options.fetch('source')
+        source_expression = PageDataSources.source_expression(source) || pretty_ruby_value(source, indentation + 2)
+        arguments << "from: #{source_expression}"
         DATA_VIEW_DECLARATION_KEYS.each do |name|
           next unless options.key?(name)
 
@@ -2143,10 +2284,18 @@ module Mxrb
           )
         end
         if options.key?('design_properties')
-          arguments = options.fetch('design_properties').map do |value|
-            pretty_ruby_value(value, indentation + 2)
+          properties = options.fetch('design_properties')
+          if runtime_design_properties_supported?(properties)
+            properties.each do |value|
+              lines << runtime_widget_declaration(
+                'design_property', [value.fetch('key').inspect, "option: #{value.fetch('option').inspect}"],
+                indentation, false
+              )
+            end
+          else
+            arguments = properties.map { pretty_ruby_value(_1, indentation + 2) }
+            lines << runtime_widget_declaration('design_properties', arguments, indentation, false)
           end
-          lines << runtime_widget_declaration('design_properties', arguments, indentation, false)
         end
         if options.key?('unknown_native')
           lines << runtime_widget_declaration(
@@ -2155,6 +2304,31 @@ module Mxrb
           )
         end
         lines
+      end
+
+      def runtime_design_properties_supported?(properties)
+        properties.any? && properties.all? do |value|
+          value.is_a?(Hash) && value.keys.sort == %w[id key option value_id] &&
+            value.values.all? { _1.is_a?(String) && !_1.empty? }
+        end
+      end
+
+      def runtime_grid_columns_expression(columns)
+        return unless columns.is_a?(Array)
+
+        values = columns.map do |column|
+          return unless column.is_a?(Hash) && column['name'].is_a?(String)
+          return unless runtime_keys?(column, %w[name attribute caption filter])
+
+          keywords = column.reject { |key, _value| key == 'name' }.transform_keys(&:to_sym)
+          actual = Page::WidgetTree.new.grid_column(column.fetch('name'), **keywords)
+          return unless actual == column
+
+          arguments = [column.fetch('name').inspect]
+          arguments.concat(keywords.map { |key, value| "#{key}: #{value.inspect}" })
+          "grid_column(#{arguments.join(', ')})"
+        end
+        "[#{values.join(', ')}]"
       end
 
       def runtime_data_view_condition_source(method_name, condition, indentation)

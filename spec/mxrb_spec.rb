@@ -1591,7 +1591,7 @@ RSpec.describe Mxrb do
       src = File.read(File.join(exported, "modules", "Sales", "application", "use_cases", "notify.rb"))
       expect(src).to include("create_variable :message")
       expect(src).to include("change_variable :message")
-      expect(src).to include('show_message "Done"')
+      expect(src).to include('show_message', 'translation "en_US", "Done"')
       expect(src).to include('log_message "Completed"')
 
       FileUtils.mkdir_p(rebuilt_dir)

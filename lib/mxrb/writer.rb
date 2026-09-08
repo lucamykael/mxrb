@@ -159,6 +159,104 @@ module Mxrb
       self
     end
 
+    # Validates the complete collection before any native write. Only named
+    # scalar properties are accepted; unknown baseline fields remain private.
+    def plan_ruby_regular_expressions(mpr, module_name:, expressions:, remove_ids: [])
+      raw_module = find_named(mpr, 'Modules', mpr.root_unit.fetch('UnitID'), module_name.to_s)
+      raise ValidationError, "Mendix module #{module_name} does not exist" unless raw_module
+
+      module_id = raw_module.fetch('UnitID')
+      existing = collect_documents(mpr, module_id).filter_map do |raw|
+        document = mpr.parse_contents(raw)
+        [raw, document] if document['$Type'] == RubyApp::RegularExpression::TYPE
+      end
+      by_id = existing.to_h { |raw, doc| [IO::BsonCodec.extract_id(doc['$ID']) || raw['UnitID'], [raw, doc]] }
+      by_name = existing.group_by { |_raw, doc| doc['Name'].to_s }
+      declarations = Array(expressions)
+      names = declarations.map { _1.fetch(:name).to_s }
+      ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+      if names.any?(&:empty?) || names.uniq.size != names.size || ids.uniq.size != ids.size
+        raise ValidationError, 'duplicate or empty regular-expression declarations'
+      end
+      changes = declarations.map do |declaration|
+        id = declaration[:id].to_s
+        validate_ruby_uuid!(id, 'regular expression')
+        matches = by_name.fetch(declaration.fetch(:name).to_s, [])
+        raise ValidationError, 'ambiguous native regular-expression name' if matches.size > 1
+
+        named = matches.first
+        pair = by_id[id]
+        if !id.empty? && !pair && (mpr.unit(id) || mpr.all_units.any? do |unit|
+          regular_expression_identity_in_use?(mpr.parse_contents(unit), id)
+        end)
+          raise ValidationError, 'regular-expression identity conflicts with a native identity, family or module'
+        end
+        if !id.empty? && named && named != pair
+          raise ValidationError, 'regular-expression identity conflicts with its native name'
+        end
+        pair ||= named if id.empty?
+        properties = declaration.fetch(:properties)
+        properties.each do |key, value|
+          valid = RubyApp::RegularExpression::FIELDS.value?(key) &&
+                  (value.nil? || (key == 'Excluded' ? [true, false].include?(value) : value.is_a?(String)))
+          raise ValidationError, 'invalid regular-expression property type' unless valid
+        end
+        absent = Array(declaration[:absent_properties])
+        unless (absent - RubyApp::RegularExpression::FIELDS.values).empty? && (absent & properties.keys).empty?
+          raise ValidationError, 'invalid regular-expression presence metadata'
+        end
+        if !pair && !properties['Expression'].is_a?(String)
+          raise ValidationError, 'a new regular expression requires its expression String'
+        end
+        [declaration, *pair]
+      end
+      removed = Array(remove_ids).map do |id|
+        pair = by_id[id.to_s]
+        raise ValidationError, 'removed regular-expression identity is outside its collection' unless pair
+        if changes.any? { |_declaration, raw, _doc| raw == pair.first }
+          raise ValidationError, 'regular expression cannot be both retained and removed'
+        end
+
+        pair.first.fetch('UnitID')
+      end
+      { module_id:, changes:, removed: }
+    end
+
+    def synchronize_ruby_regular_expressions!(mpr, module_name:, expressions:, remove_ids: [])
+      plan = plan_ruby_regular_expressions(mpr, module_name:, expressions:, remove_ids:)
+      mpr.transaction do
+        plan.fetch(:changes).each do |declaration, raw, previous|
+          id = declaration[:id].to_s
+          id = SecureRandom.uuid if id.empty?
+          document = previous || {
+            '$ID' => id, '$Type' => RubyApp::RegularExpression::TYPE,
+            'Documentation' => '', 'Excluded' => false, 'ExportLevel' => 'Hidden'
+          }
+          document = document.reject { |key, _value| Array(declaration[:absent_properties]).include?(key) }
+                             .merge(declaration.fetch(:properties)).merge('Name' => declaration.fetch(:name).to_s)
+          if raw
+            mpr.update_unit(raw.fetch('UnitID'), document)
+          else
+            mpr.insert_unit(container_uuid: plan.fetch(:module_id), containment_name: 'Documents',
+                            contents_doc: document, unit_uuid: id)
+          end
+        end
+        plan.fetch(:removed).each { mpr.delete_unit(_1) }
+      end
+      self
+    end
+
+    def regular_expression_identity_in_use?(value, identifier)
+      case value
+      when Hash
+        IO::BsonCodec.extract_id(value['$ID']).to_s == identifier ||
+          value.values.any? { regular_expression_identity_in_use?(_1, identifier) }
+      when Array then value.any? { regular_expression_identity_in_use?(_1, identifier) }
+      else false
+      end
+    end
+    private :regular_expression_identity_in_use?
+
     # Incrementally applies Ruby constant declarations without revealing or
     # replacing private defaults unless the declaration supplies a new value.
     def synchronize_ruby_constants!(mpr, module_name:, constants:)
@@ -896,8 +994,8 @@ module Mxrb
           'project-role', role.fetch(:name)
         )
         guid = ruby_project_role_guid(role, prior, id)
-        manageable = IO::BsonCodec.parse_array(prior["ManageableRoles"])
-        module_roles = IO::BsonCodec.parse_array(prior["ModuleRoles"])
+        manageable = IO::BsonCodec.parse_array(prior["ManageableRoles"] || [1])
+        module_roles = IO::BsonCodec.parse_array(prior["ModuleRoles"] || [1])
         prior.merge(
           "$ID" => id, "$Type" => "Security$UserRole",
           "Name" => role.fetch(:name).to_s,
@@ -965,7 +1063,7 @@ module Mxrb
           "Entity" => user.fetch(:entity).to_s,
           "UserRoles" => IO::BsonCodec.build_array(
             Array(user[:roles]).map(&:to_s),
-            marker: IO::BsonCodec.parse_array(prior["UserRoles"]).fetch(:marker)
+            marker: IO::BsonCodec.parse_array(prior["UserRoles"] || [1]).fetch(:marker)
           )
         )
       end
@@ -1051,7 +1149,8 @@ module Mxrb
       schedule_doc = {
         "$ID" => schedule_id, "$Type" => schedule.fetch(:type).to_s
       }.merge(
-        prior_schedule.reject { |key, _value| %w[$ID $Type].include?(key) }
+        prior_schedule['$Type'] == schedule.fetch(:type).to_s ?
+          prior_schedule.reject { |key, _value| %w[$ID $Type].include?(key) } : {}
       ).merge(schedule.fetch(:properties, {}).to_h.transform_keys(&:to_s))
       current.merge(
         "$ID" => id, "$Type" => "ScheduledEvents$ScheduledEvent",
@@ -2976,7 +3075,12 @@ module Mxrb
 
     def hydrate_pluggable_widgets!(generated, existing)
       existing_widgets = custom_widgets(existing).to_h { [_1["Name"], _1] }
-      custom_widgets(generated).each do |widget|
+      widgets = custom_widgets(generated)
+      widgets.each do |widget|
+        validate_pluggable_widget_hydration!(widget, existing_widgets[widget['Name']])
+      end
+      # Keep validation separate so a later invalid widget cannot partially hydrate the batch.
+      widgets.each do |widget| # rubocop:disable Style/CombinableLoops
         options = widget.delete("__mxrb_widget_options")
         next if options && complete_widget_definition?(widget)
 
@@ -2994,11 +3098,25 @@ module Mxrb
       end
     end
 
+    def validate_pluggable_widget_hydration!(widget, baseline)
+      options = widget['__mxrb_widget_options']
+      return unless options
+
+      source = if complete_widget_definition?(widget)
+                 widget
+               elsif compatible_widget_baseline?(widget, baseline)
+                 baseline
+               end
+      return validate_available_pluggable_slots!(widget, options) unless source
+      return unless options[:__kind].to_s == 'pluggable_widget'
+
+      validate_pluggable_widget_properties!(source, options)
+    end
+
     def configure_pluggable_widget!(widget, options)
-      properties = custom_widget_properties(widget)
+      properties = validate_pluggable_widget_properties!(widget, options)
       options.fetch(:properties, {}).each do |key, configured|
-        property = properties[key.to_s]
-        next unless property
+        property = properties.fetch(key.to_s)
 
         configure_custom_widget_value!(
           property, configured,
@@ -3009,6 +3127,17 @@ module Mxrb
         widget, options.fetch(:__slots, []),
         context_entity: options[:__context_entity], module_name: options[:__module_name]
       )
+    end
+
+    def validate_pluggable_widget_properties!(widget, options)
+      properties = custom_widget_properties(widget)
+      unknown = options.fetch(:properties, {}).keys.reject { properties.key?(_1.to_s) }
+      unless unknown.empty?
+        raise ValidationError,
+              "pluggable widget #{widget['Name'].inspect} has unknown properties: " \
+              "#{unknown.map(&:inspect).join(', ')}"
+      end
+      properties
     end
 
     def configure_custom_widget_value!(property, configured, context_entity: nil, module_name: nil)
@@ -3240,7 +3369,14 @@ module Mxrb
     end
 
     def validate_available_pluggable_slots!(widget, options)
-      return if options.nil? || Array(options[:__slots]).empty?
+      return if options.nil?
+
+      if options[:__kind].to_s == 'pluggable_widget' && !options.fetch(:properties, {}).empty?
+        raise ValidationError,
+              "pluggable widget #{widget['Name'].inspect} has declared properties, but its " \
+              'ObjectType/WidgetObject definition is unavailable'
+      end
+      return if Array(options[:__slots]).empty?
 
       raise ValidationError,
             "pluggable widget #{widget['Name'].inspect} has declared slots, but its " \

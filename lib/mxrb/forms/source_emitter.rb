@@ -105,7 +105,12 @@ module Mxrb
 
       def pluggable_assignment_lines(object, indent)
         object.assignments.flat_map do |assignment|
-          pluggable_property_lines(assignment.property, assignment.value, indent)
+          lines = pluggable_property_lines(assignment.property, assignment.value, indent)
+          if assignment.source_variable
+            lines.concat(node_lines(assignment.source_variable, indent,
+                                    declaration: "source(:#{assignment.property.ruby_name})"))
+          end
+          lines
         end
       end
 
@@ -116,7 +121,7 @@ module Mxrb
         return pluggable_object_lines(property, value, indent) if value.is_a?(Mxrb::Pluggable::ObjectNode)
         return pluggable_data_source_lines(property, value, indent) if value.is_a?(Mxrb::Pluggable::XPathSource)
         if value.is_a?(Node)
-          declaration = "#{property.ruby_name}(:#{value.schema_type.ruby_name})"
+          declaration = pluggable_nested_declaration(property, type: ":#{value.schema_type.ruby_name}")
           return node_lines(value, indent, declaration:)
         end
 
@@ -137,6 +142,16 @@ module Mxrb
           klass.protected_method_defined?(property.ruby_name)
       end
 
+      def pluggable_nested_declaration(property, type: nil, collection: false)
+        unless pluggable_reserved_name?(property)
+          return "#{property.ruby_name}#{type ? "(#{type})" : ''}"
+        end
+
+        arguments = [":#{property.ruby_name}"]
+        arguments << "type: #{type}" if type
+        "#{collection ? 'append' : 'set'}(#{arguments.join(', ')})"
+      end
+
       def pluggable_collection_lines(property, values, indent)
         return ["#{' ' * indent}set :#{property.ruby_name}, []"] if values.empty?
 
@@ -145,10 +160,12 @@ module Mxrb
           when Mxrb::Pluggable::ObjectNode
             pluggable_object_lines(property, value, indent)
           when Node
-            node_lines(value, indent, declaration: "#{property.ruby_name}(:#{value.schema_type.ruby_name})")
+            declaration = pluggable_nested_declaration(property, type: ":#{value.schema_type.ruby_name}",
+                                                                 collection: true)
+            node_lines(value, indent, declaration:)
           when Mxrb::Pluggable::Node
-            pluggable_node_lines(value, indent,
-                                  declaration: "#{property.ruby_name}(#{value.widget_type.id.inspect})")
+            declaration = pluggable_nested_declaration(property, type: value.widget_type.id.inspect, collection: true)
+            pluggable_node_lines(value, indent, declaration:)
           else ["#{' ' * indent}append :#{property.ruby_name}, #{literal(value)}"]
           end
         end
@@ -157,14 +174,15 @@ module Mxrb
       def pluggable_object_lines(property, value, indent)
         pad = ' ' * indent
         body = pluggable_assignment_lines(value, indent + INDENT)
-        ["#{pad}#{property.ruby_name} do", *body, "#{pad}end"]
+        declaration = pluggable_nested_declaration(property, collection: property.value_type.list?)
+        ["#{pad}#{declaration} do", *body, "#{pad}end"]
       end
 
       def pluggable_data_source_lines(property, value, indent)
         pad = ' ' * indent
         body_indent = indent + INDENT
         body = []
-        body << "#{' ' * body_indent}entity #{value.entity.to_s.inspect}" if value.entity
+        body << "#{' ' * body_indent}entity #{entity_reference_literal(value.entity)}" if value.entity
         body << "#{' ' * body_indent}constraint #{value.constraint.to_s.inspect}" if value.constraint
         if value.sort_bar
           body.concat(node_lines(value.sort_bar, body_indent, declaration: 'sort_bar'))
@@ -173,11 +191,16 @@ module Mxrb
           body.concat(node_lines(value.source_variable, body_indent, declaration: 'source_variable'))
         end
         body << "#{' ' * body_indent}force_full_objects true" if value.force_full_objects
-        ["#{pad}#{property.ruby_name} do", *body, "#{pad}end"]
+        declaration = pluggable_nested_declaration(property)
+        ["#{pad}#{declaration} do", *body, "#{pad}end"]
       end
 
       def literal(value) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
         if defined?(Mxrb::Pluggable::Reference) && value.is_a?(Mxrb::Pluggable::Reference)
+          if value.target.is_a?(EntityReference) && !value.target.indirect?
+            return "Mxrb::Pluggable.reference(:#{Forms::Naming.ruby_name(value.kind)}, " \
+              "Mxrb::Forms::EntityReference.direct(#{value.target.entity.inspect}))"
+          end
           return "Mxrb::Pluggable.reference(:#{Forms::Naming.ruby_name(value.kind)}, #{literal(value.target)})"
         end
         if defined?(Mxrb::Pluggable::Decimal) && value.is_a?(Mxrb::Pluggable::Decimal)

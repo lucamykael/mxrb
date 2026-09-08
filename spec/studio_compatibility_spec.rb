@@ -244,7 +244,7 @@ RSpec.describe Mxrb::StudioCompatibility do
     end
   end
 
-  it 'changes physical MPR storage while migrating between Studio Pro 9 and 11' do
+  it 'upgrades physical storage to Studio Pro 11 and rejects lossy downgrade before rewriting' do
     Dir.mktmpdir do |directory|
       path = File.join(directory, 'StorageMigration.mpr')
       Mxrb.define(path) do
@@ -262,14 +262,18 @@ RSpec.describe Mxrb::StudioCompatibility do
       )
       upgraded.close
 
-      Mxrb.open(path, readonly: false) { _1.migrate_to!('9.6.1.29396') }
-      downgraded = Mxrb::IO::MprFile.open(path)
-      expect(downgraded.format_version).to eq(:v1)
-      expect(downgraded.all_units).to all(satisfy { !_1['Contents'].nil? })
-      expect(File).not_to exist(File.join(directory, 'mprcontents'))
+      before_mpr = File.binread(path)
+      before_contents = Dir[File.join(directory, 'mprcontents', '**', '*')]
+                        .select { File.file?(_1) }.to_h { [_1, File.binread(_1)] }
+      expect do
+        Mxrb.open(path, readonly: false) { _1.migrate_to!('9.6.1.29396') }
+      end.to raise_error(Mxrb::UnsupportedVersion, /would remove.*semantic equivalence is not established/)
+      expect(File.binread(path)).to eq(before_mpr)
+      after_contents = Dir[File.join(directory, 'mprcontents', '**', '*')]
+                       .select { File.file?(_1) }.to_h { [_1, File.binread(_1)] }
+      expect(after_contents).to eq(before_contents)
     ensure
       upgraded&.close
-      downgraded&.close
     end
   end
 

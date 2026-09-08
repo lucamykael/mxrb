@@ -395,7 +395,7 @@ module Mxrb
     def visit_settings_values(value, &block)
       case value
       when Settings::Node
-        value.fields.each { |field, child| value.fields[field] = visit_settings_values(child, &block) }
+        value.fields.each { |field, child| value.set(field, visit_settings_values(child, &block)) }
         value
       when Settings::Collection
         Settings::Collection.new(items: value.items.map { visit_settings_values(_1, &block) },
@@ -3623,6 +3623,19 @@ module Mxrb
       lines
     end
 
+    def decision_declaration_lines(condition, indent)
+      pad = " " * indent
+      return ["#{pad}decision #{ruby(condition['Expression'].to_s)} do"] \
+        unless condition['$Type'] == 'Microflows$RuleSplitCondition'
+
+      rule = condition['RuleCall'] || {}
+      lines = ["#{pad}rule_decision #{ruby(rule['Microflow'])} do"]
+      bson_items(rule['ParameterMappings']).each do |mapping|
+        lines << "#{pad}  argument #{ruby(mapping['Parameter'])}, #{ruby(mapping['Argument'])}"
+      end
+      lines
+    end
+
     def flow_case_value(flow)
       case_doc = bson_items(flow["CaseValues"]).first || flow["NewCaseValue"]
       value = case_doc&.dig("Value")
@@ -3662,20 +3675,9 @@ module Mxrb
 
         when "Microflows$ExclusiveSplit"
           condition_doc = obj["SplitCondition"] || {}
-          condition = if condition_doc["$Type"] == "Microflows$RuleSplitCondition"
-            rule = condition_doc["RuleCall"] || {}
-            mappings = bson_items(rule["ParameterMappings"]).to_h do |mapping|
-              [mapping["Parameter"].to_s, mapping["Argument"].to_s]
-            end
-            { rule: rule["Microflow"], pass: mappings }
-          else
-            condition_doc["Expression"].to_s
-          end
           nexts      = fwd[cursor] || []
           merge_id = find_common_merge_node(nexts.map { _1[:to] }, fwd, by_id)
-          rendered_condition = condition.is_a?(Hash) ?
-            "(#{ruby(condition)})" : ruby(condition)
-          lines << "#{' ' * indent}decision #{rendered_condition} do"
+          lines.concat(decision_declaration_lines(condition_doc, indent))
           nexts.each do |edge|
             branch_lines = []
             linearize_flow(
@@ -3822,15 +3824,12 @@ module Mxrb
       when "Microflows$CreateObjectAction", "Microflows$CreateChangeAction"
         legacy = action["$Type"] == "Microflows$CreateChangeAction"
         members = member_specs(action[legacy ? "Items" : "Members"])
-        has_associations = members.any? { !_1[:association].to_s.empty? }
-        set_arg = members.empty? || has_associations ?
-          "" : ", set: { #{members_dsl(members)} }"
         variable = legacy ? action["VariableName"] : action["OutputVariableName"]
         commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
         commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
         refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
-        command = "#{pad}create_object #{ruby(action["Entity"])}, as: :#{variable}#{set_arg}#{commit_a}#{refresh_a}"
-        has_associations ? member_block(command, members, indent) : command
+        command = "#{pad}create_object #{ruby(action["Entity"])}, as: :#{variable}#{commit_a}#{refresh_a}"
+        members.empty? ? command : member_block(command, members, indent)
       when "Microflows$ChangeObjectAction", "Microflows$ChangeAction"
         legacy = action["$Type"] == "Microflows$ChangeAction"
         members = member_specs(action[legacy ? "Items" : "Members"])
@@ -3838,11 +3837,8 @@ module Mxrb
         commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
         commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
         refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
-        has_associations = members.any? { !_1[:association].to_s.empty? }
-        set_arg = members.empty? || has_associations ?
-          "" : ", set: { #{members_dsl(members)} }"
-        command = "#{pad}change_object :#{variable}#{set_arg}#{commit_a}#{refresh_a}"
-        has_associations ? member_block(command, members, indent) : command
+        command = "#{pad}change_object :#{variable}#{commit_a}#{refresh_a}"
+        members.empty? ? command : member_block(command, members, indent)
       when "Microflows$RetrieveAction"
         src      = action["RetrieveSource"] || {}
         variable = action["ResultVariableName"] || action["ResultListName"]
@@ -3912,17 +3908,7 @@ module Mxrb
       when "Microflows$ChangeVariableAction"
         "#{pad}change_variable :#{action["ChangeVariableName"]}, to: #{ruby_val(action["Value"])}"
       when "Microflows$ShowMessageAction"
-        template = action["Template"] || {}
-        translations = translated_items(template["Text"]).to_h do |translation|
-          [translation["LanguageCode"].to_s, translation["Text"].to_s]
-        end
-        parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
-        text = translations["en_US"] || translations.values.first.to_s
-        type_a = action["Type"].to_s.empty? ? "" : ", type: :#{underscore(action["Type"])}"
-        blocking_a = action["Blocking"] == true ? ", blocking: true" : ""
-        translations_a = translations.size > 1 ? ", translations: #{ruby(translations)}" : ""
-        parameters_a = parameters.empty? ? "" : ", parameters: #{ruby(parameters)}"
-        "#{pad}show_message #{ruby(text)}#{type_a}#{blocking_a}#{translations_a}#{parameters_a}"
+        flow_text_action_line(action, indent, validation: false)
       when "Microflows$LogMessageAction"
         template = action["MessageTemplate"] || {}
         parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
@@ -3932,24 +3918,7 @@ module Mxrb
         parameters_a = parameters.empty? ? "" : ", parameters: #{ruby(parameters)}"
         "#{pad}log_message #{ruby(template["Text"].to_s)}#{level_a}#{node_a}#{stack_a}#{parameters_a}"
       when "Microflows$ShowFormAction"
-        settings = action["FormSettings"] || {}
-        args = [ruby(settings["Form"])]
-        variable = action["FormObjectVariable"].to_s
-        args << "object: :#{variable}" unless variable.empty?
-        location = settings["Location"].to_s
-        args << "location: :#{underscore(location)}" unless location.empty?
-        mappings = bson_items(settings["ParameterMappings"]).map do |mapping|
-          "#{ruby(mapping["Parameter"])} => #{ruby_val(mapping["Argument"])}"
-        end
-        args << "pass: { #{mappings.join(', ')} }" unless mappings.empty?
-        close_pages = action["NumberOfPagesToClose"].to_s
-        args << "close_pages: #{close_pages.to_i}" unless close_pages.empty?
-        title = settings["FormTitle"] || settings["TitleOverride"]
-        translations = translated_items(title&.fetch("Text", title)).to_h do |translation|
-          [translation["LanguageCode"].to_s, translation["Text"].to_s]
-        end
-        args << "title: #{ruby(translations)}" unless translations.empty?
-        "#{pad}show_page #{args.join(', ')}"
+        show_page_action_line(action, indent)
       when "Microflows$CloseFormAction"
         count = action["NumberOfPagesToClose"].to_s
         count.empty? ? "#{pad}close_page" : "#{pad}close_page count: #{count.to_i}"
@@ -4011,19 +3980,7 @@ module Mxrb
         "#{pad}change_list :#{action["ChangeVariableName"]}, " \
           "action: :#{underscore(action["Type"])}, value: #{ruby_val(action["Value"])}"
       when "Microflows$ValidationFeedbackAction"
-        template = action["FeedbackTemplate"] || {}
-        translations = translated_items(template["Text"]).to_h do |translation|
-          [translation["LanguageCode"].to_s, translation["Text"].to_s]
-        end
-        parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
-        args = [":#{action["ValidationVariableName"]}"]
-        args << "attribute: #{ruby(action["Attribute"])}" unless action["Attribute"].to_s.empty?
-        args << "association: #{ruby(action["Association"])}" unless action["Association"].to_s.empty?
-        args << "translations: #{ruby(translations)}"
-        args << "parameters: #{ruby(parameters)}" unless parameters.empty?
-        error = underscore(action["ErrorHandlingType"])
-        args << "error: :#{error}" unless error == "rollback"
-        "#{pad}validation_feedback #{args.join(', ')}"
+        flow_text_action_line(action, indent, validation: true)
       when "Microflows$RestCallAction"
         rest_call_line(pad, action)
       when "DatabaseConnector$ExecuteDatabaseQueryAction"
@@ -4105,9 +4062,9 @@ module Mxrb
     def rest_call_line(pad, action)
       http = action["HttpConfiguration"] || {}
       location = http["CustomLocationTemplate"] || {}
-      headers = bson_items(http["HttpHeaderEntries"]).to_h do |header|
-        [header["Key"].to_s, header["Value"].to_s]
-      end
+      headers = Dsl::FlowRestBuilder.new
+      bson_items(http["HttpHeaderEntries"]).each { headers.header(_1.fetch('Key'), _1.fetch('Value')) }
+      headers = headers.headers
       request = action["RequestHandling"] || {}
       result = action["ResultHandling"] || {}
       import_call = result["ImportMappingCall"] || {}
@@ -4117,7 +4074,6 @@ module Mxrb
       ]
       parameters = bson_items(location["Parameters"]).map { _1["Expression"] }
       args << "location_parameters: #{ruby(parameters)}" unless parameters.empty?
-      args << "headers: #{ruby(headers)}" unless headers.empty?
       if request["$Type"] == "Microflows$CustomRequestHandling"
         template = request["Template"] || {}
         args << "request_body: #{ruby(template['Text'].to_s)}"
@@ -4151,7 +4107,11 @@ module Mxrb
       args << "parameter_variable: :#{parameter}" unless parameter.empty?
       args << "error_result: :#{underscore(action["ErrorResultHandlingType"])}"
       args << "error: :#{underscore(action["ErrorHandlingType"])}"
-      "#{pad}call_rest #{args.join(', ')}"
+      command = "#{pad}call_rest #{args.join(', ')}"
+      return command if headers.empty?
+
+      declarations = headers.map { |name, expression| "#{pad}  header #{ruby(name)}, #{ruby(expression)}" }
+      ["#{command} do", *declarations, "#{pad}end"].join("\n")
     end
 
     def call_action_line(pad, method, target, output, mappings, use_return)
@@ -4223,6 +4183,70 @@ module Mxrb
       bson_items(text_doc["Translations"] || text_doc["Items"])
     end
 
+    def show_page_action_line(action, indent)
+      pad = " " * indent
+      settings = action["FormSettings"] || {}
+      args = [ruby(settings["Form"])]
+      variable = action["FormObjectVariable"].to_s
+      args << "object: :#{variable}" unless variable.empty?
+      location = settings["Location"].to_s
+      args << "location: :#{underscore(location)}" unless location.empty?
+      close_pages = action["NumberOfPagesToClose"].to_s
+      args << "close_pages: #{close_pages.to_i}" unless close_pages.empty?
+      title = settings["FormTitle"] || settings["TitleOverride"]
+      translations = translated_items(title&.fetch("Text", title)).map do |translation|
+        [translation["LanguageCode"].to_s, translation["Text"].to_s]
+      end
+      if translations.map(&:first).uniq.size != translations.size
+        raise SerializationError, 'duplicate page title language cannot be represented by this declaration'
+      end
+      mappings = bson_items(settings["ParameterMappings"])
+      command = "#{pad}show_page #{args.join(', ')}"
+      return command if mappings.empty? && title.nil?
+
+      lines = ["#{command} do"]
+      mappings.each do |mapping|
+        lines << "#{pad}  argument #{ruby(mapping['Parameter'])}, #{ruby(mapping['Argument'])}"
+      end
+      unless title.nil?
+        lines << "#{pad}  title do"
+        translations.each { |language, text| lines << "#{pad}    translation #{ruby(language)}, #{ruby(text)}" }
+        lines << "#{pad}  end"
+      end
+      (lines << "#{pad}end").join("\n")
+    end
+
+    def flow_text_action_line(action, indent, validation:)
+      template = action[validation ? 'FeedbackTemplate' : 'Template'] || {}
+      builder = Dsl::FlowTextBuilder.new
+      translated_items(template['Text']).each do |translation|
+        builder.translation(translation.fetch('LanguageCode'), translation.fetch('Text', ''))
+      end
+      bson_items(template['Parameters']).each { builder.parameter(_1['Expression']) }
+      if validation
+        arguments = [symbol(action['ValidationVariableName'])]
+        arguments << "attribute: #{ruby(action['Attribute'])}" unless action['Attribute'].to_s.empty?
+        arguments << "association: #{ruby(action['Association'])}" unless action['Association'].to_s.empty?
+        error = underscore(action['ErrorHandlingType'])
+        arguments << "error: :#{error}" unless error == 'rollback'
+      else
+        arguments = []
+        arguments << "type: :#{underscore(action['Type'])}" unless action['Type'].to_s.empty?
+        arguments << 'blocking: true' if action['Blocking'] == true
+      end
+      command = validation ? 'validation_feedback' : 'show_message'
+      declaration = [command, arguments.join(', ')].reject(&:empty?).join(' ')
+      padding = ' ' * indent
+      lines = ["#{padding}#{declaration} do"]
+      builder.translations.each do |language, text|
+        lines << "#{padding}  translation #{ruby(language)}, #{ruby(text)}"
+      end
+      builder.parameters.each { lines << "#{padding}  parameter #{ruby(_1)}" }
+      [*lines, "#{padding}end"].join("\n")
+    rescue ArgumentError, TypeError, KeyError => e
+      raise SerializationError, "unsupported flow text declaration: #{e.class}"
+    end
+
     def member_specs(members_bson)
       bson_items(members_bson).filter_map do |m|
         attr = m["Attribute"].to_s
@@ -4260,6 +4284,9 @@ module Mxrb
     end
 
     def ruby_val(val)
+      # Native expressions are source text, not Ruby literals to interpret.
+      # Leading zeros, decimal precision and words such as "nil" are data.
+      return ruby(val) if val.is_a?(String)
       return "nil" if val.nil? || val.to_s.empty?
       return ruby(val) if val.is_a?(Hash) || val.is_a?(Array)
       s = val.to_s

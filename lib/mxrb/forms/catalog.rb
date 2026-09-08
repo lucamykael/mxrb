@@ -63,6 +63,9 @@ module Mxrb
       ROOT = File.expand_path('../compiler/schemas', __dir__)
       FILES = { '11.12.1' => 'forms-11.12.1.json' }.freeze
 
+      @catalogs = {}
+      @catalog_mutex = Mutex.new
+
       attr_reader :version, :source, :source_sha256, :types
 
       def self.for(version)
@@ -70,12 +73,14 @@ module Mxrb
         filename = FILES.fetch(version) do
           raise ArgumentError, "unsupported Forms schema #{version.inspect}; available: #{FILES.keys.join(', ')}"
         end
-        new(File.join(ROOT, filename), expected_version: version)
+        @catalog_mutex.synchronize do
+          @catalogs[version] ||= new(File.join(ROOT, filename), expected_version: version)
+        end
       end
 
       def initialize(path, expected_version: nil) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
         payload = JSON.parse(File.read(path))
-        @version = payload.fetch('mendix_version')
+        @version = payload.fetch('mendix_version').dup.freeze
         if expected_version && @version != expected_version
           raise ArgumentError, "Forms schema version mismatch: expected #{expected_version}, got #{@version.inspect}"
         end

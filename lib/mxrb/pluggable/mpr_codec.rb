@@ -156,7 +156,7 @@ module Mxrb
           $ID $Type WidgetId WidgetName Name WidgetDescription Description Prompt
           StudioProCategory StudioCategory SupportedPlatform OfflineCapable
           WidgetNeedsEntityContext NeedsEntityContext WidgetPluginWidget PluginWidget
-          WidgetPhoneGapEnabled HelpUrl ObjectType
+          HelpUrl ObjectType
         ]
         assert_known!(document, known, path)
         [definition, context]
@@ -239,7 +239,10 @@ module Mxrb
 
           value = decode_value(stored.fetch('Value'), property.value_type, context,
                                path: "#{path}.#{property.key}")
-          target.set(property.key, value)
+          source = if property.value_type.kind != 'DataSource'
+                     decode_optional_forms(stored.fetch('Value')['SourceVariable'])
+                   end
+          target.set(property.key, value, source:)
           assert_known!(stored, %w[$ID $Type TypePointer Value], "#{path}.Properties[#{index}]")
         end
         assert_known!(document, %w[$ID $Type TypePointer Properties], path)
@@ -253,7 +256,8 @@ module Mxrb
         when 'Boolean' then document.fetch('PrimitiveValue', 'false').to_s == 'true'
         when 'Integer' then Integer(document.fetch('PrimitiveValue', '0'))
         when 'Decimal' then Decimal.coerce(document.fetch('PrimitiveValue', '0'))
-        when 'String', 'Enumeration', 'Selection' then document.fetch('PrimitiveValue', '').to_s
+        when 'String', 'Enumeration' then document.fetch('PrimitiveValue', '').to_s
+        when 'Selection' then document.fetch('Selection', 'None').to_s
         when 'Expression' then Forms::Expression.coerce(document.fetch('Expression', ''))
         when 'EntityConstraint' then Forms::XPathConstraint.coerce(document.fetch('XPathConstraint', ''))
         when 'Attribute'
@@ -315,6 +319,11 @@ module Mxrb
       end
 
       def decode_semantic_reference(kind, document)
+        if kind == 'Association' && document['EntityRef']
+          target = forms_codec.decode_entity_reference_value(document['EntityRef'], path: '$.EntityRef')
+          return Pluggable.reference(kind, target)
+        end
+
         field = {
           'Association' => 'AttributeRef', 'File' => 'Image', 'Form' => 'Form',
           'Image' => 'Image', 'Microflow' => 'Microflow', 'Nanoflow' => 'Nanoflow'
@@ -369,32 +378,53 @@ module Mxrb
         }
       end
 
+      SCHEMA_STORAGE_ALIASES = {
+        'CustomWidgets$CustomWidgetType' => {
+          'Name' => 'WidgetName', 'Description' => 'WidgetDescription',
+          'NeedsEntityContext' => 'WidgetNeedsEntityContext', 'PluginWidget' => 'WidgetPluginWidget'
+        },
+        'CustomWidgets$WidgetPropertyType' => { '_Key' => 'PropertyKey', 'Key' => 'PropertyKey' },
+        'CustomWidgets$WidgetValueType' => { 'AttributeTypes' => 'AllowedTypes' },
+        'CustomWidgets$WidgetEnumerationValue' => { 'Key' => '_Key' },
+        'CustomWidgets$WidgetActionVariable' => { '_Key' => 'Key' }
+      }.transform_values(&:freeze).freeze
+      private_constant :SCHEMA_STORAGE_ALIASES
+
       def restore_schema_identity!(document, baseline)
         replacements = {}
-        copy_schema_ids!(document.fetch('Type'), baseline.fetch('Type'), replacements)
+        restore_schema_fields!(document.fetch('Type'), baseline.fetch('Type'), replacements)
         rewrite_type_pointers!(document.fetch('Object'), replacements)
       end
 
-      def copy_schema_ids!(generated, baseline, replacements)
+      def restore_schema_fields!(generated, baseline, replacements)
         case generated
         when Hash
-          if baseline.is_a?(Hash) && generated.key?('$ID') && baseline.key?('$ID')
-            old_id = storage_id(generated['$ID'])
-            generated['$ID'] = baseline['$ID']
-            replacements[old_id] = baseline['$ID'] if old_id
-          end
-          generated.each do |key, value|
-            copy_schema_ids!(value, baseline[key], replacements) if baseline.is_a?(Hash) && baseline.key?(key)
-          end
+          restore_schema_hash!(generated, baseline, replacements) if baseline.is_a?(Hash)
         when Array
           return unless baseline.is_a?(Array)
 
-          generated_items = array_items(generated)
-          baseline_items = array_items(baseline)
-          generated_items.zip(baseline_items).each do |value, previous|
-            copy_schema_ids!(value, previous, replacements) if previous
+          array_items(generated).zip(array_items(baseline)).each do |value, previous|
+            restore_schema_fields!(value, previous, replacements) if previous
           end
         end
+      end
+
+      def restore_schema_hash!(generated, baseline, replacements)
+        # The baseline selected the concrete schema above. Field presence and
+        # BSON key order are part of its identity: adding an empty Prompt or
+        # reordering fields makes Studio report an outdated widget.
+        aliases = SCHEMA_STORAGE_ALIASES.fetch(generated['$Type'], {})
+        fields = baseline.each_key.with_object({}) do |key, restored|
+          canonical = aliases.fetch(key, key)
+          restored[key] = generated.fetch(canonical) if generated.key?(canonical)
+        end
+        generated.replace(fields)
+        old_id = storage_id(generated['$ID'])
+        if old_id && baseline.key?('$ID')
+          generated['$ID'] = baseline['$ID']
+          replacements[old_id] = baseline['$ID']
+        end
+        generated.each { |key, value| restore_schema_fields!(value, baseline[key], replacements) }
       end
 
       def rewrite_type_pointers!(value, replacements)
@@ -443,12 +473,16 @@ module Mxrb
         properties = object.assignments.map do |assignment|
           property = schema.fetch_property(assignment.property.key)
           value_type_id = context[:value_type_ids].fetch(property.value_type.object_id)
-          {
+          stored = {
             '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetProperty',
             'TypePointer' => context[:property_ids].fetch(property.object_id),
             'Value' => encode_value(assignment.value, property.value_type,
                                     value_type_id, context, path: "#{path}.#{assignment.property.key}")
           }
+          if assignment.source_variable
+            stored['Value']['SourceVariable'] = encode_optional_forms(assignment.source_variable)
+          end
+          stored
         end
         {
           '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetObject',
@@ -461,8 +495,9 @@ module Mxrb
         document = empty_widget_value(type_id)
         case value_type.kind
         when 'Boolean' then document['PrimitiveValue'] = value.to_s
-        when 'Integer', 'Decimal', 'String', 'Enumeration', 'Selection'
+        when 'Integer', 'Decimal', 'String', 'Enumeration'
           document['PrimitiveValue'] = value.to_s
+        when 'Selection' then document['Selection'] = value.to_s
         when 'Expression' then document['Expression'] = value.to_s
         when 'EntityConstraint' then document['XPathConstraint'] = value.to_s
         when 'Attribute'
@@ -535,6 +570,11 @@ module Mxrb
 
       def encode_semantic_reference(document, kind, reference)
         return if reference.nil?
+
+        if kind == 'Association' && reference.target.is_a?(Forms::EntityReference)
+          document['EntityRef'] = forms_codec.encode_entity_reference_value(reference.target)
+          return
+        end
 
         field = {
           'Association' => 'AttributeRef', 'File' => 'Image', 'Form' => 'Form',

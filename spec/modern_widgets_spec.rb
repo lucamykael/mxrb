@@ -106,7 +106,7 @@ RSpec.describe 'modern page widgets' do
       options: {
         widget_id: 'example.Map', widget_name: 'Map', properties: {
           mode: 'satellite', config: { PrimitiveValue: 'compact', Rules: [{ Enabled: true }] },
-          ignored: nil, unknown: 'not-in-schema'
+          ignored: nil
         }
       }
     }

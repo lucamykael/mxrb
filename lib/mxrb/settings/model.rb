@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'value_contracts'
+
 module Mxrb
   # Typed, storage-independent representation of Mendix project settings.
   module Settings
@@ -147,27 +149,35 @@ module Mxrb
 
     Collection = Data.define(:items, :marker) do
       def initialize(items:, marker: 3)
-        super(items: Array(items).freeze, marker: Integer(marker))
+        marker = Integer(marker)
+        raise Error, 'settings collection marker must be 1, 2, or 3' unless (1..3).cover?(marker)
+
+        copies = Array(items).map { _1.is_a?(String) ? _1.dup.freeze : _1 }
+        super(items: copies.freeze, marker:)
       end
     end
 
     # A schema-checked settings component. Storage names remain internal.
     class Node
-      attr_reader :storage_type, :fields
+      attr_reader :storage_type
 
       def initialize(storage_type)
         Catalog.method_for_type(storage_type)
-        @storage_type = storage_type.freeze
+        @storage_type = storage_type.dup.freeze
         @fields = {}
       end
 
       def set(field, value)
-        Catalog.field_for(storage_type, Catalog.field_method(field))
-        fields[field.to_s] = value
+        canonical = Catalog.field_for(storage_type, Catalog.field_method(field))
+        @fields[canonical] = ValueContracts.normalize(storage_type, canonical, value)
         self
       end
 
-      def fetch(field) = fields.fetch(field.to_s)
+      def fetch(field)
+        @fields.fetch(Catalog.field_for(storage_type, Catalog.field_method(field)))
+      end
+
+      def fields = @fields.dup.freeze
     end
 
     # Builds a homogeneous or empty component collection in the Ruby DSL.

@@ -6,7 +6,11 @@ require_relative '../forms/node'
 
 module Mxrb
   module Pluggable
-    Assignment = Data.define(:property, :value)
+    Assignment = Data.define(:property, :value, :source_variable) do
+      def initialize(property:, value:, source_variable: nil)
+        super
+      end
+    end
     Reference = Data.define(:kind, :target)
     Decimal = Data.define(:value) do
       def self.coerce(value) = new(BigDecimal(value.to_s).to_s('F').freeze)
@@ -58,6 +62,8 @@ module Mxrb
 
     # Values for one WidgetObject, checked against its embedded MPK schema.
     class ObjectNode
+      VALUE_UNSET = Object.new.freeze
+
       attr_reader :schema
 
       def initialize(schema)
@@ -70,12 +76,22 @@ module Mxrb
       def assignments = @assignments.dup.freeze
       def fetch(identifier) = assignment(identifier)&.value
 
-      def set(identifier, value)
+      def set(identifier, value = VALUE_UNSET, source: assignment(identifier)&.source_variable, type: nil, &block)
         property = schema.fetch_property(identifier)
+        value = assignment_value(property, value, type, &block)
         normalized = normalize(property, value)
+        validate_source!(source)
         @assignments.reject! { _1.property.key == property.key }
-        @assignments << Assignment.new(property, normalized)
+        @assignments << Assignment.new(property, normalized, source)
         self
+      end
+
+      def source(identifier, type = 'PageVariable', &block)
+        current = assignment(identifier)
+        raise ArgumentError, "assign #{identifier} before its source" unless current
+        return current.source_variable unless block
+
+        set(identifier, current.value, source: Forms::Node.build(type, &block))
       end
 
       def append(identifier, value = nil, type: nil, &block)
@@ -112,6 +128,26 @@ module Mxrb
       end
 
       private
+
+      def assignment_value(property, value, type, &block)
+        if block
+          raise ArgumentError, 'set accepts a value or a nested block, not both' unless value.equal?(VALUE_UNSET)
+
+          return nested_value(property, type, &block)
+        end
+        if value.equal?(VALUE_UNSET) || type
+          raise ArgumentError, 'set requires a value, or a nested block with an optional type'
+        end
+
+        value
+      end
+
+      def validate_source!(source)
+        return if source.nil?
+        return if source.is_a?(Forms::Node) && source.schema_type.name == 'PageVariable'
+
+        raise TypeError, 'property source must be a Forms::PageVariable'
+      end
 
       def assignment(identifier)
         property = schema.fetch_property(identifier)
@@ -299,7 +335,9 @@ module Mxrb
 
     def self.reference(kind, target)
       canonical_kind = kind.to_s.split('_').map(&:capitalize).join.freeze
-      canonical_target = if canonical_kind == 'Association'
+      canonical_target = if canonical_kind == 'Association' && target.is_a?(Forms::EntityReference)
+                           target
+                         elsif canonical_kind == 'Association'
                            Forms::AttributeReference.coerce(target)
                          else
                            target.to_s.freeze

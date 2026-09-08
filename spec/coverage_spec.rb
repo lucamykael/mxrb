@@ -2754,13 +2754,13 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       "Entity" => "M.Entity", "OutputVariableName" => "Object",
       "Members" => attribute_member
     )
-    expect(created).to include("create_object", "set:")
+    expect(created).to include("create_object", "set :Name, to:")
 
     changed = line.call(
       "$Type" => "Microflows$ChangeObjectAction",
       "Variable" => "Object", "Members" => attribute_member
     )
-    expect(changed).to include("change_object", "set:")
+    expect(changed).to include("change_object", "set :Name, to:")
 
     retrieved = line.call(
       "$Type" => "Microflows$RetrieveAction",

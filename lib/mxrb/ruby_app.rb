@@ -7,6 +7,17 @@ require 'monitor'
 require 'uri'
 require_relative 'native_fragment_store'
 require_relative 'ruby_app/session_manager'
+require_relative 'ruby_app/source_identity'
+require_relative 'ruby_app/domain_rule_builders'
+require_relative 'ruby_app/security_builders'
+require_relative 'ruby_app/member_identity'
+require_relative 'ruby_app/record_identity'
+require_relative 'ruby_app/regular_expression'
+require_relative 'ruby_app/security_identity'
+require_relative 'ruby_app/schedule_builder'
+require_relative 'ruby_app/page_data_sources'
+require_relative 'ruby_app/page_design_identity'
+require_relative 'ruby_app/pluggable_properties'
 require_relative 'http/server'
 
 module Mxrb
@@ -22,7 +33,7 @@ module Mxrb
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[
-      constants enumerations models dtos controllers services pages security scheduled_events
+      constants enumerations models dtos controllers services pages security scheduled_events regular_expressions
     ].freeze
 
     def self.application_files(root)
@@ -43,6 +54,23 @@ module Mxrb
     def self.with_native_fragments(root, &block)
       store = NativeFragmentStore.new(File.join(File.expand_path(root), '.mxrb', 'native_fragments'))
       NativeFragmentStore.with(store, &block)
+    end
+
+    def self.load_sources(manifest)
+      SourceIdentity.with(manifest) do |identities|
+        FlowMetadata.with(manifest) do
+          PageDesignIdentity.with(manifest) do
+            PluggableProperties.with(manifest) do
+              with_native_fragments(manifest.root) do
+                application_files(manifest.root).each do |path|
+                  identities.load_file(path) { load path, true }
+                end
+                identities.finalize!
+              end
+            end
+          end
+        end
+      end
     end
 
     def self.source_bundle(root)
@@ -158,6 +186,7 @@ module Mxrb
         @module_security = {}
         @project_security = {}
         @scheduled_events = {}
+        @regular_expressions = {}
         @adapters = {}
         @java_custom_actions = {}
       end
@@ -255,10 +284,33 @@ module Mxrb
           constant: @constants, enumeration: @enumerations, record: @records, service: @services,
           controller: (@controllers ||= {}), page: @pages, module_security: @module_security,
           project_security: @project_security, scheduled_event: @scheduled_events,
+          regular_expression: @regular_expressions,
           adapter: @adapters,
           java_custom_action: @java_custom_actions
         }.fetch(kind)
       end
+    end
+
+    AccessRuleMember = Data.define(:name, :rights, :id, :reference, :kind)
+
+    # Ordered member declarations shared by persistent models and DTOs.
+    class AccessRuleBuilder
+      def initialize(members = [])
+        @members = Array(members).dup
+      end
+
+      def member(name, rights:, id: nil, reference: nil, kind: :attribute)
+        raise ArgumentError, 'access member requires a name' if name.to_s.empty?
+
+        @members << AccessRuleMember.new(name:, rights:, id:, reference:, kind:)
+      end
+
+      def evaluate(&block)
+        block.arity == 1 ? block.call(self) : instance_eval(&block)
+        self
+      end
+
+      def members = @members.dup.freeze
     end
 
     # Base for generated persistent models.
@@ -269,6 +321,7 @@ module Mxrb
       ASSOCIATION_OWNERS = %i[Default Both].freeze
       ASSOCIATION_STORAGE_FORMATS = %i[Column Table].freeze
       ACCESS_RIGHTS = %i[None ReadOnly ReadWrite].freeze
+      ACCESS_RIGHT_ALIASES = { none: :None, read_only: :ReadOnly, read_write: :ReadWrite }.freeze
       ACCESS_MEMBER_KINDS = %i[attribute association].freeze
       ATTRIBUTE_OPTION_UNSET = Object.new.freeze
 
@@ -289,13 +342,15 @@ module Mxrb
           child.instance_variable_set(:@oql_view_definition, nil)
           child.instance_variable_set(:@native_lifecycle_definitions, nil)
           child.instance_variable_set(:@validation_rules, nil)
+          child.instance_variable_set(:@removed_domain_members, {})
+          child.instance_variable_set(:@declared_domain_collections, {})
         end
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :record, @mendix_name, id:)
           Registry.register(:record, @mendix_name, self)
         end
 
@@ -319,7 +374,7 @@ module Mxrb
 
         def association(target, name:, id: nil, type: :Reference, owner: :Default,
                         documentation: '', parent_delete: :NoAction, child_delete: :NoAction,
-                        storage_format: nil)
+                        storage_format: nil, renamed_from: nil)
           type = type.to_sym
           owner = owner.to_sym
           storage_format = storage_format&.to_sym
@@ -332,42 +387,56 @@ module Mxrb
           end
 
           @associations ||= []
-          @associations << {
+          declaration = {
             name: name.to_s, id: id&.to_s, target: target.to_s, type:, owner:,
             documentation: documentation.to_s, parent_delete: parent_delete.to_sym,
             child_delete: child_delete.to_sym, storage_format:
           }
+          declaration[:renamed_from] = renamed_from unless renamed_from.nil?
+          @associations << declaration
+          (@declared_domain_collections ||= {})[:associations] = true
         end
 
+        def clear_associations! = clear_domain_collection(:associations, :@associations)
+
         def access_rule(*roles, id: nil, documentation: '', create: false, delete: false,
-                        default_rights: :None, xpath: '', xpath_caption: nil, members: [])
+                        default_rights: :None, xpath: '', xpath_caption: nil, members: [],
+                        renamed_from: nil, &block)
           raise ArgumentError, 'access_rule requires at least one module role' if roles.empty?
 
-          @access_rules ||= []
-          @access_rules << {
+          declarations = AccessRuleBuilder.new(members)
+          declarations.evaluate(&block) if block
+          rule = {
             id: id.to_s, roles: roles.map(&:to_s), documentation: documentation.to_s,
             create: create == true, delete: delete == true,
             default_rights: normalize_access_right(default_rights), xpath: xpath.to_s,
             xpath_caption: xpath_caption&.to_s,
-            members: Array(members).map { normalize_access_member(_1) }
+            members: declarations.members.map { normalize_access_member(_1) }
           }
+          rule[:renamed_from] = renamed_from unless renamed_from.nil?
+          (@access_rules ||= []) << rule
+          (@declared_domain_collections ||= {})[:access_rules] = true
         end
 
-        def clear_access_rules! = (@access_rules = [])
+        def clear_access_rules! = clear_domain_collection(:access_rules, :@access_rules)
 
         def index(*attributes, id: nil, guid: nil, include_offline: false, ascending: true,
-                  members: nil)
-          declarations = members || index_members(attributes, ascending)
-          raise ArgumentError, 'index requires at least one attribute' if declarations.empty?
+                  members: nil, renamed_from: nil, &block)
+          declarations = IndexBuilder.new(members || index_members(attributes, ascending))
+          declarations.evaluate(&block) if block
+          normalized = declarations.members.map { normalize_index_member(_1) }
+          raise ArgumentError, 'index requires at least one attribute' if normalized.empty?
 
-          @indexes ||= []
-          @indexes << {
+          definition = {
             id: id.to_s, guid: guid.to_s, include_offline: include_offline == true,
-            members: declarations.map { normalize_index_member(_1) }
+            members: normalized
           }
+          definition[:renamed_from] = renamed_from unless renamed_from.nil?
+          (@indexes ||= []) << definition
+          (@declared_domain_collections ||= {})[:indexes] = true
         end
 
-        def clear_indexes! = (@indexes = [])
+        def clear_indexes! = clear_domain_collection(:indexes, :@indexes)
 
         def system_members(owner: ATTRIBUTE_OPTION_UNSET, created_date: ATTRIBUTE_OPTION_UNSET,
                            changed_date: ATTRIBUTE_OPTION_UNSET, changed_by: ATTRIBUTE_OPTION_UNSET)
@@ -398,7 +467,7 @@ module Mxrb
         end
 
         def lifecycle(event, method_name = nil, microflow: nil, id: nil, pass_event_object: true,
-                      raise_error_on_false: nil, &block)
+                      raise_error_on_false: nil, renamed_from: nil, &block)
           event = event.to_sym
           raise ArgumentError, "unknown lifecycle event #{event}" unless LIFECYCLE_EVENTS.include?(event)
 
@@ -414,11 +483,14 @@ module Mxrb
                             raise_error_on_false == true
                           end
             @native_lifecycle_definitions ||= []
-            @native_lifecycle_definitions << {
+            definition = {
               id: id.to_s, event:, handler: microflow.to_s,
               pass_event_object: pass_event_object == true,
               raise_error_on_false: raise_error
             }
+            definition[:renamed_from] = renamed_from unless renamed_from.nil?
+            @native_lifecycle_definitions << definition
+            (@declared_domain_collections ||= {})[:lifecycle] = true
             return
           end
           raise ArgumentError, 'callback method or block is required' unless method_name || block
@@ -433,29 +505,61 @@ module Mxrb
           end
         end
 
-        def clear_native_lifecycle! = (@native_lifecycle_definitions = [])
+        def clear_native_lifecycle! = clear_domain_collection(:lifecycle, :@native_lifecycle_definitions)
 
         def validation_rule(attribute, kind:, id: nil, message_id: nil, translations: [],
-                            rule_info_id: nil, rule_info: {})
+                            rule_info_id: nil, rule_info: {}, renamed_from: nil, &block)
           name = attribute.to_s
           raise ArgumentError, 'validation_rule requires an attribute' if name.empty?
 
-          @validation_rules ||= []
-          @validation_rules << {
-            id: id.to_s, attribute: name, kind: kind.to_s,
+          builder = ValidationRuleBuilder.new(kind:, translations:, rule_info:)
+          builder.evaluate(&block) if block
+          definition = {
+            id: id.to_s, attribute: name, kind: builder.kind,
             message_id: message_id.to_s,
-            translations: Array(translations).map { normalize_validation_translation(_1) },
+            translations: builder.translations.map { normalize_validation_translation(_1) },
             rule_info_id: rule_info_id.to_s,
-            rule_info: rule_info.to_h.transform_keys(&:to_s)
+            rule_info: builder.rule_info
           }
-          option = { 'required' => :required, 'unique' => :unique }[kind.to_s.downcase]
+          definition[:renamed_from] = renamed_from unless renamed_from.nil?
+          (@validation_rules ||= []) << definition
+          (@declared_domain_collections ||= {})[:validation_rules] = true
+          option = { 'required' => :required, 'unique' => :unique }[builder.kind.downcase]
           declared_attribute = @attributes&.find do |candidate|
             [candidate[:name], candidate[:mendix_name]].map(&:to_s).include?(name)
           end
           declared_attribute[option] = true if option && declared_attribute
         end
 
-        def clear_validation_rules! = (@validation_rules = [])
+        def clear_validation_rules! = clear_domain_collection(:validation_rules, :@validation_rules)
+
+        def remove_association(name) = remove_domain_member(:associations, name)
+        def remove_index(*members) = remove_domain_member(:indexes, members)
+        def remove_access_rule(*roles, xpath: '') = remove_domain_member(:access_rules, [roles, xpath])
+        def remove_native_lifecycle(event) = remove_domain_member(:lifecycle, event)
+        def remove_validation_rule(attribute, kind:) = remove_domain_member(:validation_rules, [attribute, kind])
+
+        def resolve_record_identities!(identities)
+          (@removed_domain_members || {}).each do |collection, removed|
+            next if removed.empty? || @declared_domain_collections.to_h[collection]
+
+            raise ValidationError,
+                  "domain removal requires explicit complete #{collection} declarations or an explicit clear operation"
+          end
+          resolved = identities.resolve(
+            id: mendix_id, name: mendix_name, removed: @removed_domain_members || {},
+            associations: @associations, access_rules: @access_rules, indexes: @indexes,
+            lifecycle: @native_lifecycle_definitions, validation_rules: @validation_rules,
+            generalization: @generalization, oql_view: @oql_view_definition
+          )
+          @associations = resolved.fetch(:associations)
+          @access_rules = resolved.fetch(:access_rules)
+          @indexes = resolved.fetch(:indexes)
+          @native_lifecycle_definitions = resolved.fetch(:lifecycle)
+          @validation_rules = resolved.fetch(:validation_rules)
+          @generalization = resolved.fetch(:generalization)
+          @oql_view_definition = resolved.fetch(:oql_view)
+        end
 
         def from_native(value)
           values = attributes.to_a.to_h do |attribute|
@@ -466,8 +570,20 @@ module Mxrb
 
         private
 
+        def clear_domain_collection(collection, variable)
+          (@declared_domain_collections ||= {})[collection] = true
+          instance_variable_set(variable, [])
+        end
+
+        def remove_domain_member(collection, key)
+          raise ArgumentError, 'domain removal requires a semantic key' if key.nil? || key.to_s.empty? || key == []
+
+          @removed_domain_members ||= {}
+          (@removed_domain_members[collection] ||= []) << key
+        end
+
         def normalize_access_right(value)
-          right = value.to_sym
+          right = ACCESS_RIGHT_ALIASES.fetch(value.to_sym, value.to_sym)
           raise ArgumentError, "access rights must be one of #{ACCESS_RIGHTS.join(', ')}" \
             unless ACCESS_RIGHTS.include?(right)
 
@@ -661,12 +777,24 @@ module Mxrb
     class Enumeration
       OPTION_UNSET = Object.new.freeze
 
+      # Localized captions are authored as ordered, typed translations.
+      class TranslationBuilder
+        def initialize = (@translations = [])
+
+        def translation(language, text)
+          @translations << Forms::Translation.new(language.to_s, text.to_s)
+        end
+
+        def build = Forms::Text.new(@translations)
+      end
+
       class << self
         attr_reader :mendix_id, :values
 
         def inherited(child)
           super
           child.instance_variable_set(:@values, [])
+          child.instance_variable_set(:@removed_values, [])
           child.instance_variable_set(:@documentation, '')
         end
 
@@ -674,7 +802,7 @@ module Mxrb
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :enumeration, @mendix_name, id:)
           Registry.register(:enumeration, @mendix_name, self)
         end
 
@@ -684,16 +812,39 @@ module Mxrb
           @documentation = value.to_s
         end
 
-        def value(name, id: nil, caption: OPTION_UNSET, captions: nil)
-          localized = if captions.nil?
+        def value(name, id: nil, caption: OPTION_UNSET, captions: nil, renamed_from: nil, &block)
+          if block && (!captions.nil? || !caption.equal?(OPTION_UNSET))
+            raise ArgumentError, 'value accepts either caption options or a translation block'
+          end
+
+          localized = if block
+                        builder = TranslationBuilder.new
+                        block.arity.zero? ? builder.instance_eval(&block) : block.call(builder)
+                        builder.build.translations.to_h { [_1.language, _1.text] }
+                      elsif captions.nil?
                         {}
                       else
                         captions.to_h.transform_keys(&:to_s).transform_values(&:to_s)
                       end
           localized['en_US'] = caption.to_s unless caption.equal?(OPTION_UNSET)
-          localized['en_US'] = name.to_s if captions.nil? && caption.equal?(OPTION_UNSET)
+          localized['en_US'] = name.to_s if !block && captions.nil? && caption.equal?(OPTION_UNSET)
           @values ||= []
-          @values << { name: name.to_s, id: id.to_s, captions: localized.freeze }.freeze
+          declaration = { name: name.to_s, id: id.to_s, captions: localized.freeze }
+          declaration[:renamed_from] = renamed_from.to_s unless renamed_from.nil?
+          @values << declaration.freeze
+        end
+
+        def remove_value(name)
+          value = name.to_s
+          raise ArgumentError, 'remove_value requires a value name' if value.empty?
+
+          (@removed_values ||= []) << value
+        end
+
+        def resolve_value_identities!(previous)
+          @values = MemberIdentity.resolve(
+            previous:, declarations: Array(@values), removed: Array(@removed_values)
+          ).map(&:freeze)
         end
 
         def native_definition
@@ -728,7 +879,7 @@ module Mxrb
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :constant, @mendix_name, id:)
           Registry.register(:constant, @mendix_name, self)
         end
 
@@ -798,22 +949,37 @@ module Mxrb
         def inherited(child)
           super
           child.instance_variable_set(:@roles, [])
+          child.instance_variable_set(:@removed_roles, [])
         end
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :module_security, @mendix_name, id:)
           Registry.register(:module_security, @mendix_name, self)
         end
 
-        def module_role(name, id: nil, description: '')
+        def module_role(name, id: nil, description: '', renamed_from: nil)
           @roles ||= []
-          @roles << { name: name.to_s, id: id.to_s, description: description.to_s }
+          declaration = { name: name.to_s, id: id.to_s, description: description.to_s }
+          declaration[:renamed_from] = renamed_from.to_s unless renamed_from.nil?
+          @roles << declaration
         end
 
         def clear_module_roles! = (@roles = [])
+
+        def remove_module_role(name)
+          raise ArgumentError, 'remove_module_role requires a role name' if name.to_s.empty?
+
+          (@removed_roles ||= []) << name.to_s
+        end
+
+        def resolve_security_identities!(identities)
+          definition = identities.module_security(native_definition, removed_roles: Array(@removed_roles))
+          @mendix_id = definition.fetch(:id)
+          @roles = definition.fetch(:roles)
+        end
 
         def native_definition
           { module_name: @mendix_name.to_s, id: @mendix_id.to_s, roles: Array(@roles) }
@@ -836,12 +1002,20 @@ module Mxrb
           child.instance_variable_set(:@demo_user_definitions, [])
           child.instance_variable_set(:@settings, {})
           child.instance_variable_set(:@password_policy, nil)
+          child.instance_variable_set(:@removed_user_roles, [])
+          child.instance_variable_set(:@removed_demo_users, [])
         end
 
         def mendix_id(value = OPTION_UNSET)
           return @mendix_id.to_s if value.equal?(OPTION_UNSET)
 
-          @mendix_id = value.to_s
+          project_security(id: value)
+        end
+
+        def mendix_name = 'project'
+
+        def project_security(id: nil)
+          @mendix_id = SourceIdentity.resolve(self, :project_security, 'project', id:)
           Registry.register(:project_security, 'project', self)
         end
 
@@ -857,9 +1031,9 @@ module Mxrb
 
         def user_role(name, id: nil, guid: nil, description: '', check_security: true,
                       manageable_roles: [], manage_all_roles: false,
-                      manage_users_without_roles: false, module_roles: [])
+                      manage_users_without_roles: false, module_roles: [], renamed_from: nil)
           @user_roles ||= []
-          @user_roles << {
+          declaration = {
             name: name.to_s, id: id.to_s, guid: guid.to_s,
             description: description.to_s, check_security: check_security == true,
             manageable_roles: Array(manageable_roles).map(&:to_s),
@@ -867,24 +1041,57 @@ module Mxrb
             manage_users_without_roles: manage_users_without_roles == true,
             module_roles: Array(module_roles).map(&:to_s)
           }
+          declaration[:renamed_from] = renamed_from.to_s unless renamed_from.nil?
+          @user_roles << declaration
         end
 
         def clear_user_roles! = (@user_roles = [])
 
-        def demo_user(name, entity:, roles:, id: nil, password: nil)
+        def demo_user(name, entity:, roles:, id: nil, password: nil, renamed_from: nil)
           @demo_user_definitions ||= []
-          @demo_user_definitions << {
+          declaration = {
             name: name.to_s, id: id.to_s, entity: entity.to_s,
             roles: Array(roles).map(&:to_s), password: password
           }
+          declaration[:renamed_from] = renamed_from.to_s unless renamed_from.nil?
+          @demo_user_definitions << declaration
         end
 
         def clear_demo_users! = (@demo_user_definitions = [])
 
-        def password_policy(id: nil, properties: {}, **options)
+        def remove_user_role(name)
+          raise ArgumentError, 'remove_user_role requires a role name' if name.to_s.empty?
+
+          (@removed_user_roles ||= []) << name.to_s
+        end
+
+        def remove_demo_user(name)
+          raise ArgumentError, 'remove_demo_user requires a user name' if name.to_s.empty?
+
+          (@removed_demo_users ||= []) << name.to_s
+        end
+
+        def resolve_security_identities!(identities)
+          definition = identities.project_security(
+            native_definition, removed_user_roles: Array(@removed_user_roles),
+            removed_demo_users: Array(@removed_demo_users)
+          )
+          @mendix_id = definition.fetch(:id)
+          @user_roles = definition.fetch(:user_roles)
+          @demo_user_definitions = definition.fetch(:demo_users)
+          @password_policy = definition[:password_policy]
+        end
+
+        def password_policy(id: nil, properties: {}, **options, &block)
+          values = properties.to_h.merge(options)
+          if block
+            builder = PasswordPolicyBuilder.new(values)
+            builder.evaluate(&block)
+            values = builder.properties
+          end
           @password_policy = {
             id: id.to_s,
-            properties: properties.to_h.merge(options).transform_keys(&:to_s)
+            properties: values.transform_keys(&:to_s)
           }
         end
 
@@ -917,7 +1124,7 @@ module Mxrb
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :scheduled_event, @mendix_name, id:)
           Registry.register(:scheduled_event, @mendix_name, self)
         end
 
@@ -932,11 +1139,14 @@ module Mxrb
         def interval_type(value) = (@definition[:interval_type] = value.to_s)
         def interval(value) = (@definition[:interval] = Integer(value))
 
-        def schedule(type, id: nil, properties: {}, **options)
-          @definition[:schedule] = {
-            type: type.to_s, id: id.to_s,
-            properties: properties.to_h.merge(options).transform_keys(&:to_s)
-          }
+        def schedule(type, id: nil, properties: {}, **options, &block)
+          values = properties.to_h.merge(options)
+          definition = if block
+                         ScheduleBuilder.new(type, id:, properties: values).evaluate(&block).build.to_h
+                       else
+                         { type: type.to_s, id: id.to_s, properties: values.transform_keys(&:to_s) }
+                       end
+          @definition[:schedule] = definition
         end
 
         def native_definition
@@ -945,6 +1155,68 @@ module Mxrb
             qualified_name: @mendix_name.to_s, id: @mendix_id.to_s
           )
         end
+      end
+    end
+
+    # Flow baselines belong to the exporting application's private sidecar.
+    # Scope the lookup to source loading so application roots cannot leak
+    # metadata into each other or into newly authored services.
+    class FlowMetadata
+      THREAD_KEY = :mxrb_ruby_app_flow_metadata
+
+      def self.with(manifest)
+        previous = Thread.current[THREAD_KEY]
+        Thread.current[THREAD_KEY] = new(manifest)
+        yield
+      ensure
+        Thread.current[THREAD_KEY] = previous
+      end
+
+      def self.for(unit_id, native_type)
+        Thread.current[THREAD_KEY]&.fetch(unit_id, native_type)
+      end
+
+      def self.validate!(unit_id, native_type, builder)
+        context = Thread.current[THREAD_KEY]
+        return unless context&.registered?(unit_id, native_type)
+        return unless builder.expected_body_fingerprint.to_s.empty?
+
+        raise ValidationError, 'existing Ruby flow requires its semantic metadata baseline or a legacy body fingerprint'
+      end
+
+      def initialize(manifest)
+        @entries = {}
+        @registered = manifest.modules.flat_map do |mod|
+          { 'services' => 'Microflows$Microflow', 'nanoflows' => 'Microflows$Nanoflow' }.flat_map do |key, native_type|
+            Array(mod[key]).map { [_1.fetch('id').to_s, native_type] }
+          end
+        end.to_set
+        path = File.join(File.dirname(manifest.absolute_path('mendix_project')), '.mxrb', 'semantic_metadata.json')
+        return unless File.file?(path)
+
+        modules = JSON.parse(File.read(path)).fetch('modules', {})
+        modules.each_value do |mod|
+          mod.fetch('flows', {}).each_value do |metadata|
+            (metadata.is_a?(Array) ? metadata : [metadata]).each { index(_1) }
+          end
+        end
+      rescue JSON::ParserError => e
+        raise SerializationError, "invalid flow metadata sidecar #{path}: #{e.message}"
+      end
+
+      def fetch(unit_id, native_type) = @entries[[unit_id.to_s, native_type.to_s]]
+      def registered?(unit_id, native_type) = @registered.include?([unit_id.to_s, native_type.to_s])
+
+      private
+
+      def index(metadata)
+        key = [metadata.fetch('unit_id', '').to_s, metadata.fetch('native_type', '').to_s]
+        return if key.any?(&:empty?)
+
+        previous = @entries[key]
+        raise ValidationError, 'conflicting flow metadata identities' if previous && previous != metadata
+
+        @entries[key] = metadata
       end
     end
 
@@ -958,7 +1230,7 @@ module Mxrb
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :service, @mendix_name, id:)
           Registry.register(:service, @mendix_name, self, unit_id: @mendix_id)
         end
 
@@ -973,11 +1245,15 @@ module Mxrb
                                  raise ArgumentError, 'flow kind must be microflow or nanoflow'
                                end
           unit_id = native_unit_id(kind)
+          SourceIdentity.validate_flow!(self, kind)
           @mendix_id = unit_id if @mendix_id.to_s.empty?
+          native_type = kind.to_sym == :nanoflow ? 'Microflows$Nanoflow' : 'Microflows$Microflow'
           builder = Dsl::FlowBuilder.new(
-            qualified.split('.', 2).last, runtime:, kind: flow_kind, public:, unit_id:
+            qualified.split('.', 2).last,
+            runtime:, kind: flow_kind, public:, unit_id:, metadata: FlowMetadata.for(unit_id, native_type)
           )
           builder.instance_eval(&block) if block
+          FlowMetadata.validate!(unit_id, native_type, builder)
           @native_kind = kind.to_sym
           @native_definition = builder.to_h
         end
@@ -1045,12 +1321,16 @@ module Mxrb
     # Page metadata remains ordinary Ruby while the browser receives its JSON
     # projection from the integrated backend.
     class Page
+      extend PageDataSources
+
       # Builds the runtime-facing widget projection without making the page an
       # authoritative native document. This keeps exported pages lossless via
       # the MPR sidecar while presenting their structure as editable Ruby.
       class WidgetTree
         include Dsl::WidgetComposite
+        include Dsl::WidgetEvents
         include NativeFragmentAccess
+        include PageDataSources
 
         OPTION_UNSET = Object.new.freeze
         STRUCTURED_METHODS = %i[data_view layout_grid native_widget tab_control table].freeze
@@ -1064,8 +1344,11 @@ module Mxrb
 
         attr_reader :widgets
 
-        def initialize
+        def initialize(event_owner: false, property_owner: nil)
           @widgets = []
+          @events = []
+          @event_owner = event_owner
+          @property_owner = property_owner
           initialize_widget_composite(
             key_transform: :to_s.to_proc,
             path_normalizer: method(:normalize),
@@ -1073,18 +1356,26 @@ module Mxrb
           )
         end
 
-        def widget(type, name = '', options: {}, events: [], caption: OPTION_UNSET, &block)
+        def widget(type, name = '', options: {}, events: OPTION_UNSET, caption: OPTION_UNSET, &block)
           options = normalize(options)
           value = { 'type' => type.to_s, 'name' => name.to_s }
           value['options'] = options unless options.empty?
           caption = options['caption'] if caption.equal?(OPTION_UNSET) && options.key?('caption')
           value['caption'] = caption unless caption.equal?(OPTION_UNSET) || caption.to_s.empty?
-          events = normalize(events)
-          value['events'] = events unless events.empty?
+          explicit_events = !events.equal?(OPTION_UNSET)
+          normalized_events = explicit_events ? normalize(events) : []
+          value['events'] = normalized_events unless normalized_events.empty?
 
           if block
-            content = self.class.new
+            property_owner = if type.to_s == 'pluggable_widget'
+                               { name: name.to_s, widget_id: options['widget_id'], legacy: options.key?('properties') }
+                             end
+            content = self.class.new(event_owner: true, property_owner:)
             block.arity.zero? ? content.instance_eval(&block) : block.call(content)
+            if explicit_events && content.send(:widget_event_collection).any?
+              raise ArgumentError, 'widget accepts either events: or typed event declarations'
+            end
+
             content.send(:append_to, value)
           end
 
@@ -1092,8 +1383,23 @@ module Mxrb
           value
         end
 
+        def properties(&block)
+          raise ArgumentError, 'properties must belong to a pluggable widget' unless @property_owner
+          raise ArgumentError, 'properties requires a block' unless block
+          if @property_owner.fetch(:legacy)
+            raise ArgumentError, 'widget accepts either properties: or a properties block'
+          end
+
+          raise ArgumentError, 'widget accepts only one properties block' if @pluggable_properties
+
+          bridge = PluggableProperties.for_widget(
+            @property_owner.fetch(:name), widget_id: @property_owner.fetch(:widget_id)
+          )
+          @pluggable_properties = bridge.evaluate(&block).to_projection
+        end
+
         (WIDGET_METHODS - STRUCTURED_METHODS).each do |type|
-          define_method(type) do |name = '', caption: OPTION_UNSET, events: [], **options, &block|
+          define_method(type) do |name = '', caption: OPTION_UNSET, events: OPTION_UNSET, **options, &block|
             options[:class] = options.delete(:class_name) if options.key?(:class_name)
             options[:caption] = caption unless caption.equal?(OPTION_UNSET)
             widget(type, name, options:, events:, &block)
@@ -1147,10 +1453,23 @@ module Mxrb
           append_structured(value, declared_fields: false)
         end
 
+        def grid_column(name, attribute: nil, caption: nil, filter: nil)
+          builder = Dsl::WidgetBuilder.new(:data_grid, '')
+          normalize(builder.column(name, attribute:, caption:, filter:).last)
+        end
+
         private
 
         def append_to(value)
+          (value['options'] ||= {})['properties'] = @pluggable_properties if @pluggable_properties
+          value['events'] = normalize(@events) unless @events.empty?
           append_widget_composite(value, children: @widgets)
+        end
+
+        def widget_event_collection
+          raise ArgumentError, 'event declarations must belong to a widget' unless @event_owner
+
+          @events
         end
 
         def append_structured(builder, declared_fields: true)
@@ -1180,7 +1499,7 @@ module Mxrb
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = id.to_s
+          @mendix_id = SourceIdentity.resolve(self, :page, @mendix_name, id:)
           Registry.register(:page, @mendix_name, self)
         end
 
@@ -1189,16 +1508,23 @@ module Mxrb
           raise ArgumentError, 'configure accepts either widgets: or a widget block, not both' \
             if widgets && block
 
-          @title = title.to_s
-          @widgets = if block
-                       tree = WidgetTree.new
-                       block.arity.zero? ? tree.instance_eval(&block) : block.call(tree)
-                       tree.widgets.freeze
-                     else
-                       Array(widgets).freeze
-                     end
-          @appearance_class = appearance_class.to_s
-          @appearance_style = appearance_style.to_s
+          title = title.to_s
+          appearance_class = appearance_class.to_s
+          appearance_style = appearance_style.to_s
+          widgets = if block
+                      tree = WidgetTree.new
+                      PluggableProperties.with_page(mendix_id) do
+                        block.arity.zero? ? tree.instance_eval(&block) : block.call(tree)
+                      end
+                      tree.widgets.freeze
+                    else
+                      Array(widgets).freeze
+                    end
+          widgets = PageDesignIdentity.configure(self, widgets).freeze
+          @title = title
+          @widgets = widgets
+          @appearance_class = appearance_class
+          @appearance_style = appearance_style
           @data_source = data_source
         end
 
@@ -1581,9 +1907,7 @@ module Mxrb
       end
 
       def load_application_files
-        RubyApp.with_native_fragments(root) do
-          RubyApp.application_files(root).each { load _1, true }
-        end
+        RubyApp.load_sources(manifest)
       end
 
       def load_adapters
@@ -1792,11 +2116,12 @@ module Mxrb
       def synchronize!
         Registry.reset!
         Environment.load(root: @root).with do
-          RubyApp.with_native_fragments(@root) do
-            RubyApp.application_files(@root).each { load _1, true }
-          end
+          @source_identities = RubyApp.load_sources(@manifest)
         end
+        @source_identities.validate_entity_names!
         project = Model::Project.open(@target, readonly: false)
+        preflight_regular_expressions!(project)
+        synchronize_regular_expression_definitions(project)
         synchronize_constant_definitions(project)
         synchronize_enumeration_definitions(project)
         synchronize_module_security(project)
@@ -1812,6 +2137,7 @@ module Mxrb
         prune_enumerations(project)
         synchronize_native_documents(project)
         synchronize_scheduled_events(project)
+        @source_identities.reconcile!(project)
         project.close
         project = nil
         embed_sources!
@@ -1824,6 +2150,7 @@ module Mxrb
 
       def embed_sources!
         files = RubyApp.source_bundle(@root)
+        files << @source_identities.bundle if @source_identities
         mpr = IO::MprFile.open(@target, readonly: false)
         mpr.transaction { mpr.write_ruby_app_sources(files) }
       ensure
@@ -1866,6 +2193,83 @@ module Mxrb
             project.mpr, module_name: name,
                          enumerations: implementations.map(&:native_definition)
           )
+        end
+        project.refresh!
+      end
+
+      def preflight_regular_expressions!(project)
+        registered = Registry.all(:regular_expression).values.group_by { module_name(_1.mendix_name) }
+        sources = @manifest.modules.to_h do |mod|
+          [mod.fetch('name'), mod.fetch('regular_expressions', [])]
+        end
+        @regular_expression_changes = {}
+        return if registered.empty? && sources.values.all?(&:empty?)
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        (sources.keys + registered.keys).uniq.each do |name|
+          declarations = Array(registered[name]).map(&:native_definition)
+          baseline = sources.fetch(name, [])
+          next if declarations.empty? && baseline.empty?
+
+          declarations = declarations.map do |declaration|
+            prior = baseline.find { _1.fetch('id').to_s == declaration[:id].to_s }
+            next declaration unless prior
+
+            absent = RegularExpression::FIELDS.values - prior.fetch('properties').keys -
+                     declaration.fetch(:properties).keys
+            declaration.merge(absent_properties: absent)
+          end
+
+          retained_ids = declarations.map { _1[:id].to_s }.reject(&:empty?)
+          retained_names = Array(registered[name]).map(&:mendix_name)
+          removed = baseline.reject do |entry|
+            retained_ids.include?(entry.fetch('id').to_s) || retained_names.include?(entry.fetch('name'))
+          end
+          remove_ids = removed.map { _1.fetch('id') }
+          plan = writer.plan_ruby_regular_expressions(project.mpr, module_name: name,
+                                                      expressions: declarations, remove_ids:)
+          plan.fetch(:changes).each do |declaration, raw, previous|
+            next unless previous && previous['Name'].to_s != declaration.fetch(:name).to_s
+
+            validate_regular_expression_references!(project, raw, "#{name}.#{previous['Name']}", :rename)
+          end
+          removed.each do |entry|
+            raw = project.mpr.unit(entry.fetch('id'))
+            validate_regular_expression_references!(project, raw, entry.fetch('name'), :remove)
+          end
+          @regular_expression_changes[name] = { expressions: declarations, remove_ids: }
+        end
+      end
+
+      def validate_regular_expression_references!(project, raw, name, operation)
+        artifact = project.semantic_index.artifacts.find { _1.unit_id == raw.fetch('UnitID') }
+        raise ValidationError, 'regular-expression reference baseline is unavailable' unless artifact
+
+        incoming = project.references_to(artifact).reject { _1.source.id == artifact.id }
+        explicit = project.all_units.any? do |unit|
+          regular_expression_reference?(project.parse_bson(unit), name)
+        end
+        children = project.children_of(raw.fetch('UnitID'))
+        return if incoming.empty? && !explicit && children.empty?
+
+        raise ValidationError, "cannot #{operation} referenced regular expression #{name}"
+      end
+
+      def regular_expression_reference?(value, name)
+        case value
+        when Hash
+          value['RegExIdentifier'] == name || value.values.any? { regular_expression_reference?(_1, name) }
+        when Array then value.any? { regular_expression_reference?(_1, name) }
+        else false
+        end
+      end
+
+      def synchronize_regular_expression_definitions(project)
+        return if @regular_expression_changes.empty?
+
+        writer = Writer.new(@target, version: project.mendix_version, modules: [])
+        @regular_expression_changes.each do |name, options|
+          writer.synchronize_ruby_regular_expressions!(project.mpr, module_name: name, **options)
         end
         project.refresh!
       end

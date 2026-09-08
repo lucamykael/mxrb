@@ -4,6 +4,8 @@ require 'spec_helper'
 require 'mxrb/forms/mpr_codec'
 
 RSpec.describe Mxrb::Pluggable::MprCodec do # rubocop:disable Metrics/BlockLength
+  def schema_bytes(schema) = Mxrb::IO::BsonCodec.serialize(schema)
+
   def value_type(kind, list: false, object_type: nil, required: false)
     Mxrb::Pluggable::ValueType.new(
       kind:, list:, linked: false, metadata: false, entity_property: '',
@@ -42,6 +44,28 @@ RSpec.describe Mxrb::Pluggable::MprCodec do # rubocop:disable Metrics/BlockLengt
       needs_context: true, plugin: true, help_url: 'https://example.invalid/grid',
       object_type: object
     )
+  end
+
+  it 'round-trips selection through its physical field rather than the unrelated primitive field' do
+    schema = widget_type.with(id: 'com.example.selection.Input',
+                              object_type: Mxrb::Pluggable::ObjectType.new([property('selection', 'Selection')]))
+    registry = Mxrb::Pluggable::Catalog.default
+    registry.register(schema)
+    forms_codec = Mxrb::Forms::MprCodec.new(pluggable_catalog: registry)
+    codec = described_class.new(forms_codec:, catalog: registry)
+
+    %w[None Single Multi].each do |selection|
+      node = Mxrb::Pluggable::Node.new(schema, catalog: registry)
+      node.object.set('selection', selection)
+      stored = codec.encode(node)
+      value = stored.fetch('Object').fetch('Properties').last.fetch('Value')
+      expect(value.fetch('Selection')).to eq(selection)
+      expect(value.fetch('PrimitiveValue')).to eq('')
+      source = Mxrb::Forms::SourceEmitter.new.emit(codec.decode(stored))
+      restored = eval(source) # rubocop:disable Security/Eval
+      expect(codec.encode(restored).fetch('Object').fetch('Properties').last.fetch('Value')['Selection'])
+        .to eq(selection)
+    end
   end
 
   it 'round-trips a complete embedded schema without exposing pointer ids or hashes' do
@@ -188,6 +212,37 @@ RSpec.describe Mxrb::Pluggable::MprCodec do # rubocop:disable Metrics/BlockLengt
     end
     expect(rebuilt['Type']).to eq(baseline['Type'])
     expect(rebuilt_pointers).to eq(baseline_pointers)
+  end
+
+  it 'preserves absent optional schema fields while encoding edited widget values' do
+    registry = Mxrb::Pluggable::Catalog.new
+    registry.register(widget_type)
+    codec = Mxrb::Forms::MprCodec.new(pluggable_catalog: registry)
+    node = Mxrb::Pluggable.widget(widget_type.id, catalog: registry) do
+      properties { columns { caption 'Customer' } }
+    end
+    baseline = codec.encode(node)
+    schema = baseline.fetch('Type')
+    schema.delete('Prompt')
+    properties = schema.dig('ObjectType', 'PropertyTypes').drop(1)
+    properties.each { _1.delete('Prompt') }
+    nested = properties.find { _1['PropertyKey'] == 'columns' }
+    nested.dig('ValueType', 'ObjectType', 'PropertyTypes').drop(1).each do |property|
+      property.delete('Prompt')
+      property.fetch('ValueType').delete('AllowUpload')
+    end
+    # A present, nonempty prompt must survive alongside absent prompts.
+    properties.first['Prompt'] = 'Show the column header'
+    schema.replace(schema.sort.to_h)
+    original_schema = Marshal.load(Marshal.dump(schema))
+
+    decoded = codec.decode(baseline)
+    decoded.object.fetch(:columns).first.set(:caption, 'Orders')
+    rebuilt = codec.encode(decoded, baseline:)
+
+    expect(schema_bytes(rebuilt.fetch('Type'))).to eq(schema_bytes(original_schema))
+    expect(baseline.fetch('Type')).to eq(original_schema)
+    expect(codec.decode(rebuilt).object.fetch(:columns).first.fetch(:caption)).to eq('Orders')
   end
 
   it 'prefers an exact property key when MPK keys collide after Ruby normalization' do

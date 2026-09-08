@@ -639,7 +639,7 @@ RSpec.describe 'Ruby application internal contracts' do
       project_source = File.join(dir, 'project.rb')
       File.write(project_source, '# generated')
       manifest = double(
-        mpr_name: 'x.mpr', absolute_path: project_source,
+        root: dir, mpr_name: 'x.mpr', absolute_path: project_source,
         data: {}, modules: [], coverage: []
       )
       allow(Mxrb::RubyApp::Manifest).to receive(:load).and_return(manifest)
@@ -791,6 +791,9 @@ RSpec.describe 'Ruby application internal contracts' do
     sync = Mxrb::RubyApp::Synchronizer.allocate
     sync.instance_variable_set(:@root, '/tmp/none')
     sync.instance_variable_set(:@target, '/tmp/target.mpr')
+    sync.instance_variable_set(
+      :@manifest, double(root: '/tmp/none', modules: [], data: {}, absolute_path: '/tmp/none/project.rb')
+    )
     project = double(close: nil, all_units: [], modules: [])
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)
     allow(sync).to receive(:synchronize_entities).and_raise(Mxrb::ValidationError, 'stop')

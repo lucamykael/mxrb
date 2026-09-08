@@ -5,6 +5,12 @@ superfície só recebe o estado `native` quando possui testes de criar, alterar,
 remover, reabrir o MPR e recompilar sem trocar identidades nativas. Preservar o
 BSON no sidecar não conta como edição.
 
+Atualização de 5 de setembro de 2026: a matriz abaixo é conservadora por
+família, não uma porcentagem de conclusão. Domínio, segurança e operação já
+possuem rotas de autoria incremental; variantes não representadas continuam
+preservadas. Os contratos e limites verificados estão na
+[revisão de Ruby e round-trip](../reviews/ruby-code-review-2026-09-05.pt-BR.md).
+
 Estados:
 
 - `native`: Ruby autoritativo materializa e atualiza o artefato no Studio Pro;
@@ -18,17 +24,18 @@ Estados:
 | Atributos | native | tipos, required, unique, default, docs, length, localize date e referência de enum |
 | Associações locais e cross-module | native | criar/alterar/remover, tipo, owner, storage, docs, delete behavior e ID estável |
 | Definições de enumeração | native | criar/renomear/remover, valores ordenados, captions por idioma, documentação e IDs estáveis |
-| Constantes | preserved_native | próximo: tipo, valor padrão, documentação e ID |
-| Regras de acesso de entidade | preserved_native | próximo: roles, CRUD, XPath, direitos default e member access |
-| Índices, system members, generalização e OQL view | preserved_native | projetar contrato Ruby autoritativo e regressão por versão |
+| Constantes | parcial | autoria incremental com identidade privada; ampliar variantes |
+| Regras de acesso de entidade | parcial | roles, CRUD, XPath e membros; ACLs ambíguas ainda exigem identidade explícita |
+| Índices, system members, generalização e OQL view | parcial | autoria incremental e reconciliação privada; sem pareamento por posição |
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
-| Module roles e project security | preserved_native | roles, user roles, demo users e configurações por versão |
+| Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | Page.native e widgets mapeados; ampliar propriedades, data sources, events e validações |
 | Layouts, snippets, building blocks e menus | preserved_native | criar projeções Ruby e sincronizadores incrementais |
 | Navegação | parcial | itens de Page.native; ampliar perfis, home/login e role targeting |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
-| Scheduled events | preserved_native | intervalo, timezone, enablement, handler e identidade |
+| Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
+| Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
 | REST publicado/consumido | preserved_native | serviços, resources, operations, mappings, auth e contratos |
 | OData, App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
 | Import/export mappings, JSON/XML/message definitions | preserved_native | edição estrutural e referências estáveis |
@@ -53,23 +60,32 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Enumerações em aplicações Ruby
 
-O export `--mode ruby` cria uma classe em `app/enumerations/<módulo>/`. O ID da
-enumeração e os IDs dos valores fazem parte do contrato de identidade:
+O export `--mode ruby` cria uma classe em `app/enumerations/<módulo>/`. Os IDs
+nativos permanecem no vínculo privado do projeto exportado; não são
+necessários nas declarações geradas:
 
 ```ruby
 module Pedidos
   class Status < Mxrb::RubyApp::Enumeration
-    mendix_name 'Pedidos.Status', id: '11111111-1111-4111-8111-111111111111'
+    mendix_name 'Pedidos.Status'
     documentation 'Situação atual do pedido'
 
-    value 'Aberto', id: '22222222-2222-4222-8222-222222222222',
-                    captions: { en_US: 'Open', pt_BR: 'Aberto' }
-    value 'Fechado', captions: { en_US: 'Closed', pt_BR: 'Fechado' }
+    value 'Aberto' do
+      translation 'en_US', 'Open'
+      translation 'pt_BR', 'Aberto'
+    end
+    value 'Fechado' do
+      translation 'en_US', 'Closed'
+      translation 'pt_BR', 'Fechado'
+    end
   end
 end
 ```
 
-Alterar o nome mantendo `id:` renomeia o documento ou valor nativo. A ordem das
+`id:` e `captions:` continuam aceitos por compatibilidade. Use
+`value 'Novo', renamed_from: 'Anterior'` para renomear um valor sem publicar
+seu ID. `remove_value 'Anterior'` desambigua remoção seguida de inserção; sem
+uma indicação inequívoca, a operação é recusada. A ordem das
 chamadas `value` é autoritativa. Remover o arquivo exclui a enumeração somente
 quando não há atributo que a referencie; caso contrário a compilação falha antes
 de escrever uma remoção insegura. Estruturas de localização e campos BSON não

@@ -48,7 +48,7 @@ module Mxrb
 
       def load_registry
         Registry.reset!
-        RubyApp.application_files(root).each { load _1, true }
+        Environment.load(root:).with { RubyApp.load_sources(@manifest) }
       end
 
       def coverage_entries

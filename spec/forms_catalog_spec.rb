@@ -17,7 +17,6 @@ RSpec.describe Mxrb::Forms::Catalog do # rubocop:disable Metrics/BlockLength
     expect(catalog.types).to be_frozen
   end
 
-
   it 'includes the canonical Projects.Document base inherited by forms' do
     page = catalog.fetch_type(:page)
 
@@ -57,5 +56,13 @@ RSpec.describe Mxrb::Forms::Catalog do # rubocop:disable Metrics/BlockLength
     expect { catalog.fetch_type(:missing) }.to raise_error(KeyError, /unknown Forms type/)
     expect { catalog.fetch_type(:action_button).fetch_property(:missing) }
       .to raise_error(KeyError, /unknown ActionButton property/)
+  end
+
+  it 'shares the immutable version catalog across callers and threads' do
+    catalogs = 8.times.map { Thread.new { described_class.for('11.12.1') } }.map(&:value)
+
+    expect(catalogs).to all(equal(catalog))
+    expect(catalog.version).to be_frozen
+    expect(described_class.for(+'11.12.1')).to equal(catalog)
   end
 end

@@ -522,7 +522,7 @@ RSpec.describe 'complete Ruby projection contracts' do
     expect(source).to include('generalizes "App.Base"', 'oql_view source:', 'before_commit microflow:')
     expect(exporter.send(:scheduled_event_start, 'raw')).to eq('raw')
     security_source = exporter.send(:project_security_source, manifest)
-    expect(security_source).to include('demo_user "manager"', 'password_policy id:')
+    expect(security_source).to include('demo_user "manager"', 'password_policy do')
   end
 
   it 'exports semantic code-action types and modern native flow actions' do

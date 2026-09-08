@@ -63,6 +63,62 @@ RSpec.describe Mxrb::Settings::MprCodec do
     expect(rebuilt_ids).to all(match(Mxrb::PublicSourceAudit::UUID))
   end
 
+  it 'never reuses a baseline identity after reordering and renaming configurations' do
+    baseline = settings_with_servers('A', 'B')
+    codec = described_class.new
+    model = codec.decode(baseline)
+    configuration = model.fetch('Settings').items.first
+    first, second = configuration.fetch('Configurations').items
+    first.set('Name', 'C')
+    configuration.set('Configurations', Mxrb::Settings::Collection.new(items: [second, first]))
+
+    rebuilt = codec.encode(model, baseline:)
+    servers = rebuilt.fetch('Settings')[1].fetch('Configurations').drop(1)
+    original = baseline.fetch('Settings')[1].fetch('Configurations').drop(1)
+
+    expect(servers.map { _1.fetch('Name') }).to eq(%w[B C])
+    expect(servers.first.fetch('$ID')).to eq(original.last.fetch('$ID'))
+    expect(nested_ids(rebuilt).uniq).to eq(nested_ids(rebuilt))
+  end
+
+  it 'reserves existing identities before inserting a configuration at the start' do
+    codec = described_class.new
+    baseline = codec.encode(codec.decode(settings_with_servers('A', 'B')))
+    model = codec.decode(baseline)
+    configuration = model.fetch('Settings').items.first
+    original = baseline.fetch('Settings')[1].fetch('Configurations').drop(1)
+    added = Mxrb::Settings::Node.new('Settings$ServerConfiguration').set('Name', 'New')
+    items = [added, *configuration.fetch('Configurations').items]
+    configuration.set('Configurations', Mxrb::Settings::Collection.new(items:))
+
+    rebuilt = codec.encode(model, baseline:)
+    servers = rebuilt.fetch('Settings')[1].fetch('Configurations').drop(1)
+
+    expect(servers.drop(1).map { _1.fetch('$ID') }).to eq(original.map { _1.fetch('$ID') })
+    expect(nested_ids(rebuilt).uniq).to eq(nested_ids(rebuilt))
+    expect(codec.encode(model, baseline:)).to eq(rebuilt)
+  end
+
+  def settings_with_servers(*names)
+    servers = names.map { node('Settings$ServerConfiguration', 'Name' => _1) }
+    configuration = node('Settings$ConfigurationSettings', 'Configurations' => collection(servers, 3))
+    node('Settings$ProjectSettings', 'Settings' => collection([configuration], 2))
+  end
+
+  it 'canonicalizes Ruby property names before reading or encoding settings' do
+    model = Mxrb::Settings::Node.new('Settings$ModelSettings')
+    model.set(:java_major_version, '21')
+    root = Mxrb::Settings::Node.new('Settings$ProjectSettings')
+    root.set(:settings, Mxrb::Settings::Collection.new(items: [model], marker: 2))
+
+    expect(model.fetch('JavaMajorVersion')).to eq('21')
+    expect(model.fetch(:java_major_version)).to eq('21')
+    expect(model.fields.keys).to eq(['JavaMajorVersion'])
+    encoded = described_class.new.encode(root).fetch('Settings')[1]
+    expect(encoded.fetch('JavaMajorVersion')).to eq('21')
+    expect(encoded).not_to have_key('java_major_version')
+  end
+
   def complete_settings
     parts = [
       web_ui_settings, integration_settings, configuration_settings, model_settings,

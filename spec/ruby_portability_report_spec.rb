@@ -111,4 +111,65 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       expect(described_class.new(root).entries).to be_empty
     end
   end
+
+  it 'audits exported homonymous flows using their private identities and metadata' do # rubocop:disable Metrics/BlockLength
+    Dir.mktmpdir('mxrb-portability-private-identities-') do |directory| # rubocop:disable Metrics/BlockLength
+      source = File.join(directory, 'Source.mpr')
+      Mxrb.define(source) do
+        mendix_version '10.18.0'
+        self.module(:App) do
+          microflow(:Shared) do
+            return_type :string
+            return_value "'native'"
+          end
+          nanoflow(:Shared) do
+            return_type :integer
+            return_value '42'
+          end
+        end
+      end
+      root = File.join(directory, 'ruby-app')
+      Mxrb::Exporter.new(source, root, mode: :ruby).export!
+      services = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb'))
+      expect(services.size).to eq(2)
+      services.each { expect(File.read(_1)).not_to match(/mendix_name[^\n]*\bid:/) }
+
+      report = described_class.new(root)
+      flows = report.entries.select { _1.name == 'App.Shared' }
+      expect(flows.map(&:kind)).to contain_exactly('microflow', 'nanoflow')
+      expect(flows.map(&:status)).to eq(%w[native native])
+      expect(flows.map(&:id).uniq.size).to eq(2)
+      expect(Mxrb::RubyApp::Registry.all(:service)).to be_empty
+
+      metadata = File.join(root, '.mxrb', 'mendix', '.mxrb', 'semantic_metadata.json')
+      File.delete(metadata)
+      expect { described_class.new(root) }
+        .to raise_error(Mxrb::ValidationError, /requires its semantic metadata baseline/)
+      expect(Mxrb::RubyApp::Registry.all(:service)).to be_empty
+    end
+  end
+
+  it 'loads application environment only within the audit and restores it after errors' do
+    Dir.mktmpdir('mxrb-portability-environment-') do |root|
+      source = <<~RUBY
+        raise 'missing audit environment' unless ENV.fetch('MXRB_PORTABILITY_SPEC_VALUE') == 'local'
+        class EnvironmentFlow < Mxrb::RubyApp::Service
+          mendix_name 'App.EnvironmentFlow'
+          native(:microflow) { return_type :boolean }
+        end
+      RUBY
+      coverage = [{ name: 'App.EnvironmentFlow', kind: 'microflow',
+                    ruby_path: 'app/services/artifacts.rb', status: 'runtime_source_preserved' }]
+      write_app(root, coverage:, source:)
+      File.write(File.join(root, '.env'), "MXRB_PORTABILITY_SPEC_VALUE=local\n")
+
+      expect { described_class.new(root) }.not_to(change { ENV['MXRB_PORTABILITY_SPEC_VALUE'] })
+      File.write(File.join(root, 'app', 'services', 'artifacts.rb'), "#{source}\nraise 'audit stopped'\n")
+      expect { described_class.new(root) }.to raise_error(RuntimeError, 'audit stopped')
+      expect(ENV).not_to have_key('MXRB_PORTABILITY_SPEC_VALUE')
+      expect(Mxrb::RubyApp::Registry.all(:service)).to be_empty
+      expect(Thread.current[Mxrb::RubyApp::SourceIdentity::THREAD_KEY]).to be_nil
+      expect(Thread.current[Mxrb::RubyApp::FlowMetadata::THREAD_KEY]).to be_nil
+    end
+  end
 end

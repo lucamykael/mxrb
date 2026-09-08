@@ -55,4 +55,21 @@ RSpec.describe Mxrb::Forms::Node do # rubocop:disable Metrics/BlockLength
     expect { button.set(:name, %w[a b]) }.to raise_error(TypeError, /expects string/)
     expect { described_class.new(:button_style, catalog:) }.to raise_error(ArgumentError, /enum/)
   end
+
+  it 'copies text values without freezing or retaining mutable caller input' do
+    language = +'pt_BR'
+    caption = +'Salvar'
+    translations = [Mxrb::Forms::Translation.new(language, caption)]
+    text = Mxrb::Forms::Text.coerce(translations)
+    page = described_class.build(:page, catalog:) { title text }
+
+    language.replace('en_US')
+    caption.replace('Save')
+    translations.clear
+
+    expect(page.title.to_s).to eq('Salvar')
+    expect(page.title.translations.first.language).to eq('pt_BR')
+    expect(page.title.translations).to be_frozen
+    expect(page.title.translations.first.text).to be_frozen
+  end
 end
