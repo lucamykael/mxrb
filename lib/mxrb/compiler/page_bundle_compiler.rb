@@ -796,12 +796,16 @@ module Mxrb
       end
 
       def client_action_config(widget, action)
-        payload = close_page_config(action) || open_link_config(action) || open_page_config(action) ||
-                  create_object_config(widget, action) || sign_out_config(action) ||
-                  microflow_config(widget, action)
+        payload = client_action_payload(widget, action)
         return unless payload
 
         { action: payload, abortOnServerValidation: true }
+      end
+
+      def client_action_payload(widget, action)
+        close_page_config(action) || open_link_config(action) || open_page_config(action) ||
+          create_object_config(widget, action) || sign_out_config(action) ||
+          microflow_config(widget, action)
       end
 
       def open_page_config(action)
@@ -1338,15 +1342,18 @@ module Mxrb
         caption = translated_text(widget.dig('LabelTemplate', 'Template'))
         empty_caption = translated_text(widget['EmptyOptionCaption'])
         aria_label = translated_text(widget.dig('ScreenReaderLabel', 'Template'))
+        on_change = client_action_payload(widget, widget['OnChangeAction'] || {}) || do_nothing_action
         input = "React.createElement($EnumSelect, #{js_props(
-          common_props(widget).merge('$widgetId': key, id: key, readOnlyStyle: 'text',
+          common_props(widget).merge('$widgetId': key, id: key, readOnlyStyle: read_only_style(widget),
                                      ariaRequired: widget['AriaRequired'] == true,
                                      tabIndex: integer_or(widget['TabIndex'], 0)),
           expressions: {
-            value: attribute_property(scope, entity, name),
+            value: attribute_property(scope, entity, name, on_change:),
             emptyOptionCaption: "TextProperty({ value: #{JSON.generate(empty_caption)} })",
-            ariaLabel: "TextProperty({ value: #{JSON.generate(aria_label)} })"
-          }
+            ariaLabel: "TextProperty({ value: #{JSON.generate(aria_label)} })",
+            onEnter: action_property(widget, widget['OnEnterAction']),
+            onLeave: action_property(widget, widget['OnLeaveAction'])
+          }.compact
         )})"
         render_form_group(widget, key, caption, input, 'mx-dropdown')
       end
@@ -1413,8 +1420,9 @@ module Mxrb
         alternative_text = translated_text(widget.dig('AlternativeText', 'Template'))
         expressions = {
           source: "WebDynamicImageProperty(#{js_literal(config)})",
-          alternativeText: "TextProperty({ value: #{JSON.generate(alternative_text)} })"
-        }
+          alternativeText: "TextProperty({ value: #{JSON.generate(alternative_text)} })",
+          onClick: action_property(widget, widget['ClickAction'])
+        }.compact
         "React.createElement($Image, #{js_props(props, expressions:)})"
       end
 
@@ -1493,7 +1501,7 @@ module Mxrb
           filterable: true, dataSourceId: data_source_id, isList: false
         }
         props = common_props(widget).merge(
-          '$widgetId': key, id: key, class: css_class(widget), readOnlyStyle: 'text',
+          '$widgetId': key, id: key, class: css_class(widget), readOnlyStyle: read_only_style(widget),
           tabIndex: integer_or(widget['TabIndex'], 0)
         )
         expressions = {
@@ -1554,6 +1562,12 @@ module Mxrb
 
       def do_nothing_action
         { type: 'doNothing', argMap: {}, config: {}, disabledDuringExecution: false }
+      end
+
+      def read_only_style(widget)
+        widget['ReadOnlyStyle'].to_s.downcase.then do |value|
+          %w[control text].include?(value) ? value : 'text'
+        end
       end
 
       def action_property(widget, action)
@@ -1832,19 +1846,32 @@ module Mxrb
           {
             name: tab['Name'].to_s,
             caption: raw_js("TextProperty({ value: #{JSON.generate(translated_text(tab['Caption']))} })"),
+            badge: tab['Badge'] && raw_js(
+              "TextProperty({ value: #{JSON.generate(translated_text(tab.dig('Badge', 'Template')))} })"
+            ),
             isDelayed: false, refreshOnShow: tab['RefreshOnShow'] == true,
             content: raw_js(children(array(tab['Widgets'])))
-          }
+          }.compact
         end
         props = common_props(widget).merge(
           '$widgetId': key, class: css_class(widget), widgetId: key,
           defaultTab: default_tab_index(widget, tabs), tabs: compiled
         )
-        "React.createElement($TabContainer, #{js_literal(props)})"
+        expressions = {}
+        active_attribute = widget.dig('ActivePageAttributeRef', 'Attribute').to_s
+        scope = current_object_scope
+        if scope && qualified_attribute?(active_attribute)
+          entity, _, name = active_attribute.rpartition('.')
+          path = entity_reference_path(widget['ActivePageAttributeRef'])
+          expressions[:activeTab] = attribute_property(scope[:scope], entity, name, path:)
+        end
+        expressions[:onTabChange] = action_property(widget, widget['ActivePageOnChangeAction'])
+        payload = props.merge(expressions.compact.transform_values { raw_js(_1) })
+        "React.createElement($TabContainer, #{js_literal(payload)})"
       end
 
       def default_tab_index(widget, tabs)
-        pointer = IO::BsonCodec.extract_id(widget['DefaultPagePointer'])
+        pointer = IO::BsonCodec.extract_id(widget['DefaultPagePointer'] || widget['DefaultPage'])
         index = tabs.index { IO::BsonCodec.extract_id(_1['$ID']) == pointer }
         index || 0
       end
@@ -1874,10 +1901,10 @@ module Mxrb
         "img/#{[module_name, collection_name, image_name].join('$')}.#{image_format(image)}"
       end
 
-      def attribute_property(scope, entity, attribute, path: '', formatting: {})
+      def attribute_property(scope, entity, attribute, path: '', formatting: {}, on_change: do_nothing_action)
         config = {
           scope:, path:, entity:, attribute:,
-          onChange: { type: 'doNothing', argMap: {}, config: {}, disabledDuringExecution: true },
+          onChange: on_change,
           isList: false, validation: nil, formatting:
         }
         "AttributeProperty(#{js_literal(config)})"

@@ -109,7 +109,12 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
     drop_down = {
       '$Type' => 'Forms$DropDown', 'Name' => 'status',
       'AttributeRef' => { 'Attribute' => 'Demo.Item.Status' },
-      'LabelTemplate' => client_template('Status'), 'EmptyOptionCaption' => text('Choose')
+      'LabelTemplate' => client_template('Status'), 'EmptyOptionCaption' => text('Choose'),
+      'ReadOnlyStyle' => 'Control',
+      'OnChangeAction' => { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+                            'Address' => { 'IsDynamic' => false, 'Value' => 'https://change.test' } },
+      'OnEnterAction' => { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+                           'Address' => { 'IsDynamic' => false, 'Value' => 'https://enter.test' } }
     }
     reference = {
       '$Type' => 'Forms$ReferenceSelector', 'Name' => 'owner',
@@ -126,19 +131,40 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
       '$ListView', 'DatabaseObjectListProperty', '$MxrbAttributeValue', 'Demo.Item'
     )
     rendered << compiler.send(:render_drop_down, drop_down)
-    expect(rendered.last).to include('$EnumSelect', 'AttributeProperty')
+    expect(rendered.last).to include(
+      '$EnumSelect', 'AttributeProperty', 'https://change.test', 'https://enter.test',
+      '"readOnlyStyle": "control"', '"onEnter": ActionProperty'
+    )
     rendered << compiler.send(:render_reference_selector, reference)
     expect(rendered.last).to include(
       '$ReferenceSelector', 'AssociationProperty', 'ListAttributeProperty', 'Demo.Item_Owner'
     )
     rendered << compiler.send(:render_dynamic_image, {
-      '$Type' => 'Forms$DynamicImageViewer', 'Name' => 'photo'
+      '$Type' => 'Forms$DynamicImageViewer', 'Name' => 'photo',
+      'ClickAction' => { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+                         'Address' => { 'IsDynamic' => false, 'Value' => 'https://image.test' } }
     })
-    expect(rendered.last).to include('$Image', 'WebDynamicImageProperty')
+    expect(rendered.last).to include('$Image', 'WebDynamicImageProperty', 'https://image.test', 'onClick')
     rendered << compiler.send(:render_image_uploader, {
       '$Type' => 'Forms$ImageUploader', 'Name' => 'upload'
     })
     expect(rendered.last).to include('$FileManager', 'DynamicFileProperty')
+    rendered << compiler.send(:render_tab_control, {
+      '$Type' => 'Forms$TabContainer', 'Name' => 'tabs',
+      'ActivePageAttributeRef' => { 'Attribute' => 'Demo.Item.ActiveTab' },
+      'ActivePageOnChangeAction' => {
+        '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+        'Address' => { 'IsDynamic' => false, 'Value' => 'https://tab.test' }
+      },
+      'TabPages' => [2, {
+        '$Type' => 'Forms$TabPage', 'Name' => 'details', 'Caption' => text('Details'),
+        'Badge' => client_template('1'), 'Widgets' => [2]
+      }]
+    })
+    expect(rendered.last).to include(
+      '$TabContainer', '"activeTab": AttributeProperty', '"onTabChange": ActionProperty',
+      'https://tab.test', '"badge": TextProperty'
+    )
 
     imports = compiler.send(:widget_imports)
     expect(imports).to include(
