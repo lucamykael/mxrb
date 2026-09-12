@@ -9,14 +9,7 @@ module Mxrb
   # Fail-closed evidence gate for core and pluggable widgets used by an MPR.
   # rubocop:disable Metrics
   class WidgetCertification
-    CORE_WIDGET_TYPES = %w[
-      Forms$DivContainer Forms$LayoutGrid Forms$LayoutGridRow Forms$LayoutGridColumn Forms$Table
-      Forms$DynamicText Forms$Title Forms$ActionButton Forms$DataView Forms$ListView Forms$TextBox
-      Forms$TextArea Forms$DatePicker Forms$CheckBox Forms$RadioButtonGroup Forms$FileManager
-      Forms$GroupBox Forms$SnippetCallWidget Forms$Label Forms$TabControl Forms$StaticImageViewer
-      Forms$ScrollContainer Forms$Placeholder Forms$SidebarToggleButton Forms$Header
-      Forms$NavigationTree Forms$MenuBar Forms$SimpleMenuBar
-    ].freeze
+    CORE_WIDGET_TYPES = Compiler::PageBundleCompiler::CORE_WIDGET_RENDERERS.keys.freeze
     FAILURE_MARKERS = [
       'Could not render widget',
       'An error occurred, please contact your system administrator.',

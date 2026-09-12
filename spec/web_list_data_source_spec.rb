@@ -130,6 +130,26 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
     expect(associated.entity).to eq('Demo.Item')
   end
 
+  it 'resolves the grid and reference-set source variants used by core widgets' do
+    grid = described_class.new(source([]), 'DataSource' => {
+      '$Type' => 'Forms$GridXPathSource',
+      'EntityRef' => { 'Entity' => 'Demo.GridItem' }, 'XPathConstraint' => '[Active]'
+    })
+    expect(grid).to be_xpath
+    expect(grid.entity).to eq('Demo.GridItem')
+    expect(grid.xpath_constraint).to eq('[Active]')
+
+    reference_set = described_class.new(source([]), 'DataSource' => {
+      '$Type' => 'Forms$ReferenceSetSource',
+      'EntityRef' => { 'Steps' => [2, {
+        'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item'
+      }] }
+    })
+    expect(reference_set).to be_association
+    expect(reference_set.entity).to eq('Demo.Item')
+    expect(reference_set.association_path).to eq('Demo.Parent_Items/Demo.Item')
+  end
+
   it 'walks nested source arrays and rejects ambiguous connector actions and non-hashes' do
     nested_widget = {
       'Children' => [
