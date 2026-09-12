@@ -2121,7 +2121,37 @@ module Mxrb
       end
 
       def common_props(widget)
-        { key: widget_key(widget), 'data-widget-id': widget_key(widget) }
+        props = { key: widget_key(widget), 'data-widget-id': widget_key(widget) }
+        style = inline_style(widget)
+        props[:style] = style unless style.empty?
+        props
+      end
+
+      def inline_style(widget)
+        widget.dig('Appearance', 'Style').to_s.split(';').each_with_object({}) do |declaration, result|
+          property, separator, value = declaration.partition(':')
+          property = property.strip
+          value = value.strip
+          next if separator.empty? || property.empty? || value.empty?
+          next unless property.start_with?('--') || property.match?(/\A-?[a-z][a-z0-9-]*\z/i)
+
+          result[react_style_property(property)] = value
+        end
+      end
+
+      def react_style_property(property)
+        return property if property.start_with?('--')
+
+        segments = property.downcase.split('-').reject(&:empty?)
+        prefix = if property.start_with?('-ms-')
+                   segments.shift
+                   'ms'
+                 elsif property.start_with?('-')
+                   segments.shift.capitalize
+                 else
+                   segments.shift
+                 end
+        prefix + segments.map(&:capitalize).join
       end
 
       def widget_key(widget)

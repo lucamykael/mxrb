@@ -73,7 +73,8 @@ renderização auditável. Esse fechamento é de tipos e dos contratos básicos 
 testados. Os contratos web compartilhados agora preservam ações de mudança,
 foco e Enter dos inputs, estado read-only e editabilidade condicional, rótulos
 para leitores de tela, obrigatoriedade, finalidade de autocomplete, largura de
-label, tooltip/render type/tab order/papel ARIA dos botões, source/alt/clique de
+label, estilos inline de aparência, tooltip/render type/tab order/papel ARIA
+dos botões, source/alt/clique de
 imagem estática e tamanho de thumbnail do upload. A matriz continua
 classificando páginas core como `parcial` enquanto todas as variantes de
 propriedades, eventos e data sources não tiverem prova funcional no
