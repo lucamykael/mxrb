@@ -127,8 +127,11 @@ module Mxrb
       end
 
       # Serialize a Ruby Hash → BSON bytes.
-      def self.serialize(doc)
-        bson_doc = BSON::Document.new(storage_value(doc))
+      def self.serialize(doc = nil, int64_properties: false, **keyword_doc)
+        raise ArgumentError, 'document supplied twice' if doc && !keyword_doc.empty?
+
+        doc ||= keyword_doc
+        bson_doc = BSON::Document.new(storage_value(doc, int64_properties:))
         buf = BSON::ByteBuffer.new
         bson_doc.to_bson(buf)
         buf.get_bytes(buf.length)
@@ -143,22 +146,44 @@ module Mxrb
         StableId TypeParameterPointer TypePointer
       ].freeze
 
-      def self.storage_value(value, key = nil)
+      def self.storage_value(value, key = nil, int64_properties: false)
         if BINARY_UUID_KEYS.include?(key) &&
             value.is_a?(String) && value.match?(UUID_PATTERN)
           return BSON::Binary.new(uuid_to_blob(value), :generic)
         end
 
+        return BSON::Int64.new(value) if int64_property?(value, key, int64_properties)
+
         case value
         when Hash
-          value.to_h { |child_key, child| [child_key, storage_value(child, child_key.to_s)] }
+          storage_hash(value, int64_properties:)
         when Array
-          value.map { storage_value(_1) }
+          # Mendix array markers remain BSON int32; only integer-valued object
+          # properties use the Studio 11 int64 representation.
+          value.map { storage_value(_1, int64_properties:) }
         else
           value
         end
       end
       private_class_method :storage_value
+
+      def self.int64_property?(value, key, enabled)
+        enabled && key && value.is_a?(Integer)
+      end
+      private_class_method :int64_property?
+
+      def self.storage_hash(value, int64_properties: false)
+        keys = value.keys
+        id_key = keys.find { _1.to_s == '$ID' }
+        type_key = keys.find { _1.to_s == '$Type' }
+        ordered = [id_key, type_key].compact + keys.reject { _1 == id_key || _1 == type_key }
+        ordered.to_h do |child_key|
+          [child_key, storage_value(
+            value.fetch(child_key), child_key.to_s, int64_properties:
+          )]
+        end
+      end
+      private_class_method :storage_hash
 
       # ── ContentHash ────────────────────────────────────────────────────────
 

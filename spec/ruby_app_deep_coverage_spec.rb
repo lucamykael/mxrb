@@ -5,6 +5,95 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Ruby application internal contracts' do
+  it 'covers constant DSL defaults, environment values, and type validation' do
+    implementation = Class.new(Mxrb::RubyApp::Constant)
+    expect(implementation.mendix_name).to be_nil
+    expect(implementation.documentation).to eq('')
+    expect(implementation.type).to eq(:string)
+    expect(implementation.default).to be_nil
+    expect(implementation.exposed_to_client).to be(false)
+    expect(implementation.excluded).to be(false)
+    expect(implementation.export_level).to eq('Hidden')
+    implementation.mendix_name 'App.Secret', id: '11111111-1111-4111-8111-111111111111'
+    implementation.documentation 'Local secret'
+    implementation.type :string
+    implementation.exposed_to_client false
+    implementation.excluded true
+    implementation.export_level 'Public'
+    previous = ENV['MXRB_SPEC_CONSTANT_DSL']
+    ENV['MXRB_SPEC_CONSTANT_DSL'] = 'fixture-value'
+    implementation.default_from_env 'MXRB_SPEC_CONSTANT_DSL'
+    expect(implementation.native_definition).to include(
+      name: 'Secret', default_supplied: true, default_value: 'fixture-value',
+      exposed_to_client: false, excluded: true, export_level: 'Public'
+    )
+    implementation.preserve_default!
+    expect(implementation.native_definition).to include(default_supplied: false, default_value: nil)
+
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    expect(exporter.send(:constant_type, 'DataType' => 'Boolean')).to eq(:boolean)
+    expect do
+      exporter.send(:constant_type, 'Name' => 'Broken', 'DataType' => 'Object')
+    end.to raise_error(Mxrb::ValidationError, /unsupported native constant type/)
+
+    Mxrb::RubyApp::Registry.reset!
+    renamed = Class.new(Mxrb::RubyApp::Constant)
+    renamed.mendix_name 'App.NewName', id: '22222222-2222-4222-8222-222222222222'
+    synchronizer = Mxrb::RubyApp::Synchronizer.allocate
+    synchronizer.instance_variable_set(
+      :@manifest,
+      double(modules: [{ 'constants' => [{
+        'name' => 'App.MissingOldName', 'id' => '22222222-2222-4222-8222-222222222222'
+      }] }])
+    )
+    project = double(find_artifact: nil)
+    expect(synchronizer.send(:validate_constant_renames!, project)).to be_nil
+  ensure
+    previous.nil? ? ENV.delete('MXRB_SPEC_CONSTANT_DSL') : ENV['MXRB_SPEC_CONSTANT_DSL'] = previous
+  end
+
+  it 'covers enumeration DSL defaults, caption filters, and generic unsafe removal' do
+    implementation = Class.new(Mxrb::RubyApp::Enumeration)
+    expect(implementation.mendix_name).to be_nil
+    expect(implementation.documentation).to eq('')
+    implementation.mendix_name 'App.State'
+    implementation.documentation 'States'
+    implementation.value :Open, caption: 'Open caption'
+    implementation.value :Closed
+    implementation.value :Localized, captions: { pt_BR: 'Localizado' }
+    expect(implementation.native_definition).to include(
+      name: 'State', documentation: 'States',
+      values: include(
+        include(name: 'Open', captions: { 'en_US' => 'Open caption' }),
+        include(name: 'Closed', captions: { 'en_US' => 'Closed' }),
+        include(name: 'Localized', captions: { 'pt_BR' => 'Localizado' })
+      )
+    )
+
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    expect(exporter.send(:translated_caption, nil, 'Fallback')).to eq('Fallback')
+    caption = {
+      'Items' => Mxrb::IO::BsonCodec.build_array(
+        [
+          'opaque', { 'LanguageCode' => '', 'Text' => 'ignored' },
+          { 'LanguageCode' => 'en_US', 'Text' => 'Visible' }
+        ]
+      )
+    }
+    expect(exporter.send(:translated_caption, caption, 'Fallback')).to eq('Visible')
+
+    Mxrb::RubyApp::Registry.reset!
+    sync = Mxrb::RubyApp::Synchronizer.allocate
+    sync.instance_variable_set(
+      :@manifest,
+      double(modules: [{ 'enumerations' => [{ 'name' => 'App.State', 'id' => 'state' }] }])
+    )
+    plan = double(safe?: false, incoming: [:reference], children: [:child])
+    project = double(modules: [], plan_remove: plan)
+    expect { sync.send(:prune_enumerations, project) }
+      .to raise_error(Mxrb::ValidationError, /1 incoming reference.*1 child/)
+  end
+
   it 'covers exporter artifact, endpoint, source restoration, and frontend helpers' do
     Dir.mktmpdir('mxrb-exporter-internals-') do |dir|
       exp = Mxrb::RubyApp::Exporter.allocate
@@ -33,7 +122,7 @@ RSpec.describe 'Ruby application internal contracts' do
         name: 'View', persistable: false, oql_view?: true, attributes: [], id: 'v',
         system_members: {}, access_rules: {}
       )
-      allow(no_lifecycle_entity).to receive(:respond_to?).with(:lifecycle).and_return(false)
+      allow(no_lifecycle_entity).to receive(:respond_to?).and_return(false)
       mod = double(name: 'Sales')
       dto = exp.send(:export_entity, lifecycle_entity, mod, 'Sales', 'sales')
       view = exp.send(:export_entity, no_lifecycle_entity, mod, 'Sales', 'sales')
@@ -138,6 +227,30 @@ RSpec.describe 'Ruby application internal contracts' do
                       'type' => 'MicroflowCall', 'microflow' => 'Sales.Refresh',
                       'arguments' => {}, 'result_variable' => '')).to start_with('await ')
       expect(exp.send(:nanoflow_action_source, nil)).to include('runtime.unsupported')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'CreateChange', 'variable' => 'Item', 'entity' => 'Sales.Item',
+                      'changes' => [{ 'member' => 'Name', 'value' => "'New'" }]))
+        .to include('runtime.create("Item", "Sales.Item"')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'NanoflowCall', 'nanoflow' => 'Sales.Child',
+                      'arguments' => {}, 'result_variable' => 'Result'))
+        .to include('runtime.callNanoflow', 'runtime.set("Result"')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'JavaScriptActionCall', 'javascript_action' => 'Sales.Client',
+                      'arguments' => {}, 'result_variable' => '')).to include('runtime.callJavaScript')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'ShowForm', 'page' => 'Sales.Edit', 'arguments' => {}))
+        .to include('runtime.showPage')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'CloseForm', 'count' => 2)).to include('runtime.closePage(2)')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'ValidationFeedback', 'variable' => 'Item',
+                      'member' => 'Name', 'message' => 'Required')).to include('runtime.validationFeedback')
+      error_case = exp.send(
+        :nanoflow_action_case_source, { 'type' => 'LogMessage', 'message' => 'run' },
+        [{ 'destination' => 'ok', 'error' => false }, { 'destination' => 'failed', 'error' => true }]
+      )
+      expect(error_case).to include('try {', "runtime.set('latestError'", 'current = "failed"')
       expect(exp.send(:nanoflow_typescript_case,
                       { 'id' => 'unknown', 'type' => 'Unknown' }, [], 'undefined'))
         .to include("runtime.stopped('node')")
@@ -175,6 +288,9 @@ RSpec.describe 'Ruby application internal contracts' do
       )
       expect(widget).to include('caption' => 'Caption', 'events' => [include('event' => 'click')])
       expect(exp.send(:runtime_value, deep_structure: true, kept: :yes)).to eq('kept' => 'yes')
+      expect(
+        exp.send(:runtime_widget_declaration, 'unknown_native', ['{"Editable" => true}'], 8, false)
+      ).to eq('        unknown_native({"Editable" => true})')
 
       parameter_mappings = Mxrb::IO::BsonCodec.build_array(
         [{ 'Parameter' => 'Sales.Refresh.Order', 'Argument' => '$Order' }]
@@ -364,6 +480,14 @@ RSpec.describe 'Ruby application internal contracts' do
       attribute :occurred_at, type: :datetime, mendix_name: 'OccurredAt', localize_date: false
     end
     expect(record_class.attributes.first).to include(localize_date: false)
+    record_class.association 'M.Owner', name: :Timestamped_Owner
+    expect(record_class.associations.first).to include(storage_format: nil)
+    expect { record_class.association('M.Owner', name: :BadType, type: :Unknown) }
+      .to raise_error(ArgumentError, /association type/)
+    expect { record_class.association('M.Owner', name: :BadOwner, owner: :Unknown) }
+      .to raise_error(ArgumentError, /association owner/)
+    expect { record_class.association('M.Owner', name: :BadStorage, storage_format: :Unknown) }
+      .to raise_error(ArgumentError, /association storage format/)
 
     unnamed_service = Class.new(Mxrb::RubyApp::Service)
     expect { unnamed_service.native }.to raise_error(ArgumentError, /mendix_name/)
@@ -380,7 +504,7 @@ RSpec.describe 'Ruby application internal contracts' do
   it 'covers native bridge cleanup and entity synchronization validation' do
     scheduler = double(jobs: [], shutdown: nil)
     store = double(close: nil)
-    project = double(close: nil, all_units: [])
+    project = double(close: nil, all_units: [], modules: [])
     bridge = Mxrb::RubyApp::NativeBridge.allocate
     bridge.instance_variable_set(:@scheduler, scheduler)
     bridge.instance_variable_set(:@store, store)
@@ -539,7 +663,7 @@ RSpec.describe 'Ruby application internal contracts' do
       project_source = File.join(dir, 'project.rb')
       File.write(project_source, '# generated')
       manifest = double(
-        mpr_name: 'x.mpr', absolute_path: project_source,
+        root: dir, mpr_name: 'x.mpr', absolute_path: project_source,
         data: {}, modules: [], coverage: []
       )
       allow(Mxrb::RubyApp::Manifest).to receive(:load).and_return(manifest)
@@ -610,6 +734,17 @@ RSpec.describe 'Ruby application internal contracts' do
 
   it 'covers removal synchronization and all supervisor wait choices' do
     sync = Mxrb::RubyApp::Synchronizer.allocate
+    manifest = double(modules: [])
+    sync.instance_variable_set(:@manifest, manifest)
+    Mxrb::RubyApp::Registry.reset!
+    implementation = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'M.New'
+      persistence true
+    end
+    existing_project = double(find_artifact: double)
+    expect(sync).to receive(:synchronize_entity).with(existing_project, 'M.New', implementation)
+    sync.send(:synchronize_entities, existing_project)
+
     manifest = double(modules: [{ 'models' => [{ 'name' => 'M.Removed' }], 'dtos' => [] }])
     sync.instance_variable_set(:@manifest, manifest)
     Mxrb::RubyApp::Registry.reset!
@@ -680,7 +815,10 @@ RSpec.describe 'Ruby application internal contracts' do
     sync = Mxrb::RubyApp::Synchronizer.allocate
     sync.instance_variable_set(:@root, '/tmp/none')
     sync.instance_variable_set(:@target, '/tmp/target.mpr')
-    project = double(close: nil, all_units: [])
+    sync.instance_variable_set(
+      :@manifest, double(root: '/tmp/none', modules: [], data: {}, absolute_path: '/tmp/none/project.rb')
+    )
+    project = double(close: nil, all_units: [], modules: [])
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)
     allow(sync).to receive(:synchronize_entities).and_raise(Mxrb::ValidationError, 'stop')
     expect { sync.synchronize! }.to raise_error(Mxrb::ValidationError)
@@ -715,6 +853,9 @@ RSpec.describe 'Ruby application internal contracts' do
     res = response_class.new
     server.send(:dispatch, request_class.new('/rest/x', 'POST', '{}', {}, {}), res)
     expect(res.headers).not_to have_key('Access-Control-Allow-Origin')
+    expect(application).to have_received(:invoke_rest).with(
+      route, path_parameters: { 'id' => 'x' }, query: {}, body: {}, context: nil
+    )
     expect(server.send(:rest_route, 'POST', '/not-rest')).to be_nil
 
     adapter = Mxrb::RubyApp::RackAdapter.new('.')

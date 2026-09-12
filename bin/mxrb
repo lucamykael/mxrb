@@ -438,6 +438,38 @@ when "frontend"
   end
   exit 1 unless plan.safe?
 
+when 'convert'
+  usage = 'Usage: mxrb convert <file.mpr> <ruby-project-dir> --studio VERSION [--output file.mpr]'
+  source = ARGV.shift or abort usage
+  ruby_root = ARGV.shift or abort usage
+  studio_version = extract_cli_value!(ARGV, '--studio')
+  mendix_version = extract_cli_value!(ARGV, '--mendix')
+  abort 'Use only one of --studio or --mendix' if studio_version && mendix_version
+  studio_version ||= mendix_version
+  abort usage unless studio_version
+  output = extract_cli_value!(ARGV, '--output')
+  stack_flags = %w[--flymetothemoon --onrails].select { ARGV.delete(_1) }
+  abort 'Use only one of --flymetothemoon or --onrails' if stack_flags.size > 1
+  stack = stack_flags.first&.delete_prefix('--')
+  json = !ARGV.delete('--json').nil?
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  begin
+    result = Mxrb::Converter.new(
+      source, ruby_root, studio_version:, output:, stack:
+    ).convert!
+    if json
+      puts JSON.pretty_generate(result.to_h)
+    else
+      puts "[mxrb] Converted #{result.source_version} -> Studio Pro #{result.studio_version}"
+      puts "[mxrb] Ruby project: #{result.ruby_root} (#{result.ruby_artifacts} editable artifacts)"
+      puts "[mxrb] Mendix MPR : #{result.mpr} (#{result.generated_units} units)"
+      result.warnings.each { warn "[mxrb] warning: #{_1}" }
+      puts '[mxrb] Integrity OK'
+    end
+  rescue Mxrb::Error, ArgumentError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+
 when "export"
   source = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir> [--mode mendix|ruby]"
   output = ARGV.shift or abort "Usage: mxrb export <file.mpr> <ruby-project-dir> [--mode mendix|ruby]"

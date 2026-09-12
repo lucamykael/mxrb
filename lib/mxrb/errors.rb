@@ -5,6 +5,7 @@ module Mxrb
   NotMprError        = Class.new(Error)
   UnsupportedVersion = Class.new(Error)
   SchemaError        = Class.new(Error)
+  IncompletePackageError = Class.new(Error)
   ReadOnlyError      = Class.new(Error)
   SerializationError = Class.new(Error)
   ValidationError    = Class.new(Error)
@@ -13,6 +14,7 @@ module Mxrb
   CompilationError    = Class.new(Error)
   TeamServerError     = Class.new(Error)
   NativeRuntimeError  = Class.new(Error)
+  NotFoundError       = Class.new(Error)
   MarketplaceError    = Class.new(Error)
   BatchError          = Class.new(Error)
 end

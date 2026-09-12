@@ -18,7 +18,7 @@ RSpec.describe "localized documentation" do
     runtime-ruby.md runtime-schema-migrations.md
     demanda-projeto-ruby-typescript-convencional.md
     certificacao-ruby-typescript.md portabilidade-ruby-typescript.md
-    windows-studio-pro.md
+    windows-studio-pro.md cobertura-ruby-nativa.md
   ].sort.freeze
 
   it "keeps the same document set in every locale" do

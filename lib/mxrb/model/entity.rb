@@ -10,7 +10,8 @@ module Mxrb
       attr_accessor :id, :name, :qualified_name, :documentation,
                     :persistable, :location, :data_storage_guid,
                     :export_level, :generalization, :access_rules, :indexes,
-                    :system_members, :lifecycle, :source, :oql_query, :native_type
+                    :system_members, :lifecycle, :validation_rules, :source, :oql_query,
+                    :native_type
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
       def self.from_bson(doc, _domain_model_id, mpr)
@@ -21,7 +22,8 @@ module Mxrb
         e.documentation      = doc["documentation"] || doc["Documentation"] || ""
         e.native_type        = doc["$Type"]
         e.source             = doc["source"] || doc["Source"]
-        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"]
+        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"] ||
+                               (e.source["Oql"] if e.source.is_a?(Hash))
         e.data_storage_guid  = doc["dataStorageGuid"] || doc["DataStorageGuid"]
         e.export_level       = doc["exportLevel"] || doc["ExportLevel"] || "Hidden"
         e.location           = parse_location(doc["location"] || doc["Location"])
@@ -42,6 +44,7 @@ module Mxrb
         attr_arr   = IO::BsonCodec.parse_array(doc["attributes"] || doc["Attributes"])[:items]
         e.instance_variable_set(:@attributes, attr_arr.map { Attribute.from_bson(_1) })
         rules = IO::BsonCodec.parse_array(doc['validationRules'] || doc['ValidationRules'])[:items]
+        e.validation_rules = rules
         apply_validation_rules(e.attributes, rules)
         raw_indexes = IO::BsonCodec.parse_array(doc['indexes'] || doc['Indexes'])[:items]
         e.indexes = normalize_indexes(raw_indexes, e.attributes, e.qualified_name)
@@ -87,7 +90,7 @@ module Mxrb
           "location"        => serialize_location(@location),
           "generalization"  => serialize_generalization,
           "attributes"      => IO::BsonCodec.build_array(@attributes.map(&:to_bson)),
-          "validationRules" => IO::BsonCodec.build_array([]),  # must come after attributes
+          "validationRules" => IO::BsonCodec.build_array(@validation_rules.to_a),
           "eventHandlers"   => IO::BsonCodec.build_array(@lifecycle.to_a.map { lifecycle_bson(_1) }),
           "indexes"         => IO::BsonCodec.build_array([]),
           "accessRules"     => IO::BsonCodec.build_array(@access_rules.to_a),
@@ -155,16 +158,20 @@ module Mxrb
           association_ref = m["Association"].to_s
           attr_ref = association_ref.empty? ? m["Attribute"] : association_ref
           kind = association_ref.empty? ? :attribute : :association
-          { name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
+          { id: IO::BsonCodec.extract_id(m["$ID"]),
+            name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
             rights: m["AccessRights"] || "None", kind: kind }
         end
         {
+          id: IO::BsonCodec.extract_id(doc["$ID"]),
           roles: roles,
           create: doc["AllowCreate"] == true,
           delete: doc["AllowDelete"] == true,
+          documentation: doc["Documentation"].to_s,
           default_rights: default_rights,
           members: members,
-          xpath: doc["XPathConstraint"] || ""
+          xpath: doc["XPathConstraint"] || "",
+          xpath_caption: doc["XPathConstraintCaption"]
         }
       end
 
@@ -172,11 +179,12 @@ module Mxrb
         moment = doc["Moment"].to_s.downcase
         event = doc["Event"].to_s.downcase
         {
+          id: IO::BsonCodec.extract_id(doc["$ID"]),
           event: [moment, event].reject(&:empty?).join("_").to_sym,
           handler: doc["Microflow"].to_s,
           pass_event_object: doc.fetch("PassEventObject", true) == true,
           raise_error_on_false: doc["RaiseErrorOnFalse"] == true
-        }
+        }.compact
       end
 
       def self.parse_location(loc)
@@ -208,7 +216,7 @@ module Mxrb
       def lifecycle_bson(callback)
         moment, event = callback.fetch(:event).to_s.split("_", 2)
         {
-          "$ID" => SecureRandom.uuid,
+          "$ID" => callback[:id].to_s.empty? ? SecureRandom.uuid : callback[:id].to_s,
           "$Type" => "DomainModels$EventHandler",
           "Event" => event.to_s.capitalize,
           "Moment" => moment.to_s.capitalize,

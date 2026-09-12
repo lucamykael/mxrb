@@ -272,8 +272,22 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       { "UnitID" => "page-id", "ContainmentName" => "Documents" },
       double(parse_contents: page_doc)
     )
-    expect(page.widgets.map { _1[:type] })
-      .to contain_exactly(:check_box, :date_picker, :reference_selector, :text)
+    typed_widgets = lambda do |value|
+      case value
+      when Array
+        value.flat_map { typed_widgets.call(_1) }
+      when Hash
+        current = value[:type].is_a?(Symbol) ? [value] : []
+        current + value.values.flat_map { typed_widgets.call(_1) }
+      else
+        []
+      end
+    end
+    expect(page.widgets.map { _1[:type] }).to eq([:layout_grid])
+    expect(typed_widgets.call(page.widgets).map { _1[:type] })
+      .to contain_exactly(
+        :layout_grid, :check_box, :date_picker, :reference_selector, :text
+      )
     expect(page.to_bson["$Type"]).to eq("Forms$Page")
     expect(page.inspect).to include("LegacyPage")
   end
@@ -496,6 +510,15 @@ RSpec.describe "MXRB defensive and compatibility paths" do
 
     page = { name: "Deep", deep_structure: { "$Type" => "Pages$Page" } }
     expect(writer.send(:page_doc, page)).to include("__mxrb_deep_structure_declared" => true)
+    page = {
+      name: "Deep", unit_id: "page-id",
+      deep_structure: { "$ID": "stale-id", "$Type": "Forms$Page" }
+    }
+    document = writer.send(:page_doc, page)
+    expect(document).to include(
+      "$ID" => "page-id", "$Type" => "Forms$Page", "__mxrb_unit_id" => "page-id"
+    )
+    expect(document).not_to have_key(:"$ID")
     event_page = {
       name: "Events", layout: "Atlas", title: "Events",
       popup: false, widgets: [{ type: :button, name: "Run", caption: "Run" }],
@@ -853,7 +876,7 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       objects: [], flows: []
     )
     expect(exporter.send(:microflow_source, parameterized))
-      .to include("parameter :Value, type: :String", "apply_entity_access true")
+      .to include("parameter :Value, type: :String", "apply_entity_access")
     auxiliary = { "$ID" => "note", "$Type" => "Microflows$Annotation" }
     source = {
       "ObjectCollection" => { "Objects" => [3, auxiliary] },
@@ -2487,12 +2510,13 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       expect(exporter.send(:microflow_source, flow)).not_to include("parameter")
 
       page = double(
-        name: "Page", layout_id: nil, title: "", popup_width: 0, popup_height: 0,
+        id: "page-id", name: "Page", layout_id: nil, title: "", popup_width: 0, popup_height: 0,
         allowed_module_roles: [], data_source: nil, widgets: []
       )
       allow(exporter).to receive(:page_deep_structure).with(page).and_return(nil)
       page_source = exporter.send(:page_source, page)
       expect(page_source).not_to include("layout ", "deep_structure")
+      expect(page_source).to include("page :Page, unit_id: \"page-id\"")
       metadata = {
         events: [{ event: :on_click, target: "Button", kind: :microflow, handler: "M.Flow" }],
         widgets: []
@@ -2730,13 +2754,13 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       "Entity" => "M.Entity", "OutputVariableName" => "Object",
       "Members" => attribute_member
     )
-    expect(created).to include("create_object", "set:")
+    expect(created).to include("create_object", "set :Name, to:")
 
     changed = line.call(
       "$Type" => "Microflows$ChangeObjectAction",
       "Variable" => "Object", "Members" => attribute_member
     )
-    expect(changed).to include("change_object", "set:")
+    expect(changed).to include("change_object", "set :Name, to:")
 
     retrieved = line.call(
       "$Type" => "Microflows$RetrieveAction",
@@ -2828,6 +2852,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     )
     expect(block).not_to include("operation:")
     expect(exporter.send(:ruby_val, nil)).to eq("nil")
+    expect(exporter.send(:page_variable_ruby, kind: :current))
+      .to eq("page_variable(nil, kind: :current)")
   end
 
   it "closes the final exporter access and action branches" do

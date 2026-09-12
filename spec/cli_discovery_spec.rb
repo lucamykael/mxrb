@@ -16,7 +16,12 @@ RSpec.describe 'MXRB CLI discovery and releases' do
     stdout, stderr, status = cli('--help')
     expect(status).to be_success
     expect(stderr).to be_empty
-    expect(stdout).to include('mxrb init MyApp', 'mxrb export App.mpr', 'mxrb COMMAND --help')
+    expect(stdout).to include('mxrb init MyApp', 'mxrb convert App.mpr', 'mxrb COMMAND --help')
+
+    stdout, stderr, status = cli('convert', '--help')
+    expect(status).to be_success
+    expect(stderr).to be_empty
+    expect(stdout).to include('Usage: mxrb convert', '--studio VERSION', '--output FILE')
 
     stdout, stderr, status = cli('export', '--help')
     expect(status).to be_success

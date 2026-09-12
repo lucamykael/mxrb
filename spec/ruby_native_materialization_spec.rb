@@ -33,7 +33,7 @@ RSpec.describe 'Ruby-first native materialization' do
       module App
         class ActLaunch < Mxrb::RubyApp::Service
           mendix_name 'App.ACT_Launch'
-          native :microflow do
+          flow :microflow do
             allowed_roles 'App.User'
             return_type :String
             show_message 'Ruby reached Mendix', type: :success
@@ -46,7 +46,7 @@ RSpec.describe 'Ruby-first native materialization' do
       module App
         class NanLaunch < Mxrb::RubyApp::Service
           mendix_name 'App.NAN_Launch'
-          native :nanoflow do
+          flow :nanoflow do
             allowed_roles 'App.User'
             call_microflow 'App.ACT_Launch', as: :status
             show_message '{1}', type: :information, parameters: ['$status']
@@ -82,6 +82,140 @@ RSpec.describe 'Ruby-first native materialization' do
         nanoflow: mod.nanoflows.find { _1.name == 'NAN_Launch' }.id,
         page: mod.pages.find { _1.name == 'Launchpad' }.id
       }
+    end
+  end
+
+  def define_domain_source(path)
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:App) do
+        entity(:Customer) { string :Name }
+        entity(:Order) do
+          string :Number
+          association 'App.Customer', name: :Order_Customer, cardinality: :many_to_one,
+                                      documentation: 'Original relation'
+        end
+      end
+      self.module(:Shared) do
+        entity(:Tag) { string :Name }
+      end
+    end
+  end
+
+  def associations(path)
+    Mxrb.open(path) do |project|
+      project.modules.find { _1.name == 'App' }.associations
+    end
+  end
+
+  def define_enumeration_source(path)
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:App) do
+        enumeration(:OrderStatus) do
+          documentation 'Original statuses'
+          value :New, caption: 'New order'
+          value :Done, caption: 'Completed'
+        end
+        entity(:Order) do
+          enum :Status, enumeration: 'App.OrderStatus'
+        end
+      end
+    end
+  end
+
+  def native_enumeration(path, name)
+    Mxrb.open(path) do |project|
+      project.modules.find { _1.name == 'App' }.enumerations.find { _1['Name'] == name }
+    end
+  end
+
+  def native_enumeration_ids(path, name)
+    enumeration = native_enumeration(path, name)
+    values = Mxrb::IO::BsonCodec.parse_array(enumeration.fetch('Values'))[:items]
+    {
+      document: Mxrb::IO::BsonCodec.extract_id(enumeration.fetch('$ID')),
+      values: values.to_h do |value|
+        [value.fetch('Name'), Mxrb::IO::BsonCodec.extract_id(value.fetch('$ID'))]
+      end
+    }
+  end
+
+  def enrich_native_enumeration(path) # rubocop:disable Metrics/AbcSize
+    mpr = Mxrb::IO::MprFile.open(path, readonly: false)
+    raw = mpr.units_by_containment('Documents').find do |unit|
+      document = mpr.parse_contents(unit)
+      document['$Type'] == 'Enumerations$Enumeration' && document['Name'] == 'OrderStatus'
+    end
+    document = mpr.parse_contents(raw)
+    document['VendorMetadata'] = { 'Keep' => true }
+    value = Mxrb::IO::BsonCodec.parse_array(document.fetch('Values'))[:items].first
+    value['RemoteValue'] = 'native-new'
+    caption = value.fetch('Caption')
+    items = Mxrb::IO::BsonCodec.parse_array(caption.fetch('Items'))
+    items[:items] << {
+      '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Translation',
+      'LanguageCode' => 'pt_BR', 'Text' => 'Novo pedido'
+    }
+    items[:items] << {
+      '$ID' => SecureRandom.uuid, '$Type' => 'Vendor$CaptionExtension', 'Payload' => 'keep'
+    }
+    caption['Items'] = Mxrb::IO::BsonCodec.build_array(items[:items], marker: items[:marker])
+    mpr.transaction { mpr.update_unit(raw.fetch('UnitID'), document) }
+  ensure
+    mpr&.close
+  end
+
+  def define_constant_source(path)
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:App) do
+        constant :PrivateToken, type: :string, value: 'private-fixture-value' do
+          documentation 'Private token'
+        end
+        constant :PublicLimit, type: :integer, value: 10 do
+          documentation 'Public limit'
+        end
+      end
+    end
+  end
+
+  def enrich_native_constants(path) # rubocop:disable Metrics/AbcSize
+    mpr = Mxrb::IO::MprFile.open(path, readonly: false)
+    pairs = mpr.all_units.filter_map do |raw|
+      document = mpr.parse_contents(raw)
+      [raw, document] if document['$Type'] == 'Constants$Constant'
+    end
+    constants = pairs.to_h { |raw, document| [document.fetch('Name'), [raw, document]] }
+    private_raw, private_doc = constants.fetch('PrivateToken')
+    private_doc['ExposedToClient'] = false
+    private_doc['Excluded'] = false
+    private_doc['VendorMetadata'] = { 'Keep' => true }
+    private_doc.fetch('Type')['VendorTypeMetadata'] = 'keep-type'
+    public_raw, public_doc = constants.fetch('PublicLimit')
+    public_doc['ExposedToClient'] = true
+    public_doc['Excluded'] = false
+    mpr.transaction do
+      mpr.update_unit(private_raw.fetch('UnitID'), private_doc)
+      mpr.update_unit(public_raw.fetch('UnitID'), public_doc)
+      module_raw = mpr.units_by_containment('Modules').find do |raw|
+        mpr.parse_contents(raw)['Name'] == 'App'
+      end
+      mpr.insert_unit(
+        container_uuid: module_raw.fetch('UnitID'), containment_name: 'Documents',
+        contents_doc: {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Vendor$ConstantConsumer',
+          'Name' => 'PrivateConsumer', 'Expression' => '@App.PrivateToken'
+        }
+      )
+    end
+  ensure
+    mpr&.close
+  end
+
+  def native_constant(path, name)
+    Mxrb.open(path) do |project|
+      project.modules.find { _1.name == 'App' }.constants.find { _1['Name'] == name }
     end
   end
 
@@ -124,7 +258,7 @@ RSpec.describe 'Ruby-first native materialization' do
 
       Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
       expect(File.read(File.join(round_trip, 'app', 'services', 'app', 'act_launch.rb')))
-        .to include('native :microflow', "show_message 'Ruby reached Mendix'")
+        .to include('flow :microflow', "show_message 'Ruby reached Mendix'")
       expect(File).to exist(File.join(
                               round_trip, 'frontend', 'src', 'generated', 'nanoflows',
                               'app', 'nan_launch.ts'
@@ -135,6 +269,255 @@ RSpec.describe 'Ruby-first native materialization' do
                        ))).to include('runtime.string(["$status"][Number(rawIndex) - 1])')
       Mxrb::RubyApp.compile(round_trip, recompiled)
       expect(document_ids(recompiled)).to eq(first_ids)
+    end
+  end
+
+  it 'edits local and cross-module associations authoritatively with stable native ids' do
+    Dir.mktmpdir('mxrb-ruby-associations-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      ruby_root = File.join(dir, 'ruby-app')
+      compiled = File.join(dir, 'Compiled.mpr')
+      round_trip = File.join(dir, 'round-trip')
+      recompiled = File.join(dir, 'Recompiled.mpr')
+      define_domain_source(source)
+      Mxrb::Exporter.new(source, ruby_root, mode: :ruby).export!
+
+      model_path = File.join(ruby_root, 'app', 'models', 'app', 'order.rb')
+      model_source = File.read(model_path)
+      expect(model_source).to include(
+        'association "App.Customer", name: "Order_Customer"',
+        'documentation: "Original relation"'
+      )
+      model_source = model_source.sub(
+        'documentation: "Original relation"', 'documentation: "Ruby relation"'
+      ).sub(
+        "  end\nend\n",
+        <<~RUBY
+              association "Shared.Tag", name: "Order_Tags", type: :ReferenceSet,
+                          owner: :Default, documentation: "Cross relation",
+                          parent_delete: :NoAction, child_delete: :NoAction,
+                          storage_format: :Table
+            end
+          end
+        RUBY
+      )
+      File.write(model_path, model_source)
+
+      Mxrb::RubyApp.compile(ruby_root, compiled)
+      compiled_associations = associations(compiled)
+      original = compiled_associations.find { _1.name == 'Order_Customer' }
+      cross = compiled_associations.find { _1.name == 'Order_Tags' }
+      expect(original.documentation).to eq('Ruby relation')
+      expect(cross).to have_attributes(
+        association_type: :ReferenceSet, storage_format: :Table, to_entity_id: 'Shared.Tag'
+      )
+
+      Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
+      round_trip_source = File.read(File.join(round_trip, 'app', 'models', 'app', 'order.rb'))
+      expect(round_trip_source).to include('name: "Order_Tags"')
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(associations(recompiled).to_h { [_1.name, _1.id] }).to eq(
+        compiled_associations.to_h { [_1.name, _1.id] }
+      )
+
+      without_original = round_trip_source.lines.reject { _1.include?('name: "Order_Customer"') }.join
+      File.write(File.join(round_trip, 'app', 'models', 'app', 'order.rb'), without_original)
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(associations(recompiled).map(&:name)).to eq(['Order_Tags'])
+    end
+  end
+
+  it 'creates, renames, localizes, and safely removes Ruby-native enumerations with stable ids' do
+    Dir.mktmpdir('mxrb-ruby-enumerations-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      ruby_root = File.join(dir, 'ruby-app')
+      compiled = File.join(dir, 'Compiled.mpr')
+      round_trip = File.join(dir, 'round-trip')
+      recompiled = File.join(dir, 'Recompiled.mpr')
+      define_enumeration_source(source)
+      enrich_native_enumeration(source)
+      original_ids = native_enumeration_ids(source, 'OrderStatus')
+      Mxrb::Exporter.new(source, ruby_root, mode: :ruby).export!
+
+      enumeration_path = File.join(ruby_root, 'app', 'enumerations', 'app', 'order_status.rb')
+      source_text = File.read(enumeration_path)
+      expect(source_text).to include(
+        'class OrderStatus < Mxrb::RubyApp::Enumeration',
+        'translation "pt_BR", "Novo pedido"',
+        '    value "New" do', '    value "Done" do'
+      )
+      expect(source_text).not_to include(original_ids[:document], *original_ids.fetch(:values).values)
+      manifest_enum = Mxrb::RubyApp::Manifest.load(ruby_root).modules.first.fetch('enumerations')
+                                             .find { _1.fetch('name') == 'App.OrderStatus' }
+      expect(manifest_enum.fetch('id')).to eq(original_ids[:document])
+      expect(manifest_enum.fetch('values').to_h { [_1.fetch('name'), _1.fetch('id')] })
+        .to eq(original_ids.fetch(:values))
+      source_text = source_text.sub('App.OrderStatus', 'App.FulfillmentStatus')
+                               .sub('Original statuses', 'Ruby statuses')
+                               .sub(
+                                 /^    value "New" do\n.*?^    end$/m,
+                                 "    value \"Open\", renamed_from: \"New\" do\n" \
+                                 "      translation \"en_US\", \"Open order\"\n" \
+                                 "      translation \"pt_BR\", \"Pedido aberto\"\n    end"
+                               )
+                               .sub(/^    value "Done" do\n.*?^    end\n/m, "    remove_value \"Done\"\n")
+      source_text = source_text.sub(
+        "  end\nend\n",
+        "    value \"Pending\", captions: {\"en_US\"=>\"Pending\"}\n  end\nend\n"
+      )
+      File.write(enumeration_path, source_text)
+      model_path = File.join(ruby_root, 'app', 'models', 'app', 'order.rb')
+      File.write(model_path, File.read(model_path).sub('App.OrderStatus', 'App.FulfillmentStatus'))
+      priority_path = File.join(ruby_root, 'app', 'enumerations', 'app', 'priority.rb')
+      File.write(priority_path, <<~RUBY)
+        module App
+          class Priority < Mxrb::RubyApp::Enumeration
+            mendix_name 'App.Priority', id: '11111111-1111-4111-8111-111111111111'
+            documentation 'Created in Ruby'
+            value 'High', id: '22222222-2222-4222-8222-222222222222',
+                          captions: { en_US: 'High', pt_BR: 'Alta' }
+          end
+        end
+      RUBY
+      File.write(File.join(ruby_root, 'app', 'enumerations', 'app', 'tier.rb'), <<~RUBY)
+        module App
+          class Tier < Mxrb::RubyApp::Enumeration
+            mendix_name 'App.Tier'
+            value 'Standard'
+          end
+        end
+      RUBY
+
+      Mxrb::RubyApp.compile(ruby_root, compiled)
+      changed = native_enumeration(compiled, 'FulfillmentStatus')
+      changed_values = Mxrb::IO::BsonCodec.parse_array(changed.fetch('Values'))[:items]
+      open_value = changed_values.find { _1['Name'] == 'Open' }
+      open_captions = Mxrb::IO::BsonCodec.parse_array(open_value.dig('Caption', 'Items'))[:items]
+      expect(Mxrb::IO::BsonCodec.extract_id(changed['$ID'])).to eq(original_ids[:document])
+      expect(changed).to include('Documentation' => 'Ruby statuses',
+                                 'VendorMetadata' => { 'Keep' => true })
+      expect(changed_values.map { _1['Name'] }).to eq(%w[Open Pending])
+      expect(Mxrb::IO::BsonCodec.extract_id(open_value['$ID'])).to eq(original_ids.dig(:values, 'New'))
+      expect(open_value['RemoteValue']).to eq('native-new')
+      expect(open_captions).to include(
+        include('LanguageCode' => 'en_US', 'Text' => 'Open order'),
+        include('LanguageCode' => 'pt_BR', 'Text' => 'Pedido aberto'),
+        include('$Type' => 'Vendor$CaptionExtension', 'Payload' => 'keep')
+      )
+      expect(native_enumeration(compiled, 'Priority')).to include('Documentation' => 'Created in Ruby')
+
+      Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
+      round_trip_manifest = JSON.parse(File.read(File.join(round_trip, '.mxrb', 'ruby-app.json')))
+      enumeration_paths = round_trip_manifest.fetch('modules').first.fetch('enumerations').to_h do |entry|
+        [entry.fetch('name'), File.join(round_trip, entry.fetch('path'))]
+      end
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(native_enumeration_ids(recompiled, 'FulfillmentStatus')).to eq(
+        native_enumeration_ids(compiled, 'FulfillmentStatus')
+      )
+
+      File.delete(enumeration_paths.fetch('App.Priority'))
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(native_enumeration(recompiled, 'Priority')).to be_nil
+
+      File.delete(enumeration_paths.fetch('App.FulfillmentStatus'))
+      expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
+        .to raise_error(Mxrb::ValidationError, /cannot remove enumeration.*incoming reference/)
+    end
+  end
+
+  it 'round-trips Ruby-native constants without exporting private defaults' do
+    Dir.mktmpdir('mxrb-ruby-constants-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      ruby_root = File.join(dir, 'ruby-app')
+      compiled = File.join(dir, 'Compiled.mpr')
+      round_trip = File.join(dir, 'round-trip')
+      recompiled = File.join(dir, 'Recompiled.mpr')
+      define_constant_source(source)
+      enrich_native_constants(source)
+      private_id = Mxrb::IO::BsonCodec.extract_id(native_constant(source, 'PrivateToken')['$ID'])
+      public_id = Mxrb::IO::BsonCodec.extract_id(native_constant(source, 'PublicLimit')['$ID'])
+      Mxrb::Exporter.new(source, ruby_root, mode: :ruby).export!
+
+      private_path = File.join(ruby_root, 'app', 'constants', 'app', 'private_token.rb')
+      public_path = File.join(ruby_root, 'app', 'constants', 'app', 'public_limit.rb')
+      manifest_path = File.join(ruby_root, '.mxrb', 'ruby-app.json')
+      expect(File.read(private_path)).to include('preserve_default!')
+      expect(File.read(private_path)).not_to include('private-fixture-value')
+      expect(File.read(manifest_path)).not_to include('private-fixture-value')
+      expect(File.read(public_path)).to include('default "10"')
+
+      private_source = File.read(private_path).sub('excluded false', 'excluded true')
+      File.write(private_path, private_source)
+      public_source = File.read(public_path).sub('App.PublicLimit', 'App.MaximumItems')
+                          .sub('documentation "Public limit"', 'documentation "Ruby limit"')
+                          .sub('type :integer', 'type :decimal')
+                          .sub('default "10"', 'default "42.5"')
+      File.write(public_path, public_source)
+      generated_path = File.join(ruby_root, 'app', 'constants', 'app', 'generated_secret.rb')
+      File.write(generated_path, <<~RUBY)
+        module App
+          class GeneratedSecret < Mxrb::RubyApp::Constant
+            mendix_name 'App.GeneratedSecret', id: '11111111-1111-4111-8111-111111111111'
+            type :string
+            default_from_env 'MXRB_SPEC_GENERATED_SECRET'
+          end
+        end
+      RUBY
+      File.write(File.join(ruby_root, 'app', 'constants', 'app', 'empty_default.rb'), <<~RUBY)
+        module App
+          class EmptyDefault < Mxrb::RubyApp::Constant
+            mendix_name 'App.EmptyDefault'
+            type :boolean
+          end
+        end
+      RUBY
+
+      previous = ENV['MXRB_SPEC_GENERATED_SECRET']
+      ENV['MXRB_SPEC_GENERATED_SECRET'] = 'local-fixture-secret'
+      Mxrb::RubyApp.compile(ruby_root, compiled)
+      changed = native_constant(compiled, 'MaximumItems')
+      private_changed = native_constant(compiled, 'PrivateToken')
+      expect(Mxrb::IO::BsonCodec.extract_id(changed['$ID'])).to eq(public_id)
+      expect(changed).to include('Documentation' => 'Ruby limit', 'DefaultValue' => '42.5')
+      expect(changed.dig('Type', '$Type')).to eq('DataTypes$DecimalType')
+      expect(Mxrb::IO::BsonCodec.extract_id(private_changed['$ID'])).to eq(private_id)
+      expect(private_changed).to include(
+        'DefaultValue' => 'private-fixture-value', 'Excluded' => true,
+        'VendorMetadata' => { 'Keep' => true }
+      )
+      expect(private_changed.dig('Type', 'VendorTypeMetadata')).to eq('keep-type')
+      expect(native_constant(compiled, 'GeneratedSecret'))
+        .to include('DefaultValue' => 'local-fixture-secret')
+      expect(native_constant(compiled, 'EmptyDefault')).to include('DefaultValue' => '')
+
+      Mxrb::Exporter.new(compiled, round_trip, mode: :ruby).export!
+      round_manifest = JSON.parse(File.read(File.join(round_trip, '.mxrb', 'ruby-app.json')))
+      constant_paths = round_manifest.fetch('modules').first.fetch('constants').to_h do |entry|
+        [entry.fetch('name'), File.join(round_trip, entry.fetch('path'))]
+      end
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(Mxrb::IO::BsonCodec.extract_id(native_constant(recompiled, 'MaximumItems')['$ID']))
+        .to eq(public_id)
+      expect(native_constant(recompiled, 'PrivateToken')['DefaultValue'])
+        .to eq('private-fixture-value')
+
+      private_round_path = constant_paths.fetch('App.PrivateToken')
+      private_round_source = File.read(private_round_path)
+      File.write(private_round_path, private_round_source.sub('App.PrivateToken', 'App.RenamedPrivate'))
+      expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
+        .to raise_error(Mxrb::ValidationError, /cannot rename constant.*incoming reference/)
+      File.write(private_round_path, private_round_source)
+
+      File.delete(constant_paths.fetch('App.MaximumItems'))
+      Mxrb::RubyApp.compile(round_trip, recompiled)
+      expect(native_constant(recompiled, 'MaximumItems')).to be_nil
+
+      File.delete(constant_paths.fetch('App.PrivateToken'))
+      expect { Mxrb::RubyApp.compile(round_trip, recompiled) }
+        .to raise_error(Mxrb::ValidationError, /cannot remove constant.*incoming reference/)
+    ensure
+      previous.nil? ? ENV.delete('MXRB_SPEC_GENERATED_SECRET') : ENV['MXRB_SPEC_GENERATED_SECRET'] = previous
     end
   end
 end

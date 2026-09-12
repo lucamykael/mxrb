@@ -208,18 +208,34 @@ module Mxrb
       end
 
       def entity
-        direct = data_source['EntityPath'] || data_source.dig('EntityRef', 'Entity')
-        value = direct.to_s.empty? ? attribute_path(columns.first).to_s.rpartition('.').first : direct.to_s
+        path = data_source['EntityPath'].to_s
+        reference = data_source['EntityRef'] || {}
+        steps = array(reference['Steps'])
+        direct = [path, steps.last&.fetch('DestinationEntity', nil), reference['Entity']]
+                 .map(&:to_s).find { !_1.empty? }
+        value = direct || attribute_path(columns.first || {}).to_s.rpartition('.').first
         reference_set? ? value.split('/').last.to_s : value
       end
 
       def reference_set_datasource
         {
           'friendlyId' => friendly_id, 'path' => entity, 'entity' => entity,
-          'reference' => data_source['EntityPath'].to_s.split('/').first.to_s,
+          'reference' => entity_path.split('/').first.to_s,
           'sort' => sort_items, 'attributes' => columns.map { relative_attribute(attribute_path(_1)) },
           'distinct' => false
         }
+      end
+
+      def entity_path
+        legacy = data_source['EntityPath'].to_s
+        return legacy unless legacy.empty?
+
+        reference = data_source['EntityRef'] || {}
+        steps = array(reference['Steps'])
+        return reference['Entity'].to_s if steps.empty?
+
+        steps.flat_map { [_1['Association'], _1['DestinationEntity']] }
+             .map(&:to_s).reject(&:empty?).join('/')
       end
 
       def entity_schema

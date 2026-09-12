@@ -42,9 +42,9 @@ RSpec.describe MxrbFrontendLifecycleAcceptance do
         expect(File.read(File.join(final_ruby, 'modules', 'FrontendCycle', 'presentation',
                                    'pages', 'orders.rb')))
           .to include(
-            '"Attribute" => "FrontendCycle.Order.Reference"',
-            '"Attribute" => "FrontendCycle.Order.Total"',
-            '"Attribute" => "FrontendCycle.Order.Active"'
+            'text_box :reference, attribute: :Reference',
+            'text_box :total, attribute: :Total',
+            'check_box :active, attribute: :Active'
           )
         expect(File.read(File.join(final_ruby, 'theme', 'web', 'frontend-lifecycle.css')))
           .to include('display: block')

@@ -182,6 +182,7 @@ module MxrbFrontendLifecycleAcceptance
         "modules.#{MODULE_NAME}.entities.Order",
         "modules.#{MODULE_NAME}.microflows.ACT_CreateOrder",
         "modules.#{MODULE_NAME}.nanoflows.NAN_RefreshOrders",
+        "modules.#{MODULE_NAME}.pages.Home.title",
         "modules.#{MODULE_NAME}.pages.Home.widgets.pageHeader.children.pageTitle.options.caption",
         "modules.#{MODULE_NAME}.pages.Orders",
         'navigation.profiles.Responsive.app_title.en_US',
@@ -277,9 +278,22 @@ module MxrbFrontendLifecycleAcceptance
 
     def mutate_home
       path = File.join(@ruby_export, 'modules', MODULE_NAME, 'presentation', 'pages', 'home.rb')
-      replace_once(path, 'title "FrontendCycle"', 'title "Frontend lifecycle"')
-      replace_once(
-        path, '"Text" => "FrontendCycle"', '"Text" => "Frontend lifecycle verified"'
+      replace_first_available(
+        path,
+        {
+          'title "FrontendCycle"' => 'title "Frontend lifecycle"',
+          'title Mxrb::Forms::Text.coerce([Mxrb::Forms::Translation.new("en_US", "FrontendCycle")])' =>
+            'title Mxrb::Forms::Text.coerce([Mxrb::Forms::Translation.new("en_US", "Frontend lifecycle")])'
+        }
+      )
+      replace_first_available(
+        path,
+        {
+          '"Text" => "FrontendCycle"' => '"Text" => "Frontend lifecycle verified"',
+          'caption: "FrontendCycle"' => 'caption: "Frontend lifecycle verified"',
+          'Mxrb::Forms::Translation.new("en_US", "FrontendCycle")' =>
+            'Mxrb::Forms::Translation.new("en_US", "Frontend lifecycle verified")'
+        }
       )
     end
 
@@ -311,7 +325,7 @@ module MxrbFrontendLifecycleAcceptance
         File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'home.rb') =>
           'Frontend lifecycle verified',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'presentation', 'pages', 'orders.rb') =>
-          '"Attribute" => "FrontendCycle.Order.Reference"',
+          'text_box :reference',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'domain', 'entities', 'order.rb') =>
           'entity :Order',
         File.join(@final_ruby, 'modules', MODULE_NAME, 'application', 'use_cases', 'act_create_order.rb') =>
@@ -338,6 +352,14 @@ module MxrbFrontendLifecycleAcceptance
     def replace_once(path, before, after)
       content = File.read(path)
       raise Failure, "mutation anchor not found in #{path}: #{before.inspect}" unless content.include?(before)
+
+      File.write(path, content.sub(before, after))
+    end
+
+    def replace_first_available(path, replacements)
+      content = File.read(path)
+      before, after = replacements.find { |candidate, _replacement| content.include?(candidate) }
+      raise Failure, "mutation anchor not found in #{path}: #{replacements.keys.inspect}" unless before
 
       File.write(path, content.sub(before, after))
     end

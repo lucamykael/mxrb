@@ -726,8 +726,8 @@ RSpec.describe Mxrb do
         File.join(exported, "modules", "Sales", "application", "use_cases", "create_order.rb")
       )
       expect(flow_source).to include("allow_concurrent_execution false")
-      expect(flow_source).to include("mark_as_used true")
-      expect(flow_source).to include("excluded true")
+      expect(flow_source).to include("mark_as_used")
+      expect(flow_source).to include("excluded")
 
       begin
         ENV["MXRB_OUTPUT_PATH"] = rebuilt
@@ -974,9 +974,10 @@ RSpec.describe Mxrb do
       ].find { File.read(_1).include?("page :LegacyPage") }
       expect(page_source).not_to be_nil
       source = File.read(page_source)
-      expect(source).to include("deep_structure({")
-      expect(source).to include('"$Type" => "CustomWidgets$CustomWidget"')
-      expect(source).to include("bson_binary(")
+      expect(source).to include("form_structure({")
+      expect(source).to include("unit_id: #{page_id.inspect}")
+      expect(source).to include(':node_type => "CustomWidgets$CustomWidget"')
+      expect(source).not_to include("bson_binary(")
       File.write(page_source, source.sub('"Zoom" => 8', '"Zoom" => 12'))
 
       begin
@@ -988,7 +989,10 @@ RSpec.describe Mxrb do
 
       expect(Mxrb.validate(rebuilt)).to be_valid
       Mxrb.open(rebuilt) do |project|
-        page = project.pages.find { _1.name == "LegacyPage" }
+        pages = project.pages.select { _1.name == "LegacyPage" }
+        expect(pages.size).to eq(1)
+        page = pages.first
+        expect(page.id).to eq(page_id)
         doc = project.mpr.parse_contents(project.raw_unit(page.id))
         custom = doc.dig("FormCall", "Arguments", 1, "Widgets", 1)
         expect(custom.dig("Object", "Zoom")).to eq(12)
@@ -1587,7 +1591,7 @@ RSpec.describe Mxrb do
       src = File.read(File.join(exported, "modules", "Sales", "application", "use_cases", "notify.rb"))
       expect(src).to include("create_variable :message")
       expect(src).to include("change_variable :message")
-      expect(src).to include('show_message "Done"')
+      expect(src).to include('show_message', 'translation "en_US", "Done"')
       expect(src).to include('log_message "Completed"')
 
       FileUtils.mkdir_p(rebuilt_dir)

@@ -10,7 +10,7 @@ module Mxrb
 
   # Inspects, previews upgrades, and compares generated definitions with an MPR.
   class ProjectLifecycle
-    VERSION = /\A\d+\.\d+\.\d+\z/
+    VERSION = /\A\d+\.\d+\.\d+(?:\.\d+)?\z/
     VERSION_DECLARATION = /(?<prefix>mendix_version(?:\s+|\s*=\s*))["'](?<version>[^"']+)["']/
 
     def initialize(root = Dir.pwd)
@@ -30,7 +30,10 @@ module Mxrb
 
     def upgrade(version, apply: false) # rubocop:disable Metrics/MethodLength
       target = version.to_s
-      raise ArgumentError, 'Mendix version must use MAJOR.MINOR.PATCH' unless VERSION.match?(target)
+      unless VERSION.match?(target)
+        raise ArgumentError,
+              'Mendix version must use MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH.BUILD'
+      end
 
       source = project_source
       current = declared_version

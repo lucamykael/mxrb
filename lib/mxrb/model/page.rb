@@ -31,7 +31,9 @@ module Mxrb
         @allowed_module_roles = parse_array(doc["AllowedModuleRoles"] || doc["AllowedRoles"] || doc["allowedModuleRoles"])
         @parameters          = parse_array(doc["Parameters"] || doc["parameters"])
         @widgets             = []
-        parse_widgets(widget_roots(doc))
+        roots = widget_roots(doc)
+        parse_widgets(roots)
+        @data_source = canonical_root_data_source(roots)
       end
 
       def to_bson
@@ -87,8 +89,7 @@ module Mxrb
           next unless widget.is_a?(Hash)
           type = widget["$Type"]
           if %w[Pages$DataView Forms$DataView].include?(type)
-            @data_source = parse_source(widget["DataSource"])
-            parse_widgets(child_widgets(widget), target)
+            target << data_view_widget(widget)
             next
           end
           if type == "CustomWidgets$CustomWidget"
@@ -101,6 +102,14 @@ module Mxrb
           end
           if %w[Pages$TabControl Forms$TabControl].include?(type)
             target << tab_control_widget(widget)
+            next
+          end
+          if %w[Pages$Table Forms$Table].include?(type)
+            target << table_widget(widget)
+            next
+          end
+          if type == "Forms$LayoutGrid"
+            target << layout_grid_widget(widget)
             next
           end
           if %w[Pages$SnippetCall Forms$SnippetCall Forms$SnippetCallWidget].include?(type)
@@ -133,6 +142,7 @@ module Mxrb
             "OnChangeAction" => :on_change,
             "OnEnterAction" => :on_enter,
             "OnLeaveAction" => :on_leave,
+            "ClickAction" => :on_click,
             "Action" => :on_click
           }.filter_map do |property, event|
             action = parse_action(widget[property])
@@ -171,10 +181,42 @@ module Mxrb
           :text
         when "Pages$DropDownWidget", "Forms$DropDownWidget", "Forms$DropDown"
           :drop_down
+        when "Forms$RadioButtonGroup"
+          :radio_button_group
+        when "Forms$StaticImageViewer"
+          :static_image
+        when "Forms$Title"
+          :page_title
+        when "Forms$FileManager"
+          :file_manager
+        when "Forms$ReferenceSetSelector"
+          :reference_set_selector
+        when "Forms$NavigationList"
+          :navigation_list
+        when "Forms$ScrollContainer"
+          :scroll_container
+        when "Forms$ImageViewer"
+          :image_viewer
+        when "Forms$ImageUploader"
+          :image_uploader
+        when "Forms$MenuBar"
+          :menu_bar
+        when "Forms$NavigationTree"
+          :navigation_tree
         end
       end
 
       def widget_options(widget, widget_type)
+        return appearance_options(widget) if widget_type == :page_title
+        return static_image_options(widget) if widget_type == :static_image
+        return file_manager_options(widget) if widget_type == :file_manager
+        return reference_set_selector_options(widget) if widget_type == :reference_set_selector
+        return navigation_list_options(widget) if widget_type == :navigation_list
+        return scroll_container_options(widget) if widget_type == :scroll_container
+        return image_viewer_options(widget) if widget_type == :image_viewer
+        return image_uploader_options(widget) if widget_type == :image_uploader
+        return menu_widget_options(widget) if %i[menu_bar navigation_tree].include?(widget_type)
+
         options = appearance_options(widget).merge(
           attribute: attribute_path(widget),
           caption: widget_caption(widget, widget_type)
@@ -182,7 +224,98 @@ module Mxrb
         parameters = template_parameters(widget)
         options[:parameters] = parameters unless parameters.empty?
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
+        options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
         options
+      end
+
+      def file_manager_options(widget)
+        appearance_options(widget).merge(
+          allowed_extensions: widget.fetch('AllowedExtensions', ''),
+          editable: data_view_enum(widget.fetch('Editable', 'Always')),
+          max_file_size: widget.fetch('MaxFileSize', 5),
+          show_file_in_browser: widget['ShowFileInBrowser'] == true,
+          mode: data_view_enum(widget.fetch('Type', 'Both')),
+          tab_index: widget.fetch('TabIndex', 0)
+        )
+      end
+
+      def reference_set_selector_options(widget)
+        appearance_options(widget).merge(
+          selection: data_view_enum(widget.fetch('SelectionMode', 'Multi')),
+          number_of_rows: widget.fetch('NumberOfRows', 20),
+          selectable_xpath: widget.fetch('SelectableXPathConstraint', ''),
+          control_bar: widget['IsControlBarVisible'] == true,
+          select_first: widget['SelectFirst'] == true,
+          show_empty_rows: widget['ShowEmptyRows'] == true,
+          paging: data_view_enum(widget.fetch('ShowPagingBar', 'YesWithTotalCount')),
+          tab_index: widget.fetch('TabIndex', 0),
+          width_unit: data_view_enum(widget.fetch('WidthUnit', 'Weight'))
+        )
+      end
+
+      def navigation_list_options(widget)
+        appearance_options(widget).merge(tab_index: widget.fetch('TabIndex', 0))
+      end
+
+      def scroll_container_options(widget)
+        appearance_options(widget).merge(
+          alignment: data_view_enum(widget.fetch('Alignment', 'Center')),
+          layout_mode: data_view_enum(widget.fetch('LayoutMode', 'Headline')),
+          hide_scrollbars: widget['NativeHideScrollbars'] == true,
+          scroll_behavior: data_view_enum(widget.fetch('ScrollBehavior', 'PerRegion')),
+          tab_index: widget.fetch('TabIndex', 0), width: widget.fetch('Width', 0),
+          width_mode: data_view_enum(widget.fetch('WidthMode', 'Auto'))
+        )
+      end
+
+      def image_viewer_options(widget)
+        source = widget['DataSource'].is_a?(Hash) ? widget.fetch('DataSource') : {}
+        appearance_options(widget).merge(
+          entity: source.dig('EntityRef', 'Entity') || source['EntityPath'],
+          alternative_text: extract_text(widget['AlternativeText']),
+          default_image: widget.fetch('DefaultImage', '').to_s,
+          force_full_objects: source['ForceFullObjects'] == true,
+          width: widget.fetch('Width', 100).to_i,
+          height: widget.fetch('Height', 100).to_i,
+          width_unit: data_view_enum(widget.fetch('WidthUnit', 'Auto')),
+          height_unit: data_view_enum(widget.fetch('HeightUnit', 'Auto')),
+          responsive: widget.fetch('Responsive', true) == true,
+          show_as_thumbnail: widget['ShowAsThumbnail'] == true,
+          on_click_enlarge: widget['OnClickEnlarge'] == true,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        ).compact
+      end
+
+      def image_uploader_options(widget)
+        thumbnail_width, thumbnail_height = widget.fetch('ThumbnailSize', '100;75')
+                                                  .to_s.split(';', 2).map(&:to_i)
+        appearance_options(widget).merge(
+          allowed_extensions: widget.fetch('AllowedExtensions', '').to_s,
+          caption: extract_text(widget['LabelTemplate']),
+          editable: data_view_enum(widget.fetch('Editable', 'Always')),
+          max_file_size: widget.fetch('MaxFileSize', 5).to_i,
+          thumbnail_width: thumbnail_width.positive? ? thumbnail_width : 100,
+          thumbnail_height: thumbnail_height.positive? ? thumbnail_height : 75,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        )
+      end
+
+      def menu_widget_options(widget)
+        appearance_options(widget).merge(
+          menu: widget.dig('MenuSource', 'Menu').to_s,
+          tab_index: widget.fetch('TabIndex', 0).to_i
+        )
+      end
+
+      def static_image_options(widget)
+        appearance_options(widget).merge(
+          image: widget["Image"].to_s,
+          alternative_text: extract_text(widget["AlternativeText"]),
+          width: widget.fetch("Width", 0), height: widget.fetch("Height", 0),
+          width_unit: widget.fetch("WidthUnit", "Pixels").to_s.downcase.to_sym,
+          height_unit: widget.fetch("HeightUnit", "Pixels").to_s.downcase.to_sym,
+          responsive: widget.fetch("Responsive", true) == true
+        )
       end
 
       def container_options(widget)
@@ -243,6 +376,214 @@ module Mxrb
         { type: :data_grid, name: widget["Name"], options: options, events: grid_events(widget) }
       end
 
+      def data_view_widget(widget)
+        body = []
+        footer = []
+        parse_widgets(parse_array(widget["Widgets"]), body)
+        parse_widgets(parse_array(widget["FooterWidgets"]), footer)
+        appearance = appearance_options(widget)
+        appearance.delete(:visible)
+        options = appearance.merge(
+          source: parse_data_view_source(widget["DataSource"]),
+          editable: data_view_editability(
+            widget.fetch("Editability", widget.fetch("Editable", "Always"))
+          ),
+          read_only_style: data_view_enum(widget.fetch("ReadOnlyStyle", "Control")),
+          label_width: widget.fetch("LabelWidth", 0).to_i,
+          show_footer: widget.fetch("ShowFooter", true) == true,
+          no_entity_message: extract_text(widget["NoEntityMessage"]),
+          tab_index: widget.fetch("TabIndex", 0).to_i,
+          visibility: parse_data_view_condition(widget["ConditionalVisibilitySettings"]),
+          editability: parse_data_view_condition(widget["ConditionalEditabilitySettings"]),
+          design_properties: parse_array(widget.dig("Appearance", "DesignProperties")).map do |value|
+            design_property_spec(value)
+          end,
+          unknown_native: unknown_native_fields(
+            widget,
+            %w[Appearance Class ConditionalEditabilitySettings ConditionalVisibilitySettings DataSource
+               Editability Editable FooterWidgets LabelWidth Name NoEntityMessage ReadOnlyStyle ShowFooter
+               Style TabIndex UseSchema Widgets]
+          )
+        ).compact
+        options.delete(:design_properties) if options[:design_properties].empty?
+        options.delete(:unknown_native) if options[:unknown_native].empty?
+        {
+          type: :data_view, name: widget["Name"] || "dataView",
+          options:, body:, footer:, events: []
+        }
+      end
+
+      def design_property_spec(value)
+        option = value['Value']
+        return value unless value['$Type'] == 'Forms$DesignPropertyValue' &&
+                            option.is_a?(Hash) &&
+                            option['$Type'] == 'Forms$OptionDesignPropertyValue'
+
+        {
+          id: IO::BsonCodec.extract_id(value['$ID']), key: value.fetch('Key', ''),
+          value_id: IO::BsonCodec.extract_id(option['$ID']), option: option.fetch('Option', '')
+        }
+      end
+
+      def parse_data_view_source(source)
+        return { kind: :context } unless source.is_a?(Hash)
+
+        type = source["$Type"].to_s
+        common = {
+          force_full_objects: source["ForceFullObjects"] == true,
+          unknown_native: unknown_native_fields(source, data_view_source_keys(type))
+        }
+        semantic = case type
+                   when "Pages$NanoflowSource", "Forms$NanoflowSource"
+                     {
+                       kind: :nanoflow,
+                       name: source_name(source["Nanoflow"] || source.dig("NanoflowSettings", "Nanoflow")),
+                       mappings: parse_data_view_mappings(source["ParameterMappings"])
+                     }
+                   when "Pages$MicroflowSource", "Forms$MicroflowSource"
+                     settings = source["MicroflowSettings"] || source
+                     {
+                       kind: :microflow, name: source_name(settings["Microflow"] || source["Microflow"]),
+                       mappings: parse_data_view_mappings(settings["ParameterMappings"]),
+                       settings_native: data_view_microflow_settings(settings)
+                     }
+                   when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
+                     { kind: :listen, target: source["ListenTarget"].to_s }
+                   when "Pages$DataViewSource", "Forms$DataViewSource"
+                     parse_context_data_view_source(source)
+                   else
+                     { kind: :native, native_type: type }
+                   end
+        common.merge(semantic).reject do |key, value|
+          value.nil? || (value.respond_to?(:empty?) && value.empty?) ||
+            (key == :force_full_objects && value == false)
+        end
+      end
+
+      def data_view_source_keys(type)
+        common = %w[$ID $Type ForceFullObjects]
+        case type
+        when "Pages$NanoflowSource", "Forms$NanoflowSource"
+          common + %w[Nanoflow NanoflowSettings ParameterMappings]
+        when "Pages$MicroflowSource", "Forms$MicroflowSource"
+          common + %w[Microflow MicroflowSettings]
+        when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
+          common + %w[ListenTarget]
+        when "Pages$DataViewSource", "Forms$DataViewSource"
+          common + %w[EntityPath EntityRef PageParameter SourceVariable]
+        else common
+        end
+      end
+
+      def data_view_microflow_settings(settings)
+        values = unknown_native_fields(settings, %w[Microflow ParameterMappings])
+        defaults = {
+          "Asynchronous" => false, "ConfirmationInfo" => nil,
+          "FormValidations" => "All", "ProgressBar" => "None", "ProgressMessage" => nil
+        }
+        defaults.each { |key, value| values.delete(key) if values[key] == value }
+        values.delete("OutputMappings") if parse_array(values["OutputMappings"]).empty?
+        values
+      end
+
+      def parse_context_data_view_source(source)
+        reference = source["EntityRef"] || {}
+        steps = parse_array(reference["Steps"]).map do |step|
+          {
+            association: step["Association"].to_s,
+            entity: step["DestinationEntity"].to_s,
+            unknown_native: unknown_native_fields(step, %w[$ID $Type Association DestinationEntity])
+          }.reject { |_key, value| value.respond_to?(:empty?) && value.empty? }
+        end
+        variable_source = source["SourceVariable"]
+        variable_source ||= { 'PageParameter' => source['PageParameter'] } if source.key?('PageParameter')
+        variable = parse_page_variable(variable_source)
+        if steps.empty?
+          {
+            kind: :context, entity: reference["Entity"].to_s,
+            variable:, entity_ref_native: unknown_native_fields(reference, %w[$ID $Type Entity])
+          }
+        else
+          {
+            kind: :association, steps:, variable:,
+            entity: steps.last[:entity],
+            entity_ref_native: unknown_native_fields(reference, %w[$ID $Type Steps])
+          }
+        end
+      end
+
+      def parse_page_variable(variable)
+        return unless variable.is_a?(Hash)
+
+        kind, name = %w[PageParameter SnippetParameter LocalVariable Widget].filter_map do |key|
+          value = variable[key].to_s
+          [data_view_enum(key), value] unless value.empty?
+        end.first
+        {
+          kind: kind || :current, name:, sub_key: variable["SubKey"].to_s,
+          use_all_pages: variable["UseAllPages"] == true,
+          unknown_native: unknown_native_fields(
+            variable,
+            %w[$ID $Type LocalVariable PageParameter SnippetParameter SubKey UseAllPages Widget]
+          )
+        }.reject do |_key, value|
+          value.nil? || value == false || (value.respond_to?(:empty?) && value.empty?)
+        end
+      end
+
+      def parse_data_view_mappings(mappings)
+        parse_array(mappings).map do |mapping|
+          {
+            parameter: mapping["Parameter"].to_s,
+            expression: mapping["Expression"].to_s,
+            variable: parse_page_variable(mapping["Variable"]),
+            unknown_native: unknown_native_fields(
+              mapping, %w[$ID $Type Parameter Expression Variable]
+            )
+          }.reject do |_key, value|
+            value.nil? || (value.respond_to?(:empty?) && value.empty?)
+          end
+        end
+      end
+
+      def parse_data_view_condition(condition)
+        return unless condition.is_a?(Hash)
+
+        {
+          expression: condition["Expression"].to_s,
+          attribute: condition["Attribute"].to_s,
+          conditions: parse_array(condition["Conditions"]),
+          roles: parse_array(condition["ModuleRoles"]).map(&:to_s),
+          ignore_security: condition["IgnoreSecurity"] == true,
+          source_variable: parse_page_variable(condition["SourceVariable"]),
+          unknown_native: unknown_native_fields(
+            condition,
+            %w[$ID $Type Attribute Conditions Expression IgnoreSecurity ModuleRoles SourceVariable]
+          )
+        }.reject do |_key, value|
+          value.nil? || value == false || (value.respond_to?(:empty?) && value.empty?)
+        end
+      end
+
+      def unknown_native_fields(value, known)
+        return {} unless value.is_a?(Hash)
+
+        value.reject do |key, _item|
+          %w[$ID $Type].include?(key.to_s) || known.include?(key.to_s)
+        end
+      end
+
+      def data_view_enum(value)
+        value.to_s.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase.to_sym
+      end
+
+      def data_view_editability(value)
+        return :always if value == true || value.to_s.casecmp('true').zero?
+        return :never if value == false || value.to_s.casecmp('false').zero?
+
+        data_view_enum(value)
+      end
+
       def pluggable_widget(widget)
         widget_id = widget.dig("Type", "WidgetId").to_s
         return native_widget(widget) if widget_id.empty?
@@ -258,6 +599,7 @@ module Mxrb
       def generic_pluggable_widget(widget)
         object_type = widget.dig("Type", "ObjectType")
         properties = pluggable_properties(widget["Object"], object_type)
+        slots = pluggable_widget_slots(properties)
         children = nested_pluggable_widgets(properties)
         properties = strip_pluggable_widgets(properties)
         options = appearance_options(widget).merge(
@@ -266,10 +608,12 @@ module Mxrb
           platform: widget.dig("Type", "SupportedPlatform"),
           properties:
         ).compact
-        {
+        value = {
           type: :pluggable_widget, name: widget["Name"] || "widget",
           options:, children:, events: pluggable_events(properties)
         }
+        value[:slots] = slots unless slots.empty?
+        value
       end
 
       def pluggable_properties(object, object_type)
@@ -281,10 +625,19 @@ module Mxrb
           type = types_by_id[IO::BsonCodec.extract_id(property["TypePointer"])]
           next unless type
 
-          result[type["PropertyKey"].to_s] = pluggable_value(
-            property["Value"], type["ValueType"]
-          )
+          value_type = type["ValueType"]
+          projected = pluggable_value(property["Value"], value_type)
+          next if projected.nil? && !clearable_pluggable_value_type?(value_type)
+
+          result[type["PropertyKey"].to_s] = projected
         end
+      end
+
+      def clearable_pluggable_value_type?(value_type)
+        value_type.is_a?(Hash) && %w[
+          String Boolean Integer Decimal Number Enumeration Expression TextTemplate
+          Attribute Association DataSource Action Widgets Object Selection
+        ].include?(value_type['Type'].to_s)
       end
 
       def pluggable_value(value, value_type)
@@ -305,6 +658,7 @@ module Mxrb
 
         return extract_text(value["TextTemplate"]) if value["TextTemplate"].is_a?(Hash)
         return value.dig("AttributeRef", "Attribute") if value["AttributeRef"].is_a?(Hash)
+        return value.dig("EntityRef", "Entity") if value["EntityRef"].is_a?(Hash)
         return pluggable_data_source(value["DataSource"]) if value["DataSource"].is_a?(Hash)
         return value["Expression"] unless value["Expression"].to_s.empty?
         return value["Image"] unless value["Image"].to_s.empty?
@@ -337,6 +691,9 @@ module Mxrb
       end
 
       def pluggable_action(action)
+        parsed = parse_action(action)
+        return parsed.merge(kind: parsed.fetch(:kind).to_s) if parsed
+
         candidates = {
           "nanoflow" => action["Nanoflow"],
           "microflow" => action["Microflow"],
@@ -357,6 +714,22 @@ module Mxrb
         when Array then value.each { nested_pluggable_widgets(_1, found) }
         end
         found.uniq { [_1[:name] || _1["name"], _1[:type] || _1["type"]] }
+      end
+
+      def pluggable_widget_slots(value, path = [], found = [])
+        case value
+        when Hash
+          value.each do |key, child|
+            if key.to_s == "widgets"
+              found << { path: path, widgets: Array(child) }
+            else
+              pluggable_widget_slots(child, path + [key], found)
+            end
+          end
+        when Array
+          value.each_with_index { |child, index| pluggable_widget_slots(child, path + [index], found) }
+        end
+        found
       end
 
       def strip_pluggable_widgets(value)
@@ -562,6 +935,78 @@ module Mxrb
         }
       end
 
+      def table_widget(widget)
+        columns = parse_array(widget["ColumnWidths"]).map do |column|
+          { width: column.fetch("Value", 0).to_i }
+        end
+        cells_by_row = parse_array(widget["Cells"]).group_by do |cell|
+          cell.fetch("TopRowIndex", 0).to_i
+        end
+        rows = parse_array(widget["Rows"]).each_with_index.map do |row, row_index|
+          sorted_cells = cells_by_row.fetch(row_index, []).sort_by do |cell|
+            cell.fetch("LeftColumnIndex", 0).to_i
+          end
+          cells = sorted_cells.map do |cell|
+            widgets = []
+            parse_widgets(parse_array(cell["Widgets"]), widgets)
+            {
+              column: cell.fetch("LeftColumnIndex", 0).to_i,
+              colspan: [cell.fetch("Width", 1).to_i, 1].max,
+              rowspan: [cell.fetch("Height", 1).to_i, 1].max,
+              header: cell["IsHeader"] == true,
+              options: appearance_options(cell),
+              widgets:
+            }
+          end
+          { options: appearance_options(row), cells: }
+        end
+        options = appearance_options(widget).merge(
+          columns:, rows:,
+          width_unit: widget.fetch("WidthUnit", "Weight").to_s.downcase.to_sym,
+          tab_index: widget.fetch("TabIndex", 0).to_i
+        )
+        { type: :table, name: widget["Name"] || "table", options:, events: [] }
+      end
+
+      def layout_grid_widget(widget)
+        rows = parse_array(widget["Rows"]).map do |row|
+          columns = parse_array(row["Columns"]).map do |column|
+            children = []
+            parse_widgets(parse_array(column["Widgets"]), children)
+            {
+              options: appearance_options(column).merge(
+                desktop: layout_grid_weight(column.fetch("Weight", -1)),
+                tablet: layout_grid_weight(column.fetch("TabletWeight", -1)),
+                phone: layout_grid_weight(column.fetch("PhoneWeight", -1)),
+                vertical_alignment: layout_grid_enum(column.fetch("VerticalAlignment", "None"))
+              ),
+              widgets: children
+            }
+          end
+          {
+            options: appearance_options(row).merge(
+              horizontal_alignment: layout_grid_enum(row.fetch("HorizontalAlignment", "None")),
+              vertical_alignment: layout_grid_enum(row.fetch("VerticalAlignment", "None")),
+              gutters: row.fetch("SpacingBetweenColumns", true) == true
+            ),
+            columns:
+          }
+        end
+        options = appearance_options(widget).merge(
+          width: widget.fetch("Width", "FullWidth").to_s == "FixedWidth" ? :fixed : :full,
+          tab_index: widget.fetch("TabIndex", 0).to_i, rows:
+        )
+        { type: :layout_grid, name: widget["Name"] || "layoutGrid", options:, events: [] }
+      end
+
+      def layout_grid_weight(value)
+        { -1 => :grow, -2 => :auto }.fetch(value.to_i, value.to_i)
+      end
+
+      def layout_grid_enum(value)
+        value.to_s.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase.to_sym
+      end
+
       def grid_entity(widget)
         widget.dig("DataSource", "Entity") ||
           widget.dig("DataSource", "EntityRef", "Entity")
@@ -571,6 +1016,16 @@ module Mxrb
         roots = parse_array(doc["Widgets"] || doc["widgets"])
         roots.concat(form_call_widgets(doc["FormCall"]))
         roots
+      end
+
+      def canonical_root_data_source(roots)
+        return unless roots.one?
+
+        root = roots.first
+        return unless %w[Pages$DataView Forms$DataView].include?(root["$Type"])
+
+        source = parse_data_view_source(root["DataSource"])
+        source unless source[:kind] == :native
       end
 
       def form_call_widgets(form_call)
@@ -624,7 +1079,7 @@ module Mxrb
           return nil if handler.to_s.empty?
 
           arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
           end
           { kind: :nanoflow, handler: handler, arguments: arguments }
         elsif %w[Pages$MicroflowClientAction Forms$MicroflowAction Forms$MicroflowClientAction].include?(action["$Type"])
@@ -633,7 +1088,7 @@ module Mxrb
           return nil if handler.to_s.empty?
 
           arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
           end
           { kind: :microflow, handler: handler, arguments: arguments }
         elsif %w[Pages$FormAction Forms$FormAction].include?(action["$Type"])
@@ -642,7 +1097,7 @@ module Mxrb
           return nil if handler.empty?
 
           arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), mapping["Expression"].to_s]
+            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
           end
           { kind: :page, handler: handler, arguments: arguments }
         elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action["$Type"])
@@ -654,6 +1109,13 @@ module Mxrb
         elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action["$Type"])
           { kind: :action, handler: "close_page" }
         end
+      end
+
+      def parse_action_mapping_value(mapping)
+        expression = (mapping["Expression"] || mapping["Argument"]).to_s
+        return expression unless expression.empty?
+
+        parse_page_variable(mapping["Variable"]) || ""
       end
 
       def local_name(name)

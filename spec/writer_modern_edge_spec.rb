@@ -164,6 +164,67 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect(writer.send(:ruby_navigation_profile, legacy, 'Phone')).to be_nil
   end
 
+  it 'fails closed for invalid incremental Ruby association inputs' do
+    raw_module = { 'UnitID' => 'module', 'ContainerID' => 'root' }
+    raw_domain = { 'UnitID' => 'domain', 'ContainerID' => 'module' }
+    build_mpr = lambda do |domain_document: nil, include_module: true|
+      mpr = double(root_unit: { 'UnitID' => 'root' })
+      allow(mpr).to receive(:units_by_containment)
+        .with('Modules')
+        .and_return(include_module ? [raw_module] : [])
+      allow(mpr).to receive(:parse_contents).with(raw_module).and_return('Name' => 'App')
+      allow(mpr).to receive(:units_by_containment)
+        .with('DomainModel')
+        .and_return(domain_document ? [raw_domain] : [])
+      allow(mpr).to receive(:parse_contents).with(raw_domain).and_return(domain_document) if domain_document
+      mpr
+    end
+
+    missing_module = build_mpr.call(include_module: false)
+    expect do
+      writer.synchronize_ruby_associations!(missing_module, module_name: 'App', entities: [])
+    end.to raise_error(Mxrb::ValidationError, /module App does not exist/)
+
+    missing_domain = build_mpr.call
+    expect do
+      writer.synchronize_ruby_associations!(missing_domain, module_name: 'App', entities: [])
+    end.to raise_error(Mxrb::ValidationError, /module App has no domain model/)
+
+    domain_document = {
+      'Entities' => Mxrb::IO::BsonCodec.build_array([
+                                                      { '$ID' => 'order-id', 'Name' => 'Order' },
+                                                      { '$ID' => 'customer-id', 'Name' => 'Customer' }
+                                                    ]),
+      'Associations' => Mxrb::IO::BsonCodec.build_array([]),
+      'CrossAssociations' => Mxrb::IO::BsonCodec.build_array([])
+    }
+    mpr = build_mpr.call(domain_document:)
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr, module_name: 'App', entities: [{ name: 'Missing', associations: [] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /entities missing from App: Missing/)
+
+    duplicate = { name: 'Order_Customer', target: 'Customer', type: :Reference }
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr,
+        module_name: 'App',
+        entities: [{ name: 'Order', associations: [duplicate, duplicate.dup] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /duplicate Ruby association App.Order_Customer/)
+
+    expect do
+      writer.synchronize_ruby_associations!(
+        mpr,
+        module_name: 'App',
+        entities: [{ name: 'Order', associations: [
+          { name: 'Order_Missing', target: 'Missing', type: :Reference }
+        ] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /unknown association target "Missing"/)
+  end
+
   it 'normalizes explicitly supplied native layouts before writing Mendix 6 documents' do
     legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
     mpr = double
@@ -345,6 +406,51 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect(objects.map { _1['$Type'] }).to include('Microflows$Annotation')
   end
 
+  it 'repairs duplicate nested parameter type identities while preserving unique native ones' do
+    duplicate = SecureRandom.uuid
+    retained = SecureRandom.uuid
+    source_parameters = [
+      ['First', duplicate], ['Second', duplicate], ['Third', retained]
+    ].map do |name, type_id|
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Microflows$MicroflowParameter',
+        'Name' => name, 'VariableType' => { '$ID' => type_id, '$Type' => 'DataTypes$StringType' }
+      }
+    end
+    generated_parameters = source_parameters.map do |parameter|
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'Microflows$MicroflowParameter',
+        'Name' => parameter['Name'],
+        'VariableType' => {
+          '$ID' => SecureRandom.uuid, '$Type' => 'DataTypes$StringType'
+        }
+      }
+    end
+    generated_type_ids = generated_parameters.map { _1.dig('VariableType', '$ID') }
+    target = {
+      'ObjectCollection' => {
+        'Objects' => Mxrb::IO::BsonCodec.build_array(generated_parameters)
+      },
+      'Flows' => Mxrb::IO::BsonCodec.build_array([])
+    }
+    source = {
+      'ObjectCollection' => {
+        'Objects' => Mxrb::IO::BsonCodec.build_array(source_parameters)
+      },
+      'Flows' => Mxrb::IO::BsonCodec.build_array([])
+    }
+
+    writer.send(:preserve_flow_auxiliary_objects, target, source)
+
+    parameters = Mxrb::IO::BsonCodec.parse_array(
+      target.dig('ObjectCollection', 'Objects')
+    )[:items]
+    type_ids = parameters.map { _1.dig('VariableType', '$ID') }
+    expect(type_ids.first(2)).to eq(generated_type_ids.first(2))
+    expect(type_ids.last).to eq(retained)
+    expect(type_ids).to contain_exactly(*type_ids.uniq)
+  end
+
   it 'preserves localized native validation rules until explicitly disabled' do
     native_rule = {
       '$ID' => 'rule', '$Type' => 'DomainModels$ValidationRule',
@@ -399,6 +505,153 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     expect do
       writer.send(:scheduled_event_schedule_doc, unit: :weeks, interval: 1)
     end.to raise_error(ArgumentError, /modern schedules/)
+  end
+
+  it 'fails closed for missing modules and ambiguous Ruby enumeration identities' do
+    mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.synchronize_ruby_enumerations!(mpr, module_name: 'Missing', enumerations: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing/)
+
+    first_id = '11111111-1111-4111-8111-111111111111'
+    second_id = '22222222-2222-4222-8222-222222222222'
+    expect do
+      writer.send(
+        :validate_ruby_enumerations!, 'App',
+        [{ name: 'State', id: first_id }, { name: 'State', id: second_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /names State/)
+    expect do
+      writer.send(
+        :validate_ruby_enumerations!, 'App',
+        [{ name: 'State', id: first_id }, { name: 'Priority', id: first_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /ids #{first_id}/)
+
+    duplicate_name = [{ name: 'State', values: [
+      { name: 'Open', id: first_id }, { name: 'Open', id: second_id }
+    ] }]
+    duplicate_id = [{ name: 'State', values: [
+      { name: 'Open', id: first_id }, { name: 'Closed', id: first_id }
+    ] }]
+    expect { writer.send(:validate_ruby_enumerations!, 'App', duplicate_name) }
+      .to raise_error(Mxrb::ValidationError, /duplicate values.*Open/)
+    expect { writer.send(:validate_ruby_enumerations!, 'App', duplicate_id) }
+      .to raise_error(Mxrb::ValidationError, /duplicate values.*#{first_id}/)
+    expect do
+      writer.send(:validate_ruby_enumerations!, 'App', [{ name: 'State', id: 'invalid' }])
+    end.to raise_error(Mxrb::ValidationError, /invalid native id/)
+
+    existing_id = '33333333-3333-4333-8333-333333333333'
+    document = writer.send(
+      :ruby_enumeration_doc, { name: 'State', values: [] },
+      previous: { '$ID' => existing_id, 'Values' => [3] }
+    )
+    expect(document['$ID']).to eq(existing_id)
+
+    replacement_id = '44444444-4444-4444-8444-444444444444'
+    expect do
+      writer.send(
+        :validate_ruby_identity!, replacement_id, {},
+        [{ 'UnitID' => existing_id }, { '$ID' => existing_id }], 'enumeration App.State'
+      )
+    end.to raise_error(Mxrb::ValidationError, /identity mismatch.*expected #{existing_id}/)
+    expect do
+      writer.send(
+        :ruby_enumeration_doc,
+        { name: 'State', values: [{ name: 'Open', id: replacement_id, captions: {} }] },
+        previous: {
+          '$ID' => existing_id,
+          'Values' => [3, { '$ID' => first_id, 'Name' => 'Open' }]
+        }
+      )
+    end.to raise_error(Mxrb::ValidationError, /identity mismatch.*value Open/)
+  end
+
+  it 'validates and incrementally merges modern and legacy Ruby constants' do
+    missing_mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.synchronize_ruby_constants!(missing_mpr, module_name: 'Missing', constants: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing/)
+
+    first_id = '11111111-1111-4111-8111-111111111111'
+    second_id = '22222222-2222-4222-8222-222222222222'
+    expect do
+      writer.send(
+        :validate_ruby_constants!, 'App',
+        [{ name: 'Value', id: first_id }, { name: 'Value', id: second_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /names Value/)
+    expect do
+      writer.send(
+        :validate_ruby_constants!, 'App',
+        [{ name: 'Value', id: first_id }, { name: 'Other', id: first_id }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /ids #{first_id}/)
+    expect do
+      writer.send(:validate_ruby_constants!, 'App', [{ name: 'Value', id: 'invalid' }])
+    end.to raise_error(Mxrb::ValidationError, /invalid native id/)
+    expect do
+      writer.send(:validate_ruby_constants!, 'App', [{ name: 'Value', type: :object }])
+    end.to raise_error(Mxrb::ValidationError, /unsupported Ruby constant type/)
+
+    type_id = '33333333-3333-4333-8333-333333333333'
+    modern = writer.send(
+      :ruby_constant_doc,
+      {
+        name: 'Limit', type: :decimal, documentation: 'Changed', default_supplied: false,
+        exposed_to_client: false, excluded: true, export_level: 'Public'
+      },
+      previous: {
+        '$ID' => first_id, '$Type' => 'Constants$Constant', 'Name' => 'Limit',
+        'DefaultValue' => 'private-value', 'ExposedToClient' => false,
+        'Type' => {
+          '$ID' => type_id, '$Type' => 'DataTypes$IntegerType', 'VendorType' => 'keep'
+        },
+        'VendorMetadata' => 'keep'
+      }
+    )
+    expect(modern).to include(
+      '$ID' => first_id, 'DefaultValue' => 'private-value', 'Excluded' => true,
+      'ExportLevel' => 'Public', 'VendorMetadata' => 'keep'
+    )
+    expect(modern.fetch('Type')).to include(
+      '$ID' => type_id, '$Type' => 'DataTypes$DecimalType', 'VendorType' => 'keep'
+    )
+
+    legacy = writer.send(
+      :ruby_constant_doc,
+      { name: 'Enabled', type: :boolean, default_supplied: true, default_value: true },
+      previous: {
+        '$ID' => second_id, '$Type' => 'Constants$Constant', 'Name' => 'Enabled',
+        'DataType' => 'String', 'DefaultValue' => 'old', 'LegacyMetadata' => 'keep'
+      },
+      legacy: true
+    )
+    expect(legacy).to include(
+      'DataType' => 'Boolean', 'DefaultValue' => 'true', 'LegacyMetadata' => 'keep'
+    )
+    expect(legacy).not_to have_key('Type')
+
+    hybrid = writer.send(
+      :ruby_constant_doc,
+      { name: 'Hybrid', type: :string },
+      previous: {
+        '$ID' => first_id, 'Type' => { '$Type' => 'DataTypes$IntegerType' },
+        'DataType' => 'Integer', 'DefaultValue' => '1'
+      }
+    )
+    expect(hybrid).to include('DataType' => 'Integer')
+
+    expect do
+      writer.send(
+        :ruby_constant_doc,
+        { name: 'Private', exposed_to_client: true, default_supplied: false },
+        previous: { '$ID' => first_id, 'ExposedToClient' => false, 'DefaultValue' => 'secret' }
+      )
+    end.to raise_error(Mxrb::ValidationError, /explicit safe default/)
   end
 end
 # rubocop:enable Metrics/BlockLength

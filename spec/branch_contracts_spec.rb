@@ -11,7 +11,7 @@ RSpec.describe 'remaining branch contracts' do
       localize_date: false, enumeration: 'App.Status', required: false, unique: true
     )
     association = double(
-      to_entity_id: 'App.Target', association_type: :ReferenceSet, owner: :Default,
+      to_entity_id: 'App.Target', association_type: :ReferenceSet, owner: :Both,
       name: 'Links', documentation: 'docs',
       parent_delete_behavior: :DeleteMeAndReferences,
       child_delete_behavior: :DeleteMeButKeepReferences
@@ -30,7 +30,7 @@ RSpec.describe 'remaining branch contracts' do
     )
     expect(source).to include(
       'string :Status', 'localize_date: false', 'enumeration: "App.Status"',
-      'unique: true', 'cardinality: :many_to_many', 'documentation: "docs"',
+      'unique: true', 'cardinality: :many_to_many', 'owner: :Both', 'documentation: "docs"',
       'parent_delete: :DeleteMeAndReferences', 'ascending: [false]',
       'include_offline: true'
     )

@@ -59,7 +59,8 @@ RSpec.describe 'round-trip demand regressions' do
         File.read(File.join(mendix_export, '.mxrb', 'native_units.json'))
       )
       expect(exported_manifest).to include(
-        'format_version' => 'v2', 'source_filename' => 'StudioProject.mpr'
+        'format_version' => 'v2', 'source_filename' => 'StudioProject.mpr',
+        'source_version' => '11.12.1'
       )
 
       incompatible = File.join(dir, 'StudioProject-mxrb.mpr')
