@@ -59,9 +59,7 @@ module Mxrb
 
       def initialize(type, id: nil, properties: {})
         @kind = self.class.kind(type)
-        unless @kind
-          raise ArgumentError, "unsupported typed schedule #{type.inspect}; use the legacy properties API"
-        end
+        raise ArgumentError, "unsupported typed schedule #{type.inspect}; use the legacy properties API" unless @kind
 
         @id = id.to_s.dup.freeze
         @properties = {}
@@ -80,6 +78,7 @@ module Mxrb
           unless FIELDS.fetch(@kind).include?(field)
             raise ArgumentError, "#{field} is not a property of #{@kind} schedules"
           end
+
           validate_value!(field, value)
           @properties[PROPERTY_NAMES.key(field)] = value
           self

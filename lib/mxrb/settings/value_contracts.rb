@@ -4,7 +4,7 @@ module Mxrb
   module Settings
     # Contracts evidenced by the shipped Studio project templates and settings
     # fixtures. Unknown collection element schemas stay typed but unrestricted.
-    module ValueContracts
+    module ValueContracts # rubocop:disable Metrics/ModuleLength
       BOOLEAN_FIELDS = %w[
         EnableDownloadResources EnableMicroflowReachabilityAnalysis EnableNewStringBehavior
         EnableNewWidgetGeneration EnableRspackBundler EnableWidgetBundling ObsoleteEnableUrlEncoding
@@ -32,6 +32,22 @@ module Mxrb
         'Languages' => 'Texts$Language', 'Certificates' => 'Settings$Certificate',
         'CustomSettings' => 'Settings$CustomSetting'
       }.freeze
+      ENUM_FIELDS = {
+        'UseOptimizedClient' => %w[Yes No],
+        'FirstDayOfWeek' => %w[Default Sunday Monday Saturday],
+        'HashAlgorithm' => %w[BCrypt SHA256],
+        'RoundingMode' => %w[HalfUp HalfEven Down Up Floor Ceiling],
+        'DefaultAssociationStorage' => %w[Column Table],
+        'DefaultSequenceFlowLineType' => %w[BezierCurve Straight],
+        'DatabaseType' => %w[Hsqldb PostgreSQL SQLServer Oracle MySQL],
+        'Type' => %w[Authority Client]
+      }.transform_values(&:freeze).freeze
+      INTEGER_RANGES = {
+        'BcryptCost' => (4..31), 'DecimalScale' => (0..28),
+        'DefaultTaskParallelism' => (1..), 'WorkflowEngineParallelism' => (1..),
+        'HttpPortNumber' => (1..65_535), 'ServerPortNumber' => (1..65_535),
+        'MaxJavaHeapSize' => (0..)
+      }.freeze
 
       module_function
 
@@ -44,6 +60,7 @@ module Mxrb
           raise Error, "#{Catalog.method_for_type(type)}.#{Catalog.field_method(field)} " \
                        "expects #{expected}, got #{value.class}"
         end
+        validate_constraints!(type, field, value)
 
         value.is_a?(String) ? value.dup.freeze : value
       end
@@ -65,6 +82,18 @@ module Mxrb
         when String then value.is_a?(Node) && value.storage_type == expected
         else value.is_a?(expected)
         end
+      end
+
+      def validate_constraints!(type, field, value)
+        choices = ENUM_FIELDS[field]
+        if choices && !choices.include?(value)
+          raise Error, "#{Catalog.method_for_type(type)}.#{Catalog.field_method(field)} " \
+                       "must be one of #{choices.join(', ')}"
+        end
+        range = INTEGER_RANGES[field]
+        return unless range && !range.cover?(value)
+
+        raise Error, "#{Catalog.method_for_type(type)}.#{Catalog.field_method(field)} is outside #{range}"
       end
 
       def collection(type, field, value)

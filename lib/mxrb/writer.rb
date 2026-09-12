@@ -2173,7 +2173,7 @@ module Mxrb
           current = mpr.parse_contents(existing)
           if typed_forms
             doc = Forms::MprCodec.new.encode(typed_forms, baseline: current)
-              .merge('Name' => document.fetch(:name).to_s)
+                                 .merge('Name' => document.fetch(:name).to_s)
           end
           base = typed_forms ? doc : current.merge(doc)
           preserved = base.merge(

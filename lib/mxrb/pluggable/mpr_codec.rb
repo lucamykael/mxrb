@@ -24,10 +24,10 @@ module Mxrb
         TranslatableValue TypePointer Widgets XPathConstraint
       ].freeze
       LEGACY_OUTER_PROPERTIES = {
-        'AttributePath' => ['attribute', 'Attribute'],
-        'LabelText' => ['label', 'TranslatableString'],
-        'SelectorType' => ['selector_type', 'Enumeration'],
-        'DisplayAttribute' => ['display_attribute', 'Attribute']
+        'AttributePath' => %w[attribute Attribute],
+        'LabelText' => %w[label TranslatableString],
+        'SelectorType' => %w[selector_type Enumeration],
+        'DisplayAttribute' => %w[display_attribute Attribute]
       }.freeze
 
       def initialize(forms_codec:, catalog: Catalog.default)
@@ -134,7 +134,7 @@ module Mxrb
         end
       end
 
-      def decode_widget_type(document, path:) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+      def decode_widget_type(document, path:)
         require_type!(document, 'CustomWidgets$CustomWidgetType', path)
         context = { property_types: {}, object_types: {} }
         object_type = decode_object_type(document.fetch('ObjectType'), context, path: "#{path}.ObjectType")
@@ -146,9 +146,9 @@ module Mxrb
           document.fetch('StudioProCategory', '').to_s.freeze,
           document.fetch('StudioCategory', '').to_s.freeze,
           document.fetch('SupportedPlatform', 'Web').to_s.freeze,
-          !!document.fetch('OfflineCapable', false),
-          !!document.fetch('WidgetNeedsEntityContext', document.fetch('NeedsEntityContext', false)),
-          !!document.fetch('WidgetPluginWidget', document.fetch('PluginWidget', false)),
+          boolean(document.fetch('OfflineCapable', false)),
+          boolean(document.fetch('WidgetNeedsEntityContext', document.fetch('NeedsEntityContext', false))),
+          boolean(document.fetch('WidgetPluginWidget', document.fetch('PluginWidget', false))),
           document.fetch('HelpUrl', '').to_s.freeze,
           object_type
         )
@@ -162,7 +162,7 @@ module Mxrb
         [definition, context]
       end
 
-      def decode_object_type(document, context, path:) # rubocop:disable Metrics/MethodLength
+      def decode_object_type(document, context, path:)
         require_type!(document, 'CustomWidgets$WidgetObjectType', path)
         object_type_id = storage_id(document['$ID'])
         properties = array_items(document['PropertyTypes']).map.with_index do |property, index|
@@ -174,7 +174,7 @@ module Mxrb
         object_type
       end
 
-      def decode_property_type(document, context, path:) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+      def decode_property_type(document, context, path:)
         require_type!(document, 'CustomWidgets$WidgetPropertyType', path)
         key = document['PropertyKey'] || document['_Key'] || document['Key'] || ''
         value_type = decode_value_type(document.fetch('ValueType'), context, path: "#{path}.ValueType")
@@ -184,7 +184,7 @@ module Mxrb
           document.fetch('Caption', '').to_s.freeze,
           document.fetch('Description', '').to_s.freeze,
           document.fetch('Prompt', '').to_s.freeze,
-          !!document.fetch('IsDefault', false), value_type
+          boolean(document.fetch('IsDefault', false)), value_type
         )
         identifier = storage_id(document['$ID'])
         context[:property_types][identifier] = property if identifier
@@ -193,18 +193,18 @@ module Mxrb
         property
       end
 
-      def decode_value_type(document, context, path:) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+      def decode_value_type(document, context, path:)
         require_type!(document, 'CustomWidgets$WidgetValueType', path)
         object_type = document['ObjectType'] &&
                       decode_object_type(document['ObjectType'], context, path: "#{path}.ObjectType")
         value_type = ValueType.new(
           document.fetch('Type', 'String').to_s.freeze,
-          !!document.fetch('IsList', false), !!document.fetch('IsLinked', false),
-          !!document.fetch('IsMetaData', false), document.fetch('EntityProperty', '').to_s.freeze,
-          !!document.fetch('AllowNonPersistableEntities', false),
+          boolean(document.fetch('IsList', false)), boolean(document.fetch('IsLinked', false)),
+          boolean(document.fetch('IsMetaData', false)), document.fetch('EntityProperty', '').to_s.freeze,
+          boolean(document.fetch('AllowNonPersistableEntities', false)),
           document.fetch('IsPath', 'No').to_s.freeze, document.fetch('PathType', 'None').to_s.freeze,
-          !!document.fetch('ParameterIsList', false), !!document.fetch('Multiline', false),
-          document.fetch('DefaultValue', '').to_s.freeze, !!document.fetch('Required', false),
+          boolean(document.fetch('ParameterIsList', false)), boolean(document.fetch('Multiline', false)),
+          document.fetch('DefaultValue', '').to_s.freeze, boolean(document.fetch('Required', false)),
           document.fetch('OnChangeProperty', '').to_s.freeze,
           document.fetch('DataSourceProperty', '').to_s.freeze,
           document.fetch('SelectableObjectsProperty', '').to_s.freeze,
@@ -213,8 +213,8 @@ module Mxrb
           decode_enumerations(document['EnumerationValues'], path:),
           decode_action_variables(document['ActionVariables'], path:), object_type,
           decode_return_type(document['ReturnType'], path:),
-          decode_translations(document['Translations'], path:), !!document.fetch('SetLabel', false),
-          document.fetch('DefaultType', 'None').to_s.freeze, !!document.fetch('AllowUpload', false)
+          decode_translations(document['Translations'], path:), boolean(document.fetch('SetLabel', false)),
+          document.fetch('DefaultType', 'None').to_s.freeze, boolean(document.fetch('AllowUpload', false))
         )
         context[:value_types] ||= {}
         identifier = storage_id(document['$ID'])
@@ -249,7 +249,7 @@ module Mxrb
         target
       end
 
-      def decode_value(document, value_type, context, path:) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def decode_value(document, value_type, context, path:)
         require_type!(document, 'CustomWidgets$WidgetValue', path)
         assert_known!(document, WIDGET_VALUE_FIELDS, path)
         case value_type.kind
@@ -290,8 +290,11 @@ module Mxrb
       def decode_widgets(raw, path:)
         array_items(raw).map.with_index do |item, index|
           item_path = "#{path}[#{index}]"
-          item['$Type'] == 'CustomWidgets$CustomWidget' ? decode(item, path: item_path) :
+          if item['$Type'] == 'CustomWidgets$CustomWidget'
+            decode(item, path: item_path)
+          else
             forms_codec.decode_embedded(item, path: item_path)
+          end
         end.freeze
       end
 
@@ -305,6 +308,7 @@ module Mxrb
         unless %w[CustomWidgets$CustomWidgetXPathSource CustomWidgets$CustomWidgetDatabaseSource].include?(type)
           return forms_codec.decode_embedded(source, path: "#{path}.DataSource")
         end
+
         known = %w[
           $ID $Type EntityRef XPathConstraint DatabaseConstraints SortBar SourceVariable ForceFullObjects
         ]
@@ -339,8 +343,12 @@ module Mxrb
         Pluggable.reference(kind, target)
       end
 
-      def encode_widget_type(widget_type) # rubocop:disable Metrics/MethodLength
-        context = { property_ids: {}, value_type_ids: {}, object_type_ids: {} }
+      def encode_widget_type(widget_type)
+        context = {
+          property_ids: {}.compare_by_identity,
+          value_type_ids: {}.compare_by_identity,
+          object_type_ids: {}.compare_by_identity
+        }
         object_type = encode_object_type(widget_type.object_type, context)
         document = {
           '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$CustomWidgetType',
@@ -358,7 +366,7 @@ module Mxrb
 
       def encode_object_type(object_type, context)
         identifier = SecureRandom.uuid
-        context[:object_type_ids][object_type.object_id] = identifier
+        context[:object_type_ids][object_type] = identifier
         properties = object_type.properties.map { encode_property_type(_1, context) }
         {
           '$ID' => identifier, '$Type' => 'CustomWidgets$WidgetObjectType',
@@ -368,7 +376,7 @@ module Mxrb
 
       def encode_property_type(property, context)
         identifier = SecureRandom.uuid
-        context[:property_ids][property.object_id] = identifier
+        context[:property_ids][property] = identifier
         {
           '$ID' => identifier, '$Type' => 'CustomWidgets$WidgetPropertyType',
           'Caption' => property.caption, 'Category' => property.category,
@@ -403,10 +411,37 @@ module Mxrb
         when Array
           return unless baseline.is_a?(Array)
 
-          array_items(generated).zip(array_items(baseline)).each do |value, previous|
-            restore_schema_fields!(value, previous, replacements) if previous
-          end
+          restore_schema_array!(generated, baseline, replacements)
         end
+      end
+
+      def restore_schema_array!(generated, baseline, replacements)
+        values = array_items(generated)
+        previous_values = array_items(baseline)
+        return unless values.all?(Hash) || previous_values.all?(Hash)
+
+        unless values.length == previous_values.length && values.all?(Hash) && previous_values.all?(Hash)
+          raise CodecError, 'embedded widget schema collection changed shape'
+        end
+
+        candidates = previous_values.group_by { schema_identity(_1) }
+        values.each do |value|
+          identity = schema_identity(value)
+          matches = candidates.fetch(identity, [])
+          raise CodecError, "ambiguous embedded widget schema identity #{identity.inspect}" unless matches.one?
+
+          restore_schema_fields!(value, matches.first, replacements)
+          candidates.delete(identity)
+        end
+      end
+
+      def schema_identity(document)
+        type = document.fetch('$Type', '')
+        %w[PropertyKey _Key Key LanguageCode WidgetId].each do |field|
+          logical_field = %w[PropertyKey _Key Key].include?(field) ? 'Key' : field
+          return [type, logical_field, document[field].to_s] if document.key?(field)
+        end
+        [type]
       end
 
       def restore_schema_hash!(generated, baseline, replacements)
@@ -440,9 +475,9 @@ module Mxrb
         end
       end
 
-      def encode_value_type(value_type, context) # rubocop:disable Metrics/MethodLength
+      def encode_value_type(value_type, context)
         identifier = SecureRandom.uuid
-        context[:value_type_ids][value_type.object_id] = identifier
+        context[:value_type_ids][value_type] = identifier
         {
           '$ID' => identifier, '$Type' => 'CustomWidgets$WidgetValueType',
           'ActionVariables' => encode_action_variables(value_type.action_variables),
@@ -472,10 +507,10 @@ module Mxrb
       def encode_object(object, schema, context, path:)
         properties = object.assignments.map do |assignment|
           property = schema.fetch_property(assignment.property.key)
-          value_type_id = context[:value_type_ids].fetch(property.value_type.object_id)
+          value_type_id = context[:value_type_ids].fetch(property.value_type)
           stored = {
             '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetProperty',
-            'TypePointer' => context[:property_ids].fetch(property.object_id),
+            'TypePointer' => context[:property_ids].fetch(property),
             'Value' => encode_value(assignment.value, property.value_type,
                                     value_type_id, context, path: "#{path}.#{assignment.property.key}")
           }
@@ -486,12 +521,12 @@ module Mxrb
         end
         {
           '$ID' => SecureRandom.uuid, '$Type' => 'CustomWidgets$WidgetObject',
-          'TypePointer' => context[:object_type_ids].fetch(schema.object_id),
+          'TypePointer' => context[:object_type_ids].fetch(schema),
           'Properties' => marked(properties, 2)
         }
       end
 
-      def encode_value(value, value_type, type_id, context, path:) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def encode_value(value, value_type, type_id, context, path:)
         document = empty_widget_value(type_id)
         case value_type.kind
         when 'Boolean' then document['PrimitiveValue'] = value.to_s
@@ -540,13 +575,17 @@ module Mxrb
 
       def encode_widgets(values, path:)
         marked(values.map.with_index do |widget, index|
-          widget.is_a?(Node) ? encode(widget, path: "#{path}[#{index}]") :
+          if widget.is_a?(Node)
+            encode(widget, path: "#{path}[#{index}]")
+          else
             forms_codec.encode_embedded(widget, path: "#{path}[#{index}]")
+          end
         end, 2)
       end
 
       def encode_data_source(document, source, path:)
         return unless source
+
         if source.is_a?(Forms::Node)
           document['DataSource'] = forms_codec.encode_embedded(source, path: "#{path}.DataSource")
           return
@@ -653,7 +692,7 @@ module Mxrb
         return unless item
 
         assert_known!(item, %w[$ID $Type Type IsList EntityProperty AssignableTo], "#{path}.ReturnType")
-        ReturnType.new(item.fetch('Type', 'None').to_s.freeze, !!item.fetch('IsList', false),
+        ReturnType.new(item.fetch('Type', 'None').to_s.freeze, boolean(item.fetch('IsList', false)),
                        item.fetch('EntityProperty', '').to_s.freeze,
                        item.fetch('AssignableTo', '').to_s.freeze)
       end
@@ -705,6 +744,7 @@ module Mxrb
       def array_items(value) = IO::BsonCodec.parse_array(value).fetch(:items)
       def marked(value, marker) = IO::BsonCodec.build_array(value, marker:)
       def storage_id(value) = IO::BsonCodec.extract_id(value)
+      def boolean(value) = value ? true : false
 
       def require_type!(document, expected, path)
         raise CodecError, "expected #{expected} at #{path}" unless document.is_a?(Hash) && document['$Type'] == expected

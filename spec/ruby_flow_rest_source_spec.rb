@@ -39,8 +39,9 @@ RSpec.describe 'Ruby REST header declarations' do
     document = writer.send(:rest_call_action_doc, activity)
     headers = Mxrb::IO::BsonCodec.parse_array(document.dig('HttpConfiguration', 'HttpHeaderEntries')).fetch(:items)
     expect(headers.map { [_1['Key'], _1['Value']] }).to eq([
-      ['X-Multi', "'one'"], ['X-Other', '$Value'], ['X-Multi', "'two'"]
-    ])
+                                                             ['X-Multi',
+                                                              "'one'"], ['X-Other', '$Value'], ['X-Multi', "'two'"]
+                                                           ])
     source = Mxrb::Exporter.allocate.send(:rest_call_line, '', document)
     decoded = builder
     decoded.instance_eval(source)

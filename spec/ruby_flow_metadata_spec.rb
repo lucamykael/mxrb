@@ -41,6 +41,10 @@ RSpec.describe Mxrb::RubyApp::FlowMetadata do # rubocop:disable Metrics/BlockLen
   def service_files(root) = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb'))
 
   def metadata_path(root)
+    File.join(root, '.mxrb', 'semantic_metadata.json')
+  end
+
+  def legacy_metadata_path(root)
     File.join(root, '.mxrb', 'mendix', '.mxrb', 'semantic_metadata.json')
   end
 
@@ -79,6 +83,7 @@ RSpec.describe Mxrb::RubyApp::FlowMetadata do # rubocop:disable Metrics/BlockLen
   it 'fails explicitly when an existing service loses its metadata baseline' do
     _source, root = export_flows
     File.delete(metadata_path(root))
+    File.delete(legacy_metadata_path(root))
 
     expect { Mxrb::RubyApp::Application.new(root) }
       .to raise_error(Mxrb::ValidationError, /requires its semantic metadata baseline/)
@@ -103,6 +108,7 @@ RSpec.describe Mxrb::RubyApp::FlowMetadata do # rubocop:disable Metrics/BlockLen
       File.write(path, text)
     end
     File.delete(metadata_path(root))
+    File.delete(legacy_metadata_path(root))
     compiled = Mxrb::RubyApp.compile(root, File.join(@directory, 'Legacy.mpr'))
 
     expect(flow_documents(compiled).keys).to match_array(flow_documents(source).keys)
@@ -117,7 +123,8 @@ RSpec.describe Mxrb::RubyApp::FlowMetadata do # rubocop:disable Metrics/BlockLen
     micro = entries.find { _1['native_type'] == 'Microflows$Microflow' }
     id = micro.fetch('unit_id')
     empty_manifest = instance_double(
-      Mxrb::RubyApp::Manifest, modules: [], absolute_path: File.join(@directory, 'Other', 'project.rb')
+      Mxrb::RubyApp::Manifest, root: File.join(@directory, 'Other'), modules: [],
+                               absolute_path: File.join(@directory, 'Other', 'project.rb')
     )
     described_class.with(manifest) do
       expect(described_class.for(id, 'Microflows$Microflow')).to eq(micro)

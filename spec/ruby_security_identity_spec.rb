@@ -13,7 +13,7 @@ RSpec.describe Mxrb::RubyApp::SecurityIdentity do
 
   def manifest(modules: [], security: nil)
     Mxrb::RubyApp::Manifest.new('/tmp/security-identities',
-                              'mode' => 'ruby', 'modules' => modules, 'security' => security)
+                                'mode' => 'ruby', 'modules' => modules, 'security' => security)
   end
 
   def project_baseline
@@ -112,7 +112,8 @@ RSpec.describe Mxrb::RubyApp::SecurityIdentity do
       expect { described_class.new(manifest(security: baseline)).project_security(project_declaration) }
         .to raise_error(Mxrb::ValidationError, /#{collection} identity baseline/)
     end
-    resolver = described_class.new(manifest(modules: [{ 'name' => 'App', 'module_security' => { 'id' => identity(10) } }]))
+    resolver = described_class.new(manifest(modules: [{ 'name' => 'App',
+                                                        'module_security' => { 'id' => identity(10) } }]))
     expect { resolver.module_security({ module_name: 'App', roles: [] }) }
       .to raise_error(Mxrb::ValidationError, /roles identity baseline/)
     expect(described_class.new(manifest).project_security(project_declaration)).to eq(project_declaration)

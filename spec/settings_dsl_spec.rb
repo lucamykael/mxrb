@@ -119,6 +119,16 @@ RSpec.describe Mxrb::Settings::MprCodec do
     expect(encoded).not_to have_key('java_major_version')
   end
 
+  it 'enforces documented setting enums and numeric ranges' do
+    model = Mxrb::Settings::Node.new('Settings$ModelSettings')
+    expect { model.set(:bcrypt_cost, 3) }.to raise_error(Mxrb::Settings::Error, /outside/)
+    expect { model.set(:rounding_mode, 'Sideways') }.to raise_error(Mxrb::Settings::Error, /must be one of/)
+
+    model.set(:bcrypt_cost, 12)
+    model.set(:rounding_mode, 'HalfUp')
+    expect(model.fetch(:bcrypt_cost)).to eq(12)
+  end
+
   def complete_settings
     parts = [
       web_ui_settings, integration_settings, configuration_settings, model_settings,

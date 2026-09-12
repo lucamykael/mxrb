@@ -9,6 +9,7 @@ module Mxrb
         unless minimum_length.nil? || (minimum_length.is_a?(Integer) && !minimum_length.negative?)
           raise TypeError, 'minimum_length must be a nonnegative Integer or unspecified'
         end
+
         [require_mixed_case, require_symbol, require_digit].each do |value|
           unless value.nil? || value.equal?(true) || value.equal?(false)
             raise TypeError, 'password requirements must be true, false, or unspecified'
@@ -61,9 +62,7 @@ module Mxrb
 
       BOOLEAN_PROPERTIES.each do |property|
         define_method(property) do |value = true|
-          unless value.equal?(true) || value.equal?(false)
-            raise TypeError, "#{property} requires true or false"
-          end
+          raise TypeError, "#{property} requires true or false" unless value.equal?(true) || value.equal?(false)
 
           @policy = @policy.with(**{ property => value })
           self

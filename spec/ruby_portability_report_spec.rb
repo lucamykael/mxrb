@@ -141,8 +141,9 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       expect(flows.map(&:id).uniq.size).to eq(2)
       expect(Mxrb::RubyApp::Registry.all(:service)).to be_empty
 
-      metadata = File.join(root, '.mxrb', 'mendix', '.mxrb', 'semantic_metadata.json')
+      metadata = File.join(root, '.mxrb', 'semantic_metadata.json')
       File.delete(metadata)
+      File.delete(File.join(root, '.mxrb', 'mendix', '.mxrb', 'semantic_metadata.json'))
       expect { described_class.new(root) }
         .to raise_error(Mxrb::ValidationError, /requires its semantic metadata baseline/)
       expect(Mxrb::RubyApp::Registry.all(:service)).to be_empty

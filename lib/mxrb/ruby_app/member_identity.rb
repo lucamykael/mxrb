@@ -50,7 +50,7 @@ module Mxrb
         validate_names!(@removed, 'removed members')
         ids = @previous.map(&:id)
         raise ValidationError, 'private member identities are missing or duplicated' if ids.any?(&:empty?) ||
-                                                                                     ids.uniq.size != ids.size
+                                                                                        ids.uniq.size != ids.size
 
         declared_ids = @declarations.map { _1[:id].to_s }.reject(&:empty?)
         raise ValidationError, 'duplicate explicit member identities' unless declared_ids.uniq.size == declared_ids.size
@@ -91,6 +91,7 @@ module Mxrb
           unless supplied_id.empty? || supplied_id == member.id
             raise ValidationError, "explicit identity conflicts with renamed member #{old_name}"
           end
+
           bind!(index, member)
         end
       end
@@ -107,9 +108,7 @@ module Mxrb
       def bind!(index, member)
         name = @declarations.fetch(index).fetch(:name).to_s
         named = @by_name[name]
-        if named && named.id != member.id
-          raise ValidationError, "member rename collides with existing name #{name}"
-        end
+        raise ValidationError, "member rename collides with existing name #{name}" if named && named.id != member.id
         if @removed.include?(member.name)
           raise ValidationError, "member #{member.name} cannot be both removed and retained or renamed"
         end

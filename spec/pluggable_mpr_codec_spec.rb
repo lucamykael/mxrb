@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'mxrb/forms/mpr_codec'
 
-RSpec.describe Mxrb::Pluggable::MprCodec do # rubocop:disable Metrics/BlockLength
+RSpec.describe Mxrb::Pluggable::MprCodec do
   def schema_bytes(schema) = Mxrb::IO::BsonCodec.serialize(schema)
 
   def value_type(kind, list: false, object_type: nil, required: false)

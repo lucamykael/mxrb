@@ -93,6 +93,8 @@ RSpec.describe Mxrb::StudioCompatibility do
       'Children' => [3,
                      { '$Type' => 'CustomWidgets$WidgetValueType' },
                      { '$Type' => 'Forms$PageVariable' },
+                     { '$Type' => 'Forms$PageParameterMapping',
+                       'Variable' => { '$Type' => 'Forms$PageVariable' } },
                      { '$Type' => 'Forms$PageParameter' },
                      { '$Type' => 'Forms$MicroflowSettings' },
                      { '$Type' => 'Forms$CallNanoflowClientAction' }]
@@ -102,9 +104,10 @@ RSpec.describe Mxrb::StudioCompatibility do
 
     document = page.fetch('doc')
     expect(document).to include('Autofocus' => 'Off', 'ExportLevel' => 'Hidden')
-    widget_type, variable, parameter, microflow, nanoflow = document.fetch('Children').drop(1)
+    widget_type, variable, mapping, parameter, microflow, nanoflow = document.fetch('Children').drop(1)
     expect(widget_type).to include('AllowUpload' => false)
     expect(variable).to include('SubKey' => '')
+    expect(mapping.fetch('Variable')).not_to have_key('SubKey')
     expect(parameter).to include('DefaultValue' => '', 'IsRequired' => true)
     expect(microflow).to include(
       'Asynchronous' => false, 'FormValidations' => 'All',

@@ -18,8 +18,8 @@ module Mxrb
         @members = Array(members).map do |member|
           declaration = member.to_h.transform_keys(&:to_sym)
           build_member(declaration.fetch(:name), id: declaration[:id],
-                       ascending: declaration.fetch(:ascending, true),
-                       type: declaration.fetch(:type, :Normal))
+                                                 ascending: declaration.fetch(:ascending, true),
+                                                 type: declaration.fetch(:type, :Normal))
         end
       end
 
@@ -59,7 +59,7 @@ module Mxrb
     # Adds localized messages and named rule options without exposing storage
     # maps in authored Ruby. Existing option maps remain accepted at import.
     class ValidationRuleBuilder
-      attr_reader :kind
+      attr_reader :kind, :rule_info
 
       def initialize(kind:, translations: [], rule_info: {})
         @kind = kind.to_s == 'regular_expression' ? 'DomainModels$RegExRuleInfo' : kind.to_s.dup.freeze
@@ -99,7 +99,6 @@ module Mxrb
       end
 
       def translations = @translations.dup.freeze
-      def rule_info = @rule_info
 
       private
 

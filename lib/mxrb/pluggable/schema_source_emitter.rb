@@ -47,7 +47,7 @@ module Mxrb
         object_type.properties.flat_map { property_lines(_1, indent) }
       end
 
-      def property_lines(property, indent) # rubocop:disable Metrics/MethodLength
+      def property_lines(property, indent)
         type = property.value_type
         lines = ["#{pad(indent)}property #{property.key.inspect}, :#{Forms::Naming.ruby_name(type.kind)} do"]
         values = {

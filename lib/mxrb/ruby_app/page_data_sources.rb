@@ -118,7 +118,7 @@ module Mxrb
         end
 
         def flow_expression(source)
-          return unless keys?(source, %w[kind name mappings force_full_objects])
+          return unless keys?(source, %w[kind name mappings force_full_objects settings_native])
           return unless source['name'].is_a?(String) && !source['name'].empty?
 
           options = {}
@@ -132,6 +132,13 @@ module Mxrb
             options[:pass] = Expression.new(
               source: "[#{pairs.map(&:source).join(', ')}]", value: pairs.map(&:value)
             )
+          end
+          if source.key?('settings_native')
+            settings = source.fetch('settings_native')
+            return unless source['kind'] == 'microflow' && settings.is_a?(Hash) &&
+                          settings.keys == ['UseAllPages'] && [true, false].include?(settings['UseAllPages'])
+
+            options[:use_all_pages] = settings.fetch('UseAllPages')
           end
           options[:force_full_objects] = source['force_full_objects'] if source.key?('force_full_objects')
           expression("#{source.fetch('kind')}_source", [source.fetch('name')], options)

@@ -268,8 +268,18 @@ module Mxrb
       # deep_structure in exported projects. Accept the concise projection at
       # every widget nesting level so arbitrary native pages can be evaluated
       # and reconstructed from their lossless payload.
-      def gallery(name, entity: nil, &block)
-        _add_widget(:gallery, name, entity: entity, &block)
+      def gallery(name, entity: nil, xpath: nil, association: nil, context_variable: nil,
+                  sort: [], class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        options = {
+          entity:, xpath:, association:, context_variable:, sort:,
+          class: class_name, style:, dynamic_class:, visible:
+        }.compact
+        options.delete(:sort) if options[:sort].empty?
+        _add_widget(:gallery, name, **options, &block)
+      end
+
+      def sort_by(attribute, direction: 'Ascending')
+        { attribute: attribute.to_s, direction: direction.to_s }
       end
 
       def tab_control(name, &block)
@@ -335,8 +345,10 @@ module Mxrb
         )
       end
 
-      def microflow_source(name, pass: {}, force_full_objects: false, native: nil)
-        flow_data_view_source(:microflow, name, pass, force_full_objects, native)
+      def microflow_source(name, pass: {}, force_full_objects: false, use_all_pages: UNSET, native: nil)
+        flow_data_view_source(
+          :microflow, name, pass, force_full_objects, native, use_all_pages:
+        )
       end
 
       def nanoflow_source(name, pass: {}, force_full_objects: false, native: nil)
@@ -455,7 +467,7 @@ module Mxrb
         _widget_list << builder.to_h
       end
 
-      def flow_data_view_source(kind, name, pass, force_full_objects, native)
+      def flow_data_view_source(kind, name, pass, force_full_objects, native, use_all_pages: UNSET)
         mappings = pass.map do |parameter, value|
           if value.is_a?(Hash) && value[:kind]
             { parameter: parameter.to_s, variable: value }
@@ -463,9 +475,11 @@ module Mxrb
             { parameter: parameter.to_s, expression: value.to_s }
           end
         end
+        settings = { 'UseAllPages' => use_all_pages == true } unless use_all_pages.equal?(UNSET)
         compact_data_view_source(
           kind:, name: name.to_s, mappings:,
-          force_full_objects: force_full_objects == true, unknown_native: native
+          force_full_objects: force_full_objects == true, unknown_native: native,
+          settings_native: settings
         )
       end
 
@@ -479,9 +493,7 @@ module Mxrb
     module WidgetEvents
       %i[on_change on_click on_enter on_leave].each do |event|
         define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET, &block|
-          if block && !pass.equal?(UNSET)
-            raise ArgumentError, "#{event} accepts either pass: or an argument block"
-          end
+          raise ArgumentError, "#{event} accepts either pass: or an argument block" if block && !pass.equal?(UNSET)
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
 
@@ -1684,7 +1696,7 @@ module Mxrb
         @values_marker = options.fetch(:values_marker, 3).to_i
       end
 
-      def value(name, caption: nil, captions: nil, id: nil, caption_id: nil, # rubocop:disable Metrics/PerceivedComplexity
+      def value(name, caption: nil, captions: nil, id: nil, caption_id: nil,
                 caption_ids: {}, image: '', remote_value: nil, remote_id: nil,
                 remote_name: nil,
                 translations_marker: 3, export_level: nil)
@@ -1820,7 +1832,7 @@ module Mxrb
 
       private
 
-      def schedule_document(kind, schedule_id:, multiplier:, minute_offset:, # rubocop:disable Metrics/PerceivedComplexity
+      def schedule_document(kind, schedule_id:, multiplier:, minute_offset:,
                             hour_of_day:, minute_of_hour:, weekdays:)
         type = kind.to_s
         type = "ScheduledEvents$#{type.split('_').map!(&:capitalize).join}Schedule" \
@@ -2890,7 +2902,9 @@ module Mxrb
 
       def rule_decision(rule, &block)
         builder = RuleDecisionBuilder.new(rule, allow_break: _break_allowed?)
-        block.arity == 1 ? block.call(builder) : builder.instance_eval(&block) if block
+        if block
+          block.arity == 1 ? block.call(builder) : builder.instance_eval(&block)
+        end
         _acts << builder.to_h
       end
 
@@ -2987,7 +3001,6 @@ module Mxrb
         @excluded = nil
       end
 
-      # rubocop:disable Metrics/PerceivedComplexity
       def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
         metadata = Array(@metadata['parameters']).find { _1['name'].to_s == name.to_s } || {}
         type = type.merge('$ID' => metadata['type_id']) \
@@ -2999,7 +3012,6 @@ module Mxrb
           size: (size || metadata['size'])&.to_s
         }.compact
       end
-      # rubocop:enable Metrics/PerceivedComplexity
 
       def bson_binary(base64, subtype: :generic)
         BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)

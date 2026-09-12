@@ -47,7 +47,8 @@ module Mxrb
         return collection_lines(property, value, indent) if property.many?
         return nested_lines(property, value, indent) if value.is_a?(Node)
         if defined?(Mxrb::Pluggable::Node) && value.is_a?(Mxrb::Pluggable::Node)
-          return pluggable_node_lines(value, indent, declaration: "#{property.ruby_name}(#{value.widget_type.id.inspect})")
+          return pluggable_node_lines(value, indent,
+                                      declaration: "#{property.ruby_name}(#{value.widget_type.id.inspect})")
         end
 
         declaration = if value.nil?
@@ -84,8 +85,11 @@ module Mxrb
 
       def pluggable_node_lines(node, indent, root: false, declaration: nil)
         pad = ' ' * indent
-        declaration ||= root ? "Mxrb::Pluggable.widget #{node.widget_type.id.inspect}" :
-          "widget #{node.widget_type.id.inspect}"
+        declaration ||= if root
+                          "Mxrb::Pluggable.widget #{node.widget_type.id.inspect}"
+                        else
+                          "widget #{node.widget_type.id.inspect}"
+                        end
         body = node.assigned_outer.flat_map do |field, value|
           pluggable_outer_lines(field, value, indent + INDENT)
         end
@@ -120,6 +124,7 @@ module Mxrb
         end
         return pluggable_object_lines(property, value, indent) if value.is_a?(Mxrb::Pluggable::ObjectNode)
         return pluggable_data_source_lines(property, value, indent) if value.is_a?(Mxrb::Pluggable::XPathSource)
+
         if value.is_a?(Node)
           declaration = pluggable_nested_declaration(property, type: ":#{value.schema_type.ruby_name}")
           return node_lines(value, indent, declaration:)
@@ -184,9 +189,7 @@ module Mxrb
         body = []
         body << "#{' ' * body_indent}entity #{entity_reference_literal(value.entity)}" if value.entity
         body << "#{' ' * body_indent}constraint #{value.constraint.to_s.inspect}" if value.constraint
-        if value.sort_bar
-          body.concat(node_lines(value.sort_bar, body_indent, declaration: 'sort_bar'))
-        end
+        body.concat(node_lines(value.sort_bar, body_indent, declaration: 'sort_bar')) if value.sort_bar
         if value.source_variable
           body.concat(node_lines(value.source_variable, body_indent, declaration: 'source_variable'))
         end
@@ -195,7 +198,7 @@ module Mxrb
         ["#{pad}#{declaration} do", *body, "#{pad}end"]
       end
 
-      def literal(value) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def literal(value)
         if defined?(Mxrb::Pluggable::Reference) && value.is_a?(Mxrb::Pluggable::Reference)
           if value.target.is_a?(EntityReference) && !value.target.indirect?
             return "Mxrb::Pluggable.reference(:#{Forms::Naming.ruby_name(value.kind)}, " \
@@ -283,9 +286,7 @@ module Mxrb
         if asset.source_path.nil? && asset.bytes.empty?
           return "Mxrb::Forms::BinaryAsset.empty(subtype: #{asset.subtype.inspect})"
         end
-        unless asset.source_path
-          raise TypeError, 'binary Forms values must be exported as files before source emission'
-        end
+        raise TypeError, 'binary Forms values must be exported as files before source emission' unless asset.source_path
 
         "Mxrb::Forms::BinaryAsset.read(File.join(__dir__, #{asset.source_path.inspect}), " \
           "subtype: #{asset.subtype.inspect})"

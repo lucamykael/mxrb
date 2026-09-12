@@ -9,4 +9,5 @@ AllCops:
     - "script/*"
   Exclude:
     - "coverage/**/*"
+    - "tmp/**/*"
     - "vendor/**/*"

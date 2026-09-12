@@ -100,6 +100,7 @@ module Mxrb
       def initialize(widget_id, catalog:)
         @schema = catalog.fetch(widget_id).object_type
         @object = Pluggable::ObjectNode.new(schema)
+        @projection_order = []
       end
 
       def self.build(widget_id, catalog:, &block)
@@ -108,10 +109,12 @@ module Mxrb
 
       def evaluate(&block)
         previous = @object
+        previous_order = @projection_order.dup
         block.arity == 1 ? block.call(self) : instance_eval(&block)
         self
       rescue StandardError
         @object = previous
+        @projection_order = previous_order
         raise
       end
 
@@ -119,10 +122,23 @@ module Mxrb
         property = schema.fetch_property(identifier)
         ensure_supported!(property, value)
         validate_semantic_input!(property, value)
+        return apply_nil(property) if value.nil?
+
+        apply_value(property, value)
+      end
+
+      def apply_nil(property)
+        remember(property)
+        @object = copy_object(except: property.key)
+        self
+      end
+
+      def apply_value(property, value)
         candidate = copy_object
         candidate.set(property.key, bridge_value(property, value))
         validate_choice!(property, candidate.fetch(property.key))
         project_value(property, candidate.fetch(property.key))
+        remember(property)
         @object = candidate
         self
       end
@@ -133,22 +149,30 @@ module Mxrb
       end
 
       def to_projection
-        @object.assignments.to_h do |assignment|
-          [assignment.property.key, project_value(assignment.property, assignment.value)]
+        assignments = @object.assignments.to_h { [_1.property.key, _1] }
+        @projection_order.to_h do |key|
+          assignment = assignments[key]
+          [key, assignment ? project_value(assignment.property, assignment.value) : nil]
         end.freeze
       end
 
       private
 
-      def copy_object
+      def remember(property)
+        @projection_order << property.key unless @projection_order.include?(property.key)
+      end
+
+      def copy_object(except: nil)
         Pluggable::ObjectNode.new(schema).tap do |candidate|
-          @object.assignments.each { candidate.set(_1.property.key, _1.value) }
+          @object.assignments.each do |assignment|
+            candidate.set(assignment.property.key, assignment.value) unless assignment.property.key == except
+          end
         end
       end
 
       def ensure_supported!(property, value)
         type = property.value_type
-        return if value.nil? && !type.list? && !type.widgets?
+        return if value.nil? && (!type.list? || type.widgets?)
         return if SUPPORTED_KINDS.include?(type.kind) && !type.list?
 
         raise UnsupportedProjection, 'pluggable property requires the legacy projection or full Forms codec'

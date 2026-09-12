@@ -109,6 +109,7 @@ RSpec.describe 'Flymetothemoon Ruby-to-Mendix certification' do
       expect(application.page('Certification.Dashboard')).to include(title: 'Dashboard')
       application.close
 
+      FileUtils.mv(File.join(app, '.mxrb', 'mendix'), File.join(app, '.mxrb', 'mendix.detached'))
       expect(Mxrb::RubyApp.compile(app, unchanged)).to eq(unchanged)
       expect(Mxrb.validate(unchanged)).to be_valid
       expect(Mxrb.compare(source, unchanged)).to be_identical

@@ -227,6 +227,30 @@ RSpec.describe 'Ruby application internal contracts' do
                       'type' => 'MicroflowCall', 'microflow' => 'Sales.Refresh',
                       'arguments' => {}, 'result_variable' => '')).to start_with('await ')
       expect(exp.send(:nanoflow_action_source, nil)).to include('runtime.unsupported')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'CreateChange', 'variable' => 'Item', 'entity' => 'Sales.Item',
+                      'changes' => [{ 'member' => 'Name', 'value' => "'New'" }]))
+        .to include('runtime.create("Item", "Sales.Item"')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'NanoflowCall', 'nanoflow' => 'Sales.Child',
+                      'arguments' => {}, 'result_variable' => 'Result'))
+        .to include('runtime.callNanoflow', 'runtime.set("Result"')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'JavaScriptActionCall', 'javascript_action' => 'Sales.Client',
+                      'arguments' => {}, 'result_variable' => '')).to include('runtime.callJavaScript')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'ShowForm', 'page' => 'Sales.Edit', 'arguments' => {}))
+        .to include('runtime.showPage')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'CloseForm', 'count' => 2)).to include('runtime.closePage(2)')
+      expect(exp.send(:nanoflow_action_source,
+                      'type' => 'ValidationFeedback', 'variable' => 'Item',
+                      'member' => 'Name', 'message' => 'Required')).to include('runtime.validationFeedback')
+      error_case = exp.send(
+        :nanoflow_action_case_source, { 'type' => 'LogMessage', 'message' => 'run' },
+        [{ 'destination' => 'ok', 'error' => false }, { 'destination' => 'failed', 'error' => true }]
+      )
+      expect(error_case).to include('try {', "runtime.set('latestError'", 'current = "failed"')
       expect(exp.send(:nanoflow_typescript_case,
                       { 'id' => 'unknown', 'type' => 'Unknown' }, [], 'undefined'))
         .to include("runtime.stopped('node')")

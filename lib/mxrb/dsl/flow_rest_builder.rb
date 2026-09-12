@@ -10,9 +10,8 @@ module Mxrb
       end
 
       def header(name, expression)
-        unless name.is_a?(String) || name.is_a?(Symbol)
-          raise TypeError, 'REST header name requires a String or Symbol'
-        end
+        raise TypeError, 'REST header name requires a String or Symbol' unless name.is_a?(String) || name.is_a?(Symbol)
+
         value = case expression
                 when String then expression.dup.freeze
                 when Symbol, Numeric, TrueClass, FalseClass, NilClass then expression

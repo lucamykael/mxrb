@@ -30,11 +30,13 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
     double(name: ruby_class, mendix_name: "App.#{name}", mendix_id: '', resolve_record_identities!: nil)
   end
 
-  def bind(resolver, declaration, path: entry.fetch('path'), id: nil, kind: 'record')
+  # rubocop:disable Metrics/ParameterLists
+  def bind(resolver, declaration, path: entry.fetch('path'), id: nil, kind: 'record', renamed_from: nil)
     resolver.load_file(File.join(@directory, path)) do
-      resolver.resolve(declaration, kind, declaration.mendix_name, id:)
+      resolver.resolve(declaration, kind, declaration.mendix_name, id:, renamed_from:)
     end
   end
+  # rubocop:enable Metrics/ParameterLists
 
   [%w[Added Existing], %w[Existing Added]].each do |order|
     it "resolves #{order.join(' then ')} without transferring an existing identity" do
@@ -75,6 +77,15 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
 
     expect { resolver.finalize! }
       .to raise_error(Mxrb::ValidationError, /cannot distinguish a new declaration from a rename/)
+  end
+
+  it 'binds an explicit entity rename to its existing private identity' do
+    resolver = context
+    renamed = owner('Renamed')
+
+    expect(bind(resolver, renamed, renamed_from: 'App.Existing')).to eq(entry.fetch('id'))
+    expect(resolver.finalize!).to equal(resolver)
+    expect { resolver.validate_entity_names! }.not_to raise_error
   end
 
   it 'does not let one resolved declaration hide another unclaimed identity' do

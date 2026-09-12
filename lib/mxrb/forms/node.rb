@@ -80,7 +80,7 @@ module Mxrb
         self
       end
 
-      def method_missing(name, *arguments, &block) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
+      def method_missing(name, *arguments, &block) # rubocop:disable Metrics/MethodLength,Metrics/PerceivedComplexity
         property = schema_type.property(name)
         return super unless property
 
@@ -128,7 +128,7 @@ module Mxrb
         Node.build(nested_type, catalog:, &block)
       end
 
-      def normalize(property, value) # rubocop:disable Metrics/AbcSize
+      def normalize(property, value)
         return nil if value.nil? && property.optional?
         raise TypeError, "#{schema_type.name}.#{property.name} cannot be nil" if value.nil?
 
@@ -140,7 +140,7 @@ module Mxrb
         normalize_one(property, value)
       end
 
-      def normalize_one(property, value) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
+      def normalize_one(property, value) # rubocop:disable Metrics/MethodLength,Metrics/PerceivedComplexity
         return normalize_reference(property, value) if property.reference?
 
         target = catalog.type(property.type_name)
@@ -173,9 +173,7 @@ module Mxrb
       end
 
       def normalize_node(property, target, value)
-        if target.name == 'Widget' && defined?(Mxrb::Pluggable::Node) && value.is_a?(Mxrb::Pluggable::Node)
-          return value
-        end
+        return value if target.name == 'Widget' && defined?(Mxrb::Pluggable::Node) && value.is_a?(Mxrb::Pluggable::Node)
 
         allowed = [target.name, *property.targets]
         compatible = value.is_a?(Node) && allowed.any? do |candidate|

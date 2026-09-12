@@ -348,7 +348,7 @@ RSpec.describe 'Ruby-first native materialization' do
       )
       expect(source_text).not_to include(original_ids[:document], *original_ids.fetch(:values).values)
       manifest_enum = Mxrb::RubyApp::Manifest.load(ruby_root).modules.first.fetch('enumerations')
-                             .find { _1.fetch('name') == 'App.OrderStatus' }
+                                             .find { _1.fetch('name') == 'App.OrderStatus' }
       expect(manifest_enum.fetch('id')).to eq(original_ids[:document])
       expect(manifest_enum.fetch('values').to_h { [_1.fetch('name'), _1.fetch('id')] })
         .to eq(original_ids.fetch(:values))

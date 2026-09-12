@@ -14,6 +14,7 @@ module Mxrb
         unless language.is_a?(String) || language.is_a?(Symbol)
           raise TypeError, 'translation language requires a String or Symbol'
         end
+
         name = language.to_s.dup.freeze
         raise ArgumentError, 'duplicate flow translation language' if @translations.key?(name)
 

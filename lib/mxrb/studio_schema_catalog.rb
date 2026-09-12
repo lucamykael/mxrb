@@ -66,7 +66,7 @@ module Mxrb
 
     private
 
-    def catalog_payload(definitions) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+    def catalog_payload(definitions)
       by_variable = definitions.to_h { [_1.variable, _1.name] }
       by_name = definitions.to_h { [_1.name, definition_payload(_1, by_variable)] }
       bridge_document_inheritance!(by_name)
@@ -135,7 +135,7 @@ module Mxrb
       selected
     end
 
-    def definition(match) # rubocop:disable Metrics/AbcSize
+    def definition(match)
       body = balanced_fragment(match.fetch(:body_start), '{', '}')
       fields = object_fields(body)
       properties = fields['properties'] ? object_fields(fields.fetch('properties')) : {}
@@ -161,7 +161,7 @@ module Mxrb
       }.compact
     end
 
-    def property_payload(name, expression, by_variable, declared_by:) # rubocop:disable Metrics/MethodLength
+    def property_payload(name, expression, by_variable, declared_by:)
       targets = expression.scan(/[A-Za-z_$][\w$]*/).filter_map { by_variable[_1] }.uniq
       reference = reference_kind(expression)
       type = property_type(expression, targets, reference)
@@ -175,7 +175,7 @@ module Mxrb
       }.compact
     end
 
-    def default_value(expression, type) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+    def default_value(expression, type) # rubocop:disable Metrics/CyclomaticComplexity
       argument = call_argument(expression, '.default(')
       return unless argument
 

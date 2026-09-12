@@ -55,10 +55,10 @@ Gate.
 
 ## Semantik, Tests und Runtime
 
-- 1.778 Artefakte und 3.387 Referenzen;
-- 1.337 Beispiele, keine Fehler;
-- 100 % Zeilenabdeckung (24.082/24.082);
-- 100 % Branch-Abdeckung (9.883/9.883);
+- 1.734 Artefakte und 3.388 Referenzen;
+- 1.786 Beispiele, keine Fehler;
+- 96,09 % Zeilenabdeckung (34.759/36.172);
+- 89,16 % Branch-Abdeckung (13.982/15.682);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

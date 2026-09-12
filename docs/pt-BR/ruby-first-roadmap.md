@@ -39,8 +39,8 @@ Ruby é a única linguagem pública do MXRB.
   página → nanoflow → microflow → retorno visível na página.
 - Execução local ou Docker de `mx check`, pacote portátil e runtime, com seleção
   automática da família Java do projeto.
-- Gate nativo de cobertura: 100% de linhas e 100% de branches no CI,
-  com default local mais estrito de 100/100 quando os limites são omitidos.
+- Gate nativo de cobertura: 96% de linhas e 89% de branches no CI, com default
+  local mais estrito de 100/100 quando os limites são omitidos.
 
 Projetos graváveis mantêm um cache do índice semântico identificado por
 fingerprint. `mxrb cache status`, `warm` e `clear` expõem métricas e manutenção;

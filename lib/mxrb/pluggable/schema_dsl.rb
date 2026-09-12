@@ -18,7 +18,7 @@ module Mxrb
       def build = ReturnType.new(@kind, @list, @entity_property.freeze, @assignable_to.freeze)
     end
 
-    class PropertyTypeBuilder # rubocop:disable Metrics/ClassLength
+    class PropertyTypeBuilder
       def initialize(key, kind)
         @key = key.to_s
         @kind = camelize(kind)
@@ -53,7 +53,10 @@ module Mxrb
       def required! = (@required = true)
       def set_label! = (@set_label = true)
       def allow_upload! = (@allow_upload = true)
-      def path(kind, type = 'None') = (@path_kind, @path_type = camelize(kind), camelize(type))
+
+      def path(kind, type = 'None') = (@path_kind = camelize(kind)
+                                       @path_type = camelize(type))
+
       def default_type(value) = (@default_type = camelize(value))
       def attribute_type(value) = (@attribute_types << camelize(value))
       def association_type(value) = (@association_types << camelize(value))
@@ -77,7 +80,7 @@ module Mxrb
         @object_type = builder.build
       end
 
-      def build # rubocop:disable Metrics/MethodLength
+      def build
         value_type = ValueType.new(
           kind: @kind.freeze, list: @list, linked: @linked, metadata: @metadata,
           entity_property: @entity_property.freeze,

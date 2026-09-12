@@ -2852,6 +2852,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     )
     expect(block).not_to include("operation:")
     expect(exporter.send(:ruby_val, nil)).to eq("nil")
+    expect(exporter.send(:page_variable_ruby, kind: :current))
+      .to eq("page_variable(nil, kind: :current)")
   end
 
   it "closes the final exporter access and action branches" do

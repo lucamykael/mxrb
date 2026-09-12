@@ -56,7 +56,7 @@ module Mxrb
       NativeFragmentStore.with(store, &block)
     end
 
-    def self.load_sources(manifest)
+    def self.load_sources(manifest, member_identity_project: nil)
       SourceIdentity.with(manifest) do |identities|
         FlowMetadata.with(manifest) do
           PageDesignIdentity.with(manifest) do
@@ -65,6 +65,7 @@ module Mxrb
                 application_files(manifest.root).each do |path|
                   identities.load_file(path) { load path, true }
                 end
+                identities.rebase_member_identities!(member_identity_project) if member_identity_project
                 identities.finalize!
               end
             end
@@ -113,9 +114,21 @@ module Mxrb
       )
       previous = ENV['MXRB_OUTPUT_PATH']
       ENV['MXRB_OUTPUT_PATH'] = destination
-      load manifest.absolute_path('mendix_project')
+      runtime_mpr = manifest.absolute_path('runtime_mpr')
+      if File.file?(runtime_mpr)
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(runtime_mpr, destination)
+        runtime_contents = File.join(File.dirname(runtime_mpr), 'mprcontents')
+        if File.directory?(runtime_contents)
+          FileUtils.cp_r(runtime_contents, File.dirname(destination), remove_destination: true)
+        end
+        restore_runtime_project(manifest, destination)
+      else
+        load manifest.absolute_path('mendix_project')
+      end
+      transitioned = mendix_version && manifest.data.dig('project', 'mendix_version') != mendix_version.to_s
       transition(destination, mendix_version) if mendix_version
-      Synchronizer.new(root, destination, manifest:).synchronize!
+      Synchronizer.new(root, destination, manifest:, rebase_member_identities: transitioned).synchronize!
       destination
     ensure
       if previous
@@ -123,6 +136,18 @@ module Mxrb
       else
         ENV.delete('MXRB_OUTPUT_PATH')
       end
+    end
+
+    def self.restore_runtime_project(manifest, destination)
+      source = manifest.absolute_path('runtime_project')
+      return unless File.directory?(source)
+
+      Dir.children(source).each do |name|
+        FileUtils.cp_r(File.join(source, name), File.join(File.dirname(destination), name),
+                       remove_destination: true)
+      end
+    rescue KeyError
+      nil
     end
 
     def self.transition(path, version)
@@ -346,11 +371,11 @@ module Mxrb
           child.instance_variable_set(:@declared_domain_collections, {})
         end
 
-        def mendix_name(value = nil, id: nil)
+        def mendix_name(value = nil, id: nil, renamed_from: nil)
           return @mendix_name unless value
 
           @mendix_name = value.to_s
-          @mendix_id = SourceIdentity.resolve(self, :record, @mendix_name, id:)
+          @mendix_id = SourceIdentity.resolve(self, :record, @mendix_name, id:, renamed_from:)
           Registry.register(:record, @mendix_name, self)
         end
 
@@ -399,7 +424,7 @@ module Mxrb
 
         def clear_associations! = clear_domain_collection(:associations, :@associations)
 
-        def access_rule(*roles, id: nil, documentation: '', create: false, delete: false,
+        def access_rule(*roles, id: nil, identity: nil, documentation: '', create: false, delete: false,
                         default_rights: :None, xpath: '', xpath_caption: nil, members: [],
                         renamed_from: nil, &block)
           raise ArgumentError, 'access_rule requires at least one module role' if roles.empty?
@@ -413,6 +438,7 @@ module Mxrb
             xpath_caption: xpath_caption&.to_s,
             members: declarations.members.map { normalize_access_member(_1) }
           }
+          rule[:source_identity] = identity.to_s unless identity.nil?
           rule[:renamed_from] = renamed_from unless renamed_from.nil?
           (@access_rules ||= []) << rule
           (@declared_domain_collections ||= {})[:access_rules] = true
@@ -1074,7 +1100,7 @@ module Mxrb
         def resolve_security_identities!(identities)
           definition = identities.project_security(
             native_definition, removed_user_roles: Array(@removed_user_roles),
-            removed_demo_users: Array(@removed_demo_users)
+                               removed_demo_users: Array(@removed_demo_users)
           )
           @mendix_id = definition.fetch(:id)
           @user_roles = definition.fetch(:user_roles)
@@ -1191,7 +1217,10 @@ module Mxrb
             Array(mod[key]).map { [_1.fetch('id').to_s, native_type] }
           end
         end.to_set
-        path = File.join(File.dirname(manifest.absolute_path('mendix_project')), '.mxrb', 'semantic_metadata.json')
+        path = File.join(manifest.root, '.mxrb', 'semantic_metadata.json')
+        unless File.file?(path)
+          path = File.join(File.dirname(manifest.absolute_path('mendix_project')), '.mxrb', 'semantic_metadata.json')
+        end
         return unless File.file?(path)
 
         modules = JSON.parse(File.read(path)).fetch('modules', {})
@@ -1456,6 +1485,10 @@ module Mxrb
         def grid_column(name, attribute: nil, caption: nil, filter: nil)
           builder = Dsl::WidgetBuilder.new(:data_grid, '')
           normalize(builder.column(name, attribute:, caption:, filter:).last)
+        end
+
+        def sort_by(attribute, direction: 'Ascending')
+          { 'attribute' => attribute.to_s, 'direction' => direction.to_s }
         end
 
         private
@@ -2107,19 +2140,21 @@ module Mxrb
     # Applies the reversible Ruby domain contract to a generated MPR. Anything
     # outside this contract remains in the native sidecar and is never dropped.
     class Synchronizer
-      def initialize(root, target, manifest: Manifest.load(root))
+      def initialize(root, target, manifest: Manifest.load(root), rebase_member_identities: false)
         @root = File.expand_path(root)
         @target = File.expand_path(target)
         @manifest = manifest
+        @rebase_member_identities = rebase_member_identities
       end
 
       def synchronize!
         Registry.reset!
+        project = Model::Project.open(@target, readonly: false)
         Environment.load(root: @root).with do
-          @source_identities = RubyApp.load_sources(@manifest)
+          identity_project = project if @rebase_member_identities
+          @source_identities = RubyApp.load_sources(@manifest, member_identity_project: identity_project)
         end
         @source_identities.validate_entity_names!
-        project = Model::Project.open(@target, readonly: false)
         preflight_regular_expressions!(project)
         synchronize_regular_expression_definitions(project)
         synchronize_constant_definitions(project)
@@ -2227,7 +2262,7 @@ module Mxrb
           end
           remove_ids = removed.map { _1.fetch('id') }
           plan = writer.plan_ruby_regular_expressions(project.mpr, module_name: name,
-                                                      expressions: declarations, remove_ids:)
+                                                                   expressions: declarations, remove_ids:)
           plan.fetch(:changes).each do |declaration, raw, previous|
             next unless previous && previous['Name'].to_s != declaration.fetch(:name).to_s
 

@@ -131,6 +131,9 @@ RSpec.describe 'Ruby application export mode' do
       expect(File).to exist(File.join(
                               root, 'frontend', 'src', 'generated', 'bridge', 'marketplace.tsx'
                             ))
+      expect(File).to exist(File.join(
+                              root, 'frontend', 'src', 'generated', 'platform', 'theme', 'web', 'logo.png'
+                            ))
       page_source = File.read(File.join(
                                 root, 'frontend', 'src', 'generated', 'pages', 'sales', 'dashboard.tsx'
                               ))

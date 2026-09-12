@@ -214,17 +214,18 @@ module Mxrb
 
       private
 
-      def visit!(value)
+      def visit!(value, parent_type: nil, parent_key: nil)
         case value
         when Hash
-          project_node!(value)
-          value.each_value { visit!(_1) }
+          project_node!(value, parent_type:, parent_key:)
+          type = value['$Type']
+          value.each { |key, child| visit!(child, parent_type: type, parent_key: key) }
         when Array
-          value.each { visit!(_1) }
+          value.each { visit!(_1, parent_type:, parent_key:) }
         end
       end
 
-      def project_node!(node)
+      def project_node!(node, parent_type:, parent_key:)
         type = node['$Type']
         project_settings!(node) if type == 'Settings$ProjectSettings'
         project_tracing_configuration!(node) if type == 'Settings$TracingConfiguration'
@@ -233,7 +234,18 @@ module Mxrb
         rename_fields!(node, RENAMES.fetch(type, EMPTY_MAP))
         delete_fields!(node, DELETIONS.fetch(type, EMPTY_FIELDS))
         replace_values!(node, REPLACEMENTS.fetch(type, EMPTY_MAP))
-        add_defaults!(node, DEFAULTS.fetch(type, EMPTY_MAP))
+        add_defaults!(node, defaults_for(type, parent_type, parent_key))
+      end
+
+      def defaults_for(type, parent_type, parent_key)
+        defaults = DEFAULTS.fetch(type, EMPTY_MAP)
+        return defaults unless page_parameter_mapping_variable?(type, parent_type, parent_key)
+
+        defaults.except('SubKey')
+      end
+
+      def page_parameter_mapping_variable?(type, parent_type, parent_key)
+        type == 'Forms$PageVariable' && parent_type == 'Forms$PageParameterMapping' && parent_key == 'Variable'
       end
 
       def add_defaults!(node, defaults)

@@ -129,7 +129,7 @@ module Mxrb
         index
       end
 
-      def decode_node(document, path:) # rubocop:disable Metrics/AbcSize,Metrics/BlockLength,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
+      def decode_node(document, path:)
         return pluggable_codec.decode(document, path:) if document['$Type'] == 'CustomWidgets$CustomWidget'
 
         type_name = internal_type_name(document.fetch('$Type'))
@@ -246,7 +246,7 @@ module Mxrb
         decode_one(property, value, path:)
       end
 
-      def decode_one(property, value, path:) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity
+      def decode_one(property, value, path:)
         return decode_reference(property, value, path:) if property.reference?
 
         target = catalog.type(property.type_name)
@@ -260,7 +260,7 @@ module Mxrb
         decode_external(property.type_name, value, path:)
       end
 
-      def decode_external(type, value, path:) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def decode_external(type, value, path:)
         case type
         when 'Text' then decode_text(value, path:)
         when 'Expression' then Expression.coerce(value)
@@ -317,9 +317,7 @@ module Mxrb
 
       def decode_condition(value, path:)
         return Condition.coerce(value) unless value.is_a?(Hash)
-        unless value['$Type'].to_s.end_with?('$Condition')
-          raise MprCodecError, "invalid Condition at #{path}"
-        end
+        raise MprCodecError, "invalid Condition at #{path}" unless value['$Type'].to_s.end_with?('$Condition')
 
         Condition.when_value(value.fetch('AttributeValue', ''), visible: value['EditableVisible'])
       end
@@ -387,9 +385,7 @@ module Mxrb
       end
 
       def decode_data_type(value, path:)
-        unless value.is_a?(Hash) && value['$Type'].to_s.start_with?('DataTypes$')
-          return DataType.coerce(value)
-        end
+        return DataType.coerce(value) unless value.is_a?(Hash) && value['$Type'].to_s.start_with?('DataTypes$')
 
         name = external_type_name(value)
         target_field = { 'Object' => 'Entity', 'List' => 'Entity', 'Enumeration' => 'Enumeration' }[name]
@@ -443,7 +439,7 @@ module Mxrb
         end
       end
 
-      def decode_legacy_design_property(document, path:) # rubocop:disable Metrics/MethodLength
+      def decode_legacy_design_property(document, path:)
         node = Node.new('DesignPropertyValue', catalog:)
         node.key document.fetch('Key', '')
         value_type = case document.fetch('Type', '')
@@ -459,7 +455,7 @@ module Mxrb
         node
       end
 
-      def encode_node(node, path:) # rubocop:disable Metrics/MethodLength
+      def encode_node(node, path:)
         document = {
           '$ID' => node_identifier(node),
           '$Type' => "Forms$#{storage_type_name(node)}"
@@ -502,7 +498,7 @@ module Mxrb
         encode_text(value.fetch(:template) || Text.coerce([]))
       end
 
-      def encode_one(_property, value, path:) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity
+      def encode_one(_property, value, path:)
         return nil if value.nil?
         return encode_reference(value, path:) if value.is_a?(Reference)
         return value.to_s if value.is_a?(EnumValue)
@@ -570,6 +566,7 @@ module Mxrb
 
       def encode_reference(reference, path:)
         return reference.target unless reference.kind == :by_id
+
         local = @local_encode_references&.fetch(reference.target.to_s, nil)
         return local if local
         unless reference_encoder
@@ -654,7 +651,7 @@ module Mxrb
         }
       end
 
-      def encode_text_template(template, path:) # rubocop:disable Metrics/MethodLength
+      def encode_text_template(template, path:)
         parameters = template.parameters.map.with_index do |parameter, index|
           {
             '$ID' => SecureRandom.uuid, '$Type' => 'Microflows$TemplateParameter',

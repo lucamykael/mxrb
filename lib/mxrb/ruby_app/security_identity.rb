@@ -36,6 +36,7 @@ module Mxrb
         if previous && !previous.key?('password_policy')
           raise ValidationError, 'existing project security requires its password policy identity baseline'
         end
+
         prior_policy = previous && previous['password_policy']
         policy = definition.fetch(:password_policy)
         result.merge(password_policy: policy.merge(
@@ -75,6 +76,7 @@ module Mxrb
                      unless value.is_a?(Array)
                        raise ValidationError, "existing security requires its #{collection} identity baseline"
                      end
+
                      value
                    else
                      []

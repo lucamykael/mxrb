@@ -27,9 +27,9 @@ module Mxrb
           Thread.current[THREAD_KEY] = previous
         end
 
-        def resolve(owner, kind, name, id: nil)
+        def resolve(owner, kind, name, id: nil, renamed_from: nil)
           context = Thread.current[THREAD_KEY]
-          context ? context.resolve(owner, kind.to_s, name.to_s, id:) : id.to_s
+          context ? context.resolve(owner, kind.to_s, name.to_s, id:, renamed_from:) : id.to_s
         end
 
         def validate_flow!(owner, kind)
@@ -74,6 +74,7 @@ module Mxrb
                  entry['path'].match?(%r{\Aapp/(?:#{ARTIFACT_DIRECTORIES.join('|')})/.+\.rb\z})
             raise SerializationError, 'invalid Ruby source identity entry'
           end
+
           clean = Pathname.new(entry.fetch('path')).cleanpath.to_s
           unless clean == entry.fetch('path') && !clean.split('/').include?('..')
             raise SerializationError, 'unsafe Ruby source identity path'
@@ -116,6 +117,7 @@ module Mxrb
         @names = {}
         @new_declarations = {}
         @matched_entries = {}.compare_by_identity
+        @renames = {}.compare_by_identity
       end
 
       def load_file(path)
@@ -126,18 +128,20 @@ module Mxrb
         @source_path = previous
       end
 
-      def resolve(owner, kind, name, id: nil)
+      def resolve(owner, kind, name, id: nil, renamed_from: nil)
         raise ValidationError, 'Ruby source identity requires a source file context' unless @source_path
+
         name_key = [kind, name]
         if kind != 'service' && @names[name_key] && !@names[name_key].equal?(owner)
           raise ValidationError, "duplicate Ruby #{kind} declaration: #{name}"
         end
 
-        entry = if id.to_s.empty?
-                  implicit_entry(owner, kind, name)
-                else
-                  unique_entry(@by_identity.fetch([kind, id.to_s], []))
-                end
+        entry = renamed_entry(kind, name, id, renamed_from) if renamed_from
+        entry ||= if id.to_s.empty?
+                    implicit_entry(owner, kind, name)
+                  else
+                    unique_entry(@by_identity.fetch([kind, id.to_s], []))
+                  end
         identifier = id.to_s.empty? ? entry.to_h.fetch('id', '') : id.to_s
         key = [kind, identifier]
         previous = @claims[key] unless identifier.empty?
@@ -153,6 +157,7 @@ module Mxrb
           @new_declarations.delete(owner)
         end
         @names[name_key] = owner
+        @renames[owner] = renamed_from.to_s if renamed_from
         @bindings[owner] = {
           'kind' => kind, 'id' => identifier, 'name' => name, 'path' => @source_path,
           'ruby_class' => self.class.class_name(owner),
@@ -169,7 +174,24 @@ module Mxrb
         unless existing.empty? || existing == kind
           raise ValidationError, 'an existing Ruby flow cannot change between microflow and nanoflow'
         end
+
         binding['native_kind'] = kind
+      end
+
+      def rebase_member_identities!(project)
+        @enumeration_values = project.modules.flat_map do |mod|
+          mod.enumerations.map do |enumeration|
+            identifier = IO::BsonCodec.extract_id(enumeration['$ID']).to_s
+            values = IO::BsonCodec.parse_array(enumeration['Values']).fetch(:items).map do |value|
+              {
+                'name' => value['Name'].to_s,
+                'id' => IO::BsonCodec.extract_id(value['$ID']).to_s
+              }
+            end
+            [identifier, values]
+          end
+        end.to_h
+        self
       end
 
       def bundle
@@ -224,17 +246,19 @@ module Mxrb
           if original && original['id'] != identifier
             raise ValidationError, "materialized Ruby identity changed for #{key[1]}"
           end
+
           binding['id'] = identifier
         end
         self
       end
 
       def validate_entity_names!
-        @bindings.each_value do |binding|
+        @bindings.each do |owner, binding|
           next unless binding['kind'] == 'record' && !binding['id'].empty?
 
           original = unique_entry(@by_identity.fetch(['record', binding['id']], []))
           next unless original && original['name'] != binding['name']
+          next if @renames[owner] == original['name']
 
           raise ValidationError,
                 "Ruby entity rename #{original['name']} -> #{binding['name']} requires an explicit semantic rename; " \
@@ -243,6 +267,22 @@ module Mxrb
       end
 
       private
+
+      def renamed_entry(kind, name, id, renamed_from)
+        raise ValidationError, 'renamed_from is supported only for Ruby records' unless kind == 'record'
+
+        previous_name = renamed_from.to_s
+        raise ValidationError, 'record renamed_from cannot be empty' if previous_name.empty?
+        raise ValidationError, 'record renamed_from must differ from the new name' if previous_name == name
+
+        entry = unique_entry(@by_name.fetch([kind, previous_name], []))
+        raise ValidationError, "unknown Ruby record rename source #{previous_name}" unless entry
+        unless id.to_s.empty? || id.to_s == entry.fetch('id')
+          raise ValidationError, 'explicit record identity conflicts with renamed_from'
+        end
+
+        entry
+      end
 
       # A declaration without a match never borrows an existing identity. Wait
       # until all source files have loaded before deciding whether it is a new
@@ -305,7 +345,11 @@ module Mxrb
             {
               'kind' => kind, 'id' => entry.fetch('id').to_s, 'name' => entry.fetch('name').to_s,
               'path' => path.to_s, 'ruby_class' => entry.fetch('ruby_class', '').to_s,
-              'native_kind' => kind == 'service' ? (collection == 'nanoflows' ? 'nanoflow' : 'microflow') : ''
+              'native_kind' => if kind == 'service'
+                                 collection == 'nanoflows' ? 'nanoflow' : 'microflow'
+                               else
+                                 ''
+                               end
             }
           end
         end
@@ -329,6 +373,7 @@ module Mxrb
         if in_file.any? { _1['ruby_class'] == ruby_class && !ruby_class.empty? && _1['kind'] != kind }
           raise ValidationError, "Ruby source cannot change document family in #{@source_path}"
         end
+
         candidates = ruby_class.empty? ? [] : @by_class.fetch([kind, ruby_class], [])
         return unique_entry(candidates) unless candidates.empty?
 

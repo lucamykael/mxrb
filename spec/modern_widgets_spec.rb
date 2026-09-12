@@ -919,6 +919,8 @@ RSpec.describe 'modern page widgets' do
 
   it 'normalizes every pluggable widget property shape for the React projection' do
     page = Mxrb::Model::Page.allocate
+    expect(page.send(:data_view_editability, true)).to eq(:always)
+    expect(page.send(:data_view_editability, 'False')).to eq(:never)
     allow(page).to receive(:parse_widgets) do |_widgets, target|
       target << { type: :text, name: 'Slot', options: {}, events: [] }
     end

@@ -127,7 +127,8 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.typed_value(:image).kind).to eq('Image')
     expect(bridge.to_projection).not_to have_key('objects')
     expect(described_class.try_from_projection(widget_id, { 'objects' => nil }, catalog:)).to be_nil
-    expect(described_class.try_from_projection(widget_id, { 'content' => nil }, catalog:)).to be_nil
+    expect(described_class.try_from_projection(widget_id, { 'content' => nil }, catalog:).to_projection)
+      .to eq('content' => nil)
   end
 
   it 'refuses caption parameters, translation metadata and mismatched image reference types' do

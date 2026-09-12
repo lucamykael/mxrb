@@ -54,7 +54,7 @@ RSpec.describe 'semantic presentation documents' do
     mpr&.close
   end
 
-  def documents # rubocop:disable Metrics/AbcSize
+  def documents
     widgets = Mxrb::IO::BsonCodec.build_array([container_widget], marker: 2)
     [
       base_document('Forms$Layout', 'Shell').merge(

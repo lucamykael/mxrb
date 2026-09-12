@@ -69,6 +69,7 @@ module Mxrb
           @security_manifest = export_project_security(project)
           @module_manifests = modules
           write_support_files
+          copy_round_trip_metadata
           copy_frontend_theme
           restore_embedded_sources(embedded_sources)
           refresh_native_frontend_sources(project, modules, embedded_sources)
@@ -206,7 +207,31 @@ module Mxrb
         FileUtils.cp(@mpr_path, destination)
         source_contents = File.join(File.dirname(@mpr_path), 'mprcontents')
         FileUtils.cp_r(source_contents, directory, remove_destination: true) if File.directory?(source_contents)
+        copy_runtime_project_assets(directory)
         destination
+      end
+
+      def copy_runtime_project_assets(runtime_directory)
+        source_root = File.dirname(@mpr_path)
+        destination_root = File.join(runtime_directory, 'project')
+        directories = Model::DesignSystem::ASSET_DIRECTORIES + Mxrb::Exporter::MARKETPLACE_PROVENANCE
+        directories.each do |relative_path|
+          source = File.join(source_root, relative_path)
+          next unless File.exist?(source) && !File.symlink?(source)
+
+          target = File.join(destination_root, relative_path)
+          FileUtils.mkdir_p(File.dirname(target))
+          FileUtils.cp_r(source, target, remove_destination: true)
+        end
+      end
+
+      def copy_round_trip_metadata
+        source = File.join(@mendix_sidecar, '.mxrb', 'semantic_metadata.json')
+        return unless File.file?(source)
+
+        destination = File.join(@output_dir, '.mxrb', 'semantic_metadata.json')
+        FileUtils.mkdir_p(File.dirname(destination))
+        FileUtils.cp(source, destination)
       end
 
       def export_module(mod)
@@ -307,7 +332,9 @@ module Mxrb
         }
         write(relative, project_security_source(manifest))
         add_coverage(id, 'ProjectSecurity', 'project_security', relative, 'executable_bidirectional')
-        manifest.merge('path' => relative, 'ruby_class' => embedded_identity_class(:project_security, id, 'ApplicationSecurity'))
+        manifest.merge('path' => relative,
+                       'ruby_class' => embedded_identity_class(:project_security, id,
+                                                               'ApplicationSecurity'))
       end
 
       def project_user_role_manifest(role)
@@ -385,7 +412,7 @@ module Mxrb
           association.from_entity_id.to_s == entity.id.to_s
         end
         associations = associations.map { association_manifest(mod, _1) }
-        access_rules = runtime_value(entity.access_rules || [])
+        access_rules = access_rules_with_source_identity(runtime_value(entity.access_rules || []))
         indexes = entity.respond_to?(:indexes) ? entity.indexes.to_a.map { index_manifest(entity, _1) } : []
         generalization = generalization_manifest(entity)
         oql_view = oql_view_manifest(entity, mod)
@@ -800,7 +827,7 @@ module Mxrb
         body = case object['type']
                when 'EndEvent' then nanoflow_end_source(object, result_type)
                when 'ExclusiveSplit' then nanoflow_split_source(object, outgoing)
-               when 'ActionActivity' then nanoflow_action_source(object['action']) + nanoflow_next_source(outgoing)
+               when 'ActionActivity' then nanoflow_action_case_source(object['action'], outgoing)
                else nanoflow_next_source(outgoing)
                end
         <<~TS.chomp
@@ -823,6 +850,7 @@ module Mxrb
       end
 
       def nanoflow_split_source(object, flows)
+        flows = flows.reject { _1['error'] }
         cases = flows.reject { _1['case'].to_s.empty? }.map do |edge|
           "case #{JSON.generate(edge['case'].to_s)}: current = #{JSON.generate(edge['destination'])}; break;"
         end
@@ -854,6 +882,10 @@ module Mxrb
             [change['member'].to_s, change['value'].to_s]
           end
           "runtime.change(#{JSON.generate(action['variable'].to_s)}, #{JSON.generate(changes)});\n"
+        when 'CreateChange'
+          changes = action.fetch('changes', []).to_h { [_1['member'].to_s, _1['value'].to_s] }
+          "runtime.create(#{JSON.generate(action['variable'].to_s)}, " \
+            "#{JSON.generate(action['entity'].to_s)}, #{JSON.generate(changes)});\n"
         when 'MicroflowCall'
           variable = action['result_variable'].to_s
           invocation = "runtime.callMicroflow(#{JSON.generate(action['microflow'].to_s)}, " \
@@ -870,13 +902,55 @@ module Mxrb
             "runtime.string(#{JSON.generate(action.fetch('parameters', []))}[Number(rawIndex) - 1])), " \
             "#{JSON.generate(action['level'].to_s.downcase)}, " \
             "#{action['blocking'] == true});\n"
+        when 'NanoflowCall'
+          invocation = "runtime.callNanoflow(#{JSON.generate(action['nanoflow'].to_s)}, " \
+                       "#{JSON.generate(action.fetch('arguments', {}))})"
+          nanoflow_await_source(invocation, action['result_variable'])
+        when 'JavaScriptActionCall'
+          invocation = "runtime.callJavaScript(#{JSON.generate(action['javascript_action'].to_s)}, " \
+                       "#{JSON.generate(action.fetch('arguments', {}))})"
+          nanoflow_await_source(invocation, action['result_variable'])
+        when 'ShowForm'
+          "runtime.showPage(#{JSON.generate(action['page'].to_s)}, " \
+            "#{JSON.generate(action.fetch('arguments', {}))});\n"
+        when 'CloseForm'
+          "runtime.closePage(#{Integer(action.fetch('count', 1))});\n"
+        when 'ValidationFeedback'
+          "runtime.validationFeedback(#{JSON.generate(action['variable'].to_s)}, " \
+            "#{JSON.generate(action['member'].to_s)}, #{JSON.generate(action['message'].to_s)});\n"
         else
           "throw runtime.unsupported(#{JSON.generate(action['type'].to_s)});\n"
         end
       end
 
+      def nanoflow_await_source(invocation, result_variable)
+        variable = result_variable.to_s
+        return "await #{invocation};\n" if variable.empty?
+
+        "runtime.set(#{JSON.generate(variable)}, await #{invocation});\n"
+      end
+
+      def nanoflow_action_case_source(action, flows)
+        normal = flows.reject { _1['error'] }
+        errors = flows.select { _1['error'] }
+        raise SerializationError, 'nanoflow action has multiple error-handler paths' if errors.size > 1
+
+        source = nanoflow_action_source(action) + nanoflow_next_source(normal)
+        return source if errors.empty?
+
+        <<~TS.chomp
+          try {
+          #{indent(source, 2)}
+          } catch (error) {
+            runtime.set('latestError', error instanceof Error ? error.message : String(error));
+            current = #{JSON.generate(errors.first['destination'])};
+            break;
+          }
+        TS
+      end
+
       def nanoflow_next_source(flows)
-        edge = flows.first
+        edge = flows.find { !_1['error'] }
         return "throw runtime.stopped('node');" unless edge
 
         "current = #{JSON.generate(edge['destination'])};\nbreak;"
@@ -892,11 +966,11 @@ module Mxrb
           'name' => qualified, 'id' => flow.id,
           'parameters' => flow.parameters.filter_map { _1['Name'] if _1.is_a?(Hash) },
           'objects' => flow.objects.filter_map { nanoflow_object(_1) },
-          'flows' => flow.flows.reject { _1['IsErrorHandler'] == true }.map do |edge|
+          'flows' => flow.flows.map do |edge|
             {
               'origin' => native_identifier(edge['OriginPointer']),
               'destination' => native_identifier(edge['DestinationPointer']),
-              'case' => nanoflow_case(edge)
+              'case' => nanoflow_case(edge), 'error' => edge['IsErrorHandler'] == true
             }
           end
         }
@@ -924,11 +998,11 @@ module Mxrb
         when 'ChangeVariable'
           result.merge!('variable' => action['ChangeVariableName'].to_s, 'value' => action['Value'].to_s)
         when 'Change'
-          changes = native_items(action['Items']).map do |item|
-            member = (item['Attribute'].to_s.empty? ? item['Association'] : item['Attribute']).to_s
-            { 'member' => member.split(%r{[./]}).last, 'value' => item['Value'].to_s }
-          end
+          changes = nanoflow_changes(action)
           result.merge!('variable' => action['ChangeVariableName'].to_s, 'changes' => changes)
+        when 'CreateChange'
+          result.merge!('variable' => action['VariableName'].to_s,
+                        'entity' => action['Entity'].to_s, 'changes' => nanoflow_changes(action))
         when 'LogMessage'
           result['message'] = translated_text_template(action['MessageTemplate'])
         when 'MicroflowCall'
@@ -949,8 +1023,49 @@ module Mxrb
             'level' => action['Type'].to_s,
             'blocking' => action['Blocking'] == true
           )
+        when 'NanoflowCall'
+          call = action['NanoflowCall'] || {}
+          result_variable = action['UseReturnVariable'] == true ? action['OutputVariableName'].to_s : ''
+          result.merge!('nanoflow' => call['Nanoflow'].to_s,
+                        'arguments' => nanoflow_call_arguments(call['ParameterMappings']),
+                        'result_variable' => result_variable)
+        when 'JavaScriptActionCall'
+          result_variable = action['UseReturnVariable'] == true ? action['OutputVariableName'].to_s : ''
+          result.merge!('javascript_action' => action['JavaScriptAction'].to_s,
+                        'arguments' => javascript_action_arguments(action['ParameterMappings']),
+                        'result_variable' => result_variable)
+        when 'ShowForm'
+          settings = action['FormSettings'] || {}
+          result.merge!('page' => settings['Form'].to_s,
+                        'arguments' => nanoflow_call_arguments(settings['ParameterMappings']))
+        when 'CloseForm'
+          result['count'] = action.fetch('NumberOfPagesToClose', 1).to_i.clamp(1, 100)
+        when 'ValidationFeedback'
+          member = (action['Attribute'].to_s.empty? ? action['Association'] : action['Attribute']).to_s
+          result.merge!('variable' => action['ValidationVariableName'].to_s,
+                        'member' => member.split(%r{[./]}).last.to_s,
+                        'message' => translated_text_template(action['FeedbackTemplate']))
         end
         result
+      end
+
+      def nanoflow_changes(action)
+        native_items(action['Items']).map do |item|
+          member = (item['Attribute'].to_s.empty? ? item['Association'] : item['Attribute']).to_s
+          { 'member' => member.split(%r{[./]}).last.to_s, 'value' => item['Value'].to_s }
+        end
+      end
+
+      def nanoflow_call_arguments(mappings)
+        native_items(mappings).to_h do |mapping|
+          [mapping['Parameter'].to_s.split('.').last, mapping['Argument'].to_s]
+        end
+      end
+
+      def javascript_action_arguments(mappings)
+        native_items(mappings).to_h do |mapping|
+          [mapping['Parameter'].to_s.split('.').last, mapping.dig('ParameterValue', 'Argument').to_s]
+        end
       end
 
       def translated_text_template(template)
@@ -1368,10 +1483,11 @@ module Mxrb
         end
       end
 
-      def entity_source(namespace, class_name, qualified, id, attributes, associations = [],
+      def entity_source(namespace, class_name, qualified, _id, attributes, associations = [],
                         dto:, persistable:,
                         access_rules: [], indexes: [], system_members: nil,
                         generalization: nil, oql_view: nil, lifecycle: [], validation_rules: [])
+        access_rules = access_rules_with_source_identity(access_rules)
         declarations = attributes.map do |attribute|
           localize_date = if attribute.key?('localize_date')
                             ", localize_date: #{attribute.fetch('localize_date').inspect}"
@@ -1398,11 +1514,7 @@ module Mxrb
         access_declarations = if access_rules.empty?
                                 ['    clear_access_rules!']
                               else
-                                grouped = access_rules.group_by { RecordIdentity.access_key(_1) }
-                                access_rules.map do |rule|
-                                  preserve_identity = grouped.fetch(RecordIdentity.access_key(rule)).size > 1
-                                  access_rule_source(rule, preserve_identity:)
-                                end
+                                access_rules.map { access_rule_source(_1) }
                               end
         index_declarations = if indexes.empty?
                                ['    clear_indexes!']
@@ -1419,9 +1531,7 @@ module Mxrb
                                 []
                               end
         semantic_declarations = []
-        if generalization
-          semantic_declarations << "    generalizes #{generalization.fetch('target').inspect}"
-        end
+        semantic_declarations << "    generalizes #{generalization.fetch('target').inspect}" if generalization
         semantic_declarations << oql_view_source(oql_view) if oql_view
         lifecycle_declarations = if lifecycle.empty?
                                    ['    clear_native_lifecycle!']
@@ -1486,14 +1596,26 @@ module Mxrb
         ["#{declaration} do", *translations, *options, '    end'].join("\n")
       end
 
-      def access_rule_source(rule, preserve_identity: false)
+      def access_rules_with_source_identity(rules)
+        grouped = rules.group_by { RecordIdentity.access_signature(_1) }
+        grouped.each_value do |matches|
+          next unless matches.size > 1
+
+          matches.sort_by { _1.fetch('id').to_s }.each_with_index do |rule, index|
+            rule['source_identity'] = "rule_#{index + 1}"
+          end
+        end
+        rules
+      end
+
+      def access_rule_source(rule)
         roles = rule.fetch('roles').map(&:inspect).join(', ')
         members = rule.fetch('members').map do |member|
           "      member #{member.fetch('name').inspect}, " \
             "reference: #{member.fetch('reference').inspect}, rights: :#{underscore(member.fetch('rights'))}, " \
             "kind: :#{member.fetch('kind')}"
         end
-        identity = preserve_identity ? "id: #{rule.fetch('id').inspect}, " : ''
+        identity = rule['source_identity'] ? "identity: #{rule.fetch('source_identity').inspect}, " : ''
         declaration = "    access_rule #{roles}, #{identity}" \
           "documentation: #{rule.fetch('documentation').inspect}, create: #{rule.fetch('create')}, " \
           "delete: #{rule.fetch('delete')}, default_rights: :#{underscore(rule.fetch('default_rights'))}, " \
@@ -1655,7 +1777,7 @@ module Mxrb
         ["    schedule #{ScheduleBuilder.kind(type).inspect} do", *declarations, '    end'].join("\n")
       end
 
-      def service_source(namespace, class_name, qualified, id, native_source: nil,
+      def service_source(namespace, class_name, qualified, _id, native_source: nil,
                          native_kind: :microflow)
         native = if native_source
                    "\n    flow :#{native_kind} do\n" \
@@ -1751,6 +1873,8 @@ module Mxrb
             keyword = runtime_widget_keyword(type, key, generic_sink:)
             expression = if type == :data_grid && key.to_s == 'columns'
                            runtime_grid_columns_expression(value)
+                         elsif type == :gallery && key.to_s == 'sort'
+                           runtime_gallery_sort_expression(value)
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
@@ -1806,6 +1930,7 @@ module Mxrb
           allowed_extensions editable max_file_size show_file_in_browser mode tab_index
           class style dynamic_class visible
         ],
+        gallery: %w[class style dynamic_class visible entity xpath association context_variable sort],
         image_uploader: %w[
           allowed_extensions caption editable max_file_size thumbnail_width thumbnail_height
           tab_index class style dynamic_class visible
@@ -2316,19 +2441,35 @@ module Mxrb
       def runtime_grid_columns_expression(columns)
         return unless columns.is_a?(Array)
 
-        values = columns.map do |column|
-          return unless column.is_a?(Hash) && column['name'].is_a?(String)
-          return unless runtime_keys?(column, %w[name attribute caption filter])
+        values = columns.map { runtime_grid_column_expression(_1) }
+        return if values.any?(&:nil?)
 
-          keywords = column.reject { |key, _value| key == 'name' }.transform_keys(&:to_sym)
-          actual = Page::WidgetTree.new.grid_column(column.fetch('name'), **keywords)
-          return unless actual == column
-
-          arguments = [column.fetch('name').inspect]
-          arguments.concat(keywords.map { |key, value| "#{key}: #{value.inspect}" })
-          "grid_column(#{arguments.join(', ')})"
-        end
         "[#{values.join(', ')}]"
+      end
+
+      def runtime_grid_column_expression(column)
+        return unless column.is_a?(Hash) && column['name'].is_a?(String)
+        return unless runtime_keys?(column, %w[name attribute caption filter])
+
+        keywords = column.reject { |key, _value| key == 'name' }.transform_keys(&:to_sym)
+        actual = Page::WidgetTree.new.grid_column(column.fetch('name'), **keywords)
+        return unless actual == column
+
+        arguments = [column.fetch('name').inspect]
+        arguments.concat(keywords.map { |key, value| "#{key}: #{value.inspect}" })
+        "grid_column(#{arguments.join(', ')})"
+      end
+
+      def runtime_gallery_sort_expression(sort)
+        return unless sort.is_a?(Array)
+
+        values = sort.map do |item|
+          next unless item.is_a?(Hash) && item.keys.sort == %w[attribute direction]
+          next unless item.values.all? { _1.is_a?(String) }
+
+          "sort_by(#{item.fetch('attribute').inspect}, direction: #{item.fetch('direction').inspect})"
+        end
+        "[#{values.join(', ')}]" unless values.any?(&:nil?)
       end
 
       def runtime_data_view_condition_source(method_name, condition, indentation)
@@ -2623,6 +2764,16 @@ module Mxrb
         write(relative(fallback_scss), '') unless File.file?(fallback_scss)
         fallback_css = File.join(root, 'theme-cache', 'web', 'theme.compiled.css')
         write(relative(fallback_css), '') unless File.file?(fallback_css)
+        fallback_logo = File.join(root, 'theme', 'web', 'logo.png')
+        return if File.file?(fallback_logo)
+
+        FileUtils.mkdir_p(File.dirname(fallback_logo))
+        File.binwrite(
+          fallback_logo,
+          Base64.strict_decode64(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+          )
+        )
       end
 
       def copy_frontend_public_theme_assets(root)
@@ -2692,6 +2843,7 @@ module Mxrb
             'compiler' => 'project.rb',
             'mendix_project' => relative(File.join(@mendix_sidecar, 'project.rb')),
             'runtime_mpr' => relative(runtime_mpr),
+            'runtime_project' => relative(File.join(File.dirname(runtime_mpr), 'project')),
             'editable_mendix_source' => relative(@mendix_sidecar)
           }
         }
@@ -3056,6 +3208,7 @@ module Mxrb
           "  #{entry.fetch('name').inspect}: #{entry.fetch('import_name')}"
         end
         <<~TS
+          import { registerNanoflows } from './bridge/nanoflow';
           import type { RegisteredNanoflow } from './types';
 
           #{imports.join("\n")}
@@ -3063,6 +3216,8 @@ module Mxrb
           const nanoflows: Record<string, RegisteredNanoflow> = {
           #{mappings.join(",\n")}
           };
+
+          registerNanoflows(nanoflows);
 
           export default nanoflows;
         TS
@@ -3134,6 +3289,20 @@ module Mxrb
 
           type ChangeExpressions = Record<string, string>;
           type Comparable = string | number;
+          type JavaScriptAction = (
+            parameters: NanoflowParameters
+          ) => RuntimeValue | undefined | Promise<RuntimeValue | undefined>;
+
+          let nanoflowRegistry: Record<string, RegisteredNanoflow> = {};
+          let javaScriptActions: Record<string, JavaScriptAction> = {};
+
+          export const registerNanoflows = (values: Record<string, RegisteredNanoflow>): void => {
+            nanoflowRegistry = { ...values };
+          };
+
+          export const registerJavaScriptActions = (values: Record<string, JavaScriptAction>): void => {
+            javaScriptActions = { ...values };
+          };
 
           const isRecord = (value: RuntimeValue | undefined): value is EntityRecord => {
             return Boolean(value && typeof value === 'object'
@@ -3150,6 +3319,10 @@ module Mxrb
             readonly variables: NanoflowParameters;
             readonly #changes = new Map<string, EntityRecord>();
             readonly #messages: Array<{ message: string; level: string; blocking: boolean }> = [];
+            readonly #effects: Array<{
+              type: string; page?: string; arguments?: NanoflowParameters; count?: number
+            }> = [];
+            readonly #validation: Array<{ variable: string; member: string; message: string }> = [];
 
             constructor(parameters: P, readonly metadata: NanoflowMetadata,
               readonly microflowInvoker?: NanoflowMicroflowInvoker) {
@@ -3228,6 +3401,18 @@ module Mxrb
               this.#changes.set(`${record.type}:${record.id}`, record);
             }
 
+            create(variable: string, type: string, expressions: ChangeExpressions): EntityRecord {
+              const record: EntityRecord = {
+                id: crypto.randomUUID(), type, attributes: {}, transient: true
+              };
+              this.variables[variable] = record;
+              Object.entries(expressions).forEach(([member, expression]) => {
+                record.attributes[member] = this.value(expression, record);
+              });
+              this.#changes.set(`${record.type}:${record.id}`, record);
+              return record;
+            }
+
             async callMicroflow(name: string, expressions: Record<string, string>): Promise<RuntimeValue | undefined> {
               if (!this.microflowInvoker) {
                 throw new Error(`Nanoflow ${this.metadata.name} cannot call ${name}: invoker is unavailable`);
@@ -3242,14 +3427,53 @@ module Mxrb
               return response as RuntimeValue | undefined;
             }
 
+            async callNanoflow(name: string, expressions: Record<string, string>): Promise<RuntimeValue | undefined> {
+              const definition = nanoflowRegistry[name];
+              if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
+              const parameters = Object.fromEntries(
+                Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)])
+              );
+              const execution = await definition.execute(parameters, this.microflowInvoker);
+              execution.changes.forEach(record => this.#changes.set(`${record.type}:${record.id}`, record));
+              this.#messages.push(...execution.messages);
+              this.#effects.push(...execution.effects);
+              this.#validation.push(...execution.validation);
+              return execution.result;
+            }
+
+            async callJavaScript(name: string, expressions: Record<string, string>): Promise<RuntimeValue | undefined> {
+              const action = javaScriptActions[name];
+              if (!action) throw new Error(`JavaScript action frontend adapter not found: ${name}`);
+              const parameters = Object.fromEntries(
+                Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)])
+              );
+              return action(parameters);
+            }
+
             showMessage(message: string, level = 'information', blocking = false): void {
               this.#messages.push({ message, level, blocking });
+            }
+
+            showPage(page: string, expressions: Record<string, string>): void {
+              const argumentsValue = Object.fromEntries(
+                Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)])
+              );
+              this.#effects.push({ type: 'open_page', page, arguments: argumentsValue });
+            }
+
+            closePage(count = 1): void {
+              this.#effects.push({ type: 'close_page', count });
+            }
+
+            validationFeedback(variable: string, member: string, message: string): void {
+              this.#validation.push({ variable, member, message });
             }
 
             complete<R>(result: R): NanoflowExecution<R> {
               return {
                 result, variables: this.variables, changes: [...this.#changes.values()],
-                messages: [...this.#messages]
+                messages: [...this.#messages], effects: [...this.#effects],
+                validation: [...this.#validation]
               };
             }
 
@@ -3784,6 +4008,10 @@ module Mxrb
             variables: NanoflowParameters;
             changes: EntityRecord[];
             messages: Array<{ message: string; level: string; blocking: boolean }>;
+            effects: Array<{
+              type: string; page?: string; arguments?: NanoflowParameters; count?: number
+            }>;
+            validation: Array<{ variable: string; member: string; message: string }>;
           }
 
           export interface RegisteredNanoflow extends NanoflowMetadata {

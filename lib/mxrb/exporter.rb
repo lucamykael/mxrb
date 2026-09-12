@@ -102,7 +102,7 @@ module Mxrb
     def export!(parallel: true)
       return export_ruby!(parallel:) if mode == :ruby
 
-      Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress| # rubocop:disable Metrics/BlockLength
+      Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress|
         FileUtils.mkdir_p(@output_dir)
         @native_fragment_store = NativeFragmentStore.new(
           File.join(@output_dir, ".mxrb", "native_fragments")
@@ -298,7 +298,6 @@ module Mxrb
     end
 
     def export_semantic_metadata(modules)
-      # rubocop:disable Metrics/BlockLength
       values = modules.to_h do |mod|
         typed_flows = [
           *Array(mod.rules).map { ['Microflows$Rule', _1] },
@@ -340,7 +339,6 @@ module Mxrb
         end
         [mod.name.to_s, { 'flows' => flows }]
       end
-      # rubocop:enable Metrics/BlockLength
       write(
         File.join(@output_dir, '.mxrb', 'semantic_metadata.json'),
         JSON.pretty_generate('version' => 1, 'modules' => values)
@@ -1632,7 +1630,6 @@ module Mxrb
         lines << "                       #{key}: #{native_ruby(value, 23)}#{comma}"
       end
       resources = bson_items(doc["Resources"])
-      # rubocop:disable Metrics/BlockLength
       resources.each do |resource|
         spec = rest_resource_spec(resource)
         resource_options = []
@@ -1676,7 +1673,6 @@ module Mxrb
         end
         lines << "  end"
       end
-      # rubocop:enable Metrics/BlockLength
       lines << "end"
       lines.join("\n")
     end
@@ -3260,7 +3256,7 @@ module Mxrb
 
     def page_variable_ruby(raw_variable)
       variable = raw_variable.transform_keys(&:to_sym)
-      args = [symbol(variable[:name] || :current)]
+      args = [variable[:name] ? symbol(variable[:name]) : 'nil']
       args << "kind: #{symbol(variable[:kind])}" if variable.fetch(:kind, :page_parameter).to_sym != :page_parameter
       args << "sub_key: #{ruby(variable[:sub_key])}" if variable[:sub_key]
       args << "use_all_pages: true" if variable[:use_all_pages] == true

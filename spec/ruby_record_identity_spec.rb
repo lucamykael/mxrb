@@ -22,9 +22,9 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
       ] }],
       'lifecycle' => [{ 'id' => uuid(8), 'event' => 'before_commit' }],
       'validation_rules' => [{ 'id' => uuid(9), 'attribute' => 'Name', 'kind' => 'required',
-                              'message_id' => uuid(10), 'rule_info_id' => uuid(11), 'translations' => [
-                                { 'id' => uuid(12), 'language_code' => 'pt_BR', 'text' => 'Baseline' }
-                              ] }],
+                               'message_id' => uuid(10), 'rule_info_id' => uuid(11), 'translations' => [
+                                 { 'id' => uuid(12), 'language_code' => 'pt_BR', 'text' => 'Baseline' }
+                               ] }],
       'generalization' => { 'id' => uuid(13), 'target' => 'App.Base' },
       'oql_view' => { 'source_id' => uuid(14), 'document_id' => uuid(15), 'query' => 'Baseline' }
     }
@@ -32,8 +32,8 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
 
   def resolver(previous = baseline)
     manifest = Mxrb::RubyApp::Manifest.new('/tmp/record-identities', 'mode' => 'ruby', 'modules' => [
-      { 'models' => [previous], 'dtos' => [] }
-    ])
+                                             { 'models' => [previous], 'dtos' => [] }
+                                           ])
     described_class.new(manifest)
   end
 
@@ -61,8 +61,10 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
     expect(result[:indexes].first).to include(id: uuid(5), guid: uuid(6), include_offline: true)
     expect(result[:indexes].first[:members].first).to include(id: uuid(7), ascending: false)
     expect(result[:lifecycle].first).to include(id: uuid(8), handler: 'App.Changed', pass_event_object: false)
-    expect(result[:validation_rules].first).to include(id: uuid(9), message_id: uuid(10), rule_info_id: uuid(11), rule_info: {})
-    expect(result[:validation_rules].first[:translations]).to eq([{ id: uuid(12), language_code: 'pt_BR', text: 'Edited' }])
+    expect(result[:validation_rules].first).to include(id: uuid(9), message_id: uuid(10), rule_info_id: uuid(11),
+                                                       rule_info: {})
+    expect(result[:validation_rules].first[:translations]).to eq([{ id: uuid(12), language_code: 'pt_BR',
+                                                                    text: 'Edited' }])
     expect(result[:generalization]).to eq(id: uuid(13), target: 'App.OtherBase')
     expect(result[:oql_view]).to eq(source_id: uuid(14), document_id: uuid(15), query: 'Changed query')
     expect(declaration).to eq(original)
@@ -102,7 +104,24 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
     expect(result[:access_rules].map { _1[:id] }).to eq([uuid(30), uuid(3)])
   end
 
-  it 'emits only legacy top-level IDs for duplicate ACLs and hides their member IDs' do
+  it 'resolves duplicate ACL signatures through private source identities' do
+    previous = baseline
+    previous['access_rules'].first['source_identity'] = 'rule_1'
+    previous['access_rules'] << previous['access_rules'].first.merge(
+      'id' => uuid(30), 'source_identity' => 'rule_2', 'members' => []
+    )
+    declaration = declarations
+    declaration[:access_rules].first[:source_identity] = 'rule_1'
+    declaration[:access_rules].unshift(
+      roles: ['App.User'], xpath: '', source_identity: 'rule_2', members: []
+    )
+
+    result = resolver(previous).resolve(id: uuid(1), name: 'App.Item', **declaration)
+
+    expect(result[:access_rules].map { _1[:id] }).to eq([uuid(30), uuid(3)])
+  end
+
+  it 'emits stable public identities for duplicate ACLs and hides all UUIDs' do
     rule = {
       'id' => uuid(3), 'roles' => ['App.User'], 'xpath' => '', 'documentation' => '',
       'create' => false, 'delete' => false, 'default_rights' => 'None', 'members' => [
@@ -114,7 +133,8 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
     source = emitter.send(:entity_source, 'App', 'Item', 'App.Item', uuid(1), [], [],
                           dto: false, persistable: true,
                           access_rules: [rule, rule.merge('id' => uuid(30), 'members' => [])])
-    expect(source.scan(Mxrb::PublicSourceAudit::UUID)).to eq([uuid(3), uuid(30)])
+    expect(source).to include('identity: "rule_1"', 'identity: "rule_2"')
+    expect(source).not_to match(Mxrb::PublicSourceAudit::UUID)
   end
 
   it 'uses explicit removal for index replacement and refuses conflicting private GUIDs' do

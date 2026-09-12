@@ -109,13 +109,14 @@ module Mxrb
         self
       end
 
-      def method_missing(name, *arguments, &block) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def method_missing(name, *arguments, &block)
         property = schema.property(name)
         return super unless property
         return fetch(property.key) if arguments.empty? && !block
 
         if block
           return append(property.key, type: arguments.first, &block) if collection?(property)
+
           return set(property.key, nested_value(property, arguments.first, &block))
         end
         raise ArgumentError, "#{property.key} expects exactly one value" unless arguments.length == 1
@@ -173,12 +174,8 @@ module Mxrb
 
           return Forms::Node.build(explicit_type, &block)
         end
-        if value_type.object?
-          return ObjectNode.new(value_type.object_type).evaluate(&block)
-        end
-        if value_type.widgets?
-          return widget_node(explicit_type, &block)
-        end
+        return ObjectNode.new(value_type.object_type).evaluate(&block) if value_type.object?
+        return widget_node(explicit_type, &block) if value_type.widgets?
 
         raise ArgumentError, "#{property.key} does not accept a nested block"
       end
@@ -201,7 +198,7 @@ module Mxrb
         normalize_one(property, value)
       end
 
-      def normalize_one(property, value) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/MethodLength
+      def normalize_one(property, value)
         kind = property.value_type.kind
         # MPK `Required` is an authoring/validation hint, not BSON nullability.
         # Studio stores nil for required values whose controlling property
@@ -344,6 +341,7 @@ module Mxrb
                          end
       Reference.new(canonical_kind, canonical_target)
     end
+
     def self.decimal(value) = Decimal.coerce(value)
   end
 end

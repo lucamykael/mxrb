@@ -41,16 +41,20 @@ RSpec.describe 'Ruby object mutation member source' do
   it 'preserves mixed association operations and repeated attribute assignment order' do
     source = source_for(
       '$Type' => 'Microflows$ChangeObjectAction', 'Variable' => 'item', 'Members' => [3,
-        { 'Attribute' => 'Name', 'Value' => "'before'" },
-        { 'Association' => 'App.Item_Owner', 'Value' => '$Owner', 'Type' => 'Add' },
-        { 'Attribute' => 'Name', 'Value' => { 'Value' => "'after'" } }
-      ]
+                                                                                      { 'Attribute' => 'Name',
+                                                                                        'Value' => "'before'" },
+                                                                                      {
+                                                                                        'Association' => 'App.Item_Owner', 'Value' => '$Owner', 'Type' => 'Add'
+                                                                                      },
+                                                                                      { 'Attribute' => 'Name',
+                                                                                        'Value' => { 'Value' => "'after'" } }]
     )
     expect(decode_action(source)[:members]).to eq([
-      { attribute: 'Name', value: "'before'" },
-      { association: 'App.Item_Owner', value: '$Owner', operation: 'add' },
-      { attribute: 'Name', value: "'after'" }
-    ])
+                                                    { attribute: 'Name', value: "'before'" },
+                                                    { association: 'App.Item_Owner', value: '$Owner',
+                                                      operation: 'add' },
+                                                    { attribute: 'Name', value: "'after'" }
+                                                  ])
   end
 
   it 'does not add an empty block to mutations without members and retains legacy hash input' do

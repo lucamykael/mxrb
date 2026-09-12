@@ -385,7 +385,9 @@ module Mxrb
         appearance.delete(:visible)
         options = appearance.merge(
           source: parse_data_view_source(widget["DataSource"]),
-          editable: data_view_enum(widget.fetch("Editability", "Always")),
+          editable: data_view_editability(
+            widget.fetch("Editability", widget.fetch("Editable", "Always"))
+          ),
           read_only_style: data_view_enum(widget.fetch("ReadOnlyStyle", "Control")),
           label_width: widget.fetch("LabelWidth", 0).to_i,
           show_footer: widget.fetch("ShowFooter", true) == true,
@@ -398,9 +400,9 @@ module Mxrb
           end,
           unknown_native: unknown_native_fields(
             widget,
-            %w[Appearance ConditionalEditabilitySettings ConditionalVisibilitySettings DataSource
-               Editability FooterWidgets LabelWidth Name NoEntityMessage ReadOnlyStyle ShowFooter
-               TabIndex Widgets]
+            %w[Appearance Class ConditionalEditabilitySettings ConditionalVisibilitySettings DataSource
+               Editability Editable FooterWidgets LabelWidth Name NoEntityMessage ReadOnlyStyle ShowFooter
+               Style TabIndex UseSchema Widgets]
           )
         ).compact
         options.delete(:design_properties) if options[:design_properties].empty?
@@ -468,7 +470,7 @@ module Mxrb
         when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
           common + %w[ListenTarget]
         when "Pages$DataViewSource", "Forms$DataViewSource"
-          common + %w[EntityPath EntityRef SourceVariable]
+          common + %w[EntityPath EntityRef PageParameter SourceVariable]
         else common
         end
       end
@@ -493,7 +495,9 @@ module Mxrb
             unknown_native: unknown_native_fields(step, %w[$ID $Type Association DestinationEntity])
           }.reject { |_key, value| value.respond_to?(:empty?) && value.empty? }
         end
-        variable = parse_page_variable(source["SourceVariable"])
+        variable_source = source["SourceVariable"]
+        variable_source ||= { 'PageParameter' => source['PageParameter'] } if source.key?('PageParameter')
+        variable = parse_page_variable(variable_source)
         if steps.empty?
           {
             kind: :context, entity: reference["Entity"].to_s,
@@ -571,6 +575,13 @@ module Mxrb
 
       def data_view_enum(value)
         value.to_s.gsub(/([a-z\d])([A-Z])/, '\\1_\\2').downcase.to_sym
+      end
+
+      def data_view_editability(value)
+        return :always if value == true || value.to_s.casecmp('true').zero?
+        return :never if value == false || value.to_s.casecmp('false').zero?
+
+        data_view_enum(value)
       end
 
       def pluggable_widget(widget)

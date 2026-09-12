@@ -126,10 +126,16 @@ module Mxrb
       end
 
       def positional_node_index(item, previous, consumed, index)
-        return if consumed[index] || !item.is_a?(Node)
+        return unless item.is_a?(Node)
 
-        value = previous[index]
-        index if value.is_a?(Hash) && value['$Type'] == item.storage_type
+        candidates = previous.each_index.select do |candidate|
+          value = previous[candidate]
+          !consumed[candidate] && value.is_a?(Hash) && value['$Type'] == item.storage_type
+        end
+        return candidates.first if candidates.one?
+        return if candidates.empty?
+
+        raise Error, "ambiguous settings identity for #{item.storage_type} at collection index #{index}"
       end
 
       def bson_items(value)

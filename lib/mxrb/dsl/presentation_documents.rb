@@ -21,7 +21,7 @@ module Mxrb
         end
       end
 
-      def presentation_hash_document(value) # rubocop:disable Metrics/AbcSize
+      def presentation_hash_document(value)
         spec = value.to_h.transform_keys { _1.respond_to?(:to_sym) ? _1.to_sym : _1 }
         return presentation_node_document(spec) if spec.key?(:node_type)
         return presentation_collection_document(spec) if spec.key?(:collection)
@@ -60,7 +60,6 @@ module Mxrb
     # Reversible declarations for reusable Mendix presentation documents.
     # Block declarations use the schema-checked Forms model. Keyword declarations
     # remain available only as a compatibility reader for older exported sources.
-    # rubocop:disable Metrics/ParameterLists
     module PresentationDocuments
       include PresentationValues
 
@@ -69,14 +68,15 @@ module Mxrb
 
         presentation_document(
           name, 'Forms$Layout', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
-          'Appearance' => options.fetch(:appearance),
-          'CanvasHeight' => options.fetch(:canvas_height).to_i,
-          'CanvasWidth' => options.fetch(:canvas_width).to_i,
-          'Content' => options.fetch(:content),
-          'Documentation' => options.fetch(:documentation, '').to_s,
-          'Excluded' => options.fetch(:excluded, false) == true,
-          'ExportLevel' => options.fetch(:export_level, 'Hidden').to_s
-        })
+            'Appearance' => options.fetch(:appearance),
+            'CanvasHeight' => options.fetch(:canvas_height).to_i,
+            'CanvasWidth' => options.fetch(:canvas_width).to_i,
+            'Content' => options.fetch(:content),
+            'Documentation' => options.fetch(:documentation, '').to_s,
+            'Excluded' => options.fetch(:excluded, false) == true,
+            'ExportLevel' => options.fetch(:export_level, 'Hidden').to_s
+          }
+        )
       end
 
       def page_template_document(name, **options, &block)
@@ -84,19 +84,20 @@ module Mxrb
 
         presentation_document(
           name, 'Forms$PageTemplate', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
-          'Appearance' => options.fetch(:appearance),
-          'CanvasHeight' => options.fetch(:canvas_height).to_i,
-          'CanvasWidth' => options.fetch(:canvas_width).to_i,
-          'DisplayName' => options.fetch(:display_name).to_s,
-          'Documentation' => options.fetch(:documentation).to_s,
-          'DocumentationUrl' => options.fetch(:documentation_url).to_s,
-          'Excluded' => options.fetch(:excluded) == true,
-          'ExportLevel' => options.fetch(:export_level).to_s,
-          'ImageData' => options.fetch(:image), 'LayoutCall' => options.fetch(:layout_call),
-          'TemplateCategory' => options.fetch(:template_category).to_s,
-          'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
-          'TemplateType' => options.fetch(:template_type)
-        })
+            'Appearance' => options.fetch(:appearance),
+            'CanvasHeight' => options.fetch(:canvas_height).to_i,
+            'CanvasWidth' => options.fetch(:canvas_width).to_i,
+            'DisplayName' => options.fetch(:display_name).to_s,
+            'Documentation' => options.fetch(:documentation).to_s,
+            'DocumentationUrl' => options.fetch(:documentation_url).to_s,
+            'Excluded' => options.fetch(:excluded) == true,
+            'ExportLevel' => options.fetch(:export_level).to_s,
+            'ImageData' => options.fetch(:image), 'LayoutCall' => options.fetch(:layout_call),
+            'TemplateCategory' => options.fetch(:template_category).to_s,
+            'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
+            'TemplateType' => options.fetch(:template_type)
+          }
+        )
       end
 
       def building_block_document(name, **options, &block)
@@ -104,18 +105,19 @@ module Mxrb
 
         presentation_document(
           name, 'Forms$BuildingBlock', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
-          'CanvasHeight' => options.fetch(:canvas_height).to_i,
-          'CanvasWidth' => options.fetch(:canvas_width).to_i,
-          'DisplayName' => options.fetch(:display_name).to_s,
-          'Documentation' => options.fetch(:documentation).to_s,
-          'DocumentationUrl' => options.fetch(:documentation_url).to_s,
-          'Excluded' => options.fetch(:excluded) == true,
-          'ExportLevel' => options.fetch(:export_level).to_s,
-          'ImageData' => options.fetch(:image), 'Platform' => options.fetch(:platform).to_s,
-          'TemplateCategory' => options.fetch(:template_category).to_s,
-          'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
-          'Widgets' => options.fetch(:widgets)
-        })
+            'CanvasHeight' => options.fetch(:canvas_height).to_i,
+            'CanvasWidth' => options.fetch(:canvas_width).to_i,
+            'DisplayName' => options.fetch(:display_name).to_s,
+            'Documentation' => options.fetch(:documentation).to_s,
+            'DocumentationUrl' => options.fetch(:documentation_url).to_s,
+            'Excluded' => options.fetch(:excluded) == true,
+            'ExportLevel' => options.fetch(:export_level).to_s,
+            'ImageData' => options.fetch(:image), 'Platform' => options.fetch(:platform).to_s,
+            'TemplateCategory' => options.fetch(:template_category).to_s,
+            'TemplateCategoryWeight' => options.fetch(:template_category_weight).to_i,
+            'Widgets' => options.fetch(:widgets)
+          }
+        )
       end
 
       def snippet_document(name, **options, &block)
@@ -123,15 +125,16 @@ module Mxrb
 
         presentation_document(
           name, 'Forms$Snippet', unit_id: options[:unit_id], container_id: options[:container_id], fields: {
-          'CanvasHeight' => options.fetch(:canvas_height).to_i,
-          'CanvasWidth' => options.fetch(:canvas_width).to_i,
-          'Documentation' => options.fetch(:documentation).to_s,
-          'Excluded' => options.fetch(:excluded) == true,
-          'ExportLevel' => options.fetch(:export_level).to_s,
-          'Parameters' => options.fetch(:parameters),
-          'Type' => options.fetch(:snippet_type).to_s,
-          'Variables' => options.fetch(:variables), 'Widgets' => options.fetch(:widgets)
-        })
+            'CanvasHeight' => options.fetch(:canvas_height).to_i,
+            'CanvasWidth' => options.fetch(:canvas_width).to_i,
+            'Documentation' => options.fetch(:documentation).to_s,
+            'Excluded' => options.fetch(:excluded) == true,
+            'ExportLevel' => options.fetch(:export_level).to_s,
+            'Parameters' => options.fetch(:parameters),
+            'Type' => options.fetch(:snippet_type).to_s,
+            'Variables' => options.fetch(:variables), 'Widgets' => options.fetch(:widgets)
+          }
+        )
       end
 
       private
@@ -154,6 +157,5 @@ module Mxrb
         )
       end
     end
-    # rubocop:enable Metrics/ParameterLists
   end
 end

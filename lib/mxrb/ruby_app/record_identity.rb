@@ -28,7 +28,7 @@ module Mxrb
 
           previous = baseline_collection(baseline, collection)
           result[collection] = resolve_collection(collection, previous, declarations.fetch(collection),
-                                                   removed.fetch(collection, []), name)
+                                                  removed.fetch(collection, []), name)
         end
         %i[generalization oql_view].each do |singleton|
           next unless declarations[singleton]
@@ -46,6 +46,10 @@ module Mxrb
       # Shared with emission: duplicate anonymous ACL signatures cannot be
       # distinguished safely without their legacy explicit identity.
       def self.access_key(rule)
+        [*access_signature(rule), field(rule, :source_identity).to_s]
+      end
+
+      def self.access_signature(rule)
         [Array(field(rule, :roles)).map(&:to_s).sort, field(rule, :xpath).to_s]
       end
 
@@ -61,16 +65,20 @@ module Mxrb
         return [] unless baseline
 
         values = baseline[collection.to_s]
-        unless values.is_a?(Array)
-          raise ValidationError, "existing record requires its #{collection} identity baseline"
-        end
+        raise ValidationError, "existing record requires its #{collection} identity baseline" unless values.is_a?(Array)
+
         values
       end
 
       def resolve_collection(kind, previous, declarations, removed, owner)
         key = ->(entry) { signature(kind, entry, owner) }
         declarations = declarations.map do |entry|
-          entry.key?(:renamed_from) ? entry.merge(renamed_from: rename_signature(kind, entry[:renamed_from], owner)) : entry
+          if entry.key?(:renamed_from)
+            entry.merge(renamed_from: rename_signature(kind, entry[:renamed_from],
+                                                       owner))
+          else
+            entry
+          end
         end
         resolved = reconcile(previous, declarations, removed.map { rename_signature(kind, _1, owner) }, &key)
         by_id = previous.to_h { [field(_1, :id).to_s, _1] }
@@ -89,7 +97,8 @@ module Mxrb
             )
           when :validation_rules
             identities(entry, prior, %i[message_id rule_info_id]).merge(
-              translations: reconcile(baseline_collection(prior, :translations), entry.fetch(:translations), []) do |translation|
+              translations: reconcile(baseline_collection(prior, :translations), entry.fetch(:translations),
+                                      []) do |translation|
                 field(translation, :language_code).to_s
               end
             )
@@ -112,6 +121,7 @@ module Mxrb
           if duplicate_keys.include?(key) && !prior
             raise ValidationError, 'ambiguous domain member signature requires an explicit legacy id'
           end
+
           name = if prior && duplicate_keys.include?(signature.call(prior))
                    legacy_name(entry[:id])
                  else
@@ -141,11 +151,17 @@ module Mxrb
             member.is_a?(Array) ? [member.fetch(0).to_s, index_member_type(member.fetch(1))] : [member.to_s, 'Normal']
           end
         when :access_rules
-          raise ArgumentError, 'access-rule renamed_from requires [roles, xpath]' unless value.is_a?(Array) && value.size == 2
+          unless value.is_a?(Array) && value.size == 2
+            raise ArgumentError,
+                  'access-rule renamed_from requires [roles, xpath]'
+          end
 
-          [Array(value.first).map(&:to_s).sort, value.last.to_s]
+          [Array(value.first).map(&:to_s).sort, value.last.to_s, '']
         when :validation_rules
-          raise ArgumentError, 'validation renamed_from requires [attribute, kind]' unless value.is_a?(Array) && value.size == 2
+          unless value.is_a?(Array) && value.size == 2
+            raise ArgumentError,
+                  'validation renamed_from requires [attribute, kind]'
+          end
 
           signature(kind, { attribute: value.first, kind: value.last }, owner)
         end
@@ -158,6 +174,7 @@ module Mxrb
           if !supplied.empty? && prior && !prior.empty? && supplied != prior
             raise ValidationError, "native identity mismatch for domain #{key}"
           end
+
           result[key] = prior if supplied.empty? && prior && !prior.empty?
         end
       end

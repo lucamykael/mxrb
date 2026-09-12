@@ -125,7 +125,10 @@ RSpec.describe 'Ruby application defensive coverage' do
     plan = exp.send(:nanoflow_plan, flow, 'M.N')
     expect(plan['parameters']).to eq(['Input'])
     expect(plan['objects'].map { _1['type'] }).to eq(%w[EndEvent ExclusiveSplit ActionActivity])
-    expect(plan['flows']).to contain_exactly(include('origin' => 'a', 'destination' => 'b'))
+    expect(plan['flows']).to contain_exactly(
+      include('origin' => '', 'destination' => '', 'error' => true),
+      include('origin' => 'a', 'destination' => 'b', 'error' => false)
+    )
 
     expect(exp.send(:nanoflow_action, nil)).to eq({})
     expect(exp.send(:nanoflow_action,

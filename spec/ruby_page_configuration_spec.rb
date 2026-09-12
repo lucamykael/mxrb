@@ -229,6 +229,7 @@ RSpec.describe 'private Ruby page configuration' do
     { 'kind' => 'association', 'entity' => 'App.Other',
       'steps' => [{ 'association' => 'App.Item_Other', 'entity' => 'App.Other' }] },
     { 'kind' => 'microflow', 'name' => 'App.Read', 'mappings' => [{ 'parameter' => 'Item', 'expression' => '$Item' }] },
+    { 'kind' => 'microflow', 'name' => 'App.Read', 'settings_native' => { 'UseAllPages' => false } },
     { 'kind' => 'nanoflow', 'name' => 'App.Read', 'mappings' => [
       { 'parameter' => 'Item', 'variable' => { 'kind' => 'page_parameter', 'name' => 'Item' } }
     ] },
