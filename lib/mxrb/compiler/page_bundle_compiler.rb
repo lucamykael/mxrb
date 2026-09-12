@@ -11,6 +11,56 @@ module Mxrb
     class PageBundleCompiler
       include ModelValues
 
+      CORE_WIDGET_RENDERERS = {
+        'Forms$ActionButton' => :render_action_button,
+        'Forms$CheckBox' => :render_check_box,
+        'Forms$DataGrid' => :render_data_grid,
+        'Forms$DataView' => :render_data_view,
+        'Forms$DatePicker' => :render_date_picker,
+        'Forms$DivContainer' => :render_container,
+        'Forms$DropDown' => :render_drop_down,
+        'Forms$DropDownButton' => :render_drop_down_button,
+        'Forms$DynamicImageViewer' => :render_dynamic_image,
+        'Forms$DynamicText' => :render_text,
+        'Forms$FileManager' => :render_file_manager,
+        'Forms$GroupBox' => :render_group_box,
+        'Forms$Header' => :render_header,
+        'Forms$ImageUploader' => :render_image_uploader,
+        'Forms$InputReferenceSetSelector' => :render_input_reference_set_selector,
+        'Forms$Label' => :render_label,
+        'Forms$LayoutGrid' => :render_layout_grid,
+        'Forms$ListView' => :render_list_view,
+        'Forms$LoginButton' => :render_login_button,
+        'Forms$LoginIdTextBox' => :render_login_text_box,
+        'Forms$MenuBar' => :render_menu_bar,
+        'Forms$NavigationList' => :render_navigation_list,
+        'Forms$NavigationTree' => :render_navigation_tree,
+        'Forms$PasswordTextBox' => :render_login_text_box,
+        'Forms$Placeholder' => :render_placeholder,
+        'Forms$RadioButtonGroup' => :render_radio_button_group,
+        'Forms$ReferenceSelector' => :render_reference_selector,
+        'Forms$ReferenceSetSelector' => :render_reference_set_selector,
+        'Forms$ScrollContainer' => :render_scroll_container,
+        'Forms$SidebarToggleButton' => :render_sidebar_toggle,
+        'Forms$SimpleMenuBar' => :render_simple_menu_bar,
+        'Forms$SnippetCallWidget' => :render_snippet_call,
+        'Forms$StaticImageViewer' => :render_static_image,
+        'Forms$TabContainer' => :render_tab_control,
+        'Forms$Table' => :render_table,
+        'Forms$TemplateGrid' => :render_template_grid,
+        'Forms$TemplatePlaceholder' => :render_template_placeholder,
+        'Forms$TextArea' => :render_text_area,
+        'Forms$TextBox' => :render_text_box,
+        'Forms$Title' => :render_title,
+        'Forms$ValidationMessage' => :render_validation_message
+      }.freeze
+
+      LEGACY_WIDGET_RENDERERS = {
+        'Forms$LayoutGridRow' => :render_grid_row,
+        'Forms$LayoutGridColumn' => :render_grid_column,
+        'Forms$TabControl' => :render_tab_control
+      }.freeze
+
       def initialize(source)
         @source = source
         @unsupported = []
@@ -87,41 +137,21 @@ module Mxrb
       def children(widgets) = "[#{widgets.map { render_widget(_1) }.join(', ')}]"
 
       def render_widget(widget)
-        rendered = case widget['$Type']
-                   when 'Forms$DivContainer' then render_container(widget)
-                   when 'Forms$LayoutGrid' then render_layout_grid(widget)
-                   when 'Forms$LayoutGridRow' then render_grid_row(widget)
-                   when 'Forms$LayoutGridColumn' then render_grid_column(widget)
-                   when 'Forms$Table' then render_table(widget)
-                   when 'Forms$DynamicText' then render_text(widget)
-                   when 'Forms$Title' then render_title(widget)
-                   when 'Forms$ActionButton' then render_action_button(widget)
-                   when 'Forms$DataView' then render_data_view(widget)
-                   when 'Forms$ListView' then render_list_view(widget)
-                   when 'Forms$TextBox' then render_text_box(widget)
-                   when 'Forms$TextArea' then render_text_area(widget)
-                   when 'Forms$DatePicker' then render_date_picker(widget)
-                   when 'Forms$CheckBox' then render_check_box(widget)
-                   when 'Forms$RadioButtonGroup' then render_radio_button_group(widget)
-                   when 'Forms$FileManager' then render_file_manager(widget)
-                   when 'Forms$GroupBox' then render_group_box(widget)
-                   when 'Forms$SnippetCallWidget' then render_snippet_call(widget)
-                   when 'Forms$Label' then render_label(widget)
-                   when 'Forms$TabControl' then render_tab_control(widget)
-                   when 'Forms$StaticImageViewer' then render_static_image(widget)
-                   when 'Forms$ScrollContainer' then render_scroll_container(widget)
-                   when 'Forms$Placeholder' then render_placeholder(widget)
-                   when 'Forms$SidebarToggleButton' then render_sidebar_toggle(widget)
-                   when 'Forms$Header' then render_header(widget)
-                   when 'Forms$NavigationTree' then render_menu(widget, 'NavigationTree')
-                   when 'Forms$MenuBar' then render_menu(widget, 'MenuBar')
-                   when 'Forms$SimpleMenuBar' then render_menu(widget, 'SimpleMenuBar')
-                   when 'CustomWidgets$CustomWidget' then render_custom_widget(widget)
-                   else render_unsupported(widget)
+        renderer = CORE_WIDGET_RENDERERS[widget['$Type']] || LEGACY_WIDGET_RENDERERS[widget['$Type']]
+        rendered = if renderer
+                     send(renderer, widget)
+                   elsif widget['$Type'] == 'CustomWidgets$CustomWidget'
+                     render_custom_widget(widget)
+                   else
+                     render_unsupported(widget)
                    end
         rendered = wrap_dynamic_classes(widget, rendered)
         wrap_conditional_visibility(widget, rendered)
       end
+
+      def render_menu_bar(widget) = render_menu(widget, 'MenuBar')
+      def render_navigation_tree(widget) = render_menu(widget, 'NavigationTree')
+      def render_simple_menu_bar(widget) = render_menu(widget, 'SimpleMenuBar')
 
       def render_layout_grid(widget)
         render_element('div', widget, array(widget['Rows']), 'mx-layoutgrid mx-layoutgrid-fluid')
@@ -1190,6 +1220,363 @@ module Mxrb
         flow&.document&.dig('MicroflowReturnType', 'Entity').to_s
       end
 
+      def render_data_grid(widget)
+        columns = array(widget['Columns'])
+        header = columns.map do |column|
+          props = common_props(column).merge(className: "mx-datagrid-head-cell #{css_class(column)}".strip)
+          "React.createElement(\"div\", #{js_props(props)}, " \
+            "#{JSON.generate(translated_text(column['Caption']))})"
+        end
+        source = WebListDataSource.new(@source, widget)
+        list = render_collection_list(widget, source) do |scope|
+          cells = columns.map { render_grid_cell(_1, scope) }
+          "React.createElement(\"div\", { className: \"mx-datagrid-row\" }, [#{cells.join(', ')}])"
+        end
+        controls = render_grid_controls(widget)
+        props = common_props(widget).merge(
+          className: ['mx-datagrid mx-datagrid-legacy', css_class(widget)].reject(&:empty?).join(' '),
+          'data-mxrb-widget-type': widget['$Type']
+        )
+        content = [controls, 'React.createElement("div", { className: "mx-datagrid-head" }, ' \
+                             "[#{header.join(', ')}])", list].compact
+        "React.createElement(\"div\", #{js_props(props)}, [#{content.join(', ')}])"
+      end
+
+      def render_grid_cell(column, scope)
+        reference = column['AttributeRef'] || {}
+        attribute = reference['Attribute'].to_s
+        entity, separator, name = attribute.rpartition('.')
+        props = common_props(column).merge(className: "mx-datagrid-cell #{css_class(column)}".strip)
+        return "React.createElement(\"div\", #{js_props(props)})" unless separator == '.' &&
+                                                                         present_identifier?(entity) &&
+                                                                         present_identifier?(name)
+
+        @uses_grid_value = true
+        path = entity_reference_path(reference)
+        value = attribute_property(scope, entity, name, path:)
+        "React.createElement(\"div\", #{js_props(props)}, " \
+          "React.createElement($MxrbAttributeValue, { value: #{value} }))"
+      end
+
+      def render_grid_controls(widget)
+        return unless widget.fetch('IsControlBarVisible', true)
+
+        buttons = array(widget.dig('ControlBar', 'NewButtons')).filter_map do |button|
+          caption = translated_text(button.dig('CaptionTemplate', 'Template'))
+          caption = button['$Type'].to_s.sub('Forms$Grid', '').sub('Button', '') if caption.empty?
+          action = action_property(widget, button['Action'])
+          unless action
+            props = common_props(button).merge(
+              type: 'button', className: "btn mx-button #{button_style(button)}", disabled: true
+            )
+            next "React.createElement(\"button\", #{js_props(props)}, #{JSON.generate(caption)})"
+          end
+
+          @uses_form_widgets = true
+          key = widget_key(button)
+          props = common_props(button).merge(
+            '$widgetId': key, buttonId: key, class: css_class(button), renderType: 'button',
+            buttonClass: button_style(button)
+          )
+          "React.createElement($ActionButton, #{js_props(props, expressions: {
+            caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+            tooltip: 'TextProperty({ value: "" })', action:
+          })})"
+        end
+        return if buttons.empty?
+
+        "React.createElement(\"div\", { className: \"mx-grid-controlbar\" }, [#{buttons.join(', ')}])"
+      end
+
+      def render_template_grid(widget)
+        source = WebListDataSource.new(@source, widget)
+        list = render_collection_list(widget, source) do |_scope|
+          children(array(widget.dig('Contents', 'Widgets')))
+        end
+        props = common_props(widget).merge(
+          className: ['mx-templategrid', css_class(widget)].reject(&:empty?).join(' '),
+          'data-columns': positive_integer(widget['NumberOfColumns'], 1),
+          'data-mxrb-widget-type': widget['$Type']
+        )
+        "React.createElement(\"div\", #{js_props(props)}, #{list})"
+      end
+
+      def render_collection_list(widget, source)
+        key = widget_key(widget)
+        unless source.supported? && present_identifier?(source.entity)
+          return 'React.createElement("div", { className: "mxrb-empty-datasource" })'
+        end
+
+        list_value = list_view_property(widget, key, source)
+        return 'React.createElement("div", { className: "mxrb-empty-datasource" })' unless list_value
+
+        @uses_list_view = true
+        @list_scopes << { scope: key, entity: source.entity }
+        content = yield(key)
+        @list_scopes.pop
+        props = common_props(widget).merge(
+          '$widgetId': key, class: css_class(widget), pageSize: positive_integer(widget['NumberOfRows'], 20)
+        )
+        expressions = {
+          listValue: list_value,
+          itemTemplate: "TemplatedWidgetProperty({ children: () => #{content}, " \
+                        "dataSourceId: #{JSON.generate(key)}, editable: false })"
+        }
+        "React.createElement($ListView, #{js_props(props, expressions:)})"
+      end
+
+      def render_drop_down(widget)
+        scope = current_object_scope&.fetch(:scope, nil)
+        entity, separator, name = widget.dig('AttributeRef', 'Attribute').to_s.rpartition('.')
+        return render_unbound_input(widget, 'select') unless scope && separator == '.' &&
+                                                             present_identifier?(entity) &&
+                                                             present_identifier?(name)
+
+        @uses_form_widgets = true
+        @uses_drop_down = true
+        key = widget_key(widget)
+        caption = translated_text(widget.dig('LabelTemplate', 'Template'))
+        empty_caption = translated_text(widget['EmptyOptionCaption'])
+        aria_label = translated_text(widget.dig('ScreenReaderLabel', 'Template'))
+        input = "React.createElement($EnumSelect, #{js_props(
+          common_props(widget).merge('$widgetId': key, id: key, readOnlyStyle: 'text',
+                                     ariaRequired: widget['AriaRequired'] == true,
+                                     tabIndex: integer_or(widget['TabIndex'], 0)),
+          expressions: {
+            value: attribute_property(scope, entity, name),
+            emptyOptionCaption: "TextProperty({ value: #{JSON.generate(empty_caption)} })",
+            ariaLabel: "TextProperty({ value: #{JSON.generate(aria_label)} })"
+          }
+        )})"
+        render_form_group(widget, key, caption, input, 'mx-dropdown')
+      end
+
+      def render_unbound_input(widget, tag, type: nil)
+        props = common_props(widget).merge(
+          id: widget_key(widget), className: ['form-control', css_class(widget)].reject(&:empty?).join(' '),
+          disabled: true, 'data-mxrb-widget-type': widget['$Type']
+        )
+        props[:type] = type if type
+        "React.createElement(#{JSON.generate(tag)}, #{js_props(props)})"
+      end
+
+      def render_drop_down_button(widget)
+        @uses_drop_down_button = true
+        items = array(widget['Items']).map do |item|
+          {
+            caption: translated_text(item['Caption']),
+            action: action_property(widget, item['Action'])&.then { raw_js(_1) }
+          }.compact
+        end
+        props = common_props(widget).merge(
+          '$widgetId': widget_key(widget), class: css_class(widget),
+          caption: translated_text(widget.dig('Caption', 'Template')),
+          buttonClass: button_style(widget), items:
+        )
+        "React.createElement($MxrbDropDownButton, #{js_literal(props)})"
+      end
+
+      def render_navigation_list(widget)
+        @uses_navigation_list = true
+        items = array(widget['Items']).map do |item|
+          {
+            class: css_class(item), content: raw_js(children(array(item['Widgets']))),
+            action: action_property(widget, item['Action'])&.then { raw_js(_1) }
+          }.compact
+        end
+        props = common_props(widget).merge(
+          '$widgetId': widget_key(widget), class: css_class(widget), items:
+        )
+        "React.createElement($NavigationList, #{js_literal(props)})"
+      end
+
+      def render_dynamic_image(widget)
+        scope = current_object_scope&.fetch(:scope, nil)
+        unless scope
+          default_image = widget['DefaultImage'].to_s
+          return render_static_image(widget.merge('Image' => default_image)) unless default_image.empty?
+
+          return render_unbound_input(widget, 'img')
+        end
+
+        @uses_image = true
+        @uses_dynamic_image = true
+        key = widget_key(widget)
+        config = { scope:, path: '', isEditable: false, allowUpload: false }
+        props = common_props(widget).merge(
+          '$widgetId': key, class: css_class(widget), responsive: widget['Responsive'] == true,
+          width: image_dimension(widget['Width'], widget['WidthUnit']),
+          height: image_dimension(widget['Height'], widget['HeightUnit']),
+          onClickEnlarge: widget['OnClickEnlarge'] == true,
+          tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        alternative_text = translated_text(widget.dig('AlternativeText', 'Template'))
+        expressions = {
+          source: "WebDynamicImageProperty(#{js_literal(config)})",
+          alternativeText: "TextProperty({ value: #{JSON.generate(alternative_text)} })"
+        }
+        "React.createElement($Image, #{js_props(props, expressions:)})"
+      end
+
+      def image_dimension(value, unit)
+        amount = integer_or(value, 0)
+        return unless amount.positive?
+
+        suffix = { 'Pixels' => 'px', 'Percentage' => '%' }[unit.to_s]
+        suffix && "#{amount}#{suffix}"
+      end
+
+      def render_image_uploader(widget)
+        scope = current_object_scope&.fetch(:scope, nil)
+        return render_unbound_input(widget, 'input', type: 'file') unless scope
+
+        @uses_form_widgets = true
+        @uses_file_manager = true
+        key = widget_key(widget)
+        props = common_props(widget).merge(
+          '$widgetId': key, class: css_class(widget), id: key, widgetType: 'upload',
+          extensions: widget['AllowedExtensions'].to_s,
+          maxFileSize: positive_integer(widget['MaxFileSize'], 200)
+        )
+        input = "React.createElement($FileManager, #{js_props(props, expressions: {
+          content: "DynamicFileProperty(#{js_literal(scope:, path: '', isEditable: true, allowUpload: true)})"
+        })})"
+        render_form_group(
+          widget, key, translated_text(widget.dig('LabelTemplate', 'Template')), input, 'mx-imageuploader'
+        )
+      end
+
+      def render_reference_selector(widget)
+        render_association_selector(widget, type: 'Reference', component: '$ReferenceSelector')
+      end
+
+      def render_input_reference_set_selector(widget)
+        render_association_selector(widget, type: 'ReferenceSet', component: '$MxrbReferenceSetSelector')
+      end
+
+      def render_reference_set_selector(widget)
+        render_association_selector(
+          widget, type: 'ReferenceSet', component: '$MxrbReferenceSetSelector', form_group: false
+        )
+      end
+
+      def render_association_selector(widget, type:, component:, form_group: true)
+        scope = current_object_scope
+        reference = widget['AttributeRef'] || {}
+        steps = array(reference.dig('EntityRef', 'Steps'))
+        attribute = reference['Attribute'].to_s
+        caption_entity, separator, caption_attribute = attribute.rpartition('.')
+        return render_unbound_input(widget, 'select') unless scope && steps.any? && separator == '.' &&
+                                                             present_identifier?(caption_entity) &&
+                                                             present_identifier?(caption_attribute)
+
+        @uses_form_widgets = true
+        type == 'Reference' ? @uses_reference_selector = true : @uses_reference_set_selector = true
+        key = widget_key(widget)
+        data_source_id = "#{key}$options"
+        association = steps.last
+        endpoint = association['DestinationEntity'].to_s
+        parent_path = steps[0...-1].flat_map { [_1['Association'], _1['DestinationEntity']] }
+                                   .map(&:to_s).reject(&:empty?).join('/')
+        association_config = {
+          type:, entity: scope[:entity], path: parent_path, attribute: association['Association'],
+          endpointEntity: endpoint, selectableObjectsId: data_source_id, scope: scope[:scope],
+          restrictToDataSource: false, onChange: do_nothing_action
+        }
+        options_config = {
+          dataSourceId: data_source_id, entity: endpoint,
+          operationId: WebOperationCompiler.operation_id(@qualified_name, widget['Name']), sort: []
+        }
+        caption_config = {
+          path: '', entity: caption_entity, attribute: caption_attribute,
+          attributeType: attribute_type(caption_entity, caption_attribute), sortable: true,
+          filterable: true, dataSourceId: data_source_id, isList: false
+        }
+        props = common_props(widget).merge(
+          '$widgetId': key, id: key, class: css_class(widget), readOnlyStyle: 'text',
+          tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        expressions = {
+          value: "AssociationProperty(#{js_literal(association_config)})",
+          valueOptions: "DatabaseObjectListProperty(#{js_literal(options_config)})",
+          attribute: "ListAttributeProperty(#{js_literal(caption_config)})",
+          emptyCaption: "TextProperty({ value: #{JSON.generate(translated_text(widget['EmptyOptionCaption']))} })"
+        }
+        input = "React.createElement(#{component}, #{js_props(props, expressions:)})"
+        return input unless form_group
+
+        render_form_group(
+          widget, key, translated_text(widget.dig('LabelTemplate', 'Template')), input,
+          type == 'Reference' ? 'mx-referenceselector' : 'mx-referencesetselector'
+        )
+      end
+
+      def render_login_text_box(widget)
+        @uses_login_widgets = true
+        password = widget['$Type'] == 'Forms$PasswordTextBox'
+        props = common_props(widget).merge(
+          '$widgetId': widget_key(widget), class: css_class(widget), id: widget_key(widget),
+          field: password ? 'password' : 'username', type: password ? 'password' : 'text',
+          label: translated_text(widget['Label']), placeholder: translated_text(widget['Placeholder']),
+          tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        "React.createElement($MxrbLoginInput, #{js_props(props)})"
+      end
+
+      def render_login_button(widget)
+        @uses_login_widgets = true
+        props = common_props(widget).merge(
+          '$widgetId': widget_key(widget), class: css_class(widget), id: widget_key(widget),
+          caption: translated_text(widget.dig('CaptionTemplate', 'Template')),
+          validationId: widget['ValidationMessageWidget'].to_s,
+          buttonClass: button_style(widget), tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        "React.createElement($MxrbLoginButton, #{js_props(props)})"
+      end
+
+      def render_validation_message(widget)
+        props = common_props(widget).merge(
+          id: widget['Name'].to_s, role: 'alert', 'aria-live': 'polite',
+          className: ['mx-validation-message', css_class(widget)].reject(&:empty?).join(' ')
+        )
+        "React.createElement(\"div\", #{js_props(props)})"
+      end
+
+      def render_template_placeholder(widget)
+        render_placeholder(widget)
+      end
+
+      def entity_reference_path(reference)
+        array(reference.dig('EntityRef', 'Steps')).flat_map do |step|
+          [step['Association'], step['DestinationEntity']]
+        end.map(&:to_s).reject(&:empty?).join('/')
+      end
+
+      def do_nothing_action
+        { type: 'doNothing', argMap: {}, config: {}, disabledDuringExecution: false }
+      end
+
+      def action_property(widget, action)
+        return unless action.is_a?(Hash) && action['$Type'] != 'Forms$NoAction'
+
+        config = client_action_config(widget, action)
+        return unless config
+
+        @uses_action_property = true
+        "ActionProperty(#{js_literal(config)})"
+      end
+
+      def attribute_type(entity, name) # rubocop:disable Metrics/AbcSize
+        entity_document = @source.units_of('DomainModels$DomainModel').filter_map do |unit|
+          next unless unit.module_name == entity.split('.').first
+
+          array(unit.document['Entities']).find { _1['Name'] == entity.split('.').last }
+        end.first
+        attribute = array(entity_document&.fetch('Attributes', nil)).find { _1['Name'] == name }
+        type = attribute&.fetch('NewType', nil)&.fetch('$Type', '').to_s.delete_prefix('DomainModels$')
+        type.delete_suffix('AttributeType').then { _1.empty? ? 'String' : _1 }
+      end
+
       def render_list_view(widget)
         data_source = WebListDataSource.new(@source, widget)
         return render_unsupported(widget) unless data_source.supported? && present_identifier?(data_source.entity)
@@ -1790,10 +2177,13 @@ module Mxrb
       def widget_imports
         return '' unless @uses_data_grid || @uses_form_widgets || @uses_gallery || @uses_bound_text ||
                          @uses_tab_container || @uses_image || @uses_conditional || @uses_dynamic_class ||
-                         @uses_list_view || @generic_widgets&.any? || @uses_layout_widgets
+                         @uses_list_view || @generic_widgets&.any? || @uses_layout_widgets ||
+                         @uses_navigation_list || @uses_drop_down_button || @uses_login_widgets ||
+                         @uses_reference_set_selector || @uses_grid_value
 
         imports = ['import { asPluginWidgets } from "mendix";']
         widgets = []
+        imports << 'import { ActionProperty } from "mendix/ActionProperty";' if @uses_action_property
         if @uses_layout_widgets
           imports.concat([
                            'import { PlaceholderProperty } from "mendix/PlaceholderProperty";',
@@ -1879,6 +2269,21 @@ module Mxrb
                            ])
             widgets << 'FileManager'
           end
+          if @uses_drop_down
+            imports << 'import { EnumSelect } from "mendix/widgets/web/EnumSelect";'
+            widgets << 'EnumSelect'
+          end
+          if @uses_reference_selector || @uses_reference_set_selector
+            imports.concat([
+                             'import { AssociationProperty } from "mendix/AssociationProperty";',
+                             'import { DatabaseObjectListProperty } from "mendix/DatabaseObjectListProperty";',
+                             'import { ListAttributeProperty } from "mendix/ListAttributeProperty";'
+                           ])
+          end
+          if @uses_reference_selector
+            imports << 'import { ReferenceSelector } from "mendix/widgets/web/ReferenceSelector";'
+            widgets << 'ReferenceSelector'
+          end
           imports << 'import { MicroflowObjectProperty } from "mendix/MicroflowObjectProperty";' \
             if @uses_microflow_object
           imports << 'import { ListenObjectProperty } from "mendix/ListenObjectProperty";' \
@@ -1936,12 +2341,89 @@ module Mxrb
                            'import { ExpressionProperty } from "mendix/ExpressionProperty";',
                            'import { WebStaticImageProperty } from "mendix/WebStaticImageProperty";'
                          ])
+          if @uses_dynamic_image
+            imports.concat([
+                             'import { WebDynamicImageProperty } from "mendix/WebDynamicImageProperty";',
+                             'import { TextProperty } from "mendix/TextProperty";'
+                           ])
+          end
           imports << if @uses_custom_image
                        'import { Image } from "../widgets/com/mendix/widget/web/image/Image.mjs";'
                      else
                        'import { Image } from "mendix/widgets/web/Image";'
                      end
           widgets << 'Image'
+        end
+        if @uses_navigation_list
+          imports << 'import { NavigationList } from "mendix/widgets/web/NavigationList";'
+          widgets << 'NavigationList'
+        end
+        if @uses_drop_down_button
+          imports << <<~JS
+            const MxrbDropDownButton = ({ caption, buttonClass, items, class: className }) =>
+              React.createElement("div", { className: ["dropdown", className].filter(Boolean).join(" ") }, [
+                React.createElement("button", { key: "toggle", type: "button",
+                  className: ["btn", "mx-button", buttonClass].filter(Boolean).join(" ") }, caption),
+                React.createElement("ul", { key: "items", className: "dropdown-menu" },
+                  items.map((item, index) => React.createElement("li", { key: index },
+                    React.createElement("button", { type: "button", disabled: !item.action?.canExecute,
+                      onClick: () => item.action?.canExecute && item.action.execute() }, item.caption))))
+              ]);
+            MxrbDropDownButton.displayName = "MxrbDropDownButton";
+          JS
+          widgets << 'MxrbDropDownButton'
+        end
+        if @uses_reference_set_selector
+          imports << <<~JS
+            const MxrbReferenceSetSelector = ({ value, valueOptions, attribute, id, class: className }) => {
+              const options = valueOptions?.items || [];
+              const selected = value?.value || [];
+              return React.createElement("select", {
+                id, multiple: true, className, disabled: value?.readOnly,
+                value: selected.map(item => item.id),
+                onChange: event => value?.setValue(Array.from(event.target.selectedOptions)
+                  .map(option => options.find(item => item.id === option.value)).filter(Boolean))
+              }, options.map(item => React.createElement("option", { key: item.id, value: item.id },
+                attribute.get(item).displayValue)));
+            };
+            MxrbReferenceSetSelector.displayName = "MxrbReferenceSetSelector";
+          JS
+          widgets << 'MxrbReferenceSetSelector'
+        end
+        if @uses_grid_value
+          imports.concat([
+                           'const MxrbAttributeValue = ({ value }) => value?.displayValue ?? " ";',
+                           'MxrbAttributeValue.displayName = "MxrbAttributeValue";'
+                         ])
+          widgets << 'MxrbAttributeValue'
+        end
+        if @uses_login_widgets
+          imports << <<~JS
+            const MxrbLoginInput = ({ field, label, class: className, ...props }) =>
+              React.createElement("div", { className: ["form-group", className].filter(Boolean).join(" ") }, [
+                React.createElement("label", { key: "label", htmlFor: props.id }, label),
+                React.createElement("input", { key: "input", id: props.id, type: props.type,
+                  placeholder: props.placeholder, tabIndex: props.tabIndex, className: "form-control",
+                  "data-mxrb-login-field": field })
+              ]);
+            MxrbLoginInput.displayName = "MxrbLoginInput";
+            const MxrbLoginButton = ({ caption, validationId, buttonClass, class: className, ...props }) => {
+              const login = () => {
+                const username = document.querySelector("[data-mxrb-login-field=username]")?.value || "";
+                const password = document.querySelector("[data-mxrb-login-field=password]")?.value || "";
+                const showError = error => {
+                  const target = validationId && document.getElementById(validationId);
+                  if (target) target.textContent = error?.message || String(error || "Login failed");
+                };
+                if (window.mx?.login) window.mx.login(username, password, () => {}, showError);
+                else showError("Login unavailable");
+              };
+              return React.createElement("button", { id: props.id, type: "button", tabIndex: props.tabIndex,
+                className: ["btn", "mx-button", buttonClass, className].filter(Boolean).join(" "), onClick: login }, caption);
+            };
+            MxrbLoginButton.displayName = "MxrbLoginButton";
+          JS
+          widgets.concat(%w[MxrbLoginInput MxrbLoginButton])
         end
         if @uses_bound_text
           imports.concat([
