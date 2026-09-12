@@ -202,6 +202,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
     end
     input = {
       '$Type' => 'Forms$TextBox', 'Name' => 'cardNumber',
+      'Appearance' => {
+        'Style' => 'background-color: red; -ms-user-select: none; --payment-accent: blue; invalid'
+      },
       'AttributeRef' => { 'Attribute' => 'Demo.Item.CardNumber' },
       'LabelTemplate' => client_template('Card number'),
       'PlaceholderTemplate' => client_template('0000 0000'),
@@ -221,7 +224,8 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
       '"width": 5', 'Payment card number', 'https://change.test', 'https://focus.test',
       'https://blur.test', 'https://enter.test', '"onEnter": ActionProperty',
       '"onLeave": ActionProperty', '"onEnterKeyPress": ActionProperty',
-      '"isEditable": { "expr": { "type": "literal", "value": false }'
+      '"isEditable": { "expr": { "type": "literal", "value": false }',
+      '"backgroundColor":"red"', '"msUserSelect":"none"', '"--payment-accent":"blue"'
     )
     expect(rendered).to match(/"inputValue": AttributeProperty\(.+"onChange": \{ "type": "openLink"/)
 

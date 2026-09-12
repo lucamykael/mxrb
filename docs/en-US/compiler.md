@@ -64,7 +64,8 @@ For Mendix 11.12.1, the React compiler inventory and certification gate are
 derived from all **41 concrete widgets** in the versioned Forms catalog. The
 shared web contracts now preserve input change/focus actions, read-only and
 conditional-editability state, screen-reader labels, required state,
-autocomplete purpose, label width, button tooltip/render type/tab order/ARIA
+autocomplete purpose, label width, inline appearance styles, button
+tooltip/render type/tab order/ARIA
 role, static-image source/alt/click behavior, and file-upload thumbnail sizing.
 This is type-complete compiler dispatch with explicit property evidence; the
 matrix remains `partial` until every property and data-source variant also has
