@@ -413,7 +413,14 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     image = {
       '$Type' => 'Forms$StaticImageViewer', 'Name' => 'logo', 'Image' => 'Demo.Assets.Logo',
       'Width' => 80, 'WidthUnit' => 'Pixels', 'Height' => 50, 'HeightUnit' => 'Pixels',
-      'Responsive' => true
+      'Responsive' => true, 'TabIndex' => 6,
+      'AlternativeText' => { 'Template' => { 'Items' => [
+        3, { 'LanguageCode' => 'en_US', 'Text' => 'Company logo' }
+      ] } },
+      'ClickAction' => {
+        '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+        'Address' => { 'IsDynamic' => false, 'Value' => 'https://logo.test' }
+      }
     }
     data_view = {
       '$Type' => 'Forms$DataView', 'Name' => 'editor',
@@ -432,7 +439,8 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler do
     expect(bundle.source).to include(
       '$CheckBox', '$Label', '$TabContainer', '$Image', '$Container', 'WebStaticImageProperty',
       'img/Demo$Assets$Logo.png', '"type": "openLink"', 'https://example.test',
-      '"type": "callMicroflow"'
+      '"type": "callMicroflow"', '"source": WebStaticImageProperty', 'Company logo',
+      'https://logo.test', '"width": "80px"', '"height": "50px"', '"tabIndex": 6'
     )
     expect(bundle.source).to include(
       Mxrb::Compiler::WebOperationCompiler.operation_id('Demo.Home', 'run')

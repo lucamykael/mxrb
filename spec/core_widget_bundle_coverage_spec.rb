@@ -146,9 +146,14 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
     })
     expect(rendered.last).to include('$Image', 'WebDynamicImageProperty', 'https://image.test', 'onClick')
     rendered << compiler.send(:render_image_uploader, {
-      '$Type' => 'Forms$ImageUploader', 'Name' => 'upload'
+      '$Type' => 'Forms$ImageUploader', 'Name' => 'upload', 'TabIndex' => 3,
+      'AllowedExtensions' => '.png,.jpg', 'MaxFileSize' => 12,
+      'ThumbnailSize' => { 'Width' => 160, 'Height' => 90 }
     })
-    expect(rendered.last).to include('$FileManager', 'DynamicFileProperty')
+    expect(rendered.last).to include(
+      '$FileManager', 'DynamicFileProperty', '"tabIndex": 3', '"extensions": ".png,.jpg"',
+      '"maxFileSize": 12', '"thumbnailSizeWidth": 160', '"thumbnailSizeHeight": 90'
+    )
     rendered << compiler.send(:render_tab_control, {
       '$Type' => 'Forms$TabContainer', 'Name' => 'tabs',
       'ActivePageAttributeRef' => { 'Attribute' => 'Demo.Item.ActiveTab' },
@@ -181,6 +186,120 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
     )
     expect(stderr).to eq('')
     expect(status).to be_success
+  end
+
+  it 'lowers shared input behavior, accessibility, and presentation properties' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    compiler = described_class.new(source)
+    compiler.compile(unit)
+    compiler.instance_variable_set(
+      :@data_view_scopes, [{ scope: 'p.Demo.Home.item', entity: 'Demo.Item', label_width: 5 }]
+    )
+    open_link = lambda do |address|
+      { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+        'Address' => { 'IsDynamic' => false, 'Value' => address } }
+    end
+    input = {
+      '$Type' => 'Forms$TextBox', 'Name' => 'cardNumber',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.CardNumber' },
+      'LabelTemplate' => client_template('Card number'),
+      'PlaceholderTemplate' => client_template('0000 0000'),
+      'ScreenReaderLabel' => client_template('Payment card number'),
+      'ReadOnlyStyle' => 'Control', 'AriaRequired' => true, 'TabIndex' => 4, 'Editable' => 'Never',
+      'Autocomplete' => true, 'AutocompletePurpose' => 'CreditCardNumber',
+      'OnChangeAction' => open_link.call('https://change.test'),
+      'OnEnterAction' => open_link.call('https://focus.test'),
+      'OnLeaveAction' => open_link.call('https://blur.test'),
+      'OnEnterKeyPressAction' => open_link.call('https://enter.test')
+    }
+
+    rendered = compiler.send(:render_text_box, input)
+
+    expect(rendered).to include(
+      '$TextBox', '"autocomplete": "cc-number"', '"ariaRequired": true', '"tabIndex": 4',
+      '"width": 5', 'Payment card number', 'https://change.test', 'https://focus.test',
+      'https://blur.test', 'https://enter.test', '"onEnter": ActionProperty',
+      '"onLeave": ActionProperty', '"onEnterKeyPress": ActionProperty',
+      '"isEditable": { "expr": { "type": "literal", "value": false }'
+    )
+    expect(rendered).to match(/"inputValue": AttributeProperty\(.+"onChange": \{ "type": "openLink"/)
+
+    text_area = input.merge(
+      '$Type' => 'Forms$TextArea', 'Name' => 'notes',
+      'AttributeRef' => { 'Attribute' => 'Demo.Item.Notes' },
+      'CounterMessage' => text('{1} characters remaining'),
+      'TextTooLongMessage' => text('Too long'), 'NumberOfLines' => 8, 'AutoGrow' => true
+    )
+    rendered_area = compiler.send(:render_text_area, text_area)
+    expect(rendered_area).to include(
+      '$TextArea', '"numberOfLines": 8', '"autoGrow": true', 'characters remaining', 'Too long'
+    )
+
+    input_widgets = {
+      render_date_picker: ['$DatePicker', 'inputValue'],
+      render_radio_button_group: ['$RadioButtonGroup', 'value'],
+      render_check_box: ['$CheckBox', 'value']
+    }
+    input_widgets.each do |renderer, (component, value_property)|
+      widget = input.merge('$Type' => "Forms$#{component.delete_prefix('$')}")
+      output = compiler.send(renderer, widget)
+      expect(output).to include(
+        component, "\"#{value_property}\": AttributeProperty", 'Payment card number',
+        'https://change.test', 'https://focus.test', 'https://blur.test', '"width": 5'
+      )
+    end
+
+    expect(compiler.send(:autocomplete_value, 'Autocomplete' => false,
+                                              'AutocompletePurpose' => 'Email')).to eq('off')
+    expect(compiler.send(:input_editability, {
+      'Editable' => 'Conditional',
+      'ConditionalEditabilitySettings' => { 'Expression' => '$currentObject/MayEdit' }
+    }, 'p.Demo.Home.item')).to eq(
+      expr: { type: 'variable', variable: 'currentObject', path: 'MayEdit' },
+      args: { currentObject: { widget: 'p.Demo.Home.item', source: 'object' } }
+    )
+  end
+
+  it 'preserves the shared web button presentation contract on every action path' do
+    source = Mxrb::Compiler::SourceModel.read(@mpr)
+    unit = source.units_of('Forms$Page').first
+    compiler = described_class.new(source)
+    compiler.compile(unit)
+    button = {
+      '$Type' => 'Forms$ActionButton', 'Name' => 'continue',
+      'CaptionTemplate' => client_template('Continue'), 'Tooltip' => text('Open the next step'),
+      'ButtonStyle' => 'Primary', 'RenderType' => 'Link', 'TabIndex' => 7,
+      'AriaRole' => 'MenuItem',
+      'Action' => {
+        '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+        'Address' => { 'IsDynamic' => false, 'Value' => 'https://next.test' }
+      }
+    }
+
+    rendered = compiler.send(:render_action_button, button)
+
+    expect(rendered).to include(
+      '$ActionButton', '"renderType": "link"', '"buttonClass": "btn-primary"',
+      '"tabIndex": 7', '"role": "menuitem"', 'Open the next step', 'https://next.test'
+    )
+
+    data_button = button.merge(
+      'Name' => 'save', 'Action' => { '$Type' => 'Forms$SaveChangesClientAction' }
+    )
+    compiler.instance_variable_set(
+      :@data_view_scopes, [{ scope: 'p.Demo.Home.item', entity: 'Demo.Item' }]
+    )
+    expect(compiler.send(:render_action_button, data_button)).to include(
+      '"renderType": "link"', '"tabIndex": 7', 'Open the next step', 'saveChanges'
+    )
+
+    dropdown = button.merge(
+      '$Type' => 'Forms$DropDownButton', 'Caption' => client_template('Continue'), 'Items' => [2]
+    )
+    expect(compiler.send(:render_drop_down_button, dropdown)).to include(
+      '$MxrbDropDownButton', '"renderType": "link"', '"tabIndex": 7', 'Open the next step'
+    )
   end
 end
 # rubocop:enable Metrics/BlockLength
