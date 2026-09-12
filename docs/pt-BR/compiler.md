@@ -64,6 +64,16 @@ JavaScript, páginas, mensagens, validações e commits. Fluxos ausentes,
 mapeamentos de parâmetro inseguros e instruções cliente não traduzidas falham
 fechado e permanecem achados no manifesto de suporte.
 
+No Mendix 11.12.1, o inventário do compilador React e o gate de certificação é
+derivado dos **41 widgets concretos** do catálogo Forms versionado. Os 16 tipos
+que antes não possuíam dispatcher explícito — grids legados/de template,
+dropdowns, imagens dinâmicas/upload, seletores, login, NavigationList,
+TabContainer, placeholder de template e mensagem de validação — agora têm
+renderização auditável. Esse fechamento é de tipos e dos contratos básicos já
+testados; a matriz continua classificando páginas core como `parcial` enquanto
+todas as variantes de propriedades, eventos e data sources não tiverem prova
+funcional no Runtime/Chromium.
+
 Nas sessões locais da Runtime em modo developer, o mxrb também versiona imports
 dinâmicos de páginas, aplica hash de conteúdo ao chunk corrigido do React Client
 e dá à autoimportação do Rspack o mesmo token do entrypoint. Isso impede que as

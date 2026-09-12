@@ -22,7 +22,8 @@ module Mxrb
         direct = widget['DataSource'] if widget.is_a?(Hash)
         @xpath = direct if database_source?(direct)
         @xpath ||= nested(widget, 'CustomWidgets$CustomWidgetXPathSource').first
-        @association_source = direct if direct&.fetch('$Type', nil) == 'Forms$AssociationSource'
+        @association_source = direct if %w[Forms$AssociationSource Forms$ReferenceSetSource]
+                                        .include?(direct&.fetch('$Type', nil))
         @association_source ||= nested(widget, 'Forms$AssociationSource').first
         @microflow_source = direct if direct&.fetch('$Type', nil) == 'Forms$MicroflowSource'
         @microflow_source ||= nested(widget, 'Forms$MicroflowSource').first
@@ -64,7 +65,10 @@ module Mxrb
       attr_reader :widget
 
       def database_source?(source)
-        %w[Forms$DatabaseSource Forms$NewListViewDatabaseSource Forms$ListViewXPathSource]
+        %w[
+          Forms$DatabaseSource Forms$NewListViewDatabaseSource Forms$ListViewXPathSource
+          Forms$GridXPathSource Forms$NewGridDatabaseSource
+        ]
           .include?(source&.fetch('$Type', nil))
       end
 
