@@ -60,6 +60,16 @@ JavaScript actions, page/message/validation actions and commits. Missing flows,
 unsafe parameter mappings and untranslated client instructions fail closed and
 remain support-manifest findings.
 
+For Mendix 11.12.1, the React compiler inventory and certification gate are
+derived from all **41 concrete widgets** in the versioned Forms catalog. The
+shared web contracts now preserve input change/focus actions, read-only and
+conditional-editability state, screen-reader labels, required state,
+autocomplete purpose, label width, button tooltip/render type/tab order/ARIA
+role, static-image source/alt/click behavior, and file-upload thumbnail sizing.
+This is type-complete compiler dispatch with explicit property evidence; the
+matrix remains `partial` until every property and data-source variant also has
+Runtime/Chromium proof.
+
 For local developer Runtime sessions, mxrb also versions dynamic page imports,
 content-hashes the patched React Client chunk, and gives Rspack's self-import
 the same cache token as the entrypoint. This prevents Mendix's long-lived

@@ -61,6 +61,31 @@ module Mxrb
         'Forms$TabControl' => :render_tab_control
       }.freeze
 
+      HTML_AUTOCOMPLETE_PURPOSES = {
+        'FullName' => 'name', 'HonorificPrefix' => 'honorific-prefix', 'GivenName' => 'given-name',
+        'AdditionalName' => 'additional-name', 'FamilyName' => 'family-name',
+        'HonorificSuffix' => 'honorific-suffix', 'JobTitle' => 'organization-title',
+        'CompanyName' => 'organization', 'StreetAddress' => 'street-address',
+        'StreetAddressLine1' => 'address-line1', 'StreetAddressLine2' => 'address-line2',
+        'StreetAddressLine3' => 'address-line3', 'AddressLevel4' => 'address-level4',
+        'AddressLevel3' => 'address-level3', 'AddressLevel2' => 'address-level2',
+        'AddressLevel1' => 'address-level1', 'CountryCode' => 'country',
+        'CountryName' => 'country-name', 'PostalCode' => 'postal-code',
+        'CreditCardFullName' => 'cc-name', 'CreditCardGivenName' => 'cc-given-name',
+        'CreditCardAdditionalName' => 'cc-additional-name',
+        'CreditCardFamilyName' => 'cc-family-name', 'CreditCardNumber' => 'cc-number',
+        'CreditCardExpiration' => 'cc-exp', 'CreditCardExpirationMonth' => 'cc-exp-month',
+        'CreditCardExpirationYear' => 'cc-exp-year', 'CreditCardSecurityCode' => 'cc-csc',
+        'CreditCardType' => 'cc-type', 'TransactionCurrency' => 'transaction-currency',
+        'TransactionAmount' => 'transaction-amount', 'Birthday' => 'bday',
+        'DayOfBirth' => 'bday-day', 'MonthOfBirth' => 'bday-month', 'YearOfBirth' => 'bday-year',
+        'TelephoneNumber' => 'tel', 'TelephoneCountryCode' => 'tel-country-code',
+        'TelephoneWithoutCountryCode' => 'tel-national', 'TelephoneAreaCode' => 'tel-area-code',
+        'TelephoneLocal' => 'tel-local', 'TelephoneLocalPrefix' => 'tel-local-prefix',
+        'TelephoneLocalSuffix' => 'tel-local-suffix', 'TelephoneExtension' => 'tel-extension',
+        'InstantMessageProtocol' => 'impp'
+      }.freeze
+
       def initialize(source)
         @source = source
         @unsupported = []
@@ -249,14 +274,10 @@ module Mxrb
         @uses_layout_widgets = true
         key = widget_key(widget)
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
-        tooltip = translated_text(widget['Tooltip'])
-        props = common_props(widget).merge(
-          '$widgetId': key, buttonId: key, class: css_class(widget),
-          renderType: 'button', buttonClass: button_style(widget)
-        )
+        props = button_runtime_props(widget, key)
         "React.createElement($SidebarToggle, #{js_props(props, expressions: {
           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: "TextProperty({ value: #{JSON.generate(tooltip)} })"
+          tooltip: text_property(widget['Tooltip'])
         })})"
       end
 
@@ -790,7 +811,7 @@ module Mxrb
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(nanoflow_button_props(widget, key), expressions: {
           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: 'TextProperty({ value: "" })',
+          tooltip: text_property(widget['Tooltip']),
           action: "ActionProperty(#{js_literal(client_action_config(widget, action))})"
         })})"
       end
@@ -1007,17 +1028,21 @@ module Mxrb
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(nanoflow_button_props(widget, key), expressions: {
           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: 'TextProperty({ value: "" })',
+          tooltip: text_property(widget['Tooltip']),
           action: "ActionProperty(#{js_literal(nanoflow_action_config(action))})"
         })})"
       end
 
-      def nanoflow_button_props(widget, key)
+      def button_runtime_props(widget, key)
         common_props(widget).merge(
-          '$widgetId': key, buttonId: key, class: css_class(widget), renderType: 'button',
-          buttonClass: button_style(widget)
+          '$widgetId': key, buttonId: key, class: css_class(widget),
+          renderType: widget['RenderType'].to_s.casecmp('link').zero? ? 'link' : 'button',
+          buttonClass: button_style(widget), tabIndex: integer_or(widget['TabIndex'], 0),
+          role: widget['AriaRole'].to_s.downcase.then { _1.empty? ? nil : _1 }
         )
       end
+
+      alias nanoflow_button_props button_runtime_props
 
       def nanoflow_action_config(action)
         nanoflow = raw_js(nanoflow_reference(action['Nanoflow']))
@@ -1067,7 +1092,9 @@ module Mxrb
         object = data_view_object_property(widget, scope)
         return render_unsupported(widget) unless object
 
-        @data_view_scopes << { scope:, entity: data_view_entity(widget) }
+        @data_view_scopes << {
+          scope:, entity: data_view_entity(widget), label_width: positive_integer(widget['LabelWidth'], 3)
+        }
         body = array(widget['Widgets']).map { render_widget(_1) }
         footer = array(widget['FooterWidgets']).map { render_widget(_1) }
         @data_view_scopes.pop
@@ -1278,13 +1305,10 @@ module Mxrb
 
           @uses_form_widgets = true
           key = widget_key(button)
-          props = common_props(button).merge(
-            '$widgetId': key, buttonId: key, class: css_class(button), renderType: 'button',
-            buttonClass: button_style(button)
-          )
+          props = button_runtime_props(button, key)
           "React.createElement($ActionButton, #{js_props(props, expressions: {
             caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-            tooltip: 'TextProperty({ value: "" })', action:
+            tooltip: text_property(button['Tooltip']), action:
           })})"
         end
         return if buttons.empty?
@@ -1342,13 +1366,12 @@ module Mxrb
         caption = translated_text(widget.dig('LabelTemplate', 'Template'))
         empty_caption = translated_text(widget['EmptyOptionCaption'])
         aria_label = translated_text(widget.dig('ScreenReaderLabel', 'Template'))
-        on_change = client_action_payload(widget, widget['OnChangeAction'] || {}) || do_nothing_action
         input = "React.createElement($EnumSelect, #{js_props(
           common_props(widget).merge('$widgetId': key, id: key, readOnlyStyle: read_only_style(widget),
                                      ariaRequired: widget['AriaRequired'] == true,
                                      tabIndex: integer_or(widget['TabIndex'], 0)),
           expressions: {
-            value: attribute_property(scope, entity, name, on_change:),
+            value: input_attribute_property(widget, scope, entity, name),
             emptyOptionCaption: "TextProperty({ value: #{JSON.generate(empty_caption)} })",
             ariaLabel: "TextProperty({ value: #{JSON.generate(aria_label)} })",
             onEnter: action_property(widget, widget['OnEnterAction']),
@@ -1378,7 +1401,9 @@ module Mxrb
         props = common_props(widget).merge(
           '$widgetId': widget_key(widget), class: css_class(widget),
           caption: translated_text(widget.dig('Caption', 'Template')),
-          buttonClass: button_style(widget), items:
+          buttonClass: button_style(widget), items:,
+          renderType: widget['RenderType'].to_s.casecmp('link').zero? ? 'link' : 'button',
+          tabIndex: integer_or(widget['TabIndex'], 0), tooltip: translated_text(widget['Tooltip'])
         )
         "React.createElement($MxrbDropDownButton, #{js_literal(props)})"
       end
@@ -1444,7 +1469,10 @@ module Mxrb
         props = common_props(widget).merge(
           '$widgetId': key, class: css_class(widget), id: key, widgetType: 'upload',
           extensions: widget['AllowedExtensions'].to_s,
-          maxFileSize: positive_integer(widget['MaxFileSize'], 200)
+          maxFileSize: positive_integer(widget['MaxFileSize'], 200),
+          tabIndex: integer_or(widget['TabIndex'], 0),
+          thumbnailSizeWidth: positive_integer(widget.dig('ThumbnailSize', 'Width'), 100),
+          thumbnailSizeHeight: positive_integer(widget.dig('ThumbnailSize', 'Height'), 100)
         )
         input = "React.createElement($FileManager, #{js_props(props, expressions: {
           content: "DynamicFileProperty(#{js_literal(scope:, path: '', isEditable: true, allowUpload: true)})"
@@ -1537,7 +1565,9 @@ module Mxrb
           '$widgetId': widget_key(widget), class: css_class(widget), id: widget_key(widget),
           caption: translated_text(widget.dig('CaptionTemplate', 'Template')),
           validationId: widget['ValidationMessageWidget'].to_s,
-          buttonClass: button_style(widget), tabIndex: integer_or(widget['TabIndex'], 0)
+          buttonClass: button_style(widget), tabIndex: integer_or(widget['TabIndex'], 0),
+          renderType: widget['RenderType'].to_s.casecmp('link').zero? ? 'link' : 'button',
+          tooltip: translated_text(widget['Tooltip'])
         )
         "React.createElement($MxrbLoginButton, #{js_props(props)})"
       end
@@ -1568,6 +1598,56 @@ module Mxrb
         widget['ReadOnlyStyle'].to_s.downcase.then do |value|
           %w[control text].include?(value) ? value : 'text'
         end
+      end
+
+      def autocomplete_value(widget)
+        return 'off' unless widget.fetch('Autocomplete', true)
+
+        purpose = widget.fetch('AutocompletePurpose', 'On').to_s
+        return purpose.downcase if %w[On Off].include?(purpose)
+
+        HTML_AUTOCOMPLETE_PURPOSES.fetch(purpose) do
+          purpose.gsub(/([a-z\d])([A-Z])/, '\\1-\\2').downcase
+        end
+      end
+
+      def input_attribute_property(widget, scope, entity, attribute, formatting: {})
+        on_change = client_action_payload(widget, widget['OnChangeAction'] || {}) || do_nothing_action
+        attribute_property(
+          scope, entity, attribute, formatting:, on_change:, is_editable: input_editability(widget, scope)
+        )
+      end
+
+      def input_editability(widget, scope)
+        return { expr: { type: 'literal', value: false }, args: {} } if widget['Editable'] == 'Never'
+        return unless widget['Editable'] == 'Conditional'
+
+        expression = widget.dig('ConditionalEditabilitySettings', 'Expression').to_s.strip
+        match = expression.match(%r{\A\$currentObject/([A-Za-z_]\w*)\z})
+        return unless match
+
+        {
+          expr: { type: 'variable', variable: 'currentObject', path: match[1] },
+          args: { currentObject: { widget: scope, source: 'object' } }
+        }
+      end
+
+      def input_action_expressions(widget)
+        {
+          onEnter: action_property(widget, widget['OnEnterAction']),
+          onLeave: action_property(widget, widget['OnLeaveAction']),
+          onEnterKeyPress: action_property(widget, widget['OnEnterKeyPressAction'])
+        }.compact
+      end
+
+      def screen_reader_label_property(widget)
+        text_property(widget.dig('ScreenReaderLabel', 'Template'))
+      end
+
+      def text_property(text, fallback: '')
+        value = translated_text(text)
+        value = fallback if value.empty?
+        "TextProperty({ value: #{JSON.generate(value)} })"
       end
 
       def action_property(widget, action)
@@ -1666,30 +1746,26 @@ module Mxrb
         return render_unsupported(widget) unless scope && separator == '.' &&
                                                  present_identifier?(entity) && present_identifier?(name)
 
+        @uses_form_widgets = true
         key = widget_key(widget)
         caption = translated_text(widget.dig('LabelTemplate', 'Template'))
         placeholder = translated_text(widget.dig('PlaceholderTemplate', 'Template'))
         input_props = common_props(widget).merge(
           '$widgetId': key, isPassword: widget['IsPasswordBox'] == true,
-          mask: widget['InputMask'].to_s, readOnlyStyle: 'text',
+          mask: widget['InputMask'].to_s, readOnlyStyle: read_only_style(widget),
           maxLength: widget['MaxLengthCode'].to_i.positive? ? widget['MaxLengthCode'].to_i : nil,
-          autocomplete: widget['Autocomplete'] == false ? 'off' : 'on',
+          autocomplete: autocomplete_value(widget),
           submitWhileEditing: widget['SubmitBehaviour'] == 'OnTyping',
-          submitDelay: widget['SubmitOnInputDelay'].to_i, id: key
+          submitDelay: widget['SubmitOnInputDelay'].to_i, id: key,
+          ariaRequired: widget['AriaRequired'] == true, tabIndex: integer_or(widget['TabIndex'], 0)
         )
-        input = "React.createElement($TextBox, #{js_props(input_props, expressions: {
-          inputValue: attribute_property(scope, entity, name),
-          placeholder: "TextProperty({ value: #{JSON.generate(placeholder)} })"
-        })})"
-        group_props = {
-          key: "#{key}$formGroup", '$widgetId': "#{key}$formGroup",
-          class: "mx-name-#{widget['Name']} mx-textbox", control: [input],
-          width: 3, orientation: 'horizontal', labelFor: key
-        }
-        "React.createElement($FormGroup, #{js_props(group_props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          hasError: 'TextProperty({ value: false })'
-        })})"
+        expressions = input_action_expressions(widget).merge(
+          inputValue: input_attribute_property(widget, scope, entity, name),
+          placeholder: "TextProperty({ value: #{JSON.generate(placeholder)} })",
+          ariaLabel: screen_reader_label_property(widget)
+        ).compact
+        input = "React.createElement($TextBox, #{js_props(input_props, expressions:)})"
+        render_form_group(widget, key, caption, input, 'mx-textbox')
       end
 
       def render_text_area(widget)
@@ -1705,18 +1781,22 @@ module Mxrb
         placeholder = translated_text(widget.dig('PlaceholderTemplate', 'Template'))
         max_length = widget['MaxLengthCode'].to_i
         input_props = common_props(widget).merge(
-          '$widgetId': key, readOnlyStyle: 'text', numberOfLines: positive_integer(widget['NumberOfLines'], 5),
+          '$widgetId': key, readOnlyStyle: read_only_style(widget),
+          numberOfLines: positive_integer(widget['NumberOfLines'], 5),
           autoGrow: widget['AutoGrow'] == true, maxLength: max_length.positive? ? max_length : nil,
-          autocomplete: widget['Autocomplete'] == false ? 'off' : 'on',
+          autocomplete: autocomplete_value(widget),
           submitWhileEditing: %w[WhileEditing OnTyping].include?(widget['SubmitBehaviour']),
-          submitDelay: widget['SubmitOnInputDelay'].to_i, id: key
+          submitDelay: widget['SubmitOnInputDelay'].to_i, id: key,
+          ariaRequired: widget['AriaRequired'] == true, tabIndex: integer_or(widget['TabIndex'], 0)
         )
-        input = "React.createElement($TextArea, #{js_props(input_props, expressions: {
-          inputValue: attribute_property(scope, entity, name),
+        expressions = input_action_expressions(widget).merge(
+          inputValue: input_attribute_property(widget, scope, entity, name),
           placeholder: "TextProperty({ value: #{JSON.generate(placeholder)} })",
-          textTooLongMessage: 'TextProperty({ value: "Text is too long" })',
-          counterMessage: 'TextProperty({ value: "" })'
-        })})"
+          textTooLongMessage: text_property(widget['TextTooLongMessage'], fallback: 'Text is too long'),
+          counterMessage: text_property(widget['CounterMessage']),
+          ariaLabel: screen_reader_label_property(widget)
+        ).compact
+        input = "React.createElement($TextArea, #{js_props(input_props, expressions:)})"
         render_form_group(widget, key, caption, input, 'mx-textarea')
       end
 
@@ -1729,11 +1809,15 @@ module Mxrb
         @uses_form_widgets = true
         @uses_radio_button_group = true
         key = widget_key(widget)
-        input = "React.createElement($RadioButtonGroup, #{js_props(
-          common_props(widget).merge('$widgetId': key, readOnlyStyle: 'text', id: key,
-                                     ariaRequired: false, tabIndex: widget['TabIndex'].to_i),
-          expressions: { value: attribute_property(scope, entity, name) }
-        )})"
+        props = common_props(widget).merge(
+          '$widgetId': key, readOnlyStyle: read_only_style(widget), id: key,
+          ariaRequired: widget['AriaRequired'] == true, tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        expressions = input_action_expressions(widget).merge(
+          value: input_attribute_property(widget, scope, entity, name),
+          ariaLabel: screen_reader_label_property(widget)
+        ).compact
+        input = "React.createElement($RadioButtonGroup, #{js_props(props, expressions:)})"
         caption = translated_text(widget.dig('LabelTemplate', 'Template'))
         render_form_group(widget, key, caption, input, 'mx-radiogroup')
       end
@@ -1751,7 +1835,8 @@ module Mxrb
           widgetType: widget['Type'].to_s.downcase.then { _1.empty? ? 'both' : _1 },
           extensions: widget['AllowedExtensions'].to_s,
           maxFileSize: positive_integer(widget['MaxFileSize'], 200),
-          showInBrowser: widget['ShowFileInBrowser'] == true
+          showInBrowser: widget['ShowFileInBrowser'] == true,
+          tabIndex: integer_or(widget['TabIndex'], 0)
         )
         "React.createElement($FileManager, #{js_props(props, expressions: {
           content: "DynamicFileProperty(#{js_literal(config)})"
@@ -1762,7 +1847,8 @@ module Mxrb
         group_props = {
           key: "#{key}$formGroup", '$widgetId': "#{key}$formGroup",
           class: "mx-name-#{widget['Name']} #{widget_class}", control: [input],
-          width: 3, orientation: 'horizontal', labelFor: key
+          width: current_object_scope&.fetch(:label_width, nil) || 3,
+          orientation: 'horizontal', labelFor: key
         }
         "React.createElement($FormGroup, #{js_props(group_props, expressions: {
           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
@@ -1786,22 +1872,17 @@ module Mxrb
         formatting = mode == 'time' ? { timeFormat: { type: 'time' } } : { dateFormat: { type: 'date' } }
         input_props = common_props(widget).merge(
           '$widgetId': key, mode:, showCalendarButton: widget.fetch('ShowCalendarButton', true),
-          readOnlyStyle: 'text', id: key
+          readOnlyStyle: read_only_style(widget), id: key,
+          ariaRequired: widget['AriaRequired'] == true, tabIndex: integer_or(widget['TabIndex'], 0)
         )
-        input = "React.createElement($DatePicker, #{js_props(input_props, expressions: {
-          inputValue: attribute_property(scope, entity, name, formatting:),
+        expressions = input_action_expressions(widget).merge(
+          inputValue: input_attribute_property(widget, scope, entity, name, formatting:),
           placeholder: "TextProperty({ value: #{JSON.generate(placeholder)} })",
-          buttonLabel: 'TextProperty({ value: "Show date picker" })'
-        })})"
-        group_props = {
-          key: "#{key}$formGroup", '$widgetId': "#{key}$formGroup",
-          class: "mx-name-#{widget['Name']} mx-datepicker", control: [input],
-          width: 3, orientation: 'horizontal', labelFor: key
-        }
-        "React.createElement($FormGroup, #{js_props(group_props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          hasError: 'TextProperty({ value: false })'
-        })})"
+          buttonLabel: 'TextProperty({ value: "Show date picker" })',
+          ariaLabel: screen_reader_label_property(widget)
+        ).compact
+        input = "React.createElement($DatePicker, #{js_props(input_props, expressions:)})"
+        render_form_group(widget, key, caption, input, 'mx-datepicker')
       end
 
       def render_check_box(widget)
@@ -1812,20 +1893,17 @@ module Mxrb
 
         @uses_form_widgets = true
         key = widget_key(widget)
-        input = "React.createElement($CheckBox, #{js_props(
-          common_props(widget).merge('$widgetId': key, readOnlyStyle: 'text', id: key),
-          expressions: { value: attribute_property(scope, entity, name) }
-        )})"
-        group_props = {
-          key: "#{key}$formGroup", '$widgetId': "#{key}$formGroup",
-          class: "mx-name-#{widget['Name']} mx-checkbox", control: [input],
-          width: 3, orientation: 'horizontal', labelFor: key
-        }
+        props = common_props(widget).merge(
+          '$widgetId': key, readOnlyStyle: read_only_style(widget), id: key,
+          tabIndex: integer_or(widget['TabIndex'], 0)
+        )
+        expressions = input_action_expressions(widget).merge(
+          value: input_attribute_property(widget, scope, entity, name),
+          ariaLabel: screen_reader_label_property(widget)
+        ).compact
+        input = "React.createElement($CheckBox, #{js_props(props, expressions:)})"
         caption = translated_text(widget.dig('LabelTemplate', 'Template'))
-        "React.createElement($FormGroup, #{js_props(group_props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          hasError: 'TextProperty({ value: false })'
-        })})"
+        render_form_group(widget, key, caption, input, 'mx-checkbox')
       end
 
       def render_label(widget)
@@ -1881,11 +1959,19 @@ module Mxrb
         return render_unsupported(widget) unless uri
 
         @uses_image = true
-        ImageBundleCompiler.render_static(
-          widget_key(widget), css_class(widget), uri,
-          width: widget['Width'], width_unit: widget['WidthUnit'], height: widget['Height'],
-          height_unit: widget['HeightUnit'], responsive: widget['Responsive'] == true
+        key = widget_key(widget)
+        props = common_props(widget).merge(
+          '$widgetId': key, class: css_class(widget), responsive: widget['Responsive'] == true,
+          width: image_dimension(widget['Width'], widget['WidthUnit']),
+          height: image_dimension(widget['Height'], widget['HeightUnit']),
+          tabIndex: integer_or(widget['TabIndex'], 0)
         )
+        expressions = {
+          source: "WebStaticImageProperty({ image: { uri: #{JSON.generate(uri)} } })",
+          alternativeText: text_property(widget.dig('AlternativeText', 'Template')),
+          onClick: action_property(widget, widget['ClickAction'])
+        }.compact
+        "React.createElement($Image, #{js_props(props, expressions:)})"
       end
 
       def image_uri(reference)
@@ -1901,12 +1987,14 @@ module Mxrb
         "img/#{[module_name, collection_name, image_name].join('$')}.#{image_format(image)}"
       end
 
-      def attribute_property(scope, entity, attribute, path: '', formatting: {}, on_change: do_nothing_action)
+      def attribute_property(scope, entity, attribute, path: '', formatting: {},
+                             on_change: do_nothing_action, is_editable: nil)
         config = {
           scope:, path:, entity:, attribute:,
           onChange: on_change,
           isList: false, validation: nil, formatting:
         }
+        config[:isEditable] = is_editable if is_editable
         "AttributeProperty(#{js_literal(config)})"
       end
 
@@ -1937,14 +2025,11 @@ module Mxrb
           },
           abortOnServerValidation: true
         }
-        props = common_props(widget).merge(
-          '$widgetId': key, buttonId: key, class: css_class(widget), renderType: 'button',
-          buttonClass: button_style(widget)
-        )
+        props = button_runtime_props(widget, key)
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(props, expressions: {
           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: 'TextProperty({ value: "" })', action: "ActionProperty(#{js_literal(action_config)})"
+          tooltip: text_property(widget['Tooltip']), action: "ActionProperty(#{js_literal(action_config)})"
         })})"
       end
 
@@ -2366,12 +2451,12 @@ module Mxrb
         if @uses_image
           imports.concat([
                            'import { ExpressionProperty } from "mendix/ExpressionProperty";',
-                           'import { WebStaticImageProperty } from "mendix/WebStaticImageProperty";'
+                           'import { WebStaticImageProperty } from "mendix/WebStaticImageProperty";',
+                           'import { TextProperty } from "mendix/TextProperty";'
                          ])
           if @uses_dynamic_image
             imports.concat([
-                             'import { WebDynamicImageProperty } from "mendix/WebDynamicImageProperty";',
-                             'import { TextProperty } from "mendix/TextProperty";'
+                             'import { WebDynamicImageProperty } from "mendix/WebDynamicImageProperty";'
                            ])
           end
           imports << if @uses_custom_image
@@ -2387,9 +2472,12 @@ module Mxrb
         end
         if @uses_drop_down_button
           imports << <<~JS
-            const MxrbDropDownButton = ({ caption, buttonClass, items, class: className }) =>
+            const MxrbDropDownButton = ({ caption, buttonClass, items, class: className,
+              renderType, tabIndex, tooltip }) =>
               React.createElement("div", { className: ["dropdown", className].filter(Boolean).join(" ") }, [
-                React.createElement("button", { key: "toggle", type: "button",
+                React.createElement(renderType === "link" ? "a" : "button", { key: "toggle",
+                  type: renderType === "link" ? undefined : "button", href: renderType === "link" ? "#" : undefined,
+                  tabIndex, title: tooltip,
                   className: ["btn", "mx-button", buttonClass].filter(Boolean).join(" ") }, caption),
                 React.createElement("ul", { key: "items", className: "dropdown-menu" },
                   items.map((item, index) => React.createElement("li", { key: index },
@@ -2445,7 +2533,10 @@ module Mxrb
                 if (window.mx?.login) window.mx.login(username, password, () => {}, showError);
                 else showError("Login unavailable");
               };
-              return React.createElement("button", { id: props.id, type: "button", tabIndex: props.tabIndex,
+              return React.createElement(props.renderType === "link" ? "a" : "button", { id: props.id,
+                type: props.renderType === "link" ? undefined : "button",
+                href: props.renderType === "link" ? "#" : undefined, title: props.tooltip,
+                tabIndex: props.tabIndex,
                 className: ["btn", "mx-button", buttonClass, className].filter(Boolean).join(" "), onClick: login }, caption);
             };
             MxrbLoginButton.displayName = "MxrbLoginButton";
