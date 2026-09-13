@@ -86,4 +86,87 @@ RSpec.describe Mxrb::Settings::Node do # rubocop:disable Metrics/BlockLength
 
     expect(Mxrb::IO::BsonCodec.serialize(rebuilt)).to eq(Mxrb::IO::BsonCodec.serialize(document))
   end
+
+  it 'fails closed for unknown builder components, fields, and malformed nesting' do
+    collection_builder = Mxrb::Settings::CollectionBuilder.new
+    expect(collection_builder).to respond_to(:server)
+    expect(collection_builder).not_to respond_to(:unknown_component)
+    expect { collection_builder.server }.to raise_error(NoMethodError)
+    expect { collection_builder.unknown_component {} }
+      .to raise_error(Mxrb::Settings::Error, /unsupported project-settings component/)
+    expect { Mxrb::Settings::Catalog.type_for_method(:unknown) }
+      .to raise_error(Mxrb::Settings::Error, /unsupported project-settings component/)
+
+    model = node('ServerConfiguration')
+    builder = Mxrb::Settings::NodeBuilder.new(model)
+    expect(builder).to respond_to(:open_telemetry)
+    expect(builder).not_to respond_to(:unknown_field)
+    expect { builder.open_telemetry {} }.to raise_error(Mxrb::Settings::Error, /requires a component type/)
+    expect { builder.open_telemetry(:tracing_configuration, :extra) {} }
+      .to raise_error(Mxrb::Settings::Error, /accepts one component type/)
+    expect { builder.constant_values(:extra) {} }
+      .to raise_error(Mxrb::Settings::Error, /does not accept arguments/)
+    expect { builder.name }.to raise_error(Mxrb::Settings::Error, /exactly one value/)
+    expect { builder.name('one', 'two') }.to raise_error(Mxrb::Settings::Error, /exactly one value/)
+
+    project_builder = Mxrb::Settings::ProjectBuilder.new
+    expect(project_builder).to respond_to(:model)
+    expect(project_builder).not_to respond_to(:server)
+    expect { project_builder.server {} }.to raise_error(NoMethodError)
+  end
+
+  it 'rejects invalid codec roots and ambiguous or malformed baselines' do
+    codec = Mxrb::Settings::MprCodec.new
+    expect { codec.decode('$ID' => SecureRandom.uuid, '$Type' => 'Settings$ModelSettings') }
+      .to raise_error(Mxrb::Settings::Error, /root must be/)
+    expect { codec.encode(node('ModelSettings')) }
+      .to raise_error(Mxrb::Settings::Error, /model must be/)
+    expect(codec.send(:bson_items, 'not an array')).to be_empty
+    expect(codec.send(:bson_items, [0])).to be_empty
+
+    candidate = node('ServerConfiguration')
+    previous = [
+      { '$Type' => 'Settings$ServerConfiguration' },
+      { '$Type' => 'Settings$ServerConfiguration' }
+    ]
+    expect { codec.send(:positional_node_index, candidate, previous, {}, 0) }
+      .to raise_error(Mxrb::Settings::Error, /ambiguous settings identity/)
+    expect(codec.send(:positional_node_index, 'scalar', previous, {}, 0)).to be_nil
+    expect(codec.send(:positional_node_index, candidate, [], {}, 0)).to be_nil
+    expect { codec.send(:decode_value, {}) }
+      .to raise_error(Mxrb::Settings::Error, /untyped maps/)
+
+    allow(Mxrb::IO::BsonCodec).to receive(:parse_array).with([:malformed]).and_raise(ArgumentError, 'bad')
+    expect { codec.send(:decode_value, [:malformed]) }
+      .to raise_error(Mxrb::Settings::Error, /invalid project-settings collection: bad/)
+    expect(codec.send(:bson_items, [:malformed])).to be_empty
+  end
+
+  it 'renders scalar settings values and rejects unsafe source representations' do
+    emitter = Mxrb::Settings::SourceEmitter.new
+    expect { emitter.emit(Object.new) }.to raise_error(Mxrb::Settings::Error, /Node root/)
+    expect { emitter.emit(node('ProjectSettings')) }.to raise_error(KeyError)
+    invalid_collection = node('ProjectSettings')
+    invalid_collection.define_singleton_method(:fetch) { |_field| 'not a collection' }
+    expect { emitter.emit(invalid_collection) }
+      .to raise_error(Mxrb::Settings::Error, /must contain a Settings collection/)
+
+    lines = []
+    mixed = Mxrb::Settings::Collection.new(items: [node('PrivateValue'), 'mixed'])
+    expect { emitter.send(:emit_collection, :constant_values, mixed, lines, 1) }
+      .to raise_error(Mxrb::Settings::Error, /mixes scalar and component/)
+    expect(emitter.send(:literal, Time.utc(2026, 9, 13))).to eq('Time.iso8601("2026-09-13T00:00:00.000000000Z")')
+    expect(emitter.send(:literal, Mxrb::Settings::BinaryAsset.empty)).to include('BinaryAsset.empty')
+    expect { emitter.send(:literal, Mxrb::Settings::BinaryAsset.from_bytes('secret')) }
+      .to raise_error(Mxrb::Settings::Error, /was not externalized/)
+  end
+
+  it 'accepts typed values in open setting collections and rejects opaque objects' do
+    workflow = node('WorkflowsProjectSettingsPart')
+    nested = collection('group', collection(1, true, Time.utc(2026, 9, 13)))
+    workflow.set(:groups, nested)
+    expect(workflow.fetch(:groups)).to equal(nested)
+    expect { workflow.set(:groups, collection(Object.new)) }
+      .to raise_error(Mxrb::Settings::Error, /incompatible value/)
+  end
 end

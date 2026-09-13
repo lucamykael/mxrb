@@ -52,6 +52,8 @@ RSpec.describe 'Ruby flow text declarations' do
         .to raise_error(TypeError, /scalar/)
     end
     expect(builder.to_h.fetch(:body)).to be_nil
+    expect { Mxrb::Dsl::FlowTextBuilder.new.translation(Object.new, 'text') }
+      .to raise_error(TypeError, /language requires/)
   end
 
   it 'rolls back a reusable text builder after a failed block' do

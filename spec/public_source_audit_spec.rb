@@ -61,6 +61,16 @@ RSpec.describe Mxrb::PublicSourceAudit do
     end
   end
 
+  it 'classifies source trees outside the project, app, and module conventions' do
+    Dir.mktmpdir('mxrb-public-source-other-') do |root|
+      FileUtils.mkdir_p(File.join(root, 'scripts'))
+      File.write(File.join(root, 'scripts', 'task.rb'), 'native_widget nil')
+
+      expect(described_class.new(root).by_subsystem).to eq('scripts' => { opaque_api: 1 })
+      expect(described_class.new(root).send(:find_nodes, 'scalar', :hash)).to be_empty
+    end
+  end
+
   it 'keeps project-security identities in the MPR baseline, not its public Ruby API' do
     Dir.mktmpdir('mxrb-public-security-identity-') do |root|
       source = File.join(root, 'Security.mpr')
