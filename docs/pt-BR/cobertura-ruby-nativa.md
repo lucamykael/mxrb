@@ -60,13 +60,15 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Déficit verificável atual
 
-A suíte estrita de 13 de setembro passou com 1.821 exemplos, mas ainda mede
-96,46% das linhas (35.219/36.511) e 89,80% dos branches (14.211/15.825).
-Faltam, portanto, 1.292 linhas e 1.614 branches executáveis para o gate 100/100.
-Os maiores déficits estão em `ruby_app/exporter.rb`, `exporter.rb`, `writer.rb`,
-`dsl/builder.rb` e `forms/mpr_codec.rb`; nenhum deles foi removido do
-denominador. `writer/page_overlay.rb` passou a 100/100 nesta auditoria. O CI
-permanece em 96/89 até que testes reais fechem o saldo.
+A suíte estrita de 13 de setembro passou com 1.825 exemplos, mas ainda mede
+97,10% das linhas (35.451/36.511) e 90,96% dos branches (14.394/15.825).
+Faltam, portanto, 1.060 linhas e 1.431 branches executáveis para o gate 100/100.
+Os maiores déficits estão em `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
+`ruby_app/exporter.rb` e `forms/mpr_codec.rb`; nenhum deles foi removido do
+denominador. `writer/page_overlay.rb` passou a 100/100 nesta auditoria, enquanto
+a fatia de projeção sem perdas de widgets reduziu `ruby_app/exporter.rb` de 291
+para 59 linhas descobertas e de 267 para 85 branches descobertos. O CI permanece
+em 96/89 até que testes reais fechem o saldo.
 
 Cobertura de código 100/100 também não encerra cobertura funcional: layouts,
 snippets, building blocks, menus, integrações, workflows e task pages continuam
