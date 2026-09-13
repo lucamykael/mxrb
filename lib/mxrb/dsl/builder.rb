@@ -1393,15 +1393,16 @@ module Mxrb
         @security_level = value.to_s
       end
 
-      def user_role(name, module_roles: [], admin: false, id: nil, guid: nil,
+      def user_role(name, module_roles: [], exact_module_roles: false, admin: false, id: nil, guid: nil,
                     description: '', check_security: true, manageable_roles: [],
                     manage_users_without_roles: false)
         native_roles = Array(module_roles).map(&:to_s)
-        unless native_roles.any? { _1.start_with?('System.') }
+        unless exact_module_roles || native_roles.any? { _1.start_with?('System.') }
           native_roles << (admin ? 'System.Administrator' : 'System.User')
         end
         @user_roles << {
           name: name.to_s, module_roles: native_roles,
+          exact_module_roles: exact_module_roles == true,
           admin: admin, id: id.to_s, guid: guid.to_s,
           description: description.to_s, check_security: check_security == true,
           manageable_roles: Array(manageable_roles).map(&:to_s),

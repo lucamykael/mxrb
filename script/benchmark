@@ -7,6 +7,7 @@ require "json"
 require "tmpdir"
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require_relative "../lib/mxrb"
+require_relative "../lib/mxrb/benchmark_fixture"
 
 fixture_value = ENV.fetch("MXRB_BENCHMARK_MPR", "").strip
 abort "MXRB_BENCHMARK_MPR must point to an external benchmark MPR" if fixture_value.empty?
@@ -25,8 +26,7 @@ end
 measure.call(:validate) { Mxrb.validate(fixture) }
 cache_metrics = {}
 Dir.mktmpdir("mxrb-cache-benchmark-") do |directory|
-  cached_fixture = File.join(directory, File.basename(fixture))
-  FileUtils.cp(fixture, cached_fixture)
+  cached_fixture = Mxrb::BenchmarkFixture.copy(fixture, directory)
   Mxrb.open(cached_fixture, readonly: false, &:clear_semantic_cache!)
 
   measure.call(:semantic_index_cold) do

@@ -4,7 +4,7 @@ This is the source of truth for expansion of the Ruby → Mendix compiler. A
 surface is `native` only after tests cover creation, update, removal, reopening
 the MPR, and recompilation without changing native identities.
 
-September 5, 2026 update: this is a conservative family-level matrix, not a
+September 13, 2026 update: this is a conservative family-level matrix, not a
 completion percentage. Domain, security and scheduling now have incremental
 authoring paths; unrepresented variants remain preserved. Verified contracts
 and limitations are recorded in the
@@ -38,6 +38,20 @@ per Mendix version with `mxbuild`, Studio Pro, and semantic comparison.
 
 Unknown variants remain fail-closed: they are preserved and reported, never
 silently converted or discarded.
+
+## Current measurable deficit
+
+The September 13 strict suite passed 1,805 examples but still measures 96.18%
+of lines (35,115/36,511) and 89.22% of branches (14,119/15,825). Reaching the
+100/100 gate therefore requires another 1,396 executable lines and 1,706
+branches. The largest gaps are in `ruby_app/exporter.rb`, `exporter.rb`,
+`writer.rb`, `dsl/builder.rb`, and `writer/page_overlay.rb`; none were removed
+from the denominator. CI remains at 96/89 until real tests close the balance.
+
+Code coverage alone does not complete functional coverage: layouts, snippets,
+building blocks, menus, integrations, workflows, and task pages remain
+`preserved_native`, several families remain `partial`, and all 455 Forms
+properties are still 0/455 in the independent `studio_validated` gate.
 
 ## Core Forms properties
 

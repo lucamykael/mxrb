@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
 
-Last updated: 2026-08-11.
+Last updated: 2026-09-13.
 
 The matrix exercises this pipeline using only MXRB:
 
@@ -27,14 +27,14 @@ are never modified.
 | `mendixlabs/TreeViewAndGridView` (`TreeviewDemo`) | 5.21.4 | v1 | 176 | pass |
 | `mendixlabs/TreeViewAndGridView` (`GridViewPlayground`) | 6.10.8 | v1 | 122 | pass |
 
-On August 11, `script/validate_matrix` repeated the matrix with **6/6 passes**:
-1,506 units, 1,734 artifacts, and 3,388 references in 16.381 seconds.
+On September 13, `script/validate_matrix` repeated the matrix with **6/6
+passes**: 1,506 units, 1,734 artifacts, and 3,388 references in 19.278 seconds.
 
 ## Additional local inventory
 
 `script/certify_mprs --cycles 2 --repair-hashes` certified seven additional
 MPRs through 14 consecutive round trips: **7/7 passes**, 2,799 units, 3,238
-artifacts, and 4,819 references. The set covers LearnNow, SLATaskApp,
+artifacts, and 4,819 references in 100.544 seconds. The set covers LearnNow, SLATaskApp,
 SLATaskAppNative, MyFirstModule, CourseManager, RubyBridgeSandbox, and
 VetClinic.
 
@@ -43,6 +43,12 @@ repaired only `Unit.ContentsHash` in temporary copies, recorded the changed
 UUIDs, and preserved the original BSON bytes. Source files were not modified.
 The second round trip also exposed and fixed native-widget types deserialized
 as strings.
+
+The September 13 recertification found and fixed two additional losses: the DSL
+added `System.Administrator` to an exact native role list that did not contain
+it, and the Studio 11 settings codec did not yet recognize
+`Settings$ConstantValue`, `Settings$SharedValue`, and `Settings$PrivateValue`.
+Focused regressions cover both cases; private values are not published.
 
 The comparator used for this matrix includes:
 
@@ -254,9 +260,9 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 1,786 examples and passes with 96.09% line coverage
-(34,759/36,172 executable library lines) and 89.16% branch coverage
-(13,982/15,682 branches).
+The current suite contains 1,805 examples and passes with 96.18% line coverage
+(35,115/36,511 executable library lines) and 89.22% branch coverage
+(14,119/15,825 branches).
 Run the enforced gate with:
 
 ```sh
@@ -310,10 +316,15 @@ variable names from `.env.example`, but keep workstation-specific values in an
 ignored `.env` or in the shell environment.
 
 `script/validate_matrix` reruns all six disposable round trips and emits JSON
-evidence. The current run covered 1,506 units in 14.760 seconds with zero
-semantic differences. `script/benchmark` measured the Sudoku pipeline on Ruby
-4.0.5: validation 0.2257 s, semantic indexing 0.7624 s, export 2.5101 s,
-generation 2.4659 s and comparison 0.8822 s, totaling 6.8463 s.
+evidence. The current run covered 1,506 units in 19.278 seconds with zero
+semantic differences. After fixing the required `mprcontents` copy for v2
+MPRs, `script/benchmark` ran the Sudoku pipeline three times on Ruby 4.0.5.
+Median total time was 9.6308 s: validation 0.7596 s, cold semantic index
+0.7839 s, warm index 0.0090 s, read-only index 0.8171 s, export 3.9405 s,
+generation 2.1941 s, and comparison 1.1322 s. Median warm-cache speedup was
+87.1x. The former 6.8463 s result is not a comparable baseline because it used
+a different step composition and did not record an environment/budget;
+automating a versioned performance budget remains open.
 
 Deterministic fuzz tests additionally round-trip 250 nested BSON documents and
 50 atomic `.mxunit` files, including binary values, arrays and nested hashes.

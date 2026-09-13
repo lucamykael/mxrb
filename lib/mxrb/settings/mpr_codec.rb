@@ -112,7 +112,7 @@ module Mxrb
       def identity_key(item)
         return [] unless item.is_a?(Node)
 
-        field = %w[Name Code ActionActivityType ModuleName].find { item.fields.key?(_1) }
+        field = %w[Name Code ActionActivityType ModuleName ConstantId].find { item.fields.key?(_1) }
         field ? [field, item.fields[field]] : []
       end
 

@@ -1695,7 +1695,7 @@ module Mxrb
             "manageable_roles: #{role.fetch('manageable_roles').inspect}, " \
             "manage_all_roles: #{role.fetch('manage_all_roles')}, " \
             "manage_users_without_roles: #{role.fetch('manage_users_without_roles')}, " \
-            "module_roles: #{role.fetch('module_roles').inspect}"
+            "module_roles: #{role.fetch('module_roles').inspect}, exact_module_roles: true"
         end
         user_roles = ['    clear_user_roles!'] if user_roles.empty?
         demo_users = security.fetch('demo_users').map do |user|

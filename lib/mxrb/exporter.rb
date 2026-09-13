@@ -2170,7 +2170,10 @@ module Mxrb
         args << "description: #{ruby(role['Description'].to_s)}" unless role['Description'].to_s.empty?
         args << "check_security: false" unless role["CheckSecurity"] == true
         args << "manageable_roles: #{ruby(manageable)}" unless manageable.empty?
-        args << "module_roles: #{ruby(module_roles)}" unless module_roles.empty?
+        # An explicit empty list is semantically different from a Ruby-first
+        # declaration, where the DSL supplies the conventional System role.
+        args << "module_roles: #{ruby(module_roles)}"
+        args << 'exact_module_roles: true'
         args << "admin: true" if role["ManageAllRoles"] == true
         args << "manage_users_without_roles: true" if role["ManageUsersWithoutRoles"] == true
         "  user_role #{args.join(', ')}"

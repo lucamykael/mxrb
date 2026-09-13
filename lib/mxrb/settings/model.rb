@@ -26,6 +26,9 @@ module Mxrb
         'Settings$ActionActivityDefaultColor' => :action_activity_default_color,
         'Settings$Certificate' => :certificate,
         'Settings$ServerConfiguration' => :server,
+        'Settings$ConstantValue' => :constant_value,
+        'Settings$SharedValue' => :shared_value,
+        'Settings$PrivateValue' => :private_value,
         'Settings$CustomSetting' => :custom_setting,
         'Settings$OpenTelemetryConfiguration' => :open_telemetry_configuration,
         'Settings$TracingConfiguration' => :tracing_configuration,
@@ -79,6 +82,9 @@ module Mxrb
           ExtraJvmParameters HttpPortNumber MaxJavaHeapSize Name OpenAdminPort OpenHttpPort
           OpenTelemetry ServerPortNumber Tracing
         ],
+        'Settings$ConstantValue' => %w[ConstantId SharedOrPrivateValue],
+        'Settings$SharedValue' => %w[Value],
+        'Settings$PrivateValue' => [],
         'Settings$CustomSetting' => %w[Name Value],
         'Settings$OpenTelemetryConfiguration' => %w[Enabled Endpoint Logs ServiceName Traces],
         'Settings$TracingConfiguration' => %w[Enabled Endpoint ServiceName],

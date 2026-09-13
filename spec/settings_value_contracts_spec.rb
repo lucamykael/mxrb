@@ -46,6 +46,11 @@ RSpec.describe Mxrb::Settings::Node do # rubocop:disable Metrics/BlockLength
       .to raise_error(Mxrb::Settings::Error, /exclusions\[0\]/)
     expect { node('ServerConfiguration').set(:constant_values, collection({})) }
       .to raise_error(Mxrb::Settings::Error, /constant_values\[0\]/)
+    constant = node('ConstantValue').set(:constant_id, 'App.Endpoint')
+    constant.set(:shared_or_private_value, node('SharedValue').set(:value, 'https://example.test'))
+    expect { constant.set(:shared_or_private_value, node('CustomSetting')) }
+      .to raise_error(Mxrb::Settings::Error, /shared_or_private_value/)
+    node('ServerConfiguration').set(:constant_values, collection(constant))
     expect { Mxrb::Settings::Collection.new(items: [], marker: 0) }
       .to raise_error(Mxrb::Settings::Error, /marker/)
   end
