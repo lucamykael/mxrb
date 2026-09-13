@@ -26,7 +26,7 @@ module Mxrb
       end
     end
 
-    # Property-by-property gate. A value reaches complete only after all six
+    # Property-by-property gate. A value reaches complete only after all seven
     # independently evidenced phases pass; lossless binary preservation is not
     # a phase and therefore cannot inflate coverage.
     class CoverageLedger

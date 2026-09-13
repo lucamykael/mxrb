@@ -42,6 +42,18 @@ Vergleich.
 Unbekannte Varianten bleiben fail-closed: Sie werden erhalten und gemeldet,
 niemals stillschweigend konvertiert oder verworfen.
 
+## Eigenschaften der Core-Forms
+
+`script/forms_core_project_gate` erzeugt eine Mendix-11.12.1-MPR mit je einem
+isolierten Vorkommen aller geerbten Eigenschaften der 41 konkreten
+Core-Widgets, exportiert sie als lesbares Ruby, kompiliert sie neu und öffnet
+die typisierte MPR erneut. Das Gate zertifiziert 455/455 Eigenschaften als
+`imported` und `compiled`; Darstellung, Quellcodeausgabe,
+Speichertranskodierung und synthetischer Round-trip sind ebenfalls 455/455.
+`studio_validated` bleibt 0/455, bis unabhängige MxBuild-/Studio-Pro-Evidenz in
+semantisch gültigen Widget-Kontexten vorliegt. Ein struktureller Round-trip
+impliziert diese Phase nicht.
+
 ## Enumerationen in Ruby-Anwendungen
 
 `--mode ruby` exportiert Klassen nach `app/enumerations/<module>/`. Generierte

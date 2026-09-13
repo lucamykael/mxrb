@@ -855,6 +855,11 @@ RSpec.describe 'modern page widgets' do
     )
     expect(parsed[2].fetch(:options)).to include(menu: 'Ui.MainMenu', tab_index: 3)
 
+    malformed_thumbnail = raw[1].merge('ThumbnailSize' => 'invalid')
+    fallback = []
+    Mxrb::Model::Page.allocate.send(:parse_widgets, [malformed_thumbnail], fallback)
+    expect(fallback.first.fetch(:options)).to include(thumbnail_width: 100, thumbnail_height: 75)
+
     source = parsed.flat_map { Mxrb::Exporter.allocate.send(:render_widget, _1, 2) }.join("\n")
     expect(source).to include(
       'image_viewer :Preview', 'entity: "Ui.Picture"', 'on_click microflow: :Download',

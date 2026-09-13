@@ -181,6 +181,23 @@ representation where available.
 
 ## Widget certification
 
+`script/forms_core_project_gate` complements behavioral coverage with a
+property-level structural gate. For Mendix 11.12.1 it materializes all 455
+inherited property occurrences across 41 core widgets, reopens the MPR, exports
+readable Ruby without opaque fragments, recompiles it, and compares every typed
+value after reopening. The current result is 455/455 for `imported` and
+`compiled`. `studio_validated` remains 0/455 and can advance only with
+MxBuild/Studio Pro evidence in contexts that satisfy each widget's functional
+requirements.
+
+With `--mxbuild` and the official 11.12.1 executable, the rebuilt MPR was read
+without storage errors. The oracle rejected packaging with 625 consistency
+problems because the fixture deliberately isolates widgets that require login
+pages, native profiles, data contexts, data sources, layout placement, or
+executable references. This keeps the overall gate red when the oracle is
+requested and defines the remaining `studio_validated` work; it does not
+invalidate the structural import and compilation evidence.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` is the fail-closed
 gate for native web compiler and Marketplace widgets actually used by a
 project. It jointly requires page/layout compilation without fallbacks, resolution of every

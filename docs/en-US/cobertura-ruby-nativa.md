@@ -39,6 +39,17 @@ per Mendix version with `mxbuild`, Studio Pro, and semantic comparison.
 Unknown variants remain fail-closed: they are preserved and reported, never
 silently converted or discarded.
 
+## Core Forms properties
+
+`script/forms_core_project_gate` creates a Mendix 11.12.1 MPR with one isolated
+occurrence of every inherited property across the 41 concrete core widgets,
+exports it as readable Ruby, rebuilds it, and reopens the typed MPR. The gate
+certifies 455/455 properties as `imported` and `compiled`, in addition to the
+455/455 representation, source-emission, storage-transcoding, and synthetic
+round-trip evidence. `studio_validated` remains 0/455 until independent
+MxBuild/Studio Pro evidence exists in semantically valid widget contexts; a
+structural round trip never implies that phase.
+
 ## Enumerations in Ruby applications
 
 `--mode ruby` exports enumeration classes under `app/enumerations/<module>/`.

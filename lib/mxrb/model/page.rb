@@ -287,8 +287,9 @@ module Mxrb
       end
 
       def image_uploader_options(widget)
-        thumbnail_width, thumbnail_height = widget.fetch('ThumbnailSize', '100;75')
-                                                  .to_s.split(';', 2).map(&:to_i)
+        thumbnail_size = widget.fetch('ThumbnailSize', '100;75').to_s.split(';', 2).map(&:to_i)
+        thumbnail_width = thumbnail_size.fetch(0, 0)
+        thumbnail_height = thumbnail_size.fetch(1, 0)
         appearance_options(widget).merge(
           allowed_extensions: widget.fetch('AllowedExtensions', '').to_s,
           caption: extract_text(widget['LabelTemplate']),
