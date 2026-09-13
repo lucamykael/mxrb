@@ -5,7 +5,7 @@ superfície só recebe o estado `native` quando possui testes de criar, alterar,
 remover, reabrir o MPR e recompilar sem trocar identidades nativas. Preservar o
 BSON no sidecar não conta como edição.
 
-Atualização de 5 de setembro de 2026: a matriz abaixo é conservadora por
+Atualização de 13 de setembro de 2026: a matriz abaixo é conservadora por
 família, não uma porcentagem de conclusão. Domínio, segurança e operação já
 possuem rotas de autoria incremental; variantes não representadas continuam
 preservadas. Os contratos e limites verificados estão na
@@ -57,6 +57,20 @@ Estados:
 
 Cada fase deve manter o comportamento fail-closed: uma variante desconhecida é
 preservada e relatada, nunca silenciosamente convertida nem descartada.
+
+## Déficit verificável atual
+
+A suíte estrita de 13 de setembro passou com 1.805 exemplos, mas ainda mede
+96,18% das linhas (35.115/36.511) e 89,22% dos branches (14.119/15.825).
+Faltam, portanto, 1.396 linhas e 1.706 branches executáveis para o gate 100/100.
+Os maiores déficits estão em `ruby_app/exporter.rb`, `exporter.rb`, `writer.rb`,
+`dsl/builder.rb` e `writer/page_overlay.rb`; nenhum deles foi removido do
+denominador. O CI permanece em 96/89 até que testes reais fechem o saldo.
+
+Cobertura de código 100/100 também não encerra cobertura funcional: layouts,
+snippets, building blocks, menus, integrações, workflows e task pages continuam
+`preserved_native`, várias famílias seguem `parcial`, e 455/455 propriedades de
+Forms ainda estão em 0/455 no gate independente `studio_validated`.
 
 ## Propriedades de Forms core
 

@@ -63,6 +63,25 @@ RSpec.describe Mxrb::Settings::MprCodec do
     expect(rebuilt_ids).to all(match(Mxrb::PublicSourceAudit::UUID))
   end
 
+  it 'round-trips shared and private constant configuration values as typed components' do
+    shared = node('Settings$ConstantValue',
+                  'ConstantId' => 'App.Shared',
+                  'SharedOrPrivateValue' => node('Settings$SharedValue', 'Value' => 'visible'))
+    private_value = node('Settings$ConstantValue',
+                         'ConstantId' => 'App.Private',
+                         'SharedOrPrivateValue' => node('Settings$PrivateValue'))
+    baseline = settings_with_servers('Default')
+    server = baseline.fetch('Settings')[1].fetch('Configurations')[1]
+    server['ConstantValues'] = collection([shared, private_value], 3)
+
+    model = described_class.new.decode(baseline)
+    source = Mxrb::Settings::SourceEmitter.new.emit(model)
+    rebuilt = described_class.new.encode(model, baseline:)
+
+    expect(source).to include('constant_value do', 'shared_value', 'private_value')
+    expect(rebuilt).to eq(baseline)
+  end
+
   it 'never reuses a baseline identity after reordering and renaming configurations' do
     baseline = settings_with_servers('A', 'B')
     codec = described_class.new

@@ -981,8 +981,9 @@ module Mxrb
       validate_ruby_security_declarations!(declarations, "project user roles")
       roles = declarations.map do |role|
         declared_module_roles = Array(role[:module_roles]).map(&:to_s)
-        declared_module_roles << ruby_default_system_role(role) unless
-          declared_module_roles.any? { _1.start_with?('System.') }
+        unless role[:exact_module_roles] == true || declared_module_roles.any? { _1.start_with?('System.') }
+          declared_module_roles << ruby_default_system_role(role)
+        end
 
         role_id = role[:id].to_s
         matches = Array(by_name[role.fetch(:name).to_s])
@@ -4665,7 +4666,7 @@ module Mxrb
       id = role[:id].to_s
       guid = role[:guid].to_s
       module_roles = Array(role[:module_roles]).map(&:to_s)
-      unless module_roles.any? { _1.start_with?('System.') }
+      unless role[:exact_module_roles] == true || module_roles.any? { _1.start_with?('System.') }
         module_roles << (role[:admin] == true ? 'System.Administrator' : 'System.User')
       end
       previous.merge(

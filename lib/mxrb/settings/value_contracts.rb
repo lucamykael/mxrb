@@ -30,6 +30,7 @@ module Mxrb
         'Configurations' => 'Settings$ServerConfiguration',
         'ActionActivityDefaultColors' => 'Settings$ActionActivityDefaultColor',
         'Languages' => 'Texts$Language', 'Certificates' => 'Settings$Certificate',
+        'ConstantValues' => 'Settings$ConstantValue',
         'CustomSettings' => 'Settings$CustomSetting'
       }.freeze
       ENUM_FIELDS = {
@@ -70,18 +71,25 @@ module Mxrb
         return Integer if INTEGER_FIELDS.include?(field)
         return BinaryAsset if field == 'Data'
         return COMPONENTS.fetch(field) if COMPONENTS.key?(field)
+        return :shared_or_private_value if field == 'SharedOrPrivateValue'
         return :typed_value if %w[Logs Traces].include?(field)
 
         String
       end
 
       def valid?(expected, value)
+        return shared_or_private_value?(value) if expected == :shared_or_private_value
+
         case expected
         when :boolean then value.equal?(true) || value.equal?(false)
         when :typed_value then typed_value?(value)
         when String then value.is_a?(Node) && value.storage_type == expected
         else value.is_a?(expected)
         end
+      end
+
+      def shared_or_private_value?(value)
+        value.is_a?(Node) && %w[Settings$SharedValue Settings$PrivateValue].include?(value.storage_type)
       end
 
       def validate_constraints!(type, field, value)

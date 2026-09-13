@@ -1057,15 +1057,20 @@ module Mxrb
 
         def user_role(name, id: nil, guid: nil, description: '', check_security: true,
                       manageable_roles: [], manage_all_roles: false,
-                      manage_users_without_roles: false, module_roles: [], renamed_from: nil)
+                      manage_users_without_roles: false, module_roles: [], exact_module_roles: false,
+                      renamed_from: nil)
           @user_roles ||= []
+          native_roles = Array(module_roles).map(&:to_s)
+          unless exact_module_roles || native_roles.any? { _1.start_with?('System.') }
+            native_roles << (manage_all_roles ? 'System.Administrator' : 'System.User')
+          end
           declaration = {
             name: name.to_s, id: id.to_s, guid: guid.to_s,
             description: description.to_s, check_security: check_security == true,
             manageable_roles: Array(manageable_roles).map(&:to_s),
             manage_all_roles: manage_all_roles == true,
             manage_users_without_roles: manage_users_without_roles == true,
-            module_roles: Array(module_roles).map(&:to_s)
+            module_roles: native_roles, exact_module_roles: exact_module_roles == true
           }
           declaration[:renamed_from] = renamed_from.to_s unless renamed_from.nil?
           @user_roles << declaration

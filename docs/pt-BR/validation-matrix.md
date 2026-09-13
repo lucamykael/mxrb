@@ -2,7 +2,7 @@
 
 **Português** · [English](../en-US/validation-matrix.md) · [Deutsch](../de-DE/validation-matrix.md)
 
-Última atualização: 11 de agosto de 2026.
+Última atualização: 13 de setembro de 2026.
 
 O pipeline validado é:
 
@@ -21,14 +21,14 @@ Os originais nunca são modificados.
 | TreeviewDemo | 5.21.4 | v1 | passou |
 | GridViewPlayground | 6.10.8 | v1 | passou |
 
-Em 11 de agosto, `script/validate_matrix` repetiu a matriz com **6/6 passes**:
-1.506 units, 1.734 artefatos e 3.388 referências em 16,381 s.
+Em 13 de setembro, `script/validate_matrix` repetiu a matriz com **6/6
+passes**: 1.506 units, 1.734 artefatos e 3.388 referências em 19,278 s.
 
 ## Inventário adicional local
 
 `script/certify_mprs --cycles 2 --repair-hashes` certificou outros sete MPRs
 em 14 roundtrips consecutivos: **7/7 passes**, 2.799 units, 3.238 artefatos e
-4.819 referências. Foram cobertos LearnNow, SLATaskApp, SLATaskAppNative,
+4.819 referências em 100,544 s. Foram cobertos LearnNow, SLATaskApp, SLATaskAppNative,
 MyFirstModule, CourseManager, RubyBridgeSandbox e VetClinic.
 
 SLATaskApp tinha um hash de conteúdo obsoleto e RubyBridgeSandbox tinha dois.
@@ -36,6 +36,12 @@ O gate reparou somente `Unit.ContentsHash` em cópias temporárias, registrou os
 UUIDs alterados e preservou os bytes BSON originais. Os arquivos-fonte não
 foram modificados. O segundo roundtrip também detectou e corrigiu tipos de
 widgets nativos desserializados como strings.
+
+A recertificação de 13 de setembro encontrou e corrigiu mais duas perdas reais:
+o DSL acrescentava `System.Administrator` a uma lista de papéis nativos que não
+o continha, e o codec de settings 11 ainda não reconhecia
+`Settings$ConstantValue`, `Settings$SharedValue` e `Settings$PrivateValue`.
+Testes focados cobrem as duas regressões; valores privados não são publicados.
 
 ## Cobertura profunda editável
 
@@ -116,9 +122,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 1.786 exemplos, zero falhas;
-- 96,09% das linhas: 34.759/36.172;
-- 89,16% dos branches: 13.982/15.682;
+- 1.805 exemplos, zero falhas;
+- 96,18% das linhas: 35.115/36.511;
+- 89,22% dos branches: 14.119/15.825;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.
@@ -143,7 +149,14 @@ variáveis já definidas pelo processo. `.env.example` documenta somente os
 nomes; valores específicos da estação devem permanecer no `.env` ignorado ou
 no ambiente do shell.
 
-`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 16,381 s.
-`script/benchmark` mediu o pipeline Sudoku completo em 6,8463 s. O fuzzing
+`script/validate_matrix` repetiu os seis round-trips, 1.506 units, em 19,278 s.
+Após corrigir a cópia obrigatória de `mprcontents` para MPR v2,
+`script/benchmark` executou o pipeline Sudoku três vezes em Ruby 4.0.5. A
+mediana foi 9,6308 s no total: validação 0,7596 s, índice frio 0,7839 s,
+índice quente 0,0090 s, leitura somente leitura 0,8171 s, exportação 3,9405 s,
+geração 2,1941 s e comparação 1,1322 s. O cache quente teve speedup mediano de
+87,1×. A medição antiga de 6,8463 s não é um baseline comparável, pois usava
+outra composição de etapas e não registrava ambiente/budget; automatizar um
+budget versionado continua pendente. O fuzzing
 determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`
 atômicos, inclusive valores binários.
