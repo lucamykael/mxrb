@@ -43,6 +43,9 @@ RSpec.describe 'semantic artifact documents' do
     expect do
       builder.task_queue(:Ambiguous, parallelism: 2, parallelism_expression: '2')
     end.to raise_error(ArgumentError, /exactly one/)
+
+    builder.task_queue(:Numeric, parallelism: 3)
+    expect(builder.native_documents.last.fetch(:doc).dig('Config', 'Parallelism')).to eq(3)
   end
 
   def insert_artifacts(path)

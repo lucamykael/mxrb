@@ -708,8 +708,14 @@ RSpec.describe "MXRB defensive and compatibility paths" do
       :validate_doc_identity, { "UnitID" => "expected" },
       "$Type" => "X", "$ID" => "different"
     )
+    nested_id = SecureRandom.uuid
+    validator.send(
+      :validate_nested_ids, { "UnitID" => "expected" },
+      { "$Type" => "X", "Nested" => { "$Type" => "Y", "$ID" => nested_id } }
+    )
     validator.send(:add_warning, "warning")
     expect(validator.instance_variable_get(:@warnings)).to include("warning")
+    expect(validator.instance_variable_get(:@errors).join(' ')).to include("does not begin with $ID")
 
     allow(Mxrb::IO::MprFile).to receive(:open).and_raise(Mxrb::NotMprError, "not mpr")
     expect(Mxrb::Integrity::Validator.new("bad").validate.errors).to include("not mpr")

@@ -55,4 +55,16 @@ RSpec.describe 'Mendix 11.12.1 core Forms widget certification' do # rubocop:dis
     expect(certified.uniq.size).to eq(455)
     expect(failures).to be_empty, -> { failures.join("\n") }
   end
+
+  it 'uses a deterministic fallback for non-page named references' do
+    property = Struct.new(:reference, :type_name).new(:by_name, 'Unknown')
+
+    expect(Mxrb::Forms::Certification.send(:reference_sample, property, 1))
+      .to eq('Certification.Target')
+
+    catalog = Mxrb::Forms::Catalog.for('11.12.1')
+    type = catalog.concrete_widgets.find { _1.property(:name) && _1.name != 'ClientTemplate' }
+    sample = Mxrb::Forms::Certification.send(:element_sample, type, catalog, suffix: 7)
+    expect(sample.name).to eq('certificationNested7')
+  end
 end

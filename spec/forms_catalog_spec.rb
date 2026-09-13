@@ -49,6 +49,8 @@ RSpec.describe Mxrb::Forms::Catalog do # rubocop:disable Metrics/BlockLength
     expect(catalog.descendant?(:data_view, :widget)).to be(true)
     expect(widgets.type_name).to eq('Widget')
     expect(widgets).to be_many
+    expect(data_view.property(:name, inherited: false)).to be_nil
+    expect(catalog.widgets(concrete: false)).to all(be_abstract)
   end
 
   it 'fails clearly for unsupported schema versions and unknown members' do
@@ -56,6 +58,13 @@ RSpec.describe Mxrb::Forms::Catalog do # rubocop:disable Metrics/BlockLength
     expect { catalog.fetch_type(:missing) }.to raise_error(KeyError, /unknown Forms type/)
     expect { catalog.fetch_type(:action_button).fetch_property(:missing) }
       .to raise_error(KeyError, /unknown ActionButton property/)
+
+    Dir.mktmpdir('mxrb-forms-version-') do |root|
+      path = File.join(root, 'schema.json')
+      File.write(path, JSON.generate('mendix_version' => '11.0'))
+      expect { described_class.new(path, expected_version: '11.12.1') }
+        .to raise_error(ArgumentError, /version mismatch/)
+    end
   end
 
   it 'shares the immutable version catalog across callers and threads' do

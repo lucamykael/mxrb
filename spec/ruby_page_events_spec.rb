@@ -150,6 +150,10 @@ RSpec.describe 'typed runtime page events' do
       end
     end.to raise_error(TypeError, /serializable/)
     expect(arguments.arguments).to eq('Existing' => nil)
+    expect { arguments.argument(Object.new, 'value') }
+      .to raise_error(TypeError, /name requires/)
+    expect { arguments.argument('', 'value') }
+      .to raise_error(ArgumentError, /cannot be empty/)
   end
 
   it 'retains unknown event shapes and non-equivalent variable properties in the legacy projection' do
