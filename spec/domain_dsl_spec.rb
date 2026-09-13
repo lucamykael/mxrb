@@ -91,6 +91,8 @@ RSpec.describe 'complete domain DSL' do
         entity :Animal do
           association 'Clinic.Owner', name: 'Animal_Owner', cardinality: :many_to_one
           association 'Clinic.Tag', name: 'Animal_Tags', cardinality: :many_to_many
+          association 'Clinic.Tag', name: 'Animal_Tags_Both', cardinality: :many_to_many,
+                                    owner: :Both
         end
       end
 
@@ -103,6 +105,9 @@ RSpec.describe 'complete domain DSL' do
         child_delete_behavior: :DeleteMeButKeepReferences
       )
       expect(associations.find { _1.name == 'Animal_Tags' }.association_type).to eq(:ReferenceSet)
+      expect(associations.find { _1.name == 'Animal_Tags_Both' }).to have_attributes(
+        association_type: :ReferenceSet, owner: :Both
+      )
     end
   end
 

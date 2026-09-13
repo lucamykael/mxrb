@@ -327,20 +327,24 @@ module Mxrb
       end
 
       def render_layout_grid(widget, page_name, language)
+        width = widget['Width'] == 'FixedWidth' ? 'fixed' : 'fluid'
         render_structural_widget(
           widget, array(widget['Rows']), page_name, language,
-          base: 'mx-layoutgrid mx-layoutgrid-fluid'
+          base: "mx-layoutgrid mx-layoutgrid-#{width}"
         )
       end
 
       def render_grid_row(widget, page_name, language)
-        render_structural_widget(widget, array(widget['Columns']), page_name, language, base: 'row')
+        classes = ['row', ('no-gutters' if widget['SpacingBetweenColumns'] == false),
+                   grid_row_alignment_class(widget['VerticalAlignment'])].compact.join(' ')
+        render_structural_widget(widget, array(widget['Columns']), page_name, language, base: classes)
       end
 
       def render_grid_column(widget, page_name, language)
         classes = ['col', grid_weight_class('md', widget['Weight']),
                    grid_weight_class('sm', widget['TabletWeight']),
-                   grid_weight_class('xs', widget['PhoneWeight'])].compact.join(' ')
+                   grid_weight_class('xs', widget['PhoneWeight']),
+                   grid_column_alignment_class(widget['VerticalAlignment'])].compact.join(' ')
         render_structural_widget(widget, widget_children(widget), page_name, language, base: classes)
       end
 
@@ -535,7 +539,7 @@ module Mxrb
         @data_view_stack << {
           entity: data_view_entity(widget['DataSource'] || {}),
           label_width: positive_integer(widget['LabelWidth'], 3),
-          editable: widget['Editable'] != false
+          editable: data_view_editable?(widget)
         }
         content = data_view_children(widget, 'Widgets', 'Widget')
                   .map { render_widget(_1, page_name, language) }.join
@@ -577,10 +581,19 @@ module Mxrb
 
       def list_view_source(widget, page_name, entity)
         source = widget['DataSource'] || {}
-        type = source['$Type'] == 'Forms$NewListViewDatabaseSource' ? 'database' : 'xpath'
+        type = case source['$Type']
+               when 'Forms$NewListViewDatabaseSource' then 'database'
+               when 'Forms$MicroflowSource' then 'microflow'
+               else 'xpath'
+               end
         props = {
           'friendlyId' => "#{page_name}.#{widget['Name']}", 'type' => type, 'path' => entity
         }
+        if type == 'microflow'
+          props['microflow'] = flow_source_name(source, 'Microflow')
+          return props
+        end
+
         props['offlineConstraints'] = [] if type == 'database'
         constraint = source['XPathConstraint'].to_s
         props['xpathConstraints'] = constraint unless constraint.empty?
@@ -603,8 +616,13 @@ module Mxrb
       def list_view_entity(widget)
         source = widget['DataSource'] || {}
         entity = source['EntityPath'].to_s
-        entity = source.dig('EntityRef', 'Entity').to_s if entity.empty?
-        entity
+        if entity.empty?
+          reference = source['EntityRef'] || {}
+          steps = array(reference['Steps'])
+          entity = steps.last&.fetch('DestinationEntity', '').to_s
+          entity = reference['Entity'].to_s if entity.empty?
+        end
+        entity.empty? ? microflow_return_entity(source) : entity
       end
 
       def list_view_search_paths(source)
@@ -665,7 +683,7 @@ module Mxrb
           'schema' => IO::BsonCodec.extract_id(widget['$ID']).to_s,
           'datasource' => data_view_source(source, entity)
         }
-        props['readOnly'] = true if widget['Editable'] == false
+        props['readOnly'] = true unless data_view_editable?(widget)
         props['hideFooter'] = true if widget['ShowFooter'] == false
         props
       end
@@ -684,6 +702,14 @@ module Mxrb
           }
         end
 
+        if source['$Type'] == 'Forms$NanoflowSource'
+          return {
+            'type' => 'nanoflow',
+            'nanoflow' => flow_source_name(source, 'Nanoflow'),
+            'argMap' => {}
+          }
+        end
+
         path = data_view_path(source)
         { 'type' => 'direct', 'path' => path.empty? ? entity : path }
       end
@@ -691,12 +717,38 @@ module Mxrb
       def data_view_entity(source)
         if source['$Type'] == 'Forms$ListenTargetSource'
           target = source['ListenTarget'].to_s
-          list = @source.documents.flat_map { descendants(_1) }.find do |value|
-            value['$Type'] == 'Forms$ListView' && value['Name'] == target
+          widget = @source.documents.flat_map { descendants(_1) }.find do |value|
+            %w[Forms$ListView Forms$DataGrid Forms$TemplateGrid].include?(value['$Type']) &&
+              value['Name'] == target
           end
-          return list_view_entity(list || {})
+          return listened_widget_entity(widget || {})
         end
 
+        path = source['EntityPath'].to_s
+        return path.split('/').last unless path.empty?
+
+        reference = source['EntityRef'] || {}
+        steps = array(reference['Steps'])
+        destination = steps.last&.fetch('DestinationEntity', '').to_s
+        return destination unless destination.empty?
+
+        direct = reference['Entity'].to_s
+        return direct unless direct.empty?
+
+        microflow_return_entity(source)
+      end
+
+      def data_view_editable?(widget)
+        editability = widget['Editability'].to_s
+        return editability != 'Never' unless editability.empty?
+
+        widget['Editable'] != false
+      end
+
+      def listened_widget_entity(widget)
+        return list_view_entity(widget) if widget['$Type'] == 'Forms$ListView'
+
+        source = widget['DataSource'] || {}
         path = source['EntityPath'].to_s
         return path.split('/').last unless path.empty?
 
@@ -724,11 +776,18 @@ module Mxrb
       end
 
       def microflow_return_entity(source)
-        name = source.dig('MicroflowSettings', 'Microflow').to_s
-        unit = @source.units_of('Microflows$Microflow').find do |candidate|
+        kind = source['$Type'] == 'Forms$NanoflowSource' ? 'Nanoflow' : 'Microflow'
+        name = flow_source_name(source, kind)
+        unit = (@source.units_of('Microflows$Microflow') + @source.units_of('Microflows$Nanoflow')).find do |candidate|
           "#{candidate.module_name}.#{candidate.document['Name']}" == name
         end
         unit&.document&.dig('MicroflowReturnType', 'Entity').to_s
+      end
+
+      def flow_source_name(source, kind)
+        source.dig("#{kind}Settings", kind).to_s.then do |name|
+          name.empty? ? source[kind].to_s : name
+        end
       end
 
       def data_view_children(widget, plural, singular)
@@ -922,7 +981,7 @@ module Mxrb
       def render_image_viewer(widget)
         source = widget['DataSource'] || {}
         props = {
-          'datasource' => { 'type' => 'direct', 'path' => source['EntityPath'].to_s },
+          'datasource' => { 'type' => 'direct', 'path' => data_view_path(source) },
           'defaultUrl' => widget['DefaultImage'].to_s.empty? ? '' : image_uri(widget['DefaultImage']),
           'thumb' => widget['ShowAsThumbnail'] == true,
           'width' => image_dimension(widget['Width'], widget['WidthUnit']),
@@ -1311,13 +1370,14 @@ module Mxrb
         source = widget['DataSource'] || {}
         return !data_view_entity(source).empty? if source['$Type'] == 'Forms$ListenTargetSource'
         return !data_view_entity(source).empty? if source['$Type'] == 'Forms$MicroflowSource'
+        return !data_view_entity(source).empty? if source['$Type'] == 'Forms$NanoflowSource'
         return false unless source['$Type'] == 'Forms$DataViewSource'
 
         !data_view_entity(source).empty?
       end
 
       def supported_list_view?(widget)
-        %w[Forms$ListViewXPathSource Forms$NewListViewDatabaseSource].include?(
+        %w[Forms$ListViewXPathSource Forms$NewListViewDatabaseSource Forms$MicroflowSource].include?(
           widget.dig('DataSource', '$Type')
         ) &&
           !list_view_entity(widget).empty?
@@ -1336,20 +1396,20 @@ module Mxrb
       def supported_static_image?(widget)
         return false unless image_uri(widget['Image'])
 
-        %w[Forms$MicroflowAction Forms$NoAction].include?(widget.dig('ClickAction', '$Type'))
+        %w[Forms$FormAction Forms$MicroflowAction Forms$NoAction].include?(widget.dig('ClickAction', '$Type'))
       end
 
       def supported_image_viewer?(widget, data_view_context)
         return false unless data_view_context
         return false unless widget.dig('DataSource', '$Type') == 'Forms$ImageViewerSource'
-        return false if widget.dig('DataSource', 'EntityPath').to_s.empty?
+        return false if data_view_path(widget['DataSource'] || {}).empty?
         return false unless widget['DefaultImage'].to_s.empty? || image_uri(widget['DefaultImage'])
 
-        widget.dig('OnClickBehavior', '$Type').to_s == 'Forms$OnClickNothing'
+        ['', 'Forms$OnClickNothing'].include?(widget.dig('OnClickBehavior', '$Type').to_s)
       end
 
       def supported_reference_set_selector?(widget, data_view_context, page_name)
-        path = widget.dig('DataSource', 'EntityPath').to_s
+        path = data_view_path(widget['DataSource'] || {})
         return false unless data_view_context && widget.dig('DataSource', '$Type') == 'Forms$ReferenceSetSource'
         return false unless path.split('/').size == 2
 
@@ -1436,8 +1496,24 @@ module Mxrb
       end
 
       def grid_weight_class(size, weight)
+        return if weight.nil?
+
         value = Integer(weight || -1)
-        "col-#{size}-#{value}" if (1..12).cover?(value)
+        prefix = "col-#{size}"
+        return if value == -1
+        return "#{prefix}-auto" if value == -2
+
+        "#{prefix}-#{value}" if (1..12).cover?(value)
+      end
+
+      def grid_row_alignment_class(value)
+        alignment = value.to_s.downcase
+        "align-children-#{alignment}" if %w[start center end].include?(alignment)
+      end
+
+      def grid_column_alignment_class(value)
+        alignment = value.to_s.downcase
+        "align-self-#{alignment}" if %w[start center end].include?(alignment)
       end
 
       def layout_argument_id(parameter)

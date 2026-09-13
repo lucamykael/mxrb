@@ -104,6 +104,7 @@ RSpec.describe 'native navigation and design systems' do
       rebuilt = File.join(dir, 'rebuilt', 'app.mpr')
 
       Mxrb::Exporter.new(path, exported).export!
+      expect(File.read(File.join(exported, 'project.rb'))).to include('mendix_project_id ')
       expect(File.read(File.join(exported, 'app', 'navigation', 'navigation.rb')))
         .to include(
           'home_for', 'item "Home"', 'Applicatie',

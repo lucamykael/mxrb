@@ -52,9 +52,9 @@ RSpec.describe 'Native regression edge contracts' do
 
   it 'exports explicit association storage and unique/duplicate parameter maps' do
     exporter = Mxrb::Exporter.allocate
-    expect(exporter.send(:pass_source, [%w[A 1]])).to eq('{ "A" => 1 }')
+    expect(exporter.send(:pass_source, [%w[A 1]])).to eq('{ "A" => "1" }')
     expect(exporter.send(:pass_source, [%w[A 1], %w[A 2]]))
-      .to eq('[["A", 1], ["A", 2]]')
+      .to eq('[["A", "1"], ["A", "2"]]')
 
     association = Struct.new(
       :to_entity_id, :association_type, :owner, :name, :storage_format,

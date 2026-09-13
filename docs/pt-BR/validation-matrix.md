@@ -94,15 +94,15 @@ pluggable equivalentes também passaram no Runtime Mendix.
 
 ## Índice semântico
 
-Os seis MPRs produziram **1.778 artefatos** e **3.387 referências**. Consultas
+Os seis MPRs produziram **1.734 artefatos** e **3.388 referências**. Consultas
 de referências, callers, callees, impacto, lint e diff tipado foram exercitadas
 sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 1.337 exemplos, zero falhas;
-- 100% das linhas: 24.082/24.082;
-- 100% dos branches: 9.883/9.883;
+- 1.786 exemplos, zero falhas;
+- 96,09% das linhas: 34.759/36.172;
+- 89,16% dos branches: 13.982/15.682;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

@@ -7,7 +7,7 @@ module Mxrb
   module Compiler
     # Mirrors Mendix's Database Connector build extension by lowering custom activities to Java calls.
     # The mapping mirrors one cohesive external build-extension contract.
-    # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity,
+    # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
     # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
     class DatabaseConnectorActionCompiler
       include ModelValues
@@ -274,7 +274,7 @@ module Mxrb
         "#{hex[0, 8]}-#{hex[8, 4]}-4#{hex[13, 3]}-8#{hex[17, 3]}-#{hex[20, 12]}"
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity,
+    # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
     # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
   end
 end

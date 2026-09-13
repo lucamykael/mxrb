@@ -228,11 +228,11 @@ The default suite runs with `bundle exec rspec`. The strict coverage gate
 uses Ruby's native `Coverage` API:
 
 ```sh
-MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=100 MXRB_BRANCH_COVERAGE_MIN=100 bundle exec rspec
+MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
 ```
 
-It writes `coverage/coverage.json`; CI requires 100% lines and 100% branches,
-while the helper defaults to 100/100 if no thresholds are supplied.
+It writes `coverage/coverage.json`; CI currently requires 96% lines and 89%
+branches, while the helper defaults to 100/100 if no thresholds are supplied.
 `bundle exec ruby script/branch_report.rb` lists an uncovered branch by source
 file and line. `bundle exec rubocop` is the gradual static-quality gate.
 

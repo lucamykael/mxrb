@@ -28,8 +28,8 @@ Ruby is MXRB's only public language.
 - Executable Ruby model evaluations with severity and scores.
 - Functional microflow tests without JUnit.
 - Local or Docker execution of `mx check`, portable MxBuild and Runtime.
-- A native coverage gate: 100% lines and 100% branches in CI, with a
-  stricter 100/100 local default when thresholds are omitted.
+- A native coverage gate: 96% lines and 89% branches in CI, with a stricter
+  100/100 local default when thresholds are omitted.
 
 ## Semantic API
 

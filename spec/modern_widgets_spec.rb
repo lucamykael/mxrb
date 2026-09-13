@@ -30,6 +30,7 @@ RSpec.describe 'modern page widgets' do
         'Type' => spec.fetch(:type), 'DefaultValue' => spec.fetch(:default, '')
       }
       value_type['ObjectType'] = spec[:object_type] if spec[:object_type]
+      value_type['Required'] = spec[:required] if spec.key?(:required)
       {
         '$ID' => "property-type-#{index}", '$Type' => 'CustomWidgets$WidgetPropertyType',
         'PropertyKey' => key.to_s, 'ValueType' => value_type
@@ -40,6 +41,36 @@ RSpec.describe 'modern page widgets' do
     widget['Object'] = writer.send(:custom_widget_object_doc, object_type)
     widget
   end # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+  def nested_objects_widget(id) # rubocop:disable Metrics/MethodLength
+    nested_object_type = {
+      '$ID' => "#{id}-object-type", '$Type' => 'CustomWidgets$WidgetObjectType',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array(%w[name amount].map.with_index do |key, index|
+        {
+          '$ID' => "#{id}-property-#{index}", '$Type' => 'CustomWidgets$WidgetPropertyType',
+          'PropertyKey' => key,
+          'ValueType' => {
+            '$ID' => "#{id}-value-#{index}", '$Type' => 'CustomWidgets$WidgetValueType',
+            'Type' => 'String', 'DefaultValue' => ''
+          }
+        }
+      end, marker: 2)
+    }
+    schema_widget(id, { series: { type: 'Object', object_type: nested_object_type } })
+  end # rubocop:enable Metrics/MethodLength
+
+  def nested_object_state(current_writer, widget)
+    property = current_writer.send(:custom_widget_properties, widget).fetch('series')
+    current_writer.send(:array_items, property.dig('Value', 'Objects')).map do |object|
+      properties = current_writer.send(
+        :widget_object_properties, property.dig('ValueType', 'ObjectType'), object
+      )
+      {
+        ids: [object['$ID'], *properties.values.flat_map { [_1['$ID'], _1.dig('Value', '$ID')] }],
+        values: properties.transform_values { _1.dig('Value', 'PrimitiveValue') }
+      }
+    end
+  end
 
   it 'writes a modern text area and widgets nested in tab pages' do
     Dir.mktmpdir do |dir|
@@ -75,7 +106,7 @@ RSpec.describe 'modern page widgets' do
       options: {
         widget_id: 'example.Map', widget_name: 'Map', properties: {
           mode: 'satellite', config: { PrimitiveValue: 'compact', Rules: [{ Enabled: true }] },
-          ignored: nil, unknown: 'not-in-schema'
+          ignored: nil
         }
       }
     }
@@ -171,6 +202,242 @@ RSpec.describe 'modern page widgets' do
     expect(writer.send(:array_items, values.dig('content', 'Value', 'Widgets')).length).to eq(1)
     expect(writer.send(:widget_object_properties, nil, nil)).to eq({})
     expect(writer.send(:widget_object_properties, widget.dig('Type', 'ObjectType'), nil)).to eq({})
+  end
+
+  it 'clears explicitly nil pluggable widget values according to their value types' do
+    primitive_types = %w[String Boolean Integer Decimal Number Enumeration]
+    specs = primitive_types.to_h do |type|
+      [type.downcase.to_sym, { type:, default: "#{type} default" }]
+    end.merge(
+      expression: { type: 'Expression', default: '$currentObject/Name' },
+      text: { type: 'TextTemplate', default: 'Default text' },
+      optional_text: { type: 'TextTemplate' },
+      required_text: { type: 'TextTemplate', required: true },
+      attribute: { type: 'Attribute' }, association: { type: 'Association' },
+      data_source: { type: 'DataSource' }, action: { type: 'Action' },
+      widgets: { type: 'Widgets' }, object: { type: 'Object' },
+      selection: { type: 'Selection' }, omitted: { type: 'String', default: 'omitted default' }
+    )
+    widget = schema_widget('example.Clearable', specs)
+    values = writer.send(:custom_widget_properties, widget)
+    values.each_value do |property|
+      property['Value']['XPathConstraint'] = 'preserved'
+      property['Value']['PrimitiveValue'] = 'configured'
+      property['Value']['Expression'] = 'configured'
+      property['Value']['TextTemplate'] = { 'configured' => true }
+      property['Value']['AttributeRef'] = { 'configured' => true }
+      property['Value']['EntityRef'] = { 'configured' => true }
+      property['Value']['DataSource'] = { 'configured' => true }
+      property['Value']['Action'] = { 'configured' => true }
+      property['Value']['Widgets'] = [2, { 'configured' => true }]
+      property['Value']['Objects'] = [2, { 'configured' => true }]
+      property['Value']['Selection'] = 'Single'
+    end
+    cleared = specs.keys - [:omitted]
+
+    writer.send(:configure_pluggable_widget!, widget, properties: cleared.to_h { [_1, nil] })
+
+    primitive_types.each do |type|
+      expect(values.dig(type.downcase, 'Value', 'PrimitiveValue')).to eq("#{type} default")
+    end
+    expect(values.dig('expression', 'Value', 'Expression')).to eq('$currentObject/Name')
+    expect(Mxrb::Model::Page.allocate.send(
+             :extract_text, values.dig('text', 'Value', 'TextTemplate')
+           )).to eq('Default text')
+    expect(values.dig('optional_text', 'Value', 'TextTemplate')).to be_nil
+    expect(values.dig('required_text', 'Value', 'TextTemplate')).to include(
+      '$Type' => 'Forms$ClientTemplate'
+    )
+    expect(values.dig('attribute', 'Value', 'AttributeRef')).to be_nil
+    expect(values.dig('association', 'Value', 'EntityRef')).to be_nil
+    expect(values.dig('data_source', 'Value', 'DataSource')).to be_nil
+    expect(values.dig('action', 'Value', 'Action')).to include(
+      '$Type' => 'Forms$NoAction', 'DisabledDuringExecution' => true
+    )
+    expect(values.dig('widgets', 'Value', 'Widgets')).to eq([2])
+    expect(values.dig('object', 'Value', 'Objects')).to eq([2])
+    expect(values.dig('selection', 'Value', 'Selection')).to eq('None')
+    expect(values.dig('omitted', 'Value', 'PrimitiveValue')).to eq('configured')
+    expect(values.values).to all(satisfy { _1.dig('Value', 'XPathConstraint') == 'preserved' })
+  end
+
+  it 'fails closed when nil cannot be safely mapped to a pluggable widget field' do
+    %w[Icon Image System Future].each do |type|
+      widget = schema_widget("example.#{type}", { value: { type: } })
+
+      expect do
+        writer.send(:configure_pluggable_widget!, widget, properties: { value: nil })
+      end.to raise_error(Mxrb::ValidationError, /cannot clear.*#{type}/)
+    end
+  end
+
+  it 'reuses nested widget object identities and creates identities only for appends' do
+    nested_object_type = {
+      '$ID' => 'nested-object', '$Type' => 'CustomWidgets$WidgetObjectType',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array(%w[name amount].map.with_index do |key, index|
+        {
+          '$ID' => "nested-property-#{index}", '$Type' => 'CustomWidgets$WidgetPropertyType',
+          'PropertyKey' => key,
+          'ValueType' => {
+            '$ID' => "nested-value-#{index}", '$Type' => 'CustomWidgets$WidgetValueType',
+            'Type' => 'String', 'DefaultValue' => ''
+          }
+        }
+      end, marker: 2)
+    }
+    widget = schema_widget('example.Objects', {
+      series: { type: 'Object', object_type: nested_object_type }
+    })
+    configurations = [
+      { name: 'First', amount: '1' }, { name: 'Second', amount: '2' }
+    ]
+    identities = lambda do
+      objects = writer.send(:array_items, writer.send(:custom_widget_properties, widget)
+                                              .dig('series', 'Value', 'Objects'))
+      objects.map do |object|
+        {
+          object: object['$ID'],
+          properties: writer.send(:array_items, object['Properties']).map do |property|
+            [property['$ID'], property.dig('Value', '$ID')]
+          end
+        }
+      end
+    end
+
+    writer.send(:configure_pluggable_widget!, widget, properties: { series: { objects: configurations } })
+    first_write = identities.call
+    writer.send(:configure_pluggable_widget!, widget, properties: { series: { objects: configurations } })
+    second_write = identities.call
+    expect(second_write).to eq(first_write)
+
+    appended = configurations + [{ name: 'Third', amount: '3' }]
+    writer.send(:configure_pluggable_widget!, widget, properties: { series: { objects: appended } })
+    third_write = identities.call
+    expect(third_write.first(2)).to eq(second_write)
+    expect(third_write.length).to eq(3)
+    existing_ids = second_write.flat_map do |identity|
+      [identity[:object], *identity[:properties].flatten]
+    end
+    appended_ids = [third_write.last[:object], *third_write.last[:properties].flatten]
+    expect(appended_ids & existing_ids).to be_empty
+  end
+
+  it 'fails closed when nested widget object configurations shrink' do
+    current_writer = writer
+    widget = nested_objects_widget('example.ShrinkingObjects')
+    original = [
+      { name: 'First', amount: '1' },
+      { name: 'Second', amount: '2' },
+      { name: 'Third', amount: '3' }
+    ]
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: original } }
+    )
+
+    expect do
+      current_writer.send(
+        :configure_pluggable_widget!, widget,
+        properties: { series: { objects: original.first(2) } }
+      )
+    end.to raise_error(
+      Mxrb::ValidationError,
+      /configuration count 2 is smaller than baseline count 3/
+    )
+  end
+
+  it 'preserves nested object identities for a single positional edit' do
+    current_writer = writer
+    widget = nested_objects_widget('example.EditedObjects')
+    original = [{ name: 'First', amount: '1' }, { name: 'Second', amount: '2' }]
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: original } }
+    )
+    before = nested_object_state(current_writer, widget)
+
+    edited = [{ name: 'First', amount: '1' }, { name: 'Second', amount: '20' }]
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: edited } }
+    )
+    after = nested_object_state(current_writer, widget)
+
+    expect(after.map { _1[:ids] }).to eq(before.map { _1[:ids] })
+    expected_values = [
+      { 'name' => 'First', 'amount' => '1' },
+      { 'name' => 'Second', 'amount' => '20' }
+    ]
+    expect(after.map { _1[:values] }).to eq(expected_values)
+  end
+
+  it 'preserves positional identities for legitimate duplicate object configurations' do
+    current_writer = writer
+    widget = nested_objects_widget('example.DuplicateObjects')
+    duplicates = [{ name: 'Same', amount: '1' }, { name: 'Same', amount: '1' }]
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: duplicates } }
+    )
+    before = nested_object_state(current_writer, widget)
+
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: duplicates } }
+    )
+    after = nested_object_state(current_writer, widget)
+
+    expect(after.map { _1[:ids] }).to eq(before.map { _1[:ids] })
+    expect(after[0][:ids]).not_to eq(after[1][:ids])
+  end
+
+  it 'allows an undetectable same-length reorder and keeps identities by position' do
+    current_writer = writer
+    widget = nested_objects_widget('example.ReorderedObjects')
+    original = [{ name: 'First', amount: '1' }, { name: 'Second', amount: '2' }]
+    current_writer.send(
+      :configure_pluggable_widget!, widget, properties: { series: { objects: original } }
+    )
+    before = nested_object_state(current_writer, widget)
+
+    expect do
+      current_writer.send(
+        :configure_pluggable_widget!, widget,
+        properties: { series: { objects: original.reverse } }
+      )
+    end.not_to raise_error
+    after = nested_object_state(current_writer, widget)
+
+    expect(after.map { _1[:ids] }).to eq(before.map { _1[:ids] })
+    expect(after.map { _1.dig(:values, 'name') }).to eq(%w[Second First])
+  end
+
+  it 'fails closed when a nested widget object baseline has corrupt pointers' do
+    nested_object_type = {
+      '$ID' => 'nested-object', '$Type' => 'CustomWidgets$WidgetObjectType',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array([{
+        '$ID' => 'nested-property', '$Type' => 'CustomWidgets$WidgetPropertyType',
+        'PropertyKey' => 'name',
+        'ValueType' => {
+          '$ID' => 'nested-value', '$Type' => 'CustomWidgets$WidgetValueType',
+          'Type' => 'String', 'DefaultValue' => ''
+        }
+      }], marker: 2)
+    }
+    widget = schema_widget('example.CorruptObjects', {
+      series: { type: 'Object', object_type: nested_object_type }
+    })
+    configuration = { series: { objects: [{ name: 'First' }] } }
+    writer.send(:configure_pluggable_widget!, widget, properties: configuration)
+    object = writer.send(:array_items, writer.send(:custom_widget_properties, widget)
+                                        .dig('series', 'Value', 'Objects')).first
+    original_pointer = object['TypePointer']
+    object['TypePointer'] = 'corrupt-object-type'
+    expect do
+      writer.send(:configure_pluggable_widget!, widget, properties: configuration)
+    end.to raise_error(Mxrb::ValidationError, %r{invalid ObjectType/WidgetObject pointer})
+
+    object['TypePointer'] = original_pointer
+    property = writer.send(:array_items, object['Properties']).first
+    property['Value']['TypePointer'] = 'corrupt-value-type'
+    expect do
+      writer.send(:configure_pluggable_widget!, widget, properties: configuration)
+    end.to raise_error(Mxrb::ValidationError, %r{invalid WidgetValue/ValueType pointer})
   end
 
   it 'covers optional synchronization paths without inventing widget values' do
@@ -413,6 +680,52 @@ RSpec.describe 'modern page widgets' do
       .to raise_error(ArgumentError, /requires a Hash/)
   end
 
+  it 'projects canonical title, radio, and static image widgets as typed Ruby' do
+    raw = [
+      {
+        '$Type' => 'Forms$Title', 'Name' => 'PageTitle',
+        'ConditionalVisibilitySettings' => nil, 'TabIndex' => 0
+      },
+      {
+        '$Type' => 'Forms$RadioButtonGroup', 'Name' => 'Status',
+        'AttributeRef' => { 'Attribute' => 'Ui.Order.Status' },
+        'LabelTemplate' => 'Status', 'RenderHorizontal' => true
+      },
+      {
+        '$Type' => 'Forms$StaticImageViewer', 'Name' => 'Logo',
+        'Image' => 'Ui.Images.Logo', 'AlternativeText' => 'Logo',
+        'Width' => 80, 'Height' => 50, 'WidthUnit' => 'Pixels',
+        'HeightUnit' => 'Pixels', 'Responsive' => true,
+        'ClickAction' => {
+          '$Type' => 'Forms$CallNanoflowClientAction',
+          'NanoflowSettings' => { 'Nanoflow' => 'Ui.Toggle', 'ParameterMappings' => [2] }
+        }
+      }
+    ]
+    parsed = []
+    page = Mxrb::Model::Page.allocate
+    page.send(:parse_widgets, raw, parsed)
+
+    expect(parsed.map { _1.fetch(:type) }).to eq(%i[page_title radio_button_group static_image])
+    expect(parsed[1].fetch(:options)).to include(
+      attribute: 'Ui.Order.Status', caption: 'Status', horizontal: true
+    )
+    expect(parsed[2].fetch(:options)).to include(
+      image: 'Ui.Images.Logo', alternative_text: 'Logo', width: 80, height: 50
+    )
+    source = parsed.flat_map { Mxrb::Exporter.allocate.send(:render_widget, _1, 2) }.join("\n")
+    expect(source).to include(
+      'page_title :PageTitle', 'radio_button_group :Status', 'horizontal: true',
+      'static_image :Logo', 'image: "Ui.Images.Logo"', 'on_click nanoflow: :Toggle'
+    )
+    expect(source).not_to include('native_widget', 'deep_structure:')
+
+    rebuilt = parsed.map { writer.send(:widget_doc, _1) }
+    expect(rebuilt.map { _1.fetch('$Type') }).to eq(
+      %w[Forms$Title Forms$RadioButtonGroup Forms$StaticImageViewer]
+    )
+  end
+
   it 'reconstructs BSON values in native widgets nested inside containers and tabs' do
     encoded = Base64.strict_encode64("\x01\x02".b)
     page = Mxrb::Dsl::PageBuilder.new(:P)
@@ -440,6 +753,155 @@ RSpec.describe 'modern page widgets' do
     expect(tabbed.type).to eq(:uuid)
   end
 
+  it 'projects legacy file, reference-set, navigation, and scroll controls semantically' do
+    raw = [
+      { '$Type' => 'Forms$FileManager', 'Name' => 'Files', 'MaxFileSize' => 10,
+        'Editable' => 'Always', 'Type' => 'Both' },
+      { '$Type' => 'Forms$ReferenceSetSelector', 'Name' => 'Members',
+        'SelectionMode' => 'Multi', 'NumberOfRows' => 25 },
+      { '$Type' => 'Forms$NavigationList', 'Name' => 'Links', 'TabIndex' => 0 },
+      { '$Type' => 'Forms$ScrollContainer', 'Name' => 'Shell',
+        'Alignment' => 'Center', 'LayoutMode' => 'Headline',
+        'ScrollBehavior' => 'PerRegion', 'WidthMode' => 'Auto' }
+    ]
+    parsed = []
+    Mxrb::Model::Page.allocate.send(:parse_widgets, raw, parsed)
+
+    expect(parsed.map { _1.fetch(:type) }).to eq(
+      %i[file_manager reference_set_selector navigation_list scroll_container]
+    )
+    source = parsed.flat_map { Mxrb::Exporter.allocate.send(:render_widget, _1, 2) }.join("\n")
+    expect(source).to include(
+      'file_manager :Files', 'reference_set_selector :Members',
+      'navigation_list :Links', 'scroll_container :Shell'
+    )
+    expect(source).not_to include('native_widget', 'deep_structure:', 'bson_binary(')
+    expect(parsed.map { writer.send(:widget_doc, _1).fetch('$Type') }).to eq(
+      raw.map { _1.fetch('$Type') }
+    )
+
+    ruby_exporter = Mxrb::RubyApp::Exporter.allocate
+    runtime_source = parsed.map do |widget|
+      manifest = ruby_exporter.send(:widget_manifest, widget)
+      ruby_exporter.send(:runtime_widget_call_source, manifest, 2)
+    end.join("\n")
+    expect(runtime_source).to match(/file_manager(?:\s|\()/)
+    expect(runtime_source).to match(/reference_set_selector(?:\s|\()/)
+    expect(runtime_source).to match(/navigation_list(?:\s|\()/)
+    expect(runtime_source).to match(/scroll_container(?:\s|\()/)
+    expect(runtime_source).not_to include('native_widget')
+
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    tree.file_manager(:Files)
+    tree.reference_set_selector(:Members)
+    tree.navigation_list(:Links)
+    tree.scroll_container(:Shell)
+    expect(tree.widgets.map { _1.fetch('type') }).to eq(
+      %w[file_manager reference_set_selector navigation_list scroll_container]
+    )
+  end
+
+  it 'projects legacy image and menu controls as editable typed Ruby' do
+    raw = [
+      {
+        '$Type' => 'Forms$ImageViewer', 'Name' => 'Preview',
+        'DataSource' => {
+          '$Type' => 'Forms$ImageViewerSource',
+          'EntityRef' => { '$Type' => 'DomainModels$DirectEntityRef', 'Entity' => 'Ui.Picture' },
+          'ForceFullObjects' => false
+        },
+        'AlternativeText' => { '$Type' => 'Forms$ClientTemplate', 'Template' => 'Preview' },
+        'ClickAction' => {
+          '$Type' => 'Forms$MicroflowAction',
+          'MicroflowSettings' => { 'Microflow' => 'Ui.Download', 'ParameterMappings' => [2] }
+        },
+        'DefaultImage' => 'Ui.Images.Empty', 'Width' => 120, 'Height' => 100,
+        'WidthUnit' => 'Pixels', 'HeightUnit' => 'Auto', 'Responsive' => true,
+        'ShowAsThumbnail' => true, 'OnClickEnlarge' => false, 'TabIndex' => 1
+      },
+      {
+        '$Type' => 'Forms$ImageUploader', 'Name' => 'Upload',
+        'AllowedExtensions' => 'png;jpg', 'Editable' => 'Always',
+        'LabelTemplate' => { '$Type' => 'Forms$ClientTemplate', 'Template' => 'Upload image' },
+        'MaxFileSize' => 8, 'ThumbnailSize' => '48;32', 'TabIndex' => 2
+      },
+      {
+        '$Type' => 'Forms$MenuBar', 'Name' => 'Menu',
+        'MenuSource' => { '$Type' => 'Forms$MenuDocumentSource', 'Menu' => 'Ui.MainMenu' },
+        'TabIndex' => 3
+      },
+      {
+        '$Type' => 'Forms$NavigationTree', 'Name' => 'Tree',
+        'MenuSource' => { '$Type' => 'Forms$MenuDocumentSource', 'Menu' => 'Ui.MainMenu' },
+        'TabIndex' => 4
+      }
+    ]
+    parsed = []
+    Mxrb::Model::Page.allocate.send(:parse_widgets, raw, parsed)
+
+    expect(parsed.map { _1.fetch(:type) }).to eq(
+      %i[image_viewer image_uploader menu_bar navigation_tree]
+    )
+    expect(parsed[0].fetch(:options)).to include(
+      entity: 'Ui.Picture', alternative_text: 'Preview', default_image: 'Ui.Images.Empty',
+      width: 120, width_unit: :pixels, show_as_thumbnail: true
+    )
+    expect(parsed[0].fetch(:events)).to contain_exactly(
+      include(event: :on_click, kind: :microflow, handler: 'Download')
+    )
+    expect(parsed[1].fetch(:options)).to include(
+      caption: 'Upload image', allowed_extensions: 'png;jpg',
+      thumbnail_width: 48, thumbnail_height: 32
+    )
+    expect(parsed[2].fetch(:options)).to include(menu: 'Ui.MainMenu', tab_index: 3)
+
+    source = parsed.flat_map { Mxrb::Exporter.allocate.send(:render_widget, _1, 2) }.join("\n")
+    expect(source).to include(
+      'image_viewer :Preview', 'entity: "Ui.Picture"', 'on_click microflow: :Download',
+      'image_uploader :Upload', 'thumbnail_width: 48',
+      'menu_bar :Menu', 'navigation_tree :Tree', 'menu: "Ui.MainMenu"'
+    )
+    expect(source).not_to include('native_widget', 'deep_structure:', 'bson_binary(')
+
+    rebuilt = parsed.map { writer.send(:widget_doc, _1) }
+    expect(rebuilt.map { _1.fetch('$Type') }).to eq(raw.map { _1.fetch('$Type') })
+    expect(rebuilt[0].dig('DataSource', 'EntityRef', 'Entity')).to eq('Ui.Picture')
+    expect(rebuilt[0].dig('ClickAction', '$Type')).to eq('Forms$MicroflowAction')
+    expect(rebuilt[1]['ThumbnailSize']).to eq('48;32')
+    expect(rebuilt[2].dig('MenuSource', 'Menu')).to eq('Ui.MainMenu')
+
+    ruby_exporter = Mxrb::RubyApp::Exporter.allocate
+    runtime_source = parsed.map do |widget|
+      manifest = ruby_exporter.send(:widget_manifest, widget)
+      ruby_exporter.send(:runtime_widget_call_source, manifest, 2)
+    end.join("\n")
+    expect(runtime_source).to include('image_viewer', 'image_uploader', 'menu_bar', 'navigation_tree')
+    expect(runtime_source).not_to include('native_widget')
+
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    tree.image_viewer(:Preview, entity: 'Ui.Picture')
+    tree.image_uploader(:Upload)
+    tree.menu_bar(:Menu, menu: 'Ui.MainMenu')
+    tree.navigation_tree(:Tree, menu: 'Ui.MainMenu')
+    expect(tree.widgets.map { _1.fetch('type') }).to eq(
+      %w[image_viewer image_uploader menu_bar navigation_tree]
+    )
+  end
+
+  it 'evaluates exported tab pages through the runtime page tree' do
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    tree.tab_control(:Tabs) do
+      tab_page :General, caption: 'General' do
+        text :Greeting, caption: 'Hello'
+      end
+    end
+
+    expect(tree.widgets.dig(0, 'options', 'tabs', 0)).to include(
+      'name' => 'General', 'caption' => 'General',
+      'widgets' => include(include('type' => 'text', 'name' => 'Greeting'))
+    )
+  end
+
   it 'retains children nested directly in a generic widget builder' do
     empty = Mxrb::Dsl::WidgetBuilder.new(:layout_grid, :Empty)
     expect(empty.to_h).not_to have_key(:children)
@@ -457,6 +919,8 @@ RSpec.describe 'modern page widgets' do
 
   it 'normalizes every pluggable widget property shape for the React projection' do
     page = Mxrb::Model::Page.allocate
+    expect(page.send(:data_view_editability, true)).to eq(:always)
+    expect(page.send(:data_view_editability, 'False')).to eq(:never)
     allow(page).to receive(:parse_widgets) do |_widgets, target|
       target << { type: :text, name: 'Slot', options: {}, events: [] }
     end
@@ -544,6 +1008,27 @@ RSpec.describe 'modern page widgets' do
       'Type' => { 'WidgetId' => 'example.Native', 'SupportedPlatform' => 'Web' }
     })
     expect(native[:options]).to include(widget_id: 'example.Native', platform: 'Web')
+  end
+
+  it 'preserves a nil pluggable value when its package omits the property type' do
+    value = { 'PrimitiveValue' => 'package-owned-default' }
+    property = { 'Value' => value, 'ValueType' => {} }
+
+    expect(writer.send(:configure_custom_widget_value!, property, nil)).to equal(value)
+    expect(value).to eq('PrimitiveValue' => 'package-owned-default')
+  end
+
+  it 'omits empty unsupported pluggable properties from the editable projection' do
+    widget = schema_widget('example.UnsupportedNil', {
+      icon: { type: 'Icon' }, title: { type: 'String' }
+    })
+    properties = Mxrb::Model::Page.allocate.send(
+      :pluggable_properties, widget['Object'], widget.dig('Type', 'ObjectType')
+    )
+
+    expect(properties).not_to have_key('icon')
+    expect(properties).to have_key('title')
+    expect(properties['title']).to be_nil
   end
 
   it 'retains explicit association storage and exact member access overrides' do

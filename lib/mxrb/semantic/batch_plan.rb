@@ -46,7 +46,7 @@ module Mxrb
           raise BatchError,
                 "batch failed at plan #{idx} of #{@plans.size}: #{error.message}#{detail}"
         ensure
-          FileUtils.rm_f(backup_path) rescue nil
+          @project.mpr.cleanup_backup!(backup_path) rescue nil
         end
         self
       end

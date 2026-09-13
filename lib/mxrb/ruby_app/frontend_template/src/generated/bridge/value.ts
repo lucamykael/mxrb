@@ -140,14 +140,69 @@ export const inlineStyle = (value: string | undefined): CSSProperties =>
       }),
   );
 
+export interface EventArgumentSources {
+  pageParameter?: EntityRecord | null;
+  widgetValues?: RuntimeVariables;
+  localVariables?: RuntimeVariables;
+}
+
+const namedEventArgument = (
+  source: RuntimeVariables | undefined,
+  kind: string,
+  name: string,
+): RuntimeValue | undefined => {
+  if (!source || !Object.prototype.hasOwnProperty.call(source, name)) {
+    throw new Error(`Cannot resolve ${kind} event argument ${name || '(unnamed)'}`);
+  }
+  return source[name];
+};
+
+const structuredEventArgument = (
+  argument: RuntimeValue | undefined,
+  context: EntityRecord | null,
+  sources: EventArgumentSources,
+): RuntimeValue | undefined => {
+  if (
+    !argument ||
+    typeof argument !== 'object' ||
+    Array.isArray(argument) ||
+    !('kind' in argument)
+  ) {
+    return argument;
+  }
+
+  const descriptor = argument as Record<string, RuntimeValue>;
+  const kind = typeof descriptor.kind === 'string' ? descriptor.kind : '';
+  const normalizedKind = kind.replace(/[^a-z]/gi, '').toLowerCase();
+  const name = typeof descriptor.name === 'string' ? descriptor.name : '';
+  switch (normalizedKind) {
+    case 'current':
+      return context;
+    case 'pageparameter':
+      if (!Object.prototype.hasOwnProperty.call(sources, 'pageParameter')) {
+        throw new Error(`Cannot resolve PageParameter event argument ${name || '(unnamed)'}`);
+      }
+      return sources.pageParameter;
+    case 'widget':
+      return namedEventArgument(sources.widgetValues, 'Widget', name);
+    case 'localvariable':
+      return namedEventArgument(sources.localVariables, 'LocalVariable', name);
+    default:
+      throw new Error(`Unsupported event argument source ${kind || '(missing kind)'}`);
+  }
+};
+
 export const eventArguments = (
   event: WidgetEvent | undefined,
   context: EntityRecord | null,
+  sources: EventArgumentSources = {},
 ): RuntimeVariables =>
   Object.fromEntries(
-    Object.entries(event?.arguments || {}).map(([name, expression]) => [
+    Object.entries(event?.arguments || {}).map(([name, argument]) => [
       name,
-      expressionValue(expression, context),
+      typeof argument === 'string'
+        ? expressionValue(argument, context)
+        : structuredEventArgument(argument, context, sources),
     ]),
   );
 

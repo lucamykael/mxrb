@@ -23,7 +23,9 @@ incorreto de “todo o código virou documento Mendix”.
 
 Entidades, atributos e validações `required`/`unique` declarados em Ruby voltam
 ao domínio Mendix. O contrato inclui documentação, valor padrão, tamanho de
-string, localização de data e referência de enumeração. Microflows e nanoflows
+string, localização de data, referência de enumeração e associações locais ou
+cross-module. Associações incluem tipo, owner, storage format, documentação,
+delete behavior e identidade nativa estável. Microflows e nanoflows
 com grafo coberto pelo DSL são exportados automaticamente com bloco `native` e
 `body_fingerprint`; ao editar o corpo Ruby, a recompilação atualiza o documento
 Mendix. Grafos ainda não mapeados ficam intactos no sidecar e aparecem como
@@ -32,6 +34,9 @@ Mendix. Grafos ainda não mapeados ficam intactos no sidecar e aparecem como
 Novas páginas que precisam existir no Studio Pro devem usar `Page.native`. Uma
 rota React manual continua sendo uma rota React — o relatório não a promove
 artificialmente a página Mendix.
+
+A matriz por superfície, com a diferença entre leitura, preservação e edição,
+está em [Cobertura Ruby nativa](cobertura-ruby-nativa.md).
 
 ## TypeScript que roda dentro do Mendix
 

@@ -23,6 +23,9 @@ module Mxrb
         ['changelog', 'changelog [VERSION]', 'Show release notes without updating MXRB', 'mxrb changelog'],
         ['compare', 'compare LEFT.mpr RIGHT.mpr', 'Compare structural MPR snapshots',
          'mxrb compare before.mpr after.mpr'],
+        ['convert', 'convert FILE.mpr DIR --studio VERSION [--output FILE.mpr]',
+         'Convert an MPR to editable Ruby and a Studio-versioned MPR',
+         'mxrb convert Shop.mpr shop-ruby --studio 11.12.1'],
         ['db', 'db <ACTION> FILE.mpr [options]', 'Manage the isolated PostgreSQL and Runtime workspace',
          'mxrb db status Shop.mpr'],
         ['design', 'design <init|scan|migrate> ...', 'Create or migrate the project design system',
@@ -142,6 +145,14 @@ module Mxrb
           ['--mode MODE', 'Project structure: mendix (default) or ruby'],
           ['--flymetothemoon', 'Apply the full Sinatra-based Ruby preset'],
           ['--onrails', 'Apply the conventional Rails preset']
+        ],
+        'convert' => [
+          ['--studio VERSION', 'Exact Studio Pro target (MAJOR.MINOR.PATCH[.BUILD])'],
+          ['--mendix VERSION', 'Alias for --studio'],
+          ['--output FILE', 'Generated MPR path (default: DIR/build/source-name.mpr)'],
+          ['--flymetothemoon', 'Apply the full Sinatra-based Ruby preset'],
+          ['--onrails', 'Apply the conventional Rails preset'],
+          ['--json', 'Print source, generated MPR, versions, counts, and SHA-256 values']
         ],
         'diagram-er' => [
           ['--module NAME', 'Show one module; repeat to show several'],
@@ -315,7 +326,7 @@ module Mxrb
                            'mxrb widgets sync project.rb Shop.mpr']
       }.to_h { |path, values| [path, Command.new(path, *values)] }.freeze
 
-      FEATURED = %w[init generate export run validate doctor update].freeze
+      FEATURED = %w[init generate convert export run validate doctor update].freeze
 
       def welcome(release: nil)
         lines = ["mxrb #{Mxrb::VERSION} — Ruby-first Mendix toolkit"]
@@ -344,7 +355,7 @@ module Mxrb
             bundle exec mxrb generate project.rb
 
           Convert and run an existing Mendix application as Ruby + React:
-            mxrb export App.mpr app-ruby --mode ruby
+            mxrb convert App.mpr app-ruby --studio 11.12.1
             mxrb run app-ruby
 
           Understand an existing model:

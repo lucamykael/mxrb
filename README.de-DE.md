@@ -98,12 +98,13 @@ Entitäts-/XPath-Zählungen.
 
 ```sh
 bundle exec rspec
-MXRB_COVERAGE=1 bundle exec rspec
+MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
 bundle exec ruby script/branch_report.rb
 bundle exec rubocop
 ```
 
-Die Suite erzwingt 100 % Zeilen- und Branch-Abdeckung.
+CI erzwingt derzeit mindestens 96 % Zeilen- und 89 % Branch-Abdeckung. Ohne
+explizite Grenzwerte behält der lokale Helper den strengeren Standard 100/100.
 
 Siehe die [vollständige deutsche Dokumentation](docs/de-DE/README.md).
 

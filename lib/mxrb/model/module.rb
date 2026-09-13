@@ -22,23 +22,40 @@ module Mxrb
         'Rest$ConsumedRestService' => 'integrations',
         'Rest$ConsumedODataService' => 'integrations',
         'AppServices$ConsumedAppService' => 'integrations',
-        'ODataImport$ConsumedODataService' => 'integrations'
+        'ODataImport$ConsumedODataService' => 'integrations',
+        'DatabaseConnector$DatabaseConnection' => 'persistence/external'
       }.freeze
       MAPPING_DOCUMENT_TYPES = INFRASTRUCTURE_DOCUMENT_ROUTES.keys.grep(
         /Mappings|JsonStructures|MessageDefinitions|XmlSchemas/
       ).freeze
       APPLICATION_DOCUMENT_ROUTES = {
         'DataSets$DataSet' => 'queries/datasets',
-        'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events'
+        'Queues$Queue' => 'jobs/task_queues',
+        'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events',
+        'JavaActions$JavaAction' => 'actions/java',
+        'JavaScriptActions$JavaScriptAction' => 'actions/javascript'
+      }.freeze
+      PRESENTATION_DOCUMENT_ROUTES = {
+        'Forms$Layout' => 'layouts',
+        'Forms$PageTemplate' => 'page_templates',
+        'Forms$BuildingBlock' => 'building_blocks',
+        'Forms$Snippet' => 'snippets'
+      }.freeze
+      ASSET_DOCUMENT_ROUTES = {
+        'Images$ImageCollection' => 'assets/images',
+        'CustomIcons$CustomIconCollection' => 'assets/icons'
       }.freeze
       DOMAIN_DOCUMENT_ROUTES = {
         'DomainModels$ViewEntitySourceDocument' => 'oql_views',
         'Enumerations$Enumeration' => 'enumerations',
-        'Constants$Constant' => 'constants'
+        'Constants$Constant' => 'constants',
+        'RegularExpressions$RegularExpression' => 'regular_expressions'
       }.freeze
       EDITABLE_DOCUMENT_TYPES = (
         INFRASTRUCTURE_DOCUMENT_ROUTES.keys + APPLICATION_DOCUMENT_ROUTES.keys +
-        DOMAIN_DOCUMENT_ROUTES.keys
+        PRESENTATION_DOCUMENT_ROUTES.keys +
+        ASSET_DOCUMENT_ROUTES.keys +
+        DOMAIN_DOCUMENT_ROUTES.keys + ['Microflows$Rule']
       ).freeze
 
       attr_reader :name, :sort_index, :from_app_store,
@@ -94,6 +111,12 @@ module Mxrb
                        .map { Microflow.new(_1[:raw], @mpr) }
       end
 
+      def rules
+        @rules ||= document_units
+                   .select { |unit| unit[:type] == 'Microflows$Rule' }
+                   .map { Microflow.new(_1[:raw], @mpr) }
+      end
+
       def menus
         @menus ||= document_units
                    .select { |u| u[:type] == "Menus$MenuDocument" }
@@ -130,6 +153,14 @@ module Mxrb
         @application_documents ||= routed_documents(APPLICATION_DOCUMENT_ROUTES)
       end
 
+      def presentation_documents
+        @presentation_documents ||= routed_documents(PRESENTATION_DOCUMENT_ROUTES)
+      end
+
+      def asset_documents
+        @asset_documents ||= routed_documents(ASSET_DOCUMENT_ROUTES)
+      end
+
       def domain_documents
         @domain_documents ||= routed_documents(DOMAIN_DOCUMENT_ROUTES)
       end
@@ -146,12 +177,23 @@ module Mxrb
           if raw
             doc = @mpr.parse_contents(raw)
             parse_array(doc["ModuleRoles"]).map do |role|
-              { name: role["Name"], description: role["Description"].to_s }
+              {
+                id: IO::BsonCodec.extract_id(role["$ID"]),
+                name: role["Name"], description: role["Description"].to_s
+              }
             end
           else
             []
           end
         end
+      end
+
+      def module_security_id
+        raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
+        return '' unless raw
+
+        doc = @mpr.parse_contents(raw)
+        IO::BsonCodec.extract_id(doc["$ID"]) || raw.fetch("UnitID")
       end
 
       def inspect

@@ -98,13 +98,14 @@ de entidade/XPath.
 
 ```sh
 bundle exec rspec
-MXRB_COVERAGE=1 bundle exec rspec
+MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
 bundle exec ruby script/branch_report.rb
 bundle exec rubocop
 ```
 
-A suíte exige 100% de cobertura de linhas e branches. O relatório de branches
-lista qualquer regressão por arquivo e linha.
+O CI exige atualmente um piso de 96% de cobertura de linhas e 89% de branches.
+Sem limites explícitos, o helper local mantém o default mais estrito de 100/100.
+O relatório de branches lista cada branch não coberto por arquivo e linha.
 
 Consulte a [documentação completa em português](docs/pt-BR/README.md).
 

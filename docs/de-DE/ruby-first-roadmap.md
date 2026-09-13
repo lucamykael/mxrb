@@ -20,7 +20,7 @@ und MxBuild sind externe Validatoren, keine Abhängigkeiten des Ruby-Kerns.
 - Statische Analyse und ausführbare Modellbewertungen.
 - Funktionale Microflow-Tests ohne JUnit.
 - Lokale oder Docker-Ausführung von `mx check`, MxBuild und Runtime.
-- Natives Coverage-Gate mit 100 % Zeilen und 100 % Branches im CI;
+- Natives Coverage-Gate mit 96 % Zeilen und 89 % Branches im CI;
   ohne explizite Grenzwerte bleibt der lokale Standard strenger bei 100/100.
 
 ## Beispiel

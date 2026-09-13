@@ -1,0 +1,113 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+
+# Builds one Mendix 11 page containing every concrete core Forms widget. The
+# optional official oracle proves that each emitted physical type can be read;
+# property-by-property behavior belongs to the separate 825-case Ruby gate.
+module MxrbFormsCoreStorageGate
+  module_function
+
+  def run(argv)
+    options = parse(argv)
+    workspace = options[:workspace] || Dir.mktmpdir('mxrb-forms-core-storage-')
+    FileUtils.mkdir_p(workspace)
+    mpr = File.join(workspace, 'FormsCoreStorage.mpr')
+    widget_names = build(mpr)
+    structurally_valid = Mxrb.validate(mpr).valid?
+    oracle = options[:mxbuild] && mxbuild(options[:mxbuild], mpr, workspace)
+    report(mpr, widget_names, structurally_valid, oracle)
+  end
+
+  def report(mpr, widget_names, structurally_valid, oracle)
+    oracle_passed = oracle.nil? || oracle.fetch(:loaded)
+    { passed: structurally_valid && oracle_passed, mendix_version: '11.12.1', mpr:,
+      widget_types: widget_names, widget_count: widget_names.size,
+      structural_validation: structurally_valid, oracle: }
+  end
+
+  def parse(argv)
+    options = {}
+    parser = OptionParser.new do |cli|
+      cli.banner = 'Usage: script/forms_core_storage_gate [options]'
+      cli.on('--workspace DIR', 'Keep generated evidence under DIR') { options[:workspace] = _1 }
+      cli.on('--mxbuild FILE', 'Run the official local MxBuild oracle') { options[:mxbuild] = _1 }
+    end
+    parser.parse!(argv)
+    raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+    options
+  end
+
+  def build(mpr)
+    catalog = Mxrb::Forms::Catalog.for('11.12.1')
+    widgets = build_widgets(catalog)
+    define_project(mpr, widgets)
+    widgets.map { _1.schema_type.name }.freeze
+  end
+
+  def build_widgets(catalog)
+    catalog.concrete_widgets.map.with_index do |type, index|
+      Mxrb::Forms::Node.new(type.name, catalog:).tap do |widget|
+        widget.name "certification#{index + 1}" if type.property(:name)
+      end
+    end
+  end
+
+  def define_project(mpr, widgets)
+    Mxrb.define(mpr) do
+      mendix_version '11.12.1'
+      self.module(:Certification) do
+        page :AllCoreWidgets do
+          form { |document| MxrbFormsCoreStorageGate.populate_page(document, widgets) }
+        end
+      end
+    end
+  end
+
+  def populate_page(document, widgets)
+    document.name 'AllCoreWidgets'
+    document.layout_call do
+      layout 'Certification.MissingLayout'
+      arguments(:layout_call_argument) do
+        parameter 'Certification.MissingLayout.Main'
+        set :widgets, widgets
+      end
+    end
+  end
+
+  def mxbuild(executable, mpr, workspace)
+    errors = File.join(workspace, 'mxbuild-errors.json')
+    output = File.join(workspace, 'FormsCoreStorage.mda')
+    java_version = Mxrb::Runtime::Toolchain.new(mpr).plan.java_version
+    java_home = Mxrb::Runtime::JavaLocator.resolve(java_version)
+    raise "Java #{java_version} is required by MxBuild" unless java_home
+
+    command = mxbuild_command(executable, java_home, output, errors, mpr)
+    transcript, status = Open3.capture2e(*command, chdir: workspace)
+    payload = File.file?(errors) ? JSON.parse(File.read(errors)) : {}
+    oracle_report(transcript, status, payload, errors)
+  end
+
+  def mxbuild_command(executable, java_home, output, errors, mpr)
+    [File.expand_path(executable), "--java-home=#{java_home}",
+     "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", '--target=package',
+     "--output=#{output}", "--write-errors=#{errors}", mpr]
+  end
+
+  def oracle_report(transcript, status, payload, errors)
+    storage_failure = transcript.match?(/TypeCacheUnknownTypeException|StreamingBsonUnitReader/)
+    problems = Array(payload['problems'])
+    { loaded: !storage_failure && payload['problems'].is_a?(Array),
+      exit_status: status.exitstatus, problem_codes: problems.map { _1['errorCode'] }.tally.sort.to_h,
+      errors: }
+  end
+end
+
+puts JSON.pretty_generate(MxrbFormsCoreStorageGate.run(ARGV)) if $PROGRAM_NAME == __FILE__

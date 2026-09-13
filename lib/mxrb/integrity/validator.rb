@@ -90,6 +90,8 @@ module Mxrb
           next unless doc
 
           validate_doc_identity(unit, doc)
+          validate_nested_ids(unit, doc)
+          validate_mendix_semantics(unit, doc)
         ensure
           @progress&.advance(detail: "unit #{unit['UnitID']}")
         end
@@ -130,6 +132,54 @@ module Mxrb
           add_error("unit #{unit['UnitID']} content $ID mismatch #{doc_id}")
         end
       end
+
+      def validate_nested_ids(unit, doc)
+        counts = Hash.new(0)
+        misordered = []
+        collect_nested_ids(doc, counts, misordered)
+        counts.each do |id, count|
+          add_error("unit #{unit['UnitID']} contains duplicate nested $ID #{id}") if count > 1
+        end
+        misordered.each do |id|
+          add_error("unit #{unit['UnitID']} storage object #{id} does not begin with $ID")
+        end
+      end
+
+      def collect_nested_ids(value, counts, misordered)
+        case value
+        when Hash
+          id = IO::BsonCodec.extract_id(value['$ID'] || value['\$ID'])
+          counts[id] += 1 unless id.to_s.empty?
+          misordered << id if !id.to_s.empty? && value.keys.first != '$ID'
+          value.each_value { collect_nested_ids(_1, counts, misordered) }
+        when Array
+          value.each { collect_nested_ids(_1, counts, misordered) }
+        end
+      end
+
+      def validate_mendix_semantics(unit, value)
+        case value
+        when Hash
+          validate_attribute_default(unit, value) if value['$Type'] == 'DomainModels$Attribute'
+          value.each_value { validate_mendix_semantics(unit, _1) }
+        when Array
+          value.each { validate_mendix_semantics(unit, _1) }
+        end
+      end
+
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      def validate_attribute_default(unit, attribute)
+        type = attribute['NewType'] || attribute['Type'] || attribute['newType'] || attribute['type']
+        return unless type.is_a?(Hash) && type['$Type'] == 'DomainModels$AutoNumberAttributeType'
+
+        value = attribute['Value'] || attribute['value']
+        default = value.is_a?(Hash) ? (value['DefaultValue'] || value['defaultValue']) : nil
+        return if default.to_s.match?(/\A[1-9]\d*\z/)
+
+        name = attribute['Name'] || attribute['name'] || '<unnamed>'
+        add_error("unit #{unit['UnitID']} AutoNumber attribute #{name} must have a default value of 1 or higher")
+      end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       def validate_v2_files
         return unless @mpr.format_version == :v2

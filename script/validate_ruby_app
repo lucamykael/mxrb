@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'tmpdir'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require 'mxrb'
+
+source = File.expand_path(ARGV.fetch(0))
+abort "fixture not found: #{source}" unless File.file?(source)
+
+Dir.mktmpdir('mxrb-ruby-app-gate-') do |directory|
+  exported = File.join(directory, 'ruby')
+  rebuilt = File.join(directory, File.basename(source))
+  Mxrb::Exporter.new(source, exported, mode: :ruby).export!
+
+  audit = Mxrb::PublicSourceAudit.new(exported)
+  audit_failure = JSON.pretty_generate(summary: audit.summary, violations: audit.violations.map(&:to_h))
+  abort audit_failure unless audit.clean?
+
+  FileUtils.mv(File.join(exported, '.mxrb', 'mendix'), File.join(exported, '.mxrb', 'mendix.detached'))
+  Mxrb::RubyApp.compile(exported, rebuilt)
+  validation = Mxrb.validate(rebuilt)
+  comparison = Mxrb.compare(source, rebuilt)
+  abort validation.errors.join("\n") unless validation.valid?
+  abort comparison.differences.join("\n") unless comparison.identical?
+
+  puts JSON.generate(
+    source:, public_source: audit.summary, valid: validation.valid?, identical: comparison.identical?
+  )
+end

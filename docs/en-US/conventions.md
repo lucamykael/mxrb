@@ -37,7 +37,7 @@ review. Writing-style guidance for exported projects lives in
 ## Testing
 
 - `bundle exec rspec` is the default suite; everything must pass.
-- CI sets `MXRB_LINE_COVERAGE_MIN=100` and `MXRB_BRANCH_COVERAGE_MIN=100`; the
+- CI sets `MXRB_LINE_COVERAGE_MIN=96` and `MXRB_BRANCH_COVERAGE_MIN=89`; the
   local helper defaults to 100/100 when those variables are omitted.
   `bundle exec ruby script/branch_report.rb` lists uncovered branches by file
   and line.

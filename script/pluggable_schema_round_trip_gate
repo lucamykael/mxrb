@@ -1,0 +1,122 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+require_relative '../lib/mxrb'
+require_relative '../lib/mxrb/forms/mpr_codec'
+
+# Audits only schemas embedded in the supplied corpus. Reports use ordinals
+# and error classes so private model names, values and paths stay out of JSON.
+module MxrbPluggableSchemaRoundTripGate
+  module_function
+
+  def run(path)
+    report = { scope: 'embedded_pluggable_schema_round_trip', passed: false,
+               units: 0, widgets: 0, schemas_equal: 0, schemas_byte_equal: 0, failures: [] }
+    audit_mpr(path, report)
+    report[:failures] << { reason: 'no_widgets' } if report[:widgets].zero? && report[:failures].empty?
+    report[:passed] = report[:widgets].positive? && report[:failures].empty?
+    report
+  end
+
+  def audit_mpr(path, report)
+    mpr = Mxrb::IO::MprFile.new(path, readonly: true)
+    mpr.all_units.each do |unit|
+      report[:units] += 1
+      audit_unit(mpr, unit, report)
+    end
+  rescue StandardError => e
+    report[:failures] << { reason: 'mpr_read_error', error_class: e.class.name }
+  ensure
+    mpr&.close
+  end
+
+  def audit_unit(mpr, unit, report)
+    document = mpr.parse_contents(unit)
+    raise Mxrb::SerializationError, 'empty unit' if document.empty?
+
+    visit(document, report)
+  rescue StandardError => e
+    report[:failures] << { reason: 'unit_read_error', unit: report[:units], error_class: e.class.name }
+  end
+
+  def visit(value, report)
+    case value
+    when Hash
+      audit_widget(value, report) if value['$Type'] == 'CustomWidgets$CustomWidget'
+      value.each_value { visit(_1, report) }
+    when Array
+      value.each { visit(_1, report) }
+    end
+  end
+
+  def audit_widget(document, report)
+    report[:widgets] += 1
+    codec = Mxrb::Forms::MprCodec.new(pluggable_catalog: Mxrb::Pluggable::Catalog.new)
+    rebuilt = codec.encode(codec.decode(document), baseline: document)
+    compare_schema(document.fetch('Type'), rebuilt.fetch('Type'), report)
+  rescue StandardError => e
+    report[:failures] << location(report).merge(reason: 'widget_round_trip_error', error_class: e.class.name)
+  end
+
+  def compare_schema(original, rebuilt, report)
+    equal = original == rebuilt
+    byte_equal = Mxrb::IO::BsonCodec.serialize(original) == Mxrb::IO::BsonCodec.serialize(rebuilt)
+    report[:schemas_equal] += 1 if equal
+    report[:schemas_byte_equal] += 1 if byte_equal
+    return if equal && byte_equal
+
+    report[:failures] << location(report).merge(reason: equal ? 'schema_order_mismatch' : 'schema_mismatch')
+  end
+
+  def location(report) = { unit: report[:units], widget: report[:widgets] }
+
+  def parse(argv)
+    options = {}
+    parser = OptionParser.new do |cli|
+      cli.banner = 'Usage: script/pluggable_schema_round_trip_gate [--output REPORT.json] APP.mpr'
+      cli.on('-o', '--output FILE', 'Write sanitized JSON evidence') { options[:output] = _1 }
+      cli.on('-h', '--help', 'Show usage') { options[:help] = true }
+    end
+    parser.parse!(argv)
+    return options.merge(usage: parser.to_s) if options[:help]
+
+    raise OptionParser::InvalidArgument, 'expected one MPR' unless argv.length == 1
+
+    options.merge(path: argv.first)
+  end
+
+  def write_report(report, options, output)
+    json = "#{JSON.pretty_generate(report)}\n"
+    destination = options[:output]
+    return output.write(json) unless destination
+
+    if File.expand_path(destination) == File.expand_path(options.fetch(:path)) ||
+       (File.exist?(destination) && File.identical?(destination, options.fetch(:path)))
+      raise ArgumentError, 'report cannot overwrite the input MPR'
+    end
+
+    File.write(destination, json)
+  end
+
+  def cli(argv, output: $stdout, errors: $stderr)
+    options = parse(argv.dup)
+    return output.puts(options[:usage]) || 0 if options[:help]
+
+    report = run(options.fetch(:path))
+    write_report(report, options, output)
+    report.fetch(:passed) ? 0 : 1
+  rescue OptionParser::ParseError => e
+    cli_failure(errors, 'invalid_arguments', e, 64)
+  rescue StandardError => e
+    cli_failure(errors, 'report_error', e, 1)
+  end
+
+  def cli_failure(errors, reason, error, status)
+    errors.puts(JSON.generate(passed: false, reason:, error_class: error.class.name))
+    status
+  end
+end
+
+exit MxrbPluggableSchemaRoundTripGate.cli(ARGV) if $PROGRAM_NAME == __FILE__

@@ -27,6 +27,11 @@ module Mxrb
     # are injectable so applications can connect it to their Ruby microflow
     # runtime and test it without waiting for wall-clock time.
     class Scheduler
+      WEEK_DAYS = {
+        'Sunday' => 0, 'Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3,
+        'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6
+      }.freeze
+
       attr_reader :jobs, :errors
 
       def initialize(project, executor: nil, clock: -> { Time.now.utc },
@@ -125,12 +130,14 @@ module Mxrb
       def normalize_job(module_name, source)
         name = fetch(source, 'Name', :name).to_s
         qualified = qualify(module_name, fetch(source, 'QualifiedName', :qualified_name) || name)
-        microflow = qualify(module_name, fetch(source, 'Microflow', :microflow))
-        schedule = normalize_schedule(source)
+        microflow_name = fetch(source, 'Microflow', :microflow)
+        microflow = qualify(module_name, microflow_name)
+        enabled = fetch(source, 'Enabled', :enabled) != false
+        schedule = enabled ? normalize_schedule(source) : nil
         ScheduledJob.new(
           name:, qualified_name: qualified, microflow:, schedule:,
           overlap: fetch(source, 'OnOverlap', :on_overlap, :overlap) || 'SkipNext',
-          enabled: fetch(source, 'Enabled', :enabled) != false,
+          enabled:,
           start_at: parse_time(fetch(source, 'StartDateTime', :start_at)),
           time_zone: fetch(source, 'TimeZone', :time_zone).to_s,
           source:
@@ -138,25 +145,64 @@ module Mxrb
       end
 
       def normalize_schedule(source)
+        return legacy_schedule(source) unless schedule_declared?(source)
+
         schedule = fetch(source, 'Schedule', :schedule)
         type = fetch(schedule, '$Type', :type).to_s
         case type
         when /MinuteSchedule\z/
-          { type: :minute, every: positive(fetch(schedule, 'Multiplier', :multiplier)) }.freeze
+          { type: :minute, every: positive(schedule_value(schedule, 'Multiplier', :multiplier)) }.freeze
         when /HourSchedule\z/
           {
-            type: :hour, every: positive(fetch(schedule, 'Multiplier', :multiplier)),
-            minute: integer(fetch(schedule, 'MinuteOffset', :minute_offset), 0) % 60
+            type: :hour,
+            every: positive(schedule_value(schedule, 'Multiplier', :multiplier)),
+            minute: schedule_integer(
+              schedule, 'MinuteOffset', :minute_offset, range: 0..59
+            )
           }.freeze
         when /DaySchedule\z/
           {
             type: :day, every: 1,
-            hour: integer(fetch(schedule, 'HourOfDay', :hour_of_day), 0) % 24,
-            minute: integer(fetch(schedule, 'MinuteOfHour', :minute_of_hour), 0) % 60
+            hour: schedule_integer(schedule, 'HourOfDay', :hour_of_day, range: 0..23),
+            minute: schedule_integer(schedule, 'MinuteOfHour', :minute_of_hour, range: 0..59)
           }.freeze
+        when /WeekSchedule\z/
+          week_schedule(schedule)
         else
-          legacy_schedule(source)
+          raise ArgumentError, "unsupported scheduled-event schedule type #{type.inspect}"
         end
+      end
+
+      def schedule_declared?(source)
+        source.respond_to?(:key?) && (source.key?('Schedule') || source.key?(:schedule))
+      end
+
+      def week_schedule(schedule)
+        days = WEEK_DAYS.filter_map do |name, number|
+          number if schedule_value(schedule, name, name.downcase.to_sym) == true
+        end
+        raise ArgumentError, 'scheduled-event week schedule requires a day' if days.empty?
+
+        {
+          type: :week, days: days.freeze,
+          hour: schedule_integer(schedule, 'HourOfDay', :hour_of_day, range: 0..23),
+          minute: schedule_integer(schedule, 'MinuteOfHour', :minute_of_hour, range: 0..59)
+        }.freeze
+      end
+
+      def schedule_integer(schedule, *keys, range:)
+        value = integer(schedule_value(schedule, *keys), 0)
+        return value if range.cover?(value)
+
+        raise ArgumentError,
+              "scheduled-event #{keys.first} must be in #{range.begin}..#{range.end}"
+      end
+
+      def schedule_value(schedule, *keys)
+        value = fetch(schedule, *keys)
+        return value unless value.nil?
+
+        fetch(fetch(schedule, 'Properties', :properties), *keys)
       end
 
       def legacy_schedule(source)
@@ -196,6 +242,11 @@ module Mxrb
           day = time.to_date.jd
           anchor = start ? start.to_date.jd : 0
           day if ((day - anchor) % schedule.fetch(:every)).zero?
+        when :week
+          return unless schedule.fetch(:days).include?(time.wday)
+          return unless time.hour == schedule.fetch(:hour) && time.min == schedule.fetch(:minute)
+
+          time.to_date.jd
         end
       end
 
@@ -218,7 +269,7 @@ module Mxrb
       end
 
       def skip_overlap?(job)
-        @skip_overlap || job.overlap.to_s.match?(/skip/i)
+        @skip_overlap || job.overlap.to_s.match?(/(?:skip|delay)/i)
       end
 
       def dispatch(job, slot = nil, async:)

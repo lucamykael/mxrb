@@ -61,9 +61,96 @@ RSpec.describe Mxrb::Runtime::Scheduler do
     expect(calls).to eq([['Sales.Tick', 'Sales.Legacy']])
   end
 
-  it 'skips overlap and permits the missed slot after the running job finishes' do
+  it 'normalizes typed properties blocks and executes weekly schedules on selected days' do
+    events = [
+      event(
+        'NestedMinute',
+        microflow: 'Minute',
+        schedule: {
+          type: 'ScheduledEvents$MinuteSchedule',
+          properties: { 'Multiplier' => 5 }
+        }
+      ),
+      event(
+        'NestedHour',
+        microflow: 'Hour',
+        schedule: {
+          type: 'ScheduledEvents$HourSchedule',
+          properties: { 'Multiplier' => 2, 'MinuteOffset' => 15 }
+        }
+      ),
+      event(
+        'NestedDay',
+        microflow: 'Day',
+        schedule: {
+          type: 'ScheduledEvents$DaySchedule',
+          properties: { 'HourOfDay' => 8, 'MinuteOfHour' => 45 }
+        }
+      ),
+      event(
+        'Weekly',
+        microflow: 'Weekly',
+        schedule: {
+          type: 'ScheduledEvents$WeekSchedule',
+          properties: {
+            'Sunday' => true, 'Monday' => false,
+            'HourOfDay' => 9, 'MinuteOfHour' => 30
+          }
+        }
+      )
+    ]
+    calls = []
+    scheduler = described_class.new(
+      project_with(*events), executor: ->(name) { calls << name }, async: false
+    )
+
+    expect(scheduler.jobs.map(&:schedule)).to eq(
+      [
+        { type: :minute, every: 5 },
+        { type: :hour, every: 2, minute: 15 },
+        { type: :day, every: 1, hour: 8, minute: 45 },
+        { type: :week, days: [0], hour: 9, minute: 30 }
+      ]
+    )
+    expect(scheduler.tick(Time.utc(2026, 8, 30, 9, 30)).map(&:qualified_name))
+      .to include('Sales.Weekly')
+    expect(scheduler.tick(Time.utc(2026, 8, 31, 9, 30)).map(&:qualified_name))
+      .not_to include('Sales.Weekly')
+    expect(calls).to include('Sales.Weekly')
+  end
+
+  it 'keeps disabled malformed events inert and rejects invalid active intervals' do
     source = event(
-      'Slow', microflow: 'Slow',
+      'DisabledMalformed', microflow: 'Bound', enabled: false,
+                           schedule: { '$Type' => 'ScheduledEvents$FutureSchedule' }
+    )
+    scheduler = described_class.new(
+      project_with(source), executor: ->(_name) { raise 'disabled event executed' }, async: false
+    )
+
+    expect(scheduler.jobs.first.schedule).to be_nil
+    expect(scheduler.tick(Time.utc(2026, 8, 30, 9, 30))).to be_empty
+
+    expect do
+      described_class.new(
+        project_with(source.merge('Enabled' => true)), executor: ->(_name) {}, async: false
+      )
+    end.to raise_error(ArgumentError, /unsupported scheduled-event schedule type/)
+
+    invalid_legacy = {
+      name: 'InvalidLegacy', microflow: 'Bound', enabled: true,
+      interval_type: 'Minute', interval: 0
+    }
+    expect do
+      described_class.new(
+        project_with(invalid_legacy), executor: ->(_name) {}, async: false
+      )
+    end.to raise_error(ArgumentError, /interval must be positive/)
+  end
+
+  it 'honors DelayNext without concurrent execution and permits the missed slot afterwards' do
+    source = event(
+      'Slow', microflow: 'Slow', overlap: 'DelayNext',
               schedule: { '$Type' => 'ScheduledEvents$MinuteSchedule', 'Multiplier' => 1 }
     )
     entered = Queue.new
@@ -74,7 +161,9 @@ RSpec.describe Mxrb::Runtime::Scheduler do
       entered << true
       release.pop
     end
-    scheduler = described_class.new(project_with(source), executor:, async: true)
+    scheduler = described_class.new(
+      project_with(source), executor:, skip_overlap: false, async: true
+    )
 
     first = Time.utc(2026, 8, 10, 12, 10)
     scheduler.tick(first)
@@ -132,10 +221,35 @@ RSpec.describe Mxrb::Runtime::Scheduler do
   end
 
   it 'rejects invalid schedules without an optional scheduler dependency' do
-    bad = event('Bad', microflow: 'Bad', schedule: {}, enabled: true)
+    bad = event(
+      'Bad', microflow: 'Bad', enabled: true,
+             schedule: { '$Type' => 'ScheduledEvents$FutureSchedule' }
+    ).merge('IntervalType' => 'Minute', 'Interval' => 1)
     expect do
       described_class.new(project_with(bad), executor: ->(_name) {})
-    end.to raise_error(ArgumentError, /unsupported scheduled-event interval/)
+    end.to raise_error(ArgumentError, /unsupported scheduled-event schedule type/)
+
+    invalid_ranges = [
+      event(
+        'HourRange', microflow: 'Bad',
+                     schedule: {
+                       '$Type' => 'ScheduledEvents$HourSchedule',
+                       'Multiplier' => 1, 'MinuteOffset' => 60
+                     }
+      ),
+      event(
+        'DayRange', microflow: 'Bad',
+                    schedule: {
+                      '$Type' => 'ScheduledEvents$DaySchedule',
+                      'HourOfDay' => 24, 'MinuteOfHour' => 0
+                    }
+      )
+    ]
+    invalid_ranges.each do |source|
+      expect do
+        described_class.new(project_with(source), executor: ->(_name) {})
+      end.to raise_error(ArgumentError, /must be in/)
+    end
   end
 
   it 'supports default executors, executor objects, and every callable arity' do

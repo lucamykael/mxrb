@@ -271,7 +271,7 @@ module Mxrb
         SQL
       end
 
-      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength,
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
       # rubocop:disable Metrics/PerceivedComplexity
       def reconcile_up(force_build:, reconcile:, input:, output:)
         rebuild = force_build || stale_runtime?
@@ -299,7 +299,7 @@ module Mxrb
       ensure
         FileUtils.rm_rf(candidate) if defined?(candidate) && candidate && File.exist?(candidate)
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength,
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
       # rubocop:enable Metrics/PerceivedComplexity
 
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength

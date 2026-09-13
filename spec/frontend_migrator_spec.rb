@@ -43,8 +43,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
     }
   end
 
-  def insert_document(path, document)
-    mpr = Mxrb::IO::MprFile.open(path)
+  def insert_document(path, document, apply_studio_compatibility: true)
+    mpr = Mxrb::IO::MprFile.open(path, apply_studio_compatibility:)
     root = mpr.root_unit.fetch('UnitID')
     mpr.insert_unit(container_uuid: root, containment_name: 'Documents', contents_doc: document)
   ensure
@@ -154,9 +154,11 @@ RSpec.describe Mxrb::Frontend::Migrator do
       value['DataSource'] = {
         '$Type' => 'Forms$MicroflowSettings', 'Microflow' => 'Demo.Source'
       }
-      unit_id = insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget
-      })
+      unit_id = insert_document(
+        path,
+        { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget },
+        apply_studio_compatibility: false
+      )
 
       plan = described_class.plan(path)
       expect(plan).to be_safe

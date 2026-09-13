@@ -278,6 +278,20 @@ export function ApplicationRuntime() {
       }
       const message = execution.messages.at(-1);
       if (message?.message) setNotice(message.message);
+      const validation = execution.validation.at(-1);
+      if (validation?.message) setNotice(validation.message);
+      for (const effect of execution.effects) {
+        if (effect.type === 'open_page' && typeof effect.page === 'string') {
+          const values = effect.arguments && typeof effect.arguments === 'object'
+            ? Object.values(effect.arguments)
+            : [];
+          const context = values.find(isEntityRecord) || null;
+          await openPage(effect.page, context);
+        } else if (effect.type === 'close_page') {
+          const count = Math.max(1, Number(effect.count) || 1);
+          window.history.go(-count);
+        }
+      }
       setError(null);
       return execution.result;
     } catch (failure) {
