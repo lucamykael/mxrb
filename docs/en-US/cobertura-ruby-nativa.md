@@ -41,13 +41,15 @@ silently converted or discarded.
 
 ## Current measurable deficit
 
-The September 13 strict suite passed 1,821 examples but still measures 96.46%
-of lines (35,219/36,511) and 89.80% of branches (14,211/15,825). Reaching the
-100/100 gate therefore requires another 1,292 executable lines and 1,614
-branches. The largest gaps are in `ruby_app/exporter.rb`, `exporter.rb`,
-`writer.rb`, `dsl/builder.rb`, and `forms/mpr_codec.rb`; none were removed from
-the denominator. `writer/page_overlay.rb` reached 100/100 in this audit. CI
-remains at 96/89 until real tests close the balance.
+The September 13 strict suite passed 1,825 examples but still measures 97.10%
+of lines (35,451/36,511) and 90.96% of branches (14,394/15,825). Reaching the
+100/100 gate therefore requires another 1,060 executable lines and 1,431
+branches. The largest gaps are in `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
+`ruby_app/exporter.rb`, and `forms/mpr_codec.rb`; none were removed from the
+denominator. `writer/page_overlay.rb` reached 100/100 in this audit, while the
+lossless widget projection slice reduced `ruby_app/exporter.rb` from 291 to 59
+uncovered lines and from 267 to 85 uncovered branches. CI remains at 96/89
+until real tests close the balance.
 
 Code coverage alone does not complete functional coverage: layouts, snippets,
 building blocks, menus, integrations, workflows, and task pages remain
