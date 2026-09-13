@@ -30,7 +30,7 @@ Estados:
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
-| Páginas core | parcial | Page.native e widgets mapeados; ampliar propriedades, data sources, events e validações |
+| Páginas core | parcial | 41 widgets e 455 ocorrências de propriedades passam MPR → Ruby → MPR; faltam contextos funcionais, MxBuild/Studio e runtime |
 | Layouts, snippets, building blocks e menus | preserved_native | criar projeções Ruby e sincronizadores incrementais |
 | Navegação | parcial | itens de Page.native; ampliar perfis, home/login e role targeting |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
@@ -57,6 +57,17 @@ Estados:
 
 Cada fase deve manter o comportamento fail-closed: uma variante desconhecida é
 preservada e relatada, nunca silenciosamente convertida nem descartada.
+
+## Propriedades de Forms core
+
+`script/forms_core_project_gate` cria um MPR 11.12.1 com uma ocorrência
+isolada de cada propriedade herdada dos 41 widgets concretos, exporta o modelo
+como Ruby legível, recompila e reabre o MPR tipado. O gate cobre 455/455 nas
+fases `imported` e `compiled`, além das 455/455 já cobertas por representação,
+emissão, transcodificação e round-trip sintético. A fase
+`studio_validated` permanece em 0/455 até existir evidência independente de
+MxBuild/Studio Pro em contextos semanticamente válidos; ela não é inferida do
+round-trip estrutural.
 
 ## Enumerações em aplicações Ruby
 

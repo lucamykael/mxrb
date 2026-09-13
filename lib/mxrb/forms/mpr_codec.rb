@@ -344,9 +344,15 @@ module Mxrb
       end
 
       def decode_size(value, path:)
+        if value.is_a?(String)
+          width, height = value.split(';', 2)
+          return Size.new(Integer(width, 10), Integer(height, 10)) if width && height
+        end
         raise MprCodecError, "invalid size at #{path}" unless value.is_a?(Hash)
 
         Size.new(value.fetch('Width') { value.fetch('width') }, value.fetch('Height') { value.fetch('height') })
+      rescue ArgumentError
+        raise MprCodecError, "invalid size at #{path}"
       end
 
       def decode_blob(value, path:)
@@ -511,7 +517,7 @@ module Mxrb
         return encode_data_type(value) if value.is_a?(DataType)
         return encode_condition(value) if value.is_a?(Condition)
         return BSON::Binary.new(value.bytes, value.subtype) if value.is_a?(BinaryAsset)
-        return { 'Width' => value.width, 'Height' => value.height } if value.is_a?(Size)
+        return "#{value.width};#{value.height}" if value.is_a?(Size)
         return value.to_s if value.respond_to?(:to_s) && Node::EXTERNAL_VALUES.value?(value.class)
 
         value

@@ -73,6 +73,22 @@ um limite explícito.
 
 ## Certificação de widgets
 
+`script/forms_core_project_gate` complementa a matriz de comportamento com um
+gate estrutural por propriedade. Para Mendix 11.12.1, ele materializa as 455
+ocorrências herdadas dos 41 widgets core, reabre o MPR, exporta Ruby sem
+fragmentos opacos, recompila e compara cada valor tipado após nova reabertura.
+O resultado atual é 455/455 em `imported` e `compiled`. A contagem
+`studio_validated` continua 0/455 e só pode avançar com MxBuild/Studio Pro em
+cenários que satisfaçam os requisitos funcionais de cada widget.
+
+Com `--mxbuild` e o binário oficial 11.12.1, o MPR recompilado foi lido sem
+erro de storage. O oráculo recusou o pacote com 625 problemas de consistência,
+porque o fixture deliberadamente isola widgets que exigem página de login,
+perfil native, data context, datasource, posição em layout ou referências
+executáveis. Esse resultado mantém o gate geral vermelho quando o oráculo é
+solicitado e define o trabalho de `studio_validated`; não reduz as provas de
+importação e compilação estrutural.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
 em conjunto:

@@ -1,0 +1,289 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+require_relative '../lib/mxrb/forms/certification'
+require_relative '../lib/mxrb/forms/coverage'
+
+# Certifies each inherited core Forms property through a real project boundary:
+# MPR -> readable Ruby DSL -> rebuilt MPR -> typed Forms decode. This gate does
+# claims Studio validation only when the independent official-tool phase passes.
+module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
+  PAGE_NAME = 'AllCoreProperties'
+  VERSION = '11.12.1'
+  PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+  PropertyCase = Data.define(:widget, :property, :name, :value)
+
+  module_function
+
+  def run(argv) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+    options = parse(argv)
+    workspace = options[:workspace] || Dir.mktmpdir('mxrb-forms-core-project-')
+    FileUtils.mkdir_p(workspace)
+    paths = evidence_paths(workspace)
+    cases = property_cases
+    build(paths.fetch(:source_mpr), cases)
+    source_results = inspect_project(paths.fetch(:source_mpr), cases)
+    export_and_compile(paths)
+    ruby_source = File.read(paths.fetch(:page_source))
+    rebuilt_results = inspect_project(
+      paths.fetch(:rebuilt_mpr), cases, expected: source_results.fetch(:signatures)
+    )
+    oracle = options[:mxbuild] && mxbuild(options.fetch(:mxbuild), paths)
+    inspections = { source: source_results, rebuilt: rebuilt_results }
+    build_report(paths, cases, inspections, ruby_source, oracle)
+  end
+
+  def parse(argv) # rubocop:disable Metrics/MethodLength
+    options = {}
+    parser = OptionParser.new do |cli|
+      cli.banner = 'Usage: script/forms_core_project_gate [options]'
+      cli.on('--workspace DIR', 'Keep generated evidence under DIR') { options[:workspace] = _1 }
+      cli.on('--mxbuild FILE', 'Record the independent official MxBuild result') do
+        options[:mxbuild] = _1
+      end
+    end
+    parser.parse!(argv)
+    raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+    options
+  end
+
+  def evidence_paths(workspace) # rubocop:disable Metrics/MethodLength
+    ruby_root = File.join(workspace, 'ruby')
+    {
+      source_mpr: File.join(workspace, 'FormsCoreProperties.mpr'),
+      ruby_root:,
+      rebuilt_mpr: File.join(workspace, 'FormsCorePropertiesRebuilt.mpr'),
+      mda: File.join(workspace, 'FormsCoreProperties.mda'),
+      mxbuild_errors: File.join(workspace, 'mxbuild-errors.json'),
+      page_source: File.join(
+        ruby_root, 'modules', 'Certification', 'presentation', 'pages',
+        'all_core_properties.rb'
+      )
+    }.freeze
+  end
+
+  def property_cases
+    catalog = Mxrb::Forms::Catalog.for(VERSION)
+    catalog.concrete_widgets.flat_map do |widget|
+      widget.all_properties.map.with_index do |property, index|
+        property_case(widget, property, index, catalog)
+      end
+    end.freeze
+  end
+
+  def property_case(widget, property, index, catalog)
+    sequence = "#{widget.name}#{index + 1}"
+    value = Mxrb::Forms::Certification.sample_value(property, catalog:, suffix: sequence)
+    name = "certification#{sequence}"
+    value = name if property.name == 'name'
+    candidate = PropertyCase.new(widget, property, name, value)
+    candidate.with(value: build_widget(candidate).fetch(property.name))
+  end
+
+  def build(mpr, cases) # rubocop:disable Metrics/MethodLength
+    widgets = cases.map { build_widget(_1) }
+    Mxrb.define(mpr) do
+      mendix_version VERSION
+      self.module(:Certification) do
+        entity(:Entity) { string :Name }
+        layout :CertificationLayout, navigation: nil
+        image_collection :Images, images: [{
+          name: 'Target', format: 'Png', data: { data: PIXEL_PNG, subtype: :generic }
+        }]
+        page PAGE_NAME.to_sym do
+          form { |document| MxrbFormsCoreProjectGate.populate_page(document, widgets) }
+        end
+      end
+      navigation { profile :Responsive, home_page: 'Certification.AllCoreProperties' }
+    end
+  end
+
+  def build_widget(property_case)
+    widget = Mxrb::Forms::Node.new(property_case.widget.name)
+    widget.name property_case.name
+    add_default_page_dependency(widget, property_case)
+    widget.set(property_case.property.name, property_case.value)
+    widget
+  end
+
+  def add_default_page_dependency(widget, property_case)
+    return unless property_case.property.name == 'defaultPage'
+
+    target = property_case.value.respond_to?(:target) ? property_case.value.target : property_case.value
+    tab = Mxrb::Forms::Node.new('TabPage').tap { _1.name target }
+    widget.tab_pages [tab]
+  end
+
+  def populate_page(document, widgets)
+    document.name PAGE_NAME
+    document.layout_call do
+      layout 'Certification.CertificationLayout'
+      arguments(:layout_call_argument) do
+        parameter 'Certification.CertificationLayout.Main'
+        set :widgets, widgets
+      end
+    end
+  end
+
+  def export_and_compile(paths)
+    Mxrb::Exporter.new(paths.fetch(:source_mpr), paths.fetch(:ruby_root), mode: :mendix).export!
+    previous = ENV['MXRB_OUTPUT_PATH']
+    ENV['MXRB_OUTPUT_PATH'] = paths.fetch(:rebuilt_mpr)
+    load File.join(paths.fetch(:ruby_root), 'project.rb')
+  ensure
+    previous ? ENV['MXRB_OUTPUT_PATH'] = previous : ENV.delete('MXRB_OUTPUT_PATH')
+  end
+
+  def inspect_project(mpr, cases, expected: nil)
+    validation = Mxrb.validate(mpr)
+    nodes = page_nodes(mpr).filter_map do |node|
+      [node.fetch(:name).to_s, node] if node.schema_type.property(:name)
+    end.to_h
+    signatures = {}
+    certified = []
+    mismatches = cases.filter_map do |property_case|
+      inspect_case(property_case, nodes[property_case.name], signatures, certified, expected)
+    end
+    { valid: validation.valid?, errors: validation.errors, mismatches:, signatures:, certified: }.freeze
+  end
+
+  def page_nodes(mpr)
+    root = Mxrb.open(mpr) do |project|
+      unit = project.all_units.find do |candidate|
+        document = project.parse_bson(candidate)
+        document['$Type'] == 'Forms$Page' && document['Name'] == PAGE_NAME
+      end
+      raise "#{PAGE_NAME} page is missing from #{mpr}" unless unit
+
+      Mxrb::Forms::MprCodec.new.decode(project.parse_bson(unit))
+    end
+    collect_nodes(root)
+  end
+
+  def collect_nodes(value)
+    case value
+    when Mxrb::Forms::Node
+      [value, *value.assignments.flat_map { collect_nodes(_1.value) }]
+    when Array
+      value.flat_map { collect_nodes(_1) }
+    else
+      []
+    end
+  end
+
+  def inspect_case(property_case, actual, signatures, certified, expected) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+    return "#{property_case.name}: widget is missing" unless actual
+    return "#{property_case.name}: expected #{property_case.widget.name}, got #{actual.schema_type.name}" \
+      unless actual.schema_type == property_case.widget
+
+    key = [property_case.widget.name, property_case.property.name, property_case.name]
+    observed = Mxrb::Forms::Certification.signature(actual.fetch(property_case.property.name))
+    signatures[key] = observed
+    mismatch = signature_mismatch(property_case, key, observed, expected)
+    return mismatch if mismatch
+
+    certified << [property_case.widget.name, property_case.property.name]
+    nil
+  rescue KeyError => e
+    "#{property_case.widget.name}.#{property_case.property.name}: #{e.message}"
+  end
+
+  def signature_mismatch(property_case, key, observed, expected)
+    return unless expected && observed != expected.fetch(key)
+
+    "#{property_case.widget.name}.#{property_case.property.name}: " \
+      "expected #{expected.fetch(key).inspect}, got #{observed.inspect}"
+  end
+
+  def build_report(paths, cases, inspections, ruby_source, oracle) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+    source = inspections.fetch(:source)
+    rebuilt = inspections.fetch(:rebuilt)
+    readable = !Mxrb::Forms::Certification.opaque_source?(ruby_source)
+    coverage = coverage_report(source, rebuilt, readable, oracle)
+    project_passed = coverage.count(:imported) == cases.size && coverage.count(:compiled) == cases.size
+    {
+      passed: project_passed && (oracle.nil? || oracle.fetch(:accepted)),
+      project_round_trip_passed: project_passed,
+      mendix_version: VERSION,
+      widget_count: cases.map { _1.widget.name }.uniq.size,
+      property_count: cases.size,
+      phases: Mxrb::Forms::CoverageLedger::PHASES.to_h { [_1, coverage.count(_1)] },
+      readable_ruby: readable,
+      source: public_inspection(source).merge(mpr: paths.fetch(:source_mpr)),
+      rebuilt: public_inspection(rebuilt).merge(mpr: paths.fetch(:rebuilt_mpr)),
+      ruby_source: paths.fetch(:page_source), oracle:
+    }
+  end
+
+  def public_inspection(inspection)
+    public = inspection.reject { |key, _value| %i[signatures certified].include?(key) }
+    public.merge(certified_properties: inspection.fetch(:certified).size)
+  end
+
+  def coverage_report(source, rebuilt, readable, oracle)
+    ledger = Mxrb::Forms::CoverageLedger.for_synthetic_round_trip
+    claim_certified(ledger, source, :imported, readable && source.fetch(:valid),
+                    'MPR export to readable Ruby DSL')
+    claim_certified(ledger, rebuilt, :compiled, rebuilt.fetch(:valid),
+                    'Ruby DSL rebuild and typed MPR reopen')
+    claim_certified(ledger, rebuilt, :studio_validated, oracle&.fetch(:accepted, false),
+                    'Official MxBuild accepted the complete certification project')
+    ledger.report
+  end
+
+  def claim_certified(ledger, inspection, phase, enabled, evidence)
+    return unless enabled
+
+    inspection.fetch(:certified).each do |widget, property|
+      ledger.claim(widget, property, phase, evidence:)
+    end
+  end
+
+  def mxbuild(executable, paths) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
+    java_version = Mxrb::Runtime::Toolchain.new(paths.fetch(:rebuilt_mpr)).plan.java_version
+    java_home = Mxrb::Runtime::JavaLocator.resolve(java_version)
+    raise "Java #{java_version} is required by MxBuild" unless java_home
+
+    command = mxbuild_command(executable, java_home, paths)
+    transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:rebuilt_mpr)))
+    unless File.file?(paths.fetch(:mxbuild_errors))
+      GC.start
+      transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:rebuilt_mpr)))
+    end
+    payload = File.file?(paths.fetch(:mxbuild_errors)) ? JSON.parse(File.read(paths.fetch(:mxbuild_errors))) : {}
+    oracle_report(transcript, status, payload, paths.fetch(:mxbuild_errors))
+  end
+
+  def mxbuild_command(executable, java_home, paths)
+    [File.expand_path(executable), "--java-home=#{java_home}",
+     "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", '--target=package',
+     "--output=#{paths.fetch(:mda)}", "--write-errors=#{paths.fetch(:mxbuild_errors)}",
+     paths.fetch(:rebuilt_mpr)]
+  end
+
+  def oracle_report(transcript, status, payload, errors) # rubocop:disable Metrics/AbcSize
+    storage_failure = transcript.match?(/StorageLoadException|TypeCacheUnknownTypeException|StreamingBsonUnitReader/)
+    problems = Array(payload['problems'])
+    loaded = !storage_failure && payload['problems'].is_a?(Array)
+    {
+      loaded:, accepted: loaded && status.success?, exit_status: status.exitstatus,
+      problem_count: problems.size,
+      problem_codes: problems.map { _1['errorCode'] }.tally.sort.to_h,
+      errors:, diagnostics: transcript.lines.grep(/ERROR|Exception/).first(3).map(&:strip)
+    }
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  report = MxrbFormsCoreProjectGate.run(ARGV)
+  puts JSON.pretty_generate(report)
+  exit 1 unless report.fetch(:passed)
+end

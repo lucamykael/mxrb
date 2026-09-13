@@ -2,88 +2,19 @@
 
 require 'spec_helper'
 require 'mxrb/forms/mpr_codec'
+require 'mxrb/forms/certification'
 
 RSpec.describe 'Mendix 11.12.1 core Forms widget certification' do # rubocop:disable Metrics/BlockLength
-  def sample_value(property, catalog) # rubocop:disable Metrics/AbcSize,Metrics/CyclomaticComplexity,Metrics/MethodLength,Metrics/PerceivedComplexity
-    target = catalog.type(property.type_name)
-    value = if property.reference?
-              'Certification.Target'
-            elsif target&.enum?
-              target.values.first
-            elsif target&.element?
-              concrete = catalog.types.find do |candidate|
-                candidate.element? && candidate.concrete? &&
-                  (candidate == target || catalog.descendant?(candidate.name, target.name))
-              end
-              element_sample(concrete, catalog)
-            else
-              external_or_primitive(property.type_name)
-            end
-    property.many? ? [value] : value
-  end
-
-  def element_sample(type, catalog)
-    node = Mxrb::Forms::Node.new(type.name, catalog:)
-    return node unless type.name == 'ClientTemplate'
-
-    node.template Mxrb::Forms::Text.coerce(
-      [Mxrb::Forms::Translation.new('en_US', 'Certification')]
-    )
-    node.fallback Mxrb::Forms::Text.coerce([])
-    node.set(:parameters, [])
-    node
-  end
-
-  def external_or_primitive(type) # rubocop:disable Metrics/MethodLength
-    {
-      'string' => 'certification-value',
-      'integer' => 17,
-      'boolean' => true,
-      'size' => Mxrb::Forms::Size.new(320, 180),
-      'Text' => Mxrb::Forms::Text.coerce([Mxrb::Forms::Translation.new('en_US', 'Certification')]),
-      'Expression' => '$currentObject/Name',
-      'AttributeReference' => 'Certification.Entity.Name',
-      'EntityReference' => 'Certification.Entity',
-      'DataType' => 'String',
-      'Condition' => Mxrb::Forms::Condition.when_value('Active', visible: true),
-      'TextTemplate' => Mxrb::Forms::TextTemplate.build(
-        Mxrb::Forms::Text.coerce([Mxrb::Forms::Translation.new('en_US', 'Hello {1}')]),
-        parameters: ['$currentObject/Name']
-      ),
-      'XPathConstraint' => Mxrb::Forms::XPathConstraint.coerce(['[Active = true()]'])
-    }.fetch(type)
-  end
-
   def sample_values(property, catalog)
-    values = [sample_value(property, catalog)]
-    target = catalog.type(property.type_name)
-    values.concat(target.values) if target&.enum?
-    values << false if property.type_name == 'boolean'
-    values << [] if property.many?
-    values << nil if property.optional?
-    values.uniq
+    Mxrb::Forms::Certification.sample_values(property, catalog:)
   end
 
-  def signature(value) # rubocop:disable Metrics/MethodLength
-    case value
-    when Mxrb::Forms::Node
-      [value.schema_type.name,
-       value.assignments.map { [_1.property.name, signature(_1.value)] }.sort_by(&:first)]
-    when Mxrb::Forms::EnumValue
-      [value.type.name, value.value]
-    when Mxrb::Forms::Reference
-      [value.kind, value.target]
-    when Array
-      value.map { signature(_1) }
-    else
-      value
-    end
+  def signature(value)
+    Mxrb::Forms::Certification.signature(value)
   end
 
   def opaque_source?(source)
-    transport = /\$ID|TypePointer|native_widget|deep_structure|native_fragment|form_structure|\bHash\b|=>|[{}]/
-    uuid = /\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/i
-    source.match?(transport) || source.match?(uuid)
+    Mxrb::Forms::Certification.opaque_source?(source)
   end
 
   def certify(widget, property, value, environment) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength

@@ -95,6 +95,23 @@ mit jedem Mendix-Metamodell. Unbekannte `.mxunit`-Kodierungen werden abgelehnt.
 
 ## Widget-Zertifizierung
 
+`script/forms_core_project_gate` ergänzt die Verhaltensabdeckung um ein
+strukturelles Gate je Eigenschaft. Für Mendix 11.12.1 materialisiert es alle
+455 geerbten Eigenschaftsvorkommen der 41 Core-Widgets, öffnet die MPR erneut,
+exportiert lesbares Ruby ohne opake Fragmente, kompiliert neu und vergleicht
+jeden typisierten Wert nach erneutem Öffnen. Aktuell sind `imported` und
+`compiled` jeweils 455/455. `studio_validated` bleibt 0/455 und darf nur durch
+MxBuild-/Studio-Pro-Evidenz in funktional gültigen Widget-Kontexten steigen.
+
+Mit `--mxbuild` und dem offiziellen 11.12.1-Programm wurde die neu kompilierte
+MPR ohne Speicherfehler gelesen. Der Oracle-Lauf verweigerte das Paket wegen
+625 Konsistenzproblemen, da das Fixture Widgets absichtlich isoliert, die
+Login-Seiten, Native-Profile, Datenkontexte, Datenquellen, bestimmte
+Layout-Positionen oder ausführbare Referenzen benötigen. Dadurch bleibt das
+Gesamt-Gate bei angefordertem Oracle rot und beschreibt die verbleibende Arbeit
+für `studio_validated`; die strukturelle Import- und Kompilierungsevidenz bleibt
+gültig.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
 Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers
 und Marketplace-Widgets. Es

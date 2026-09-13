@@ -95,6 +95,20 @@ RSpec.describe Mxrb::Forms::MprCodec do # rubocop:disable Metrics/BlockLength
     expect(decoded.action.schema_type).to eq(original.action.schema_type)
   end
 
+  it 'uses the official semicolon storage representation for thumbnail sizes' do
+    uploader = Mxrb::Forms::Node.new('ImageUploader')
+    uploader.thumbnail_size Mxrb::Forms::Size.new(100, 75)
+
+    encoded = codec.encode(uploader)
+
+    expect(encoded.fetch('ThumbnailSize')).to eq('100;75')
+    expect(codec.decode(encoded).thumbnail_size).to eq(Mxrb::Forms::Size.new(100, 75))
+    expect(codec.decode(encoded.merge('ThumbnailSize' => { 'Width' => 48, 'Height' => 32 })).thumbnail_size)
+      .to eq(Mxrb::Forms::Size.new(48, 32))
+    expect { codec.decode(encoded.merge('ThumbnailSize' => 'broken')) }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid size/)
+  end
+
   it 'fails loudly for unmapped fields instead of preserving an opaque fragment' do
     document = action_button_document.merge('FutureProperty' => true)
 
