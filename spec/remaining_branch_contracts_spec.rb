@@ -330,6 +330,147 @@ RSpec.describe 'remaining defensive branch contracts' do
     expect(host.send(:rest_attribute_type, type: :enum)).to eq(:string)
     expect(host.send(:rest_json_original, :boolean)).to eq('false')
     expect(host.send(:rest_json_example_value, :boolean)).to be(false)
+    expect(host.send(:rest_microflow, 'App.Missing')).to be_nil
+    expect(host.send(:rest_entity, 'App.Missing')).to be_nil
+    expect(host.send(:rest_native_document?, 'Missing', 'Forms$Page')).to be(false)
+    expect(host.send(
+             :rest_operation_export_mapping, 'Api',
+             return_type: { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'App.Missing' }
+           )).to be_nil
+
+    response_parameter = {
+      name: 'HttpResponse',
+      type: { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'System.HttpResponse' }
+    }
+    assignment = {
+      type: :change_object, variable: 'HttpResponse',
+      members: [{ attribute: 'System.HttpResponse.StatusCode', value: 201 }]
+    }
+    flow = { parameters: [response_parameter], body: [assignment] }
+    host.send(:apply_rest_success_status!, flow, success_status: 201)
+    expect(flow.fetch(:body)).to eq([assignment])
+  end
+
+  it 'covers document declarations without blocks and explicit REST parameter ids' do
+    host_class = Class.new do
+      include Mxrb::Dsl::IntegrationDocuments
+      attr_reader :name
+
+      def initialize = @name = 'App'
+      def semantic_native_document(_name, _type, doc, **) = doc
+    end
+    host = host_class.new
+    expect(host.dataset(:Empty)).to include('Parameters' => [2])
+    expect(host.message_definition_collection(:Empty)).to include('MessageDefinitions' => [2])
+
+    operation = Mxrb::Dsl::IntegrationDocuments::RestOperationBuilder.new
+    operation.parameter(:id, type: :string, maps_to: 'App.Run.id', id: 'parameter-id')
+    expect(operation.parameters.first).to include(id: 'parameter-id')
+    access = Mxrb::Dsl::IntegrationDocuments::DataSetRoleAccessBuilder.new
+    access.parameter(:Id)
+    expect(access.parameters.first.fetch(:constraints)).to eq([])
+  end
+
+  it 'covers pluggable projection adapters and semantic caches' do
+    properties_class = Mxrb::RubyApp::PluggableProperties
+    expect(properties_class.try_for_widget(:Grid, widget_id: 'x', properties: nil)).to be_nil
+    expect(properties_class.try_supported_subset_for_widget(:Grid, widget_id: 'x', properties: nil)).to be_nil
+    bridge = double
+    allow(bridge).to receive(:populate_projection)
+    allow(bridge).to receive(:to_projection).and_return({ different: true })
+    allow(properties_class).to receive(:for_widget).and_return(bridge)
+    expect(properties_class.try_for_widget(:Grid, widget_id: 'x', properties: { value: true })).to be_nil
+
+    instance = properties_class.allocate
+    instance.instance_variable_set(:@object, Object.new)
+    instance.instance_variable_set(:@semantic_values, {})
+    instance.instance_variable_set(:@projection_order, [])
+    yielded = false
+    instance.evaluate { |_builder| yielded = true }
+    expect(yielded).to be(true)
+    expect { instance.send(:supported_object_value, double, 'invalid') }
+      .to raise_error(TypeError, /requires a Hash/)
+  end
+
+  it 'covers pluggable semantic projection defaults and nil validation' do
+    instance = Mxrb::RubyApp::PluggableProperties.allocate
+    property = double(key: 'action', value_type: double(kind: 'Expression'))
+    schema = double(fetch_property: property)
+    instance.instance_variable_set(:@schema, schema)
+    semantic = Mxrb::RubyApp::PluggableProperties::ActionValue.new('microflow', 'App.Run', [])
+    instance.instance_variable_set(:@semantic_values, 'action' => semantic)
+    instance.instance_variable_set(:@object, double)
+    expect(instance.send(:typed_value, 'action')).to equal(semantic)
+    expect(instance.send(:project_semantic_value, 'future')).to be_nil
+    expect(instance.send(:validate_semantic_input!, property, nil)).to be_nil
+  end
+
+  it 'covers remaining Forms enum and duplicate-name encoding alternatives' do
+    codec = Mxrb::Forms::MprCodec.new
+    editable = double(type_name: 'EditableEnum')
+    expect(codec.send(:legacy_enum_value, editable, false)).to eq('Never')
+
+    first = Mxrb::Forms::Node.build('TextBox') { name 'Duplicate' }
+    second = Mxrb::Forms::Node.build('TextBox') { name 'Duplicate' }
+    codec.send(:prepare_node_ids, [first, second])
+    expect(codec.instance_variable_get(:@local_encode_references)).to eq({})
+  end
+
+  it 'retains non-service APIs during legacy service source migration' do
+    source = <<~RUBY
+      class Other
+        def native_call
+          native_call
+        end
+      end
+    RUBY
+    migration = Mxrb::RubyApp::LegacyServiceSourceMigration.new(
+      path: 'app/services/app/other.rb', source:
+    )
+    expect(migration.migrate).to eq(source)
+  end
+
+  it 'preserves data-view native extensions and pluggable widget slots' do
+    page = Mxrb::Model::Page.allocate
+    projected = page.send(
+      :data_view_widget,
+      '$Type' => 'Forms$DataView', 'Name' => 'Details', 'Future' => true
+    )
+    expect(projected.dig(:options, :unknown_native)).to eq('Future' => true)
+
+    properties = { content: { widgets: [{ type: :text, name: 'Title' }] } }
+    allow(page).to receive(:pluggable_properties).and_return(properties)
+    widget = {
+      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'Card',
+      'Type' => { 'WidgetId' => 'App.Card', 'WidgetName' => 'Card' },
+      'Object' => {}, 'ObjectType' => {}
+    }
+    expect(page.send(:generic_pluggable_widget, widget).fetch(:slots))
+      .to eq([{ path: [:content], widgets: [{ type: :text, name: 'Title' }] }])
+  end
+
+  it 'covers legacy page source, editability, and grid class alternatives' do
+    source = double(units_of: [], documents: [])
+    builder = Mxrb::Compiler::LegacyPageBuilder.new(source, '/tmp/unused')
+    expect(builder.send(:list_view_entity, 'DataSource' => {
+      'EntityRef' => { 'Entity' => 'App.Item', 'Steps' => [2] }
+    })).to eq('App.Item')
+    expect(builder.send(:data_view_editable?, 'Editability' => 'Never')).to be(false)
+    expect(builder.send(:microflow_return_entity,
+                        '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'App.Load')).to eq('')
+    allow(builder).to receive(:data_view_entity).and_return('App.Item')
+    expect(builder.send(:supported_data_view?,
+                        'DataSource' => { '$Type' => 'Forms$NanoflowSource' })).to be(true)
+    expect(builder.send(:grid_weight_class, 'md', -1)).to be_nil
+    expect(builder.send(:grid_weight_class, 'md', -2)).to eq('col-md-auto')
+    expect(builder.send(:grid_row_alignment_class, 'Center')).to eq('align-children-center')
+    expect(builder.send(:grid_column_alignment_class, 'End')).to eq('align-self-end')
+    expect(builder.send(:render_layout_grid,
+                        { 'Width' => 'FixedWidth', 'Rows' => [2] }, 'App.Page', 'en_US'))
+      .to include('mx-layoutgrid-fixed')
+    expect(builder.send(:render_grid_row,
+                        { 'SpacingBetweenColumns' => false, 'Columns' => [2] }, 'App.Page', 'en_US'))
+      .to include('no-gutters')
   end
 end
 # rubocop:enable Metrics/BlockLength
