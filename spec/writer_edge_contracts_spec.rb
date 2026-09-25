@@ -337,10 +337,13 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       {
         name: 'Home', unit_id: nil, write_mode: :overlay,
         deep_structure: { '$Type' => 'Forms$Page', 'Future' => true },
-        widgets: [], allowed_roles: nil, public: false
+        widgets: [{ type: :text, name: 'Title', options: {} }],
+        allowed_roles: nil, public: false
       }, 'App'
     )
-    expect(page.fetch('__mxrb_page_overlay')).to include(widgets: [], encoded_widgets: [])
+    expect(page.fetch('__mxrb_page_overlay')).to include(
+      widgets: [{ type: :text, name: 'Title', options: {} }]
+    )
     menu = writer.send(:menu_doc, name: 'Main', deep_structure: { '$Type' => 'Menus$MenuDocument' })
     expect(menu).to include('$Type' => 'Menus$MenuDocument', 'Name' => 'Main')
 
@@ -396,13 +399,23 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
 
     overlay = instance_double(Mxrb::Writer::PageOverlay, apply: true)
     allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
+    allow(writer).to receive(:widget_doc).and_return('$Type' => 'Forms$TextBox')
     expect(writer.send(
              :verify_page_overlay_target!, { '$Type' => 'Forms$Page' },
-             { deep_structure: { '$Type' => 'Forms$Page' }, widgets: [] }, 'App'
+             { deep_structure: { '$Type' => 'Forms$Page' }, widgets: [{ type: :text_box }] }, 'App'
            )).to be(true)
 
     definition = writer.instance_variable_get(:@definition)
+    definition[:modules] = [{
+      name: 'App', pages: [{ name: 'Home', write_mode: :overlay, widgets: [] }]
+    }]
+    allow(writer).to receive(:overlay_module_target).and_return(raw_module)
+    allow(writer).to receive(:overlay_page_target).and_return(raw_page)
+    allow(writer).to receive(:verify_page_overlay_target!).and_return(true)
+    expect { writer.send(:preflight_page_overlays!, mpr, 'root') }.not_to raise_error
+
     definition[:modules] = [{ name: 'Missing', pages: [{ name: 'Home', write_mode: :overlay }] }]
+    allow(writer).to receive(:overlay_module_target).and_call_original
     expect { writer.send(:preflight_page_overlays!, mpr, 'root') }
       .to raise_error(Mxrb::ValidationError, /page overlay Missing.Home/)
   end
@@ -448,6 +461,9 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     expect do
       writer.send(:configure_pluggable_widget_slots!, widget, [{ path: ['content'], widgets: [] }])
     end.to raise_error(Mxrb::ValidationError, /is not a widgets property/)
+    expect do
+      writer.send(:reusable_widget_object!, object_type, object, { missing: true }, 0)
+    end.to raise_error(Mxrb::ValidationError, /invalid WidgetProperty/)
   end
 
   it 'descends through nested pluggable objects and rejects invalid object indexes' do
@@ -487,6 +503,11 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       writer.send(:pluggable_slot_property!, root_type, root,
                   ['items', 'objects', -1, 'content'], path)
     end.to raise_error(Mxrb::ValidationError, /has no object at index/)
+    root_property_type['ValueType'] = object_value.merge('ObjectType' => nil)
+    expect do
+      writer.send(:pluggable_slot_property!, root_type, root, path, path)
+    end.to raise_error(Mxrb::ValidationError, /has no ObjectType/)
+    root_property_type['ValueType'] = object_value
     nested_object['$Type'] = 'Future$Object'
     expect do
       writer.send(:pluggable_slot_property!, root_type, root, path, path)
