@@ -146,5 +146,126 @@ RSpec.describe 'DSL builder edge contracts' do
     expect(builder.send(:pluggable_slot_path, nil, within: nil, item: nil, path: %w[custom path]))
       .to eq(%w[custom path])
   end
+
+  it 'normalizes association variants, raw view sources, and composite widget slots' do
+    tree = Mxrb::Dsl::WidgetSlotBuilder.new
+    hashes = tree.association([{ association: 'App.Order_Customer', entity: 'App.Customer' }],
+                              entity: 'App.Customer')
+    scalar = tree.association('App.Order_Customer', entity: 'App.Customer')
+    expect(hashes.fetch(:steps).first).to eq(
+      association: 'App.Order_Customer', entity: 'App.Customer'
+    )
+    expect(scalar.fetch(:steps).first).to eq(
+      association: 'App.Order_Customer', entity: 'App.Customer'
+    )
+    expect(tree.view_source(:listen, target: 'grid')).to eq(kind: :listen, target: 'grid')
+
+    generic = Mxrb::Dsl::GenericWidgetBuilder.new(:future, :Future, options: {}, events: [])
+    generic.slot(path: %i[items content], role: :main) { text :Caption }
+    generic_slot = generic.to_h.fetch(:slots).first
+    expect(generic_slot).to include(path: %i[items content], role: 'main')
+    expect(generic_slot.fetch(:widgets).first).to include(type: :text, name: 'Caption')
+
+    pluggable = Mxrb::Dsl::PluggableWidgetBuilder.new(
+      :Widget, options: { widget_id: 'vendor.Widget' }, properties_declared: false
+    )
+    pluggable.slot(:content, within: :items, item: 2, role: nil) { text :Nested }
+    pluggable_slot = pluggable.to_h.fetch(:slots).first
+    expect(pluggable_slot).to include(path: [:items, :objects, 2, :content], role: nil)
+    expect(pluggable_slot.fetch(:widgets).first).to include(type: :text, name: 'Nested')
+  end
+
+  it 'builds valid tables, remote enumerations, metadata sequences, and binary values' do
+    tree = Mxrb::Dsl::WidgetSlotBuilder.new
+    tree.table(:Matrix) do
+      column(width: 100)
+      row { cell { text :Value } }
+    end
+    expect(tree.widgets.last).to include(type: :table, name: 'Matrix')
+    expect(tree.widgets.last.dig(:options, :rows, 0, :cells, 0, :widgets, 0)).to include(name: 'Value')
+
+    enumeration = Mxrb::Dsl::EnumerationBuilder.new(
+      :Status, remote_service: 'Remote.Service', remote_name: 'Status'
+    )
+    enumeration.value(:Open, remote_name: 'OPEN')
+    expect(enumeration.to_h.fetch(:remote_source)).to include(
+      '$Type' => 'Rest$ODataRemoteEnumerationSource', 'ConsumedODataService' => 'Remote.Service'
+    )
+    expect(enumeration.to_h.dig(:values, 0, :remote_value)).to include('RemoteName' => 'OPEN')
+
+    metadata = {
+      'Run' => [
+        { 'native_type' => 'Microflows$Microflow', 'unit_id' => 'first' },
+        { 'native_type' => '', 'unit_id' => 'second' }
+      ]
+    }
+    mod = Mxrb::Dsl::ModuleBuilder.new(:App, flow_metadata: metadata)
+    expect(mod.send(:flow_metadata_for, :Run).fetch('unit_id')).to eq('first')
+    expect(mod.send(:flow_metadata_for, :Run).fetch('unit_id')).to eq('second')
+
+    encoded = Base64.strict_encode64('bytes')
+    project = Mxrb::Dsl::Builder.new('/tmp/app.mpr')
+    project.preserve_native_pages
+    expect(project.instance_variable_get(:@preserve_native_pages)).to be(true)
+    expect(project.bson_binary(encoded)).to be_a(BSON::Binary)
+    expect(enumeration.bson_binary(encoded, subtype: :user).type).to eq(:user)
+    expect(mod.bson_binary(encoded, subtype: :user).type).to eq(:user)
+  end
+
+  it 'materializes typed DataSet parameters and nested access constraints' do
+    mod = Mxrb::Dsl::ModuleBuilder.new(:Reports)
+    mod.dataset(:Orders) do
+      parameter :Search, string
+      parameter :Owner, object_of('Reports.Owner'), range: true
+      parameter :Status, enum_of('Reports.Status')
+      allow 'Reports.Reader' do
+        parameter :Search do
+          constraint '[%CurrentUser%]', enabled: false
+        end
+      end
+      oql 'SELECT O/Number FROM Reports.Order O', ieiq: true
+    end
+    document = mod.native_documents.first.fetch(:doc)
+    parameters = Mxrb::IO::BsonCodec.parse_array(document.fetch('Parameters')).fetch(:items)
+    access = Mxrb::IO::BsonCodec.parse_array(
+      document.dig('DataSetAccess', 'ModuleRoleAccessList')
+    ).fetch(:items).first
+
+    expect(parameters.map { _1.dig('ParameterType', '$Type') }).to eq(
+      %w[DataTypes$StringType DataTypes$ObjectType DataTypes$EnumerationType]
+    )
+    expect(parameters[1].dig('ParameterType', 'Entity')).to eq('Reports.Owner')
+    expect(parameters[2].dig('ParameterType', 'Enumeration')).to eq('Reports.Status')
+    constraint = Mxrb::IO::BsonCodec.parse_array(
+      Mxrb::IO::BsonCodec.parse_array(access.fetch('ParameterAccessList')).fetch(:items).first
+          .fetch('ConstraintAccessList')
+    ).fetch(:items).first
+    expect(constraint).to include('ConstraintText' => '[%CurrentUser%]', 'Enabled' => false)
+
+    expect do
+      mod.dataset(:Invalid) { parameter :Value, { kind: :future } }
+    end.to raise_error(ArgumentError, /unsupported dataset parameter type/)
+  end
+
+  it 'validates REST string handling, XML exports, code-action kinds, and enum flow types' do
+    flow = Mxrb::Dsl::FlowBuilder.new(:Run, runtime: :server, kind: :microflow, public: false)
+    expect do
+      flow.call_rest(method: :get, location: '/', result_handling: :string, as: :body,
+                     result_entity: 'App.Item')
+    end.to raise_error(ArgumentError, /does not accept a result mapping or entity/)
+    expect { flow.export_xml(:item, mapping: :Export, as: :xml, content_type: :future) }
+      .to raise_error(ArgumentError, /unsupported export mapping content type/)
+    expect { flow.export_xml('', mapping: :Export, as: :xml) }
+      .to raise_error(ArgumentError, /requires variable, mapping, and as/)
+    flow.export_xml(:item, mapping: :Export, as: :xml, content_type: :json)
+    expect(flow.to_h.fetch(:body).last).to include(
+      type: :export_xml, variable: 'item', mapping: 'Export', output: 'xml', content_type: 'json'
+    )
+    expect { flow.call_java(:Code, pass: { Input: { kind: :future, value: 'x' } }) }
+      .to raise_error(ArgumentError, /unsupported code action parameter kind/)
+    expect(flow.enum_of('App.Status')).to include(
+      '$Type' => 'DataTypes$EnumerationType', 'Enumeration' => 'App.Status'
+    )
+  end
 end
 # rubocop:enable Metrics/BlockLength

@@ -239,6 +239,25 @@ RSpec.describe 'eloquent Ruby REST CRUD' do
     end.to raise_error(ArgumentError, /resources: or a block/)
   end
 
+  it 'rejects duplicate routes and builds explicit operation parameters' do
+    resource = Mxrb::Dsl::IntegrationDocuments::RestResourceBuilder.new('items')
+    resource.get(:list, path: '', microflow: 'App.List') do
+      parameter :limit, type: :integer, maps_to: :Limit, in: :query, description: 'Maximum rows'
+    end
+    expect(resource.operations.first.fetch(:parameters).first).to include(
+      name: 'limit', type: :integer, parameter_type: :query,
+      microflow_parameter: 'Limit', description: 'Maximum rows'
+    )
+    expect { resource.get(:again, path: '', microflow: 'App.List') }
+      .to raise_error(ArgumentError, /duplicate REST route GET/)
+
+    mod = Mxrb::Dsl::ModuleBuilder.new(:App)
+    body = [{ type: :change_object, variable: 'response', members: [
+      { attribute: 'System.HttpResponse.StatusCode', value: 201 }
+    ] }]
+    expect(mod.send(:rest_status_assignment?, body, 'response', 201)).to be(true)
+  end
+
   it 'keeps route responses in typed metadata instead of human documentation' do
     builder = Mxrb::Dsl::ModuleBuilder.new('DocumentedApi')
     builder.published_rest_service(:API_Service, path: 'api', version: '1') do
