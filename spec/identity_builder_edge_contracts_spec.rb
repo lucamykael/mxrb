@@ -104,7 +104,12 @@ RSpec.describe 'Ruby identity and builder edge contracts' do
   end
 
   it 'validates validation-rule specialization and deeply copies unusual legacy values' do
-    builder = Mxrb::RubyApp::ValidationRuleBuilder.new(kind: :required)
+    builder = Mxrb::RubyApp::ValidationRuleBuilder.new(
+      kind: :required, translations: [{ language: :en_US, text: 'Required', id: :message }]
+    )
+    expect(builder.translations.first.to_h).to eq(
+      id: 'message', language_code: 'en_US', text: 'Required'
+    )
     expect { builder.regular_expression('pattern') }
       .to raise_error(ArgumentError, /requires a regular-expression/)
     token = Object.new

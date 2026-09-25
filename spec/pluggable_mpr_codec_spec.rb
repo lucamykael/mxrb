@@ -446,4 +446,46 @@ RSpec.describe Mxrb::Pluggable::MprCodec do
       broken_codec.send(:encode_outer, :appearance, Mxrb::Forms::Node.new('Appearance'), path: '$.Appearance')
     end.to raise_error(Mxrb::Pluggable::CodecError, /cannot encode appearance at \$\.Appearance/)
   end
+
+  it 'covers absent schema identities and nil codec values' do
+    codec, definition, registry = codec_for(property('attribute', 'Attribute'), property('entity', 'Entity'))
+    node = Mxrb::Pluggable::Node.new(definition, catalog: registry)
+    node.object.set(:attribute, nil)
+    node.object.set(:entity, nil)
+    document = codec.encode(node)
+    schema_without_ids = Marshal.load(Marshal.dump(document.fetch('Type')))
+    walk = lambda do |value|
+      case value
+      when Hash
+        value.delete('$ID')
+        value.each_value { walk.call(_1) }
+      when Array then value.each { walk.call(_1) unless _1.is_a?(Integer) }
+      end
+    end
+    walk.call(schema_without_ids)
+
+    expect { codec.register_type(schema_without_ids) }.not_to raise_error
+    expect(codec.send(:decode_data_source, {}, path: '$.Source')).to be_nil
+    expect(codec.send(:decode_text, nil)).to eq(Mxrb::Forms::Text.coerce([]))
+    expect(codec.send(:encode_outer, :appearance, nil, path: '$.Appearance')).to be_nil
+    expect(codec.send(:encode_semantic_reference, {}, 'Future', nil)).to be_nil
+    expect(codec.decode(document).object.fetch(:attribute)).to be_nil
+    expect(codec.decode(document).object.fetch(:entity)).to be_nil
+  end
+
+  it 'rejects ambiguous embedded schema identities and ignores unrelated shapes' do
+    codec, = codec_for(property('caption', 'String'))
+    generated = [2,
+                 { '$Type' => 'Schema$Item', 'Key' => 'same' },
+                 { '$Type' => 'Schema$Item', 'Key' => 'other' }]
+    ambiguous = [2,
+                 { '$Type' => 'Schema$Item', 'Key' => 'same' },
+                 { '$Type' => 'Schema$Item', 'Key' => 'same' }]
+
+    expect do
+      codec.send(:restore_schema_array!, generated, ambiguous, {})
+    end.to raise_error(Mxrb::Pluggable::CodecError, /ambiguous embedded widget schema identity/)
+    expect { codec.send(:restore_schema_fields!, {}, 'not a hash', {}) }.not_to raise_error
+    expect { codec.send(:restore_schema_fields!, [], 'not an array', {}) }.not_to raise_error
+  end
 end

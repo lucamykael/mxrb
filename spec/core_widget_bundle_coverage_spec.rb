@@ -256,6 +256,8 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
 
     expect(compiler.send(:autocomplete_value, 'Autocomplete' => false,
                                               'AutocompletePurpose' => 'Email')).to eq('off')
+    expect(compiler.send(:autocomplete_value, 'AutocompletePurpose' => 'FutureAccountId')).to eq('future-account-id')
+    expect(compiler.send(:react_style_property, '-webkit-user-select')).to eq('WebkitUserSelect')
     expect(compiler.send(:input_editability, {
       'Editable' => 'Conditional',
       'ConditionalEditabilitySettings' => { 'Expression' => '$currentObject/MayEdit' }

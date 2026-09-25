@@ -447,4 +447,22 @@ RSpec.describe Mxrb::Forms::MprCodec do # rubocop:disable Metrics/BlockLength
     expect { codec.send(:encode_reference, Mxrb::Forms::Reference.to('missing', kind: :by_id), path: '$.Ref') }
       .to raise_error(Mxrb::Forms::UnresolvedStorageReferenceError, /semantic resolver/)
   end
+
+  it 'covers defensive scalar fallbacks and expression companions' do
+    generic_enum = Struct.new(:type_name).new('ButtonStyle')
+    conditional_expression = Struct.new(:declared_by).new('ConditionalSettings')
+    document = {}
+
+    expect { codec.send(:decode_size, 'wide;high', path: '$.Size') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid size/)
+    expect(codec.send(:legacy_enum_value, generic_enum, false)).to be(false)
+    expect(codec.send(:decode_xpath_constraint, [2, { 'XPathConstraint' => '[Active]' }]).to_s).to eq('[Active]')
+    expect(codec.send(:decode_attribute_reference, 'Sales.Order.Number', path: '$').attribute)
+      .to eq('Sales.Order.Number')
+    expect(codec.send(:decode_entity_reference, 'Sales.Order', path: '$').entity).to eq('Sales.Order')
+    expect(codec.send(:external_type_name, 'String')).to eq('String')
+    expect(codec.send(:decode_data_type, 'String', path: '$').name).to eq('String')
+    codec.send(:add_expression_companion, document, conditional_expression, 'Expression')
+    expect(document.dig('ExpressionModel', '$Type')).to eq('Expressions$NoExpression')
+  end
 end

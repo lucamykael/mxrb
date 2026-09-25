@@ -326,5 +326,22 @@ RSpec.describe 'private Ruby page configuration' do
       .to be_nil
     expect(bridge.configuration_expression(kind: :listen, target: 'grid')).to eq('listen_to("grid")')
   end
+
+  it 'fails closed when hostile hash implementations raise during source inspection' do
+    broken_lookup = Class.new(Hash) do
+      def [](_key) = raise(ArgumentError, 'broken lookup')
+    end.new
+    broken_normalization = Class.new(Hash) do
+      def to_h(*) = raise(TypeError, 'broken normalization')
+    end.new
+    broken_keys = Class.new(Hash) do
+      def keys = raise(KeyError, 'broken keys')
+    end.new
+
+    bridge = Mxrb::RubyApp::PageDataSources
+    expect(bridge.source_expression(broken_lookup)).to be_nil
+    expect(bridge.configuration_expression(broken_normalization)).to be_nil
+    expect(bridge.variable_reference_expression(broken_keys)).to be_nil
+  end
 end
 # rubocop:enable Metrics/BlockLength
