@@ -291,5 +291,40 @@ RSpec.describe 'private Ruby page configuration' do
       expect(Mxrb::RubyApp::PageDataSources.source_expression(definition)).to be_nil
     end
   end
+
+  it 'fails closed for every malformed semantic data-source component' do
+    bridge = Mxrb::RubyApp::PageDataSources
+    malformed = [
+      nil,
+      { 'kind' => 'context', 'future' => true },
+      { 'kind' => 'context', 'entity' => '' },
+      { 'kind' => 'context', 'entity' => 'App.Item', 'variable' => [] },
+      { 'kind' => 'context', 'entity' => 'App.Item',
+        'variable' => { 'kind' => 1, 'name' => 'Item' } },
+      { 'kind' => 'association', 'entity' => 1, 'steps' => [] },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => {} },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => [nil] },
+      { 'kind' => 'association', 'entity' => 'App.Item',
+        'steps' => [{ 'association' => '', 'entity' => 'App.Other' }] },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => [], 'variable' => nil },
+      { 'kind' => 'microflow', 'name' => '' },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'mappings' => {} },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'mappings' => [nil] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'mappings' => [{ 'parameter' => 1, 'expression' => '$Item' }] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'mappings' => [{ 'parameter' => 'Item', 'future' => true }] },
+      { 'kind' => 'nanoflow', 'name' => 'App.Read', 'settings_native' => { 'UseAllPages' => true } },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'settings_native' => [] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'settings_native' => { 'UseAllPages' => nil } },
+      { 'kind' => 'listen', 'target' => '' }
+    ]
+    malformed.each { expect(bridge.source_expression(_1)).to be_nil }
+    expect(bridge.variable_reference_expression(nil)).to be_nil
+    expect(bridge.variable_reference_expression('kind' => 'page_parameter', 'name' => 'Item', 'future' => true))
+      .to be_nil
+    expect(bridge.configuration_expression(kind: :listen, target: 'grid')).to eq('listen_to("grid")')
+  end
 end
 # rubocop:enable Metrics/BlockLength
