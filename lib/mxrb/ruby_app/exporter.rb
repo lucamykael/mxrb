@@ -678,7 +678,7 @@ module Mxrb
                   end
         return unless encoded
 
-        encoded.lines.filter_map { _1[/\A-\s+(2\d{2}):/, 1] }.first
+        encoded.lines.filter_map { _1.chomp[/\A-\s+(2\d{2}):/, 1] }.first
       end
 
       def rest_runtime_resource_path(resource, operation)

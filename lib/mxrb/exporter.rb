@@ -1886,7 +1886,7 @@ module Mxrb
       return [documentation.to_s, []] unless encoded
 
       responses = encoded.lines.filter_map do |line|
-        match = line.match(/\A-\s+(\d{3}):\s*(.*)\z/)
+        match = line.chomp.match(/\A-\s+(\d{3}):\s*(.*)\z/)
         { status: match[1].to_i, description: match[2] } if match
       end
       [prose, responses]
