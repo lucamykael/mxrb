@@ -321,5 +321,61 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(exporter.send(:body_dsl_lines, [break_event], [], 4, nested: true))
       .to eq(['    break_loop'])
   end
+
+  it 'wraps typed Forms, settings, and system-text decoding failures' do
+    project = double(mendix_version: '11.12.1')
+    unit = { 'UnitID' => 'page-id' }
+    allow(project).to receive(:parse_bson).with(unit).and_return(
+      '$Type' => 'Forms$PageTemplate', 'Name' => 'Broken'
+    )
+    codec = double
+    allow(codec).to receive(:register_pluggable_type)
+    allow(codec).to receive(:decode).and_raise(KeyError, 'missing field')
+    allow(Mxrb::Forms::MprCodec).to receive(:new).and_return(codec)
+    expect { exporter.send(:prepare_typed_forms, project, [unit], []) }
+      .to raise_error(Mxrb::SerializationError, /typed Forms export failed for Broken/)
+
+    page = double(id: 'runtime-page', raw_document: {}, widgets: [{ type: :future }], name: 'Runtime')
+    mod = double(pages: [page])
+    allow(exporter).to receive(:semantic_page_baseline?).and_return(false)
+    expect { exporter.send(:prepare_typed_forms, project, [], [mod]) }
+      .to raise_error(Mxrb::SerializationError, /typed Forms export failed for page Runtime/)
+
+    settings_codec = double(decode: nil)
+    allow(settings_codec).to receive(:decode).and_raise(KeyError, 'settings')
+    allow(Mxrb::Settings::MprCodec).to receive(:new).and_return(settings_codec)
+    expect { exporter.send(:typed_project_settings_declaration, {}) }
+      .to raise_error(Mxrb::SerializationError, /typed project settings export failed/)
+
+    texts_codec = double(decode: nil)
+    allow(texts_codec).to receive(:decode).and_raise(KeyError, 'texts')
+    allow(Mxrb::SystemTexts::MprCodec).to receive(:new).and_return(texts_codec)
+    expect { exporter.send(:typed_system_text_declaration, {}) }
+      .to raise_error(Mxrb::SerializationError, /typed system-text export failed/)
+  end
+
+  it 'emits resource documentation, page event arguments, and symbolic values' do
+    document = {
+      id: 'service-id', container_id: 'module-id', name: 'Api',
+      doc: { 'Resources' => [2, { 'Operations' => [2] }] }
+    }
+    allow(exporter).to receive(:rest_resource_spec).and_return(
+      id: 'resource-id', name: 'Orders', documentation: 'Order operations', operations: []
+    )
+    expect(exporter.send(:published_rest_declaration, document))
+      .to include('documentation: "Order operations"')
+
+    page = double(
+      name: 'Home', id: 'page-id', layout_id: nil, title: 'Home', popup_width: 0,
+      popup_height: 0, allowed_module_roles: [], widgets: [], data_source: nil,
+      raw_document: nil
+    )
+    metadata = {
+      widgets: [], public: false,
+      events: [{ event: :on_load, kind: :microflow, handler: 'App.Load', arguments: { Input: '$value' } }]
+    }
+    expect(exporter.send(:page_source, page, metadata)).to include('pass:')
+    expect(exporter.send(:ruby_val, :future)).to eq('"future"')
+  end
 end
 # rubocop:enable Metrics/BlockLength

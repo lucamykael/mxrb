@@ -29,6 +29,11 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
                     { name: 'Detached', unbound: true, enabled: true, microflow: '', schedule: nil }
                   ])
     end.to raise_error(Mxrb::ValidationError, /must be disabled/)
+    expect do
+      writer.send(:validate_ruby_scheduled_events!, 'App', [
+                    { name: 'Detached', unbound: true, enabled: false, microflow: '', schedule: nil }
+                  ])
+    end.not_to raise_error
     unbound = writer.send(
       :ruby_unbound_scheduled_event_doc,
       { name: 'Detached', start_at: '', interval: 1 }, { 'StartDateTime' => '2026-01-01T00:00:00Z' }, 'id'
@@ -363,6 +368,198 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       content_type: :xml, error: :rollback
     )
     expect(action).to include('$Type' => 'Microflows$ExportXmlAction')
+  end
+
+  it 'resolves page overlay module/page identities and wraps preflight failures' do
+    raw_module = { 'UnitID' => 'module-id', 'ContainmentName' => 'Modules' }
+    raw_page = { 'UnitID' => 'page-id' }
+    mpr = double(all_units: [raw_module, raw_page], children_of: [raw_module])
+    allow(mpr).to receive(:parse_contents).with(raw_module).and_return('Name' => 'App')
+    allow(mpr).to receive(:parse_contents).with(raw_page)
+                                          .and_return('$Type' => 'Forms$Page', 'Name' => 'Home')
+    allow(mpr).to receive(:unit).with('module-id').and_return(raw_module)
+    allow(mpr).to receive(:unit).with('page-id').and_return(raw_page)
+    metadata = { 'module_unit_id' => 'module-id', 'page_unit_id' => 'page-id' }
+    expect(writer.send(:overlay_module_target, mpr, 'root', { name: 'App' }, metadata))
+      .to equal(raw_module)
+    allow(writer).to receive(:documents_by_name).and_return('Home' => [raw_page])
+    expect(writer.send(:overlay_page_target, mpr, raw_module, { name: 'Home' }, metadata))
+      .to equal(raw_page)
+
+    expect do
+      writer.send(:overlay_module_target, mpr, 'root', { name: 'Missing' }, nil)
+    end.to raise_error(Mxrb::ValidationError, /module identity changed/)
+    allow(writer).to receive(:documents_by_name).and_return('Home' => [])
+    expect do
+      writer.send(:overlay_page_target, mpr, raw_module, { name: 'Home' }, nil)
+    end.to raise_error(Mxrb::ValidationError, /page overlay identity changed/)
+
+    overlay = instance_double(Mxrb::Writer::PageOverlay, apply: true)
+    allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
+    expect(writer.send(
+             :verify_page_overlay_target!, { '$Type' => 'Forms$Page' },
+             { deep_structure: { '$Type' => 'Forms$Page' }, widgets: [] }, 'App'
+           )).to be(true)
+
+    definition = writer.instance_variable_get(:@definition)
+    definition[:modules] = [{ name: 'Missing', pages: [{ name: 'Home', write_mode: :overlay }] }]
+    expect { writer.send(:preflight_page_overlays!, mpr, 'root') }
+      .to raise_error(Mxrb::ValidationError, /page overlay Missing.Home/)
+  end
+
+  it 'validates simple, duplicate, and nested pluggable widget slots' do
+    widgets_type = { '$ID' => 'widgets-value', 'Type' => 'Widgets' }
+    content_type = {
+      '$ID' => 'content-property', 'PropertyKey' => 'content', 'ValueType' => widgets_type
+    }
+    object_type = { '$ID' => 'object-type', 'PropertyTypes' => [2, content_type] }
+    content = {
+      '$Type' => 'CustomWidgets$WidgetProperty', 'TypePointer' => 'content-property',
+      'Value' => { '$Type' => 'CustomWidgets$WidgetValue', 'TypePointer' => 'widgets-value' }
+    }
+    object = {
+      '$Type' => 'CustomWidgets$WidgetObject', 'TypePointer' => 'object-type',
+      'Properties' => [2, content]
+    }
+    widget = { 'Name' => 'Grid', 'Type' => { 'ObjectType' => object_type }, 'Object' => object }
+    resolved = writer.send(:pluggable_slot_property!, object_type, object, ['content'], ['content'])
+    expect(resolved.fetch('ValueType')).to include('Type' => 'Widgets')
+    writer.send(
+      :configure_pluggable_widget_slots!, widget,
+      [{ path: ['content'], widgets: [{ type: :text, name: 'Inside', options: {} }] }]
+    )
+    expect(Mxrb::IO::BsonCodec.parse_array(content.dig('Value', 'Widgets'))[:items]).not_to be_empty
+    expect do
+      writer.send(:configure_pluggable_widget_slots!, widget,
+                  [{ path: ['content'] }, { path: ['content'] }])
+    end.to raise_error(Mxrb::ValidationError, /duplicate pluggable widget slot/)
+    expect { writer.send(:pluggable_slot_property!, object_type, object, [], []) }
+      .to raise_error(Mxrb::ValidationError, /path cannot be empty/)
+    expect { writer.send(:pluggable_slot_property!, object_type, object, ['missing'], ['missing']) }
+      .to raise_error(Mxrb::ValidationError, /has no property/)
+    expect do
+      writer.send(:pluggable_slot_property!, object_type, object,
+                  %w[content invalid], %w[content invalid])
+    end.to raise_error(Mxrb::ValidationError, /must descend through/)
+    expect do
+      writer.send(:configure_pluggable_widget_slots!, widget, [{ path: ['content'], widgets: [] }])
+    end.not_to raise_error
+    content_type['ValueType']['Type'] = 'String'
+    expect do
+      writer.send(:configure_pluggable_widget_slots!, widget, [{ path: ['content'], widgets: [] }])
+    end.to raise_error(Mxrb::ValidationError, /is not a widgets property/)
+  end
+
+  it 'descends through nested pluggable objects and rejects invalid object indexes' do
+    leaf_value = { '$ID' => 'leaf-value', 'Type' => 'Widgets' }
+    leaf_property_type = {
+      '$ID' => 'leaf-property', 'PropertyKey' => 'content', 'ValueType' => leaf_value
+    }
+    nested_type = { '$ID' => 'nested-type', 'PropertyTypes' => [2, leaf_property_type] }
+    leaf_property = {
+      '$Type' => 'CustomWidgets$WidgetProperty', 'TypePointer' => 'leaf-property',
+      'Value' => { '$Type' => 'CustomWidgets$WidgetValue', 'TypePointer' => 'leaf-value' }
+    }
+    nested_object = {
+      '$Type' => 'CustomWidgets$WidgetObject', 'TypePointer' => 'nested-type',
+      'Properties' => [2, leaf_property]
+    }
+    object_value = { '$ID' => 'object-value', 'Type' => 'Object', 'ObjectType' => nested_type }
+    root_property_type = {
+      '$ID' => 'items-property', 'PropertyKey' => 'items', 'ValueType' => object_value
+    }
+    root_type = { '$ID' => 'root-type', 'PropertyTypes' => [2, root_property_type] }
+    root_property = {
+      '$Type' => 'CustomWidgets$WidgetProperty', 'TypePointer' => 'items-property',
+      'Value' => {
+        '$Type' => 'CustomWidgets$WidgetValue', 'TypePointer' => 'object-value',
+        'Objects' => [2, nested_object]
+      }
+    }
+    root = {
+      '$Type' => 'CustomWidgets$WidgetObject', 'TypePointer' => 'root-type',
+      'Properties' => [2, root_property]
+    }
+    path = ['items', 'objects', 0, 'content']
+    expect(writer.send(:pluggable_slot_property!, root_type, root, path, path))
+      .to include('TypePointer' => 'leaf-property')
+    expect do
+      writer.send(:pluggable_slot_property!, root_type, root,
+                  ['items', 'objects', -1, 'content'], path)
+    end.to raise_error(Mxrb::ValidationError, /has no object at index/)
+    nested_object['$Type'] = 'Future$Object'
+    expect do
+      writer.send(:pluggable_slot_property!, root_type, root, path, path)
+    end.to raise_error(Mxrb::ValidationError, /does not resolve to a WidgetObject/)
+
+    expect do
+      writer.send(:validate_available_pluggable_slots!, { 'Name' => 'Grid' },
+                  __kind: :native, __slots: [{ path: ['content'] }])
+    end.to raise_error(Mxrb::ValidationError, /has declared slots/)
+  end
+
+  it 'updates existing OQL documents and typed Forms documents' do
+    raw = { 'UnitID' => 'view-id' }
+    mpr = double
+    allow(writer).to receive(:collect_documents).and_return([raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(
+      '$ID' => 'view-id', '$Type' => 'DomainModels$ViewEntitySourceDocument',
+      'Name' => 'View', 'Oql' => 'old'
+    )
+    expect(mpr).to receive(:update_unit).with('view-id', hash_including('Oql' => 'SELECT 1'))
+    writer.send(
+      :synchronize_ruby_oql_documents!, mpr, 'module-id', 'App',
+      [{ name: 'View', oql_view: { source: 'App.View', query: 'SELECT 1' } }]
+    )
+
+    forms_model = Object.new
+    declaration = {
+      name: 'Home', type: 'Forms$Page', containment: 'Documents', forms_model:
+    }
+    existing = { 'UnitID' => 'page-id', 'ContainerID' => 'module-id' }
+    current = { '$ID' => 'page-id', '$Type' => 'Forms$Page', 'Name' => 'Home' }
+    codec = instance_double(Mxrb::Forms::MprCodec)
+    allow(Mxrb::Forms::MprCodec).to receive(:new).and_return(codec)
+    allow(codec).to receive(:encode).with(forms_model).and_return(current)
+    allow(codec).to receive(:encode).with(forms_model, baseline: current).and_return(current)
+    allow(writer).to receive(:native_document_target).and_return(existing)
+    allow(writer).to receive(:conventional_document_container).and_return('module-id')
+    forms_mpr = double
+    allow(forms_mpr).to receive(:parse_contents).with(existing).and_return(current)
+    expect(forms_mpr).to receive(:update_unit).with('page-id', hash_including('Name' => 'Home'))
+    writer.send(:write_native_documents, forms_mpr, 'module-id', native_documents: [declaration])
+  end
+
+  it 'prunes undeclared managed native documents and resolves anonymous shapes' do
+    raw = { 'UnitID' => 'old-id' }
+    mpr = double
+    allow(writer).to receive(:collect_documents).and_return([raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(
+      '$Type' => 'Forms$Snippet', 'Name' => 'Old'
+    )
+    expect(mpr).to receive(:delete_unit).with('old-id')
+    writer.send(
+      :write_native_documents, mpr, 'module-id',
+      native_documents: [], managed_native_document_types: ['Forms$Snippet']
+    )
+
+    expect(writer.send(
+             :resolve_document_target, mpr, 'module-id', [raw],
+             { 'Name' => '', '$Type' => 'Forms$Snippet' }, '', allow_name_fallback: true
+           )).to equal(raw)
+  end
+
+  it 'wraps page overlay application errors with the generated page name' do
+    generated = {
+      'Name' => 'Home', '__mxrb_page_overlay' => {
+        baseline: {}, metadata: {}, widgets: [], encoded_widgets: []
+      }
+    }
+    overlay = instance_double(Mxrb::Writer::PageOverlay)
+    allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
+    allow(overlay).to receive(:apply).and_raise(Mxrb::ValidationError, 'changed')
+    expect { writer.send(:apply_page_overlay, {}, generated) }
+      .to raise_error(Mxrb::ValidationError, /page overlay Home: changed/)
   end
 end
 # rubocop:enable Metrics/BlockLength

@@ -3961,22 +3961,20 @@ module Mxrb
       if source_reference.empty? && !query.nil?
         source_reference = "#{module_name}.#{entity_name}"
       end
-      unless source_reference.empty?
-        source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
-        current_source = previous&.dig(source_key)
-        source = (current_source.is_a?(Hash) ? current_source : {}).merge(
-          '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
-          '$Type' => 'DomainModels$OqlViewEntitySource',
-          'SourceDocument' => source_reference
-        )
-        %w[oql Oql OQL].each { source.delete(_1) }
-        doc[source_key] = source
-        %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
-      end
-      return unless query && source_reference.empty?
+      return if source_reference.empty?
+      source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
+      current_source = previous&.dig(source_key)
+      source = (current_source.is_a?(Hash) ? current_source : {}).merge(
+        '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
+        '$Type' => 'DomainModels$OqlViewEntitySource',
+        'SourceDocument' => source_reference
+      )
+      %w[oql Oql OQL].each { source.delete(_1) }
+      doc[source_key] = source
+      %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
 
-      query_key = native_existing_key(previous, 'oqlQuery', 'OqlQuery', 'OQLQuery') || 'OqlQuery'
-      doc[query_key] = query
+      # Inline queries are represented by the named source document created
+      # alongside the entity, so there is no legacy inline-query write here.
     end
 
     def attribute_doc(attr, previous, oql_view: false)
