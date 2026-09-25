@@ -435,5 +435,89 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(tree.widgets.last).not_to have_key('events')
     expect { tree.properties {} }.to raise_error(ArgumentError, /pluggable widget/)
   end
+
+  it 'covers remaining registry, record, security, service, and page alternatives' do
+    Mxrb::RubyApp::Registry.reset!
+    services = 3.times.map do |index|
+      double(mendix_name: 'App.Run', mendix_id: "service-#{index}")
+    end
+    services.each_with_index do |service, index|
+      Mxrb::RubyApp::Registry.register(:service, 'App.Run', service, unit_id: "service-#{index}")
+    end
+    expect(Mxrb::RubyApp::Registry.all(:service).length).to eq(3)
+
+    allow(Mxrb::RubyApp::SourceIdentity).to receive(:resolve).and_return('record-id')
+    record = Class.new(Mxrb::RubyApp::Record)
+    record.mendix_name('App.Item')
+    record.attribute(:name, type: :String, mendix_name: 'Name')
+    record.access_rule('App.User')
+    record.oql_view(source: 'SELECT 1')
+    expect(record.oql_view_definition).to eq(source: 'SELECT 1')
+    record.oql_view(query: 'SELECT 2')
+    expect(record.oql_view_definition).to eq(query: 'SELECT 2')
+    application = double(create_record: :created)
+    controller = Mxrb::RubyApp::Controller.new(application)
+    expect(controller.create(record, { name: 'One' })).to eq(:created)
+    record.instance_variable_set(:@attributes, nil)
+    record.validation_rule(:Unknown, kind: :required)
+
+    module_security = Class.new(Mxrb::RubyApp::ModuleSecurity)
+    module_security.module_role(:User, renamed_from: :OldUser)
+    expect(module_security.roles.first.fetch(:renamed_from)).to eq('OldUser')
+    project_security = Class.new(Mxrb::RubyApp::ProjectSecurity)
+    project_security.password_policy(id: 'policy', minimum_length: 12)
+    expect(project_security.native_definition.dig(:password_policy, :properties))
+      .to eq('minimum_length' => 12)
+
+    controller_class = Class.new(Mxrb::RubyApp::Controller) do
+      def run(value:) = value
+    end
+    service = Class.new(Mxrb::RubyApp::Service)
+    service.controller(controller_class, action: :run)
+    expect(service.new(double).call(value: 1)).to eq(1)
+    missing = Class.new(Mxrb::RubyApp::Service)
+    missing.controller(:MissingController, action: :run)
+    expect { missing.new(double).call }.to raise_error(Mxrb::ValidationError, /not registered/)
+
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    pluggable = tree.widget(:pluggable_widget, :Widget, options: { widget_id: 'vendor.Widget' })
+    owner_tree = Mxrb::RubyApp::Page::WidgetTree.new(
+      property_owner: { name: pluggable.fetch('name'), widget_id: 'vendor.Widget', legacy: false }
+    )
+    expect { owner_tree.properties }.to raise_error(ArgumentError, /requires a block/)
+    expect { tree.table(:Invalid) }.to raise_error(ArgumentError, /at least one column/)
+    event_value = { type: :text, name: :Title, options: {}, events: [{ event: :on_click }] }
+    expect(tree.send(:append_structured, event_value).fetch('events')).not_to be_empty
+
+    page = Class.new(Mxrb::RubyApp::Page)
+    allow(Mxrb::RubyApp::PageDesignIdentity).to receive(:configure) { |_owner, widgets| widgets }
+    expect do
+      page.configure(title: 'Home', widgets: []) { text :Title }
+    end.to raise_error(ArgumentError, /either widgets: or a widget block/)
+    page.configure(title: 'Home') { |widgets| widgets.text :Title }
+    expect(page.widgets.first.fetch('name')).to eq('Title')
+  ensure
+    Mxrb::RubyApp::Registry.reset!
+  end
+
+  it 'skips empty regex modules and rejects unavailable reference baselines' do
+    sync = Mxrb::RubyApp::Synchronizer.allocate
+    manifest = double(modules: [{ 'name' => 'App', 'regular_expressions' => [] }])
+    sync.instance_variable_set(:@manifest, manifest)
+    project = double(mendix_version: '11.12.1', mpr: double)
+    expression = double(mendix_name: 'Other.Email', native_definition: { name: 'Email' })
+    allow(Mxrb::RubyApp::Registry).to receive(:all).with(:regular_expression)
+                                                   .and_return('Other.Email' => expression)
+    plan = double(plan_ruby_regular_expressions: { changes: [] })
+    allow(Mxrb::Writer).to receive(:new).and_return(plan)
+    sync.send(:preflight_regular_expressions!, project)
+    expect(sync.instance_variable_get(:@regular_expression_changes)).to include('Other')
+
+    index = double(artifacts: [])
+    project = double(semantic_index: index)
+    expect do
+      sync.send(:validate_regular_expression_references!, project, { 'UnitID' => 'missing' }, 'Email', :remove)
+    end.to raise_error(Mxrb::ValidationError, /baseline is unavailable/)
+  end
 end
 # rubocop:enable Metrics/BlockLength, Lint/ConstantDefinitionInBlock

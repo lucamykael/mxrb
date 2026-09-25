@@ -2411,7 +2411,7 @@ module Mxrb
           }
         end
         options << "members: #{native_ruby(member_declarations)}"
-        flags << "  index #{members.map { symbol(_1) }.join(', ')}#{options.empty? ? '' : ", #{options.join(', ')}"}"
+        flags << "  index #{members.map { symbol(_1) }.join(', ')}, #{options.join(', ')}"
       end
       lifecycle = if entity.respond_to?(:lifecycle)
                     entity.lifecycle

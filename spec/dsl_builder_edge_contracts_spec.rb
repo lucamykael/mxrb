@@ -373,5 +373,77 @@ RSpec.describe 'DSL builder edge contracts' do
       multiplier: 2, minute_offset: 3, hour_of_day: 4, minute_of_hour: 5, monday: true
     )
   end
+
+  it 'covers remaining optional DSL branches and invalid page declarations' do
+    table = Mxrb::Dsl::TableBuilder.new(
+      :Table, width_unit: :weight, tab_index: 0, class_name: nil, style: nil,
+              dynamic_class: nil, visible: nil
+    )
+    table.column(width: 1) { width 2 }
+    table.row
+    expect(table.to_h.dig(:options, :columns, 0, :width)).to eq(2)
+
+    grid = Mxrb::Dsl::LayoutGridBuilder.new(
+      :Grid, width: :full, tab_index: 0, class_name: nil, style: nil,
+             dynamic_class: nil, visible: nil
+    )
+    grid.row
+    expect(grid.to_h.dig(:options, :rows).length).to eq(1)
+
+    view = Mxrb::Dsl::DataViewBuilder.new(
+      :Details, from: { kind: :context, entity: 'App.Item' }, editable: :always,
+                read_only_style: :control, label_width: 0, show_footer: true,
+                no_entity_message: '', tab_index: 0, class_name: nil, style: nil,
+                dynamic_class: nil
+    )
+    view.visible_when(nil, roles: [:User])
+    expect(view.to_h.dig(:options, :visibility)).to include(roles: ['User'])
+    container = Mxrb::Dsl::ContainerBuilder.new(
+      :Box, class_name: 'box', style: 'color:red', dynamic_class: '$class', visible: '$visible'
+    )
+    expect(container.to_h.fetch(:options)).to include(
+      class: 'box', style: 'color:red', dynamic_class: '$class', visible: '$visible'
+    )
+
+    empty_schedule = Mxrb::Dsl::ScheduledEventBuilder.new(
+      :Tick, microflow: 'App.Tick', schedule: :daily
+    ).to_h.fetch(:schedule)
+    expect(empty_schedule).to include(id: nil, properties: {})
+    preserved = Mxrb::Dsl::ModuleBuilder.new(:App, preserve_native_pages: true)
+    expect(preserved.page(:Ignored)).to be_nil
+    module_builder = Mxrb::Dsl::ModuleBuilder.new(:App)
+    module_builder.microflow(:NoBody)
+    module_builder.nanoflow(:NoClientBody)
+    module_builder.rule(:NoRuleBody)
+
+    entity = Mxrb::Dsl::EntityBuilder.new(:Item)
+    entity.access_rule('App.User', xpath_caption: 'Owned')
+    expect(entity.to_h.fetch(:access_rules).first.fetch(:xpath_caption)).to eq('Owned')
+
+    page = Mxrb::Dsl::PageBuilder.new(:Home)
+    expect { page.write_mode(:future) }.to raise_error(ArgumentError, /write_mode/)
+    expect { page.form_structure({}, extra: true) }.to raise_error(ArgumentError, /one structure/)
+    expect { page.baseline_widget(:text, :Title, fingerprint: 'digest') }
+      .to raise_error(ArgumentError, /baseline_overlay/)
+    expect { page.on_click(action: :save, pass: []) }.to raise_error(ArgumentError, /pass: must be a Hash/)
+    page.on_click(action: :save, pass: { item: 'value' })
+    expect(page.to_h.fetch(:events).last.fetch(:arguments)).to eq(item: 'value')
+
+    arguments = Mxrb::Dsl::CallArgumentsBuilder.new
+    expect { arguments.entity_argument(:Item, 'App.Item') }
+      .to raise_error(ArgumentError, /only valid for code actions/)
+  end
+
+  it 'covers flow feedback defaults, REST string validation, yielded rules, and date aliases' do
+    flow = Mxrb::Dsl::FlowBuilder.new(:Run, runtime: :server, kind: :use_case, public: false)
+    flow.validation_feedback(:item)
+    expect(flow.to_h.fetch(:body).first).to include(translations: {}, parameters: [])
+    expect do
+      flow.call_rest(method: :get, location: '/', result_handling: :string)
+    end.to raise_error(ArgumentError, /string REST result handling requires as/)
+    flow.rule_decision(:Allowed) { |_decision| }
+    flow.rule_decision(:AlsoAllowed)
+    expect(flow.flow_type(kind: :DateTime).fetch('$Type')).to eq('DataTypes$DateTimeType')
+  end
 end
 # rubocop:enable Metrics/BlockLength

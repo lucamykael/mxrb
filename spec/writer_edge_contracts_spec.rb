@@ -582,5 +582,498 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     expect { writer.send(:apply_page_overlay, {}, generated) }
       .to raise_error(Mxrb::ValidationError, /page overlay Home: changed/)
   end
+
+  it 'validates missing modules, domain models, and regular-expression members' do
+    mpr = double(root_unit: { 'UnitID' => 'root' }, all_units: [], unit: nil)
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.plan_ruby_regular_expressions(mpr, module_name: 'Missing', expressions: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing does not exist/)
+    %i[
+      synchronize_ruby_entity_access! synchronize_ruby_entity_structures!
+      synchronize_ruby_entity_behaviors!
+    ].each do |method|
+      expect { writer.public_send(method, mpr, module_name: 'Missing', entities: []) }
+        .to raise_error(Mxrb::ValidationError, /module Missing does not exist/)
+    end
+
+    allow(writer).to receive(:find_named).and_return('UnitID' => 'module-id')
+    allow(mpr).to receive(:units_by_containment).and_return([])
+    %i[
+      synchronize_ruby_entity_access! synchronize_ruby_entity_structures!
+      synchronize_ruby_entity_behaviors!
+    ].each do |method|
+      expect { writer.public_send(method, mpr, module_name: 'App', entities: []) }
+        .to raise_error(Mxrb::ValidationError, /has no domain model/)
+    end
+
+    allow(writer).to receive(:collect_documents).and_return([])
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App', expressions: [{ name: 'Bad', properties: { 'Expression' => 1 } }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /invalid regular-expression property type/)
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App', expressions: [], remove_ids: ['missing']
+      )
+    end.to raise_error(Mxrb::ValidationError, /outside its collection/)
+  end
+
+  it 'skips undeclared access and behavior collections' do
+    raw_domain = { 'UnitID' => 'domain-id', 'ContainerID' => 'module-id' }
+    domain = { 'Entities' => [2] }
+    mpr = double(root_unit: { 'UnitID' => 'root' }, units_by_containment: [raw_domain])
+    allow(mpr).to receive(:parse_contents).with(raw_domain).and_return(domain)
+    allow(mpr).to receive(:transaction).and_yield
+    allow(mpr).to receive(:update_unit)
+    allow(writer).to receive(:find_named).and_return('UnitID' => 'module-id')
+    expect(writer.synchronize_ruby_entity_access!(mpr, module_name: 'App',
+                                                       entities: [{ access_rules: nil }])).to equal(writer)
+    expect(writer.synchronize_ruby_entity_behaviors!(mpr, module_name: 'App',
+                                                          entities: [])).to equal(writer)
+  end
+
+  it 'covers time objects, missing target fallbacks, and successful page overlays' do
+    event = writer.send(
+      :ruby_scheduled_event_doc,
+      {
+        name: 'Tick', microflow: 'App.Tick', interval: 1, enabled: true,
+        start_at: Time.utc(2026, 1, 1), schedule: {
+          id: nil, type: 'ScheduledEvents$DaySchedule', properties: {}
+        }
+      }, {}, 'App'
+    )
+    expect(event.fetch('StartDateTime')).to eq(Time.utc(2026, 1, 1))
+    mpr = double(unit: nil)
+    expect(writer.send(
+             :resolve_document_target, mpr, 'module-id', [],
+             { 'Name' => 'Home', '$Type' => 'Forms$Page' }, 'missing', allow_name_fallback: false
+           )).to be_nil
+
+    overlay = instance_double(Mxrb::Writer::PageOverlay, apply: { 'Result' => true })
+    allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
+    generated = {
+      'Name' => 'Home', '__mxrb_allowed_roles_declared' => true,
+      '__mxrb_page_overlay' => { baseline: {}, metadata: {}, widgets: [], encoded_widgets: [] }
+    }
+    expect(writer.send(:apply_page_overlay, {}, generated))
+      .to include('Result' => true, '__mxrb_allowed_roles_declared' => true)
+  end
+
+  it 'validates absent pluggable pointers and normalizes XPath sorts' do
+    expect do
+      writer.send(:validate_pluggable_widget_object!, nil, nil, [:content])
+    end.to raise_error(Mxrb::ValidationError, /invalid ObjectType/)
+    expect do
+      writer.send(:validate_pluggable_widget_value!, { 'ValueType' => nil, 'Value' => nil }, [:content])
+    end.to raise_error(Mxrb::ValidationError, /invalid WidgetValue/)
+
+    source = writer.send(
+      :custom_xpath_source_doc, 'App.Item', sort: [
+        { attribute: 'App.Item.Name', direction: :Ascending },
+        ['App.Item.Code', :Descending]
+      ]
+    )
+    items = Mxrb::IO::BsonCodec.parse_array(source.dig('SortBar', 'SortItems')).fetch(:items)
+    expect(items.map { _1.fetch('SortDirection') }).to eq(%w[Ascending Descending])
+  end
+
+  it 'covers OQL, generalization, page context, and legacy widget alternatives' do
+    expect(writer.send(:apply_oql_view!, {}, nil, nil, module_name: 'App', entity_name: 'Item')).to be_nil
+    expect(writer.send(:generalization_doc, 'System.User')).to include(
+      'Generalization' => 'System.User'
+    )
+    expect(writer.send(:generalization_doc, target: 'System.User', id: 'generalization-id'))
+      .to include('$ID' => 'generalization-id')
+    expect(writer.send(:legacy_semantic_widget_doc,
+                       type: :static_image, name: 'Image', options: {})).to be_nil
+
+    allow(writer).to receive(:flow_return_entity).and_return(nil)
+    allow(writer).to receive(:first_data_view_source).and_return(kind: :context, entity: 'App.Nested')
+    expect(writer.send(:page_context_entity, { data_source: nil, widgets: [] }, 'App')).to eq('App.Nested')
+    expect(writer.send(:page_context_entity,
+                       { data_source: { entity: 'App.Direct' }, widgets: [] }, 'App'))
+      .to eq('App.Direct')
+  end
+
+  it 'covers image event and thumbnail defaults' do
+    no_click = writer.send(:image_viewer_widget_fields,
+                           { events: [] }, entity: 'App.Image')
+    with_click = writer.send(:image_viewer_widget_fields,
+                             { events: [{ event: :on_click, kind: :action, handler: :save_changes }] },
+                             entity: 'App.Image')
+    expect(no_click.dig('ClickAction', '$Type')).to eq('Forms$NoAction')
+    expect(with_click.fetch('ClickAction')).to be_a(Hash)
+    expect(writer.send(:image_uploader_widget_fields,
+                       thumbnail_width: 20, thumbnail_height: 30).fetch('ThumbnailSize')).to eq('20;30')
+    expect(writer.send(:image_uploader_widget_fields,
+                       thumbnail_width: 0, thumbnail_height: 0).fetch('ThumbnailSize')).to eq('100;75')
+  end
+
+  it 'covers regex filtering, duplicate native names, and missing entity targets' do
+    raw_module = { 'UnitID' => 'module-id' }
+    raw = { 'UnitID' => 'unit-id' }
+    mpr = double(root_unit: { 'UnitID' => 'root' }, unit: nil, all_units: [])
+    allow(writer).to receive(:find_named).and_return(raw_module)
+    allow(writer).to receive(:collect_documents).and_return([raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return('$Type' => 'Future$Document')
+    expect(writer.plan_ruby_regular_expressions(mpr, module_name: 'App', expressions: []))
+      .to include(changes: [], removed: [])
+
+    second = { 'UnitID' => 'second' }
+    allow(writer).to receive(:collect_documents).and_return([raw, second])
+    allow(mpr).to receive(:parse_contents).and_return(
+      '$Type' => Mxrb::RubyApp::RegularExpression::TYPE, 'Name' => 'Email'
+    )
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App', expressions: [{ name: 'Email', properties: {} }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /ambiguous native regular-expression name/)
+
+    raw_domain = { 'UnitID' => 'domain-id', 'ContainerID' => 'module-id' }
+    domain = { 'Entities' => [2] }
+    allow(mpr).to receive(:units_by_containment).and_return([raw_domain])
+    allow(mpr).to receive(:parse_contents).with(raw_domain).and_return(domain)
+    allow(writer).to receive(:find_named).and_return(raw_module)
+    expect do
+      writer.synchronize_ruby_entity_access!(
+        mpr, module_name: 'App', entities: [{ name: 'Missing', access_rules: [] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /entity App.Missing does not exist/)
+    expect do
+      writer.synchronize_ruby_entity_structures!(
+        mpr, module_name: 'App', entities: [{ name: 'Missing' }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /entity App.Missing does not exist/)
+    expect do
+      writer.synchronize_ruby_entity_behaviors!(
+        mpr, module_name: 'App', entities: [{ name: 'Missing' }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /entity App.Missing does not exist/)
+  end
+
+  it 'validates module security and scheduled-event modules and prunes removed events' do
+    mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(nil)
+    expect do
+      writer.synchronize_ruby_module_security!(mpr, module_name: 'Missing', security: {})
+    end.to raise_error(Mxrb::ValidationError, /module Missing does not exist/)
+    expect do
+      writer.synchronize_ruby_scheduled_events!(mpr, module_name: 'Missing', events: [])
+    end.to raise_error(Mxrb::ValidationError, /module Missing does not exist/)
+
+    raw = { 'UnitID' => 'event-id' }
+    allow(writer).to receive(:find_named).and_return('UnitID' => 'module-id')
+    allow(writer).to receive(:collect_documents).and_return([raw])
+    allow(mpr).to receive(:parse_contents).with(raw).and_return(
+      '$ID' => 'event-id', '$Type' => 'ScheduledEvents$ScheduledEvent', 'Name' => 'Old'
+    )
+    allow(mpr).to receive(:transaction).and_yield
+    allow(mpr).to receive(:delete_unit)
+    writer.synchronize_ruby_scheduled_events!(mpr, module_name: 'App', events: [])
+    expect(mpr).to have_received(:delete_unit).with('event-id')
+  end
+
+  it 'covers native index, generalization, OQL value, and security-role alternatives' do
+    expect(writer.send(:ruby_index_member_signature,
+                       { 'Type' => 'Owner' }, {})).to eq(%w[Owner Owner])
+    entity = {}
+    writer.send(:synchronize_ruby_generalization!, entity, target: 'System.User')
+    expect(entity.fetch('MaybeGeneralization')).to include('Generalization' => 'System.User')
+
+    entity = { 'Attributes' => [2, { 'Name' => 'Code', 'Value' => 'scalar' }] }
+    writer.send(:synchronize_ruby_oql_member_values!, entity)
+    value = Mxrb::IO::BsonCodec.parse_array(entity.fetch('Attributes')).fetch(:items).first.fetch('Value')
+    expect(value).to include('Reference' => 'Code')
+    security = writer.send(:ruby_project_security_doc, {
+      id: '', admin_user_role: '', user_roles: [], demo_users: [], password_policy: nil
+    }, {})
+    expect(Mxrb::IO::BsonCodec.parse_array(security.fetch('UserRoles')).fetch(:items)).to be_empty
+    expect(security).not_to have_key('PasswordPolicySettings')
+  end
+
+  it 'covers unbound schedules and explicit modern security identities' do
+    unbound = writer.send(
+      :ruby_scheduled_event_doc,
+      { name: 'Detached', unbound: true, start_at: Time.utc(2026), interval: 1 }, {}, 'App'
+    )
+    expect(unbound).to include('Schedule' => nil, 'Enabled' => false)
+    expect(writer.send(:scheduled_event_schedule,
+                       schedule_specified: true, schedule: nil)).to be_nil
+    schedule = writer.send(:scheduled_event_schedule,
+                           schedule_specified: true,
+                           schedule: { id: 'schedule-id', type: 'ScheduledEvents$DaySchedule', properties: {} })
+    expect(schedule.fetch('$ID')).to eq('schedule-id')
+
+    role = writer.send(:user_role_doc, {
+      name: 'User', id: 'role-id', guid: '11111111-1111-4111-8111-111111111111',
+      admin: false, module_roles: []
+    })
+    expect(role).to include('$ID' => 'role-id')
+    expect(Mxrb::IO::BsonCodec.parse_array(role.fetch('ModuleRoles')).fetch(:items))
+      .to include('System.User')
+    user = writer.send(:demo_user_doc, {
+      name: 'demo', id: 'user-id', password: 'x', entity: 'System.User', roles: []
+    })
+    expect(user.fetch('$ID')).to eq('user-id')
+    security = writer.send(:project_security_doc,
+                           password_policy_id: 'policy-id', user_roles: [], demo_users: [])
+    expect(security.dig('PasswordPolicySettings', '$ID')).to eq('policy-id')
+  end
+
+  it 'covers typed page ids, public pages, widget dispatch, and full layout widths' do
+    codec = double
+    allow(Mxrb::Forms::MprCodec).to receive(:new).and_return(codec)
+    allow(codec).to receive(:encode).and_return('$ID' => 'generated', '$Type' => 'Forms$Page')
+    typed = writer.send(:page_doc, { name: 'Typed', unit_id: 'stable', forms_model: Object.new })
+    expect(typed.fetch('$ID')).to eq('stable')
+
+    deep = writer.send(:page_doc, {
+      name: 'Deep', unit_id: nil, deep_structure: {}, public: true, widgets: []
+    })
+    expect(deep.fetch('ExportLevel')).to eq('Public')
+    plain = writer.send(:page_doc, {
+      name: 'Plain', unit_id: nil, layout: 'App.Layout', title: 'Plain', public: true,
+      widgets: [], events: [], allowed_roles: nil, popup: false
+    })
+    expect(plain.fetch('ExportLevel')).to eq('Public')
+
+    expect(writer.send(:widget_doc,
+                       { type: :table, name: 'Table', options: { columns: [], rows: [] } }))
+      .to include('$Type' => 'Forms$Table')
+    expect(writer.send(:widget_doc,
+                       { type: :layout_grid, name: 'Grid', options: { rows: [] } }))
+      .to include('$Type' => 'Forms$LayoutGrid', 'Width' => 'FullWidth')
+  end
+
+  it 'covers page context flow results and nested data-view source entities' do
+    allow(writer).to receive(:flow_return_entity).and_return('App.FlowResult')
+    expect(writer.send(:page_context_entity,
+                       { data_source: { name: 'App.Load' }, widgets: [] }, 'App'))
+      .to eq('App.FlowResult')
+    allow(writer).to receive(:first_data_view_source).and_return(kind: :microflow, name: 'App.Load')
+    expect(writer.send(:page_context_entity, { data_source: nil, widgets: [] }, 'App'))
+      .to eq('App.FlowResult')
+    expect(writer.send(:data_view_source_entity,
+                       kind: :association, steps: [{ entity: 'App.Customer' }]))
+      .to eq('App.Customer')
+    expect(writer.send(:data_view_source_entity, kind: :association, steps: [])).to be_nil
+
+    odd_key = Object.new
+    expect(writer.send(:symbolize_data_view_value, odd_key => 'value')).to include(odd_key => 'value')
+  end
+
+  it 'covers pluggable platforms, typed mappings, native merge filtering, and unit identities' do
+    allow(Mxrb::WidgetPackage).to receive(:find).and_return(nil)
+    descriptor = { id: 'vendor.Widget', name: 'Widget', studio_category: 'Custom', studio_pro_category: 'Custom' }
+    widget = {
+      type: :pluggable_widget, name: 'Widget', options: {
+        widget_id: 'vendor.Widget', widget_name: 'Widget', platform: :Native
+      }, events: []
+    }
+    doc = writer.send(:pluggable_widget_doc, widget, descriptor)
+    expect(doc.dig('Type', 'SupportedPlatform')).to eq('Native')
+
+    mappings = writer.send(:client_parameter_mapping_docs, {
+      'App.Run.Input' => { kind: :widget, name: 'Grid' }, 'Other' => 'value'
+    }, handler: 'App.Run', kind: :page)
+    items = Mxrb::IO::BsonCodec.parse_array(mappings).fetch(:items)
+    expect(items.first).to include('Argument' => '', 'Parameter' => 'App.Run.Input')
+    expect(items.last.fetch('Argument')).to eq('value')
+
+    native_source = writer.send(:data_view_source_doc, {
+      kind: :native, native_type: 'Forms$FutureSource', unknown_native: {
+        '$ID' => 'discarded', '$Type' => 'Discarded', 'Future' => true
+      }
+    })
+    expect(native_source).to include('$Type' => 'Forms$FutureSource', Future: true)
+    expect(native_source.fetch('$ID')).not_to eq('discarded')
+
+    flow = {
+      name: 'Run', unit_id: 'flow-id', parameters: [], body: [], return_type: nil,
+      runtime: :server, kind: :use_case, public: false
+    }
+    expect(writer.send(:microflow_doc, flow, 'App', identity_by_unit_id: true))
+      .to include('__mxrb_unit_id' => 'flow-id')
+    expect do
+      writer.send(:code_action_parameter_doc,
+                  { kind: :entity_type, value: '' }, basic_type: 'Microflows$Basic', code: {})
+    end.to raise_error(Mxrb::ValidationError, /requires an entity/)
+  end
+
+  it 'covers undeclared behavior collections and missing typed settings baselines' do
+    raw_module = { 'UnitID' => 'module-id' }
+    raw_domain = { 'UnitID' => 'domain-id', 'ContainerID' => 'module-id' }
+    domain = { 'Entities' => [2, { 'Name' => 'Item' }] }
+    mpr = double(root_unit: { 'UnitID' => 'root' })
+    allow(writer).to receive(:find_named).and_return(raw_module)
+    allow(mpr).to receive(:units_by_containment).and_return([raw_domain])
+    allow(mpr).to receive(:parse_contents).with(raw_domain).and_return(domain)
+    allow(mpr).to receive(:transaction).and_yield
+    allow(mpr).to receive(:update_unit)
+    expect(writer.synchronize_ruby_entity_behaviors!(
+             mpr, module_name: 'App', entities: [{ name: 'Item', validation_rules: nil }]
+           )).to equal(writer)
+
+    writer.instance_variable_get(:@definition)[:project_settings_model] = Object.new
+    allow(mpr).to receive(:children_of).and_return([])
+    expect { writer.send(:write_typed_project_settings, mpr, 'root') }
+      .to raise_error(Mxrb::ValidationError, /baseline is missing/)
+  end
+
+  it 'covers opaque security entries and valid duplicate flow identities' do
+    previous = writer.send(:project_security_doc, admin_user_role: '', user_roles: [], demo_users: [])
+    previous['UserRoles'] = Mxrb::IO::BsonCodec.build_array(['opaque'])
+    security = writer.send(:ruby_project_security_doc, {
+      id: nil, admin_user_role: '', user_roles: [], demo_users: []
+    }, previous)
+    expect(Mxrb::IO::BsonCodec.parse_array(security.fetch('UserRoles')).fetch(:items))
+      .to eq(['opaque'])
+    expect do
+      writer.send(:validate_flow_identities!, [
+                    { name: 'Run', unit_id: 'one' }, { name: 'Run', unit_id: 'two' }
+                  ], 'Microflows$Microflow')
+    end.not_to raise_error
+  end
+
+  it 'covers overlay metadata alternatives and direct nested page contexts' do
+    overlay = instance_double(Mxrb::Writer::PageOverlay, apply: true)
+    allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
+    writer.send(:verify_page_overlay_target!, {}, {
+      name: 'Home', deep_structure: { Mxrb::Writer::PageOverlay::METADATA_KEY => {} }, widgets: []
+    }, 'App')
+    writer.send(:verify_page_overlay_target!, {}, { name: 'Home', widgets: [] }, 'App')
+
+    allow(writer).to receive(:flow_return_entity).and_return(nil)
+    expect(writer.send(:page_context_entity, {
+      data_source: nil, widgets: [{ type: :data_view, options: {
+        source: { kind: :context, entity: 'App.Direct' }
+      } }]
+    }, 'App')).to eq('App.Direct')
+    nested = [{ type: :container, options: {}, children: [{
+      type: :data_view, options: { source: { kind: :context, entity: 'App.Nested' } }
+    }] }]
+    expect(writer.send(:first_data_view_source, nested)).to include(entity: 'App.Nested')
+
+    raw_module = { 'UnitID' => 'module-id' }
+    raw_page = { 'UnitID' => 'page-id' }
+    mpr = double(all_units: [raw_module, raw_page])
+    definition = writer.instance_variable_get(:@definition)
+    definition[:modules] = [{
+      name: 'App', pages: [{
+        name: 'Home', write_mode: :overlay,
+        deep_structure: { Mxrb::Writer::PageOverlay::METADATA_KEY => {} }, widgets: []
+      }]
+    }]
+    allow(writer).to receive(:overlay_module_target).and_return(raw_module)
+    allow(writer).to receive(:overlay_page_target).and_return(raw_page)
+    allow(writer).to receive(:verify_page_overlay_target!)
+    allow(mpr).to receive(:parse_contents).and_return({})
+    writer.send(:preflight_page_overlays!, mpr, 'root')
+  end
+
+  it 'covers native document retention and storage identity alternatives' do
+    mpr = double
+    allow(writer).to receive(:collect_documents).and_return(
+      [{ 'UnitID' => 'retained' }, { 'UnitID' => 'declared' }]
+    )
+    allow(mpr).to receive(:parse_contents).and_return(
+      { '$Type' => 'Future$Document', 'Name' => 'Kept' },
+      { '$Type' => 'Future$Document', 'Name' => 'Declared' }
+    )
+    allow(mpr).to receive(:delete_unit)
+    allow(writer).to receive(:native_document_target).and_return({ 'UnitID' => 'retained' })
+    allow(writer).to receive(:conventional_document_container).and_return('module-id')
+    allow(writer).to receive(:relocate_root_document)
+    allow(mpr).to receive(:update_unit)
+    writer.send(:write_native_documents, mpr, 'module-id', {
+      native_documents: [{
+        type: 'Future$Document', name: 'Declared', containment: 'Documents',
+        doc: { '$Type' => 'Future$Document', 'Name' => 'Declared' }
+      }], managed_native_document_types: ['Future$Document']
+    })
+    expect(mpr).not_to have_received(:delete_unit)
+
+    stable = { 'UnitID' => 'stable-id' }
+    semantic = { 'UnitID' => 'semantic-id' }
+    allow(mpr).to receive(:unit).with('missing-id').and_return(nil)
+    allow(mpr).to receive(:children_of).and_return([semantic])
+    allow(mpr).to receive(:parse_contents).with(semantic).and_return(
+      '$ID' => 'semantic-doc', '$Type' => 'Future$Document', 'Name' => 'Kept'
+    )
+    expect(writer.send(:upsert_native_unit, mpr, 'module-id', {
+      'unit_id' => '', 'containment' => 'Documents',
+      'doc' => { '$Type' => 'Future$Document', 'Name' => 'Kept' }
+    })).to eq('semantic-id')
+    allow(mpr).to receive(:unit).with('stable-id').and_return(stable)
+    allow(mpr).to receive(:parse_contents).with(stable).and_return(
+      '$Type' => 'Future$Document', 'Name' => 'Stable'
+    )
+    allow(mpr).to receive(:insert_unit).and_return('inserted')
+    expect(writer.send(:upsert_native_unit, mpr, 'module-id', {
+      'unit_id' => 'stable-id', 'containment' => 'Documents',
+      'doc' => { '$Type' => 'Future$Document', 'Name' => 'Stable' }
+    })).to eq('stable-id')
+  end
+
+  it 'covers document lookup, native merges, OQL, access, association, and schedule alternatives' do
+    candidates = [{ 'UnitID' => 'one' }, { 'UnitID' => 'two' }]
+    mpr = double(unit: nil)
+    allow(mpr).to receive(:parse_contents).and_return(
+      { '$Type' => 'Microflows$Microflow' }, { '$Type' => 'Microflows$Microflow' }
+    )
+    expect do
+      writer.send(:resolve_document_target, mpr, 'module', candidates,
+                  { 'Name' => 'Run', '$Type' => 'Microflows$Microflow' }, 'missing-id',
+                  allow_name_fallback: true)
+    end.to raise_error(Mxrb::ValidationError, /with missing unit id/)
+
+    merged = writer.send(:merge_existing_document,
+                         { '$Type' => 'Constants$Constant', 'Type' => 'opaque' },
+                         { '$Type' => 'Constants$Constant', 'Type' => 'new' })
+    expect(merged.fetch('Type')).to eq('new')
+    generated_type = { '$ID' => 'generated' }
+    writer.send(:preserve_flow_parameter_metadata,
+                { 'VariableType' => generated_type }, { 'VariableType' => {} })
+    expect(generated_type.fetch('$ID')).to eq('generated')
+
+    oql = {}
+    writer.send(:apply_oql_view!, oql, { query: '', source: '' }, nil,
+                module_name: 'App', entity_name: 'View')
+    expect(oql).to include('Source')
+    expect(writer.send(:apply_oql_view!, {}, { query: nil, source: '' }, nil,
+                       module_name: 'App', entity_name: 'View')).to be_nil
+    access = writer.send(:access_rule_doc, { roles: [], xpath_caption: nil }, 'App', 'Item')
+    expect(access).not_to have_key('XPathConstraintCaption')
+    expect(writer.send(:access_rule_doc, {
+      roles: [], xpath_caption: 'Visible records'
+    }, 'App', 'Item')).to include('XPathConstraintCaption' => 'Visible records')
+    association = writer.send(:association_doc, { name: 'App.Link', type: :Reference },
+                              from_id: 'from', to_id: 'to', previous: nil, oql_view: true)
+    expect(association.dig('Source', '$Type')).to eq('DomainModels$OqlViewAssociationSource')
+    previous = { 'Source' => { '$ID' => 'source-id' } }
+    association = writer.send(:association_doc, { name: 'App.Link', type: :Reference },
+                              from_id: 'from', to_id: 'to', previous:, oql_view: true)
+    expect(association.dig('Source', '$ID')).to eq('source-id')
+    schedule = writer.send(
+      :scheduled_event_schedule, schedule_specified: true,
+                                 schedule: { id: 'explicit', type: 'ScheduledEvents$DaySchedule', properties: {} }
+    )
+    expect(schedule.fetch('$ID')).to eq('explicit')
+    generated_schedule = writer.send(
+      :scheduled_event_schedule, schedule_specified: true,
+                                 schedule: { id: '', type: 'ScheduledEvents$DaySchedule', properties: {} }
+    )
+    expect(generated_schedule.fetch('$ID')).not_to be_empty
+
+    allow(writer).to receive(:flow_return_entity).and_return(nil, 'App.FlowResult')
+    expect(writer.send(:page_context_entity, {
+      data_source: nil, widgets: [{
+        type: :data_view, options: { source: { kind: :microflow, name: 'App.Load' } }
+      }]
+    }, 'App')).to eq('App.FlowResult')
+  end
 end
 # rubocop:enable Metrics/BlockLength

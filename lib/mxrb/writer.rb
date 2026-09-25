@@ -2310,13 +2310,11 @@ module Mxrb
         existing.fetch("UnitID")
       else
         containment = unit.fetch("containment")
-        inserted_id = stable ? SecureRandom.uuid : requested_id
-        inserted_doc = stable ? doc.merge("$ID" => inserted_id) : doc
         mpr.insert_unit(
           container_uuid: container_id,
           containment_name: containment,
-          contents_doc: inserted_doc,
-          unit_uuid: inserted_id
+          contents_doc: doc,
+          unit_uuid: requested_id
         )
       end
     end

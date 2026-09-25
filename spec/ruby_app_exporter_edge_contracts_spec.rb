@@ -182,5 +182,168 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     expect { exporter.send(:duplicate_flow_ids, [one, two]) }
       .to raise_error(Mxrb::SerializationError, /distinct explicit unit ids/)
   end
+
+  it 'covers absent sidecars, identities, and source files' do
+    Dir.mktmpdir('mxrb-ruby-exporter-missing-') do |dir|
+      exporter.instance_variable_set(:@mendix_sidecar, dir)
+      expect(exporter.send(:read_rest_response_metadata)).to eq([])
+      exporter.instance_variable_set(:@embedded_identities, {
+        %w[record id] => { 'path' => 'app/models/item.rb' }
+      })
+      exporter.instance_variable_set(:@embedded_source_paths, nil)
+      expect(exporter.send(:embedded_identity, :record, :id)).to be_nil
+      exporter.instance_variable_set(:@output_dir, dir)
+      expect(exporter.send(:copy_round_trip_metadata)).to be_nil
+    end
+  end
+
+  it 'projects project security without native ids or a password policy' do
+    unit = { 'UnitID' => 'security-unit' }
+    document = {
+      '$Type' => 'Security$ProjectSecurity', '$ID' => nil,
+      'SecurityLevel' => 'Production', 'UserRoles' => [2], 'DemoUsers' => [2]
+    }
+    project = double(all_units: [unit])
+    allow(project).to receive(:parse_bson).with(unit).and_return(document)
+    allow(exporter).to receive(:embedded_identity_path).and_return(nil)
+    allow(exporter).to receive(:embedded_security_path).and_return(nil)
+    allow(exporter).to receive(:write)
+    allow(exporter).to receive(:add_coverage)
+    manifest = exporter.send(:export_project_security, project)
+    expect(manifest).to include('id' => 'security-unit', 'password_policy' => nil)
+  end
+
+  it 'covers OQL, generalization, and validation-rule fallbacks' do
+    entity = double
+    allow(entity).to receive_messages(
+      oql_view?: true, oql_source_document: 'Missing', source: nil, oql_query: 'SELECT 1',
+      generalization_target: 'System.User', generalization: nil
+    )
+    mod = double(name: 'App', oql_view_documents: [])
+    expect(exporter.send(:oql_view_manifest, entity, mod)).to include('query' => 'SELECT 1')
+    expect(exporter.send(:generalization_manifest, entity)).to eq('target' => 'System.User')
+    empty_entity = Object.new
+    empty_entity.define_singleton_method(:oql_view?) { true }
+    empty_entity.define_singleton_method(:oql_source_document) { 'Missing' }
+    empty_entity.define_singleton_method(:oql_query) { '' }
+    empty_entity.define_singleton_method(:generalization_target) { 'System.User' }
+    expect(exporter.send(:oql_view_manifest, empty_entity, mod)).to include('source' => 'Missing')
+    expect(exporter.send(:generalization_manifest, empty_entity)).to eq('target' => 'System.User')
+    manifest = exporter.send(:validation_rule_manifest, {
+      '$ID' => nil, 'Attribute' => 'App.Item.Name', 'RuleInfo' => 'scalar', 'Message' => 'scalar'
+    })
+    expect(manifest).to include('rule_info' => {}, 'translations' => [])
+    source = exporter.send(:validation_rule_source, {
+      'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => {}, 'translations' => []
+    })
+    expect(source).to include('kind: "Future"')
+    expect(source).not_to include('rule_info:')
+    expect(exporter.send(:validation_rule_source, {
+      'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => { 'Future' => true },
+      'translations' => []
+    })).to include('rule_info:')
+  end
+
+  it 'rejects multiple nanoflow errors and covers unused result alternatives' do
+    expect do
+      exporter.send(:nanoflow_action_case_source, { 'type' => 'Unknown' }, [
+                      { 'error' => true, 'destination' => 'one' },
+                      { 'error' => true, 'destination' => 'two' }
+                    ])
+    end.to raise_error(Mxrb::SerializationError, /multiple error-handler paths/)
+    nanoflow = exporter.send(:nanoflow_action, {
+      '$Type' => 'Microflows$NanoflowCallAction', 'UseReturnVariable' => false,
+      'NanoflowCall' => { 'Nanoflow' => 'App.Run', 'ParameterMappings' => [2] }
+    })
+    javascript = exporter.send(:nanoflow_action, {
+      '$Type' => 'Microflows$JavaScriptActionCallAction', 'UseReturnVariable' => false,
+      'JavaScriptAction' => 'App.Run', 'ParameterMappings' => [2]
+    })
+    feedback = exporter.send(:nanoflow_action, {
+      '$Type' => 'Microflows$ValidationFeedbackAction', 'Attribute' => 'App.Item.Name',
+      'ValidationVariableName' => 'Item', 'FeedbackTemplate' => {}
+    })
+    expect(nanoflow.fetch('result_variable')).to eq('')
+    expect(javascript.fetch('result_variable')).to eq('')
+    expect(feedback.fetch('member')).to eq('Name')
+  end
+
+  it 'omits empty widget regions and slot roles and clears empty security collections' do
+    manifest = exporter.send(:widget_manifest, {
+      type: :container, name: :Empty,
+      body: [{ type: :text, name: :Body, options: {} }], regions: 'scalar',
+      slots: [{ path: [:content], widgets: [] }]
+    })
+    expect(manifest.fetch('body').first.fetch('name')).to eq('Body')
+    expect(manifest.fetch('slots').first).not_to have_key('role')
+    security = {
+      'security_level' => '', 'admin_user_role' => '', 'demo_users_enabled' => false,
+      'guest_access_enabled' => false, 'guest_user_role' => '', 'sign_in_microflow' => nil,
+      'user_roles' => [], 'demo_users' => []
+    }
+    expect(exporter.send(:project_security_source, security))
+      .to include('clear_user_roles!', 'clear_demo_users!')
+  end
+
+  it 'covers empty runtime widget, condition, data-view, and grid rendering branches' do
+    widget = { 'type' => 'container', 'name' => 'Empty' }
+    expect(exporter.send(:runtime_widget_call_source, widget, 0, generic_sink: true))
+      .to eq('container "Empty"')
+    expect(exporter.send(:runtime_widget_call_source,
+                         { 'type' => 'future', 'name' => 'Opaque' }, 0, generic_sink: true))
+      .to eq('widget :future, "Opaque"')
+    expect(exporter.send(:runtime_pluggable_properties_source,
+                         { 'options' => {} }, 0)).to be_nil
+    expect(exporter.send(:runtime_dsl_sink_regions_supported?, :container,
+                         'body' => [])).to be(false)
+    expect(exporter.send(:runtime_dsl_sink_typed?, :container, {}, 'body' => [])).to be(false)
+    expect(exporter.send(:runtime_data_view_options_supported?, {})).to be(false)
+    expect(exporter.send(:runtime_data_view_supported?, {}, {
+      'type' => 'data_view', 'name' => 'Details', 'options' => {}, 'events' => [], 'body' => []
+    })).to be(false)
+    expect(exporter.send(:runtime_data_view_condition_source, 'visible_when', {}, 0))
+      .to eq('visible_when')
+    data_view = {
+      'name' => 'Details', 'options' => {
+        'source' => { 'kind' => 'context', 'entity' => 'App.Item' },
+        'editable' => 'always', 'read_only_style' => 'control', 'label_width' => 0,
+        'show_footer' => true, 'no_entity_message' => '', 'tab_index' => 0
+      }
+    }
+    expect(exporter.send(:runtime_data_view_source, data_view, 0)).to start_with('data_view')
+    grid = {
+      'name' => 'Grid', 'options' => { 'columns' => [] }, 'events' => []
+    }
+    expect(exporter.send(:runtime_data_grid_source, grid, 0)).to include('data_grid', "\nend")
+    expect(exporter.send(:runtime_table_geometry_supported?, 2, [
+                           { 'cells' => [{ 'column' => 0, 'rowspan' => 2 }] },
+                           { 'cells' => [{}] }
+                         ])).to be(true)
+    expect(exporter.send(:runtime_table_source, {
+      'name' => 'Table', 'options' => { 'columns' => [], 'rows' => [] }
+    }, 0)).to start_with('table "Table" do')
+    expect(exporter.send(:runtime_table_cell_source,
+                         { 'rowspan' => 2, 'widgets' => [] }, 2, 0).first)
+      .to include('rowspan: 2')
+    expect(exporter.send(:runtime_layout_grid_source, {
+      'name' => 'Grid', 'options' => { 'rows' => [] }
+    }, 0)).to start_with('layout_grid "Grid" do')
+  end
+
+  it 'returns when a frontend logo already exists and rejects id-less flow suffixes' do
+    Dir.mktmpdir('mxrb-ruby-exporter-logo-') do |dir|
+      exporter.instance_variable_set(:@output_dir, dir)
+      exporter.instance_variable_set(:@mendix_sidecar, dir)
+      logo = File.join(dir, 'frontend', 'src', 'generated', 'platform', 'theme', 'web', 'logo.png')
+      FileUtils.mkdir_p(File.dirname(logo))
+      File.binwrite(logo, 'logo')
+      allow(exporter).to receive(:write)
+      expect(exporter.send(:copy_frontend_theme)).to be_nil
+    end
+    expect { exporter.send(:flow_identity_suffix, double(id: '', name: 'Run')) }
+      .to raise_error(Mxrb::SerializationError, /has no unit id/)
+    expect(exporter.send(:frontend_widget_names,
+                         'name' => 'Root', 'regions' => 'scalar')).to eq(['Root'])
+  end
 end
 # rubocop:enable Metrics/BlockLength

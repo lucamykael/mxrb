@@ -472,5 +472,74 @@ RSpec.describe 'remaining defensive branch contracts' do
                         { 'SpacingBetweenColumns' => false, 'Columns' => [2] }, 'App.Page', 'en_US'))
       .to include('no-gutters')
   end
+
+  it 'covers legacy list-view step and flow fallbacks' do
+    builder = Mxrb::Compiler::LegacyPageBuilder.new(double(units_of: [], documents: []), '/tmp/unused')
+    expect(builder.send(:list_view_entity, 'DataSource' => {
+      'EntityRef' => { 'Entity' => 'App.Direct', 'Steps' => [2, {
+        'DestinationEntity' => 'App.Step'
+      }] }
+    })).to eq('App.Step')
+    allow(builder).to receive(:microflow_return_entity).and_return('App.FlowResult')
+    expect(builder.send(:list_view_entity, 'DataSource' => {})).to eq('App.FlowResult')
+  end
+
+  it 'covers pluggable construction, object copying, and nil projection' do
+    properties_class = Mxrb::RubyApp::PluggableProperties
+    instance = properties_class.allocate
+    allow(properties_class).to receive(:new).and_return(instance)
+    expect(properties_class.build('vendor.Widget', catalog: double)).to equal(instance)
+
+    property = double(key: 'kept')
+    assignment = double(property:, value: 'value')
+    instance.instance_variable_set(:@schema, double)
+    instance.instance_variable_set(:@object, double(assignments: [assignment]))
+    candidate = double
+    allow(candidate).to receive(:set)
+    allow(Mxrb::Pluggable::ObjectNode).to receive(:new).and_return(candidate)
+    expect(instance.send(:copy_object, except: 'other')).to equal(candidate)
+    expect(candidate).to have_received(:set).with('kept', 'value')
+    expect(instance.send(:copy_object, except: 'kept')).to equal(candidate)
+    expect(instance.send(:project_value, double, nil)).to be_nil
+  end
+
+  it 'covers source identity materialization and empty source metadata' do
+    identity = Mxrb::RubyApp::SourceIdentity.allocate
+    owner = double(mendix_name: 'App.Item', mendix_id: 'kept-id')
+    binding = { 'kind' => 'record', 'native_kind' => '', 'id' => 'kept-id' }
+    identity.instance_variable_set(:@bindings, owner => binding)
+    identity.instance_variable_set(
+      :@by_identity,
+      %w[record kept-id] => [{ 'id' => 'kept-id' }]
+    )
+    entries = %w[other-id kept-id].map do |id|
+      { 'kind' => 'record', 'name' => 'App.Item', 'native_kind' => '', 'id' => id }
+    end
+    allow(identity).to receive(:materialized_entries).and_return(entries)
+    identity.reconcile!(double(modules: [double]))
+    expect(binding.fetch('id')).to eq('kept-id')
+
+    unit = {
+      'UnitID' => 'unit-id', 'ContainmentName' => 'ProjectDocuments'
+    }
+    mpr = double(root_unit: { 'UnitID' => 'root' }, children_of: [unit])
+    project = double(mpr:, parse_bson: {
+      '$Type' => 'Security$ProjectSecurity', '$ID' => nil
+    })
+    expect(identity.send(:project_security_entries, project).first.fetch('id')).to eq('unit-id')
+
+    mod = {
+      'models' => [{ 'id' => 'id', 'name' => 'Item', 'path' => '' }],
+      'dtos' => [], 'pages' => [], 'microflows' => [], 'nanoflows' => [], 'constants' => [],
+      'enumerations' => [], 'scheduled_events' => []
+    }
+    expect(identity.send(:module_entries, mod)).to eq([])
+
+    identity.instance_variable_set(:@source_path, 'app/models/app/item.rb')
+    identity.instance_variable_set(:@by_path, Hash.new { |hash, key| hash[key] = [] })
+    identity.instance_variable_set(:@by_class, {})
+    identity.instance_variable_set(:@by_name, {})
+    expect(identity.send(:implicit_entry, double(name: nil), 'record', 'App.Item')).to be_nil
+  end
 end
 # rubocop:enable Metrics/BlockLength
