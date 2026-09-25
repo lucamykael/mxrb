@@ -92,6 +92,10 @@ RSpec.describe Mxrb::Converter do
       .to raise_error(Mxrb::ValidationError, /targets 10\.24/)
     expect { converter.send(:version_major, 'future', role: 'source MPR') }
       .to raise_error(Mxrb::UnsupportedVersion, /unsupported Mendix version/)
+
+    allow(Mxrb::Model::Project).to receive(:open).and_raise(Mxrb::Error, 'unreadable')
+    expect { converter.send(:mpr_metadata, '/tmp/unreadable.mpr') }
+      .to raise_error(Mxrb::Error, 'unreadable')
   end
 
   it 'rejects ambiguous versions and unknown presets before exporting' do
@@ -105,6 +109,11 @@ RSpec.describe Mxrb::Converter do
       expect do
         described_class.new(source, File.join(dir, 'out'), studio_version: '11.12', stack: :unknown).convert!
       end.to raise_error(ArgumentError, /Studio Pro version/)
+      expect do
+        described_class.new(
+          source, File.join(dir, 'out'), studio_version: '11.12.1', stack: :unknown
+        ).convert!
+      end.to raise_error(ArgumentError, /unknown Ruby stack preset/)
     end
   end
 

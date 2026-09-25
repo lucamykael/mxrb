@@ -92,6 +92,7 @@ RSpec.describe 'remaining defensive edge contracts' do # rubocop:disable Metrics
     expect(compatibility.apply_document!({ '$Type' => 'Unknown' })).to eq('$Type' => 'Unknown')
     expect(compatibility.send(:items, nil)).to eq([])
     expect(compatibility.send(:array_marker, nil)).to be_nil
+    expect(compatibility.send(:array_marker, [Object.new])).to be_nil
     source = { 'OneTimeConversions' => [{ 'Name' => 'Keep' }] }
     target = { 'OneTimeConversions' => [{ 'Name' => 'Keep' }, { 'Name' => 'Add' }] }
     expect(compatibility.send(:reconciled_conversions, source, target).map { _1['Name'] })
@@ -100,6 +101,12 @@ RSpec.describe 'remaining defensive edge contracts' do # rubocop:disable Metrics
     target = { 'SystemTexts' => [{ 'InternalKey' => 'keep' }, { 'InternalKey' => 'add' }] }
     expect(compatibility.send(:reconciled_system_texts, source, target).map { _1['InternalKey'] })
       .to eq(%w[keep add])
+
+    Dir.mktmpdir('mxrb-unmatched-template-') do |directory|
+      File.write(File.join(directory, 'future.json'), JSON.generate('units' => []))
+      unmatched = Mxrb::StudioCompatibility.new('future', template_root: directory)
+      expect(unmatched.send(:template_document, 'Missing$Type')).to be_nil
+    end
   end
 
   it 'covers compatibility helpers for malformed collections and pre-existing target fields' do

@@ -82,7 +82,16 @@ RSpec.describe 'Pluggable typed edge contracts' do
     widget = Mxrb::Pluggable::WidgetTypeBuilder.new('com.example.Minimal')
     widget.properties
     expect(widget.build.object_type.properties).to be_empty
-    expect(define_widget('com.example.Empty')).to be_a(Mxrb::Pluggable::WidgetType)
+    empty = define_widget('com.example.Empty')
+    expect(empty).to be_a(Mxrb::Pluggable::WidgetType)
+    source = Mxrb::Pluggable::SchemaSourceEmitter.new.emit([empty, property_widget(property.build)])
+    expect(source).to include('return_type :string do')
+  end
+
+  def property_widget(property)
+    Mxrb::Pluggable::WidgetTypeBuilder.new('com.example.MinimalProperty').tap do |widget|
+      widget.instance_variable_set(:@object_type, Mxrb::Pluggable::ObjectType.new([property].freeze))
+    end.build
   end
 
   it 'rejects invalid catalog entries and falls back safely across schema revisions' do
@@ -111,6 +120,13 @@ RSpec.describe 'Pluggable typed edge contracts' do
     expect(merged.object_type.fetch_property(:count).value_type.kind).to eq('String')
     expect(catalog.property_count).to be >= 3
     expect(catalog.resolve(second.id, incompatible)).to equal(merged)
+
+    property = second.object_type.fetch_property(:count)
+    assignment = Mxrb::Pluggable::Assignment.new(property, 'value', nil)
+    fake_object = Struct.new(:assignments).new([assignment])
+    schema_without_value = Mxrb::Pluggable::ObjectType.new([property.with(value_type: nil)].freeze)
+    expect(catalog.send(:schema_excess, schema_without_value, fake_object)).to eq(0)
+    expect(catalog.send(:schema_excess, Mxrb::Pluggable::ObjectType.new([].freeze), fake_object)).to eq(-1)
   end
 
   it 'exposes XPath builder getters and explicit receiver evaluation without inventing defaults' do
@@ -158,6 +174,8 @@ RSpec.describe 'Pluggable typed edge contracts' do
     expect(object.fetch(:items).first.fetch(:caption)).to eq('First')
     object.set(:source, type: :microflow_source) {}
     expect(object.fetch(:source).schema_type.name).to eq('MicroflowSource')
+    object.set(:source) { |source| source.entity 'Sales.Order' }
+    expect(object.fetch(:source).entity.to_s).to eq('Sales.Order')
     expect { object.title { 'invalid' } }.to raise_error(ArgumentError, /does not accept a nested block/)
   end
 
@@ -205,6 +223,7 @@ RSpec.describe 'Pluggable typed edge contracts' do
     node.editable('Always')
     node.tab_index('7')
     expect(node).to have_attributes(editable: :Always, tab_index: 7)
+    expect(node.send(:normalize_outer, :future, 'value')).to eq('value')
   end
 end
 # rubocop:enable Metrics/BlockLength

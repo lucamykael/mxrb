@@ -124,7 +124,7 @@ RSpec.describe Mxrb::Forms::SourceEmitter do # rubocop:disable Metrics/BlockLeng
       Mxrb::Forms::DataType.enumeration('Sales.Status'), Mxrb::Forms::DataType.build('String'),
       Mxrb::Forms::XPathConstraint.coerce([]),
       Mxrb::Forms::XPathConstraint.coerce(%w[[A] [B]]), direct, indirect,
-      Mxrb::Forms::BinaryAsset.empty
+      Mxrb::Forms::BinaryAsset.empty, Mxrb::Pluggable.decimal('1.50')
     ]
     source = values.map { emitter.send(:literal, _1) }.join("\n")
     expect(source).to include(
@@ -135,5 +135,40 @@ RSpec.describe Mxrb::Forms::SourceEmitter do # rubocop:disable Metrics/BlockLeng
     expect { emitter.send(:literal, Object.new) }.to raise_error(TypeError, /cannot emit Forms value/)
     asset = Mxrb::Forms::BinaryAsset.from_bytes('private')
     expect { emitter.send(:literal, asset) }.to raise_error(TypeError, /exported as files/)
+  end
+
+  it 'emits pluggable nils, empty collections, nested widgets, and sparse data sources' do # rubocop:disable Metrics/BlockLength
+    registry = Mxrb::Pluggable::Catalog.new
+    definition = Mxrb::Pluggable.widget_type('com.example.EmitterEdges', catalog: registry) do
+      properties do
+        property 'caption', :string
+        property 'children', :widgets
+      end
+    end
+    node = Mxrb::Pluggable::Node.new(definition, catalog: registry)
+    node.object.set(:caption, nil)
+    node.object.set(:children, [])
+    source = emitter.emit(node)
+    expect(source).to include('caption(nil)', 'set :children, []')
+    expect(emitter.send(:pluggable_node_lines, node, 0).first)
+      .to include('widget "com.example.EmitterEdges"')
+
+    property = definition.object_type.fetch_property(:children)
+    expect(emitter.send(:pluggable_collection_lines, property, [nil], 0))
+      .to eq(['append :children, nil'])
+    sparse = Mxrb::Pluggable::XPathSource.new(
+      nil, nil, Mxrb::Forms.grid_sort_bar, nil, true
+    )
+    lines = emitter.send(:pluggable_data_source_lines, property, sparse, 0)
+    expect(lines.join("\n")).to include('sort_bar', 'force_full_objects true')
+
+    forms_property = Mxrb::Forms::Property.new(
+      'Child', 'child', 'Wrapper', 'Widget', [].freeze, :one, true, nil, nil
+    )
+    assignment = Mxrb::Forms::Assignment.new(forms_property, node)
+    expect(emitter.send(:assignment_lines, assignment, 0).join)
+      .to include('child("com.example.EmitterEdges")')
+    empty = Mxrb::Forms::Node.new(:action_button)
+    expect(emitter.send(:node_lines, empty, 0)).to eq(['action_button do', 'end'])
   end
 end

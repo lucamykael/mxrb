@@ -96,6 +96,7 @@ RSpec.describe 'Forms value ownership' do # rubocop:disable Metrics/BlockLength
 
     data_type = forms::DataType.build(:String)
     expect(forms::DataType.coerce(data_type)).to equal(data_type)
+    expect(forms::DataType.coerce(:Integer).name).to eq('Integer')
     condition = forms::Condition.when_value('$x')
     expect(forms::Condition.coerce(condition)).to equal(condition)
     expect(forms::Condition.coerce('$y').attribute_value).to eq('$y')

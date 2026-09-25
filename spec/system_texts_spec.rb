@@ -51,6 +51,7 @@ RSpec.describe Mxrb::SystemTexts do
 
   it 'rejects malformed storage and ignores unusable identity baselines' do
     expect { codec.decode({}) }.to raise_error(Mxrb::SystemTexts::CodecError, /must be/)
+    expect { codec.decode([]) }.to raise_error(Mxrb::SystemTexts::CodecError, /must be/)
     expect do
       codec.decode('$Type' => 'Texts$SystemTextCollection')
     end.to raise_error(Mxrb::SystemTexts::CodecError, /incomplete/)
