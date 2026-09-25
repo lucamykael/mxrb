@@ -3,6 +3,7 @@
 require 'spec_helper'
 require 'mxrb/forms/node'
 require 'mxrb/forms/mpr_codec'
+require 'tmpdir'
 
 RSpec.describe 'Forms value ownership' do # rubocop:disable Metrics/BlockLength
   forms = Mxrb::Forms
@@ -83,6 +84,37 @@ RSpec.describe 'Forms value ownership' do # rubocop:disable Metrics/BlockLength
     expect(reference.entity).to eq('')
     expect(forms::Expression.coerce(expression)).to equal(expression)
     expect(forms::TextTemplate.coerce(template)).to equal(template)
+  end
+
+  it 'covers value constructors, scalar alternatives, and their validation errors' do
+    translation = forms::Translation.new(language: nil, text: nil)
+    expect(translation.to_h).to eq(language: nil, text: nil)
+    expect(forms::Text.coerce(forms::Translation.new('en_US', 'Hello')).to_s).to eq('Hello')
+    expect(forms::Text.coerce([]).to_s).to eq('')
+    expect { forms::Text.coerce([Object.new]) }.to raise_error(TypeError, /Translation values/)
+    expect { forms::EntityReference.through(Object.new) }.to raise_error(TypeError, /EntityPathStep/)
+
+    data_type = forms::DataType.build(:String)
+    expect(forms::DataType.coerce(data_type)).to equal(data_type)
+    condition = forms::Condition.when_value('$x')
+    expect(forms::Condition.coerce(condition)).to equal(condition)
+    expect(forms::Condition.coerce('$y').attribute_value).to eq('$y')
+    xpath = forms::XPathConstraint.coerce('[true()]')
+    expect(forms::XPathConstraint.coerce(xpath)).to equal(xpath)
+    expect { forms::Reference.to('target', kind: :unsupported) }
+      .to raise_error(ArgumentError, /unsupported reference kind/)
+  end
+
+  it 'reads a binary asset lazily from its declared source path' do
+    Dir.mktmpdir('mxrb-form-asset-') do |directory|
+      path = File.join(directory, 'asset.bin')
+      File.binwrite(path, "\x00\xFF".b)
+      asset = forms::BinaryAsset.read(path, subtype: :user)
+
+      expect(asset.bytes).to eq("\x00\xFF".b)
+      expect(asset.subtype).to eq(:user)
+      expect(asset.source_path).to eq(File.expand_path(path))
+    end
   end
 
   it 'does not freeze or retain native attribute strings when decoding a document' do

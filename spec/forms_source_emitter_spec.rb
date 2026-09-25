@@ -103,4 +103,37 @@ RSpec.describe Mxrb::Forms::SourceEmitter do # rubocop:disable Metrics/BlockLeng
     expect { sources.each { eval(_1) } }.not_to raise_error # rubocop:disable Security/Eval
     expect(sources.join).not_to include('{', '}', '$ID', 'Hash', 'deep_structure', 'native_widget')
   end
+
+  it 'rejects untyped roots and supports named and empty root declarations' do
+    expect { emitter.emit(Object.new) }.to raise_error(TypeError, /typed Forms widget/)
+    expect { emitter.emit_as(Object.new, 'widget') }.to raise_error(TypeError, /requires a Forms::Node/)
+    empty = Mxrb::Forms::Node.new(:action_button)
+    expect(emitter.emit(empty)).to eq("Mxrb::Forms.action_button\n")
+    expect(emitter.emit_as(empty, 'custom_button')).to eq("custom_button do\nend\n")
+  end
+
+  it 'emits every semantic literal variant and rejects unpublished binary bytes' do
+    direct = Mxrb::Forms::EntityReference.direct('Sales.Order')
+    indirect = Mxrb::Forms::EntityReference.through(
+      Mxrb::Forms::EntityPathStep.to('Sales.Order_Customer', 'Sales.Customer')
+    )
+    values = [
+      Mxrb::Forms::Condition.when_value('$currentObject/Active', visible: true),
+      Mxrb::Forms::TextTemplate.build('Order {1}', parameters: ['$currentObject/Name']),
+      Mxrb::Forms::DataType.object('Sales.Order'), Mxrb::Forms::DataType.list('Sales.Order'),
+      Mxrb::Forms::DataType.enumeration('Sales.Status'), Mxrb::Forms::DataType.build('String'),
+      Mxrb::Forms::XPathConstraint.coerce([]),
+      Mxrb::Forms::XPathConstraint.coerce(%w[[A] [B]]), direct, indirect,
+      Mxrb::Forms::BinaryAsset.empty
+    ]
+    source = values.map { emitter.send(:literal, _1) }.join("\n")
+    expect(source).to include(
+      'Condition.when_value', 'TextTemplate.build', 'DataType.object', 'DataType.list',
+      'DataType.enumeration', 'XPathConstraint.coerce([])', 'EntityReference.through',
+      'BinaryAsset.empty'
+    )
+    expect { emitter.send(:literal, Object.new) }.to raise_error(TypeError, /cannot emit Forms value/)
+    asset = Mxrb::Forms::BinaryAsset.from_bytes('private')
+    expect { emitter.send(:literal, asset) }.to raise_error(TypeError, /exported as files/)
+  end
 end
