@@ -45,4 +45,59 @@ RSpec.describe Mxrb::StudioSchemaCatalog do # rubocop:disable Metrics/BlockLengt
     expect { described_class.new('a=x.element({type:x.schemaType(N,"Widget")})').extract }
       .to raise_error(ArgumentError, /Widget, Page, and DataView/)
   end
+
+  it 'extracts files and bridges FormBase to document properties' do
+    source = <<~JAVASCRIPT.delete("\n")
+      f=x.element({type:x.schemaType(N,"FormBase"),properties:{own:x.string()}}),
+      w=f.extend({type:x.schemaType(N,"Widget"),properties:{}}),
+      d=w.extend({type:x.schemaType(N,"DataView"),properties:{}}),
+      p=w.extend({type:x.schemaType(N,"Page"),properties:{}})
+    JAVASCRIPT
+    Dir.mktmpdir('studio-schema-') do |directory|
+      path = File.join(directory, 'main.js')
+      File.write(path, source)
+      catalog = described_class.extract(path, mendix_version: '11.12.1')
+
+      expect(catalog).to include(source: 'main.js', mendix_version: '11.12.1')
+      expect(catalog.dig(:types, 'ExportLevel', :values)).to eq(%w[Hidden API])
+      expect(catalog.dig(:types, 'FormBase', :properties).map { _1.fetch(:name) })
+        .to eq(%w[name documentation excluded exportLevel own])
+    end
+  end
+
+  it 'decodes every supported default expression and rejects unknown defaults' do
+    catalog = described_class.new('')
+    values = {
+      '!0' => { kind: 'literal', value: true },
+      '!1' => { kind: 'literal', value: false },
+      '-12' => { kind: 'literal', value: -12 },
+      '1e2' => { kind: 'literal', value: 100.0 },
+      '{width:10,height:-2}' => { kind: 'size', width: 10, height: -2 },
+      'unknownTypeSchema.create()' => { kind: 'unknown_data_type' },
+      'widgetSchema.create()' => { kind: 'factory', type: 'Widget' }
+    }
+    values.each do |expression, expected|
+      expect(catalog.send(:default_value, "x.default(#{expression})", 'Widget')).to eq(expected)
+    end
+    expect { catalog.send(:default_value, 'x.default(future)', 'Widget') }
+      .to raise_error(ArgumentError, /unsupported default expression/)
+  end
+
+  it 'reports invalid enums and unterminated or escaped schema fragments' do
+    invalid_enum = <<~JAVASCRIPT.delete("\n")
+      e=x.enum({type:x.schemaType(N,"Mode"),values:[invalid]}),
+      w=x.element({type:x.schemaType(N,"Widget")}),
+      d=w.extend({type:x.schemaType(N,"DataView")}),
+      p=w.extend({type:x.schemaType(N,"Page")})
+    JAVASCRIPT
+    expect { described_class.new(invalid_enum).extract }
+      .to raise_error(ArgumentError, /invalid enum values for Mode/)
+
+    catalog = described_class.new(%q({"escaped\"value"))
+    expect(catalog.send(:top_level_indexes, %q("escaped\"value",next), ',')).to eq([16])
+    expect { catalog.send(:balanced_fragment, 0, '{', '}') }
+      .to raise_error(ArgumentError, /unterminated Studio schema fragment/)
+    expect { catalog.send(:balanced_value, %q!("escaped\"value"!, 0, '(', ')') }
+      .to raise_error(ArgumentError, /unterminated balanced value/)
+  end
 end
