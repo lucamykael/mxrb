@@ -267,5 +267,111 @@ RSpec.describe 'DSL builder edge contracts' do
       '$Type' => 'DataTypes$EnumerationType', 'Enumeration' => 'App.Status'
     )
   end
+
+  it 'covers optional widget blocks, parameters, events, and composite regions' do
+    tree = Mxrb::Dsl::WidgetSlotBuilder.new
+    tree.text(:Greeting, parameters: %i[name count])
+    tree.button(:Save, parameters: [:item])
+    tree.gallery(:Cards, sort: [tree.sort_by(:Name)])
+    expect { tree.table(:Table) }.to raise_error(ArgumentError, /at least one column/)
+    tree.layout_grid(:Grid)
+    tree.container(:Container)
+    tree.pluggable_widget(:Widget, widget_id: 'vendor.Widget')
+    tree.widget(:future, :Future)
+    tree.data_view(:Details, from: tree.context(entity: 'App.Item'), visible: '$currentObject/Visible')
+    expect(tree.widgets.map { _1[:type] }).to include(
+      :text, :button, :gallery, :layout_grid, :container, :pluggable_widget, :future,
+      :data_view
+    )
+
+    event_widget = Mxrb::Dsl::GenericWidgetBuilder.new(:future, :Events, options: {}, events: [])
+    expect { event_widget.on_click(action: :save, pass: []) }
+      .to raise_error(ArgumentError, /pass: must be a Hash/)
+    event_widget.on_click(action: :save, pass: { item: 'value' })
+    expect(event_widget.to_h.fetch(:events).first.fetch(:arguments)).to eq(item: 'value')
+
+    composite = Mxrb::Dsl::GenericWidgetBuilder.new(:future, :Composite, options: {}, events: [])
+    composite.body { text :Body }
+    expect { composite.body { text :Duplicate } }.to raise_error(ArgumentError, /duplicate widget region/)
+    composite.slot(path: [:content]) { text :Slot }
+    expect(composite.to_h.fetch(:slots).first).not_to have_key(:role)
+  end
+
+  it 'covers builder validation and explicit appearance alternatives' do
+    expect { Mxrb::Dsl::GenericWidgetBuilder.new(:x, :X, options: [], events: []) }
+      .to raise_error(ArgumentError, /options must be a Hash/)
+    expect { Mxrb::Dsl::GenericWidgetBuilder.new(:x, :X, options: {}, events: {}) }
+      .to raise_error(ArgumentError, /events must be an Array/)
+    expect { Mxrb::Dsl::GenericWidgetBuilder.new(:x, :X, options: {}, events: [:bad]) }
+      .to raise_error(ArgumentError, /only Hash values/)
+
+    pluggable = Mxrb::Dsl::PluggableWidgetBuilder.new(
+      :Widget, options: { widget_id: 'vendor.Widget' }, properties_declared: false
+    )
+    pluggable.slot(:content) { text :Caption }
+    expect(pluggable.to_h.dig(:slots, 0, :path)).to eq([:content])
+
+    table = Mxrb::Dsl::TableBuilder.new(
+      :Table, width_unit: :pixels, tab_index: 2, class_name: 'table', style: 'color:red',
+              dynamic_class: '$class', visible: '$visible'
+    )
+    2.times { table.column(width: 1) }
+    table.row(class_name: 'first', style: 'x', dynamic_class: '$row', visible: '$visible') do
+      cell(column: 0, rowspan: 2, class_name: 'cell', style: 'x', dynamic_class: '$cell')
+    end
+    table.row { cell }
+    expect(table.to_h.dig(:options, :rows, 1, :cells, 0, :column)).to eq(1)
+
+    grid = Mxrb::Dsl::LayoutGridBuilder.new(
+      :Grid, width: :fixed, tab_index: 2, class_name: 'grid', style: 'x',
+             dynamic_class: '$grid', visible: '$visible'
+    )
+    grid.row(class_name: 'row', style: 'x', dynamic_class: '$row', visible: '$visible') do
+      column(class_name: 'column', style: 'x', dynamic_class: '$column')
+    end
+    expect(grid.to_h.dig(:options, :class)).to eq('grid')
+  end
+
+  it 'covers repeated data-view conditions and identified design properties' do
+    source = { kind: :context, entity: 'App.Item' }
+    view = Mxrb::Dsl::DataViewBuilder.new(
+      :Details, from: source, editable: :always, read_only_style: :text, label_width: 3,
+                show_footer: false, no_entity_message: 'Missing', tab_index: 2,
+                class_name: 'view', style: 'x', dynamic_class: '$view'
+    )
+    2.times do
+      view.visible_when('$currentObject/Visible', attribute: 'App.Item.Visible')
+      view.editable_when('$currentObject/Editable', attribute: 'App.Item.Editable')
+    end
+    view.design_property(:Color, option: :Red, id: 'property-id', value_id: 'value-id')
+    expect(view.to_h.dig(:options, :design_properties, 0)).to include(
+      id: 'property-id', value_id: 'value-id'
+    )
+  end
+
+  it 'covers metadata, remote ids, native units, and complete schedules' do
+    project = Mxrb::Dsl::Builder.new('/tmp/app.mpr')
+    project.semantic_metadata('/tmp/mxrb-missing-semantic-metadata.json')
+    project.native_unit('unit', container_id: 'container', containment: 'Modules',
+                                module_name: 'App', deep_structure: {})
+    expect(project.instance_variable_get(:@native_unit_overrides).first.fetch(:module)).to eq('App')
+
+    enumeration = Mxrb::Dsl::EnumerationBuilder.new(
+      :Status, remote_service: 'Remote.Service', remote_name: 'Status', remote_source_id: 'source-id'
+    )
+    enumeration.value(:Open, remote_name: 'OPEN', remote_id: 'value-id')
+    expect(enumeration.to_h.dig(:remote_source, '$ID')).to eq('source-id')
+    expect(enumeration.to_h.dig(:values, 0, :remote_value, '$ID')).to eq('value-id')
+
+    schedule = Mxrb::Dsl::ScheduledEventBuilder.new(
+      :Tick, microflow: 'App.Tick', schedule: 'ScheduledEvents$CustomSchedule',
+             schedule_id: 'schedule-id', multiplier: 2, minute_offset: 3,
+             hour_of_day: 4, minute_of_hour: 5, weekdays: [:monday]
+    ).to_h.fetch(:schedule)
+    expect(schedule).to include(type: 'ScheduledEvents$CustomSchedule', id: 'schedule-id')
+    expect(schedule.fetch(:properties)).to include(
+      multiplier: 2, minute_offset: 3, hour_of_day: 4, minute_of_hour: 5, monday: true
+    )
+  end
 end
 # rubocop:enable Metrics/BlockLength

@@ -335,5 +335,105 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(adapter.send(:rack_request, 'QUERY_STRING' => '')).to have_attributes(path: '/', body: '')
     adapter.close
   end
+
+  it 'covers record declaration validation and optional identity metadata' do
+    allow(Mxrb::RubyApp::SourceIdentity).to receive(:resolve).and_return('record-id')
+    record = Class.new(Mxrb::RubyApp::Record)
+    record.mendix_name('App.Item')
+    record.attribute(:name, type: :String, mendix_name: 'Name')
+    record.association(
+      'App.Category', name: :Item_Category, id: 'association-id', renamed_from: 'Old_Association'
+    )
+    expect(record.associations.first).to include(id: 'association-id', renamed_from: 'Old_Association')
+    expect { record.access_rule }.to raise_error(ArgumentError, /at least one module role/)
+    record.access_rule(
+      'App.User', identity: 'rule-id', renamed_from: 'old-rule', xpath_caption: 'Owned'
+    ) { member :Name, rights: :read_only }
+    expect(record.access_rules.first).to include(
+      source_identity: 'rule-id', renamed_from: 'old-rule', xpath_caption: 'Owned'
+    )
+    expect { record.index }.to raise_error(ArgumentError, /at least one attribute/)
+    record.index(:Name, renamed_from: 'old-index')
+    expect(record.indexes.last.fetch(:renamed_from)).to eq('old-index')
+    record.oql_view(source: 'SELECT *', query: 'SELECT 1', document_id: 'doc', source_id: 'source')
+    expect(record.oql_view_definition).to include(document_id: 'doc', source_id: 'source')
+    expect { record.lifecycle(:after_create, microflow: 'App.Run') }
+      .to raise_error(ArgumentError, /not a native Mendix lifecycle event/)
+    record.lifecycle(:before_commit, microflow: 'App.Run', renamed_from: 'old-lifecycle')
+    expect(record.native_lifecycle_definitions.last.fetch(:renamed_from)).to eq('old-lifecycle')
+    expect { record.validation_rule('', kind: :required) }
+      .to raise_error(ArgumentError, /requires an attribute/)
+    record.validation_rule(:Unknown, kind: :required, renamed_from: 'old-validation') { |_rule| }
+    expect(record.validation_rules.last.fetch(:renamed_from)).to eq('old-validation')
+    expect { record.remove_index }.to raise_error(ArgumentError, /requires a semantic key/)
+  end
+
+  it 'covers controller keyword CRUD and missing-record failures' do
+    allow(Mxrb::RubyApp::SourceIdentity).to receive(:resolve).and_return('record-id')
+    model = Class.new(Mxrb::RubyApp::Record)
+    model.mendix_name('App.Item')
+    model.attribute(:name, type: :String, mendix_name: 'Name')
+    application = double
+    allow(application).to receive(:create_record).and_return(:created)
+    allow(application).to receive(:update_record).and_return(:updated, nil)
+    allow(application).to receive(:delete_record).and_return(false)
+    controller = Mxrb::RubyApp::Controller.new(application)
+    expect(controller.create(model, name: 'One')).to eq(:created)
+    expect(controller.update(model, 'id', name: 'Two')).to eq(:updated)
+    expect { controller.update(model, 'missing', name: 'Two') }
+      .to raise_error(Mxrb::NotFoundError)
+    expect { controller.destroy(model, 'missing') }
+      .to raise_error(Mxrb::NotFoundError)
+    expect { controller.create(model, unknown: true) }.to raise_error(ArgumentError, /unknown/)
+    expect { Class.new(Mxrb::RubyApp::Controller).controller_name('') }
+      .to raise_error(ArgumentError, /cannot be empty/)
+  end
+
+  it 'covers enumeration, project-security, flow metadata, and service guards' do
+    allow(Mxrb::RubyApp::SourceIdentity).to receive(:resolve).and_return('identity')
+    enumeration = Class.new(Mxrb::RubyApp::Enumeration)
+    enumeration.mendix_name('App.Status')
+    enumeration.value(:Open, renamed_from: 'OldOpen') { translation :en_US, 'Open' }
+    expect(enumeration.native_definition.fetch(:values).first.fetch(:renamed_from)).to eq('OldOpen')
+    expect { enumeration.remove_value('') }.to raise_error(ArgumentError, /requires a value name/)
+
+    security = Class.new(Mxrb::RubyApp::ProjectSecurity)
+    expect(security.mendix_id).to eq('')
+    security.user_role(:Admin, manage_all_roles: true, renamed_from: 'OldAdmin')
+    security.demo_user(:Tester, entity: 'System.User', roles: [:Admin], renamed_from: 'OldTester')
+    security.password_policy(id: 'policy') { minimum_length 12 }
+    expect(security.user_roles.first).to include(
+      module_roles: ['System.Administrator'], renamed_from: 'OldAdmin'
+    )
+    expect(security.demo_user_definitions.first.fetch(:renamed_from)).to eq('OldTester')
+
+    metadata = Mxrb::RubyApp::FlowMetadata.allocate
+    metadata.instance_variable_set(:@entries, {})
+    metadata.instance_variable_set(:@registered, Set.new)
+    expect(metadata.send(:index, 'unit_id' => '', 'native_type' => '')).to be_nil
+    first = { 'unit_id' => 'unit', 'native_type' => 'Microflows$Microflow', 'value' => 1 }
+    metadata.send(:index, first)
+    expect { metadata.send(:index, first.merge('value' => 2)) }
+      .to raise_error(Mxrb::ValidationError, /conflicting flow metadata/)
+
+    service = Class.new(Mxrb::RubyApp::Service)
+    expect { service.controller(Object.new, action: :run) }
+      .to raise_error(ArgumentError, /controller must be/)
+    expect { service.controller(Mxrb::RubyApp::Controller, action: '') }
+      .to raise_error(ArgumentError, /action cannot be empty/)
+  end
+
+  it 'covers widget-tree block styles and empty structured events' do
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    tree.widget(:container, :Yielded) { |content| content.text :Caption }
+    tree.layout_grid(:Grid)
+    tree.data_view(:Details, from: { kind: :context, entity: 'App.Item' })
+    tree.tab_control(:Tabs)
+    expect(tree.widgets.map { _1.fetch('type') }).to include(
+      'container', 'layout_grid', 'data_view', 'tab_control'
+    )
+    expect(tree.widgets.last).not_to have_key('events')
+    expect { tree.properties {} }.to raise_error(ArgumentError, /pluggable widget/)
+  end
 end
 # rubocop:enable Metrics/BlockLength, Lint/ConstantDefinitionInBlock
