@@ -64,6 +64,36 @@ RSpec.describe Mxrb::Converter do
     end
   end
 
+  it 'honors an explicit output path and an audited stack preset' do
+    Dir.mktmpdir('mxrb-convert-output-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      output = File.join(dir, 'custom', 'Built.mpr')
+      Mxrb.define(source) { mendix_version '10.24.0.73019' }
+
+      result = described_class.new(
+        source, File.join(dir, 'ruby'), studio_version: '10.24.0.73019',
+                                        output:, stack: :onrails
+      ).convert!
+
+      expect(result.mpr).to eq(output)
+      expect(File).to exist(output)
+    end
+  end
+
+  it 'fails closed when generated integrity or version evidence differs' do
+    converter = described_class.allocate
+    invalid = Mxrb::Integrity::Result.new(errors: ['broken'], warnings: [])
+    allow(Mxrb).to receive(:validate).with('/tmp/generated.mpr').and_return(invalid)
+    expect { converter.send(:validate_mpr!, '/tmp/generated.mpr') }
+      .to raise_error(Mxrb::ValidationError, /failed integrity validation/)
+
+    converter.instance_variable_set(:@studio_version, '11.12.1')
+    expect { converter.send(:validate_version!, version: '10.24.0.73019') }
+      .to raise_error(Mxrb::ValidationError, /targets 10\.24/)
+    expect { converter.send(:version_major, 'future', role: 'source MPR') }
+      .to raise_error(Mxrb::UnsupportedVersion, /unsupported Mendix version/)
+  end
+
   it 'rejects ambiguous versions and unknown presets before exporting' do
     expect do
       described_class.new('/missing.mpr', '/tmp/output', studio_version: '11.12').convert!
