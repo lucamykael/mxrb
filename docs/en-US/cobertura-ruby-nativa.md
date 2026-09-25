@@ -4,7 +4,7 @@ This is the source of truth for expansion of the Ruby → Mendix compiler. A
 surface is `native` only after tests cover creation, update, removal, reopening
 the MPR, and recompilation without changing native identities.
 
-September 13, 2026 update: this is a conservative family-level matrix, not a
+September 25, 2026 update: this is a conservative family-level matrix, not a
 completion percentage. Domain, security and scheduling now have incremental
 authoring paths; unrepresented variants remain preserved. Verified contracts
 and limitations are recorded in the
@@ -41,14 +41,14 @@ silently converted or discarded.
 
 ## Current measurable deficit
 
-The September 13 strict suite passed 1,825 examples but still measures 97.10%
-of lines (35,451/36,511) and 90.96% of branches (14,394/15,825). Reaching the
-100/100 gate therefore requires another 1,060 executable lines and 1,431
+The September 25 strict suite passed 1,832 examples but still measures 97.12%
+of lines (35,711/36,769) and 90.92% of branches (14,475/15,920). Reaching the
+100/100 gate therefore requires another 1,058 executable lines and 1,445
 branches. The largest gaps are in `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
 `ruby_app/exporter.rb`, and `forms/mpr_codec.rb`; none were removed from the
 denominator. `writer/page_overlay.rb` reached 100/100 in this audit, while the
-lossless widget projection slice reduced `ruby_app/exporter.rb` from 291 to 59
-uncovered lines and from 267 to 85 uncovered branches. CI remains at 96/89
+lossless widget projection slice keeps scalar properties, actions, XPath
+sources, and object lists in Ruby without exposing BSON. CI remains at 96/89
 until real tests close the balance.
 
 Code coverage alone does not complete functional coverage: layouts, snippets,

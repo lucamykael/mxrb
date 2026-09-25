@@ -2,7 +2,7 @@
 
 **Português** · [English](../en-US/validation-matrix.md) · [Deutsch](../de-DE/validation-matrix.md)
 
-Última atualização: 13 de setembro de 2026.
+Última atualização: 25 de setembro de 2026.
 
 O pipeline validado é:
 
@@ -42,6 +42,23 @@ o DSL acrescentava `System.Administrator` a uma lista de papéis nativos que nã
 o continha, e o codec de settings 11 ainda não reconhecia
 `Settings$ConstantValue`, `Settings$SharedValue` e `Settings$PrivateValue`.
 Testes focados cobrem as duas regressões; valores privados não são publicados.
+
+Em 25 de setembro, `script/validate_ruby_app --repair-hashes` certificou o
+corpus completo de 13 projetos por exportação Ruby app, auditoria da fonte
+pública com zero violações, compilação com o sidecar Mendix editável destacado,
+validação do MPR e comparação semântica idêntica: **13/13 passaram**. O reparo
+de hashes continua explícito e temporário: uma unit do SLATaskApp e duas do
+RubyBridgeSandbox foram corrigidas em cópias; os outros onze projetos não
+precisaram de reparo.
+
+Esse gate encontrou e corrigiu vazamentos que o round-trip estrutural não
+detectava. Mapeamentos do Database Connector agora usam blocos de parâmetros
+ordenados; escalares, ações, fontes XPath e listas de objetos pluggable
+suportados pelo schema usam builders semânticos editáveis, enquanto qualquer
+valor aninhado ainda não representado permanece íntegro no baseline privado; e
+design properties compostas usam declarações semânticas aninhadas, com
+identidades BSON restauradas privadamente. UUIDs externos de configuração de
+widgets deixaram de ser confundidos com identidade de unit.
 
 ## Cobertura profunda editável
 
@@ -122,9 +139,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 1.825 exemplos, zero falhas;
-- 97,10% das linhas: 35.451/36.511;
-- 90,96% dos branches: 14.394/15.825;
+- 1.832 exemplos, zero falhas;
+- 97,12% das linhas: 35.711/36.769;
+- 90,92% dos branches: 14.475/15.920;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

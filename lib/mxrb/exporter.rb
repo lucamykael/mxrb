@@ -4011,13 +4011,20 @@ module Mxrb
       connection_parameters = bson_items(action["ConnectionParameterMappings"]).map do |mapping|
         [mapping["ParameterName"], mapping["Value"]]
       end
-      args << "parameters: #{pass_source(parameters)}" unless parameters.empty?
-      unless connection_parameters.empty?
-        args << "connection_parameters: #{pass_source(connection_parameters)}"
-      end
       error = underscore(action["ErrorHandlingType"])
       args << "error: :#{error}" unless error == "rollback"
-      "#{pad}execute_database_query #{args.join(', ')}"
+      declaration = "#{pad}execute_database_query #{args.join(', ')}"
+      return declaration if parameters.empty? && connection_parameters.empty?
+
+      lines = ["#{declaration} do"]
+      parameters.each do |name, value|
+        lines << "#{pad}  parameter #{ruby(name)}, #{ruby_val(value)}"
+      end
+      connection_parameters.each do |name, value|
+        lines << "#{pad}  connection_parameter #{ruby(name)}, #{ruby_val(value)}"
+      end
+      lines << "#{pad}end"
+      lines.join("\n")
     end
 
     def import_xml_line(pad, action)
@@ -4140,16 +4147,6 @@ module Mxrb
       end
       lines << "#{pad}end"
       lines.join("\n")
-    end
-
-    def pass_source(mappings)
-      duplicate = mappings.map { _1.first.to_s }.tally.values.any? { _1 > 1 }
-      rendered = mappings.map do |parameter, value|
-        key = ruby(parameter)
-        val = ruby_val(value)
-        duplicate ? "[#{key}, #{val}]" : "#{key} => #{val}"
-      end
-      duplicate ? "[#{rendered.join(', ')}]" : "{ #{rendered.join(', ')} }"
     end
 
     def code_action_parameter_value(value)

@@ -154,12 +154,21 @@ RSpec.describe 'modern page widgets' do
     }
     widget = schema_widget('example.Semantic', {
       source: { type: 'DataSource' }, label: { type: 'Attribute' }, selected: { type: 'Selection' },
-      content: { type: 'Widgets' }, series: { type: 'Object', object_type: nested_object_type }
+      action: { type: 'Action' }, content: { type: 'Widgets' },
+      series: { type: 'Object', object_type: nested_object_type }
     })
     options = {
       properties: {
-        source: { data_source: { entity: 'Ui.Item', xpath: '[Active = true]' } },
+        source: {
+          data_source: {
+            entity: 'Ui.Item', xpath: '[Active = true]',
+            sort: [{ attribute: 'Ui.Item.Name', direction: 'Ascending' }]
+          }
+        },
         label: { attribute: 'Ui.Item.Name' }, selected: { selection: 'Single' },
+        action: {
+          action: { kind: 'microflow', handler: 'Ui.Refresh', arguments: { Item: '$currentObject' } }
+        },
         content: { widgets: [{ type: :text, name: 'Nested', options: { caption: 'Child' }, events: [] }] },
         series: { objects: [{ name: { primitive: 'Primary' }, amount: { attribute: 'Ui.Item.Amount' } }] }
       }
@@ -171,8 +180,12 @@ RSpec.describe 'modern page widgets' do
     expect(values.dig('source', 'Value', 'DataSource')).to include(
       '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'XPathConstraint' => '[Active = true]'
     )
+    expect(writer.send(:array_items, values.dig('source', 'Value', 'DataSource', 'SortBar', 'SortItems')).first)
+      .to include('SortDirection' => 'Ascending', 'AttributeRef' => include('Attribute' => 'Ui.Item.Name'))
     expect(values.dig('label', 'Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Name')
     expect(values.dig('selected', 'Value', 'Selection')).to eq('Single')
+    expect(values.dig('action', 'Value', 'Action', '$Type')).to eq('Forms$MicroflowAction')
+    expect(values.dig('action', 'Value', 'Action', 'MicroflowSettings', 'Microflow')).to eq('Ui.Refresh')
     expect(writer.send(:array_items, values.dig('content', 'Value', 'Widgets')).first).to include(
       '$Type' => 'Forms$DynamicText', 'Name' => 'Nested'
     )

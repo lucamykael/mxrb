@@ -61,6 +61,21 @@ RSpec.describe Mxrb::PublicSourceAudit do
     end
   end
 
+  it 'does not confuse typed UUID-shaped widget configuration with a native unit identity' do
+    Dir.mktmpdir('mxrb-public-source-widget-value-') do |root|
+      File.write(
+        File.join(root, 'page.rb'),
+        <<~RUBY
+          properties do
+            set "externalAppId", "9c5cdce1-f479-44b2-830c-4d102da03632"
+          end
+        RUBY
+      )
+
+      expect(described_class.new(root)).to be_clean
+    end
+  end
+
   it 'classifies source trees outside the project, app, and module conventions' do
     Dir.mktmpdir('mxrb-public-source-other-') do |root|
       FileUtils.mkdir_p(File.join(root, 'scripts'))

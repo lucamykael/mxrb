@@ -1012,10 +1012,11 @@ module Mxrb
 
       def design_properties(*values) = (@design_properties = values.flatten)
 
-      def design_property(key, option:, id: nil, value_id: nil)
-        @design_properties << {
-          key: key.to_s, option: option.to_s, id: id&.to_s, value_id: value_id&.to_s
-        }
+      def design_property(key, option: UNSET, id: nil, value_id: nil, &block)
+        builder = DesignPropertyBuilder.new
+        @design_properties << builder.build(
+          key, option:, id:, value_id:, &block
+        )
       end
 
       def unknown_native(value)
@@ -1071,6 +1072,34 @@ module Mxrb
           ignore_security: ignore_security == true, source_variable: source,
           unknown_native: native
         )
+      end
+    end
+
+    class DesignPropertyBuilder
+      attr_reader :properties
+
+      def initialize = (@properties = [])
+
+      def design_property(key, option: UNSET, id: nil, value_id: nil, &block)
+        @properties << build(key, option:, id:, value_id:, &block)
+      end
+
+      def build(key, option: UNSET, id: nil, value_id: nil, &block)
+        if block && !option.equal?(UNSET)
+          raise ArgumentError, 'design property accepts either option: or a nested block'
+        end
+        raise ArgumentError, 'design property requires option: or a nested block' if
+          !block && option.equal?(UNSET)
+
+        value = { key: key.to_s, id: id&.to_s, value_id: value_id&.to_s }
+        if block
+          nested = self.class.new
+          nested.instance_eval(&block)
+          value[:properties] = nested.properties
+        else
+          value[:option] = option.to_s
+        end
+        value
       end
     end
 
@@ -2552,6 +2581,26 @@ module Mxrb
       end
     end
 
+    # Collects ordered Database Connector mappings without exposing storage
+    # hashes in exported application code. Separate methods keep query and
+    # connection parameters unambiguous while preserving duplicate names.
+    class DatabaseQueryArgumentsBuilder
+      attr_reader :parameters, :connection_parameters
+
+      def initialize
+        @parameters = []
+        @connection_parameters = []
+      end
+
+      def parameter(name, value)
+        @parameters << { name: name.to_s, value: value }
+      end
+
+      def connection_parameter(name, value)
+        @connection_parameters << { name: name.to_s, value: value }
+      end
+    end
+
     # Shared activity DSL mixed into FlowBuilder, BranchBuilder, LoopBuilder, RescueBuilder
     module FlowBodyDsl
       CODE_ACTION_PARAMETER_KINDS = %i[
@@ -2803,15 +2852,32 @@ module Mxrb
       end
 
       def execute_database_query(query = nil, as: nil, dynamic_query: nil,
-                                 parameters: {}, connection_parameters: {},
-                                 error: :rollback)
+                                 parameters: nil, connection_parameters: nil,
+                                 error: :rollback, &block)
+        if block
+          if Array(parameters).any? || Array(connection_parameters).any?
+            raise ArgumentError,
+                  "database query mappings must use either keyword hashes or a block"
+          end
+
+          mappings = DatabaseQueryArgumentsBuilder.new
+          mappings.instance_eval(&block)
+          parameter_mappings = mappings.parameters
+          connection_parameter_mappings = mappings.connection_parameters
+        else
+          parameter_mappings = (parameters || {}).map do |name, value|
+            { name: name.to_s, value: value }
+          end
+          connection_parameter_mappings = (connection_parameters || {}).map do |name, value|
+            { name: name.to_s, value: value }
+          end
+        end
+
         _acts << {
           type: :execute_database_query, query: query.to_s,
           dynamic_query: dynamic_query.to_s, variable: as&.to_s,
-          parameters: parameters.map { |name, value| { name: name.to_s, value: value } },
-          connection_parameters: connection_parameters.map do |name, value|
-            { name: name.to_s, value: value }
-          end,
+          parameters: parameter_mappings,
+          connection_parameters: connection_parameter_mappings,
           error: error.to_s
         }
       end

@@ -416,14 +416,27 @@ module Mxrb
 
       def design_property_spec(value)
         option = value['Value']
-        return value unless value['$Type'] == 'Forms$DesignPropertyValue' &&
-                            option.is_a?(Hash) &&
-                            option['$Type'] == 'Forms$OptionDesignPropertyValue'
+        return value unless value['$Type'] == 'Forms$DesignPropertyValue' && option.is_a?(Hash)
 
-        {
+        result = {
           id: IO::BsonCodec.extract_id(value['$ID']), key: value.fetch('Key', ''),
-          value_id: IO::BsonCodec.extract_id(option['$ID']), option: option.fetch('Option', '')
+          value_id: IO::BsonCodec.extract_id(option['$ID'])
         }
+        case option['$Type']
+        when 'Forms$OptionDesignPropertyValue'
+          result.merge(option: option.fetch('Option', ''))
+        when 'Forms$CompoundDesignPropertyValue'
+          properties = parse_array(option['Properties']).map { design_property_spec(_1) }
+          return value unless properties.all? { semantic_design_property?(_1) }
+
+          result.merge(properties:)
+        else value
+        end
+      end
+
+      def semantic_design_property?(value)
+        value.is_a?(Hash) && value.key?(:key) &&
+          (value.key?(:option) || value[:properties].is_a?(Array))
       end
 
       def parse_data_view_source(source)

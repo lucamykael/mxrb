@@ -1904,13 +1904,15 @@ module Mxrb
         options = widget.fetch('options', {})
         return unless options.key?('properties')
 
-        bridge = PluggableProperties.try_for_widget(
+        bridge = PluggableProperties.try_supported_subset_for_widget(
           widget.fetch('name', ''), widget_id: options['widget_id'], properties: options.fetch('properties')
         )
         return unless bridge
 
-        lines = options.fetch('properties').map do |key, value|
-          runtime_widget_declaration('set', [key.inspect, pretty_ruby_value(value, indentation + 2)],
+        lines = bridge.to_projection.map do |key, value|
+          expression = bridge.source_expression(key, indentation: indentation + 4) ||
+                       pretty_ruby_value(value, indentation + 2)
+          runtime_widget_declaration('set', [key.inspect, expression],
                                      indentation + 2, false)
         end
         ["#{' ' * indentation}properties do", *lines, "#{' ' * indentation}end"].join("\n")
@@ -2412,10 +2414,7 @@ module Mxrb
           properties = options.fetch('design_properties')
           if runtime_design_properties_supported?(properties)
             properties.each do |value|
-              lines << runtime_widget_declaration(
-                'design_property', [value.fetch('key').inspect, "option: #{value.fetch('option').inspect}"],
-                indentation, false
-              )
+              lines << runtime_design_property_source(value, indentation)
             end
           else
             arguments = properties.map { pretty_ruby_value(_1, indentation + 2) }
@@ -2433,9 +2432,37 @@ module Mxrb
 
       def runtime_design_properties_supported?(properties)
         properties.any? && properties.all? do |value|
-          value.is_a?(Hash) && value.keys.sort == %w[id key option value_id] &&
-            value.values.all? { _1.is_a?(String) && !_1.empty? }
+          runtime_design_property_supported?(value)
         end
+      end
+
+      def runtime_design_property_supported?(value)
+        return false unless value.is_a?(Hash)
+        return false unless value.values_at('id', 'key', 'value_id').all? { _1.is_a?(String) && !_1.empty? }
+
+        if value.key?('option')
+          value.keys.sort == %w[id key option value_id] && value.fetch('option').is_a?(String)
+        elsif value.key?('properties')
+          value.keys.sort == %w[id key properties value_id] &&
+            value.fetch('properties').is_a?(Array) && value.fetch('properties').any? &&
+            value.fetch('properties').all? { runtime_design_property_supported?(_1) }
+        else
+          false
+        end
+      end
+
+      def runtime_design_property_source(value, indentation)
+        arguments = [value.fetch('key').inspect]
+        if value.key?('option')
+          arguments << "option: #{value.fetch('option').inspect}"
+          return runtime_widget_declaration('design_property', arguments, indentation, false)
+        end
+
+        declaration = runtime_widget_declaration('design_property', arguments, indentation, true)
+        nested = value.fetch('properties').map do |property|
+          runtime_design_property_source(property, indentation + 2)
+        end
+        [declaration, *nested, "#{' ' * indentation}end"].join("\n")
       end
 
       def runtime_grid_columns_expression(columns)

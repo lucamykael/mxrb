@@ -5,7 +5,7 @@ superfície só recebe o estado `native` quando possui testes de criar, alterar,
 remover, reabrir o MPR e recompilar sem trocar identidades nativas. Preservar o
 BSON no sidecar não conta como edição.
 
-Atualização de 13 de setembro de 2026: a matriz abaixo é conservadora por
+Atualização de 25 de setembro de 2026: a matriz abaixo é conservadora por
 família, não uma porcentagem de conclusão. Domínio, segurança e operação já
 possuem rotas de autoria incremental; variantes não representadas continuam
 preservadas. Os contratos e limites verificados estão na
@@ -60,14 +60,14 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Déficit verificável atual
 
-A suíte estrita de 13 de setembro passou com 1.825 exemplos, mas ainda mede
-97,10% das linhas (35.451/36.511) e 90,96% dos branches (14.394/15.825).
-Faltam, portanto, 1.060 linhas e 1.431 branches executáveis para o gate 100/100.
+A suíte estrita de 25 de setembro passou com 1.832 exemplos, mas ainda mede
+97,12% das linhas (35.711/36.769) e 90,92% dos branches (14.475/15.920).
+Faltam, portanto, 1.058 linhas e 1.445 branches executáveis para o gate 100/100.
 Os maiores déficits estão em `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
 `ruby_app/exporter.rb` e `forms/mpr_codec.rb`; nenhum deles foi removido do
 denominador. `writer/page_overlay.rb` passou a 100/100 nesta auditoria, enquanto
-a fatia de projeção sem perdas de widgets reduziu `ruby_app/exporter.rb` de 291
-para 59 linhas descobertas e de 267 para 85 branches descobertos. O CI permanece
+a fatia de projeção sem perdas de widgets mantém propriedades escalares, ações,
+fontes XPath e listas de objetos em Ruby sem expor BSON. O CI permanece
 em 96/89 até que testes reais fechem o saldo.
 
 Cobertura de código 100/100 também não encerra cobertura funcional: layouts,

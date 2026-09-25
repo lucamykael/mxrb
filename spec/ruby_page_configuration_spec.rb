@@ -60,6 +60,42 @@ RSpec.describe 'private Ruby page configuration' do
     expect(projection.first.dig('options', 'design_properties', 0, 'id')).to be_nil
   end
 
+  it 'emits nested compound design properties without exposing their private BSON structure' do
+    nested_id = '44444444-4444-4444-8444-444444444444'
+    nested_value_id = '55555555-5555-4555-8555-555555555555'
+    compound = {
+      'id' => property_id, 'value_id' => value_id, 'key' => 'Spacing',
+      'properties' => [{
+        'id' => nested_id, 'value_id' => nested_value_id,
+        'key' => 'margin-bottom', 'option' => 'M'
+      }]
+    }
+    configured = widget.merge(
+      'options' => widget.fetch('options').merge('design_properties' => [compound])
+    )
+    source, projection = emitted_widgets([configured])
+    expect(source).to include(
+      'design_property "Spacing" do',
+      'design_property "margin-bottom", option: "M"'
+    )
+    expect(source).not_to include(property_id, value_id, nested_id, nested_value_id, '$Type')
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([configured])) do
+      restored = Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection)
+      expect(restored).to eq([configured])
+    end
+
+    writer = Mxrb::Writer.allocate
+    document = writer.send(:data_view_design_property_doc, compound)
+    parsed = Mxrb::Model::Page.allocate.send(:design_property_spec, document)
+    expect(normalize(parsed)).to eq(compound)
+
+    builder = Mxrb::Dsl::DesignPropertyBuilder.new
+    expect { builder.build('Spacing') }.to raise_error(ArgumentError, /requires option/)
+    expect do
+      builder.build('Spacing', option: 'M') { design_property 'nested', option: 'S' }
+    end.to raise_error(ArgumentError, /either option/)
+  end
+
   it 'keeps authored option changes while restoring IDs through Page.configure' do
     source, = emitted_widgets([widget])
     source = source.sub('option: "Large"', 'option: "Small"')

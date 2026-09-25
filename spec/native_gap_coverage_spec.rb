@@ -50,11 +50,21 @@ RSpec.describe 'Native regression edge contracts' do
     expect(association.fetch('StorageFormat')).to eq('Table')
   end
 
-  it 'exports explicit association storage and unique/duplicate parameter maps' do
+  it 'exports explicit association storage and ordered database parameter blocks' do
     exporter = Mxrb::Exporter.allocate
-    expect(exporter.send(:pass_source, [%w[A 1]])).to eq('{ "A" => "1" }')
-    expect(exporter.send(:pass_source, [%w[A 1], %w[A 2]]))
-      .to eq('[["A", "1"], ["A", "2"]]')
+    parameter_docs = [
+      { 'ParameterName' => 'A', 'Value' => '1' },
+      { 'ParameterName' => 'A', 'Value' => '2' }
+    ]
+    mappings = Mxrb::IO::BsonCodec.build_array(parameter_docs)
+    source = exporter.send(
+      :database_query_line, '',
+      'Query' => 'SELECT 1', 'ParameterMappings' => mappings,
+      'ConnectionParameterMappings' => Mxrb::IO::BsonCodec.build_array([]),
+      'ErrorHandlingType' => 'Rollback'
+    )
+    expect(source).to include('parameter "A", "1"', 'parameter "A", "2"')
+    expect(source).not_to include('=>')
 
     association = Struct.new(
       :to_entity_id, :association_type, :owner, :name, :storage_format,

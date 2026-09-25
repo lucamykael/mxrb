@@ -94,9 +94,18 @@ module Mxrb
     def pattern_violations(source, relative, subsystem, lines)
       lexical_violations(source, relative, subsystem, lines) + TEXT_PATTERNS.flat_map do |category, pattern|
         scan_pattern(source, pattern).map do |line|
+          next if category == :uuid && typed_property_value?(lines.fetch(line - 1, ''))
+
           violation(category, subsystem, relative, line, lines)
-        end
+        end.compact
       end
+    end
+
+    # UUID-shaped application configuration is not necessarily a Mendix
+    # storage identity. A schema-checked pluggable-property assignment is a
+    # typed public value; unit IDs continue to be reported everywhere else.
+    def typed_property_value?(line)
+      line.match?(/\A\s*set\s+["'][^"']+["']\s*,/)
     end
 
     def scan_pattern(source, pattern)
