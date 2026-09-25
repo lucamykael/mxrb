@@ -393,7 +393,7 @@ module Mxrb
     end
 
     def array_marker(collection)
-      collection&.first if collection.is_a?(Array) && collection.first.is_a?(Integer)
+      collection.first if collection.is_a?(Array) && collection.first.is_a?(Integer)
     end
 
     def deep_copy(value)
