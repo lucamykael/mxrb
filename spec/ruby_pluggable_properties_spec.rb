@@ -117,7 +117,7 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
       widget_id:,
       properties: projection.merge('action' => { 'kind' => 'microflow' }, 'objects' => nil)
     )
-    expect(bridge.to_projection).to eq(projection)
+    expect(bridge.to_projection).to eq(projection.merge('objects' => nil))
     expect do
       described_class.try_supported_subset_for_widget(
         'example', widget_id:, properties: { 'futureProperty' => true }
@@ -229,7 +229,8 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.typed_value(:image)).to be_a(Mxrb::Pluggable::Reference)
     expect(bridge.typed_value(:image).kind).to eq('Image')
     expect(bridge.to_projection).not_to have_key('objects')
-    expect(described_class.try_from_projection(widget_id, { 'objects' => nil }, catalog:)).to be_nil
+    expect(described_class.try_from_projection(widget_id, { 'objects' => nil }, catalog:).to_projection)
+      .to eq('objects' => nil)
     expect(described_class.try_from_projection(widget_id, { 'content' => nil }, catalog:).to_projection)
       .to eq('content' => nil)
   end

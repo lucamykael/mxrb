@@ -344,7 +344,7 @@ module Mxrb
 
       def ensure_supported!(property, value)
         type = property.value_type
-        return if value.nil? && (!type.list? || type.widgets?)
+        return if value.nil? && (!type.list? || type.widgets? || type.object?)
         return if scalar_supported?(type) || semantic_supported?(type, value)
 
         raise UnsupportedProjection, 'pluggable property requires the legacy projection or full Forms codec'
