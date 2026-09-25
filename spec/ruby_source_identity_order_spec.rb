@@ -30,6 +30,22 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
     double(name: ruby_class, mendix_name: "App.#{name}", mendix_id: '', resolve_record_identities!: nil)
   end
 
+  def bundle_entry(**overrides)
+    {
+      'kind' => 'record', 'id' => '11111111-1111-4111-8111-111111111111',
+      'name' => 'App.Existing', 'path' => 'app/models/app/existing.rb',
+      'ruby_class' => 'App::Existing', 'native_kind' => ''
+    }.merge(overrides)
+  end
+
+  def bundle_file(payload, checksum: nil)
+    contents = payload.is_a?(String) ? payload : JSON.generate(payload)
+    {
+      path: described_class::BUNDLE_PATH, contents:,
+      sha256: checksum || Digest::SHA256.hexdigest(contents)
+    }
+  end
+
   # rubocop:disable Metrics/ParameterLists
   def bind(resolver, declaration, path: entry.fetch('path'), id: nil, kind: 'record', renamed_from: nil)
     resolver.load_file(File.join(@directory, path)) do
@@ -110,6 +126,109 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
 
     expect { bind(resolver, owner('Existing'), kind: 'page') }
       .to raise_error(Mxrb::ValidationError, /cannot change document family/)
+  end
+
+  it 'validates every integrity boundary of the private identity sidecar' do
+    valid = { 'format_version' => 1, 'entries' => [bundle_entry] }
+    expect(described_class.read_bundle([bundle_file(valid)])).to eq([bundle_entry])
+    expect { described_class.read_bundle([bundle_file(valid, checksum: 'bad')]) }
+      .to raise_error(Mxrb::SerializationError, /checksum mismatch/)
+    expect { described_class.read_bundle([bundle_file('{')]) }
+      .to raise_error(Mxrb::SerializationError, /invalid Ruby source identity sidecar:/)
+    expect { described_class.read_bundle([bundle_file({ 'format_version' => 2, 'entries' => [] })]) }
+      .to raise_error(Mxrb::SerializationError, /invalid Ruby source identity sidecar format/)
+    expect { described_class.read_bundle([bundle_file({ 'format_version' => 1, 'entries' => [{}] })]) }
+      .to raise_error(Mxrb::SerializationError, /invalid Ruby source identity entry/)
+    unsafe = bundle_entry('path' => 'app/models/app/../other.rb')
+    expect { described_class.read_bundle([bundle_file({ 'format_version' => 1, 'entries' => [unsafe] })]) }
+      .to raise_error(Mxrb::SerializationError, /unsafe Ruby source identity path/)
+    invalid_service = bundle_entry('kind' => 'service', 'native_kind' => 'future')
+    expect do
+      described_class.read_bundle([bundle_file({ 'format_version' => 1, 'entries' => [invalid_service] })])
+    end
+      .to raise_error(Mxrb::SerializationError, /invalid Ruby service identity kind/)
+  end
+
+  it 'rejects incomplete enumeration identity baselines and duplicate names' do
+    manifest = Mxrb::RubyApp::Manifest.new(
+      @directory, 'mode' => 'ruby', 'modules' => [{
+        'name' => 'App', 'enumerations' => [entry('Status').merge('values' => nil)]
+      }]
+    )
+    expect { described_class.new(manifest) }
+      .to raise_error(Mxrb::ValidationError, /enumeration requires its member identity baseline/)
+
+    resolver = context
+    bind(resolver, owner('Existing'))
+    expect { bind(resolver, owner('Existing', ruby_class: 'App::Duplicate')) }
+      .to raise_error(Mxrb::ValidationError, /duplicate Ruby record declaration/)
+  end
+
+  it 'prevents flow-kind changes, implicit entity renames, and conflicting explicit renames' do
+    service_entry = entry('Run').merge(
+      'ruby_class' => 'App::Run', 'native_kind' => 'microflow', 'path' => 'app/services/app/run.rb'
+    )
+    manifest = Mxrb::RubyApp::Manifest.new(
+      @directory, 'mode' => 'ruby', 'modules' => [{ 'name' => 'App', 'services' => [service_entry] }]
+    )
+    resolver = described_class.new(manifest)
+    service = owner('Run')
+    bind(resolver, service, path: service_entry.fetch('path'), kind: 'service')
+    expect { resolver.validate_flow!(service, 'nanoflow') }
+      .to raise_error(Mxrb::ValidationError, /cannot change between microflow and nanoflow/)
+
+    resolver = context
+    renamed = owner('Renamed')
+    bind(resolver, renamed, id: entry.fetch('id'))
+    expect { resolver.validate_entity_names! }
+      .to raise_error(Mxrb::ValidationError, /requires an explicit semantic rename/)
+    expect { bind(context, owner('Renamed'), renamed_from: 'App.Existing', id: 'different') }
+      .to raise_error(Mxrb::ValidationError, /conflicts with renamed_from/)
+    expect { bind(context, owner('Existing', ruby_class: 'App::Moved'), path: 'app/models/app/moved.rb') }
+      .to raise_error(Mxrb::ValidationError, /cannot resolve moved Ruby declaration/)
+  end
+
+  it 'fails when an existing materialized identity disappears or changes' do
+    empty_module = Struct.new(
+      :name, :entities, :pages, :microflows, :nanoflows, :constants, :enumerations,
+      :scheduled_events, :module_security_id, :domain_documents
+    ).new('App', [], [], [], [], [], [], [], '', [])
+    project = Struct.new(:modules).new([empty_module])
+
+    missing = context
+    bind(missing, owner('Existing'))
+    expect { missing.reconcile!(project) }
+      .to raise_error(Mxrb::ValidationError, /missing materialized Ruby identity/)
+
+    changed = context
+    bind(changed, owner('Existing'))
+    empty_module.entities = [Struct.new(:name, :id).new('Existing', 'changed-id')]
+    expect { changed.reconcile!(project) }
+      .to raise_error(Mxrb::ValidationError, /materialized Ruby identity changed/)
+  end
+
+  it 'clears unmatched new identities and rejects ambiguous materialized records' do
+    module_type = Struct.new(
+      :name, :entities, :pages, :microflows, :nanoflows, :constants, :enumerations,
+      :scheduled_events, :module_security_id, :domain_documents
+    )
+    record_type = Struct.new(:name, :id)
+    project_type = Struct.new(:modules)
+
+    resolver = context([])
+    added = owner('Added')
+    bind(resolver, added)
+    empty = module_type.new('App', [], [], [], [], [], [], [], '', [])
+    expect(resolver.reconcile!(project_type.new([empty]))).to equal(resolver)
+    expect(resolver.bundle.fetch(:contents)).not_to include('App.Added')
+
+    ambiguous = context([])
+    duplicate = owner('Added')
+    bind(ambiguous, duplicate)
+    mod = module_type.new('App', [record_type.new('Added', ''), record_type.new('Added', '')],
+                          [], [], [], [], [], [], '', [])
+    expect { ambiguous.reconcile!(project_type.new([mod])) }
+      .to raise_error(Mxrb::ValidationError, /ambiguous materialized Ruby identity/)
   end
 
   it 'compiles and reexports a new model before an existing one with both identities preserved' do
