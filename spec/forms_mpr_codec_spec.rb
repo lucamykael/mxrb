@@ -338,4 +338,113 @@ RSpec.describe Mxrb::Forms::MprCodec do # rubocop:disable Metrics/BlockLength
     expect(documents.size).to eq(455)
     expect(documents).to all(include('$ID', '$Type'))
   end
+
+  it 'rejects values outside the typed Forms boundary' do
+    expect { codec.decode('Forms$TextBox') }.to raise_error(TypeError, /must be a Hash/)
+    expect { codec.encode(Object.new) }.to raise_error(TypeError, /typed widget node/)
+  end
+
+  it 'upgrades flattened widget fields to their typed equivalents' do
+    document = {
+      '$ID' => 'legacy', '$Type' => 'Forms$TextBox',
+      'AttributePath' => 'Sales.Order.Number', 'LabelText' => text_document('Order'),
+      'Class' => 'legacy-input', 'Style' => 'width: 10rem'
+    }
+
+    node = codec.decode(document)
+
+    expect(node.attribute_ref.to_s).to eq('Sales.Order.Number')
+    expect(node.label_template.template.to_s).to eq('Order')
+    expect(node.appearance.css_class).to eq('legacy-input')
+    expect(node.appearance.style).to eq('width: 10rem')
+    expect(node.appearance.design_properties).to eq([])
+  end
+
+  it 'consumes harmless legacy fields and rejects values that cannot be migrated' do
+    snippet = codec.decode('$ID' => 'snippet', '$Type' => 'Forms$Snippet', 'Entity' => '')
+    date_picker = codec.decode('$ID' => 'date', '$Type' => 'Forms$DatePicker', 'AutoFocus' => false)
+
+    expect(snippet.schema_type.name).to eq('Snippet')
+    expect(date_picker.schema_type.name).to eq('DatePicker')
+    expect do
+      codec.decode('$ID' => 'snippet', '$Type' => 'Forms$Snippet', 'Entity' => 'Sales.Order')
+    end.to raise_error(Mxrb::Forms::MprCodecError, /typed parameter migration/)
+    expect do
+      codec.decode('$ID' => 'date', '$Type' => 'Forms$DatePicker', 'AutoFocus' => true)
+    end.to raise_error(Mxrb::Forms::MprCodecError, /non-default obsolete/)
+  end
+
+  it 'decodes every structured external Forms value' do
+    condition = codec.send(:decode_external, 'Condition', '$currentObject/Active', path: '$.Condition')
+    structured_condition = codec.send(
+      :decode_external, 'Condition',
+      { '$Type' => 'Enumerations$Condition', 'AttributeValue' => 'Yes', 'EditableVisible' => false },
+      path: '$.Condition'
+    )
+    template = codec.send(
+      :decode_external, 'TextTemplate',
+      { 'Text' => text_document('Hello'), 'Parameters' => [2, { 'Expression' => '$name' }] },
+      path: '$.Template'
+    )
+
+    expect(condition.to_s).to eq('$currentObject/Active')
+    expect(structured_condition.attribute_value).to eq('Yes')
+    expect(template.parameters.map(&:expression).map(&:to_s)).to eq(['$name'])
+    expect(codec.send(:decode_blob, 'bytes'.b, path: '$.Blob').bytes).to eq('bytes')
+  end
+
+  it 'reports malformed external Forms storage' do
+    expect { codec.send(:decode_external, 'FutureValue', nil, path: '$.Future') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /unsupported external/)
+    expect { codec.send(:decode_attribute_reference, { '$Type' => 'Bad' }, path: '$.Attribute') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid AttributeReference/)
+    expect { codec.send(:decode_entity_reference, { '$Type' => 'Bad' }, path: '$.Entity') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid EntityReference/)
+    expect { codec.send(:decode_condition, {}, path: '$.Condition') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid Condition/)
+    expect { codec.send(:decode_text, 'bad', path: '$.Text') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid Text/)
+    expect { codec.send(:decode_text_template, 'bad', path: '$.Template') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid TextTemplate/)
+    expect { codec.send(:decode_blob, 42, path: '$.Blob') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /invalid binary asset/)
+  end
+
+  it 'enforces semantic references and strict structured data types' do
+    catalog = Mxrb::Forms::Catalog.for('11.12.1')
+    property = catalog.fetch_type('TabContainer').all_properties.find { _1.reference == :by_id }
+    invalid_type = { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Sales.Order', 'Future' => true }
+
+    expect(codec.send(:decode_reference, property, '00000000-0000-0000-0000-000000000000', path: '$.Ref')).to be_nil
+    expect { codec.send(:decode_reference, property, 'missing-id', path: '$.Ref') }
+      .to raise_error(Mxrb::Forms::UnresolvedStorageReferenceError, /semantic resolver/)
+    expect(codec.send(:reference_path, 'Sales.Order', 'Entity')).to eq('Sales.Order')
+    expect(codec.send(:reference_path, { 'EntityPath' => 'Sales.Line' }, 'Entity')).to eq('Sales.Line')
+    expect { codec.send(:decode_data_type, invalid_type, path: '$.Type') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /unsupported DataType field/)
+  end
+
+  it 'covers all legacy design-property migrations and typed encoders' do
+    values = {
+      'Toggle' => nil,
+      'Custom' => 'var(--brand)'
+    }.transform_values.with_index do |string_value, index|
+      codec.decode(
+        '$ID' => "design-#{index}", '$Type' => 'Forms$DesignPropertyValue',
+        'Key' => 'Legacy', 'Type' => index.zero? ? 'Toggle' : 'Custom',
+        'BooleanValue' => true, 'StringValue' => string_value.to_s
+      ).value
+    end
+    condition = Mxrb::Forms::Condition.when_value('Yes', visible: true)
+    template = Mxrb::Forms::TextTemplate.build('Hello', parameters: ['$name'])
+
+    expect(values.fetch('Toggle').schema_type.name).to eq('ToggleDesignPropertyValue')
+    expect(values.fetch('Custom').value).to eq('var(--brand)')
+    expect(codec.send(:encode_condition, condition).fetch('EditableVisible')).to be(true)
+    expect(codec.send(:encode_text_template, template, path: '$.Template').fetch('Parameters').length).to eq(2)
+    expect { codec.send(:decode_legacy_design_property, { 'Key' => 'X', 'Type' => 'Future' }, path: '$') }
+      .to raise_error(Mxrb::Forms::MprCodecError, /unsupported design property type/)
+    expect { codec.send(:encode_reference, Mxrb::Forms::Reference.to('missing', kind: :by_id), path: '$.Ref') }
+      .to raise_error(Mxrb::Forms::UnresolvedStorageReferenceError, /semantic resolver/)
+  end
 end
