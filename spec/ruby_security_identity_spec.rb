@@ -119,6 +119,17 @@ RSpec.describe Mxrb::RubyApp::SecurityIdentity do
     expect(described_class.new(manifest).project_security(project_declaration)).to eq(project_declaration)
   end
 
+  it 'fails closed for ambiguous modules and missing module-security documents' do
+    duplicate = { 'name' => 'App', 'module_security' => { 'id' => identity(10), 'roles' => [] } }
+    resolver = described_class.new(manifest(modules: [duplicate, duplicate.dup]))
+    expect { resolver.module_security({ module_name: 'App', id: '', roles: [] }) }
+      .to raise_error(Mxrb::ValidationError, /ambiguous private module/)
+
+    resolver = described_class.new(manifest(modules: [{ 'name' => 'App', 'module_security' => nil }]))
+    expect { resolver.module_security({ module_name: 'App', id: '', roles: [] }) }
+      .to raise_error(Mxrb::ValidationError, /requires its security identity baseline/)
+  end
+
   it 'preserves absent and explicitly removed policies and rejects missing declared policy baselines' do
     resolver = described_class.new(manifest(security: project_baseline))
     expect(resolver.project_security(project_declaration.merge(password_policy: nil))[:password_policy]).to be_nil

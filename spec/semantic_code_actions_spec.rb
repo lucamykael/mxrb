@@ -5,6 +5,14 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength
 RSpec.describe 'semantic code action documents' do
+  it 'omits optional image fields that were not declared' do
+    builder = Object.new.extend(Mxrb::Dsl::CodeActions)
+    document = builder.send(:code_action_info_document, caption: 'Run', category: 'Tests')
+
+    expect(document).to include('Caption' => 'Run', 'Category' => 'Tests')
+    expect(document.keys).not_to include('IconData', 'IconDataDark', 'ImageData', 'ImageDataDark')
+  end
+
   it 'round-trips Java and JavaScript action contracts as typed Ruby' do
     Dir.mktmpdir('mxrb-code-actions-') do |dir|
       source = File.join(dir, 'Actions.mpr')

@@ -108,6 +108,11 @@ RSpec.describe Mxrb do
   describe Mxrb::IO::BsonCodec do
     let(:uuid) { "c67c5271-da7d-45f1-81df-ceb6946b8abe" }
 
+    it "rejects supplying a document both positionally and through keywords" do
+      expect { described_class.serialize({ "one" => 1 }, two: 2) }
+        .to raise_error(Mxrb::SerializationError, /document supplied twice/)
+    end
+
     it "round-trips UUID through blob" do
       blob = described_class.uuid_to_blob(uuid)
       expect(blob.bytesize).to eq(16)

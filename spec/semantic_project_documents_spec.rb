@@ -9,6 +9,16 @@ PROJECT_DOCUMENT_TYPES = %w[
 ].freeze
 
 RSpec.describe 'semantic project documents' do
+  it 'rejects missing blocks, incomplete native storage, and mixed typed storage arguments' do
+    builder = Object.new.extend(Mxrb::Dsl::ProjectDocuments)
+
+    expect { builder.project_settings }.to raise_error(ArgumentError, /requires a block/)
+    expect { builder.system_text_collection(system_texts: []) }
+      .to raise_error(ArgumentError, /unit_id and container_id are required/)
+    expect { builder.system_text_collection(unit_id: 'private') {} }
+      .to raise_error(ArgumentError, /does not accept storage keywords/)
+  end
+
   it 'round-trips project settings and system texts as Ruby trees' do
     Dir.mktmpdir('mxrb-project-documents-') do |dir|
       source = File.join(dir, 'ProjectDocuments.mpr')

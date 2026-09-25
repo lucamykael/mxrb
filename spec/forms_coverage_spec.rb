@@ -29,6 +29,33 @@ RSpec.describe Mxrb::Forms::CoverageLedger do # rubocop:disable Metrics/BlockLen
       )
   end
 
+  it 'returns a complete report unchanged after every phase has evidence' do
+    widget = Struct.new(:name).new('Example')
+    property = Struct.new(:name).new('value')
+    entry = Mxrb::Forms::CoverageEntry.new(
+      widget, property, described_class::PHASES, 'complete fixture'
+    )
+    report = Mxrb::Forms::CoverageReport.new('test', [entry])
+
+    expect(report.assert_complete!).to equal(report)
+  end
+
+  it 'skips schema properties that the typed node cannot represent' do
+    property = Mxrb::Forms::Property.new(
+      'Future', 'future', 'UnsupportedWidget', 'UnknownFutureType', [].freeze,
+      :one, true, nil, nil
+    )
+    widget = Mxrb::Forms::Type.new(
+      'UnsupportedWidget', 'unsupported_widget', :element, false, nil,
+      [property].freeze, [property].freeze, [].freeze, true
+    )
+    catalog = Struct.new(:version, :concrete_widgets) do
+      def type(_identifier) = nil
+    end.new('future', [widget].freeze)
+
+    expect(described_class.for_node(catalog).report.count(:represented)).to be_zero
+  end
+
   it 'tracks clean Ruby emission separately from import and native compilation' do
     report = described_class.for_source_emitter.report
 

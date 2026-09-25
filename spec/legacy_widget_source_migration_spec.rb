@@ -49,6 +49,13 @@ RSpec.describe Mxrb::RubyApp::LegacyWidgetSourceMigration do
                      generated: 'file_manager "files"')).not_to be_regenerate
   end
 
+  it 'does not accept a generated page that still contains any native widget' do
+    embedded = 'native_widget "files", type: "Forms$FileManager"'
+    generated = "file_manager \"files\"\nnative_widget \"map\", type: \"Vendor$Map\""
+
+    expect(migration(embedded:, generated:)).not_to be_regenerate
+  end
+
   it 'keeps the generated typed page when restoring deprecated embedded source' do
     Dir.mktmpdir do |root|
       relative = 'app/pages/demo_page.rb'

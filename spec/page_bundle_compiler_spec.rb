@@ -1183,6 +1183,14 @@ RSpec.describe Mxrb::Compiler::ImageBundleCompiler do
     expect(described_class.javascript(test: 1)).to eq('{ "test": 1 }')
     expect(described_class.unit(nil)).to eq('auto')
     expect(described_class.number(nil, 7)).to eq(7)
+    static = described_class.render_static(
+      'image-key', 'brand', 'Demo$Assets$Logo.png',
+      width_unit: 'PX', width: 80, height_unit: nil, height: nil, responsive: true
+    )
+    expect(static).to include(
+      'React.createElement($Image', 'Demo$Assets$Logo.png', '"widthUnit": "px"',
+      '"heightUnit": "auto"', '"height": 100'
+    )
     expect(compiler.send(:translated_text, nil)).to eq('')
     compiler.instance_variable_set(:@values, {})
     expect(compiler.send(:primitive, 'missing')).to be_nil

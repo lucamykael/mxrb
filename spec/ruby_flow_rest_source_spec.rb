@@ -51,6 +51,8 @@ RSpec.describe 'Ruby REST header declarations' do
 
   it 'rejects mixing and invalid blocks without installing a partial REST activity' do
     flow = builder
+    expect { flow.call_rest(**options) { header Object.new, 'Value' } }
+      .to raise_error(TypeError, /name requires a String or Symbol/)
     expect { flow.call_rest(**options, headers: {}) { header 'Name', 'Value' } }
       .to raise_error(ArgumentError, /either headers:/)
     expect do
