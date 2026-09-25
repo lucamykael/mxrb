@@ -28,6 +28,7 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
           properties do
             property :name, :string
             property :run, :action
+            property :source, :data_source
             property :content, :widgets
           end
         end
@@ -128,6 +129,18 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
            )).to be_nil
   end
 
+  it 'builds a complete bridge through the application context' do
+    context = instance_double(Mxrb::RubyApp::PluggableContext)
+    allow(Mxrb::RubyApp::PluggableContext).to receive(:current).and_return(context)
+    allow(context).to receive(:for_widget).with('example', widget_id:).and_return(
+      described_class.new(widget_id, catalog:)
+    )
+
+    bridge = described_class.try_for_widget('example', widget_id:, properties: projection)
+
+    expect(bridge.to_projection.to_a).to eq(projection.to_a)
+  end
+
   it 'projects actions and XPath data sources through semantic constructors' do
     bridge = described_class.build(widget_id, catalog:) do
       set :action, action(
@@ -202,6 +215,30 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.source_expression(:objects)).not_to include('{', '=>')
   end
 
+  it 'validates malformed semantic collections and emits nested data sources' do
+    bridge = described_class.new(widget_id, catalog:)
+    expect { bridge.action(kind: :page, handler: 'App.Home', arguments: [1]) }
+      .to raise_error(ArgumentError, /Array of pairs/)
+    source = bridge.data_source(
+      entity: 'App.Item', sort: [{ attribute: 'App.Item.Name', direction: :descending }]
+    )
+    expect(source.sort).to eq([['App.Item.Name', 'descending']])
+
+    invalid = bridge.objects { object { set :missing, 'value' } }
+    expect { bridge.set(:objects, invalid) }.to raise_error(described_class::UnsupportedProjection)
+
+    nested = bridge.objects do
+      object do
+        set :name, 'First'
+        set :source, data_source(entity: 'App.Item')
+      end
+    end
+    bridge.set(:objects, nested)
+    expect(bridge.source_expression(:objects)).to include(
+      'set "source", data_source(entity: "App.Item", xpath: "")'
+    )
+  end
+
   it 'rejects decimal precision loss and attributed contexts without publishing a partial update' do
     bridge = described_class.build(widget_id, catalog:) { set :title, 'Original' }
     expect { bridge.set(:price, '0.123456789012345678901') }.to raise_error(described_class::UnsupportedProjection)
@@ -244,6 +281,13 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     foreign = Mxrb::Pluggable.reference(:microflow, 'App.Flow')
     expect { bridge.set(:image, foreign) }.to raise_error(TypeError)
     expect(bridge.to_projection).to eq({})
+    image_reference = Mxrb::Pluggable.reference(:image, 'App.Images.Photo')
+    expect { bridge.set(:image, image_reference) }.not_to raise_error
+    structured = Mxrb::Forms::Node.build('ClientTemplate') do
+      template 'Caption'
+      fallback 'Fallback'
+    end
+    expect { bridge.set(:label, structured) }.to raise_error(described_class::UnsupportedProjection)
     image = +'App.Images.Photo'
     bridge.set(:image, image)
     image.replace('changed')

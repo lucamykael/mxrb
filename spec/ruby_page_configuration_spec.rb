@@ -174,6 +174,23 @@ RSpec.describe 'private Ruby page configuration' do
     end
   end
 
+  it 'rejects design shape changes and duplicate semantic keys' do
+    _, projection = emitted_widgets([widget])
+    projection.first.dig('options', 'design_properties').first.delete('option')
+    projection.first.dig('options', 'design_properties').first['properties'] = []
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([widget])) do
+      expect { Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection) }
+        .to raise_error(Mxrb::ValidationError, /changed between option and compound/)
+    end
+
+    duplicate = Marshal.load(Marshal.dump(widget))
+    duplicate.dig('options', 'design_properties') << design.merge('id' => '', 'value_id' => '')
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([widget])) do
+      expect { Mxrb::RubyApp::PageDesignIdentity.restore(page_id, [duplicate]) }
+        .to raise_error(Mxrb::ValidationError, /duplicate design property key/)
+    end
+  end
+
   it 'restores nested project contexts after exceptions without leaking IDs between applications' do
     _, projection = emitted_widgets([widget])
     changed = Marshal.load(Marshal.dump(widget))

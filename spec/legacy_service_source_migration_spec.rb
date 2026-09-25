@@ -37,6 +37,51 @@ RSpec.describe Mxrb::RubyApp::LegacyServiceSourceMigration do
     )
   end
 
+  it 'migrates explicit self receivers while ignoring singleton APIs' do
+    source = <<~RUBY
+      class Process < Mxrb::RubyApp::Service
+        self.native :microflow do
+        end
+        self.native(:nanoflow) do
+        end
+
+        def call(arguments)
+          self.native_call(arguments)
+        end
+
+        class << self
+          def native_call(arguments) = arguments
+        end
+
+        def self.native_call(arguments) = arguments
+      end
+    RUBY
+    migrated = migrate('app/services/process.rb', source)
+
+    expect(migrated).to include('self.flow :microflow', 'self.flow(:nanoflow)', 'self.execute_flow(arguments)')
+    expect(migrated.scan('def native_call').size).to eq(1)
+    expect(migrated).to include('def self.native_call')
+  end
+
+  it 'does not infer service semantics from unrelated call and constant shapes' do
+    source = <<~RUBY
+      class Local < Service
+        other.native(:microflow)
+      end
+      class Dynamic < service_class
+        native :microflow
+      end
+      class Absolute < ::Mxrb::RubyApp::Service
+        native :microflow
+      end
+    RUBY
+
+    migrated = migrate('app/services/shapes.rb', source)
+    expect(migrated).to include('class Local < Service', 'other.native(:microflow)',
+                                'class Dynamic < service_class', 'native :microflow',
+                                'class Absolute < ::Mxrb::RubyApp::Service', 'flow :microflow')
+  end
+
   it 'does not rewrite non-service embedded sources' do
     source = "native :microflow\nnative_call(arguments)\n"
 
