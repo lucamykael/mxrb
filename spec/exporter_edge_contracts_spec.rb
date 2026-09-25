@@ -263,5 +263,63 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(rest).to include('result_handling: :string', 'as: :Body')
     expect(exporter.send(:ruby_val, 'hello world')).to eq('"hello world"')
   end
+
+  it 'renders enum flow types, event arguments, pluggable bodies, and container events' do
+    expect(exporter.send(
+             :flow_type_source,
+             '$Type' => 'DataTypes$EnumerationType', 'Enumeration' => 'App.State'
+           )).to eq('enum_of("App.State")')
+    event = { event: :on_click, kind: :microflow, handler: 'App.Run', arguments: { Input: '$value' } }
+    expect(exporter.send(:render_widget_event, event, 2)).to include('pass:')
+    pluggable = {
+      type: :pluggable_widget, name: 'Grid',
+      options: { widget_id: 'Vendor.Grid' },
+      slots: [{ path: [:content], widgets: [] }], events: [event]
+    }
+    expect(exporter.send(:render_widget, pluggable, 0).join("\n"))
+      .to include('pluggable_widget :Grid', 'slot :content', 'on_click')
+    container = { type: :container, name: 'Box', options: {}, children: [], events: [event] }
+    expect(exporter.send(:render_widget, container, 0).join("\n"))
+      .to include('container :Box do', 'on_click')
+    expect(exporter.send(:direct_widget_children, type: :container,
+                                                  slots: [{ widgets: [{ name: 'Nested' }] }]))
+      .to eq([{ name: 'Nested' }])
+  end
+
+  it 'recognizes editable string REST and export-XML actions and emits break loops' do
+    string_rest = {
+      '$Type' => 'Microflows$RestCallAction',
+      'HttpConfiguration' => {
+        'HttpMethod' => 'Get', 'HttpHeaderEntries' => [2],
+        'CustomLocationTemplate' => { 'Parameters' => [2] }
+      },
+      'RequestHandling' => {
+        '$Type' => 'Microflows$MappingRequestHandling', 'MappingId' => 'App.Request'
+      },
+      'ResultHandlingType' => 'String',
+      'ResultHandling' => {
+        'Bind' => true, 'ImportMappingCall' => nil, 'ResultVariableName' => 'Body',
+        'VariableType' => { '$Type' => 'DataTypes$StringType' }
+      }
+    }
+    expect(exporter.send(:editable_action?, string_rest)).to be(true)
+
+    export_xml = {
+      '$Type' => 'Microflows$ExportXmlAction',
+      'OutputMethod' => {
+        '$Type' => 'ExportXmlAction$StringExport', 'OutputVariableName' => 'Body'
+      },
+      'ResultHandling' => {
+        '$Type' => 'Microflows$MappingRequestHandling', 'ContentType' => 'Json',
+        'MappingId' => 'App.Export', 'MappingVariableName' => 'Input'
+      },
+      'IsValidationRequired' => false
+    }
+    expect(exporter.send(:editable_action?, export_xml)).to be(true)
+    expect(exporter.send(:action_dsl_line, { 'Action' => export_xml }, 0)).to include('export_xml')
+    break_event = { '$ID' => 'break', '$Type' => 'Microflows$BreakEvent' }
+    expect(exporter.send(:body_dsl_lines, [break_event], [], 4, nested: true))
+      .to eq(['    break_loop'])
+  end
 end
 # rubocop:enable Metrics/BlockLength

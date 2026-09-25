@@ -40,6 +40,12 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     }
     manifest = exporter.send(:export_scheduled_event, mod, event, 'Sales', 'sales')
     expect(manifest.fetch('schedule')).to include('type' => 'ScheduledEvents$Daily')
+    event['Name'] = 'Detached'
+    event['Schedule'] = nil
+    event['Enabled'] = false
+    event['Microflow'] = ''
+    expect(exporter.send(:export_scheduled_event, mod, event, 'Sales', 'sales'))
+      .to include('schedule' => nil, 'unbound' => true)
 
     attribute = double(id: 'attribute-id', name: 'Code')
     entity = double(attributes: [attribute], qualified_name: 'Sales.Order')
@@ -166,6 +172,10 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     } }
     expect(exporter.send(:runtime_widget_call_source, gallery, 0, generic_sink: true)).to include('sort_by')
     expect(exporter.send(:runtime_design_property_supported?, 'future')).to be(false)
+    expect(exporter.send(
+             :runtime_design_property_supported?,
+             'id' => 'id', 'key' => 'key', 'value_id' => 'value'
+           )).to be(false)
 
     one = double(name: 'Run', id: '')
     two = double(name: 'Run', id: 'two')

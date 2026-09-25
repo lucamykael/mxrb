@@ -759,27 +759,24 @@ module Mxrb
       source = "#{module_name}.#{entity_name}" if source.empty? && !query.nil?
       declared_id = declaration[:source_id].to_s
 
-      unless source.empty?
-        key = native_existing_key(entity, "source", "Source") || "Source"
-        previous = entity[key].is_a?(Hash) ? entity[key] : {}
-        previous_id = IO::BsonCodec.extract_id(previous["$ID"])
-        if !declared_id.empty? && previous_id && declared_id != previous_id
-          raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
-        end
-        source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
-                     "SourceDocument"
-        normalized = previous.merge(
-          "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
-          "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
-        )
-        %w[oql Oql OQL].each { normalized.delete(_1) }
-        entity[key] = normalized
-        %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
+      key = native_existing_key(entity, "source", "Source") || "Source"
+      previous = entity[key].is_a?(Hash) ? entity[key] : {}
+      previous_id = IO::BsonCodec.extract_id(previous["$ID"])
+      if !declared_id.empty? && previous_id && declared_id != previous_id
+        raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
       end
-      return if query.nil? || !source.empty?
+      source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
+                   "SourceDocument"
+      normalized = previous.merge(
+        "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
+        "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
+      )
+      %w[oql Oql OQL].each { normalized.delete(_1) }
+      entity[key] = normalized
+      %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
 
-      query_key = native_existing_key(entity, "oqlQuery", "OqlQuery", "OQLQuery") || "OqlQuery"
-      entity[query_key] = query.to_s
+      # Inline queries are normalized to a named source above; the matching
+      # ViewEntitySourceDocument is synchronized separately.
     end
 
     def synchronize_ruby_oql_member_values!(entity)

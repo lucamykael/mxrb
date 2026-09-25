@@ -19,6 +19,10 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       writer.send(:validate_ruby_indexes!, [{ members: [{ name: :Future, type: :Future }] }],
                   {}, 'App', 'Item')
     end.to raise_error(Mxrb::ValidationError, /unknown indexed system member/)
+    expect do
+      writer.send(:validate_ruby_indexes!, [{ members: [{ name: :Owner, type: :Owner }] }],
+                  {}, 'App', 'Item')
+    end.not_to raise_error
 
     expect do
       writer.send(:validate_ruby_scheduled_events!, 'App', [
@@ -34,6 +38,57 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       writer.send(:ruby_unbound_scheduled_event_doc,
                   { name: 'Bad', start_at: 'not-a-date', interval: 1 }, {}, 'id')
     end.to raise_error(Mxrb::ValidationError, /invalid start time/)
+  end
+
+  it 'rejects inconsistent regular-expression collections before writing' do
+    raw_module = { 'UnitID' => 'module-id' }
+    expression_id = '11111111-1111-4111-8111-111111111111'
+    other_id = '22222222-2222-4222-8222-222222222222'
+    raw_expression = { 'UnitID' => expression_id }
+    raw_other = { 'UnitID' => other_id }
+    native = {
+      '$ID' => expression_id, '$Type' => Mxrb::RubyApp::RegularExpression::TYPE,
+      'Name' => 'Email', 'Expression' => '.+'
+    }
+    mpr = double(root_unit: { 'UnitID' => 'root' }, unit: nil, all_units: [])
+    allow(writer).to receive(:find_named).and_return(raw_module)
+    allow(writer).to receive(:collect_documents).and_return([raw_expression, raw_other])
+    allow(mpr).to receive(:parse_contents).with(raw_expression).and_return(native)
+    allow(mpr).to receive(:parse_contents).with(raw_other).and_return(
+      '$ID' => other_id, '$Type' => Mxrb::RubyApp::RegularExpression::TYPE,
+      'Name' => 'Other', 'Expression' => '.+'
+    )
+
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App',
+             expressions: [{ name: '', properties: { 'Expression' => '.+' } }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /duplicate or empty/)
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App',
+             expressions: [{ name: 'Other', id: expression_id, properties: { 'Expression' => '.+' } }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /conflicts with its native name/)
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App',
+             expressions: [{ name: 'Email', properties: {}, absent_properties: %w[Expression Future] }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /presence metadata/)
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App', expressions: [{ name: 'New', properties: {} }]
+      )
+    end.to raise_error(Mxrb::ValidationError, /requires its expression String/)
+    expect do
+      writer.plan_ruby_regular_expressions(
+        mpr, module_name: 'App',
+             expressions: [{ name: 'Email', properties: { 'Expression' => '.+' } }],
+             remove_ids: [expression_id]
+      )
+    end.to raise_error(Mxrb::ValidationError, /both retained and removed/)
   end
 
   it 'encodes table and layout-grid structures including visibility and nested widgets' do
@@ -178,6 +233,136 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       :client_template_doc, 'Hello {1}', parameters: ['$currentObject/Name'], entity: 'App.Order'
     )
     expect(Mxrb::IO::BsonCodec.parse_array(template['Parameters'])[:items]).not_to be_empty
+  end
+
+  it 'validates typed project-document versions and inserts missing system texts' do
+    legacy = described_class.new('legacy.mpr', version: '10.24.0', modules: [])
+    legacy.instance_variable_get(:@definition)[:project_settings_model] = Object.new
+    expect { legacy.send(:write_typed_project_settings, double, 'root') }
+      .to raise_error(Mxrb::ValidationError, /supports Mendix 11 only/)
+    expect { legacy.send(:write_system_texts, double, 'root', Object.new) }
+      .to raise_error(Mxrb::ValidationError, /supports Mendix 11 only/)
+
+    mpr = double(children_of: [])
+    codec = instance_double(Mxrb::SystemTexts::MprCodec)
+    allow(Mxrb::SystemTexts::MprCodec).to receive(:new).and_return(codec)
+    allow(codec).to receive(:encode).and_return('$Type' => Mxrb::SystemTexts::MprCodec::COLLECTION_TYPE)
+    expect(mpr).to receive(:insert_unit).with(
+      container_uuid: 'root', containment_name: 'ProjectDocuments', contents_doc: anything
+    )
+    writer.send(:write_system_texts, mpr, 'root', Object.new)
+  end
+
+  it 'resolves, rejects, and relocates native document identities' do
+    raw = { 'UnitID' => 'unit-id', 'ContainerID' => 'module-id' }
+    mpr = double
+    allow(mpr).to receive(:unit).and_return(raw)
+    allow(mpr).to receive(:parse_contents).with(raw)
+                                          .and_return('$Type' => 'Forms$Page', 'Name' => 'Existing')
+    expect do
+      writer.send(
+        :upsert_native_unit, mpr, 'module-id',
+        'unit_id' => 'unit-id', 'containment' => 'Documents',
+        'doc' => { '$Type' => 'Forms$Page', 'Name' => 'Changed' }
+      )
+    end.to raise_error(Mxrb::ValidationError, /native unit unit-id/)
+
+    candidates = [{ 'UnitID' => 'one' }, { 'UnitID' => 'two' }]
+    allow(mpr).to receive(:unit).and_return(nil)
+    allow(mpr).to receive(:children_of).and_return(candidates)
+    allow(mpr).to receive(:parse_contents).and_return(
+      '$Type' => 'Microflows$Microflow', 'Name' => 'Run'
+    )
+    expect do
+      writer.send(
+        :upsert_native_unit, mpr, 'module-id',
+        'containment' => 'Documents',
+        'doc' => { '$Type' => 'Microflows$Microflow', 'Name' => 'Run' }
+      )
+    end.to raise_error(Mxrb::ValidationError, /ambiguous native/)
+
+    expect(mpr).to receive(:relocate_unit).with(
+      'unit-id', container_uuid: 'folder-id', containment_name: 'Documents'
+    )
+    writer.send(:relocate_root_document, mpr, raw, 'module-id', 'folder-id')
+  end
+
+  it 'validates duplicate flow identities and document target stability' do
+    expect do
+      writer.send(:validate_flow_identities!, [{ name: 'Run' }, { name: 'Run' }], 'microflow')
+    end.to raise_error(Mxrb::ValidationError, /distinct unit ids/)
+
+    candidates = [{ 'UnitID' => 'one' }, { 'UnitID' => 'two' }]
+    mpr = double(unit: nil)
+    allow(mpr).to receive(:parse_contents).and_return(
+      'Name' => 'Run', '$Type' => 'Microflows$Microflow'
+    )
+    expect do
+      writer.send(
+        :resolve_document_target, mpr, 'module-id', candidates,
+        { 'Name' => 'Run', '$Type' => 'Microflows$Microflow' }, '', allow_name_fallback: true
+      )
+    end.to raise_error(Mxrb::ValidationError, /ambiguous Microflows\$Microflow/)
+
+    stable = { 'UnitID' => 'stable' }
+    allow(mpr).to receive(:unit).with('stable').and_return(stable)
+    allow(mpr).to receive(:parse_contents).with(stable)
+                                          .and_return('Name' => 'Other', '$Type' => 'Forms$Page')
+    expect do
+      writer.send(
+        :resolve_document_target, mpr, 'module-id', [],
+        { 'Name' => 'Home', '$Type' => 'Forms$Page' }, 'stable', allow_name_fallback: true
+      )
+    end.to raise_error(Mxrb::ValidationError, /document unit stable/)
+
+    allow(mpr).to receive(:parse_contents).with(stable)
+                                          .and_return('Name' => 'Home', '$Type' => 'Forms$Page')
+    allow(writer).to receive(:collect_documents).and_return([])
+    expect do
+      writer.send(
+        :resolve_document_target, mpr, 'module-id', [],
+        { 'Name' => 'Home', '$Type' => 'Forms$Page' }, 'stable', allow_name_fallback: true
+      )
+    end.to raise_error(Mxrb::ValidationError, /outside module/)
+  end
+
+  it 'encodes overlay pages, deep menus, nested page attributes, and rescue breaks' do
+    page = writer.send(
+      :page_doc,
+      {
+        name: 'Home', unit_id: nil, write_mode: :overlay,
+        deep_structure: { '$Type' => 'Forms$Page', 'Future' => true },
+        widgets: [], allowed_roles: nil, public: false
+      }, 'App'
+    )
+    expect(page.fetch('__mxrb_page_overlay')).to include(widgets: [], encoded_widgets: [])
+    menu = writer.send(:menu_doc, name: 'Main', deep_structure: { '$Type' => 'Menus$MenuDocument' })
+    expect(menu).to include('$Type' => 'Menus$MenuDocument', 'Name' => 'Main')
+
+    widgets = [{
+      type: :container,
+      slots: [{ widgets: [{ type: :text_box, options: { attribute: 'SlotName' } }] }],
+      children: [], body: [], footer: [],
+      regions: {},
+      options: { rows: [{
+        cells: [{ widgets: [{ type: :text_box, options: { attribute: 'CellName' } }] }],
+        columns: [{ widgets: [{ type: :text_box, options: { attribute: 'ColumnName' } }] }]
+      }] }
+    }]
+    expect(writer.send(:simple_page_attributes, widgets))
+      .to contain_exactly('SlotName', 'CellName', 'ColumnName')
+
+    graph = writer.send(
+      :build_microflow_graph,
+      [{ type: :rescue_all, activities: [{ type: :break_event }] }], ''
+    )
+    expect(graph.fetch(:objects)).to include(include('$Type' => 'Microflows$BreakEvent'))
+    action = writer.send(
+      :activity_action_doc,
+      type: :export_xml, variable: 'Input', mapping: 'App.Export', output: 'Text',
+      content_type: :xml, error: :rollback
+    )
+    expect(action).to include('$Type' => 'Microflows$ExportXmlAction')
   end
 end
 # rubocop:enable Metrics/BlockLength
