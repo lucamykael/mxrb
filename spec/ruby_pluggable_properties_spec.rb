@@ -237,6 +237,8 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.source_expression(:objects)).to include(
       'set "source", data_source(entity: "App.Item", xpath: "")'
     )
+    empty_objects = described_class::ObjectListValue.new([].freeze)
+    expect(bridge.send(:semantic_source, empty_objects, 0)).to eq("objects do\n\nend")
   end
 
   it 'rejects decimal precision loss and attributed contexts without publishing a partial update' do

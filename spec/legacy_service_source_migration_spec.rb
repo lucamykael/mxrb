@@ -80,6 +80,9 @@ RSpec.describe Mxrb::RubyApp::LegacyServiceSourceMigration do
     expect(migrated).to include('class Local < Service', 'other.native(:microflow)',
                                 'class Dynamic < service_class', 'native :microflow',
                                 'class Absolute < ::Mxrb::RubyApp::Service', 'flow :microflow')
+    migration = described_class.new(path: 'app/services/shapes.rb', source: '')
+    expect(migration.send(:call_identifier, [:call, [:vcall, [:@ident, 'other']], :'.', [:@ident, 'native']]))
+      .to be_nil
   end
 
   it 'does not rewrite non-service embedded sources' do

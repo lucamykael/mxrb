@@ -48,7 +48,7 @@ RSpec.describe Mxrb::StudioSchemaCatalog do # rubocop:disable Metrics/BlockLengt
 
   it 'extracts files and bridges FormBase to document properties' do
     source = <<~JAVASCRIPT.delete("\n")
-      f=x.element({type:x.schemaType(N,"FormBase"),properties:{own:x.string()}}),
+      f=y.element({type:y.schemaType(Z,"FormBase"),properties:{own:y.string()}}),
       w=f.extend({type:x.schemaType(N,"Widget"),properties:{}}),
       d=w.extend({type:x.schemaType(N,"DataView"),properties:{}}),
       p=w.extend({type:x.schemaType(N,"Page"),properties:{}})
