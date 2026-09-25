@@ -107,5 +107,50 @@ RSpec.describe Mxrb::RubyApp::LegacyServiceSourceMigration do
       )
     end
   end
+
+  it 'keeps regenerated public projections instead of restoring generated legacy identities' do
+    Dir.mktmpdir('mxrb-legacy-public-projection-') do |dir|
+      exporter = Mxrb::RubyApp::Exporter.allocate
+      exporter.instance_variable_set(:@output_dir, dir)
+      relative = 'app/constants/app/environment.rb'
+      generated = File.join(dir, relative)
+      FileUtils.mkdir_p(File.dirname(generated))
+      File.write(generated, "mendix_name \"App.Environment\"\n")
+      legacy = "mendix_name \"App.Environment\", id: \"#{SecureRandom.uuid}\"\n"
+
+      exporter.send(:restore_embedded_sources, [
+                      {
+                        path: relative, contents: legacy,
+                        sha256: Digest::SHA256.hexdigest(legacy), mode: 0o644
+                      }
+                    ])
+
+      expect(File.read(generated)).to eq("mendix_name \"App.Environment\"\n")
+    end
+  end
+
+  it 'regenerates standard legacy services but preserves custom Ruby methods' do
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    legacy = <<~RUBY
+      class Run < Mxrb::RubyApp::Service
+        mendix_name "App.Run", id: "#{SecureRandom.uuid}"
+        def call(**arguments)
+          native_call(arguments)
+        end
+      end
+    RUBY
+    custom = legacy.sub('native_call(arguments)', 'CustomRunner.call(arguments)')
+
+    expect(exporter.send(:regenerate_legacy_public_projection?,
+                         'app/services/app/run.rb', legacy, __FILE__)).to be(true)
+    expect(exporter.send(:regenerate_legacy_public_projection?,
+                         'app/services/app/run.rb', custom, __FILE__)).to be(false)
+    expect(exporter.send(:regenerate_legacy_public_projection?,
+                         'app/models/app/item.rb', custom, __FILE__)).to be(false)
+    expect(exporter.send(:regenerate_legacy_public_projection?,
+                         'config/adapters.rb', legacy, __FILE__)).to be(false)
+    expect(exporter.send(:regenerate_legacy_public_projection?,
+                         'app/services/app/run.rb', legacy, '/missing/generated.rb')).to be(false)
+  end
 end
 # rubocop:enable Metrics/BlockLength

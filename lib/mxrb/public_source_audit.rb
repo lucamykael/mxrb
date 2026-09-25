@@ -14,15 +14,10 @@ module Mxrb
       native_fragment native_fragments native_unit native_units native_widget native_widgets
       native_document native_documents form_structure deep_structure bson_binary TypePointer
     ].freeze
-    STORAGE_SCHEMA = /(?:
-      ["']\$(?:ID|Type)["'] |
-      \b(?:node_type|fields|collection|marker): |
-      :(?:node_type|fields|collection|marker)\b
-    )/x
+    STORAGE_SCHEMA_KEYS = %w[$ID $Type node_type fields collection marker].freeze
     SIDECAR_REFERENCE = %r{(?:File\.join\([^\n]*["']\.mxrb["']|["']\.mxrb/)}
     TEXT_PATTERNS = {
-      uuid: UUID, digest: DIGEST, storage_schema: STORAGE_SCHEMA,
-      sidecar_reference: SIDECAR_REFERENCE
+      uuid: UUID, digest: DIGEST, sidecar_reference: SIDECAR_REFERENCE
     }.freeze
 
     Violation = Data.define(:category, :subsystem, :path, :line, :excerpt) do
@@ -76,6 +71,7 @@ module Mxrb
       subsystem = subsystem_for(relative)
       lines = source.lines
       violations = ast_hashes(source, relative, subsystem, lines)
+      violations.concat(ast_storage_keys(source, relative, subsystem, lines))
       violations.concat(pattern_violations(source, relative, subsystem, lines))
       violations << violation(:syntax_error, subsystem, relative, 1, lines) unless Ripper.sexp(source)
       violations
@@ -88,6 +84,19 @@ module Mxrb
       find_nodes(sexp, :hash).map do |node|
         line = first_location(node)&.first || 1
         violation(:hash_literal, subsystem, relative, line, lines)
+      end
+    end
+
+    def ast_storage_keys(source, relative, subsystem, lines)
+      sexp = Ripper.sexp(source)
+      return [] unless sexp
+
+      find_nodes(sexp, :assoc_new).filter_map do |node|
+        token = first_token(node[1])
+        name = token&.[](1).to_s.delete_suffix(':')
+        next unless STORAGE_SCHEMA_KEYS.include?(name)
+
+        violation(:storage_schema, subsystem, relative, token[2].first, lines)
       end
     end
 
@@ -150,6 +159,17 @@ module Mxrb
       value.each do |child|
         location = first_location(child)
         return location if location
+      end
+      nil
+    end
+
+    def first_token(value)
+      return unless value.is_a?(Array)
+      return value if value.first.to_s.start_with?('@') && value[2].is_a?(Array)
+
+      value.each do |child|
+        token = first_token(child)
+        return token if token
       end
       nil
     end

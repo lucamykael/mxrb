@@ -35,6 +35,13 @@ module Mxrb
       RECORD_RESERVED = %w[attributes id initialize mendix_id mendix_name to_h type].freeze
       ZERO_UUID = '00000000-0000-0000-0000-000000000000'
       SYSTEM_INDEX_MEMBER_TYPES = %w[Owner CreatedDate ChangedDate ChangedBy].freeze
+      LEGACY_PUBLIC_PROJECTION_PATH = %r{\Aapp/(?:
+        constants|dtos|enumerations|models|pages|scheduled_events|security|services
+      )/.+\.rb\z}x
+      LEGACY_PUBLIC_IDENTITY = /^\s*(?:
+        mendix_name\s+['"][^'"]+['"],\s+id: |
+        mendix_id\s+['"]
+      )/x
 
       def initialize(mpr_path, output_dir, mendix_sidecar:)
         @mpr_path = File.expand_path(mpr_path)
@@ -135,6 +142,10 @@ module Mxrb
 
           path = RubyApp.safe_source_path(@output_dir, file.fetch(:path))
           FileUtils.mkdir_p(File.dirname(path))
+          if regenerate_legacy_public_projection?(file.fetch(:path), contents, path)
+            File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
+            next
+          end
           if regenerate_legacy_widget_page?(file, path)
             File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
             next
@@ -143,6 +154,19 @@ module Mxrb
           File.binwrite(path, contents)
           File.chmod(RubyApp.safe_source_mode(file[:mode], file.fetch(:path)), path)
         end
+      end
+
+      def regenerate_legacy_public_projection?(relative, embedded, generated)
+        return false unless LEGACY_PUBLIC_PROJECTION_PATH.match?(relative)
+        return false unless File.file?(generated) && embedded.match?(LEGACY_PUBLIC_IDENTITY)
+
+        definitions = embedded.scan(/^\s*def\s+(?:self\.)?([^\s(]+)/).flatten
+        return true if definitions.empty?
+        return false unless relative.start_with?('app/services/') && definitions == ['call']
+
+        embedded.match?(
+          /def\s+call\(\*\*arguments\)\s+(?:native_call|execute_flow)\(arguments\)\s+end/m
+        )
       end
 
       def regenerate_legacy_widget_page?(file, generated_path)

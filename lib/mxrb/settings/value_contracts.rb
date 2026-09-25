@@ -40,7 +40,9 @@ module Mxrb
         'RoundingMode' => %w[HalfUp HalfEven Down Up Floor Ceiling],
         'DefaultAssociationStorage' => %w[Column Table],
         'DefaultSequenceFlowLineType' => %w[BezierCurve Straight],
-        'DatabaseType' => %w[Hsqldb PostgreSQL SQLServer Oracle MySQL],
+        # Studio 11 has emitted both spellings across real projects. Preserve
+        # the stored spelling so a typed round trip remains byte-semantic.
+        'DatabaseType' => %w[Hsqldb PostgreSQL PostgreSql SQLServer Oracle MySQL],
         'Type' => %w[Authority Client]
       }.transform_values(&:freeze).freeze
       INTEGER_RANGES = {
