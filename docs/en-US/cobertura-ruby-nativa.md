@@ -39,17 +39,12 @@ per Mendix version with `mxbuild`, Studio Pro, and semantic comparison.
 Unknown variants remain fail-closed: they are preserved and reported, never
 silently converted or discarded.
 
-## Current measurable deficit
+## Current measurable coverage
 
-The September 25 strict suite passed 1,832 examples but still measures 97.12%
-of lines (35,711/36,769) and 90.92% of branches (14,475/15,920). Reaching the
-100/100 gate therefore requires another 1,058 executable lines and 1,445
-branches. The largest gaps are in `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
-`ruby_app/exporter.rb`, and `forms/mpr_codec.rb`; none were removed from the
-denominator. `writer/page_overlay.rb` reached 100/100 in this audit, while the
-lossless widget projection slice keeps scalar properties, actions, XPath
-sources, and object lists in Ruby without exposing BSON. CI remains at 96/89
-until real tests close the balance.
+The strict suite passed 2,065 examples and measures 100.00% of
+lines (36,788/36,788) and 100.00% of branches (15,926/15,926). No executable
+library code was removed from the denominator to reach the gate. CI enforces
+the same 100/100 floor.
 
 Code coverage alone does not complete functional coverage: layouts, snippets,
 building blocks, menus, integrations, workflows, and task pages remain

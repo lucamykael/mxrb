@@ -276,13 +276,13 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 1,832 examples and passes with 97.12% line coverage
-(35,711/36,769 executable library lines) and 90.92% branch coverage
-(14,475/15,920 branches).
+The current suite contains 2,065 examples and passes with 100.00% line coverage
+(36,788/36,788 executable library lines) and 100.00% branch coverage
+(15,926/15,926 branches).
 Run the enforced gate with:
 
 ```sh
-MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
+MXRB_COVERAGE=1 bundle exec rspec
 ```
 
 The Ruby evaluation CLI was also exercised against the Mendix 11.12.1 Sudoku

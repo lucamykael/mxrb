@@ -70,6 +70,17 @@ RSpec.describe Mxrb::Progress do
     expect(output.string).to include('FAILED', 'Importing', 'invalid package')
   end
 
+  it 'reraises setup failures before a progress task exists' do
+    output = ProgressTtyBuffer.new
+    described_class.configure(enabled: true, io: output)
+    allow(described_class::Task).to receive(:new).and_raise(Mxrb::Error, 'cannot create progress task')
+
+    expect do
+      described_class.with('Importing') { raise 'unreachable' }
+    end.to raise_error(Mxrb::Error, 'cannot create progress task')
+    expect(output.string).to be_empty
+  end
+
   it 'supports dynamic totals, clamping, nested operations, and every terminal shape' do
     output = ProgressTtyBuffer.new
     task = described_class::Task.new('Loading a dynamic operation', io: output).start

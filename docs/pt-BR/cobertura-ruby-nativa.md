@@ -58,17 +58,12 @@ Estados:
 Cada fase deve manter o comportamento fail-closed: uma variante desconhecida é
 preservada e relatada, nunca silenciosamente convertida nem descartada.
 
-## Déficit verificável atual
+## Cobertura verificável atual
 
-A suíte estrita de 25 de setembro passou com 1.832 exemplos, mas ainda mede
-97,12% das linhas (35.711/36.769) e 90,92% dos branches (14.475/15.920).
-Faltam, portanto, 1.058 linhas e 1.445 branches executáveis para o gate 100/100.
-Os maiores déficits estão em `exporter.rb`, `writer.rb`, `dsl/builder.rb`,
-`ruby_app/exporter.rb` e `forms/mpr_codec.rb`; nenhum deles foi removido do
-denominador. `writer/page_overlay.rb` passou a 100/100 nesta auditoria, enquanto
-a fatia de projeção sem perdas de widgets mantém propriedades escalares, ações,
-fontes XPath e listas de objetos em Ruby sem expor BSON. O CI permanece
-em 96/89 até que testes reais fechem o saldo.
+A suíte estrita passou com 2.065 exemplos e mede 100,00% das
+linhas (36.788/36.788) e 100,00% dos branches (15.926/15.926). Nenhum código
+executável da biblioteca foi removido do denominador para atingir o gate. O CI
+exige o mesmo piso de 100/100.
 
 Cobertura de código 100/100 também não encerra cobertura funcional: layouts,
 snippets, building blocks, menus, integrações, workflows e task pages continuam
