@@ -759,27 +759,24 @@ module Mxrb
       source = "#{module_name}.#{entity_name}" if source.empty? && !query.nil?
       declared_id = declaration[:source_id].to_s
 
-      unless source.empty?
-        key = native_existing_key(entity, "source", "Source") || "Source"
-        previous = entity[key].is_a?(Hash) ? entity[key] : {}
-        previous_id = IO::BsonCodec.extract_id(previous["$ID"])
-        if !declared_id.empty? && previous_id && declared_id != previous_id
-          raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
-        end
-        source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
-                     "SourceDocument"
-        normalized = previous.merge(
-          "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
-          "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
-        )
-        %w[oql Oql OQL].each { normalized.delete(_1) }
-        entity[key] = normalized
-        %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
+      key = native_existing_key(entity, "source", "Source") || "Source"
+      previous = entity[key].is_a?(Hash) ? entity[key] : {}
+      previous_id = IO::BsonCodec.extract_id(previous["$ID"])
+      if !declared_id.empty? && previous_id && declared_id != previous_id
+        raise ValidationError, "OQL source id does not match #{module_name}.#{entity_name}"
       end
-      return if query.nil? || !source.empty?
+      source_key = native_existing_key(previous, "sourceDocument", "SourceDocument") ||
+                   "SourceDocument"
+      normalized = previous.merge(
+        "$ID" => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
+        "$Type" => "DomainModels$OqlViewEntitySource", source_key => source
+      )
+      %w[oql Oql OQL].each { normalized.delete(_1) }
+      entity[key] = normalized
+      %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
 
-      query_key = native_existing_key(entity, "oqlQuery", "OqlQuery", "OQLQuery") || "OqlQuery"
-      entity[query_key] = query.to_s
+      # Inline queries are normalized to a named source above; the matching
+      # ViewEntitySourceDocument is synchronized separately.
     end
 
     def synchronize_ruby_oql_member_values!(entity)
@@ -2313,13 +2310,11 @@ module Mxrb
         existing.fetch("UnitID")
       else
         containment = unit.fetch("containment")
-        inserted_id = stable ? SecureRandom.uuid : requested_id
-        inserted_doc = stable ? doc.merge("$ID" => inserted_id) : doc
         mpr.insert_unit(
           container_uuid: container_id,
           containment_name: containment,
-          contents_doc: inserted_doc,
-          unit_uuid: inserted_id
+          contents_doc: doc,
+          unit_uuid: requested_id
         )
       end
     end
@@ -3160,6 +3155,7 @@ module Mxrb
       value['TextTemplate'] = client_template_doc(configured[:text]) if configured.key?(:text)
       value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
       value['EntityRef'] = indirect_entity_ref_doc(configured[:association]) if configured.key?(:association)
+      value['Action'] = client_action_doc(configured[:action]) if configured.key?(:action)
       configure_widget_data_source!(value, configured[:data_source]) if configured.key?(:data_source)
       if configured.key?(:widgets)
         configure_widget_children!(
@@ -3203,14 +3199,15 @@ module Mxrb
 
     def semantic_widget_value?(value)
       value.is_a?(Hash) && (value.keys.map(&:to_sym) & %i[
-        primitive expression selection text attribute association data_source widgets objects
+        primitive expression selection text attribute association action data_source widgets objects
       ]).any?
     end
 
     def configure_widget_data_source!(value, configured)
       options = configured.is_a?(Hash) ? configured : { entity: configured }
+      options = options.to_h { |key, item| [key.to_sym, item] }
       value['DataSource'] = custom_xpath_source_doc(
-        options.fetch(:entity), xpath: options.fetch(:xpath, '')
+        options.fetch(:entity), xpath: options.fetch(:xpath, ''), sort: options.fetch(:sort, [])
       )
     end
 
@@ -3517,7 +3514,15 @@ module Mxrb
       end.compact
     end
 
-    def custom_xpath_source_doc(entity, xpath: '')
+    def custom_xpath_source_doc(entity, xpath: '', sort: [])
+      sort_items = Array(sort).map do |item|
+        item = item.to_h { |key, entry| [key.to_sym, entry] } if item.is_a?(Hash)
+        attribute, direction = item.is_a?(Array) ? item : item.values_at(:attribute, :direction)
+        {
+          "$ID" => SecureRandom.uuid, "$Type" => "Forms$GridSortItem",
+          "AttributeRef" => attribute_ref_doc(attribute), "SortDirection" => direction.to_s
+        }
+      end
       {
         "$ID" => SecureRandom.uuid, "$Type" => "CustomWidgets$CustomWidgetXPathSource",
         "EntityRef" => {
@@ -3527,7 +3532,7 @@ module Mxrb
         "ForceFullObjects" => false,
         "SortBar" => {
           "$ID" => SecureRandom.uuid, "$Type" => "Forms$GridSortBar",
-          "SortItems" => IO::BsonCodec.build_array([], marker: 2)
+          "SortItems" => IO::BsonCodec.build_array(sort_items, marker: 2)
         },
         "SourceVariable" => nil, "XPathConstraint" => xpath.to_s
       }
@@ -3954,22 +3959,20 @@ module Mxrb
       if source_reference.empty? && !query.nil?
         source_reference = "#{module_name}.#{entity_name}"
       end
-      unless source_reference.empty?
-        source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
-        current_source = previous&.dig(source_key)
-        source = (current_source.is_a?(Hash) ? current_source : {}).merge(
-          '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
-          '$Type' => 'DomainModels$OqlViewEntitySource',
-          'SourceDocument' => source_reference
-        )
-        %w[oql Oql OQL].each { source.delete(_1) }
-        doc[source_key] = source
-        %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
-      end
-      return unless query && source_reference.empty?
+      return if source_reference.empty?
+      source_key = native_existing_key(previous, 'source', 'Source') || 'Source'
+      current_source = previous&.dig(source_key)
+      source = (current_source.is_a?(Hash) ? current_source : {}).merge(
+        '$ID' => current_source&.fetch('$ID', nil) || SecureRandom.uuid,
+        '$Type' => 'DomainModels$OqlViewEntitySource',
+        'SourceDocument' => source_reference
+      )
+      %w[oql Oql OQL].each { source.delete(_1) }
+      doc[source_key] = source
+      %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
 
-      query_key = native_existing_key(previous, 'oqlQuery', 'OqlQuery', 'OQLQuery') || 'OqlQuery'
-      doc[query_key] = query
+      # Inline queries are represented by the named source document created
+      # alongside the entity, so there is no legacy inline-query write here.
     end
 
     def attribute_doc(attr, previous, oql_view: false)
@@ -5270,16 +5273,32 @@ module Mxrb
     end
 
     def data_view_design_property_doc(value)
-      return value unless value.is_a?(Hash) && value.key?(:key) && value.key?(:option)
+      semantic = symbolize_data_view_value(value)
+      return value unless semantic.is_a?(Hash) && semantic.key?(:key)
 
+      nested = semantic[:properties]
+      option = semantic[:option]
+      return value if option.nil? && !nested.is_a?(Array)
+
+      property_value = {
+        '$ID' => semantic[:value_id].to_s.empty? ? SecureRandom.uuid : semantic[:value_id].to_s
+      }
+      if nested.is_a?(Array)
+        property_value.merge!(
+          '$Type' => 'Forms$CompoundDesignPropertyValue',
+          'Properties' => IO::BsonCodec.build_array(
+            nested.map { data_view_design_property_doc(_1) }, marker: 2
+          )
+        )
+      else
+        property_value.merge!(
+          '$Type' => 'Forms$OptionDesignPropertyValue', 'Option' => option.to_s
+        )
+      end
       {
-        '$ID' => value[:id].to_s.empty? ? SecureRandom.uuid : value[:id].to_s,
-        '$Type' => 'Forms$DesignPropertyValue', 'Key' => value.fetch(:key).to_s,
-        'Value' => {
-          '$ID' => value[:value_id].to_s.empty? ? SecureRandom.uuid : value[:value_id].to_s,
-          '$Type' => 'Forms$OptionDesignPropertyValue',
-          'Option' => value.fetch(:option).to_s
-        }
+        '$ID' => semantic[:id].to_s.empty? ? SecureRandom.uuid : semantic[:id].to_s,
+        '$Type' => 'Forms$DesignPropertyValue', 'Key' => semantic.fetch(:key).to_s,
+        'Value' => property_value
       }
     end
 

@@ -148,6 +148,13 @@ RSpec.describe Mxrb::Settings::MprCodec do
     expect(model.fetch(:bcrypt_cost)).to eq(12)
   end
 
+  it 'preserves the PostgreSql database spelling emitted by Studio projects' do
+    server = Mxrb::Settings::Node.new('Settings$ServerConfiguration')
+    server.set(:database_type, 'PostgreSql')
+
+    expect(server.fetch(:database_type)).to eq('PostgreSql')
+  end
+
   def complete_settings
     parts = [
       web_ui_settings, integration_settings, configuration_settings, model_settings,

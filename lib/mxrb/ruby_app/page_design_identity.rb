@@ -113,10 +113,11 @@ module Mxrb
       end
 
       def semantic_property?(value)
-        value.is_a?(Hash) && value.key?('key') && value.key?('option')
+        value.is_a?(Hash) && value.key?('key') &&
+          (value.key?('option') || value['properties'].is_a?(Array))
       end
 
-      def resolve_properties(previous, declarations) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+      def resolve_properties(previous, declarations) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
         known = Array(previous).select { semantic_property?(_1) }
         authored = declarations.select { semantic_property?(_1) }
         assert_unique!(known, 'key')
@@ -138,10 +139,20 @@ module Mxrb
           raise ValidationError, 'duplicate design property identity claim' if used.include?(prior)
 
           used << prior
-          declaration.merge(
+          resolved = declaration.merge(
             'id' => identity(declaration['id'], prior['id']),
             'value_id' => identity(declaration['value_id'], prior['value_id'])
           )
+          if declaration['properties'].is_a?(Array)
+            unless prior['properties'].is_a?(Array)
+              raise ValidationError, 'design property changed between option and compound values'
+            end
+
+            resolved['properties'] = resolve_properties(
+              prior.fetch('properties'), declaration.fetch('properties')
+            )
+          end
+          resolved
         end
         if unmatched.any? && (known - used).any?
           raise ValidationError,

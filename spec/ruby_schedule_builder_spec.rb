@@ -67,6 +67,7 @@ RSpec.describe Mxrb::RubyApp::ScheduleBuilder do
   end
 
   it 'rejects invented types, duplicate aliases and unsupported fields in typed blocks' do
+    expect(described_class.compatible?(:day, nil)).to be(false)
     expect { described_class.new(:daily) }.to raise_error(ArgumentError, /legacy properties API/)
     expect do
       described_class.new(:minute, properties: { 'Multiplier' => 2, multiplier: 3 })

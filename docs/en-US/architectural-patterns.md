@@ -144,8 +144,7 @@ back a guess would corrupt the project.
 
 ## 10. Coverage as a gate, not a metric
 
-CI currently enforces 96% line and 89% branch coverage through Ruby's native
-`Coverage` API. The local helper defaults to 100/100 when no threshold variables
-are supplied.
+CI and the local helper enforce 100% line and branch coverage through Ruby's
+native `Coverage` API.
 The gate measures every executable library line and branch; comments such as
 `:nocov:` do not remove code from the denominator. See [conventions](conventions.md).

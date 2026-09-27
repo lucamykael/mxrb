@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
 
-Last updated: 2026-09-13.
+Last updated: 2026-09-25.
 
 The matrix exercises this pipeline using only MXRB:
 
@@ -49,6 +49,22 @@ added `System.Administrator` to an exact native role list that did not contain
 it, and the Studio 11 settings codec did not yet recognize
 `Settings$ConstantValue`, `Settings$SharedValue`, and `Settings$PrivateValue`.
 Focused regressions cover both cases; private values are not published.
+
+On September 25, `script/validate_ruby_app --repair-hashes` certified the full
+13-project corpus through Ruby-app export, a zero-violation public-source audit,
+compilation with the editable Mendix sidecar detached, MPR validation, and an
+identical semantic comparison: **13/13 passed**. Hash repair remains explicit
+and temporary: one stale hash in SLATaskApp and two in RubyBridgeSandbox were
+repaired in copies, while the other eleven inputs required no repair.
+
+This gate exposed and fixed public Ruby leaks that the structural round-trip did
+not detect. Database Connector mappings now use ordered parameter blocks;
+schema-supported pluggable scalars, actions, XPath sources, and object lists use
+editable semantic builders, while any still-unsupported nested value stays
+losslessly authoritative in the private baseline; and compound design
+properties are emitted as nested semantic declarations with their BSON
+identities restored privately. External UUID-shaped widget configuration is no
+longer misclassified as a Mendix unit identity.
 
 The comparator used for this matrix includes:
 
@@ -260,13 +276,13 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 1,825 examples and passes with 97.10% line coverage
-(35,451/36,511 executable library lines) and 90.96% branch coverage
-(14,394/15,825 branches).
+The current suite contains 2,066 examples and passes with 100.00% line coverage
+(36,788/36,788 executable library lines) and 100.00% branch coverage
+(15,926/15,926 branches).
 Run the enforced gate with:
 
 ```sh
-MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
+MXRB_COVERAGE=1 bundle exec rspec
 ```
 
 The Ruby evaluation CLI was also exercised against the Mendix 11.12.1 Sudoku

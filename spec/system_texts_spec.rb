@@ -37,6 +37,43 @@ RSpec.describe Mxrb::SystemTexts do
     expect(rebuilt).to eq(original)
   end
 
+  it 'supports empty inferred collections and rejects ambiguous builder input' do
+    empty = described_class::Collection.build
+    expect(empty.to_h).to eq(language_codes: [], entries: [])
+    inferred = described_class::Collection.build { text 'hello', en_US: 'Hello' }
+    expect(inferred.language_codes).to eq(['en_US'])
+    expect { described_class::Collection.build { languages :en_US, :en_US } }
+      .to raise_error(ArgumentError, /duplicate system-text language/)
+    expect do
+      described_class::Collection.build { text('hello', en_US: 'Hello') { translation :nl_NL, 'Hallo' } }
+    end.to raise_error(ArgumentError, /keywords or a block/)
+  end
+
+  it 'rejects malformed storage and ignores unusable identity baselines' do
+    expect { codec.decode({}) }.to raise_error(Mxrb::SystemTexts::CodecError, /must be/)
+    expect { codec.decode([]) }.to raise_error(Mxrb::SystemTexts::CodecError, /must be/)
+    expect do
+      codec.decode('$Type' => 'Texts$SystemTextCollection')
+    end.to raise_error(Mxrb::SystemTexts::CodecError, /incomplete/)
+    expect do
+      codec.decode('$Type' => 'Texts$SystemTextCollection', 'SystemTexts' => {})
+    end.to raise_error(Mxrb::SystemTexts::CodecError, /Mendix collection/)
+
+    collection = described_class::Collection.build { text 'hello' }
+    expect(codec.encode(collection, baseline: 'invalid')).to include('$Type' => 'Texts$SystemTextCollection')
+    expect(codec.encode(collection, baseline: { '$Type' => 'Other' }))
+      .to include('$Type' => 'Texts$SystemTextCollection')
+  end
+
+  it 'emits concise source for empty languages, languages without entries, and empty translations' do
+    emitter = described_class::SourceEmitter.new
+    expect(emitter.emit(described_class::Collection.build)).to eq("system_text_collection do\nend\n")
+    languages_only = described_class::Collection.build { languages :en_US }
+    expect(emitter.emit(languages_only)).to include('languages :en_US')
+    empty_text = described_class::Collection.build { text 'empty' }
+    expect(emitter.emit(empty_text)).to include('text "empty"')
+  end
+
   it 'round-trips a Mendix 11 collection through clean exported Ruby' do
     Dir.mktmpdir('mxrb-system-texts-') do |dir|
       source_dir = File.join(dir, 'original')

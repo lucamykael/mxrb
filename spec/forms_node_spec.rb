@@ -72,4 +72,49 @@ RSpec.describe Mxrb::Forms::Node do # rubocop:disable Metrics/BlockLength
     expect(page.title.translations).to be_frozen
     expect(page.title.translations.first.text).to be_frozen
   end
+
+  it 'supports assignment inspection, replacement, removal, and explicit receivers' do
+    button = described_class.build(:action_button, catalog:) { |node| node.name('save') }
+    expect(button).to be_assigned(:name)
+    expect(button.inspect).to include('ActionButton', 'name="save"')
+    expect(button.set(:name, 'replace').fetch(:name)).to eq('replace')
+    expect(button.unset(:name)).to equal(button)
+    expect(button).not_to be_assigned(:name)
+  end
+
+  it 'rejects invalid dynamic calls, collection shapes, nils, and nested node families' do
+    button = described_class.new(:action_button, catalog:)
+    expect { button.append(:name, 'invalid') }.to raise_error(ArgumentError, /not a collection/)
+    expect { button.missing_property }.to raise_error(NoMethodError)
+    expect { button.caption(:client_template, :extra) {} }
+      .to raise_error(ArgumentError, /at most one type/)
+    expect { button.name }.not_to raise_error
+    expect { button.name('one', 'two') }.to raise_error(ArgumentError, /exactly one value/)
+    expect { button.set(:name, nil) }.to raise_error(TypeError, /cannot be nil/)
+
+    data_view = described_class.new(:data_view, catalog:)
+    expect { data_view.set(:widgets, 'not an array') }.to raise_error(TypeError, /requires an Array/)
+    wrong_nested = described_class.new(:text_box, catalog:)
+    expect { button.set(:caption, wrong_nested) }.to raise_error(TypeError, /expects ClientTemplate/)
+    expect { button.set(:caption, Object.new) }.to raise_error(TypeError, /expects ClientTemplate/)
+    page = described_class.new(:page, catalog:)
+    expect { page.set(:title, Object.new) }.to raise_error(TypeError, /expects Text/)
+  end
+
+  it 'rejects an unknown scalar type even when supplied through a valid schema property' do
+    property = Mxrb::Forms::Property.new(
+      'Future', 'future', 'FutureWidget', 'future_scalar', [].freeze,
+      :one, false, nil, nil
+    )
+    type = Mxrb::Forms::Type.new(
+      'FutureWidget', 'future_widget', :element, false, nil,
+      [property].freeze, [property].freeze, [].freeze, true
+    )
+    fake_catalog = Object.new
+    fake_catalog.define_singleton_method(:fetch_type) { |_identifier| type }
+    fake_catalog.define_singleton_method(:type) { |_identifier| nil }
+
+    expect { described_class.new(:future_widget, catalog: fake_catalog).set(:future, 'value') }
+      .to raise_error(TypeError, /expects future_scalar/)
+  end
 end

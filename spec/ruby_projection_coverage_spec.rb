@@ -122,6 +122,16 @@ RSpec.describe 'complete Ruby projection contracts' do
     flow = Mxrb::Dsl::FlowBuilder.new('Run', runtime: :server, kind: :use_case, public: false)
     flow.execute_database_query('SELECT 1', as: :rows, dynamic_query: '$query',
                                             parameters: { id: '$id' }, connection_parameters: { host: '$host' })
+    flow.execute_database_query('SELECT 2') do
+      parameter :id, '$first'
+      parameter :id, '$second'
+      connection_parameter :host, '$host'
+    end
+    expect do
+      flow.execute_database_query('SELECT 3', parameters: { id: '$id' }) do
+        parameter :other, '$other'
+      end
+    end.to raise_error(ArgumentError, /either keyword hashes or a block/)
     flow.import_xml('$document', mapping: 'App.Import', as: :items, result_entity: 'App.Item')
     flow.download_file('$file', show_in_browser: true)
     expect(flow.flow_type(kind: :object, entity: 'App.Item', id: uuid)).to include(
@@ -586,7 +596,8 @@ RSpec.describe 'complete Ruby projection contracts' do
     }
     expect(exporter.send(:editable_action?, query)).to be(true)
     expect(exporter.send(:database_query_line, '  ', query)).to include(
-      'dynamic_query:', 'parameters:', 'connection_parameters:', 'error: :continue'
+      'dynamic_query:', 'parameter "id", "$id"',
+      'connection_parameter "host", "$host"', 'error: :continue'
     )
 
     import = {

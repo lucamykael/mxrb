@@ -409,6 +409,44 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
                         'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' })).to eq('Demo.Item.Name')
   end
 
+  it 'renders flow-backed list views and resolves every listened entity shape' do
+    microflow = unit('Microflows$Microflow', 'Load', {
+      'MicroflowReturnType' => { 'Entity' => 'Demo.Result' }
+    })
+    nanoflow = unit('Microflows$Nanoflow', 'LoadClient', {
+      'MicroflowReturnType' => { 'Entity' => 'Demo.ClientResult' }
+    })
+    builder = builder_for([microflow, nanoflow])
+
+    list = builder.send(:list_view_source, {
+      'Name' => 'items', 'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource',
+        'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+      }
+    }, 'Demo.Page', 'Demo.Result')
+    expect(list).to include('type' => 'microflow', 'microflow' => 'Demo.Load')
+    expect(builder.send(:data_view_source, {
+      '$Type' => 'Forms$NanoflowSource',
+      'NanoflowSettings' => { 'Nanoflow' => 'Demo.LoadClient' }
+    }, 'Demo.ClientResult')).to include('type' => 'nanoflow', 'nanoflow' => 'Demo.LoadClient')
+
+    expect(builder.send(:listened_widget_entity, {
+      'DataSource' => { 'EntityPath' => 'Demo.Order/Demo.Line' }
+    })).to eq('Demo.Line')
+    expect(builder.send(:listened_widget_entity, {
+      'DataSource' => { 'EntityRef' => { 'Steps' => [2, { 'DestinationEntity' => 'Demo.Customer' }] } }
+    })).to eq('Demo.Customer')
+    expect(builder.send(:listened_widget_entity, {
+      'DataSource' => { 'EntityRef' => { 'Entity' => 'Demo.Order' } }
+    })).to eq('Demo.Order')
+    expect(builder.send(:listened_widget_entity, {
+      'DataSource' => {
+        '$Type' => 'Forms$MicroflowSource',
+        'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+      }
+    })).to eq('Demo.Result')
+  end
+
   it 'covers editor, media, action, and domain-model defensive contracts' do
     image = unit('Images$ImageCollection', 'Assets', {
       'Images' => [2, { 'Name' => 'Logo', 'Image' => BSON::Binary.new("\x89PNG\r\n\x1A\nimage".b) }]

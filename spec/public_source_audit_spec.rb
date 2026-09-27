@@ -61,6 +61,36 @@ RSpec.describe Mxrb::PublicSourceAudit do
     end
   end
 
+  it 'does not confuse typed UUID-shaped widget configuration with a native unit identity' do
+    Dir.mktmpdir('mxrb-public-source-widget-value-') do |root|
+      File.write(
+        File.join(root, 'page.rb'),
+        <<~RUBY
+          properties do
+            set "externalAppId", "9c5cdce1-f479-44b2-830c-4d102da03632"
+          end
+        RUBY
+      )
+
+      expect(described_class.new(root)).to be_clean
+    end
+  end
+
+  it 'does not confuse Mendix $Type expressions with storage-schema keys' do
+    Dir.mktmpdir('mxrb-public-source-expression-') do |root|
+      File.write(
+        File.join(root, 'flow.rb'),
+        <<~RUBY
+          argument "App.Flow.Input", "$Type"
+          list_operation :filter, :Items, expression: "$Type", as: :Filtered
+          text caption: "Search over the following fields:"
+        RUBY
+      )
+
+      expect(described_class.new(root)).to be_clean
+    end
+  end
+
   it 'classifies source trees outside the project, app, and module conventions' do
     Dir.mktmpdir('mxrb-public-source-other-') do |root|
       FileUtils.mkdir_p(File.join(root, 'scripts'))
@@ -69,6 +99,16 @@ RSpec.describe Mxrb::PublicSourceAudit do
       expect(described_class.new(root).by_subsystem).to eq('scripts' => { opaque_api: 1 })
       expect(described_class.new(root).send(:find_nodes, 'scalar', :hash)).to be_empty
     end
+  end
+
+  it 'ignores malformed association keys without lexical tokens' do
+    audit = described_class.allocate
+    syntax = [:assoc_new, [:container, 'scalar'], nil]
+    allow(Ripper).to receive(:sexp).and_return(syntax)
+
+    expect(audit.send(:ast_storage_keys, 'source', 'flow.rb', 'app/services', ['source']))
+      .to be_empty
+    expect(audit.send(:first_token, [:container, 'scalar'])).to be_nil
   end
 
   it 'keeps project-security identities in the MPR baseline, not its public Ruby API' do

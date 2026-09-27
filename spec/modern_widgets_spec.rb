@@ -154,12 +154,21 @@ RSpec.describe 'modern page widgets' do
     }
     widget = schema_widget('example.Semantic', {
       source: { type: 'DataSource' }, label: { type: 'Attribute' }, selected: { type: 'Selection' },
-      content: { type: 'Widgets' }, series: { type: 'Object', object_type: nested_object_type }
+      action: { type: 'Action' }, content: { type: 'Widgets' },
+      series: { type: 'Object', object_type: nested_object_type }
     })
     options = {
       properties: {
-        source: { data_source: { entity: 'Ui.Item', xpath: '[Active = true]' } },
+        source: {
+          data_source: {
+            entity: 'Ui.Item', xpath: '[Active = true]',
+            sort: [{ attribute: 'Ui.Item.Name', direction: 'Ascending' }]
+          }
+        },
         label: { attribute: 'Ui.Item.Name' }, selected: { selection: 'Single' },
+        action: {
+          action: { kind: 'microflow', handler: 'Ui.Refresh', arguments: { Item: '$currentObject' } }
+        },
         content: { widgets: [{ type: :text, name: 'Nested', options: { caption: 'Child' }, events: [] }] },
         series: { objects: [{ name: { primitive: 'Primary' }, amount: { attribute: 'Ui.Item.Amount' } }] }
       }
@@ -171,8 +180,12 @@ RSpec.describe 'modern page widgets' do
     expect(values.dig('source', 'Value', 'DataSource')).to include(
       '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'XPathConstraint' => '[Active = true]'
     )
+    expect(writer.send(:array_items, values.dig('source', 'Value', 'DataSource', 'SortBar', 'SortItems')).first)
+      .to include('SortDirection' => 'Ascending', 'AttributeRef' => include('Attribute' => 'Ui.Item.Name'))
     expect(values.dig('label', 'Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Name')
     expect(values.dig('selected', 'Value', 'Selection')).to eq('Single')
+    expect(values.dig('action', 'Value', 'Action', '$Type')).to eq('Forms$MicroflowAction')
+    expect(values.dig('action', 'Value', 'Action', 'MicroflowSettings', 'Microflow')).to eq('Ui.Refresh')
     expect(writer.send(:array_items, values.dig('content', 'Value', 'Widgets')).first).to include(
       '$Type' => 'Forms$DynamicText', 'Name' => 'Nested'
     )
@@ -1201,6 +1214,68 @@ RSpec.describe 'modern page widgets' do
       expect(result.mx_path).to eq('native MPK schemas')
     end
   end
+
+  it 'projects data-view sources, design properties, tables, and nested pluggable slots' do
+    page = Mxrb::Model::Page.allocate
+    design = {
+      '$ID' => 'property', '$Type' => 'Forms$DesignPropertyValue', 'Key' => 'Spacing',
+      'Value' => {
+        '$ID' => 'value', '$Type' => 'Forms$OptionDesignPropertyValue', 'Option' => 'Large'
+      }
+    }
+    widget = {
+      '$Type' => 'Forms$DataView', 'Name' => 'details', 'Widgets' => [2], 'FooterWidgets' => [2],
+      'Appearance' => { 'DesignProperties' => [3, design] },
+      'DataSource' => { '$Type' => 'Forms$ListenTargetSource', 'ListenTarget' => 'grid' }
+    }
+    parsed = page.send(:data_view_widget, widget)
+    expect(parsed.dig(:options, :design_properties, 0)).to include(
+      id: 'property', value_id: 'value', key: 'Spacing', option: 'Large'
+    )
+    expect(parsed.dig(:options, :source)).to eq(kind: :listen, target: 'grid')
+    expect(page.send(:design_property_spec, design.merge('Value' => { '$Type' => 'Future' })))
+      .to include('$Type' => 'Forms$DesignPropertyValue')
+
+    direct = page.send(:parse_data_view_source, {
+      '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Entity' => 'App.Order' },
+      'PageParameter' => 'Order'
+    })
+    association = page.send(:parse_data_view_source, {
+      '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Steps' => [2, {
+        'Association' => 'App.Order_Customer', 'DestinationEntity' => 'App.Customer'
+      }] },
+      'SourceVariable' => { 'LocalVariable' => 'Current', 'UseAllPages' => true }
+    })
+    expect(direct).to include(kind: :context, entity: 'App.Order', variable: include(kind: :page_parameter))
+    expect(association).to include(
+      kind: :association, entity: 'App.Customer', variable: include(kind: :local_variable, use_all_pages: true)
+    )
+
+    mappings = page.send(:parse_data_view_mappings, [2, {
+      'Parameter' => 'Order', 'Variable' => { 'Widget' => 'grid' }, 'Future' => false
+    }])
+    expect(mappings.first).to include(parameter: 'Order', variable: include(kind: :widget))
+    expect(mappings.first.fetch(:unknown_native)).to eq('Future' => false)
+
+    slots = page.send(:pluggable_widget_slots, section: [{ 'widgets' => [{ type: :text }] }])
+    expect(slots).to eq([{ path: [:section, 0], widgets: [{ type: :text }] }])
+
+    allow(page).to receive(:parse_widgets) { |_raw, target| target << { type: :text } }
+    table = page.send(:table_widget, {
+      'Name' => 'matrix', 'ColumnWidths' => [2, { 'Value' => 100 }], 'Rows' => [2, {}],
+      'Cells' => [2, { 'TopRowIndex' => 0, 'LeftColumnIndex' => 1, 'Width' => 2,
+                       'Height' => 1, 'Widgets' => [2, {}] }]
+    })
+    expect(table.dig(:options, :rows, 0, :cells, 0)).to include(column: 1, colspan: 2)
+    expect(table.dig(:options, :rows, 0, :cells, 0, :widgets)).to eq([{ type: :text }])
+
+    expect(page.send(:parse_source, {
+      '$Type' => 'Forms$NanoflowSource', 'NanoflowSettings' => { 'Nanoflow' => 'App.Refresh' }
+    })).to eq(kind: :nanoflow, name: 'App.Refresh')
+    expect(page.send(:parse_action_mapping_value, 'Variable' => { 'SnippetParameter' => 'Item' }))
+      .to include(kind: :snippet_parameter, name: 'Item')
+  end
+
   it 'restores output paths and reports synchronizer failures' do
     Dir.mktmpdir do |dir|
       definition = File.join(dir, 'project.rb')

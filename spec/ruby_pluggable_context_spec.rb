@@ -152,5 +152,33 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
     expect(manifest).not_to receive(:absolute_path)
     bridge.with(manifest) { bridge.with_page(nil) { expect(described_class.current).to be_a(described_class) } }
   end
+
+  it 'restores the prior thread context when context construction itself fails' do
+    previous = Object.new
+    Thread.current[described_class::THREAD_KEY] = previous
+    allow(described_class).to receive(:new).and_raise(ArgumentError, 'invalid context')
+
+    expect { described_class.with {} }.to raise_error(ArgumentError, 'invalid context')
+    expect(described_class.current).to equal(previous)
+  ensure
+    Thread.current[described_class::THREAD_KEY] = nil
+  end
+
+  it 'normalizes invalid runtime paths and unsupported embedded schemas' do
+    manifest = double('invalid manifest')
+    allow(manifest).to receive(:absolute_path).and_raise(KeyError, 'missing')
+    context = described_class.new(manifest:)
+    context.with_page('one') do
+      expect { context.for_widget('example', widget_id:) }
+        .to raise_error(Mxrb::ValidationError, /path is unavailable or invalid/)
+    end
+
+    context = described_class.new(mpr: mpr_for('one' => page(widget(:boolean))))
+    allow(context).to receive(:widget_type).and_return({})
+    context.with_page('one') do
+      expect { context.for_widget('example', widget_id:) }
+        .to raise_error(Mxrb::ValidationError, /schema is unsupported/)
+    end
+  end
 end
 # rubocop:enable Metrics/BlockLength

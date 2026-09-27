@@ -1149,7 +1149,7 @@ module Mxrb
         File.binwrite(temporary, bytes)
         File.rename(temporary, path)
       ensure
-        FileUtils.rm_f(temporary) if temporary
+        FileUtils.rm_f(temporary)
       end
 
       def raw_to_hash(row)

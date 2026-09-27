@@ -9,6 +9,35 @@ PRESENTATION_DOCUMENT_TYPES = %w[
 ].freeze
 
 RSpec.describe 'semantic presentation documents' do
+  it 'builds every reusable presentation document through schema-checked blocks' do
+    harness = Class.new do
+      include Mxrb::Dsl::PresentationDocuments
+
+      attr_reader :native_documents
+
+      def initialize = (@native_documents = [])
+
+      def native_document(name, **options)
+        @native_documents << options.merge(name:)
+      end
+    end.new
+
+    layout = harness.layout_document('Shell') {}
+    template = harness.page_template_document('Overview') { |node| node.name 'Authored' }
+    block = harness.building_block_document('Card') {}
+    snippet = harness.snippet_document('Details') {}
+
+    expect([layout, template, block, snippet].map { _1.schema_type.name })
+      .to eq(%w[Layout PageTemplate BuildingBlock Snippet])
+    expect(layout.name).to eq('Shell')
+    expect(template.name).to eq('Authored')
+    expect(harness.native_documents.map { _1[:type] })
+      .to eq(%w[Forms$Layout Forms$PageTemplate Forms$BuildingBlock Forms$Snippet])
+
+    value = harness.send(:presentation_value_document, { Object.new => { map: { nested: 1 } } })
+    expect(value.values.first).to eq(nested: 1)
+  end
+
   it 'round-trips reusable form documents without native BSON declarations' do
     Dir.mktmpdir('mxrb-presentation-documents-') do |dir|
       source = File.join(dir, 'Presentation.mpr')

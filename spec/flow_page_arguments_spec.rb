@@ -65,6 +65,8 @@ RSpec.describe 'typed flow page arguments' do # rubocop:disable Metrics/BlockLen
 
   it 'rejects mixed notation and failing or duplicate title blocks without adding partial activities' do
     flow = builder
+    expect { flow.show_page('App.Detail') { title } }
+      .to raise_error(ArgumentError, /requires a translation block/)
     expect { flow.show_page('App.Detail', pass: {}) { argument 'Value', 1 } }
       .to raise_error(ArgumentError, /either pass:/)
     expect { flow.show_page('App.Detail', title: {}) { title {} } }
@@ -85,6 +87,15 @@ RSpec.describe 'typed flow page arguments' do # rubocop:disable Metrics/BlockLen
       end
     end.to raise_error(ArgumentError, /already declared/)
     expect(Array(flow.to_h.fetch(:body))).to be_empty
+  end
+
+  it 'supports an explicit receiver for the nested title translations' do
+    flow = builder
+    flow.show_page('App.Detail') do |page|
+      page.title { |title| title.translation('en_US', 'Details') }
+    end
+
+    expect(flow.to_h.dig(:body, 0, :title)).to eq('en_US' => 'Details')
   end
 
   it 'emits an explicitly empty native title and refuses to collapse duplicate native languages' do

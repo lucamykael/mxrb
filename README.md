@@ -158,13 +158,12 @@ and persisted state through entity/XPath count assertions.
 
 ```sh
 bundle exec rspec
-MXRB_COVERAGE=1 MXRB_LINE_COVERAGE_MIN=96 MXRB_BRANCH_COVERAGE_MIN=89 bundle exec rspec
+MXRB_COVERAGE=1 bundle exec rspec
 bundle exec ruby script/branch_report.rb
 bundle exec rubocop
 ```
 
-CI currently enforces a 96% line and 89% branch coverage floor. The local
-helper keeps a stricter 100/100 default when thresholds are omitted. The branch
+CI and the local helper both enforce 100% line and branch coverage. The branch
 report lists any uncovered branch by source file and line.
 
 Architecture and deeper writing guidance are available in

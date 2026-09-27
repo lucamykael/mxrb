@@ -815,5 +815,56 @@ RSpec.describe Mxrb::Runtime::Native do
     expect(@interpreter.send(:render_text_template, nil, {})).to eq('')
     expect(@interpreter.send(:render_text_template, { 'Text' => { 'Items' => [2] } }, {})).to eq('')
   end
+
+  it 'validates code-action entity mappings, export XML, and REST string results' do
+    mapping = { '$Type' => 'Microflows$EntityTypeCodeActionParameterValue', 'Entity' => 'Clinic.Animal' }
+    expect(@interpreter.send(:java_action_argument, 'Clinic.Code', 'Entity', mapping, {}))
+      .to eq('Clinic.Animal')
+    expect do
+      @interpreter.send(:java_action_argument, 'Clinic.Code', 'Entity', mapping.merge('Entity' => ''), {})
+    end.to raise_error(Mxrb::NativeRuntimeError, /has an empty entity type/)
+
+    result = 'exported'
+    interpreter = described_class::Interpreter.new(
+      @project, adapters: { export_mapping: ->(*) { result } }
+    )
+    action = {
+      'OutputMethod' => {
+        '$Type' => 'ExportXmlAction$StringExport', 'OutputVariableName' => 'output'
+      },
+      'ResultHandling' => {
+        '$Type' => 'Microflows$MappingRequestHandling', 'ContentType' => 'Json',
+        'MappingId' => 'Clinic.Export', 'MappingVariableName' => 'animal'
+      },
+      'IsValidationRequired' => false
+    }
+    variables = { 'animal' => @interpreter.store.create('Clinic.Animal') }
+
+    expect(interpreter.send(:action_export_xml, action, variables)).to eq('exported')
+    expect(variables.fetch('output')).to eq('exported')
+    expect { interpreter.send(:action_export_xml, action.merge('IsValidationRequired' => nil), variables) }
+      .to raise_error(Mxrb::NativeRuntimeError, /unsupported export XML configuration/)
+    missing = Marshal.load(Marshal.dump(action))
+    missing.fetch('OutputMethod')['OutputVariableName'] = ''
+    expect { interpreter.send(:action_export_xml, missing, variables) }
+      .to raise_error(Mxrb::NativeRuntimeError, /requires output, mapping, and source variables/)
+    result = { exported: true }
+    expect { interpreter.send(:action_export_xml, action, variables) }
+      .to raise_error(Mxrb::NativeRuntimeError, /returned a non-string/)
+
+    string_handling = {
+      'Bind' => true, 'ResultVariableName' => 'raw',
+      'VariableType' => { '$Type' => 'DataTypes$StringType' }, 'ImportMappingCall' => nil
+    }
+    interpreter.send(:bind_rest_result, string_handling, 'plain body', variables, result_handling_type: 'String')
+    expect(variables.fetch('raw')).to eq('plain body')
+    expect do
+      interpreter.send(:bind_rest_result, string_handling.merge('ImportMappingCall' => {}), 'body', variables,
+                       result_handling_type: 'String')
+    end.to raise_error(Mxrb::NativeRuntimeError, /invalid string REST result handling/)
+    expect do
+      interpreter.send(:bind_rest_result, string_handling, 'body', variables, result_handling_type: 'Future')
+    end.to raise_error(Mxrb::NativeRuntimeError, /unsupported REST result handling/)
+  end
 end
 # rubocop:enable Metrics/BlockLength

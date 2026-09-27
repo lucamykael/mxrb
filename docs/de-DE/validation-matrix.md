@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · [English](../en-US/validation-matrix.md) · **Deutsch**
 
-Stand: 13. September 2026.
+Stand: 25. September 2026.
 
 ```text
 Original-MPR → validate → export → generate → validate → compare
@@ -43,6 +43,24 @@ die diese Rolle nicht enthielt, und der Settings-Codec kannte
 noch nicht. Fokussierte Regressionstests decken beides ab; private Werte werden
 nicht veröffentlicht.
 
+Am 25. September zertifizierte `script/validate_ruby_app --repair-hashes` den
+vollständigen Korpus aus 13 Projekten über Ruby-App-Export, eine öffentliche
+Quelltextprüfung ohne Verstöße, Kompilierung mit abgetrenntem bearbeitbarem
+Mendix-Sidecar, MPR-Validierung und identischen semantischen Vergleich:
+**13/13 bestanden**. Hash-Reparaturen bleiben ausdrücklich temporär: eine Unit
+in SLATaskApp und zwei in RubyBridgeSandbox wurden nur in Kopien korrigiert;
+die übrigen elf Eingaben benötigten keine Reparatur.
+
+Dieses Gate beseitigte öffentliche Ruby-Leaks, die der strukturelle Roundtrip
+nicht erkannt hatte. Database-Connector-Mappings verwenden nun geordnete
+Parameterblöcke; schema-gestützte Pluggable-Skalare, Aktionen, XPath-Quellen
+und Objektlisten verwenden bearbeitbare semantische Builder, während noch
+nicht repräsentierte verschachtelte Werte verlustfrei im privaten Baseline
+verbleiben; zusammengesetzte Design-Properties werden als verschachtelte
+semantische Deklarationen ausgegeben und ihre BSON-Identitäten privat
+wiederhergestellt. Externe UUID-förmige Widget-Konfigurationen werden nicht
+mehr als Mendix-Unit-Identität fehlklassifiziert.
+
 ## Tiefe Abdeckung
 
 Der Vergleich umfasst Metadaten, Security, Unit-Baum, Entitäten,
@@ -63,9 +81,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 1.825 Beispiele, keine Fehler;
-- 97,10 % Zeilenabdeckung (35.451/36.511);
-- 90,96 % Branch-Abdeckung (14.394/15.825);
+- 2.066 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (36.788/36.788);
+- 100,00 % Branch-Abdeckung (15.926/15.926);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

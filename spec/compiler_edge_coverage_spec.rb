@@ -307,5 +307,14 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
 
     grid = Mxrb::Compiler::LegacyDataGridCompiler.allocate
     expect(grid.send(:button_class, {})).to eq('btn-default')
+
+    grid.instance_variable_set(:@widget, 'DataSource' => { 'EntityRef' => { 'Entity' => 'Demo.Item' } })
+    expect(grid.send(:entity_path)).to eq('Demo.Item')
+    data_source = { 'EntityRef' => { 'Steps' => [2, {
+      'Association' => 'Demo.Item_Category', 'DestinationEntity' => 'Demo.Category'
+    }] } }
+    grid.instance_variable_set(:@widget, 'DataSource' => data_source)
+    expect(grid.send(:entity_path)).to eq('Demo.Item_Category/Demo.Category')
+    expect(grid.send(:entity)).to eq('Demo.Category')
   end
 end

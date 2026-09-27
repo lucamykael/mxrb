@@ -258,5 +258,68 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
     @compiler.instance_variable_set(:@uses_listen_object, true)
     expect(@compiler.send(:widget_imports)).to include('ListenObjectProperty')
   end
+
+  it 'covers empty collection, fallback image, and invalid styling branches' do
+    expect(@compiler.send(:render_grid_cell, {}, 'row')).to include('mx-datagrid-cell')
+
+    source = instance_double(Mxrb::Compiler::WebListDataSource, supported?: true, entity: 'Demo.Item')
+    allow(@compiler).to receive(:list_view_property).and_return(nil)
+    expect(@compiler.send(:render_collection_list, { 'Name' => 'items' }, source) { 'unused' })
+      .to include('mxrb-empty-datasource')
+
+    expect(@compiler.send(:render_dynamic_image,
+                          'Name' => 'image', 'DefaultImage' => 'Demo.Logo'))
+      .to include('image')
+    expect(@compiler.send(:inline_style,
+                          'Appearance' => { 'Style' => '1invalid:value; --valid: yes' }))
+      .to eq('--valid' => 'yes')
+  end
+
+  it 'covers association, login, editability, and form-group alternatives' do
+    @compiler.instance_variable_set(:@data_view_scopes, [{ scope: 'object', entity: 'Demo.Item' }])
+    allow(@compiler).to receive(:attribute_type).and_return('String')
+    selector = {
+      'Name' => 'categories',
+      'AttributeRef' => {
+        'Attribute' => 'Demo.Category.Name',
+        'EntityRef' => { 'Steps' => [2, {
+          'Association' => 'Demo.Item_Category', 'DestinationEntity' => 'Demo.Category'
+        }] }
+      }
+    }
+    expect(@compiler.send(:render_association_selector, selector,
+                          type: 'ReferenceSet', component: '$ReferenceSet'))
+      .to include('mx-referencesetselector')
+    expect(@compiler.send(:render_login_button,
+                          'Name' => 'login', 'RenderType' => 'Link'))
+      .to include('"renderType": "link"')
+    expect(@compiler.send(:input_editability,
+                          { 'Editable' => 'Conditional',
+                            'ConditionalEditabilitySettings' => { 'Expression' => 'invalid' } },
+                          'object')).to be_nil
+    allow(@compiler).to receive(:client_action_config).and_return(nil)
+    expect(@compiler.send(:action_property, {}, '$Type' => 'Forms$MicroflowAction')).to be_nil
+
+    @compiler.instance_variable_set(:@data_view_scopes, [])
+    expect(@compiler.send(:render_form_group, { 'Name' => 'field' }, 'field', 'Caption', 'input', 'mx-field'))
+      .to include('"width": 3')
+  end
+
+  it 'resolves missing and concrete domain attribute types' do
+    mismatch = Struct.new(:module_name, :document).new('Other', {})
+    domain = Struct.new(:module_name, :document).new('Demo', {
+      'Entities' => [2, {
+        'Name' => 'Item', 'Attributes' => [2,
+                                           { 'Name' => 'Untyped' },
+                                           { 'Name' => 'Title',
+                                             'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }]
+      }]
+    })
+    allow(@source).to receive(:units_of).with('DomainModels$DomainModel').and_return([mismatch, domain])
+    expect(@compiler.send(:attribute_type, 'Other.Item', 'Missing')).to eq('String')
+    expect(@compiler.send(:attribute_type, 'Demo.Item', 'Missing')).to eq('String')
+    expect(@compiler.send(:attribute_type, 'Demo.Item', 'Untyped')).to eq('String')
+    expect(@compiler.send(:attribute_type, 'Demo.Item', 'Title')).to eq('String')
+  end
 end
 # rubocop:enable Metrics/BlockLength

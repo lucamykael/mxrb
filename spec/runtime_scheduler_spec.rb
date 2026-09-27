@@ -250,6 +250,20 @@ RSpec.describe Mxrb::Runtime::Scheduler do
         described_class.new(project_with(source), executor: ->(_name) {})
       end.to raise_error(ArgumentError, /must be in/)
     end
+
+    no_day = event(
+      'NoDay', microflow: 'Bad',
+               schedule: { '$Type' => 'ScheduledEvents$WeekSchedule', 'Monday' => false }
+    )
+    expect { described_class.new(project_with(no_day), executor: ->(_name) {}) }
+      .to raise_error(ArgumentError, /requires a day/)
+
+    invalid_legacy = {
+      name: 'InvalidLegacy', microflow: 'Bad', enabled: true,
+      interval_type: 'Year', interval: 1
+    }
+    expect { described_class.new(project_with(invalid_legacy), executor: ->(_name) {}) }
+      .to raise_error(ArgumentError, /unsupported scheduled-event interval/)
   end
 
   it 'supports default executors, executor objects, and every callable arity' do
@@ -326,6 +340,10 @@ RSpec.describe Mxrb::Runtime::Scheduler do
     expect(scheduler.send(:due_slot, every_two_days, candidate)).to be_nil
     anchored_day = every_two_days.with(start_at: first)
     expect(scheduler.send(:due_slot, anchored_day, first + (2 * 86_400))).not_to be_nil
+    weekly = scheduler.jobs.first.with(schedule: { type: :week, days: [1], hour: 9, minute: 30 })
+    expect(scheduler.send(:due_slot, weekly, Time.utc(2026, 8, 10, 9, 31))).to be_nil
+    expect(scheduler.send(:integer, nil, 7)).to eq(7)
+    expect(scheduler.send(:integer, '2', 7)).to eq(2)
   end
 
   it 'handles lifecycle failures, overlap options, and thread edge paths' do

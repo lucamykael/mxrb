@@ -5,7 +5,7 @@ Compilers. Eine Oberfläche gilt erst dann als `native`, wenn Erstellen, Ändern
 Entfernen, erneutes Öffnen der MPR-Datei und Neukompilieren mit stabilen nativen
 IDs getestet sind.
 
-Stand 5. September 2026: Diese konservative Matrix bewertet ganze Familien,
+Stand 25. September 2026: Diese konservative Matrix bewertet ganze Familien,
 nicht den prozentualen Fertigstellungsgrad. Für Domäne, Sicherheit und geplante
 Ereignisse bestehen inzwischen inkrementelle Bearbeitungswege; nicht
 repräsentierte Varianten werden weiterhin erhalten. Geprüfte Verträge und

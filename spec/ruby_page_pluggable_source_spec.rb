@@ -13,6 +13,13 @@ RSpec.describe 'runtime page pluggable property blocks' do
         property :title, :string
         property :enabled, :boolean
         property :count, :integer
+        property :series, :object do
+          list!
+          properties do
+            property :name, :string
+            property :run, :action
+          end
+        end
       end
     end
   end
@@ -67,6 +74,26 @@ RSpec.describe 'runtime page pluggable property blocks' do
         'custom', widget_id:, widget_name: 'Custom', properties: widget.dig('options', 'properties')
       )
       expect(builder.widgets).to eq(baseline.widgets)
+    end
+  end
+
+  it 'emits and evaluates nested object properties through semantic builders' do
+    complex = Marshal.load(Marshal.dump(widget))
+    complex['options']['properties']['series'] = {
+      objects: [{ name: 'First', run: { kind: :microflow, handler: 'App.Run', arguments: {} } }]
+    }
+    with_context do
+      source = emit(complex)
+      expect(source).to include('objects do', 'object do', 'set "name", "First"')
+      expect(source).not_to include('objects: [{', '=>')
+      tree = Mxrb::RubyApp::Page::WidgetTree.new
+      tree.instance_eval(source)
+      expect(tree.widgets.first.dig('options', 'properties', 'series')).to eq(
+        objects: [{
+          'name' => 'First',
+          'run' => { action: { kind: 'microflow', handler: 'App.Run', arguments: {} } }
+        }]
+      )
     end
   end
 

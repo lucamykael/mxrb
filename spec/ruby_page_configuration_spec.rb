@@ -60,6 +60,42 @@ RSpec.describe 'private Ruby page configuration' do
     expect(projection.first.dig('options', 'design_properties', 0, 'id')).to be_nil
   end
 
+  it 'emits nested compound design properties without exposing their private BSON structure' do
+    nested_id = '44444444-4444-4444-8444-444444444444'
+    nested_value_id = '55555555-5555-4555-8555-555555555555'
+    compound = {
+      'id' => property_id, 'value_id' => value_id, 'key' => 'Spacing',
+      'properties' => [{
+        'id' => nested_id, 'value_id' => nested_value_id,
+        'key' => 'margin-bottom', 'option' => 'M'
+      }]
+    }
+    configured = widget.merge(
+      'options' => widget.fetch('options').merge('design_properties' => [compound])
+    )
+    source, projection = emitted_widgets([configured])
+    expect(source).to include(
+      'design_property "Spacing" do',
+      'design_property "margin-bottom", option: "M"'
+    )
+    expect(source).not_to include(property_id, value_id, nested_id, nested_value_id, '$Type')
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([configured])) do
+      restored = Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection)
+      expect(restored).to eq([configured])
+    end
+
+    writer = Mxrb::Writer.allocate
+    document = writer.send(:data_view_design_property_doc, compound)
+    parsed = Mxrb::Model::Page.allocate.send(:design_property_spec, document)
+    expect(normalize(parsed)).to eq(compound)
+
+    builder = Mxrb::Dsl::DesignPropertyBuilder.new
+    expect { builder.build('Spacing') }.to raise_error(ArgumentError, /requires option/)
+    expect do
+      builder.build('Spacing', option: 'M') { design_property 'nested', option: 'S' }
+    end.to raise_error(ArgumentError, /either option/)
+  end
+
   it 'keeps authored option changes while restoring IDs through Page.configure' do
     source, = emitted_widgets([widget])
     source = source.sub('option: "Large"', 'option: "Small"')
@@ -135,6 +171,23 @@ RSpec.describe 'private Ruby page configuration' do
     Mxrb::RubyApp::PageDesignIdentity.with(manifest([widget])) do
       expect { Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection) }
         .to raise_error(Mxrb::ValidationError, %r{rename from removal/insertion})
+    end
+  end
+
+  it 'rejects design shape changes and duplicate semantic keys' do
+    _, projection = emitted_widgets([widget])
+    projection.first.dig('options', 'design_properties').first.delete('option')
+    projection.first.dig('options', 'design_properties').first['properties'] = []
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([widget])) do
+      expect { Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection) }
+        .to raise_error(Mxrb::ValidationError, /changed between option and compound/)
+    end
+
+    duplicate = Marshal.load(Marshal.dump(widget))
+    duplicate.dig('options', 'design_properties') << design.merge('id' => '', 'value_id' => '')
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([widget])) do
+      expect { Mxrb::RubyApp::PageDesignIdentity.restore(page_id, [duplicate]) }
+        .to raise_error(Mxrb::ValidationError, /duplicate design property key/)
     end
   end
 
@@ -254,6 +307,58 @@ RSpec.describe 'private Ruby page configuration' do
     it "retains fallback for non-equivalent source #{definition.inspect}" do
       expect(Mxrb::RubyApp::PageDataSources.source_expression(definition)).to be_nil
     end
+  end
+
+  it 'fails closed for every malformed semantic data-source component' do
+    bridge = Mxrb::RubyApp::PageDataSources
+    malformed = [
+      nil,
+      { 'kind' => 'context', 'future' => true },
+      { 'kind' => 'context', 'entity' => '' },
+      { 'kind' => 'context', 'entity' => 'App.Item', 'variable' => [] },
+      { 'kind' => 'context', 'entity' => 'App.Item',
+        'variable' => { 'kind' => 1, 'name' => 'Item' } },
+      { 'kind' => 'association', 'entity' => 1, 'steps' => [] },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => {} },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => [nil] },
+      { 'kind' => 'association', 'entity' => 'App.Item',
+        'steps' => [{ 'association' => '', 'entity' => 'App.Other' }] },
+      { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => [], 'variable' => nil },
+      { 'kind' => 'microflow', 'name' => '' },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'mappings' => {} },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'mappings' => [nil] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'mappings' => [{ 'parameter' => 1, 'expression' => '$Item' }] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'mappings' => [{ 'parameter' => 'Item', 'future' => true }] },
+      { 'kind' => 'nanoflow', 'name' => 'App.Read', 'settings_native' => { 'UseAllPages' => true } },
+      { 'kind' => 'microflow', 'name' => 'App.Read', 'settings_native' => [] },
+      { 'kind' => 'microflow', 'name' => 'App.Read',
+        'settings_native' => { 'UseAllPages' => nil } },
+      { 'kind' => 'listen', 'target' => '' }
+    ]
+    malformed.each { expect(bridge.source_expression(_1)).to be_nil }
+    expect(bridge.variable_reference_expression(nil)).to be_nil
+    expect(bridge.variable_reference_expression('kind' => 'page_parameter', 'name' => 'Item', 'future' => true))
+      .to be_nil
+    expect(bridge.configuration_expression(kind: :listen, target: 'grid')).to eq('listen_to("grid")')
+  end
+
+  it 'fails closed when hostile hash implementations raise during source inspection' do
+    broken_lookup = Class.new(Hash) do
+      def [](_key) = raise(ArgumentError, 'broken lookup')
+    end.new
+    broken_normalization = Class.new(Hash) do
+      def to_h(*) = raise(TypeError, 'broken normalization')
+    end.new
+    broken_keys = Class.new(Hash) do
+      def keys = raise(KeyError, 'broken keys')
+    end.new
+
+    bridge = Mxrb::RubyApp::PageDataSources
+    expect(bridge.source_expression(broken_lookup)).to be_nil
+    expect(bridge.configuration_expression(broken_normalization)).to be_nil
+    expect(bridge.variable_reference_expression(broken_keys)).to be_nil
   end
 end
 # rubocop:enable Metrics/BlockLength
