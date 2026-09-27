@@ -12,7 +12,7 @@ module Mxrb
     # the public value type, so the native microflow interpreter can use this
     # store without a persistence-specific object abstraction.
     # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
-    # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
     class SQLiteStore
       EVENTS = %i[
         before_create after_create before_update after_update
@@ -25,20 +25,20 @@ module Mxrb
 
       attr_reader :database, :schema
 
-      def initialize(project, path: ':memory:', defaults: {}, hooks: {}, allow_destructive: false)
+      def initialize(project, path: ':memory:', defaults: {}, hooks: {}, allow_destructive: false,
+                     schema: nil, transient_entities: nil)
         @database = SQLite3::Database.new(path.to_s)
         @database.results_as_hash = true
         @database.execute('PRAGMA foreign_keys = ON')
         @database.busy_timeout = 5_000
         @schema = SchemaMigrator.new(
-          project, database: @database, allow_destructive:
+          project, database: @database, allow_destructive:, schema:
         ).tap(&:migrate!).schema
         @defaults = defaults.transform_keys(&:to_s)
-        transient_defaults = project.modules.flat_map do |mod|
-          mod.entities.select { _1.persistable == false }.map do |entity|
-            ["#{mod.name}.#{entity.name}", defaults.fetch("#{mod.name}.#{entity.name}", {})]
-          end
-        end.to_h
+        transient_names = transient_entities || project.modules.flat_map do |mod|
+          mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
+        end
+        transient_defaults = transient_names.to_h { [_1, defaults.fetch(_1, {})] }
         @transient_entities = transient_defaults.keys.freeze
         @transient = Native::Store.new(defaults: transient_defaults)
         @hooks = Hash.new { |values, event| values[event] = [] }
@@ -724,6 +724,6 @@ module Mxrb
       end
     end
     # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
-    # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:enable Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
   end
 end

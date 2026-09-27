@@ -162,7 +162,10 @@ RSpec.describe 'Ruby application export mode' do
         'value.data_source?.name', 'transient: true', 'if (record.transient)',
         '<PageOutlet page={page} busy={busy} Widget={PageWidget} />'
       )
-      expect(page_outlet_source).to include('<PageComponent busy={busy} Widget={Widget} />')
+      expect(page_outlet_source).to include(
+        'page.widgets || []', 'renderWidget(child, childIndex', 'data-page={page.name}'
+      )
+      expect(page_outlet_source).not_to include("import pages from '../../pages'")
       expect(application_source).not_to match(/localStorage[^\n]*(?:password|username)/i)
       expect(application_source).not_to include('const activeContext = pageContext || contextOverride;')
       expect(application_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(2)
@@ -473,6 +476,7 @@ RSpec.describe 'Ruby application export mode' do
       expect(help_status).to be_success
       expect(help_stderr).to be_empty
       expect(help_stdout).to include('--server-port PORT', '--client-port PORT')
+      expect(help_stdout).to include('--no-reload')
       expect(help_stdout).to include('--api-port for --server-port', '--no-progress option is optional')
 
       frontend = File.join(root, 'frontend')

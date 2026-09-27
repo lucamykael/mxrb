@@ -669,6 +669,7 @@ when "run"
       --client-port PORT   React + Vite port (default: 5173)
       --environment NAME   Load .env and config/environments/NAME.env
       --no-frontend        Start only the Ruby backend
+      --no-reload          Disable Ruby backend source reload
 
     Compatibility aliases: --api-port for --server-port, --port for --client-port.
     The global --no-progress option is optional and only suppresses progress output.
@@ -695,10 +696,11 @@ when "run"
   server_port = option.call(%w[--server-port --api-port], 9292)
   client_port = option.call(%w[--client-port --port], 5173)
   frontend = !ARGV.delete("--no-frontend")
+  reload = !ARGV.delete("--no-reload")
   abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
   environment = load_environment!(environment_name, root:)
   supervisor = Mxrb::RubyApp::Supervisor.new(
-    root, host:, api_port: server_port, frontend_port: client_port, frontend:, environment:
+    root, host:, api_port: server_port, frontend_port: client_port, frontend:, environment:, reload:
   )
   puts "[mxrb] Environment: #{environment.name}"
   puts "[mxrb] Ruby server: http://#{host}:#{server_port}"

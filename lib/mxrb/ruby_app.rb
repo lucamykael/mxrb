@@ -193,11 +193,51 @@ module Mxrb
       end
     end
 
+    # Cheap request-boundary change detector for editable Ruby application code.
+    # Vite owns frontend HMR; this detector deliberately ignores generated and
+    # dependency directories and never invokes the Mendix compiler.
+    class SourceReloader
+      attr_reader :revision
+
+      def initialize(root)
+        @root = File.expand_path(root)
+        @revision = capture
+      end
+
+      def changed_revision
+        current = capture
+        current == revision ? nil : current
+      end
+
+      def commit(revision) = (@revision = revision.freeze)
+
+      private
+
+      def capture
+        paths.to_h do |path|
+          stat = File.stat(path)
+          [path, [stat.size, stat.mtime.to_i, stat.mtime.nsec].freeze]
+        end.freeze
+      end
+
+      def paths
+        adapters = File.join(@root, 'config', 'adapters.rb')
+        [*RubyApp.application_files(@root), *(File.file?(adapters) ? [adapters] : [])].sort
+      end
+    end
+
     # Per-process registry populated by conventional app/**/*.rb files.
     module Registry
       ADAPTER_KINDS = %i[
         app_service web_service import_xml import_mapping export_mapping document
       ].freeze
+      COLLECTIONS = {
+        constant: :@constants, enumeration: :@enumerations, record: :@records,
+        controller: :@controllers, service: :@services, page: :@pages,
+        module_security: :@module_security, project_security: :@project_security,
+        scheduled_event: :@scheduled_events, regular_expression: :@regular_expressions,
+        adapter: :@adapters, java_custom_action: :@java_custom_actions
+      }.freeze
 
       module_function
 
@@ -229,6 +269,18 @@ module Mxrb
       end
 
       def all(kind) = collection(kind).dup.freeze
+
+      def snapshot
+        collection(:record)
+        COLLECTIONS.to_h { |kind, variable| [kind, instance_variable_get(variable).dup] }.freeze
+      end
+
+      def restore!(state)
+        COLLECTIONS.each do |kind, variable|
+          instance_variable_set(variable, state.fetch(kind).dup)
+        end
+        self
+      end
 
       def register_service(name, implementation, unit_id: nil)
         services = collection(:service)
@@ -305,14 +357,7 @@ module Mxrb
 
       def collection(kind)
         reset! unless defined?(@records) && @records
-        {
-          constant: @constants, enumeration: @enumerations, record: @records, service: @services,
-          controller: (@controllers ||= {}), page: @pages, module_security: @module_security,
-          project_security: @project_security, scheduled_event: @scheduled_events,
-          regular_expression: @regular_expressions,
-          adapter: @adapters,
-          java_custom_action: @java_custom_actions
-        }.fetch(kind)
+        instance_variable_get(COLLECTIONS.fetch(kind))
       end
     end
 
@@ -1613,9 +1658,9 @@ module Mxrb
 
     # Loads generated Ruby classes and provides one shared in-memory backend.
     class Application
-      attr_reader :root, :manifest, :environment
+      attr_reader :root, :manifest, :environment, :reload_status
 
-      def initialize(root, environment: nil, process: ENV)
+      def initialize(root, environment: nil, process: ENV, reload: nil)
         @root = File.expand_path(root)
         @runtime_monitor = Monitor.new
         @manifest = Manifest.load(@root)
@@ -1626,9 +1671,27 @@ module Mxrb
                            environment, root: @root, process:
                          )
                        end
+        @reload_enabled = if reload.nil?
+                            process['MXRB_RELOAD'].to_s.match?(/\A(?:1|true|yes)\z/i)
+                          else
+                            reload == true
+                          end
         Registry.reset!
         load_adapters
         load_application_files
+        @source_reloader = SourceReloader.new(@root)
+        @reload_status = { enabled: @reload_enabled, state: 'ready', error: nil }.freeze
+      end
+
+      def reload_if_changed!
+        return false unless @reload_enabled
+
+        runtime_synchronize do
+          revision = @source_reloader.changed_revision
+          next false unless revision
+
+          reload_sources!(revision)
+        end
       end
 
       def schema(context: nil)
@@ -1805,7 +1868,10 @@ module Mxrb
         )
       end
 
-      def start_scheduler = bridge.start_scheduler
+      def start_scheduler
+        @scheduler_started = true
+        bridge.start_scheduler
+      end
 
       def close
         @bridge&.close
@@ -1814,6 +1880,7 @@ module Mxrb
         @access_control = nil
         @session_manager = nil
         @shared_store = nil
+        @scheduler_started = false
       end
 
       private
@@ -1954,15 +2021,46 @@ module Mxrb
       end
 
       def bridge
-        @bridge ||= NativeBridge.new(
+        @bridge ||= build_bridge
+      end
+
+      def build_bridge
+        NativeBridge.new(
           manifest.absolute_path('runtime_mpr'),
           database: runtime_database_path,
           record_hooks: Registry.all(:record), adapters: Registry.adapters,
           java_custom_actions: Registry.java_custom_actions,
           allow_destructive: environment['MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS'].to_s.casecmp?('true'),
           coordinator: shared_store,
-          scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300')
+          scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
+          runtime_records: Registry.all(:record)
         )
+      end
+
+      def reload_sources!(revision)
+        previous_registry = Registry.snapshot
+        previous_bridge = @bridge
+        candidate = nil
+        Registry.reset!
+        load_adapters
+        load_application_files
+        candidate = build_bridge if previous_bridge
+        candidate.start_scheduler if @scheduler_started
+        @bridge = candidate if previous_bridge
+        @access_control = nil
+        @session_manager = nil
+        @rest_routes = nil
+        previous_bridge&.close
+        @source_reloader.commit(revision)
+        @reload_status = { enabled: true, state: 'reloaded', error: nil }.freeze
+        true
+      rescue StandardError, ScriptError => e
+        candidate&.close
+        Registry.restore!(previous_registry)
+        @bridge = previous_bridge
+        @reload_status = { enabled: true, state: 'error', error: "#{e.class}: #{e.message}" }.freeze
+        warn "[mxrb] Ruby reload failed; keeping previous application: #{@reload_status.fetch(:error)}"
+        false
       end
 
       def shared_store
@@ -2097,10 +2195,15 @@ module Mxrb
       attr_reader :access_control, :interpreter, :project, :scheduler, :store
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
-                     allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300)
+                     allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
+                     runtime_records: nil)
         FileUtils.mkdir_p(File.dirname(database))
         @project = Model::Project.open(path)
-        @store = Runtime::SQLiteStore.new(@project, path: database, allow_destructive:)
+        schema = runtime_records && Runtime::SchemaMigrator.derive_overlay(@project, runtime_records)
+        transient = runtime_records && runtime_transient_entities(runtime_records)
+        store_options = { path: database, allow_destructive: }
+        store_options.merge!(schema:, transient_entities: transient) if runtime_records
+        @store = Runtime::SQLiteStore.new(@project, **store_options)
         @access_control = Runtime::AccessControl.new(@project)
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:
@@ -2128,6 +2231,14 @@ module Mxrb
       end
 
       private
+
+      def runtime_transient_entities(records)
+        native = project.modules.flat_map do |mod|
+          mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
+        end
+        ruby = records.to_h.values.select { _1.persistable == false }.map { _1.mendix_name.to_s }
+        (native + ruby).uniq
+      end
 
       def register_record_hooks(records)
         records.each do |entity, implementation|
@@ -2691,13 +2802,13 @@ module Mxrb
 
       attr_reader :host, :port, :application
 
-      def initialize(root, host: '127.0.0.1', port: 9292, logger: nil, environment: nil)
+      def initialize(root, host: '127.0.0.1', port: 9292, logger: nil, environment: nil,
+                     reload: nil)
         @host = host.to_s
         raise ArgumentError, 'the Ruby application server must bind to loopback' unless LOOPBACK_HOSTS.include?(@host)
 
         @port = Integer(port)
-        @application = Application.new(root, environment:)
-        @sessions = @application.session_manager
+        @application = Application.new(root, environment:, reload:)
         @logger = logger
       end
 
@@ -2713,19 +2824,27 @@ module Mxrb
 
       private
 
+      def sessions
+        return @sessions if defined?(@sessions) && @sessions
+
+        application.session_manager
+      end
+
       def dispatch(request, response)
+        application.reload_if_changed! if application.respond_to?(:reload_if_changed!)
         path = request.path
         method = request.request_method
         if method == 'GET' && path == '/api/health'
           return render_json(
             response, 200, ok: true, project: application.schema[:project],
-                           environment: application.environment.name
+                           environment: application.environment.name,
+                           reload: application.reload_status
           )
         end
 
         if method == 'POST' && path == '/api/login'
           credentials = request_json(request)
-          session = @sessions.login(credentials['username'], credentials['password'])
+          session = sessions.login(credentials['username'], credentials['password'])
           set_session_cookie(response, session.fetch(:token))
           public_session = session.reject { |key, _value| key == :token }
           return render_json(response, 200, { ok: true }.merge(public_session))
@@ -2733,16 +2852,16 @@ module Mxrb
 
         authorization = request_authorization(request)
         validate_csrf!(request, authorization) if unsafe_request?(method) && cookie_authenticated?(request)
-        context = @sessions.authenticate(authorization)
+        context = sessions.authenticate(authorization)
         if method == 'GET' && path == '/api/session'
           return render_json(
             response, 200,
             user: context.user, roles: context.user_roles, module_roles: context.module_roles,
-            csrf: @sessions.csrf_token(authorization)
+            csrf: sessions.csrf_token(authorization)
           )
         end
         if method == 'POST' && path == '/api/logout'
-          logged_out = @sessions.logout(authorization)
+          logged_out = sessions.logout(authorization)
           clear_session_cookie(response)
           return render_json(response, 200, ok: logged_out)
         end
@@ -2894,14 +3013,14 @@ module Mxrb
       def unsafe_request?(method) = !%w[GET HEAD OPTIONS].include?(method)
 
       def validate_csrf!(request, authorization)
-        return if @sessions.valid_csrf?(authorization, request['X-CSRF-Token'])
+        return if sessions.valid_csrf?(authorization, request['X-CSRF-Token'])
 
         raise AuthenticationError, 'invalid or missing CSRF token'
       end
 
       def set_session_cookie(response, token)
         attributes = ["mxrb_session=#{token}", 'Path=/', 'HttpOnly', 'SameSite=Strict',
-                      "Max-Age=#{@sessions.ttl}"]
+                      "Max-Age=#{sessions.ttl}"]
         attributes << 'Secure' if ENV['MXRB_SECURE_COOKIES'] == 'true'
         response['Set-Cookie'] = attributes.join('; ')
       end
@@ -3030,13 +3149,15 @@ module Mxrb
       attr_reader :root, :host, :api_port, :frontend_port
 
       def initialize(root, host: '127.0.0.1', api_port: 9292, frontend_port: 5173,
-                     npm: ENV.fetch('MXRB_NPM', 'npm'), frontend: true, environment: nil)
+                     npm: ENV.fetch('MXRB_NPM', 'npm'), frontend: true, environment: nil,
+                     reload: true)
         @root = File.expand_path(root)
         @host = host.to_s
         @api_port = Integer(api_port)
         @frontend_port = Integer(frontend_port)
         @npm = npm.to_s
         @frontend = frontend
+        @reload = reload == true
         @environment = if environment.is_a?(Environment)
                          environment
                        else
@@ -3050,7 +3171,7 @@ module Mxrb
         if external_backend?
           @backend_pid = spawn_backend
         else
-          @server = Server.new(root, host:, port: api_port, environment: @environment)
+          @server = Server.new(root, host:, port: api_port, environment: @environment, reload: @reload)
           @backend = Thread.new { @server.start }
         end
         @frontend_pid = spawn_frontend if @frontend
@@ -3088,7 +3209,10 @@ module Mxrb
 
       def spawn_backend
         Process.spawn(
-          profile_environment.merge('HOST' => host, 'MXRB_SERVER_PORT' => api_port.to_s),
+          profile_environment.merge(
+            'HOST' => host, 'MXRB_SERVER_PORT' => api_port.to_s,
+            'MXRB_RELOAD' => @reload ? '1' : '0'
+          ),
           'bundle', 'exec', 'puma', '-C', 'config/puma.rb', chdir: root
         )
       end

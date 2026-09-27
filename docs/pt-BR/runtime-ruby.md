@@ -23,10 +23,27 @@ mxrb run . --environment qa
 mxrb test App.mpr smoke.rb --native --environment qa
 ```
 
-Cada perfil usa, por padrão, `.mxrb/runtime/<ambiente>.sqlite3`. O schema deriva
-de entidades, atributos, associações e system members; mudanças aditivas são
+Durante `mxrb run`, o backend interpreta os arquivos Ruby e verifica mudanças
+no início de cada requisição; o frontend continua com o HMR do Vite. Um reload
+bem-sucedido troca o registro da aplicação e o runtime sob um único lock. Se o
+código novo tiver erro de sintaxe, declaração inválida ou migração insegura, a
+última versão válida continua atendendo e `/api/health` expõe o erro de reload.
+Use `--no-reload` quando precisar fixar o processo em uma única revisão.
+
+Esse ciclo de desenvolvimento não escreve o `.mpr` e não executa MxBuild. O
+`.mpr` só é sincronizado no limite explícito de `mxrb export`; até lá, páginas,
+serviços e modelos Ruby são executados pelo backend, enquanto artefatos nativos
+que ainda não têm implementação Ruby continuam no interpretador a partir do
+snapshot Mendix exportado.
+
+Cada perfil usa, por padrão, `.mxrb/runtime/<ambiente>.sqlite3`. Em `mxrb run`,
+o schema deriva das classes Ruby atuais, sobreposto ao snapshot nativo para os
+artefatos restantes. Entidades, atributos, associações e system members novos
+são aplicados de forma incremental. Mudanças aditivas são
 aplicadas de forma idempotente e mudanças incompatíveis usam rebuild
-transacional. Entidades não persistentes continuam somente em memória.
+transacional. Remoções destrutivas falham fechado, a menos que
+`MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS=true` esteja configurado. Entidades não
+persistentes continuam somente em memória.
 
 A API Ruby oferece login e tokens bearer, sessão, schema, navigation, pages,
 microflows, CRUD e published REST. Regras de página/microflow, access rules de

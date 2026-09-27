@@ -240,7 +240,9 @@ RSpec.describe 'Ruby application defensive coverage' do
     allow(app).to receive_messages(
       schema: { project: { 'name' => 'P' }, navigation: {}, modules: [{ 'pages' => [] }] },
       page: nil, invoke_service: { result: 1, effects: [] }, records: [], record: nil,
-      create_record: {}, update_record: nil, delete_record: false, rest_routes: []
+      create_record: {}, update_record: nil, delete_record: false, rest_routes: [],
+      reload_if_changed!: false,
+      reload_status: { enabled: false, state: 'ready', error: nil }
     )
     server = bare_server(application: app, sessions: sessions)
     dispatch = lambda do |path, method = 'GET', body = '', query = {}, headers = {}|

@@ -16,6 +16,18 @@ mxrb run . --environment qa
 mxrb test App.mpr smoke.rb --native --environment qa
 ```
 
+Während `mxrb run` interpretiert das Backend die Ruby-Quellen und prüft an jeder
+Request-Grenze auf Änderungen; für das Frontend bleibt Vite-HMR zuständig. Ein
+erfolgreicher Reload tauscht Registry und Runtime unter einem gemeinsamen Lock.
+Bei Syntaxfehlern, ungültigen Deklarationen oder unsicheren Migrationen arbeitet
+die letzte gültige Revision weiter und `/api/health` meldet den Reload-Fehler.
+Mit `--no-reload` wird der Prozess auf eine Quellrevision festgelegt.
+
+Dieser Entwicklungszyklus schreibt keine `.mpr`-Datei und startet MxBuild
+nicht. Die `.mpr` wird ausschließlich an der expliziten Grenze `mxrb export`
+synchronisiert; native Artefakte ohne Ruby-Implementierung laufen bis dahin im
+Interpreter auf Basis des exportierten Mendix-Snapshots.
+
 Jedes Profil verwendet standardmäßig `.mxrb/runtime/<Umgebung>.sqlite3`. Die
 Migration leitet Entitäten, Attribute, Assoziationen und System-Member ab.
 Additive Änderungen sind idempotent, inkompatible Änderungen verwenden einen

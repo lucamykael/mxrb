@@ -1,5 +1,4 @@
-import pages from '../../pages';
-import type { PageComponentProps, PageDefinition } from '../../types';
+import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
 
 interface PageOutletProps {
   page: PageDefinition;
@@ -8,13 +7,17 @@ interface PageOutletProps {
 }
 
 export function PageOutlet({ page, busy, Widget }: PageOutletProps) {
-  const PageComponent = pages[page.name as keyof typeof pages];
-  if (!PageComponent) {
-    return (
-      <main className="app-page mxrb-page region-content" role="alert">
-        Generated React page not found: {page.name}
-      </main>
-    );
-  }
-  return <PageComponent busy={busy} Widget={Widget} />;
+  const renderWidget = (widget: WidgetDefinition, index: number, path: string) => (
+    <Widget key={`${path}-${widget.name || widget.type}`} widget={widget} index={index}>
+      {(widget.children || []).map((child, childIndex) =>
+        renderWidget(child, childIndex, `${path}-${childIndex}`),
+      )}
+    </Widget>
+  );
+
+  return (
+    <main className="app-page mxrb-page region-content" aria-busy={busy} data-page={page.name}>
+      {(page.widgets || []).map((widget, index) => renderWidget(widget, index, String(index)))}
+    </main>
+  );
 }
