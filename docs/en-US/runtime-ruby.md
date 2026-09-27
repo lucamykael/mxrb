@@ -16,6 +16,19 @@ mxrb run . --environment qa
 mxrb test App.mpr smoke.rb --native --environment qa
 ```
 
+During `mxrb run`, the backend interprets Ruby sources and checks for changes
+at each request boundary; Vite continues to own frontend HMR. A successful
+reload swaps the application registry and runtime under one lock. If the new
+code has a syntax error, an invalid declaration, or an unsafe migration, the
+last valid revision keeps serving and `/api/health` reports the reload error.
+Use `--no-reload` to pin the process to one source revision.
+
+This development loop neither writes the `.mpr` nor invokes MxBuild. The
+`.mpr` is synchronized only at the explicit `mxrb export` boundary. Until then,
+Ruby pages, services, and models run in the backend, while native artifacts
+without Ruby implementations continue through the interpreter from the
+exported Mendix snapshot.
+
 Each profile defaults to `.mxrb/runtime/<environment>.sqlite3`. Schema migration
 derives entities, attributes, associations, and system members; additive changes
 are idempotent and incompatible changes use a transactional rebuild. Non-

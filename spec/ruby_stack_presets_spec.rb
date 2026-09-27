@@ -166,7 +166,7 @@ RSpec.describe Mxrb::RubyApp::Preset do
         expect(Process).to receive(:spawn).with(
           {
             'STACK_PROFILE' => 'qa-stack', 'MXRB_ENV' => 'qa',
-            'HOST' => '127.0.0.1', 'MXRB_SERVER_PORT' => '9494'
+            'HOST' => '127.0.0.1', 'MXRB_SERVER_PORT' => '9494', 'MXRB_RELOAD' => '1'
           },
           'bundle', 'exec', 'puma', '-C', 'config/puma.rb', chdir: root
         ).and_return(12_345)

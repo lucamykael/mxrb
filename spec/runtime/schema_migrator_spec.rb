@@ -112,6 +112,65 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     expect(derived.associations.first.storage_key).to eq('Local.Qualified')
   end
 
+  it 'derives the live schema from Ruby records and overlays only their native entities' do
+    Mxrb::RubyApp::Registry.reset!
+    record = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'Store.Pet', id: 'pet'
+      persistence true
+      attribute :name, type: :string, mendix_name: 'Name', required: true
+      attribute :weight, type: :decimal, mendix_name: 'Weight', default: 1.5
+      association 'Store.Owner', name: 'Pet_Owner', id: 'pet-owner', type: :Reference
+      system_members created_date: true
+    end
+    record.attributes.first[:id] = 'pet-name'
+    fallback_record = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'Store.Fallback'
+      persistence true
+      attribute :payload, type: :custom, mendix_name: 'Payload'
+      association 'Store.Owner', name: 'Remote.Fallback_Owner'
+    end
+    transient = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'Store.Draft', id: 'draft'
+      persistence false
+    end
+    view = Class.new(Mxrb::RubyApp::Record) do
+      mendix_name 'Store.Report', id: 'report'
+      persistence true
+      oql_view query: 'SELECT 1'
+    end
+    records = {
+      record.mendix_name => record, fallback_record.mendix_name => fallback_record,
+      transient.mendix_name => transient, view.mendix_name => view
+    }
+
+    ruby_schema = described_class.derive_records(records)
+    pet = ruby_schema.entity('Store.Pet')
+    expect(ruby_schema.entities.map(&:name)).to eq(%w[Store.Pet Store.Fallback])
+    expect(pet.columns.map { [_1.name, _1.type, _1.required, _1.default] }).to eq(
+      [['Name', :string, true, nil], ['Weight', :decimal, false, 1.5]]
+    )
+    expect(pet.system_members.keys).to eq([:created_date])
+    expect(ruby_schema.association('Store.Pet_Owner')).to have_attributes(
+      from_entity: 'Store.Pet', to_entity: 'Store.Owner', storage_key: 'pet-owner'
+    )
+    expect(ruby_schema.entity('Store.Fallback')).to have_attributes(storage_key: 'Store.Fallback')
+    expect(ruby_schema.entity('Store.Fallback').columns.first.sql_type).to eq('TEXT')
+    expect(ruby_schema.association('Remote.Fallback_Owner')).to have_attributes(
+      storage_key: 'Remote.Fallback_Owner'
+    )
+
+    native = schema_project
+    owner = schema_entity('Owner', [], id: 'owner', guid: 'owner')
+    native.modules.first.entities << owner
+    overlay = described_class.derive_overlay(native, records)
+    expect(overlay.entities.map(&:name)).to contain_exactly(
+      'Store.Pet', 'Store.Fallback', 'Store.Owner'
+    )
+    expect(overlay.entity('Store.Pet').columns.map(&:name)).to eq(%w[Name Weight])
+  ensure
+    Mxrb::RubyApp::Registry.reset!
+  end
+
   it 'falls back from storage GUIDs to IDs and logical names and ignores disabled system flags' do
     columns = [
       schema_attribute('ById', guid: '', id: 'attribute-id'),

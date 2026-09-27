@@ -182,7 +182,8 @@ module Mxrb
           ['--server-port PORT', 'Ruby backend port (default: 9292)'],
           ['--client-port PORT', 'React + Vite port (default: 5173)'],
           ['--environment NAME', 'Load .env plus config/environments/NAME.env'],
-          ['--no-frontend', 'Start only the Ruby backend']
+          ['--no-frontend', 'Start only the Ruby backend'],
+          ['--no-reload', 'Disable Ruby backend source reload']
         ],
         'env' => [
           ['--environment NAME', 'Profile: development, qa, staging, production, or a safe custom name'],
@@ -206,6 +207,7 @@ module Mxrb
         ],
         'run' => [
           'Compatibility aliases: --api-port for --server-port, --port for --client-port.',
+          'Ruby sources reload at request boundaries; Vite owns frontend HMR.',
           'The global --no-progress option is optional and only suppresses progress output.'
         ]
       }.freeze

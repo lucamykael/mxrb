@@ -627,6 +627,12 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(supervisor.send(:external_backend?)).to be(false)
     allow(Process).to receive(:spawn).and_return(12)
     expect(supervisor.send(:spawn_backend)).to eq(12)
+    no_reload = Mxrb::RubyApp::Supervisor.new('.', environment:, frontend: false, reload: false)
+    expect(Process).to receive(:spawn).with(
+      hash_including('MXRB_RELOAD' => '0'), 'bundle', 'exec', 'puma', '-C', 'config/puma.rb',
+      chdir: File.expand_path('.')
+    ).and_return(14)
+    expect(no_reload.send(:spawn_backend)).to eq(14)
     expect(supervisor.send(:profile_environment)).to include('MXRB_ENV' => 'qa', 'VITE_X' => '1')
     expect(supervisor.send(:terminate, nil)).to be_nil
     expect(Process).to receive(:kill).with('TERM', 12)
@@ -710,7 +716,7 @@ RSpec.describe 'Ruby application internal contracts' do
         '/tmp/runtime.mpr', database: File.join(dir, 'db/custom.sqlite3'),
                             record_hooks: {}, adapters: {}, java_custom_actions: {},
                             allow_destructive: true, coordinator:,
-                            scheduler_lease_ttl: '300'
+                            scheduler_lease_ttl: '300', runtime_records: {}
       ).and_return(native_bridge)
       expect(app.send(:bridge)).to eq(native_bridge)
       app.close

@@ -75,12 +75,75 @@ module Mxrb
 
       attr_reader :schema, :migration_plan
 
-      def initialize(project, database:, allow_destructive: false)
+      def initialize(project, database:, allow_destructive: false, schema: nil)
         @project = project
         @allow_destructive = allow_destructive == true
         @owns_database = !database.is_a?(SQLite3::Database)
         @database = @owns_database ? SQLite3::Database.new(database.to_s) : database
-        @schema = self.class.derive(project)
+        @schema = schema || self.class.derive(project)
+      end
+
+      def self.derive_records(records)
+        implementations = records.to_h.values.uniq
+        entities = implementations.filter_map { record_entity_schema(_1) }
+        associations = implementations.flat_map { record_association_schemas(_1) }
+        RuntimeSchema.new(entities.freeze, associations.freeze)
+      end
+
+      def self.derive_overlay(project, records)
+        native = derive(project)
+        ruby = derive_records(records)
+        authoritative = records.to_h.values.map { _1.mendix_name.to_s }.uniq
+        entities = native.entities.reject { authoritative.include?(_1.name) } + ruby.entities
+        associations = native.associations.reject do |association|
+          authoritative.include?(association.from_entity)
+        end + ruby.associations
+        RuntimeSchema.new(entities.freeze, associations.freeze)
+      end
+
+      def self.record_entity_schema(record)
+        return if record.persistable == false || record.oql_view_definition
+
+        qualified = record.mendix_name.to_s
+        key = record.mendix_id.to_s
+        key = qualified if key.empty?
+        columns = Array(record.attributes).map do |attribute|
+          name = attribute.fetch(:mendix_name).to_s
+          member_key = attribute[:id].to_s
+          member_key = "#{key}:#{name}" if member_key.empty?
+          type = attribute.fetch(:type).to_sym
+          SchemaColumn.new(
+            name, member_key, physical_name('attribute', member_key),
+            TYPE_MAP.fetch(type, 'TEXT'), type, attribute[:default],
+            attribute[:required] == true, attribute[:unique] == true || type == :autonumber
+          )
+        end
+        flags = record.system_members.to_h.each_with_object({}) do |(name, enabled), selected|
+          selected[name.to_sym] = SYSTEM_COLUMNS.fetch(name.to_sym) if enabled && SYSTEM_COLUMNS.key?(name.to_sym)
+        end
+        EntitySchema.new(
+          qualified, key, physical_name('entity', key), columns.freeze, flags.freeze
+        )
+      end
+
+      def self.record_association_schemas(record)
+        from = record.mendix_name.to_s
+        Array(record.associations).map do |association|
+          qualified = qualified_association_name(from, association.fetch(:name))
+          key = association[:id].to_s
+          key = qualified if key.empty?
+          AssociationSchema.new(
+            qualified.split('.').last, qualified, key,
+            physical_name('association', key), from, association.fetch(:target).to_s,
+            association.fetch(:type).to_sym
+          )
+        end
+      end
+
+      def self.qualified_association_name(entity, name)
+        module_name = entity.to_s.split('.', 2).first
+        value = name.to_s
+        value.include?('.') ? value : "#{module_name}.#{value}"
       end
 
       def self.derive(project)
