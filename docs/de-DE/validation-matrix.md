@@ -81,7 +81,7 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.066 Beispiele, keine Fehler;
+- 2.067 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (36.788/36.788);
 - 100,00 % Branch-Abdeckung (15.926/15.926);
 - Sudoku-Modellbewertung: 7/7;
@@ -130,17 +130,16 @@ strukturelles Gate je Eigenschaft. Für Mendix 11.12.1 materialisiert es alle
 455 geerbten Eigenschaftsvorkommen der 41 Core-Widgets, öffnet die MPR erneut,
 exportiert lesbares Ruby ohne opake Fragmente, kompiliert neu und vergleicht
 jeden typisierten Wert nach erneutem Öffnen. Aktuell sind `imported` und
-`compiled` jeweils 455/455. `studio_validated` bleibt 0/455 und darf nur durch
-MxBuild-/Studio-Pro-Evidenz in funktional gültigen Widget-Kontexten steigen.
+`compiled` jeweils 455/455; `studio_validated` erreicht ebenfalls 455/455.
 
-Mit `--mxbuild` und dem offiziellen 11.12.1-Programm wurde die neu kompilierte
-MPR ohne Speicherfehler gelesen. Der Oracle-Lauf verweigerte das Paket wegen
-625 Konsistenzproblemen, da das Fixture Widgets absichtlich isoliert, die
-Login-Seiten, Native-Profile, Datenkontexte, Datenquellen, bestimmte
-Layout-Positionen oder ausführbare Referenzen benötigen. Dadurch bleibt das
-Gesamt-Gate bei angefordertem Oracle rot und beschreibt die verbleibende Arbeit
-für `studio_validated`; die strukturelle Import- und Kompilierungsevidenz bleibt
-gültig.
+Mit `--mxbuild` und dem offiziellen 11.12.1-Programm erzeugt das Gate eine
+zweite Evidenz-MPR mit vollständigen Widgets in den erforderlichen Layout-,
+Template-, Entitäts-, Datei- und Bildkontexten. MxBuild lädt, prüft und paketiert
+diese MPR mit Exit-Status 0 und ohne Probleme. Eine unabhängige typisierte
+Inspektion bestätigt dieselben 455 Eigenschaften im akzeptierten Projekt. Der
+veraltete `TemplatePlaceholder` liegt in einem ausdrücklich ausgeschlossenen
+Template, weil Studio ihn in auslieferbaren Templates selbst verbietet; er
+wird dennoch vom Oracle deserialisiert.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
 Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers

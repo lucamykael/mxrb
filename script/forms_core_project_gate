@@ -11,11 +11,18 @@ require_relative '../lib/mxrb/forms/certification'
 require_relative '../lib/mxrb/forms/coverage'
 
 # Certifies each inherited core Forms property through a real project boundary:
-# MPR -> readable Ruby DSL -> rebuilt MPR -> typed Forms decode. This gate does
+# MPR -> readable Ruby DSL -> rebuilt MPR -> typed Forms decode. This gate
 # claims Studio validation only when the independent official-tool phase passes.
-module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
+# The certification fixture is intentionally explicit: every widget property and
+# every Studio context is visible in one executable evidence generator.
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/CyclomaticComplexity
+# rubocop:disable Metrics/MethodLength, Metrics/ModuleLength, Metrics/PerceivedComplexity
+module MxrbFormsCoreProjectGate
   PAGE_NAME = 'AllCoreProperties'
   VERSION = '11.12.1'
+  LAYOUT_WIDGETS = %w[Header Placeholder ScrollContainer SidebarToggleButton].freeze
+  FILE_WIDGETS = %w[FileManager].freeze
+  IMAGE_WIDGETS = %w[DynamicImageViewer ImageUploader].freeze
   PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
   PropertyCase = Data.define(:widget, :property, :name, :value)
@@ -35,8 +42,13 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     rebuilt_results = inspect_project(
       paths.fetch(:rebuilt_mpr), cases, expected: source_results.fetch(:signatures)
     )
+    if options[:mxbuild]
+      build_studio_project(paths.fetch(:studio_mpr))
+      configure_classic_web_client(paths.fetch(:studio_mpr))
+    end
+    studio_results = options[:mxbuild] && inspect_studio_project(paths.fetch(:studio_mpr))
     oracle = options[:mxbuild] && mxbuild(options.fetch(:mxbuild), paths)
-    inspections = { source: source_results, rebuilt: rebuilt_results }
+    inspections = { source: source_results, rebuilt: rebuilt_results, studio: studio_results }
     build_report(paths, cases, inspections, ruby_source, oracle)
   end
 
@@ -61,6 +73,7 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
       source_mpr: File.join(workspace, 'FormsCoreProperties.mpr'),
       ruby_root:,
       rebuilt_mpr: File.join(workspace, 'FormsCorePropertiesRebuilt.mpr'),
+      studio_mpr: File.join(workspace, 'FormsCoreStudio.mpr'),
       mda: File.join(workspace, 'FormsCoreProperties.mda'),
       mxbuild_errors: File.join(workspace, 'mxbuild-errors.json'),
       page_source: File.join(
@@ -68,6 +81,568 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
         'all_core_properties.rb'
       )
     }.freeze
+  end
+
+  def build_studio_project(mpr) # rubocop:disable Metrics/MethodLength
+    widgets = studio_widgets
+    by_context = widgets.group_by { studio_context(_1.schema_type.name) }
+    Mxrb.define(mpr) do
+      mendix_version VERSION
+      self.module(:Certification) do
+        enumeration(:Status) { value :Active, caption: 'Active' }
+        entity(:Target) { string :Name }
+        entity(:File) { generalizes 'System.FileDocument' }
+        entity(:Image) { generalizes 'System.Image' }
+        entity(:Entity) do
+          string :Name
+          boolean :Flag, default: 'false'
+          datetime :OccurredAt
+          enum :Status, enumeration: 'Certification.Status'
+          association 'Certification.Target', name: 'Entity_Target', cardinality: :many_to_many
+          association 'Certification.Target', name: 'Entity_TargetSingle', cardinality: :many_to_one
+        end
+        layout :CertificationLayout, navigation: nil
+        layout :PopupLayout, navigation: nil
+        layout_document :StudioLayout do |document|
+          MxrbFormsCoreProjectGate.populate_studio_layout(document, by_context.fetch(:layout))
+        end
+        layout_document :LegacyLayout do |document|
+          MxrbFormsCoreProjectGate.populate_legacy_layout(document)
+        end
+        page_template_document :StudioTemplate do |document|
+          MxrbFormsCoreProjectGate.populate_studio_template(document, by_context.fetch(:template))
+        end
+        image_collection :Images, images: [{
+          name: 'Target', format: 'Png', data: { data: PIXEL_PNG, subtype: :generic }
+        }]
+        menu :Main
+        snippet_document :Witness do |document|
+          MxrbFormsCoreProjectGate.populate_studio_snippet(document)
+        end
+        page :Home do
+          title 'Forms certification'
+        end
+        page :Tooltip do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(document, 'Tooltip', [], 'Entity')
+          end
+        end
+        page :TargetTooltip do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(document, 'TargetTooltip', [], 'Target')
+          end
+        end
+        page :TargetPicker do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_target_picker(document, 'TargetPicker', :single)
+          end
+        end
+        page :TargetMultiPicker do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_target_picker(document, 'TargetMultiPicker', :multi)
+          end
+        end
+        page :TargetDetails do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(document, 'TargetDetails', [], 'Target')
+          end
+        end
+        page :StudioWitnesses do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(
+              document, 'StudioWitnesses', by_context.fetch(:entity), 'Entity'
+            )
+          end
+        end
+        page :FileWitnesses do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(
+              document, 'FileWitnesses', by_context.fetch(:file), 'File'
+            )
+          end
+        end
+        page :ImageWitnesses do
+          form do |document|
+            MxrbFormsCoreProjectGate.populate_studio_page(
+              document, 'ImageWitnesses', by_context.fetch(:image), 'Image'
+            )
+          end
+        end
+      end
+      navigation { profile :Responsive, home_page: 'Certification.Home' }
+    end
+  end
+
+  def studio_context(widget)
+    return :layout if LAYOUT_WIDGETS.include?(widget)
+    return :template if widget == 'TemplatePlaceholder'
+    return :file if FILE_WIDGETS.include?(widget)
+    return :image if IMAGE_WIDGETS.include?(widget)
+
+    :entity
+  end
+
+  def studio_widgets
+    catalog = Mxrb::Forms::Catalog.for(VERSION)
+    catalog.concrete_widgets.map { studio_widget(_1, catalog) }
+  end
+
+  def studio_widget(widget, catalog)
+    Mxrb::Forms::Node.new(widget.name, catalog:).tap do |node|
+      widget.all_properties.each_with_index do |property, index|
+        value = studio_property_value(widget, property, index, catalog)
+        node.set(property.name, value)
+      end
+      node.name "studio#{widget.name}"
+      complete_studio_widget(node)
+    end
+  end
+
+  def studio_property_value(widget, property, index, catalog)
+    return no_client_action(catalog) if property.type_name == 'ClientAction'
+    return studio_attribute(widget.name) if property.type_name == 'AttributeReference'
+    return studio_data_source(widget.name, catalog) if property.type_name == 'DataSource'
+    if property.type_name == 'Page'
+      return widget.name == 'ReferenceSetSelector' ? 'Certification.TargetTooltip' : 'Certification.Tooltip'
+    end
+
+    Mxrb::Forms::Certification.sample_value(
+      property, catalog:, suffix: "Studio#{widget.name}#{index + 1}"
+    )
+  end
+
+  def no_client_action(catalog)
+    Mxrb::Forms::Node.new('NoClientAction', catalog:).tap do |action|
+      action.disabled_during_execution true
+    end
+  end
+
+  def studio_attribute(widget)
+    attribute = {
+      'CheckBox' => 'Flag', 'DatePicker' => 'OccurredAt',
+      'DropDown' => 'Status', 'RadioButtonGroup' => 'Status',
+      'InputReferenceSetSelector' => 'Target.Name',
+      'ReferenceSelector' => 'TargetSingle.Name'
+    }.fetch(widget, 'Name')
+    return Mxrb::Forms::AttributeReference.coerce("Certification.Entity.#{attribute}") unless attribute.include?('.')
+
+    association = if attribute.start_with?('TargetSingle')
+                    'Certification.Entity_TargetSingle'
+                  else
+                    'Certification.Entity_Target'
+                  end
+    Mxrb::Forms::AttributeReference.through(
+      'Certification.Target.Name',
+      via: Mxrb::Forms::EntityReference.through(
+        Mxrb::Forms::EntityPathStep.to(association, 'Certification.Target')
+      )
+    )
+  end
+
+  def studio_data_source(widget, catalog)
+    type = {
+      'DataGrid' => 'GridXPathSource', 'DataView' => 'DataViewSource',
+      'DynamicImageViewer' => 'ImageViewerSource', 'ListView' => 'ListViewXPathSource',
+      'ReferenceSetSelector' => 'ReferenceSetSource', 'TemplateGrid' => 'GridXPathSource'
+    }.fetch(widget, 'DataViewSource')
+    Mxrb::Forms::Node.new(type, catalog:).tap do |source|
+      source.force_full_objects false if source.schema_type.property(:force_full_objects)
+      source.entity_ref studio_entity_reference(widget) if source.schema_type.property(:entity_ref)
+      if source.schema_type.property(:source_variable)
+        parameter = widget == 'DynamicImageViewer' ? 'Image' : 'Entity'
+        source.source_variable studio_data_source_variable(widget, parameter)
+      end
+      if source.schema_type.property(:search_bar)
+        source.search_bar do |search|
+          search.items []
+          search.type :none
+          search.wait_for_search false
+        end
+      end
+    end
+  end
+
+  def studio_data_source_variable(widget, parameter)
+    return studio_source_variable(parameter) if %w[DataView ReferenceSetSelector].include?(widget)
+
+    nil
+  end
+
+  def studio_entity_reference(widget)
+    return Mxrb::Forms::EntityReference.direct('Certification.Entity') if widget == 'DataView'
+    return Mxrb::Forms::EntityReference.direct('Certification.Image') if widget == 'DynamicImageViewer'
+    if widget == 'ReferenceSetSelector'
+      return Mxrb::Forms::EntityReference.through(
+        Mxrb::Forms::EntityPathStep.to('Certification.Entity_Target', 'Certification.Target')
+      )
+    end
+
+    Mxrb::Forms::EntityReference.direct('Certification.Entity')
+  end
+
+  def studio_source_variable(parameter)
+    Mxrb::Forms::Node.new('PageVariable').tap do |variable|
+      variable.widget ''
+      variable.page_parameter parameter
+      variable.snippet_parameter ''
+      variable.local_variable ''
+      variable.use_all_pages false
+      variable.sub_key ''
+    end
+  end
+
+  def complete_studio_widget(widget)
+    widget.icon studio_glyph_icon if widget.schema_type.property(:icon)
+    widget.screen_reader_label nil if widget.schema_type.property(:screen_reader_label)
+    widget.native_accessibility_settings nil if widget.schema_type.property(:native_accessibility_settings)
+    widget.source_variable nil if widget.schema_type.property(:source_variable)
+
+    case widget.schema_type.name
+    when 'DataGrid', 'ReferenceSetSelector'
+      complete_studio_grid(widget)
+    when 'DataView'
+      widget.widgets []
+      widget.footer_widgets []
+    when 'ListView'
+      widget.templates []
+    when 'LoginButton'
+      widget.validation_message_widget 'studioValidationMessage'
+    when 'MenuBar', 'NavigationTree', 'SimpleMenuBar'
+      widget.menu_source studio_menu_source
+    when 'InputReferenceSetSelector', 'ReferenceSelector'
+      widget.selector_source studio_selector_source
+      select_page = widget.schema_type.name == 'InputReferenceSetSelector' ? 'TargetMultiPicker' : 'TargetPicker'
+      widget.select_page_settings studio_page_settings(select_page)
+      if widget.schema_type.property(:goto_page_settings)
+        widget.goto_page_settings studio_page_settings('TargetDetails')
+      end
+      widget.render_mode :drop_down if widget.schema_type.property(:render_mode)
+    when 'SnippetCallWidget'
+      widget.snippet_call studio_snippet_call
+    when 'StaticImageViewer'
+      widget.alternative_text studio_client_template('Certification image')
+    when 'TabContainer'
+      target = widget.fetch(:default_page).target
+      tab = Mxrb::Forms::Node.new('TabPage').tap do |page|
+        page.name target
+        page.caption Mxrb::Forms::Text.coerce('Certification', language: 'en_US')
+        page.widgets []
+      end
+      widget.tab_pages [tab]
+      widget.active_page_attribute_ref nil
+      widget.active_page_source_variable nil
+    when 'LayoutGrid'
+      column = Mxrb::Forms::Node.new('LayoutGridColumn').tap do |value|
+        value.weight 12
+        value.tablet_weight 12
+        value.phone_weight 12
+        value.preview_width 12
+        value.widgets []
+      end
+      row = Mxrb::Forms::Node.new('LayoutGridRow').tap { _1.columns [column] }
+      widget.rows [row]
+    when 'TemplateGrid'
+      widget.selection_mode :single
+      widget.select_first false
+      widget.default_button_trigger :double
+      widget.control_bar studio_control_bar
+    when 'TextBox'
+      widget.max_length_code 64
+      widget.input_mask '*****************'
+    end
+  end
+
+  def complete_studio_grid(widget)
+    reference_set = widget.schema_type.name == 'ReferenceSetSelector'
+    widget.selection_mode(reference_set ? :none : :single)
+    widget.select_first false
+    widget.default_button_trigger :double
+    widget.control_bar studio_control_bar
+    entity = reference_set ? 'Target' : 'Entity'
+    widget.columns [studio_grid_column(widget.schema_type.name, entity)]
+    return unless reference_set
+
+    widget.default_button_trigger :double
+    widget.x_path_constraint Mxrb::Forms::XPathConstraint.coerce('')
+    widget.constrained_by_refs []
+  end
+
+  def studio_control_bar
+    Mxrb::Forms::Node.new('GridControlBar').tap do |bar|
+      bar.items []
+      bar.default_button nil
+    end
+  end
+
+  def studio_grid_column(owner, entity = 'Entity')
+    Mxrb::Forms::Node.new('GridColumn').tap do |column|
+      column.name "#{owner.downcase}NameColumn"
+      column.caption Mxrb::Forms::Text.coerce('Name', language: 'en_US')
+      column.attribute_ref "Certification.#{entity}.Name"
+      column.show_tooltip false
+      column.aggregate_caption Mxrb::Forms::Text.coerce('', language: 'en_US')
+      column.aggregate_function :none
+      column.editable false
+      column.width 100
+      column.appearance { |appearance| complete_appearance(appearance) }
+    end
+  end
+
+  def studio_menu_source
+    Mxrb::Forms::Node.new('MenuDocumentSource').tap { _1.menu 'Certification.Main' }
+  end
+
+  def studio_selector_source
+    Mxrb::Forms::Node.new('SelectorXPathSource').tap do |source|
+      source.sort_bar do |sort_bar|
+        sort_bar.sort_items []
+      end
+      source.x_path_constraint Mxrb::Forms::XPathConstraint.coerce('')
+      source.constrained_by_refs []
+    end
+  end
+
+  def studio_snippet_call
+    Mxrb::Forms::Node.new('SnippetCall').tap do |call|
+      call.snippet 'Certification.Witness'
+      call.parameter_mappings []
+    end
+  end
+
+  def studio_page_settings(page)
+    Mxrb::Forms::Node.new('PageSettings').tap do |settings|
+      settings.page "Certification.#{page}"
+      settings.title_override nil
+      settings.parameter_mappings []
+    end
+  end
+
+  def studio_client_template(text)
+    Mxrb::Forms::Node.new('ClientTemplate').tap do |template|
+      template.template Mxrb::Forms::Text.coerce(text, language: 'en_US')
+      template.fallback Mxrb::Forms::Text.coerce(text, language: 'en_US')
+      template.parameters []
+    end
+  end
+
+  def populate_studio_layout(document, widgets)
+    indexed = widgets.to_h { [_1.schema_type.name, _1] }
+    scroll = indexed.fetch('ScrollContainer')
+    placeholder = indexed.fetch('Placeholder')
+    placeholder.name 'Main'
+    center = scroll_region([placeholder], toggle_mode: :none)
+    left = scroll_region([], toggle_mode: :push_content_aside)
+    top = scroll_region(
+      [indexed.fetch('Header'), indexed.fetch('SidebarToggleButton')], toggle_mode: :none
+    )
+    scroll.center center
+    scroll.left left
+    scroll.right nil
+    scroll.bottom nil
+    scroll.top top
+    scroll.layout_mode :sidebar
+
+    document.name 'StudioLayout'
+    document.documentation 'Complete core Forms witnesses that are valid only in layouts.'
+    document.excluded false
+    document.export_level :hidden
+    document.canvas_width 800
+    document.canvas_height 600
+    document.parameters []
+    document.content(:web_layout_content) do
+      layout_type :responsive
+      layout_call nil
+      set :widgets, [scroll]
+    end
+    document.appearance { |appearance| complete_appearance(appearance) }
+  end
+
+  def populate_studio_template(document, widgets)
+    document.name 'StudioTemplate'
+    document.documentation 'Complete template-placeholder witness.'
+    document.excluded true
+    document.export_level :hidden
+    document.canvas_width 800
+    document.canvas_height 600
+    document.display_name 'Studio template'
+    document.documentation_url ''
+    document.template_category 'Certification'
+    document.template_category_weight 1
+    document.image_data Mxrb::Forms::BinaryAsset.new(PIXEL_PNG, :generic, nil)
+    document.layout_call do
+      layout 'Certification.LegacyLayout'
+      arguments(:layout_call_argument) do
+        parameter 'Certification.LegacyLayout.Main'
+        set :widgets, widgets
+      end
+    end
+    document.appearance { |appearance| complete_appearance(appearance) }
+    document.template_type Mxrb::Forms::Node.new('OverviewPageTemplateType')
+  end
+
+  def populate_legacy_layout(document)
+    placeholder = Mxrb::Forms::Node.new('Placeholder').tap do |value|
+      value.name 'Main'
+      value.appearance { |appearance| complete_appearance(appearance) }
+      value.tab_index 0
+    end
+    document.name 'LegacyLayout'
+    document.documentation 'Legacy host for the template-placeholder witness.'
+    document.excluded false
+    document.export_level :hidden
+    document.canvas_width 800
+    document.canvas_height 600
+    document.parameters []
+    document.content('WebLayoutContent') do
+      layout_type :legacy
+      layout_call nil
+      set :widgets, [placeholder]
+    end
+    document.appearance { |appearance| complete_appearance(appearance) }
+  end
+
+  def scroll_region(widgets, toggle_mode:)
+    Mxrb::Forms::Node.new('ScrollContainerRegion').tap do |region|
+      region.widgets widgets
+      region.size_mode :pixels
+      region.size 240
+      region.appearance { |appearance| complete_appearance(appearance) }
+      region.toggle_mode toggle_mode
+    end
+  end
+
+  def complete_appearance(appearance)
+    appearance.css_class ''
+    appearance.style ''
+    appearance.design_properties []
+    appearance.dynamic_classes ''
+  end
+
+  def populate_studio_snippet(document)
+    document.name 'Witness'
+    document.documentation 'Target for the complete snippet-call witness.'
+    document.excluded false
+    document.export_level :hidden
+    document.canvas_width 320
+    document.canvas_height 180
+    document.widgets []
+    document.type :web
+    document.parameters []
+    document.variables []
+  end
+
+  def populate_studio_page(document, name, widgets, parameter_name)
+    document.name name
+    parameter = Mxrb::Forms::Node.new('PageParameter').tap do |value|
+      value.name parameter_name
+      value.parameter_type Mxrb::Forms::DataType.object("Certification.#{parameter_name}")
+      value.is_required true
+    end
+    document.parameters [parameter]
+    document.layout_call do
+      layout 'Certification.StudioLayout'
+      arguments(:layout_call_argument) do
+        parameter 'Certification.StudioLayout.Main'
+        set :widgets, [MxrbFormsCoreProjectGate.studio_context_view(parameter_name, widgets)]
+      end
+    end
+  end
+
+  def populate_target_picker(document, name, selection_mode)
+    document.name name
+    document.parameters []
+    document.layout_call do
+      layout 'Certification.PopupLayout'
+      arguments(:layout_call_argument) do
+        parameter 'Certification.PopupLayout.Main'
+        set :widgets, [MxrbFormsCoreProjectGate.studio_target_grid(selection_mode)]
+      end
+    end
+  end
+
+  def studio_target_grid(selection_mode)
+    catalog = Mxrb::Forms::Catalog.for(VERSION)
+    studio_widget(catalog.fetch_type('DataGrid'), catalog).tap do |grid|
+      grid.name 'targetPickerGrid'
+      grid.selection_mode selection_mode
+      grid.data_source('GridXPathSource') do |source|
+        source.force_full_objects false
+        source.entity_ref Mxrb::Forms::EntityReference.direct('Certification.Target')
+        source.source_variable nil
+        source.sort_bar { |sort| sort.sort_items [] }
+        source.search_bar do |search|
+          search.items []
+          search.type :none
+          search.wait_for_search false
+        end
+        source.x_path_constraint Mxrb::Forms::XPathConstraint.coerce('')
+      end
+      grid.columns [studio_grid_column('TargetPicker', 'Target')]
+      grid.control_bar studio_select_control_bar
+      grid.tooltip_page 'Certification.TargetTooltip'
+    end
+  end
+
+  def studio_select_control_bar
+    select = Mxrb::Forms::Node.new('SelectButton').tap do |button|
+      button.name 'selectTarget'
+      button.caption studio_client_template('Select')
+      button.tooltip Mxrb::Forms::Text.coerce('Select', language: 'en_US')
+      button.icon studio_glyph_icon
+      button.appearance { |appearance| complete_appearance(appearance) }
+      button.conditional_visibility_settings nil
+      button.button_style :default
+    end
+    Mxrb::Forms::Node.new('GridControlBar').tap do |bar|
+      bar.items [select]
+      bar.default_button nil
+    end
+  end
+
+  def studio_glyph_icon
+    Mxrb::Forms::Node.new('GlyphIcon').tap { _1.code 57_377 }
+  end
+
+  def studio_context_view(parameter_name, widgets)
+    source = Mxrb::Forms::Node.new('DataViewSource').tap do |data_source|
+      data_source.force_full_objects false
+      data_source.entity_ref Mxrb::Forms::EntityReference.direct("Certification.#{parameter_name}")
+      data_source.source_variable studio_source_variable(parameter_name)
+    end
+    Mxrb::Forms::Node.new('DataView').tap do |view|
+      view.name "#{parameter_name.downcase}Context"
+      view.data_source source
+      view.widgets widgets
+      view.footer_widgets []
+      view.editability :always
+      view.show_footer false
+      view.no_entity_message Mxrb::Forms::Text.coerce('Unavailable', language: 'en_US')
+    end
+  end
+
+  def configure_classic_web_client(mpr)
+    Mxrb.open(mpr, readonly: false) do |project|
+      unit = project.all_units.find do |candidate|
+        project.parse_bson(candidate)['$Type'] == 'Settings$ProjectSettings'
+      end
+      document = project.parse_bson(unit)
+      settings = Mxrb::IO::BsonCodec.parse_array(document.fetch('Settings')).fetch(:items)
+      web = settings.find { _1['$Type'] == 'Forms$WebUIProjectSettingsPart' }
+      web['EnableNewWidgetGeneration'] = false
+      web['UseOptimizedClient'] = 'No'
+      project.mpr.update_unit(unit.fetch('UnitID'), document)
+      configure_popup_layout(project)
+    end
+  end
+
+  def configure_popup_layout(project)
+    unit = project.all_units.find do |candidate|
+      document = project.parse_bson(candidate)
+      document['$Type'] == 'Forms$Layout' && document['Name'] == 'PopupLayout'
+    end
+    document = project.parse_bson(unit)
+    document.fetch('Content')['LayoutType'] = 'Popup'
+    project.mpr.update_unit(unit.fetch('UnitID'), document)
   end
 
   def property_cases
@@ -155,6 +730,38 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     { valid: validation.valid?, errors: validation.errors, mismatches:, signatures:, certified: }.freeze
   end
 
+  def inspect_studio_project(mpr)
+    validation = Mxrb.validate(mpr)
+    nodes = studio_document_nodes(mpr)
+    concrete = Mxrb::Forms::Catalog.for(VERSION).concrete_widgets.to_h { [_1.name, _1] }
+    certified = nodes.filter_map do |node|
+      widget = concrete[node.schema_type.name]
+      next unless widget
+
+      node.assignments.map { [widget.name, _1.property.name] }
+    end.flatten(1).uniq
+    expected = concrete.values.flat_map do |widget|
+      widget.all_properties.map { [widget.name, _1.name] }
+    end
+    missing = expected - certified
+    {
+      valid: validation.valid?, errors: validation.errors,
+      mismatches: missing.map { "#{_1.join('.')}: missing from Studio witness project" },
+      signatures: {}, certified:
+    }.freeze
+  end
+
+  def studio_document_nodes(mpr)
+    types = %w[Forms$Page Forms$Layout Forms$PageTemplate Forms$Snippet]
+    Mxrb.open(mpr) do |project|
+      documents = project.all_units.filter_map do |unit|
+        document = project.parse_bson(unit)
+        Mxrb::Forms::MprCodec.new.decode(document) if types.include?(document['$Type'])
+      end
+      documents.flat_map { collect_nodes(_1) }
+    end
+  end
+
   def page_nodes(mpr)
     root = Mxrb.open(mpr) do |project|
       unit = project.all_units.find do |candidate|
@@ -206,11 +813,13 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
   def build_report(paths, cases, inspections, ruby_source, oracle) # rubocop:disable Metrics/AbcSize,Metrics/MethodLength
     source = inspections.fetch(:source)
     rebuilt = inspections.fetch(:rebuilt)
+    studio = inspections.fetch(:studio)
     readable = !Mxrb::Forms::Certification.opaque_source?(ruby_source)
-    coverage = coverage_report(source, rebuilt, readable, oracle)
+    coverage = coverage_report(source, rebuilt, studio, readable, oracle)
     project_passed = coverage.count(:imported) == cases.size && coverage.count(:compiled) == cases.size
+    studio_passed = oracle.nil? || coverage.count(:studio_validated) == cases.size
     {
-      passed: project_passed && (oracle.nil? || oracle.fetch(:accepted)),
+      passed: project_passed && studio_passed,
       project_round_trip_passed: project_passed,
       mendix_version: VERSION,
       widget_count: cases.map { _1.widget.name }.uniq.size,
@@ -219,6 +828,7 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
       readable_ruby: readable,
       source: public_inspection(source).merge(mpr: paths.fetch(:source_mpr)),
       rebuilt: public_inspection(rebuilt).merge(mpr: paths.fetch(:rebuilt_mpr)),
+      studio: studio && public_inspection(studio).merge(mpr: paths.fetch(:studio_mpr)),
       ruby_source: paths.fetch(:page_source), oracle:
     }
   end
@@ -228,13 +838,14 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     public.merge(certified_properties: inspection.fetch(:certified).size)
   end
 
-  def coverage_report(source, rebuilt, readable, oracle)
+  def coverage_report(source, rebuilt, studio, readable, oracle)
     ledger = Mxrb::Forms::CoverageLedger.for_synthetic_round_trip
     claim_certified(ledger, source, :imported, readable && source.fetch(:valid),
                     'MPR export to readable Ruby DSL')
     claim_certified(ledger, rebuilt, :compiled, rebuilt.fetch(:valid),
                     'Ruby DSL rebuild and typed MPR reopen')
-    claim_certified(ledger, rebuilt, :studio_validated, oracle&.fetch(:accepted, false),
+    studio_accepted = oracle&.fetch(:accepted, false) && studio&.fetch(:valid) && studio.fetch(:mismatches).empty?
+    claim_certified(ledger, studio, :studio_validated, studio_accepted,
                     'Official MxBuild accepted the complete certification project')
     ledger.report
   end
@@ -253,10 +864,10 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     raise "Java #{java_version} is required by MxBuild" unless java_home
 
     command = mxbuild_command(executable, java_home, paths)
-    transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:rebuilt_mpr)))
-    unless File.file?(paths.fetch(:mxbuild_errors))
+    transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:studio_mpr)))
+    unless status.success? || File.file?(paths.fetch(:mxbuild_errors))
       GC.start
-      transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:rebuilt_mpr)))
+      transcript, status = Open3.capture2e(*command, chdir: File.dirname(paths.fetch(:studio_mpr)))
     end
     payload = File.file?(paths.fetch(:mxbuild_errors)) ? JSON.parse(File.read(paths.fetch(:mxbuild_errors))) : {}
     oracle_report(transcript, status, payload, paths.fetch(:mxbuild_errors))
@@ -266,13 +877,13 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     [File.expand_path(executable), "--java-home=#{java_home}",
      "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", '--target=package',
      "--output=#{paths.fetch(:mda)}", "--write-errors=#{paths.fetch(:mxbuild_errors)}",
-     paths.fetch(:rebuilt_mpr)]
+     paths.fetch(:studio_mpr)]
   end
 
   def oracle_report(transcript, status, payload, errors) # rubocop:disable Metrics/AbcSize
     storage_failure = transcript.match?(/StorageLoadException|TypeCacheUnknownTypeException|StreamingBsonUnitReader/)
     problems = Array(payload['problems'])
-    loaded = !storage_failure && payload['problems'].is_a?(Array)
+    loaded = !storage_failure && (status.success? || payload['problems'].is_a?(Array))
     {
       loaded:, accepted: loaded && status.success?, exit_status: status.exitstatus,
       problem_count: problems.size,
@@ -281,6 +892,8 @@ module MxrbFormsCoreProjectGate # rubocop:disable Metrics/ModuleLength
     }
   end
 end
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/CyclomaticComplexity
+# rubocop:enable Metrics/MethodLength, Metrics/ModuleLength, Metrics/PerceivedComplexity
 
 if $PROGRAM_NAME == __FILE__
   report = MxrbFormsCoreProjectGate.run(ARGV)

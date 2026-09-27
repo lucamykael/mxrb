@@ -101,16 +101,16 @@ gate estrutural por propriedade. Para Mendix 11.12.1, ele materializa as 455
 ocorrências herdadas dos 41 widgets core, reabre o MPR, exporta Ruby sem
 fragmentos opacos, recompila e compara cada valor tipado após nova reabertura.
 O resultado atual é 455/455 em `imported` e `compiled`. A contagem
-`studio_validated` continua 0/455 e só pode avançar com MxBuild/Studio Pro em
-cenários que satisfaçam os requisitos funcionais de cada widget.
+`studio_validated` também é 455/455.
 
-Com `--mxbuild` e o binário oficial 11.12.1, o MPR recompilado foi lido sem
-erro de storage. O oráculo recusou o pacote com 625 problemas de consistência,
-porque o fixture deliberadamente isola widgets que exigem página de login,
-perfil native, data context, datasource, posição em layout ou referências
-executáveis. Esse resultado mantém o gate geral vermelho quando o oráculo é
-solicitado e define o trabalho de `studio_validated`; não reduz as provas de
-importação e compilação estrutural.
+Com `--mxbuild` e o binário oficial 11.12.1, o gate cria um segundo MPR de
+evidência com widgets completos nos contextos exigidos de layout, template,
+entidade, arquivo e imagem. O MxBuild carregou, verificou e empacotou esse MPR
+com `exit_status` 0 e zero problemas. Uma inspeção tipada independente confirma
+que as mesmas 455 propriedades estão presentes no projeto aceito. O
+`TemplatePlaceholder`, mantido pelo metamodelo mas proibido pelo Studio em
+templates implantáveis, fica em um template legado explicitamente excluído;
+ele ainda é desserializado pelo oráculo sem fingir que pode ser publicado.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
@@ -139,7 +139,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.066 exemplos, zero falhas;
+- 2.067 exemplos, zero falhas;
 - 100,00% das linhas: 36.788/36.788;
 - 100,00% dos branches: 15.926/15.926;
 - avaliação Sudoku: 7/7 checks;

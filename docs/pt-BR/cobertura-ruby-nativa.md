@@ -30,7 +30,7 @@ Estados:
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
-| Páginas core | parcial | 41 widgets e 455 ocorrências de propriedades passam MPR → Ruby → MPR; faltam contextos funcionais, MxBuild/Studio e runtime |
+| Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, snippets, building blocks e menus | preserved_native | criar projeções Ruby e sincronizadores incrementais |
 | Navegação | parcial | itens de Page.native; ampliar perfis, home/login e role targeting |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
@@ -60,15 +60,15 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.066 exemplos e mede 100,00% das
+A suíte estrita passou com 2.067 exemplos e mede 100,00% das
 linhas (36.788/36.788) e 100,00% dos branches (15.926/15.926). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
 Cobertura de código 100/100 também não encerra cobertura funcional: layouts,
 snippets, building blocks, menus, integrações, workflows e task pages continuam
-`preserved_native`, várias famílias seguem `parcial`, e 455/455 propriedades de
-Forms ainda estão em 0/455 no gate independente `studio_validated`.
+`preserved_native` e várias famílias seguem `parcial`; as 455 propriedades de
+Forms estão em 455/455 no gate independente `studio_validated`.
 
 ## Propriedades de Forms core
 
@@ -76,10 +76,12 @@ Forms ainda estão em 0/455 no gate independente `studio_validated`.
 isolada de cada propriedade herdada dos 41 widgets concretos, exporta o modelo
 como Ruby legível, recompila e reabre o MPR tipado. O gate cobre 455/455 nas
 fases `imported` e `compiled`, além das 455/455 já cobertas por representação,
-emissão, transcodificação e round-trip sintético. A fase
-`studio_validated` permanece em 0/455 até existir evidência independente de
-MxBuild/Studio Pro em contextos semanticamente válidos; ela não é inferida do
-round-trip estrutural.
+emissão, transcodificação e round-trip sintético. Um segundo MPR usa witnesses
+completos nos contextos de layout, template, entidade, arquivo e imagem. O
+MxBuild 11.12.1 oficial o empacota com zero problemas, e a inspeção tipada desse
+mesmo artefato certifica `studio_validated` em 455/455. O `TemplatePlaceholder`
+legado é carregado em um template explicitamente excluído, pois o próprio
+Studio o proíbe em documentos implantáveis.
 
 ## Enumerações em aplicações Ruby
 

@@ -50,9 +50,12 @@ Core-Widgets, exportiert sie als lesbares Ruby, kompiliert sie neu und öffnet
 die typisierte MPR erneut. Das Gate zertifiziert 455/455 Eigenschaften als
 `imported` und `compiled`; Darstellung, Quellcodeausgabe,
 Speichertranskodierung und synthetischer Round-trip sind ebenfalls 455/455.
-`studio_validated` bleibt 0/455, bis unabhängige MxBuild-/Studio-Pro-Evidenz in
-semantisch gültigen Widget-Kontexten vorliegt. Ein struktureller Round-trip
-impliziert diese Phase nicht.
+Eine zweite MPR platziert vollständige Witnesses in Layout-, Template-,
+Entitäts-, Datei- und Bildkontexten. Das offizielle MxBuild 11.12.1 paketiert
+sie ohne Probleme; die typisierte Inspektion dieses akzeptierten Artefakts
+zertifiziert `studio_validated` mit 455/455. Der veraltete
+`TemplatePlaceholder` wird aus einem ausdrücklich ausgeschlossenen Template
+geladen, weil Studio ihn in auslieferbaren Dokumenten selbst verbietet.
 
 ## Enumerationen in Ruby-Anwendungen
 

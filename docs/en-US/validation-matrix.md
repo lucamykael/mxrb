@@ -208,17 +208,16 @@ property-level structural gate. For Mendix 11.12.1 it materializes all 455
 inherited property occurrences across 41 core widgets, reopens the MPR, exports
 readable Ruby without opaque fragments, recompiles it, and compares every typed
 value after reopening. The current result is 455/455 for `imported` and
-`compiled`. `studio_validated` remains 0/455 and can advance only with
-MxBuild/Studio Pro evidence in contexts that satisfy each widget's functional
-requirements.
+`compiled`, and 455/455 for `studio_validated`.
 
-With `--mxbuild` and the official 11.12.1 executable, the rebuilt MPR was read
-without storage errors. The oracle rejected packaging with 625 consistency
-problems because the fixture deliberately isolates widgets that require login
-pages, native profiles, data contexts, data sources, layout placement, or
-executable references. This keeps the overall gate red when the oracle is
-requested and defines the remaining `studio_validated` work; it does not
-invalidate the structural import and compilation evidence.
+With `--mxbuild` and the official 11.12.1 executable, the gate creates a second
+evidence MPR containing complete widgets in the required layout, template,
+entity, file, and image contexts. MxBuild loaded, checked, and packaged that
+MPR with exit status 0 and no problems. An independent typed inspection proves
+that the same 455 properties are present in the accepted project. The legacy
+`TemplatePlaceholder` remains loadable only in an explicitly excluded template
+because Studio rejects it in deployable templates; the gate records that
+platform limitation instead of claiming it can be published.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` is the fail-closed
 gate for native web compiler and Marketplace widgets actually used by a
@@ -276,7 +275,7 @@ instead of dumping the complete removed and added flow bodies.
 
 ## Ruby evaluations and coverage gate
 
-The current suite contains 2,066 examples and passes with 100.00% line coverage
+The current suite contains 2,067 examples and passes with 100.00% line coverage
 (36,788/36,788 executable library lines) and 100.00% branch coverage
 (15,926/15,926 branches).
 Run the enforced gate with:

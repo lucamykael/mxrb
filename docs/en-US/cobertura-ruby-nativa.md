@@ -41,15 +41,15 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,066 examples and measures 100.00% of
+The strict suite passed 2,067 examples and measures 100.00% of
 lines (36,788/36,788) and 100.00% of branches (15,926/15,926). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
 Code coverage alone does not complete functional coverage: layouts, snippets,
 building blocks, menus, integrations, workflows, and task pages remain
-`preserved_native`, several families remain `partial`, and all 455 Forms
-properties are still 0/455 in the independent `studio_validated` gate.
+`preserved_native` and several families remain `partial`; all 455 Forms
+properties are now 455/455 in the independent `studio_validated` gate.
 
 ## Core Forms properties
 
@@ -58,9 +58,12 @@ occurrence of every inherited property across the 41 concrete core widgets,
 exports it as readable Ruby, rebuilds it, and reopens the typed MPR. The gate
 certifies 455/455 properties as `imported` and `compiled`, in addition to the
 455/455 representation, source-emission, storage-transcoding, and synthetic
-round-trip evidence. `studio_validated` remains 0/455 until independent
-MxBuild/Studio Pro evidence exists in semantically valid widget contexts; a
-structural round trip never implies that phase.
+round-trip evidence. A second MPR places complete witnesses in layout,
+template, entity, file, and image contexts. Official MxBuild 11.12.1 packages
+it with no problems, while typed inspection of that accepted artifact certifies
+`studio_validated` at 455/455. The legacy `TemplatePlaceholder` is loaded from
+an explicitly excluded template because Studio itself rejects it in deployable
+documents.
 
 ## Enumerations in Ruby applications
 
