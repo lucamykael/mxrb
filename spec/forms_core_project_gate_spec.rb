@@ -29,6 +29,19 @@ RSpec.describe MxrbFormsCoreProjectGate do
     expect(described_class.property_cases.size).to eq(455)
   end
 
+  it 'places every inherited property in a context-complete Studio witness project' do
+    Dir.mktmpdir('mxrb-forms-studio-witness-spec-') do |workspace|
+      mpr = File.join(workspace, 'FormsCoreStudio.mpr')
+      described_class.build_studio_project(mpr)
+      described_class.configure_classic_web_client(mpr)
+
+      inspection = described_class.inspect_studio_project(mpr)
+
+      expect(inspection).to include(valid: true, mismatches: [])
+      expect(inspection.fetch(:certified).size).to eq(455)
+    end
+  end
+
   it 'distinguishes an MxBuild-readable project from an accepted project' do
     status = instance_double(Process::Status, success?: false, exitstatus: 3)
     payload = { 'problems' => [{ 'errorCode' => 'CE0544' }, { 'errorCode' => 'CE0544' }] }
@@ -41,6 +54,10 @@ RSpec.describe MxrbFormsCoreProjectGate do
     )
     expect(described_class.oracle_report('StorageLoadException', status, payload, '/tmp/errors.json'))
       .to include(loaded: false, accepted: false)
+
+    success = instance_double(Process::Status, success?: true, exitstatus: 0)
+    expect(described_class.oracle_report('BUILD SUCCEEDED', success, {}, '/tmp/missing.json'))
+      .to include(loaded: true, accepted: true, problem_count: 0)
   end
 end
 # rubocop:enable Metrics/BlockLength
