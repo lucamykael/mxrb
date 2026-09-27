@@ -60,7 +60,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.065 exemplos e mede 100,00% das
+A suíte estrita passou com 2.066 exemplos e mede 100,00% das
 linhas (36.788/36.788) e 100,00% dos branches (15.926/15.926). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.

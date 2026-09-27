@@ -901,6 +901,11 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       writer.send(:code_action_parameter_doc,
                   { kind: :entity_type, value: '' }, basic_type: 'Microflows$Basic', code: {})
     end.to raise_error(Mxrb::ValidationError, /requires an entity/)
+    expect(writer.send(:code_action_parameter_doc,
+                       { kind: :microflow, value: 'App.Helper' },
+                       basic_type: 'Microflows$Basic', code: false))
+      .to include('$Type' => 'Microflows$MicroflowJavaActionParameterValue',
+                  'Microflow' => 'App.Helper')
   end
 
   it 'covers undeclared behavior collections and missing typed settings baselines' do

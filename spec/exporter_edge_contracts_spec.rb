@@ -15,8 +15,13 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       type: 'Forms$BuildingBlock', name: 'Card', id: 'block-id', container_id: 'module-id',
       doc: { 'ImageData' => BSON::Binary.new('preview') }
     }
+    snippet = {
+      type: 'Forms$Snippet', name: 'Summary', id: 'snippet-id', container_id: 'module-id',
+      doc: { 'Parameters' => [2], 'Variables' => [2], 'Widgets' => [2] }
+    }
     expect(exporter.send(:integration_document_declaration, template)).to include('page_template_document')
     expect(exporter.send(:integration_document_declaration, block)).to include('building_block_document')
+    expect(exporter.send(:integration_document_declaration, snippet)).to include('snippet_document')
     expect(exporter.send(:presentation_value_spec, BSON::Binary.new('bytes')))
       .to include(binary: 'Ynl0ZXM=', subtype: :generic)
 
@@ -598,11 +603,13 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       .to eq([[{ 'Name' => 'Root' }]])
     expect(exporter.send(:page_root_widget_slots, 'FormCall' => 'opaque')).to eq([])
     slots = exporter.send(:page_root_widget_slots, {
-      'FormCall' => { 'Arguments' => [2, 'opaque', {
-        'Widgets' => [2, { 'Name' => 'Modern' }], 'Widget' => { 'Name' => 'Legacy' }
-      }] }
+      'FormCall' => { 'Arguments' => [2, 'opaque',
+                                      { 'Widgets' => [2, { 'Name' => 'Modern' }] },
+                                      { 'Widget' => { 'Name' => 'Legacy' } }] }
     })
     expect(slots).to eq([[{ 'Name' => 'Modern' }], [{ 'Name' => 'Legacy' }]])
+    page = double(raw_document: {})
+    expect(exporter.send(:page_overlay_exportable?, page, [])).to be(false)
   end
 
   it 'validates and externalizes native fragments with metadata' do
@@ -623,6 +630,41 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(sparse).not_to include('types:', 'overrides:')
     oversized = 'x' * (Mxrb::Exporter::INLINE_NATIVE_MAX_BYTES + 1)
     expect(exporter.send(:inline_native_fragment?, {}, oversized)).to be(false)
+    long_line = 'x' * (Mxrb::Exporter::INLINE_NATIVE_MAX_LINE_BYTES + 1)
+    expect(exporter.send(:inline_native_fragment?, {}, long_line)).to be(false)
+  end
+
+  it 'falls back for opaque code actions and exports scalar flow type metadata' do
+    opaque = {
+      type: 'JavaActions$JavaAction', name: 'Opaque', id: 'action-id',
+      container_id: 'module-id', doc: {}
+    }
+    allow(exporter).to receive(:semantic_code_action?).with({}).and_return(false)
+    allow(exporter).to receive(:native_document_declaration).with(opaque).and_return('native action')
+    expect(exporter.send(:integration_document_declaration, opaque)).to eq('native action')
+
+    Dir.mktmpdir('mxrb-semantic-metadata-') do |directory|
+      exporter.instance_variable_set(:@output_dir, directory)
+      allow(exporter).to receive(:editable_flow_body?).and_return(false)
+      flow = double(
+        id: 'flow-id', name: 'Run', parameters: [{ 'Name' => 'Value', 'Type' => 'String' }],
+        objects: [], flows: [], return_type_document: nil
+      )
+      mod = double(name: 'App', rules: [flow], microflows: [], nanoflows: [])
+      exporter.send(:export_semantic_metadata, [mod])
+      metadata = JSON.parse(File.read(File.join(directory, '.mxrb', 'semantic_metadata.json')))
+      expect(metadata.dig('modules', 'App', 'flows', 'Run', 'parameters', 0))
+        .to include('name' => 'Value')
+      expect(metadata.dig('modules', 'App', 'flows', 'Run', 'parameters', 0))
+        .not_to have_key('type_id')
+    end
+
+    flow = double(
+      name: 'Typed', parameters: [], return_type: 'App.Item', documentation: '',
+      allow_concurrent_execution: true, mark_as_used: false, excluded: false,
+      allowed_module_roles: [], objects: [], flows: []
+    )
+    expect(exporter.send(:microflow_source, flow)).to include('return_type :"App.Item"')
   end
 
   it 'renders sparse and decorated widget alternatives' do

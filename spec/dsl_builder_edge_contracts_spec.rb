@@ -263,6 +263,10 @@ RSpec.describe 'DSL builder edge contracts' do
     )
     expect { flow.call_java(:Code, pass: { Input: { kind: :future, value: 'x' } }) }
       .to raise_error(ArgumentError, /unsupported code action parameter kind/)
+    flow.call_java(:Code, as: :result, result_name: :output)
+    expect(flow.to_h.fetch(:body).last).to include(
+      variable: 'result', result_name: 'output', use_return: true
+    )
     expect(flow.enum_of('App.Status')).to include(
       '$Type' => 'DataTypes$EnumerationType', 'Enumeration' => 'App.Status'
     )

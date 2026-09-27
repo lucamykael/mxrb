@@ -81,7 +81,7 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.065 Beispiele, keine Fehler;
+- 2.066 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (36.788/36.788);
 - 100,00 % Branch-Abdeckung (15.926/15.926);
 - Sudoku-Modellbewertung: 7/7;

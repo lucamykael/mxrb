@@ -139,7 +139,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.065 exemplos, zero falhas;
+- 2.066 exemplos, zero falhas;
 - 100,00% das linhas: 36.788/36.788;
 - 100,00% dos branches: 15.926/15.926;
 - avaliação Sudoku: 7/7 checks;

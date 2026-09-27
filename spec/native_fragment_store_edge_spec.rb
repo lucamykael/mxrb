@@ -5,7 +5,7 @@ require 'tmpdir'
 
 RSpec.describe Mxrb::NativeFragmentStore do # rubocop:disable Metrics/BlockLength
   it 'validates input, digests, declarations, overrides, and configured access' do # rubocop:disable Metrics/BlockLength
-    Dir.mktmpdir('mxrb-fragments-') do |directory|
+    Dir.mktmpdir('mxrb-fragments-') do |directory| # rubocop:disable Metrics/BlockLength
       store = described_class.new(directory)
       expect { store.put([]) }.to raise_error(ArgumentError, /must be a Hash/)
       expect { store.fetch('invalid') }.to raise_error(Mxrb::ValidationError, /invalid.*digest/)
@@ -14,11 +14,13 @@ RSpec.describe Mxrb::NativeFragmentStore do # rubocop:disable Metrics/BlockLengt
 
       document = {
         '$Type' => 'Root', 'Endpoint' => 'https://example.invalid',
-        'Nested' => { '$Type' => 'Child', 'Name' => 'before' }
+        'Nested' => [{ '$Type' => 'Child', 'Name' => 'before',
+                       'Endpoint' => 'https://array.example.invalid' }]
       }
       digest = store.put(document)
       expect(store.put(document)).to eq(digest)
-      expect(store.fetch(digest, types: %w[Root Child], hints: ['https://example.invalid'],
+      expect(store.fetch(digest, types: %w[Root Child],
+                                 hints: ['https://example.invalid', 'https://array.example.invalid'],
                                  overrides: { 'Endpoint' => nil }))
         .to include('Endpoint' => nil)
       expect { store.fetch(digest, types: ['Missing']) }
