@@ -2057,13 +2057,10 @@ module Mxrb
         write(File.join(presentation, relative), menu_source(menu))
         paths << relative
       end
-      existing_path = File.join(presentation, "presentation.rb")
-      existing = File.exist?(existing_path) ? File.read(existing_path).lines : []
-      additions = paths.sort.map do |relative|
-        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
-        "evaluate File.join(__dir__, #{segments})\n"
-      end
-      write(existing_path, (existing + additions).join)
+      append_to_aggregator(
+        File.join(presentation, 'presentation.rb'), paths,
+        managed_types: ['Menus$MenuDocument']
+      )
     end
 
     def export_nanoflows(root, mod)
@@ -2880,10 +2877,15 @@ module Mxrb
     end
 
     def menu_source(menu)
+      return opaque_menu_source(menu) unless menu.semantic?
+
       body = menu.items.flat_map { menu_item_source(_1, 2) }
       if menu.raw_document.is_a?(Hash)
         body.unshift("  baseline_menu unit_id: #{ruby(menu.id)}")
       end
+      body.unshift("  export_level #{symbol(menu.export_level)}") unless menu.export_level.empty?
+      body.unshift('  excluded') if menu.excluded?
+      body.unshift("  documentation #{ruby(menu.documentation)}") unless menu.documentation.empty?
       <<~RUBY
         # frozen_string_literal: true
 
@@ -2895,14 +2897,35 @@ module Mxrb
 
     def menu_item_source(item, indent)
       pad = " " * indent
-      args = [ruby(item.fetch(:caption))]
+      translations = item.fetch(:caption_translations, {})
+      primary_locale = item[:caption_locale]
+      args = if !translations.empty? && primary_locale != 'en_US'
+               [ruby(translations)]
+             else
+               values = translations.reject { |locale, _text| locale.to_s == 'en_US' }
+               [ruby(item.fetch(:caption))].tap do |entries|
+                 entries << "translations: #{ruby(values)}" unless values.empty?
+               end
+             end
       args << "page: #{ruby(item[:page])}" if item[:page]
+      args << "microflow: #{ruby(item[:microflow])}" if item[:microflow]
+      args << "icon: #{ruby(item[:icon])}" if item[:icon]
       children = Array(item[:items])
       return ["#{pad}item #{args.join(', ')}"] if children.empty?
 
       lines = ["#{pad}item #{args.join(', ')} do"]
       lines.concat(children.flat_map { menu_item_source(_1, indent + 2) })
       lines << "#{pad}end"
+    end
+
+    def opaque_menu_source(menu)
+      <<~RUBY
+        # frozen_string_literal: true
+
+        menu #{symbol(menu.name)} do
+          deep_structure #{native_fragment_ruby(menu.raw_document)}
+        end
+      RUBY
     end
 
     def render_widget(widget, indent)

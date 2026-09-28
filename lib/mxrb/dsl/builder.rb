@@ -2206,7 +2206,14 @@ module Mxrb
         @items = []
         @deep_structure = nil
         @unit_id = nil
+        @documentation = ''
+        @excluded = false
+        @export_level = 'Hidden'
       end
+
+      def documentation(value) = (@documentation = value.to_s)
+      def excluded(value = true) = (@excluded = value == true)
+      def export_level(value) = (@export_level = value.to_s)
 
       def deep_structure(value)
         raise ArgumentError, "deep_structure requires a Hash" unless value.is_a?(Hash)
@@ -2228,16 +2235,21 @@ module Mxrb
         BSON::Binary.new(Base64.strict_decode64(base64), subtype.to_sym)
       end
 
-      def item(caption, page: nil, &block)
-        child = self.class.new(caption)
+      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, &block)
+        child = NavigationMenuItemBuilder.new(
+          caption, page:, microflow:, icon:, translations:
+        )
         child.instance_eval(&block) if block
-        @items << { caption: caption.to_s, page: page&.to_s, items: child.items }.compact
+        @items << child.to_h
       end
 
       def items = @items
 
       def to_h
-        { name: @name, items: @items, deep_structure: @deep_structure, unit_id: @unit_id }
+        {
+          name: @name, items: @items, deep_structure: @deep_structure, unit_id: @unit_id,
+          documentation: @documentation, excluded: @excluded, export_level: @export_level
+        }
       end
     end
 

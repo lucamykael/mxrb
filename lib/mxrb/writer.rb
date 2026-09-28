@@ -2196,6 +2196,9 @@ module Mxrb
       declared = mod.fetch(:native_documents, []).to_h do |document|
         [[document.fetch(:type).to_s, document.fetch(:name).to_s], true]
       end
+      Array(mod[:menus]).each do |menu|
+        declared[['Menus$MenuDocument', menu.fetch(:name).to_s]] = true
+      end
       collect_documents(mpr, module_id).each do |raw|
         document = mpr.parse_contents(raw)
         next unless managed.include?(document['$Type'].to_s)
@@ -3040,6 +3043,9 @@ module Mxrb
           ])
         end
         preserve_allowed_roles(merged, existing, generated)
+      when 'Menus$MenuDocument'
+        Forms::MprCodec.new.preserve_storage_identities!(generated, existing)
+        existing.merge(generated)
       else
         merged
       end
@@ -4433,25 +4439,17 @@ module Mxrb
         )
       end
 
-      unless menu[:unit_id].to_s.empty?
-        return {
-          '$ID' => menu.fetch(:unit_id).to_s, '$Type' => 'Menus$MenuDocument',
-          'Name' => menu.fetch(:name), '__mxrb_unit_id' => menu.fetch(:unit_id).to_s
-        }
-      end
-
+      unit_id = menu[:unit_id].to_s
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => unit_id.empty? ? SecureRandom.uuid : unit_id,
         "$Type" => "Menus$MenuDocument",
         "Name" => menu.fetch(:name),
-        "Documentation" => "",
-        "Excluded" => false,
-        "ItemCollection" => {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Menus$MenuItemCollection",
-          "Items" => IO::BsonCodec.build_array(menu.fetch(:items, []).map { menu_item_doc(_1) })
-        }
-      }
+        "Documentation" => menu.fetch(:documentation, ''),
+        "Excluded" => menu.fetch(:excluded, false) == true,
+        "ExportLevel" => menu.fetch(:export_level, 'Hidden').to_s,
+        "ItemCollection" => navigation_menu_doc(menu.fetch(:items, [])),
+        '__mxrb_unit_id' => unit_id
+      }.tap { _1.delete('__mxrb_unit_id') if unit_id.empty? }
     end
 
     CONSTANT_TYPE_MAP = {
@@ -4726,17 +4724,6 @@ module Mxrb
         "$ID" => SecureRandom.uuid,
         "$Type" => type,
         "AccessRules" => IO::BsonCodec.build_array([])
-      }
-    end
-
-    def menu_item_doc(item)
-      {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Menus$MenuItem",
-        "Caption" => text_doc(item.fetch(:caption)),
-        "Action" => item[:page] ? form_action_doc(item.fetch(:page)) : no_action_doc,
-        "Icon" => nil,
-        "Items" => IO::BsonCodec.build_array(item.fetch(:items, []).map { menu_item_doc(_1) })
       }
     end
 

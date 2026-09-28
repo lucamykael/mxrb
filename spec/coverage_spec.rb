@@ -2531,10 +2531,16 @@ RSpec.describe "MXRB defensive and compatibility paths" do
 
       expect(exporter.send(:menu_item_source, { caption: "Item" }, 2).first)
         .to eq('  item "Item"')
+      expect(exporter.send(
+               :menu_item_source,
+               { caption: 'Início', caption_locale: 'pt_BR',
+                 caption_translations: { 'pt_BR' => 'Início' } }, 2
+             ).first).to eq('  item {"pt_BR" => "Início"}')
 
       menu = double(
         id: "menu", name: "Menu", items: [{ caption: "Item" }],
-        raw_document: nil
+        raw_document: nil, semantic?: true, documentation: '', excluded?: true,
+        export_level: ''
       )
       mod_with_menu = double(menus: [menu])
       exporter.send(:export_menus, root, mod_with_menu)

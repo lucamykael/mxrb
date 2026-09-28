@@ -23,7 +23,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Module roles and project security | partial |
 | Microflows, nanoflows and core pages | partial |
 | Layouts, page templates, snippets, and building blocks | native |
-| Menus | preserved_native |
+| Menus | partial |
 | Navigation and pluggable widgets | partial |
 | Scheduled events | partial |
 | Regular expressions (Mendix/JVM text) | native |
@@ -42,15 +42,15 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,076 examples and measures 100.00% of
-lines (36,969/36,969) and 100.00% of branches (16,013/16,013). No executable
+The strict suite passed 2,078 examples and measures 100.00% of
+lines (37,004/37,004) and 100.00% of branches (16,030/16,030). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
-Code coverage alone does not complete functional coverage: menus, integrations,
-workflows, and task pages remain `preserved_native` and several families remain
-`partial`; all 455 Forms properties are now 455/455 in the independent
-`studio_validated` gate.
+Code coverage alone does not complete functional coverage: integrations,
+workflows, and task pages remain `preserved_native`; menus and several other
+families remain `partial`. All 455 Forms properties are 455/455 in the
+independent `studio_validated` gate.
 
 ## Reusable presentation documents
 
@@ -60,6 +60,14 @@ recompiles the MPR for two cycles. It requires structural validity, stable
 document semantics, and stable unit and nested-node IDs. With `--mxbuild`, the
 official MxBuild 11.12.1 packages the final fixture with exit status zero and
 zero problems.
+
+Supported menu documents are authoritative too: localized captions, page and
+microflow targets, glyph icons, recursive items, and document/item removal
+round-trip through readable Ruby with stable compatible identities. Unknown
+actions or icons fall back to lossless `deep_structure`, so the family remains
+`partial`. The menu fixture passes `script/frontend_acceptance` through both
+the source and rebuilt MPR with official MxBuild 11.12.1, zero errors, and no
+structural differences.
 
 ## Core Forms properties
 
