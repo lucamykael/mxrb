@@ -173,6 +173,13 @@ opaque fallback; `script/frontend_acceptance` accepted source and rebuilt
 projects with MxBuild 11.12.1, zero errors, no structural differences, and
 `frontend_ready: true`.
 
+The `spec/fixtures/published_odata/project.rb` witness covers a read-only OData
+4 service with an allowed role, Basic authentication, an entity type, ID,
+attributes, and a paged entity set. Two cycles retained identities and
+semantics without opaque fallback; `script/frontend_acceptance` accepted source
+and rebuilt projects with MxBuild 11.12.1, zero errors, no structural
+differences, and `frontend_ready: true`.
+
 This validation exposed and drove the fixes listed above. The six-project MXRB
 matrix was rerun from fresh targets after the fixes and all six v1/v2
 round-trips passed again.

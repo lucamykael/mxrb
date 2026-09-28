@@ -27,6 +27,10 @@ module Mxrb
         'ok' => 200, 'created' => 201, 'accepted' => 202,
         'nocontent' => 204
       }.freeze
+      ODATA_MEMBER_TYPES = {
+        id: 'ODataPublish$PublishedId',
+        attribute: 'ODataPublish$PublishedAttribute'
+      }.freeze
 
       # Collects typed entity-message declarations for one Mendix collection.
       class MessageDefinitionCollectionBuilder
@@ -174,6 +178,52 @@ module Mxrb
         )
       end
 
+      def published_odata_service( # rubocop:disable Metrics/ParameterLists
+        name, path:, namespace:, version:, entity_types:, entity_sets:,
+        service_name: nil, allowed_roles: [], authentication_types: [],
+        authentication_microflow: '', documentation: '', summary: '', description: '',
+        excluded: false, export_level: 'Hidden', publish_associations: false,
+        replace_illegal_chars: false, use_generalization: false, odata_version: 'OData4',
+        include_metadata_by_default: true, supports_graphql: false,
+        unit_id: nil, container_id: nil
+      )
+        types = Array(entity_types).map { published_odata_entity_type_spec(_1) }
+        type_ids = types.to_h { [_1.fetch(:name), _1.fetch(:id)] }
+        doc = integration_identity(unit_id).merge(
+          'AllowedModuleRoles' => integration_array(Array(allowed_roles).map(&:to_s), 1),
+          'AuthenticationMicroflow' => authentication_microflow.to_s,
+          'AuthenticationTypes' => integration_array(
+            Array(authentication_types).map { integration_enum(_1) }, 3
+          ),
+          'Description' => description.to_s,
+          'Documentation' => documentation.to_s,
+          'EntitySets' => integration_array(
+            Array(entity_sets).map { published_odata_entity_set_document(_1, type_ids) }, 3
+          ),
+          'EntityTypes' => integration_array(
+            types.map { published_odata_entity_type_document(_1) }, 3
+          ),
+          'Enumerations' => integration_array([], 3),
+          'Excluded' => excluded == true,
+          'ExportLevel' => export_level.to_s,
+          'IncludeMetadataByDefault' => include_metadata_by_default == true,
+          'Microflows' => integration_array([], 3),
+          'Namespace' => namespace.to_s,
+          'ODataVersion' => integration_enum(odata_version),
+          'Path' => path.to_s,
+          'PublishAssociations' => publish_associations == true,
+          'ReplaceIllegalChars' => replace_illegal_chars == true,
+          'ServiceName' => (service_name || name).to_s,
+          'Summary' => summary.to_s,
+          'SupportsGraphQL' => supports_graphql == true,
+          'UseGeneralization' => use_generalization == true,
+          'Version' => version.to_s
+        )
+        semantic_native_document(
+          name, 'ODataPublish$PublishedODataService2', doc, unit_id:, container_id:
+        )
+      end
+
       def oql_source_document(name, query:, documentation: '', excluded: false,
                               export_level: 'Hidden', unit_id: nil, container_id: nil)
         doc = integration_identity(unit_id).merge(
@@ -286,6 +336,106 @@ module Mxrb
       end
 
       private
+
+      def published_odata_entity_type_spec(source)
+        spec = integration_spec(source)
+        id = spec[:id].to_s
+        id = SecureRandom.uuid if id.empty?
+        spec.merge(id:, name: spec.fetch(:name).to_s, entity: spec.fetch(:entity).to_s)
+      end
+
+      def published_odata_entity_type_document(spec)
+        integration_identity(spec.fetch(:id)).merge(
+          '$Type' => 'ODataPublish$EntityType',
+          'ChildMembers' => integration_array(
+            Array(spec[:members]).map { published_odata_member_document(_1, spec.fetch(:entity)) }, 3
+          ),
+          'Description' => spec.fetch(:description, '').to_s,
+          'Entity' => spec.fetch(:entity),
+          'ExposedName' => spec.fetch(:name),
+          'Summary' => spec.fetch(:summary, '').to_s
+        )
+      end
+
+      def published_odata_member_document(source, entity)
+        spec = integration_spec(source)
+        kind = spec.fetch(:kind).to_sym
+        type = ODATA_MEMBER_TYPES.fetch(kind) do
+          raise ArgumentError, "unsupported published OData member kind: #{kind}"
+        end
+        common = integration_identity(spec[:id]).merge(
+          '$Type' => type,
+          'Description' => spec.fetch(:description, '').to_s,
+          'ExposedName' => spec.fetch(:name).to_s,
+          'IsPartOfKey' => spec.fetch(:key, kind == :id) == true,
+          'Summary' => spec.fetch(:summary, '').to_s
+        )
+        return common if kind == :id
+
+        common.merge(
+          'Attribute' => published_odata_qualified_member(spec.fetch(:attribute), entity),
+          'CanBeEmpty' => spec.fetch(:optional, true) == true,
+          'EdmType' => spec.fetch(:edm_type, '').to_s,
+          'EnumerationAsString' => spec.fetch(:enumeration_as_string, false) == true,
+          'Filterable' => spec.fetch(:filterable, true) == true,
+          'Sortable' => spec.fetch(:sortable, true) == true,
+          'StringAsGuid' => spec.fetch(:string_as_guid, false) == true
+        )
+      end
+
+      def published_odata_qualified_member(member, entity)
+        value = member.to_s
+        value.include?('.') ? value : "#{entity}.#{value}"
+      end
+
+      def published_odata_entity_set_document(source, type_ids)
+        spec = integration_spec(source)
+        type_id = spec[:entity_type_id].to_s
+        type_id = type_ids.fetch(spec.fetch(:entity_type).to_s) if type_id.empty?
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'ODataPublish$EntitySet',
+          'AlternativeExposedName' => spec.fetch(:alternative_name, '').to_s,
+          'DeleteMode' => published_odata_change_mode_document(spec.fetch(:delete, :not_supported)),
+          'EntityTypePointer' => type_id,
+          'ExposedName' => spec.fetch(:name).to_s,
+          'InsertMode' => published_odata_change_mode_document(spec.fetch(:insert, :not_supported)),
+          'PageSize' => spec.fetch(:page_size, 100).to_i,
+          'QueryOptions' => published_odata_query_options_document(spec.fetch(:query, {})),
+          'ReadMode' => published_odata_read_mode_document(spec.fetch(:read, :source)),
+          'UpdateMode' => published_odata_change_mode_document(spec.fetch(:update, :not_supported)),
+          'UsePaging' => spec.fetch(:paging, true) == true
+        )
+      end
+
+      def published_odata_mode_spec(source)
+        source.is_a?(Hash) ? integration_spec(source) : { kind: source.to_sym }
+      end
+
+      def published_odata_read_mode_document(source)
+        spec = published_odata_mode_spec(source)
+        raise ArgumentError, 'published OData read mode must be :source' unless spec.fetch(:kind).to_sym == :source
+
+        integration_identity(spec[:id]).merge('$Type' => 'ODataPublish$ReadSource')
+      end
+
+      def published_odata_change_mode_document(source)
+        spec = published_odata_mode_spec(source)
+        unless spec.fetch(:kind).to_sym == :not_supported
+          raise ArgumentError, 'published OData change mode must be :not_supported'
+        end
+
+        integration_identity(spec[:id]).merge('$Type' => 'ODataPublish$ChangeNotSupported')
+      end
+
+      def published_odata_query_options_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'ODataPublish$QueryOptions',
+          'Countable' => spec.fetch(:countable, true) == true,
+          'SkipSupported' => spec.fetch(:skip, true) == true,
+          'TopSupported' => spec.fetch(:top, true) == true
+        )
+      end
 
       def message_definition_document(spec)
         exposed = spec.fetch(:exposed)

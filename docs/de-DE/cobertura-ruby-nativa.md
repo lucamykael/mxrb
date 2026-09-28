@@ -32,7 +32,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Published REST und JSON-Mappings | partial |
 | Consumed REST und konsumiertes OData | partial |
 | Message Definitions und abgeleitete XML-Mappings | partial |
-| Published OData, App/Web Services, XSD/WSDL und weitere Mappings | preserved_native |
+| Published OData | partial |
+| App/Web Services, XSD/WSDL und weitere Mappings | preserved_native |
 | Java Custom Actions und externe Connectors | runtime_only |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -115,6 +116,21 @@ Mappings auf Basis von Message Definitions aktivieren keine Schema-Validierung,
 da MxBuild sie XSD-basierten Mappings vorbehält. Die Familie bleibt `partial`:
 verschachtelte Bäume, Assoziationen, Konverter, XSD/WSDL und weitere Varianten
 bleiben bis zu eigener Evidenz im verlustfreien Fallback.
+
+## Published OData
+
+`spec/fixtures/published_odata/project.rb` deklariert einen schreibgeschützten
+OData-4-Service mit erlaubter Rolle, Basic-Authentifizierung, Entity Type, ID,
+Attributen und einem paginierten Entity Set mit Query-Optionen. Zwei
+Ruby-→-MPR-Zyklen behalten Semantik und Unit-IDs ohne `native_document`,
+`deep_structure`, `native_fragment` oder opakes BSON in der zertifizierten
+Quelle. MxBuild 11.12.1 akzeptiert Quell- und Neuaufbauprojekt ohne Fehler oder
+strukturelle Unterschiede und mit `frontend_ready: true`.
+
+Die Service-Position endet gemäß MxBuild-Regel CE6552 mit `/`. Die Familie
+bleibt `partial`: Schreibmodi, veröffentlichte Microflows, Enumerationen,
+Assoziationen, GraphQL und weitere Varianten bleiben bis zu eigener Evidenz im
+verlustfreien Fallback.
 
 ## Eigenschaften der Core-Forms
 

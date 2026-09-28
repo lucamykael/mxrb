@@ -39,7 +39,8 @@ Estados:
 | Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
 | REST publicado e mappings JSON | parcial | serviço, resources, operações, parâmetros, JSON/export mappings e autenticação suportada; variantes desconhecidas ficam lossless |
 | REST consumido e OData consumido | parcial | chamadas REST tipadas e serviço OData básico com CSDL v4; ampliar auth, proxy, form-data e entidades validadas |
-| OData publicado, App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
+| OData publicado | parcial | OData 4 read-only com entity types, IDs, atributos e entity sets; ampliar escrita, ações, enums e associações |
+| App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
 | Message definitions e mappings XML derivados | parcial | entidades/atributos expostos, import/export mappings e ações XML; ampliar árvores, associações e variantes |
 | XSD/WSDL e outros import/export mappings | preserved_native | edição estrutural e referências estáveis |
 | Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
@@ -63,8 +64,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.083 exemplos e mede 100,00% das
-linhas (37.094/37.094) e 100,00% dos branches (16.086/16.086). Nenhum código
+A suíte estrita passou com 2.086 exemplos e mede 100,00% das
+linhas (37.197/37.197) e 100,00% dos branches (16.125/16.125). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -135,6 +136,21 @@ Mappings baseados em message definitions não ativam validação contra schema,
 pois o próprio MxBuild reserva essa opção para mappings XSD. A família segue
 `parcial`: árvores aninhadas, associações, conversores, XSD/WSDL e outras
 variantes permanecem no fallback lossless até receberem evidência específica.
+
+## OData publicado
+
+O fixture `spec/fixtures/published_odata/project.rb` declara um serviço OData 4
+read-only com papel permitido, autenticação Basic, entity type, ID, atributos e
+entity set paginado com opções de query. Dois ciclos Ruby → MPR mantêm semântica
+e IDs das units sem `native_document`, `deep_structure`, `native_fragment` ou
+BSON opaco nas fontes certificadas. Original e reconstruído passaram no
+MxBuild 11.12.1 com zero erros, zero diferenças estruturais e
+`frontend_ready: true`.
+
+A localização termina em `/`, conforme a regra CE6552 do MxBuild. A família
+permanece `parcial`: modos de escrita, microflows publicados, enumerações,
+associações, GraphQL e outras variantes continuam no fallback lossless até
+receberem evidência dedicada.
 
 ## Propriedades de Forms core
 
