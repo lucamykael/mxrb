@@ -2859,6 +2859,14 @@ module Mxrb
         if handling == :string && (!result_entity.to_s.empty? || !result_mapping.to_s.empty?)
           raise ArgumentError, "string REST result handling does not accept a result mapping or entity"
         end
+        mapping_set = !request_mapping.to_s.empty?
+        variable_set = !request_variable.to_s.empty?
+        if mapping_set != variable_set
+          raise ArgumentError, 'REST request mapping requires both request_mapping and request_variable'
+        end
+        if !request_body.nil? && mapping_set
+          raise ArgumentError, 'call_rest accepts either a request body or a request mapping'
+        end
 
         if block
           raise ArgumentError, 'call_rest accepts either headers: or a header block' unless headers.equal?(UNSET)

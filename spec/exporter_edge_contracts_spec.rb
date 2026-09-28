@@ -300,7 +300,8 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
         'CustomLocationTemplate' => { 'Parameters' => [2] }
       },
       'RequestHandling' => {
-        '$Type' => 'Microflows$MappingRequestHandling', 'MappingId' => 'App.Request'
+        '$Type' => 'Microflows$MappingRequestHandling', 'MappingId' => 'App.Request',
+        'MappingVariableName' => 'Input'
       },
       'ResultHandlingType' => 'String',
       'ResultHandling' => {
@@ -309,6 +310,16 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       }
     }
     expect(exporter.send(:editable_action?, string_rest)).to be(true)
+    empty_request = Marshal.load(Marshal.dump(string_rest))
+    empty_request['RequestHandling'] = {
+      '$Type' => 'Microflows$MappingRequestHandling',
+      'MappingId' => '', 'MappingVariableName' => ''
+    }
+    expect(exporter.send(:editable_action?, empty_request)).to be(false)
+    expect(exporter.send(:rest_call_line, '', empty_request))
+      .not_to include('request_mapping:', 'request_variable:')
+    empty_request['RequestHandling']['MappingVariableName'] = 'Input'
+    expect(exporter.send(:editable_action?, empty_request)).to be(false)
 
     export_xml = {
       '$Type' => 'Microflows$ExportXmlAction',

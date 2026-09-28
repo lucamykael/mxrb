@@ -3548,7 +3548,9 @@ module Mxrb
         request = action["RequestHandling"] || {}
         request_supported = case request["$Type"]
                             when "Microflows$MappingRequestHandling"
-                              !request["MappingId"].to_s.empty?
+                              mapping_id = request["MappingId"].to_s
+                              mapping_variable = request["MappingVariableName"].to_s
+                              !mapping_id.empty? && !mapping_variable.empty?
                             when "Microflows$CustomRequestHandling"
                               template = request["Template"] || {}
                               bson_items(template["Parameters"]).all? { _1["Expression"] }
@@ -4124,8 +4126,10 @@ module Mxrb
           args << "request_parameters: #{ruby(request_parameters)}"
         end
       else
-        args << "request_mapping: #{ruby(request["MappingId"])}" if request["MappingId"]
-        args << "request_variable: :#{request["MappingVariableName"]}" if request["MappingVariableName"]
+        mapping_id = request["MappingId"].to_s
+        mapping_variable = request["MappingVariableName"].to_s
+        args << "request_mapping: #{ruby(mapping_id)}" unless mapping_id.empty?
+        args << "request_variable: :#{mapping_variable}" unless mapping_variable.empty?
       end
       args << "result_mapping: #{ruby(import_call["ReturnValueMapping"])}" if import_call["ReturnValueMapping"]
       if action["ResultHandlingType"] == "HttpResponse"

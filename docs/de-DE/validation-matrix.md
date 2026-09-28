@@ -81,9 +81,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.081 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.076/37.076);
-- 100,00 % Branch-Abdeckung (16.078/16.078);
+- 2.082 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.094/37.094);
+- 100,00 % Branch-Abdeckung (16.086/16.086);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
@@ -160,6 +160,14 @@ Zwei Zyklen behielten Identitäten und Semantik bei;
 `script/frontend_acceptance` akzeptierte Quell- und Neuaufbauprojekt mit
 MxBuild 11.12.1 ohne Fehler oder strukturelle Unterschiede und mit
 `frontend_ready: true`.
+
+Das Fixture `spec/fixtures/consumed_services/project.rb` deckt einen REST-
+Aufruf ohne Body mit Parametern, Headern, Timeout und HTTP-Antwortbehandlung
+sowie einen konsumierten OData-Service mit gültigem CSDL v4 und
+konstantenbasierter URL ab. Zwei Zyklen behielten Identitäten und Semantik ohne
+opaken Fallback bei; `script/frontend_acceptance` akzeptierte Quell- und
+Neuaufbauprojekt mit MxBuild 11.12.1 ohne Fehler oder strukturelle Unterschiede
+und mit `frontend_ready: true`.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
 Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers

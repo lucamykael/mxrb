@@ -671,6 +671,16 @@ RSpec.describe 'complete Ruby projection contracts' do
     )
     expect(custom['RequestHandling']).to include('$Type' => 'Microflows$CustomRequestHandling')
     expect(custom['ResultHandling']).to include('ImportMappingCall' => nil)
+    bodyless = writer.send(
+      :rest_call_action_doc,
+      method: :get, location: '/health', location_parameters: [], headers: {},
+      request_body: nil, request_mapping: '', request_variable: '',
+      result_handling: :http_response, variable: 'response',
+      result_entity: 'System.HttpResponse', timeout: '', error_result: :store, error: :rollback
+    )
+    expect(bodyless).to include('RequestHandlingType' => 'Custom')
+    expect(bodyless['RequestHandling']).to include('$Type' => 'Microflows$CustomRequestHandling')
+    expect(bodyless.dig('RequestHandling', 'Template')).to include('Text' => '')
     mapped = writer.send(
       :rest_call_action_doc,
       method: :get, location: '/items', location_parameters: [], headers: {},
@@ -681,6 +691,14 @@ RSpec.describe 'complete Ruby projection contracts' do
       parameter_variable: 'parameter', timeout: '', error_result: :store, error: :rollback
     )
     expect(mapped['RequestHandling']).to include('$Type' => 'Microflows$MappingRequestHandling')
+    expect do
+      writer.send(:rest_request_handling_type,
+                  request_body: nil, request_mapping: 'App.Export', request_variable: '')
+    end.to raise_error(Mxrb::ValidationError, /both request_mapping and request_variable/)
+    expect do
+      writer.send(:rest_request_handling_type,
+                  request_body: '', request_mapping: 'App.Export', request_variable: 'Input')
+    end.to raise_error(Mxrb::ValidationError, /either a request body or a request mapping/)
     expect do
       writer.send(:rest_result_handling_doc, result_handling: :http_response,
                                              variable: '', result_entity: '')

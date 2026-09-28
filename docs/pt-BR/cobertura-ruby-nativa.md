@@ -38,8 +38,8 @@ Estados:
 | Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
 | Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
 | REST publicado e mappings JSON | parcial | serviço, resources, operações, parâmetros, JSON/export mappings e autenticação suportada; variantes desconhecidas ficam lossless |
-| REST consumido | preserved_native | clientes, operações, autenticação e contratos de resposta |
-| OData, App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
+| REST consumido e OData consumido | parcial | chamadas REST tipadas e serviço OData básico com CSDL v4; ampliar auth, proxy, form-data e entidades validadas |
+| OData publicado, App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
 | Outros import/export mappings, XML e message definitions | preserved_native | edição estrutural e referências estáveis |
 | Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
 | Workflows e task pages | preserved_native | metamodelo, outcomes, timers, boundaries e segurança |
@@ -62,8 +62,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.081 exemplos e mede 100,00% das
-linhas (37.076/37.076) e 100,00% dos branches (16.078/16.078). Nenhum código
+A suíte estrita passou com 2.082 exemplos e mede 100,00% das
+linhas (37.094/37.094) e 100,00% dos branches (16.086/16.086). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -103,6 +103,22 @@ reconstruído no MxBuild 11.12.1, com zero erros e `frontend_ready: true`.
 O estado permanece `parcial`: apenas shapes reconhecidos são emitidos pela DSL;
 operações, autenticação ou mappings ainda não representados continuam no
 fallback lossless em vez de serem parcialmente convertidos.
+
+## REST consumido e OData consumido
+
+O fixture `spec/fixtures/consumed_services/project.rb` combina uma chamada
+REST GET sem body, parâmetros de URL, headers ordenados, timeout e resposta
+HTTP com um serviço OData consumido baseado em CSDL v4 e URL definida por uma
+constante Mendix. Dois ciclos Ruby → MPR mantêm semântica e IDs das units sem
+`native_fragment`, `deep_structure` ou BSON opaco nas fontes certificadas.
+Original e reconstruído também passaram no MxBuild 11.12.1 com zero erros,
+zero diferenças estruturais e `frontend_ready: true`.
+
+Chamadas sem body usam o `CustomRequestHandling` vazio observado em projetos
+reais. A DSL rejeita mapping sem variável, variável sem mapping e a mistura de
+body customizado com export mapping. A família permanece `parcial`: form-data,
+variantes de autenticação/proxy, referências de metadata e entidades OData
+validadas ainda seguem pelo fallback lossless quando não são reconhecidas.
 
 ## Propriedades de Forms core
 
