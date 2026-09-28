@@ -20,7 +20,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Constants | native |
 | Entity access rules | native |
 | Indexes, system members, and generalization | native |
-| OQL views | partial |
+| OQL views | native |
 | Entity lifecycle | native |
 | Module roles | native |
 | Project roles, demo users, and password policy | native |
@@ -52,7 +52,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,110 examples and measures 100.00% of
+The strict suite passed 2,111 examples and measures 100.00% of
 lines (37,689/37,689) and 100.00% of branches (16,310/16,310). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -103,7 +103,20 @@ All four system-member flags (`owner`, `created_date`, `changed_date`, and
 `changed_by`) and qualified generalizations are editable. The gate performs a
 Ruby-app export and two MPR → Ruby → MPR cycles, requires identical comparison
 and stable IDs, and permits no opaque BSON fallback. Official MxBuild 11.12.1
-finishes with `BUILD SUCCEEDED`. OQL views remain separately `partial`.
+finishes with `BUILD SUCCEEDED`.
+
+## OQL views
+
+`oql_view` covers the `OqlViewEntitySource` reference; every attribute gets an
+`OqlViewValue`, while associations use `OqlViewAssociationSource`. The
+`ViewEntitySourceDocument` exposes its query, documentation, exclusion state,
+and export level. Inline queries are normalized into a named source document,
+matching Studio Pro 11 behavior.
+
+The gate performs Ruby-app and two regular cycles, compares the MPR, and
+requires stable IDs for the entity, source, values, association, association
+source, and OQL document without opaque fallback. Official MxBuild 11.12.1
+packages the complete fixture with `BUILD SUCCEEDED`.
 
 ## Entity lifecycle
 

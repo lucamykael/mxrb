@@ -124,10 +124,15 @@ write-only im privaten Baseline. Ruby-App und zwei reguläre Zyklen behalten
 Container-, Regel- und Member-IDs; beide Fixtures endeten im offiziellen
 MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
 
+Das OQL-View-Gate deckt Source Document, OQL-Werte der Attribute und
+OQL-Association-Quellen ab. Ruby-App und zwei reguläre Zyklen behalten alle
+verschachtelten IDs ohne opaken Fallback; das vollständige Fixture endete im
+offiziellen MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.110 Beispiele, keine Fehler;
+- 2.111 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.689/37.689);
 - 100,00 % Branch-Abdeckung (16.310/16.310);
 - Sudoku-Modellbewertung: 7/7;

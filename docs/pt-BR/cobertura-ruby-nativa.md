@@ -27,7 +27,7 @@ Estados:
 | Constantes | native | cinco tipos oficiais, valor padrão, exposição ao cliente, metadados e IDs estáveis; overrides privados não vazam |
 | Regras de acesso de entidade | native | roles, CRUD, documentação, direitos padrão, XPath/caption, membros de atributo/associação e IDs estáveis |
 | Índices, system members e generalização | native | índices `Normal`, `CreatedDate` e `ChangedDate`; flags de auditoria, herança e IDs estáveis |
-| OQL view | parcial | autoria incremental e reconciliação privada; ampliar fontes e variantes por versão |
+| OQL view | native | source document, valores e associações OQL com IDs estáveis |
 | Lifecycle de entidade | native | before/after commit/delete, microflow, flags e IDs estáveis |
 | Module roles | native | nome, descrição, criação/alteração/remoção e IDs estáveis |
 | Project roles, demo users e política de senha | native | propriedades, relações, IDs/GUIDs estáveis e segredos privados |
@@ -68,7 +68,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.110 exemplos e mede 100,00% das
+A suíte estrita passou com 2.111 exemplos e mede 100,00% das
 linhas (37.689/37.689) e 100,00% dos branches (16.310/16.310). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -120,7 +120,20 @@ As quatro flags de system members (`owner`, `created_date`, `changed_date` e
 `changed_by`) e generalizações qualificadas também são editáveis. O gate faz
 export Ruby-app e dois ciclos MPR → Ruby → MPR, exige comparação idêntica e
 IDs estáveis, não aceita fallback BSON opaco e termina com `BUILD SUCCEEDED`
-no MxBuild oficial 11.12.1. OQL view permanece separadamente `parcial`.
+no MxBuild oficial 11.12.1.
+
+## OQL view
+
+`oql_view` cobre a referência `OqlViewEntitySource`; cada atributo materializa
+um `OqlViewValue`, e associações usam `OqlViewAssociationSource`. O documento
+`ViewEntitySourceDocument` expõe consulta, documentação, exclusão e export
+level. Queries inline são normalizadas para um source document nomeado, como o
+Studio Pro 11.
+
+O gate executa Ruby-app e dois ciclos regulares, compara o MPR e exige IDs
+estáveis para entidade, source, valores, associação, source da associação e
+documento OQL, sem fallback opaco. O fixture completo terminou com
+`BUILD SUCCEEDED` no MxBuild oficial 11.12.1.
 
 ## Lifecycle de entidade
 
