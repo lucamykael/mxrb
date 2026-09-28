@@ -25,7 +25,7 @@ Estados:
 | Associações locais e cross-module | native | criar/alterar/remover, tipo, owner, storage, docs, delete behavior e ID estável |
 | Definições de enumeração | native | criar/renomear/remover, valores ordenados, captions por idioma, documentação e IDs estáveis |
 | Constantes | native | cinco tipos oficiais, valor padrão, exposição ao cliente, metadados e IDs estáveis; overrides privados não vazam |
-| Regras de acesso de entidade | parcial | roles, CRUD, XPath e membros; ACLs ambíguas ainda exigem identidade explícita |
+| Regras de acesso de entidade | native | roles, CRUD, documentação, direitos padrão, XPath/caption, membros de atributo/associação e IDs estáveis |
 | Índices, system members, generalização e OQL view | parcial | autoria incremental e reconciliação privada; sem pareamento por posição |
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
@@ -65,7 +65,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.099 exemplos e mede 100,00% das
+A suíte estrita passou com 2.100 exemplos e mede 100,00% das
 linhas (37.497/37.497) e 100,00% dos branches (16.216/16.216). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -88,6 +88,21 @@ O fixture com os cinco tipos foi empacotado pelo MxBuild 11.12.1. O valor de
 DateTime usa o formato nativo `yyyy-MM-ddTHH:mm:ss`, exigido pelo validador do
 Studio Pro. Overrides de configuração privados continuam no sidecar local e
 seus valores não aparecem no Ruby público.
+
+## Regras de acesso de entidade
+
+`access_rule` cobre todas as propriedades do `DomainModels$AccessRule` e do
+`DomainModels$MemberAccess` no Mendix 11: papéis de módulo, create/delete,
+documentação, direito padrão, XPath e caption, além de direitos `None`,
+`ReadOnly` e `ReadWrite` para atributos e associações, inclusive membros
+herdados com referência qualificada.
+
+Dois ciclos MPR → Ruby → MPR preservam a semântica e os IDs de regras e
+membros. O gate inclui duas ACLs com a mesma assinatura papel/XPath: a DSL MPR
+mantém os IDs explícitos, enquanto o modo Ruby app usa identidades privadas
+estáveis e não publica UUIDs. Criação, edição e remoção autoritativa já são
+cobertas pelos testes de reconciliação. O fixture completo foi empacotado com
+sucesso pelo MxBuild 11.12.1 sem fallback opaco.
 
 ## Documentos reutilizáveis de apresentação
 

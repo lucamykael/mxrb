@@ -86,6 +86,12 @@ empacotado pelo MxBuild 11.12.1. O caso DateTime usa a representação nativa
 `yyyy-MM-ddTHH:mm:ss`; valores privados de configuração permanecem locais e
 não são publicados.
 
+O gate de regras de acesso cobre papéis, create/delete, documentação, direitos
+padrão, XPath/caption e membros de atributo e associação. Duas ACLs com a mesma
+assinatura semântica mantiveram IDs distintos por dois ciclos; referências
+qualificadas e identidades de membros também permaneceram estáveis. O MxBuild
+11.12.1 empacotou o fixture completo sem erros.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -181,7 +187,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.099 exemplos, zero falhas;
+- 2.100 exemplos, zero falhas;
 - 100,00% das linhas: 37.497/37.497;
 - 100,00% dos branches: 16.216/16.216;
 - avaliação Sudoku: 7/7 checks;
