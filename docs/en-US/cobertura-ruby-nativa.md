@@ -4,7 +4,7 @@ This is the source of truth for expansion of the Ruby → Mendix compiler. A
 surface is `native` only after tests cover creation, update, removal, reopening
 the MPR, and recompilation without changing native identities.
 
-September 25, 2026 update: this is a conservative family-level matrix, not a
+September 27, 2026 update: this is a conservative family-level matrix, not a
 completion percentage. Domain, security and scheduling now have incremental
 authoring paths; unrepresented variants remain preserved. Verified contracts
 and limitations are recorded in the
@@ -22,7 +22,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Entity lifecycle | partial |
 | Module roles and project security | partial |
 | Microflows, nanoflows and core pages | partial |
-| Layouts, snippets, building blocks and menus | preserved_native |
+| Layouts, page templates, snippets, and building blocks | native |
+| Menus | preserved_native |
 | Navigation and pluggable widgets | partial |
 | Scheduled events | partial |
 | Regular expressions (Mendix/JVM text) | native |
@@ -41,15 +42,24 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,067 examples and measures 100.00% of
-lines (36,788/36,788) and 100.00% of branches (15,926/15,926). No executable
+The strict suite passed 2,076 examples and measures 100.00% of
+lines (36,969/36,969) and 100.00% of branches (16,013/16,013). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
-Code coverage alone does not complete functional coverage: layouts, snippets,
-building blocks, menus, integrations, workflows, and task pages remain
-`preserved_native` and several families remain `partial`; all 455 Forms
-properties are now 455/455 in the independent `studio_validated` gate.
+Code coverage alone does not complete functional coverage: menus, integrations,
+workflows, and task pages remain `preserved_native` and several families remain
+`partial`; all 455 Forms properties are now 455/455 in the independent
+`studio_validated` gate.
+
+## Reusable presentation documents
+
+`script/presentation_documents_gate` authors layouts, page templates, snippets,
+and building blocks through the typed Forms DSL, exports readable Ruby, and
+recompiles the MPR for two cycles. It requires structural validity, stable
+document semantics, and stable unit and nested-node IDs. With `--mxbuild`, the
+official MxBuild 11.12.1 packages the final fixture with exit status zero and
+zero problems.
 
 ## Core Forms properties
 

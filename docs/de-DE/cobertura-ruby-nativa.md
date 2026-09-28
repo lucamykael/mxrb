@@ -5,7 +5,7 @@ Compilers. Eine Oberfläche gilt erst dann als `native`, wenn Erstellen, Ändern
 Entfernen, erneutes Öffnen der MPR-Datei und Neukompilieren mit stabilen nativen
 IDs getestet sind.
 
-Stand 25. September 2026: Diese konservative Matrix bewertet ganze Familien,
+Stand 27. September 2026: Diese konservative Matrix bewertet ganze Familien,
 nicht den prozentualen Fertigstellungsgrad. Für Domäne, Sicherheit und geplante
 Ereignisse bestehen inzwischen inkrementelle Bearbeitungswege; nicht
 repräsentierte Varianten werden weiterhin erhalten. Geprüfte Verträge und
@@ -24,7 +24,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Entity Lifecycle | partial |
 | Modulrollen und Projektsicherheit | partial |
 | Microflows, Nanoflows und Core Pages | partial |
-| Layouts, Snippets, Building Blocks und Menüs | preserved_native |
+| Layouts, Page Templates, Snippets und Building Blocks | native |
+| Menüs | preserved_native |
 | Navigation und Pluggable Widgets | partial |
 | Scheduled Events | partial |
 | Reguläre Ausdrücke (Mendix/JVM-Text) | native |
@@ -41,6 +42,15 @@ Vergleich.
 
 Unbekannte Varianten bleiben fail-closed: Sie werden erhalten und gemeldet,
 niemals stillschweigend konvertiert oder verworfen.
+
+## Wiederverwendbare Präsentationsdokumente
+
+`script/presentation_documents_gate` erstellt Layouts, Page Templates, Snippets
+und Building Blocks mit der typisierten Forms-DSL, exportiert lesbares Ruby und
+kompiliert die MPR über zwei Zyklen neu. Das Gate verlangt strukturelle
+Gültigkeit, stabile Dokumentsemantik sowie stabile Unit- und innere Node-IDs.
+Mit `--mxbuild` paketiert das offizielle MxBuild 11.12.1 das finale Fixture mit
+Exit-Status null und ohne Probleme.
 
 ## Eigenschaften der Core-Forms
 

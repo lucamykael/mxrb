@@ -1,0 +1,186 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+require_relative '../spec/fixtures/presentation_documents/project'
+
+# Certifies reusable presentation documents through a complete boundary:
+# typed Ruby -> MPR -> readable Ruby -> MPR -> readable Ruby -> MPR. The
+# optional official oracle packages the final project without participating in
+# generation or mutation.
+# rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+# rubocop:disable Metrics/ModuleLength, Metrics/PerceivedComplexity
+module MxrbPresentationDocumentsGate
+  TYPES = %w[Forms$Layout Forms$PageTemplate Forms$BuildingBlock Forms$Snippet].freeze
+  EXPECTED = {
+    'Forms$Layout' => %w[ApplicationLayout Shell],
+    'Forms$PageTemplate' => %w[Starter],
+    'Forms$BuildingBlock' => %w[Card],
+    'Forms$Snippet' => %w[Summary]
+  }.freeze
+
+  module_function
+
+  def run(argv)
+    options = parse(argv)
+    workspace = options[:workspace] || Dir.mktmpdir('mxrb-presentation-documents-')
+    FileUtils.mkdir_p(workspace)
+    paths = evidence_paths(workspace)
+    PresentationDocumentsFixture.build(paths.fetch(:source_mpr))
+    first = inspect_project(paths.fetch(:source_mpr))
+    export_and_compile(paths.fetch(:source_mpr), paths.fetch(:ruby_one), paths.fetch(:rebuilt_one))
+    second = inspect_project(paths.fetch(:rebuilt_one))
+    export_and_compile(paths.fetch(:rebuilt_one), paths.fetch(:ruby_two), paths.fetch(:rebuilt_two))
+    third = inspect_project(paths.fetch(:rebuilt_two))
+    oracle = options[:mxbuild] && mxbuild(options.fetch(:mxbuild), paths)
+    report(paths, first, second, third, oracle)
+  end
+
+  def parse(argv)
+    options = {}
+    parser = OptionParser.new do |cli|
+      cli.banner = 'Usage: script/presentation_documents_gate [options]'
+      cli.on('--workspace DIR', 'Keep generated evidence under DIR') { options[:workspace] = _1 }
+      cli.on('--mxbuild FILE', 'Run the official local MxBuild oracle') { options[:mxbuild] = _1 }
+    end
+    parser.parse!(argv)
+    raise OptionParser::InvalidArgument, argv.join(' ') unless argv.empty?
+
+    options
+  end
+
+  def evidence_paths(workspace)
+    {
+      source_mpr: File.join(workspace, 'PresentationDocuments.mpr'),
+      ruby_one: File.join(workspace, 'ruby-one'),
+      rebuilt_one: File.join(workspace, 'PresentationDocumentsRebuilt.mpr'),
+      ruby_two: File.join(workspace, 'ruby-two'),
+      rebuilt_two: File.join(workspace, 'PresentationDocumentsRebuiltTwice.mpr'),
+      mda: File.join(workspace, 'PresentationDocuments.mda'),
+      mxbuild_errors: File.join(workspace, 'mxbuild-errors.json')
+    }.freeze
+  end
+
+  def export_and_compile(source, ruby_root, destination)
+    Mxrb::Exporter.new(source, ruby_root).export!
+    previous = ENV['MXRB_OUTPUT_PATH']
+    ENV['MXRB_OUTPUT_PATH'] = destination
+    load File.join(ruby_root, 'project.rb')
+  ensure
+    previous ? ENV['MXRB_OUTPUT_PATH'] = previous : ENV.delete('MXRB_OUTPUT_PATH')
+  end
+
+  def inspect_project(path)
+    documents = Mxrb.open(path) do |project|
+      project.all_units.filter_map do |unit|
+        document = project.parse_bson(unit)
+        next unless TYPES.include?(document['$Type'])
+
+        key = [document.fetch('$Type'), document.fetch('Name')]
+        [key, { unit_id: unit.fetch('UnitID'), document: }]
+      end.to_h
+    end
+    expected_keys = EXPECTED.flat_map { |type, names| names.map { [type, _1] } }.sort
+    actual_keys = documents.keys.sort
+    raise "unexpected presentation documents: #{actual_keys.inspect}" unless actual_keys == expected_keys
+
+    { valid: Mxrb.validate(path).valid?, documents: }
+  end
+
+  def report(paths, first, second, third, oracle)
+    first_signatures = signatures(first)
+    second_signatures = signatures(second)
+    third_signatures = signatures(third)
+    stable_ids = identity_sets(first) == identity_sets(second) && identity_sets(second) == identity_sets(third)
+    authored_keys = first_signatures.keys.reject { _1 == ['Forms$Layout', 'ApplicationLayout'] }
+    authored_stable = authored_keys.all? { first_signatures.fetch(_1) == second_signatures.fetch(_1) }
+    stable_documents = authored_stable && second_signatures == third_signatures
+    typed_sources = typed_sources?(paths.fetch(:ruby_one)) && typed_sources?(paths.fetch(:ruby_two))
+    oracle_passed = oracle.nil? || oracle.fetch(:accepted)
+    passed = [first, second, third].all? { _1.fetch(:valid) } && stable_ids && stable_documents &&
+             typed_sources && oracle_passed
+    {
+      passed:, mendix_version: PresentationDocumentsFixture::VERSION,
+      documents: EXPECTED.transform_values(&:size), cycles: 2,
+      structural_validation: [first, second, third].all? { _1.fetch(:valid) },
+      stable_native_ids: stable_ids, stable_documents:, readable_typed_ruby: typed_sources,
+      final_mpr: paths.fetch(:rebuilt_two), oracle:
+    }
+  end
+
+  def signatures(inspection)
+    inspection.fetch(:documents).transform_values { canonical(_1.fetch(:document), ids: false) }
+  end
+
+  def identity_sets(inspection)
+    inspection.fetch(:documents).transform_values do |entry|
+      [entry.fetch(:unit_id), *native_ids(entry.fetch(:document))].sort
+    end
+  end
+
+  def canonical(value, ids:)
+    case value
+    when Hash
+      value.reject { |key, _child| !ids && key == '$ID' }
+           .sort.to_h.transform_values { canonical(_1, ids:) }
+    when Array
+      value.map { canonical(_1, ids:) }
+    when BSON::Binary
+      [value.type, value.data]
+    else value
+    end
+  end
+
+  def native_ids(value)
+    case value
+    when Hash
+      identity = value['$ID'] && Mxrb::IO::BsonCodec.extract_id(value.fetch('$ID'))
+      [identity, *value.values.flat_map { native_ids(_1) }].compact.map(&:to_s)
+    when Array then value.drop(value.first.is_a?(Integer) ? 1 : 0).flat_map { native_ids(_1) }
+    else []
+    end
+  end
+
+  def typed_sources?(root)
+    sources = Dir[File.join(root, 'modules', 'Presentation', 'presentation', '**', '*.rb')]
+              .reject { File.basename(_1) == 'presentation.rb' }.map { File.read(_1) }.join("\n")
+    %w[layout_document page_template_document building_block_document snippet_document].all? do |declaration|
+      sources.include?(declaration)
+    end && !sources.include?('native_document')
+  end
+
+  def mxbuild(executable, paths)
+    mpr = paths.fetch(:rebuilt_two)
+    java_version = Mxrb::Runtime::Toolchain.new(mpr).plan.java_version
+    java_home = Mxrb::Runtime::JavaLocator.resolve(java_version)
+    raise "Java #{java_version} is required by MxBuild" unless java_home
+
+    command = [File.expand_path(executable), "--java-home=#{java_home}",
+               "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", '--target=package',
+               "--output=#{paths.fetch(:mda)}", "--write-errors=#{paths.fetch(:mxbuild_errors)}", mpr]
+    transcript, status = Open3.capture2e(*command, chdir: File.dirname(mpr))
+    payload = File.file?(paths.fetch(:mxbuild_errors)) ? JSON.parse(File.read(paths.fetch(:mxbuild_errors))) : {}
+    problems = Array(payload['problems'])
+    storage_failure = transcript.match?(/StorageLoadException|TypeCacheUnknownTypeException|StreamingBsonUnitReader/)
+    {
+      loaded: !storage_failure && (status.success? || payload['problems'].is_a?(Array)),
+      accepted: !storage_failure && status.success?, exit_status: status.exitstatus,
+      problem_count: problems.size, problem_codes: problems.map { _1['errorCode'] }.tally.sort.to_h,
+      errors: paths.fetch(:mxbuild_errors),
+      diagnostics: transcript.lines.grep(/ERROR|Exception/).first(3).map(&:strip)
+    }
+  end
+end
+# rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+# rubocop:enable Metrics/ModuleLength, Metrics/PerceivedComplexity
+
+if $PROGRAM_NAME == __FILE__
+  result = MxrbPresentationDocumentsGate.run(ARGV)
+  puts JSON.pretty_generate(result)
+  exit 1 unless result.fetch(:passed)
+end

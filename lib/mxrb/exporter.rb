@@ -657,7 +657,7 @@ module Mxrb
         )
         paths << relative
       end
-      write_path_aggregator(File.join(presentation, "presentation.rb"), paths)
+      append_to_aggregator(File.join(presentation, "presentation.rb"), paths)
     end
 
     def export_infrastructure_documents(root, mod)

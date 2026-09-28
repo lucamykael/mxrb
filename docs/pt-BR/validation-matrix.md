@@ -94,7 +94,7 @@ todo metamodelo Mendix. Encodings `.mxunit` desconhecidos são rejeitados em vez
 de adivinhados. A validação exata do 5.21 em Studio Pro/Windows continua sendo
 um limite explícito.
 
-## Certificação de widgets
+## Certificação de widgets e apresentação
 
 `script/forms_core_project_gate` complementa a matriz de comportamento com um
 gate estrutural por propriedade. Para Mendix 11.12.1, ele materializa as 455
@@ -111,6 +111,11 @@ que as mesmas 455 propriedades estão presentes no projeto aceito. O
 `TemplatePlaceholder`, mantido pelo metamodelo mas proibido pelo Studio em
 templates implantáveis, fica em um template legado explicitamente excluído;
 ele ainda é desserializado pelo oráculo sem fingir que pode ser publicado.
+
+`script/presentation_documents_gate` certifica layouts, page templates,
+snippets e building blocks criados pela DSL Forms tipada. Ele exige dois
+ciclos Ruby → MPR → Ruby com semântica e IDs nativos estáveis. O MxBuild
+11.12.1 oficial empacotou o MPR final com `exit_status` 0 e zero problemas.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
@@ -139,9 +144,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.067 exemplos, zero falhas;
-- 100,00% das linhas: 36.788/36.788;
-- 100,00% dos branches: 15.926/15.926;
+- 2.076 exemplos, zero falhas;
+- 100,00% das linhas: 36.969/36.969;
+- 100,00% dos branches: 16.013/16.013;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

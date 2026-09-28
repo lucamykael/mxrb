@@ -5,7 +5,7 @@ superfície só recebe o estado `native` quando possui testes de criar, alterar,
 remover, reabrir o MPR e recompilar sem trocar identidades nativas. Preservar o
 BSON no sidecar não conta como edição.
 
-Atualização de 25 de setembro de 2026: a matriz abaixo é conservadora por
+Atualização de 27 de setembro de 2026: a matriz abaixo é conservadora por
 família, não uma porcentagem de conclusão. Domínio, segurança e operação já
 possuem rotas de autoria incremental; variantes não representadas continuam
 preservadas. Os contratos e limites verificados estão na
@@ -31,7 +31,8 @@ Estados:
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
-| Layouts, snippets, building blocks e menus | preserved_native | criar projeções Ruby e sincronizadores incrementais |
+| Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
+| Menus | preserved_native | tornar itens Ruby autoritativos e adicionar remoção incremental |
 | Navegação | parcial | itens de Page.native; ampliar perfis, home/login e role targeting |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
 | Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
@@ -60,15 +61,24 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.067 exemplos e mede 100,00% das
-linhas (36.788/36.788) e 100,00% dos branches (15.926/15.926). Nenhum código
+A suíte estrita passou com 2.076 exemplos e mede 100,00% das
+linhas (36.969/36.969) e 100,00% dos branches (16.013/16.013). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
-Cobertura de código 100/100 também não encerra cobertura funcional: layouts,
-snippets, building blocks, menus, integrações, workflows e task pages continuam
-`preserved_native` e várias famílias seguem `parcial`; as 455 propriedades de
-Forms estão em 455/455 no gate independente `studio_validated`.
+Cobertura de código 100/100 também não encerra cobertura funcional: menus,
+integrações, workflows e task pages continuam `preserved_native` e várias
+famílias seguem `parcial`; as 455 propriedades de Forms estão em 455/455 no
+gate independente `studio_validated`.
+
+## Documentos reutilizáveis de apresentação
+
+`script/presentation_documents_gate` cria layouts, page templates, snippets e
+building blocks por DSL Forms tipada, exporta Ruby legível e recompila o MPR por
+dois ciclos. O gate exige validação estrutural, documentos semanticamente
+estáveis e preservação dos IDs da unidade e dos nós internos. Com
+`--mxbuild /caminho/para/mxbuild`, o MxBuild 11.12.1 oficial empacota o artefato
+final; o fixture certificado passa com código de saída zero e zero problemas.
 
 ## Propriedades de Forms core
 

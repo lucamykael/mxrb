@@ -246,6 +246,89 @@ RSpec.describe Mxrb::Forms::MprCodec do # rubocop:disable Metrics/BlockLength
     expect(rebuilt.fetch('DefaultPagePointer')).not_to eq(encoded.fetch('DefaultPagePointer'))
   end
 
+  it 'preserves nested storage identities and rewrites by-id pointers against a baseline' do
+    tabs = Mxrb::Forms.tab_container do
+      name 'details'
+      tab_pages(:tab_page) { name 'overview' }
+      tab_pages(:tab_page) { name 'history' }
+      default_page 'history'
+    end
+    baseline = codec.encode(tabs)
+    rebuilt = codec.encode(tabs, baseline:)
+    baseline_pages = Mxrb::IO::BsonCodec.parse_array(baseline.fetch('TabPages')).fetch(:items)
+    rebuilt_pages = Mxrb::IO::BsonCodec.parse_array(rebuilt.fetch('TabPages')).fetch(:items)
+
+    expect(rebuilt.fetch('$ID')).to eq(baseline.fetch('$ID'))
+    expect(rebuilt_pages.map { _1.fetch('$ID') }).to eq(baseline_pages.map { _1.fetch('$ID') })
+    expect(rebuilt.fetch('DefaultPagePointer')).to eq(baseline_pages.last.fetch('$ID'))
+  end
+
+  it 'reconciles exact, semantic, typed, positional, and unmatched storage children' do # rubocop:disable Metrics/BlockLength
+    replacements = {}
+    codec.send(:reconcile_storage_identities!, Object.new, {}, replacements)
+    codec.send(
+      :reconcile_storage_identities!, { '$Type' => 'Forms$Left' },
+      { '$Type' => 'Forms$Right' }, replacements
+    )
+    without_ids = { '$Type' => 'Forms$Child', 'Nested' => { '$Type' => 'Forms$Nested' } }
+    codec.send(:reconcile_storage_identities!, without_ids, Marshal.load(Marshal.dump(without_ids)), replacements)
+    exact = [{ '$ID' => 'new-exact', '$Type' => 'Forms$Child', 'Value' => 1 }]
+    exact_baseline = [{ '$ID' => 'old-exact', '$Type' => 'Forms$Child', 'Value' => 1 }]
+    codec.send(:reconcile_storage_collection!, exact, exact_baseline, replacements)
+
+    semantic = [{ '$ID' => 'new-semantic', '$Type' => 'Forms$Child', 'Name' => 'named', 'Value' => 2 }]
+    semantic_baseline = [{ '$ID' => 'old-semantic', '$Type' => 'Forms$Child',
+                           'Name' => 'named', 'Value' => 1 }]
+    codec.send(:reconcile_storage_collection!, semantic, semantic_baseline, replacements)
+
+    typed = [{ '$ID' => 'new-typed', '$Type' => 'Forms$Unique', 'Value' => 2 }]
+    typed_baseline = [{ '$ID' => 'old-typed', '$Type' => 'Forms$Unique', 'Value' => 1 },
+                      { '$ID' => 'other', '$Type' => 'Forms$Other', 'Value' => 1 }]
+    codec.send(:reconcile_storage_collection!, typed, typed_baseline, replacements)
+
+    positional = [2,
+                  { '$ID' => 'new-first', '$Type' => 'Forms$Repeated', 'Value' => 10 },
+                  { '$ID' => 'new-second', '$Type' => 'Forms$Repeated', 'Value' => 20 }]
+    positional_baseline = [2,
+                           { '$ID' => 'old-first', '$Type' => 'Forms$Repeated', 'Value' => 1 },
+                           { '$ID' => 'old-second', '$Type' => 'Forms$Repeated', 'Value' => 2 }]
+    codec.send(:reconcile_storage_collection!, positional, positional_baseline, replacements)
+
+    unmatched = [{ '$ID' => 'new-unmatched', '$Type' => 'Forms$Repeated', 'Value' => 3 }]
+    unmatched_baseline = [
+      { '$ID' => 'old-a', '$Type' => 'Forms$Repeated', 'Value' => 1 },
+      { '$ID' => 'old-b', '$Type' => 'Forms$Repeated', 'Value' => 2 }
+    ]
+    codec.send(:reconcile_storage_collection!, unmatched, unmatched_baseline, replacements)
+
+    expect(exact.first.fetch('$ID')).to eq('old-exact')
+    expect(semantic.first.fetch('$ID')).to eq('old-semantic')
+    expect(typed.first.fetch('$ID')).to eq('old-typed')
+    expect(positional.drop(1).map { _1.fetch('$ID') }).to eq(%w[old-first old-second])
+    expect(unmatched.first.fetch('$ID')).to eq('new-unmatched')
+  end
+
+  it 'normalizes binary fingerprints and rewrites nested storage references' do
+    binary = BSON::Binary.new("\x00\xFF".b)
+    fingerprint = codec.send(
+      :storage_fingerprint,
+      { '$ID' => 'ignored', 'Items' => [2, binary], 'Nested' => { 'Value' => 1 } }
+    )
+    document = {
+      '$ID' => 'new-root', 'Pointer' => 'new-child',
+      'Children' => [2, 'new-child', { '$ID' => 'new-child', 'Pointer' => 'new-root' }]
+    }
+    codec.send(:rewrite_storage_references!, document, 'new-root' => 'old-root', 'new-child' => 'old-child')
+
+    expect(fingerprint.to_s).to include('AP8=')
+    expect(codec.send(:storage_identity_signature, Object.new)).to eq([])
+    expect(codec.send(:storage_identity_signature, '$Type' => 'Forms$Child', 'Name' => '')).to eq([])
+    expect(document).to eq(
+      '$ID' => 'new-root', 'Pointer' => 'old-child',
+      'Children' => [2, 'old-child', { '$ID' => 'new-child', 'Pointer' => 'old-root' }]
+    )
+  end
+
   it 'migrates legacy database constraints to the canonical Mendix 11 XPath source storage' do
     source = {
       '$ID' => 'ignored', '$Type' => 'Forms$NewGridDatabaseSource',

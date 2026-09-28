@@ -81,9 +81,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.067 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (36.788/36.788);
-- 100,00 % Branch-Abdeckung (15.926/15.926);
+- 2.076 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (36.969/36.969);
+- 100,00 % Branch-Abdeckung (16.013/16.013);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
@@ -123,7 +123,7 @@ Deterministisches Fuzzing deckt 250 BSON-Dokumente und 50 atomare
 Die Matrix beweist die geprüften Szenarien, nicht universelle Kompatibilität
 mit jedem Mendix-Metamodell. Unbekannte `.mxunit`-Kodierungen werden abgelehnt.
 
-## Widget-Zertifizierung
+## Widget- und Präsentationszertifizierung
 
 `script/forms_core_project_gate` ergänzt die Verhaltensabdeckung um ein
 strukturelles Gate je Eigenschaft. Für Mendix 11.12.1 materialisiert es alle
@@ -140,6 +140,12 @@ Inspektion bestätigt dieselben 455 Eigenschaften im akzeptierten Projekt. Der
 veraltete `TemplatePlaceholder` liegt in einem ausdrücklich ausgeschlossenen
 Template, weil Studio ihn in auslieferbaren Templates selbst verbietet; er
 wird dennoch vom Oracle deserialisiert.
+
+`script/presentation_documents_gate` zertifiziert Layouts, Page Templates,
+Snippets und Building Blocks aus der typisierten Forms-DSL. Es verlangt zwei
+Ruby-→-MPR-→-Ruby-Zyklen mit stabiler Semantik und stabilen nativen IDs. Das
+offizielle MxBuild 11.12.1 paketierte die finale MPR mit Exit-Status 0 und ohne
+Probleme.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
 Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers
