@@ -129,6 +129,13 @@ mantiveram IDs e semântica; `script/frontend_acceptance` aprovou original e
 reconstruído no MxBuild 11.12.1 com zero erros, zero diferenças estruturais e
 `frontend_ready: true`.
 
+O fixture `spec/fixtures/consumed_services/project.rb` cobre chamada REST sem
+body com parâmetros, headers, timeout e resposta HTTP, além de serviço OData
+consumido com CSDL v4 e URL baseada em constante. Dois ciclos mantiveram IDs e
+semântica sem fallback opaco; `script/frontend_acceptance` aprovou original e
+reconstruído no MxBuild 11.12.1 com zero erros, zero diferenças estruturais e
+`frontend_ready: true`.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
 em conjunto:
@@ -156,9 +163,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.081 exemplos, zero falhas;
-- 100,00% das linhas: 37.076/37.076;
-- 100,00% dos branches: 16.078/16.078;
+- 2.082 exemplos, zero falhas;
+- 100,00% das linhas: 37.094/37.094;
+- 100,00% dos branches: 16.086/16.086;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

@@ -28,7 +28,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Scheduled events | partial |
 | Regular expressions (Mendix/JVM text) | native |
 | Published REST and JSON mappings | partial |
-| Consumed REST, OData, App/Web Services, XML and other mappings | preserved_native |
+| Consumed REST and consumed OData | partial |
+| Published OData, App/Web Services, XML and other mappings | preserved_native |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -43,8 +44,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,081 examples and measures 100.00% of
-lines (37,076/37,076) and 100.00% of branches (16,078/16,078). No executable
+The strict suite passed 2,082 examples and measures 100.00% of
+lines (37,094/37,094) and 100.00% of branches (16,086/16,086). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -89,6 +90,22 @@ source and rebuilt projects with MxBuild 11.12.1, zero errors, and
 The family remains `partial`: only recognized shapes use the semantic DSL;
 unrepresented operations, authentication, or mapping variants keep the
 lossless fallback.
+
+## Consumed REST and consumed OData
+
+`spec/fixtures/consumed_services/project.rb` combines a bodyless REST GET with
+URL parameters, ordered headers, timeout, and HTTP response handling with a
+consumed OData service backed by valid CSDL v4 and a constant-based service
+URL. Two Ruby → MPR cycles retain semantics and unit IDs without
+`native_fragment`, `deep_structure`, or opaque BSON in the certified sources.
+Official MxBuild 11.12.1 accepts both source and rebuilt projects with zero
+errors, no structural differences, and `frontend_ready: true`.
+
+Bodyless calls use the empty `CustomRequestHandling` shape observed in real
+projects. The DSL rejects a mapping without its variable, a variable without
+its mapping, and mixing a custom body with an export mapping. The family stays
+`partial`: form-data, authentication/proxy variants, metadata references, and
+validated OData entities retain the lossless fallback when unrecognized.
 
 ## Core Forms properties
 

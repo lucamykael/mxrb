@@ -30,7 +30,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Scheduled Events | partial |
 | Reguläre Ausdrücke (Mendix/JVM-Text) | native |
 | Published REST und JSON-Mappings | partial |
-| Consumed REST, OData, App/Web Services, XML und weitere Mappings | preserved_native |
+| Consumed REST und konsumiertes OData | partial |
+| Published OData, App/Web Services, XML und weitere Mappings | preserved_native |
 | Java Custom Actions und externe Connectors | runtime_only |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -81,6 +82,23 @@ MxBuild 11.12.1 ohne Fehler und mit `frontend_ready: true`.
 Die Familie bleibt `partial`: Nur erkannte Shapes verwenden die semantische
 DSL; nicht dargestellte Operationen, Authentifizierungs- oder Mappingvarianten
 bleiben im verlustfreien Fallback.
+
+## Consumed REST und konsumiertes OData
+
+`spec/fixtures/consumed_services/project.rb` kombiniert einen REST-GET ohne
+Body mit URL-Parametern, geordneten Headern, Timeout und HTTP-Antwortbehandlung
+mit einem konsumierten OData-Service auf Basis gültigen CSDL v4 und einer
+konstantenbasierten Service-URL. Zwei Ruby-→-MPR-Zyklen behalten Semantik und
+Unit-IDs ohne `native_fragment`, `deep_structure` oder opakes BSON in den
+zertifizierten Quellen. MxBuild 11.12.1 akzeptiert Quell- und Neuaufbauprojekt
+ohne Fehler oder strukturelle Unterschiede und mit `frontend_ready: true`.
+
+Bodylose Aufrufe verwenden das in realen Projekten beobachtete leere
+`CustomRequestHandling`. Die DSL weist unvollständige Mapping-Paare und die
+Mischung eines eigenen Bodys mit einem Export-Mapping zurück. Die Familie
+bleibt `partial`: Form-Data, Authentifizierungs-/Proxyvarianten,
+Metadata-Referenzen und validierte OData-Entitäten bleiben bei unbekannten
+Shapes im verlustfreien Fallback.
 
 ## Eigenschaften der Core-Forms
 

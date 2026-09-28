@@ -159,6 +159,13 @@ cycles retained identities and semantics; `script/frontend_acceptance`
 accepted source and rebuilt projects with MxBuild 11.12.1, zero errors, no
 structural differences, and `frontend_ready: true`.
 
+The `spec/fixtures/consumed_services/project.rb` witness covers a bodyless REST
+call with parameters, headers, timeout, and HTTP response handling plus a
+consumed OData service with valid CSDL v4 and a constant-based URL. Two cycles
+retained identities and semantics without opaque fallback;
+`script/frontend_acceptance` accepted source and rebuilt projects with MxBuild
+11.12.1, zero errors, no structural differences, and `frontend_ready: true`.
+
 This validation exposed and drove the fixes listed above. The six-project MXRB
 matrix was rerun from fresh targets after the fixes and all six v1/v2
 round-trips passed again.

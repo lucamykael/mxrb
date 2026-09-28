@@ -6884,6 +6884,7 @@ module Mxrb
       unless %w[mapping http_response string].include?(result_handling)
         raise ValidationError, "unsupported REST result handling #{result_handling.inspect}"
       end
+      request_handling_type = rest_request_handling_type(activity)
 
       {
         "$ID" => SecureRandom.uuid,
@@ -6919,8 +6920,8 @@ module Mxrb
           "UseHttpAuthentication" => false
         },
         "ProxyConfiguration" => nil,
-        "RequestHandling" => rest_request_handling_doc(activity),
-        "RequestHandlingType" => activity[:request_body].nil? ? "Mapping" : "Custom",
+        "RequestHandling" => rest_request_handling_doc(activity, request_handling_type),
+        "RequestHandlingType" => request_handling_type,
         "RequestProxyType" => "DefaultProxy",
         "ResultHandling" => rest_result_handling_doc(activity),
         "ResultHandlingType" => mendix_enum(result_handling),
@@ -6929,8 +6930,22 @@ module Mxrb
       }
     end
 
-    def rest_request_handling_doc(activity)
-      unless activity[:request_body].nil?
+    def rest_request_handling_type(activity)
+      mapping_set = !activity[:request_mapping].to_s.empty?
+      variable_set = !activity[:request_variable].to_s.empty?
+      if mapping_set != variable_set
+        raise ValidationError,
+              "REST request mapping requires both request_mapping and request_variable"
+      end
+      if !activity[:request_body].nil? && mapping_set
+        raise ValidationError, "REST call accepts either a request body or a request mapping"
+      end
+
+      mapping_set ? "Mapping" : "Custom"
+    end
+
+    def rest_request_handling_doc(activity, handling_type = rest_request_handling_type(activity))
+      if handling_type == "Custom"
         return {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Microflows$CustomRequestHandling",

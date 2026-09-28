@@ -63,6 +63,15 @@ RSpec.describe 'Ruby REST header declarations' do
     end.to raise_error(TypeError, /scalar/)
     expect { flow.call_rest(**options, result_handling: :invalid) { header 'Name', 'Value' } }
       .to raise_error(ArgumentError, /unsupported REST/)
+    expect { flow.call_rest(**options, request_mapping: 'App.Export') }
+      .to raise_error(ArgumentError, /both request_mapping and request_variable/)
+    expect { flow.call_rest(**options, request_variable: :Input) }
+      .to raise_error(ArgumentError, /both request_mapping and request_variable/)
+    expect do
+      flow.call_rest(
+        **options, request_body: '', request_mapping: 'App.Export', request_variable: :Input
+      )
+    end.to raise_error(ArgumentError, /either a request body or a request mapping/)
     expect(flow.to_h.fetch(:body)).to be_nil
   end
 
