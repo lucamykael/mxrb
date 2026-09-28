@@ -25,7 +25,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Modulrollen und Projektsicherheit | partial |
 | Microflows, Nanoflows und Core Pages | partial |
 | Layouts, Page Templates, Snippets und Building Blocks | native |
-| Menüs | preserved_native |
+| Menüs | partial |
 | Navigation und Pluggable Widgets | partial |
 | Scheduled Events | partial |
 | Reguläre Ausdrücke (Mendix/JVM-Text) | native |
@@ -51,6 +51,14 @@ kompiliert die MPR über zwei Zyklen neu. Das Gate verlangt strukturelle
 Gültigkeit, stabile Dokumentsemantik sowie stabile Unit- und innere Node-IDs.
 Mit `--mxbuild` paketiert das offizielle MxBuild 11.12.1 das finale Fixture mit
 Exit-Status null und ohne Probleme.
+
+Unterstützte Menüdokumente sind ebenfalls maßgeblich: lokalisierte Captions,
+Page- und Microflow-Ziele, Glyph-Icons, rekursive Einträge sowie das Entfernen
+von Dokumenten und Einträgen durchlaufen lesbares Ruby mit stabilen kompatiblen
+Identitäten. Unbekannte Aktionen oder Icons fallen auf verlustfreies
+`deep_structure` zurück; deshalb bleibt die Familie `partial`. Das Menü-Fixture
+durchläuft `script/frontend_acceptance` für Quell- und Neuaufbau-MPR mit dem
+offiziellen MxBuild 11.12.1 ohne Fehler und ohne strukturelle Unterschiede.
 
 ## Eigenschaften der Core-Forms
 

@@ -64,16 +64,21 @@ module Mxrb
         @pluggable_baselines = index_pluggable_baselines(baseline)
         prepare_node_ids(node)
         document = encode_embedded(node)
-        if baseline
-          replacements = {}
-          reconcile_storage_identities!(document, baseline, replacements)
-          rewrite_storage_references!(document, replacements)
-        end
+        preserve_storage_identities!(document, baseline) if baseline
         document
       ensure
         @node_ids = previous_ids
         @local_encode_references = previous_references
         @pluggable_baselines = previous_baselines
+      end
+
+      # Reuses the schema-independent identity reconciler for other BSON trees
+      # containing Forms values, such as menu actions and localized captions.
+      def preserve_storage_identities!(document, baseline)
+        replacements = {}
+        reconcile_storage_identities!(document, baseline, replacements)
+        rewrite_storage_references!(document, replacements)
+        document
       end
 
       # Nested pluggable values share the root's semantic reference maps.
@@ -119,7 +124,7 @@ module Mxrb
       attr_reader :catalog, :reference_decoder, :reference_encoder, :pluggable_codec
 
       IDENTITY_FIELDS = %w[
-        Name LanguageCode Property Attribute Association Parameter Variable Entity
+        Name LanguageCode Caption Property Attribute Association Parameter Variable Entity
       ].freeze
 
       def reconcile_storage_identities!(generated, baseline, replacements)
@@ -178,7 +183,7 @@ module Mxrb
 
         IDENTITY_FIELDS.filter_map do |field|
           item = value[field]
-          [field, item] unless item.nil? || item.to_s.empty?
+          [field, storage_fingerprint(item)] unless item.nil? || item.to_s.empty?
         end
       end
 

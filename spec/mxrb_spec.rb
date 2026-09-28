@@ -2427,6 +2427,9 @@ RSpec.describe Mxrb do
       menu = Mxrb::Model::Menu.new(raw, mpr)
       expect(menu.items.first[:caption]).to eq("")
       expect(menu.items.last[:caption]).to eq("")
+      expect(menu.semantic?).to be(false)
+      menu.raw_document.fetch('ItemCollection')['$Type'] = 'Menus$MenuItemCollection'
+      expect(menu.semantic?).to be(false)
       mpr.close
     end
   end
