@@ -29,7 +29,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Regular expressions (Mendix/JVM text) | native |
 | Published REST and JSON mappings | partial |
 | Consumed REST and consumed OData | partial |
-| Published OData, App/Web Services, XML and other mappings | preserved_native |
+| Message definitions and derived XML mappings | partial |
+| Published OData, App/Web Services, XSD/WSDL and other mappings | preserved_native |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -44,7 +45,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,082 examples and measures 100.00% of
+The strict suite passed 2,083 examples and measures 100.00% of
 lines (37,094/37,094) and 100.00% of branches (16,086/16,086). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -106,6 +107,21 @@ projects. The DSL rejects a mapping without its variable, a variable without
 its mapping, and mixing a custom body with an export mapping. The family stays
 `partial`: form-data, authentication/proxy variants, metadata references, and
 validated OData entities retain the lossless fallback when unrecognized.
+
+## Message definitions and derived XML mappings
+
+`spec/fixtures/message_xml/project.rb` declares an entity and attributes
+exposed through a `MessageDefinitionCollection`, import/export mappings with
+`XmlPath`, and two microflows that import and export XML. Two Ruby → MPR cycles
+retain semantics and unit IDs without `native_document`, `deep_structure`,
+`native_fragment`, or opaque BSON in the certified sources. Official MxBuild
+11.12.1 accepts source and rebuilt projects with zero errors, no structural
+differences, and `frontend_ready: true`.
+
+Message-definition mappings do not enable schema validation because MxBuild
+reserves it for XSD-based mappings. The family remains `partial`: nested trees,
+associations, converters, XSD/WSDL, and other variants retain the lossless
+fallback until they receive dedicated evidence.
 
 ## Core Forms properties
 

@@ -136,6 +136,12 @@ semântica sem fallback opaco; `script/frontend_acceptance` aprovou original e
 reconstruído no MxBuild 11.12.1 com zero erros, zero diferenças estruturais e
 `frontend_ready: true`.
 
+O fixture `spec/fixtures/message_xml/project.rb` cobre message definitions,
+import/export mappings derivados com `XmlPath` e ações de microflow para
+importar e exportar XML. Dois ciclos mantiveram IDs e semântica sem fallback
+opaco; `script/frontend_acceptance` aprovou original e reconstruído no MxBuild
+11.12.1 com zero erros, zero diferenças estruturais e `frontend_ready: true`.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
 em conjunto:
@@ -163,7 +169,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.082 exemplos, zero falhas;
+- 2.083 exemplos, zero falhas;
 - 100,00% das linhas: 37.094/37.094;
 - 100,00% dos branches: 16.086/16.086;
 - avaliação Sudoku: 7/7 checks;
