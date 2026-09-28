@@ -16,8 +16,10 @@ flow behavior, widgets, permissions, endpoints, tests, and evaluations remain
 project work. The accepted VetClinic had its navigation edited in `project.rb`;
 `init` now creates a minimal profile, layout, and Home page, while additional
 menu items still have no dedicated command. Published
-REST, consumed REST, and Java Action scaffolds are buildable microflow adapters;
-native documents still require an exported baseline or Studio Pro.
+Published and consumed REST scaffolds are buildable microflow handlers/adapters;
+their REST documents still require explicit DSL, an exported baseline, or Studio
+Pro. Java Action now creates the native action document and a compilable
+`UserAction` class under `javasource`.
 
 An independent empty-project smoke test passed `mxrb validate`, official
 `mx check`, and MxBuild without manual editing.

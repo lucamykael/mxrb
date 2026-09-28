@@ -43,7 +43,8 @@ Estados:
 | App Services e Web Services | parcial | serviços consumidos, ações/parâmetros e SOAP publicado com versões/operações escalares; contratos MSD e entidades estruturadas seguem lossless |
 | Message definitions e mappings XML derivados | parcial | entidades/atributos expostos, import/export mappings e ações XML; ampliar árvores, associações e variantes |
 | XSD/WSDL e outros import/export mappings | parcial | XSD e WSDL consumido com conteúdos/namespace/localização e mappings referenciados; ampliar serviços WSDL interpretados e árvores complexas |
-| Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
+| Java custom actions | native | assinatura tipada, scaffold com classe Java, fontes preservadas e pacote compilado pelo MxBuild 11.12.1 |
+| Connectors externos | parcial | auditoria e instalação por pacote oficial verificado; módulos protegidos continuam tratados como dependência externa |
 | Workflows e task pages | preserved_native | metamodelo, outcomes, timers, boundaries e segurança |
 | Settings, runtime, theme/design system e resources | parcial | assets e tokens cobertos; ampliar settings nativos versionados |
 | React/TypeScript convencional | runtime_only | vira nativo apenas como pluggable widget oficial |
@@ -64,8 +65,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.091 exemplos e mede 100,00% das
-linhas (37.338/37.338) e 100,00% dos branches (16.147/16.147). Nenhum código
+A suíte estrita passou com 2.092 exemplos e mede 100,00% das
+linhas (37.347/37.347) e 100,00% dos branches (16.147/16.147). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -165,6 +166,19 @@ os nomes físicos legados `ImportedServiceImpl`, `WsdlDescriptionImpl`,
 públicos do Model SDK. A família permanece `parcial` enquanto serviços e
 operações WSDL já interpretados, árvores complexas e demais variantes ainda
 dependerem do fallback lossless.
+
+## Java custom actions e connectors externos
+
+`java_action` materializa a assinatura nativa, parâmetros, tipos genéricos,
+retorno e metadados visuais. O scaffold `mxrb java-action new` cria também a
+classe `UserAction` na convenção `javasource/<module>/actions`; exportações
+copiam os fontes e dois ciclos Ruby → MPR preservam conteúdo, semântica e IDs.
+O fixture completo foi compilado e empacotado pelo MxBuild 11.12.1.
+
+Connectors do Marketplace permanecem dependências externas: o MXRB audita GUID
+verificado, superfície pública e proveniência, e só instala por adapter oficial
+autenticado. Módulos protegidos não são apresentados como editáveis e pedidos
+sem pacote resolvido falham fechados.
 
 ## OData publicado
 

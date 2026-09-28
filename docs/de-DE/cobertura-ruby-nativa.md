@@ -35,7 +35,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Published OData | partial |
 | App/Web Services | partial |
 | XSD/WSDL und weitere Mappings | partial |
-| Java Custom Actions und externe Connectors | runtime_only |
+| Java Custom Actions | native |
+| Externe Connectors | partial |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
 | Konventionelles React/TypeScript | runtime_only |
@@ -148,6 +149,20 @@ Flags ab. Sie verwendet die älteren physischen Namen `ImportedServiceImpl`,
 Familie bleibt `partial`, solange bereits geparste WSDL-Services und
 -Operationen, komplexe Mapping-Bäume und weitere Varianten noch den
 verlustfreien Fallback verwenden.
+
+## Java Custom Actions und externe Connectors
+
+`java_action` materialisiert die native Signatur, Parameter, generische Typen,
+Rückgabetyp und visuelle Metadaten. Das Scaffold `mxrb java-action new` erzeugt
+zusätzlich die `UserAction`-Klasse unter `javasource/<modul>/actions`; Exporte
+kopieren die Quellen und zwei Ruby-→-MPR-Zyklen behalten Inhalt, Semantik und
+IDs. Das vollständige Fixture wird mit MxBuild 11.12.1 kompiliert und paketiert.
+
+Marketplace-Connectors bleiben externe Abhängigkeiten: MXRB prüft verifizierte
+GUIDs, öffentliche Oberfläche und Provenienz und installiert nur über einen
+authentifizierten offiziellen Adapter. Geschützte Module werden nicht als
+editierbar dargestellt; nicht aufgelöste Paketanfragen schlagen fail-closed
+fehl.
 
 ## Published OData
 
