@@ -47,6 +47,12 @@ The same structures can be declared in the Ruby DSL and written back to the
 native navigation document. Rename, remove, diff and lint operate on those
 references, including user-role access to role-specific homes.
 
+Supported settings also include legacy `enabled`/`offline_enabled` state,
+translated login titles, legacy login location, not-found page or microflow
+targets, and `throw_partial_sync_error`. Updates retain profile and nested
+native identities. PWA and offline configuration variants not represented by
+the DSL remain opaque and unchanged.
+
 ## Design tokens from real stylesheets
 
 `project.design_system` scans the project directory (`theme/`,

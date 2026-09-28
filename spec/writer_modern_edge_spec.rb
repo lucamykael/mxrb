@@ -90,10 +90,15 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
 
     profile = writer.send(
       :legacy_navigation_profile_doc,
-      { role_homes: {}, role_home_details: [], app_title: {}, items: [] },
+      {
+        role_homes: {}, role_home_details: [], app_title: {}, items: [],
+        enabled: false, offline_enabled: true
+      },
       previous: { 'ApplicationTitle' => 'Existing title' }
     )
-    expect(profile['ApplicationTitle']).to eq('Existing title')
+    expect(profile).to include(
+      'ApplicationTitle' => 'Existing title', 'Enabled' => false, 'OfflineEnabled6' => true
+    )
   end
 
   it 'writes empty navigation role-home alternatives as empty references' do
@@ -109,6 +114,83 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     )
     expect(microflow_home).to include(
       'Page' => '', 'Microflow' => 'App.ACT_Home'
+    )
+  end
+
+  it 'updates typed profile settings without replacing identities or opaque settings' do
+    previous = {
+      '$ID' => 'profile-id', '$Type' => 'Navigation$NavigationProfile',
+      'Name' => 'Responsive', 'Kind' => 'Responsive',
+      'HomePage' => { '$ID' => 'home-id', '$Type' => 'Navigation$HomePage' },
+      'HomeItems' => [2],
+      'Menu' => { '$ID' => 'menu-id', '$Type' => 'Menus$MenuItemCollection', 'Items' => [2] },
+      'OfflineEntityConfigs' => [3, { '$ID' => 'offline-id', '$Type' => 'Offline$Config' }],
+      'ProgressiveWebAppSettings' => {
+        '$ID' => 'pwa-id', '$Type' => 'Navigation$ProgressiveWebAppSettings', 'Enabled' => true
+      },
+      'LoginPageSettings' => {
+        '$ID' => 'login-id', '$Type' => 'Forms$FormSettings', 'Form' => 'App.OldLogin',
+        'ParameterMappings' => [2], 'TitleOverride' => nil
+      },
+      'NotFoundHomepage' => {
+        '$ID' => 'not-found-id', '$Type' => 'Navigation$HomePage',
+        'Page' => 'App.OldMissing', 'Microflow' => ''
+      },
+      'ThrowPartialSyncError' => true
+    }
+    profile = Mxrb::Dsl::NavigationProfileBuilder.new(
+      :Responsive, home_page: 'App.Home', sign_in_page: 'App.Login',
+                   sign_in_title: { en_US: 'Sign in' }, not_found_page: 'App.Missing',
+                   throw_partial_sync_error: false
+    ).to_h
+
+    generated = writer.send(:navigation_profile_doc, profile, previous:)
+
+    expect(generated).to include(
+      '$ID' => 'profile-id', 'OfflineEntityConfigs' => previous['OfflineEntityConfigs'],
+      'ProgressiveWebAppSettings' => previous['ProgressiveWebAppSettings'],
+      'ThrowPartialSyncError' => false
+    )
+    expect(generated.fetch('LoginPageSettings')).to include(
+      '$ID' => 'login-id', 'Form' => 'App.Login', 'ParameterMappings' => [2]
+    )
+    expect(generated.dig('LoginPageSettings', 'TitleOverride')).to include(
+      '$Type' => 'Microflows$TextTemplate'
+    )
+    expect(generated.fetch('NotFoundHomepage')).to include(
+      '$ID' => 'not-found-id', '$Type' => 'Navigation$NotFoundHomePage',
+      'Page' => 'App.Missing', 'Microflow' => ''
+    )
+
+    model = Mxrb::Model::NavigationProfile.new(generated)
+    expect(model).to have_attributes(
+      sign_in_page: 'App.Login', sign_in_title: { 'en_US' => 'Sign in' },
+      not_found_page: 'App.Missing', throw_partial_sync_error: false
+    )
+  end
+
+  it 'uses versioned login settings and exposes legacy profile state' do
+    legacy_writer = described_class.new('legacy.mpr', version: '7.17.0', modules: [])
+    profile = Mxrb::Dsl::NavigationProfileBuilder.new(
+      :Responsive, sign_in_page: 'App.Login', sign_in_title: 'Login',
+                   sign_in_location: :Popup
+    ).to_h
+    settings = legacy_writer.send(:navigation_login_settings_doc, profile)
+    expect(settings).to include('Form' => 'App.Login', 'Location' => 'Popup')
+    expect(settings).to have_key('FormTitle')
+    expect(settings).not_to have_key('TitleOverride')
+    empty_settings = legacy_writer.send(
+      :navigation_login_settings_doc, Mxrb::Dsl::NavigationProfileBuilder.new(:Responsive).to_h
+    )
+    expect(empty_settings['FormTitle']).to be_nil
+
+    legacy = Mxrb::Model::NavigationProfile.new(
+      'Name' => 'OfflinePhone', 'Enabled' => false, 'OfflineEnabled6' => true,
+      'ApplicationTitle' => 'Legacy app'
+    )
+    expect(legacy).to have_attributes(enabled?: false, offline?: true)
+    expect(legacy.to_h).to include(
+      enabled: false, offline_enabled: true, app_title: { 'en_US' => 'Legacy app' }
     )
   end
 

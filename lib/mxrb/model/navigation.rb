@@ -52,12 +52,36 @@ module Mxrb
 
       def name = @raw_document['Name'].to_s
       def kind = @raw_document['Kind'].to_s
-      def offline? = kind.match?(/offline/i)
+
+      def enabled = optional_field('Enabled')
+      def enabled? = enabled.nil? || enabled == true
+
+      def offline? = kind.match?(/offline/i) || @raw_document['OfflineEnabled6'] == true ||
+        name.match?(/offline/i)
+
+      def offline_enabled = optional_field('OfflineEnabled6')
+      def throw_partial_sync_error = optional_field('ThrowPartialSyncError')
+
       def app_icon = @raw_document['AppIcon']
-      def app_title = text_translations(@raw_document['AppTitle'])
+
+      def app_title
+        translations = text_translations(@raw_document['AppTitle'])
+        legacy = @raw_document['ApplicationTitle'].to_s
+        translations.empty? && !legacy.empty? ? { 'en_US' => legacy } : translations
+      end
+
       def home_page = reference(@raw_document.dig('HomePage', 'Page'))
       def home_microflow = reference(@raw_document.dig('HomePage', 'Microflow'))
       def sign_in_page = reference(@raw_document.dig('LoginPageSettings', 'Form'))
+      def sign_in_location = @raw_document.dig('LoginPageSettings', 'Location')
+
+      def sign_in_title
+        settings = @raw_document['LoginPageSettings'] || {}
+        text_template_translations(settings['TitleOverride'] || settings['FormTitle'])
+      end
+
+      def not_found_page = reference(@raw_document.dig('NotFoundHomepage', 'Page'))
+      def not_found_microflow = reference(@raw_document.dig('NotFoundHomepage', 'Microflow'))
 
       def role_homes
         items(@raw_document['HomeItems'] || @raw_document['RoleBasedHomePages']).map do |home|
@@ -93,6 +117,18 @@ module Mxrb
           home_microflow:,
           sign_in_page:,
           role_homes:
+        }.merge(profile_settings)
+      end
+
+      def profile_settings
+        {
+          sign_in_title:,
+          sign_in_location:,
+          not_found_page:,
+          not_found_microflow:,
+          enabled:,
+          offline_enabled:,
+          throw_partial_sync_error:
         }
       end
 
@@ -103,6 +139,8 @@ module Mxrb
         result.to_s.empty? ? nil : result
       end
 
+      def optional_field(name) = @raw_document.key?(name) ? @raw_document[name] : nil
+
       def text_translations(text)
         return {} unless text.is_a?(Hash)
 
@@ -110,6 +148,12 @@ module Mxrb
           [translation['LanguageCode'].to_s, translation['Text'].to_s]
         end
         translations.reject { |_locale, value| value.empty? }
+      end
+
+      def text_template_translations(template)
+        return {} unless template.is_a?(Hash)
+
+        text_translations(template['Text'])
       end
 
       def navigation_item(item)

@@ -2396,6 +2396,7 @@ module Mxrb
             else
               modern_navigation_doc(existing, navigation)
             end
+      Forms::MprCodec.new.preserve_storage_identities!(doc, existing) unless existing.empty?
       if raw
         mpr.update_unit(raw.fetch("UnitID"), doc)
       else
@@ -2434,9 +2435,12 @@ module Mxrb
           navigation_role_home_doc(home, previous: prior)
         end,
         'Menu' => navigation_menu_doc(profile.fetch(:items, []), previous: previous['Menu']),
-        'Enabled' => true,
+        'Enabled' => profile[:enabled].nil? ? previous.fetch('Enabled', true) : profile[:enabled],
         'ApplicationTitle' => title.to_s.empty? ? previous.fetch('ApplicationTitle', 'Mendix') : title.to_s
       }
+      unless profile[:offline_enabled].nil?
+        editable['OfflineEnabled6'] = profile[:offline_enabled]
+      end
       editable['Kind'] = profile[:kind].to_s unless profile[:kind].to_s.empty?
       previous.merge(editable)
     end
@@ -2466,12 +2470,23 @@ module Mxrb
         "HomeItems" => navigation_array(role_homes, previous["HomeItems"]) do |home, prior|
           navigation_role_home_doc(home, previous: prior)
         end,
-        "Menu" => navigation_menu_doc(profile.fetch(:items, []), previous: previous["Menu"]),
-        "OfflineEntityConfigs" => IO::BsonCodec.build_array([], marker: 3),
-        "ProgressiveWebAppSettings" => nil,
-        "NotFoundHomepage" => nil,
-        "ThrowPartialSyncError" => true
+        "Menu" => navigation_menu_doc(profile.fetch(:items, []), previous: previous["Menu"])
       }
+      if previous.empty?
+        editable["OfflineEntityConfigs"] = IO::BsonCodec.build_array([], marker: 3)
+        editable["ProgressiveWebAppSettings"] = nil
+      end
+      unless profile[:throw_partial_sync_error].nil?
+        editable["ThrowPartialSyncError"] = profile[:throw_partial_sync_error]
+      end
+      if profile[:not_found_page] || profile[:not_found_microflow]
+        editable["NotFoundHomepage"] = navigation_not_found_home_doc(
+          profile[:not_found_page], profile[:not_found_microflow],
+          previous: previous["NotFoundHomepage"]
+        )
+      elsif previous.empty?
+        editable["NotFoundHomepage"] = nil
+      end
       if !profile[:kind].to_s.empty?
         editable["Kind"] = profile[:kind]
       elsif profile[:offline]
@@ -2485,22 +2500,13 @@ module Mxrb
           profile.fetch(:app_title), previous: previous["AppTitle"]
         )
       end
-      if profile[:sign_in_page]
-        editable["LoginPageSettings"] = {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$FormSettings",
-          "Form" => profile.fetch(:sign_in_page),
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
-          "TitleOverride" => nil
-        }
+      if profile[:sign_in_page] || !profile.fetch(:sign_in_title, {}).empty? ||
+         profile[:sign_in_location]
+        editable["LoginPageSettings"] = navigation_login_settings_doc(
+          profile, previous: previous["LoginPageSettings"]
+        )
       elsif previous.empty?
-        editable["LoginPageSettings"] = {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Forms$FormSettings",
-          "Form" => "",
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
-          "TitleOverride" => nil
-        }
+        editable["LoginPageSettings"] = navigation_login_settings_doc(profile, previous: nil)
       end
       {
         "$ID" => previous["$ID"] || SecureRandom.uuid,
@@ -2515,6 +2521,51 @@ module Mxrb
         "$Type" => previous["$Type"] || "Navigation$HomePage",
         "Microflow" => microflow.to_s,
         "Page" => page.to_s
+      }
+    end
+
+    def navigation_not_found_home_doc(page, microflow, previous: nil)
+      navigation_home_doc(page, microflow, previous:).merge(
+        "$Type" => "Navigation$NotFoundHomePage"
+      )
+    end
+
+    def navigation_login_settings_doc(profile, previous: nil)
+      previous ||= {}
+      modern = @definition.fetch(:version).to_i >= 8
+      editable = {
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Forms$FormSettings",
+        "Form" => profile[:sign_in_page].to_s
+      }
+      if modern
+        editable["ParameterMappings"] = IO::BsonCodec.build_array([], marker: 2) \
+          if @definition.fetch(:version).to_i >= 10 && !previous.key?("ParameterMappings")
+        unless profile.fetch(:sign_in_title, {}).empty?
+          editable["TitleOverride"] = navigation_text_template_doc(
+            profile.fetch(:sign_in_title, {}), previous: previous["TitleOverride"]
+          )
+        end
+        editable["TitleOverride"] = nil if previous.empty? && !editable.key?("TitleOverride")
+      else
+        editable["Location"] = profile[:sign_in_location] || previous.fetch("Location", "Popup")
+        unless profile.fetch(:sign_in_title, {}).empty?
+          editable["FormTitle"] = navigation_text_template_doc(
+            profile.fetch(:sign_in_title, {}), previous: previous["FormTitle"]
+          )
+        end
+        editable["FormTitle"] = nil if previous.empty? && !editable.key?("FormTitle")
+      end
+      previous.merge(editable)
+    end
+
+    def navigation_text_template_doc(translations, previous: nil)
+      previous ||= {}
+      {
+        "$ID" => previous["$ID"] || SecureRandom.uuid,
+        "$Type" => previous["$Type"] || "Microflows$TextTemplate",
+        "Parameters" => previous.fetch("Parameters", IO::BsonCodec.build_array([], marker: 2)),
+        "Text" => translated_text_doc(translations, previous: previous["Text"])
       }
     end
 

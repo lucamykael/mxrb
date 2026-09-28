@@ -42,8 +42,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,078 examples and measures 100.00% of
-lines (37,004/37,004) and 100.00% of branches (16,030/16,030). No executable
+The strict suite passed 2,080 examples and measures 100.00% of
+lines (37,076/37,076) and 100.00% of branches (16,078/16,078). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -68,6 +68,12 @@ actions or icons fall back to lossless `deep_structure`, so the family remains
 `partial`. The menu fixture passes `script/frontend_acceptance` through both
 the source and rebuilt MPR with official MxBuild 11.12.1, zero errors, and no
 structural differences.
+
+Navigation profiles expose modern and legacy application titles, enabled and
+offline state, role homes, login title/location, not-found targets, and
+partial-sync behavior. Updating supported settings retains native and nested
+identities. Unrepresented PWA and offline configuration structures stay opaque
+and unchanged, so navigation remains `partial`.
 
 ## Core Forms properties
 

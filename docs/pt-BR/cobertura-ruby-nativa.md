@@ -33,7 +33,7 @@ Estados:
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
 | Menus | parcial | captions localizadas, page/microflow, ícones, hierarquia e remoção autoritativa; ações desconhecidas ficam em fallback lossless |
-| Navegação | parcial | itens de Page.native; ampliar perfis, home/login e role targeting |
+| Navegação | parcial | perfis modernos e legados, home/login/not-found, títulos, flags offline e homes por papel; PWA e configurações offline desconhecidas permanecem opacas |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
 | Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
 | Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
@@ -61,8 +61,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.078 exemplos e mede 100,00% das
-linhas (37.004/37.004) e 100,00% dos branches (16.030/16.030). Nenhum código
+A suíte estrita passou com 2.080 exemplos e mede 100,00% das
+linhas (37.076/37.076) e 100,00% dos branches (16.078/16.078). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 

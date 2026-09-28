@@ -16,6 +16,13 @@ navigation do
 end
 ```
 
+Unterstützte Profileinstellungen umfassen außerdem den älteren
+`enabled`-/`offline_enabled`-Status, übersetzte Login-Titel, die ältere
+Login-Position, Not-found-Seiten oder -Microflows sowie
+`throw_partial_sync_error`. Änderungen behalten native und verschachtelte IDs
+bei. Noch nicht dargestellte PWA- und Offline-Konfigurationen bleiben opak und
+unverändert.
+
 `project.design_system` inventarisiert CSS-Eigenschaften, Sass-Variablen,
 Themes und `design-properties.json`-Kataloge. Lint findet fehlende Tokens,
 literale Farben und Kontrastverträge unterhalb des deklarierten WCAG-Niveaus.
