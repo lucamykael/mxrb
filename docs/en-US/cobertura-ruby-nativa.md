@@ -18,7 +18,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Local and cross-module associations | native |
 | Enumeration definitions | native |
 | Constants | native |
-| Entity access rules | partial |
+| Entity access rules | native |
 | Indexes, system members, generalization and OQL views | partial |
 | Entity lifecycle | partial |
 | Module roles and project security | partial |
@@ -49,7 +49,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,099 examples and measures 100.00% of
+The strict suite passed 2,100 examples and measures 100.00% of
 lines (37,497/37,497) and 100.00% of branches (16,216/16,216). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -72,6 +72,21 @@ The five-type fixture packages successfully with MxBuild 11.12.1. DateTime
 uses the native `yyyy-MM-ddTHH:mm:ss` format required by the Studio Pro
 validator. Private configuration overrides remain in the local sidecar and
 their values are not emitted into public Ruby.
+
+## Entity access rules
+
+`access_rule` covers every Mendix 11 `DomainModels$AccessRule` and
+`DomainModels$MemberAccess` property: module roles, create/delete,
+documentation, default rights, XPath and caption, plus `None`, `ReadOnly`, and
+`ReadWrite` rights for attribute and association members. Qualified inherited
+member references are retained.
+
+Two MPR → Ruby → MPR cycles retain semantics and rule/member IDs. The gate
+includes two ACLs with the same role/XPath signature: the MPR DSL keeps their
+explicit IDs, while Ruby-app mode uses stable private identities and emits no
+UUIDs publicly. Reconciliation tests already cover authoritative creation,
+editing, and removal. The complete fixture packages successfully with MxBuild
+11.12.1 without opaque fallback.
 
 ## Workflows and task pages
 

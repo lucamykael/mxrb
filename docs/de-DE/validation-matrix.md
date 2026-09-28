@@ -85,10 +85,16 @@ verwendet das native Format `yyyy-MM-ddTHH:mm:ss`. Private
 Konfigurationswerte bleiben lokal und werden nicht in öffentliches Ruby
 geschrieben.
 
+Das Gate für Entitätszugriffsregeln deckt Rollen, Create/Delete,
+Dokumentation, Standardrechte, XPath samt Caption sowie Attribut- und
+Assoziationsmitglieder ab. Zwei ACLs mit identischer semantischer Signatur
+behielten über zwei Zyklen verschiedene Regel- und Mitglieds-IDs. MxBuild
+11.12.1 paketierte das vollständige Fixture fehlerfrei.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.099 Beispiele, keine Fehler;
+- 2.100 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.497/37.497);
 - 100,00 % Branch-Abdeckung (16.216/16.216);
 - Sudoku-Modellbewertung: 7/7;
