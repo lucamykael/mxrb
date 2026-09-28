@@ -70,6 +70,7 @@ module Mxrb
           security_level: doc["SecurityLevel"],
           check_security: doc["CheckSecurity"],
           admin_user_name: doc["AdminUserName"],
+          admin_password_sha256: Digest::SHA256.hexdigest(doc["AdminPassword"].to_s),
           admin_user_role: doc["AdminUserRole"],
           demo_users_enabled: doc["EnableDemoUsers"],
           demo_users: IO::BsonCodec.parse_array(doc["DemoUsers"]).fetch(:items).map do |user|
@@ -81,6 +82,10 @@ module Mxrb
           end.sort_by { _1[:name].to_s },
           guest_access_enabled: doc["EnableGuestAccess"],
           guest_user_role: doc["GuestUserRole"],
+          strict_mode: doc.fetch("StrictMode", false),
+          strict_page_url_check: doc.fetch("StrictPageUrlCheck", true),
+          file_document_access: project_access_summary(doc["FileDocumentAccess"]),
+          image_access: project_access_summary(doc["ImageAccess"]),
           sign_in_microflow: doc["SignInMicroflow"],
           password_policy: normalize_flow_value(doc["PasswordPolicySettings"], {}),
           user_roles: IO::BsonCodec.parse_array(doc["UserRoles"]).fetch(:items).map do |role|
@@ -91,6 +96,14 @@ module Mxrb
             }
           end.sort_by { _1[:name].to_s }
         }
+      end
+
+      def project_access_summary(container)
+        return [] unless container.is_a?(Hash)
+
+        IO::BsonCodec.parse_array(container["AccessRules"]).fetch(:items).map do |rule|
+          normalize_hash(Model::Entity.parse_access_rule(rule))
+        end
       end
 
       def unit_summary(project)

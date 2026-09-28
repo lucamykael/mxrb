@@ -335,14 +335,20 @@ module Mxrb
         relative = embedded_identity_path(:project_security, id) || embedded_security_path(id, 'ProjectSecurity') ||
                    File.join('app', 'security', 'project_security.rb')
         policy = document['PasswordPolicySettings'] if document['PasswordPolicySettings'].is_a?(Hash)
+        file_access = project_access_container_manifest(document['FileDocumentAccess'])
+        image_access = project_access_container_manifest(document['ImageAccess'])
         manifest = {
           'id' => id,
           'security_level' => document['SecurityLevel'].to_s,
+          'check_security' => document.fetch('CheckSecurity', true) == true,
+          'strict_page_url_check' => document.fetch('StrictPageUrlCheck', true) == true,
+          'admin_user_name' => document.fetch('AdminUserName', 'MxAdmin').to_s,
           'admin_user_role' => document['AdminUserRole'].to_s,
           'demo_users_enabled' => document['EnableDemoUsers'] == true,
           'guest_access_enabled' => document['EnableGuestAccess'] == true,
           'guest_user_role' => document['GuestUserRole'].to_s,
           'sign_in_microflow' => document['SignInMicroflow']&.to_s,
+          'strict_mode' => document.fetch('StrictMode', false) == true,
           'user_roles' => native_items(document['UserRoles']).map { project_user_role_manifest(_1) },
           'demo_users' => native_items(document['DemoUsers']).map { project_demo_user_manifest(_1) },
           'password_policy' => if policy
@@ -354,6 +360,8 @@ module Mxrb
                                  }
                                end
         }
+        manifest['file_document_access'] = file_access if file_access
+        manifest['image_access'] = image_access if image_access
         write(relative, project_security_source(manifest))
         add_coverage(id, 'ProjectSecurity', 'project_security', relative, 'executable_bidirectional')
         manifest.merge('path' => relative,
@@ -380,6 +388,24 @@ module Mxrb
           'entity' => user['Entity'].to_s,
           'roles' => native_items(user['UserRoles']).map(&:to_s),
           'password_redacted' => true
+        }
+      end
+
+      def project_access_container_manifest(container)
+        return nil unless container.is_a?(Hash)
+
+        native_rules = native_items(container['AccessRules'])
+        return nil unless native_rules.all? do |rule|
+          rule.is_a?(Hash) && rule['$Type'] == 'DomainModels$AccessRule' &&
+          native_items(rule['AllowedModuleRoles'] || rule['ModuleRoles']).any?
+        end
+
+        rules = native_rules.map do |rule|
+          Model::Entity.parse_access_rule(rule)
+        end
+        {
+          'id' => native_identifier(container['$ID']),
+          'rules' => access_rules_with_source_identity(runtime_value(rules))
         }
       end
 
@@ -1733,21 +1759,51 @@ module Mxrb
         sign_in_source = if security['sign_in_microflow']
                            "    sign_in_microflow #{security.fetch('sign_in_microflow').inspect}"
                          end
+        file_access = if security.key?('file_document_access')
+                        project_access_source(
+                          security.fetch('file_document_access').fetch('rules', []),
+                          'file_document_access_rule', 'clear_file_document_access_rules!'
+                        )
+                      else
+                        []
+                      end
+        image_access = if security.key?('image_access')
+                         project_access_source(
+                           security.fetch('image_access').fetch('rules', []),
+                           'image_access_rule', 'clear_image_access_rules!'
+                         )
+                       else
+                         []
+                       end
         <<~RUBY
           # frozen_string_literal: true
 
           class ApplicationSecurity < Mxrb::RubyApp::ProjectSecurity
             project_security
             security_level #{security.fetch('security_level').inspect}
+            check_security #{security.fetch('check_security', true)}
+            strict_page_url_check #{security.fetch('strict_page_url_check', true)}
+            admin_user #{security.fetch('admin_user_name', 'MxAdmin').inspect}
             admin_user_role #{security.fetch('admin_user_role').inspect}
             demo_users enabled: #{security.fetch('demo_users_enabled')}
             guest_access enabled: #{security.fetch('guest_access_enabled')}, role: #{security.fetch('guest_user_role').inspect}
+            strict_mode #{security.fetch('strict_mode', false)}
           #{sign_in_source}
           #{user_roles.join("\n")}
           #{demo_users.join("\n")}
           #{policy_source}
+          #{file_access.join("\n")}
+          #{image_access.join("\n")}
           end
         RUBY
+      end
+
+      def project_access_source(rules, declaration, clear_declaration)
+        return ["    #{clear_declaration}"] if rules.empty?
+
+        access_rules_with_source_identity(rules).map do |rule|
+          access_rule_source(rule).sub(/\A    access_rule/, "    #{declaration}")
+        end
       end
 
       def password_policy_source(policy)

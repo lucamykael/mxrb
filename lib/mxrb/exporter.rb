@@ -2802,6 +2802,9 @@ module Mxrb
         "  user_role #{args.join(', ')}"
       end
       options = []
+      options << "  check_security #{doc.fetch("CheckSecurity", true) == true}"
+      options << "  strict_page_url_check #{doc.fetch("StrictPageUrlCheck", true) == true}"
+      options << "  admin_user #{ruby(doc.fetch("AdminUserName", "MxAdmin"))}"
       options << "  admin_user_role #{ruby(doc["AdminUserRole"])}" unless doc["AdminUserRole"].to_s.empty?
       options << "  demo_users #{doc["EnableDemoUsers"] == true}"
       demo_users = doc["DemoUsers"] || IO::BsonCodec.build_array([])
@@ -2813,6 +2816,11 @@ module Mxrb
       guest = "  guest_access #{doc["EnableGuestAccess"] == true}"
       guest += ", role: #{ruby(doc["GuestUserRole"])}" unless doc["GuestUserRole"].to_s.empty?
       options << guest
+      options << "  strict_mode #{doc.fetch("StrictMode", false) == true}"
+      options.concat(project_access_source(doc, "FileDocumentAccess", "file_document_access_rule",
+                                           "clear_file_document_access_rules!"))
+      options.concat(project_access_source(doc, "ImageAccess", "image_access_rule",
+                                           "clear_image_access_rules!"))
       options << "  sign_in_microflow #{ruby(doc["SignInMicroflow"])}" unless doc["SignInMicroflow"].to_s.empty?
       password = doc["PasswordPolicySettings"]
       if password.is_a?(Hash)
@@ -2842,6 +2850,23 @@ module Mxrb
       #{options.join("\n")}
         end
       RUBY
+    end
+
+    def project_access_source(document, native_key, declaration, clear_declaration)
+      container = document[native_key]
+      return [] unless container.is_a?(Hash)
+
+      native_rules = IO::BsonCodec.parse_array(container["AccessRules"]).fetch(:items)
+      rules = native_rules.filter_map do |rule|
+        next unless rule.is_a?(Hash) && rule["$Type"] == "DomainModels$AccessRule"
+
+        access_rule_source(Model::Entity.parse_access_rule(rule))&.sub(
+          /\A  access_rule/, "  #{declaration}"
+        )
+      end
+      return [] unless rules.size == native_rules.size
+
+      rules.empty? ? ["  #{clear_declaration}"] : rules
     end
 
     def navigation_source(navigation)

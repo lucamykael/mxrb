@@ -1,13 +1,15 @@
 # frozen_string_literal: true
 
+require 'json'
 require_relative 'member_identity'
+require_relative 'record_identity'
 
 module Mxrb
   module RubyApp
     # Security declarations remain authoritative. The private manifest supplies
     # identities only: never permissions, passwords, settings or collection order.
     # Call after loading the complete declarations, before assigning any result.
-    class SecurityIdentity
+    class SecurityIdentity # rubocop:disable Metrics/ClassLength
       def initialize(manifest)
         @modules = manifest.modules
         @project = manifest.data['security']
@@ -29,6 +31,7 @@ module Mxrb
         users = members(previous, 'demo_users', definition.fetch(:demo_users), removed_demo_users)
         roles = resolve_role_guids(roles, previous)
         result = definition.merge(id: identifier, user_roles: roles, demo_users: users)
+        result = resolve_project_access(definition, previous, result)
         return result unless definition.key?(:password_policy) && definition[:password_policy]
 
         # Nil still means an explicit removal, and an absent declaration stays
@@ -100,6 +103,69 @@ module Mxrb
 
           role.merge(guid: identity(role[:guid], prior.fetch('guid', ''), 'project role GUID'))
         end
+      end
+
+      def resolve_project_access(definition, previous, result)
+        { file_document_access: 'System.FileDocument', image_access: 'System.Image' }.each do |key, owner|
+          next unless definition.key?(key)
+
+          result[key] = access_rules(previous, key, definition.fetch(key), owner)
+        end
+        result
+      end
+
+      def access_rules(previous, key, declarations, owner)
+        baseline = if previous
+                     container = previous[key.to_s]
+                     unless container.is_a?(Hash) && container['rules'].is_a?(Array)
+                       raise ValidationError, "existing project security requires its #{key} identity baseline"
+                     end
+
+                     container.fetch('rules')
+                   else
+                     []
+                   end
+        resolved = resolve_access_collection(baseline, declarations)
+        by_id = baseline.to_h { [field(_1, :id).to_s, _1] }
+        resolved.map do |rule|
+          prior = by_id[rule[:id].to_s]
+          members = resolve_access_members(prior, rule.fetch(:members), owner)
+          rule.merge(members:)
+        end
+      end
+
+      def resolve_access_collection(previous, declarations)
+        prior = previous.map { |entry| { name: access_name(entry), id: field(entry, :id) } }
+        current = declarations.map { |entry| entry.merge(name: access_name(entry)) }
+        MemberIdentity.resolve(previous: prior, declarations: current).zip(declarations).map do |entry, original|
+          original.merge(id: entry[:id])
+        end
+      rescue ValidationError => e
+        raise ValidationError, e.message.sub('remove_value', 'clear the project access rules explicitly')
+      end
+
+      def resolve_access_members(previous, declarations, owner)
+        baseline = previous ? Array(field(previous, :members)) : []
+        prior = baseline.map { |entry| { name: access_member_name(entry, owner), id: field(entry, :id) } }
+        current = declarations.map { |entry| entry.merge(name: access_member_name(entry, owner)) }
+        MemberIdentity.resolve(previous: prior, declarations: current).zip(declarations).map do |entry, original|
+          original.merge(id: entry[:id])
+        end
+      end
+
+      def access_name(entry)
+        JSON.generate(RecordIdentity.access_key(entry))
+      end
+
+      def access_member_name(entry, owner)
+        kind = (field(entry, :kind) || :attribute).to_s
+        reference = field(entry, :reference).to_s
+        reference = "#{owner}.#{field(entry, :name)}" if reference.empty?
+        JSON.generate([kind, reference])
+      end
+
+      def field(entry, key)
+        entry.key?(key) ? entry[key] : entry[key.to_s]
       end
 
       def identity(supplied, previous, label)

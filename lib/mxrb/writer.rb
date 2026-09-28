@@ -934,16 +934,23 @@ module Mxrb
       document = current.merge("$ID" => id, "$Type" => "Security$ProjectSecurity")
       {
         security_level: "SecurityLevel",
+        check_security: "CheckSecurity",
+        strict_page_url_check: "StrictPageUrlCheck",
+        admin_user_name: "AdminUserName",
+        admin_password: "AdminPassword",
         admin_user_role: "AdminUserRole",
         demo_users_enabled: "EnableDemoUsers",
         guest_access_enabled: "EnableGuestAccess",
         guest_user_role: "GuestUserRole",
-        sign_in_microflow: "SignInMicroflow"
+        sign_in_microflow: "SignInMicroflow",
+        strict_mode: "StrictMode"
       }.each do |definition_key, native_key|
         next unless declaration.key?(definition_key)
 
         value = declaration[definition_key]
-        document[native_key] = if %i[demo_users_enabled guest_access_enabled].include?(definition_key)
+        document[native_key] = if %i[
+          check_security strict_page_url_check demo_users_enabled guest_access_enabled strict_mode
+        ].include?(definition_key)
                                  value == true
                                else
                                  value.to_s
@@ -964,6 +971,16 @@ module Mxrb
           document.delete("PasswordPolicySettings")
         end
       end
+      {
+        file_document_access: ["FileDocumentAccess", "Security$FileDocumentAccessRuleContainer", "FileDocument"],
+        image_access: ["ImageAccess", "Security$ImageAccessRuleContainer", "Image"]
+      }.each do |definition_key, (native_key, type, entity_name)|
+        next unless declaration.key?(definition_key)
+
+        document[native_key] = ruby_project_access_container_doc(
+          declaration.fetch(definition_key), current[native_key], type, entity_name
+        )
+      end
       admin_role = document["AdminUserRole"].to_s
       role_names = IO::BsonCodec.parse_array(document["UserRoles"]).fetch(:items).filter_map do |role|
         role["Name"].to_s if role.is_a?(Hash) && role["$Type"] == "Security$UserRole"
@@ -972,6 +989,17 @@ module Mxrb
         raise ValidationError, "project admin user role #{admin_role} is not declared"
       end
       document
+    end
+
+    def ruby_project_access_container_doc(declarations, previous, type, entity_name)
+      current = previous.is_a?(Hash) ? previous : {}
+      current.merge(
+        "$ID" => current["$ID"] || SecureRandom.uuid,
+        "$Type" => current["$Type"] || type,
+        "AccessRules" => ruby_access_rule_docs(
+          Array(declarations), current["AccessRules"], "System", entity_name
+        )
+      )
     end
 
     def ruby_project_user_roles(declarations, previous)
@@ -1412,7 +1440,7 @@ module Mxrb
       previous = current || {}
       id = declaration[:id].to_s
       id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
-      roles_key = native_key(previous, "AllowedModuleRoles", "ModuleRoles")
+      roles_key = native_key(previous, "ModuleRoles", "AllowedModuleRoles")
       roles_payload = IO::BsonCodec.parse_array(previous[roles_key])
       previous_members = previous["MemberAccesses"]
       previous.merge(
@@ -2374,19 +2402,26 @@ module Mxrb
           # the empty role set is bootstrapped, those references must be
           # removed as one atomic security repair.
           editable["DemoUsers"] = doc.fetch("DemoUsers")
-          editable["EnableDemoUsers"] = doc.fetch("EnableDemoUsers")
+          editable["EnableDemoUsers"] = security[:demo_users_enabled] == true
           editable["SecurityLevel"] = doc.fetch("SecurityLevel")
         end
         if security[:security_level]
           editable["SecurityLevel"] = doc.fetch("SecurityLevel")
         end
         {
+          check_security: "CheckSecurity",
+          strict_page_url_check: "StrictPageUrlCheck",
+          admin_user_name: "AdminUserName",
+          admin_password: "AdminPassword",
           demo_users_enabled: "EnableDemoUsers",
           demo_users: "DemoUsers",
           guest_access_enabled: "EnableGuestAccess",
           guest_user_role: "GuestUserRole",
           sign_in_microflow: "SignInMicroflow",
-          password_policy: "PasswordPolicySettings"
+          password_policy: "PasswordPolicySettings",
+          file_document_access: "FileDocumentAccess",
+          image_access: "ImageAccess",
+          strict_mode: "StrictMode"
         }.each do |definition_key, native_key|
           editable[native_key] = doc.fetch(native_key) unless security[definition_key].nil?
         end
@@ -4711,19 +4746,33 @@ module Mxrb
         password_policy[native_key] = value
       end
       previous_demo_users = array_items(previous['DemoUsers']).group_by { _1['UserName'].to_s }
+      file_document_access = project_access_container_doc(
+        security[:file_document_access], previous["FileDocumentAccess"],
+        "Security$FileDocumentAccessRuleContainer", "FileDocument"
+      )
+      image_access = project_access_container_doc(
+        security[:image_access], previous["ImageAccess"],
+        "Security$ImageAccessRuleContainer", "Image"
+      )
       document = {
         "$ID" => security[:id].to_s.empty? ? (previous["$ID"] || SecureRandom.uuid) : security[:id].to_s,
         "$Type" => "Security$ProjectSecurity",
-        "SecurityLevel" => security[:security_level] || "CheckNothing",
-        "CheckSecurity" => true,
-        "AdminUserName" => "MxAdmin",
-        "AdminPassword" => "1",
-        "AdminUserRole" => security[:admin_user_role] || default_admin,
-        "EnableDemoUsers" => security.fetch(:demo_users_enabled, false) == true,
-        "EnableGuestAccess" => security.fetch(:guest_access_enabled, false) == true,
-        "GuestUserRole" => security[:guest_user_role].to_s,
-        "StrictMode" => false,
-        "StrictPageUrlCheck" => true,
+        "SecurityLevel" => security[:security_level] || previous["SecurityLevel"] || "CheckNothing",
+        "CheckSecurity" => security[:check_security].nil? ?
+          previous.fetch("CheckSecurity", true) : security[:check_security] == true,
+        "AdminUserName" => security[:admin_user_name] || previous["AdminUserName"] || "MxAdmin",
+        "AdminPassword" => security[:admin_password] || previous["AdminPassword"] || "1",
+        "AdminUserRole" => security[:admin_user_role] || previous["AdminUserRole"] || default_admin,
+        "EnableDemoUsers" => security[:demo_users_enabled].nil? ?
+          previous.fetch("EnableDemoUsers", false) : security[:demo_users_enabled] == true,
+        "EnableGuestAccess" => security[:guest_access_enabled].nil? ?
+          previous.fetch("EnableGuestAccess", false) : security[:guest_access_enabled] == true,
+        "GuestUserRole" => security[:guest_user_role].nil? ?
+          previous.fetch("GuestUserRole", '').to_s : security[:guest_user_role].to_s,
+        "StrictMode" => security[:strict_mode].nil? ?
+          previous.fetch("StrictMode", false) : security[:strict_mode] == true,
+        "StrictPageUrlCheck" => security[:strict_page_url_check].nil? ?
+          previous.fetch("StrictPageUrlCheck", true) : security[:strict_page_url_check] == true,
         "UserRoles" => IO::BsonCodec.build_array(roles, marker: 2),
         "DemoUsers" => IO::BsonCodec.build_array(
           Array(security[:demo_users]).map do |user|
@@ -4732,12 +4781,24 @@ module Mxrb
           end,
           marker: 2
         ),
-        "FileDocumentAccess" => access_container("Security$FileDocumentAccessRuleContainer"),
-        "ImageAccess" => access_container("Security$ImageAccessRuleContainer"),
+        "FileDocumentAccess" => file_document_access,
+        "ImageAccess" => image_access,
         "PasswordPolicySettings" => password_policy
       }
       document["SignInMicroflow"] = security[:sign_in_microflow].to_s unless security[:sign_in_microflow].nil?
       document
+    end
+
+    def project_access_container_doc(declarations, previous, type, entity_name)
+      current = previous.is_a?(Hash) ? previous : {}
+      if declarations.nil?
+        return current unless current.empty?
+
+        return access_container(type)
+      end
+      return access_container(type) if declarations.empty? && current.empty?
+
+      ruby_project_access_container_doc(declarations, current, type, entity_name)
     end
 
     def user_role_doc(role, previous: {})
