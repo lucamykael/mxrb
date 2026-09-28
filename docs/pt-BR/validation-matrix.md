@@ -123,6 +123,12 @@ de partial sync. `script/frontend_acceptance` validou original e reconstruído
 com o MxBuild 11.12.1: zero erros, sem diferenças estruturais e
 `frontend_ready: true`.
 
+O fixture `spec/fixtures/published_rest/project.rb` cobre REST publicado com
+resources, operações, parâmetros e mappings JSON/export inferidos. Dois ciclos
+mantiveram IDs e semântica; `script/frontend_acceptance` aprovou original e
+reconstruído no MxBuild 11.12.1 com zero erros, zero diferenças estruturais e
+`frontend_ready: true`.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
 em conjunto:
@@ -150,7 +156,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.080 exemplos, zero falhas;
+- 2.081 exemplos, zero falhas;
 - 100,00% das linhas: 37.076/37.076;
 - 100,00% dos branches: 16.078/16.078;
 - avaliação Sudoku: 7/7 checks;

@@ -153,6 +153,12 @@ login titles, home/not-found targets, role homes, and partial-sync behavior.
 MxBuild 11.12.1: zero errors, no structural differences, and
 `frontend_ready: true`.
 
+The `spec/fixtures/published_rest/project.rb` witness covers published REST
+resources, operations, parameters, and inferred JSON/export mappings. Two
+cycles retained identities and semantics; `script/frontend_acceptance`
+accepted source and rebuilt projects with MxBuild 11.12.1, zero errors, no
+structural differences, and `frontend_ready: true`.
+
 This validation exposed and drove the fixes listed above. The six-project MXRB
 matrix was rerun from fresh targets after the fixes and all six v1/v2
 round-trips passed again.

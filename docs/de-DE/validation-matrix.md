@@ -81,7 +81,7 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.080 Beispiele, keine Fehler;
+- 2.081 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.076/37.076);
 - 100,00 % Branch-Abdeckung (16.078/16.078);
 - Sudoku-Modellbewertung: 7/7;
@@ -152,6 +152,13 @@ Navigationsprofile mit übersetztem Login-Titel, Home-/Not-found-Zielen,
 rollenbezogenen Startseiten und Partial-Sync-Verhalten.
 `script/frontend_acceptance` akzeptierte Quell- und Neuaufbauprojekt mit
 MxBuild 11.12.1: keine Fehler, keine strukturellen Unterschiede und
+`frontend_ready: true`.
+
+Das Fixture `spec/fixtures/published_rest/project.rb` deckt Published-REST-
+Ressourcen, Operationen, Parameter sowie abgeleitete JSON-/Export-Mappings ab.
+Zwei Zyklen behielten Identitäten und Semantik bei;
+`script/frontend_acceptance` akzeptierte Quell- und Neuaufbauprojekt mit
+MxBuild 11.12.1 ohne Fehler oder strukturelle Unterschiede und mit
 `frontend_ready: true`.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
