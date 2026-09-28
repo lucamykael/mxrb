@@ -765,6 +765,8 @@ module Mxrb
         return mapping_declaration(document, :export) if doc.key?("JsonStructure")
       when "Rest$PublishedRestService"
         return published_rest_declaration(document, mod:) if semantic_rest_service?(doc, mod:)
+      when 'ODataPublish$PublishedODataService2'
+        return published_odata_service_declaration(document) if semantic_published_odata_service?(doc)
       when 'Rest$ConsumedODataService'
         return consumed_odata_service_declaration(document) if semantic_consumed_odata_service?(doc)
       when 'MessageDefinitions$MessageDefinitionCollection'
@@ -984,6 +986,145 @@ module Mxrb
         validated_entities_marker: bson_marker(doc['ValidatedEntities'], 1)
       )
       semantic_call_source(:consumed_odata_service, document, options)
+    end
+
+    PUBLISHED_ODATA_FIELDS = %w[
+      $ID $Type AllowedModuleRoles AuthenticationMicroflow AuthenticationTypes Description
+      Documentation EntitySets EntityTypes Enumerations Excluded ExportLevel
+      IncludeMetadataByDefault Microflows Name Namespace ODataVersion Path PublishAssociations
+      ReplaceIllegalChars ServiceName Summary SupportsGraphQL UseGeneralization Version
+    ].freeze
+    PUBLISHED_ODATA_ENTITY_FIELDS = %w[
+      $ID $Type ChildMembers Description Entity ExposedName Summary
+    ].freeze
+    PUBLISHED_ODATA_ID_FIELDS = %w[
+      $ID $Type Description ExposedName IsPartOfKey Summary
+    ].freeze
+    PUBLISHED_ODATA_ATTRIBUTE_FIELDS = %w[
+      $ID $Type Attribute CanBeEmpty Description EdmType EnumerationAsString ExposedName
+      Filterable IsPartOfKey Sortable StringAsGuid Summary
+    ].freeze
+    PUBLISHED_ODATA_SET_FIELDS = %w[
+      $ID $Type AlternativeExposedName DeleteMode EntityTypePointer ExposedName InsertMode
+      PageSize QueryOptions ReadMode UpdateMode UsePaging
+    ].freeze
+    PUBLISHED_ODATA_QUERY_FIELDS = %w[$ID $Type Countable SkipSupported TopSupported].freeze
+
+    def semantic_published_odata_service?(doc)
+      return false unless (doc.keys - PUBLISHED_ODATA_FIELDS).empty?
+      return false unless bson_items(doc['Enumerations']).empty? && bson_items(doc['Microflows']).empty?
+
+      entities = bson_items(doc['EntityTypes'])
+      ids = entities.to_h { [document_id(_1), true] }
+      entities.all? { semantic_published_odata_entity?(_1) } &&
+        bson_items(doc['EntitySets']).all? { semantic_published_odata_set?(_1, ids) }
+    end
+
+    def semantic_published_odata_entity?(entity)
+      return false unless entity['$Type'] == 'ODataPublish$EntityType'
+      return false unless (entity.keys - PUBLISHED_ODATA_ENTITY_FIELDS).empty?
+
+      bson_items(entity['ChildMembers']).all? do |member|
+        fields = member['$Type'] == 'ODataPublish$PublishedId' ?
+          PUBLISHED_ODATA_ID_FIELDS : PUBLISHED_ODATA_ATTRIBUTE_FIELDS
+        %w[ODataPublish$PublishedId ODataPublish$PublishedAttribute].include?(member['$Type']) &&
+          (member.keys - fields).empty?
+      end
+    end
+
+    def semantic_published_odata_set?(entity_set, entity_ids)
+      return false unless entity_set['$Type'] == 'ODataPublish$EntitySet'
+      return false unless (entity_set.keys - PUBLISHED_ODATA_SET_FIELDS).empty?
+      return false unless entity_ids[document_id_value(entity_set['EntityTypePointer'])]
+      return false unless entity_set.dig('ReadMode', '$Type') == 'ODataPublish$ReadSource'
+
+      %w[InsertMode UpdateMode DeleteMode].all? do |field|
+        entity_set.dig(field, '$Type') == 'ODataPublish$ChangeNotSupported'
+      end && semantic_published_odata_query?(entity_set['QueryOptions'])
+    end
+
+    def semantic_published_odata_query?(query)
+      query.is_a?(Hash) && query['$Type'] == 'ODataPublish$QueryOptions' &&
+        (query.keys - PUBLISHED_ODATA_QUERY_FIELDS).empty?
+    end
+
+    def published_odata_service_declaration(document)
+      doc = document.fetch(:doc)
+      entities = bson_items(doc['EntityTypes'])
+      names_by_id = entities.to_h { [document_id(_1), _1.fetch('ExposedName')] }
+      options = {
+        path: doc.fetch('Path'), namespace: doc.fetch('Namespace'),
+        version: doc.fetch('Version'), service_name: doc.fetch('ServiceName'),
+        allowed_roles: bson_items(doc['AllowedModuleRoles']),
+        authentication_types: bson_items(doc['AuthenticationTypes']).map { underscore(_1).to_sym },
+        authentication_microflow: doc.fetch('AuthenticationMicroflow', ''),
+        documentation: doc.fetch('Documentation', ''), summary: doc.fetch('Summary', ''),
+        description: doc.fetch('Description', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        publish_associations: doc['PublishAssociations'] == true,
+        replace_illegal_chars: doc['ReplaceIllegalChars'] == true,
+        use_generalization: doc['UseGeneralization'] == true,
+        odata_version: doc.fetch('ODataVersion', 'OData4'),
+        include_metadata_by_default: doc['IncludeMetadataByDefault'] == true,
+        supports_graphql: doc['SupportsGraphQL'] == true,
+        entity_types: entities.map { published_odata_entity_spec(_1) },
+        entity_sets: bson_items(doc['EntitySets']).map do |entity_set|
+          published_odata_set_spec(entity_set, names_by_id)
+        end
+      }
+      semantic_call_source(:published_odata_service, document, options)
+    end
+
+    def published_odata_entity_spec(entity)
+      {
+        id: document_id(entity), name: entity.fetch('ExposedName'),
+        entity: entity.fetch('Entity'), summary: entity.fetch('Summary', ''),
+        description: entity.fetch('Description', ''),
+        members: bson_items(entity['ChildMembers']).map { published_odata_member_spec(_1) }
+      }
+    end
+
+    def published_odata_member_spec(member)
+      spec = {
+        id: document_id(member),
+        kind: member['$Type'] == 'ODataPublish$PublishedId' ? :id : :attribute,
+        name: member.fetch('ExposedName'), key: member['IsPartOfKey'] == true,
+        summary: member.fetch('Summary', ''), description: member.fetch('Description', '')
+      }
+      return spec if spec.fetch(:kind) == :id
+
+      spec.merge(
+        attribute: member.fetch('Attribute'), optional: member['CanBeEmpty'] == true,
+        edm_type: member.fetch('EdmType', ''), filterable: member['Filterable'] == true,
+        sortable: member['Sortable'] == true,
+        enumeration_as_string: member['EnumerationAsString'] == true,
+        string_as_guid: member['StringAsGuid'] == true
+      )
+    end
+
+    def published_odata_set_spec(entity_set, names_by_id)
+      {
+        id: document_id(entity_set), name: entity_set.fetch('ExposedName'),
+        alternative_name: entity_set.fetch('AlternativeExposedName', ''),
+        entity_type: names_by_id.fetch(document_id_value(entity_set.fetch('EntityTypePointer'))),
+        paging: entity_set['UsePaging'] == true, page_size: entity_set.fetch('PageSize', 100),
+        read: published_odata_mode_spec(entity_set.fetch('ReadMode'), :source),
+        insert: published_odata_mode_spec(entity_set.fetch('InsertMode'), :not_supported),
+        update: published_odata_mode_spec(entity_set.fetch('UpdateMode'), :not_supported),
+        delete: published_odata_mode_spec(entity_set.fetch('DeleteMode'), :not_supported),
+        query: published_odata_query_spec(entity_set.fetch('QueryOptions'))
+      }
+    end
+
+    def published_odata_mode_spec(mode, kind)
+      { id: document_id(mode), kind: }
+    end
+
+    def published_odata_query_spec(query)
+      {
+        id: document_id(query), countable: query['Countable'] == true,
+        skip: query['SkipSupported'] == true, top: query['TopSupported'] == true
+      }
     end
 
     MESSAGE_COLLECTION_FIELDS = %w[

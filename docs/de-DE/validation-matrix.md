@@ -81,9 +81,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.083 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.094/37.094);
-- 100,00 % Branch-Abdeckung (16.086/16.086);
+- 2.086 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.197/37.197);
+- 100,00 % Branch-Abdeckung (16.125/16.125);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
@@ -173,6 +173,14 @@ Das Fixture `spec/fixtures/message_xml/project.rb` deckt Message Definitions,
 daraus abgeleitete Import-/Export-Mappings mit `XmlPath` und Microflow-Aktionen
 für XML-Import und -Export ab. Zwei Zyklen behielten Identitäten und Semantik
 ohne opaken Fallback bei; `script/frontend_acceptance` akzeptierte Quell- und
+Neuaufbauprojekt mit MxBuild 11.12.1 ohne Fehler oder strukturelle Unterschiede
+und mit `frontend_ready: true`.
+
+Das Fixture `spec/fixtures/published_odata/project.rb` deckt einen
+schreibgeschützten OData-4-Service mit erlaubter Rolle,
+Basic-Authentifizierung, Entity Type, ID, Attributen und einem paginierten
+Entity Set ab. Zwei Zyklen behielten Identitäten und Semantik ohne opaken
+Fallback bei; `script/frontend_acceptance` akzeptierte Quell- und
 Neuaufbauprojekt mit MxBuild 11.12.1 ohne Fehler oder strukturelle Unterschiede
 und mit `frontend_ready: true`.
 

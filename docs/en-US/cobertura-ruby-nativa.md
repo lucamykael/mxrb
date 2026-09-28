@@ -30,7 +30,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Published REST and JSON mappings | partial |
 | Consumed REST and consumed OData | partial |
 | Message definitions and derived XML mappings | partial |
-| Published OData, App/Web Services, XSD/WSDL and other mappings | preserved_native |
+| Published OData | partial |
+| App/Web Services, XSD/WSDL and other mappings | preserved_native |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -45,8 +46,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,083 examples and measures 100.00% of
-lines (37,094/37,094) and 100.00% of branches (16,086/16,086). No executable
+The strict suite passed 2,086 examples and measures 100.00% of
+lines (37,197/37,197) and 100.00% of branches (16,125/16,125). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -122,6 +123,21 @@ Message-definition mappings do not enable schema validation because MxBuild
 reserves it for XSD-based mappings. The family remains `partial`: nested trees,
 associations, converters, XSD/WSDL, and other variants retain the lossless
 fallback until they receive dedicated evidence.
+
+## Published OData
+
+`spec/fixtures/published_odata/project.rb` declares a read-only OData 4 service
+with an allowed role, Basic authentication, an entity type, ID, attributes,
+and a paged entity set with query options. Two Ruby → MPR cycles retain
+semantics and unit IDs without `native_document`, `deep_structure`,
+`native_fragment`, or opaque BSON in the certified source. Official MxBuild
+11.12.1 accepts source and rebuilt projects with zero errors, no structural
+differences, and `frontend_ready: true`.
+
+The service location ends in `/` as required by MxBuild rule CE6552. The
+family remains `partial`: write modes, published microflows, enumerations,
+associations, GraphQL, and other variants retain the lossless fallback until
+they receive dedicated evidence.
 
 ## Core Forms properties
 
