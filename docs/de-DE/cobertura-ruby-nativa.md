@@ -33,7 +33,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Consumed REST und konsumiertes OData | partial |
 | Message Definitions und abgeleitete XML-Mappings | partial |
 | Published OData | partial |
-| App/Web Services, XSD/WSDL und weitere Mappings | preserved_native |
+| App/Web Services | partial |
+| XSD/WSDL und weitere Mappings | preserved_native |
 | Java Custom Actions und externe Connectors | runtime_only |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -116,6 +117,20 @@ Mappings auf Basis von Message Definitions aktivieren keine Schema-Validierung,
 da MxBuild sie XSD-basierten Mappings vorbehält. Die Familie bleibt `partial`:
 verschachtelte Bäume, Assoziationen, Konverter, XSD/WSDL und weitere Varianten
 bleiben bis zu eigener Evidenz im verlustfreien Fallback.
+
+## App Services und Web Services
+
+Konsumierte App Services stellen jetzt Position, Timeout, App-Store-Metadaten,
+Actions, Parameter und Rückgabewerte über `consumed_app_service` bereit.
+Veröffentlichte SOAP-Services stellen Versionen, Namespaces,
+Authentifizierung, Operationen, skalare Parameter und Microflow-Referenzen über
+`published_web_service` bereit. Das Gate führt zwei Ruby-→-MPR-Zyklen aus und
+verlangt identischen Vergleich sowie stabile Unit-IDs; auch der ältere
+`ConnectorKitDemo`-Korpus exportiert erkannte Shapes über die semantische DSL.
+
+Die Familie bleibt `partial`: eingebettete MSD-Verträge werden verlustfrei
+erhalten. Strukturierte SOAP-Entities, Child Members und zukünftige Varianten
+bleiben bis zu einem eigenen typisierten Modell im fail-closed Fallback.
 
 ## Published OData
 

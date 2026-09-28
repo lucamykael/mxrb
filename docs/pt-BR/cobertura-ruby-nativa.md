@@ -40,7 +40,7 @@ Estados:
 | REST publicado e mappings JSON | parcial | serviço, resources, operações, parâmetros, JSON/export mappings e autenticação suportada; variantes desconhecidas ficam lossless |
 | REST consumido e OData consumido | parcial | chamadas REST tipadas e serviço OData básico com CSDL v4; ampliar auth, proxy, form-data e entidades validadas |
 | OData publicado | parcial | OData 4 read-only com entity types, IDs, atributos e entity sets; ampliar escrita, ações, enums e associações |
-| App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
+| App Services e Web Services | parcial | serviços consumidos, ações/parâmetros e SOAP publicado com versões/operações escalares; contratos MSD e entidades estruturadas seguem lossless |
 | Message definitions e mappings XML derivados | parcial | entidades/atributos expostos, import/export mappings e ações XML; ampliar árvores, associações e variantes |
 | XSD/WSDL e outros import/export mappings | preserved_native | edição estrutural e referências estáveis |
 | Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
@@ -64,13 +64,13 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.086 exemplos e mede 100,00% das
-linhas (37.197/37.197) e 100,00% dos branches (16.125/16.125). Nenhum código
+A suíte estrita passou com 2.088 exemplos e mede 100,00% das
+linhas (37.282/37.282) e 100,00% dos branches (16.137/16.137). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
-Cobertura de código 100/100 também não encerra cobertura funcional: integrações,
-workflows e task pages continuam `preserved_native`, menus e várias outras
+Cobertura de código 100/100 também não encerra cobertura funcional: XSD/WSDL,
+workflows e task pages continuam `preserved_native`; integrações e várias outras
 famílias seguem `parcial`; as 455 propriedades de Forms estão em 455/455 no
 gate independente `studio_validated`.
 
@@ -136,6 +136,19 @@ Mappings baseados em message definitions não ativam validação contra schema,
 pois o próprio MxBuild reserva essa opção para mappings XSD. A família segue
 `parcial`: árvores aninhadas, associações, conversores, XSD/WSDL e outras
 variantes permanecem no fallback lossless até receberem evidência específica.
+
+## App Services e Web Services
+
+Serviços App consumidos agora expõem localização, timeout, metadados da App
+Store, ações, parâmetros e retorno pela DSL `consumed_app_service`. Serviços
+SOAP publicados expõem versões, namespace, autenticação, operações, parâmetros
+escalares e referências de microflow por `published_web_service`. O gate usa
+dois ciclos Ruby → MPR, exige comparação idêntica e IDs de units estáveis; o
+corpus legado `ConnectorKitDemo` também exporta as formas reconhecidas pela DSL.
+
+A família permanece `parcial`: o contrato MSD incorporado é preservado sem
+perdas, e entidades SOAP estruturadas, membros filhos e variantes futuras
+continuam no fallback fail-closed até receberem um modelo tipado próprio.
 
 ## OData publicado
 

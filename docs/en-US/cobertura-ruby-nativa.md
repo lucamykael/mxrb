@@ -31,7 +31,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Consumed REST and consumed OData | partial |
 | Message definitions and derived XML mappings | partial |
 | Published OData | partial |
-| App/Web Services, XSD/WSDL and other mappings | preserved_native |
+| App/Web Services | partial |
+| XSD/WSDL and other mappings | preserved_native |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -46,13 +47,13 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,086 examples and measures 100.00% of
-lines (37,197/37,197) and 100.00% of branches (16,125/16,125). No executable
+The strict suite passed 2,088 examples and measures 100.00% of
+lines (37,282/37,282) and 100.00% of branches (16,137/16,137). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
-Code coverage alone does not complete functional coverage: integrations,
-workflows, and task pages remain `preserved_native`; menus and several other
+Code coverage alone does not complete functional coverage: XSD/WSDL,
+workflows, and task pages remain `preserved_native`; integrations and several other
 families remain `partial`. All 455 Forms properties are 455/455 in the
 independent `studio_validated` gate.
 
@@ -123,6 +124,20 @@ Message-definition mappings do not enable schema validation because MxBuild
 reserves it for XSD-based mappings. The family remains `partial`: nested trees,
 associations, converters, XSD/WSDL, and other variants retain the lossless
 fallback until they receive dedicated evidence.
+
+## App Services and Web Services
+
+Consumed App Services now expose location, timeout, App Store metadata,
+actions, parameters, and return values through `consumed_app_service`.
+Published SOAP services expose versions, namespaces, authentication,
+operations, scalar parameters, and microflow references through
+`published_web_service`. The gate performs two Ruby → MPR cycles and requires
+identical comparison and stable unit IDs; the legacy `ConnectorKitDemo` corpus
+also exports recognized shapes through the semantic DSL.
+
+The family remains `partial`: embedded MSD contracts are preserved losslessly,
+while structured SOAP entities, child members, and future variants retain the
+fail-closed fallback until they receive a dedicated typed model.
 
 ## Published OData
 

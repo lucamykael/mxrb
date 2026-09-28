@@ -318,6 +318,48 @@ module Mxrb
         )
       end
 
+      def consumed_app_service( # rubocop:disable Metrics/ParameterLists
+        name, actions:, location: 'Constant', location_constant: '', contract: nil,
+        app_store_guid: '', app_store_version: '', app_store_version_guid: '',
+        documentation: '', excluded: false, from_app_store: false,
+        timeout: 30, use_timeout: false, actions_marker: 2,
+        unit_id: nil, container_id: nil
+      )
+        doc = integration_identity(unit_id).merge(
+          'Actions' => integration_array(
+            Array(actions).map { consumed_app_service_action_document(_1) }, actions_marker
+          ),
+          'AppServiceLocation' => location.to_s,
+          'AppStoreGuid' => app_store_guid.to_s,
+          'AppStoreVersion' => app_store_version.to_s,
+          'AppStoreVersionGuid' => app_store_version_guid.to_s,
+          'Documentation' => documentation.to_s,
+          'Excluded' => excluded == true,
+          'FromAppStore' => from_app_store == true,
+          'LocationConstant' => location_constant.to_s,
+          'Msd' => contract,
+          'TimeOut' => timeout.to_i,
+          'UseTimeOut' => use_timeout == true
+        )
+        semantic_native_document(
+          name, 'AppServices$ConsumedAppService', doc, unit_id:, container_id:
+        )
+      end
+
+      def published_web_service(name, versions:, documentation: '', excluded: false,
+                                versions_marker: 2, unit_id: nil, container_id: nil)
+        doc = integration_identity(unit_id).merge(
+          'Documentation' => documentation.to_s,
+          'Excluded' => excluded == true,
+          'VersionedWebServices' => integration_array(
+            Array(versions).map { published_web_service_version_document(_1) }, versions_marker
+          )
+        )
+        semantic_native_document(
+          name, 'WebServices$PublishedService', doc, unit_id:, container_id:
+        )
+      end
+
       def message_definition_collection(name, documentation: '', excluded: false,
                                         export_level: 'Hidden', definitions_marker: 2,
                                         unit_id: nil, container_id: nil, &block)
@@ -336,6 +378,118 @@ module Mxrb
       end
 
       private
+
+      def consumed_app_service_action_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'AppServices$AppServiceActionImpl',
+          'Caption' => spec.fetch(:caption, '').to_s,
+          'Description' => spec.fetch(:description, '').to_s,
+          'ImageString' => spec.fetch(:image, '').to_s,
+          'Microflow' => spec.fetch(:microflow, '').to_s,
+          'Name' => spec.fetch(:name).to_s,
+          'Parameters' => integration_array(
+            Array(spec[:parameters]).map { consumed_app_service_parameter_document(_1) },
+            spec.fetch(:parameters_marker, 2).to_i
+          ),
+          'ReturnType' => spec.fetch(:return_type, 'Void').to_s,
+          'ReturnTypeCanBeEmpty' => spec.fetch(:return_type_can_be_empty, false) == true
+        )
+      end
+
+      def consumed_app_service_parameter_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'AppServices$AppServiceActionParameter',
+          'CanBeEmpty' => spec.fetch(:can_be_empty, false) == true,
+          'Name' => spec.fetch(:name).to_s,
+          'Type' => spec.fetch(:type, 'String').to_s
+        )
+      end
+
+      def published_web_service_version_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'WebServices$VersionedServiceImpl',
+          'AppServiceState' => spec.fetch(:app_service_state, 'Consumable').to_s,
+          'Caption' => spec.fetch(:caption, '').to_s,
+          'Description' => spec.fetch(:description, '').to_s,
+          'Documentation' => spec.fetch(:documentation, '').to_s,
+          'HeaderAuthentication' => spec.fetch(:header_authentication, 'None').to_s,
+          'HeaderMicroflow' => spec.fetch(:header_microflow, '').to_s,
+          'Image' => spec.fetch(:image, '').to_s,
+          'ImportMapping' => spec.fetch(:import_mapping, '').to_s,
+          'IsLockedByContract' => spec.fetch(:locked_by_contract, false) == true,
+          'MsdEnumerationsByContract' => spec[:contract_enumerations],
+          'Operations' => integration_array(
+            Array(spec[:operations]).map { published_web_service_operation_document(_1) },
+            spec.fetch(:operations_marker, 3).to_i
+          ),
+          'TargetNamespace' => spec.fetch(:target_namespace, '').to_s,
+          'Validate' => spec.fetch(:validate, false) == true,
+          'VersionNumber' => spec.fetch(:version, 0).to_i
+        )
+      end
+
+      def published_web_service_operation_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'WebServices$PublishedOperationImpl',
+          'DataEntity' => published_web_service_data_entity_document(spec.fetch(:data_entity, {})),
+          'Description' => spec.fetch(:description, '').to_s,
+          'Documentation' => spec.fetch(:documentation, '').to_s,
+          'ImageId' => spec.fetch(:image, '').to_s,
+          'IsLockedByContract' => spec.fetch(:locked_by_contract, false) == true,
+          'Microflow' => spec.fetch(:microflow, '').to_s,
+          'Name' => spec.fetch(:name).to_s,
+          'Parameters' => integration_array(
+            Array(spec[:parameters]).map { published_web_service_parameter_document(_1) },
+            spec.fetch(:parameters_marker, 2).to_i
+          ),
+          'ReturnElementName' => spec.fetch(:return_element_name, '').to_s,
+          'ReturnElementNameByContract' => spec.fetch(:contract_return_element_name, '').to_s,
+          'ReturnType' => spec.fetch(:return_type, 'Void').to_s,
+          'ReturnTypeIsNillable' => spec.fetch(:return_nillable, false) == true,
+          'ReturnTypeIsOptional' => spec.fetch(:return_optional, false) == true,
+          'ReturnTypeName' => spec.fetch(:return_type_name, 'Nothing').to_s,
+          'ReturnTypeSpecification' => spec.fetch(:return_type_specification, '').to_s
+        )
+      end
+
+      def published_web_service_parameter_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'WebServices$PublishedParameterImpl',
+          'DataEntity' => published_web_service_data_entity_document(spec.fetch(:data_entity, {})),
+          'ElementName' => spec.fetch(:element_name, '').to_s,
+          'IsLockedByContract' => spec.fetch(:locked_by_contract, false) == true,
+          'IsNillable' => spec.fetch(:nillable, false) == true,
+          'IsOptional' => spec.fetch(:optional, false) == true,
+          'IsOptionalByContract' => spec.fetch(:optional_by_contract, false) == true,
+          'MicroflowParameter' => spec.fetch(:microflow_parameter, '').to_s,
+          'MsdMicroflowParameterByContract' => spec[:contract_parameter],
+          'ObjectElementName' => spec.fetch(:object_element_name, '').to_s,
+          'ObjectElementNameByContract' => spec.fetch(:contract_object_element_name, '').to_s,
+          'Type' => spec.fetch(:type, 'String').to_s
+        )
+      end
+
+      def published_web_service_data_entity_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'WebServices$DataEntityImpl',
+          'ChildMembers' => integration_array([], spec.fetch(:children_marker, 2).to_i),
+          'ElementName' => spec.fetch(:element_name, '').to_s,
+          'Entity' => spec.fetch(:entity, '').to_s,
+          'IsKey' => spec.fetch(:key, false) == true,
+          'IsLockedByContract' => spec.fetch(:locked_by_contract, false) == true,
+          'IsNillable' => spec.fetch(:nillable, false) == true,
+          'IsNillableByContract' => spec.fetch(:nillable_by_contract, false) == true,
+          'IsOptional' => spec.fetch(:optional, false) == true,
+          'IsOptionalByContract' => spec.fetch(:optional_by_contract, false) == true,
+          'ObjectElementName' => spec.fetch(:object_element_name, '').to_s
+        )
+      end
 
       def published_odata_entity_type_spec(source)
         spec = integration_spec(source)
