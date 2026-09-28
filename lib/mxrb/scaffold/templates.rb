@@ -376,6 +376,18 @@ module Mxrb
         RUBY
       end
 
+      def javascript_action(_module_name, name)
+        <<~RUBY
+          # frozen_string_literal: true
+
+          javascript_action :#{name},
+                            parameters: [],
+                            return_type: { kind: :void },
+                            platform: :Web,
+                            documentation: "#{humanize(name)}"
+        RUBY
+      end
+
       def java_action_source(module_name, name) # rubocop:disable Metrics/MethodLength
         package_name = module_name.downcase
         <<~JAVA
@@ -412,6 +424,25 @@ module Mxrb
           \t// END EXTRA CODE
           }
         JAVA
+      end
+
+      def javascript_action_source(_module_name, name)
+        <<~JAVASCRIPT
+          // This file follows the Mendix JavaScript action regeneration contract.
+          // Imports and code inside the USER/EXTRA sections are retained by Studio Pro.
+
+          // BEGIN EXTRA CODE
+          // END EXTRA CODE
+
+          /**
+           * @returns {Promise.<void>}
+           */
+          export async function #{name}() {
+          \t// BEGIN USER CODE
+          \treturn;
+          \t// END USER CODE
+          }
+        JAVASCRIPT
       end
 
       def functional_test(module_name, name)

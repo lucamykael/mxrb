@@ -36,15 +36,17 @@ o hash criado pelo gerador, protegendo edições posteriores.
 | `mxrb published-rest new App.CustomersApi` | Handler editável para REST publicado |
 | `mxrb consumed-rest new App.ExternalPets` | Adaptador REST consumido |
 | `mxrb java-action new App.ParseDocument` | Java Action nativa e classe Java |
+| `mxrb javascript-action new App.Notify` | JavaScript Action nativa e fonte JavaScript |
 | `mxrb functional-test new App.ACT_Create` | Definição de teste de runtime |
 | `mxrb evaluation new architecture` | Avaliação estática do modelo |
 | `mxrb design init` | Design system do projeto |
 | `mxrb ci init github` | Workflow GitHub Actions |
 
 Entidades começam vazias e apontam para o [guia completo da DSL](entity-dsl.md).
-REST publicado ainda gera um handler Ruby. Java Action gera diretamente o
-documento nativo tipado e a classe
-`javasource/<module>/actions/<Action>.java`, com as zonas USER/EXTRA que o
+REST publicado ainda gera um handler Ruby. Java e JavaScript Actions geram
+diretamente o documento nativo tipado e a implementação em
+`javasource/<module>/actions/<Action>.java` ou
+`javascriptsource/<module>/actions/<Action>.js`, com as zonas USER/EXTRA que o
 Studio Pro preserva. Os demais itens tipados geram diretamente a DSL suportada
 pelo mxrb.
 
