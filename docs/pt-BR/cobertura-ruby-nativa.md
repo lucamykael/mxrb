@@ -37,9 +37,10 @@ Estados:
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
 | Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
 | Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
-| REST publicado/consumido | preserved_native | serviços, resources, operations, mappings, auth e contratos |
+| REST publicado e mappings JSON | parcial | serviço, resources, operações, parâmetros, JSON/export mappings e autenticação suportada; variantes desconhecidas ficam lossless |
+| REST consumido | preserved_native | clientes, operações, autenticação e contratos de resposta |
 | OData, App Services e Web Services | preserved_native | contratos publicados/consumidos e versões suportadas |
-| Import/export mappings, JSON/XML/message definitions | preserved_native | edição estrutural e referências estáveis |
+| Outros import/export mappings, XML e message definitions | preserved_native | edição estrutural e referências estáveis |
 | Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
 | Workflows e task pages | preserved_native | metamodelo, outcomes, timers, boundaries e segurança |
 | Settings, runtime, theme/design system e resources | parcial | assets e tokens cobertos; ampliar settings nativos versionados |
@@ -61,7 +62,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.080 exemplos e mede 100,00% das
+A suíte estrita passou com 2.081 exemplos e mede 100,00% das
 linhas (37.076/37.076) e 100,00% dos branches (16.078/16.078). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -88,6 +89,20 @@ recursivos são Ruby legível. Ações ou ícones desconhecidos exportam
 `spec/fixtures/menu_documents/project.rb` passou no `script/frontend_acceptance`
 com MxBuild 11.12.1 para original e reconstruído, sem erros e sem diferenças
 estruturais.
+
+## REST publicado e mappings JSON
+
+O fixture `spec/fixtures/published_rest/project.rb` declara um serviço REST
+com resources, operações GET/POST, parâmetros de path, microflows e
+status de sucesso. O compilador infere estruturas JSON e export mappings
+tipados para retornos de entidade/lista. Dois ciclos Ruby → MPR mantêm os IDs
+das units, produzem fonte sem `deep_structure` e permanecem semanticamente
+idênticos. O `script/frontend_acceptance` também aprovou original e
+reconstruído no MxBuild 11.12.1, com zero erros e `frontend_ready: true`.
+
+O estado permanece `parcial`: apenas shapes reconhecidos são emitidos pela DSL;
+operações, autenticação ou mappings ainda não representados continuam no
+fallback lossless em vez de serem parcialmente convertidos.
 
 ## Propriedades de Forms core
 

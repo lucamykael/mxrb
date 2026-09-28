@@ -29,7 +29,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Navigation und Pluggable Widgets | partial |
 | Scheduled Events | partial |
 | Reguläre Ausdrücke (Mendix/JVM-Text) | native |
-| REST, OData, App/Web Services und Mappings | preserved_native |
+| Published REST und JSON-Mappings | partial |
+| Consumed REST, OData, App/Web Services, XML und weitere Mappings | preserved_native |
 | Java Custom Actions und externe Connectors | runtime_only |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -66,6 +67,20 @@ Not-found-Ziele sowie das Partial-Sync-Verhalten bereit. Änderungen behalten
 native und verschachtelte Identitäten bei. Nicht dargestellte PWA- und
 Offline-Konfigurationen bleiben opak und unverändert; Navigation bleibt daher
 `partial`.
+
+## Published REST und JSON-Mappings
+
+`spec/fixtures/published_rest/project.rb` deklariert einen Service mit
+Ressourcen, GET-/POST-Operationen, Path-Parametern, Microflows und
+Erfolgsstatus. Der Compiler leitet typisierte JSON-Strukturen und Export-
+Mappings für Entity-/Listen-Antworten ab. Zwei Ruby-→-MPR-Zyklen behalten
+Unit-IDs bei, erzeugen kein `deep_structure` und bleiben semantisch identisch.
+`script/frontend_acceptance` akzeptierte Quell- und Neuaufbauprojekt mit
+MxBuild 11.12.1 ohne Fehler und mit `frontend_ready: true`.
+
+Die Familie bleibt `partial`: Nur erkannte Shapes verwenden die semantische
+DSL; nicht dargestellte Operationen, Authentifizierungs- oder Mappingvarianten
+bleiben im verlustfreien Fallback.
 
 ## Eigenschaften der Core-Forms
 

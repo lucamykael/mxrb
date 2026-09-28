@@ -27,7 +27,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Navigation and pluggable widgets | partial |
 | Scheduled events | partial |
 | Regular expressions (Mendix/JVM text) | native |
-| REST, OData, App/Web Services and mappings | preserved_native |
+| Published REST and JSON mappings | partial |
+| Consumed REST, OData, App/Web Services, XML and other mappings | preserved_native |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -42,7 +43,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,080 examples and measures 100.00% of
+The strict suite passed 2,081 examples and measures 100.00% of
 lines (37,076/37,076) and 100.00% of branches (16,078/16,078). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -74,6 +75,20 @@ offline state, role homes, login title/location, not-found targets, and
 partial-sync behavior. Updating supported settings retains native and nested
 identities. Unrepresented PWA and offline configuration structures stay opaque
 and unchanged, so navigation remains `partial`.
+
+## Published REST and JSON mappings
+
+`spec/fixtures/published_rest/project.rb` declares a service with resources,
+GET/POST operations, path parameters, microflows, and success status.
+The compiler infers typed JSON structures and export mappings for entity/list
+responses. Two Ruby → MPR cycles retain unit IDs, emit no `deep_structure`, and
+remain semantically identical. `script/frontend_acceptance` also accepted the
+source and rebuilt projects with MxBuild 11.12.1, zero errors, and
+`frontend_ready: true`.
+
+The family remains `partial`: only recognized shapes use the semantic DSL;
+unrepresented operations, authentication, or mapping variants keep the
+lossless fallback.
 
 ## Core Forms properties
 
