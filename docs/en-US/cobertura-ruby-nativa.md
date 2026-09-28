@@ -25,7 +25,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Module roles | native |
 | Project roles, demo users, and password policy | native |
 | Global project-security settings and access containers | native |
-| Microflows, nanoflows and core pages | partial |
+| Microflows and nanoflows | partial |
+| Core pages | partial |
 | Layouts, page templates, snippets, and building blocks | native |
 | Menus | partial |
 | Navigation and pluggable widgets | partial |
@@ -52,8 +53,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,111 examples and measures 100.00% of
-lines (37,689/37,689) and 100.00% of branches (16,310/16,310). No executable
+The strict suite passed 2,112 examples and measures 100.00% of
+lines (37,693/37,693) and 100.00% of branches (16,312/16,312). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -132,6 +133,19 @@ it—preventing `Delete` from being silently interpreted as the default
 `Commit`. Ruby-app and two MPR → Ruby → MPR cycles retain identical comparison
 and stable IDs without opaque fallback. Official MxBuild packages the
 four-event fixture with `BUILD SUCCEEDED`.
+
+## Microflows and nanoflows: Show Home Page
+
+`show_home_page` materializes and reexports `Microflows$ShowHomePageAction`,
+the final core action in the inventoried Mendix 11 schema that previously had
+no authoritative Ruby declaration. The gate authors it through Ruby-app mode
+and runs one Ruby-app plus two regular MPR → Ruby → MPR cycles, retaining the
+unit, activity, and action IDs without opaque fallback.
+
+The fixture finishes with `BUILD SUCCEEDED` under the official MxBuild
+11.12.1. The family remains `partial` because legacy/specialized actions
+outside the core schema and additional event/split variants still require the
+same contract.
 
 ## Module roles
 

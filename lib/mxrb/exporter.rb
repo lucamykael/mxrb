@@ -71,6 +71,7 @@ module Mxrb
       Microflows$ShowMessageAction
       Microflows$LogMessageAction
       Microflows$ShowFormAction
+      Microflows$ShowHomePageAction
       Microflows$CloseFormAction
       Microflows$JavaActionCallAction
       Microflows$JavaScriptActionCallAction
@@ -4625,6 +4626,8 @@ module Mxrb
         "#{pad}log_message #{ruby(template["Text"].to_s)}#{level_a}#{node_a}#{stack_a}#{parameters_a}"
       when "Microflows$ShowFormAction"
         show_page_action_line(action, indent)
+      when "Microflows$ShowHomePageAction"
+        "#{pad}show_home_page"
       when "Microflows$CloseFormAction"
         count = action["NumberOfPagesToClose"].to_s
         count.empty? ? "#{pad}close_page" : "#{pad}close_page count: #{count.to_i}"

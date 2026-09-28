@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · **English** · [Deutsch](../de-DE/validation-matrix.md)
 
-Last updated: 2026-09-25.
+Last updated: 2026-09-28.
 
 The matrix exercises this pipeline using only MXRB:
 
@@ -306,11 +306,16 @@ pair returned zero semantic changes. A controlled microflow rename in the 7.17
 fixture was reduced to precise `changed` entries for its name and references,
 instead of dumping the complete removed and added flow bodies.
 
+The `ShowHomePageAction` gate authors the final core action in the inventoried
+Mendix 11 schema that previously lacked a Ruby declaration. One Ruby-app and
+two regular cycles retain the unit, activity, and action IDs without opaque
+fallback; the official MxBuild 11.12.1 finishes with **BUILD SUCCEEDED**.
+
 ## Ruby evaluations and coverage gate
 
-The current suite contains 2,111 examples and passes with 100.00% line coverage
-(37,689/37,689 executable library lines) and 100.00% branch coverage
-(16,310/16,310 branches).
+The current suite contains 2,112 examples and passes with 100.00% line coverage
+(37,693/37,693 executable library lines) and 100.00% branch coverage
+(16,312/16,312 branches).
 Run the enforced gate with:
 
 ```sh

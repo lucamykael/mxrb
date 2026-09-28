@@ -6785,6 +6785,12 @@ module Mxrb
         show_form_action_doc(activity)
       when :close_page
         close_form_action_doc(activity)
+      when :show_home_page
+        {
+          "$ID" => SecureRandom.uuid,
+          "$Type" => "Microflows$ShowHomePageAction",
+          "ErrorHandlingType" => "Rollback"
+        }
       when :call_java
         java_action_call_doc(activity)
       when :call_javascript
