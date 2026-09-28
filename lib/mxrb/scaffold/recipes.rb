@@ -108,7 +108,25 @@ module Mxrb
       def scaffold_integration = scaffold_infrastructure_artifact(:integration)
       def scaffold_published_rest = scaffold_infrastructure_artifact(:published_rest)
       def scaffold_consumed_rest = scaffold_infrastructure_artifact(:consumed_rest)
-      def scaffold_java_action = scaffold_infrastructure_artifact(:java_action)
+
+      def scaffold_java_action
+        module_name, artifact_name = qualified_name
+        ensure_infrastructure(module_name)
+        create_connected_module_file(
+          module_name, ['infrastructure', INFRASTRUCTURE.fetch(:java_action)],
+          artifact_name, :java_action
+        )
+        create_java_action_source(module_name, artifact_name)
+      end
+
+      def create_java_action_source(module_name, artifact_name)
+        @transaction.create(
+          project_path(
+            'javasource', module_name.downcase, 'actions', "#{artifact_name}.java"
+          ),
+          Templates.render(:java_action_source, module_name:, name: artifact_name)
+        )
+      end
 
       def scaffold_presentation
         module_name = module_only

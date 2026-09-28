@@ -77,6 +77,8 @@ Vorlagen still zu importieren. Siehe die [offizielle Seitendokumentation](https:
 
 Artefaktbefehle verwenden `new Modul.Name`; Projektbefehle verwenden
 `design init` und `ci init github`. Alle unterstützten Entitätstypen und
-Assoziationen stehen in der [Entitäten-DSL](entity-dsl.md). Published REST und
-Java Action erzeugen editierbare Ruby-Adapter; das native Dokument bzw. die
-Aktion muss weiterhin aus einem exportierten Baseline oder Studio Pro stammen.
+Assoziationen stehen in der [Entitäten-DSL](entity-dsl.md). Published REST
+erzeugt weiterhin einen editierbaren Ruby-Handler. Java Action erzeugt das
+typisierte native Action-Dokument und die zugehörige Klasse
+`javasource/<modul>/actions/<Action>.java` einschließlich der von Studio Pro
+beibehaltenen USER-/EXTRA-Bereiche.

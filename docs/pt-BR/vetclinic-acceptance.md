@@ -32,11 +32,10 @@ depois desse aceite, `init` passou a criar perfil, layout e Home mínimos. Itens
 de menu adicionais ainda não têm comando próprio. Página, integrações e
 endpoints também exigem conteúdo real.
 
-`published-rest`, `consumed-rest` e `java-action` produzem adaptadores de
-microflow compiláveis. Um documento REST publicado/consumido ou Java Action
-nativo ainda requer um baseline exportado ou Studio Pro. Isso não impede a
-validade e o build do MPR aceito, mas delimita honestamente o alcance atual
-desses três scaffolds.
+`published-rest` e `consumed-rest` produzem handlers/adapters de microflow
+compiláveis; seus documentos REST ainda exigem DSL explícita, baseline exportado
+ou Studio Pro. `java-action` agora produz o documento Java Action nativo e a
+classe `UserAction` compilável em `javasource`.
 
 ## Correções orientadas pelo aceite
 

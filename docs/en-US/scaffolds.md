@@ -74,6 +74,7 @@ imported. See the [official pages documentation](https://docs.mendix.com/refguid
 
 Artifact commands use `new Module.Name`; project commands use `design init` and
 `ci init github`. See the [entity DSL](entity-dsl.md) for all supported entity
-types and associations. Published REST and Java Action create editable Ruby
-adapters; their native document/action must still come from an exported
-baseline or Studio Pro.
+types and associations. Published REST still creates an editable Ruby handler.
+Java Action creates the typed native action document and its
+`javasource/<module>/actions/<Action>.java` class, including the USER/EXTRA
+sections retained by Studio Pro.

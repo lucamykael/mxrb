@@ -16,9 +16,10 @@ Flow-Verhalten, Widgets, Rechte, Endpunkte, Tests und Auswertungen bleiben
 Projektarbeit. Beim abgenommenen VetClinic wurde die Navigation in `project.rb`
 ergänzt; `init` erzeugt nun Profil, Layout und Home-Seite minimal, während
 weitere Menüeinträge noch keinen eigenen Befehl haben.
-Published REST, Consumed REST und Java Action erzeugen baubare
-Microflow-Adapter; native Dokumente benötigen weiterhin ein exportiertes
-Baseline-Projekt oder Studio Pro.
+Published REST und Consumed REST erzeugen baubare Microflow-Handler/-Adapter;
+ihre REST-Dokumente benötigen weiterhin explizite DSL, ein exportiertes
+Baseline-Projekt oder Studio Pro. Java Action erzeugt nun das native
+Action-Dokument und eine kompilierbare `UserAction`-Klasse unter `javasource`.
 
 Ein unabhängiger Leerscaffold bestand ohne manuelle Änderung `mxrb validate`,
 das offizielle `mx check` und MxBuild.

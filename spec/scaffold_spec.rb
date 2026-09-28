@@ -492,7 +492,12 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect(File.read(File.join(infrastructure, 'endpoints/animals_api.rb')))
         .to include('native Studio Pro/baseline operation')
       expect(File.read(File.join(infrastructure, 'actions/parse_document.rb')))
-        .to include('# call_java')
+        .to include('java_action :ParseDocument', 'return_type: { kind: :void }')
+      java_source = File.join(root, 'javasource/scaffoldapp/actions/ParseDocument.java')
+      expect(File.read(java_source)).to include(
+        'package scaffoldapp.actions;', 'extends UserAction<java.lang.Void>',
+        '// BEGIN USER CODE', '// BEGIN EXTRA CODE'
+      )
 
       load File.join(root, 'project.rb')
       mpr = File.join(root, 'ScaffoldApp.mpr')
@@ -501,9 +506,14 @@ RSpec.describe Mxrb::Scaffold::Generator do
         mod = project.modules.first
         expect(mod.microflows.map(&:name)).to include(
           'AnimalRepositoryImplementation', 'Cleanup', 'PetApi',
-          'AnimalsApi', 'ExternalPets', 'ParseDocument'
+          'AnimalsApi', 'ExternalPets'
         )
         expect(mod.scheduled_events.map { _1['Name'] }).to eq(['Cleanup'])
+        java_actions = project.all_units.filter_map do |unit|
+          document = project.parse_bson(unit)
+          document if document['$Type'] == 'JavaActions$JavaAction'
+        end
+        expect(java_actions.map { _1['Name'] }).to eq(['ParseDocument'])
       end
     end
   end

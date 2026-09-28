@@ -33,7 +33,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Published OData | partial |
 | App/Web Services | partial |
 | XSD/WSDL and other mappings | partial |
-| Java custom actions and external connectors | runtime_only |
+| Java custom actions | native |
+| External connectors | partial |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
 | Conventional React/TypeScript | runtime_only |
@@ -47,8 +48,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,091 examples and measures 100.00% of
-lines (37,338/37,338) and 100.00% of branches (16,147/16,147). No executable
+The strict suite passed 2,092 examples and measures 100.00% of
+lines (37,347/37,347) and 100.00% of branches (16,147/16,147). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -154,6 +155,19 @@ legacy physical names `ImportedServiceImpl`, `WsdlDescriptionImpl`,
 the public Model SDK names. The family stays `partial` while parsed WSDL
 services and operations, complex mapping trees, and other variants still use
 the lossless fallback.
+
+## Java custom actions and external connectors
+
+`java_action` materializes the native signature, parameters, generic types,
+return type, and visual metadata. The `mxrb java-action new` scaffold also
+creates the `UserAction` class under `javasource/<module>/actions`; exports copy
+the sources and two Ruby → MPR cycles retain content, semantics, and IDs. The
+complete fixture compiles and packages with MxBuild 11.12.1.
+
+Marketplace connectors remain external dependencies: MXRB audits verified
+GUIDs, public surface, and provenance, and installs only through an
+authenticated official adapter. Protected modules are not presented as
+editable, and unresolved package requests fail closed.
 
 ## Published OData
 
