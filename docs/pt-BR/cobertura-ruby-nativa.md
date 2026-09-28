@@ -26,7 +26,8 @@ Estados:
 | Definições de enumeração | native | criar/renomear/remover, valores ordenados, captions por idioma, documentação e IDs estáveis |
 | Constantes | native | cinco tipos oficiais, valor padrão, exposição ao cliente, metadados e IDs estáveis; overrides privados não vazam |
 | Regras de acesso de entidade | native | roles, CRUD, documentação, direitos padrão, XPath/caption, membros de atributo/associação e IDs estáveis |
-| Índices, system members, generalização e OQL view | parcial | autoria incremental e reconciliação privada; sem pareamento por posição |
+| Índices, system members e generalização | native | índices `Normal`, `CreatedDate` e `ChangedDate`; flags de auditoria, herança e IDs estáveis |
+| OQL view | parcial | autoria incremental e reconciliação privada; ampliar fontes e variantes por versão |
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
@@ -65,8 +66,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.100 exemplos e mede 100,00% das
-linhas (37.497/37.497) e 100,00% dos branches (16.216/16.216). Nenhum código
+A suíte estrita passou com 2.102 exemplos e mede 100,00% das
+linhas (37.514/37.514) e 100,00% dos branches (16.224/16.224). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -103,6 +104,21 @@ mantém os IDs explícitos, enquanto o modo Ruby app usa identidades privadas
 estáveis e não publica UUIDs. Criação, edição e remoção autoritativa já são
 cobertas pelos testes de reconciliação. O fixture completo foi empacotado com
 sucesso pelo MxBuild 11.12.1 sem fallback opaco.
+
+## Índices, system members e generalização
+
+Índices cobrem os três tipos que o Studio Pro 11.12.1 consegue materializar:
+atributos normais, `CreatedDate` e `ChangedDate`, incluindo ordem, direção,
+`IncludeInOffline`, GUID e IDs dos membros. `Association`, `Owner` e
+`ChangedBy` ainda existem no enum armazenado do Mendix, mas o próprio
+`EntityIndex` não consegue resolvê-los; o MXRB agora os rejeita antes de gerar
+um MPR inválido.
+
+As quatro flags de system members (`owner`, `created_date`, `changed_date` e
+`changed_by`) e generalizações qualificadas também são editáveis. O gate faz
+export Ruby-app e dois ciclos MPR → Ruby → MPR, exige comparação idêntica e
+IDs estáveis, não aceita fallback BSON opaco e termina com `BUILD SUCCEEDED`
+no MxBuild oficial 11.12.1. OQL view permanece separadamente `parcial`.
 
 ## Documentos reutilizáveis de apresentação
 

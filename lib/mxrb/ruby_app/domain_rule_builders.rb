@@ -7,10 +7,9 @@ module Mxrb
 
     # Builds one ordered index before Record publishes its declaration.
     class IndexBuilder
-      MEMBER_TYPES = %i[Normal CreatedDate ChangedDate Owner ChangedBy].freeze
+      MEMBER_TYPES = %i[Normal CreatedDate ChangedDate].freeze
       TYPE_ALIASES = {
-        normal: :Normal, created_date: :CreatedDate, changed_date: :ChangedDate,
-        owner: :Owner, changed_by: :ChangedBy
+        normal: :Normal, created_date: :CreatedDate, changed_date: :ChangedDate
       }.freeze
       private_constant :MEMBER_TYPES, :TYPE_ALIASES
 

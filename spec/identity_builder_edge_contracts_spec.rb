@@ -92,7 +92,8 @@ RSpec.describe 'Ruby identity and builder edge contracts' do
     builder = Mxrb::RubyApp::IndexBuilder.new
     expect { builder.member('') }.to raise_error(ArgumentError, /requires a name/)
     expect { builder.member('Name', type: :future) }.to raise_error(ArgumentError, /unsupported index member/)
-    expect { builder.member('Name', type: :owner) }.to raise_error(ArgumentError, /must be named Owner/)
+    expect { builder.member('Name', type: :created_date) }
+      .to raise_error(ArgumentError, /must be named CreatedDate/)
     builder.member('Name')
     expect do
       builder.evaluate do |index|

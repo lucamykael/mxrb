@@ -690,8 +690,16 @@ module Mxrb
           {
             id: declaration[:id].to_s, name: declaration.fetch(:name).to_s,
             ascending: declaration.fetch(:ascending, true) == true,
-            type: declaration.fetch(:type, :Normal).to_sym
+            type: normalize_index_type(declaration.fetch(:type, :Normal))
           }
+        end
+
+        def normalize_index_type(value)
+          aliases = {
+            normal: :Normal, created_date: :CreatedDate, changed_date: :ChangedDate
+          }
+          symbol = value.to_sym
+          aliases.fetch(symbol, symbol)
         end
 
         def normalize_validation_translation(translation)

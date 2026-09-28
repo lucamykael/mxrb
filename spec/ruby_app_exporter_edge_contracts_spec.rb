@@ -53,7 +53,7 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
       .to eq('Name')
     expect(exporter.send(:index_member_name, entity, { 'AttributePointer' => 'attribute-id' }, 'Normal'))
       .to eq('Code')
-    expect(exporter.send(:index_member_name, entity, {}, 'Owner')).to eq('Owner')
+    expect(exporter.send(:index_member_name, entity, {}, 'CreatedDate')).to eq('CreatedDate')
     expect do
       exporter.send(:index_member_name, entity, { 'AttributePointer' => 'missing-id' }, 'Normal')
     end.to raise_error(Mxrb::SerializationError, /unresolved index attribute pointer/)

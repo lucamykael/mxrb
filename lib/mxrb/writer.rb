@@ -358,8 +358,9 @@ module Mxrb
         entity = existing[name]
         raise ValidationError, "entity #{module_name}.#{name} does not exist" unless entity
 
-        synchronize_ruby_indexes!(entity, declaration[:indexes], module_name.to_s, name) \
-          unless declaration[:indexes].nil?
+        unless declaration[:indexes].nil?
+          synchronize_ruby_indexes!(entity, declaration[:indexes], module_name.to_s, name)
+        end
         synchronize_ruby_system_members!(entity, declaration[:system_members]) \
           unless declaration[:system_members].nil?
         synchronize_ruby_generalization!(entity, declaration[:generalization]) \
@@ -532,7 +533,7 @@ module Mxrb
 
     ACCESS_RIGHTS = %i[None ReadOnly ReadWrite].freeze
     ACCESS_MEMBER_KINDS = %i[attribute association].freeze
-    SYSTEM_INDEX_MEMBERS = %w[CreatedDate ChangedDate Owner ChangedBy].freeze
+    SYSTEM_INDEX_MEMBERS = %w[CreatedDate ChangedDate].freeze
     ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
     def ruby_access_rule_docs(declarations, previous, module_name, entity_name)
@@ -606,7 +607,7 @@ module Mxrb
         members.each do |member|
           validate_ruby_uuid!(member[:id], "index member for #{module_name}.#{entity_name}")
           name = member.fetch(:name).to_s
-          type = member.fetch(:type, :Normal).to_s
+          type = canonical_index_member_type(member.fetch(:type, :Normal))
           if type != "Normal"
             raise ValidationError, "unknown indexed system member #{module_name}.#{entity_name}.#{name}" \
               unless ruby_system_index_member?(member)
@@ -652,7 +653,7 @@ module Mxrb
       id = IO::BsonCodec.extract_id(previous["$ID"]) || SecureRandom.uuid if id.empty?
       previous.merge(
         "$ID" => id, "$Type" => previous["$Type"] || "DomainModels$IndexedAttribute",
-        "Type" => declaration.fetch(:type, :Normal).to_s,
+        "Type" => canonical_index_member_type(declaration.fetch(:type, :Normal)),
         "AttributePointer" => binary_uuid(ruby_index_member_pointer(declaration, attribute_ids)),
         "AssociationPointer" => previous.fetch(
           "AssociationPointer", binary_uuid(ZERO_UUID)
@@ -677,7 +678,13 @@ module Mxrb
     end
 
     def ruby_index_member_declaration_signature(member)
-      [member.fetch(:name).to_s, member.fetch(:type, :Normal).to_s]
+      [member.fetch(:name).to_s, canonical_index_member_type(member.fetch(:type, :Normal))]
+    end
+
+    def canonical_index_member_type(value)
+      {
+        'normal' => 'Normal', 'created_date' => 'CreatedDate', 'changed_date' => 'ChangedDate'
+      }.fetch(value.to_s, value.to_s)
     end
 
     def ruby_system_index_member?(member)
@@ -2703,7 +2710,6 @@ module Mxrb
       existing_entities = array_items(existing[entities_key]).to_h do |entity|
         [entity["name"] || entity["Name"], entity]
       end
-
       access_associations = association_access_by_entity(mod)
       entities = mod.fetch(:entities).map.with_index do |entity, index|
         entity_doc(
@@ -4186,7 +4192,7 @@ module Mxrb
         {
           '$ID' => member.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : member.fetch(:id).to_s,
           '$Type' => 'DomainModels$IndexedAttribute',
-          'Type' => member.fetch(:type, :Normal).to_s,
+          'Type' => canonical_index_member_type(member.fetch(:type, :Normal)),
           'AttributePointer' => binary_uuid(ruby_index_member_pointer(member, attribute_ids)),
           'AssociationPointer' => binary_uuid(ZERO_UUID),
           'Ascending' => member.fetch(:ascending, true) == true

@@ -3026,7 +3026,16 @@ module Mxrb
         indexed = IO::BsonCodec.parse_array(
           index['attributes'] || index['Attributes'] || index['IndexedAttributes']
         )[:items]
-        members = indexed.filter_map { _1['attribute'] || _1['Attribute'] }.map { _1.to_s.split('.').last }
+        member_declarations = indexed.map do |member|
+          type = (member['type'] || member['Type'] || 'Normal').to_s
+          name = exported_index_member_name(entity, member, type)
+          {
+            id: IO::BsonCodec.extract_id(member['$ID']), name:,
+            ascending: member.fetch('ascending', member.fetch('Ascending', true)),
+            type: type.to_sym
+          }
+        end
+        members = member_declarations.map { _1.fetch(:name) }
         next if members.empty?
 
         directions = indexed.map { |member| member.fetch('ascending', member.fetch('Ascending', true)) }
@@ -3038,14 +3047,6 @@ module Mxrb
         options << "ascending: #{ruby(directions)}" unless directions.all?
         include_offline = index['includeInOffline'] || index['IncludeInOffline']
         options << 'include_offline: true' if include_offline
-        member_declarations = indexed.map do |member|
-          {
-            id: IO::BsonCodec.extract_id(member['$ID']),
-            name: (member['attribute'] || member['Attribute']).to_s.split('.').last,
-            ascending: member.fetch('ascending', member.fetch('Ascending', true)),
-            type: (member['type'] || member['Type'] || 'Normal').to_sym
-          }
-        end
         options << "members: #{native_ruby(member_declarations)}"
         flags << "  index #{members.map { symbol(_1) }.join(', ')}, #{options.join(', ')}"
       end
@@ -3079,6 +3080,23 @@ module Mxrb
       return :one_to_one if association.owner == :Both
 
       :many_to_one
+    end
+
+    def exported_index_member_name(entity, member, type)
+      unless %w[Normal CreatedDate ChangedDate].include?(type)
+        raise SerializationError,
+              "unsupported index member type #{type} in #{entity.qualified_name}"
+      end
+      explicit = (member['attribute'] || member['Attribute']).to_s.split('.').last.to_s
+      return explicit unless explicit.empty?
+      return type unless type == 'Normal'
+
+      pointer = IO::BsonCodec.extract_id(member['AttributePointer'])
+      candidate = entity.attributes.find { _1.id.to_s == pointer }
+      return candidate.name unless candidate.nil?
+
+      raise SerializationError,
+            "unresolved index attribute pointer #{pointer} in #{entity.qualified_name}"
     end
 
     def access_rule_source(rule)
