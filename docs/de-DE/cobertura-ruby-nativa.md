@@ -34,7 +34,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Message Definitions und abgeleitete XML-Mappings | partial |
 | Published OData | partial |
 | App/Web Services | partial |
-| XSD/WSDL und weitere Mappings | preserved_native |
+| XSD/WSDL und weitere Mappings | partial |
 | Java Custom Actions und externe Connectors | runtime_only |
 | Workflows und Task Pages | preserved_native |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -131,6 +131,23 @@ verlangt identischen Vergleich sowie stabile Unit-IDs; auch der ältere
 Die Familie bleibt `partial`: eingebettete MSD-Verträge werden verlustfrei
 erhalten. Strukturierte SOAP-Entities, Child Members und zukünftige Varianten
 bleiben bis zu einem eigenen typisierten Modell im fail-closed Fallback.
+
+## XSD und zugehörige Mappings
+
+`xml_schema` deklariert XSD-Dateien mit Pfad, Inhalt, Target Namespace und
+lokalisierten Formaten. Import-/Export-Mappings können über die vorhandene DSL
+auf Schema und Root Element verweisen. Zwei Ruby-→-MPR-Zyklen behalten IDs und
+semantische Gleichheit; MxBuild 11.12.1 paketiert das vollständige Fixture
+einschließlich Import-Mapping ohne Fehler.
+
+Die Implementierung deckt außerdem `imported_web_service` mit rohem
+WSDL-Inhalt, eingebetteten Schemas, URL, Target Namespace sowie Import-/MTOM-
+Flags ab. Sie verwendet die älteren physischen Namen `ImportedServiceImpl`,
+`WsdlDescriptionImpl`, `WsdlEntryImpl`, `SchemaContentss` und
+`XmlSchemaContents`, die von den öffentlichen Model-SDK-Namen abweichen. Die
+Familie bleibt `partial`, solange bereits geparste WSDL-Services und
+-Operationen, komplexe Mapping-Bäume und weitere Varianten noch den
+verlustfreien Fallback verwenden.
 
 ## Published OData
 

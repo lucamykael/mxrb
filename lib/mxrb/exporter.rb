@@ -759,6 +759,8 @@ module Mxrb
       case document.fetch(:type)
       when "JsonStructures$JsonStructure"
         return json_structure_declaration(document) if doc.key?("JsonSnippet")
+      when 'XmlSchemas$XmlSchema'
+        return xml_schema_declaration(document) if semantic_xml_schema?(doc)
       when "ImportMappings$ImportMapping"
         return mapping_declaration(document, :import) if doc.key?("JsonStructure")
       when "ExportMappings$ExportMapping"
@@ -773,6 +775,8 @@ module Mxrb
         return consumed_app_service_declaration(document) if semantic_consumed_app_service?(doc)
       when 'WebServices$PublishedService'
         return published_web_service_declaration(document) if semantic_published_web_service?(doc)
+      when 'WebServices$ImportedServiceImpl'
+        return imported_web_service_declaration(document) if semantic_imported_web_service?(doc)
       when 'MessageDefinitions$MessageDefinitionCollection'
         return message_definition_collection_declaration(document) \
           if semantic_message_definition_collection?(doc)
@@ -874,6 +878,41 @@ module Mxrb
       semantic_call_source(:regular_expression, document, {
         expression: doc.fetch('Expression', ''), documentation: doc.fetch('Documentation', ''),
         excluded: doc['Excluded'] == true, export_level: doc.fetch('ExportLevel', 'Hidden')
+      })
+    end
+
+    XML_SCHEMA_FIELDS = %w[
+      $ID $Type Documentation Excluded ExportLevel FilePath Name SchemaContentss
+    ].freeze
+    XML_SCHEMA_ENTRY_FIELDS = %w[
+      $ID $Type Contents LocalizedContentsFormat LocalizedLocationFormat Location TargetNamespace
+    ].freeze
+
+    def semantic_xml_schema?(doc)
+      return false unless (doc.keys - XML_SCHEMA_FIELDS).empty?
+
+      bson_items(doc['SchemaContentss']).all? do |entry|
+        entry.is_a?(Hash) && entry['$Type'] == 'XmlSchemas$XmlSchemaContents' &&
+          (entry.keys - XML_SCHEMA_ENTRY_FIELDS).empty?
+      end
+    end
+
+    def xml_schema_declaration(document)
+      doc = document.fetch(:doc)
+      entries = bson_items(doc['SchemaContentss']).map do |entry|
+        {
+          id: document_id(entry), contents: entry.fetch('Contents', ''),
+          localized_contents_format: entry.fetch('LocalizedContentsFormat', ''),
+          localized_location_format: entry.fetch('LocalizedLocationFormat', ''),
+          location: entry.fetch('Location', ''),
+          target_namespace: entry.fetch('TargetNamespace', '')
+        }
+      end
+      semantic_call_source(:xml_schema, document, {
+        entries:, file_path: doc.fetch('FilePath', ''),
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        entries_marker: bson_marker(doc['SchemaContentss'], 2)
       })
     end
 
@@ -1179,6 +1218,69 @@ module Mxrb
         optional_by_contract: entity['IsOptionalByContract'] == true,
         object_element_name: entity.fetch('ObjectElementName', '')
       }
+    end
+
+    IMPORTED_WEB_SERVICE_FIELDS = %w[
+      $ID $Type Description Documentation Excluded ExportLevel Name UseMtom WsdlUrl
+    ].freeze
+    WSDL_DESCRIPTION_FIELDS = %w[
+      $ID $Type ImportsHaveLocations SchemaContentss Services TargetNamespace WsdlContentss
+    ].freeze
+    WSDL_ENTRY_FIELDS = %w[
+      $ID $Type Contents LocalizedContentsFormat LocalizedLocationFormat Location
+    ].freeze
+
+    def semantic_imported_web_service?(doc)
+      return false unless (doc.keys - IMPORTED_WEB_SERVICE_FIELDS).empty?
+
+      description = doc['Description']
+      description.is_a?(Hash) && description['$Type'] == 'WebServices$WsdlDescriptionImpl' &&
+        (description.keys - WSDL_DESCRIPTION_FIELDS).empty? &&
+        bson_items(description['Services']).empty? &&
+        bson_items(description['WsdlContentss']).all? { semantic_wsdl_entry?(_1) } &&
+        bson_items(description['SchemaContentss']).all? { semantic_wsdl_schema_entry?(_1) }
+    end
+
+    def semantic_wsdl_entry?(entry)
+      entry.is_a?(Hash) && entry['$Type'] == 'WebServices$WsdlEntryImpl' &&
+        (entry.keys - WSDL_ENTRY_FIELDS).empty?
+    end
+
+    def semantic_wsdl_schema_entry?(entry)
+      entry.is_a?(Hash) && entry['$Type'] == 'XmlSchemas$XmlSchemaContents' &&
+        (entry.keys - XML_SCHEMA_ENTRY_FIELDS).empty?
+    end
+
+    def imported_web_service_declaration(document)
+      doc = document.fetch(:doc)
+      description = doc.fetch('Description')
+      options = {
+        wsdl_entries: bson_items(description['WsdlContentss']).map { wsdl_entry_spec(_1) },
+        schema_entries: bson_items(description['SchemaContentss']).map { xml_schema_entry_spec(_1) },
+        target_namespace: description.fetch('TargetNamespace', ''),
+        wsdl_url: doc.fetch('WsdlUrl', ''), use_mtom: doc['UseMtom'] == true,
+        imports_have_locations: description['ImportsHaveLocations'] == true,
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        description_id: document_id(description),
+        wsdl_entries_marker: bson_marker(description['WsdlContentss'], 2),
+        schema_entries_marker: bson_marker(description['SchemaContentss'], 2),
+        services_marker: bson_marker(description['Services'], 2)
+      }
+      semantic_call_source(:imported_web_service, document, options)
+    end
+
+    def wsdl_entry_spec(entry)
+      {
+        id: document_id(entry), contents: entry.fetch('Contents', ''),
+        localized_contents_format: entry.fetch('LocalizedContentsFormat', ''),
+        localized_location_format: entry.fetch('LocalizedLocationFormat', ''),
+        location: entry.fetch('Location', '')
+      }
+    end
+
+    def xml_schema_entry_spec(entry)
+      wsdl_entry_spec(entry).merge(target_namespace: entry.fetch('TargetNamespace', ''))
     end
 
     PUBLISHED_ODATA_FIELDS = %w[

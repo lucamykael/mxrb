@@ -32,7 +32,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Message definitions and derived XML mappings | partial |
 | Published OData | partial |
 | App/Web Services | partial |
-| XSD/WSDL and other mappings | preserved_native |
+| XSD/WSDL and other mappings | partial |
 | Java custom actions and external connectors | runtime_only |
 | Workflows and task pages | preserved_native |
 | Settings, themes, design system and resources | partial |
@@ -47,13 +47,13 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,088 examples and measures 100.00% of
-lines (37,282/37,282) and 100.00% of branches (16,137/16,137). No executable
+The strict suite passed 2,091 examples and measures 100.00% of
+lines (37,338/37,338) and 100.00% of branches (16,147/16,147). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
-Code coverage alone does not complete functional coverage: XSD/WSDL,
-workflows, and task pages remain `preserved_native`; integrations and several other
+Code coverage alone does not complete functional coverage: workflows and task
+pages remain `preserved_native`; integrations and several other
 families remain `partial`. All 455 Forms properties are 455/455 in the
 independent `studio_validated` gate.
 
@@ -138,6 +138,22 @@ also exports recognized shapes through the semantic DSL.
 The family remains `partial`: embedded MSD contracts are preserved losslessly,
 while structured SOAP entities, child members, and future variants retain the
 fail-closed fallback until they receive a dedicated typed model.
+
+## XSD and associated mappings
+
+`xml_schema` declares XSD files with paths, contents, target namespaces, and
+localized formats. Import/export mappings can reference the schema and root
+element through the existing DSL. Two Ruby → MPR cycles retain IDs and semantic
+equivalence; official MxBuild 11.12.1 packages the complete fixture, including
+the import mapping, with zero errors.
+
+The implementation also covers `imported_web_service` with raw WSDL contents,
+embedded schemas, URL, target namespace, and import/MTOM flags. It uses the
+legacy physical names `ImportedServiceImpl`, `WsdlDescriptionImpl`,
+`WsdlEntryImpl`, `SchemaContentss`, and `XmlSchemaContents`, which differ from
+the public Model SDK names. The family stays `partial` while parsed WSDL
+services and operations, complex mapping trees, and other variants still use
+the lossless fallback.
 
 ## Published OData
 

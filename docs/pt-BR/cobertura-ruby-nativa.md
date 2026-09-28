@@ -42,7 +42,7 @@ Estados:
 | OData publicado | parcial | OData 4 read-only com entity types, IDs, atributos e entity sets; ampliar escrita, ações, enums e associações |
 | App Services e Web Services | parcial | serviços consumidos, ações/parâmetros e SOAP publicado com versões/operações escalares; contratos MSD e entidades estruturadas seguem lossless |
 | Message definitions e mappings XML derivados | parcial | entidades/atributos expostos, import/export mappings e ações XML; ampliar árvores, associações e variantes |
-| XSD/WSDL e outros import/export mappings | preserved_native | edição estrutural e referências estáveis |
+| XSD/WSDL e outros import/export mappings | parcial | XSD e WSDL consumido com conteúdos/namespace/localização e mappings referenciados; ampliar serviços WSDL interpretados e árvores complexas |
 | Java custom actions e connectors externos | runtime_only | adapter Ruby existe; próximo: documento/action nativo e package contract |
 | Workflows e task pages | preserved_native | metamodelo, outcomes, timers, boundaries e segurança |
 | Settings, runtime, theme/design system e resources | parcial | assets e tokens cobertos; ampliar settings nativos versionados |
@@ -64,13 +64,13 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.088 exemplos e mede 100,00% das
-linhas (37.282/37.282) e 100,00% dos branches (16.137/16.137). Nenhum código
+A suíte estrita passou com 2.091 exemplos e mede 100,00% das
+linhas (37.338/37.338) e 100,00% dos branches (16.147/16.147). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
-Cobertura de código 100/100 também não encerra cobertura funcional: XSD/WSDL,
-workflows e task pages continuam `preserved_native`; integrações e várias outras
+Cobertura de código 100/100 também não encerra cobertura funcional: workflows
+e task pages continuam `preserved_native`; integrações e várias outras
 famílias seguem `parcial`; as 455 propriedades de Forms estão em 455/455 no
 gate independente `studio_validated`.
 
@@ -149,6 +149,22 @@ corpus legado `ConnectorKitDemo` também exporta as formas reconhecidas pela DSL
 A família permanece `parcial`: o contrato MSD incorporado é preservado sem
 perdas, e entidades SOAP estruturadas, membros filhos e variantes futuras
 continuam no fallback fail-closed até receberem um modelo tipado próprio.
+
+## XSD e mappings associados
+
+`xml_schema` declara arquivos XSD com caminho, conteúdos, target namespace e
+formatos localizados. Import/export mappings já podem apontar para o schema e
+seu root element pela DSL existente. Dois ciclos Ruby → MPR preservam os IDs e
+a comparação semântica; o fixture completo, incluindo o import mapping, foi
+empacotado pelo MxBuild 11.12.1 com zero erros.
+
+A implementação também cobre `imported_web_service` com conteúdo WSDL bruto,
+schemas incorporados, URL, target namespace e flags de importação/MTOM. Ela usa
+os nomes físicos legados `ImportedServiceImpl`, `WsdlDescriptionImpl`,
+`WsdlEntryImpl`, `SchemaContentss` e `XmlSchemaContents`, diferentes dos nomes
+públicos do Model SDK. A família permanece `parcial` enquanto serviços e
+operações WSDL já interpretados, árvores complexas e demais variantes ainda
+dependerem do fallback lossless.
 
 ## OData publicado
 
