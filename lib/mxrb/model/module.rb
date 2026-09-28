@@ -22,6 +22,7 @@ module Mxrb
         'Rest$ConsumedRestService' => 'integrations',
         'Rest$ConsumedODataService' => 'integrations',
         'AppServices$ConsumedAppService' => 'integrations',
+        'WebServices$ImportedServiceImpl' => 'integrations',
         'ODataImport$ConsumedODataService' => 'integrations',
         'DatabaseConnector$DatabaseConnection' => 'persistence/external'
       }.freeze

@@ -115,6 +115,21 @@ module Mxrb
         )
       end
 
+      def xml_schema(name, entries:, file_path: '', documentation: '', excluded: false,
+                     export_level: 'Hidden', entries_marker: 2,
+                     unit_id: nil, container_id: nil)
+        doc = integration_identity(unit_id).merge(
+          'Documentation' => documentation.to_s,
+          'SchemaContentss' => integration_array(
+            Array(entries).map { xml_schema_entry_document(_1) }, entries_marker
+          ),
+          'Excluded' => excluded == true,
+          'ExportLevel' => export_level.to_s,
+          'FilePath' => file_path.to_s
+        )
+        semantic_native_document(name, 'XmlSchemas$XmlSchema', doc, unit_id:, container_id:)
+      end
+
       def import_mapping(name, json_structure:, elements:, documentation: '', excluded: false,
                          export_level: 'Hidden', parameter_type: :unknown, parameter_type_id: nil,
                          use_subtransactions: false, unit_id: nil, container_id: nil,
@@ -360,6 +375,38 @@ module Mxrb
         )
       end
 
+      def imported_web_service( # rubocop:disable Metrics/ParameterLists
+        name, wsdl_entries:, schema_entries: [], target_namespace: '', wsdl_url: '',
+        use_mtom: true, imports_have_locations: false,
+        documentation: '', excluded: false, export_level: 'Hidden',
+        description_id: nil, wsdl_entries_marker: 2, schema_entries_marker: 2,
+        services_marker: 2, unit_id: nil, container_id: nil
+      )
+        description = integration_identity(description_id).merge(
+          '$Type' => 'WebServices$WsdlDescriptionImpl',
+          'ImportsHaveLocations' => imports_have_locations == true,
+          'SchemaContentss' => integration_array(
+            Array(schema_entries).map { xml_schema_entry_document(_1) }, schema_entries_marker
+          ),
+          'Services' => integration_array([], services_marker),
+          'TargetNamespace' => target_namespace.to_s,
+          'WsdlContentss' => integration_array(
+            Array(wsdl_entries).map { wsdl_entry_document(_1) }, wsdl_entries_marker
+          )
+        )
+        doc = integration_identity(unit_id).merge(
+          'Description' => description,
+          'Documentation' => documentation.to_s,
+          'Excluded' => excluded == true,
+          'ExportLevel' => export_level.to_s,
+          'UseMtom' => use_mtom == true,
+          'WsdlUrl' => wsdl_url.to_s
+        )
+        semantic_native_document(
+          name, 'WebServices$ImportedServiceImpl', doc, unit_id:, container_id:
+        )
+      end
+
       def message_definition_collection(name, documentation: '', excluded: false,
                                         export_level: 'Hidden', definitions_marker: 2,
                                         unit_id: nil, container_id: nil, &block)
@@ -378,6 +425,29 @@ module Mxrb
       end
 
       private
+
+      def xml_schema_entry_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'XmlSchemas$XmlSchemaContents',
+          'Contents' => spec.fetch(:contents).to_s,
+          'LocalizedContentsFormat' => spec.fetch(:localized_contents_format, '').to_s,
+          'LocalizedLocationFormat' => spec.fetch(:localized_location_format, '').to_s,
+          'Location' => spec.fetch(:location, '').to_s,
+          'TargetNamespace' => spec.fetch(:target_namespace, '').to_s
+        )
+      end
+
+      def wsdl_entry_document(source)
+        spec = integration_spec(source)
+        integration_identity(spec[:id]).merge(
+          '$Type' => 'WebServices$WsdlEntryImpl',
+          'Contents' => spec.fetch(:contents).to_s,
+          'LocalizedContentsFormat' => spec.fetch(:localized_contents_format, '').to_s,
+          'LocalizedLocationFormat' => spec.fetch(:localized_location_format, '').to_s,
+          'Location' => spec.fetch(:location, '').to_s
+        )
+      end
 
       def consumed_app_service_action_document(source)
         spec = integration_spec(source)
