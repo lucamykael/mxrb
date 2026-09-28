@@ -147,6 +147,12 @@ MxBuild 11.12.1:
 - current regression MDA: 11,941,148 bytes, SHA-256
   `fc4fb7a2ea2b4ad7cdb0fcd3296a5dbb5c4d148371aad997ab0032d2c5c0cf33`.
 
+The `spec/fixtures/navigation_profiles/project.rb` witness covers translated
+login titles, home/not-found targets, role homes, and partial-sync behavior.
+`script/frontend_acceptance` accepted both source and rebuilt projects with
+MxBuild 11.12.1: zero errors, no structural differences, and
+`frontend_ready: true`.
+
 This validation exposed and drove the fixes listed above. The six-project MXRB
 matrix was rerun from fresh targets after the fixes and all six v1/v2
 round-trips passed again.

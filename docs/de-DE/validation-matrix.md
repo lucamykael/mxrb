@@ -81,9 +81,9 @@ Gate.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.078 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.004/37.004);
-- 100,00 % Branch-Abdeckung (16.030/16.030);
+- 2.080 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.076/37.076);
+- 100,00 % Branch-Abdeckung (16.078/16.078);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
@@ -146,6 +146,13 @@ Snippets und Building Blocks aus der typisierten Forms-DSL. Es verlangt zwei
 Ruby-→-MPR-→-Ruby-Zyklen mit stabiler Semantik und stabilen nativen IDs. Das
 offizielle MxBuild 11.12.1 paketierte die finale MPR mit Exit-Status 0 und ohne
 Probleme.
+
+Das Fixture `spec/fixtures/navigation_profiles/project.rb` zertifiziert
+Navigationsprofile mit übersetztem Login-Titel, Home-/Not-found-Zielen,
+rollenbezogenen Startseiten und Partial-Sync-Verhalten.
+`script/frontend_acceptance` akzeptierte Quell- und Neuaufbauprojekt mit
+MxBuild 11.12.1: keine Fehler, keine strukturellen Unterschiede und
+`frontend_ready: true`.
 
 `script/certify_widgets --browser-report REPORT.json App.mpr` ist das
 Fail-Closed-Gate für tatsächlich verwendete Widgets des nativen Web-Compilers

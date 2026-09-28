@@ -2236,10 +2236,23 @@ module Mxrb
       args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
       args << "home_microflow: #{ruby(profile[:home_microflow])}" if profile[:home_microflow]
       args << "sign_in_page: #{ruby(profile[:sign_in_page])}" if profile[:sign_in_page]
+      args << "sign_in_title: #{ruby(profile[:sign_in_title])}" unless
+        profile.fetch(:sign_in_title, {}).empty?
+      args << "sign_in_location: #{ruby(profile[:sign_in_location])}" if profile[:sign_in_location]
+      args << "not_found_page: #{ruby(profile[:not_found_page])}" if profile[:not_found_page]
+      if profile[:not_found_microflow]
+        args << "not_found_microflow: #{ruby(profile[:not_found_microflow])}"
+      end
       args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
       role_homes = profile.fetch(:role_homes, {})
       args << "role_homes: #{ruby(role_homes)}" if role_homes.is_a?(Hash) && !role_homes.empty?
       args << "offline: true" if profile[:offline]
+      args << "enabled: #{ruby(profile[:enabled])}" unless profile[:enabled].nil?
+      args << "offline_enabled: #{ruby(profile[:offline_enabled])}" unless
+        profile[:offline_enabled].nil?
+      unless profile[:throw_partial_sync_error].nil?
+        args << "throw_partial_sync_error: #{ruby(profile[:throw_partial_sync_error])}"
+      end
       args << "kind: #{ruby(profile[:kind])}" unless profile[:kind].to_s.empty?
       args << "app_icon: #{ruby(profile[:app_icon])}" if profile[:app_icon]
       body = navigation_profile_body(profile, role_homes)

@@ -7,13 +7,22 @@ microflow, login, título traduzido, ícone, home por papel e menus recursivos.
 
 ```ruby
 navigation do
-  profile :Responsive, home_page: "Sales.Home", app_title: "Loja" do
+  profile :Responsive, home_page: "Sales.Home", app_title: "Loja",
+                       sign_in_page: "Sales.Login",
+                       sign_in_title: { pt_BR: "Entrar" },
+                       not_found_page: "Sales.NotFound",
+                       throw_partial_sync_error: false do
     title :en_US, "Shop"
     home_for :Administrator, microflow: "Sales.OpenDashboard"
     item "Pedidos", page: "Sales.Order_Overview", icon: "shopping_cart"
   end
 end
 ```
+
+Perfis legados também expõem `enabled` e `offline_enabled`. Ao alterar campos
+suportados, o writer mantém os IDs nativos do perfil e das estruturas internas;
+configurações PWA e offline ainda não representadas permanecem opacas e
+inalteradas.
 
 Ícones de navegação aceitos: `home`, `pets`/`heart`, `calendar`/
 `calendar_today`, `user`, `search`, `settings`, `trash`, `file`, `time` e

@@ -60,6 +60,13 @@ Identitäten. Unbekannte Aktionen oder Icons fallen auf verlustfreies
 durchläuft `script/frontend_acceptance` für Quell- und Neuaufbau-MPR mit dem
 offiziellen MxBuild 11.12.1 ohne Fehler und ohne strukturelle Unterschiede.
 
+Navigationsprofile stellen moderne und ältere Anwendungstitel, Aktivierungs-
+und Offline-Status, rollenbezogene Startseiten, Login-Titel und -Position,
+Not-found-Ziele sowie das Partial-Sync-Verhalten bereit. Änderungen behalten
+native und verschachtelte Identitäten bei. Nicht dargestellte PWA- und
+Offline-Konfigurationen bleiben opak und unverändert; Navigation bleibt daher
+`partial`.
+
 ## Eigenschaften der Core-Forms
 
 `script/forms_core_project_gate` erzeugt eine Mendix-11.12.1-MPR mit je einem

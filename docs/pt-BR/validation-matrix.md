@@ -117,6 +117,12 @@ snippets e building blocks criados pela DSL Forms tipada. Ele exige dois
 ciclos Ruby → MPR → Ruby com semântica e IDs nativos estáveis. O MxBuild
 11.12.1 oficial empacotou o MPR final com `exit_status` 0 e zero problemas.
 
+O fixture `spec/fixtures/navigation_profiles/project.rb` certifica perfis de
+navegação com login traduzido, home/not-found, home por papel e configuração
+de partial sync. `script/frontend_acceptance` validou original e reconstruído
+com o MxBuild 11.12.1: zero erros, sem diferenças estruturais e
+`frontend_ready: true`.
+
 `script/certify_widgets --browser-report REPORT.json App.mpr` é o gate para
 widgets do compilador web nativo e Marketplace realmente usados. Ele exige,
 em conjunto:
@@ -144,9 +150,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.078 exemplos, zero falhas;
-- 100,00% das linhas: 37.004/37.004;
-- 100,00% dos branches: 16.030/16.030;
+- 2.080 exemplos, zero falhas;
+- 100,00% das linhas: 37.076/37.076;
+- 100,00% dos branches: 16.078/16.078;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

@@ -1515,10 +1515,15 @@ module Mxrb
 
       def profile(name, home_page: nil, home_microflow: nil, sign_in_page: nil,
                   menu: nil, role_homes: {}, offline: false, kind: nil,
-                  app_title: nil, app_icon: nil, &block)
+                  app_title: nil, app_icon: nil, enabled: nil, offline_enabled: nil,
+                  throw_partial_sync_error: nil, sign_in_title: nil,
+                  sign_in_location: nil, not_found_page: nil,
+                  not_found_microflow: nil, &block)
         profile = NavigationProfileBuilder.new(
           name, home_page:, home_microflow:, sign_in_page:, menu:, role_homes:,
-                offline:, kind:, app_title:, app_icon:
+                offline:, kind:, app_title:, app_icon:, enabled:, offline_enabled:,
+                throw_partial_sync_error:, sign_in_title:, sign_in_location:,
+                not_found_page:, not_found_microflow:
         )
         profile.instance_eval(&block) if block
         @profiles << profile.to_h
@@ -1540,6 +1545,13 @@ module Mxrb
         @kind = optional_string(options, :kind)
         @app_icon = optional_string(options, :app_icon)
         @app_title = normalize_translations(options[:app_title])
+        @enabled = optional_boolean(options, :enabled)
+        @offline_enabled = optional_boolean(options, :offline_enabled)
+        @throw_partial_sync_error = optional_boolean(options, :throw_partial_sync_error)
+        @sign_in_title = normalize_translations(options[:sign_in_title])
+        @sign_in_location = optional_string(options, :sign_in_location)
+        @not_found_page = optional_string(options, :not_found_page)
+        @not_found_microflow = optional_string(options, :not_found_microflow)
         @role_homes = options.fetch(:role_homes, {}).to_h.transform_keys(&:to_s)
                              .transform_values(&:to_s)
         @role_home_details = []
@@ -1548,6 +1560,10 @@ module Mxrb
 
       def title(locale, text)
         @app_title[locale.to_s] = text.to_s
+      end
+
+      def login_title(locale, text)
+        @sign_in_title[locale.to_s] = text.to_s
       end
 
       def home_for(role, page: nil, microflow: nil)
@@ -1579,7 +1595,12 @@ module Mxrb
           name: @name, home_page: @home_page, home_microflow: @home_microflow,
           sign_in_page: @sign_in_page, menu: @menu, role_homes: @role_homes,
           role_home_details: @role_home_details, offline: @offline, kind: @kind,
-          app_title: @app_title, app_icon: @app_icon, items: @items
+          app_title: @app_title, app_icon: @app_icon, enabled: @enabled,
+          offline_enabled: @offline_enabled,
+          throw_partial_sync_error: @throw_partial_sync_error,
+          sign_in_title: @sign_in_title, sign_in_location: @sign_in_location,
+          not_found_page: @not_found_page, not_found_microflow: @not_found_microflow,
+          items: @items
         }
       end
 
@@ -1587,6 +1608,11 @@ module Mxrb
 
       def optional_string(options, key)
         options[key]&.to_s
+      end
+
+      def optional_boolean(options, key)
+        value = options[key]
+        value == true unless value.nil?
       end
 
       def normalize_translations(value)

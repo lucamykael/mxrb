@@ -337,7 +337,7 @@ RSpec.describe 'native navigation and design systems' do
     )
     expect(legacy.profiles.first.name).to eq('Desktop')
     expect(legacy.profiles.first.home_page).to be_nil
-    expect(legacy.profiles.first.app_title).to be_empty
+    expect(legacy.profiles.first.app_title).to eq('en_US' => 'Legacy')
     profile = Mxrb::Model::NavigationProfile.new(
       'Name' => 'Bare',
       'MenuItemCollection' => {
@@ -387,8 +387,12 @@ RSpec.describe 'native navigation and design systems' do
     navigation = Mxrb::Dsl::NavigationBuilder.new
     navigation.profile(
       :Native, home_microflow: :App_Dashboard, kind: :Native,
-               app_title: { pt_BR: 'Aplicativo' }
+               app_title: { pt_BR: 'Aplicativo' }, enabled: false,
+               offline_enabled: true, throw_partial_sync_error: false,
+               sign_in_title: { pt_BR: 'Entrar' }, sign_in_location: :Popup,
+               not_found_page: :'App.NotFound', not_found_microflow: :'App.MissingFlow'
     ) do
+      login_title :en_US, 'Sign in'
       home_for :User, page: :App_Home
       item 'Parent' do
         item 'Nested' do
@@ -400,7 +404,11 @@ RSpec.describe 'native navigation and design systems' do
     profile = navigation.to_h.fetch(:profiles).first
     expect(profile).to include(
       home_page: nil, home_microflow: 'App_Dashboard', kind: 'Native',
-      app_title: { 'pt_BR' => 'Aplicativo' }
+      app_title: { 'pt_BR' => 'Aplicativo' }, enabled: false,
+      offline_enabled: true, throw_partial_sync_error: false,
+      sign_in_title: { 'pt_BR' => 'Entrar', 'en_US' => 'Sign in' },
+      sign_in_location: 'Popup', not_found_page: 'App.NotFound',
+      not_found_microflow: 'App.MissingFlow'
     )
 
     design = Mxrb::Dsl::DesignSystemBuilder.new
@@ -411,6 +419,12 @@ RSpec.describe 'native navigation and design systems' do
     expect(definition.dig(:themes, 1, :tokens, 0, :value)).to be_nil
 
     exporter = Mxrb::Exporter.new('unused.mpr', Dir.mktmpdir)
+    complete_source = exporter.send(:navigation_source, navigation.to_h)
+    expect(complete_source).to include(
+      'sign_in_title:', 'sign_in_location: "Popup"',
+      'not_found_page: "App.NotFound"', 'not_found_microflow: "App.MissingFlow"',
+      'enabled: false', 'offline_enabled: true', 'throw_partial_sync_error: false'
+    )
     source = exporter.send(
       :navigation_source,
       profiles: [{
