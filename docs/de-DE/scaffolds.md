@@ -10,7 +10,8 @@ Verfügbar sind Projekt/Modul (`init`, `module new`), Domäne (`entity`,
 `enumeration`, `constant`), Anwendung (`use-case`, `validation`, `query`,
 `repository`, `scheduled-event`), Präsentation (`presentation init`, `page`,
 `nanoflow`), Sicherheit, Infrastruktur (`integration`, `published-rest`,
-`consumed-rest`, `java-action`), Prüfung (`functional-test`, `evaluation`),
+`consumed-rest`, `java-action`, `javascript-action`), Prüfung
+(`functional-test`, `evaluation`),
 Design und GitHub-CI. `mxrb page new Modul.Seite` erzeugt weiterhin eine
 minimale Seite. Mit `--chain` entsteht ein ausführbarer vertikaler Schnitt mit
 Beispielentität, Data-Source-Microflow, editierbarer Seite, Aktionen und
@@ -78,7 +79,8 @@ Vorlagen still zu importieren. Siehe die [offizielle Seitendokumentation](https:
 Artefaktbefehle verwenden `new Modul.Name`; Projektbefehle verwenden
 `design init` und `ci init github`. Alle unterstützten Entitätstypen und
 Assoziationen stehen in der [Entitäten-DSL](entity-dsl.md). Published REST
-erzeugt weiterhin einen editierbaren Ruby-Handler. Java Action erzeugt das
-typisierte native Action-Dokument und die zugehörige Klasse
-`javasource/<modul>/actions/<Action>.java` einschließlich der von Studio Pro
-beibehaltenen USER-/EXTRA-Bereiche.
+erzeugt weiterhin einen editierbaren Ruby-Handler. Java und JavaScript Actions
+erzeugen typisierte native Action-Dokumente und die Implementierung unter
+`javasource/<modul>/actions/<Action>.java` beziehungsweise
+`javascriptsource/<modul>/actions/<Action>.js` einschließlich der von Studio
+Pro beibehaltenen USER-/EXTRA-Bereiche.

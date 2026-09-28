@@ -35,7 +35,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Published OData | partial |
 | App/Web Services | partial |
 | XSD/WSDL und weitere Mappings | partial |
-| Java Custom Actions | native |
+| Java und JavaScript Custom Actions | native |
 | Externe Connectors | partial |
 | Workflows und Task Pages | partial |
 | Settings, Themes, Design System und Ressourcen | partial |
@@ -163,13 +163,19 @@ Familie bleibt `partial`, solange bereits geparste WSDL-Services und
 -Operationen, komplexe Mapping-Bäume und weitere Varianten noch den
 verlustfreien Fallback verwenden.
 
-## Java Custom Actions und externe Connectors
+## Java und JavaScript Custom Actions und externe Connectors
 
 `java_action` materialisiert die native Signatur, Parameter, generische Typen,
 Rückgabetyp und visuelle Metadaten. Das Scaffold `mxrb java-action new` erzeugt
 zusätzlich die `UserAction`-Klasse unter `javasource/<modul>/actions`; Exporte
 kopieren die Quellen und zwei Ruby-→-MPR-Zyklen behalten Inhalt, Semantik und
 IDs. Das vollständige Fixture wird mit MxBuild 11.12.1 kompiliert und paketiert.
+
+`javascript_action` stellt denselben clientseitigen Vertrag mit Plattform,
+Parametern und Rückgabetyp bereit. `mxrb javascript-action new` erzeugt die
+Quelle unter `javascriptsource/<modul>/actions`; zwei Zyklen erhalten Datei und
+Unit, und auch das zertifizierte Web-Paket wird von MxBuild 11.12.1 erfolgreich
+paketiert.
 
 Marketplace-Connectors bleiben externe Abhängigkeiten: MXRB prüft verifizierte
 GUIDs, öffentliche Oberfläche und Provenienz und installiert nur über einen

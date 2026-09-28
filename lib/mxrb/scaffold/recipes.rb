@@ -12,7 +12,7 @@ module Mxrb
       }.freeze
       INFRASTRUCTURE = {
         integration: 'integrations', published_rest: 'endpoints',
-        consumed_rest: 'integrations', java_action: 'actions'
+        consumed_rest: 'integrations', java_action: 'actions', javascript_action: 'actions'
       }.freeze
 
       private
@@ -119,12 +119,31 @@ module Mxrb
         create_java_action_source(module_name, artifact_name)
       end
 
+      def scaffold_javascript_action
+        module_name, artifact_name = qualified_name
+        ensure_infrastructure(module_name)
+        create_connected_module_file(
+          module_name, ['infrastructure', INFRASTRUCTURE.fetch(:javascript_action)],
+          artifact_name, :javascript_action
+        )
+        create_javascript_action_source(module_name, artifact_name)
+      end
+
       def create_java_action_source(module_name, artifact_name)
         @transaction.create(
           project_path(
             'javasource', module_name.downcase, 'actions', "#{artifact_name}.java"
           ),
           Templates.render(:java_action_source, module_name:, name: artifact_name)
+        )
+      end
+
+      def create_javascript_action_source(module_name, artifact_name)
+        @transaction.create(
+          project_path(
+            'javascriptsource', module_name.downcase, 'actions', "#{artifact_name}.js"
+          ),
+          Templates.render(:javascript_action_source, module_name:, name: artifact_name)
         )
       end
 

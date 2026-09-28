@@ -487,6 +487,7 @@ RSpec.describe Mxrb::Scaffold::Generator do
       scaffold(root, :published_rest, 'ScaffoldApp.AnimalsApi')
       scaffold(root, :consumed_rest, 'ScaffoldApp.ExternalPets')
       scaffold(root, :java_action, 'ScaffoldApp.ParseDocument')
+      scaffold(root, :javascript_action, 'ScaffoldApp.NotifyClient')
 
       infrastructure = File.join(root, 'modules/ScaffoldApp/infrastructure')
       expect(File.read(File.join(infrastructure, 'endpoints/animals_api.rb')))
@@ -497,6 +498,16 @@ RSpec.describe Mxrb::Scaffold::Generator do
       expect(File.read(java_source)).to include(
         'package scaffoldapp.actions;', 'extends UserAction<java.lang.Void>',
         '// BEGIN USER CODE', '// BEGIN EXTRA CODE'
+      )
+      javascript_declaration = File.join(infrastructure, 'actions/notify_client.rb')
+      expect(File.read(javascript_declaration)).to include(
+        'javascript_action :NotifyClient', 'platform: :Web'
+      )
+      javascript_source = File.join(
+        root, 'javascriptsource/scaffoldapp/actions/NotifyClient.js'
+      )
+      expect(File.read(javascript_source)).to include(
+        'export async function NotifyClient()', '// BEGIN USER CODE', '// BEGIN EXTRA CODE'
       )
 
       load File.join(root, 'project.rb')
@@ -514,6 +525,11 @@ RSpec.describe Mxrb::Scaffold::Generator do
           document if document['$Type'] == 'JavaActions$JavaAction'
         end
         expect(java_actions.map { _1['Name'] }).to eq(['ParseDocument'])
+        javascript_actions = project.all_units.filter_map do |unit|
+          document = project.parse_bson(unit)
+          document if document['$Type'] == 'JavaScriptActions$JavaScriptAction'
+        end
+        expect(javascript_actions.map { _1['Name'] }).to eq(['NotifyClient'])
       end
     end
   end

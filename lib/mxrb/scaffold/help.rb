@@ -34,6 +34,9 @@ module Mxrb
         'published-rest' => ['new Module.Handler', 'Create published REST handler flow', 'infrastructure/endpoints'],
         'consumed-rest' => ['new Module.Client', 'Create consumed REST adapter flow', 'infrastructure/integrations'],
         'java-action' => ['new Module.Adapter', 'Create Java Action adapter flow', 'infrastructure/actions'],
+        'javascript-action' => [
+          'new Module.Adapter', 'Create JavaScript Action adapter', 'infrastructure/actions'
+        ],
         'design' => ['init', 'Initialize the project design system', 'app/design_system'],
         'ci' => ['init github', 'Create a GitHub Actions workflow', '.github/workflows']
       }.freeze

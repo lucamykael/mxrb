@@ -10,7 +10,8 @@ The available families are project/module (`init`, `module new`), domain
 (`entity`, `enumeration`, `constant`), application (`use-case`, `validation`,
 `query`, `repository`, `scheduled-event`), presentation (`presentation init`,
 `page`, `nanoflow`), security, infrastructure (`integration`, `published-rest`,
-`consumed-rest`, `java-action`), verification (`functional-test`, `evaluation`),
+`consumed-rest`, `java-action`, `javascript-action`), verification
+(`functional-test`, `evaluation`),
 design, and GitHub CI. `mxrb page new Module.Page` keeps creating a minimal
 page. Adding `--chain` creates an executable vertical slice with a sample
 entity, data-source microflow, editable page, actions, and a Responsive
@@ -75,6 +76,7 @@ imported. See the [official pages documentation](https://docs.mendix.com/refguid
 Artifact commands use `new Module.Name`; project commands use `design init` and
 `ci init github`. See the [entity DSL](entity-dsl.md) for all supported entity
 types and associations. Published REST still creates an editable Ruby handler.
-Java Action creates the typed native action document and its
-`javasource/<module>/actions/<Action>.java` class, including the USER/EXTRA
-sections retained by Studio Pro.
+Java and JavaScript Actions create typed native action documents and their
+`javasource/<module>/actions/<Action>.java` or
+`javascriptsource/<module>/actions/<Action>.js` implementations, including the
+USER/EXTRA sections retained by Studio Pro.

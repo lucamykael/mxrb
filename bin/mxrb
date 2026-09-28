@@ -2181,6 +2181,7 @@ else
       published-rest new Module.Name      Scaffold a published REST handler
       consumed-rest new Module.Name       Scaffold a consumed REST adapter
       java-action new Module.Name         Scaffold a Java Action adapter
+      javascript-action new Module.Name  Scaffold a JavaScript Action adapter
       design init                         Initialize design-system Ruby
       ci init github                      Scaffold GitHub Actions
       test       <file.mpr> <test.rb>      Run isolated functional runtime tests
