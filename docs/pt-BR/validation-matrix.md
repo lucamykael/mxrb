@@ -112,6 +112,12 @@ dois ciclos regulares mantiveram comparação idêntica sem fallback opaco; os
 project roles do fixture referenciam os papéis certificados e o MxBuild
 11.12.1 terminou com **BUILD SUCCEEDED**.
 
+O gate de registros de project security cobre todas as propriedades de user
+roles, demo users e política de senha, incluindo IDs e GUIDs. No Ruby-app a
+senha é redigida do fonte público e restaurada pelo baseline privado. Dois
+ciclos regulares permaneceram idênticos, sem fallback opaco, e o MxBuild
+11.12.1 terminou com **BUILD SUCCEEDED**.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -207,7 +213,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.104 exemplos, zero falhas;
+- 2.105 exemplos, zero falhas;
 - 100,00% das linhas: 37.519/37.519;
 - 100,00% dos branches: 16.226/16.226;
 - avaliação Sudoku: 7/7 checks;

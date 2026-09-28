@@ -30,7 +30,8 @@ Estados:
 | OQL view | parcial | autoria incremental e reconciliação privada; ampliar fontes e variantes por versão |
 | Lifecycle de entidade | native | before/after commit/delete, microflow, flags e IDs estáveis |
 | Module roles | native | nome, descrição, criação/alteração/remoção e IDs estáveis |
-| Project security | parcial | user roles, demo users e política de senha; ampliar settings e access containers |
+| Project roles, demo users e política de senha | native | propriedades, relações, IDs/GUIDs estáveis e segredos privados |
+| Settings globais e access containers de project security | parcial | ampliar opções do projeto e regras de FileDocument/Image |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
@@ -67,7 +68,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.104 exemplos e mede 100,00% das
+A suíte estrita passou com 2.105 exemplos e mede 100,00% das
 linhas (37.519/37.519) e 100,00% dos branches (16.226/16.226). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -148,6 +149,21 @@ fixture referencia os papéis por project roles reais e foi empacotado com
 `BUILD SUCCEEDED` no MxBuild 11.12.1. `Project security` permanece separado e
 `parcial` enquanto seus settings globais e access containers não fecharem o
 mesmo contrato.
+
+## Project roles, demo users e política de senha
+
+`user_role` cobre nome, descrição, `CheckSecurity`, GUID, module roles,
+manageable roles, `ManageAllRoles` e `ManageUsersWithoutRoles`. Demo users
+cobrem nome, entidade, project roles e identidade. A política de senha cobre
+comprimento mínimo, dígito, caixa mista e símbolo, com ID estável.
+
+Ruby-app redige a senha do demo user no fonte público (`password: nil`) e a
+restaura pelo baseline privado; o valor não vaza durante a exportação. O gate
+faz Ruby-app e dois ciclos regulares, exige comparação idêntica, IDs/GUIDs
+estáveis e ausência de fallback opaco. O fixture completo foi empacotado pelo
+MxBuild 11.12.1 com `BUILD SUCCEEDED`. Settings globais e os access containers
+de `System.FileDocument`/`System.Image` permanecem em um bloco `parcial`
+separado.
 
 ## Documentos reutilizáveis de apresentação
 

@@ -23,7 +23,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | OQL views | partial |
 | Entity lifecycle | native |
 | Module roles | native |
-| Project security | partial |
+| Project roles, demo users, and password policy | native |
+| Global project-security settings and access containers | partial |
 | Microflows, nanoflows and core pages | partial |
 | Layouts, page templates, snippets, and building blocks | native |
 | Menus | partial |
@@ -51,7 +52,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,104 examples and measures 100.00% of
+The strict suite passed 2,105 examples and measures 100.00% of
 lines (37,519/37,519) and 100.00% of branches (16,226/16,226). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -132,6 +133,22 @@ project roles reference the module roles, and official MxBuild 11.12.1 packages
 the fixture with `BUILD SUCCEEDED`. `Project security` remains separately
 `partial` until its global settings and access containers meet the same
 contract.
+
+## Project roles, demo users, and password policy
+
+`user_role` covers name, description, `CheckSecurity`, GUID, module roles,
+manageable roles, `ManageAllRoles`, and `ManageUsersWithoutRoles`. Demo users
+cover name, entity, project-role assignments, and identity. Password policy
+covers minimum length, digit, mixed case, and symbol requirements with a
+stable ID.
+
+Ruby-app redacts demo-user passwords from public source (`password: nil`) and
+restores them from the private baseline, so the value does not leak during
+export. The gate performs Ruby-app and two regular cycles, requires identical
+comparison, stable IDs/GUIDs, and no opaque fallback. Official MxBuild 11.12.1
+packages the complete fixture with `BUILD SUCCEEDED`. Global settings and the
+`System.FileDocument`/`System.Image` access containers remain in a separate
+`partial` block.
 
 ## Workflows and task pages
 

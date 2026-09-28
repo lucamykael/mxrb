@@ -111,10 +111,16 @@ Ruby-App und zwei reguläre Zyklen blieben ohne opaken Fallback identisch; die
 Project Roles des Fixtures referenzieren die zertifizierten Rollen, und
 MxBuild 11.12.1 endete mit **BUILD SUCCEEDED**.
 
+Das Gate für Project-Security-Datensätze deckt alle Eigenschaften von User
+Roles, Demo Users und Passwortrichtlinie einschließlich IDs und GUIDs ab. Im
+Ruby-App-Export wird das Passwort aus dem öffentlichen Quelltext entfernt und
+aus dem privaten Baseline wiederhergestellt. Zwei reguläre Zyklen blieben ohne
+opaken Fallback identisch; MxBuild 11.12.1 endete mit **BUILD SUCCEEDED**.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.104 Beispiele, keine Fehler;
+- 2.105 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.519/37.519);
 - 100,00 % Branch-Abdeckung (16.226/16.226);
 - Sudoku-Modellbewertung: 7/7;
