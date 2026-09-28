@@ -177,13 +177,13 @@ module Mxrb
 
       def self.parse_lifecycle(doc)
         moment = doc["Moment"].to_s.downcase
-        event = doc["Event"].to_s.downcase
+        event = (doc["Type"] || doc["Event"]).to_s.downcase
         {
           id: IO::BsonCodec.extract_id(doc["$ID"]),
           event: [moment, event].reject(&:empty?).join("_").to_sym,
           handler: doc["Microflow"].to_s,
           pass_event_object: doc.fetch("PassEventObject", true) == true,
-          raise_error_on_false: doc["RaiseErrorOnFalse"] == true
+          raise_error_on_false: doc.fetch("RaiseErrorOnFalse", true) == true
         }.compact
       end
 
@@ -218,7 +218,7 @@ module Mxrb
         {
           "$ID" => callback[:id].to_s.empty? ? SecureRandom.uuid : callback[:id].to_s,
           "$Type" => "DomainModels$EventHandler",
-          "Event" => event.to_s.capitalize,
+          "Type" => event.to_s.capitalize,
           "Moment" => moment.to_s.capitalize,
           "Microflow" => callback.fetch(:handler).to_s,
           "PassEventObject" => callback.fetch(:pass_event_object, true) == true,

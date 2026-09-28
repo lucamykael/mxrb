@@ -100,6 +100,13 @@ SUCCEEDED**. Os valores armazenados `Association`, `Owner` e `ChangedBy` são
 rejeitados para índices porque o próprio `EntityIndex` oficial não consegue
 materializá-los.
 
+O gate de lifecycle de entidade cobre os quatro pares before/after e
+commit/delete, referência de microflow, passagem do objeto, propagação de
+retorno falso e IDs. Ele também verifica leitura e atualização do campo legado
+`Event`, enquanto novas units usam o nome físico correto `Type`. Ruby-app e
+dois ciclos regulares permaneceram idênticos, e o MxBuild 11.12.1 empacotou o
+fixture completo sem erros.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -195,9 +202,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.102 exemplos, zero falhas;
-- 100,00% das linhas: 37.514/37.514;
-- 100,00% dos branches: 16.224/16.224;
+- 2.103 exemplos, zero falhas;
+- 100,00% das linhas: 37.519/37.519;
+- 100,00% dos branches: 16.226/16.226;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

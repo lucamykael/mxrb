@@ -93,7 +93,7 @@ RSpec.describe 'Pure-Ruby runtime layers' do
         )
         event = Mxrb::IO::BsonCodec.parse_array(entity.to_bson.fetch('eventHandlers'))[:items].first
         expect(event).to include(
-          'Event' => 'Commit', 'Moment' => 'Before', 'Microflow' => 'ValidateOrder',
+          'Type' => 'Commit', 'Moment' => 'Before', 'Microflow' => 'ValidateOrder',
           'PassEventObject' => true, 'RaiseErrorOnFalse' => true
         )
         interpreter = Mxrb::Runtime::Native::Interpreter.new(project)

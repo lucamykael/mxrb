@@ -131,8 +131,8 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
       }],
       'EventHandlers' => [
         3,
-        { 'Moment' => 'Before', 'Event' => 'Commit', 'Microflow' => 'Sales.Validate' },
-        { 'Moment' => 'After', 'Event' => 'Delete', 'Microflow' => 'Sales.Audit',
+        { 'Moment' => 'Before', 'Type' => 'Commit', 'Microflow' => 'Sales.Validate' },
+        { 'Moment' => 'After', 'Type' => 'Delete', 'Microflow' => 'Sales.Audit',
           'PassEventObject' => false, 'RaiseErrorOnFalse' => true }
       ]
     }
@@ -156,7 +156,7 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
     )
     expect(entity.lifecycle).to eq([
                                      { event: :before_commit, handler: 'Sales.Validate', pass_event_object: true,
-                                       raise_error_on_false: false },
+                                       raise_error_on_false: true },
                                      { event: :after_delete, handler: 'Sales.Audit', pass_event_object: false,
                                        raise_error_on_false: true }
                                    ])
@@ -166,11 +166,14 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
     entity = described_class.from_bson(entity_document, nil, nil)
     events = Mxrb::IO::BsonCodec.parse_array(entity.to_bson['eventHandlers'])[:items]
     expect(events).to contain_exactly(
-      include('Moment' => 'Before', 'Event' => 'Commit', 'Microflow' => 'Sales.Validate',
-              'PassEventObject' => true, 'RaiseErrorOnFalse' => false),
-      include('Moment' => 'After', 'Event' => 'Delete', 'Microflow' => 'Sales.Audit',
+      include('Moment' => 'Before', 'Type' => 'Commit', 'Microflow' => 'Sales.Validate',
+              'PassEventObject' => true, 'RaiseErrorOnFalse' => true),
+      include('Moment' => 'After', 'Type' => 'Delete', 'Microflow' => 'Sales.Audit',
               'PassEventObject' => false, 'RaiseErrorOnFalse' => true)
     )
+    expect(described_class.send(:parse_lifecycle, {
+      'Moment' => 'After', 'Event' => 'Delete', 'Microflow' => 'Sales.Legacy'
+    })).to include(event: :after_delete, handler: 'Sales.Legacy')
   end
 
   it 'covers OQL source variants, system flag spellings, and serialization defaults' do

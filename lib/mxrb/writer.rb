@@ -1209,7 +1209,8 @@ module Mxrb
     end
 
     def lifecycle_signature(handler)
-      "#{handler['Moment'].to_s.downcase}_#{handler['Event'].to_s.downcase}".to_sym
+      type = handler['Type'] || handler['Event']
+      "#{handler['Moment'].to_s.downcase}_#{type.to_s.downcase}".to_sym
     end
 
     def ruby_lifecycle_doc(declaration, current, entity_name)
@@ -1220,13 +1221,17 @@ module Mxrb
              ruby_stable_uuid('lifecycle', entity_name, declaration.fetch(:event))
       end
       moment, event = declaration.fetch(:event).to_s.split('_', 2)
-      previous.merge(
+      type_key = native_existing_key(previous, "Type", "Event") || "Type"
+      document = previous.merge(
         "$ID" => id, "$Type" => "DomainModels$EventHandler",
-        "Event" => event.capitalize, "Moment" => moment.capitalize,
+        "Moment" => moment.capitalize,
         "Microflow" => declaration.fetch(:handler).to_s,
         "PassEventObject" => declaration.fetch(:pass_event_object, true) == true,
         "RaiseErrorOnFalse" => declaration.fetch(:raise_error_on_false, moment == 'before') == true
       )
+      document[type_key] = event.capitalize
+      document.delete(type_key == "Type" ? "Event" : "Type")
+      document
     end
 
     def ruby_validation_rule_docs(declarations, previous, module_name, entity_name, attributes)
@@ -4352,7 +4357,7 @@ module Mxrb
       {
         "$ID" => callback.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : callback.fetch(:id).to_s,
         "$Type" => "DomainModels$EventHandler",
-        "Event" => event == "before" || event == "after" ? moment.capitalize : event.capitalize,
+        "Type" => event == "before" || event == "after" ? moment.capitalize : event.capitalize,
         "Moment" => event.capitalize,
         "Microflow" => callback.fetch(:handler),
         "PassEventObject" => callback.fetch(:pass_event_object, true) == true,

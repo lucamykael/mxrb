@@ -21,7 +21,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Entity access rules | native |
 | Indexes, system members, and generalization | native |
 | OQL views | partial |
-| Entity lifecycle | partial |
+| Entity lifecycle | native |
 | Module roles and project security | partial |
 | Microflows, nanoflows and core pages | partial |
 | Layouts, page templates, snippets, and building blocks | native |
@@ -50,8 +50,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,102 examples and measures 100.00% of
-lines (37,514/37,514) and 100.00% of branches (16,224/16,224). No executable
+The strict suite passed 2,103 examples and measures 100.00% of
+lines (37,519/37,519) and 100.00% of branches (16,226/16,226). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -102,6 +102,21 @@ All four system-member flags (`owner`, `created_date`, `changed_date`, and
 Ruby-app export and two MPR → Ruby → MPR cycles, requires identical comparison
 and stable IDs, and permits no opaque BSON fallback. Official MxBuild 11.12.1
 finishes with `BUILD SUCCEEDED`. OQL views remain separately `partial`.
+
+## Entity lifecycle
+
+`before_commit`, `after_commit`, `before_delete`, and `after_delete` cover the
+complete native `Moment` × `Type` matrix. The microflow reference,
+`PassEventObject`, `RaiseErrorOnFalse`, and ID are editable; the authoritative
+collection supports creation, editing, and removal without positional
+matching.
+
+The modern event field is `Type`, as defined by the 11.12.1 metamodel. Reading
+and reconciliation still accept legacy `Event`, while new units no longer emit
+it—preventing `Delete` from being silently interpreted as the default
+`Commit`. Ruby-app and two MPR → Ruby → MPR cycles retain identical comparison
+and stable IDs without opaque fallback. Official MxBuild packages the
+four-event fixture with `BUILD SUCCEEDED`.
 
 ## Workflows and task pages
 

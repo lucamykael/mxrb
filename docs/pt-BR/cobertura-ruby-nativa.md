@@ -28,7 +28,7 @@ Estados:
 | Regras de acesso de entidade | native | roles, CRUD, documentação, direitos padrão, XPath/caption, membros de atributo/associação e IDs estáveis |
 | Índices, system members e generalização | native | índices `Normal`, `CreatedDate` e `ChangedDate`; flags de auditoria, herança e IDs estáveis |
 | OQL view | parcial | autoria incremental e reconciliação privada; ampliar fontes e variantes por versão |
-| Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
+| Lifecycle de entidade | native | before/after commit/delete, microflow, flags e IDs estáveis |
 | Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
@@ -66,8 +66,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.102 exemplos e mede 100,00% das
-linhas (37.514/37.514) e 100,00% dos branches (16.224/16.224). Nenhum código
+A suíte estrita passou com 2.103 exemplos e mede 100,00% das
+linhas (37.519/37.519) e 100,00% dos branches (16.226/16.226). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -119,6 +119,20 @@ As quatro flags de system members (`owner`, `created_date`, `changed_date` e
 export Ruby-app e dois ciclos MPR → Ruby → MPR, exige comparação idêntica e
 IDs estáveis, não aceita fallback BSON opaco e termina com `BUILD SUCCEEDED`
 no MxBuild oficial 11.12.1. OQL view permanece separadamente `parcial`.
+
+## Lifecycle de entidade
+
+`before_commit`, `after_commit`, `before_delete` e `after_delete` cobrem toda a
+matriz nativa de `Moment` e `Type`. Referência de microflow,
+`PassEventObject`, `RaiseErrorOnFalse` e ID são editáveis; a coleção é
+autoritativa, portanto criação, alteração e remoção não dependem de posição.
+
+O campo moderno do evento é `Type`, conforme o metamodelo 11.12.1. O leitor e
+o reconciliador continuam aceitando o `Event` legado, mas novas units não o
+emitem — evitando que `Delete` seja reinterpretado como o default `Commit`.
+Ruby-app e dois ciclos MPR → Ruby → MPR mantêm comparação idêntica e IDs
+estáveis sem fallback opaco. O fixture com os quatro eventos terminou com
+`BUILD SUCCEEDED` no MxBuild oficial.
 
 ## Documentos reutilizáveis de apresentação
 
