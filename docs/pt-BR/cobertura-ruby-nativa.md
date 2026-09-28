@@ -31,7 +31,7 @@ Estados:
 | Lifecycle de entidade | native | before/after commit/delete, microflow, flags e IDs estáveis |
 | Module roles | native | nome, descrição, criação/alteração/remoção e IDs estáveis |
 | Project roles, demo users e política de senha | native | propriedades, relações, IDs/GUIDs estáveis e segredos privados |
-| Settings globais e access containers de project security | parcial | ampliar opções do projeto e regras de FileDocument/Image |
+| Settings globais e access containers de project security | native | opções globais, senha administrativa privada e ACLs de FileDocument/Image com IDs estáveis |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
@@ -68,8 +68,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.105 exemplos e mede 100,00% das
-linhas (37.519/37.519) e 100,00% dos branches (16.226/16.226). Nenhum código
+A suíte estrita passou com 2.110 exemplos e mede 100,00% das
+linhas (37.689/37.689) e 100,00% dos branches (16.310/16.310). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -146,9 +146,7 @@ alteração, remoção e renomeação explícita sem pareamento por posição.
 O gate exporta para Ruby-app e para o DSL regular, executa dois ciclos MPR →
 Ruby → MPR, verifica a unit e os IDs dos papéis e proíbe fallback opaco. O
 fixture referencia os papéis por project roles reais e foi empacotado com
-`BUILD SUCCEEDED` no MxBuild 11.12.1. `Project security` permanece separado e
-`parcial` enquanto seus settings globais e access containers não fecharem o
-mesmo contrato.
+`BUILD SUCCEEDED` no MxBuild 11.12.1.
 
 ## Project roles, demo users e política de senha
 
@@ -161,9 +159,21 @@ Ruby-app redige a senha do demo user no fonte público (`password: nil`) e a
 restaura pelo baseline privado; o valor não vaza durante a exportação. O gate
 faz Ruby-app e dois ciclos regulares, exige comparação idêntica, IDs/GUIDs
 estáveis e ausência de fallback opaco. O fixture completo foi empacotado pelo
-MxBuild 11.12.1 com `BUILD SUCCEEDED`. Settings globais e os access containers
-de `System.FileDocument`/`System.Image` permanecem em um bloco `parcial`
-separado.
+MxBuild 11.12.1 com `BUILD SUCCEEDED`.
+
+## Settings globais e ACLs especiais de project security
+
+`check_security`, `strict_page_url_check`, `strict_mode`, `admin_user` e o
+nível de segurança são editáveis nos DSLs regular e Ruby-app. A senha do
+administrador é write-only: pode ser definida explicitamente, nunca aparece no
+fonte exportado e é restaurada pelo baseline privado. Ausência de declaração
+preserva tanto a senha quanto os containers nativos existentes.
+
+`file_document_access_rule` e `image_access_rule` cobrem documentação, criação,
+remoção, direitos padrão, XPath/caption, membros e papéis do módulo `System`.
+Ruby-app e dois ciclos regulares preservam os IDs dos containers, regras e
+membros sem fallback opaco. Fixtures separados para settings e ACLs terminaram
+com `BUILD SUCCEEDED` no MxBuild oficial 11.12.1.
 
 ## Documentos reutilizáveis de apresentação
 

@@ -117,12 +117,19 @@ Ruby-App-Export wird das Passwort aus dem öffentlichen Quelltext entfernt und
 aus dem privaten Baseline wiederhergestellt. Zwei reguläre Zyklen blieben ohne
 opaken Fallback identisch; MxBuild 11.12.1 endete mit **BUILD SUCCEEDED**.
 
+Das globale Project-Security-Gate deckt `CheckSecurity`, strikte Seiten-URLs,
+Strict Mode, Admin-Benutzer und die speziellen Zugriffscontainer für
+`System.FileDocument` und `System.Image` ab. Das Admin-Passwort bleibt
+write-only im privaten Baseline. Ruby-App und zwei reguläre Zyklen behalten
+Container-, Regel- und Member-IDs; beide Fixtures endeten im offiziellen
+MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.105 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.519/37.519);
-- 100,00 % Branch-Abdeckung (16.226/16.226);
+- 2.110 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.689/37.689);
+- 100,00 % Branch-Abdeckung (16.310/16.310);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

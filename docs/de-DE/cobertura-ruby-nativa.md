@@ -22,7 +22,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Konstanten und Zugriffsregeln | partial |
 | Indizes, Systemmitglieder, Generalisierung und OQL Views | partial |
 | Entity Lifecycle | partial |
-| Modulrollen und Projektsicherheit | partial |
+| Modulrollen und Projektsicherheit | native |
 | Microflows, Nanoflows und Core Pages | partial |
 | Layouts, Page Templates, Snippets und Building Blocks | native |
 | Menüs | partial |

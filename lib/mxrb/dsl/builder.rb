@@ -1398,19 +1398,26 @@ module Mxrb
       end
     end
 
-    class SecurityBuilder
+    class SecurityBuilder # rubocop:disable Metrics/ClassLength
       def initialize
         @user_roles = []
         @demo_users = []
         @demo_users_declared = false
         @security_level = nil
+        @check_security = nil
+        @strict_page_url_check = nil
+        @admin_user_name = nil
+        @admin_password = nil
         @admin_user_role = nil
         @demo_users_enabled = nil
         @guest_access_enabled = nil
         @guest_user_role = nil
         @sign_in_microflow = nil
+        @strict_mode = nil
         @password_policy = nil
         @password_policy_id = nil
+        @file_document_access = nil
+        @image_access = nil
         @id = nil
       end
 
@@ -1421,6 +1428,17 @@ module Mxrb
       # export/import does not silently weaken project security.
       def security_level(value)
         @security_level = value.to_s
+      end
+
+      def check_security(value = true) = (@check_security = value == true)
+      def strict_page_url_check(value = true) = (@strict_page_url_check = value == true)
+      def strict_mode(value = true) = (@strict_mode = value == true)
+
+      # The administrative password is write-only. Exporters emit the user
+      # name but leave the secret in the private native baseline.
+      def admin_user(name, password: nil)
+        @admin_user_name = name.to_s
+        @admin_password = password.to_s unless password.nil?
       end
 
       def user_role(name, module_roles: [], exact_module_roles: false, admin: false, id: nil, guid: nil,
@@ -1492,19 +1510,56 @@ module Mxrb
         @password_policy = options.transform_keys(&:to_sym)
       end
 
+      def file_document_access_rule(*roles, **options)
+        @file_document_access ||= []
+        @file_document_access << project_access_rule(roles, options)
+      end
+
+      def image_access_rule(*roles, **options)
+        @image_access ||= []
+        @image_access << project_access_rule(roles, options)
+      end
+
+      def clear_file_document_access_rules! = (@file_document_access = [])
+      def clear_image_access_rules! = (@image_access = [])
+
       def to_h
         {
           user_roles: @user_roles,
           demo_users: @demo_users_declared ? @demo_users : nil,
           security_level: @security_level,
+          check_security: @check_security,
+          strict_page_url_check: @strict_page_url_check,
+          admin_user_name: @admin_user_name,
+          admin_password: @admin_password,
           admin_user_role: @admin_user_role,
           demo_users_enabled: @demo_users_enabled,
           guest_access_enabled: @guest_access_enabled,
           guest_user_role: @guest_user_role,
           sign_in_microflow: @sign_in_microflow,
+          strict_mode: @strict_mode,
           password_policy: @password_policy,
           password_policy_id: @password_policy_id,
+          file_document_access: @file_document_access,
+          image_access: @image_access,
           id: @id
+        }
+      end
+
+      private
+
+      def project_access_rule(roles, options)
+        values = options.transform_keys(&:to_sym)
+        {
+          id: values[:id]&.to_s,
+          documentation: values.fetch(:documentation, '').to_s,
+          roles: roles.map(&:to_s),
+          create: values.fetch(:create, false) == true,
+          delete: values.fetch(:delete, false) == true,
+          default_rights: values.fetch(:default_rights, :None).to_s,
+          members: Array(values[:members]).map { _1.to_h.transform_keys(&:to_sym) },
+          xpath: values.fetch(:xpath, '').to_s,
+          xpath_caption: values[:xpath_caption]&.to_s
         }
       end
     end

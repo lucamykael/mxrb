@@ -24,7 +24,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Entity lifecycle | native |
 | Module roles | native |
 | Project roles, demo users, and password policy | native |
-| Global project-security settings and access containers | partial |
+| Global project-security settings and access containers | native |
 | Microflows, nanoflows and core pages | partial |
 | Layouts, page templates, snippets, and building blocks | native |
 | Menus | partial |
@@ -52,8 +52,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,105 examples and measures 100.00% of
-lines (37,519/37,519) and 100.00% of branches (16,226/16,226). No executable
+The strict suite passed 2,110 examples and measures 100.00% of
+lines (37,689/37,689) and 100.00% of branches (16,310/16,310). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -130,9 +130,7 @@ renaming without positional matching.
 The gate exports both Ruby-app and regular DSL forms, performs two MPR → Ruby
 → MPR cycles, checks unit and role IDs, and forbids opaque fallback. Its real
 project roles reference the module roles, and official MxBuild 11.12.1 packages
-the fixture with `BUILD SUCCEEDED`. `Project security` remains separately
-`partial` until its global settings and access containers meet the same
-contract.
+the fixture with `BUILD SUCCEEDED`.
 
 ## Project roles, demo users, and password policy
 
@@ -146,9 +144,22 @@ Ruby-app redacts demo-user passwords from public source (`password: nil`) and
 restores them from the private baseline, so the value does not leak during
 export. The gate performs Ruby-app and two regular cycles, requires identical
 comparison, stable IDs/GUIDs, and no opaque fallback. Official MxBuild 11.12.1
-packages the complete fixture with `BUILD SUCCEEDED`. Global settings and the
-`System.FileDocument`/`System.Image` access containers remain in a separate
-`partial` block.
+packages the complete fixture with `BUILD SUCCEEDED`.
+
+## Global project-security settings and special ACLs
+
+`check_security`, `strict_page_url_check`, `strict_mode`, `admin_user`, and the
+security level are editable in both the regular and Ruby-app DSLs. The admin
+password is write-only: applications may set it explicitly, exported source
+never contains it, and recompilation restores it from the private baseline.
+Omitted declarations preserve both the password and existing native access
+containers.
+
+`file_document_access_rule` and `image_access_rule` cover documentation,
+create/delete rights, default rights, XPath/caption, members, and `System`
+module roles. Ruby-app and two regular cycles retain container, rule, and
+member IDs without opaque fallback. Separate global-settings and ACL fixtures
+both package with `BUILD SUCCEEDED` under official MxBuild 11.12.1.
 
 ## Workflows and task pages
 
