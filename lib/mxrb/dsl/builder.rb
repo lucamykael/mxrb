@@ -1809,7 +1809,7 @@ module Mxrb
 
       def initialize(name, type:, value: nil, **options)
         @name = name.to_s
-        @type = type.to_sym
+        @type = type.to_sym == :date_time ? :datetime : type.to_sym
         @value = value
         @id = options[:id]&.to_s
         @type_id = options[:type_id]&.to_s

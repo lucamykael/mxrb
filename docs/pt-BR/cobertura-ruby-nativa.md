@@ -24,7 +24,7 @@ Estados:
 | Atributos | native | tipos, required, unique, default, docs, length, localize date e referência de enum |
 | Associações locais e cross-module | native | criar/alterar/remover, tipo, owner, storage, docs, delete behavior e ID estável |
 | Definições de enumeração | native | criar/renomear/remover, valores ordenados, captions por idioma, documentação e IDs estáveis |
-| Constantes | parcial | autoria incremental com identidade privada; ampliar variantes |
+| Constantes | native | cinco tipos oficiais, valor padrão, exposição ao cliente, metadados e IDs estáveis; overrides privados não vazam |
 | Regras de acesso de entidade | parcial | roles, CRUD, XPath e membros; ACLs ambíguas ainda exigem identidade explícita |
 | Índices, system members, generalização e OQL view | parcial | autoria incremental e reconciliação privada; sem pareamento por posição |
 | Lifecycle de entidade | parcial | callbacks cobertos; ampliar variantes e validação de handlers |
@@ -65,8 +65,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.098 exemplos e mede 100,00% das
-linhas (37.497/37.497) e 100,00% dos branches (16.214/16.214). Nenhum código
+A suíte estrita passou com 2.099 exemplos e mede 100,00% das
+linhas (37.497/37.497) e 100,00% dos branches (16.216/16.216). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -74,6 +74,20 @@ Cobertura de código 100/100 também não encerra cobertura funcional: workflows
 e task pages agora possuem um recorte tipado `parcial`; integrações e várias
 outras famílias também seguem `parcial`; as 455 propriedades de Forms estão em
 455/455 no gate independente `studio_validated`.
+
+## Constantes
+
+`constant` cobre os cinco tipos aceitos pelo Mendix 11: string, boolean,
+DateTime, decimal e integer/long. Valor padrão, documentação, export level,
+estado excluído e exposição ao cliente são editáveis. Dois ciclos MPR → Ruby →
+MPR mantêm semântica, UnitID e ID do tipo sem recorrer a BSON opaco. O gate
+também exercita a grafia exportada `:date_time`; ela é normalizada para o tipo
+nativo sem perder identidade.
+
+O fixture com os cinco tipos foi empacotado pelo MxBuild 11.12.1. O valor de
+DateTime usa o formato nativo `yyyy-MM-ddTHH:mm:ss`, exigido pelo validador do
+Studio Pro. Overrides de configuração privados continuam no sidecar local e
+seus valores não aparecem no Ruby público.
 
 ## Documentos reutilizáveis de apresentação
 
