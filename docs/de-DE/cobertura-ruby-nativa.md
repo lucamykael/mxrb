@@ -20,7 +20,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Lokale und modulübergreifende Assoziationen | native |
 | Enumerationen | native |
 | Konstanten und Zugriffsregeln | partial |
-| Indizes, Systemmitglieder, Generalisierung und OQL Views | partial |
+| Indizes, Systemmitglieder, Generalisierung und OQL Views | native |
 | Entity Lifecycle | partial |
 | Modulrollen und Projektsicherheit | native |
 | Microflows, Nanoflows und Core Pages | partial |
