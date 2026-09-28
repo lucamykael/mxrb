@@ -311,11 +311,17 @@ Mendix 11 schema that previously lacked a Ruby declaration. One Ruby-app and
 two regular cycles retain the unit, activity, and action IDs without opaque
 fallback; the official MxBuild 11.12.1 finishes with **BUILD SUCCEEDED**.
 
+The flow-annotation gate covers creation, editing, and removal of captions,
+positions, and sizes with stable IDs. Existing connections remain identical
+when their endpoints survive and are dropped when they would become dangling;
+the fixture containing a valid `AnnotationFlow` finishes with **BUILD
+SUCCEEDED** under MxBuild 11.12.1.
+
 ## Ruby evaluations and coverage gate
 
-The current suite contains 2,112 examples and passes with 100.00% line coverage
-(37,693/37,693 executable library lines) and 100.00% branch coverage
-(16,312/16,312 branches).
+The current suite contains 2,113 examples and passes with 100.00% line coverage
+(37,742/37,742 executable library lines) and 100.00% branch coverage
+(16,324/16,324 branches).
 Run the enforced gate with:
 
 ```sh

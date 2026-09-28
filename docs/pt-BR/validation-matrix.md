@@ -123,6 +123,11 @@ O gate de `ShowHomePageAction` cria a última ação core inventariada no schema
 regulares com IDs estáveis de unit, atividade e ação, e não aceita fallback
 opaco. O fixture terminou no MxBuild 11.12.1 com **BUILD SUCCEEDED**.
 
+O gate de anotações de flow cobre criação, edição e remoção de caption, posição
+e tamanho com IDs estáveis. Conexões existentes permanecem idênticas quando os
+endpoints sobrevivem e são removidas quando ficariam pendentes; o fixture com
+`AnnotationFlow` válido terminou no MxBuild 11.12.1 com **BUILD SUCCEEDED**.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -218,9 +223,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.112 exemplos, zero falhas;
-- 100,00% das linhas: 37.693/37.693;
-- 100,00% dos branches: 16.312/16.312;
+- 2.113 exemplos, zero falhas;
+- 100,00% das linhas: 37.742/37.742;
+- 100,00% dos branches: 16.324/16.324;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

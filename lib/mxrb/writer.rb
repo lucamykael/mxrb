@@ -3158,6 +3158,7 @@ module Mxrb
       doc.delete("__mxrb_apply_entity_access_declared")
       doc.delete("__mxrb_mark_as_used_declared")
       doc.delete("__mxrb_excluded_declared")
+      doc.delete("__mxrb_annotations_declared")
       strip_nested_internal_keys(doc)
       doc
     end
@@ -3741,12 +3742,25 @@ module Mxrb
         target["Flows"] || generated_collection["Flows"]
       )
       duplicate_parameter_type_ids = duplicate_flow_parameter_type_ids(original_objects)
+      annotations_declared = target["__mxrb_annotations_declared"] == true
+
+      if annotations_declared
+        original_annotations = all_flow_objects(original_objects).select do |object|
+          object["$Type"] == "Microflows$Annotation"
+        end
+        generated_annotations = all_flow_objects(generated_objects).select do |object|
+          object["$Type"] == "Microflows$Annotation"
+        end
+        generated_annotations.zip(original_annotations).each do |generated, original|
+          next unless original
+
+          generated.replace(original.merge(generated).merge("$ID" => original["$ID"]))
+        end
+      end
 
       original_objects.each_with_index do |object, index|
-        next unless %w[
-          Microflows$Annotation
-          Microflows$MicroflowParameter
-        ].include?(object["$Type"])
+        next if object["$Type"] == "Microflows$Annotation" && annotations_declared
+        next unless %w[Microflows$Annotation Microflows$MicroflowParameter].include?(object["$Type"])
         generated_parameter = generated_objects.find do |generated|
           object["$Type"] == 'Microflows$MicroflowParameter' &&
             generated["$Type"] == object["$Type"] && generated["Name"] == object["Name"]
@@ -3793,9 +3807,16 @@ module Mxrb
       generated_flows.map! do |flow|
         original_edges.fetch(flow_edge_signature(flow), flow)
       end
-      generated_flows.concat(
-        original_flows.select { _1["$Type"] == "Microflows$AnnotationFlow" }
-      )
+      annotation_flows = original_flows.select do |flow|
+        flow["$Type"] == "Microflows$AnnotationFlow"
+      end
+      if annotations_declared
+        object_ids = all_flow_objects(generated_objects).to_h { [_1["$ID"], true] }
+        annotation_flows.select! do |flow|
+          object_ids.key?(flow["OriginPointer"]) && object_ids.key?(flow["DestinationPointer"])
+        end
+      end
+      generated_flows.concat(annotation_flows)
       validate_flow_endpoints!(generated_objects, generated_flows)
 
       generated_collection["Objects"] = IO::BsonCodec.build_array(generated_objects)
@@ -6070,6 +6091,7 @@ module Mxrb
       end
       roles_declared  = !flow[:allowed_roles].nil?
       body_declared   = !flow[:body].nil? || !flow[:return_expression].nil?
+      annotations_declared = flow[:annotations_authoritative] == true
       return_var_name = flow[:return_variable_name] || "ReturnValue"
       allow_concurrent = flow[:allow_concurrent_execution]
       apply_entity_access = flow[:apply_entity_access]
@@ -6097,6 +6119,7 @@ module Mxrb
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(flow[:allowed_roles]), marker: 1),
         "__mxrb_allowed_roles_declared" => roles_declared,
         "__mxrb_body_declared" => body_declared,
+        "__mxrb_annotations_declared" => annotations_declared,
         "__mxrb_return_type_declared" => !flow[:return_type].nil?,
         "__mxrb_preserve_native_body" => flow[:preserve_native_body] == true,
         "__mxrb_allow_concurrent_execution_declared" => !allow_concurrent.nil?,
@@ -6236,12 +6259,17 @@ module Mxrb
       start_id = SecureRandom.uuid
       objects << flow_object_doc(start_id, "Microflows$StartEvent", 50, 100, "20;20")
 
+      annotations, executable_body = Array(body).partition do |activity|
+        activity[:type].to_sym == :annotation
+      end
+      objects.concat(annotations.map { annotation_doc(_1) })
+
       prev_id = start_id
       x = 190
 
       # Separate rescue_all from regular items (rescue_all must be last)
-      main_items   = Array(body).reject { _1[:type].to_sym == :rescue_all }
-      rescue_block = Array(body).find   { _1[:type].to_sym == :rescue_all }
+      main_items   = executable_body.reject { _1[:type].to_sym == :rescue_all }
+      rescue_block = executable_body.find   { _1[:type].to_sym == :rescue_all }
 
       main_items.each_with_index do |activity, i|
         is_last    = i == main_items.size - 1
@@ -6306,6 +6334,16 @@ module Mxrb
       end
 
       { objects: objects, flows: flows }
+    end
+
+    def annotation_doc(annotation)
+      {
+        "$ID" => SecureRandom.uuid,
+        "$Type" => "Microflows$Annotation",
+        "Caption" => annotation[:caption].to_s,
+        "RelativeMiddlePoint" => annotation[:position].to_s,
+        "Size" => annotation[:size].to_s
+      }
     end
 
     def process_activity(activity, prev_id, objects, flows, x, y, error_type: "None")
@@ -6414,6 +6452,8 @@ module Mxrb
     end
 
     def process_decision_branch(activities, split_id, case_value, objects, flows, x, y)
+      annotations, activities = activities.partition { _1[:type].to_sym == :annotation }
+      objects.concat(annotations.map { annotation_doc(_1) })
       first = nil
       previous = nil
       terminal = false
@@ -6446,12 +6486,17 @@ module Mxrb
     def build_rescue_branch(origin_id, activities, objects, flows, x, y)
       return unless origin_id
 
+      annotations, activities = Array(activities).partition do |activity|
+        activity[:type].to_sym == :annotation
+      end
+      objects.concat(annotations.map { annotation_doc(_1) })
+
       origin = objects.find { _1["$ID"] == origin_id }
       if origin&.dig("Action").is_a?(Hash)
         origin["Action"]["ErrorHandlingType"] = custom_error_handling_type
       end
       previous = nil
-      Array(activities).each do |activity|
+      activities.each do |activity|
         before = objects.size
         next_id, x = process_activity(
           activity, previous, objects, flows, x, y
@@ -6513,7 +6558,11 @@ module Mxrb
       i_prev = nil
       i_x    = 50
       started = false
-      Array(activity[:activities]).each do |act|
+      annotations, activities = Array(activity[:activities]).partition do |item|
+        item[:type].to_sym == :annotation
+      end
+      inner_objs.concat(annotations.map { annotation_doc(_1) })
+      activities.each do |act|
         break if started && i_prev.nil?
 
         i_prev, i_x = process_activity(

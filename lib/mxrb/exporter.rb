@@ -3235,6 +3235,7 @@ module Mxrb
       flows = Array(flow.flows)
       if editable_flow_body?(objects, flows)
         dsl_lines = body_dsl_lines(objects, flows, 2)
+        body << "  annotations_authoritative" if flow_objects_contain_annotation?(objects)
         body.concat(dsl_lines)
         if internal_metadata && (fingerprint = flow_body_fingerprint(dsl_lines, flow))
           body << "  body_fingerprint #{ruby(fingerprint)}"
@@ -4325,9 +4326,29 @@ module Mxrb
         start = objects.find { !destinations.key?(_1["$ID"]) }
       end
       return [] unless start
-      lines = []
+      lines = annotation_dsl_lines(objects, indent)
       linearize_flow(start["$ID"], fwd_map, err_map, by_id, flows, {}, lines, indent, nil)
       lines
+    end
+
+    def annotation_dsl_lines(objects, indent)
+      pad = " " * indent
+      objects.filter_map do |object|
+        next unless object["$Type"] == "Microflows$Annotation"
+
+        "#{pad}annotation #{ruby(object['Caption'].to_s)}, " \
+          "position: #{ruby(object['RelativeMiddlePoint'].to_s)}, " \
+          "size: #{ruby(object['Size'].to_s)}"
+      end
+    end
+
+    def flow_objects_contain_annotation?(objects)
+      Array(objects).any? do |object|
+        object["$Type"] == "Microflows$Annotation" ||
+          flow_objects_contain_annotation?(
+            bson_items(object.dig("ObjectCollection", "Objects"))
+          )
+      end
     end
 
     def decision_declaration_lines(condition, indent)
