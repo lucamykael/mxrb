@@ -769,6 +769,10 @@ module Mxrb
         return published_odata_service_declaration(document) if semantic_published_odata_service?(doc)
       when 'Rest$ConsumedODataService'
         return consumed_odata_service_declaration(document) if semantic_consumed_odata_service?(doc)
+      when 'AppServices$ConsumedAppService'
+        return consumed_app_service_declaration(document) if semantic_consumed_app_service?(doc)
+      when 'WebServices$PublishedService'
+        return published_web_service_declaration(document) if semantic_published_web_service?(doc)
       when 'MessageDefinitions$MessageDefinitionCollection'
         return message_definition_collection_declaration(document) \
           if semantic_message_definition_collection?(doc)
@@ -986,6 +990,195 @@ module Mxrb
         validated_entities_marker: bson_marker(doc['ValidatedEntities'], 1)
       )
       semantic_call_source(:consumed_odata_service, document, options)
+    end
+
+    CONSUMED_APP_SERVICE_FIELDS = %w[
+      $ID $Type Actions AppServiceLocation AppStoreGuid AppStoreVersion AppStoreVersionGuid
+      Documentation Excluded FromAppStore LocationConstant Msd Name TimeOut UseTimeOut
+    ].freeze
+    APP_SERVICE_ACTION_FIELDS = %w[
+      $ID $Type Caption Description ImageString Microflow Name Parameters ReturnType
+      ReturnTypeCanBeEmpty
+    ].freeze
+    APP_SERVICE_PARAMETER_FIELDS = %w[$ID $Type CanBeEmpty Name Type].freeze
+
+    def semantic_consumed_app_service?(doc)
+      return false unless (doc.keys - CONSUMED_APP_SERVICE_FIELDS).empty?
+      return false unless doc['Msd'].nil? || doc['Msd'].is_a?(Hash)
+
+      bson_items(doc['Actions']).all? do |action|
+        action.is_a?(Hash) && action['$Type'] == 'AppServices$AppServiceActionImpl' &&
+          (action.keys - APP_SERVICE_ACTION_FIELDS).empty? &&
+          bson_items(action['Parameters']).all? do |parameter|
+            parameter.is_a?(Hash) &&
+              parameter['$Type'] == 'AppServices$AppServiceActionParameter' &&
+              (parameter.keys - APP_SERVICE_PARAMETER_FIELDS).empty?
+          end
+      end
+    end
+
+    def consumed_app_service_declaration(document)
+      doc = document.fetch(:doc)
+      options = {
+        actions: bson_items(doc['Actions']).map { consumed_app_service_action_spec(_1) },
+        location: doc.fetch('AppServiceLocation', 'Constant'),
+        location_constant: doc.fetch('LocationConstant', ''), contract: doc['Msd'],
+        app_store_guid: doc.fetch('AppStoreGuid', ''),
+        app_store_version: doc.fetch('AppStoreVersion', ''),
+        app_store_version_guid: doc.fetch('AppStoreVersionGuid', ''),
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        from_app_store: doc['FromAppStore'] == true, timeout: doc.fetch('TimeOut', 30),
+        use_timeout: doc['UseTimeOut'] == true, actions_marker: bson_marker(doc['Actions'], 2)
+      }
+      semantic_call_source(:consumed_app_service, document, options)
+    end
+
+    def consumed_app_service_action_spec(action)
+      {
+        id: document_id(action), name: action.fetch('Name'),
+        caption: action.fetch('Caption', ''), description: action.fetch('Description', ''),
+        image: action.fetch('ImageString', ''), microflow: action.fetch('Microflow', ''),
+        parameters: bson_items(action['Parameters']).map do |parameter|
+          {
+            id: document_id(parameter), name: parameter.fetch('Name'),
+            type: parameter.fetch('Type', 'String'),
+            can_be_empty: parameter['CanBeEmpty'] == true
+          }
+        end,
+        parameters_marker: bson_marker(action['Parameters'], 2),
+        return_type: action.fetch('ReturnType', 'Void'),
+        return_type_can_be_empty: action['ReturnTypeCanBeEmpty'] == true
+      }
+    end
+
+    PUBLISHED_WEB_SERVICE_FIELDS = %w[
+      $ID $Type Documentation Excluded Name VersionedWebServices
+    ].freeze
+    WEB_SERVICE_VERSION_FIELDS = %w[
+      $ID $Type AppServiceState Caption Description Documentation HeaderAuthentication
+      HeaderMicroflow Image ImportMapping IsLockedByContract MsdEnumerationsByContract
+      Name Operations TargetNamespace Validate VersionNumber
+    ].freeze
+    WEB_SERVICE_OPERATION_FIELDS = %w[
+      $ID $Type DataEntity Description Documentation ImageId IsLockedByContract Microflow Name
+      Parameters ReturnElementName ReturnElementNameByContract ReturnType ReturnTypeIsNillable
+      ReturnTypeIsOptional ReturnTypeName ReturnTypeSpecification
+    ].freeze
+    WEB_SERVICE_PARAMETER_FIELDS = %w[
+      $ID $Type DataEntity ElementName IsLockedByContract IsNillable IsOptional
+      IsOptionalByContract MicroflowParameter MsdMicroflowParameterByContract ObjectElementName
+      ObjectElementNameByContract Type
+    ].freeze
+    WEB_SERVICE_DATA_ENTITY_FIELDS = %w[
+      $ID $Type ChildMembers ElementName Entity IsKey IsLockedByContract IsNillable
+      IsNillableByContract IsOptional IsOptionalByContract ObjectElementName
+    ].freeze
+
+    def semantic_published_web_service?(doc)
+      return false unless (doc.keys - PUBLISHED_WEB_SERVICE_FIELDS).empty?
+
+      bson_items(doc['VersionedWebServices']).all? { semantic_web_service_version?(_1) }
+    end
+
+    def semantic_web_service_version?(version)
+      version.is_a?(Hash) && version['$Type'] == 'WebServices$VersionedServiceImpl' &&
+        (version.keys - WEB_SERVICE_VERSION_FIELDS).empty? &&
+        bson_items(version['Operations']).all? { semantic_web_service_operation?(_1) }
+    end
+
+    def semantic_web_service_operation?(operation)
+      operation.is_a?(Hash) && operation['$Type'] == 'WebServices$PublishedOperationImpl' &&
+        (operation.keys - WEB_SERVICE_OPERATION_FIELDS).empty? &&
+        semantic_web_service_data_entity?(operation['DataEntity']) &&
+        bson_items(operation['Parameters']).all? { semantic_web_service_parameter?(_1) }
+    end
+
+    def semantic_web_service_parameter?(parameter)
+      parameter.is_a?(Hash) && parameter['$Type'] == 'WebServices$PublishedParameterImpl' &&
+        (parameter.keys - WEB_SERVICE_PARAMETER_FIELDS).empty? &&
+        semantic_web_service_data_entity?(parameter['DataEntity'])
+    end
+
+    def semantic_web_service_data_entity?(entity)
+      entity.is_a?(Hash) && entity['$Type'] == 'WebServices$DataEntityImpl' &&
+        (entity.keys - WEB_SERVICE_DATA_ENTITY_FIELDS).empty? &&
+        bson_items(entity['ChildMembers']).empty?
+    end
+
+    def published_web_service_declaration(document)
+      doc = document.fetch(:doc)
+      options = {
+        versions: bson_items(doc['VersionedWebServices']).map { published_web_service_version_spec(_1) },
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        versions_marker: bson_marker(doc['VersionedWebServices'], 2)
+      }
+      semantic_call_source(:published_web_service, document, options)
+    end
+
+    def published_web_service_version_spec(version)
+      {
+        id: document_id(version), app_service_state: version.fetch('AppServiceState', 'Consumable'),
+        caption: version.fetch('Caption', ''), description: version.fetch('Description', ''),
+        documentation: version.fetch('Documentation', ''),
+        header_authentication: version.fetch('HeaderAuthentication', 'None'),
+        header_microflow: version.fetch('HeaderMicroflow', ''), image: version.fetch('Image', ''),
+        import_mapping: version.fetch('ImportMapping', ''),
+        locked_by_contract: version['IsLockedByContract'] == true,
+        contract_enumerations: version['MsdEnumerationsByContract'],
+        operations: bson_items(version['Operations']).map { published_web_service_operation_spec(_1) },
+        operations_marker: bson_marker(version['Operations'], 3),
+        target_namespace: version.fetch('TargetNamespace', ''),
+        validate: version['Validate'] == true, version: version.fetch('VersionNumber', 0)
+      }
+    end
+
+    def published_web_service_operation_spec(operation)
+      {
+        id: document_id(operation), name: operation.fetch('Name'),
+        data_entity: published_web_service_data_entity_spec(operation.fetch('DataEntity')),
+        description: operation.fetch('Description', ''),
+        documentation: operation.fetch('Documentation', ''), image: operation.fetch('ImageId', ''),
+        locked_by_contract: operation['IsLockedByContract'] == true,
+        microflow: operation.fetch('Microflow', ''),
+        parameters: bson_items(operation['Parameters']).map { published_web_service_parameter_spec(_1) },
+        parameters_marker: bson_marker(operation['Parameters'], 2),
+        return_element_name: operation.fetch('ReturnElementName', ''),
+        contract_return_element_name: operation.fetch('ReturnElementNameByContract', ''),
+        return_type: operation.fetch('ReturnType', 'Void'),
+        return_nillable: operation['ReturnTypeIsNillable'] == true,
+        return_optional: operation['ReturnTypeIsOptional'] == true,
+        return_type_name: operation.fetch('ReturnTypeName', 'Nothing'),
+        return_type_specification: operation.fetch('ReturnTypeSpecification', '')
+      }
+    end
+
+    def published_web_service_parameter_spec(parameter)
+      {
+        id: document_id(parameter),
+        data_entity: published_web_service_data_entity_spec(parameter.fetch('DataEntity')),
+        element_name: parameter.fetch('ElementName', ''),
+        locked_by_contract: parameter['IsLockedByContract'] == true,
+        nillable: parameter['IsNillable'] == true, optional: parameter['IsOptional'] == true,
+        optional_by_contract: parameter['IsOptionalByContract'] == true,
+        microflow_parameter: parameter.fetch('MicroflowParameter', ''),
+        contract_parameter: parameter['MsdMicroflowParameterByContract'],
+        object_element_name: parameter.fetch('ObjectElementName', ''),
+        contract_object_element_name: parameter.fetch('ObjectElementNameByContract', ''),
+        type: parameter.fetch('Type', 'String')
+      }
+    end
+
+    def published_web_service_data_entity_spec(entity)
+      {
+        id: document_id(entity), children_marker: bson_marker(entity['ChildMembers'], 2),
+        element_name: entity.fetch('ElementName', ''), entity: entity.fetch('Entity', ''),
+        key: entity['IsKey'] == true, locked_by_contract: entity['IsLockedByContract'] == true,
+        nillable: entity['IsNillable'] == true,
+        nillable_by_contract: entity['IsNillableByContract'] == true,
+        optional: entity['IsOptional'] == true,
+        optional_by_contract: entity['IsOptionalByContract'] == true,
+        object_element_name: entity.fetch('ObjectElementName', '')
+      }
     end
 
     PUBLISHED_ODATA_FIELDS = %w[
