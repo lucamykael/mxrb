@@ -2,7 +2,7 @@
 
 **Português** · [English](../en-US/validation-matrix.md) · [Deutsch](../de-DE/validation-matrix.md)
 
-Última atualização: 25 de setembro de 2026.
+Última atualização: 28 de setembro de 2026.
 
 O pipeline validado é:
 
@@ -118,6 +118,11 @@ senha é redigida do fonte público e restaurada pelo baseline privado. Dois
 ciclos regulares permaneceram idênticos, sem fallback opaco, e o MxBuild
 11.12.1 terminou com **BUILD SUCCEEDED**.
 
+O gate de `ShowHomePageAction` cria a última ação core inventariada no schema
+11 que ainda não tinha autoria Ruby, executa um ciclo Ruby app e dois ciclos
+regulares com IDs estáveis de unit, atividade e ação, e não aceita fallback
+opaco. O fixture terminou no MxBuild 11.12.1 com **BUILD SUCCEEDED**.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -213,9 +218,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.111 exemplos, zero falhas;
-- 100,00% das linhas: 37.689/37.689;
-- 100,00% dos branches: 16.310/16.310;
+- 2.112 exemplos, zero falhas;
+- 100,00% das linhas: 37.693/37.693;
+- 100,00% dos branches: 16.312/16.312;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

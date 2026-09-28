@@ -2852,6 +2852,10 @@ module Mxrb
         _acts << { type: :close_page, count: count }
       end
 
+      def show_home_page
+        _acts << { type: :show_home_page }
+      end
+
       def aggregate(list, function:, as:, attribute: nil)
         _acts << {
           type: :aggregate, variable: list.to_s, function: function.to_s,

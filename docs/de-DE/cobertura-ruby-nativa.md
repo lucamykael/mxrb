@@ -23,7 +23,8 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Indizes, Systemmitglieder, Generalisierung und OQL Views | native |
 | Entity Lifecycle | partial |
 | Modulrollen und Projektsicherheit | native |
-| Microflows, Nanoflows und Core Pages | partial |
+| Microflows und Nanoflows | partial |
+| Core Pages | partial |
 | Layouts, Page Templates, Snippets und Building Blocks | native |
 | Menüs | partial |
 | Navigation und Pluggable Widgets | partial |
@@ -48,6 +49,20 @@ Vergleich.
 
 Unbekannte Varianten bleiben fail-closed: Sie werden erhalten und gemeldet,
 niemals stillschweigend konvertiert oder verworfen.
+
+## Microflows und Nanoflows: Show Home Page
+
+`show_home_page` materialisiert und reexportiert
+`Microflows$ShowHomePageAction`, die letzte Core Action im inventarisierten
+Mendix-11-Schema, für die zuvor keine autoritative Ruby-Deklaration bestand.
+Das Gate erstellt sie im Ruby-App-Modus und durchläuft einen Ruby-App- sowie
+zwei reguläre MPR-→-Ruby-→-MPR-Zyklen. Unit-, Activity- und Action-ID bleiben
+ohne opaken Fallback stabil.
+
+Das Fixture endet im offiziellen MxBuild 11.12.1 mit `BUILD SUCCEEDED`. Die
+Familie bleibt `partial`, weil Legacy-/Spezialaktionen außerhalb des
+Core-Schemas und weitere Event-/Split-Varianten denselben Vertrag noch
+benötigen.
 
 ## Workflows und Task Pages
 

@@ -2,7 +2,7 @@
 
 [Português](../pt-BR/validation-matrix.md) · [English](../en-US/validation-matrix.md) · **Deutsch**
 
-Stand: 25. September 2026.
+Stand: 28. September 2026.
 
 ```text
 Original-MPR → validate → export → generate → validate → compare
@@ -124,6 +124,12 @@ write-only im privaten Baseline. Ruby-App und zwei reguläre Zyklen behalten
 Container-, Regel- und Member-IDs; beide Fixtures endeten im offiziellen
 MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
 
+Das `ShowHomePageAction`-Gate erstellt die letzte Core Action im
+inventarisierten Mendix-11-Schema, für die zuvor keine Ruby-Deklaration
+bestand. Ein Ruby-App- und zwei reguläre Zyklen bewahren Unit-, Activity- und
+Action-ID ohne opaken Fallback; das offizielle MxBuild 11.12.1 endet mit
+**BUILD SUCCEEDED**.
+
 Das OQL-View-Gate deckt Source Document, OQL-Werte der Attribute und
 OQL-Association-Quellen ab. Ruby-App und zwei reguläre Zyklen behalten alle
 verschachtelten IDs ohne opaken Fallback; das vollständige Fixture endete im
@@ -132,9 +138,9 @@ offiziellen MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.111 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.689/37.689);
-- 100,00 % Branch-Abdeckung (16.310/16.310);
+- 2.112 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.693/37.693);
+- 100,00 % Branch-Abdeckung (16.312/16.312);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
