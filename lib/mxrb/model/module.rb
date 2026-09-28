@@ -34,7 +34,8 @@ module Mxrb
         'Queues$Queue' => 'jobs/task_queues',
         'ScheduledEvents$ScheduledEvent' => 'jobs/scheduled_events',
         'JavaActions$JavaAction' => 'actions/java',
-        'JavaScriptActions$JavaScriptAction' => 'actions/javascript'
+        'JavaScriptActions$JavaScriptAction' => 'actions/javascript',
+        'Workflows$Workflow' => 'workflows'
       }.freeze
       PRESENTATION_DOCUMENT_ROUTES = {
         'Forms$Layout' => 'layouts',

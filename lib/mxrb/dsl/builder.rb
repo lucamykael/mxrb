@@ -6,6 +6,7 @@ require "base64"
 require_relative "../native_fragment_store"
 require_relative "integration_documents"
 require_relative "code_actions"
+require_relative "workflows"
 require_relative "presentation_documents"
 require_relative "asset_documents"
 require_relative "artifact_documents"
@@ -1912,6 +1913,7 @@ module Mxrb
       include NativeFragmentAccess
       include IntegrationDocuments
       include CodeActions
+      include Workflows
       include PresentationDocuments
       include AssetDocuments
       include ArtifactDocuments
@@ -2462,7 +2464,7 @@ module Mxrb
       end
     end
 
-    class PageBuilder
+    class PageBuilder # rubocop:disable Metrics/ClassLength
       include WidgetDsl
       include PresentationValues
 
@@ -2477,6 +2479,7 @@ module Mxrb
         @data_source   = nil
         @events        = []
         @widgets       = []
+        @parameters    = []
         @allowed_roles = nil
         @deep_structure = nil
         @forms_model = nil
@@ -2550,6 +2553,13 @@ module Mxrb
         @allowed_roles = roles.map(&:to_s)
       end
 
+      def parameter(name, entity:, required: true, default_value: '', id: nil, type_id: nil)
+        @parameters << {
+          name: name.to_s, entity: entity.to_s, required: required == true,
+          default_value: default_value.to_s, id: id&.to_s, type_id: type_id&.to_s
+        }
+      end
+
       def data_source(query: nil, microflow: nil, nanoflow: nil)
         choices = { microflow: microflow || query, nanoflow: nanoflow }.compact
         raise ArgumentError, "data_source requires exactly one target" unless choices.size == 1
@@ -2576,7 +2586,8 @@ module Mxrb
         {
           name: @name, public: @public, layout: @layout, title: @title, popup: @popup,
           data_source: @data_source, events: @events, widgets: @widgets,
-          allowed_roles: @allowed_roles, deep_structure: @deep_structure, write_mode: @write_mode
+          parameters: @parameters, allowed_roles: @allowed_roles,
+          deep_structure: @deep_structure, write_mode: @write_mode
         }.merge(
           unit_id: @unit_id, overlay_metadata: @overlay_metadata,
           forms_model: @forms_model
@@ -2586,7 +2597,7 @@ module Mxrb
       private
 
       def _widget_list = @widgets
-    end
+    end # rubocop:enable Metrics/ClassLength
 
     # Collects ordered call parameter mappings without exposing the BSON-shaped
     # hashes used internally by Mendix. Keeping this as a small builder also

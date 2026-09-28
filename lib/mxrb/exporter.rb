@@ -800,6 +800,8 @@ module Mxrb
         return code_action_declaration(document, :java) if semantic_code_action?(doc)
       when "JavaScriptActions$JavaScriptAction"
         return code_action_declaration(document, :javascript) if semantic_code_action?(doc)
+      when 'Workflows$Workflow'
+        return workflow_declaration(document) if semantic_workflow?(doc)
       when "Forms$Layout"
         return layout_document_declaration(document)
       when "Forms$PageTemplate"
@@ -1778,6 +1780,194 @@ module Mxrb
       true
     rescue KeyError, TypeError, NoMethodError
       false
+    end
+
+    WORKFLOW_FIELDS = %w[
+      $ID $Type AdminPage Annotation DueDate EventSubProcesses Flow Name OnWorkflowEvent
+      Parameter PersistentId Title WorkflowDescription WorkflowMetaData WorkflowName WorkflowV2
+    ].freeze
+    WORKFLOW_PARAMETER_FIELDS = %w[$ID $Type Entity Name].freeze
+    WORKFLOW_FLOW_FIELDS = %w[$ID $Type Activities].freeze
+    WORKFLOW_ACTIVITY_FIELDS = %w[
+      $ID $Type Annotation Caption Name PersistentId RelativeMiddlePoint Size
+    ].freeze
+    WORKFLOW_USER_TASK_FIELDS = (WORKFLOW_ACTIVITY_FIELDS + %w[
+      AutoAssignSingleTargetUser BoundaryEvents DueDate OnCreatedEvent Outcomes
+      TaskDescription TaskName TaskPage UserTargeting
+    ]).freeze
+    WORKFLOW_PAGE_REFERENCE_FIELDS = %w[$ID $Type Page].freeze
+    WORKFLOW_TARGETING_FIELDS = %w[$ID $Type XPathConstraint].freeze
+    WORKFLOW_OUTCOME_FIELDS = %w[$ID $Type Flow PersistentId Value].freeze
+    WORKFLOW_NO_EVENT_FIELDS = %w[$ID $Type].freeze
+    WORKFLOW_TEMPLATE_FIELDS = %w[$ID $Type Arguments Text].freeze
+    WORKFLOW_METADATA_FIELDS = %w[$ID $Type Annotation DetachedActivities FlowLines].freeze
+
+    def semantic_workflow?(doc)
+      return false unless (doc.keys - WORKFLOW_FIELDS).empty?
+      return false unless doc['PersistentId'].is_a?(BSON::Binary)
+      return false unless doc['Title'].is_a?(String) && doc['DueDate'].is_a?(String)
+      return false unless doc['AdminPage'].nil? && doc['Annotation'].nil? && doc['WorkflowV2'] == false
+      return false unless semantic_workflow_parameter?(doc['Parameter'])
+      return false unless semantic_workflow_template?(doc['WorkflowName'])
+      return false unless semantic_workflow_template?(doc['WorkflowDescription'])
+      return false unless semantic_workflow_flow?(doc['Flow'])
+      return false unless semantic_workflow_metadata?(doc['WorkflowMetaData'])
+
+      bson_items(doc['OnWorkflowEvent']).empty? && bson_items(doc['EventSubProcesses']).empty?
+    end
+
+    def semantic_workflow_parameter?(parameter)
+      parameter.is_a?(Hash) && parameter['$Type'] == 'Workflows$Parameter' &&
+        (parameter.keys - WORKFLOW_PARAMETER_FIELDS).empty? &&
+        parameter['Entity'].is_a?(String) && parameter['Name'].is_a?(String)
+    end
+
+    def semantic_workflow_template?(template)
+      template.is_a?(Hash) && template['$Type'] == 'Microflows$StringTemplate' &&
+        (template.keys - WORKFLOW_TEMPLATE_FIELDS).empty? &&
+        template['Text'].is_a?(String) && bson_marker(template['Arguments'], 2) == 2 &&
+        bson_items(template['Arguments']).empty?
+    end
+
+    def semantic_workflow_flow?(flow)
+      return false unless flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow'
+      return false unless (flow.keys - WORKFLOW_FLOW_FIELDS).empty?
+
+      activities = bson_items(flow['Activities'])
+      activities.size >= 2 &&
+        semantic_workflow_terminal?(activities.first, 'Workflows$StartWorkflowActivity') &&
+        semantic_workflow_terminal?(activities.last, 'Workflows$EndWorkflowActivity') &&
+        activities[1...-1].all? { semantic_workflow_user_task?(_1) }
+    end
+
+    def semantic_workflow_terminal?(activity, type)
+      activity.is_a?(Hash) && activity['$Type'] == type &&
+        (activity.keys - WORKFLOW_ACTIVITY_FIELDS).empty? &&
+        activity['PersistentId'].is_a?(BSON::Binary) && activity['Annotation'].nil? &&
+        activity['RelativeMiddlePoint'].is_a?(String) && activity['Size'].is_a?(String) &&
+        activity['Name'].is_a?(String) && activity['Caption'].is_a?(String)
+    end
+
+    def semantic_workflow_user_task?(activity)
+      return false unless activity.is_a?(Hash) &&
+                          activity['$Type'] == 'Workflows$SingleUserTaskActivity'
+      return false unless (activity.keys - WORKFLOW_USER_TASK_FIELDS).empty?
+      return false unless semantic_workflow_activity_base?(activity)
+      return false unless semantic_workflow_page_reference?(activity['TaskPage'])
+      return false unless semantic_workflow_template?(activity['TaskName'])
+      return false unless semantic_workflow_template?(activity['TaskDescription'])
+      return false unless semantic_workflow_targeting?(activity['UserTargeting'])
+      return false unless bson_items(activity['BoundaryEvents']).empty?
+      return false unless activity['OnCreatedEvent'].is_a?(Hash) &&
+                          activity['OnCreatedEvent']['$Type'] == 'Workflows$NoEvent' &&
+                          (activity['OnCreatedEvent'].keys - WORKFLOW_NO_EVENT_FIELDS).empty?
+      return false unless [true, false].include?(activity['AutoAssignSingleTargetUser'])
+
+      outcomes = bson_items(activity['Outcomes'])
+      outcomes.one? && semantic_workflow_outcome?(outcomes.first)
+    end
+
+    def semantic_workflow_activity_base?(activity)
+      activity['PersistentId'].is_a?(BSON::Binary) && activity['Annotation'].nil? &&
+        activity['RelativeMiddlePoint'].is_a?(String) && activity['Size'].is_a?(String) &&
+        activity['Name'].is_a?(String) && activity['Caption'].is_a?(String) &&
+        activity['DueDate'].is_a?(String)
+    end
+
+    def semantic_workflow_page_reference?(reference)
+      reference.is_a?(Hash) && reference['$Type'] == 'Workflows$PageReference' &&
+        (reference.keys - WORKFLOW_PAGE_REFERENCE_FIELDS).empty? && reference['Page'].is_a?(String)
+    end
+
+    def semantic_workflow_targeting?(targeting)
+      targeting.is_a?(Hash) && targeting['$Type'] == 'Workflows$XPathUserTargeting' &&
+        (targeting.keys - WORKFLOW_TARGETING_FIELDS).empty? &&
+        targeting['XPathConstraint'].is_a?(String)
+    end
+
+    def semantic_workflow_outcome?(outcome)
+      return false unless outcome.is_a?(Hash) && outcome['$Type'] == 'Workflows$UserTaskOutcome'
+      return false unless (outcome.keys - WORKFLOW_OUTCOME_FIELDS).empty?
+      return false unless outcome['PersistentId'].is_a?(BSON::Binary) && outcome['Value'].is_a?(String)
+
+      flow = outcome['Flow']
+      flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow' &&
+        (flow.keys - WORKFLOW_FLOW_FIELDS).empty? && bson_items(flow['Activities']).empty?
+    end
+
+    def semantic_workflow_metadata?(metadata)
+      metadata.is_a?(Hash) && metadata['$Type'] == 'Workflows$WorkflowMetaData' &&
+        (metadata.keys - WORKFLOW_METADATA_FIELDS).empty? &&
+        bson_items(metadata['DetachedActivities']).empty? &&
+        bson_items(metadata['FlowLines']).empty? && bson_items(metadata['Annotation']).empty?
+    end
+
+    def workflow_declaration(document)
+      doc = document.fetch(:doc)
+      flow = doc.fetch('Flow')
+      activities = bson_items(flow.fetch('Activities'))
+      start = activities.first
+      finish = activities.last
+      metadata = doc.fetch('WorkflowMetaData')
+      semantic_call_source(:workflow, document, {
+        context_entity: doc.fetch('Parameter').fetch('Entity', ''),
+        title: doc.fetch('Title', ''), workflow_name: doc.fetch('WorkflowName').fetch('Text', ''),
+        workflow_description: doc.fetch('WorkflowDescription').fetch('Text', ''),
+        due_date: doc.fetch('DueDate', ''), parameter_name: doc.fetch('Parameter').fetch('Name', ''),
+        start: workflow_terminal_spec(start), finish: workflow_terminal_spec(finish),
+        user_tasks: activities[1...-1].map { workflow_user_task_spec(_1) },
+        persistent_id: document_id_value(doc.fetch('PersistentId')),
+        parameter_id: document_id(doc.fetch('Parameter')), flow_id: document_id(flow),
+        workflow_name_id: document_id(doc.fetch('WorkflowName')),
+        workflow_description_id: document_id(doc.fetch('WorkflowDescription')),
+        metadata_id: document_id(metadata), activities_marker: bson_marker(flow['Activities'], 2),
+        on_workflow_event_marker: bson_marker(doc['OnWorkflowEvent'], 2),
+        event_sub_processes_marker: bson_marker(doc['EventSubProcesses'], 2),
+        detached_activities_marker: bson_marker(metadata['DetachedActivities'], 2),
+        flow_lines_marker: bson_marker(metadata['FlowLines'], 2),
+        annotations_marker: bson_marker(metadata['Annotation'], 2)
+      })
+    end
+
+    def workflow_terminal_spec(activity)
+      {
+        id: document_id(activity), persistent_id: document_id_value(activity.fetch('PersistentId')),
+        name: activity.fetch('Name', ''), caption: activity.fetch('Caption', ''),
+        position: activity.fetch('RelativeMiddlePoint', ''), size: activity.fetch('Size', '')
+      }
+    end
+
+    def workflow_user_task_spec(activity)
+      {
+        id: document_id(activity),
+        persistent_id: document_id_value(activity.fetch('PersistentId')),
+        name: activity.fetch('Name', ''), caption: activity.fetch('Caption', ''),
+        position: activity.fetch('RelativeMiddlePoint', ''), size: activity.fetch('Size', ''),
+        task_page: activity.fetch('TaskPage').fetch('Page', ''),
+        task_page_id: document_id(activity.fetch('TaskPage')),
+        task_name: activity.fetch('TaskName').fetch('Text', ''),
+        task_name_id: document_id(activity.fetch('TaskName')),
+        task_description: activity.fetch('TaskDescription').fetch('Text', ''),
+        task_description_id: document_id(activity.fetch('TaskDescription')),
+        due_date: activity.fetch('DueDate', ''),
+        xpath: activity.fetch('UserTargeting').fetch('XPathConstraint', ''),
+        targeting_id: document_id(activity.fetch('UserTargeting')),
+        outcomes: bson_items(activity['Outcomes']).map { workflow_outcome_spec(_1) },
+        outcomes_marker: bson_marker(activity['Outcomes'], 2),
+        boundary_events_marker: bson_marker(activity['BoundaryEvents'], 2),
+        on_created_event_id: document_id(activity.fetch('OnCreatedEvent')),
+        auto_assign: activity['AutoAssignSingleTargetUser'] == true
+      }
+    end
+
+    def workflow_outcome_spec(outcome)
+      flow = outcome.fetch('Flow')
+      {
+        id: document_id(outcome),
+        persistent_id: document_id_value(outcome.fetch('PersistentId')),
+        value: outcome.fetch('Value', ''), flow_id: document_id(flow),
+        activities_marker: bson_marker(flow['Activities'], 2)
+      }
     end
 
     def enumeration_declaration(document)
