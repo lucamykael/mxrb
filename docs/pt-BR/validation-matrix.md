@@ -107,6 +107,11 @@ retorno falso e IDs. Ele também verifica leitura e atualização do campo legad
 dois ciclos regulares permaneceram idênticos, e o MxBuild 11.12.1 empacotou o
 fixture completo sem erros.
 
+O gate de module roles cobre nome, descrição, unit e IDs de papéis. Ruby-app e
+dois ciclos regulares mantiveram comparação idêntica sem fallback opaco; os
+project roles do fixture referenciam os papéis certificados e o MxBuild
+11.12.1 terminou com **BUILD SUCCEEDED**.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -202,7 +207,7 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.103 exemplos, zero falhas;
+- 2.104 exemplos, zero falhas;
 - 100,00% das linhas: 37.519/37.519;
 - 100,00% dos branches: 16.226/16.226;
 - avaliação Sudoku: 7/7 checks;

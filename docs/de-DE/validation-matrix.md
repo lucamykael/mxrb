@@ -106,10 +106,15 @@ alten Feldes `Event`, während neue Units den korrekten physischen Namen `Type`
 verwenden. Ruby-App und zwei reguläre Zyklen blieben identisch; MxBuild 11.12.1
 paketierte das vollständige Fixture fehlerfrei.
 
+Das Module-Roles-Gate deckt Name, Beschreibung, Unit und Rollen-IDs ab.
+Ruby-App und zwei reguläre Zyklen blieben ohne opaken Fallback identisch; die
+Project Roles des Fixtures referenzieren die zertifizierten Rollen, und
+MxBuild 11.12.1 endete mit **BUILD SUCCEEDED**.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.103 Beispiele, keine Fehler;
+- 2.104 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.519/37.519);
 - 100,00 % Branch-Abdeckung (16.226/16.226);
 - Sudoku-Modellbewertung: 7/7;
