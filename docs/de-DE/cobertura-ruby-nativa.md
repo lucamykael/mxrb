@@ -27,7 +27,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | Layouts, Page Templates, Snippets und Building Blocks | native |
 | Menüs | partial |
 | Navigation und Pluggable Widgets | partial |
-| Scheduled Events | partial |
+| Scheduled Events | native |
 | Reguläre Ausdrücke (Mendix/JVM-Text) | native |
 | Published REST und JSON-Mappings | partial |
 | Consumed REST und konsumiertes OData | partial |
@@ -61,6 +61,15 @@ und MxBuild 11.12.1 paketiert das Fixture erfolgreich. Alternative Aufgaben,
 Targetings, mehrere Outcome-Flows, Timer, Boundary Events, Subprozesse und
 erweiterte Sicherheit bleiben im verlustfreien Fallback; daher bleibt die
 Familie `partial`.
+
+## Scheduled Events
+
+`scheduled_event` deckt alle vier konkreten Mendix-11-Schedules ab: Minute,
+Stunde, Tag und Woche. Intervall, Offsets, Uhrzeit, Wochentage, Zeitzone,
+Overlap-Policy, Aktivierung, Handler und Metadaten sind editierbar. Zwei Zyklen
+erhalten die Unit-ID und die innere Schedule-ID; das Fixture mit allen vier
+Typen wird von MxBuild 11.12.1 erfolgreich paketiert. Unbekannte zukünftige
+Schedule-Typen bleiben fail-closed im verlustfreien Fallback.
 
 ## Wiederverwendbare Präsentationsdokumente
 
