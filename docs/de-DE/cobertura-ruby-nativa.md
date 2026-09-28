@@ -5,7 +5,7 @@ Compilers. Eine Oberfläche gilt erst dann als `native`, wenn Erstellen, Ändern
 Entfernen, erneutes Öffnen der MPR-Datei und Neukompilieren mit stabilen nativen
 IDs getestet sind.
 
-Stand 27. September 2026: Diese konservative Matrix bewertet ganze Familien,
+Stand 28. September 2026: Diese konservative Matrix bewertet ganze Familien,
 nicht den prozentualen Fertigstellungsgrad. Für Domäne, Sicherheit und geplante
 Ereignisse bestehen inzwischen inkrementelle Bearbeitungswege; nicht
 repräsentierte Varianten werden weiterhin erhalten. Geprüfte Verträge und
@@ -37,7 +37,7 @@ Die Zustände sind `native`, `partial`, `preserved_native` und `runtime_only`.
 | XSD/WSDL und weitere Mappings | partial |
 | Java Custom Actions | native |
 | Externe Connectors | partial |
-| Workflows und Task Pages | preserved_native |
+| Workflows und Task Pages | partial |
 | Settings, Themes, Design System und Ressourcen | partial |
 | Konventionelles React/TypeScript | runtime_only |
 
@@ -48,6 +48,19 @@ Vergleich.
 
 Unbekannte Varianten bleiben fail-closed: Sie werden erhalten und gemeldet,
 niemals stillschweigend konvertiert oder verworfen.
+
+## Workflows und Task Pages
+
+`workflow` erstellt Kontext, Namens-/Beschreibungsvorlagen, Fälligkeit,
+Start/Ende und einfache menschliche Aufgaben. Eine
+`SingleUserTaskActivity` verweist auf eine Task Page, deren erforderlicher
+Objektparameter `System.WorkflowUserTask` über die Page-DSL bearbeitbar ist;
+XPath-Targeting, `NoEvent` und ein Outcome mit leerem Flow gehören zum Vertrag.
+Zwei MPR-→-Ruby-→-MPR-Zyklen erhalten Semantik und alle inneren Workflow-IDs,
+und MxBuild 11.12.1 paketiert das Fixture erfolgreich. Alternative Aufgaben,
+Targetings, mehrere Outcome-Flows, Timer, Boundary Events, Subprozesse und
+erweiterte Sicherheit bleiben im verlustfreien Fallback; daher bleibt die
+Familie `partial`.
 
 ## Wiederverwendbare Präsentationsdokumente
 

@@ -5,7 +5,7 @@ superfície só recebe o estado `native` quando possui testes de criar, alterar,
 remover, reabrir o MPR e recompilar sem trocar identidades nativas. Preservar o
 BSON no sidecar não conta como edição.
 
-Atualização de 27 de setembro de 2026: a matriz abaixo é conservadora por
+Atualização de 28 de setembro de 2026: a matriz abaixo é conservadora por
 família, não uma porcentagem de conclusão. Domínio, segurança e operação já
 possuem rotas de autoria incremental; variantes não representadas continuam
 preservadas. Os contratos e limites verificados estão na
@@ -45,7 +45,7 @@ Estados:
 | XSD/WSDL e outros import/export mappings | parcial | XSD e WSDL consumido com conteúdos/namespace/localização e mappings referenciados; ampliar serviços WSDL interpretados e árvores complexas |
 | Java custom actions | native | assinatura tipada, scaffold com classe Java, fontes preservadas e pacote compilado pelo MxBuild 11.12.1 |
 | Connectors externos | parcial | auditoria e instalação por pacote oficial verificado; módulos protegidos continuam tratados como dependência externa |
-| Workflows e task pages | preserved_native | metamodelo, outcomes, timers, boundaries e segurança |
+| Workflows e task pages | parcial | contexto, start/end, single user task, página parametrizada, XPath e outcome simples; ampliar fluxos de outcome, timers, boundaries e segurança |
 | Settings, runtime, theme/design system e resources | parcial | assets e tokens cobertos; ampliar settings nativos versionados |
 | React/TypeScript convencional | runtime_only | vira nativo apenas como pluggable widget oficial |
 
@@ -65,15 +65,15 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.092 exemplos e mede 100,00% das
-linhas (37.347/37.347) e 100,00% dos branches (16.147/16.147). Nenhum código
+A suíte estrita passou com 2.096 exemplos e mede 100,00% das
+linhas (37.486/37.486) e 100,00% dos branches (16.214/16.214). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
 Cobertura de código 100/100 também não encerra cobertura funcional: workflows
-e task pages continuam `preserved_native`; integrações e várias outras
-famílias seguem `parcial`; as 455 propriedades de Forms estão em 455/455 no
-gate independente `studio_validated`.
+e task pages agora possuem um recorte tipado `parcial`; integrações e várias
+outras famílias também seguem `parcial`; as 455 propriedades de Forms estão em
+455/455 no gate independente `studio_validated`.
 
 ## Documentos reutilizáveis de apresentação
 
@@ -179,6 +179,20 @@ Connectors do Marketplace permanecem dependências externas: o MXRB audita GUID
 verificado, superfície pública e proveniência, e só instala por adapter oficial
 autenticado. Módulos protegidos não são apresentados como editáveis e pedidos
 sem pacote resolvido falham fechados.
+
+## Workflows e task pages
+
+`workflow` materializa contexto, templates de nome e descrição, vencimento,
+start/end e tarefas humanas simples. Cada `SingleUserTaskActivity` referencia
+uma página criada por `page`, cujo parâmetro de objeto pode ser declarado com
+`parameter :WorkflowUserTask, entity: 'System.WorkflowUserTask'`; o contrato
+inclui targeting XPath, evento `NoEvent` e um outcome com fluxo vazio.
+
+Dois ciclos MPR → Ruby → MPR preservam a semântica e todas as identidades do
+workflow e dos nós internos, sem BSON opaco. O fixture completo foi compilado e
+empacotado pelo MxBuild 11.12.1. A família permanece `parcial`: tarefas e
+targetings alternativos, múltiplos outcomes/fluxos, timers, boundary events,
+subprocessos e regras avançadas de segurança continuam no fallback lossless.
 
 ## OData publicado
 

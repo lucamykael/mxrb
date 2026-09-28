@@ -4,7 +4,7 @@ This is the source of truth for expansion of the Ruby → Mendix compiler. A
 surface is `native` only after tests cover creation, update, removal, reopening
 the MPR, and recompilation without changing native identities.
 
-September 27, 2026 update: this is a conservative family-level matrix, not a
+September 28, 2026 update: this is a conservative family-level matrix, not a
 completion percentage. Domain, security and scheduling now have incremental
 authoring paths; unrepresented variants remain preserved. Verified contracts
 and limitations are recorded in the
@@ -35,7 +35,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | XSD/WSDL and other mappings | partial |
 | Java custom actions | native |
 | External connectors | partial |
-| Workflows and task pages | preserved_native |
+| Workflows and task pages | partial |
 | Settings, themes, design system and resources | partial |
 | Conventional React/TypeScript | runtime_only |
 
@@ -48,15 +48,27 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,092 examples and measures 100.00% of
-lines (37,347/37,347) and 100.00% of branches (16,147/16,147). No executable
+The strict suite passed 2,096 examples and measures 100.00% of
+lines (37,486/37,486) and 100.00% of branches (16,214/16,214). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
 Code coverage alone does not complete functional coverage: workflows and task
-pages remain `preserved_native`; integrations and several other
-families remain `partial`. All 455 Forms properties are 455/455 in the
-independent `studio_validated` gate.
+pages now have a typed `partial` slice; integrations and several other families
+also remain `partial`. All 455 Forms properties are 455/455 in the independent
+`studio_validated` gate.
+
+## Workflows and task pages
+
+`workflow` authors context, name/description templates, due date, start/end,
+and simple human tasks. A `SingleUserTaskActivity` references a task page whose
+required `System.WorkflowUserTask` object parameter is editable through the
+page DSL, together with XPath targeting, `NoEvent`, and one empty-flow outcome.
+Two MPR → Ruby → MPR cycles preserve workflow semantics and every nested
+workflow identity without opaque BSON, and the official MxBuild 11.12.1
+packages the fixture successfully. Alternative task/targeting variants,
+multi-outcome flows, timers, boundary events, subprocesses, and advanced
+security remain lossless fallback, so the family stays `partial`.
 
 ## Reusable presentation documents
 

@@ -4436,7 +4436,9 @@ module Mxrb
         "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
         "__mxrb_allowed_roles_declared" => roles_declared,
         "__mxrb_deep_structure_declared" => false,
-        "Parameters" => IO::BsonCodec.build_array([]),
+        "Parameters" => IO::BsonCodec.build_array(
+          page.fetch(:parameters, []).map { page_parameter_doc(_1) }, marker: 3
+        ),
         "PopupWidth" => page.fetch(:popup) ? 600 : 0,
         "PopupHeight" => page.fetch(:popup) ? 400 : 0,
         "PopupResizable" => page.fetch(:popup),
@@ -4448,6 +4450,19 @@ module Mxrb
         }
       end
       doc
+    end
+
+    def page_parameter_doc(parameter)
+      {
+        '$ID' => parameter[:id].to_s.empty? ? SecureRandom.uuid : parameter.fetch(:id),
+        '$Type' => 'Forms$PageParameter', 'Name' => parameter.fetch(:name),
+        'ParameterType' => {
+          '$ID' => parameter[:type_id].to_s.empty? ? SecureRandom.uuid : parameter.fetch(:type_id),
+          '$Type' => 'DataTypes$ObjectType', 'Entity' => parameter.fetch(:entity)
+        },
+        'IsRequired' => parameter.fetch(:required),
+        'DefaultValue' => parameter.fetch(:default_value)
+      }
     end
 
     def legacy_widget_tree(value)
