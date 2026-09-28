@@ -25,7 +25,7 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Layouts, page templates, snippets, and building blocks | native |
 | Menus | partial |
 | Navigation and pluggable widgets | partial |
-| Scheduled events | partial |
+| Scheduled events | native |
 | Regular expressions (Mendix/JVM text) | native |
 | Published REST and JSON mappings | partial |
 | Consumed REST and consumed OData | partial |
@@ -48,7 +48,7 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,097 examples and measures 100.00% of
+The strict suite passed 2,098 examples and measures 100.00% of
 lines (37,497/37,497) and 100.00% of branches (16,214/16,214). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
@@ -69,6 +69,15 @@ workflow identity without opaque BSON, and the official MxBuild 11.12.1
 packages the fixture successfully. Alternative task/targeting variants,
 multi-outcome flows, timers, boundary events, subprocesses, and advanced
 security remain lossless fallback, so the family stays `partial`.
+
+## Scheduled events
+
+`scheduled_event` covers all four concrete Mendix 11 schedules: minute, hour,
+day, and week. Interval, offsets, clock time, weekdays, time zone, overlap
+policy, enablement, handler, and metadata are editable. Two cycles retain the
+unit and nested schedule IDs, and the four-kind fixture packages successfully
+with MxBuild 11.12.1. Unknown future schedule types remain fail-closed in the
+lossless fallback without reducing the versioned native claim.
 
 ## Reusable presentation documents
 

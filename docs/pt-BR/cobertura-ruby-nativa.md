@@ -35,7 +35,7 @@ Estados:
 | Menus | parcial | captions localizadas, page/microflow, ícones, hierarquia e remoção autoritativa; ações desconhecidas ficam em fallback lossless |
 | Navegação | parcial | perfis modernos e legados, home/login/not-found, títulos, flags offline e homes por papel; PWA e configurações offline desconhecidas permanecem opacas |
 | Pluggable widgets | parcial | pacote MPK e propriedades; ampliar schema, actions e design properties |
-| Scheduled events | parcial | bloco de configuração tipado e identidade privada; ampliar variantes |
+| Scheduled events | native | minuto/hora/dia/semana, offsets, weekdays, overlap, fuso, enablement e IDs estáveis |
 | Expressões regulares | native | texto Mendix/JVM, criação, edição, remoção e renomeação não referenciada com identidade privada |
 | REST publicado e mappings JSON | parcial | serviço, resources, operações, parâmetros, JSON/export mappings e autenticação suportada; variantes desconhecidas ficam lossless |
 | REST consumido e OData consumido | parcial | chamadas REST tipadas e serviço OData básico com CSDL v4; ampliar auth, proxy, form-data e entidades validadas |
@@ -65,7 +65,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.097 exemplos e mede 100,00% das
+A suíte estrita passou com 2.098 exemplos e mede 100,00% das
 linhas (37.497/37.497) e 100,00% dos branches (16.214/16.214). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -198,6 +198,15 @@ workflow e dos nós internos, sem BSON opaco. O fixture completo foi compilado e
 empacotado pelo MxBuild 11.12.1. A família permanece `parcial`: tarefas e
 targetings alternativos, múltiplos outcomes/fluxos, timers, boundary events,
 subprocessos e regras avançadas de segurança continuam no fallback lossless.
+
+## Scheduled events
+
+`scheduled_event` cobre os quatro schedules concretos do Mendix 11: minuto,
+hora, dia e semana. Intervalo, offsets, horário, weekdays, fuso, política de
+overlap, ativação, handler e metadados são editáveis; dois ciclos preservam as
+IDs da unit e do schedule aninhado. Um fixture com os quatro tipos foi
+compilado e empacotado pelo MxBuild 11.12.1. Tipos futuros desconhecidos
+continuam fail-closed no fallback lossless, sem reduzir a cobertura versionada.
 
 ## OData publicado
 
