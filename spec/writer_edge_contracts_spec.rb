@@ -7,11 +7,11 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
   subject(:writer) { described_class.new('model.mpr', version: '11.12.1', modules: []) }
 
   it 'validates system indexes and scheduled-event edge cases' do
-    expect(writer.send(:ruby_system_index_member?, name: :Owner, type: :Owner)).to be(true)
-    expect(writer.send(:ruby_system_index_member?, name: :Owner, type: :ChangedBy)).to be(false)
+    expect(writer.send(:ruby_system_index_member?, name: :CreatedDate, type: :CreatedDate)).to be(true)
+    expect(writer.send(:ruby_system_index_member?, name: :Owner, type: :Owner)).to be(false)
     expect(writer.send(:ruby_index_member_pointer, { name: :Name }, 'Name' => 'attribute-id'))
       .to eq('attribute-id')
-    expect(writer.send(:ruby_index_member_pointer, { name: :Owner, type: :Owner }, {}))
+    expect(writer.send(:ruby_index_member_pointer, { name: :CreatedDate, type: :CreatedDate }, {}))
       .to eq(Mxrb::Writer::ZERO_UUID)
     expect { writer.send(:ruby_index_member_pointer, { name: :Future, type: :Future }, {}) }
       .to raise_error(Mxrb::ValidationError, /unknown indexed system member/)
@@ -20,9 +20,13 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
                   {}, 'App', 'Item')
     end.to raise_error(Mxrb::ValidationError, /unknown indexed system member/)
     expect do
-      writer.send(:validate_ruby_indexes!, [{ members: [{ name: :Owner, type: :Owner }] }],
+      writer.send(:validate_ruby_indexes!, [{ members: [{ name: :CreatedDate, type: :CreatedDate }] }],
                   {}, 'App', 'Item')
     end.not_to raise_error
+    expect do
+      writer.send(:validate_ruby_indexes!, [{ members: [{ name: :Owner, type: :Owner }] }],
+                  {}, 'App', 'Item')
+    end.to raise_error(Mxrb::ValidationError, /unknown indexed system member/)
 
     expect do
       writer.send(:validate_ruby_scheduled_events!, 'App', [

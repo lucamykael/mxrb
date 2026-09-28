@@ -91,12 +91,20 @@ Assoziationsmitglieder ab. Zwei ACLs mit identischer semantischer Signatur
 behielten über zwei Zyklen verschiedene Regel- und Mitglieds-IDs. MxBuild
 11.12.1 paketierte das vollständige Fixture fehlerfrei.
 
+Das Gate für Domänenstrukturen deckt `Normal`-, `CreatedDate`- und
+`ChangedDate`-Indizes, alle vier Systemmitglied-Flags und Generalisierungen
+ab. Ruby-App-Export und zwei MPR-→-Ruby-→-MPR-Zyklen bewahrten Semantik, GUIDs
+und native IDs ohne opaken Fallback; MxBuild 11.12.1 endete mit **BUILD
+SUCCEEDED**. Die gespeicherten Werte `Association`, `Owner` und `ChangedBy`
+werden für Indizes abgelehnt, weil der offizielle `EntityIndex` sie selbst
+nicht materialisieren kann.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.100 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.497/37.497);
-- 100,00 % Branch-Abdeckung (16.216/16.216);
+- 2.102 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.514/37.514);
+- 100,00 % Branch-Abdeckung (16.224/16.224);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

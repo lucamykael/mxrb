@@ -34,7 +34,7 @@ module Mxrb
       ].freeze
       RECORD_RESERVED = %w[attributes id initialize mendix_id mendix_name to_h type].freeze
       ZERO_UUID = '00000000-0000-0000-0000-000000000000'
-      SYSTEM_INDEX_MEMBER_TYPES = %w[Owner CreatedDate ChangedDate ChangedBy].freeze
+      SYSTEM_INDEX_MEMBER_TYPES = %w[CreatedDate ChangedDate].freeze
       LEGACY_PUBLIC_PROJECTION_PATH = %r{\Aapp/(?:
         constants|dtos|enumerations|models|pages|scheduled_events|security|services
       )/.+\.rb\z}x

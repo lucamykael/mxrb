@@ -92,6 +92,14 @@ assinatura semântica mantiveram IDs distintos por dois ciclos; referências
 qualificadas e identidades de membros também permaneceram estáveis. O MxBuild
 11.12.1 empacotou o fixture completo sem erros.
 
+O gate de estruturas de domínio cobre índices `Normal`, `CreatedDate` e
+`ChangedDate`, as quatro flags de system members e generalização. Export
+Ruby-app e dois ciclos MPR → Ruby → MPR mantiveram semântica, GUIDs e IDs
+nativos sem fallback opaco; o MxBuild 11.12.1 terminou com **BUILD
+SUCCEEDED**. Os valores armazenados `Association`, `Owner` e `ChangedBy` são
+rejeitados para índices porque o próprio `EntityIndex` oficial não consegue
+materializá-los.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -187,9 +195,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.100 exemplos, zero falhas;
-- 100,00% das linhas: 37.497/37.497;
-- 100,00% dos branches: 16.216/16.216;
+- 2.102 exemplos, zero falhas;
+- 100,00% das linhas: 37.514/37.514;
+- 100,00% dos branches: 16.224/16.224;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

@@ -581,6 +581,24 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       lifecycle: [{ event: :before_commit, handler: 'App.Validate' }]
     })
     expect(entity_source).to include('query: "SELECT 1"', 'include_offline: true', 'before_commit')
+
+    index_attribute = double(id: 'attribute-id', name: 'Code')
+    indexed_entity = double(attributes: [index_attribute], qualified_name: 'App.View')
+    expect(exporter.send(
+             :exported_index_member_name, indexed_entity,
+             { 'AttributePointer' => 'attribute-id' }, 'Normal'
+           )).to eq('Code')
+    expect(exporter.send(:exported_index_member_name, indexed_entity, {}, 'CreatedDate'))
+      .to eq('CreatedDate')
+    expect do
+      exporter.send(:exported_index_member_name, indexed_entity, {}, 'Owner')
+    end.to raise_error(Mxrb::SerializationError, /unsupported index member type/)
+    expect do
+      exporter.send(
+        :exported_index_member_name, indexed_entity,
+        { 'AttributePointer' => 'missing' }, 'Normal'
+      )
+    end.to raise_error(Mxrb::SerializationError, /unresolved index attribute pointer/)
   end
 
   it 'exports complete access-rule and public-page options' do

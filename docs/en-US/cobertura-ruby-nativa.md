@@ -19,7 +19,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Enumeration definitions | native |
 | Constants | native |
 | Entity access rules | native |
-| Indexes, system members, generalization and OQL views | partial |
+| Indexes, system members, and generalization | native |
+| OQL views | partial |
 | Entity lifecycle | partial |
 | Module roles and project security | partial |
 | Microflows, nanoflows and core pages | partial |
@@ -49,8 +50,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,100 examples and measures 100.00% of
-lines (37,497/37,497) and 100.00% of branches (16,216/16,216). No executable
+The strict suite passed 2,102 examples and measures 100.00% of
+lines (37,514/37,514) and 100.00% of branches (16,224/16,224). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -87,6 +88,20 @@ explicit IDs, while Ruby-app mode uses stable private identities and emits no
 UUIDs publicly. Reconciliation tests already cover authoritative creation,
 editing, and removal. The complete fixture packages successfully with MxBuild
 11.12.1 without opaque fallback.
+
+## Indexes, system members, and generalization
+
+Indexes cover all three member types that Studio Pro 11.12.1 can materialize:
+normal attributes, `CreatedDate`, and `ChangedDate`, including ordering,
+direction, `IncludeInOffline`, GUIDs, and member IDs. `Association`, `Owner`,
+and `ChangedBy` remain in Mendix's stored enum, but `EntityIndex` itself cannot
+resolve them; MXRB now rejects them before producing an invalid MPR.
+
+All four system-member flags (`owner`, `created_date`, `changed_date`, and
+`changed_by`) and qualified generalizations are editable. The gate performs a
+Ruby-app export and two MPR → Ruby → MPR cycles, requires identical comparison
+and stable IDs, and permits no opaque BSON fallback. Official MxBuild 11.12.1
+finishes with `BUILD SUCCEEDED`. OQL views remain separately `partial`.
 
 ## Workflows and task pages
 
