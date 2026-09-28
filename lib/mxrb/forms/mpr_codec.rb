@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'base64'
 require 'securerandom'
 require_relative '../io/bson_codec'
 require_relative 'storage_naming'
@@ -62,7 +63,13 @@ module Mxrb
         previous_baselines = @pluggable_baselines
         @pluggable_baselines = index_pluggable_baselines(baseline)
         prepare_node_ids(node)
-        encode_embedded(node)
+        document = encode_embedded(node)
+        if baseline
+          replacements = {}
+          reconcile_storage_identities!(document, baseline, replacements)
+          rewrite_storage_references!(document, replacements)
+        end
+        document
       ensure
         @node_ids = previous_ids
         @local_encode_references = previous_references
@@ -110,6 +117,107 @@ module Mxrb
       private
 
       attr_reader :catalog, :reference_decoder, :reference_encoder, :pluggable_codec
+
+      IDENTITY_FIELDS = %w[
+        Name LanguageCode Property Attribute Association Parameter Variable Entity
+      ].freeze
+
+      def reconcile_storage_identities!(generated, baseline, replacements)
+        return unless generated.is_a?(Hash) && baseline.is_a?(Hash)
+        return unless compatible_storage_type?(generated, baseline)
+
+        if generated['$ID'] && baseline['$ID']
+          replacements[generated.fetch('$ID').to_s] = IO::BsonCodec.extract_id(baseline.fetch('$ID')).to_s
+          generated['$ID'] = baseline.fetch('$ID')
+        end
+        generated.each do |key, value|
+          previous = baseline[key]
+          if value.is_a?(Hash) && previous.is_a?(Hash)
+            reconcile_storage_identities!(value, previous, replacements)
+          elsif value.is_a?(Array) && previous.is_a?(Array)
+            reconcile_storage_collection!(value, previous, replacements)
+          end
+        end
+      end
+
+      def reconcile_storage_collection!(generated, baseline, replacements)
+        current_items = storage_array_items(generated)
+        previous_items = storage_array_items(baseline)
+        available = previous_items.each_index.to_a
+        current_items.each_with_index do |item, index|
+          next unless item.is_a?(Hash)
+
+          match = storage_identity_match(item, previous_items, available, index, current_items.size)
+          next unless match
+
+          available.delete(match)
+          reconcile_storage_identities!(item, previous_items.fetch(match), replacements)
+        end
+      end
+
+      def storage_identity_match(item, candidates, available, index, current_size)
+        exact = available.select { storage_fingerprint(candidates.fetch(_1)) == storage_fingerprint(item) }
+        return exact.first if exact.one?
+
+        signature = storage_identity_signature(item)
+        semantic = available.select do |candidate|
+          storage_identity_signature(candidates.fetch(candidate)) == signature
+        end
+        return semantic.first if !signature.empty? && semantic.one?
+
+        typed = available.select { compatible_storage_type?(item, candidates.fetch(_1)) }
+        return typed.first if typed.one?
+        return index if current_size == candidates.size && available.include?(index) &&
+                        compatible_storage_type?(item, candidates.fetch(index))
+
+        nil
+      end
+
+      def storage_identity_signature(value)
+        return [] unless value.is_a?(Hash)
+
+        IDENTITY_FIELDS.filter_map do |field|
+          item = value[field]
+          [field, item] unless item.nil? || item.to_s.empty?
+        end
+      end
+
+      def storage_fingerprint(value)
+        case value
+        when Hash
+          value.reject { |key, _item| key.to_s == '$ID' }
+               .sort_by { |key, _item| key.to_s }
+               .map { |key, item| [key.to_s, storage_fingerprint(item)] }
+        when Array then storage_array_items(value).map { storage_fingerprint(_1) }
+        when BSON::Binary then [value.type, Base64.strict_encode64(value.data)]
+        else value
+        end
+      end
+
+      def compatible_storage_type?(left, right)
+        left.is_a?(Hash) && right.is_a?(Hash) && left['$Type'].to_s == right['$Type'].to_s
+      end
+
+      def storage_array_items(value)
+        value.drop(value.first.is_a?(Integer) ? 1 : 0)
+      end
+
+      def rewrite_storage_references!(value, replacements)
+        case value
+        when Hash
+          value.each do |key, child|
+            next if key.to_s == '$ID'
+
+            value[key] = replacements.fetch(child, child) if child.is_a?(String)
+            rewrite_storage_references!(child, replacements) unless child.is_a?(String)
+          end
+        when Array
+          value.each_with_index do |child, index|
+            value[index] = replacements.fetch(child, child) if child.is_a?(String)
+            rewrite_storage_references!(child, replacements) unless child.is_a?(String)
+          end
+        end
+      end
 
       def index_pluggable_baselines(document)
         index = Hash.new { |entries, key| entries[key] = [] }
