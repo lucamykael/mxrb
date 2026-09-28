@@ -99,12 +99,19 @@ SUCCEEDED**. Die gespeicherten Werte `Association`, `Owner` und `ChangedBy`
 werden für Indizes abgelehnt, weil der offizielle `EntityIndex` sie selbst
 nicht materialisieren kann.
 
+Das Gate für Entitäts-Lifecycle deckt alle vier Before/After- und
+Commit/Delete-Kombinationen, Microflow-Referenz, Objektübergabe,
+False-Fehlerweitergabe und IDs ab. Es prüft auch das Lesen und Aktualisieren des
+alten Feldes `Event`, während neue Units den korrekten physischen Namen `Type`
+verwenden. Ruby-App und zwei reguläre Zyklen blieben identisch; MxBuild 11.12.1
+paketierte das vollständige Fixture fehlerfrei.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.102 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.514/37.514);
-- 100,00 % Branch-Abdeckung (16.224/16.224);
+- 2.103 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.519/37.519);
+- 100,00 % Branch-Abdeckung (16.226/16.226);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

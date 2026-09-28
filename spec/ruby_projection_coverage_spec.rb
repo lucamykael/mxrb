@@ -340,9 +340,17 @@ RSpec.describe 'complete Ruby projection contracts' do
       bson_array([{ '$Type' => 'Vendor$Handler' }]), 'App', 'Item'
     )
     expect(Mxrb::IO::BsonCodec.parse_array(lifecycle)[:items]).to include(
-      include('$Type' => 'DomainModels$EventHandler', 'Moment' => 'Before', 'Event' => 'Commit'),
+      include('$Type' => 'DomainModels$EventHandler', 'Moment' => 'Before', 'Type' => 'Commit'),
       include('$Type' => 'Vendor$Handler')
     )
+    legacy_lifecycle = writer.send(
+      :ruby_lifecycle_doc,
+      { event: :after_delete, handler: 'App.Legacy' },
+      { '$ID' => id(32), '$Type' => 'DomainModels$EventHandler', 'Event' => 'Delete' },
+      'App.Item'
+    )
+    expect(legacy_lifecycle).to include('Event' => 'Delete')
+    expect(legacy_lifecycle).not_to have_key('Type')
 
     rules = writer.send(
       :ruby_validation_rule_docs,

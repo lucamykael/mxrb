@@ -1051,7 +1051,7 @@ RSpec.describe Mxrb do
         entity_doc = project.parse_bson(raw_domain)["Entities"][1]
         handler = entity_doc["EventHandlers"][1]
         expect(handler["$Type"]).to eq("DomainModels$EventHandler")
-        expect(handler["Event"]).to eq("Commit")
+        expect(handler["Type"]).to eq("Commit")
         expect(handler["Moment"]).to eq("Before")
         raw_page = project.mpr.units_by_containment("Documents").find {
           project.parse_bson(_1)["Name"] == "OrderEdit"
