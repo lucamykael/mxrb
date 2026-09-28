@@ -29,7 +29,8 @@ Estados:
 | Índices, system members e generalização | native | índices `Normal`, `CreatedDate` e `ChangedDate`; flags de auditoria, herança e IDs estáveis |
 | OQL view | parcial | autoria incremental e reconciliação privada; ampliar fontes e variantes por versão |
 | Lifecycle de entidade | native | before/after commit/delete, microflow, flags e IDs estáveis |
-| Module roles e project security | parcial | roles, user roles, demo users e política de senha; ampliar variantes por versão |
+| Module roles | native | nome, descrição, criação/alteração/remoção e IDs estáveis |
+| Project security | parcial | user roles, demo users e política de senha; ampliar settings e access containers |
 | Microflows e nanoflows | parcial | grafo e ações mapeadas são native; ampliar todas as famílias de ações/eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
@@ -66,7 +67,7 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.103 exemplos e mede 100,00% das
+A suíte estrita passou com 2.104 exemplos e mede 100,00% das
 linhas (37.519/37.519) e 100,00% dos branches (16.226/16.226). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
@@ -133,6 +134,20 @@ emitem — evitando que `Delete` seja reinterpretado como o default `Commit`.
 Ruby-app e dois ciclos MPR → Ruby → MPR mantêm comparação idêntica e IDs
 estáveis sem fallback opaco. O fixture com os quatro eventos terminou com
 `BUILD SUCCEEDED` no MxBuild oficial.
+
+## Module roles
+
+`module_role` cobre toda a estrutura `Security$ModuleRole` do Mendix 11: nome,
+descrição e identidade, dentro de uma unit `Security$ModuleSecurity` também
+estável. A coleção é autoritativa e os testes de reconciliação cobrem criação,
+alteração, remoção e renomeação explícita sem pareamento por posição.
+
+O gate exporta para Ruby-app e para o DSL regular, executa dois ciclos MPR →
+Ruby → MPR, verifica a unit e os IDs dos papéis e proíbe fallback opaco. O
+fixture referencia os papéis por project roles reais e foi empacotado com
+`BUILD SUCCEEDED` no MxBuild 11.12.1. `Project security` permanece separado e
+`parcial` enquanto seus settings globais e access containers não fecharem o
+mesmo contrato.
 
 ## Documentos reutilizáveis de apresentação
 
