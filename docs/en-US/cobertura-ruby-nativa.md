@@ -17,7 +17,8 @@ States are `native`, `partial`, `preserved_native`, and `runtime_only`.
 | Entities, non-persistent DTOs and attributes | native |
 | Local and cross-module associations | native |
 | Enumeration definitions | native |
-| Constants and entity access rules | partial |
+| Constants | native |
+| Entity access rules | partial |
 | Indexes, system members, generalization and OQL views | partial |
 | Entity lifecycle | partial |
 | Module roles and project security | partial |
@@ -48,8 +49,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,098 examples and measures 100.00% of
-lines (37,497/37,497) and 100.00% of branches (16,214/16,214). No executable
+The strict suite passed 2,099 examples and measures 100.00% of
+lines (37,497/37,497) and 100.00% of branches (16,216/16,216). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -57,6 +58,20 @@ Code coverage alone does not complete functional coverage: workflows and task
 pages now have a typed `partial` slice; integrations and several other families
 also remain `partial`. All 455 Forms properties are 455/455 in the independent
 `studio_validated` gate.
+
+## Constants
+
+`constant` covers all five types accepted by Mendix 11: string, Boolean,
+DateTime, decimal, and integer/long. Default value, documentation, export
+level, excluded state, and client exposure are editable. Two MPR → Ruby → MPR
+cycles retain semantics, the unit ID, and the nested type ID without opaque
+BSON. The gate also exercises the exported `:date_time` spelling and
+normalizes it back to the native type without changing identity.
+
+The five-type fixture packages successfully with MxBuild 11.12.1. DateTime
+uses the native `yyyy-MM-ddTHH:mm:ss` format required by the Studio Pro
+validator. Private configuration overrides remain in the local sidecar and
+their values are not emitted into public Ruby.
 
 ## Workflows and task pages
 

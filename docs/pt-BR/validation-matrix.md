@@ -80,6 +80,12 @@ editáveis. Toda unit nativa mantém o baseline JSON e também é expandida em
 - MDA atual: 11.941.148 bytes, SHA-256
   `fc4fb7a2ea2b4ad7cdb0fcd3296a5dbb5c4d148371aad997ab0032d2c5c0cf33`.
 
+O gate dedicado de constantes materializou string, boolean, DateTime, decimal
+e integer/long, fez dois ciclos MPR → Ruby → MPR com IDs estáveis e foi
+empacotado pelo MxBuild 11.12.1. O caso DateTime usa a representação nativa
+`yyyy-MM-ddTHH:mm:ss`; valores privados de configuração permanecem locais e
+não são publicados.
+
 ## Validação oficial Mendix 5–9
 
 O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
@@ -175,9 +181,9 @@ sem MDL.
 
 ## Avaliações, cobertura e runtime
 
-- 2.098 exemplos, zero falhas;
+- 2.099 exemplos, zero falhas;
 - 100,00% das linhas: 37.497/37.497;
-- 100,00% dos branches: 16.214/16.214;
+- 100,00% dos branches: 16.216/16.216;
 - avaliação Sudoku: 7/7 checks;
 - testes funcionais Sudoku: 3/3 localmente em 34,16 s;
 - testes funcionais Sudoku: 3/3 no Docker em 39,52 s.

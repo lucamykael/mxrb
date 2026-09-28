@@ -78,12 +78,19 @@ Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro eine
 ausdrückliche MXRB-Einschränkung und gehört nicht zum direkten automatischen
 Gate.
 
+Das dedizierte Konstanten-Gate materialisiert String, Boolean, DateTime,
+Decimal und Integer/Long. Zwei MPR → Ruby → MPR-Zyklen bewahren Semantik sowie
+Unit- und Typ-ID; MxBuild 11.12.1 paketiert das Ergebnis erfolgreich. DateTime
+verwendet das native Format `yyyy-MM-ddTHH:mm:ss`. Private
+Konfigurationswerte bleiben lokal und werden nicht in öffentliches Ruby
+geschrieben.
+
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.098 Beispiele, keine Fehler;
+- 2.099 Beispiele, keine Fehler;
 - 100,00 % Zeilenabdeckung (37.497/37.497);
-- 100,00 % Branch-Abdeckung (16.214/16.214);
+- 100,00 % Branch-Abdeckung (16.216/16.216);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 
