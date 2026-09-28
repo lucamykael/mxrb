@@ -64,6 +64,20 @@ Familie bleibt `partial`, weil Legacy-/Spezialaktionen außerhalb des
 Core-Schemas und weitere Event-/Split-Varianten denselben Vertrag noch
 benötigen.
 
+## Microflow- und Nanoflow-Annotationen
+
+`annotation` macht Caption, Position und Größe von
+`Microflows$Annotation`-Knoten autoritativ. Das Gate deckt Erstellung in Ruby,
+Bearbeitung und Entfernung im Ruby-App-Modus, einen Ruby-App- und zwei reguläre
+Zyklen mit stabilen IDs ohne opaken Fallback ab. Beim Entfernen entfällt auch
+ein `AnnotationFlow`, dessen Endpoint nicht mehr existiert; weiterhin gültige
+Verbindungen behalten ihre eigene ID und die Kurven-ID.
+
+Der reale Korpus enthält 291 Annotationen und 153 Verbindungen von Mendix 5.21
+bis 11.12.1. Das moderne Fixture mit erhaltener Verbindung endet im MxBuild
+11.12.1 mit `BUILD SUCCEEDED`. Für Verbindungen besteht noch keine eigene
+Ruby-Deklaration; sie werden in diesem Schritt erhalten, aber nicht bearbeitet.
+
 ## Workflows und Task Pages
 
 `workflow` erstellt Kontext, Namens-/Beschreibungsvorlagen, Fälligkeit,

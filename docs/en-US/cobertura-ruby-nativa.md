@@ -53,8 +53,8 @@ silently converted or discarded.
 
 ## Current measurable coverage
 
-The strict suite passed 2,112 examples and measures 100.00% of
-lines (37,693/37,693) and 100.00% of branches (16,312/16,312). No executable
+The strict suite passed 2,113 examples and measures 100.00% of
+lines (37,742/37,742) and 100.00% of branches (16,324/16,324). No executable
 library code was removed from the denominator to reach the gate. CI enforces
 the same 100/100 floor.
 
@@ -146,6 +146,20 @@ The fixture finishes with `BUILD SUCCEEDED` under the official MxBuild
 11.12.1. The family remains `partial` because legacy/specialized actions
 outside the core schema and additional event/split variants still require the
 same contract.
+
+## Microflow and nanoflow annotations
+
+`annotation` makes the caption, position, and size of
+`Microflows$Annotation` nodes authoritative. The gate covers Ruby creation,
+Ruby-app editing and removal, one Ruby-app cycle, and two regular cycles with
+stable IDs and no opaque fallback. Removal also drops an `AnnotationFlow`
+whose endpoint no longer exists, while still-valid connections retain their
+own ID and the curve ID.
+
+The real corpus contains 291 annotations and 153 connections across Mendix
+5.21 through 11.12.1; the modern fixture with a retained connection finishes
+with `BUILD SUCCEEDED` under MxBuild 11.12.1. Connections do not yet have their
+own Ruby declaration, so this slice preserves but does not edit them.
 
 ## Module roles
 

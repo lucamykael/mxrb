@@ -130,6 +130,12 @@ bestand. Ein Ruby-App- und zwei reguläre Zyklen bewahren Unit-, Activity- und
 Action-ID ohne opaken Fallback; das offizielle MxBuild 11.12.1 endet mit
 **BUILD SUCCEEDED**.
 
+Das Flow-Annotation-Gate deckt Erstellung, Bearbeitung und Entfernung von
+Caption, Position und Größe mit stabilen IDs ab. Vorhandene Verbindungen
+bleiben bei fortbestehenden Endpoints identisch und werden entfernt, wenn sie
+sonst ungültig wären; das Fixture mit gültigem `AnnotationFlow` endet im
+MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
+
 Das OQL-View-Gate deckt Source Document, OQL-Werte der Attribute und
 OQL-Association-Quellen ab. Ruby-App und zwei reguläre Zyklen behalten alle
 verschachtelten IDs ohne opaken Fallback; das vollständige Fixture endete im
@@ -138,9 +144,9 @@ offiziellen MxBuild 11.12.1 mit **BUILD SUCCEEDED**.
 ## Semantik, Tests und Runtime
 
 - 1.734 Artefakte und 3.388 Referenzen;
-- 2.112 Beispiele, keine Fehler;
-- 100,00 % Zeilenabdeckung (37.693/37.693);
-- 100,00 % Branch-Abdeckung (16.312/16.312);
+- 2.113 Beispiele, keine Fehler;
+- 100,00 % Zeilenabdeckung (37.742/37.742);
+- 100,00 % Branch-Abdeckung (16.324/16.324);
 - Sudoku-Modellbewertung: 7/7;
 - funktionale Runtime-Tests: 3/3 lokal und 3/3 in Docker.
 

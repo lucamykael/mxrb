@@ -2856,6 +2856,13 @@ module Mxrb
         _acts << { type: :show_home_page }
       end
 
+      def annotation(caption, position: '0;0', size: '200;80')
+        _acts << {
+          type: :annotation, caption: caption.to_s,
+          position: position.to_s, size: size.to_s
+        }
+      end
+
       def aggregate(list, function:, as:, attribute: nil)
         _acts << {
           type: :aggregate, variable: list.to_s, function: function.to_s,
@@ -3182,6 +3189,7 @@ module Mxrb
         @apply_entity_access = nil
         @mark_as_used = nil
         @excluded = nil
+        @annotations_authoritative = false
       end
 
       def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
@@ -3242,6 +3250,11 @@ module Mxrb
       def apply_entity_access(value = true) = (@apply_entity_access = !!value)
       def mark_as_used(value = true) = (@mark_as_used = !!value)
       def excluded(value = true) = (@excluded = !!value)
+
+      def annotations_authoritative(value = true)
+        @annotations_authoritative = value == true
+        @body ||= []
+      end
 
       def allowed_roles(*roles)
         @allowed_roles = roles.map(&:to_s)
@@ -3307,12 +3320,23 @@ module Mxrb
           allow_concurrent_execution: @allow_concurrent_execution,
           apply_entity_access: @apply_entity_access,
           mark_as_used: @mark_as_used, excluded: @excluded,
+          annotations_authoritative: @annotations_authoritative || body_contains_annotation?(@body),
           preserve_native_body: !@expected_body_fingerprint.nil? &&
             @expected_body_fingerprint == current_fingerprint
         }.tap { _1[:unit_id] = @unit_id unless @unit_id.nil? }
       end
 
       private
+
+      def body_contains_annotation?(activities)
+        Array(activities).any? do |activity|
+          activity[:type] == :annotation ||
+            body_contains_annotation?(activity[:activities]) ||
+            body_contains_annotation?(activity[:true_branch]) ||
+            body_contains_annotation?(activity[:false_branch]) ||
+            activity.fetch(:branches, {}).values.any? { body_contains_annotation?(_1) }
+        end
+      end
 
       def _acts = (@body ||= [])
     end

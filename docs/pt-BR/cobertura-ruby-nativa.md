@@ -32,7 +32,7 @@ Estados:
 | Module roles | native | nome, descrição, criação/alteração/remoção e IDs estáveis |
 | Project roles, demo users e política de senha | native | propriedades, relações, IDs/GUIDs estáveis e segredos privados |
 | Settings globais e access containers de project security | native | opções globais, senha administrativa privada e ACLs de FileDocument/Image com IDs estáveis |
-| Microflows e nanoflows | parcial | todas as ações core inventariadas no schema 11 são editáveis; ampliar ações legadas/especializadas e variantes de eventos/splits |
+| Microflows e nanoflows | parcial | ações core 11 e nós de anotação são editáveis; ampliar conexões de anotação, ações legadas/especializadas e variantes de eventos/splits |
 | Páginas core | parcial | 41 widgets e 455 ocorrências passam MPR → Ruby → MPR e MxBuild 11.12.1; falta ampliar o runtime funcional |
 | Layouts, page templates, snippets e building blocks | native | DSL Forms tipada; criar/alterar/remover, dois ciclos com IDs estáveis e MxBuild 11.12.1 sem problemas |
 | Menus | parcial | captions localizadas, page/microflow, ícones, hierarquia e remoção autoritativa; ações desconhecidas ficam em fallback lossless |
@@ -68,8 +68,8 @@ preservada e relatada, nunca silenciosamente convertida nem descartada.
 
 ## Cobertura verificável atual
 
-A suíte estrita passou com 2.112 exemplos e mede 100,00% das
-linhas (37.693/37.693) e 100,00% dos branches (16.312/16.312). Nenhum código
+A suíte estrita passou com 2.113 exemplos e mede 100,00% das
+linhas (37.742/37.742) e 100,00% dos branches (16.324/16.324). Nenhum código
 executável da biblioteca foi removido do denominador para atingir o gate. O CI
 exige o mesmo piso de 100/100.
 
@@ -160,6 +160,19 @@ da unit, da atividade e da ação sem recorrer a fallback opaco.
 O fixture terminou com `BUILD SUCCEEDED` no MxBuild oficial 11.12.1. A família
 permanece `parcial` porque ações legadas/especializadas fora do schema core e
 variantes adicionais de eventos e splits ainda precisam do mesmo contrato.
+
+## Anotações de microflows e nanoflows
+
+`annotation` torna autoritativos o caption, a posição e o tamanho de nós
+`Microflows$Annotation`. O gate cobre criação via Ruby, edição e remoção via
+Ruby app, um ciclo Ruby app e dois ciclos regulares com IDs estáveis e sem
+fallback opaco. A remoção também elimina `AnnotationFlow` cujo endpoint deixou
+de existir, enquanto conexões ainda válidas preservam seus IDs e o ID da curva.
+
+O corpus real contém 291 anotações e 153 conexões entre Mendix 5.21 e 11.12.1;
+o fixture moderno com conexão preservada terminou com `BUILD SUCCEEDED` no
+MxBuild 11.12.1. As conexões ainda não possuem declaração Ruby própria, por
+isso continuam preservadas, mas não editáveis, neste recorte.
 
 ## Module roles
 
