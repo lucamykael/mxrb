@@ -5,7 +5,7 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength
 RSpec.describe 'Workflow certification' do
-  it 'keeps a workflow, single user task, outcome, and task page stable for two Ruby cycles' do
+  it 'keeps a workflow, user-task outcomes, and task page stable for two Ruby cycles' do
     Dir.mktmpdir('mxrb-workflow-') do |dir|
       current = File.join(dir, 'source.mpr')
       build_source(current)
@@ -20,7 +20,8 @@ RSpec.describe 'Workflow certification' do
         expect(source).to include(
           'workflow :Approval', 'context_entity: "App.Request"',
           'workflow_name: "Approval request"', 'persistent_id:',
-          'user_tasks:', ':task_page => "App.Review"', ':value => "Complete"'
+          'user_tasks:', ':task_page => "App.Review"', ':value => "Approve"',
+          ':value => "Reject"'
         )
         expect(source).not_to include('native_document', 'deep_structure:', 'bson_binary(')
         page_source = Dir[File.join(exported, 'modules/App/presentation/pages/*.rb')]
@@ -102,11 +103,24 @@ RSpec.describe 'Workflow certification' do
       expect(exporter.send(:semantic_workflow_user_task?, candidate)).to be(false)
     end
 
-    outcome = Mxrb::IO::BsonCodec.parse_array(task.fetch('Outcomes')).fetch(:items).first
+    empty_outcomes = deep_copy(task)
+    empty_outcomes['Outcomes'] = Mxrb::IO::BsonCodec.build_array([], marker: 2)
+    expect(exporter.send(:semantic_workflow_user_task?, empty_outcomes)).to be(false)
+
+    duplicate_outcomes = deep_copy(task)
+    duplicate = deep_copy(outcome = Mxrb::IO::BsonCodec.parse_array(
+      task.fetch('Outcomes')
+    ).fetch(:items).first)
+    duplicate_outcomes['Outcomes'] = Mxrb::IO::BsonCodec.build_array(
+      [outcome, duplicate], marker: 2
+    )
+    expect(exporter.send(:semantic_workflow_user_task?, duplicate_outcomes)).to be(false)
+
     [
       ->(value) { value['$Type'] = 'Workflows$FutureOutcome' },
       ->(value) { value['Future'] = true },
-      ->(value) { value['Value'] = nil }
+      ->(value) { value['Value'] = nil },
+      ->(value) { value['Value'] = '' }
     ].each do |mutate|
       candidate = deep_copy(outcome)
       mutate.call(candidate)
@@ -119,9 +133,22 @@ RSpec.describe 'Workflow certification' do
     expect do
       builder.workflow(
         :Invalid, context_entity: 'App.Request',
-                  user_tasks: [{ task_page: 'App.Review', outcomes: [{}, {}] }]
+                  user_tasks: [{ task_page: 'App.Review', outcomes: [] }]
       )
-    end.to raise_error(ArgumentError, /exactly one outcome/)
+    end.to raise_error(ArgumentError, /at least one outcome/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request',
+                  user_tasks: [{ task_page: 'App.Review', outcomes: [{ value: '' }] }]
+      )
+    end.to raise_error(ArgumentError, /cannot be empty/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request', user_tasks: [{
+          task_page: 'App.Review', outcomes: [{ value: 'Complete' }, { value: 'Complete' }]
+        }]
+      )
+    end.to raise_error(ArgumentError, /must be unique/)
 
     page = Mxrb::Dsl::PageBuilder.new(:Review)
     page.parameter(
@@ -157,7 +184,7 @@ RSpec.describe 'Workflow certification' do
                               name: 'Review', caption: 'Review', task_page: 'App.Review',
                               task_name: 'Review request', task_description: 'Review the request',
                               xpath: "[id = '[%CurrentUser%]']",
-                              outcomes: [{ value: 'Complete' }]
+                              outcomes: [{ value: 'Approve' }, { value: 'Reject' }]
                             }]
       end
     end
