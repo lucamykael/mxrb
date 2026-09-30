@@ -30,7 +30,7 @@ RSpec.describe 'semantic project documents' do
       Mxrb::Exporter.new(source, exported).export!
       settings = File.read(File.join(exported, 'app', 'settings', 'settings.rb'))
       texts = File.read(File.join(exported, 'app', 'texts', 'system_texts.rb'))
-      expect(settings).to include('project_settings_document(', 'Settings$ModelSettings')
+      expect(settings).to include('project_settings do', 'model do', 'use_oql_version2 true')
       expect(texts).to include('system_text_collection(', 'Texts$SystemText')
       expect(settings + texts).not_to include('native_unit ', 'deep_structure:', 'bson_binary(')
       native_source = File.read(File.join(exported, '.mxrb', 'native_units.rb'))

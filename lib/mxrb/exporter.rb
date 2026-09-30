@@ -358,7 +358,7 @@ module Mxrb
       settings = documents.filter_map do |unit, document|
         next unless document['$Type'] == 'Settings$ProjectSettings'
 
-        if project.mendix_version.to_s.split('.').first.to_i == 11
+        if (5..11).cover?(project.mendix_version.to_s.split('.').first.to_i)
           typed_project_settings_declaration(document)
         else
           project_document_declaration(:project_settings_document, unit, document, 'Settings')

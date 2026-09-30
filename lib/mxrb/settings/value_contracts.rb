@@ -8,6 +8,7 @@ module Mxrb
       BOOLEAN_FIELDS = %w[
         EnableDownloadResources EnableMicroflowReachabilityAnalysis EnableNewStringBehavior
         EnableNewWidgetGeneration EnableRspackBundler EnableWidgetBundling ObsoleteEnableUrlEncoding
+        FeedbackWidgetUpdated UseModernUI SkipJarAnalyzerStep
         AllowUserMultipleSessions EnableDataStorageNewQueryHandling EnableDataStorageOptimisticLocking
         EnforceDataStorageUniqueness UseDatabaseForeignKeyConstraints UseDeprecatedClientForWebServiceCalls
         UseOQLVersion2 UseSystemContextForBackgroundTasks LowerCaseMicroflowVariables IsDistributable
@@ -36,7 +37,7 @@ module Mxrb
       ENUM_FIELDS = {
         'UseOptimizedClient' => %w[Yes No],
         'FirstDayOfWeek' => %w[Default Sunday Monday Saturday],
-        'HashAlgorithm' => %w[BCrypt SHA256],
+        'HashAlgorithm' => %w[BCrypt SHA256 SSHA256],
         'RoundingMode' => %w[HalfUp HalfEven Down Up Floor Ceiling],
         'DefaultAssociationStorage' => %w[Column Table],
         'DefaultSequenceFlowLineType' => %w[BezierCurve Straight],

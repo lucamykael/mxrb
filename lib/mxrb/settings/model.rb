@@ -7,7 +7,7 @@ module Mxrb
   module Settings
     class Error < Mxrb::SerializationError; end
 
-    # Names and collection contracts used by Studio Pro 11 project settings.
+    # Names and collection contracts used by Studio Pro 5 through 11 settings.
     module Catalog # rubocop:disable Metrics/ModuleLength
       TYPE_METHODS = {
         'Settings$ProjectSettings' => :project_settings,
@@ -44,11 +44,16 @@ module Mxrb
         'Settings$JavaActionsSettings'
       ).invert.freeze
       FIELDS = {
-        'Settings$ProjectSettings' => %w[Settings],
+        'Settings$ProjectSettings' => %w[
+          Languages Settings Configurations Certificates HashAlgorithm RoundingMode ConversionState
+          SkipJarAnalyzerStep AfterStartupMicroflow BeforeShutdownMicroflow HealthCheckMicroflow
+          DefaultLanguageCode FirstDayOfWeek DefaultTimeZoneCode ScheduledEventTimeZoneCode
+          AllowUserMultipleSessions LowerCaseMicroflowVariables
+        ],
         'Forms$WebUIProjectSettingsPart' => %w[
           EnableDownloadResources EnableMicroflowReachabilityAnalysis EnableNewStringBehavior
-          EnableNewWidgetGeneration EnableRspackBundler EnableWidgetBundling Theme ThemeModuleName
-          ThemeModuleOrder UrlPrefix UseOptimizedClient
+          EnableNewWidgetGeneration EnableRspackBundler EnableWidgetBundling FeedbackWidgetUpdated
+          UseModernUI Theme ThemeModuleName ThemeModuleOrder UrlPrefix UseOptimizedClient
         ],
         'Settings$IntegrationProjectSettingsPart' => %w[ObsoleteEnableUrlEncoding],
         'Settings$ConfigurationSettings' => %w[Configurations],
@@ -270,6 +275,10 @@ module Mxrb
 
     # Root builder exposed as `project_settings do ... end`.
     class ProjectBuilder
+      ROOT_METHOD_ALIASES = {
+        project_languages: 'Languages', project_certificates: 'Certificates'
+      }.freeze
+
       def initialize
         @root = Node.new('Settings$ProjectSettings')
         @parts = []
@@ -277,19 +286,43 @@ module Mxrb
 
       def method_missing(method, *arguments, &block)
         type = Catalog::PART_TYPES[method.to_sym]
-        return super unless type && block && arguments.empty?
+        return build_part(type, &block) if type && block && arguments.empty?
+        if (field = root_field(method))
+          return NodeBuilder.new(@root).public_send(Catalog.field_method(field), *arguments, &block)
+        end
 
-        node = Node.new(type)
-        NodeBuilder.new(node).instance_eval(&block)
-        @parts << node
-        node
+        super
       end
 
       def respond_to_missing?(method, include_private = false)
-        Catalog::PART_TYPES.key?(method.to_sym) || super
+        Catalog::PART_TYPES.key?(method.to_sym) || !root_field(method).nil? || super
       end
 
       def to_model
+        synchronize_parts unless @root.fields.key?('Settings')
+        @root
+      end
+
+      private
+
+      def build_part(type, &block)
+        Node.new(type).tap do |node|
+          NodeBuilder.new(node).instance_eval(&block)
+          @parts << node
+          synchronize_parts
+        end
+      end
+
+      def root_field(method)
+        return ROOT_METHOD_ALIASES[method.to_sym] if ROOT_METHOD_ALIASES.key?(method.to_sym)
+
+        Catalog::FIELDS.fetch('Settings$ProjectSettings').find do |field|
+          field != 'Settings' && Catalog.field_method(field) == method.to_sym &&
+            !Catalog::PART_TYPES.key?(method.to_sym)
+        end
+      end
+
+      def synchronize_parts
         @root.set('Settings', Collection.new(items: @parts, marker: 2))
       end
     end

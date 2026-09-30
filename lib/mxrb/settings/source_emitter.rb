@@ -13,12 +13,23 @@ module Mxrb
         raise Error, 'project settings must contain a Settings collection' unless parts.is_a?(Collection)
 
         lines = ['project_settings do']
-        parts.items.each { emit_node(_1, lines, 1) }
+        emit_root_fields(model, lines)
         lines << 'end'
         "#{lines.join("\n")}\n"
       end
 
       private
+
+      def emit_root_fields(model, lines)
+        model.fields.each do |field, value|
+          if field == 'Settings'
+            value.items.each { emit_node(_1, lines, 1) }
+          else
+            method = ProjectBuilder::ROOT_METHOD_ALIASES.invert.fetch(field, Catalog.field_method(field))
+            emit_field(field, value, lines, 1, method:)
+          end
+        end
+      end
 
       def emit_node(node, lines, depth)
         indent = '  ' * depth
@@ -27,8 +38,7 @@ module Mxrb
         lines << "#{indent}end"
       end
 
-      def emit_field(field, value, lines, depth)
-        method = Catalog.field_method(field)
+      def emit_field(field, value, lines, depth, method: Catalog.field_method(field))
         case value
         when Collection
           emit_collection(method, value, lines, depth)

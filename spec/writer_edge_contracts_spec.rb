@@ -246,9 +246,14 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
 
   it 'validates typed project-document versions and inserts missing system texts' do
     legacy = described_class.new('legacy.mpr', version: '10.24.0', modules: [])
-    legacy.instance_variable_get(:@definition)[:project_settings_model] = Object.new
-    expect { legacy.send(:write_typed_project_settings, double, 'root') }
-      .to raise_error(Mxrb::ValidationError, /supports Mendix 11 only/)
+    settings = Mxrb::Settings::ProjectBuilder.new.to_model
+    legacy.instance_variable_get(:@definition)[:project_settings_model] = settings
+    legacy_mpr = double(children_of: [])
+    expect(legacy_mpr).to receive(:insert_unit).with(
+      container_uuid: 'root', containment_name: 'ProjectDocuments',
+      contents_doc: anything, unit_uuid: anything
+    )
+    legacy.send(:write_typed_project_settings, legacy_mpr, 'root')
     expect { legacy.send(:write_system_texts, double, 'root', Object.new) }
       .to raise_error(Mxrb::ValidationError, /supports Mendix 11 only/)
 
@@ -912,7 +917,7 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
                   'Microflow' => 'App.Helper')
   end
 
-  it 'covers undeclared behavior collections and missing typed settings baselines' do
+  it 'covers undeclared behavior collections and invalid typed settings models' do
     raw_module = { 'UnitID' => 'module-id' }
     raw_domain = { 'UnitID' => 'domain-id', 'ContainerID' => 'module-id' }
     domain = { 'Entities' => [2, { 'Name' => 'Item' }] }
@@ -929,7 +934,7 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     writer.instance_variable_get(:@definition)[:project_settings_model] = Object.new
     allow(mpr).to receive(:children_of).and_return([])
     expect { writer.send(:write_typed_project_settings, mpr, 'root') }
-      .to raise_error(Mxrb::ValidationError, /baseline is missing/)
+      .to raise_error(Mxrb::Settings::Error, /Settings::Node root/)
   end
 
   it 'covers opaque security entries and valid duplicate flow identities' do
