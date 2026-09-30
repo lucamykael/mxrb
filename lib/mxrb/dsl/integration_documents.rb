@@ -333,6 +333,39 @@ module Mxrb
         )
       end
 
+      def authentication( # rubocop:disable Metrics/ParameterLists
+        name, type:, username: '', password: '', provider_name: '', well_known_endpoint: '',
+        tenant_id: '', client_id: '', client_secret: '', token_endpoint: '', scopes: [],
+        audience: '', authorization_endpoint: '', callback_url: '', response_type: 'code',
+        response_mode: 'query', details_id: nil, scopes_marker: 1,
+        unit_id: nil, container_id: nil
+      )
+        kind = type.to_s.downcase.to_sym
+        details = case kind
+                  when :basic
+                    authentication_basic_details(username, password, details_id)
+                  when :oauth2_client_credentials
+                    authentication_oauth_details(
+                      :client_credentials, details_id:, provider_name:, well_known_endpoint:,
+                                           tenant_id:, client_id:, client_secret:, token_endpoint:, scopes:,
+                                           scopes_marker:, audience:
+                    )
+                  when :oauth2_authorization_code
+                    authentication_oauth_details(
+                      :authorization_code, details_id:, provider_name:, well_known_endpoint:,
+                                           tenant_id:, client_id:, client_secret:, token_endpoint:, scopes:,
+                                           scopes_marker:, audience:, authorization_endpoint:, callback_url:,
+                                           response_type:, response_mode:
+                    )
+                  else
+                    raise ArgumentError, "unsupported authentication type #{type.inspect}"
+                  end
+        doc = integration_identity(unit_id).merge('AuthenticationDetails' => details)
+        semantic_native_document(
+          name, 'Authentication$Authentication', doc, unit_id:, container_id:
+        )
+      end
+
       def consumed_app_service( # rubocop:disable Metrics/ParameterLists
         name, actions:, location: 'Constant', location_constant: '', contract: nil,
         app_store_guid: '', app_store_version: '', app_store_version_guid: '',
@@ -723,6 +756,61 @@ module Mxrb
           name, type:, unit_id:, container_id:, containment: 'Documents',
                 deep_structure: doc
         )
+      end
+
+      def authentication_basic_details(username, password, id)
+        if username.to_s.empty? || password.to_s.empty?
+          raise ArgumentError, 'basic authentication requires username and password constants'
+        end
+
+        integration_identity(id).merge(
+          '$Type' => 'Authentication$BasicAuthenticationDetails',
+          'Username' => username.to_s, 'Password' => password.to_s
+        )
+      end
+
+      def authentication_oauth_details(kind, details_id:, provider_name:, well_known_endpoint:,
+                                       tenant_id:, client_id:, client_secret:, token_endpoint:,
+                                       scopes:, scopes_marker:, audience:, **options)
+        validate_oauth_authentication!(
+          kind, tenant_id:, client_id:, client_secret:, token_endpoint:, **options
+        )
+        type = if kind == :client_credentials
+                 'Authentication$OAuth20ClientCredentialsDetails'
+               else
+                 'Authentication$OAuth20AuthCodeDetails'
+               end
+        details = integration_identity(details_id).merge(
+          '$Type' => type, 'ProviderName' => provider_name.to_s,
+          'WellKnownEndPoint' => well_known_endpoint.to_s, 'TenantId' => tenant_id.to_s,
+          'ClientId' => client_id.to_s, 'ClientSecret' => client_secret.to_s,
+          'TokenEndPoint' => token_endpoint.to_s,
+          'Scopes' => integration_array(Array(scopes).map(&:to_s), scopes_marker),
+          'GrantType' => kind == :client_credentials ? 'ClientCredentials' : 'AuthorizationCode',
+          'Audience' => audience.to_s
+        )
+        return details if kind == :client_credentials
+
+        details.merge(
+          'ResponseType' => options.fetch(:response_type).to_s,
+          'ResponseMode' => options.fetch(:response_mode).to_s,
+          'AuthorizationEndpoint' => options.fetch(:authorization_endpoint).to_s,
+          'CallbackUrl' => options.fetch(:callback_url).to_s
+        )
+      end
+
+      def validate_oauth_authentication!(kind, tenant_id:, client_id:, client_secret:,
+                                         token_endpoint:, **options)
+        required = {
+          tenant_id: tenant_id, client_id: client_id, client_secret: client_secret,
+          token_endpoint: token_endpoint
+        }
+        if kind == :authorization_code
+          required[:authorization_endpoint] = options[:authorization_endpoint]
+          required[:callback_url] = options[:callback_url]
+        end
+        missing = required.filter_map { |field, value| field if value.to_s.empty? }
+        raise ArgumentError, "OAuth2 authentication requires #{missing.join(', ')}" unless missing.empty?
       end
 
       def mapping_document(_name, direction, json_structure:, elements:, documentation:,

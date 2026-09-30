@@ -7137,6 +7137,11 @@ module Mxrb
       if username.empty? != password.empty?
         raise ValidationError, 'REST basic authentication requires both username and password'
       end
+      proxy_type = activity.fetch(:request_proxy_type, 'DefaultProxy').to_s
+      unless %w[DefaultProxy Override NoProxy].include?(proxy_type)
+        raise ValidationError, "unsupported REST proxy type #{proxy_type.inspect}"
+      end
+      proxy_configuration = rest_proxy_configuration_doc(activity, proxy_type)
 
       {
         "$ID" => SecureRandom.uuid,
@@ -7146,7 +7151,7 @@ module Mxrb
         "HttpConfiguration" => {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Microflows$HttpConfiguration",
-          "ClientCertificate" => "",
+          "ClientCertificate" => activity[:client_certificate].to_s,
           "CustomLocation" => "",
           "CustomLocationTemplate" => {
             "$ID" => SecureRandom.uuid,
@@ -7171,14 +7176,39 @@ module Mxrb
           "OverrideLocation" => true,
           "UseHttpAuthentication" => !username.empty?
         },
-        "ProxyConfiguration" => nil,
+        "ProxyConfiguration" => proxy_configuration,
         "RequestHandling" => rest_request_handling_doc(activity, request_handling_type),
         "RequestHandlingType" => request_handling_type,
-        "RequestProxyType" => "DefaultProxy",
+        "RequestProxyType" => proxy_type,
         "ResultHandling" => rest_result_handling_doc(activity),
         "ResultHandlingType" => mendix_enum(result_handling),
         "TimeOutExpression" => activity[:timeout].to_s,
         "UseRequestTimeOut" => !activity[:timeout].to_s.empty?
+      }
+    end
+
+    def rest_proxy_configuration_doc(activity, proxy_type)
+      proxy = activity[:proxy]
+      if proxy_type != 'Override'
+        raise ValidationError, 'REST proxy configuration requires the Override proxy type' if proxy
+
+        return nil
+      end
+      unless proxy.is_a?(Hash) && !proxy[:host].to_s.empty? && !proxy[:port].to_s.empty?
+        raise ValidationError, 'REST proxy override requires host and port expressions'
+      end
+      if proxy[:username].to_s.empty? != proxy[:password].to_s.empty?
+        raise ValidationError, 'REST proxy authentication requires both username and password'
+      end
+
+      {
+        '$ID' => proxy[:id].to_s.empty? ? SecureRandom.uuid : proxy[:id].to_s,
+        '$Type' => 'Microflows$ProxyConfiguration',
+        'UsernameExpression' => proxy[:username].to_s,
+        'PasswordExpression' => proxy[:password].to_s,
+        'HostExpression' => proxy[:host].to_s,
+        'PortExpression' => proxy[:port].to_s,
+        'UseConfigurationExpression' => proxy.fetch(:use, 'true').to_s
       }
     end
 

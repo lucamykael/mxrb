@@ -2972,6 +2972,7 @@ module Mxrb
 
       def call_rest(method:, location:, location_parameters: [], headers: UNSET,
                     username: nil, password: nil,
+                    client_certificate: nil, proxy: nil,
                     request_mapping: nil, request_variable: nil,
                     request_body: nil, request_parameters: [],
                     result_mapping: nil, as: nil, result_entity: nil,
@@ -3000,6 +3001,7 @@ module Mxrb
         if username.to_s.empty? != password.to_s.empty?
           raise ArgumentError, 'REST basic authentication requires both username and password'
         end
+        request_proxy_type, proxy_configuration = _rest_proxy(proxy)
 
         if block
           raise ArgumentError, 'call_rest accepts either headers: or a header block' unless headers.equal?(UNSET)
@@ -3015,6 +3017,8 @@ module Mxrb
           location_parameters: Array(location_parameters),
           headers: headers,
           username: _optional_string(username), password: _optional_string(password),
+          client_certificate: _optional_string(client_certificate),
+          request_proxy_type:, proxy: proxy_configuration,
           request_mapping: request_mapping.to_s,
           request_variable: request_variable.to_s,
           request_body: _optional_string(request_body),
@@ -3206,6 +3210,35 @@ module Mxrb
 
       def _optional_string(value)
         value&.to_s
+      end
+
+      def _rest_proxy(proxy)
+        return ['DefaultProxy', nil] if proxy.nil?
+        if proxy.is_a?(String) || proxy.is_a?(Symbol)
+          return ['DefaultProxy', nil] if proxy.to_sym == :default
+          return ['NoProxy', nil] if %i[none no_proxy].include?(proxy.to_sym)
+        end
+
+        raise ArgumentError, 'REST proxy must be :default, :none, or a configuration hash' unless proxy.is_a?(Hash)
+
+        values = proxy.transform_keys(&:to_sym)
+        unknown = values.keys - %i[id host port username password use]
+        raise ArgumentError, "unsupported REST proxy options: #{unknown.join(', ')}" unless unknown.empty?
+        if values[:host].to_s.empty? || values[:port].to_s.empty?
+          raise ArgumentError, 'REST proxy override requires host and port expressions'
+        end
+        if values[:username].to_s.empty? != values[:password].to_s.empty?
+          raise ArgumentError, 'REST proxy authentication requires both username and password'
+        end
+
+        configuration = {
+          id: _optional_string(values[:id]), host: values[:host].to_s, port: values[:port].to_s,
+          username: values[:username].to_s, password: values[:password].to_s,
+          use: values.fetch(:use, 'true').to_s
+        }
+        ['Override', configuration]
+      rescue NoMethodError
+        raise ArgumentError, 'REST proxy must be :default, :none, or a configuration hash'
       end
 
       def _break_allowed? = false

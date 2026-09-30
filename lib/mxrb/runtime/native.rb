@@ -6,6 +6,7 @@ require 'base64'
 require 'json'
 require 'monitor'
 require 'net/http'
+require 'openssl'
 require 'uri'
 
 module Mxrb
@@ -1198,7 +1199,13 @@ module Mxrb
           body_value = variables[request['MappingVariableName'].to_s]
           body = body_value.nil? ? nil : JSON.generate(runtime_json(body_value))
           timeout = @expression.evaluate(action['TimeOutExpression'], variables) if action['UseRequestTimeOut'] == true
-          response = @http.call(configuration['HttpMethod'].to_s, location, headers, body, timeout)
+          transport = rest_transport_options(action, configuration, variables)
+          arguments = [configuration['HttpMethod'].to_s, location, headers, body, timeout]
+          response = if transport.empty?
+                       @http.call(*arguments)
+                     else
+                       @http.call(*arguments, transport)
+                     end
           unless response.code.to_i.between?(200, 299)
             raise NativeRuntimeError, "REST call returned HTTP #{response.code}"
           end
@@ -1294,17 +1301,92 @@ module Mxrb
           end
         end
 
-        def http_request(method, location, headers, body, timeout)
+        def rest_transport_options(action, configuration, variables)
+          options = {}
+          certificate = configuration['ClientCertificate'].to_s
+          unless certificate.empty?
+            options[:client_certificate] = evaluate_rest_transport_expression(certificate, variables)
+          end
+          case action.fetch('RequestProxyType', 'DefaultProxy')
+          when 'DefaultProxy'
+            nil
+          when 'NoProxy'
+            options[:proxy] = :none
+          when 'Override'
+            proxy = action['ProxyConfiguration'] || {}
+            enabled = evaluate_rest_transport_expression(
+              proxy.fetch('UseConfigurationExpression', 'true'), variables
+            )
+            if enabled == false
+              nil
+            else
+              options[:proxy] = {
+                host: evaluate_rest_transport_expression(proxy['HostExpression'], variables).to_s,
+                port: Integer(evaluate_rest_transport_expression(proxy['PortExpression'], variables)),
+                username: evaluate_rest_transport_expression(proxy['UsernameExpression'], variables).to_s,
+                password: evaluate_rest_transport_expression(proxy['PasswordExpression'], variables).to_s
+              }
+            end
+          else
+            raise NativeRuntimeError,
+                  "unsupported REST proxy type #{action['RequestProxyType'].inspect}"
+          end
+          options
+        rescue ArgumentError, TypeError => e
+          raise NativeRuntimeError, "invalid REST proxy configuration: #{e.message}"
+        end
+
+        def evaluate_rest_transport_expression(expression, variables)
+          text = expression.to_s
+          return '' if text.empty?
+
+          @expression.evaluate(text, variables)
+        rescue NativeRuntimeError, ArgumentError
+          text
+        end
+
+        def http_request(method, location, headers, body, timeout, transport = {})
           uri = URI.parse(location)
           request_class = Net::HTTP.const_get(method.to_s.downcase.capitalize)
           request = request_class.new(uri)
           headers.each { request[_1] = _2 }
           request.body = body if body
-          Net::HTTP.start(
-            uri.host, uri.port, use_ssl: uri.scheme == 'https',
-                                open_timeout: timeout || 10,
-                                read_timeout: timeout || 30
-          ) { _1.request(request) }
+          if transport.empty?
+            return Net::HTTP.start(
+              uri.host, uri.port, use_ssl: uri.scheme == 'https',
+                                  open_timeout: timeout || 10,
+                                  read_timeout: timeout || 30
+            ) { _1.request(request) }
+          end
+
+          http = rest_http_client(uri, transport[:proxy])
+          http.use_ssl = uri.scheme == 'https'
+          http.open_timeout = timeout || 10
+          http.read_timeout = timeout || 30
+          configure_client_certificate(http, transport[:client_certificate])
+          http.start { _1.request(request) }
+        rescue Errno::ENOENT, OpenSSL::OpenSSLError => e
+          raise NativeRuntimeError, "REST client certificate failed: #{e.message}"
+        end
+
+        def rest_http_client(uri, proxy)
+          return Net::HTTP.new(uri.host, uri.port, nil) if proxy == :none
+          return Net::HTTP.new(uri.host, uri.port) unless proxy.is_a?(Hash)
+
+          Net::HTTP::Proxy(
+            proxy.fetch(:host), proxy.fetch(:port), proxy[:username], proxy[:password]
+          ).new(uri.host, uri.port)
+        end
+
+        def configure_client_certificate(http, certificate)
+          return if certificate.nil? || certificate.to_s.empty?
+
+          source = certificate.is_a?(Hash) ? certificate : { path: certificate.to_s }
+          bundle = OpenSSL::PKCS12.new(
+            File.binread(source.fetch(:path)), source.fetch(:password, '').to_s
+          )
+          http.cert = bundle.certificate
+          http.key = bundle.key
         end
 
         def aggregate(function, values)
