@@ -7132,6 +7132,11 @@ module Mxrb
         raise ValidationError, "unsupported REST result handling #{result_handling.inspect}"
       end
       request_handling_type = rest_request_handling_type(activity)
+      username = activity[:username].to_s
+      password = activity[:password].to_s
+      if username.empty? != password.empty?
+        raise ValidationError, 'REST basic authentication requires both username and password'
+      end
 
       {
         "$ID" => SecureRandom.uuid,
@@ -7151,8 +7156,8 @@ module Mxrb
             ),
             "Text" => activity[:location]
           },
-          "HttpAuthenticationPassword" => "",
-          "HttpAuthenticationUserName" => "",
+          "HttpAuthenticationPassword" => password,
+          "HttpAuthenticationUserName" => username,
           "HttpHeaderEntries" => IO::BsonCodec.build_array(
             activity[:headers].map do |key, value|
               {
@@ -7164,7 +7169,7 @@ module Mxrb
           ),
           "HttpMethod" => mendix_enum(activity[:method]),
           "OverrideLocation" => true,
-          "UseHttpAuthentication" => false
+          "UseHttpAuthentication" => !username.empty?
         },
         "ProxyConfiguration" => nil,
         "RequestHandling" => rest_request_handling_doc(activity, request_handling_type),

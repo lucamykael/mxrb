@@ -2945,6 +2945,7 @@ module Mxrb
       end
 
       def call_rest(method:, location:, location_parameters: [], headers: UNSET,
+                    username: nil, password: nil,
                     request_mapping: nil, request_variable: nil,
                     request_body: nil, request_parameters: [],
                     result_mapping: nil, as: nil, result_entity: nil,
@@ -2970,6 +2971,9 @@ module Mxrb
         if !request_body.nil? && mapping_set
           raise ArgumentError, 'call_rest accepts either a request body or a request mapping'
         end
+        if username.to_s.empty? != password.to_s.empty?
+          raise ArgumentError, 'REST basic authentication requires both username and password'
+        end
 
         if block
           raise ArgumentError, 'call_rest accepts either headers: or a header block' unless headers.equal?(UNSET)
@@ -2984,6 +2988,7 @@ module Mxrb
           type: :call_rest, method: method.to_s, location: location.to_s,
           location_parameters: Array(location_parameters),
           headers: headers,
+          username: _optional_string(username), password: _optional_string(password),
           request_mapping: request_mapping.to_s,
           request_variable: request_variable.to_s,
           request_body: _optional_string(request_body),

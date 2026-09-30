@@ -685,6 +685,33 @@ RSpec.describe Mxrb::Runtime::Native do
     )
   end
 
+  it 'applies REST basic authentication expressions to runtime requests' do
+    request_arguments = nil
+    response = Struct.new(:code, :body).new('200', '{}')
+    interpreter = described_class::Interpreter.new(
+      @project,
+      http: lambda do |*arguments|
+        request_arguments = arguments
+        response
+      end
+    )
+    interpreter.send(:action_rest_call, {
+      'HttpConfiguration' => {
+        'HttpMethod' => 'Get',
+        'CustomLocationTemplate' => { 'Text' => 'https://example.test/private' },
+        'HttpHeaderEntries' => [],
+        'UseHttpAuthentication' => true,
+        'HttpAuthenticationUserName' => "'api-user'",
+        'HttpAuthenticationPassword' => '$Secret'
+      },
+      'RequestHandling' => {}, 'ResultHandling' => {}, 'ResultHandlingType' => 'String'
+    }, 'Secret' => 's3cret')
+
+    expect(request_arguments.fetch(2)).to include(
+      'Authorization' => "Basic #{Base64.strict_encode64('api-user:s3cret')}"
+    )
+  end
+
   it 'covers native store fallbacks, lifecycle defenses, and non-rollback handlers' do
     store = described_class::Store.new
     object = store.create('Clinic.Animal')
