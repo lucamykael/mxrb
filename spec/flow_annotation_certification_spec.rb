@@ -139,6 +139,25 @@ RSpec.describe 'Flow annotation certification' do
     end
   end
 
+  it 'writes the legacy annotation flow vectors before Mendix 10' do
+    writer = Mxrb::Writer.new('/tmp/legacy-annotation-flow.mpr', version: '9.24.0', modules: [])
+    document = writer.send(
+      :annotation_flow_doc,
+      {
+        from: :note, to: :home, origin_index: 1, destination_index: 0,
+        origin_vector: '12;34', destination_vector: '-12;-34'
+      },
+      'note' => '11111111-1111-1111-1111-111111111111',
+      'home' => '22222222-2222-2222-2222-222222222222'
+    )
+
+    expect(document).to include(
+      'OriginBezierVector' => '12;34',
+      'DestinationBezierVector' => '-12;-34'
+    )
+    expect(document).not_to have_key('Line')
+  end
+
   it 'fails closed for missing and duplicate node references' do
     Dir.mktmpdir('mxrb-annotation-flow-invalid-') do |dir|
       expect do
