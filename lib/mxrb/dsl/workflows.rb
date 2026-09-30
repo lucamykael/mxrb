@@ -10,6 +10,7 @@ module Mxrb
       def workflow( # rubocop:disable Metrics/ParameterLists
         name, context_entity:, title: nil, workflow_name: nil, workflow_description: '',
         due_date: '', parameter_name: 'WorkflowContext', start: {}, finish: {}, user_tasks: [],
+        activities: nil,
         persistent_id: nil, parameter_id: nil, flow_id: nil, workflow_name_id: nil,
         workflow_description_id: nil, metadata_id: nil, activities_marker: 2,
         on_workflow_event_marker: 2, event_sub_processes_marker: 2,
@@ -21,7 +22,10 @@ module Mxrb
           'Title' => (title || name).to_s,
           'Parameter' => workflow_parameter(context_entity, parameter_name, parameter_id),
           'AdminPage' => nil,
-          'Flow' => workflow_flow(start, user_tasks, finish, flow_id, activities_marker),
+          'Flow' => workflow_flow(
+            start, finish,
+            { user_tasks:, activities:, id: flow_id, marker: activities_marker }
+          ),
           'WorkflowName' => workflow_string_template(
             workflow_name || title || name, workflow_name_id
           ),
@@ -51,19 +55,34 @@ module Mxrb
         )
       end
 
-      def workflow_flow(start, user_tasks, finish, id, marker)
-        tasks = Array(user_tasks).each_with_index.map { workflow_user_task(_1, _2) }
-        finish_position = "0;#{160 * (tasks.size + 1)}"
+      def workflow_flow(start, finish, options)
+        user_tasks = options.fetch(:user_tasks)
+        activities = options.fetch(:activities)
+        raise ArgumentError, 'workflow accepts either activities or user_tasks' if
+          activities && Array(user_tasks).any?
+
+        sources = activities || Array(user_tasks).map { _1.to_h.merge(type: :user_task) }
+        body = Array(sources).each_with_index.map { workflow_activity(_1, _2) }
+        finish_position = "0;#{160 * (body.size + 1)}"
         {
-          '$ID' => workflow_id(id), '$Type' => 'Workflows$Flow',
+          '$ID' => workflow_id(options[:id]), '$Type' => 'Workflows$Flow',
           'Activities' => workflow_array([
                                            workflow_terminal_activity(start, :start),
-                                           *tasks,
+                                           *body,
                                            workflow_terminal_activity(
                                              finish, :finish, default_position: finish_position
                                            )
-                                         ], marker)
+                                         ], options.fetch(:marker))
         }
+      end
+
+      def workflow_activity(source, index)
+        spec = source.to_h.transform_keys(&:to_sym)
+        case spec.fetch(:type, :user_task).to_sym
+        when :user_task then workflow_user_task(spec, index)
+        when :wait_timer then workflow_wait_timer(spec, index)
+        else raise ArgumentError, "unsupported certified workflow activity #{spec[:type].inspect}"
+        end
       end
 
       def workflow_user_task(source, index)
@@ -92,11 +111,19 @@ module Mxrb
           'Outcomes' => workflow_array(
             outcomes.map { workflow_user_task_outcome(_1) }, spec.fetch(:outcomes_marker, 2)
           ),
-          'BoundaryEvents' => workflow_array([], spec.fetch(:boundary_events_marker, 2)),
-          'OnCreatedEvent' => workflow_identity(spec[:on_created_event_id]).merge(
-            '$Type' => 'Workflows$NoEvent'
+          'BoundaryEvents' => workflow_array(
+            Array(spec[:boundary_events]).each_with_index.map { workflow_boundary_event(_1, _2) },
+            spec.fetch(:boundary_events_marker, 2)
           ),
+          'OnCreatedEvent' => workflow_user_task_event(spec),
           'AutoAssignSingleTargetUser' => spec.fetch(:auto_assign, false) == true
+        )
+      end
+
+      def workflow_wait_timer(spec, index)
+        workflow_activity_identity(spec, index, default_name: 'WaitForTimer').merge(
+          '$Type' => 'Workflows$WaitForTimerActivity',
+          'Delay' => spec.fetch(:delay).to_s
         )
       end
 
@@ -105,9 +132,89 @@ module Mxrb
       end
 
       def workflow_user_targeting(spec)
-        workflow_identity(spec[:targeting_id]).merge(
-          '$Type' => 'Workflows$XPathUserTargeting',
-          'XPathConstraint' => spec.fetch(:xpath, "[id = '[%CurrentUser%]']").to_s
+        source = spec[:targeting] ? spec[:targeting].to_h.transform_keys(&:to_sym) : {}
+        type = source.fetch(:type, :xpath).to_sym
+        id = source[:id] || spec[:targeting_id]
+        handler = {
+          xpath: :workflow_xpath_targeting,
+          microflow: :workflow_microflow_targeting,
+          none: :workflow_no_targeting
+        }.fetch(type) { raise ArgumentError, "unsupported workflow user targeting #{type.inspect}" }
+        send(handler, spec, source, id)
+      end
+
+      def workflow_xpath_targeting(spec, source, id)
+        constraint = source[:constraint].to_s
+        constraint = spec.fetch(:xpath, "[id = '[%CurrentUser%]']").to_s if constraint.empty?
+        workflow_identity(id).merge(
+          '$Type' => 'Workflows$XPathUserTargeting', 'XPathConstraint' => constraint
+        )
+      end
+
+      def workflow_microflow_targeting(_spec, source, id)
+        workflow_identity(id).merge(
+          '$Type' => 'Workflows$MicroflowUserTargeting',
+          'Microflow' => source.fetch(:microflow).to_s
+        )
+      end
+
+      def workflow_no_targeting(_spec, _source, id) =
+        workflow_identity(id).merge('$Type' => 'Workflows$NoUserTargeting')
+
+      def workflow_user_task_event(spec)
+        source = spec[:on_created]&.to_h&.transform_keys(&:to_sym)
+        return workflow_identity(spec[:on_created_event_id]).merge('$Type' => 'Workflows$NoEvent') unless source
+
+        workflow_identity(source[:id] || spec[:on_created_event_id]).merge(
+          '$Type' => 'Workflows$MicroflowBasedEvent',
+          'Microflow' => source.fetch(:microflow).to_s
+        )
+      end
+
+      def workflow_boundary_event(source, index)
+        spec = source.to_h.transform_keys(&:to_sym)
+        type = spec.fetch(:type).to_sym
+        storage_type = {
+          interrupting_timer: 'Workflows$InterruptingTimerBoundaryEvent',
+          non_interrupting_timer: 'Workflows$NonInterruptingTimerBoundaryEvent'
+        }.fetch(type) { raise ArgumentError, "unsupported workflow boundary event #{type.inspect}" }
+        document = workflow_identity(spec[:id]).merge(
+          '$Type' => storage_type,
+          'PersistentId' => workflow_guid(spec[:persistent_id]),
+          'Flow' => workflow_boundary_flow(spec, type, index),
+          'Caption' => spec.fetch(:caption, '').to_s,
+          'Annotation' => nil,
+          'FirstExecutionTime' => spec.fetch(:first_execution_time).to_s
+        )
+        document['Recurrence'] = workflow_recurrence(spec[:recurrence]) if type == :non_interrupting_timer
+        document
+      end
+
+      def workflow_boundary_flow(spec, type, index)
+        ending_type = if type == :interrupting_timer
+                        'Workflows$EndWorkflowActivity'
+                      else
+                        'Workflows$EndOfBoundaryEventPathActivity'
+                      end
+        ending = workflow_activity_identity(
+          spec.fetch(:end, {}).to_h.transform_keys(&:to_sym), 0,
+          default_name: "EndBoundaryPath#{index + 1}", default_position: '0;80'
+        ).merge('$Type' => ending_type)
+        {
+          '$ID' => workflow_id(spec[:flow_id]), '$Type' => 'Workflows$Flow',
+          'Activities' => workflow_array([ending], spec.fetch(:activities_marker, 2))
+        }
+      end
+
+      def workflow_recurrence(source)
+        return nil unless source
+
+        spec = source.to_h.transform_keys(&:to_sym)
+        workflow_identity(spec[:id]).merge(
+          '$Type' => 'Workflows$LinearRecurrence',
+          'IntervalType' => spec.fetch(:interval_type, 'Minute').to_s,
+          'Interval' => Integer(spec.fetch(:interval, 1)),
+          'MaxExecutions' => Integer(spec.fetch(:max_executions, 1))
         )
       end
 
@@ -136,13 +243,25 @@ module Mxrb
         spec = source.to_h.transform_keys(&:to_sym)
         defaults = kind == :start ? %w[Start Start] : %w[End End]
         type = kind == :start ? 'StartWorkflowActivity' : 'EndWorkflowActivity'
+        workflow_activity_identity(
+          spec, 0, default_name: defaults[0], default_caption: defaults[1],
+                   default_position:
+        ).merge(
+          '$Type' => "Workflows$#{type}"
+        )
+      end
+
+      def workflow_activity_identity(spec, index, default_name:, default_caption: nil,
+                                     default_position: nil)
+        name = spec.fetch(:name, default_name).to_s
         workflow_identity(spec[:id]).merge(
-          '$Type' => "Workflows$#{type}",
           'PersistentId' => workflow_guid(spec[:persistent_id]),
-          'Name' => spec.fetch(:name, defaults[0]).to_s,
-          'Caption' => spec.fetch(:caption, defaults[1]).to_s,
+          'Name' => name,
+          'Caption' => spec.fetch(:caption, default_caption || name).to_s,
           'Annotation' => nil,
-          'RelativeMiddlePoint' => spec.fetch(:position, default_position).to_s,
+          'RelativeMiddlePoint' => spec.fetch(
+            :position, default_position || "0;#{160 * (index + 1)}"
+          ).to_s,
           'Size' => spec.fetch(:size, '120;60').to_s
         )
       end

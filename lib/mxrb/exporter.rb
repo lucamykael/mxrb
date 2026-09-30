@@ -1796,10 +1796,18 @@ module Mxrb
       AutoAssignSingleTargetUser BoundaryEvents DueDate OnCreatedEvent Outcomes
       TaskDescription TaskName TaskPage UserTargeting
     ]).freeze
+    WORKFLOW_WAIT_TIMER_FIELDS = (WORKFLOW_ACTIVITY_FIELDS + %w[Delay]).freeze
     WORKFLOW_PAGE_REFERENCE_FIELDS = %w[$ID $Type Page].freeze
-    WORKFLOW_TARGETING_FIELDS = %w[$ID $Type XPathConstraint].freeze
+    WORKFLOW_XPATH_TARGETING_FIELDS = %w[$ID $Type XPathConstraint].freeze
+    WORKFLOW_MICROFLOW_TARGETING_FIELDS = %w[$ID $Type Microflow].freeze
+    WORKFLOW_NO_TARGETING_FIELDS = %w[$ID $Type].freeze
     WORKFLOW_OUTCOME_FIELDS = %w[$ID $Type Flow PersistentId Value].freeze
     WORKFLOW_NO_EVENT_FIELDS = %w[$ID $Type].freeze
+    WORKFLOW_MICROFLOW_EVENT_FIELDS = %w[$ID $Type Microflow].freeze
+    WORKFLOW_BOUNDARY_FIELDS = %w[
+      $ID $Type Annotation Caption FirstExecutionTime Flow PersistentId Recurrence
+    ].freeze
+    WORKFLOW_RECURRENCE_FIELDS = %w[$ID $Type Interval IntervalType MaxExecutions].freeze
     WORKFLOW_TEMPLATE_FIELDS = %w[$ID $Type Arguments Text].freeze
     WORKFLOW_METADATA_FIELDS = %w[$ID $Type Annotation DetachedActivities FlowLines].freeze
 
@@ -1838,7 +1846,20 @@ module Mxrb
       activities.size >= 2 &&
         semantic_workflow_terminal?(activities.first, 'Workflows$StartWorkflowActivity') &&
         semantic_workflow_terminal?(activities.last, 'Workflows$EndWorkflowActivity') &&
-        activities[1...-1].all? { semantic_workflow_user_task?(_1) }
+        activities[1...-1].all? { semantic_workflow_activity?(_1) }
+    end
+
+    def semantic_workflow_activity?(activity)
+      case activity&.fetch('$Type', nil)
+      when 'Workflows$SingleUserTaskActivity' then semantic_workflow_user_task?(activity)
+      when 'Workflows$WaitForTimerActivity' then semantic_workflow_wait_timer?(activity)
+      else false
+      end
+    end
+
+    def semantic_workflow_wait_timer?(activity)
+      (activity.keys - WORKFLOW_WAIT_TIMER_FIELDS).empty? &&
+        semantic_workflow_activity_base?(activity) && activity['Delay'].is_a?(String)
     end
 
     def semantic_workflow_terminal?(activity, type)
@@ -1854,14 +1875,15 @@ module Mxrb
                           activity['$Type'] == 'Workflows$SingleUserTaskActivity'
       return false unless (activity.keys - WORKFLOW_USER_TASK_FIELDS).empty?
       return false unless semantic_workflow_activity_base?(activity)
+      return false unless activity['DueDate'].is_a?(String)
       return false unless semantic_workflow_page_reference?(activity['TaskPage'])
       return false unless semantic_workflow_template?(activity['TaskName'])
       return false unless semantic_workflow_template?(activity['TaskDescription'])
       return false unless semantic_workflow_targeting?(activity['UserTargeting'])
-      return false unless bson_items(activity['BoundaryEvents']).empty?
-      return false unless activity['OnCreatedEvent'].is_a?(Hash) &&
-                          activity['OnCreatedEvent']['$Type'] == 'Workflows$NoEvent' &&
-                          (activity['OnCreatedEvent'].keys - WORKFLOW_NO_EVENT_FIELDS).empty?
+      return false unless bson_items(activity['BoundaryEvents']).all? do
+        semantic_workflow_boundary_event?(_1)
+      end
+      return false unless semantic_workflow_user_task_event?(activity['OnCreatedEvent'])
       return false unless [true, false].include?(activity['AutoAssignSingleTargetUser'])
 
       outcomes = bson_items(activity['Outcomes'])
@@ -1872,8 +1894,7 @@ module Mxrb
     def semantic_workflow_activity_base?(activity)
       activity['PersistentId'].is_a?(BSON::Binary) && activity['Annotation'].nil? &&
         activity['RelativeMiddlePoint'].is_a?(String) && activity['Size'].is_a?(String) &&
-        activity['Name'].is_a?(String) && activity['Caption'].is_a?(String) &&
-        activity['DueDate'].is_a?(String)
+        activity['Name'].is_a?(String) && activity['Caption'].is_a?(String)
     end
 
     def semantic_workflow_page_reference?(reference)
@@ -1882,9 +1903,66 @@ module Mxrb
     end
 
     def semantic_workflow_targeting?(targeting)
-      targeting.is_a?(Hash) && targeting['$Type'] == 'Workflows$XPathUserTargeting' &&
-        (targeting.keys - WORKFLOW_TARGETING_FIELDS).empty? &&
-        targeting['XPathConstraint'].is_a?(String)
+      return false unless targeting.is_a?(Hash)
+
+      case targeting['$Type']
+      when 'Workflows$XPathUserTargeting'
+        (targeting.keys - WORKFLOW_XPATH_TARGETING_FIELDS).empty? &&
+          targeting['XPathConstraint'].is_a?(String)
+      when 'Workflows$MicroflowUserTargeting'
+        (targeting.keys - WORKFLOW_MICROFLOW_TARGETING_FIELDS).empty? &&
+          targeting['Microflow'].is_a?(String) && !targeting['Microflow'].empty?
+      when 'Workflows$NoUserTargeting'
+        (targeting.keys - WORKFLOW_NO_TARGETING_FIELDS).empty?
+      else false
+      end
+    end
+
+    def semantic_workflow_user_task_event?(event)
+      return false unless event.is_a?(Hash)
+
+      case event['$Type']
+      when 'Workflows$NoEvent'
+        (event.keys - WORKFLOW_NO_EVENT_FIELDS).empty?
+      when 'Workflows$MicroflowBasedEvent'
+        (event.keys - WORKFLOW_MICROFLOW_EVENT_FIELDS).empty? &&
+          event['Microflow'].is_a?(String) && !event['Microflow'].empty?
+      else false
+      end
+    end
+
+    def semantic_workflow_boundary_event?(event)
+      return false unless event.is_a?(Hash)
+      return false unless %w[
+        Workflows$InterruptingTimerBoundaryEvent Workflows$NonInterruptingTimerBoundaryEvent
+      ].include?(event['$Type'])
+      return false unless (event.keys - WORKFLOW_BOUNDARY_FIELDS).empty?
+      return false unless event['PersistentId'].is_a?(BSON::Binary) && event['Annotation'].nil?
+      return false unless event['Caption'].is_a?(String) && event['FirstExecutionTime'].is_a?(String)
+      return false unless semantic_workflow_boundary_flow?(event['Flow'], event['$Type'])
+
+      recurrence = event['Recurrence']
+      event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent' ?
+        !event.key?('Recurrence') : semantic_workflow_recurrence?(recurrence)
+    end
+
+    def semantic_workflow_boundary_flow?(flow, event_type)
+      return false unless flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow'
+      return false unless (flow.keys - WORKFLOW_FLOW_FIELDS).empty?
+
+      activities = bson_items(flow['Activities'])
+      ending_type = event_type == 'Workflows$InterruptingTimerBoundaryEvent' ?
+        'Workflows$EndWorkflowActivity' : 'Workflows$EndOfBoundaryEventPathActivity'
+      activities.one? && semantic_workflow_terminal?(activities.first, ending_type)
+    end
+
+    def semantic_workflow_recurrence?(recurrence)
+      return true if recurrence.nil?
+
+      recurrence.is_a?(Hash) && recurrence['$Type'] == 'Workflows$LinearRecurrence' &&
+        (recurrence.keys - WORKFLOW_RECURRENCE_FIELDS).empty? &&
+        recurrence['IntervalType'].is_a?(String) && recurrence['Interval'].is_a?(Integer) &&
+        recurrence['MaxExecutions'].is_a?(Integer)
     end
 
     def semantic_workflow_outcome?(outcome)
@@ -1912,13 +1990,18 @@ module Mxrb
       start = activities.first
       finish = activities.last
       metadata = doc.fetch('WorkflowMetaData')
+      body = activities[1...-1]
+      activity_options = if body.all? { _1['$Type'] == 'Workflows$SingleUserTaskActivity' }
+                           { user_tasks: body.map { workflow_user_task_spec(_1) } }
+                         else
+                           { activities: body.map { workflow_activity_spec(_1) } }
+                         end
       semantic_call_source(:workflow, document, {
         context_entity: doc.fetch('Parameter').fetch('Entity', ''),
         title: doc.fetch('Title', ''), workflow_name: doc.fetch('WorkflowName').fetch('Text', ''),
         workflow_description: doc.fetch('WorkflowDescription').fetch('Text', ''),
         due_date: doc.fetch('DueDate', ''), parameter_name: doc.fetch('Parameter').fetch('Name', ''),
         start: workflow_terminal_spec(start), finish: workflow_terminal_spec(finish),
-        user_tasks: activities[1...-1].map { workflow_user_task_spec(_1) },
         persistent_id: document_id_value(doc.fetch('PersistentId')),
         parameter_id: document_id(doc.fetch('Parameter')), flow_id: document_id(flow),
         workflow_name_id: document_id(doc.fetch('WorkflowName')),
@@ -1929,7 +2012,7 @@ module Mxrb
         detached_activities_marker: bson_marker(metadata['DetachedActivities'], 2),
         flow_lines_marker: bson_marker(metadata['FlowLines'], 2),
         annotations_marker: bson_marker(metadata['Annotation'], 2)
-      })
+      }.merge(activity_options))
     end
 
     def workflow_terminal_spec(activity)
@@ -1941,7 +2024,8 @@ module Mxrb
     end
 
     def workflow_user_task_spec(activity)
-      {
+      spec = {
+        type: :user_task,
         id: document_id(activity),
         persistent_id: document_id_value(activity.fetch('PersistentId')),
         name: activity.fetch('Name', ''), caption: activity.fetch('Caption', ''),
@@ -1953,13 +2037,61 @@ module Mxrb
         task_description: activity.fetch('TaskDescription').fetch('Text', ''),
         task_description_id: document_id(activity.fetch('TaskDescription')),
         due_date: activity.fetch('DueDate', ''),
-        xpath: activity.fetch('UserTargeting').fetch('XPathConstraint', ''),
-        targeting_id: document_id(activity.fetch('UserTargeting')),
+        targeting: workflow_targeting_spec(activity.fetch('UserTargeting')),
         outcomes: bson_items(activity['Outcomes']).map { workflow_outcome_spec(_1) },
         outcomes_marker: bson_marker(activity['Outcomes'], 2),
         boundary_events_marker: bson_marker(activity['BoundaryEvents'], 2),
+        boundary_events: bson_items(activity['BoundaryEvents']).map { workflow_boundary_spec(_1) },
         on_created_event_id: document_id(activity.fetch('OnCreatedEvent')),
         auto_assign: activity['AutoAssignSingleTargetUser'] == true
+      }
+      event = activity.fetch('OnCreatedEvent')
+      if event['$Type'] == 'Workflows$MicroflowBasedEvent'
+        spec[:on_created] = {
+          id: document_id(event), microflow: event.fetch('Microflow', '')
+        }
+      end
+      spec
+    end
+
+    def workflow_activity_spec(activity)
+      return workflow_user_task_spec(activity) if activity['$Type'] == 'Workflows$SingleUserTaskActivity'
+
+      workflow_terminal_spec(activity).merge(type: :wait_timer, delay: activity.fetch('Delay', ''))
+    end
+
+    def workflow_targeting_spec(targeting)
+      base = { id: document_id(targeting) }
+      case targeting['$Type']
+      when 'Workflows$XPathUserTargeting'
+        base.merge(type: :xpath, constraint: targeting.fetch('XPathConstraint', ''))
+      when 'Workflows$MicroflowUserTargeting'
+        base.merge(type: :microflow, microflow: targeting.fetch('Microflow', ''))
+      else base.merge(type: :none)
+      end
+    end
+
+    def workflow_boundary_spec(event)
+      flow = event.fetch('Flow')
+      ending = bson_items(flow.fetch('Activities')).first
+      spec = {
+        id: document_id(event), persistent_id: document_id_value(event.fetch('PersistentId')),
+        type: event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent' ?
+          :interrupting_timer : :non_interrupting_timer,
+        caption: event.fetch('Caption', ''),
+        first_execution_time: event.fetch('FirstExecutionTime', ''),
+        flow_id: document_id(flow), activities_marker: bson_marker(flow['Activities'], 2),
+        end: workflow_terminal_spec(ending)
+      }
+      recurrence = event['Recurrence']
+      spec[:recurrence] = workflow_recurrence_spec(recurrence) if recurrence
+      spec
+    end
+
+    def workflow_recurrence_spec(recurrence)
+      {
+        id: document_id(recurrence), interval_type: recurrence.fetch('IntervalType', ''),
+        interval: recurrence.fetch('Interval', 1), max_executions: recurrence.fetch('MaxExecutions', 1)
       }
     end
 
