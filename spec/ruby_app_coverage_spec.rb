@@ -239,7 +239,8 @@ RSpec.describe 'Ruby application defensive coverage' do
     app = double(environment:, root: '/tmp/no-app')
     allow(app).to receive_messages(
       schema: { project: { 'name' => 'P' }, navigation: {}, modules: [{ 'pages' => [] }] },
-      page: nil, invoke_service: { result: 1, effects: [] }, records: [], record: nil,
+      page: nil, invoke_service: { result: 1, effects: [] }, records: [],
+      record_page: { records: [], total: 0 }, record: nil,
       create_record: {}, update_record: nil, delete_record: false, rest_routes: [],
       reload_if_changed!: false,
       reload_status: { enabled: false, state: 'ready', error: nil }
@@ -269,6 +270,21 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(app).to have_received(:records).with(
       'M.E', context:, association: 'M.E_Parent', context_type: 'M.Parent', context_id: 'p1'
     )
+    advanced = dispatch.call(
+      '/api/entities/M.E', 'GET', '',
+      'filters' => JSON.generate([{ attribute: 'Score', type: 'number', operator: 'gte', value: 10 }]),
+      'sort' => JSON.generate([{ attribute: 'Name', direction: 'Descending' }]),
+      'offset' => '20', 'limit' => '10'
+    )
+    expect(advanced.status).to eq(200)
+    expect(app).to have_received(:record_page).with(
+      'M.E', context:, association: nil, context_type: nil, context_id: nil,
+             filters: [{ 'attribute' => 'Score', 'type' => 'number', 'operator' => 'gte', 'value' => 10 }],
+             sort: [{ 'attribute' => 'Name', 'direction' => 'Descending' }],
+             offset: '20', limit: '10'
+    )
+    expect(dispatch.call('/api/entities/M.E', 'GET', '', 'filters' => '{}').status).to eq(400)
+    expect(server.send(:query_json_array, nil, 'filters')).to eq([])
     expect(dispatch.call('/api/entities/M.E/1').status).to eq(404)
     allow(app).to receive(:record).and_return(id: '1')
     expect(dispatch.call('/api/entities/M.E/1').status).to eq(200)
