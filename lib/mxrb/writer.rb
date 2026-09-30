@@ -2086,18 +2086,23 @@ module Mxrb
     def write_typed_project_settings(mpr, root_id)
       model = @definition[:project_settings_model]
       return unless model
-      unless @definition.fetch(:version).to_s.split('.').first.to_i == 11
-        raise ValidationError, 'typed project_settings currently supports Mendix 11 only'
+      unless (5..11).cover?(@definition.fetch(:version).to_s.split('.').first.to_i)
+        raise ValidationError, 'typed project_settings supports Mendix 5 through 11'
       end
 
       unit = mpr.children_of(root_id).find do |candidate|
         mpr.parse_contents(candidate)['$Type'] == 'Settings$ProjectSettings'
       end
-      raise ValidationError, 'Settings$ProjectSettings baseline is missing' unless unit
-
-      baseline = mpr.parse_contents(unit)
+      baseline = mpr.parse_contents(unit) if unit
       document = Settings::MprCodec.new.encode(model, baseline:)
-      mpr.update_unit(unit.fetch('UnitID'), document)
+      if unit
+        mpr.update_unit(unit.fetch('UnitID'), document)
+      else
+        mpr.insert_unit(
+          container_uuid: root_id, containment_name: 'ProjectDocuments', contents_doc: document,
+          unit_uuid: IO::BsonCodec.extract_id(document['$ID'])
+        )
+      end
     end
 
     def write_system_texts(mpr, root_id, definition)
