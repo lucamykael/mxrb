@@ -40,6 +40,35 @@ RSpec.describe 'Workflow certification' do
     end
   end
 
+  it 'keeps timers, targeting, creation events, and boundary timers editable' do
+    Dir.mktmpdir('mxrb-advanced-workflow-') do |dir|
+      current = File.join(dir, 'source.mpr')
+      build_advanced_source(current)
+      baseline_ids = workflow_ids(current)
+
+      2.times do |index|
+        exported = File.join(dir, "ruby-#{index}")
+        rebuilt = File.join(dir, "rebuilt-#{index}.mpr")
+        Mxrb::Exporter.new(current, exported).export!
+        source = Dir[File.join(exported, 'modules/App/application/workflows/*.rb')]
+                 .map { File.read(_1) }.join("\n")
+        expect(source).to include(
+          'activities:', ':type => :wait_timer', ':delay => "addMinutes(',
+          ':type => :microflow', ':microflow => "App.TargetUsers"',
+          ':on_created =>', ':type => :interrupting_timer',
+          ':type => :non_interrupting_timer', ':interval_type => "Minute"'
+        )
+        expect(source).not_to include('native_document', 'deep_structure:', 'bson_binary(')
+
+        generate(exported, rebuilt)
+        expect(Mxrb.validate(rebuilt)).to be_valid
+        expect(Mxrb.compare(current, rebuilt)).to be_identical
+        expect(workflow_ids(rebuilt)).to eq(baseline_ids)
+        current = rebuilt
+      end
+    end
+  end
+
   it 'keeps workflows with unsupported activities in the native fallback' do
     builder = Mxrb::Dsl::ModuleBuilder.new(:App)
     builder.workflow(:Approval, context_entity: 'App.Request')
@@ -93,8 +122,8 @@ RSpec.describe 'Workflow certification' do
       ->(value) { value['TaskName'] = nil },
       ->(value) { value['TaskDescription'] = nil },
       ->(value) { value['UserTargeting'] = nil },
-      ->(value) { value['BoundaryEvents'] << { '$Type' => 'Workflows$TimerBoundaryEvent' } },
-      ->(value) { value['OnCreatedEvent']['$Type'] = 'Workflows$MicroflowEvent' },
+      ->(value) { value['BoundaryEvents'] << { '$Type' => 'Workflows$FutureBoundaryEvent' } },
+      ->(value) { value['OnCreatedEvent']['$Type'] = 'Workflows$FutureEvent' },
       ->(value) { value['AutoAssignSingleTargetUser'] = nil }
     ]
     invalid_tasks.each do |mutate|
@@ -128,8 +157,67 @@ RSpec.describe 'Workflow certification' do
     end
   end
 
+  it 'rejects unsupported advanced activity, targeting, event, and timer shapes' do
+    exporter = Mxrb::Exporter.allocate
+    document = advanced_workflow_document
+    activities = Mxrb::IO::BsonCodec.parse_array(
+      document.fetch('Flow').fetch('Activities')
+    ).fetch(:items)
+    wait_timer = activities.fetch(1)
+    task = activities.fetch(2)
+    boundaries = Mxrb::IO::BsonCodec.parse_array(task.fetch('BoundaryEvents')).fetch(:items)
+    interrupting, non_interrupting = boundaries
+
+    expect(exporter.send(:semantic_workflow_activity?, nil)).to be(false)
+    expect(exporter.send(:semantic_workflow_activity?, { '$Type' => 'Workflows$FutureActivity' }))
+      .to be(false)
+    expect(exporter.send(:semantic_workflow_activity?, wait_timer)).to be(true)
+    expect(exporter.send(:semantic_workflow_user_task?, nil)).to be(false)
+    expect(exporter.send(:semantic_workflow_user_task?, task.merge('PersistentId' => 'invalid')))
+      .to be(false)
+
+    no_targeting = task.fetch('UserTargeting')
+    expect(exporter.send(:semantic_workflow_targeting?, no_targeting)).to be(true)
+    expect(exporter.send(:workflow_targeting_spec, no_targeting)).to include(type: :none, id: a_kind_of(String))
+    expect(exporter.send(:semantic_workflow_targeting?, { '$Type' => 'Workflows$FutureTargeting' }))
+      .to be(false)
+    expect(exporter.send(:semantic_workflow_user_task_event?, nil)).to be(false)
+
+    expect(exporter.send(:semantic_workflow_boundary_event?, interrupting)).to be(true)
+    expect(exporter.send(:semantic_workflow_boundary_event?, non_interrupting)).to be(true)
+    expect(exporter.send(:semantic_workflow_boundary_event?, nil)).to be(false)
+    invalid_boundary_mutations.each do |mutate|
+      candidate = deep_copy(interrupting)
+      mutate.call(candidate)
+      expect(exporter.send(:semantic_workflow_boundary_event?, candidate)).to be(false)
+    end
+
+    interrupting_flow = interrupting.fetch('Flow')
+    expect(exporter.send(:semantic_workflow_boundary_flow?, nil, interrupting.fetch('$Type')))
+      .to be(false)
+    expect(exporter.send(
+             :semantic_workflow_boundary_flow?, interrupting_flow.merge('Future' => true),
+             interrupting.fetch('$Type')
+           )).to be(false)
+    empty_flow = deep_copy(interrupting_flow)
+    empty_flow['Activities'] = Mxrb::IO::BsonCodec.build_array([], marker: 2)
+    expect(exporter.send(
+             :semantic_workflow_boundary_flow?, empty_flow, interrupting.fetch('$Type')
+           )).to be(false)
+
+    expect(exporter.send(:semantic_workflow_recurrence?, nil)).to be(true)
+    expect(exporter.send(:semantic_workflow_recurrence?, 'invalid')).to be(false)
+    recurrence = non_interrupting.fetch('Recurrence')
+    invalid_recurrence_mutations.each do |mutate|
+      candidate = deep_copy(recurrence)
+      mutate.call(candidate)
+      expect(exporter.send(:semantic_workflow_recurrence?, candidate)).to be(false)
+    end
+  end
+
   it 'validates the concise authoring boundaries and explicit page parameter identities' do
     builder = Mxrb::Dsl::ModuleBuilder.new(:App)
+    expect(builder.send(:workflow_recurrence, nil)).to be_nil
     expect do
       builder.workflow(
         :Invalid, context_entity: 'App.Request',
@@ -149,6 +237,31 @@ RSpec.describe 'Workflow certification' do
         }]
       )
     end.to raise_error(ArgumentError, /must be unique/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request', user_tasks: [{ task_page: 'App.Review' }],
+                  activities: [{ type: :wait_timer, delay: '1' }]
+      )
+    end.to raise_error(ArgumentError, /either activities or user_tasks/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request', activities: [{ type: :future }]
+      )
+    end.to raise_error(ArgumentError, /unsupported certified workflow activity/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request', user_tasks: [{
+          task_page: 'App.Review', targeting: { type: :future }
+        }]
+      )
+    end.to raise_error(ArgumentError, /unsupported workflow user targeting/)
+    expect do
+      builder.workflow(
+        :Invalid, context_entity: 'App.Request', user_tasks: [{
+          task_page: 'App.Review', boundary_events: [{ type: :future }]
+        }]
+      )
+    end.to raise_error(ArgumentError, /unsupported workflow boundary event/)
 
     page = Mxrb::Dsl::PageBuilder.new(:Review)
     page.parameter(
@@ -190,6 +303,52 @@ RSpec.describe 'Workflow certification' do
     end
   end
 
+  def build_advanced_source(path) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    Mxrb.define(path) do
+      mendix_version '11.12.1'
+      self.module :App do
+        entity(:Request) { string :Subject }
+        page(:Review) do
+          title 'Review task'
+          parameter :WorkflowUserTask, entity: 'System.WorkflowUserTask'
+        end
+        microflow :TargetUsers do
+          parameter :Workflow, type: object_of('System.Workflow')
+          parameter :WorkflowContext, type: object_of('App.Request')
+          return_type list_of('System.User')
+          retrieve_objects 'System.User', as: :Users
+          return_value '$Users'
+        end
+        microflow :NotifyCreated do
+          parameter :WorkflowUserTask, type: object_of('System.WorkflowUserTask')
+          parameter :WorkflowContext, type: object_of('App.Request')
+        end
+        workflow :Approval, context_entity: 'App.Request', activities: [
+          {
+            type: :wait_timer, name: 'Pause', delay: 'addMinutes([%CurrentDateTime%], 5)'
+          },
+          {
+            type: :user_task, name: 'Review', task_page: 'App.Review',
+            targeting: { type: :microflow, microflow: 'App.TargetUsers' },
+            on_created: { microflow: 'App.NotifyCreated' },
+            outcomes: [{ value: 'Complete' }],
+            boundary_events: [
+              {
+                type: :interrupting_timer,
+                first_execution_time: 'addMinutes([%CurrentDateTime%], 10)'
+              },
+              {
+                type: :non_interrupting_timer,
+                first_execution_time: 'addMinutes([%CurrentDateTime%], 2)',
+                recurrence: { interval_type: 'Minute', interval: 2, max_executions: 3 }
+              }
+            ]
+          }
+        ]
+      end
+    end
+  end
+
   def workflow_ids(path)
     Mxrb.open(path) do |project|
       document = project.all_units.filter_map do |unit|
@@ -211,6 +370,49 @@ RSpec.describe 'Workflow certification' do
                  user_tasks: [{ task_page: 'App.Review', outcomes: [{ value: 'Complete' }] }]
     )
     builder.native_documents.fetch(0).fetch(:doc)
+  end
+
+  def advanced_workflow_document
+    builder = Mxrb::Dsl::ModuleBuilder.new(:App)
+    builder.workflow(
+      :Advanced, context_entity: 'App.Request', activities: [
+        { type: :wait_timer, delay: 'addMinutes([%CurrentDateTime%], 1)' },
+        {
+          type: :user_task, task_page: 'App.Review', targeting: { type: :none },
+          boundary_events: [
+            { type: :interrupting_timer, first_execution_time: '[%CurrentDateTime%]' },
+            {
+              type: :non_interrupting_timer, first_execution_time: '[%CurrentDateTime%]',
+              recurrence: { interval_type: 'Minute', interval: 1, max_executions: 2 }
+            }
+          ]
+        }
+      ]
+    )
+    builder.native_documents.fetch(0).fetch(:doc)
+  end
+
+  def invalid_boundary_mutations # rubocop:disable Metrics/AbcSize
+    [
+      ->(value) { value['$Type'] = 'Workflows$FutureBoundaryEvent' },
+      ->(value) { value['Future'] = true },
+      ->(value) { value['PersistentId'] = 'invalid' },
+      ->(value) { value['Annotation'] = 'invalid' },
+      ->(value) { value['Caption'] = nil },
+      ->(value) { value['FirstExecutionTime'] = nil },
+      ->(value) { value['Flow'] = nil },
+      ->(value) { value['Recurrence'] = nil }
+    ]
+  end
+
+  def invalid_recurrence_mutations
+    [
+      ->(value) { value['$Type'] = 'Workflows$FutureRecurrence' },
+      ->(value) { value['Future'] = true },
+      ->(value) { value['IntervalType'] = nil },
+      ->(value) { value['Interval'] = nil },
+      ->(value) { value['MaxExecutions'] = nil }
+    ]
   end
 
   def nested_documents(value)
