@@ -3904,6 +3904,7 @@ module Mxrb
             name?: string;
             attribute?: string;
             caption?: string;
+            filter?: string;
             width?: number;
           }
 

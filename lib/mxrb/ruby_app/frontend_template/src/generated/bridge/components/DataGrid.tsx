@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   ApiRequest,
   EntityCollectionResponse,
@@ -35,7 +35,9 @@ export function DataGrid({
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<EntityRecord | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const pageSize = Math.max(1, Number(options.page_size || options.pageSize || 20));
+  const columns = options.columns || [];
 
   useEffect(() => {
     if (!options.entity) return;
@@ -97,8 +99,22 @@ export function DataGrid({
       onSelectRecord(null);
     });
   const toolbar = options.toolbar?.buttons || [{ type: 'new' }, { type: 'delete' }];
-  const pageCount = Math.max(1, Math.ceil(records.length / pageSize));
-  const visible = records.slice(pageNumber * pageSize, (pageNumber + 1) * pageSize);
+  const filteredRecords = useMemo(
+    () =>
+      records.filter((record) =>
+        columns.every((column) => {
+          if (!column.filter) return true;
+          const key = column.name || column.attribute || '';
+          const query = (filters[key] || '').trim().toLocaleLowerCase();
+          if (!query) return true;
+          const value = displayValue(recordValue(record, column.attribute || column.name));
+          return String(value).toLocaleLowerCase().includes(query);
+        }),
+      ),
+    [columns, filters, records],
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const visible = filteredRecords.slice(pageNumber * pageSize, (pageNumber + 1) * pageSize);
 
   return (
     <div
@@ -123,10 +139,34 @@ export function DataGrid({
       <table>
         <thead>
           <tr>
-            {(options.columns || []).map((column) => (
+            {columns.map((column) => (
               <th key={column.name || column.attribute}>{column.caption || column.name}</th>
             ))}
           </tr>
+          {columns.some((column) => column.filter) ? (
+            <tr className="data-grid__filters">
+              {columns.map((column) => {
+                const key = column.name || column.attribute || '';
+                const label = column.caption || column.name || column.attribute || 'column';
+                return (
+                  <th key={key}>
+                    {column.filter ? (
+                      <input
+                        type="search"
+                        aria-label={`Filter ${label}`}
+                        placeholder={`Filter ${label}`}
+                        value={filters[key] || ''}
+                        onChange={(event) => {
+                          setFilters((current) => ({ ...current, [key]: event.target.value }));
+                          setPageNumber(0);
+                        }}
+                      />
+                    ) : null}
+                  </th>
+                );
+              })}
+            </tr>
+          ) : null}
         </thead>
         <tbody>
           {visible.map((record) => (
@@ -139,7 +179,7 @@ export function DataGrid({
                 onRowAction(record);
               }}
             >
-              {(options.columns || []).map((column) => (
+              {columns.map((column) => (
                 <td key={column.name || column.attribute}>
                   {displayValue(recordValue(record, column.attribute || column.name))}
                 </td>
@@ -157,7 +197,7 @@ export function DataGrid({
           Previous
         </button>
         <span>
-          Page {pageNumber + 1} of {pageCount} · {records.length} rows
+          Page {pageNumber + 1} of {pageCount} · {filteredRecords.length} rows
         </span>
         <button
           type="button"
