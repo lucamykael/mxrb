@@ -712,6 +712,108 @@ RSpec.describe Mxrb::Runtime::Native do
     )
   end
 
+  it 'passes client certificates and evaluated proxy settings to the REST transport' do
+    requests = []
+    response = Struct.new(:code, :body).new('200', '{}')
+    interpreter = described_class::Interpreter.new(
+      @project, http: lambda { |*arguments|
+        requests << arguments
+        response
+      }
+    )
+    action = {
+      'HttpConfiguration' => {
+        'HttpMethod' => 'Get', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' },
+        'HttpHeaderEntries' => [], 'ClientCertificate' => '/secure/client.p12'
+      },
+      'RequestProxyType' => 'Override',
+      'ProxyConfiguration' => {
+        'HostExpression' => "'proxy.internal'", 'PortExpression' => '8080',
+        'UsernameExpression' => "'proxy-user'", 'PasswordExpression' => '$ProxySecret',
+        'UseConfigurationExpression' => '$UseProxy'
+      },
+      'RequestHandling' => {}, 'ResultHandling' => {}, 'ResultHandlingType' => 'String'
+    }
+    interpreter.send(:action_rest_call, action, 'ProxySecret' => 'secret', 'UseProxy' => true)
+    expect(requests.last.fetch(5)).to eq(
+      client_certificate: '/secure/client.p12',
+      proxy: { host: 'proxy.internal', port: 8080, username: 'proxy-user', password: 'secret' }
+    )
+
+    action['RequestProxyType'] = 'NoProxy'
+    action['HttpConfiguration']['ClientCertificate'] = ''
+    interpreter.send(:action_rest_call, action, {})
+    expect(requests.last.fetch(5)).to eq(proxy: :none)
+
+    action['RequestProxyType'] = 'Override'
+    action['ProxyConfiguration']['UseConfigurationExpression'] = 'false'
+    interpreter.send(:action_rest_call, action, {})
+    expect(requests.last.size).to eq(5)
+
+    action['ProxyConfiguration']['UseConfigurationExpression'] = 'true'
+    action['ProxyConfiguration']['PortExpression'] = "'not-a-port'"
+    expect { interpreter.send(:action_rest_call, action, {}) }
+      .to raise_error(Mxrb::NativeRuntimeError, /invalid REST proxy configuration/)
+
+    action['RequestProxyType'] = 'Unsupported'
+    expect { interpreter.send(:action_rest_call, action, {}) }
+      .to raise_error(Mxrb::NativeRuntimeError, /unsupported REST proxy type/)
+  end
+
+  it 'constructs explicit REST transports and loads PKCS12 client certificates' do
+    uri = URI.parse('https://example.test/path')
+    client = double(:client)
+    allow(client).to receive(:use_ssl=)
+    allow(client).to receive(:open_timeout=)
+    allow(client).to receive(:read_timeout=)
+    allow(client).to receive(:start).and_yield(client)
+    allow(client).to receive(:request) { |request| request }
+    allow(Net::HTTP).to receive(:new).and_return(client)
+
+    response = @interpreter.send(
+      :http_request, 'GET', uri.to_s, {}, nil, 4, proxy: :none
+    )
+    expect(response).to be_a(Net::HTTP::Get)
+    expect(Net::HTTP).to have_received(:new).with('example.test', 443, nil)
+    expect(client).to have_received(:use_ssl=).with(true)
+    expect(client).to have_received(:open_timeout=).with(4)
+    expect(client).to have_received(:read_timeout=).with(4)
+
+    expect(@interpreter.send(:rest_http_client, uri, nil)).to eq(client)
+    expect(Net::HTTP).to have_received(:new).with('example.test', 443)
+    proxy_client = double(:proxy_client)
+    proxy_factory = double(:proxy_factory, new: proxy_client)
+    allow(Net::HTTP).to receive(:Proxy).and_return(proxy_factory)
+    expect(@interpreter.send(
+             :rest_http_client, uri,
+             { host: 'proxy.internal', port: 8080, username: 'user', password: 'secret' }
+           )).to eq(proxy_client)
+    expect(Net::HTTP).to have_received(:Proxy).with('proxy.internal', 8080, 'user', 'secret')
+
+    certificate = double(:certificate)
+    key = double(:key)
+    bundle = double(:bundle, certificate:, key:)
+    allow(File).to receive(:binread).and_call_original
+    allow(File).to receive(:binread).with('/secure/client.p12').and_return('pkcs12')
+    allow(OpenSSL::PKCS12).to receive(:new).with('pkcs12', 'password').and_return(bundle)
+    allow(client).to receive(:cert=)
+    allow(client).to receive(:key=)
+    @interpreter.send(
+      :configure_client_certificate, client,
+      { path: '/secure/client.p12', password: 'password' }
+    )
+    expect(client).to have_received(:cert=).with(certificate)
+    expect(client).to have_received(:key=).with(key)
+    expect(@interpreter.send(:evaluate_rest_transport_expression, nil, {})).to eq('')
+
+    expect do
+      @interpreter.send(
+        :http_request, 'GET', uri.to_s, {}, nil, nil,
+        client_certificate: '/missing/client.p12'
+      )
+    end.to raise_error(Mxrb::NativeRuntimeError, /client certificate failed/)
+  end
+
   it 'covers native store fallbacks, lifecycle defenses, and non-rollback handlers' do
     store = described_class::Store.new
     object = store.create('Clinic.Animal')

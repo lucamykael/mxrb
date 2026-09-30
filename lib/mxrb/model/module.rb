@@ -21,6 +21,7 @@ module Mxrb
         'ODataPublish$PublishedODataService2' => 'endpoints',
         'Rest$ConsumedRestService' => 'integrations',
         'Rest$ConsumedODataService' => 'integrations',
+        'Authentication$Authentication' => 'integrations',
         'AppServices$ConsumedAppService' => 'integrations',
         'WebServices$ImportedServiceImpl' => 'integrations',
         'ODataImport$ConsumedODataService' => 'integrations',

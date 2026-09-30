@@ -772,6 +772,8 @@ module Mxrb
         return published_odata_service_declaration(document) if semantic_published_odata_service?(doc)
       when 'Rest$ConsumedODataService'
         return consumed_odata_service_declaration(document) if semantic_consumed_odata_service?(doc)
+      when 'Authentication$Authentication'
+        return authentication_declaration(document) if semantic_authentication?(doc)
       when 'AppServices$ConsumedAppService'
         return consumed_app_service_declaration(document) if semantic_consumed_app_service?(doc)
       when 'WebServices$PublishedService'
@@ -986,6 +988,79 @@ module Mxrb
       HttpAuthenticationPassword HttpAuthenticationUserName HttpHeaderEntries HttpMethod
       OverrideLocation UseHttpAuthentication
     ].freeze
+
+    AUTHENTICATION_FIELDS = %w[$ID $Type AuthenticationDetails Name].freeze
+    BASIC_AUTHENTICATION_FIELDS = %w[$ID $Type Password Username].freeze
+    OAUTH_AUTHENTICATION_FIELDS = %w[
+      $ID $Type Audience ClientId ClientSecret GrantType ProviderName Scopes TenantId
+      TokenEndPoint WellKnownEndPoint
+    ].freeze
+    OAUTH_AUTH_CODE_FIELDS = (
+      OAUTH_AUTHENTICATION_FIELDS + %w[AuthorizationEndpoint CallbackUrl ResponseMode ResponseType]
+    ).freeze
+    AUTHENTICATION_TYPES = {
+      'Authentication$BasicAuthenticationDetails' => :basic,
+      'Authentication$OAuth20ClientCredentialsDetails' => :oauth2_client_credentials,
+      'Authentication$OAuth20AuthCodeDetails' => :oauth2_authorization_code
+    }.freeze
+
+    def semantic_authentication?(doc)
+      return false unless (doc.keys - AUTHENTICATION_FIELDS).empty?
+
+      details = doc['AuthenticationDetails']
+      return false unless details.is_a?(Hash) && AUTHENTICATION_TYPES.key?(details['$Type'])
+
+      fields = if details['$Type'] == 'Authentication$BasicAuthenticationDetails'
+                 BASIC_AUTHENTICATION_FIELDS
+               elsif details['$Type'] == 'Authentication$OAuth20AuthCodeDetails'
+                 OAUTH_AUTH_CODE_FIELDS
+               else
+                 OAUTH_AUTHENTICATION_FIELDS
+               end
+      return false unless (details.keys - fields).empty?
+      return authentication_string_fields?(details, fields - %w[$ID $Type]) if
+        details['$Type'] == 'Authentication$BasicAuthenticationDetails'
+      return false unless details.key?('Scopes')
+
+      expected_grant = details['$Type'] == 'Authentication$OAuth20AuthCodeDetails' ?
+        'AuthorizationCode' : 'ClientCredentials'
+      return false unless details['GrantType'] == expected_grant
+
+      authentication_string_fields?(details, fields - %w[$ID $Type Scopes]) &&
+        bson_items(details['Scopes']).all? { _1.is_a?(String) }
+    end
+
+    def authentication_string_fields?(details, fields)
+      fields.all? { details.fetch(_1, '').is_a?(String) }
+    end
+
+    def authentication_declaration(document)
+      details = document.fetch(:doc).fetch('AuthenticationDetails')
+      kind = AUTHENTICATION_TYPES.fetch(details.fetch('$Type'))
+      options = { type: kind, details_id: document_id(details) }
+      if kind == :basic
+        options.merge!(username: details.fetch('Username', ''), password: details.fetch('Password', ''))
+      else
+        options.merge!(
+          provider_name: details.fetch('ProviderName', ''),
+          well_known_endpoint: details.fetch('WellKnownEndPoint', ''),
+          tenant_id: details.fetch('TenantId', ''), client_id: details.fetch('ClientId', ''),
+          client_secret: details.fetch('ClientSecret', ''),
+          token_endpoint: details.fetch('TokenEndPoint', ''),
+          scopes: bson_items(details['Scopes']), scopes_marker: bson_marker(details['Scopes'], 1),
+          audience: details.fetch('Audience', '')
+        )
+        if kind == :oauth2_authorization_code
+          options.merge!(
+            response_type: details.fetch('ResponseType', ''),
+            response_mode: details.fetch('ResponseMode', ''),
+            authorization_endpoint: details.fetch('AuthorizationEndpoint', ''),
+            callback_url: details.fetch('CallbackUrl', '')
+          )
+        end
+      end
+      semantic_call_source(:authentication, document, options)
+    end
 
     def semantic_consumed_odata_service?(doc)
       http = doc['HttpConfiguration']
@@ -5054,6 +5129,9 @@ module Mxrb
         args << "username: #{ruby(username)}"
         args << "password: #{ruby(password)}"
       end
+      client_certificate = http['ClientCertificate'].to_s
+      args << "client_certificate: #{ruby(client_certificate)}" unless client_certificate.empty?
+      rest_proxy_source_option(action, args)
       if request["$Type"] == "Microflows$CustomRequestHandling"
         template = request["Template"] || {}
         args << "request_body: #{ruby(template['Text'].to_s)}"
@@ -5094,6 +5172,43 @@ module Mxrb
 
       declarations = headers.map { |name, expression| "#{pad}  header #{ruby(name)}, #{ruby(expression)}" }
       ["#{command} do", *declarations, "#{pad}end"].join("\n")
+    end
+
+    REST_PROXY_CONFIGURATION_FIELDS = %w[
+      $ID $Type HostExpression PasswordExpression PortExpression UseConfigurationExpression
+      UsernameExpression
+    ].freeze
+
+    def rest_proxy_source_option(action, args)
+      proxy_type = action.fetch('RequestProxyType', 'DefaultProxy')
+      proxy = action['ProxyConfiguration']
+      case proxy_type
+      when 'DefaultProxy'
+        raise SerializationError, 'default REST proxy must not contain a configuration' if proxy
+      when 'NoProxy'
+        raise SerializationError, 'disabled REST proxy must not contain a configuration' if proxy
+
+        args << 'proxy: :none'
+      when 'Override'
+        unless proxy.is_a?(Hash) && proxy['$Type'] == 'Microflows$ProxyConfiguration' &&
+               (proxy.keys - REST_PROXY_CONFIGURATION_FIELDS).empty?
+          raise SerializationError, 'REST proxy override requires a valid proxy configuration'
+        end
+        if proxy['HostExpression'].to_s.empty? || proxy['PortExpression'].to_s.empty?
+          raise SerializationError, 'REST proxy override requires host and port expressions'
+        end
+        if proxy['UsernameExpression'].to_s.empty? != proxy['PasswordExpression'].to_s.empty?
+          raise SerializationError, 'REST proxy authentication requires both username and password'
+        end
+        args << "proxy: #{ruby({
+          id: document_id(proxy), host: proxy['HostExpression'].to_s,
+          port: proxy['PortExpression'].to_s, username: proxy['UsernameExpression'].to_s,
+          password: proxy['PasswordExpression'].to_s,
+          use: proxy.fetch('UseConfigurationExpression', 'true').to_s
+        })}"
+      else
+        raise SerializationError, "unsupported REST proxy type #{proxy_type.inspect}"
+      end
     end
 
     def call_action_line(pad, method, target, output, mappings, use_return)

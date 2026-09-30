@@ -128,6 +128,108 @@ RSpec.describe 'Ruby REST header declarations' do
     expect(decoded.to_h.fetch(:body).first).to eq(activity)
   end
 
+  it 'roundtrips client certificates and explicit proxy modes' do
+    flow = builder
+    flow.call_rest(
+      **options, client_certificate: 'App.ClientCertificate',
+                 proxy: {
+                   id: '11111111-1111-4111-8111-111111111111', host: "'proxy.internal'",
+                   port: '8080', username: "'proxy-user'", password: '$ProxySecret', use: '$UseProxy'
+                 }
+    )
+    activity = flow.to_h.fetch(:body).first
+    writer = Mxrb::Writer.new('/tmp/rest-proxy.mpr', version: '11.12.1', modules: [])
+    document = writer.send(:rest_call_action_doc, activity)
+
+    expect(document.dig('HttpConfiguration', 'ClientCertificate')).to eq('App.ClientCertificate')
+    expect(document).to include('RequestProxyType' => 'Override')
+    expect(document.fetch('ProxyConfiguration')).to include(
+      '$Type' => 'Microflows$ProxyConfiguration', 'HostExpression' => "'proxy.internal'",
+      'PortExpression' => '8080', 'UsernameExpression' => "'proxy-user'",
+      'PasswordExpression' => '$ProxySecret', 'UseConfigurationExpression' => '$UseProxy'
+    )
+
+    source = Mxrb::Exporter.allocate.send(:rest_call_line, '', document)
+    expect(source).to include(
+      'client_certificate: "App.ClientCertificate"', 'proxy: {', 'host: "\'proxy.internal\'"'
+    )
+    decoded = builder
+    decoded.instance_eval(source)
+    expect(decoded.to_h.fetch(:body).first).to eq(activity)
+
+    direct = builder
+    direct.call_rest(**options, proxy: :none)
+    direct_document = writer.send(:rest_call_action_doc, direct.to_h.fetch(:body).first)
+    expect(direct_document).to include('RequestProxyType' => 'NoProxy', 'ProxyConfiguration' => nil)
+    expect(Mxrb::Exporter.allocate.send(:rest_call_line, '', direct_document)).to include('proxy: :none')
+  end
+
+  it 'rejects incomplete or malformed REST proxy configurations' do
+    default = builder
+    default.call_rest(**options, proxy: 'default')
+    expect(default.to_h.fetch(:body).first).to include(
+      request_proxy_type: 'DefaultProxy', proxy: nil
+    )
+    expect { builder.call_rest(**options, proxy: { host: "'proxy'", port: '8080', future: true }) }
+      .to raise_error(ArgumentError, /unsupported REST proxy options/)
+    expect { builder.call_rest(**options, proxy: { Object.new => 'invalid' }) }
+      .to raise_error(ArgumentError, /proxy must be/)
+    expect { builder.call_rest(**options, proxy: :invalid) }
+      .to raise_error(ArgumentError, /proxy must be/)
+    expect { builder.call_rest(**options, proxy: { host: "'proxy'" }) }
+      .to raise_error(ArgumentError, /requires host and port/)
+    expect do
+      builder.call_rest(**options, proxy: { host: "'proxy'", port: '8080', username: "'user'" })
+    end.to raise_error(ArgumentError, /both username and password/)
+
+    writer = Mxrb::Writer.new('/tmp/rest-invalid-proxy.mpr', version: '11.12.1', modules: [])
+    activity = builder.tap { _1.call_rest(**options) }.to_h.fetch(:body).first
+    expect { writer.send(:rest_call_action_doc, activity.merge(request_proxy_type: 'Unknown')) }
+      .to raise_error(Mxrb::ValidationError, /unsupported REST proxy type/)
+    expect { writer.send(:rest_call_action_doc, activity.merge(proxy: {})) }
+      .to raise_error(Mxrb::ValidationError, /requires the Override proxy type/)
+    expect do
+      writer.send(:rest_call_action_doc, activity.merge(request_proxy_type: 'Override'))
+    end.to raise_error(Mxrb::ValidationError, /requires host and port/)
+    invalid_auth = activity.merge(
+      request_proxy_type: 'Override',
+      proxy: { host: "'proxy'", port: '8080', username: "'user'", password: '' }
+    )
+    expect { writer.send(:rest_call_action_doc, invalid_auth) }
+      .to raise_error(Mxrb::ValidationError, /both username and password/)
+    generated_id = writer.send(
+      :rest_call_action_doc,
+      activity.merge(request_proxy_type: 'Override', proxy: { host: "'proxy'", port: '8080' })
+    ).dig('ProxyConfiguration', '$ID')
+    expect(generated_id).not_to be_nil
+
+    document = writer.send(:rest_call_action_doc, activity)
+    document['RequestProxyType'] = 'Override'
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', document) }
+      .to raise_error(Mxrb::SerializationError, /valid proxy configuration/)
+
+    document['RequestProxyType'] = 'DefaultProxy'
+    document['ProxyConfiguration'] = {}
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', document) }
+      .to raise_error(Mxrb::SerializationError, /default REST proxy/)
+    document['RequestProxyType'] = 'NoProxy'
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', document) }
+      .to raise_error(Mxrb::SerializationError, /disabled REST proxy/)
+
+    proxy = writer.send(:rest_call_action_doc,
+                        invalid_auth.merge(proxy: invalid_auth[:proxy].merge(password: "'pass'")))
+    proxy['ProxyConfiguration']['HostExpression'] = ''
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', proxy) }
+      .to raise_error(Mxrb::SerializationError, /requires host and port/)
+    proxy['ProxyConfiguration']['HostExpression'] = "'proxy'"
+    proxy['ProxyConfiguration']['PasswordExpression'] = ''
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', proxy) }
+      .to raise_error(Mxrb::SerializationError, /both username and password/)
+    proxy['RequestProxyType'] = 'FutureProxy'
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', proxy) }
+      .to raise_error(Mxrb::SerializationError, /unsupported REST proxy type/)
+  end
+
   def flow_bytes(path)
     mpr = Mxrb::IO::MprFile.open(path, readonly: true)
     mpr.all_units.filter_map do |unit|
