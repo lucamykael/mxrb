@@ -15,6 +15,7 @@ RSpec.describe 'Flow annotation certification' do
       baseline = annotation_snapshot(source)
 
       ruby_app = File.join(dir, 'ruby-app')
+      canonical = File.join(dir, 'Canonical.mpr')
       added = File.join(dir, 'Added.mpr')
       edited = File.join(dir, 'Edited.mpr')
       Mxrb::Exporter.new(source, ruby_app, mode: :ruby).export!
@@ -24,10 +25,14 @@ RSpec.describe 'Flow annotation certification' do
         'annotations_authoritative',
         'annotation "First note", position: "20;30", size: "240;80"',
         'annotation "Second note", position: "20;140", size: "240;60"',
-        'as_node "annotation:',
-        'annotation_flow from: "annotation:'
+        'as_node "annotation_1"',
+        'annotation_flow from: "annotation_1"',
+        'to: "return_1"'
       )
       expect(ruby_source).not_to include('native_document', 'deep_structure:', 'bson_binary(')
+      Mxrb::RubyApp.compile(ruby_app, canonical)
+      expect(Mxrb.compare(source, canonical)).to be_identical
+      editable_baseline = annotation_snapshot(canonical)
 
       compatibility_app = File.join(dir, 'compatibility-app')
       compatibility_mpr = File.join(dir, 'Compatibility.mpr')
@@ -50,7 +55,7 @@ RSpec.describe 'Flow annotation certification' do
       )
       Mxrb::RubyApp.compile(first_removal_app, first_removal_mpr)
       expect(annotation_snapshot(first_removal_mpr).fetch(:annotations)).to eq(
-        'Second note' => baseline.dig(:annotations, 'Second note')
+        'Second note' => editable_baseline.dig(:annotations, 'Second note')
       )
 
       File.write(
@@ -64,13 +69,13 @@ RSpec.describe 'Flow annotation certification' do
       Mxrb::RubyApp.compile(ruby_app, added)
       added_snapshot = annotation_snapshot(added)
       expect(added_snapshot.fetch(:annotations)).to include(
-        'Edited note' => baseline.dig(:annotations, 'First note').merge(caption: 'Edited note'),
-        'Second note' => baseline.dig(:annotations, 'Second note'),
+        'Edited note' => editable_baseline.dig(:annotations, 'First note').merge(caption: 'Edited note'),
+        'Second note' => editable_baseline.dig(:annotations, 'Second note'),
         'Third note' => include(caption: 'Third note', position: '20;220', size: '240;60')
       )
       expect(added_snapshot.fetch(:flows)).to eq(
-        baseline.fetch(:flows).each_with_index.map do |flow, index|
-          index.zero? ? flow.merge(origin_caption: 'Edited note') : flow
+        editable_baseline.fetch(:flows).map do |flow|
+          flow[:origin_caption] == 'First note' ? flow.merge(origin_caption: 'Edited note') : flow
         end
       )
 
@@ -86,10 +91,14 @@ RSpec.describe 'Flow annotation certification' do
       Mxrb::RubyApp.compile(removal_app, edited)
       edited_snapshot = annotation_snapshot(edited)
       expect(edited_snapshot.fetch(:annotations)).to eq(
-        'Edited note' => baseline.dig(:annotations, 'First note').merge(caption: 'Edited note')
+        'Edited note' => editable_baseline.dig(:annotations, 'First note').merge(caption: 'Edited note')
       )
       expect(edited_snapshot.fetch(:flows)).to eq(
-        [baseline.fetch(:flows).first.merge(origin_caption: 'Edited note')]
+        editable_baseline.fetch(:flows).filter_map do |flow|
+          next if flow[:origin_caption] == 'Second note'
+
+          flow.merge(origin_caption: 'Edited note')
+        end
       )
       expect(Mxrb.validate(edited)).to be_valid
 
@@ -183,6 +192,7 @@ RSpec.describe 'Flow annotation certification' do
       .to raise_error(ArgumentError, /requires a preceding flow node/)
     builder.annotation 'Note'
     expect { builder.as_node('') }.to raise_error(ArgumentError, /cannot be empty/)
+    expect { builder.return_node('') }.to raise_error(ArgumentError, /cannot be empty/)
     expect { builder.annotation_flow(from: '', to: :note) }
       .to raise_error(ArgumentError, /references cannot be empty/)
     builder.annotation_flow(from: :note, to: :home)
@@ -204,6 +214,10 @@ RSpec.describe 'Flow annotation certification' do
     expect do
       exporter.send(:annotation_flow_endpoint_refs, [], [flow])
     end.to raise_error(Mxrb::SerializationError, /references a missing object/)
+
+    native_id = '11111111-2222-3333-4444-555555555555'
+    writer = Mxrb::Writer.new('/tmp/native-flow-node.mpr', version: '11.12.1', modules: [])
+    expect(writer.send(:flow_node_id, node_ref: "annotation:#{native_id}")).to eq(native_id)
   end
 
   def build_source(path)
@@ -268,8 +282,10 @@ RSpec.describe 'Flow annotation certification' do
     objects = native_items(document.dig('ObjectCollection', 'Objects'))
     annotations = objects.select { _1['$Type'] == 'Microflows$Annotation' }
     target = objects.find { _1['$Type'] == 'Microflows$ActionActivity' }
+    finish = objects.find { _1['$Type'] == 'Microflows$EndEvent' }
     flows = native_items(document['Flows'])
     flows.concat(annotations.map { annotation_flow(_1.fetch('$ID'), target.fetch('$ID')) })
+    flows << annotation_flow(annotations.first.fetch('$ID'), finish.fetch('$ID'))
     document['Flows'] = Mxrb::IO::BsonCodec.build_array(flows)
     mpr.transaction { mpr.update_unit(raw.fetch('UnitID'), document) }
   ensure
@@ -303,20 +319,21 @@ RSpec.describe 'Flow annotation certification' do
       flow = project.modules.find { _1.name == 'App' }.microflows.find { _1.name == flow_name }
       annotations = flow.objects.select { _1['$Type'] == 'Microflows$Annotation' }
       captions_by_id = annotations.to_h { |item| [native_id(item.fetch('$ID')), item.fetch('Caption')] }
+      objects_by_id = flow.objects.to_h { |item| [native_id(item.fetch('$ID')), item] }
       {
         annotations: annotations.to_h do |item|
           [item.fetch('Caption'), {
-            id: native_id(item.fetch('$ID')), caption: item.fetch('Caption'),
+            caption: item.fetch('Caption'),
             position: item.fetch('RelativeMiddlePoint'), size: item.fetch('Size')
           }]
         end,
         flows: flow.flows.filter_map do |item|
           next unless item['$Type'] == 'Microflows$AnnotationFlow'
 
+          destination_id = native_id(item.fetch('DestinationPointer'))
           {
-            id: native_id(item.fetch('$ID')), line_id: native_id(item.dig('Line', '$ID')),
             origin_caption: captions_by_id[native_id(item.fetch('OriginPointer'))],
-            destination_id: native_id(item.fetch('DestinationPointer'))
+            destination_type: objects_by_id.fetch(destination_id).fetch('$Type')
           }
         end
       }

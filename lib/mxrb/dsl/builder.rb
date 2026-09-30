@@ -3216,6 +3216,7 @@ module Mxrb
         @mark_as_used = nil
         @excluded = nil
         @annotations_authoritative = false
+        @return_node_ref = nil
       end
 
       def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
@@ -3311,6 +3312,13 @@ module Mxrb
         end
       end
 
+      def return_node(reference)
+        value = reference.to_s
+        raise ArgumentError, 'return node reference cannot be empty' if value.empty?
+
+        @return_node_ref = value
+      end
+
       def body_fingerprint(value)
         @expected_body_fingerprint = value.to_s
       end
@@ -3342,7 +3350,7 @@ module Mxrb
           parameters: @parameters, return_type: @return_type, documentation: @doc,
           calls: @calls, repositories: @repositories, allowed_roles: @allowed_roles,
           body: @body, return_variable_name: @return_variable_name,
-          return_expression: @return_expression,
+          return_expression: @return_expression, return_node_ref: @return_node_ref,
           allow_concurrent_execution: @allow_concurrent_execution,
           apply_entity_access: @apply_entity_access,
           mark_as_used: @mark_as_used, excluded: @excluded,

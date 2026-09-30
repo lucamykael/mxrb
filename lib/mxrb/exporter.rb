@@ -4358,6 +4358,24 @@ module Mxrb
 
       all_objects = nested_flow_objects(objects)
       by_id = all_objects.to_h { [_1["$ID"], _1] }
+      counters = Hash.new(0)
+      references = all_objects.to_h do |object|
+        prefix = {
+          "Microflows$Annotation" => "annotation",
+          "Microflows$ActionActivity" => "activity",
+          "Microflows$ExclusiveSplit" => "decision",
+          "Microflows$InheritanceSplit" => "type_decision",
+          "Microflows$LoopedActivity" => "loop",
+          "Microflows$EndEvent" => "return",
+          "Microflows$ErrorEvent" => "error",
+          "Microflows$ContinueEvent" => "continue",
+          "Microflows$BreakEvent" => "break"
+        }[object["$Type"]]
+        next [object["$ID"], nil] unless prefix
+
+        counters[prefix] += 1
+        [object["$ID"], "#{prefix}_#{counters[prefix]}"]
+      end
       endpoint_ids = annotation_flows.flat_map do |flow|
         [flow["OriginPointer"], flow["DestinationPointer"]]
       end.uniq
@@ -4365,21 +4383,12 @@ module Mxrb
         object = by_id[id]
         raise SerializationError, 'annotation flow references a missing object' unless object
 
-        prefix = {
-          "Microflows$Annotation" => "annotation",
-          "Microflows$ActionActivity" => "activity",
-          "Microflows$ExclusiveSplit" => "decision",
-          "Microflows$InheritanceSplit" => "type_decision",
-          "Microflows$LoopedActivity" => "loop",
-          "Microflows$ErrorEvent" => "error",
-          "Microflows$ContinueEvent" => "continue",
-          "Microflows$BreakEvent" => "break"
-        }[object["$Type"]]
-        unless prefix
+        reference = references[id]
+        unless reference
           raise SerializationError,
                 "unsupported annotation flow endpoint #{object['$Type']}"
         end
-        [id, "#{prefix}:#{document_id(object)}"]
+        [id, reference]
       end
     end
 
@@ -4549,6 +4558,12 @@ module Mxrb
             end
           else
             lines << "#{' ' * indent}end_flow" if indent > 2
+          end
+          if indent == 2 && (reference = endpoint_refs[obj["$ID"]])
+            emitted_refs[reference] = true
+            lines << "#{' ' * indent}return_node #{ruby(reference)}"
+          else
+            append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           end
           break
 

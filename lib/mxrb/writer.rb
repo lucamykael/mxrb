@@ -6116,7 +6116,8 @@ module Mxrb
 
       body = qualify_flow_member_references(flow[:body], flow[:parameters], module_name)
       graph = build_microflow_graph(
-        body, flow[:return_expression] || flow[:return_variable_name], identity:
+        body, flow[:return_expression] || flow[:return_variable_name],
+        identity:, return_node_ref: flow[:return_node_ref]
       )
       object_collection = {
         "$ID" => stable_id(identity, "object_collection"),
@@ -6269,7 +6270,7 @@ module Mxrb
       item
     end
 
-    def build_microflow_graph(body, return_expression, identity: nil)
+    def build_microflow_graph(body, return_expression, identity: nil, return_node_ref: nil)
       objects = []
       flows   = []
 
@@ -6279,7 +6280,7 @@ module Mxrb
       if flow_activities(executable_graph).any? { _1[:type].to_sym == :annotation_flow }
         raise ValidationError, 'annotation_flow declarations must be at the flow root'
       end
-      validate_flow_node_references!(executable_graph)
+      validate_flow_node_references!(executable_graph, additional: [return_node_ref])
       previous_identity = @flow_graph_identity
       @flow_graph_identity = identity
 
@@ -6306,7 +6307,12 @@ module Mxrb
 
       last_main_id = prev_id
 
-      end_id    = SecureRandom.uuid
+      return_reference = return_node_ref.to_s
+      end_id = if return_reference.empty?
+                 SecureRandom.uuid
+               else
+                 flow_node_id(type: :return_event, node_ref: return_reference)
+               end
       end_value = return_expression.to_s
       if prev_id
         objects << flow_object_doc(end_id, "Microflows$EndEvent", x, 100, "20;20").merge(
@@ -6361,6 +6367,7 @@ module Mxrb
       end
 
       node_ids = flow_node_references(executable_graph)
+      node_ids[return_reference] = end_id if prev_id && !return_reference.empty?
       flows.concat(annotation_flows.map { annotation_flow_doc(_1, node_ids) })
 
       { objects: objects, flows: flows }
@@ -6390,8 +6397,9 @@ module Mxrb
       end
     end
 
-    def validate_flow_node_references!(activities)
+    def validate_flow_node_references!(activities, additional: [])
       references = flow_activities(activities).filter_map { _1[:node_ref]&.to_s }
+      references.concat(Array(additional).map(&:to_s).reject(&:empty?))
       duplicate = references.tally.find { |_reference, count| count > 1 }&.first
       raise ValidationError, "duplicate flow node reference: #{duplicate}" if duplicate
     end
@@ -6418,7 +6426,9 @@ module Mxrb
       destination = node_ids[flow.fetch(:to).to_s]
       unless origin && destination
         missing = origin ? flow.fetch(:to) : flow.fetch(:from)
-        raise ValidationError, "unknown annotation_flow node reference: #{missing}"
+        available = node_ids.keys.sort.join(', ')
+        raise ValidationError,
+              "unknown annotation_flow node reference: #{missing}; available: #{available}"
       end
 
       document = {
