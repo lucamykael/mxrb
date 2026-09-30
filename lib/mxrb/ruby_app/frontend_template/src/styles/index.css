@@ -166,6 +166,12 @@ select {
   text-align: left;
 }
 
+.data-grid__filters input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 8rem;
+}
+
 .data-grid tbody tr {
   cursor: pointer;
 }
