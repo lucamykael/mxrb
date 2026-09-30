@@ -97,8 +97,72 @@ RSpec.describe Mxrb::Protocols do
       [{ protocol: :opc_ua, version: '2.2.0', marketplace_id: nil }]
     )
     expect(builder.connector_plans.first.entry.marketplace_id).to eq('230843')
-    expect { builder.build! }.to raise_error(Mxrb::MarketplaceError, /preview-only/)
+    expect { builder.build! }.to raise_error(Mxrb::MarketplaceError, /apply_connector_plans!/)
     expect(File).not_to exist('/tmp/connector-plan.mpr')
+  end
+
+  it 'applies every safe connector plan before allowing the builder to continue' do
+    mqtt = official_package('MQTT', '119508', '3.1.0')
+    kafka = official_package('Kafka', '105878', '2.12.0')
+    api = instance_double(Mxrb::OfficialMarketplace::ContentApi)
+    installer = instance_double(Mxrb::OfficialMarketplace::Installer)
+    allow(api).to receive(:resolve).with('119508', version: '3.1.0', mendix_version: '10.24.0')
+                                   .and_return(mqtt)
+    allow(api).to receive(:resolve).with('105878', version: nil, mendix_version: '10.24.0')
+                                   .and_return(kafka)
+    allow(installer).to receive(:pull_official).and_return(:installed)
+    builder = Mxrb::Dsl::Builder.new('/tmp/connectors-applied.mpr')
+    builder.mendix_version('10.24.0')
+    builder.connector(:mqtt, version: '3.1.0')
+    builder.connector(:kafka)
+
+    plans = builder.apply_connector_plans!(adapter: described_class.adapter(installer:, api:))
+
+    expect(plans.map(&:entry).map(&:protocol)).to eq(%i[mqtt kafka])
+    expect(plans).to all(be_applied)
+    expect(plans).to be_frozen
+    expect(builder.apply_connector_plans!(adapter: described_class.adapter(installer:, api:)))
+      .to eq([])
+    expect { builder.send(:validate_connector_requests!) }.not_to raise_error
+    expect(builder.definition[:connectors].map { _1[:protocol] }).to eq(%i[mqtt kafka])
+  end
+
+  it 'prevalidates connector plans and resumes after an installation failure' do
+    mqtt = official_package('MQTT', '119508', '3.1.0')
+    kafka = official_package('Kafka', '105878', '2.12.0')
+    api = instance_double(Mxrb::OfficialMarketplace::ContentApi)
+    installer = instance_double(Mxrb::OfficialMarketplace::Installer)
+    allow(api).to receive(:resolve).and_return(mqtt, kafka, kafka)
+    calls = []
+    allow(installer).to receive(:pull_official) do |marketplace_id, **|
+      calls << marketplace_id
+      raise Mxrb::MarketplaceError, 'install failed' if marketplace_id == '105878' && calls.count('105878') == 1
+
+      :installed
+    end
+    adapter = described_class.adapter(installer:, api:)
+    builder = Mxrb::Dsl::Builder.new('/tmp/connectors-resume.mpr')
+    builder.mendix_version('10.24.0')
+    builder.connector(:mqtt, version: '3.1.0')
+    builder.connector(:kafka, version: '2.12.0')
+
+    expect { builder.apply_connector_plans!(adapter:) }
+      .to raise_error(Mxrb::MarketplaceError, /install failed/)
+    expect(calls).to eq(%w[119508 105878])
+    expect(builder.apply_connector_plans!(adapter:).map { _1.entry.protocol }).to eq([:kafka])
+    expect(calls).to eq(%w[119508 105878 105878])
+
+    blocked_api = instance_double(Mxrb::OfficialMarketplace::ContentApi)
+    blocked_installer = instance_double(Mxrb::OfficialMarketplace::Installer)
+    allow(blocked_api).to receive(:resolve).and_return(mqtt, nil)
+    expect(blocked_installer).not_to receive(:pull_official)
+    blocked_adapter = described_class.adapter(installer: blocked_installer, api: blocked_api)
+    blocked = Mxrb::Dsl::Builder.new('/tmp/connectors-blocked.mpr')
+    blocked.mendix_version('10.24.0')
+    blocked.connector(:mqtt, version: '3.1.0')
+    blocked.connector(:kafka, version: '2.12.0')
+    expect { blocked.apply_connector_plans!(adapter: blocked_adapter) }
+      .to raise_error(Mxrb::MarketplaceError, /version was not resolved/)
   end
 
   it 'identifies connectors only by verified GUIDs and fails closed otherwise' do
@@ -199,6 +263,14 @@ RSpec.describe Mxrb::Protocols do
     project.modules.select(&:from_app_store).to_h do |mod|
       [mod.name, { guid: mod.app_store_guid, version: mod.app_store_version }]
     end
+  end
+
+  def official_package(name, marketplace_id, version)
+    Mxrb::OfficialMarketplace::OfficialPackage.new(
+      name, version, :mendix, "https://example.test/#{name.downcase}.mpk",
+      "content:#{marketplace_id}", marketplace_id.to_i,
+      SecureRandom.uuid, 'Module', 'Regular', [], false, true
+    )
   end
 end
 
