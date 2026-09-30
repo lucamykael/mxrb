@@ -1,0 +1,46 @@
+{
+  "name": "mxrb-data-grid-advanced-runtime",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "typed-server-grid",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Page 1 of 3 · 5 rows" },
+        { "wait_for_count": { "selector": ".mxrb-data-grid-runtime tbody tr", "equals": 2 } },
+        { "wait_for_selector": "input[aria-label=\"Filter Score\"]" },
+        {
+          "measure_click": {
+            "selector": "button[aria-label=\"Sort Score\"]",
+            "max_ms": 300,
+            "min_requests": 1
+          }
+        },
+        {
+          "measure_click": {
+            "selector": ".mxrb-grid-pagination button",
+            "index": 1,
+            "max_ms": 300,
+            "min_requests": 1
+          }
+        },
+        { "wait_for_text": "Page 2 of 3 · 5 rows" },
+        {
+          "measure_click": {
+            "selector": ".mxrb-grid-pagination button",
+            "index": 1,
+            "max_ms": 300,
+            "min_requests": 1
+          }
+        },
+        { "wait_for_count": { "selector": ".mxrb-data-grid-runtime tbody tr", "equals": 1 } },
+        { "wait_for_text": "Page 3 of 3 · 5 rows" },
+        { "wait_for_absence": "[role=\"alert\"]" }
+      ]
+    }
+  ]
+}

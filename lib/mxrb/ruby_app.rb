@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'date'
 require 'fileutils'
 require 'json'
 require 'monitor'
@@ -1611,9 +1612,9 @@ module Mxrb
           append_structured(value, declared_fields: false)
         end
 
-        def grid_column(name, attribute: nil, caption: nil, filter: nil)
+        def grid_column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
           builder = Dsl::WidgetBuilder.new(:data_grid, '')
-          normalize(builder.column(name, attribute:, caption:, filter:).last)
+          normalize(builder.column(name, attribute:, caption:, filter:, sortable:).last)
         end
 
         def sort_by(attribute, direction: 'Ascending')
@@ -1845,7 +1846,15 @@ module Mxrb
         end
       end
 
-      def records(name, context: nil, association: nil, context_type: nil, context_id: nil)
+      def records(name, context: nil, association: nil, context_type: nil, context_id: nil,
+                  filters: [], sort: [], offset: 0, limit: nil)
+        record_page(
+          name, context:, association:, context_type:, context_id:, filters:, sort:, offset:, limit:
+        ).fetch(:records)
+      end
+
+      def record_page(name, context: nil, association: nil, context_type: nil, context_id: nil,
+                      filters: [], sort: [], offset: 0, limit: nil)
         runtime_synchronize do
           filter = [association, context_type, context_id]
           if filter.any? && !filter.all? { !_1.to_s.empty? }
@@ -1861,7 +1870,17 @@ module Mxrb
                    end
           values = values.select { _1.entity == name.to_s }
           values = access_control.filter_readable(name.to_s, values, context:) if context
-          values.map { serialize(_1, context:) }
+          values = values.select { grid_record_matches?(_1, filters) }
+          values = grid_sort_records(values, sort)
+          total = values.length
+          normalized_offset = Integer(offset || 0)
+          normalized_limit = limit.nil? || limit.to_s.empty? ? nil : Integer(limit)
+          raise ArgumentError, 'record offset must be non-negative' if normalized_offset.negative?
+          raise ArgumentError, 'record limit must be positive' if normalized_limit && !normalized_limit.positive?
+
+          values = values.drop(normalized_offset)
+          values = values.first(normalized_limit) if normalized_limit
+          { records: values.map { serialize(_1, context:) }, total: }
         ensure
           release_runtime_cache
         end
@@ -1963,6 +1982,105 @@ module Mxrb
       end
 
       private
+
+      GRID_FILTER_OPERATORS = {
+        'text' => %w[contains equals not_equals starts_with ends_with empty not_empty],
+        'number' => %w[equals not_equals gt gte lt lte between empty not_empty],
+        'date' => %w[equals not_equals before after on_or_before on_or_after between empty not_empty],
+        'boolean' => %w[equals not_equals empty not_empty],
+        'enum' => %w[equals not_equals empty not_empty]
+      }.freeze
+
+      GRID_DEFAULT_OPERATORS = {
+        'text' => 'contains', 'number' => 'equals', 'date' => 'equals',
+        'boolean' => 'equals', 'enum' => 'equals'
+      }.freeze
+
+      def grid_record_matches?(record, filters)
+        Array(filters).all? do |raw|
+          filter = raw.to_h.transform_keys(&:to_s)
+          type = filter.fetch('type', 'text').to_s.downcase
+          allowed = GRID_FILTER_OPERATORS[type] || raise(ArgumentError, "unsupported filter type #{type}")
+          operator = filter.fetch('operator', GRID_DEFAULT_OPERATORS.fetch(type)).to_s.downcase
+          raise ArgumentError, "unsupported #{type} filter operator #{operator}" unless allowed.include?(operator)
+
+          attribute = grid_member_name(filter.fetch('attribute'))
+          grid_filter_match?(record.members[attribute], filter['value'], type, operator)
+        end
+      end
+
+      def grid_filter_match?(actual, expected, type, operator)
+        return actual.nil? || actual.to_s.empty? if operator == 'empty'
+        return !actual.nil? && !actual.to_s.empty? if operator == 'not_empty'
+
+        left = grid_filter_value(actual, type)
+        right = grid_filter_value(expected, type)
+        return false if left.nil? || right.nil?
+        return Array(right).include?(left) if type == 'enum' && operator == 'equals' && right.is_a?(Array)
+
+        case operator
+        when 'contains' then left.include?(right)
+        when 'starts_with' then left.start_with?(right)
+        when 'ends_with' then left.end_with?(right)
+        when 'equals' then left == right
+        when 'not_equals' then left != right
+        when 'gt', 'after' then left > right
+        when 'gte', 'on_or_after' then left >= right
+        when 'lt', 'before' then left < right
+        when 'lte', 'on_or_before' then left <= right
+        when 'between'
+          bounds = Array(expected).map { grid_filter_value(_1, type) }
+          bounds.size == 2 && bounds.none?(&:nil?) && left >= bounds[0] && left <= bounds[1]
+        end
+      end
+
+      def grid_filter_value(value, type)
+        return value.map { grid_filter_value(_1, type) } if value.is_a?(Array)
+
+        case type
+        when 'text', 'enum' then value.to_s.downcase
+        when 'number' then Float(value)
+        when 'date' then Date.iso8601(value.to_s[0, 10])
+        when 'boolean'
+          return value if [true, false].include?(value)
+          return true if value.to_s.casecmp?('true')
+
+          false if value.to_s.casecmp?('false')
+        end
+      rescue ArgumentError, TypeError
+        nil
+      end
+
+      def grid_sort_records(records, sortings)
+        Array(sortings).reverse_each.reduce(records.dup) do |values, raw|
+          sorting = raw.to_h.transform_keys(&:to_s)
+          attribute = grid_member_name(sorting.fetch('attribute'))
+          direction = sorting.fetch('direction', 'Ascending').to_s
+          unless %w[Ascending Descending asc desc].include?(direction)
+            raise ArgumentError, "unsupported sort direction #{direction}"
+          end
+
+          multiplier = %w[Descending desc].include?(direction) ? -1 : 1
+          values.sort do |left, right|
+            multiplier * grid_compare_values(left.members[attribute], right.members[attribute])
+          end
+        end
+      end
+
+      def grid_compare_values(left, right)
+        return 0 if left.nil? && right.nil?
+        return -1 if left.nil?
+        return 1 if right.nil?
+
+        left.is_a?(Numeric) && right.is_a?(Numeric) ? left <=> right : left.to_s <=> right.to_s
+      end
+
+      def grid_member_name(value)
+        name = value.to_s.split(%r{[./]}).last.to_s
+        raise ArgumentError, 'filter/sort attribute cannot be empty' if name.empty?
+
+        name
+      end
 
       def runtime_synchronize(&block)
         (@runtime_monitor ||= Monitor.new).synchronize(&block)
@@ -2967,13 +3085,21 @@ module Mxrb
           name, id = tail.split('/', 2)
           if method == 'GET' && id.nil?
             query = request.query.to_h
-            records = application.records(
-              name, context:,
-                    association: query['association'],
-                    context_type: query['context_type'],
-                    context_id: query['context_id']
-            )
-            return render_json(response, 200, records:)
+            scope = {
+              context:, association: query['association'], context_type: query['context_type'],
+              context_id: query['context_id']
+            }
+            page = if %w[filters sort offset limit].any? { query.key?(_1) }
+                     application.record_page(
+                       name, **scope, filters: query_json_array(query['filters'], 'filters'),
+                                      sort: query_json_array(query['sort'], 'sort'),
+                                      offset: query.fetch('offset', 0), limit: query['limit']
+                     )
+                   else
+                     records = application.records(name, **scope)
+                     { records:, total: records.length }
+                   end
+            return render_json(response, 200, page)
           end
 
           if method == 'GET' && id
@@ -3121,6 +3247,14 @@ module Mxrb
 
         JSON.parse(body).tap do |payload|
           raise ArgumentError, 'JSON body must be an object' unless payload.is_a?(Hash)
+        end
+      end
+
+      def query_json_array(value, name)
+        return [] if value.to_s.empty?
+
+        JSON.parse(value).tap do |payload|
+          raise ArgumentError, "#{name} must be a JSON array" unless payload.is_a?(Array)
         end
       end
 

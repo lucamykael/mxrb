@@ -2556,7 +2556,7 @@ module Mxrb
 
       def runtime_grid_column_expression(column)
         return unless column.is_a?(Hash) && column['name'].is_a?(String)
-        return unless runtime_keys?(column, %w[name attribute caption filter])
+        return unless runtime_keys?(column, %w[name attribute caption filter sortable])
 
         keywords = column.reject { |key, _value| key == 'name' }.transform_keys(&:to_sym)
         actual = Page::WidgetTree.new.grid_column(column.fetch('name'), **keywords)
@@ -2602,13 +2602,15 @@ module Mxrb
 
       def runtime_data_grid_supported?(type, options, widget)
         return false unless type == :data_grid
-        return false unless runtime_keys?(options, %w[entity selection columns])
+        return false unless runtime_keys?(
+          options, %w[entity selection columns page_size pageSize server_side sort toolbar]
+        )
         return false unless Array(widget['children']).empty?
         return false unless runtime_dsl_sink_regions_supported?(type, widget)
         return false unless runtime_widget_events_supported?(widget)
 
         Array(options['columns']).all? do |column|
-          runtime_keys?(column, %w[name attribute caption filter]) && column.key?('name')
+          runtime_keys?(column, %w[name attribute caption filter sortable]) && column.key?('name')
         end
       end
 
@@ -2616,13 +2618,13 @@ module Mxrb
         padding = ' ' * indentation
         options = widget.fetch('options')
         arguments = [widget.fetch('name', '').inspect]
-        %w[entity selection].each do |name|
+        %w[entity selection page_size pageSize server_side sort toolbar].each do |name|
           arguments << "#{name}: #{pretty_ruby_value(options.fetch(name), indentation + 2)}" if options.key?(name)
         end
         lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
         Array(options['columns']).each do |column|
           column_arguments = [column.fetch('name').inspect]
-          %w[attribute caption filter].each do |name|
+          %w[attribute caption filter sortable].each do |name|
             column_arguments << "#{name}: #{pretty_ruby_value(column.fetch(name), indentation + 4)}" if
               column.key?(name)
           end
@@ -3904,7 +3906,12 @@ module Mxrb
             name?: string;
             attribute?: string;
             caption?: string;
-            filter?: string;
+            filter?: string | {
+              type?: 'text' | 'number' | 'date' | 'boolean' | 'enum';
+              operator?: string;
+              options?: Array<RuntimeScalar | { value: RuntimeScalar; caption?: string }>;
+            };
+            sortable?: boolean;
             width?: number;
           }
 
@@ -3951,6 +3958,7 @@ module Mxrb
             options?: RuntimeValue[] | Record<string, RuntimeValue>;
             pageSize?: number;
             page_size?: number;
+            server_side?: boolean;
             parameters?: string[];
             read_only?: boolean;
             sort?: Array<{ attribute: string; direction?: string }>;
@@ -4077,6 +4085,7 @@ module Mxrb
 
           export interface EntityCollectionResponse<T extends EntityRecord = EntityRecord> {
             records: T[];
+            total?: number;
           }
 
           export interface Session {

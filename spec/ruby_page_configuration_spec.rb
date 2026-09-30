@@ -265,6 +265,31 @@ RSpec.describe 'private Ruby page configuration' do
     expect(actual).to eq([grid])
   end
 
+  it 'round-trips typed filters, sorting, and server-side grid options' do
+    grid = { 'type' => 'data_grid', 'name' => 'items', 'options' => {
+      'entity' => 'App.Item', 'selection' => 'multi', 'server_side' => true,
+      'page_size' => 25,
+      'sort' => [{ 'attribute' => 'Score', 'direction' => 'Descending' }],
+      'columns' => [
+        {
+          'name' => 'Score', 'attribute' => 'Score', 'sortable' => true,
+          'filter' => { 'type' => 'number', 'operator' => 'gte' }
+        },
+        {
+          'name' => 'Status', 'attribute' => 'Status',
+          'filter' => { 'type' => 'enum', 'options' => %w[New Done] }
+        }
+      ]
+    } }
+
+    source, actual = emitted_widgets([grid])
+    expect(source).to include(
+      'server_side: true', 'page_size: 25', '"direction" => "Descending"',
+      'filter: {"type" => "number", "operator" => "gte"}', 'sortable: true'
+    )
+    expect(actual).to eq([grid])
+  end
+
   it 'retains non-equivalent grid column fields including explicit nil and future settings' do
     columns = [
       { 'name' => 'Name', 'attribute' => nil },

@@ -537,9 +537,9 @@ module Mxrb
         @filters     = []
       end
 
-      def column(name, attribute: nil, caption: nil, filter: nil)
+      def column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
         @columns << {
-          name: name.to_s, attribute: attribute&.to_s, caption:, filter:
+          name: name.to_s, attribute: attribute&.to_s, caption:, filter:, sortable:
         }.compact
       end
 
