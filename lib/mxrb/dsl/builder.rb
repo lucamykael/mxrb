@@ -1246,23 +1246,49 @@ module Mxrb
       end
 
       def connector_plans(adapter: nil)
-        connector_requests.map do |request|
-          Protocols.plan(
-            request.protocol, mendix_version: @mendix_version, version: request.version,
-                              marketplace_id: request.marketplace_id, adapter:
-          )
+        connector_requests.map { connector_plan(_1, adapter) }
+      end
+
+      def apply_connector_plans!(adapter:)
+        requests = pending_connector_requests
+        plans = requests.map { connector_plan(_1, adapter) }
+        blocked = plans.reject(&:safe?)
+        unless blocked.empty?
+          reasons = blocked.flat_map(&:blocked_reasons).uniq.join('; ')
+          raise MarketplaceError, "connector plans are blocked: #{reasons}"
         end
+
+        plans.zip(requests).each do |plan, request|
+          plan.apply!
+          applied_connector_request_ids << request.object_id
+        end
+        plans.freeze
+      end
+
+      private
+
+      def connector_plan(request, adapter)
+        Protocols.plan(
+          request.protocol, mendix_version: @mendix_version, version: request.version,
+                            marketplace_id: request.marketplace_id, adapter:
+        )
       end
 
       def validate_connector_requests!
-        return if connector_requests.empty?
+        return if pending_connector_requests.empty?
 
         raise MarketplaceError,
-              'connector declarations are preview-only; resolve and apply connector_plans ' \
-              'to an existing MPR with the official Marketplace adapter'
+              'connector declarations are pending; call apply_connector_plans! ' \
+              'with the official Marketplace adapter before build!'
       end
 
       def connector_requests = (@connector_requests ||= [])
+
+      def pending_connector_requests = connector_requests.reject do
+        applied_connector_request_ids.include?(_1.object_id)
+      end
+
+      def applied_connector_request_ids = (@applied_connector_request_ids ||= [])
     end
 
     class Builder # rubocop:disable Metrics/ClassLength
