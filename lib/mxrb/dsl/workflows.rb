@@ -69,7 +69,7 @@ module Mxrb
       def workflow_user_task(source, index)
         spec = source.to_h.transform_keys(&:to_sym)
         outcomes = Array(spec.fetch(:outcomes, [{ value: 'Complete' }]))
-        raise ArgumentError, 'certified workflow user tasks require exactly one outcome' unless outcomes.one?
+        validate_workflow_outcomes!(outcomes)
 
         workflow_identity(spec[:id]).merge(
           '$Type' => 'Workflows$SingleUserTaskActivity',
@@ -122,6 +122,14 @@ module Mxrb
           },
           'Value' => spec.fetch(:value, 'Complete').to_s
         )
+      end
+
+      def validate_workflow_outcomes!(outcomes)
+        raise ArgumentError, 'certified workflow user tasks require at least one outcome' if outcomes.empty?
+
+        values = outcomes.map { _1.to_h.transform_keys(&:to_sym).fetch(:value, 'Complete').to_s }
+        raise ArgumentError, 'certified workflow outcome values cannot be empty' if values.any?(&:empty?)
+        raise ArgumentError, 'certified workflow outcome values must be unique' unless values.uniq == values
       end
 
       def workflow_terminal_activity(source, kind, default_position: '0;0')

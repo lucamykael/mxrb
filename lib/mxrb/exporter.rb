@@ -1865,7 +1865,8 @@ module Mxrb
       return false unless [true, false].include?(activity['AutoAssignSingleTargetUser'])
 
       outcomes = bson_items(activity['Outcomes'])
-      outcomes.one? && semantic_workflow_outcome?(outcomes.first)
+      !outcomes.empty? && outcomes.all? { semantic_workflow_outcome?(_1) } &&
+        outcomes.map { _1['Value'] }.uniq.size == outcomes.size
     end
 
     def semantic_workflow_activity_base?(activity)
@@ -1889,7 +1890,8 @@ module Mxrb
     def semantic_workflow_outcome?(outcome)
       return false unless outcome.is_a?(Hash) && outcome['$Type'] == 'Workflows$UserTaskOutcome'
       return false unless (outcome.keys - WORKFLOW_OUTCOME_FIELDS).empty?
-      return false unless outcome['PersistentId'].is_a?(BSON::Binary) && outcome['Value'].is_a?(String)
+      return false unless outcome['PersistentId'].is_a?(BSON::Binary) &&
+                          outcome['Value'].is_a?(String) && !outcome['Value'].empty?
 
       flow = outcome['Flow']
       flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow' &&
