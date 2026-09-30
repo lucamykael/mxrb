@@ -41,6 +41,8 @@ module ConsumedServicesFixture
                     as: :Response,
                     result_entity: 'System.HttpResponse',
                     timeout: '30',
+                    username: "'certification-user'",
+                    password: "'certification-password'",
                     error: :continue do
             header 'Accept', "'application/json'"
             header 'X-Correlation-Id', "'mxrb-certification'"

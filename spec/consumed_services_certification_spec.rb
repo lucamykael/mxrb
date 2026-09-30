@@ -19,6 +19,7 @@ RSpec.describe 'consumed services certification' do
         sources = ruby_sources(exported)
         expect(sources).to include(
           'consumed_odata_service :Directory', 'call_rest method: :get',
+          'username: "\'certification-user\'"', 'password: "\'certification-password\'"',
           'header "Accept"', 'header "X-Correlation-Id"'
         )
         expect(sources).not_to include(

@@ -72,6 +72,18 @@ RSpec.describe 'Ruby REST header declarations' do
         **options, request_body: '', request_mapping: 'App.Export', request_variable: :Input
       )
     end.to raise_error(ArgumentError, /either a request body or a request mapping/)
+    expect { flow.call_rest(**options, username: "'api-user'") }
+      .to raise_error(ArgumentError, /requires both username and password/)
+    expect { flow.call_rest(**options, password: "'api-password'") }
+      .to raise_error(ArgumentError, /requires both username and password/)
+    valid = builder
+    valid.call_rest(**options)
+    invalid = valid.to_h.fetch(:body).first
+    writer = Mxrb::Writer.new('/tmp/invalid-rest-basic-auth.mpr', version: '11.12.1', modules: [])
+    expect { writer.send(:rest_call_action_doc, invalid.merge(username: "'api-user'")) }
+      .to raise_error(Mxrb::ValidationError, /requires both username and password/)
+    expect { writer.send(:rest_call_action_doc, invalid.merge(password: "'api-password'")) }
+      .to raise_error(Mxrb::ValidationError, /requires both username and password/)
     expect(flow.to_h.fetch(:body)).to be_nil
   end
 
@@ -84,6 +96,33 @@ RSpec.describe 'Ruby REST header declarations' do
     document = writer.send(:rest_call_action_doc, activity)
     source = Mxrb::Exporter.allocate.send(:rest_call_line, '', document)
     expect(source).not_to include(' do', 'header ')
+    decoded = builder
+    decoded.instance_eval(source)
+    expect(decoded.to_h.fetch(:body).first).to eq(activity)
+  end
+
+  it 'roundtrips native REST basic authentication expressions' do
+    flow = builder
+    flow.call_rest(**options, username: "'api-user'", password: '$Secret')
+    activity = flow.to_h.fetch(:body).first
+    writer = Mxrb::Writer.new('/tmp/rest-basic-auth.mpr', version: '11.12.1', modules: [])
+    document = writer.send(:rest_call_action_doc, activity)
+
+    expect(document.fetch('HttpConfiguration')).to include(
+      'UseHttpAuthentication' => true,
+      'HttpAuthenticationUserName' => "'api-user'",
+      'HttpAuthenticationPassword' => '$Secret'
+    )
+    source = Mxrb::Exporter.allocate.send(:rest_call_line, '', document)
+    expect(source).to include('username: "\'api-user\'"', 'password: "$Secret"')
+    malformed = Marshal.load(Marshal.dump(document))
+    malformed['HttpConfiguration']['HttpAuthenticationPassword'] = ''
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', malformed) }
+      .to raise_error(Mxrb::SerializationError, /requires both username and password/)
+    malformed['HttpConfiguration']['HttpAuthenticationUserName'] = ''
+    malformed['HttpConfiguration']['HttpAuthenticationPassword'] = '$Secret'
+    expect { Mxrb::Exporter.allocate.send(:rest_call_line, '', malformed) }
+      .to raise_error(Mxrb::SerializationError, /requires both username and password/)
     decoded = builder
     decoded.instance_eval(source)
     expect(decoded.to_h.fetch(:body).first).to eq(activity)
@@ -110,7 +149,8 @@ RSpec.describe 'Ruby REST header declarations' do
         self.module(:App) do
           microflow(:Request) do
             call_rest method: :get, location: 'https://example.invalid', result_handling: :http_response,
-                      as: :response, result_entity: 'System.HttpResponse', timeout: '30', request_body: '' do
+                      as: :response, result_entity: 'System.HttpResponse', timeout: '30', request_body: '',
+                      username: "'api-user'", password: "'api-password'" do
               header 'X-Test', "'original'"
               header 'X-Multi', "'one'"
               header 'X-Multi', "'two'"
@@ -123,6 +163,7 @@ RSpec.describe 'Ruby REST header declarations' do
       source_path = File.join(output, 'app', 'services', 'app', 'request.rb')
       source = File.read(source_path)
       expect(source).not_to include('headers:', '=>')
+      expect(source).to include('username: "\'api-user\'"', 'password: "\'api-password\'"')
       expect(source.scan('header "X-Multi"').size).to eq(2), source
       Mxrb::RubyApp.compile(output, rebuilt)
       expect(flow_bytes(rebuilt)).to eq(before)

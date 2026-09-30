@@ -4911,6 +4911,15 @@ module Mxrb
       ]
       parameters = bson_items(location["Parameters"]).map { _1["Expression"] }
       args << "location_parameters: #{ruby(parameters)}" unless parameters.empty?
+      if http["UseHttpAuthentication"] == true
+        username = http["HttpAuthenticationUserName"].to_s
+        password = http["HttpAuthenticationPassword"].to_s
+        if username.empty? || password.empty?
+          raise SerializationError, 'REST basic authentication requires both username and password'
+        end
+        args << "username: #{ruby(username)}"
+        args << "password: #{ruby(password)}"
+      end
       if request["$Type"] == "Microflows$CustomRequestHandling"
         template = request["Template"] || {}
         args << "request_body: #{ruby(template['Text'].to_s)}"

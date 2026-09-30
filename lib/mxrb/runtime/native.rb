@@ -2,6 +2,7 @@
 
 require 'securerandom'
 require 'strscan'
+require 'base64'
 require 'json'
 require 'monitor'
 require 'net/http'
@@ -1183,6 +1184,15 @@ module Mxrb
             [entry['Key'].to_s, @expression.evaluate(entry['Value'], variables).to_s]
           rescue NativeRuntimeError
             [entry['Key'].to_s, entry['Value'].to_s]
+          end
+          if configuration['UseHttpAuthentication'] == true
+            username = @expression.evaluate(
+              configuration['HttpAuthenticationUserName'].to_s, variables
+            )
+            password = @expression.evaluate(
+              configuration['HttpAuthenticationPassword'].to_s, variables
+            )
+            headers['Authorization'] = "Basic #{Base64.strict_encode64("#{username}:#{password}")}"
           end
           request = action['RequestHandling'] || {}
           body_value = variables[request['MappingVariableName'].to_s]
