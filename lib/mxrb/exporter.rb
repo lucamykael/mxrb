@@ -4302,7 +4302,8 @@ module Mxrb
       branches.size >= 2 && branches.all? { by_id.key?(_1["DestinationPointer"]) }
     end
 
-    def body_dsl_lines(objects, flows, indent = 2, nested: false)
+    def body_dsl_lines(objects, flows, indent = 2, nested: false, endpoint_refs: nil,
+                       emitted_refs: nil)
       return [] if objects.empty?
       by_id   = objects.to_h { |o| [o["$ID"], o] }
       fwd_map = {}
@@ -4326,19 +4327,94 @@ module Mxrb
         start = objects.find { !destinations.key?(_1["$ID"]) }
       end
       return [] unless start
-      lines = annotation_dsl_lines(objects, indent)
-      linearize_flow(start["$ID"], fwd_map, err_map, by_id, flows, {}, lines, indent, nil)
+      endpoint_refs ||= annotation_flow_endpoint_refs(objects, flows)
+      emitted_refs ||= {}
+      lines = annotation_dsl_lines(objects, indent, endpoint_refs, emitted_refs)
+      linearize_flow(
+        start["$ID"], fwd_map, err_map, by_id, flows, {}, lines, indent, nil,
+        endpoint_refs, emitted_refs
+      )
+      lines.concat(annotation_flow_dsl_lines(flows, endpoint_refs, indent)) unless nested
       lines
     end
 
-    def annotation_dsl_lines(objects, indent)
+    def annotation_dsl_lines(objects, indent, endpoint_refs = {}, emitted_refs = {})
       pad = " " * indent
-      objects.filter_map do |object|
-        next unless object["$Type"] == "Microflows$Annotation"
+      objects.flat_map do |object|
+        next [] unless object["$Type"] == "Microflows$Annotation"
 
-        "#{pad}annotation #{ruby(object['Caption'].to_s)}, " \
+        declaration = "#{pad}annotation #{ruby(object['Caption'].to_s)}, " \
           "position: #{ruby(object['RelativeMiddlePoint'].to_s)}, " \
           "size: #{ruby(object['Size'].to_s)}"
+        reference = endpoint_refs[object["$ID"]]
+        emitted_refs[reference] = true if reference
+        [declaration, ("#{pad}as_node #{ruby(reference)}" if reference)].compact
+      end
+    end
+
+    def annotation_flow_endpoint_refs(objects, flows)
+      annotation_flows = Array(flows).select { _1["$Type"] == "Microflows$AnnotationFlow" }
+      return {} if annotation_flows.empty?
+
+      all_objects = nested_flow_objects(objects)
+      by_id = all_objects.to_h { [_1["$ID"], _1] }
+      counters = Hash.new(0)
+      references = all_objects.to_h do |object|
+        prefix = {
+          "Microflows$Annotation" => "annotation",
+          "Microflows$ActionActivity" => "activity",
+          "Microflows$ExclusiveSplit" => "decision",
+          "Microflows$InheritanceSplit" => "type_decision",
+          "Microflows$LoopedActivity" => "loop",
+          "Microflows$EndEvent" => "return",
+          "Microflows$ErrorEvent" => "error",
+          "Microflows$ContinueEvent" => "continue",
+          "Microflows$BreakEvent" => "break"
+        }[object["$Type"]]
+        next [object["$ID"], nil] unless prefix
+
+        counters[prefix] += 1
+        [object["$ID"], "#{prefix}_#{counters[prefix]}"]
+      end
+      endpoint_ids = annotation_flows.flat_map do |flow|
+        [flow["OriginPointer"], flow["DestinationPointer"]]
+      end.uniq
+      endpoint_ids.to_h do |id|
+        object = by_id[id]
+        raise SerializationError, 'annotation flow references a missing object' unless object
+
+        reference = references[id]
+        unless reference
+          raise SerializationError,
+                "unsupported annotation flow endpoint #{object['$Type']}"
+        end
+        [id, reference]
+      end
+    end
+
+    def nested_flow_objects(objects)
+      Array(objects).flat_map do |object|
+        nested = bson_items(object.dig("ObjectCollection", "Objects"))
+        [object, *nested_flow_objects(nested)]
+      end
+    end
+
+    def annotation_flow_dsl_lines(flows, endpoint_refs, indent)
+      pad = " " * indent
+      Array(flows).filter_map do |flow|
+        next unless flow["$Type"] == "Microflows$AnnotationFlow"
+
+        from = endpoint_refs.fetch(flow["OriginPointer"])
+        to = endpoint_refs.fetch(flow["DestinationPointer"])
+        line = flow["Line"] || {}
+        origin_vector = line["OriginControlVector"] || flow["OriginBezierVector"] || "0;0"
+        destination_vector = line["DestinationControlVector"] ||
+          flow["DestinationBezierVector"] || "0;-30"
+        "#{pad}annotation_flow from: #{ruby(from)}, to: #{ruby(to)}, " \
+          "origin_index: #{flow.fetch('OriginConnectionIndex', 1)}, " \
+          "destination_index: #{flow.fetch('DestinationConnectionIndex', 0)}, " \
+          "origin_vector: #{ruby(origin_vector)}, " \
+          "destination_vector: #{ruby(destination_vector)}"
       end
     end
 
@@ -4373,7 +4449,8 @@ module Mxrb
       value
     end
 
-    def linearize_flow(cursor, fwd, err, by_id, graph_flows, seen, lines, indent, stop_at)
+    def linearize_flow(cursor, fwd, err, by_id, graph_flows, seen, lines, indent, stop_at,
+                       endpoint_refs = {}, emitted_refs = {})
       while cursor && cursor != stop_at
         break if seen[cursor]
         seen[cursor] = true
@@ -4387,13 +4464,14 @@ module Mxrb
         when "Microflows$ActionActivity"
           line = action_dsl_line(obj, indent)
           lines << line if line
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs) if line
           next_id  = (fwd[cursor] || []).first&.dig(:to)
           error_to = err[cursor]
           if error_to
             rescue_lines = []
             linearize_flow(
               error_to, fwd, err, by_id, graph_flows,
-              seen.dup, rescue_lines, indent + 2, nil
+              seen.dup, rescue_lines, indent + 2, nil, endpoint_refs, emitted_refs
             )
             lines << "#{' ' * indent}rescue_all do"
             lines.concat(rescue_lines)
@@ -4410,13 +4488,14 @@ module Mxrb
             branch_lines = []
             linearize_flow(
               edge[:to], fwd, err, by_id, graph_flows, seen.dup,
-              branch_lines, indent + 4, merge_id
+              branch_lines, indent + 4, merge_id, endpoint_refs, emitted_refs
             )
             lines << "#{' ' * (indent + 2)}on(#{ruby(edge[:case_val])}) do"
             lines.concat(branch_lines)
             lines << "#{' ' * (indent + 2)}end"
           end
           lines << "#{' ' * indent}end"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = merge_id
 
         when "Microflows$ExclusiveMerge"
@@ -4430,7 +4509,7 @@ module Mxrb
             branch_lines = []
             linearize_flow(
               edge[:to], fwd, err, by_id, graph_flows, seen.dup,
-              branch_lines, indent + 4, merge_id
+              branch_lines, indent + 4, merge_id, endpoint_refs, emitted_refs
             )
             if edge[:case_val].to_s.empty?
               lines << "#{' ' * (indent + 2)}otherwise do"
@@ -4441,6 +4520,7 @@ module Mxrb
             lines << "#{' ' * (indent + 2)}end"
           end
           lines << "#{' ' * indent}end"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = merge_id
 
         when "Microflows$LoopedActivity"
@@ -4453,7 +4533,9 @@ module Mxrb
             inner_objects,
             graph_flows,
             indent + 2,
-            nested: true
+            nested: true,
+            endpoint_refs: endpoint_refs,
+            emitted_refs: emitted_refs
           )
           if loop_src["$Type"] == "Microflows$WhileLoopCondition"
             lines << "#{' ' * indent}while_loop #{ruby(loop_src["WhileExpression"])} do"
@@ -4463,6 +4545,7 @@ module Mxrb
           end
           lines.concat(inner_lines)
           lines << "#{' ' * indent}end"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = (fwd[cursor] || []).first&.dig(:to)
 
         when "Microflows$EndEvent"
@@ -4476,24 +4559,41 @@ module Mxrb
           else
             lines << "#{' ' * indent}end_flow" if indent > 2
           end
+          if indent == 2 && (reference = endpoint_refs[obj["$ID"]])
+            emitted_refs[reference] = true
+            lines << "#{' ' * indent}return_node #{ruby(reference)}"
+          else
+            append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
+          end
           break
 
         when "Microflows$ErrorEvent"
           lines << "#{' ' * indent}error_event"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
 
         when "Microflows$ContinueEvent"
           lines << "#{' ' * indent}continue_loop"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
 
         when "Microflows$BreakEvent"
           lines << "#{' ' * indent}break_loop"
+          append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
 
         else
           cursor = (fwd[cursor] || []).first&.dig(:to)
         end
       end
+    end
+
+    def append_flow_node_reference(lines, object, indent, endpoint_refs, emitted_refs)
+      reference = endpoint_refs[object["$ID"]]
+      return unless reference && !emitted_refs[reference]
+
+      emitted_refs[reference] = true
+      lines << "#{' ' * indent}as_node #{ruby(reference)}"
     end
 
     def flows_for_objects(flows, objects)

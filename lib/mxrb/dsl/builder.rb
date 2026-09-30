@@ -2863,6 +2863,32 @@ module Mxrb
         }
       end
 
+      def as_node(reference)
+        activity = _acts.last
+        if activity.nil? || activity[:type] == :annotation_flow
+          raise ArgumentError, 'as_node requires a preceding flow node declaration'
+        end
+
+        value = reference.to_s
+        raise ArgumentError, 'flow node reference cannot be empty' if value.empty?
+
+        activity[:node_ref] = value
+      end
+
+      def annotation_flow(from:, to:, origin_index: 1, destination_index: 0,
+                          origin_vector: '0;0', destination_vector: '0;-30')
+        origin = from.to_s
+        destination = to.to_s
+        raise ArgumentError, 'annotation_flow references cannot be empty' \
+          if origin.empty? || destination.empty?
+
+        _acts << {
+          type: :annotation_flow, from: origin, to: destination,
+          origin_index: Integer(origin_index), destination_index: Integer(destination_index),
+          origin_vector: origin_vector.to_s, destination_vector: destination_vector.to_s
+        }
+      end
+
       def aggregate(list, function:, as:, attribute: nil)
         _acts << {
           type: :aggregate, variable: list.to_s, function: function.to_s,
@@ -3190,6 +3216,7 @@ module Mxrb
         @mark_as_used = nil
         @excluded = nil
         @annotations_authoritative = false
+        @return_node_ref = nil
       end
 
       def parameter(name, type:, id: nil, relative_middle_point: nil, size: nil)
@@ -3285,6 +3312,13 @@ module Mxrb
         end
       end
 
+      def return_node(reference)
+        value = reference.to_s
+        raise ArgumentError, 'return node reference cannot be empty' if value.empty?
+
+        @return_node_ref = value
+      end
+
       def body_fingerprint(value)
         @expected_body_fingerprint = value.to_s
       end
@@ -3316,11 +3350,12 @@ module Mxrb
           parameters: @parameters, return_type: @return_type, documentation: @doc,
           calls: @calls, repositories: @repositories, allowed_roles: @allowed_roles,
           body: @body, return_variable_name: @return_variable_name,
-          return_expression: @return_expression,
+          return_expression: @return_expression, return_node_ref: @return_node_ref,
           allow_concurrent_execution: @allow_concurrent_execution,
           apply_entity_access: @apply_entity_access,
           mark_as_used: @mark_as_used, excluded: @excluded,
           annotations_authoritative: @annotations_authoritative || body_contains_annotation?(@body),
+          annotation_flows_authoritative: body_contains_annotation_flow?(@body),
           preserve_native_body: !@expected_body_fingerprint.nil? &&
             @expected_body_fingerprint == current_fingerprint
         }.tap { _1[:unit_id] = @unit_id unless @unit_id.nil? }
@@ -3335,6 +3370,16 @@ module Mxrb
             body_contains_annotation?(activity[:true_branch]) ||
             body_contains_annotation?(activity[:false_branch]) ||
             activity.fetch(:branches, {}).values.any? { body_contains_annotation?(_1) }
+        end
+      end
+
+      def body_contains_annotation_flow?(activities)
+        Array(activities).any? do |activity|
+          activity[:type] == :annotation_flow ||
+            body_contains_annotation_flow?(activity[:activities]) ||
+            body_contains_annotation_flow?(activity[:true_branch]) ||
+            body_contains_annotation_flow?(activity[:false_branch]) ||
+            activity.fetch(:branches, {}).values.any? { body_contains_annotation_flow?(_1) }
         end
       end
 

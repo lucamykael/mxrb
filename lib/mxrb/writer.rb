@@ -3743,6 +3743,8 @@ module Mxrb
       )
       duplicate_parameter_type_ids = duplicate_flow_parameter_type_ids(original_objects)
       annotations_declared = target["__mxrb_annotations_declared"] == true
+      annotation_flows_declared = target["__mxrb_annotation_flows_declared"] == true
+      id_mapping = {}
 
       if annotations_declared
         original_annotations = all_flow_objects(original_objects).select do |object|
@@ -3751,9 +3753,16 @@ module Mxrb
         generated_annotations = all_flow_objects(generated_objects).select do |object|
           object["$Type"] == "Microflows$Annotation"
         end
-        generated_annotations.zip(original_annotations).each do |generated, original|
+        remaining_annotations = original_annotations.dup
+        generated_annotations.each do |generated|
+          generated_id = IO::BsonCodec.extract_id(generated["$ID"])
+          original = remaining_annotations.find do |candidate|
+            IO::BsonCodec.extract_id(candidate["$ID"]) == generated_id
+          end || remaining_annotations.first
           next unless original
 
+          remaining_annotations.delete(original)
+          id_mapping[generated["$ID"]] = original["$ID"]
           generated.replace(original.merge(generated).merge("$ID" => original["$ID"]))
         end
       end
@@ -3781,10 +3790,13 @@ module Mxrb
       generated_editable = ordered_flow_objects(
         all_flow_objects(generated_objects), generated_flows
       ).reject { flow_auxiliary_object?(_1) }
-      id_mapping = {}
       original_cursor = 0
       generated_editable.each do |generated_object|
-        match_index = (original_cursor...original_editable.size).find do |index|
+        candidates = original_cursor...original_editable.size
+        generated_id = IO::BsonCodec.extract_id(generated_object["$ID"])
+        match_index = candidates.find do |index|
+          IO::BsonCodec.extract_id(original_editable[index]["$ID"]) == generated_id
+        end || candidates.find do |index|
           flow_object_signature(original_editable[index]) ==
             flow_object_signature(generated_object)
         end
@@ -3807,16 +3819,18 @@ module Mxrb
       generated_flows.map! do |flow|
         original_edges.fetch(flow_edge_signature(flow), flow)
       end
-      annotation_flows = original_flows.select do |flow|
-        flow["$Type"] == "Microflows$AnnotationFlow"
-      end
-      if annotations_declared
-        object_ids = all_flow_objects(generated_objects).to_h { [_1["$ID"], true] }
-        annotation_flows.select! do |flow|
-          object_ids.key?(flow["OriginPointer"]) && object_ids.key?(flow["DestinationPointer"])
+      unless annotation_flows_declared
+        annotation_flows = original_flows.select do |flow|
+          flow["$Type"] == "Microflows$AnnotationFlow"
         end
+        if annotations_declared
+          object_ids = all_flow_objects(generated_objects).to_h { [_1["$ID"], true] }
+          annotation_flows.select! do |flow|
+            object_ids.key?(flow["OriginPointer"]) && object_ids.key?(flow["DestinationPointer"])
+          end
+        end
+        generated_flows.concat(annotation_flows)
       end
-      generated_flows.concat(annotation_flows)
       validate_flow_endpoints!(generated_objects, generated_flows)
 
       generated_collection["Objects"] = IO::BsonCodec.build_array(generated_objects)
@@ -3944,6 +3958,7 @@ module Mxrb
 
     def flow_edge_signature(flow)
       [
+        flow["$Type"],
         flow["OriginPointer"], flow["DestinationPointer"],
         flow["IsErrorHandler"] == true,
         array_items(flow["CaseValues"]).first&.dig("$Type") ||
@@ -6092,6 +6107,7 @@ module Mxrb
       roles_declared  = !flow[:allowed_roles].nil?
       body_declared   = !flow[:body].nil? || !flow[:return_expression].nil?
       annotations_declared = flow[:annotations_authoritative] == true
+      annotation_flows_declared = flow[:annotation_flows_authoritative] == true
       return_var_name = flow[:return_variable_name] || "ReturnValue"
       allow_concurrent = flow[:allow_concurrent_execution]
       apply_entity_access = flow[:apply_entity_access]
@@ -6100,7 +6116,8 @@ module Mxrb
 
       body = qualify_flow_member_references(flow[:body], flow[:parameters], module_name)
       graph = build_microflow_graph(
-        body, flow[:return_expression] || flow[:return_variable_name]
+        body, flow[:return_expression] || flow[:return_variable_name],
+        identity:, return_node_ref: flow[:return_node_ref]
       )
       object_collection = {
         "$ID" => stable_id(identity, "object_collection"),
@@ -6120,6 +6137,7 @@ module Mxrb
         "__mxrb_allowed_roles_declared" => roles_declared,
         "__mxrb_body_declared" => body_declared,
         "__mxrb_annotations_declared" => annotations_declared,
+        "__mxrb_annotation_flows_declared" => annotation_flows_declared,
         "__mxrb_return_type_declared" => !flow[:return_type].nil?,
         "__mxrb_preserve_native_body" => flow[:preserve_native_body] == true,
         "__mxrb_allow_concurrent_execution_declared" => !allow_concurrent.nil?,
@@ -6252,14 +6270,24 @@ module Mxrb
       item
     end
 
-    def build_microflow_graph(body, return_expression)
+    def build_microflow_graph(body, return_expression, identity: nil, return_node_ref: nil)
       objects = []
       flows   = []
+
+      annotation_flows, executable_graph = Array(body).partition do |activity|
+        activity[:type].to_sym == :annotation_flow
+      end
+      if flow_activities(executable_graph).any? { _1[:type].to_sym == :annotation_flow }
+        raise ValidationError, 'annotation_flow declarations must be at the flow root'
+      end
+      validate_flow_node_references!(executable_graph, additional: [return_node_ref])
+      previous_identity = @flow_graph_identity
+      @flow_graph_identity = identity
 
       start_id = SecureRandom.uuid
       objects << flow_object_doc(start_id, "Microflows$StartEvent", 50, 100, "20;20")
 
-      annotations, executable_body = Array(body).partition do |activity|
+      annotations, executable_body = executable_graph.partition do |activity|
         activity[:type].to_sym == :annotation
       end
       objects.concat(annotations.map { annotation_doc(_1) })
@@ -6279,7 +6307,12 @@ module Mxrb
 
       last_main_id = prev_id
 
-      end_id    = SecureRandom.uuid
+      return_reference = return_node_ref.to_s
+      end_id = if return_reference.empty?
+                 SecureRandom.uuid
+               else
+                 flow_node_id(type: :return_event, node_ref: return_reference)
+               end
       end_value = return_expression.to_s
       if prev_id
         objects << flow_object_doc(end_id, "Microflows$EndEvent", x, 100, "20;20").merge(
@@ -6294,7 +6327,7 @@ module Mxrb
         err_pid = last_main_id
         terminal = false
         Array(rescue_block[:activities]).each_with_index do |act, i|
-          act_id = SecureRandom.uuid
+          act_id = flow_node_id(act)
           object = case act[:type].to_sym
           when :return_event
             terminal = true
@@ -6333,17 +6366,89 @@ module Mxrb
         end
       end
 
+      node_ids = flow_node_references(executable_graph)
+      node_ids[return_reference] = end_id if prev_id && !return_reference.empty?
+      flows.concat(annotation_flows.map { annotation_flow_doc(_1, node_ids) })
+
       { objects: objects, flows: flows }
+    ensure
+      @flow_graph_identity = previous_identity
     end
 
     def annotation_doc(annotation)
       {
-        "$ID" => SecureRandom.uuid,
+        "$ID" => flow_node_id(annotation),
         "$Type" => "Microflows$Annotation",
         "Caption" => annotation[:caption].to_s,
         "RelativeMiddlePoint" => annotation[:position].to_s,
         "Size" => annotation[:size].to_s
       }
+    end
+
+    def flow_activities(activities)
+      Array(activities).flat_map do |activity|
+        nested = [activity[:activities]]
+        if activity.fetch(:branches, {}).empty?
+          nested.concat([activity[:true_branch], activity[:false_branch]])
+        else
+          nested.concat(activity.fetch(:branches).values)
+        end
+        [activity, *nested.flat_map { flow_activities(_1) }]
+      end
+    end
+
+    def validate_flow_node_references!(activities, additional: [])
+      references = flow_activities(activities).filter_map { _1[:node_ref]&.to_s }
+      references.concat(Array(additional).map(&:to_s).reject(&:empty?))
+      duplicate = references.tally.find { |_reference, count| count > 1 }&.first
+      raise ValidationError, "duplicate flow node reference: #{duplicate}" if duplicate
+    end
+
+    def flow_node_references(activities)
+      flow_activities(activities).filter_map do |activity|
+        reference = activity[:node_ref]&.to_s
+        [reference, flow_node_id(activity)] unless reference.to_s.empty?
+      end.to_h
+    end
+
+    def flow_node_id(activity)
+      reference = activity[:node_ref]&.to_s
+      return SecureRandom.uuid if reference.to_s.empty?
+
+      native_id = reference[/\A[a-z_]+:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\z/i, 1]
+      return native_id if native_id
+
+      stable_id(@flow_graph_identity, 'flow_node', reference)
+    end
+
+    def annotation_flow_doc(flow, node_ids)
+      origin = node_ids[flow.fetch(:from).to_s]
+      destination = node_ids[flow.fetch(:to).to_s]
+      unless origin && destination
+        missing = origin ? flow.fetch(:to) : flow.fetch(:from)
+        available = node_ids.keys.sort.join(', ')
+        raise ValidationError,
+              "unknown annotation_flow node reference: #{missing}; available: #{available}"
+      end
+
+      document = {
+        "$ID" => SecureRandom.uuid, "$Type" => "Microflows$AnnotationFlow",
+        "OriginPointer" => origin, "DestinationPointer" => destination,
+        "OriginConnectionIndex" => flow.fetch(:origin_index),
+        "DestinationConnectionIndex" => flow.fetch(:destination_index)
+      }
+      major = @definition.fetch(:version).to_s.split('.').first.to_i
+      if major >= 10
+        document["Line"] = {
+          "$ID" => SecureRandom.uuid, "$Type" => "Microflows$BezierCurve",
+          "OriginControlVector" => flow.fetch(:origin_vector),
+          "DestinationControlVector" => flow.fetch(:destination_vector)
+        }
+      else
+        document["OriginBezierVector"] = flow.fetch(:origin_vector)
+        document["DestinationBezierVector"] = flow.fetch(:destination_vector)
+      end
+      document
     end
 
     def process_activity(activity, prev_id, objects, flows, x, y, error_type: "None")
@@ -6353,12 +6458,12 @@ module Mxrb
       when :inheritance_decision
         process_inheritance_decision(activity, prev_id, objects, flows, x, y)
       when :loop_over, :while_loop
-        act_id = SecureRandom.uuid
+        act_id = flow_node_id(activity)
         objects << loop_activity_doc(activity, act_id, x, y, flows)
         flows << sequence_flow_doc(prev_id, act_id) if prev_id
         [act_id, x + 140]
       when :return_event, :error_event, :continue_event, :break_event
-        act_id = SecureRandom.uuid
+        act_id = flow_node_id(activity)
         type = {
           return_event: "Microflows$EndEvent",
           error_event: "Microflows$ErrorEvent",
@@ -6374,7 +6479,7 @@ module Mxrb
         flows << sequence_flow_doc(prev_id, act_id) if prev_id
         [nil, x + 140]
       else
-        act_id = SecureRandom.uuid
+        act_id = flow_node_id(activity)
         objects << build_activity(activity, act_id, x, y, error_type: error_type)
         flows << sequence_flow_doc(prev_id, act_id) if prev_id
         [act_id, x + 140]
@@ -6382,7 +6487,7 @@ module Mxrb
     end
 
     def process_decision(activity, prev_id, objects, flows, x, y)
-      split_id  = SecureRandom.uuid
+      split_id  = flow_node_id(activity)
       branches = activity[:branches] || {
         true => Array(activity[:true_branch]),
         false => Array(activity[:false_branch])
@@ -6513,7 +6618,7 @@ module Mxrb
     end
 
     def process_inheritance_decision(activity, prev_id, objects, flows, x, y)
-      split_id = SecureRandom.uuid
+      split_id = flow_node_id(activity)
       branches = activity.fetch(:branches)
       objects << flow_object_doc(
         split_id, "Microflows$InheritanceSplit", x, y, "60;40"

@@ -15,6 +15,7 @@ RSpec.describe 'Flow annotation certification' do
       baseline = annotation_snapshot(source)
 
       ruby_app = File.join(dir, 'ruby-app')
+      canonical = File.join(dir, 'Canonical.mpr')
       added = File.join(dir, 'Added.mpr')
       edited = File.join(dir, 'Edited.mpr')
       Mxrb::Exporter.new(source, ruby_app, mode: :ruby).export!
@@ -23,13 +24,44 @@ RSpec.describe 'Flow annotation certification' do
       expect(ruby_source).to include(
         'annotations_authoritative',
         'annotation "First note", position: "20;30", size: "240;80"',
-        'annotation "Second note", position: "20;140", size: "240;60"'
+        'annotation "Second note", position: "20;140", size: "240;60"',
+        'as_node "annotation_1"',
+        'annotation_flow from: "annotation_1"',
+        'to: "return_1"'
       )
       expect(ruby_source).not_to include('native_document', 'deep_structure:', 'bson_binary(')
+      Mxrb::RubyApp.compile(ruby_app, canonical)
+      expect(Mxrb.compare(source, canonical)).to be_identical
+      editable_baseline = annotation_snapshot(canonical)
+
+      compatibility_app = File.join(dir, 'compatibility-app')
+      compatibility_mpr = File.join(dir, 'Compatibility.mpr')
+      Mxrb::Exporter.new(source, compatibility_app, mode: :ruby).export!
+      compatibility_service = service_path(compatibility_app)
+      File.write(
+        compatibility_service,
+        File.read(compatibility_service).lines.reject { _1.include?('annotation_flow from:') }.join
+      )
+      Mxrb::RubyApp.compile(compatibility_app, compatibility_mpr)
+      expect(annotation_snapshot(compatibility_mpr)).to eq(baseline)
+
+      first_removal_app = File.join(dir, 'first-removal-app')
+      first_removal_mpr = File.join(dir, 'FirstRemoval.mpr')
+      Mxrb::Exporter.new(source, first_removal_app, mode: :ruby).export!
+      first_removal_service = service_path(first_removal_app)
+      File.write(
+        first_removal_service,
+        without_connected_annotation(File.read(first_removal_service), 'First note')
+      )
+      Mxrb::RubyApp.compile(first_removal_app, first_removal_mpr)
+      expect(annotation_snapshot(first_removal_mpr).fetch(:annotations)).to eq(
+        'Second note' => editable_baseline.dig(:annotations, 'Second note')
+      )
+
       File.write(
         service,
         ruby_source.sub('First note', 'Edited note').sub(
-          /(\s+annotation "Second note"[^\n]*\n)/,
+          /(\s+annotation "Second note"[^\n]*\n\s+as_node [^\n]+\n)/,
           "\\1    annotation \"Third note\", position: \"20;220\", size: \"240;60\"\n"
         )
       )
@@ -37,32 +69,36 @@ RSpec.describe 'Flow annotation certification' do
       Mxrb::RubyApp.compile(ruby_app, added)
       added_snapshot = annotation_snapshot(added)
       expect(added_snapshot.fetch(:annotations)).to include(
-        'Edited note' => baseline.dig(:annotations, 'First note').merge(caption: 'Edited note'),
-        'Second note' => baseline.dig(:annotations, 'Second note'),
+        'Edited note' => editable_baseline.dig(:annotations, 'First note').merge(caption: 'Edited note'),
+        'Second note' => editable_baseline.dig(:annotations, 'Second note'),
         'Third note' => include(caption: 'Third note', position: '20;220', size: '240;60')
       )
       expect(added_snapshot.fetch(:flows)).to eq(
-        baseline.fetch(:flows).each_with_index.map do |flow, index|
-          index.zero? ? flow.merge(origin_caption: 'Edited note') : flow
+        editable_baseline.fetch(:flows).map do |flow|
+          flow[:origin_caption] == 'First note' ? flow.merge(origin_caption: 'Edited note') : flow
         end
       )
 
       removal_app = File.join(dir, 'removal-app')
       Mxrb::Exporter.new(added, removal_app, mode: :ruby).export!
       removal_service = service_path(removal_app)
+      removal_source = File.read(removal_service)
       File.write(
         removal_service,
-        File.read(removal_service).lines.reject do |line|
-          line.include?('Second note') || line.include?('Third note')
-        end.join
+        without_connected_annotation(removal_source, 'Second note')
+          .lines.reject { _1.include?('Third note') }.join
       )
       Mxrb::RubyApp.compile(removal_app, edited)
       edited_snapshot = annotation_snapshot(edited)
       expect(edited_snapshot.fetch(:annotations)).to eq(
-        'Edited note' => baseline.dig(:annotations, 'First note').merge(caption: 'Edited note')
+        'Edited note' => editable_baseline.dig(:annotations, 'First note').merge(caption: 'Edited note')
       )
       expect(edited_snapshot.fetch(:flows)).to eq(
-        [baseline.fetch(:flows).first.merge(origin_caption: 'Edited note')]
+        editable_baseline.fetch(:flows).filter_map do |flow|
+          next if flow[:origin_caption] == 'Second note'
+
+          flow.merge(origin_caption: 'Edited note')
+        end
       )
       expect(Mxrb.validate(edited)).to be_valid
 
@@ -87,6 +123,103 @@ RSpec.describe 'Flow annotation certification' do
     end
   end
 
+  it 'creates authoritative annotation flows from node references' do
+    Dir.mktmpdir('mxrb-annotation-flow-create-') do |dir|
+      path = File.join(dir, 'Created.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module :App do
+          page(:Home) { title 'Home' }
+          microflow :Connected do
+            annotation 'Created note', position: '20;30', size: '240;80'
+            as_node :note
+            show_home_page
+            as_node :home
+            annotation_flow from: :note, to: :home
+          end
+        end
+        navigation { profile :Responsive, home_page: 'App.Home', app_title: 'Created flow' }
+      end
+
+      snapshot = annotation_snapshot(path, flow_name: 'Connected')
+      expect(snapshot.fetch(:flows).size).to eq(1)
+      expect(snapshot.dig(:flows, 0, :origin_caption)).to eq('Created note')
+      expect(Mxrb.validate(path)).to be_valid
+    end
+  end
+
+  it 'writes the legacy annotation flow vectors before Mendix 10' do
+    writer = Mxrb::Writer.new('/tmp/legacy-annotation-flow.mpr', version: '9.24.0', modules: [])
+    document = writer.send(
+      :annotation_flow_doc,
+      {
+        from: :note, to: :home, origin_index: 1, destination_index: 0,
+        origin_vector: '12;34', destination_vector: '-12;-34'
+      },
+      'note' => '11111111-1111-1111-1111-111111111111',
+      'home' => '22222222-2222-2222-2222-222222222222'
+    )
+
+    expect(document).to include(
+      'OriginBezierVector' => '12;34',
+      'DestinationBezierVector' => '-12;-34'
+    )
+    expect(document).not_to have_key('Line')
+  end
+
+  it 'fails closed for missing and duplicate node references' do
+    Dir.mktmpdir('mxrb-annotation-flow-invalid-') do |dir|
+      expect do
+        build_invalid_flow(File.join(dir, 'Missing.mpr'), duplicate: false)
+      end.to raise_error(Mxrb::ValidationError, /unknown annotation_flow node reference: missing/)
+      expect do
+        build_invalid_flow(File.join(dir, 'Duplicate.mpr'), duplicate: true)
+      end.to raise_error(Mxrb::ValidationError, /duplicate flow node reference: note/)
+      expect do
+        build_invalid_flow(File.join(dir, 'MissingDestination.mpr'), missing_destination: true)
+      end.to raise_error(Mxrb::ValidationError, /unknown annotation_flow node reference: missing/)
+      expect do
+        build_nested_flow(File.join(dir, 'Nested.mpr'))
+      end.to raise_error(Mxrb::ValidationError, /must be at the flow root/)
+    end
+  end
+
+  it 'rejects incomplete declarations and unsupported native endpoints' do
+    builder = Mxrb::Dsl::FlowBuilder.new(
+      :Invalid, runtime: :server, kind: :use_case, public: false
+    )
+    expect { builder.as_node(:missing) }
+      .to raise_error(ArgumentError, /requires a preceding flow node/)
+    builder.annotation 'Note'
+    expect { builder.as_node('') }.to raise_error(ArgumentError, /cannot be empty/)
+    expect { builder.return_node('') }.to raise_error(ArgumentError, /cannot be empty/)
+    expect { builder.annotation_flow(from: '', to: :note) }
+      .to raise_error(ArgumentError, /references cannot be empty/)
+    builder.annotation_flow(from: :note, to: :home)
+    expect { builder.as_node(:flow) }
+      .to raise_error(ArgumentError, /requires a preceding flow node/)
+
+    exporter = Mxrb::Exporter.new('input.mpr', Dir.mktmpdir)
+    flow = {
+      '$Type' => 'Microflows$AnnotationFlow',
+      'OriginPointer' => 'start', 'DestinationPointer' => 'missing'
+    }
+    expect do
+      exporter.send(
+        :annotation_flow_endpoint_refs,
+        [{ '$ID' => 'start', '$Type' => 'Microflows$StartEvent' }], [flow]
+      )
+    end.to raise_error(Mxrb::SerializationError, /unsupported annotation flow endpoint/)
+    flow['OriginPointer'] = 'missing'
+    expect do
+      exporter.send(:annotation_flow_endpoint_refs, [], [flow])
+    end.to raise_error(Mxrb::SerializationError, /references a missing object/)
+
+    native_id = '11111111-2222-3333-4444-555555555555'
+    writer = Mxrb::Writer.new('/tmp/native-flow-node.mpr', version: '11.12.1', modules: [])
+    expect(writer.send(:flow_node_id, node_ref: "annotation:#{native_id}")).to eq(native_id)
+  end
+
   def build_source(path)
     Mxrb.define(path) do
       mendix_version '11.12.1'
@@ -104,6 +237,41 @@ RSpec.describe 'Flow annotation certification' do
     end
   end
 
+  def build_invalid_flow(path, duplicate: false, missing_destination: false)
+    origin_reference = duplicate || missing_destination ? :note : :missing
+    Mxrb.define(path) do
+      mendix_version '11.12.1'
+      self.module :App do
+        microflow :Invalid do
+          annotation 'One'
+          as_node :note
+          if duplicate
+            annotation 'Two'
+            as_node :note
+          end
+          show_home_page
+          as_node :home
+          annotation_flow from: origin_reference,
+                          to: missing_destination ? :missing : :home
+        end
+      end
+    end
+  end
+
+  def build_nested_flow(path)
+    Mxrb.define(path) do
+      mendix_version '11.12.1'
+      self.module :App do
+        microflow :Nested do
+          decision 'true' do
+            on(true) { annotation_flow from: :note, to: :home }
+            on(false) { end_flow }
+          end
+        end
+      end
+    end
+  end
+
   def add_annotation_flows(path)
     mpr = Mxrb::IO::MprFile.open(path, readonly: false)
     raw = mpr.all_units.find do |unit|
@@ -114,12 +282,24 @@ RSpec.describe 'Flow annotation certification' do
     objects = native_items(document.dig('ObjectCollection', 'Objects'))
     annotations = objects.select { _1['$Type'] == 'Microflows$Annotation' }
     target = objects.find { _1['$Type'] == 'Microflows$ActionActivity' }
+    finish = objects.find { _1['$Type'] == 'Microflows$EndEvent' }
     flows = native_items(document['Flows'])
     flows.concat(annotations.map { annotation_flow(_1.fetch('$ID'), target.fetch('$ID')) })
+    flows << annotation_flow(annotations.first.fetch('$ID'), finish.fetch('$ID'))
     document['Flows'] = Mxrb::IO::BsonCodec.build_array(flows)
     mpr.transaction { mpr.update_unit(raw.fetch('UnitID'), document) }
   ensure
     mpr&.close
+  end
+
+  def without_connected_annotation(source, caption)
+    reference = source.lines.each_cons(2).find do |annotation, _reference|
+      annotation.include?(caption)
+    end.last[/as_node "([^"]+)"/, 1]
+    source.lines.reject do |line|
+      line.include?(caption) || line.include?("as_node \"#{reference}\"") ||
+        (line.include?('annotation_flow') && line.include?(reference))
+    end.join
   end
 
   def annotation_flow(origin, destination)
@@ -134,25 +314,26 @@ RSpec.describe 'Flow annotation certification' do
     }
   end
 
-  def annotation_snapshot(path)
+  def annotation_snapshot(path, flow_name: 'Annotated')
     Mxrb.open(path) do |project|
-      flow = project.modules.find { _1.name == 'App' }.microflows.find { _1.name == 'Annotated' }
+      flow = project.modules.find { _1.name == 'App' }.microflows.find { _1.name == flow_name }
       annotations = flow.objects.select { _1['$Type'] == 'Microflows$Annotation' }
       captions_by_id = annotations.to_h { |item| [native_id(item.fetch('$ID')), item.fetch('Caption')] }
+      objects_by_id = flow.objects.to_h { |item| [native_id(item.fetch('$ID')), item] }
       {
         annotations: annotations.to_h do |item|
           [item.fetch('Caption'), {
-            id: native_id(item.fetch('$ID')), caption: item.fetch('Caption'),
+            caption: item.fetch('Caption'),
             position: item.fetch('RelativeMiddlePoint'), size: item.fetch('Size')
           }]
         end,
         flows: flow.flows.filter_map do |item|
           next unless item['$Type'] == 'Microflows$AnnotationFlow'
 
+          destination_id = native_id(item.fetch('DestinationPointer'))
           {
-            id: native_id(item.fetch('$ID')), line_id: native_id(item.dig('Line', '$ID')),
             origin_caption: captions_by_id[native_id(item.fetch('OriginPointer'))],
-            destination_id: native_id(item.fetch('DestinationPointer'))
+            destination_type: objects_by_id.fetch(destination_id).fetch('$Type')
           }
         end
       }
