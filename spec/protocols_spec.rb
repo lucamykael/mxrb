@@ -8,36 +8,45 @@ RSpec.describe Mxrb::Protocols do
   def entry(protocol:, guids: [], name: 'Test', marketplace_id: '1')
     described_class::Entry.new(
       protocol: protocol, name: name, publisher: 'Mendix', category: 'Messaging',
-      marketplace_id: marketplace_id, content_type: 'Module', appstore_guids: guids.freeze,
+      marketplace_id: marketplace_id, content_type: 'Module', module_name: name.delete(' -'),
+      appstore_guids: guids.freeze, certified_version: '1.0.0',
+      certified_version_id: 'certified-version', certified_sha256: 'certified-sha256',
+      certified_model_version: '11.12.1',
       source_url: "https://marketplace.mendix.com/link/component/#{marketplace_id}",
       evidence_date: '2026-08-02'
     )
   end
 
   def mod(name:, guid: nil, version: '', **attrs)
-    defaults = { name: name, app_store_guid: guid, app_store_version: version,
+    defaults = { id: "#{name}-id", name: name, app_store_guid: guid, app_store_version: version,
                  from_app_store: true, export_level: 'Hidden', entities: [], microflows: [] }
     instance_double(Mxrb::Model::Module, **defaults.merge(attrs))
   end
 
-  def project(*modules) = instance_double(Mxrb::Model::Project, modules: modules)
+  def project(*modules)
+    mpr = instance_double(Mxrb::IO::MprFile, path: '/tmp/project/App.mpr')
+    instance_double(Mxrb::Model::Project, modules: modules, mpr:)
+  end
 
   it 'exposes an immutable registry of connectors with verifiable provenance' do
     expect(described_class.all).to be_frozen
     expect(described_class.all).to all(be_a(described_class::Entry))
     expect(described_class.all.map(&:marketplace_id)).to contain_exactly(
-      '119508', '230843', '117391', '105878', '235426', '118800'
+      '119508', '230843', '117391', '105878', '235426'
     )
     expect(described_class.all.map(&:source_url)).to all(start_with('https://marketplace.mendix.com/'))
+    expect(described_class.all.map(&:module_name)).to all(match(/\A[A-Za-z][A-Za-z0-9_]*\z/))
+    expect(described_class.all.map(&:certified_sha256)).to all(match(/\A[0-9a-f]{64}\z/))
+    expect(described_class.all.map(&:certified_version_id)).to all(match(/\A[0-9a-f-]{36}\z/))
   end
 
   it 'finds registered connectors by protocol and ignores unknown protocols' do
     expect(described_class.find_by_protocol(:opc_ua).map(&:name))
-      .to contain_exactly('OPC-UA Connector', 'OPC UA Client Connector')
-    expect(described_class.find_by_protocol('MQTT').map(&:name)).to eq(['MQTT'])
+      .to contain_exactly('OPC UA Connector', 'OPC UA Client Connector')
+    expect(described_class.find_by_protocol('MQTT').map(&:name)).to eq(['MQTT Connector'])
     expect(described_class.find_by_protocol(:kafka).map(&:name)).to eq(['Kafka'])
     expect(described_class.find_by_protocol('websocket').map(&:name)).to eq(['WebsocketClient'])
-    expect(described_class.find_by_protocol(:amqp).map(&:name)).to eq(['eMagiz Mendix Connector (Legacy)'])
+    expect(described_class.find_by_protocol(:amqp)).to be_empty
     expect(described_class.find_by_protocol(:modbus)).to be_empty
   end
 
@@ -173,6 +182,7 @@ RSpec.describe Mxrb::Protocols do
 
     expect(described_class.identify('')).to be_nil
     expect(described_class.identify('unregistered')).to be_nil
+    expect(described_class.identify_content(nil)).to be_nil
     expect(described_class.identify('real-guid', registry: [verified])).to eq(verified)
     expect(described_class.known_guid?('real-guid', registry: [verified])).to be(true)
     expect(described_class.known_guid?('unregistered')).to be(false)
@@ -199,6 +209,55 @@ RSpec.describe Mxrb::Protocols do
     expect(connector.entities).to eq([])
     expect(connector.metadata).to include(marketplace_id: '230843', name: 'OPC-UA Connector')
     expect(result.unknown_marketplace_modules).to eq(%w[AlphaWidgetLib ZebraWidgetLib])
+  end
+
+  it 'audits modern connector modules through authenticated Marketplace lock identity' do
+    kafka = mod(name: 'Kafka', guid: '', version: '', from_app_store: false)
+    lock = {
+      'packages' => {
+        'Kafka' => {
+          'kind' => 'module', 'content_id' => 105_878, 'module_id' => 'Kafka-id',
+          'version' => '2.15.0', 'version_id' => '9b047060-6138-4783-abae-1984b452993a',
+          'sha256' => '0602b0e2d3dc16d861c798a3e16e3859f4a89efcfdb01be0ded07a3f569936b7'
+        }
+      }
+    }
+
+    result = described_class.audit(project(kafka), lock:)
+    connector = result.connectors.fetch(0)
+    expect(connector).to have_attributes(
+      module_name: 'Kafka', protocol: :kafka, appstore_version: '2.15.0'
+    )
+    expect(connector.metadata).to include(
+      provenance: :official_marketplace_lock, certified_package: true,
+      version_id: '9b047060-6138-4783-abae-1984b452993a'
+    )
+    expect(result.unknown_marketplace_modules).to be_empty
+  end
+
+  it 'fails closed when a lock content id is attached to the wrong module name' do
+    impostor = mod(name: 'NotKafka', guid: '', from_app_store: false)
+    unknown = mod(name: 'UnknownConnector', guid: '', from_app_store: false)
+    lock = {
+      'packages' => {
+        'NotKafka' => {
+          'kind' => 'module', 'content_id' => 105_878, 'module_id' => 'NotKafka-id',
+          'version' => '2.15.0'
+        },
+        'UnknownConnector' => {
+          'kind' => 'module', 'content_id' => 999_999, 'module_id' => 'UnknownConnector-id'
+        },
+        'Widget' => { 'kind' => 'widget', 'content_id' => 105_878 },
+        'LocalModule' => { 'kind' => 'module' },
+        'MissingModule' => {
+          'kind' => 'module', 'content_id' => 105_878, 'module_id' => 'absent-id'
+        }
+      }
+    }
+
+    result = described_class.audit(project(impostor, unknown), lock:)
+    expect(result.connectors).to be_empty
+    expect(result.unknown_marketplace_modules).to eq(%w[NotKafka UnknownConnector])
   end
 
   it 'reports the public surface of a readable connector module' do

@@ -170,9 +170,9 @@ RSpec.describe Mxrb::OfficialMarketplace::ContentApi do
       download_url: 'https://marketplace.mendix.com/content/package.mpk'
     )
     expect(client).to have_received(:download).with(
-      'https://marketplace.mendix.com/content/package.mpk', '/tmp/package.mpk',
+      include('/versions/123e4567-e89b-12d3-a456-426614174000/download'), '/tmp/package.mpk',
       authorization: 'MxToken secret'
-    )
+    ).twice
   end
 
   it 'accepts the lowercase downloadUrl returned by the live API and checks minimum compatibility' do

@@ -70,7 +70,7 @@ module Mxrb
 
       def download(version_id, destination, download_url: nil)
         identifier = uuid_filter(version_id)
-        url = download_url || "#{BASE_URL}/versions/#{identifier}/download"
+        url = download_source(identifier, download_url)
         uri = URI.parse(url)
         trusted = AUTHORIZED_HOSTS.include?(uri.host)
         @client.download(url, destination, authorization: trusted ? authorization : nil)
@@ -83,6 +83,18 @@ module Mxrb
       end
 
       private
+
+      # Public Marketplace download URLs currently reject Content API tokens.
+      # Route Mendix-owned URLs through the documented API endpoint and reserve
+      # direct downloads for external signed storage URLs.
+      def download_source(identifier, download_url)
+        return "#{BASE_URL}/versions/#{identifier}/download" if download_url.to_s.empty?
+
+        uri = URI.parse(download_url)
+        return download_url unless AUTHORIZED_HOSTS.include?(uri.host)
+
+        "#{BASE_URL}/versions/#{identifier}/download"
+      end
 
       def request(path, parameters = {})
         @client.json(url(path, parameters), authorization: authorization)
