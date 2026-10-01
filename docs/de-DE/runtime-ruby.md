@@ -56,6 +56,15 @@ p client.read_holding_registers(0, 2) # [42, 123]
 Der Simulator ist ein Entwicklungswerkzeug mit Daten im Arbeitsspeicher.
 Ctrl+C beendet ihn.
 
+Den vollständigen Anwendungsablauf startet
+`bundle exec ruby examples/modbus_application.rb`. Das Beispiel startet einen
+eigenen Simulator auf einem freien Port, erzeugt und validiert ein MPR mit der
+Entität `Measurement` und dem Microflow `Industrial.ConfigureAndSample`, schreibt
+die Sollwerte 42 und 84 und speichert die Messwerte in SQLite. Nach erneutem
+Öffnen der Datenbank werden beide Messungen geprüft. Das JSON-Ergebnis enthält
+die Pfade zu Modell und Datenbank in einem temporären Verzeichnis, das zur
+Inspektion erhalten bleibt. Der Simulator wird automatisch beendet.
+
 ### Serielle RTU-Schnittstelle
 
 RTU verwendet ein bereits geöffnetes, von Anwendung/System konfiguriertes serielles
@@ -72,7 +81,8 @@ end
 ```
 
 RTU verlangt `unit_id` 1–247; Broadcast wird nicht unterstützt. Pro Bus darf nur
-ein Client verwendet werden. Die Anwendung besitzt und schließt das IO. CRC,
+ein Client verwendet werden; gleichzeitige Aufrufe werden bis zum Abschluss der
+Antwortvalidierung abgewiesen. Die Anwendung besitzt und schließt das IO. CRC,
 Länge, Adresse und Funktion werden geprüft, ebenso softwareseitig beobachtete
 Frame-Abstände und Zeichenpausen. Transport-/Protokollfehler sperren die Sitzung:
 Port erneut öffnen und resynchronisieren, bevor ein neuer Client erstellt wird;

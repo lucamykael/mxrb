@@ -141,7 +141,9 @@ RSpec.describe Mxrb::Modbus::RtuTransport do
     expect { transport.call("\x03".b) }.to raise_error(Mxrb::Modbus::TransportError, /disconnected/)
     lock = transport.instance_variable_get(:@lock)
     lock.lock
-    expect { transport.call("\x03".b) }.to raise_error(Mxrb::Modbus::TransportError, /in progress/)
+    Thread.new do
+      expect { transport.call("\x03".b) }.to raise_error(Mxrb::Modbus::TransportError, /in progress/)
+    end.value
     expect(lock).to be_locked
     lock.unlock
   end
@@ -151,6 +153,33 @@ RSpec.describe Mxrb::Modbus::RtuTransport do
     client = Mxrb::Modbus::Client.new(transport: :rtu, io:)
     expect { client.read_holding_registers(0) }.to raise_error(Mxrb::Modbus::ProtocolError, /byte count/)
     expect { client.read_holding_registers(0) }.to raise_error(Mxrb::Modbus::TransportError, /session failed/)
+  end
+
+  it 'keeps the RTU bus reserved until semantic validation has invalidated a bad response' do
+    allow(io).to receive(:read_nonblock).and_return(frame("\x01\x03\x00".b))
+    client = Mxrb::Modbus::Client.new(transport: :rtu, io:)
+    reached = Queue.new
+    release = Queue.new
+    allow(client).to receive(:protocol_error!).and_wrap_original do |method, message|
+      reached << true
+      release.pop
+      method.call(message)
+    end
+    worker = Thread.new do
+      client.read_holding_registers(0)
+    rescue Mxrb::Modbus::Error => e
+      e
+    end
+    Timeout.timeout(2) { reached.pop }
+    expect { client.read_holding_registers(0) }.to raise_error(Mxrb::Modbus::TransportError, /in progress/)
+    release << true
+    expect(worker.value).to be_a(Mxrb::Modbus::ProtocolError)
+    expect { client.read_holding_registers(0) }.to raise_error(Mxrb::Modbus::TransportError, /session failed/)
+    expect(io).to have_received(:write_nonblock).once
+  ensure
+    release << true
+    worker&.join(2)
+    worker&.kill
   end
 end
 # rubocop:enable Metrics/BlockLength, Metrics/MethodLength

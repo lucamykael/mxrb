@@ -55,6 +55,14 @@ p client.read_holding_registers(0, 2) # [42, 123]
 
 The simulator is a development tool with in-memory state. Stop it with Ctrl+C.
 
+For the complete application flow, run
+`bundle exec ruby examples/modbus_application.rb`. It starts its own simulator on
+an available port, generates and validates an MPR with a `Measurement` entity and
+the `Industrial.ConfigureAndSample` microflow, writes setpoints 42 and 84, and
+saves the readings to SQLite. It then reopens the database and verifies both
+measurements. The JSON result includes the model and database paths, retained in
+a temporary directory for inspection. The simulator stops automatically.
+
 ### RTU serial port
 
 RTU accepts an already open serial IO configured by the application/system in
@@ -70,7 +78,8 @@ File.open('/dev/ttyUSB0', File::RDWR | File::NONBLOCK | File::NOCTTY) do |serial
 end
 ```
 
-RTU requires `unit_id` 1–247; broadcast is unsupported. Use one client per bus.
+RTU requires `unit_id` 1–247; broadcast is unsupported. Use one client per bus;
+concurrent calls are rejected until complete response validation finishes.
 The caller owns and closes the IO. CRC, length, address and function are checked,
 with software-observed frame separation and inter-character limits. Transport or
 protocol errors invalidate the session: reopen and resynchronize the port before

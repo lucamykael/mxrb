@@ -2,8 +2,9 @@
 
 module Mxrb
   # Registry and audit for Mendix Marketplace protocol connectors (IoT,
-  # industrial, and messaging). MXRB never implements or runs these protocols;
-  # it inspects imported modules and their authenticated Marketplace lock data.
+  # industrial, and messaging). This registry inspects imported modules and
+  # authenticated Marketplace lock data. Custom runtime clients such as
+  # Mxrb::Modbus remain separate from official package certification.
   module Protocols
     # Modern official packages leave `AppStoreGuid` empty. Their durable
     # identity is the Content API id plus the imported module recorded in the

@@ -13,41 +13,58 @@ module Mxrb
                      end
       end
 
-      def read_coils(address, quantity = 1) = read_bits(1, address, quantity)
-      def read_discrete_inputs(address, quantity = 1) = read_bits(2, address, quantity)
-      def read_holding_registers(address, quantity = 1) = read_registers(3, address, quantity)
-      def read_input_registers(address, quantity = 1) = read_registers(4, address, quantity)
+      def read_coils(address, quantity = 1) = operation { read_bits(1, address, quantity) }
+      def read_discrete_inputs(address, quantity = 1) = operation { read_bits(2, address, quantity) }
+      def read_holding_registers(address, quantity = 1) = operation { read_registers(3, address, quantity) }
+      def read_input_registers(address, quantity = 1) = operation { read_registers(4, address, quantity) }
 
       def write_single_coil(address, value)
-        boolean!(value)
-        write_single(5, address, value ? 0xff00 : 0)
-        value
+        operation do
+          boolean!(value)
+          write_single(5, address, value ? 0xff00 : 0)
+          value
+        end
       end
 
       def write_single_register(address, value)
-        integer!(value, 0..65_535, 'register')
-        write_single(6, address, value)
-        value
+        operation do
+          integer!(value, 0..65_535, 'register')
+          write_single(6, address, value)
+          value
+        end
       end
 
       def write_multiple_coils(address, values)
-        values!(values)
-        range!(address, values.size, 1968)
-        values.each { boolean!(_1) }
-        data = values.each_slice(8).map do |bits|
-          bits.each_with_index.sum { |bit, index| bit ? 1 << index : 0 }
-        end.pack('C*')
-        write_multiple(15, address, values.size, data)
+        operation do
+          values!(values)
+          range!(address, values.size, 1968)
+          values.each { boolean!(_1) }
+          write_multiple(15, address, values.size, packed_bits(values))
+        end
       end
 
       def write_multiple_registers(address, values)
-        values!(values)
-        range!(address, values.size, 123)
-        values.each { integer!(_1, 0..65_535, 'register') }
-        write_multiple(16, address, values.size, values.pack('n*'))
+        operation do
+          values!(values)
+          range!(address, values.size, 123)
+          values.each { integer!(_1, 0..65_535, 'register') }
+          write_multiple(16, address, values.size, values.pack('n*'))
+        end
       end
 
       private
+
+      def operation(&block)
+        return @transport.synchronize(&block) if @transport.respond_to?(:synchronize)
+
+        yield
+      end
+
+      def packed_bits(values)
+        values.each_slice(8).map do |bits|
+          bits.each_with_index.sum { |bit, index| bit ? 1 << index : 0 }
+        end.pack('C*')
+      end
 
       def tcp_transport(unit_id, timeout, host:, port: 502)
         raise ArgumentError, 'host must be a nonempty String' unless host.is_a?(String) && !host.strip.empty?

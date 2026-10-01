@@ -20,10 +20,17 @@ module Mxrb
       end
 
       def call(pdu)
+        return transaction(pdu) if @lock.owned?
+
+        synchronize { transaction(pdu) }
+      end
+
+      # Keep the bus reserved through the client's semantic response decoding.
+      def synchronize
         raise TransportError, 'RTU bus already has a transaction in progress' unless @lock.try_lock
 
         begin
-          transaction(pdu)
+          yield
         ensure
           @lock.unlock
         end
