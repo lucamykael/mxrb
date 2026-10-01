@@ -1871,12 +1871,23 @@ module Mxrb
       AutoAssignSingleTargetUser BoundaryEvents DueDate OnCreatedEvent Outcomes
       TaskDescription TaskName TaskPage UserTargeting
     ]).freeze
+    WORKFLOW_MULTI_USER_TASK_FIELDS = (WORKFLOW_USER_TASK_FIELDS + %w[
+      AwaitAllUsers CompletionCriteria TargetUserInput
+    ]).freeze
     WORKFLOW_WAIT_TIMER_FIELDS = (WORKFLOW_ACTIVITY_FIELDS + %w[Delay]).freeze
+    WORKFLOW_CALL_MICROFLOW_FIELDS = (WORKFLOW_ACTIVITY_FIELDS + %w[
+      BoundaryEvents Microflow Outcomes ParameterMappings
+    ]).freeze
+    WORKFLOW_CALL_WORKFLOW_FIELDS = (WORKFLOW_ACTIVITY_FIELDS + %w[
+      BoundaryEvents ExecuteAsync ParameterMappings Workflow
+    ]).freeze
+    WORKFLOW_PARAMETER_MAPPING_FIELDS = %w[$ID $Type Expression Parameter].freeze
     WORKFLOW_PAGE_REFERENCE_FIELDS = %w[$ID $Type Page].freeze
     WORKFLOW_XPATH_TARGETING_FIELDS = %w[$ID $Type XPathConstraint].freeze
     WORKFLOW_MICROFLOW_TARGETING_FIELDS = %w[$ID $Type Microflow].freeze
     WORKFLOW_NO_TARGETING_FIELDS = %w[$ID $Type].freeze
     WORKFLOW_OUTCOME_FIELDS = %w[$ID $Type Flow PersistentId Value].freeze
+    WORKFLOW_CONDITION_OUTCOME_FIELDS = %w[$ID $Type Flow PersistentId Value].freeze
     WORKFLOW_NO_EVENT_FIELDS = %w[$ID $Type].freeze
     WORKFLOW_MICROFLOW_EVENT_FIELDS = %w[$ID $Type Microflow].freeze
     WORKFLOW_BOUNDARY_FIELDS = %w[
@@ -1885,6 +1896,16 @@ module Mxrb
     WORKFLOW_RECURRENCE_FIELDS = %w[$ID $Type Interval IntervalType MaxExecutions].freeze
     WORKFLOW_TEMPLATE_FIELDS = %w[$ID $Type Arguments Text].freeze
     WORKFLOW_METADATA_FIELDS = %w[$ID $Type Annotation DetachedActivities FlowLines].freeze
+    WORKFLOW_TARGET_INPUT_FIELDS = %w[$ID $Type Amount Percentage].freeze
+    WORKFLOW_COMPLETION_FIELDS = %w[
+      $ID $Type CompletionType FallbackOutcomePointer Microflow Threshold VetoOutcomePointer
+    ].freeze
+    WORKFLOW_EVENT_HANDLER_FIELDS = %w[
+      $ID $Type Description Documentation EventTypes MicroflowEventHandler
+    ].freeze
+    WORKFLOW_EVENT_SUB_PROCESS_FIELDS = %w[
+      $ID $Type Annotation Caption Flow Name PersistentId
+    ].freeze
 
     def semantic_workflow?(doc)
       return false unless (doc.keys - WORKFLOW_FIELDS).empty?
@@ -1897,7 +1918,8 @@ module Mxrb
       return false unless semantic_workflow_flow?(doc['Flow'])
       return false unless semantic_workflow_metadata?(doc['WorkflowMetaData'])
 
-      bson_items(doc['OnWorkflowEvent']).empty? && bson_items(doc['EventSubProcesses']).empty?
+      bson_items(doc['OnWorkflowEvent']).all? { semantic_workflow_event_handler?(_1) } &&
+        bson_items(doc['EventSubProcesses']).all? { semantic_workflow_event_sub_process?(_1) }
     end
 
     def semantic_workflow_parameter?(parameter)
@@ -1927,7 +1949,10 @@ module Mxrb
     def semantic_workflow_activity?(activity)
       case activity&.fetch('$Type', nil)
       when 'Workflows$SingleUserTaskActivity' then semantic_workflow_user_task?(activity)
+      when 'Workflows$MultiUserTaskActivity' then semantic_workflow_multi_user_task?(activity)
       when 'Workflows$WaitForTimerActivity' then semantic_workflow_wait_timer?(activity)
+      when 'Workflows$CallMicroflowActivity' then semantic_workflow_call_microflow?(activity)
+      when 'Workflows$CallWorkflowActivity' then semantic_workflow_call_workflow?(activity)
       else false
       end
     end
@@ -1966,6 +1991,101 @@ module Mxrb
         outcomes.map { _1['Value'] }.uniq.size == outcomes.size
     end
 
+    def semantic_workflow_multi_user_task?(activity)
+      return false unless activity.is_a?(Hash) &&
+                          activity['$Type'] == 'Workflows$MultiUserTaskActivity'
+      return false unless (activity.keys - WORKFLOW_MULTI_USER_TASK_FIELDS).empty?
+
+      single = activity.merge('$Type' => 'Workflows$SingleUserTaskActivity')
+                       .reject { |key| %w[AwaitAllUsers CompletionCriteria TargetUserInput].include?(key) }
+      semantic_workflow_user_task?(single) &&
+        semantic_workflow_target_user_input?(activity['TargetUserInput']) &&
+        semantic_workflow_completion_criteria?(activity['CompletionCriteria']) &&
+        [true, false].include?(activity['AwaitAllUsers'])
+    end
+
+    def semantic_workflow_target_user_input?(input)
+      return false unless input.is_a?(Hash) && (input.keys - WORKFLOW_TARGET_INPUT_FIELDS).empty?
+
+      case input['$Type']
+      when 'Workflows$AllUserInput' then (input.keys - %w[$ID $Type]).empty?
+      when 'Workflows$AbsoluteAmountUserInput' then input['Amount'].is_a?(Integer)
+      when 'Workflows$PercentageAmountUserInput'
+        input['Percentage'].is_a?(Integer) && (1..100).cover?(input['Percentage'])
+      else false
+      end
+    end
+
+    def semantic_workflow_completion_criteria?(criteria)
+      return false unless criteria.is_a?(Hash) &&
+                          (criteria.keys - WORKFLOW_COMPLETION_FIELDS).empty?
+
+      case criteria['$Type']
+      when 'Workflows$ConsensusCompletionCriteria'
+        criteria['FallbackOutcomePointer'].is_a?(BSON::Binary)
+      when 'Workflows$MajorityCompletionCriteria'
+        criteria['CompletionType'].is_a?(String) &&
+          (criteria['FallbackOutcomePointer'].nil? ||
+            criteria['FallbackOutcomePointer'].is_a?(BSON::Binary))
+      when 'Workflows$MicroflowCompletionCriteria'
+        criteria['Microflow'].is_a?(String) && !criteria['Microflow'].empty?
+      when 'Workflows$ThresholdCompletionCriteria'
+        criteria['CompletionType'].is_a?(String) && criteria['Threshold'].is_a?(Integer) &&
+          criteria['FallbackOutcomePointer'].is_a?(BSON::Binary)
+      when 'Workflows$VetoCompletionCriteria'
+        criteria['VetoOutcomePointer'].nil? || criteria['VetoOutcomePointer'].is_a?(BSON::Binary)
+      else false
+      end
+    end
+
+    def semantic_workflow_call_microflow?(activity)
+      activity.is_a?(Hash) && activity['$Type'] == 'Workflows$CallMicroflowActivity' &&
+        (activity.keys - WORKFLOW_CALL_MICROFLOW_FIELDS).empty? &&
+        semantic_workflow_activity_base?(activity) && activity['Microflow'].is_a?(String) &&
+        !activity['Microflow'].empty? &&
+        !bson_items(activity['Outcomes']).empty? &&
+        bson_items(activity['Outcomes']).all? { semantic_workflow_condition_outcome?(_1) } &&
+        semantic_workflow_parameter_mappings?(activity['ParameterMappings'], :microflow) &&
+        bson_items(activity['BoundaryEvents']).all? { semantic_workflow_boundary_event?(_1) }
+    end
+
+    def semantic_workflow_condition_outcome?(outcome)
+      return false unless outcome.is_a?(Hash) &&
+                          (outcome.keys - WORKFLOW_CONDITION_OUTCOME_FIELDS).empty?
+      return false unless outcome['PersistentId'].is_a?(BSON::Binary)
+      return false unless %w[
+        Workflows$VoidConditionOutcome Workflows$BooleanConditionOutcome
+        Workflows$EnumerationValueConditionOutcome
+      ].include?(outcome['$Type'])
+      return false if outcome['$Type'] == 'Workflows$BooleanConditionOutcome' &&
+                      ![true, false].include?(outcome['Value'])
+      return false if outcome['$Type'] == 'Workflows$EnumerationValueConditionOutcome' &&
+                      !outcome['Value'].is_a?(String)
+
+      flow = outcome['Flow']
+      flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow' &&
+        (flow.keys - WORKFLOW_FLOW_FIELDS).empty? && bson_items(flow['Activities']).empty?
+    end
+
+    def semantic_workflow_call_workflow?(activity)
+      activity.is_a?(Hash) && activity['$Type'] == 'Workflows$CallWorkflowActivity' &&
+        (activity.keys - WORKFLOW_CALL_WORKFLOW_FIELDS).empty? &&
+        semantic_workflow_activity_base?(activity) && activity['Workflow'].is_a?(String) &&
+        !activity['Workflow'].empty? && [true, false].include?(activity['ExecuteAsync']) &&
+        semantic_workflow_parameter_mappings?(activity['ParameterMappings'], :workflow) &&
+        bson_items(activity['BoundaryEvents']).all? { semantic_workflow_boundary_event?(_1) }
+    end
+
+    def semantic_workflow_parameter_mappings?(value, kind)
+      type = kind == :microflow ?
+        'Workflows$MicroflowCallParameterMapping' : 'Workflows$WorkflowCallParameterMapping'
+      bson_items(value).all? do |mapping|
+        mapping.is_a?(Hash) && mapping['$Type'] == type &&
+          (mapping.keys - WORKFLOW_PARAMETER_MAPPING_FIELDS).empty? &&
+          mapping['Parameter'].is_a?(String) && mapping['Expression'].is_a?(String)
+      end
+    end
+
     def semantic_workflow_activity_base?(activity)
       activity['PersistentId'].is_a?(BSON::Binary) && activity['Annotation'].nil? &&
         activity['RelativeMiddlePoint'].is_a?(String) && activity['Size'].is_a?(String) &&
@@ -1981,10 +2101,10 @@ module Mxrb
       return false unless targeting.is_a?(Hash)
 
       case targeting['$Type']
-      when 'Workflows$XPathUserTargeting'
+      when 'Workflows$XPathUserTargeting', 'Workflows$XPathGroupTargeting'
         (targeting.keys - WORKFLOW_XPATH_TARGETING_FIELDS).empty? &&
           targeting['XPathConstraint'].is_a?(String)
-      when 'Workflows$MicroflowUserTargeting'
+      when 'Workflows$MicroflowUserTargeting', 'Workflows$MicroflowGroupTargeting'
         (targeting.keys - WORKFLOW_MICROFLOW_TARGETING_FIELDS).empty? &&
           targeting['Microflow'].is_a?(String) && !targeting['Microflow'].empty?
       when 'Workflows$NoUserTargeting'
@@ -2058,6 +2178,50 @@ module Mxrb
         bson_items(metadata['FlowLines']).empty? && bson_items(metadata['Annotation']).empty?
     end
 
+    def semantic_workflow_event_handler?(event)
+      return false unless event.is_a?(Hash) && event['$Type'] == 'Workflows$WorkflowEventHandler'
+      return false unless (event.keys - WORKFLOW_EVENT_HANDLER_FIELDS).empty?
+      return false unless event['Description'].is_a?(String) && !event['Description'].empty?
+      return false unless event['Documentation'].is_a?(String)
+      return false unless bson_items(event['EventTypes']).all? { _1.is_a?(String) }
+
+      handler = event['MicroflowEventHandler']
+      handler.nil? || semantic_workflow_microflow_handler?(handler)
+    end
+
+    def semantic_workflow_microflow_handler?(handler)
+      handler.is_a?(Hash) && handler['$Type'] == 'Workflows$MicroflowEventHandler' &&
+        (handler.keys - WORKFLOW_MICROFLOW_EVENT_FIELDS).empty? &&
+        handler['Microflow'].is_a?(String) && !handler['Microflow'].empty?
+    end
+
+    def semantic_workflow_event_sub_process?(process)
+      return false unless process.is_a?(Hash) && process['$Type'] == 'Workflows$EventSubProcess'
+      return false unless (process.keys - WORKFLOW_EVENT_SUB_PROCESS_FIELDS).empty?
+      return false unless process['PersistentId'].is_a?(BSON::Binary) && process['Annotation'].nil?
+      return false unless process['Name'].is_a?(String) && process['Caption'].is_a?(String)
+
+      semantic_workflow_event_sub_process_flow?(process['Flow'])
+    end
+
+    def semantic_workflow_event_sub_process_flow?(flow)
+      return false unless flow.is_a?(Hash) && flow['$Type'] == 'Workflows$Flow'
+      return false unless (flow.keys - WORKFLOW_FLOW_FIELDS).empty?
+
+      activities = bson_items(flow['Activities'])
+      return false if activities.size < 2
+
+      interrupting = activities.first['$Type'] ==
+                     'Workflows$InterruptingNotificationEventSubProcessStartActivity'
+      non_interrupting = activities.first['$Type'] ==
+                         'Workflows$NonInterruptingNotificationEventSubProcessStartActivity'
+      return false unless interrupting || non_interrupting
+      return false unless semantic_workflow_terminal?(activities.first, activities.first['$Type'])
+
+      semantic_workflow_terminal?(activities.last, 'Workflows$EndWorkflowActivity') &&
+        activities[1...-1].all? { semantic_workflow_activity?(_1) }
+    end
+
     def workflow_declaration(document)
       doc = document.fetch(:doc)
       flow = doc.fetch('Flow')
@@ -2082,6 +2246,10 @@ module Mxrb
         workflow_name_id: document_id(doc.fetch('WorkflowName')),
         workflow_description_id: document_id(doc.fetch('WorkflowDescription')),
         metadata_id: document_id(metadata), activities_marker: bson_marker(flow['Activities'], 2),
+        on_workflow_events: bson_items(doc['OnWorkflowEvent']).map { workflow_event_handler_spec(_1) },
+        event_sub_processes: bson_items(doc['EventSubProcesses']).map do |process|
+          workflow_event_sub_process_spec(process)
+        end,
         on_workflow_event_marker: bson_marker(doc['OnWorkflowEvent'], 2),
         event_sub_processes_marker: bson_marker(doc['EventSubProcesses'], 2),
         detached_activities_marker: bson_marker(metadata['DetachedActivities'], 2),
@@ -2100,7 +2268,8 @@ module Mxrb
 
     def workflow_user_task_spec(activity)
       spec = {
-        type: :user_task,
+        type: activity['$Type'] == 'Workflows$MultiUserTaskActivity' ?
+          :multi_user_task : :user_task,
         id: document_id(activity),
         persistent_id: document_id_value(activity.fetch('PersistentId')),
         name: activity.fetch('Name', ''), caption: activity.fetch('Caption', ''),
@@ -2126,13 +2295,112 @@ module Mxrb
           id: document_id(event), microflow: event.fetch('Microflow', '')
         }
       end
+      if activity['$Type'] == 'Workflows$MultiUserTaskActivity'
+        spec[:target_user_input] = workflow_target_user_input_spec(activity.fetch('TargetUserInput'))
+        spec[:completion_criteria] = workflow_completion_criteria_spec(
+          activity.fetch('CompletionCriteria')
+        )
+        spec[:await_all_users] = activity['AwaitAllUsers'] == true
+      end
       spec
     end
 
     def workflow_activity_spec(activity)
-      return workflow_user_task_spec(activity) if activity['$Type'] == 'Workflows$SingleUserTaskActivity'
+      case activity['$Type']
+      when 'Workflows$SingleUserTaskActivity', 'Workflows$MultiUserTaskActivity'
+        workflow_user_task_spec(activity)
+      when 'Workflows$CallMicroflowActivity'
+        workflow_call_activity_spec(activity, :microflow)
+      when 'Workflows$CallWorkflowActivity'
+        workflow_call_activity_spec(activity, :workflow)
+      else
+        workflow_terminal_spec(activity).merge(type: :wait_timer, delay: activity.fetch('Delay', ''))
+      end
+    end
 
-      workflow_terminal_spec(activity).merge(type: :wait_timer, delay: activity.fetch('Delay', ''))
+    def workflow_target_user_input_spec(input)
+      base = { id: document_id(input) }
+      case input['$Type']
+      when 'Workflows$AbsoluteAmountUserInput'
+        base.merge(type: :absolute, amount: input.fetch('Amount', 2))
+      when 'Workflows$PercentageAmountUserInput'
+        base.merge(type: :percentage, percentage: input.fetch('Percentage', 100))
+      else base.merge(type: :all)
+      end
+    end
+
+    def workflow_completion_criteria_spec(criteria)
+      base = { id: document_id(criteria) }
+      case criteria['$Type']
+      when 'Workflows$MajorityCompletionCriteria'
+        base.merge(
+          type: :majority, completion_type: criteria.fetch('CompletionType', ''),
+          fallback_outcome: workflow_outcome_reference_spec(criteria['FallbackOutcomePointer'])
+        )
+      when 'Workflows$MicroflowCompletionCriteria'
+        base.merge(type: :microflow, microflow: criteria.fetch('Microflow', ''))
+      when 'Workflows$ThresholdCompletionCriteria'
+        base.merge(
+          type: :threshold, completion_type: criteria.fetch('CompletionType', ''),
+          threshold: criteria.fetch('Threshold', 50),
+          fallback_outcome: workflow_outcome_reference_spec(criteria['FallbackOutcomePointer'])
+        )
+      when 'Workflows$VetoCompletionCriteria'
+        base.merge(
+          type: :veto,
+          veto_outcome: workflow_outcome_reference_spec(criteria['VetoOutcomePointer'])
+        )
+      else
+        base.merge(
+          type: :consensus,
+          fallback_outcome: workflow_outcome_reference_spec(criteria['FallbackOutcomePointer'])
+        )
+      end
+    end
+
+    def workflow_outcome_reference_spec(value)
+      value.nil? ? nil : document_id_value(value)
+    end
+
+    def workflow_call_activity_spec(activity, kind)
+      spec = workflow_terminal_spec(activity).merge(
+        type: kind == :microflow ? :call_microflow : :call_workflow,
+        parameter_mappings: bson_items(activity['ParameterMappings']).map do |mapping|
+          {
+            id: document_id(mapping), parameter: mapping.fetch('Parameter', ''),
+            expression: mapping.fetch('Expression', '')
+          }
+        end,
+        parameter_mappings_marker: bson_marker(activity['ParameterMappings'], 2),
+        boundary_events: bson_items(activity['BoundaryEvents']).map { workflow_boundary_spec(_1) },
+        boundary_events_marker: bson_marker(activity['BoundaryEvents'], 2)
+      )
+      if kind == :microflow
+        spec.merge!(microflow: activity.fetch('Microflow', ''),
+                    outcomes: bson_items(activity['Outcomes']).map do |outcome|
+                      workflow_condition_outcome_spec(outcome)
+                    end,
+                    outcomes_marker: bson_marker(activity['Outcomes'], 2))
+      else
+        spec.merge!(workflow: activity.fetch('Workflow', ''),
+                    execute_async: activity['ExecuteAsync'] == true)
+      end
+      spec
+    end
+
+    def workflow_condition_outcome_spec(outcome)
+      flow = outcome.fetch('Flow')
+      type = case outcome['$Type']
+             when 'Workflows$BooleanConditionOutcome' then :boolean
+             when 'Workflows$EnumerationValueConditionOutcome' then :enumeration
+             else :void
+             end
+      {
+        id: document_id(outcome),
+        persistent_id: document_id_value(outcome.fetch('PersistentId')),
+        type:, value: outcome['Value'], flow_id: document_id(flow),
+        activities_marker: bson_marker(flow['Activities'], 2)
+      }.compact
     end
 
     def workflow_targeting_spec(targeting)
@@ -2140,10 +2408,45 @@ module Mxrb
       case targeting['$Type']
       when 'Workflows$XPathUserTargeting'
         base.merge(type: :xpath, constraint: targeting.fetch('XPathConstraint', ''))
+      when 'Workflows$XPathGroupTargeting'
+        base.merge(type: :xpath_group, constraint: targeting.fetch('XPathConstraint', ''))
       when 'Workflows$MicroflowUserTargeting'
         base.merge(type: :microflow, microflow: targeting.fetch('Microflow', ''))
+      when 'Workflows$MicroflowGroupTargeting'
+        base.merge(type: :microflow_group, microflow: targeting.fetch('Microflow', ''))
       else base.merge(type: :none)
       end
+    end
+
+    def workflow_event_handler_spec(event)
+      spec = {
+        id: document_id(event), description: event.fetch('Description', ''),
+        event_types: bson_items(event['EventTypes']),
+        event_types_marker: bson_marker(event['EventTypes'], 2),
+        documentation: event.fetch('Documentation', '')
+      }
+      handler = event['MicroflowEventHandler']
+      if handler
+        spec[:handler_id] = document_id(handler)
+        spec[:microflow] = handler.fetch('Microflow', '')
+      end
+      spec
+    end
+
+    def workflow_event_sub_process_spec(process)
+      flow = process.fetch('Flow')
+      activities = bson_items(flow['Activities'])
+      {
+        id: document_id(process),
+        persistent_id: document_id_value(process.fetch('PersistentId')),
+        name: process.fetch('Name', ''), caption: process.fetch('Caption', ''),
+        flow_id: document_id(flow), activities_marker: bson_marker(flow['Activities'], 2),
+        interrupting: activities.first['$Type'] ==
+          'Workflows$InterruptingNotificationEventSubProcessStartActivity',
+        start: workflow_terminal_spec(activities.first),
+        activities: activities[1...-1].map { workflow_activity_spec(_1) },
+        finish: workflow_terminal_spec(activities.last)
+      }
     end
 
     def workflow_boundary_spec(event)
