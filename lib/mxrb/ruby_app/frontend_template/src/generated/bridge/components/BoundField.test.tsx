@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useLayoutEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
 import { BoundField } from './BoundField';
@@ -32,6 +33,34 @@ const props = () => ({
 });
 
 describe('editable exported fields', () => {
+  it('does not overwrite an edit made before passive initialization effects run', async () => {
+    function EarlyEdit() {
+      useLayoutEffect(() => {
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Early edit' } });
+      }, []);
+      return <BoundField {...props()} />;
+    }
+    await act(async () => {
+      render(<EarlyEdit />);
+    });
+    expect(screen.getByRole('textbox')).toHaveValue('Early edit');
+  });
+  it('preserves a newer draft across server updates but resets it for another record', () => {
+    const input = props();
+    const { rerender } = render(<BoundField {...input} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Unsaved draft' } });
+    rerender(
+      <BoundField {...input} record={{ ...record, attributes: { Name: 'Server update' } }} />,
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('Unsaved draft');
+    rerender(
+      <BoundField
+        {...input}
+        record={{ ...record, id: '2', attributes: { Name: 'Another item' } }}
+      />,
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('Another item');
+  });
   it('inherits read-only presentation without revealing password values', () => {
     render(
       <ReadOnlyContext.Provider value={true}>

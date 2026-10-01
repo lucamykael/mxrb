@@ -54,6 +54,8 @@ export function BoundField({
   );
   const [references, setReferences] = useState<EntityRecord[]>([]);
   const committed = useRef(draft);
+  const recordKey = `${record?.type}/${record?.id}/${kind}/${member}`;
+  const sourceKey = useRef(recordKey);
   const latestRecord = useRef(record);
   const pending = useRef<Promise<EntityRecord | null>>(Promise.resolve(record));
   const associations = (schema.modules || []).flatMap((module) => module.associations || []);
@@ -77,9 +79,14 @@ export function BoundField({
 
   useEffect(() => {
     const next = kind === 'check_box' ? Boolean(value) : draftValue(value);
+    const previous = committed.current;
+    const changedSource = sourceKey.current !== recordKey;
+    sourceKey.current = recordKey;
     committed.current = next;
-    setDraft(next);
-  }, [kind, record?.id, value]);
+    // Initialization and delayed server responses must not erase a newer draft.
+    // Selecting another record/member deliberately starts a fresh draft.
+    setDraft((current) => (changedSource || current === previous ? next : current));
+  }, [kind, recordKey, value]);
   useEffect(() => {
     latestRecord.current = record;
   }, [record]);
