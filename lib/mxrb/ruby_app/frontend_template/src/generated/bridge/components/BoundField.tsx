@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { editable, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import type {
   ApiRequest,
@@ -43,6 +43,7 @@ export function BoundField({
   onLeft,
   onError,
 }: BoundFieldProps) {
+  const fieldId = useId();
   const options = widget.options || {};
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
@@ -76,6 +77,21 @@ export function BoundField({
         item.id === attributeDefinition?.enumeration ||
         item.name === attributeDefinition?.enumeration,
     );
+  const radioChoices =
+    attributeDefinition?.type.toLowerCase() === 'boolean'
+      ? [
+          { value: true, label: 'Yes' },
+          { value: false, label: 'No' },
+        ]
+      : (enumeration?.values || []).map((item) => ({
+          value: item.name,
+          label: item.caption || item.name,
+        }));
+  const enumPrefix = enumeration ? `${enumeration.name}.` : '';
+  const radioValue = (candidate: string | number | boolean) =>
+    enumPrefix && typeof candidate === 'string' && candidate.startsWith(enumPrefix)
+      ? candidate.slice(enumPrefix.length)
+      : candidate;
 
   useEffect(() => {
     const next = kind === 'check_box' ? Boolean(value) : draftValue(value);
@@ -162,8 +178,66 @@ export function BoundField({
   if (disabled && readOnlyStyle === 'text') {
     return (
       <span className="mxrb-field-read-only">
-        {options.password === true && value ? '••••••••' : displayValue(value)}
+        {options.password === true && value
+          ? '••••••••'
+          : kind === 'radio_button_group'
+            ? (radioChoices.find((item) => item.value === radioValue(draftValue(value)))?.label ??
+              String(value ?? ''))
+            : displayValue(value)}
       </span>
+    );
+  }
+
+  if (kind === 'radio_button_group') {
+    if (!radioChoices.length)
+      return (
+        <span role="alert">Cannot resolve choices for {options.attribute || widget.name}</span>
+      );
+    return (
+      <div
+        role="radiogroup"
+        aria-label={
+          typeof options.aria_label === 'string' && options.aria_label
+            ? options.aria_label
+            : options.caption || widget.name
+        }
+        aria-required={options.aria_required === true}
+        style={{
+          display: 'flex',
+          flexDirection: options.horizontal === true ? 'row' : 'column',
+          gap: '0.5rem',
+        }}
+        onFocus={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) focus();
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) blur();
+        }}
+      >
+        {radioChoices.map((choice) => (
+          <label key={String(choice.value)}>
+            <input
+              type="radio"
+              name={fieldId}
+              disabled={disabled}
+              tabIndex={typeof options.tab_index === 'number' ? options.tab_index : undefined}
+              value={String(choice.value)}
+              checked={radioValue(draft) === choice.value}
+              onChange={() =>
+                changed(
+                  enumPrefix && typeof draft === 'string' && draft.startsWith(enumPrefix)
+                    ? `${enumPrefix}${choice.value}`
+                    : choice.value,
+                )
+              }
+            />
+            {choice.label}
+          </label>
+        ))}
+        {draft !== '' && !radioChoices.some((choice) => choice.value === radioValue(draft)) && (
+          <span role="status">Unknown choice: {String(draft)}</span>
+        )}
+      </div>
     );
   }
 

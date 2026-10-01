@@ -1778,7 +1778,7 @@ module Mxrb
         result = {
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
           navigation: manifest.data.fetch('navigation', {}),
-          modules: manifest.modules, coverage: manifest.coverage
+          modules: runtime_schema_modules, coverage: manifest.coverage
         }
         context ? secure_schema(result, context) : result
       end
@@ -1982,6 +1982,25 @@ module Mxrb
       end
 
       private
+
+      def runtime_schema_modules
+        manifest.modules.map do |mod|
+          enumerations = mod.fetch('enumerations', []).map do |definition|
+            implementation = Registry.fetch(:enumeration, definition.fetch('name'))
+            next definition unless implementation
+
+            values = implementation.values.map do |value|
+              captions = value.fetch(:captions)
+              {
+                'name' => value.fetch(:name), 'id' => value.fetch(:id), 'captions' => captions,
+                'caption' => captions['en_US'] || captions.values.first || value.fetch(:name)
+              }
+            end
+            definition.merge('values' => values)
+          end
+          mod.merge('enumerations' => enumerations)
+        end
+      end
 
       GRID_FILTER_OPERATORS = {
         'text' => %w[contains equals not_equals starts_with ends_with empty not_empty],

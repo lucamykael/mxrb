@@ -10,6 +10,18 @@ const record: EntityRecord = {
 };
 
 describe('presentation expressions', () => {
+  it('compares qualified and bare enum members without conflating different enum types', () => {
+    for (const status of ['Ready', 'App.Status.Ready']) {
+      const current = { ...record, attributes: { Status: status } };
+      expect(evaluateCondition('$currentObject/Status = App.Status.Ready', current)).toBe(true);
+      expect(evaluateCondition('App.Status.Ready != $currentObject/Status', current)).toBe(false);
+    }
+    expect(evaluateCondition('Other.Status.Ready = App.Status.Ready', record)).toBe(false);
+    expect(evaluateCondition("'Other.Status.Ready' = App.Status.Ready", record)).toBe(false);
+    expect(evaluateCondition('App.Status.Ready = App.Status.Ready', record)).toBe(true);
+    expect(evaluate('App.Status.Ready', record)).toBe('Ready');
+    expect(evaluate('toString(App.Status.Ready)', record)).toBe('Ready');
+  });
   it('preserves grouping, precedence, numeric types, and quoted operators', () => {
     expect(evaluateCondition('($currentObject/Amount = 12 or false) and not(false)', record)).toBe(
       true,

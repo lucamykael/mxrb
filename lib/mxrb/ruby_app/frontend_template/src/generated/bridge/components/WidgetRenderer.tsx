@@ -1,6 +1,8 @@
 import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
+import { TabControl } from './TabControl';
+import { PageTitleContext } from './PageTitleContext';
 import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import { useSelections } from './SelectionScope';
 import { MarketplaceWidget, type MarketplaceWidgetRegion } from '../marketplace';
@@ -371,6 +373,7 @@ export function WidgetRenderer({
   onSelectRecord,
 }: WidgetRuntimeProps) {
   const selections = useSelections();
+  const pageTitle = useContext(PageTitleContext);
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
   const className = classes(
@@ -645,6 +648,12 @@ export function WidgetRenderer({
           {label}
         </span>
       );
+    case 'page_title':
+      return (
+        <h1 {...runtimeProps} className={className} style={inlineStyle(options.style)}>
+          {pageTitle}
+        </h1>
+      );
     case 'button':
       return (
         <button {...runtimeProps} type="button" className={className} onClick={onClick}>
@@ -668,6 +677,24 @@ export function WidgetRenderer({
           />
           {label}
         </label>
+      );
+    case 'radio_button_group':
+      return (
+        <fieldset {...runtimeProps} className={className} style={inlineStyle(options.style)}>
+          <legend>{label}</legend>
+          <BoundField
+            widget={widget}
+            record={activeRecord}
+            schema={schema}
+            request={request}
+            saveRecord={saveRecord}
+            revision={revision}
+            onChanged={onChanged}
+            onEntered={onEntered}
+            onLeft={onLeft}
+            onError={onError}
+          />
+        </fieldset>
       );
     case 'text_area':
     case 'text_box':
@@ -695,30 +722,11 @@ export function WidgetRenderer({
     case 'tab_control':
       return (
         <div {...runtimeProps} className={className}>
-          {(options.tabs || []).map((tab) => (
-            <section key={tab.name}>
-              <h3>{tab.caption || tab.name}</h3>
-              {(tab.widgets || []).map((child, index) => (
-                <WidgetRenderer
-                  key={`${child.name}-${index}`}
-                  widget={child}
-                  moduleName={moduleName}
-                  invoke={invoke}
-                  invokeNanoflow={invokeNanoflow}
-                  navigate={navigate}
-                  context={context}
-                  pageContext={pageContext}
-                  revision={revision}
-                  schema={schema}
-                  request={request}
-                  saveRecord={saveRecord}
-                  onError={onError}
-                  onMutation={onMutation}
-                  onSelectRecord={onSelectRecord}
-                />
-              ))}
-            </section>
-          ))}
+          <TabControl
+            tabs={options.tabs || []}
+            label={label}
+            renderPanel={(tab) => renderWidgets(tab.widgets, `tab-${tab.name}`)}
+          />
         </div>
       );
     case 'data_grid':
