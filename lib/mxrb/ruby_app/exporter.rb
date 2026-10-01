@@ -1955,6 +1955,8 @@ module Mxrb
                            runtime_grid_columns_expression(value)
                          elsif type == :gallery && key.to_s == 'sort'
                            runtime_gallery_sort_expression(value)
+                         elsif key.to_s == 'editability' && value.is_a?(Hash) && value.keys == ['expression']
+                           "input_condition(#{value.fetch('expression').inspect})"
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
@@ -2118,6 +2120,10 @@ module Mxrb
 
       def runtime_dsl_sink_typed?(type, options, widget)
         allowed = DSL_SINK_OPTIONS[type]
+        if %i[text_box text_area number_input check_box date_picker drop_down
+              radio_button_group reference_selector].include?(type)
+          allowed += Forms::InputPresentation::OPTION_KEYS.map(&:to_s)
+        end
         return false unless allowed && (options.keys.map(&:to_s) - allowed).empty?
         return false unless (DSL_SINK_REQUIRED_OPTIONS.fetch(type, []) - options.keys.map(&:to_s)).empty?
         return false if !DSL_SINK_BLOCK_METHODS.include?(type) && widget_block?(widget)

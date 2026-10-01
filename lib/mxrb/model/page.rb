@@ -252,7 +252,7 @@ module Mxrb
         if widget.key?('Autocomplete') || widget.key?('AutocompletePurpose')
           result[:autocomplete] = Forms::InputPresentation.autocomplete(widget)
         end
-        result
+        result.compact
       end
 
       def file_manager_options(widget)

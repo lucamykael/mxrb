@@ -4,6 +4,18 @@ module Mxrb
   module Forms
     # Shared by the Mendix compiler and the independent Ruby web projection.
     module InputPresentation
+      OPTION_KEYS = %i[
+        editable read_only_style placeholder aria_label password max_length aria_required
+        tab_index editability autocomplete
+      ].freeze
+
+      def self.options(values)
+        unknown = values.keys - OPTION_KEYS
+        raise ArgumentError, "unknown input options: #{unknown.join(', ')}" unless unknown.empty?
+
+        values
+      end
+
       AUTOCOMPLETE_PURPOSES = {
         'FullName' => 'name', 'HonorificPrefix' => 'honorific-prefix', 'GivenName' => 'given-name',
         'AdditionalName' => 'additional-name', 'FamilyName' => 'family-name',

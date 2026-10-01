@@ -40,6 +40,20 @@ RSpec.describe 'Ruby frontend input editability' do # rubocop:disable Metrics/Bl
     expect(page.send(:input_options, 'AutocompletePurpose' => 'CreditCardNumber')).to eq(autocomplete: 'cc-number')
   end
 
+  it 'keeps nested input options typed and rejects unknown presentation keywords' do
+    expect { Mxrb::Dsl::WidgetSlotBuilder.new.text_box('Name', mystery: true) }
+      .to raise_error(ArgumentError, /unknown input options: mystery/)
+    builder = Mxrb::Dsl::WidgetSlotBuilder.new
+    expect(builder.input_condition('$currentObject/Active')).to eq(expression: '$currentObject/Active')
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    expect(tree.input_condition('true')).to eq(expression: 'true')
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    [nil, {}].each do |condition|
+      widget = { 'type' => 'text_box', 'name' => 'Name', 'options' => { 'editability' => condition } }
+      expect(exporter.send(:runtime_widget_call_source, widget, 0)).to include('editability:')
+    end
+  end
+
   it 'exports input settings as editable application source and serves Ruby changes without compiling Mendix' do # rubocop:disable Metrics/BlockLength
     Dir.mktmpdir('mxrb-editable-input-') do |root| # rubocop:disable Metrics/BlockLength
       source = File.join(root, 'Source.mpr')
@@ -47,7 +61,11 @@ RSpec.describe 'Ruby frontend input editability' do # rubocop:disable Metrics/Bl
         mendix_version '11.12.1'
         self.module(:App) do
           entity(:Item) { string :Name }
-          page(:Home) { text_box :Name, attribute: 'App.Item.Name', caption: 'Name' }
+          page(:Home) do
+            data_view :Details, from: context(entity: 'App.Item') do
+              body { text_box :Name, attribute: 'App.Item.Name', caption: 'Name' }
+            end
+          end
         end
       end
       Mxrb.open(source, readonly: false) do |project|
@@ -55,6 +73,7 @@ RSpec.describe 'Ruby frontend input editability' do # rubocop:disable Metrics/Bl
         document = page.raw_document
         field = find_input(document)
         field.merge!('Editable' => 'Never', 'ReadOnlyStyle' => 'Text',
+                     'ConditionalEditabilitySettings' => { 'Expression' => '$currentObject/Active' },
                      'PlaceholderTemplate' => template('Original placeholder'), 'IsPasswordBox' => true)
         project.mpr.update_unit(page.id, document)
       end
@@ -63,10 +82,12 @@ RSpec.describe 'Ruby frontend input editability' do # rubocop:disable Metrics/Bl
       path = File.join(target, 'app', 'pages', 'app', 'home_page.rb')
       code = File.read(path)
       expect(code).to include('editable: "never"', 'password: true', 'placeholder: "Original placeholder"')
+      expect(code).to include('input_condition("$currentObject/Active")')
+      expect(Mxrb::PublicSourceAudit.new(target)).to be_clean
       File.write(path, code.sub('editable: "never"', 'editable: "always"')
                            .sub('Original placeholder', 'Edited in Ruby'))
       application = Mxrb::RubyApp::Application.new(target)
-      widget = application.page('App.Home').fetch(:widgets).first
+      widget = application.page('App.Home').fetch(:widgets).first.fetch('body').first
       expect(widget.fetch('options')).to include(
         'editable' => 'always', 'placeholder' => 'Edited in Ruby', 'password' => true
       )

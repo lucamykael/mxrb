@@ -8,7 +8,7 @@ module Mxrb
     # is checked against the existing DSL instead of guessing at extensions.
     # rubocop:disable Metrics
     module PageDataSources
-      METHODS = %i[context association microflow_source nanoflow_source listen_to page_variable].freeze
+      METHODS = %i[context association microflow_source nanoflow_source listen_to page_variable input_condition].freeze
       METHODS.each do |name|
         define_method(name) do |*arguments, **options|
           Dsl::WidgetSlotBuilder.new.public_send(name, *arguments, **options)

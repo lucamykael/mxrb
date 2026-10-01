@@ -15,6 +15,7 @@ require_relative "flow_page_builder"
 require_relative "flow_text_builder"
 require_relative "flow_rest_builder"
 require_relative "widget_event_arguments"
+require_relative '../forms/input_presentation'
 
 module Mxrb
   module Dsl
@@ -79,58 +80,61 @@ module Mxrb
       include NativeFragmentAccess
 
       def text_box(name, attribute: nil, caption: nil, class_name: nil, style: nil,
-                   dynamic_class: nil, visible: nil, &block)
+                   dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :text_box, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
-                           visible:, &block
+                           visible:, **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def number_input(name, attribute: nil, caption: nil, class_name: nil, style: nil,
-                       dynamic_class: nil, visible: nil, &block)
+                       dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :number_input, name,
-          attribute:, caption:, class: class_name, style:, dynamic_class:, visible:, &block
+          attribute:, caption:, class: class_name, style:, dynamic_class:, visible:,
+          **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def text_area(name, attribute: nil, caption: nil, lines: 5, class_name: nil, style: nil,
-                    dynamic_class: nil, visible: nil, &block)
+                    dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :text_area, name, attribute:, caption:, lines:, class: class_name, style:,
-                            dynamic_class:, visible:, &block
+                            dynamic_class:, visible:, **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def check_box(name, attribute: nil, caption: nil, class_name: nil, style: nil,
-                    dynamic_class: nil, visible: nil, &block)
+                    dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :check_box, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
-                            visible:, &block
+                            visible:, **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def date_picker(name, attribute: nil, caption: nil, class_name: nil, style: nil,
-                      dynamic_class: nil, visible: nil, &block)
+                      dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :date_picker, name, attribute:, caption:, class: class_name, style:, dynamic_class:,
-                              visible:, &block
+                              visible:, **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def radio_button_group(name, attribute: nil, caption: nil, horizontal: false,
-                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :radio_button_group, name, attribute:, caption:, horizontal: horizontal == true,
-                                     class: class_name, style:, dynamic_class:, visible:, &block
+                                     class: class_name, style:, dynamic_class:, visible:,
+                                     **Forms::InputPresentation.options(input_options), &block
         )
       end
 
       def reference_selector(name, attribute: nil, caption: nil, display_attribute: nil,
-                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+                             class_name: nil, style: nil, dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :reference_selector, name, attribute:, caption:, display_attribute:,
-                                     class: class_name, style:, dynamic_class:, visible:, &block
+                                     class: class_name, style:, dynamic_class:, visible:,
+                                     **Forms::InputPresentation.options(input_options), &block
         )
       end
 
@@ -390,11 +394,15 @@ module Mxrb
       end
 
       def drop_down(name, attribute: nil, caption: nil, class_name: nil, style: nil,
-                    dynamic_class: nil, visible: nil, &block)
+                    dynamic_class: nil, visible: nil, **input_options, &block)
         _add_widget(
           :drop_down, name, attribute: attribute&.to_s, caption:, class: class_name,
-                            style:, dynamic_class:, visible:, &block
+                            style:, dynamic_class:, visible:, **Forms::InputPresentation.options(input_options), &block
         )
+      end
+
+      def input_condition(expression)
+        { expression: expression.to_s }
       end
 
       def snippet(name, from: nil)
