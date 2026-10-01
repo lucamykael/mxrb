@@ -1,5 +1,43 @@
 # Runtime sem Java
 
+## Modbus TCP
+
+`Mxrb::Modbus::Client` é um conector próprio para o backend Ruby. Implementa
+as funções 01/02/03/04/05/06/15/16 da
+[especificação Modbus](https://www.modbus.org/modbus-specifications).
+Não é um pacote oficial Marketplace nem gera uma implementação Java para Mendix.
+RTU/serial, TLS e conversões de registradores para floats não fazem parte desta API.
+
+```ruby
+client = Mxrb::Modbus::Client.new(host: ENV.fetch('MODBUS_HOST'), unit_id: 1, timeout: 5)
+client.read_holding_registers(0, 2)       # => [4660, 65535]
+client.read_coils(0, 8)                  # => Array de true/false
+client.write_single_register(10, 42)     # => 42
+client.write_multiple_coils(0, [true, false]) # => 2
+```
+
+Também estão disponíveis `read_discrete_inputs`, `read_input_registers`,
+`write_single_coil` e `write_multiple_registers`. Endereços começam em zero:
+o registrador convencional 40001 corresponde ao endereço 0 de holding registers.
+Registradores usam inteiros sem sinal de 0 a 65535; coils exigem booleanos.
+Leituras retornam arrays, escritas simples retornam o valor e escritas múltiplas
+retornam a quantidade confirmada. A porta padrão é 502 e `unit_id` aceita 0–255
+para endereçar também gateways.
+
+Cada operação abre e fecha sua conexão, com um prazo total em segundos para
+resolução/conexão, envio e resposta. Não há repetição automática: um timeout após
+uma escrita deixa o resultado remoto desconhecido. `ExceptionResponse` expõe
+`function` e `code`; `ProtocolError` indica resposta inválida e `TransportError`
+(incluindo `TimeoutError`) indica falha de comunicação. Modbus TCP não oferece
+autenticação ou criptografia; configure o endpoint pela aplicação em rede confiável.
+
+Um adapter em `config/adapters.rb` pode retornar
+`client.read_holding_registers(0).first` para uma ação registrada com
+`Registry.register_java_custom_action('Industrial.ReadRegister')`. O microflow
+consome esse valor pelo interpretador Ruby; o adapter não é exportado como Java.
+
+## Execução do backend
+
 O modo Ruby executa o backend sem iniciar o Mendix Runtime Java. Ao abrir uma
 aplicação exportada, o MXRB migra automaticamente um banco SQLite por ambiente,
 abre o interpretador de microflows, registra lifecycle hooks, aplica segurança e

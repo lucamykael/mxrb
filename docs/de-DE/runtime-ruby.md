@@ -1,5 +1,43 @@
 # Runtime ohne Java
 
+## Modbus TCP
+
+`Mxrb::Modbus::Client` ist ein eigener Connector für das Ruby-Backend mit den
+Funktionen 01/02/03/04/05/06/15/16 der
+[Modbus-Spezifikation](https://www.modbus.org/modbus-specifications).
+Er ist kein offizielles Marketplace-Paket und erzeugt keinen Mendix-Java-Code.
+RTU/seriell, TLS und die Umwandlung von Registern in Gleitkommazahlen sind nicht enthalten.
+
+```ruby
+client = Mxrb::Modbus::Client.new(host: ENV.fetch('MODBUS_HOST'), unit_id: 1, timeout: 5)
+client.read_holding_registers(0, 2)       # => [4660, 65535]
+client.read_coils(0, 8)                  # => Array mit true/false
+client.write_single_register(10, 42)     # => 42
+client.write_multiple_coils(0, [true, false]) # => 2
+```
+
+Weitere Methoden sind `read_discrete_inputs`, `read_input_registers`,
+`write_single_coil` und `write_multiple_registers`. Adressen beginnen bei null:
+Holding-Register 40001 entspricht Adresse 0. Register sind vorzeichenlose
+Ganzzahlen von 0 bis 65535; Coils verlangen boolesche Werte. Lesen liefert Arrays,
+einzelnes Schreiben den Wert und mehrfaches Schreiben die bestätigte Anzahl.
+Standardport ist 502; `unit_id` akzeptiert 0–255, auch für Gateways.
+
+Jede Operation öffnet und schließt ihre Verbindung. Ein gemeinsames Zeitlimit in
+Sekunden gilt für Namensauflösung/Verbindung, Senden und Empfang. Automatische
+Wiederholungen gibt es nicht: Nach einem Schreib-Timeout ist das entfernte Ergebnis
+unbekannt. `ExceptionResponse` enthält `function` und `code`; `ProtocolError`
+kennzeichnet ungültige Antworten, `TransportError` (einschließlich `TimeoutError`)
+Kommunikationsfehler. Modbus TCP bietet keine Authentifizierung oder Verschlüsselung;
+der Endpunkt wird von der Anwendung in einem vertrauenswürdigen Netzwerk konfiguriert.
+
+Ein mit `Registry.register_java_custom_action('Industrial.ReadRegister')` in
+`config/adapters.rb` registrierter Adapter kann
+`client.read_holding_registers(0).first` zurückgeben. Der Ruby-Microflow-Interpreter
+verarbeitet das Ergebnis; der Adapter wird nicht als Java exportiert.
+
+## Backend-Ausführung
+
 Der Ruby-Modus startet das Backend ohne Mendix Java Runtime. Beim Öffnen einer
 exportierten Anwendung migriert MXRB automatisch eine umgebungsspezifische
 SQLite-Datenbank, öffnet den Microflow-Interpreter, registriert Lifecycle-Hooks,

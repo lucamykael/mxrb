@@ -1,5 +1,43 @@
 # Java-free runtime
 
+## Modbus TCP
+
+`Mxrb::Modbus::Client` is MXRB's own Ruby backend connector for functions
+01/02/03/04/05/06/15/16 of the
+[Modbus specification](https://www.modbus.org/modbus-specifications).
+It is not an official Marketplace package and does not generate Mendix Java code.
+RTU/serial, TLS and register-to-float conversions are outside this API.
+
+```ruby
+client = Mxrb::Modbus::Client.new(host: ENV.fetch('MODBUS_HOST'), unit_id: 1, timeout: 5)
+client.read_holding_registers(0, 2)       # => [4660, 65535]
+client.read_coils(0, 8)                  # => Array of true/false
+client.write_single_register(10, 42)     # => 42
+client.write_multiple_coils(0, [true, false]) # => 2
+```
+
+The remaining methods are `read_discrete_inputs`, `read_input_registers`,
+`write_single_coil` and `write_multiple_registers`. Addresses are zero-based:
+conventional holding register 40001 maps to address 0. Registers are unsigned
+integers from 0 to 65535; coils require booleans. Reads return arrays, single
+writes return the value, and multiple writes return the acknowledged quantity.
+The default port is 502; `unit_id` accepts 0–255, including gateway addressing.
+
+Each operation opens and closes its connection with one total deadline in seconds
+for resolution/connection, sending and receiving. There are no automatic retries:
+a write timeout leaves the remote outcome unknown. `ExceptionResponse` exposes
+`function` and `code`; `ProtocolError` indicates an invalid response, and
+`TransportError` (including `TimeoutError`) indicates a communication failure.
+Modbus TCP has no authentication or encryption; configure the endpoint in the
+application on a trusted network.
+
+In `config/adapters.rb`, an adapter registered through
+`Registry.register_java_custom_action('Industrial.ReadRegister')` can return
+`client.read_holding_registers(0).first`. The Ruby microflow interpreter consumes
+the result; the adapter is not exported as Java.
+
+## Backend execution
+
 Ruby mode runs the backend without starting the Mendix Java Runtime. When an
 exported application opens, MXRB automatically migrates an environment-specific
 SQLite database, opens the microflow interpreter, registers lifecycle hooks,
