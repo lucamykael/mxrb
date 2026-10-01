@@ -97,7 +97,8 @@ module Mxrb
             relative = safe_relative_path(element.attributes['path'], directory: true)
             present = archive.any? do |entry|
               normalized = entry.name.to_s.tr('\\', '/').delete_suffix('/')
-              normalized == relative || normalized.start_with?("#{relative}/")
+              normalized == relative || normalized.start_with?("#{relative}/") ||
+                normalized.start_with?("#{relative}.")
             end
             raise MarketplaceError, "declared widget file is missing: #{relative}" unless present
           end

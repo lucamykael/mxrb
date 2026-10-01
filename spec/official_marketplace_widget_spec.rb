@@ -8,7 +8,7 @@ require 'zip'
 RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
   def widget_package(path, version: '2.9.0', declared: 'com/mendix/widget/web/combobox/',
                      widget_id: 'com.mendix.widget.web.combobox.Combobox', name: 'Combobox',
-                     runtime: true)
+                     runtime: true, runtime_path: nil)
     package = <<~XML
       <?xml version="1.0" encoding="utf-8"?>
       <package xmlns="http://www.mendix.com/package/1.0/">
@@ -27,8 +27,8 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
     Zip::File.open(path, create: true) do |zip|
       zip.get_output_stream('package.xml') { _1.write(package) }
       zip.get_output_stream('Combobox.xml') { _1.write(widget) }
-      runtime_path = File.join(declared.delete_suffix('/'), "#{name}.mjs")
-      zip.get_output_stream(runtime_path) { _1.write('export {};') } if runtime
+      asset_path = runtime_path || File.join(declared.delete_suffix('/'), "#{name}.mjs")
+      zip.get_output_stream(asset_path) { _1.write('export {};') } if runtime
     end
     path
   end
@@ -136,6 +136,17 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
 
     File.binwrite(result.destination, 'changed')
     expect(Mxrb::OfficialMarketplace.verify(@root).dig('Combo box', :valid)).to be(false)
+  end
+
+  it 'accepts an official widget file declaration that names an extensionless asset stem' do
+    archive = widget_package(
+      File.join(@root, 'stem.mpk'),
+      declared: 'SprintrFeedbackWidget/SprintrFeedback',
+      runtime_path: 'SprintrFeedbackWidget/SprintrFeedback.mjs'
+    )
+
+    expect(Mxrb::OfficialMarketplace::WidgetPackageInventory.read(archive).widget_ids)
+      .to eq(['com.mendix.widget.web.combobox.Combobox'])
   end
 
   it 'downloads Widget content with the authenticated API and routes it by package structure' do
@@ -505,6 +516,8 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
       :@resolved, 'Installed' => installed_dependency, 'Unused' => dependency
     )
     combo_id = 'com.mendix.widget.web.combobox.Combobox'
+    resolver.instance_variable_set(:@required_widget_ids, [combo_id])
+    expect(resolver.send(:resolve_widget_dependencies)).to eq([])
     resolved = resolver.send(:resolve_widget_dependency, 219_304, [combo_id])
     expect(resolved.widget_ids).to eq([combo_id])
     expect(api).not_to have_received(:resolve)

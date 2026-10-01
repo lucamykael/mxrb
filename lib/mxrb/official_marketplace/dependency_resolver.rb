@@ -211,7 +211,8 @@ module Mxrb
       end
 
       def resolve_widget_dependencies # rubocop:disable Metrics/MethodLength
-        missing = @required_widget_ids.reject { widget_installed?(_1) }
+        provided = resolved_widget_ids
+        missing = @required_widget_ids.reject { widget_installed?(_1) || provided.include?(_1) }
         grouped = missing.group_by { official_widget_content_id(_1) }
         Array(grouped.delete(nil)).each do |widget_id|
           @blockers << "#{widget_id}: no verified official Marketplace widget mapping"
@@ -222,6 +223,10 @@ module Mxrb
           @blockers << "widget content #{content_id}: #{e.message}"
           nil
         end
+      end
+
+      def resolved_widget_ids
+        @resolved.values.flat_map { WidgetBundleInventory.read(_1.archive).widget_ids }.uniq
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
