@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
+import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
+import { useSelections } from './SelectionScope';
 import { MarketplaceWidget, type MarketplaceWidgetRegion } from '../marketplace';
 import type {
   EntityCollectionResponse,
@@ -163,12 +165,18 @@ function DataView({
 }: WidgetRuntimeProps) {
   const options = widget.options || {};
   const source = options.source as DataViewSource | undefined;
+  const inheritedReadOnly = useContext(ReadOnlyContext);
+  const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
+  const selections = useSelections();
+  const listenTarget = source?.target?.split('.').at(-1) || '';
   const inheritedContext = context || pageContext;
   const [record, setRecord] = useState<EntityRecord | null>(inheritedContext);
   const [loading, setLoading] = useState(false);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const contextRef = useRef(inheritedContext);
   contextRef.current = inheritedContext;
+  const nanoflowRef = useRef(invokeNanoflow);
+  nanoflowRef.current = invokeNanoflow;
   const sourceRevision = source?.kind === 'association' ? revision : 0;
 
   useEffect(() => {
@@ -182,12 +190,12 @@ function DataView({
       Object.fromEntries(
         (source?.mappings || []).map((entry) => {
           const mapping = entry as Record<string, unknown>;
-          const parameter = String(mapping.parameter || '').split('.').pop() || '';
+          const parameter =
+            String(mapping.parameter || '')
+              .split('.')
+              .pop() || '';
           if (mapping.variable) return [parameter, activeContext || undefined];
-          return [
-            parameter,
-            expressionValue(String(mapping.expression || ''), activeContext),
-          ];
+          return [parameter, expressionValue(String(mapping.expression || ''), activeContext)];
         }),
       );
 
@@ -199,8 +207,6 @@ function DataView({
       };
     }
     if (source.kind === 'listen') {
-      setRecord(null);
-      setUnsupported(`listen source ${source.target || ''} requires a selection adapter`);
       return () => {
         current = false;
       };
@@ -209,40 +215,39 @@ function DataView({
     setLoading(true);
     let pending: Promise<unknown>;
     if (source.kind === 'microflow' && source.name) {
-      pending = request<InvocationResult>(
-        `/api/microflows/${encodeURIComponent(source.name)}`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            ...mappings(),
-            ...(activeContext ? { __mxrb_context: activeContext } : {}),
-          }),
-        },
-      ).then((payload) => payload.context || payload.result || null);
+      pending = request<InvocationResult>(`/api/microflows/${encodeURIComponent(source.name)}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...mappings(),
+          ...(activeContext ? { __mxrb_context: activeContext } : {}),
+        }),
+      }).then((payload) => payload.context || payload.result || null);
     } else if (source.kind === 'nanoflow' && source.name) {
-      pending = invokeNanoflow(source.name, mappings(), activeContext);
+      pending = nanoflowRef.current(source.name, mappings(), activeContext);
     } else if (source.kind === 'association') {
-      if ((source.steps?.length || 0) > 1) {
+      const steps = source.steps || [];
+      if (!steps.length || steps.some((step) => !step.entity || !step.association)) {
         setLoading(false);
         setRecord(null);
-        setUnsupported('multi-step association sources require a traversal adapter');
+        setUnsupported(
+          'association source must declare its association and destination at each step',
+        );
         return () => {
           current = false;
         };
       }
-      const step = source.steps?.at(-1);
-      const entity = source.entity || step?.entity;
-      if (!entity) {
-        setLoading(false);
-        setRecord(null);
-        setUnsupported('association source has no destination entity');
-        return () => {
-          current = false;
-        };
-      }
-      pending = request<EntityCollectionResponse>(
-        entityCollectionPath(entity, step?.association, activeContext),
-      ).then((payload) => payload.records?.[0] || null);
+      pending = (async () => {
+        let candidate = activeContext;
+        for (const step of steps) {
+          // Never turn an empty association into an unscoped entity query.
+          if (!candidate || !current) return null;
+          const payload = await request<EntityCollectionResponse>(
+            entityCollectionPath(step.entity!, step.association, candidate),
+          );
+          candidate = payload.records?.[0] || null;
+        }
+        return candidate;
+      })();
     } else {
       setLoading(false);
       setRecord(null);
@@ -263,17 +268,20 @@ function DataView({
     return () => {
       current = false;
     };
-  }, [
-    source,
-    inheritedContext?.type,
-    inheritedContext?.id,
-    sourceRevision,
-    invokeNanoflow,
-    request,
-    onError,
-  ]);
+  }, [source, inheritedContext?.type, inheritedContext?.id, sourceRevision, request, onError]);
 
-  const resolvedRecord = !source || source.kind === 'context' ? inheritedContext : record;
+  const resolvedRecord =
+    source?.kind === 'listen'
+      ? selections.records[listenTarget] || null
+      : !source || source.kind === 'context'
+        ? inheritedContext
+        : record;
+  const saveResolvedRecord: typeof saveRecord = async (current, changes) => {
+    const updated = await saveRecord(current, changes);
+    if (updated) setRecord((previous) => (previous?.id === updated.id ? updated : previous));
+    if (updated && source?.kind === 'listen') selections.select(listenTarget, updated);
+    return updated;
+  };
 
   const render = (widgets: WidgetDefinition[] | undefined, region: string) =>
     (widgets || []).map((child, index) => (
@@ -289,13 +297,14 @@ function DataView({
         revision={revision}
         schema={schema}
         request={request}
-        saveRecord={saveRecord}
+        saveRecord={saveResolvedRecord}
         onError={onError}
         onMutation={onMutation}
         onSelectRecord={onSelectRecord}
       />
     ));
 
+  if (options.visibility && !matchesCondition(options.visibility, resolvedRecord)) return null;
   if (unsupported)
     return (
       <div className="mxrb-data-view mxrb-data-view--unsupported" role="alert">
@@ -316,21 +325,31 @@ function DataView({
     );
 
   return (
-    <section
-      className={classes('app-widget', 'mxrb-widget', 'mxrb-data-view', options.class)}
-      data-widget-name={widget.name}
-      data-widget-type={widget.type}
-      data-editability={String(options.editable || 'always')}
-    >
-      <div className="mxrb-data-view__body" data-widget-region="body">
-        {render(widget.body, 'body')}
-      </div>
-      {options.show_footer !== false && (widget.footer || []).length > 0 && (
-        <footer className="mxrb-data-view__footer" data-widget-region="footer">
-          {render(widget.footer, 'footer')}
-        </footer>
-      )}
-    </section>
+    <ReadOnlyContext.Provider value={inheritedReadOnly || !editable(options, resolvedRecord)}>
+      <ReadOnlyStyleContext.Provider
+        value={
+          options.read_only_style === 'text' || options.read_only_style === 'control'
+            ? options.read_only_style
+            : inheritedReadOnlyStyle
+        }
+      >
+        <section
+          className={classes('app-widget', 'mxrb-widget', 'mxrb-data-view', options.class)}
+          data-widget-name={widget.name}
+          data-widget-type={widget.type}
+          data-editability={String(options.editable || 'always')}
+        >
+          <div className="mxrb-data-view__body" data-widget-region="body">
+            {render(widget.body, 'body')}
+          </div>
+          {options.show_footer !== false && (widget.footer || []).length > 0 && (
+            <footer className="mxrb-data-view__footer" data-widget-region="footer">
+              {render(widget.footer, 'footer')}
+            </footer>
+          )}
+        </section>
+      </ReadOnlyStyleContext.Provider>
+    </ReadOnlyContext.Provider>
   );
 }
 
@@ -351,6 +370,7 @@ export function WidgetRenderer({
   onMutation,
   onSelectRecord,
 }: WidgetRuntimeProps) {
+  const selections = useSelections();
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
   const className = classes(
@@ -389,6 +409,8 @@ export function WidgetRenderer({
     ));
   const click = (widget.events || []).find((event) => event.event === 'on_click');
   const change = (widget.events || []).find((event) => event.event === 'on_change');
+  const enter = (widget.events || []).find((event) => event.event === 'on_enter');
+  const leave = (widget.events || []).find((event) => event.event === 'on_leave');
   const runEvent = (
     event: WidgetEvent | undefined,
     eventContext: EntityRecord | null = context || pageContext,
@@ -399,7 +421,7 @@ export function WidgetRenderer({
     try {
       parameters = eventArguments(event, eventContext, {
         pageParameter: pageContext,
-        widgetValues: { [widget.name]: eventContext },
+        widgetValues: { ...selections.records, [widget.name]: eventContext },
       });
     } catch (failure) {
       onError(failure);
@@ -415,6 +437,8 @@ export function WidgetRenderer({
   };
   const onClick = click ? () => runEvent(click) : undefined;
   const onChanged = (updated: EntityRecord) => runEvent(change, updated);
+  const onEntered = (record: EntityRecord) => runEvent(enter, record);
+  const onLeft = (record: EntityRecord) => runEvent(leave, record);
   const activeRecord = context || pageContext;
   const label = caption(widget, options, activeRecord);
   const renderWidgets = (widgets: WidgetDefinition[] | undefined, region: string) =>
@@ -530,35 +554,35 @@ export function WidgetRenderer({
           <tbody>
             {rows.map((row, rowIndex) =>
               !isVisible(row.options?.visible, activeRecord) ? null : (
-              <tr
-                key={rowIndex}
-                className={classes(
-                  'mxrb-table__row',
-                  row.options?.class,
-                  dynamicClass(row.options?.dynamic_class, activeRecord),
-                )}
-                style={inlineStyle(row.options?.style)}
-              >
-                {(row.cells || []).map((cell, cellIndex) => {
-                  if (!isVisible(cell.options?.visible, activeRecord)) return null;
-                  const Cell = cell.header ? 'th' : 'td';
-                  return (
-                    <Cell
-                      key={`${cell.column ?? cellIndex}-${cellIndex}`}
-                      className={classes(
-                        'mxrb-table__cell',
-                        cell.options?.class,
-                        dynamicClass(cell.options?.dynamic_class, activeRecord),
-                      )}
-                      style={inlineStyle(cell.options?.style)}
-                      colSpan={cell.colspan || 1}
-                      rowSpan={cell.rowspan || 1}
-                    >
-                      {renderWidgets(cell.widgets, `row-${rowIndex}-cell-${cellIndex}`)}
-                    </Cell>
-                  );
-                })}
-              </tr>
+                <tr
+                  key={rowIndex}
+                  className={classes(
+                    'mxrb-table__row',
+                    row.options?.class,
+                    dynamicClass(row.options?.dynamic_class, activeRecord),
+                  )}
+                  style={inlineStyle(row.options?.style)}
+                >
+                  {(row.cells || []).map((cell, cellIndex) => {
+                    if (!isVisible(cell.options?.visible, activeRecord)) return null;
+                    const Cell = cell.header ? 'th' : 'td';
+                    return (
+                      <Cell
+                        key={`${cell.column ?? cellIndex}-${cellIndex}`}
+                        className={classes(
+                          'mxrb-table__cell',
+                          cell.options?.class,
+                          dynamicClass(cell.options?.dynamic_class, activeRecord),
+                        )}
+                        style={inlineStyle(cell.options?.style)}
+                        colSpan={cell.colspan || 1}
+                        rowSpan={cell.rowspan || 1}
+                      >
+                        {renderWidgets(cell.widgets, `row-${rowIndex}-cell-${cellIndex}`)}
+                      </Cell>
+                    );
+                  })}
+                </tr>
               ),
             )}
           </tbody>
@@ -575,41 +599,41 @@ export function WidgetRenderer({
         >
           {rows.map((row, rowIndex) =>
             !isVisible(row.options?.visible, activeRecord) ? null : (
-            <div
-              key={rowIndex}
-              className={classes(
-                'mxrb-layout-grid__row',
-                row.options?.class,
-                dynamicClass(row.options?.dynamic_class, activeRecord),
-              )}
-              style={{
-                ...inlineStyle(row.options?.style),
-                display: 'flex',
-                gap: row.options?.gutters === false ? 0 : undefined,
-              }}
-            >
-              {(row.columns || []).map((column, columnIndex) =>
-                !isVisible(column.options?.visible, activeRecord) ? null : (
-                <div
-                  key={columnIndex}
-                  className={classes(
-                    'mxrb-layout-grid__column',
-                    column.options?.class,
-                    dynamicClass(column.options?.dynamic_class, activeRecord),
-                  )}
-                  style={{
-                    ...inlineStyle(column.options?.style),
-                    ...layoutColumnStyle(column.options || {}),
-                  }}
-                  data-desktop-width={String(column.options?.desktop ?? 'grow')}
-                  data-tablet-width={String(column.options?.tablet ?? 'grow')}
-                  data-phone-width={String(column.options?.phone ?? 'grow')}
-                >
-                  {renderWidgets(column.widgets, `row-${rowIndex}-column-${columnIndex}`)}
-                </div>
-                ),
-              )}
-            </div>
+              <div
+                key={rowIndex}
+                className={classes(
+                  'mxrb-layout-grid__row',
+                  row.options?.class,
+                  dynamicClass(row.options?.dynamic_class, activeRecord),
+                )}
+                style={{
+                  ...inlineStyle(row.options?.style),
+                  display: 'flex',
+                  gap: row.options?.gutters === false ? 0 : undefined,
+                }}
+              >
+                {(row.columns || []).map((column, columnIndex) =>
+                  !isVisible(column.options?.visible, activeRecord) ? null : (
+                    <div
+                      key={columnIndex}
+                      className={classes(
+                        'mxrb-layout-grid__column',
+                        column.options?.class,
+                        dynamicClass(column.options?.dynamic_class, activeRecord),
+                      )}
+                      style={{
+                        ...inlineStyle(column.options?.style),
+                        ...layoutColumnStyle(column.options || {}),
+                      }}
+                      data-desktop-width={String(column.options?.desktop ?? 'grow')}
+                      data-tablet-width={String(column.options?.tablet ?? 'grow')}
+                      data-phone-width={String(column.options?.phone ?? 'grow')}
+                    >
+                      {renderWidgets(column.widgets, `row-${rowIndex}-column-${columnIndex}`)}
+                    </div>
+                  ),
+                )}
+              </div>
             ),
           )}
         </div>
@@ -638,6 +662,8 @@ export function WidgetRenderer({
             saveRecord={saveRecord}
             revision={revision}
             onChanged={onChanged}
+            onEntered={onEntered}
+            onLeft={onLeft}
             onError={onError}
           />
           {label}
@@ -660,6 +686,8 @@ export function WidgetRenderer({
             saveRecord={saveRecord}
             revision={revision}
             onChanged={onChanged}
+            onEntered={onEntered}
+            onLeft={onLeft}
             onError={onError}
           />
         </label>
@@ -703,7 +731,10 @@ export function WidgetRenderer({
             revision={revision}
             onError={onError}
             onMutation={onMutation}
-            onSelectRecord={onSelectRecord}
+            onSelectRecord={(record) => {
+              selections.select(widget.name, record);
+              onSelectRecord(record);
+            }}
             onRowAction={(record) => runEvent(change || click, record)}
           />
         </div>

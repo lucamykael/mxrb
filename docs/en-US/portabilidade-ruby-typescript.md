@@ -1,5 +1,36 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Primary direction: Mendix → Ruby + React/TypeScript
+
+The conversion target is an editable Ruby backend and React/TypeScript web
+application without the Mendix runtime. Rebuilding an MPR is a separate contract.
+`runtime_only` does not mean uneditable: custom Ruby and React code can be fully
+editable without a Studio Pro projection. `portability --require-native` audits
+Ruby → Mendix, not completion of Mendix → Ruby.
+
+The Ruby runtime still reads an internal MPR copy for metadata and graphs that
+depend on it. No JVM/Mendix runtime does not yet mean no MPR baseline. Untranslated
+variants, custom actions without adapters, and unsupported widgets remain gaps.
+
+Input editability, expression conditions, read-only style, placeholder, password,
+maximum length, ARIA label/required state, tab order, and autocomplete are now
+exported as page Ruby options. Editing `app/pages/**/*.rb` changes the Ruby
+backend's page projection without rebuilding an MPR. Supported options are applied
+by React. Nested Data Views cannot unlock a read-only ancestor; unknown conditions
+stay locked. Role-based/native condition variants still need translation and
+must not be called functionally equivalent. Backend authorization remains separate.
+
+Focus/change/leave actions preserve input focus and wait for writes where needed.
+Server objects are no longer implicitly transient; failed writes, including 404,
+are reported. Named grid selection feeds `listen_to` views. Multi-step association
+sources traverse each link and stop at empty links without unscoped queries.
+
+`spec/fixtures/ruby_frontend_editability/project.rb` and
+`spec/fixtures/frontend_browser/ruby_editability_flow.json` test conditional
+editing, selection, and persistence after reload in Ruby/React. Component tests
+cover focus, rejected writes, expression semantics, and association traversal.
+This verifies that slice, not the entire frontend or independence from every baseline.
+
 MXRB reports every Ruby application artifact as `native` (materialized as an
 editable MPR document), `preserved_native` (kept losslessly in the Mendix
 sidecar), or `runtime_only` (requires the MXRB runtime).

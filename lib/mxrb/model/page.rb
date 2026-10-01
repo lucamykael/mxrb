@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "unit"
+require_relative '../forms/input_presentation'
 
 module Mxrb
   module Model
@@ -225,7 +226,33 @@ module Mxrb
         options[:parameters] = parameters unless parameters.empty?
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
         options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
+        options.merge!(input_options(widget)) if %i[
+          text_box text_area check_box date_picker drop_down reference_selector radio_button_group
+        ].include?(widget_type)
         options
+      end
+
+      # These values used to survive only in the native baseline. They are
+      # public Ruby options now, consumed directly by the Ruby web runtime.
+      def input_options(widget)
+        result = {}
+        { 'Editable' => :editable, 'ReadOnlyStyle' => :read_only_style }.each do |native, key|
+          result[key] = data_view_editability(widget[native]) if widget.key?(native)
+        end
+        { 'PlaceholderTemplate' => :placeholder, 'ScreenReaderLabel' => :aria_label }.each do |native, key|
+          result[key] = extract_text(widget[native]) if widget.key?(native)
+        end
+        {
+          'IsPasswordBox' => :password, 'MaxLengthCode' => :max_length,
+          'AriaRequired' => :aria_required, 'TabIndex' => :tab_index
+        }.each { |native, key| result[key] = widget[native] if widget.key?(native) }
+        if widget.key?('ConditionalEditabilitySettings')
+          result[:editability] = parse_data_view_condition(widget['ConditionalEditabilitySettings'])
+        end
+        if widget.key?('Autocomplete') || widget.key?('AutocompletePurpose')
+          result[:autocomplete] = Forms::InputPresentation.autocomplete(widget)
+        end
+        result
       end
 
       def file_manager_options(widget)

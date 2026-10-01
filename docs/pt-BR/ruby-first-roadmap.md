@@ -15,6 +15,32 @@ Ruby é a única linguagem pública do MXRB.
 
 ## Capacidades
 
+### Prioridade acordada em 1 de outubro de 2026
+
+Converter projetos Mendix em aplicações Ruby + React/TypeScript editáveis e
+executáveis sem runtime Mendix. A classificação de retorno ao Studio Pro não
+substitui essa verificação. Preservar um artefato opaco não encerra sua conversão;
+`runtime_only` pode ser código editável perfeitamente adequado ao destino Ruby.
+
+O primeiro recorte removeu dependências do baseline para opções de campos,
+aplicou editabilidade e eventos no React, corrigiu persistência de objetos de
+fontes microflow, preservou foco e implementou Data Views por seleção e
+associações em múltiplas etapas. Evidências e limites estão no
+[contrato de conversão](portabilidade-ruby-typescript.md).
+
+Ainda devem ser fechados, com provas de edição e execução:
+
+1. Demais widgets core, ações cliente, layouts/snippets, validações e fontes de
+   dados ainda sem equivalente funcional no frontend Ruby.
+2. Condições de visibilidade/editabilidade por papéis e variantes nativas;
+   contratos de widgets externos e custom actions, com adapters explícitos.
+3. Fluxos e documentos ainda delegados ao modelo preservado: produzir fontes
+   Ruby autoritativos e remover a necessidade desse baseline em execução.
+4. Gates em projetos reais: editar o código exportado, testar a aplicação
+   convertida e distinguir qualquer dependência residual de mera preservação
+   opcional para round-trip. Não declarar conversão universal com base apenas
+   em cobertura de linhas ou compilação de MPR.
+
 ### Disponível
 
 - Leitura e escrita profunda de MPR v1 e v2.
