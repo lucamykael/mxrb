@@ -26,5 +26,7 @@ module Mxrb
   end
 end
 
+require_relative 'modbus/stream_io'
 require_relative 'modbus/tcp_transport'
+require_relative 'modbus/rtu_transport'
 require_relative 'modbus/client'

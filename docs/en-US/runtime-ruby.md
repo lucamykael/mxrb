@@ -1,12 +1,13 @@
 # Java-free runtime
 
-## Modbus TCP
+## Modbus TCP and RTU
 
 `Mxrb::Modbus::Client` is MXRB's own Ruby backend connector for functions
 01/02/03/04/05/06/15/16 of the
 [Modbus specification](https://www.modbus.org/modbus-specifications).
 It is not an official Marketplace package and does not generate Mendix Java code.
-RTU/serial, TLS and register-to-float conversions are outside this API.
+The same client accepts `transport: :tcp` (default) or `transport: :rtu`.
+TLS and register-to-float conversions are outside this API.
 
 ```ruby
 client = Mxrb::Modbus::Client.new(host: ENV.fetch('MODBUS_HOST'), unit_id: 1, timeout: 5)
@@ -23,7 +24,7 @@ integers from 0 to 65535; coils require booleans. Reads return arrays, single
 writes return the value, and multiple writes return the acknowledged quantity.
 The default port is 502; `unit_id` accepts 0–255, including gateway addressing.
 
-Each operation opens and closes its connection with one total deadline in seconds
+For TCP, each operation opens and closes its connection with one total deadline in seconds
 for resolution/connection, sending and receiving. There are no automatic retries:
 a write timeout leaves the remote outcome unknown. `ExceptionResponse` exposes
 `function` and `code`; `ProtocolError` indicates an invalid response, and
@@ -35,6 +36,47 @@ In `config/adapters.rb`, an adapter registered through
 `Registry.register_java_custom_action('Industrial.ReadRegister')` can return
 `client.read_holding_registers(0).first`. The Ruby microflow interpreter consumes
 the result; the adapter is not exported as Java.
+
+### Local TCP simulation
+
+Run `bundle exec ruby examples/modbus_tcp_simulator.rb` from the MXRB root.
+The simulator listens only on `127.0.0.1:1502`, with `unit_id: 1` and addresses
+0–255 in each area. A numeric argument changes the port. Coils and holding
+registers start at zero and retain writes until shutdown; discrete input 0
+starts as `true` and input register 0 as `1234`.
+
+In another Ruby process, after `require 'mxrb'`:
+
+```ruby
+client = Mxrb::Modbus::Client.new(transport: :tcp, host: '127.0.0.1', port: 1502)
+client.write_multiple_registers(0, [42, 123])
+p client.read_holding_registers(0, 2) # [42, 123]
+```
+
+The simulator is a development tool with in-memory state. Stop it with Ctrl+C.
+
+### RTU serial port
+
+RTU accepts an already open serial IO configured by the application/system in
+raw mode, 8E1, 8O1 or 8N2, without local echo. The adapter must handle RS-485
+direction control. `baud_rate` describes the configured speed for timing calculations;
+it does not configure the port. No particular serial library is required.
+POSIX example for an already configured port:
+
+```ruby
+File.open('/dev/ttyUSB0', File::RDWR | File::NONBLOCK | File::NOCTTY) do |serial|
+  client = Mxrb::Modbus::Client.new(transport: :rtu, io: serial, baud_rate: 9600, unit_id: 1)
+  p client.read_holding_registers(0, 2)
+end
+```
+
+RTU requires `unit_id` 1–247; broadcast is unsupported. Use one client per bus.
+The caller owns and closes the IO. CRC, length, address and function are checked,
+with software-observed frame separation and inter-character limits. Transport or
+protocol errors invalidate the session: reopen and resynchronize the port before
+creating another client; never automatically repeat an uncertain write. A valid
+device exception does not invalidate the session. Tests use a pseudo-terminal and
+local TCP; electrical timing, USB drivers and physical devices still require validation.
 
 ## Backend execution
 

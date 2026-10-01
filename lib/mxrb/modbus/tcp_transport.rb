@@ -5,6 +5,8 @@ module Mxrb
     # One connection per transaction: no stale responses, shared socket or
     # automatic retries. A write timeout means the remote outcome is unknown.
     class TcpTransport
+      include StreamIO
+
       def initialize(host:, port:, unit_id:, timeout:)
         @host = host
         @port = port
@@ -31,13 +33,6 @@ module Mxrb
         read(socket, length - 1, deadline)
       end
 
-      def remaining(deadline)
-        seconds = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        raise TimeoutError, 'Modbus transaction timed out; remote write outcome may be unknown' unless seconds.positive?
-
-        seconds
-      end
-
       def response_length(header)
         transaction, protocol, length, unit = header.unpack('nnnC')
         raise ProtocolError, 'unexpected Modbus transaction' unless transaction == 1
@@ -46,32 +41,6 @@ module Mxrb
         raise ProtocolError, 'invalid Modbus response length' unless (3..254).cover?(length)
 
         length
-      end
-
-      def read(socket, size, deadline)
-        bytes = +''.b
-        while bytes.bytesize < size
-          wait(socket, :wait_readable, deadline)
-          chunk = socket.read_nonblock(size - bytes.bytesize, exception: false)
-          raise TransportError, 'connection closed before complete Modbus response' if chunk.nil?
-
-          bytes << chunk unless chunk == :wait_readable
-        end
-        bytes
-      end
-
-      def write(socket, bytes, deadline)
-        until bytes.empty?
-          wait(socket, :wait_writable, deadline)
-          count = socket.write_nonblock(bytes, exception: false)
-          bytes = bytes.byteslice(count..) unless count == :wait_writable
-        end
-      end
-
-      def wait(socket, method, deadline)
-        return if socket.public_send(method, remaining(deadline))
-
-        raise TimeoutError, 'Modbus transaction timed out; remote write outcome may be unknown'
       end
     end
   end

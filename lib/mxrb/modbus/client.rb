@@ -2,16 +2,15 @@
 
 module Mxrb
   module Modbus
-    # Synchronous Modbus TCP functions 01/02/03/04/05/06/15/16.
-    class Client
-      def initialize(host:, port: 502, unit_id: 1, timeout: 5.0)
-        raise ArgumentError, 'host must be a nonempty String' unless host.is_a?(String) && !host.strip.empty?
-
-        integer!(port, 1..65_535, 'port')
-        integer!(unit_id, 0..255, 'unit_id')
+    # The same synchronous operations over TCP or a caller-owned RTU serial IO.
+    class Client # rubocop:disable Metrics/ClassLength
+      def initialize(transport: :tcp, unit_id: 1, timeout: 5.0, **options)
         timeout!(timeout)
-
-        @transport = TcpTransport.new(host: host.dup.freeze, port:, unit_id:, timeout: timeout.to_f)
+        @transport = case transport
+                     when :tcp then tcp_transport(unit_id, timeout.to_f, **options)
+                     when :rtu then RtuTransport.new(unit_id:, timeout: timeout.to_f, **options)
+                     else raise ArgumentError, 'transport must be :tcp or :rtu'
+                     end
       end
 
       def read_coils(address, quantity = 1) = read_bits(1, address, quantity)
@@ -50,8 +49,16 @@ module Mxrb
 
       private
 
+      def tcp_transport(unit_id, timeout, host:, port: 502)
+        raise ArgumentError, 'host must be a nonempty String' unless host.is_a?(String) && !host.strip.empty?
+
+        integer!(port, 1..65_535, 'port')
+        integer!(unit_id, 0..255, 'unit_id')
+        TcpTransport.new(host: host.dup.freeze, port:, unit_id:, timeout:)
+      end
+
       def timeout!(value)
-        return if value.is_a?(Numeric) && value.real? && value.to_f.finite? && value.to_f.positive?
+        return if value.is_a?(Numeric) && value.real? && value <= Float::MAX && value.to_f.positive?
 
         raise ArgumentError, 'timeout must be finite and positive'
       end
@@ -79,18 +86,18 @@ module Mxrb
       def exchange(function, payload)
         response = @transport.call([function].pack('C') + payload)
         if response.getbyte(0) == (function | 0x80)
-          raise ProtocolError, 'invalid Modbus exception response' unless response.bytesize == 2
+          protocol_error!('invalid Modbus exception response') unless response.bytesize == 2
 
           raise ExceptionResponse.new(function, response.getbyte(1))
         end
-        raise ProtocolError, 'unexpected Modbus function' unless response.getbyte(0) == function
+        protocol_error!('unexpected Modbus function') unless response.getbyte(0) == function
 
         response.byteslice(1..)
       end
 
       def read_data(function, address, quantity, bytes)
         data = exchange(function, [address, quantity].pack('nn'))
-        raise ProtocolError, 'invalid Modbus byte count' unless data.getbyte(0) == bytes && data.bytesize == bytes + 1
+        protocol_error!('invalid Modbus byte count') unless data.getbyte(0) == bytes && data.bytesize == bytes + 1
 
         data.byteslice(1..)
       end
@@ -107,7 +114,7 @@ module Mxrb
         unused = quantity % 8
         return unless unused.positive? && (data.getbyte(-1) >> unused).positive?
 
-        raise ProtocolError, 'nonzero Modbus coil padding'
+        protocol_error!('nonzero Modbus coil padding')
       end
 
       def read_registers(function, address, quantity)
@@ -118,15 +125,20 @@ module Mxrb
       def write_single(function, address, value)
         range!(address, 1, 1)
         payload = [address, value].pack('nn')
-        raise ProtocolError, 'invalid Modbus write echo' unless exchange(function, payload) == payload
+        protocol_error!('invalid Modbus write echo') unless exchange(function, payload) == payload
       end
 
       def write_multiple(function, address, quantity, data)
         expected = [address, quantity].pack('nn')
         payload = expected + [data.bytesize].pack('C') + data
-        raise ProtocolError, 'invalid Modbus write echo' unless exchange(function, payload) == expected
+        protocol_error!('invalid Modbus write echo') unless exchange(function, payload) == expected
 
         quantity
+      end
+
+      def protocol_error!(message)
+        @transport.invalidate! if @transport.respond_to?(:invalidate!)
+        raise ProtocolError, message
       end
     end
   end
