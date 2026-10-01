@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent as dispatchEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { useLayoutEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,7 +37,7 @@ describe('editable exported fields', () => {
   it('does not overwrite an edit made before passive initialization effects run', async () => {
     function EarlyEdit() {
       useLayoutEffect(() => {
-        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Early edit' } });
+        dispatchEvent.change(screen.getByRole('textbox'), { target: { value: 'Early edit' } });
       }, []);
       return <BoundField {...props()} />;
     }
