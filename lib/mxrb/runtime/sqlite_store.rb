@@ -22,6 +22,7 @@ module Mxrb
         owner: %w[Owner __owner_id], created_date: %w[createdDate __created_at],
         changed_date: %w[changedDate __changed_at], changed_by: %w[changedBy __changed_by_id]
       }.freeze
+      FILE_TABLES = %w[mxrb_file_contents mxrb_file_thumbnails].freeze
 
       attr_reader :database, :schema
 
@@ -90,7 +91,10 @@ module Mxrb
       def retrieve(entity)
         return @transient.retrieve(transient_name(entity)) if transient?(entity)
 
-        definition = schema.entity(entity)
+        schema.concrete_entities(entity).flat_map { retrieve_exact(_1) }
+      end
+
+      def retrieve_exact(definition)
         rows = database.execute("SELECT * FROM #{quote(definition.table)} ORDER BY rowid")
         values = rows.map { materialize(definition, _1) }
         values.concat(@staged_new.values.select { _1.entity == definition.name })
@@ -101,7 +105,14 @@ module Mxrb
       def find(entity, id)
         return @transient.find(transient_name(entity), id) if transient?(entity)
 
-        definition = schema.entity(entity)
+        schema.concrete_entities(entity).each do |definition|
+          value = find_exact(definition, id)
+          return value if value
+        end
+        nil
+      end
+
+      def find_exact(definition, id)
         staged = @staged_new[id.to_s]
         return staged if staged&.entity == definition.name
 
@@ -133,12 +144,12 @@ module Mxrb
 
         return @transient.retrieve_association(association, start) if transient?(start.entity)
 
-        if start.entity == definition.from_entity
+        if schema.assignable?(start.entity, definition.from_entity)
           ids = database.execute(
             "SELECT target_id FROM #{quote(definition.table)} WHERE source_id = ? ORDER BY rowid", [start.id]
           ).map { _1['target_id'] }
           materialize_ids(definition.to_entity, ids)
-        elsif start.entity == definition.to_entity
+        elsif schema.assignable?(start.entity, definition.to_entity)
           ids = database.execute(
             "SELECT source_id FROM #{quote(definition.table)} WHERE target_id = ? ORDER BY rowid", [start.id]
           ).map { _1['source_id'] }
@@ -160,9 +171,10 @@ module Mxrb
 
         return retrieve(entity).count { predicate.call(_1) } if predicate
 
-        definition = schema.entity(entity)
-        durable = database.get_first_value("SELECT COUNT(*) FROM #{quote(definition.table)}").to_i
-        durable + @staged_new.values.count { _1.entity == definition.name }
+        schema.concrete_entities(entity).sum do |definition|
+          durable = database.get_first_value("SELECT COUNT(*) FROM #{quote(definition.table)}").to_i
+          durable + @staged_new.values.count { _1.entity == definition.name }
+        end
       end
 
       def commit(value = nil, events: true)
@@ -207,9 +219,10 @@ module Mxrb
 
       def snapshot
         result = schema.entities.to_h do |entity|
-          [entity.name, retrieve(entity.name).map { duplicate_value(_1) }]
+          [entity.name, retrieve_exact(entity).map { duplicate_value(_1) }]
         end
         result['__mxrb_transient__'] = @transient.snapshot
+        result['__mxrb_files__'] = file_snapshot
         result['__mxrb_uow__'] = {
           persisted: @persisted.transform_values(&:dup),
           staged_ids: @staged_new.keys,
@@ -229,6 +242,7 @@ module Mxrb
           else
             restore_legacy_snapshot(snapshot)
           end
+          restore_files(snapshot['__mxrb_files__']) if snapshot.key?('__mxrb_files__')
         end
         @transient.restore(snapshot.fetch('__mxrb_transient__', @transient.snapshot))
         self
@@ -240,6 +254,27 @@ module Mxrb
       end
 
       private
+
+      # Interpreter rollback uses snapshots as well as SQL transactions. Keep
+      # blobs with their rows when delete triggers fire during snapshot restore.
+      def file_snapshot
+        FILE_TABLES.to_h do |table|
+          exists = database.get_first_value("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table)
+          [table, exists ? database.execute("SELECT * FROM #{quote(table)}") : []]
+        end
+      end
+
+      def restore_files(snapshot)
+        FILE_TABLES.each do |table|
+          rows = snapshot.fetch(table)
+          rows.each do |row|
+            fields = row.keys.map { quote(_1) }.join(', ')
+            values = row.map { |key, value| key == 'content' ? SQLite3::Blob.new(value) : value }
+            placeholders = Array.new(values.length, '?').join(', ')
+            database.execute("INSERT OR REPLACE INTO #{quote(table)} (#{fields}) VALUES (#{placeholders})", values)
+          end
+        end
+      end
 
       def transaction_snapshot
         {
@@ -403,7 +438,7 @@ module Mxrb
       end
 
       def persist_associations(value, entity)
-        schema.associations.select { _1.from_entity == entity.name }.each do |association|
+        schema.associations.select { schema.assignable?(entity.name, _1.from_entity) }.each do |association|
           next if hybrid_association?(association)
           next unless value.members.key?(association.name)
 
@@ -439,12 +474,14 @@ module Mxrb
       def materialize_ids(entity, ids)
         return [] if ids.empty?
 
-        definition = schema.entity(entity)
         placeholders = Array.new(ids.size, '?').join(', ')
-        rows = database.execute(
-          "SELECT * FROM #{quote(definition.table)} WHERE id IN (#{placeholders})", ids
-        ).to_h { [_1['id'], _1] }
-        ids.filter_map { |id| rows[id] && materialize(definition, rows[id]) }
+        objects = schema.concrete_entities(entity).flat_map do |definition|
+          database.execute(
+            "SELECT * FROM #{quote(definition.table)} WHERE id IN (#{placeholders})", ids
+          ).map { materialize(definition, _1) }
+        end
+        by_id = objects.to_h { [_1.id, _1] }
+        ids.filter_map { by_id[_1] }
       end
 
       def load_direct_associations(values)
@@ -454,7 +491,7 @@ module Mxrb
           # SQLite here would replace the in-memory values with an empty result.
           next if @staged_new.key?(value.id)
 
-          schema.associations.select { _1.from_entity == value.entity }.each do |association|
+          schema.associations.select { schema.assignable?(value.entity, _1.from_entity) }.each do |association|
             next if association_dirty?(value, association.name)
 
             related = retrieve_association(association.qualified_name, value)

@@ -54,8 +54,11 @@ RSpec.describe 'Ruby frontend core widget source' do # rubocop:disable Metrics/B
       _1['caption']
     end).to eq(%w[Traduzido NoCaption])
     expect(result.first.fetch('enumerations').last).to eq(definitions.last)
-    expect(result.last).to eq('enumerations' => [])
+    expect(result.last).to eq('enumerations' => [], 'models' => [], 'dtos' => [])
     expect(definitions.first.fetch('values')).to eq([{ 'name' => 'Old' }])
+    legacy = { 'name' => 'Legacy.Record', 'attributes' => [{ 'name' => 'Name', 'type' => 'string' }] }
+    allow(Mxrb::RubyApp::Registry).to receive(:fetch).with(:record, 'Legacy.Record').and_return(nil)
+    expect(application.send(:runtime_model_definition, legacy)).to eq(legacy)
     allow(implementation).to receive(:values).and_return([])
     expect(application.send(:runtime_schema_modules).first.fetch('enumerations').first.fetch('values')).to eq([])
   end

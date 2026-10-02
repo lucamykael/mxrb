@@ -54,11 +54,18 @@ aninhados são compostos a cada leitura da página, com detecção de ciclos.
 grava coleções de referências e respeita bloqueios herdados. Referências aos
 objetos-alvo e leitura das associações são autorizadas no backend. Caminhos
 compostos resolvem um único objeto proprietário antes de gravar; caminhos
-ambíguos/vazios não viram consultas sem escopo. Predicados XPath simples
-(comparações, booleanos e funções de strings suportadas) filtram os DTOs já
-autorizados, sem consultar campos privados. Referências previamente selecionadas
-fora do filtro são preservadas. XPath aninhado ou com travessia de associações
-ainda exige uma fonte explícita; não há equivalência com o XPath completo.
+ambíguos/vazios não viram consultas sem escopo. O servidor avalia XPath antes da
+paginação: comparações, booleanos, aritmética, funções de strings, referências
+a variáveis, caminhos de associações diretas/inversas e predicados aninhados.
+Por exemplo, `[App.Item_Tags/App.Tag[Name = 'Visible']]` filtra pelo objeto
+relacionado. Caminhos vazios não correspondem a objetos e comparações de conjuntos
+são existenciais. O mesmo avaliador atende retrieves de microflows.
+Cada objeto e membro acessado pela consulta HTTP passa por autorização; campos
+privados não podem ser usados para inferir resultados. O contexto de
+`$currentObject` é recuperado do banco e autorizado. Referências previamente
+selecionadas fora do filtro são preservadas. Sintaxe inválida é rejeitada, com
+limites de tamanho e profundidade. Isso não implementa todos os eixos, tokens e
+funções do XPath nativo.
 
 `file_manager`, `image_uploader` e `image_viewer` usam `/api/files/:entity/:id`.
 O backend exige autorização sobre o objeto e seu membro `Contents`; mutações
@@ -70,26 +77,56 @@ Limites/extensões próprios do widget são verificações adicionais da UI, nã
 política de segurança do servidor. O modelo Ruby pode declarar
 `file_policy max_bytes: 1048576, extensions: %w[png], images_only: true`, aplicada
 também contra uploads que ignoram a UI. `Name`, `FileSize` e `HasContents` são
-atualizados quando declarados no modelo. Um trigger transacional remove blobs
-na exclusão pelo runtime, inclusive com eventos desativados; rollback restaura
-registro e conteúdo. Downloads pelo navegador usam cookie de mesma origem.
+atualizados também quando herdados de `System.FileDocument`. `generalizes`
+resolve atributos da cadeia de entidades nas tabelas, nos objetos Ruby e no
+schema enviado ao frontend. Consultas pela entidade base encontram seus subtipos,
+inclusive associações com destino em `System.FileDocument` ou `System.Image`.
+Uploads para subtipos de `System.Image` exigem assinatura raster. CRUD e arquivos
+verificam as permissões do tipo concreto: consultar pela base não concede acesso
+adicional. As regras de acesso continuam próprias de cada entidade, conforme o
+[contrato de segurança do Mendix](https://docs.mendix.com/refguide/access-rules/).
+Um trigger transacional remove blobs na exclusão pelo runtime, inclusive com
+eventos desativados; rollback SQL e restauração de snapshots do interpretador
+restauram registro, conteúdo e miniaturas. Downloads usam cookie de mesma origem.
 Imagens usam fontes de contexto, associação, microflow e nanoflow; dimensões
 percentuais/automáticas, fallback e abertura da imagem são cobertos.
+
+`show_as_thumbnail` solicita uma miniatura PNG real pelo mesmo endpoint, com
+`thumbnail_width` e `thumbnail_height` entre 1 e 1024. A imagem mantém proporção,
+não é ampliada e tem orientação corrigida e metadados removidos. GIF/WebP animado
+usa o primeiro quadro. O cache no SQLite é invalidado por substituição/exclusão
+do arquivo e respeita as mesmas permissões do download original.
+O processamento requer ImageMagick 7 (`magick` no PATH), ou ImageMagick 6 com
+`MXRB_IMAGEMAGICK=convert`. A ausência do worker ou imagem inválida gera erro
+explícito. A execução usa argumentos separados, decodificador raster explícito,
+limites de memória/tempo e encerramento após 15 segundos, seguindo as opções de
+[recursos do ImageMagick](https://imagemagick.org/security-policy/). A CI instala
+e executa esse worker; downloads originais não precisam dele.
 
 O fixture `spec/fixtures/ruby_presentation_widgets/project.rb` testa os dez tipos,
 recursos exportados, edição pública e persistência. O cenário
 `spec/fixtures/frontend_browser/ruby_presentation_widgets_flow.json` verifica
-31 passos no Chromium, inclusive seleção persistida após recarregar, navegação
-e abertura de região lateral com largura de 240 px,
+33 passos no Chromium, inclusive seleção filtrada por associação aninhada,
+persistência após recarregar, solicitação de thumbnail, navegação e abertura
+de região lateral com largura de 240 px,
 com MPR e sidecar removidos da aplicação de teste. Upload é coberto por testes de
 componente e API. `ruby_standalone_runtime_spec.rb` proíbe abrir projetos MPR e
 verifica alteração de fluxos, chamada interna a Ruby personalizado e reabertura
 do banco; custom actions têm teste próprio de resolução sem MPR.
 
-Limites ainda abertos: XPath completo/associações dentro dos predicados,
-herança/polimorfismo completos de FileDocument e System.Image, geração real de
-thumbnails, ações cliente nativas adicionais, parâmetros tipados/variáveis locais
-mais avançadas e integrações particulares. Layouts móveis/nativos, comportamento
+Os contratos de XPath por associação, persistência polimórfica de arquivos e
+miniaturas reais têm gates em `spec/runtime/xpath_spec.rb` e
+`spec/ruby_runtime_compatibility_spec.rb`, incluindo reinício, permissões,
+cache, rollback, HTTP e runtime proibido de abrir MPR.
+O Sudoku usado na CI também inicializa 9 módulos, 19 páginas e 4 entidades
+persistentes sem MPR. Senhas de demonstração ocultadas na exportação não são
+necessárias para construir o modelo de autorização; credenciais do runtime
+continuam sendo configuradas no `SessionManager` pelo ambiente da aplicação.
+
+Limites ainda abertos: funções/eixos/tokens restantes do XPath completo,
+equivalência de todos os eventos/validações herdados do runtime Mendix,
+ações cliente nativas adicionais, parâmetros tipados/variáveis locais mais
+avançadas e integrações particulares. Layouts móveis/nativos, comportamento
 responsivo exato de cada tema e equivalência visual com Studio Pro não estão
 certificados. Os limites novos têm testes em `ruby_advanced_presentation_spec.rb`
 e nos componentes React; isso não elimina os gates pendentes em projetos reais.

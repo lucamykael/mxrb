@@ -197,10 +197,12 @@ describe('Standalone presentation widgets', () => {
     input.request = vi
       .fn()
       .mockResolvedValueOnce({ records: [owner] })
-      .mockResolvedValueOnce({ records: [hidden, visible] });
+      .mockResolvedValueOnce({ records: [visible] });
     render(<WidgetRenderer {...input} />);
     await userEvent.setup().click(await screen.findByRole('checkbox', { name: 'Visible' }));
     expect(screen.queryByRole('checkbox', { name: 'Hidden' })).not.toBeInTheDocument();
+    expect(input.request).toHaveBeenNthCalledWith(2,
+      '/api/entities/Files.Tag?xpath=%5BName+%3D+%27Visible%27%5D&xpath_context_type=Files.Document&xpath_context_id=1');
     await waitFor(() =>
       expect(input.saveRecord).toHaveBeenCalledWith(owner, { Tags: [hidden, visible] }),
     );

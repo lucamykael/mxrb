@@ -46,10 +46,21 @@ de seletores, predicados XPath simples sobre dados autorizados, tamanhos/toggles
 de regiões, fontes alternativas de imagens e composição de layouts Ruby com
 placeholders. Menus preservam parâmetros, tradução e módulo da ação; arquivos
 têm políticas por entidade, metadados declarados e exclusão transacional pelo
-runtime. O fluxo de apresentação passa em 31 passos no Chromium sem MPR.
+runtime. O fluxo de apresentação passou inicialmente em 31 passos no Chromium sem MPR.
+
+O quinto bloco move XPath de seletores para o servidor e compartilha o parser
+com retrieves: associações diretas/inversas, predicados aninhados, contexto
+autorizado e paginação após filtro. Atributos herdados passam a existir no
+runtime; consultas, associações e arquivos resolvem subtipos pela entidade base,
+com permissões do tipo concreto. `System.FileDocument` fornece metadados e
+`System.Image` exige imagem. Thumbnails PNG são gerados por ImageMagick,
+armazenados em cache no SQLite e invalidados por substituição/exclusão.
+Snapshots do interpretador também preservam blobs e miniaturas no rollback.
+O fixture ampliado tem 33 passos no Chromium, sem MPR nem sidecar, além de
+contratos de persistência, acesso e HTTP em `ruby_runtime_compatibility_spec.rb`.
 
 A existência desses contratos **não** certifica todas as variantes nativas:
-XPath completo, herança/polimorfismo de FileDocument, thumbnails gerados,
+funções/eixos/tokens restantes de XPath, todos os eventos/validações herdados,
 ações cliente adicionais e layouts móveis ainda precisam de implementação e
 gates próprios. Não chamar o conjunto de variantes avançadas de concluído.
 

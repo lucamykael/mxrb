@@ -44,8 +44,10 @@ RSpec.describe 'Standalone runtime defensive contracts' do
   end
 
   it 'handles optional flow declarations and legacy page roles without opening a project' do
+    Mxrb::RubyApp::Registry.reset!
     project = Mxrb::RubyApp::RuntimeProject.allocate
     expect(project.all_units).to eq([])
+    expect(project.send(:build_security)).to be_nil
     expect(project.send(:build_flow, double(native_definition: nil), 'App')).to be_nil
     page = double(mendix_name: 'App.Home', native_definition: { allowed_roles: ['App.Native'] },
                   allowed_module_roles: nil)

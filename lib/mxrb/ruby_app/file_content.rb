@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'base64'
+require_relative 'thumbnail'
 
 module Mxrb
   module RubyApp
@@ -18,6 +19,7 @@ module Mxrb
             PRIMARY KEY (entity, object_id)
           )
         SQL
+        initialize_thumbnails
       end
 
       def write(entity, id, filename, encoded, **policy)
@@ -43,6 +45,20 @@ module Mxrb
         @database.execute('DELETE FROM mxrb_file_contents WHERE entity = ? AND object_id = ?', [entity, id])
       end
 
+      def thumbnail(entity, id, width, height)
+        width, height = Thumbnail.dimensions(width, height)
+        original = read(entity, id)
+        return unless original
+
+        parameters = [entity, id, width, height]
+        content = @database.get_first_value(
+          'SELECT content FROM mxrb_file_thumbnails WHERE entity = ? AND object_id = ? AND width = ? AND height = ?',
+          parameters
+        )
+        content ||= generate_thumbnail(original, parameters)
+        { 'name' => "#{original.fetch('name')}.png", 'media_type' => 'image/png', 'content' => content }
+      end
+
       # A database trigger covers microflows, events:false, and transactional
       # deletes as well as HTTP CRUD. Rollback restores the blob with its row.
       def attach(entity)
@@ -58,6 +74,24 @@ module Mxrb
       end
 
       private
+
+      def generate_thumbnail(original, parameters)
+        content = Thumbnail.render(original, *parameters.last(2))
+        @database.execute('INSERT INTO mxrb_file_thumbnails VALUES (?, ?, ?, ?, ?)',
+                          [*parameters, SQLite3::Blob.new(content)])
+        content
+      end
+
+      def initialize_thumbnails
+        @database.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS mxrb_file_thumbnails (
+            entity TEXT NOT NULL, object_id TEXT NOT NULL,
+            width INTEGER NOT NULL, height INTEGER NOT NULL, content BLOB NOT NULL,
+            PRIMARY KEY (entity, object_id, width, height),
+            FOREIGN KEY (entity, object_id) REFERENCES mxrb_file_contents(entity, object_id) ON DELETE CASCADE
+          )
+        SQL
+      end
 
       def validate_policy(name, type, size, policy)
         raise ArgumentError, 'file exceeds the entity upload policy' if size > policy.fetch(:max_bytes, MAX_BYTES)

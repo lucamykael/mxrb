@@ -24,7 +24,7 @@ module Mxrb
         def lifecycle = Array(implementation.native_lifecycle_definitions)
 
         def attributes
-          implementation.attributes.map do |entry|
+          implementation.runtime_attributes.map do |entry|
             Attribute.new(entry.fetch(:mendix_name), entry.fetch(:type), entry[:default])
           end
         end
@@ -50,7 +50,12 @@ module Mxrb
 
       def build_security
         security = Registry.all(:project_security).values.first
-        security && @writer.send(:ruby_project_security_doc, security.native_definition, {})
+        return unless security
+
+        # This model supplies authorization metadata. Runtime login credentials
+        # belong to SessionManager; redacted MPR demo passwords are not needed.
+        definition = security.native_definition.merge(demo_users: [])
+        @writer.send(:ruby_project_security_doc, definition, {})
       end
 
       def module_names

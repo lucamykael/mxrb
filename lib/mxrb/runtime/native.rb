@@ -856,27 +856,12 @@ module Mxrb
           variables[action['ResultVariableName'].to_s] = values
         end
 
-        # Narrows a value set by a Mendix XPath constraint. Only attribute
-        # predicates (comparisons, and/or, boolean shorthand) are understood;
-        # anything else is rejected by the expression evaluator rather than
-        # silently ignored.
         def filter_by_xpath(values, xpath, variables)
-          predicate = xpath_predicate(xpath)
-          return values if predicate.empty?
-
-          values.select { @expression.evaluate(predicate, variables, node: _1) }
-        end
-
-        def xpath_predicate(xpath)
-          text = xpath.strip
-          return '' if text.empty?
-
-          groups = text.scan(/\[([^\[\]]*)\]/).flatten.map(&:strip).reject(&:empty?)
-          unless groups.any? && text.gsub(/\[[^\[\]]*\]/, '').strip.empty?
-            raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
-          end
-
-          groups.map { "(#{_1})" }.join(' and ')
+          require_relative 'xpath'
+          policy = enforce_entity_access? ? @policy : nil
+          XPath.new(xpath, store:, policy:, context: @security_context).filter(values, variables)
+        rescue ArgumentError, TypeError
+          raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
         end
 
         def sort_values(values, sortings)
