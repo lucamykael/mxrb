@@ -62,6 +62,7 @@ module Mxrb
         @embedded_identities = SourceIdentity.read_bundle(embedded_sources).to_h do |identity|
           [[identity.fetch('kind'), identity.fetch('id')], identity]
         end
+        require_relative 'presentation_exporter'
         Mxrb.open(@mpr_path) do |project|
           @project = project
           @known_entity_names = project.modules.flat_map do |mod|
@@ -70,8 +71,11 @@ module Mxrb
           @coverage = []
           @nanoflow_entries = []
           @page_entries = []
-          modules = PluggableProperties.with_mpr(project.mpr) do
-            project.modules.map { export_module(_1) }
+          modules = PluggableProperties.with_mpr(project.mpr) do |context|
+            result = project.modules.map { export_module(_1) }
+            PresentationExporter.new(self, project).export!
+            context.export_schemas(@output_dir)
+            result
           end
           @security_manifest = export_project_security(project)
           @module_manifests = modules
@@ -802,9 +806,20 @@ module Mxrb
         declaration = source.lines.index { _1.match?(/^\s*(?:microflow|nanoflow)\s/) }
         return unless declaration
 
-        source.lines[(declaration + 1)...-1]
-              .reject { _1.match?(/^\s*body_fingerprint\b/) }
-              .map { _1.delete_prefix('  ') }.join.rstrip
+        body = source.lines[(declaration + 1)...-1]
+                     .reject { _1.match?(/^\s*body_fingerprint\b/) }
+                     .map { _1.delete_prefix('  ') }.join.rstrip
+        settings = {
+          allowed_roles: flow.allowed_module_roles,
+          apply_entity_access: flow.apply_entity_access,
+          allow_concurrent_execution: flow.allow_concurrent_execution
+        }.filter_map do |name, value|
+          next if body.match?(/^\s*#{name}\b/)
+
+          arguments = name == :allowed_roles ? Array(value).map(&:inspect).join(', ') : value.inspect
+          "#{name}#{arguments.empty? ? '' : " #{arguments}"}"
+        end
+        [*settings, body].join("\n")
       rescue StandardError, SyntaxError
         nil
       end
@@ -1155,12 +1170,13 @@ module Mxrb
         relative = embedded_identity_path(:page, page.id) ||
                    File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
         qualified = "#{mod.name}.#{page.name}"
-        widgets = page.widgets.map { widget_manifest(_1) }
+        widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document)
         write(
           relative,
           page_source(namespace, class_name, qualified, page.id, page.title, widgets,
                       appearance_class: page.appearance_class,
                       appearance_style: page.appearance_style,
+                      allowed_roles: page.allowed_module_roles,
                       data_source: page.data_source)
         )
         add_coverage(page.id, qualified, 'page', relative, 'native_projection_source_preserved')
@@ -1882,7 +1898,7 @@ module Mxrb
       end
 
       def page_source(namespace, class_name, qualified, id, title, widgets,
-                      appearance_class:, appearance_style:, data_source:)
+                      appearance_class:, appearance_style:, data_source:, allowed_roles: [])
         widget_source = PluggableProperties.with_page(id) { runtime_widget_dsl_source(widgets, 6) }
         data_source_expression = PageDataSources.configuration_expression(data_source) || data_source.inspect
         <<~RUBY
@@ -1893,6 +1909,7 @@ module Mxrb
               mendix_name #{qualified.inspect}
               configure(
                 title: #{title.inspect},
+                allowed_roles: #{allowed_roles.map(&:to_s).inspect},
                 appearance_class: #{appearance_class.inspect},
                 appearance_style: #{appearance_style.inspect},
                 data_source: #{data_source_expression}
@@ -1951,7 +1968,24 @@ module Mxrb
             next if key.to_s == 'properties' && property_source
 
             keyword = runtime_widget_keyword(type, key, generic_sink:)
-            expression = if type == :data_grid && key.to_s == 'columns'
+            expression = if key.to_s == 'source'
+                           PageDataSources.source_expression(value)
+                         elsif key.to_s == 'association_path'
+                           steps = value.map { [_1['association'], _1['entity']].inspect }
+                           "association_path(#{steps.join(', ')})"
+                         elsif key.to_s == 'region_options'
+                           entries = value.map do |region, settings|
+                             args = settings.map { |name, setting| "#{name}: #{setting.inspect}" }.join(', ')
+                             "#{region}: scroll_region(#{args})"
+                           end
+                           "scroll_regions(#{entries.join(', ')})"
+                         elsif type == :snippet && key.to_s == 'arguments'
+                           pairs = value.map do |name, argument|
+                             source = PageDataSources.variable_reference_expression(argument) || argument.inspect
+                             "[#{name.inspect}, #{source}]"
+                           end
+                           "snippet_arguments(#{pairs.join(', ')})"
+                         elsif type == :data_grid && key.to_s == 'columns'
                            runtime_grid_columns_expression(value)
                          elsif type == :gallery && key.to_s == 'sort'
                            runtime_gallery_sort_expression(value)
@@ -2020,7 +2054,7 @@ module Mxrb
           tab_index class style dynamic_class visible
         ],
         image_viewer: %w[
-          entity alternative_text default_image force_full_objects width height width_unit
+          entity source alternative_text default_image force_full_objects width height width_unit
           height_unit responsive show_as_thumbnail on_click_enlarge tab_index
           class style dynamic_class visible
         ],
@@ -2035,14 +2069,15 @@ module Mxrb
         radio_button_group: %w[attribute caption horizontal class style dynamic_class visible],
         reference_selector: %w[attribute caption display_attribute class style dynamic_class visible],
         reference_set_selector: %w[
+          association target_entity display_attribute association_steps association_path caption editable
           selection number_of_rows selectable_xpath control_bar select_first show_empty_rows
           paging tab_index width_unit class style dynamic_class visible
         ],
         scroll_container: %w[
-          alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode
+          alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode region_options
           class style dynamic_class visible
         ],
-        snippet: %w[snippet],
+        snippet: %w[snippet arguments class style dynamic_class visible],
         static_image: %w[
           image alternative_text width height width_unit height_unit responsive
           class style dynamic_class visible
@@ -2076,6 +2111,8 @@ module Mxrb
       end
 
       def runtime_native_widget_source(widget, indentation)
+        return presentation_form_widget_source(widget, indentation) if @presentation_source
+
         options = widget.fetch('options')
         fragment = options.fetch('native_fragment')
         arguments = [
@@ -2084,6 +2121,22 @@ module Mxrb
           "deep_structure: native_fragment(#{fragment.fetch('digest').inspect})"
         ]
         runtime_widget_declaration('native_widget', arguments, indentation, false)
+      end
+
+      def presentation_widget_source(widgets)
+        @presentation_source = true
+        runtime_widget_dsl_source(widgets, 2)
+      ensure
+        @presentation_source = false
+      end
+
+      def presentation_form_widget_source(widget, indentation)
+        options = widget.fetch('options')
+        document = @native_fragment_store.fetch(options.fetch('native_fragment').fetch('digest'))
+        document = document.merge('$Type' => options.fetch('native_type'), 'Name' => widget.fetch('name'))
+        node = Forms::MprCodec.new.decode(document)
+        source = Forms::SourceEmitter.new.emit(node).lines.map { "#{' ' * (indentation + 2)}#{_1}" }.join
+        "#{' ' * indentation}form_widget(\n#{source}#{' ' * indentation})"
       end
 
       def runtime_tab_control_supported?(options, widget)
@@ -2133,6 +2186,8 @@ module Mxrb
       end
 
       def runtime_dsl_sink_regions_supported?(type, widget)
+        return !widget.key?('slots') && !widget.key?('body') && !widget.key?('footer') if type == :scroll_container
+
         named_regions = %w[body footer regions].any? { widget.key?(_1) }
         return false if named_regions
         return true unless widget.key?('slots')
@@ -2930,6 +2985,19 @@ module Mxrb
         end
       end
 
+      def java_action_parameters(project)
+        project.modules.flat_map do |mod|
+          mod.application_documents.filter_map do |entry|
+            next unless entry[:type] == 'JavaActions$JavaAction'
+
+            parameters = IO::BsonCodec.parse_array(entry.fetch(:doc)['Parameters'])[:items].to_h do |parameter|
+              [IO::BsonCodec.extract_id(parameter['$ID']).to_s, parameter.fetch('Name')]
+            end
+            ["#{mod.name}.#{entry[:name]}", parameters]
+          end
+        end.to_h
+      end
+
       def write_manifest(project, modules, runtime_mpr)
         native_coverage(project)
         payload = {
@@ -2941,7 +3009,8 @@ module Mxrb
             'name' => File.basename(@mpr_path),
             'sha256' => Digest::SHA256.file(@mpr_path).hexdigest
           },
-          'modules' => modules, 'coverage' => @coverage,
+          'modules' => modules, 'coverage' => @coverage, 'runtime_model' => 'ruby',
+          'java_action_parameters' => java_action_parameters(project),
           'frontend' => {
             'framework' => 'react', 'language' => 'typescript', 'bundler' => 'vite',
             'source' => 'frontend/src', 'generated' => 'frontend/src/generated',
@@ -3191,7 +3260,7 @@ module Mxrb
             'globals' => '^17.11.0',
             'jsdom' => '^30.0.1', 'prettier' => '^3.9.6',
             'sass-embedded' => '^1.90.0', 'typescript' => '^6.0.3',
-            'typescript-eslint' => '^8.67.0', 'vite' => '^8.2.1', 'vitest' => '^4.1.10'
+            'typescript-eslint' => '^8.67.0', 'vite' => '^8.2.1', 'vitest' => '^4.1.11'
           }
         ) << "\n"
       end
@@ -4060,9 +4129,28 @@ module Mxrb
           }
 
           export interface ApplicationSchema {
+            presentation?: Record<string, PresentationResource>;
             project: { name: string; mendix_version: string };
             navigation?: { profiles?: NavigationProfile[] };
             modules: RuntimeModule[];
+          }
+
+          export interface PresentationMenuItem {
+            caption: string;
+            page?: string;
+            microflow?: string;
+            icon?: string;
+            items?: PresentationMenuItem[];
+            caption_translations?: Record<string, string>;
+            action?: WidgetEvent;
+          }
+
+          export interface PresentationResource {
+            kind: 'menu' | 'snippet' | 'image' | 'layout';
+            items?: PresentationMenuItem[];
+            widgets?: WidgetDefinition[];
+            path?: string;
+            parameters?: string[];
           }
 
           export interface OpenPageEffect {

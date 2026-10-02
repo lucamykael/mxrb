@@ -10,11 +10,90 @@ podem ser integralmente editáveis mesmo sem projeção de volta ao Studio Pro.
 Por isso, `portability --require-native` verifica a direção Ruby → Mendix;
 ele **não** certifica a conclusão de Mendix → Ruby.
 
-O runtime Ruby ainda abre uma cópia interna do MPR para metadados e execução
-dos grafos que dependem dela. Não confundir “sem JVM/runtime Mendix” com
-“sem baseline MPR”. Variantes não traduzidas, custom actions sem adapter e
-widgets sem implementação web continuam sendo lacunas de conversão, não
-funcionalidades concluídas por estarem preservadas.
+Novas exportações declaram `runtime_model: ruby`: o modelo de execução, esquema
+de persistência, segurança e grafos vêm das definições Ruby carregadas. Não se
+abre nem se gera um MPR para executá-los. O manifesto e metadados de identidade
+continuam presentes; não são interpretados como código de negócio. MPR e
+sidecar de reconstrução são preservados para round-trip, não como fallback de
+execução. Aplicações antigas sem essa configuração mantêm o bridge legado;
+faça nova exportação para obter o contrato novo.
+
+Schemas de widgets pluggable são exportados separadamente em
+`.mxrb/widget_schemas`, mantendo a revisão exata de cada widget por página,
+layout ou snippet. Eles validam as propriedades Ruby sem abrir o MPR; não
+contêm os valores de negócio dos widgets. Uma exportação nova exige esses
+schemas e falha explicitamente se estiverem ausentes.
+
+Widgets incomuns de layouts podem aparecer como `form_widget(Mxrb::Forms...)`:
+suas propriedades continuam editáveis em construtores tipados, sem hashes ou
+referências a fragmentos opacos. Essa representação não acrescenta um renderer
+web para tipos ainda não suportados.
+
+Isso não traduz automaticamente grafos sem declaração Ruby nem implementações
+Java externas: exigem implementação Ruby/adapter explícito. Preservação desses
+artefatos não conta como funcionalidade concluída.
+
+### Dez widgets de apresentação e execução sem MPR
+
+`menu_bar` e `navigation_tree` usam menus recursivos de `app/presentation`, com
+ações de página/microflow/nanoflow, parâmetros, traduções de legenda, ícones e
+filtragem pelas permissões. Referências mantêm o módulo de origem do menu;
+ações negadas são removidas mesmo quando seus filhos continuam autorizados. `navigation_list`
+preserva conteúdo e ações de seus itens. `snippet` expande widgets reutilizáveis
+com parâmetros nomeados de objetos/escalares, mapeamentos e proteção contra
+recursão. DataViews podem editar objetos diferentes no mesmo snippet sem trocar
+o objeto da página. Parâmetros ausentes são reportados.
+`static_image` aponta para arquivos exportados em `frontend/public/assets/images`.
+`scroll_container` preserva as cinco regiões, dimensões em pixels/percentual,
+layouts headline/sidebar e os modos de abertura/fechamento, sobreposição e
+deslocamento. Layouts compartilhados também são declarações Ruby em
+`app/presentation`: seus placeholders recebem argumentos nomeados e layouts
+aninhados são compostos a cada leitura da página, com detecção de ciclos.
+
+`reference_set_selector`, incluindo a forma nativa InputReferenceSetSelector,
+grava coleções de referências e respeita bloqueios herdados. Referências aos
+objetos-alvo e leitura das associações são autorizadas no backend. Caminhos
+compostos resolvem um único objeto proprietário antes de gravar; caminhos
+ambíguos/vazios não viram consultas sem escopo. Predicados XPath simples
+(comparações, booleanos e funções de strings suportadas) filtram os DTOs já
+autorizados, sem consultar campos privados. Referências previamente selecionadas
+fora do filtro são preservadas. XPath aninhado ou com travessia de associações
+ainda exige uma fonte explícita; não há equivalência com o XPath completo.
+
+`file_manager`, `image_uploader` e `image_viewer` usam `/api/files/:entity/:id`.
+O backend exige autorização sobre o objeto e seu membro `Contents`; mutações
+por cookie também exigem CSRF. Conteúdo binário fica no banco SQLite, com teto
+de 20 MiB por arquivo. Nome e MIME fornecidos pelo cliente não controlam caminhos
+de disco nem conteúdo executável: somente assinaturas raster reconhecidas são
+exibidas inline; os demais arquivos são anexos, com `nosniff` e CSP restritiva.
+Limites/extensões próprios do widget são verificações adicionais da UI, não uma
+política de segurança do servidor. O modelo Ruby pode declarar
+`file_policy max_bytes: 1048576, extensions: %w[png], images_only: true`, aplicada
+também contra uploads que ignoram a UI. `Name`, `FileSize` e `HasContents` são
+atualizados quando declarados no modelo. Um trigger transacional remove blobs
+na exclusão pelo runtime, inclusive com eventos desativados; rollback restaura
+registro e conteúdo. Downloads pelo navegador usam cookie de mesma origem.
+Imagens usam fontes de contexto, associação, microflow e nanoflow; dimensões
+percentuais/automáticas, fallback e abertura da imagem são cobertos.
+
+O fixture `spec/fixtures/ruby_presentation_widgets/project.rb` testa os dez tipos,
+recursos exportados, edição pública e persistência. O cenário
+`spec/fixtures/frontend_browser/ruby_presentation_widgets_flow.json` verifica
+31 passos no Chromium, inclusive seleção persistida após recarregar, navegação
+e abertura de região lateral com largura de 240 px,
+com MPR e sidecar removidos da aplicação de teste. Upload é coberto por testes de
+componente e API. `ruby_standalone_runtime_spec.rb` proíbe abrir projetos MPR e
+verifica alteração de fluxos, chamada interna a Ruby personalizado e reabertura
+do banco; custom actions têm teste próprio de resolução sem MPR.
+
+Limites ainda abertos: XPath completo/associações dentro dos predicados,
+herança/polimorfismo completos de FileDocument e System.Image, geração real de
+thumbnails, ações cliente nativas adicionais, parâmetros tipados/variáveis locais
+mais avançadas e integrações particulares. Layouts móveis/nativos, comportamento
+responsivo exato de cada tema e equivalência visual com Studio Pro não estão
+certificados. Os limites novos têm testes em `ruby_advanced_presentation_spec.rb`
+e nos componentes React; isso não elimina os gates pendentes em projetos reais.
+Esse gate certifica o fixture e os contratos descritos, não conversão universal.
 
 ### Campos e Data Views editáveis
 

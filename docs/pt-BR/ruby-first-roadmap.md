@@ -30,21 +30,38 @@ associações em múltiplas etapas. Evidências e limites estão no
 
 O segundo recorte implementa seleção por rádio booleana/enumeração e título da
 página, torna as abas interativas com teclado e preservação de rascunhos, e
-projeta valores/legendas de enumeração a partir do Ruby carregado. O inventário
-do renderizador ainda tem dez tipos declarados sem implementação explícita:
+projeta valores/legendas de enumeração a partir do Ruby carregado. O terceiro
+bloco adiciona implementações web e fontes editáveis para os dez tipos restantes:
 `file_manager`, `image_uploader`, `image_viewer`, `menu_bar`, `navigation_list`,
 `navigation_tree`, `reference_set_selector`, `scroll_container`, `snippet` e
-`static_image`. A existência de um renderer não certifica todas as variantes
-nativas do widget; as abas já ilustravam essa diferença.
+`static_image`. Menus, snippets e imagens são exportados em `app/presentation`
+e assets públicos; arquivos têm API autorizada e persistência em SQLite.
+Novas exportações executam os grafos construídos das declarações Ruby e não
+abrem o MPR. Chamadas internas respeitam implementações Ruby dos serviços.
+O fixture de apresentação foi validado com MPR e sidecar de reconstrução
+retirados da aplicação, incluindo seleção múltipla persistida após recarregar.
+
+O quarto bloco acrescenta parâmetros nomeados de snippets, caminhos compostos
+de seletores, predicados XPath simples sobre dados autorizados, tamanhos/toggles
+de regiões, fontes alternativas de imagens e composição de layouts Ruby com
+placeholders. Menus preservam parâmetros, tradução e módulo da ação; arquivos
+têm políticas por entidade, metadados declarados e exclusão transacional pelo
+runtime. O fluxo de apresentação passa em 31 passos no Chromium sem MPR.
+
+A existência desses contratos **não** certifica todas as variantes nativas:
+XPath completo, herança/polimorfismo de FileDocument, thumbnails gerados,
+ações cliente adicionais e layouts móveis ainda precisam de implementação e
+gates próprios. Não chamar o conjunto de variantes avançadas de concluído.
 
 Ainda devem ser fechados, com provas de edição e execução:
 
-1. Demais widgets core, ações cliente, layouts/snippets, validações e fontes de
+1. Variantes dos widgets core, ações cliente, layouts/snippets, validações e fontes de
    dados ainda sem equivalente funcional no frontend Ruby.
 2. Condições de visibilidade/editabilidade por papéis e variantes nativas;
    contratos de widgets externos e custom actions, com adapters explícitos.
-3. Fluxos e documentos ainda delegados ao modelo preservado: produzir fontes
-   Ruby autoritativos e remover a necessidade desse baseline em execução.
+3. Grafos sem declaração Ruby e integrações externas: produzir implementações
+   ou adapters explícitos. O runtime novo não usa o MPR como fallback. Aplicações
+   legadas sem `runtime_model: ruby` conservam o bridge antigo até nova exportação.
 4. Gates em projetos reais: editar o código exportado, testar a aplicação
    convertida e distinguir qualquer dependência residual de mera preservação
    opcional para round-trip. Não declarar conversão universal com base apenas

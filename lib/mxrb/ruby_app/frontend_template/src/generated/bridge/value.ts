@@ -86,10 +86,14 @@ export const caption = (
   widget: WidgetDefinition,
   options: WidgetOptions,
   context: EntityRecord | null,
+  variables: RuntimeVariables = {},
 ): string => {
   let value = options.caption || widget.caption || widget.name;
   (options.parameters || []).forEach((parameter, index) => {
-    value = value.replaceAll(`{${index + 1}}`, String(expressionValue(parameter, context) ?? ''));
+    value = value.replaceAll(
+      `{${index + 1}}`,
+      String(expressionValue(parameter, context, variables) ?? ''),
+    );
   });
   return value;
 };
@@ -112,6 +116,7 @@ export interface EventArgumentSources {
   pageParameter?: EntityRecord | null;
   widgetValues?: RuntimeVariables;
   localVariables?: RuntimeVariables;
+  snippetParameters?: RuntimeVariables;
 }
 
 const namedEventArgument = (
@@ -155,6 +160,8 @@ const structuredEventArgument = (
       return namedEventArgument(sources.widgetValues, 'Widget', name);
     case 'localvariable':
       return namedEventArgument(sources.localVariables, 'LocalVariable', name);
+    case 'snippetparameter':
+      return namedEventArgument(sources.snippetParameters, 'SnippetParameter', memberName(name));
     default:
       throw new Error(`Unsupported event argument source ${kind || '(missing kind)'}`);
   }
@@ -169,7 +176,10 @@ export const eventArguments = (
     Object.entries(event?.arguments || {}).map(([name, argument]) => [
       name,
       typeof argument === 'string'
-        ? expressionValue(argument, context)
+        ? expressionValue(argument, context, {
+            ...sources.localVariables,
+            ...sources.snippetParameters,
+          })
         : structuredEventArgument(argument, context, sources),
     ]),
   );

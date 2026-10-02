@@ -1,0 +1,45 @@
+{
+  "name": "ruby-standalone-ten-presentation-widgets",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 1000 },
+  "pages": [
+    {
+      "name": "standalone-presentation",
+      "path": "/",
+      "steps": [
+        { "wait_for_selector": "[data-widget-name=MainMenu] button" },
+        { "wait_for_selector": "[data-widget-name=SnippetName] input:not(:disabled)" },
+        { "wait_for_selector": "[data-widget-name=RegionName] input:not(:disabled)" },
+        { "click_selector": "[data-widget-name=Scroll] button[aria-expanded=false]" },
+        { "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left]:not([hidden]) [data-widget-name=AdvancedRegionName] input:not(:disabled)" },
+        { "wait_for_style": { "selector": "[data-widget-name=Scroll] [data-widget-region=left]", "property": "width", "value": "240px" } },
+        { "click_selector": "[data-widget-name=Scroll] button[aria-expanded=true]" },
+        { "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left][hidden]" },
+        { "wait_for_selector": "[data-widget-name=Logo]" },
+        { "wait_for_selector": "[data-widget-name=Preview] img" },
+        { "wait_for_selector": "[data-widget-name=File] input[type=file]:not(:disabled)" },
+        { "wait_for_selector": "[data-widget-name=UploadImage] input[type=file]:not(:disabled)" },
+        { "wait_for_selector": "[data-widget-name=Tags] input[type=checkbox]" },
+        { "click_selector": "[data-widget-name=Tags] input[type=checkbox]" },
+        { "wait_for_selector": "[data-widget-name=Tags] input:checked" },
+        { "navigate": "/" },
+        { "wait_for_selector": "[data-widget-name=Tags] input:checked" },
+        { "click_selector": "[data-widget-name=Tree] summary" },
+        { "click_selector": "[data-widget-name=Tree] details button" },
+        { "wait_for_text": "Ruby action executed" },
+        { "click_selector": "[data-widget-name=MainMenu] button" },
+        { "wait_for_text": "Alternate page content" },
+        { "navigate": "/" },
+        { "wait_for_selector": "[data-widget-name=Links] [role=button]" },
+        { "click_selector": "[data-widget-name=Links] [role=button]" },
+        { "wait_for_text": "Alternate page content" },
+        { "navigate": "/" },
+        { "wait_for_selector": "[data-widget-name=Tags] input:checked" },
+        { "click_selector": "[data-widget-name=Tags] input:checked" },
+        { "wait_for_absence": "[data-widget-name=Tags] input:checked" },
+        { "wait_for_absence": "[role=alert]" }
+      ],
+      "selectors": ["[data-widget-name=SnippetName] input", "[data-widget-name=Tree]", "[data-widget-name=Preview] img"]
+    }
+  ]
+}

@@ -200,7 +200,8 @@ RSpec.describe 'Native runtime entity security context' do
     expect(application.send(:synchronize_context, unchanged, context:)).to equal(original)
     expect(application.send(:synchronize_context, changed, context:)).to equal(original)
     expect(original.members['Name']).to eq('Changed')
-    expect(policy).to have_received(:authorize!).once
+    expect(policy).to have_received(:authorize!).with('M.E', hash_including(action: :read)).twice
+    expect(policy).to have_received(:authorize!).with('M.E', hash_including(action: :write)).once
   end
 
   it 'materializes REST input as a detached authorized object and propagates service context' do
