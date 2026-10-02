@@ -1,0 +1,30 @@
+{
+  "name": "ruby-source-editability-and-persistence",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [
+    {
+      "name": "editable-ruby-application",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Ruby editable application" },
+        { "wait_for_selector": "[data-widget-name=Name] input:disabled" },
+        { "wait_for_selector": "[data-widget-name=ReadOnly] input:disabled" },
+        { "wait_for_absence": "[data-widget-name=SelectedName] input" },
+        { "wait_for_selector": "[data-widget-name=Items] tbody tr" },
+        { "click_selector": "[data-widget-name=Items] tbody tr" },
+        { "wait_for_selector": "[data-widget-name=SelectedName] input:disabled" },
+        { "click_selector": "[data-widget-name=Unlock] input" },
+        { "wait_for_selector": "[data-widget-name=Name] input:not(:disabled)" },
+        { "navigate": "/" },
+        { "wait_for_selector": "[data-widget-name=Name] input:not(:disabled)" },
+        { "wait_for_selector": "[data-widget-name=Unlock] input:checked" },
+        { "wait_for_selector": "[data-widget-name=ReadOnly] input:disabled" },
+        { "click_selector": "[data-widget-name=Unlock] input" },
+        { "wait_for_selector": "[data-widget-name=Name] input:disabled" },
+        { "wait_for_absence": "[role=alert]" }
+      ],
+      "selectors": ["[data-widget-name=Name] input:disabled", "[data-widget-name=ReadOnly] input:disabled"]
+    }
+  ]
+}

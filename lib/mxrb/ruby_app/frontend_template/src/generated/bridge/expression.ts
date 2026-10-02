@@ -1,0 +1,142 @@
+import type { EntityRecord, RuntimeValue, RuntimeVariables } from '../types';
+
+type Value = RuntimeValue | undefined;
+type Expression = () => Value;
+const precedence: Record<string, number> = {
+  or: 1,
+  and: 2,
+  '=': 3,
+  '!=': 3,
+  '>': 3,
+  '<': 3,
+  '>=': 3,
+  '<=': 3,
+  '+': 4,
+  '-': 4,
+  '*': 5,
+  div: 5,
+  mod: 5,
+};
+
+function boolean(value: Value): boolean {
+  if (typeof value !== 'boolean') throw new Error('Condition must evaluate to a boolean');
+  return value;
+}
+
+function number(value: Value): number {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    throw new Error('Expected a finite number');
+  return value;
+}
+
+function binary(operator: string, left: Expression, right: Expression): Value {
+  if (operator === 'and') return boolean(left()) && boolean(right());
+  if (operator === 'or') return boolean(left()) || boolean(right());
+  const a = left();
+  const b = right();
+  if (operator === '=') return a === b;
+  if (operator === '!=') return a !== b;
+  if (operator === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
+  if (['>', '<', '>=', '<='].includes(operator)) {
+    if (!(
+      (typeof a === 'number' && typeof b === 'number') ||
+      (typeof a === 'string' && typeof b === 'string')
+    )) {
+      throw new Error('Comparison operands must have matching types');
+    }
+    if (operator === '>') return a > b;
+    if (operator === '<') return a < b;
+    if (operator === '>=') return a >= b;
+    return a <= b;
+  }
+  const x = number(a);
+  const y = number(b);
+  if (operator === '+') return x + y;
+  if (operator === '-') return x - y;
+  if (operator === '*') return x * y;
+  if (y === 0) throw new Error('Division by zero');
+  return operator === 'div' ? Math.trunc(x / y) : x % y;
+}
+
+// A small explicit expression grammar, never JavaScript eval. Unsupported
+// syntax is an error instead of a truthy string that enables an input.
+export function evaluate(
+  source: string,
+  context: EntityRecord | null,
+  variables: RuntimeVariables = {},
+): Value {
+  const tokens: string[] = [];
+  let remaining = source.trim();
+  while (remaining) {
+    const match = remaining.match(
+      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,\-])/,
+    );
+    if (!match) throw new Error(`Unsupported expression syntax: ${remaining}`);
+    tokens.push(match[0]);
+    remaining = remaining.slice(match[0].length).trimStart();
+  }
+  let cursor = 0;
+  const consume = (expected: string) => {
+    if (tokens[cursor++] !== expected) throw new Error(`Expected ${expected} in expression`);
+  };
+  const atom = (): Expression => {
+    const token = tokens[cursor++];
+    if (!token) throw new Error('Incomplete expression');
+    if (token === '(') {
+      const value = parse(1);
+      consume(')');
+      return value;
+    }
+    if (token === 'not' || token === '-') {
+      const value = atom();
+      return () => (token === 'not' ? !boolean(value()) : -number(value()));
+    }
+    if (token.startsWith("'")) return () => token.slice(1, -1).replaceAll("''", "'");
+    if (/^\d/.test(token)) return () => Number(token);
+    if (token === 'true' || token === 'false') return () => token === 'true';
+    if (token === 'empty') return () => null;
+    if (token.startsWith('$')) {
+      const [name, member] = token.slice(1).split('/');
+      return () => {
+        const value =
+          name === 'currentObject'
+            ? context
+            : Object.hasOwn(variables, name)
+              ? variables[name]
+              : context;
+        if (!member) return value;
+        if (!value || typeof value !== 'object' || !('attributes' in value)) return undefined;
+        const attributes = value.attributes as Record<string, Value>;
+        return attributes[member.split('.').at(-1) || member];
+      };
+    }
+    if (token === 'toString') {
+      consume('(');
+      const value = parse(1);
+      consume(')');
+      return () => String(value() ?? '');
+    }
+    if (/^\w+\.\w+\.\w+$/.test(token)) return () => token.split('.').at(-1);
+    throw new Error(`Unsupported expression: ${token}`);
+  };
+  const parse = (minimum: number): Expression => {
+    let result = atom();
+    while ((precedence[tokens[cursor]] || 0) >= minimum) {
+      const operator = tokens[cursor++];
+      const left = result;
+      const right = parse(precedence[operator] + 1);
+      result = () => binary(operator, left, right);
+    }
+    return result;
+  };
+  if (!tokens.length) return undefined;
+  const result = parse(1);
+  if (cursor !== tokens.length) throw new Error(`Unexpected expression token: ${tokens[cursor]}`);
+  return result();
+}
+
+export const evaluateCondition = (
+  source: string,
+  context: EntityRecord | null,
+  variables: RuntimeVariables = {},
+): boolean => boolean(evaluate(source, context, variables));

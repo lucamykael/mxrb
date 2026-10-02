@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
 import { apiFailure, inlineStyle, isEntityRecord } from './value';
-import type { InvokeHandler, SaveRecord, SelectRecord } from './contracts';
+import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
 import { LoginForm } from '../../components/auth/LoginForm';
 import { AppFeedback } from '../../components/feedback/AppFeedback';
 import { AppNavigation } from '../../components/navigation/AppNavigation';
 import { PageOutlet } from './components/PageOutlet';
 import { WidgetRenderer } from './components/WidgetRenderer';
+import { SelectionScope } from './components/SelectionScope';
 import { AppLayout } from '../../layouts/AppLayout';
 import type {
   ApiFailure,
@@ -24,6 +25,21 @@ import type {
   Session,
   ShowMessageEffect,
 } from '../types';
+
+type PageRuntime = Omit<WidgetRuntimeProps, 'widget' | 'children'>;
+const PageRuntimeContext = createContext<PageRuntime | null>(null);
+
+// Keep this component's identity stable across API responses. Declaring it
+// inside ApplicationRuntime remounts inputs and drops focus and unsaved drafts.
+function RuntimePageWidget({ widget, children }: PageWidgetProps) {
+  const runtime = useContext(PageRuntimeContext);
+  if (!runtime) throw new Error('Page runtime context is missing');
+  return (
+    <WidgetRenderer {...runtime} widget={widget}>
+      {children}
+    </WidgetRenderer>
+  );
+}
 
 export function ApplicationRuntime() {
   const navigate = useNavigate();
@@ -56,27 +72,22 @@ export function ApplicationRuntime() {
     updateLocation = true,
   ): Promise<void> => {
     try {
-      const value = await api<PageDefinition>(
-        `/api/pages/${encodeURIComponent(name)}`,
-        {},
-      );
+      const value = await api<PageDefinition>(`/api/pages/${encodeURIComponent(name)}`, {});
       let resolvedContext = context;
       if (!resolvedContext && value.data_source?.name) {
         if (value.data_source.kind === 'nanoflow') {
           const source = nanoflows[value.data_source.name as keyof typeof nanoflows];
           if (!source)
             throw new Error(`Page data source nanoflow not found: ${value.data_source.name}`);
-          const execution = await source.execute({});
-          resolvedContext = isEntityRecord(execution.result)
-            ? { ...execution.result, transient: true }
-            : null;
+          const execution = await source.execute({}, invoke);
+          resolvedContext = isEntityRecord(execution.result) ? execution.result : null;
         } else {
           const payload = await api<InvocationResult>(
             `/api/microflows/${encodeURIComponent(value.data_source.name)}`,
             { method: 'POST', body: '{}' },
           );
           const candidate = payload.context || payload.result;
-          resolvedContext = isEntityRecord(candidate) ? { ...candidate, transient: true } : null;
+          resolvedContext = isEntityRecord(candidate) ? candidate : null;
         }
       }
       setPage(value);
@@ -192,17 +203,6 @@ export function ApplicationRuntime() {
           return updated;
         })
         .catch((failure: unknown) => {
-          const normalized = apiFailure(failure);
-          if (normalized.status === 404) {
-            const updated: EntityRecord = {
-              ...record,
-              attributes: { ...record.attributes, ...changes },
-            };
-            setPageContext((current) => (current?.id === updated.id ? updated : current));
-            setRevision((value) => value + 1);
-            setError(null);
-            return updated;
-          }
           handleError(failure);
           return null;
         });
@@ -282,9 +282,10 @@ export function ApplicationRuntime() {
       if (validation?.message) setNotice(validation.message);
       for (const effect of execution.effects) {
         if (effect.type === 'open_page' && typeof effect.page === 'string') {
-          const values = effect.arguments && typeof effect.arguments === 'object'
-            ? Object.values(effect.arguments)
-            : [];
+          const values =
+            effect.arguments && typeof effect.arguments === 'object'
+              ? Object.values(effect.arguments)
+              : [];
           const context = values.find(isEntityRecord) || null;
           await openPage(effect.page, context);
         } else if (effect.type === 'close_page') {
@@ -309,26 +310,21 @@ export function ApplicationRuntime() {
     schema.navigation?.profiles?.find((item) => item.kind === 'Responsive') ||
     schema.navigation?.profiles?.[0];
   const moduleName = page.name.split('.')[0];
-  const PageWidget = ({ widget, children }: PageWidgetProps) => (
-    <WidgetRenderer
-      widget={widget}
-      moduleName={moduleName}
-      invoke={invoke}
-      invokeNanoflow={invokeNanoflow}
-      navigate={openPage}
-      context={pageContext}
-      pageContext={pageContext}
-      revision={revision}
-      schema={schema}
-      request={request}
-      saveRecord={saveRecord}
-      onError={handleError}
-      onMutation={markMutation}
-      onSelectRecord={selectRecord}
-    >
-      {children}
-    </WidgetRenderer>
-  );
+  const pageRuntime: PageRuntime = {
+    moduleName,
+    invoke,
+    invokeNanoflow,
+    navigate: openPage,
+    context: pageContext,
+    pageContext,
+    revision,
+    schema,
+    request,
+    saveRecord,
+    onError: handleError,
+    onMutation: markMutation,
+    onSelectRecord: selectRecord,
+  };
 
   return (
     <AppLayout
@@ -351,7 +347,11 @@ export function ApplicationRuntime() {
         />
       }
     >
-      <PageOutlet page={page} busy={busy} Widget={PageWidget} />
+      <PageRuntimeContext.Provider value={pageRuntime}>
+        <SelectionScope key={page.name}>
+          <PageOutlet key={page.name} page={page} busy={busy} Widget={RuntimePageWidget} />
+        </SelectionScope>
+      </PageRuntimeContext.Provider>
     </AppLayout>
   );
 }

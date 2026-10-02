@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { evaluate, evaluateCondition } from './expression';
 import type {
   ApiFailure,
   EntityRecord,
@@ -48,46 +49,13 @@ export const expressionValue = (
   source: string | undefined,
   context: EntityRecord | null,
   variables: RuntimeVariables = {},
-): RuntimeValue | undefined => {
-  const text = (source || '').trim();
-  const wrapped = text.match(/^toString\((.*)\)$/);
-  if (wrapped) return String(expressionValue(wrapped[1], context, variables) ?? '');
-  if (text === '$currentObject') return context;
-  const variable = text.match(/^\$([A-Za-z_]\w*)$/);
-  if (variable) return variables[variable[1]] ?? context;
-  const member = text.match(/^\$([A-Za-z_]\w*)\/([A-Za-z_][\w.]*)$/);
-  if (member) return attributes(variables[member[1]] ?? context)[memberName(member[2])];
-  if (text === 'empty') return null;
-  if (text === 'true') return true;
-  if (text === 'false') return false;
-  if (/^'.*'$/.test(text)) return text.slice(1, -1).replaceAll("''", "'");
-  return text;
-};
+): RuntimeValue | undefined => evaluate(source || '', context, variables);
 
 export const conditionValue = (
   source: string | undefined,
   context: EntityRecord | null,
   variables: RuntimeVariables = {},
-): boolean => {
-  const text = (source || '').trim().replace(/^\((.*)\)$/, '$1');
-  const orParts = text.split(/\s+or\s+/);
-  if (orParts.length > 1) return orParts.some((part) => conditionValue(part, context, variables));
-  const andParts = text.split(/\s+and\s+/);
-  if (andParts.length > 1)
-    return andParts.every((part) => conditionValue(part, context, variables));
-  const comparison = text.match(/^(.*?)\s*(=|!=|>=|<=|>|<)\s*(.*?)$/);
-  if (!comparison) return Boolean(expressionValue(text, context, variables));
-  const left = expressionValue(comparison[1], context, variables);
-  const right = expressionValue(comparison[3], context, variables);
-  if (comparison[2] === '=') return left === right;
-  if (comparison[2] === '!=') return left !== right;
-  const comparable = (value: RuntimeValue | undefined): string | number =>
-    typeof value === 'number' ? value : String(value ?? '');
-  if (comparison[2] === '>') return comparable(left) > comparable(right);
-  if (comparison[2] === '<') return comparable(left) < comparable(right);
-  if (comparison[2] === '>=') return comparable(left) >= comparable(right);
-  return comparable(left) <= comparable(right);
-};
+): boolean => evaluateCondition(source || '', context, variables);
 
 export const isVisible = (
   source: string | boolean | undefined,

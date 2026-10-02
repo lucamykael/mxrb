@@ -1,5 +1,37 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Hauptrichtung: Mendix → Ruby + React/TypeScript
+
+Ziel ist ein editierbares Ruby-Backend mit React/TypeScript-Frontend ohne Mendix-
+Runtime. Die Rückübersetzung in ein MPR ist ein zusätzlicher Vertrag.
+`runtime_only` bedeutet nicht uneditierbar. `portability --require-native` prüft
+Ruby → Mendix, nicht die Vollständigkeit der Konvertierung nach Ruby.
+
+Die Ruby-Runtime liest weiterhin eine interne MPR-Kopie für Metadaten und davon
+abhängige Graphen. Ohne JVM/Mendix-Runtime bedeutet noch nicht ohne MPR-Baseline.
+Nicht übersetzte Varianten, Custom Actions ohne Adapter und nicht unterstützte
+Widgets bleiben offene Konvertierungslücken.
+
+Editierbarkeit, Ausdrucksbedingungen, Read-only-Stil, Platzhalter, Passwortmodus,
+Maximallänge, ARIA-Label/Pflichtkennzeichnung, Tab-Reihenfolge und Autocomplete
+werden als Ruby-Seitenoptionen exportiert. Änderungen in `app/pages/**/*.rb`
+wirken ohne MPR-Neukompilierung. Verschachtelte Data Views können eine gesperrte
+übergeordnete View nicht entsperren. Unbekannte Bedingungen bleiben gesperrt;
+rollenbasierte/native Varianten benötigen noch eine Übersetzung. Backend-
+Autorisierung bleibt unabhängig von dieser UI-Steuerung.
+
+Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
+auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
+Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die
+Auswahl des benannten Grids. Mehrstufige Assoziationen enden bei leeren Verweisen,
+ohne eine uneingeschränkte Entitätsabfrage auszuführen.
+
+Das Fixture `spec/fixtures/ruby_frontend_editability/project.rb` und das Szenario
+`spec/fixtures/frontend_browser/ruby_editability_flow.json` prüfen Editierbarkeit,
+Auswahl und Persistenz nach Neuladen in Ruby/React. Komponententests ergänzen
+Fokus, Fehlerfälle, Ausdrücke und Assoziationen. Dies bestätigt diesen Ausschnitt,
+nicht das gesamte Frontend oder die Unabhängigkeit von jeder Baseline.
+
 MXRB kennzeichnet jedes Artefakt einer Ruby-Anwendung als `native` (editierbares
 MPR-Dokument), `preserved_native` (verlustfrei im Mendix-Sidecar erhalten) oder
 `runtime_only` (benötigt die MXRB-Runtime).

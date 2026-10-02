@@ -159,9 +159,10 @@ RSpec.describe 'Ruby application export mode' do
                                      ))
       expect(bound_field_source).to include('module.enumerations || []', 'enumeration?.values || []')
       expect(application_source).to include(
-        'value.data_source?.name', 'transient: true', 'if (record.transient)',
-        '<PageOutlet page={page} busy={busy} Widget={PageWidget} />'
+        'value.data_source?.name', 'if (record.transient)',
+        '<PageOutlet key={page.name} page={page} busy={busy} Widget={RuntimePageWidget} />'
       )
+      expect(application_source).not_to include('...candidate, transient: true', 'normalized.status === 404')
       expect(page_outlet_source).to include(
         'page.widgets || []', 'renderWidget(child, childIndex', 'data-page={page.name}'
       )
