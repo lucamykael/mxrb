@@ -72,11 +72,13 @@ let persisted: EntityRecord;
 let failCommit: boolean;
 let commits: number;
 let reads: number;
+let reopenAfterClose: boolean;
 beforeEach(() => {
   persisted = structuredClone(original);
   failCommit = false;
   commits = 0;
   reads = 0;
+  reopenAfterClose = false;
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation(async (path, options) => {
     if (path === '/api/session') return { user: 'tester' } as never;
@@ -92,7 +94,12 @@ beforeEach(() => {
       return { result: persisted } as never;
     }
     if (path === '/api/microflows/App.Exit')
-      return { effects: [{ type: 'close_page', count: 1 }] } as never;
+      return {
+        effects: [
+          { type: 'close_page', count: 1 },
+          ...(reopenAfterClose ? [{ type: 'open_page', page: 'App.Detail' }] : []),
+        ],
+      } as never;
     if (path === '/api/records/commit') {
       commits += 1;
       if (failCommit) throw new Error('Commit denied');
@@ -172,6 +179,20 @@ describe('native client actions', () => {
       'Saved before navigation',
     );
     expect(reads).toBe(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('finishes closing before applying a subsequent open-page effect', async () => {
+    const user = mount();
+    await screen.findByRole('textbox', { name: 'Name' });
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    reopenAfterClose = true;
+    await user.click(await screen.findByRole('button', { name: 'Exit flow' }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/api/entities/App.Item/1', {}));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Exit flow' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('textbox', { name: 'Name' })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

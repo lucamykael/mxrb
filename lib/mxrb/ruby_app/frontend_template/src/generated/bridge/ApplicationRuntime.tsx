@@ -64,6 +64,7 @@ export function ApplicationRuntime() {
   const pageRequest = useRef(0);
   const pendingRoute = useRef<string | null>(null);
   const depth = useRef(0);
+  const closeTransition = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
 
   const handleError = useCallback((failure: unknown) => {
     const normalized = apiFailure(failure);
@@ -130,9 +131,17 @@ export function ApplicationRuntime() {
     }
   };
 
-  const closePage = (count = 1) => {
+  const closePage = (count = 1): Promise<void> => {
+    if (closeTransition.current) return closeTransition.current.promise;
     const distance = Math.min(depth.current, Math.max(1, Math.floor(Number(count) || 1)));
-    if (distance > 0) navigate(-distance);
+    if (distance <= 0) return Promise.resolve();
+    let resolve = () => {};
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    closeTransition.current = { promise, resolve };
+    navigate(-distance);
+    return promise;
   };
 
   // React Router changes the URL on Back/Forward; reload the matching page
@@ -148,7 +157,10 @@ export function ApplicationRuntime() {
     }
     depth.current = Number(location.state?.mxrbDepth) || 0;
     const context = location.state?.context;
-    void loadRoute.current(target, isEntityRecord(context) ? context : null, false);
+    void loadRoute.current(target, isEntityRecord(context) ? context : null, false).finally(() => {
+      closeTransition.current?.resolve();
+      closeTransition.current = null;
+    });
   }, [location.key, pageName]);
 
   const loadApplication = async () => {
@@ -304,7 +316,7 @@ export function ApplicationRuntime() {
             await openPage(effect.page, context);
             navigated = true;
           } else if (effect.type === 'close_page') {
-            closePage(Number(effect.count));
+            await closePage(Number(effect.count));
             navigated = true;
           }
         }
@@ -353,7 +365,7 @@ export function ApplicationRuntime() {
           const context = values.find(isEntityRecord) || null;
           await openPage(effect.page, context);
         } else if (effect.type === 'close_page') {
-          closePage(Number(effect.count));
+          await closePage(Number(effect.count));
         }
       }
       setError(null);
@@ -404,7 +416,7 @@ export function ApplicationRuntime() {
           );
           break;
         case 'close_page':
-          closePage();
+          await closePage();
           return;
         default:
           throw new Error(`Unsupported client action: ${event.handler}`);
@@ -412,7 +424,7 @@ export function ApplicationRuntime() {
       setRevision((value) => value + 1);
       setError(null);
       if (event.close_page ?? ['save_changes', 'cancel_changes'].includes(event.handler))
-        closePage();
+        await closePage();
     } catch (failure) {
       handleError(failure);
     } finally {
