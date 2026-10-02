@@ -28,6 +28,15 @@ fontes microflow, preservou foco e implementou Data Views por seleção e
 associações em múltiplas etapas. Evidências e limites estão no
 [contrato de conversão](portabilidade-ruby-typescript.md).
 
+O segundo recorte implementa seleção por rádio booleana/enumeração e título da
+página, torna as abas interativas com teclado e preservação de rascunhos, e
+projeta valores/legendas de enumeração a partir do Ruby carregado. O inventário
+do renderizador ainda tem dez tipos declarados sem implementação explícita:
+`file_manager`, `image_uploader`, `image_viewer`, `menu_bar`, `navigation_list`,
+`navigation_tree`, `reference_set_selector`, `scroll_container`, `snippet` e
+`static_image`. A existência de um renderer não certifica todas as variantes
+nativas do widget; as abas já ilustravam essa diferença.
+
 Ainda devem ser fechados, com provas de edição e execução:
 
 1. Demais widgets core, ações cliente, layouts/snippets, validações e fontes de

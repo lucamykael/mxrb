@@ -32,6 +32,22 @@ Auswahl und Persistenz nach Neuladen in Ruby/React. Komponententests ergänzen
 Fokus, Fehlerfälle, Ausdrücke und Assoziationen. Dies bestätigt diesen Ausschnitt,
 nicht das gesamte Frontend oder die Unabhängigkeit von jeder Baseline.
 
+Radiogruppen unterstützen Boolean-/Enum-Auswahl, Beschriftungen, horizontale oder
+vertikale Anordnung, Tastaturbedienung, Persistenz und Fokus-/Austrittsereignisse.
+Geerbte Schreibsperren bleiben erhalten. Unbekannte Werte werden ohne Mutation
+angezeigt. Kurze und qualifizierte Enum-Werte werden erkannt; Schreiboperationen
+behalten die empfangene Darstellung bei. Enum-Bedingungen unterscheiden weiterhin
+verschiedene qualifizierte Typen. Werte und Übersetzungen exportierter Enums stammen
+aus Ruby-Definitionen; nicht geladene Legacy-Definitionen verwenden das Manifest.
+Nach Quelländerungen die Anwendung neu laden. Neue Dokumente und die Entfernung
+des Manifests als Katalog bleiben offen.
+
+Seitentitel verwenden den geladenen Ruby-Titel. Tabs zeigen ein Panel, unterstützen
+Pfeile/Home/End und erhalten Eingaben bereits geöffneter Panels; ungeöffnete Panels
+werden erst bei Bedarf geladen. Das Fixture `ruby_frontend_core_widgets` und das
+Szenario `frontend_browser/ruby_core_widgets_flow.json` prüfen dies einschließlich
+Enum-Bedingungen und Persistenz. Nicht projizierte native Tab-Varianten bleiben offen.
+
 MXRB kennzeichnet jedes Artefakt einer Ruby-Anwendung als `native` (editierbares
 MPR-Dokument), `preserved_native` (verlustfrei im Mendix-Sidecar erhalten) oder
 `runtime_only` (benötigt die MXRB-Runtime).

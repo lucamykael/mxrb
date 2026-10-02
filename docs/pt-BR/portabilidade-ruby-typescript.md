@@ -47,6 +47,30 @@ React. Testes de componente cobrem escrita rejeitada, foco, eventos, condições
 e associações com múltiplas etapas. Isso fecha esse recorte, não toda a matriz
 de frontend nem todas as dependências do baseline.
 
+### Seleção por rádio, títulos e abas
+
+`radio_button_group` oferece seleção booleana ou por enumeração, legendas,
+orientação horizontal/vertical, navegação nativa por teclado, persistência e
+eventos de foco/saída do grupo. Respeita os bloqueios herdados de Data Views;
+opções desconhecidas são sinalizadas, sem substituir o valor armazenado.
+Valores de enumeração curtos e qualificados são reconhecidos. A gravação
+preserva a representação recebida, e comparações com literais de enumeração
+em condições reconhecem ambas sem confundir tipos qualificados diferentes.
+
+O schema servido usa os valores e traduções Ruby das enumerações exportadas,
+com fallback ao manifesto para definições legadas sem implementação carregada.
+Alterar `app/enumerations/**/*.rb` não exige recompilar o MPR; recarregue a
+aplicação para obter o schema atualizado. Descoberta de novos documentos e
+remoção do manifesto como catálogo ainda não estão concluídas.
+
+`page_title` usa o título da página Ruby carregada. `tab_control` seleciona um
+painel por vez, suporta setas/Home/End e mantém os campos dos painéis já abertos
+montados, preservando rascunhos. Painéis ainda não abertos são carregados sob
+demanda. O fixture `spec/fixtures/ruby_frontend_core_widgets/project.rb` e o
+cenário `spec/fixtures/frontend_browser/ruby_core_widgets_flow.json` verificam
+esse comportamento, condições por enumeração e persistência após recarregar.
+Variantes nativas de abas ainda não projetadas não estão cobertas por esse contrato.
+
 ## O que o MXRB garante
 
 O modo Ruby possui três classes explícitas de portabilidade:
