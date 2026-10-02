@@ -286,8 +286,8 @@ RSpec.describe "MXRB defensive and compatibility paths" do
     expect(page.widgets.map { _1[:type] }).to eq([:layout_grid])
     expect(typed_widgets.call(page.widgets).map { _1[:type] })
       .to contain_exactly(
-        :layout_grid, :check_box, :date_picker, :reference_selector, :text
-      )
+          :layout_grid, :check_box, :date_picker, :reference_set_selector, :text
+        )
     expect(page.to_bson["$Type"]).to eq("Forms$Page")
     expect(page.inspect).to include("LegacyPage")
   end

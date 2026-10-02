@@ -114,12 +114,7 @@ export function evaluate(
     if (token.startsWith('$')) {
       const [name, member] = token.slice(1).split('/');
       return () => {
-        const value =
-          name === 'currentObject'
-            ? context
-            : Object.hasOwn(variables, name)
-              ? variables[name]
-              : context;
+        const value = Object.hasOwn(variables, name) ? variables[name] : context;
         if (!member) return value;
         if (!value || typeof value !== 'object' || !('attributes' in value)) return undefined;
         const attributes = value.attributes as Record<string, Value>;
@@ -133,6 +128,21 @@ export function evaluate(
       return () => {
         const result = value();
         return result instanceof EnumLiteral ? result.member : String(result ?? '');
+      };
+    }
+    if (['contains', 'starts-with', 'startsWith', 'endsWith'].includes(token)) {
+      consume('(');
+      const left = parse(1);
+      consume(',');
+      const right = parse(1);
+      consume(')');
+      return () => {
+        const value = left();
+        const search = right();
+        if (typeof value !== 'string' || typeof search !== 'string')
+          throw new Error('String predicate requires two strings');
+        if (token === 'contains') return value.includes(search);
+        return token === 'endsWith' ? value.endsWith(search) : value.startsWith(search);
       };
     }
     if (/^\w+\.\w+\.\w+$/.test(token)) return () => new EnumLiteral(token);

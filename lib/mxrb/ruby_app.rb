@@ -19,6 +19,9 @@ require_relative 'ruby_app/schedule_builder'
 require_relative 'ruby_app/page_data_sources'
 require_relative 'ruby_app/page_design_identity'
 require_relative 'ruby_app/pluggable_properties'
+require_relative 'ruby_app/runtime_project'
+require_relative 'ruby_app/presentation'
+require_relative 'ruby_app/file_content'
 require_relative 'http/server'
 
 module Mxrb
@@ -34,7 +37,8 @@ module Mxrb
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[
-      constants enumerations models dtos controllers services pages security scheduled_events regular_expressions
+      constants enumerations models dtos controllers services pages presentation security
+      scheduled_events regular_expressions
     ].freeze
 
     def self.application_files(root)
@@ -237,7 +241,7 @@ module Mxrb
         controller: :@controllers, service: :@services, page: :@pages,
         module_security: :@module_security, project_security: :@project_security,
         scheduled_event: :@scheduled_events, regular_expression: :@regular_expressions,
-        adapter: :@adapters, java_custom_action: :@java_custom_actions
+        adapter: :@adapters, java_custom_action: :@java_custom_actions, presentation: :@presentation
       }.freeze
 
       module_function
@@ -255,6 +259,7 @@ module Mxrb
         @regular_expressions = {}
         @adapters = {}
         @java_custom_actions = {}
+        @presentation = {}
       end
 
       def register(kind, name, implementation, unit_id: nil)
@@ -426,6 +431,18 @@ module Mxrb
         end
 
         def persistence(value) = (@persistable = value == true)
+
+        # Server-owned upload policy; browser widget settings are only UX hints.
+        def file_policy(max_bytes: FileContent::MAX_BYTES, extensions: [], images_only: false)
+          size = Integer(max_bytes)
+          raise ArgumentError, 'file policy size must be between 1 byte and 20 MiB' unless
+            size.positive? && size <= FileContent::MAX_BYTES
+
+          @file_policy = { max_bytes: size, extensions: Array(extensions).map { _1.to_s.downcase.delete_prefix('.') },
+                           images_only: images_only == true }
+        end
+
+        def file_upload_policy = @file_policy || {}
 
         def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil,
                       documentation: '', length: nil, localize_date: ATTRIBUTE_OPTION_UNSET,
@@ -1498,7 +1515,7 @@ module Mxrb
           file_manager image_uploader image_viewer native_widget layout_grid menu_bar
           navigation_list navigation_tree number_input page_title
           pluggable_widget radio_button_group reference_selector reference_set_selector
-          scroll_container snippet static_image tab_control table text text_area text_box
+          scroll_container snippet static_image tab_control table text text_area text_box layout placeholder
         ].freeze
 
         attr_reader :widgets
@@ -1612,6 +1629,13 @@ module Mxrb
           append_structured(value, declared_fields: false)
         end
 
+        def form_widget(node)
+          document = Forms::MprCodec.new.encode(node)
+          page = Model::Page.allocate
+          page.decode('Widgets' => [2, document])
+          page.widgets.each { append_structured(_1, declared_fields: false) }
+        end
+
         def grid_column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
           builder = Dsl::WidgetBuilder.new(:data_grid, '')
           normalize(builder.column(name, attribute:, caption:, filter:, sortable:).last)
@@ -1656,7 +1680,7 @@ module Mxrb
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
                     :appearance_style, :data_source, :native_definition,
-                    :navigation_definition
+                    :navigation_definition, :allowed_module_roles
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -1667,6 +1691,7 @@ module Mxrb
         end
 
         def configure(title:, widgets: nil, appearance_class: '', appearance_style: '', data_source: nil,
+                      allowed_roles: nil,
                       &block)
           raise ArgumentError, 'configure accepts either widgets: or a widget block, not both' \
             if widgets && block
@@ -1689,6 +1714,7 @@ module Mxrb
           @appearance_class = appearance_class
           @appearance_style = appearance_style
           @data_source = data_source
+          @allowed_module_roles = allowed_roles&.map(&:to_s)
         end
 
         # Declares an editable native Mendix page with the typed page/widget
@@ -1778,6 +1804,7 @@ module Mxrb
         result = {
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
           navigation: manifest.data.fetch('navigation', {}),
+          presentation: Registry.all(:presentation),
           modules: runtime_schema_modules, coverage: manifest.coverage
         }
         context ? secure_schema(result, context) : result
@@ -1864,6 +1891,11 @@ module Mxrb
           store = bridge.interpreter.store
           values = if filter.all? { !_1.to_s.empty? }
                      parent = store.find(context_type.to_s, context_id.to_s)
+                     if parent
+                       authorize_entity!(parent.entity, :read, context, record: parent)
+                       authorize_entity!(parent.entity, :read, context, member: association.to_s.split('.').last,
+                                                                        record: parent)
+                     end
                      parent ? store.retrieve_association(association.to_s, parent) : []
                    else
                      store.retrieve(name.to_s)
@@ -1918,7 +1950,10 @@ module Mxrb
           next false unless value
 
           authorize_entity!(name, :delete, context, record: value)
-          bridge.interpreter.store.delete(value)
+          bridge.interpreter.store.transaction do
+            bridge.interpreter.store.delete(value)
+            FileContent.new(bridge.interpreter.store.database).delete(name, id)
+          end
           true
         end
       end
@@ -1932,10 +1967,40 @@ module Mxrb
           bridge.interpreter.store.transaction do
             attributes.to_h.each do |member, member_value|
               authorize_entity!(name, :write, context, member: member, record: value)
-              value.members[member.to_s] = deserialize(member_value)
+              value.members[member.to_s] = deserialize(member_value, context:)
             end
             bridge.interpreter.store.commit(value)
             serialize(value, context:)
+          end
+        end
+      end
+
+      def file_content(name, id, context: nil, upload: nil)
+        if upload && (!upload.is_a?(Hash) || !%w[name content].all? { upload[_1].is_a?(String) })
+          raise ArgumentError, 'file upload requires string name and base64 content'
+        end
+
+        runtime_synchronize do
+          store = bridge.interpreter.store
+          value = store.find(name.to_s, id.to_s)
+          next unless value
+
+          authorize_entity!(name, :read, context, record: value)
+          authorize_entity!(name, upload ? :write : :read, context, member: 'Contents', record: value)
+          files = FileContent.new(store.database)
+          next files.read(name, id) unless upload
+
+          store.transaction do
+            files.attach(store.schema.entity(name))
+            policy = Registry.fetch(:record, name.to_s)&.file_upload_policy || {}
+            metadata = files.write(name, id, upload.fetch('name'), upload.fetch('content'), **policy)
+            fields = store.schema.entity(name).columns.map(&:name)
+            { 'Name' => metadata.fetch(:name), 'FileSize' => metadata.fetch(:size),
+              'HasContents' => true }.each do |key, item|
+              value.members[key] = item if fields.include?(key)
+            end
+            store.commit(value)
+            metadata
           end
         end
       end
@@ -1948,7 +2013,7 @@ module Mxrb
 
         {
           name: implementation.mendix_name, id: implementation.mendix_id,
-          title: implementation.title, widgets: implementation.widgets,
+          title: implementation.title, widgets: Presentation.compose(implementation.widgets),
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
@@ -2143,6 +2208,11 @@ module Mxrb
           end
         end
         secured[:navigation] = secure_navigation(secured[:navigation], allowed_pages, allowed_services)
+        secured.fetch(:presentation, {}).each_value do |resource|
+          next unless resource[:kind] == 'menu'
+
+          resource[:items] = secure_navigation_items(resource[:items], allowed_pages, allowed_services)
+        end
         secured
       end
 
@@ -2170,8 +2240,12 @@ module Mxrb
           children = secure_navigation_items(item[:items], pages, services)
           allowed = (!item[:page] || pages.include?(item[:page])) &&
                     (!item[:microflow] || services.include?(item[:microflow]))
+          action = item[:action].to_h.transform_keys(&:to_sym)
+          allowed &&= pages.include?(action[:handler]) if action[:kind].to_s == 'page'
+          allowed &&= services.include?(action[:handler]) if %w[microflow nanoflow].include?(action[:kind].to_s)
           next unless allowed || children.any?
 
+          item = item.reject { %i[page microflow action].include?(_1) } unless allowed
           item.merge(items: children)
         end
       end
@@ -2243,13 +2317,17 @@ module Mxrb
       def build_bridge
         NativeBridge.new(
           manifest.absolute_path('runtime_mpr'),
+          runtime_project: manifest.data['runtime_model'] == 'ruby' ? RuntimeProject.new(manifest) : nil,
           database: runtime_database_path,
           record_hooks: Registry.all(:record), adapters: Registry.adapters,
           java_custom_actions: Registry.java_custom_actions,
           allow_destructive: environment['MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS'].to_s.casecmp?('true'),
           coordinator: shared_store,
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
-          runtime_records: Registry.all(:record)
+          runtime_records: Registry.all(:record),
+          service_dispatch: lambda { |name, arguments, context|
+            deserialize(call_service(name, arguments, context:), context:)
+          }
         )
       end
 
@@ -2326,6 +2404,7 @@ module Mxrb
 
       def deserialize(value = nil, context: nil, synchronize: false, **keyword_value)
         value = keyword_value if value.nil? && !keyword_value.empty?
+        value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:id) && value.key?(:type)
         if value.is_a?(Hash) && value['id'] && value['type']
           object = bridge.interpreter.store.find(value['type'].to_s, value['id'].to_s)
           if !object && value['transient'] == true
@@ -2337,6 +2416,8 @@ module Mxrb
             end
           end
           raise NativeRuntimeError, "object #{value['type']} #{value['id']} not found" unless object
+
+          authorize_entity!(object.entity, :read, context, record: object)
 
           value.fetch('attributes', {}).each do |member, member_value|
             next unless synchronize
@@ -2412,22 +2493,28 @@ module Mxrb
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
-                     runtime_records: nil)
+                     runtime_records: nil, runtime_project: nil, service_dispatch: nil)
         FileUtils.mkdir_p(File.dirname(database))
-        @project = Model::Project.open(path)
-        schema = runtime_records && Runtime::SchemaMigrator.derive_overlay(@project, runtime_records)
+        @project = runtime_project || Model::Project.open(path)
+        schema = if runtime_project
+                   Runtime::SchemaMigrator.derive_records(runtime_records)
+                 elsif runtime_records
+                   Runtime::SchemaMigrator.derive_overlay(@project, runtime_records)
+                 end
         transient = runtime_records && runtime_transient_entities(runtime_records)
         store_options = { path: database, allow_destructive: }
         store_options.merge!(schema:, transient_entities: transient) if runtime_records
         @store = Runtime::SQLiteStore.new(@project, **store_options)
         @access_control = Runtime::AccessControl.new(@project)
         @interpreter = Runtime::Native::Interpreter.new(
-          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:
+          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
         register_record_hooks(record_hooks)
         @scheduler = Runtime::Scheduler.new(
           @project,
-          executor: ->(name, **_metadata) { @interpreter.call(name) }, coordinator:,
+          executor: lambda { |name, **_metadata|
+            service_dispatch ? service_dispatch.call(name, {}, nil) : @interpreter.call(name)
+          }, coordinator:,
           lease_ttl: scheduler_lease_ttl
         )
       rescue StandardError
@@ -3100,6 +3187,28 @@ module Mxrb
           return render_json(response, 200, { ok: true }.merge(invocation))
         end
 
+        if (tail = route_name(path, '/api/files/')) && %w[GET PUT].include?(method)
+          name, id = tail.split('/', 2)
+          raise ArgumentError, 'file record id is required' if id.to_s.empty?
+
+          upload = method == 'PUT' ? request_json(request, max_bytes: 28 * 1024 * 1024) : nil
+          content = application.file_content(name, id, context:, upload:)
+          return render_json(response, 404, error('not_found', 'file not found')) unless content
+          return render_json(response, 200, content) if upload
+
+          response.status = 200
+          response['Content-Type'] = content.fetch('media_type')
+          inline = content.fetch('media_type').start_with?('image/') && request.query['download'] != '1'
+          disposition = inline ? 'inline' : 'attachment'
+          response['Content-Disposition'] =
+            "#{disposition}; filename*=UTF-8''#{URI.encode_www_form_component(content.fetch('name'))}"
+          response['X-Content-Type-Options'] = 'nosniff'
+          response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+          response['Cache-Control'] = 'private, no-store'
+          response.body = content.fetch('content')
+          return
+        end
+
         if (tail = route_name(path, '/api/entities/'))
           name, id = tail.split('/', 2)
           if method == 'GET' && id.nil?
@@ -3259,9 +3368,12 @@ module Mxrb
         URI.decode_www_form_component(path.delete_prefix(prefix))
       end
 
-      def request_json(request)
+      def request_json(request, max_bytes: MAX_BODY_BYTES)
         body = request.body.to_s
-        raise ArgumentError, 'request body exceeds 1 MiB' if body.bytesize > MAX_BODY_BYTES
+        if body.bytesize > max_bytes
+          raise ArgumentError,
+                max_bytes == MAX_BODY_BYTES ? 'request body exceeds 1 MiB' : 'request body exceeds allowed limit'
+        end
         return {} if body.empty?
 
         JSON.parse(body).tap do |payload|

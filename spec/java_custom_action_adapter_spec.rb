@@ -82,6 +82,22 @@ RSpec.describe 'Java Custom Action Ruby adapters' do
     end
   end
 
+  it 'resolves imported action parameter identities without consulting an MPR at runtime' do
+    Dir.mktmpdir('mxrb-java-standalone-') do |root|
+      source = File.join(root, 'Actions.mpr')
+      build_project(source)
+      target = File.join(root, 'ruby')
+      Mxrb::Exporter.new(source, target, mode: :ruby).export!
+      application = Mxrb::RubyApp::Application.new(target)
+      Mxrb::RubyApp::Registry.register_java_custom_action('Actions.Normalize') { _1.fetch('Input').upcase }
+      allow(Mxrb::Model::Project).to receive(:open).and_raise('MPR access is forbidden')
+      expect(application.call_service('Actions.Invoke', { 'Source' => 'ruby' })).to eq('RUBY')
+    ensure
+      application&.close
+      Mxrb::RubyApp::Registry.reset!
+    end
+  end
+
   it 'registers only callable adapters under qualified names' do
     registry = Mxrb::RubyApp::Registry
     registry.reset!

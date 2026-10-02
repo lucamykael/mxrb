@@ -153,6 +153,30 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
     bridge.with(manifest) { bridge.with_page(nil) { expect(described_class.current).to be_a(described_class) } }
   end
 
+  it 'loads exact page and shared-resource schemas without an MPR, and refuses missing snapshots' do
+    Dir.mktmpdir do |directory|
+      bridge.with_mpr(mpr_for('one' => page(widget(:boolean)))) do |context|
+        bridge.with_page('one') { expect(resolve(false)).to eq('value' => false) }
+        context.with_document('App.Layout', page(widget(:string))) do
+          expect(resolve('shared')).to eq('value' => 'shared')
+        end
+        context.export_schemas(directory)
+      end
+      manifest = Mxrb::RubyApp::Manifest.new(directory, 'mode' => 'ruby', 'runtime_model' => 'ruby')
+      expect(Mxrb::IO::MprFile).not_to receive(:open)
+      bridge.with(manifest) do
+        bridge.with_page('one') do
+          expect(resolve(true)).to eq('value' => true)
+          expect { resolve('wrong revision') }.to raise_error(TypeError)
+        end
+        bridge.with_page('App.Layout') { expect(resolve('edited')).to eq('value' => 'edited') }
+        bridge.with_page('missing') do
+          expect { resolve(false) }.to raise_error(Mxrb::ValidationError, /snapshot is unavailable/)
+        end
+      end
+    end
+  end
+
   it 'restores the prior thread context when context construction itself fails' do
     previous = Object.new
     Thread.current[described_class::THREAD_KEY] = previous
@@ -165,7 +189,7 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
   end
 
   it 'normalizes invalid runtime paths and unsupported embedded schemas' do
-    manifest = double('invalid manifest')
+    manifest = double('invalid manifest', data: {})
     allow(manifest).to receive(:absolute_path).and_raise(KeyError, 'missing')
     context = described_class.new(manifest:)
     context.with_page('one') do

@@ -436,6 +436,8 @@ RSpec.describe 'Ruby application internal contracts' do
     allow(store).to receive(:transaction).and_yield
     allow(store).to receive(:create).and_return(native)
     allow(store).to receive_messages(commit: native, delete: true)
+    allow(store).to receive(:database).and_return(double)
+    allow(Mxrb::RubyApp::FileContent).to receive(:new).with(store.database).and_return(double(delete: nil))
 
     expect(app.records('M.E', context: Object.new)).to contain_exactly(include(id: '1'))
     expect(app.record('M.E', '1', context: Object.new)).to be_nil
@@ -704,7 +706,7 @@ RSpec.describe 'Ruby application internal contracts' do
               }
       )
       app.instance_variable_set(:@environment, destructive)
-      app.instance_variable_set(:@manifest, double(absolute_path: '/tmp/runtime.mpr'))
+      app.instance_variable_set(:@manifest, double(absolute_path: '/tmp/runtime.mpr', data: {}))
       native_bridge = double(close: nil)
       coordinator = app.send(:shared_store)
       allow(Mxrb::RubyApp::Registry).to receive(:all).and_return({})
@@ -716,7 +718,8 @@ RSpec.describe 'Ruby application internal contracts' do
         '/tmp/runtime.mpr', database: File.join(dir, 'db/custom.sqlite3'),
                             record_hooks: {}, adapters: {}, java_custom_actions: {},
                             allow_destructive: true, coordinator:,
-                            scheduler_lease_ttl: '300', runtime_records: {}
+                            scheduler_lease_ttl: '300', runtime_records: {}, runtime_project: nil,
+                            service_dispatch: instance_of(Proc)
       ).and_return(native_bridge)
       expect(app.send(:bridge)).to eq(native_bridge)
       app.close

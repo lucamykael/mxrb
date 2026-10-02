@@ -2,6 +2,7 @@
 
 require_relative '../io/mpr_file'
 require_relative '../pluggable/mpr_codec'
+require_relative 'pluggable_schemas'
 
 module Mxrb
   module RubyApp
@@ -41,6 +42,13 @@ module Mxrb
         @page_id = previous
       end
 
+      def with_document(name, document, &block)
+        @pages[name.to_s] = collect_widgets(document)
+        with_page(name, &block)
+      end
+
+      def export_schemas(root) = PluggableSchemas.write(root, @pages)
+
       def for_widget(name, widget_id:)
         raise ValidationError, 'typed pluggable properties require their private page identity' if @page_id.to_s.empty?
 
@@ -73,15 +81,21 @@ module Mxrb
       end
 
       def page_widgets
-        @pages[@page_id] ||= begin
-          unit = mpr.unit(@page_id)
-          raise ValidationError, 'private pluggable page baseline is unavailable' unless unit
+        @pages[@page_id] ||= if @manifest && @manifest.data['runtime_model'] == 'ruby'
+                               PluggableSchemas.read(@manifest.root, @page_id)
+                             else
+                               baseline_widgets
+                             end
+      end
 
-          document = mpr.parse_contents(unit)
-          raise ValidationError, 'private pluggable identity is not a page' unless document['$Type'] == 'Forms$Page'
+      def baseline_widgets
+        unit = mpr.unit(@page_id)
+        raise ValidationError, 'private pluggable page baseline is unavailable' unless unit
 
-          collect_widgets(document)
-        end
+        document = mpr.parse_contents(unit)
+        raise ValidationError, 'private pluggable identity is not a page' unless document['$Type'] == 'Forms$Page'
+
+        collect_widgets(document)
       end
 
       def collect_widgets(value, found = [])
