@@ -1,5 +1,97 @@
 # Runtime ohne Java
 
+## Modbus TCP und RTU
+
+`Mxrb::Modbus::Client` ist ein eigener Connector für das Ruby-Backend mit den
+Funktionen 01/02/03/04/05/06/15/16 der
+[Modbus-Spezifikation](https://www.modbus.org/modbus-specifications).
+Er ist kein offizielles Marketplace-Paket und erzeugt keinen Mendix-Java-Code.
+Der gleiche Client akzeptiert `transport: :tcp` (Standard) oder `transport: :rtu`.
+TLS und die Umwandlung von Registern in Gleitkommazahlen sind nicht enthalten.
+
+```ruby
+client = Mxrb::Modbus::Client.new(host: ENV.fetch('MODBUS_HOST'), unit_id: 1, timeout: 5)
+client.read_holding_registers(0, 2)       # => [4660, 65535]
+client.read_coils(0, 8)                  # => Array mit true/false
+client.write_single_register(10, 42)     # => 42
+client.write_multiple_coils(0, [true, false]) # => 2
+```
+
+Weitere Methoden sind `read_discrete_inputs`, `read_input_registers`,
+`write_single_coil` und `write_multiple_registers`. Adressen beginnen bei null:
+Holding-Register 40001 entspricht Adresse 0. Register sind vorzeichenlose
+Ganzzahlen von 0 bis 65535; Coils verlangen boolesche Werte. Lesen liefert Arrays,
+einzelnes Schreiben den Wert und mehrfaches Schreiben die bestätigte Anzahl.
+Standardport ist 502; `unit_id` akzeptiert 0–255, auch für Gateways.
+
+Bei TCP öffnet und schließt jede Operation ihre Verbindung. Ein gemeinsames Zeitlimit in
+Sekunden gilt für Namensauflösung/Verbindung, Senden und Empfang. Automatische
+Wiederholungen gibt es nicht: Nach einem Schreib-Timeout ist das entfernte Ergebnis
+unbekannt. `ExceptionResponse` enthält `function` und `code`; `ProtocolError`
+kennzeichnet ungültige Antworten, `TransportError` (einschließlich `TimeoutError`)
+Kommunikationsfehler. Modbus TCP bietet keine Authentifizierung oder Verschlüsselung;
+der Endpunkt wird von der Anwendung in einem vertrauenswürdigen Netzwerk konfiguriert.
+
+Ein mit `Registry.register_java_custom_action('Industrial.ReadRegister')` in
+`config/adapters.rb` registrierter Adapter kann
+`client.read_holding_registers(0).first` zurückgeben. Der Ruby-Microflow-Interpreter
+verarbeitet das Ergebnis; der Adapter wird nicht als Java exportiert.
+
+### Lokale TCP-Simulation
+
+Start: `bundle exec ruby examples/modbus_tcp_simulator.rb` im MXRB-Verzeichnis.
+Der Simulator lauscht nur auf `127.0.0.1:1502`, mit `unit_id: 1` und Adressen
+0–255 je Bereich. Ein numerisches Argument ändert den Port. Coils und Holding-
+Register beginnen bei null und behalten Schreibwerte bis zum Beenden; Eingang 0
+ist `true`, Input-Register 0 enthält `1234`.
+
+In einem weiteren Ruby-Prozess nach `require 'mxrb'`:
+
+```ruby
+client = Mxrb::Modbus::Client.new(transport: :tcp, host: '127.0.0.1', port: 1502)
+client.write_multiple_registers(0, [42, 123])
+p client.read_holding_registers(0, 2) # [42, 123]
+```
+
+Der Simulator ist ein Entwicklungswerkzeug mit Daten im Arbeitsspeicher.
+Ctrl+C beendet ihn.
+
+Den vollständigen Anwendungsablauf startet
+`bundle exec ruby examples/modbus_application.rb`. Das Beispiel startet einen
+eigenen Simulator auf einem freien Port, erzeugt und validiert ein MPR mit der
+Entität `Measurement` und dem Microflow `Industrial.ConfigureAndSample`, schreibt
+die Sollwerte 42 und 84 und speichert die Messwerte in SQLite. Nach erneutem
+Öffnen der Datenbank werden beide Messungen geprüft. Das JSON-Ergebnis enthält
+die Pfade zu Modell und Datenbank in einem temporären Verzeichnis, das zur
+Inspektion erhalten bleibt. Der Simulator wird automatisch beendet.
+
+### Serielle RTU-Schnittstelle
+
+RTU verwendet ein bereits geöffnetes, von Anwendung/System konfiguriertes serielles
+IO im Raw-Modus: 8E1, 8O1 oder 8N2, ohne lokales Echo. Der Adapter übernimmt die
+RS-485-Richtungssteuerung. `baud_rate` beschreibt die konfigurierte Geschwindigkeit
+für die Zeitberechnung und ändert keine Portparameter. Eine bestimmte serielle
+Bibliothek ist nicht erforderlich. POSIX-Beispiel für einen konfigurierten Port:
+
+```ruby
+File.open('/dev/ttyUSB0', File::RDWR | File::NONBLOCK | File::NOCTTY) do |serial|
+  client = Mxrb::Modbus::Client.new(transport: :rtu, io: serial, baud_rate: 9600, unit_id: 1)
+  p client.read_holding_registers(0, 2)
+end
+```
+
+RTU verlangt `unit_id` 1–247; Broadcast wird nicht unterstützt. Pro Bus darf nur
+ein Client verwendet werden; gleichzeitige Aufrufe werden bis zum Abschluss der
+Antwortvalidierung abgewiesen. Die Anwendung besitzt und schließt das IO. CRC,
+Länge, Adresse und Funktion werden geprüft, ebenso softwareseitig beobachtete
+Frame-Abstände und Zeichenpausen. Transport-/Protokollfehler sperren die Sitzung:
+Port erneut öffnen und resynchronisieren, bevor ein neuer Client erstellt wird;
+unsichere Schreibvorgänge nicht automatisch wiederholen. Eine gültige Geräteausnahme
+sperrt die Sitzung nicht. Tests verwenden Pseudo-Terminals und lokales TCP;
+elektrische Zeitbedingungen, USB-Treiber und reale Geräte sind noch zu validieren.
+
+## Backend-Ausführung
+
 Der Ruby-Modus startet das Backend ohne Mendix Java Runtime. Beim Öffnen einer
 exportierten Anwendung migriert MXRB automatisch eine umgebungsspezifische
 SQLite-Datenbank, öffnet den Microflow-Interpreter, registriert Lifecycle-Hooks,
