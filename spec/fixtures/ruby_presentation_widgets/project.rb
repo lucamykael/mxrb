@@ -16,6 +16,7 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
     entity :Document do
       generalizes 'System.FileDocument'
       string :Name
+      boolean :Approved
       association 'Presentation.Tag', type: :ReferenceSet, name: :Document_Tags
     end
     microflow :Load do
@@ -57,6 +58,7 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       title 'Standalone presentation'
       data_source microflow: 'Presentation.Load'
       menu_bar :MainMenu, menu: 'Presentation.Main'
+      button(:EditDraft, caption: 'Edit draft') { on_click page: 'Presentation.Edit' }
       navigation_tree :Tree, menu: 'Presentation.Main'
       static_image :Logo, image: 'Presentation.Images.Pixel', alternative_text: 'Exported image'
       snippet :Details, from: 'Presentation.Details'
@@ -99,6 +101,21 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
           }]
         }]
       }
+    end
+    page :Edit do
+      title 'Client actions'
+      data_source microflow: 'Presentation.Load'
+      text_box :DraftName, attribute: 'Presentation.Document.Name', caption: 'Draft name'
+      check_box :DraftApproved, attribute: 'Presentation.Document.Approved', caption: 'Approved'
+      button(:SaveDraft, caption: 'Save draft') { on_click action: :save_changes, close_page: false }
+      button(:CancelDraft, caption: 'Cancel draft') { on_click action: :cancel_changes, close_page: false }
+      button(:CloseDraft, caption: 'Close draft') { on_click action: :close_page }
+      layout_grid :ResponsiveGrid do
+        row horizontal_alignment: :center do
+          column(desktop: 6, tablet: 8, phone: 12) { text 'First responsive column' }
+          column(desktop: 6, tablet: 4, phone: 12) { text 'Second responsive column' }
+        end
+      end
     end
     page(:Alternate) { text 'Alternate page content' }
   end

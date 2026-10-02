@@ -26,6 +26,25 @@ RSpec.describe 'typed runtime page events' do
     value
   end
 
+  it 'retains native close-page settings in editable runtime events and Mendix output' do
+    writer = Mxrb::Writer.allocate
+    page = Mxrb::Model::Page.allocate
+    %w[save_changes cancel_changes delete].each do |handler|
+      [true, false].each do |close_page|
+        projected = { 'event' => 'on_click', 'kind' => 'action', 'handler' => handler, 'close_page' => close_page }
+        source, widget = emit(projection([projected]))
+        expect(source).to include("close_page: #{close_page}")
+        expect(widget.fetch('events')).to eq([projected])
+        event = projected.transform_keys(&:to_sym)
+        native = writer.send(:client_action_doc, event)
+        expect(native.fetch('ClosePage')).to be(close_page)
+        expect(page.send(:parse_action, native)).to include(close_page:)
+        legacy = Mxrb::Exporter.allocate.send(:render_widget_event, event, 0)
+        expect(legacy).to include("close_page: #{close_page}")
+      end
+    end
+  end
+
   it 'distinguishes missing arguments from a present empty argument collection' do
     absent_source, absent = emit(projection([event]))
     empty_source, empty = emit(projection([event({})]))

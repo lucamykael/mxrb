@@ -110,13 +110,13 @@ RSpec.describe 'Ruby application export mode' do
         "api<ApplicationSchema>('/api/schema')", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
         'const execution = await definition.execute(resolvedParameters, invoke)',
-        "effect): effect is ShowMessageEffect => effect.type === 'show_message'",
+        "effect.type === 'show_message' && effect.message",
         "method: 'PATCH'", "api<LoginResponse>('/api/login'",
         "api<Session>('/api/session'", "api('/api/logout'",
         'if (payload.context) setPageContext(payload.context)',
         'const activeContext = contextOverride || pageContext;',
         'if (invocationInFlight.current) return Promise.resolve(null)',
-        'payload.context ||', 'payload.result ||'
+        'payload.context ||', 'isEntityRecord(payload.result) ? payload.result : null'
       )
       service_sources = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join
       expect(service_sources).to include('flow :microflow do')

@@ -335,3 +335,15 @@ de 10.24 e 11.12; `mx check` também preserva diagnósticos observáveis dos
 pacotes byte a byte em cada round-trip. O MXRB permanece independente: `mx` e
 MxBuild são somente oráculos de validação, nunca geradores, mutadores ou
 dependências de runtime.
+
+### Continuação de 02/10: ações cliente e grid responsivo
+
+Salvar/Cancelar mantém rascunhos por página, com confirmação atômica e ACL por
+objeto/membro no backend; Excluir/Fechar deixa de ser tratado como microflow.
+A opção ClosePage retorna ao MPR, efeitos de fechamento são aplicados e o
+histórico restaura página/contexto. LayoutGrid aplica os pesos e alinhamentos
+por desktop/tablet/celular. O fixture existente cobre 54 passos de navegador,
+com mais dois cenários de viewport. Ver o recorte e as limitações específicas
+em `portabilidade-ruby-typescript.md`: uploads/efeitos de flows fora do lote,
+modais, outras ações nativas, parâmetros avançados e equivalência visual ampla
+continuam fora desta certificação.

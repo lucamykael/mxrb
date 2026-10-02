@@ -4299,6 +4299,7 @@ module Mxrb
                 end
       declaration = "#{' ' * indent}#{event.fetch(:event)} " \
                     "#{event.fetch(:kind)}: #{handler}"
+      declaration += ", close_page: #{event.fetch(:close_page).inspect}" if event.key?(:close_page)
       return declaration if arguments.empty?
 
       "#{declaration}, pass: #{native_ruby(arguments, indent)}"

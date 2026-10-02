@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
+import { ClientActions, PageEdits, hasPageEdits } from './PageEdits';
 import { apiFailure, inlineStyle, isEntityRecord } from './value';
 import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
@@ -18,12 +19,11 @@ import type {
   EntityRecord,
   InvocationResult,
   LoginResponse,
-  OpenPageEffect,
   PageDefinition,
   PageWidgetProps,
   RuntimeVariables,
   Session,
-  ShowMessageEffect,
+  WidgetEvent,
 } from '../types';
 
 type PageRuntime = Omit<WidgetRuntimeProps, 'widget' | 'children'>;
@@ -43,6 +43,7 @@ function RuntimePageWidget({ widget, children }: PageWidgetProps) {
 
 export function ApplicationRuntime() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { pageName } = useParams();
   const [schema, setSchema] = useState<ApplicationSchema | null>(null);
   const [page, setPage] = useState<PageDefinition | null>(null);
@@ -55,6 +56,15 @@ export function ApplicationRuntime() {
   const [revision, setRevision] = useState(0);
   const [session, setSession] = useState<Session | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
+  const [edits, setEdits] = useState(() => new PageEdits(false));
+  const [editReset, setEditReset] = useState(0);
+  const actionInFlight = useRef(false);
+  const schemaRef = useRef<ApplicationSchema | null>(null);
+  const pageLoaded = useRef(false);
+  const pageRequest = useRef(0);
+  const pendingRoute = useRef<string | null>(null);
+  const depth = useRef(0);
+  const closeTransition = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
 
   const handleError = useCallback((failure: unknown) => {
     const normalized = apiFailure(failure);
@@ -71,10 +81,21 @@ export function ApplicationRuntime() {
     context: EntityRecord | null = null,
     updateLocation = true,
   ): Promise<void> => {
+    const requestId = ++pageRequest.current;
     try {
       const value = await api<PageDefinition>(`/api/pages/${encodeURIComponent(name)}`, {});
       let resolvedContext = context;
-      if (!resolvedContext && value.data_source?.name) {
+      if (!updateLocation && context && !context.transient) {
+        try {
+          resolvedContext = await request<EntityRecord>(
+            `/api/entities/${encodeURIComponent(context.type)}/${encodeURIComponent(context.id)}`,
+          );
+        } catch (failure) {
+          if (apiFailure(failure).status !== 404) throw failure;
+          resolvedContext = null;
+        }
+      }
+      if (!context && value.data_source?.name) {
         if (value.data_source.kind === 'nanoflow') {
           const source = nanoflows[value.data_source.name as keyof typeof nanoflows];
           if (!source)
@@ -90,15 +111,57 @@ export function ApplicationRuntime() {
           resolvedContext = isEntityRecord(candidate) ? candidate : null;
         }
       }
+      if (requestId !== pageRequest.current) return;
+      setEdits(new PageEdits(schemaRef.current ? hasPageEdits(value, schemaRef.current) : false));
       setPage(value);
       setPageContext(resolvedContext);
       setRevision((current) => current + 1);
       setError(null);
-      if (updateLocation) navigate(`/pages/${encodeURIComponent(name)}`);
+      if (updateLocation || !pageLoaded.current) {
+        pendingRoute.current = name;
+        if (pageLoaded.current) depth.current += 1;
+        navigate(`/pages/${encodeURIComponent(name)}`, {
+          replace: !pageLoaded.current,
+          state: { mxrbDepth: depth.current, context: resolvedContext },
+        });
+      }
+      pageLoaded.current = true;
     } catch (failure) {
       handleError(failure);
     }
   };
+
+  const closePage = (count = 1): Promise<void> => {
+    if (closeTransition.current) return closeTransition.current.promise;
+    const distance = Math.min(depth.current, Math.max(1, Math.floor(Number(count) || 1)));
+    if (distance <= 0) return Promise.resolve();
+    let resolve = () => {};
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    closeTransition.current = { promise, resolve };
+    navigate(-distance);
+    return promise;
+  };
+
+  // React Router changes the URL on Back/Forward; reload the matching page
+  // and its saved object context as well. Never navigate outside this app.
+  const loadRoute = useRef(openPage);
+  loadRoute.current = openPage;
+  useEffect(() => {
+    if (!pageLoaded.current || !pageName) return;
+    const target = decodeURIComponent(pageName);
+    if (pendingRoute.current === target) {
+      pendingRoute.current = null;
+      return;
+    }
+    depth.current = Number(location.state?.mxrbDepth) || 0;
+    const context = location.state?.context;
+    void loadRoute.current(target, isEntityRecord(context) ? context : null, false).finally(() => {
+      closeTransition.current?.resolve();
+      closeTransition.current = null;
+    });
+  }, [location.key, pageName]);
 
   const loadApplication = async () => {
     try {
@@ -106,6 +169,7 @@ export function ApplicationRuntime() {
       setSession(activeSession);
       setCsrfToken(activeSession.csrf || null);
       const value = await api<ApplicationSchema>('/api/schema');
+      schemaRef.current = value;
       setSchema(value);
       setAuthRequired(false);
       setError(null);
@@ -164,6 +228,10 @@ export function ApplicationRuntime() {
       setCsrfToken(null);
       setSession(null);
       setSchema(null);
+      schemaRef.current = null;
+      pageLoaded.current = false;
+      depth.current = 0;
+      pageRequest.current += 1;
       setPage(null);
       setAuthRequired(true);
       navigate('/');
@@ -182,12 +250,19 @@ export function ApplicationRuntime() {
   const saveRecord: SaveRecord = useCallback(
     (record, changes) => {
       if (!record?.type || !record.id) return Promise.resolve(record);
+      if (edits.deferred) {
+        const updated = edits.stage(record, changes);
+        setRevision((value) => value + 1);
+        return Promise.resolve(updated);
+      }
       if (record.transient) {
         const updated: EntityRecord = {
           ...record,
           attributes: { ...record.attributes, ...changes },
         };
-        setPageContext((current) => (current?.id === updated.id ? updated : current));
+        setPageContext((current) =>
+          current?.id === updated.id && current.type === updated.type ? updated : current,
+        );
         setRevision((value) => value + 1);
         setError(null);
         return Promise.resolve(updated);
@@ -197,7 +272,9 @@ export function ApplicationRuntime() {
         { method: 'PATCH', body: JSON.stringify(changes) },
       )
         .then((updated) => {
-          setPageContext((current) => (current?.id === updated.id ? updated : current));
+          setPageContext((current) =>
+            current?.id === updated.id && current.type === updated.type ? updated : current,
+          );
           setRevision((value) => value + 1);
           setError(null);
           return updated;
@@ -207,7 +284,7 @@ export function ApplicationRuntime() {
           return null;
         });
     },
-    [request, handleError],
+    [request, handleError, edits],
   );
 
   const markMutation = useCallback(() => setRevision((value) => value + 1), []);
@@ -225,27 +302,26 @@ export function ApplicationRuntime() {
         ...(activeContext ? { __mxrb_context: activeContext } : {}),
       }),
     })
-      .then((payload) => {
+      .then(async (payload) => {
         setRevision((value) => value + 1);
         if (payload.context) setPageContext(payload.context);
-        const message = (payload.effects || []).find(
-          (effect): effect is ShowMessageEffect => effect.type === 'show_message',
-        );
-        if (message?.message) setNotice(String(message.message));
-        const navigation = (payload.effects || []).find(
-          (effect): effect is OpenPageEffect => effect.type === 'open_page',
-        );
-        if (navigation?.page) {
-          const context =
-            Object.values(navigation.arguments || {})[0] ||
-            payload.context ||
-            payload.result ||
-            null;
-          return openPage(navigation.page, context as EntityRecord | null).then(() => payload);
+        let navigated = false;
+        for (const effect of payload.effects || []) {
+          if (effect.type === 'show_message' && effect.message) setNotice(String(effect.message));
+          if (effect.type === 'open_page' && typeof effect.page === 'string') {
+            const context =
+              Object.values(effect.arguments || {}).find(isEntityRecord) ||
+              payload.context ||
+              (isEntityRecord(payload.result) ? payload.result : null);
+            await openPage(effect.page, context);
+            navigated = true;
+          } else if (effect.type === 'close_page') {
+            await closePage(Number(effect.count));
+            navigated = true;
+          }
         }
-        return payload.context
-          ? Promise.resolve(payload)
-          : refreshPageContext().then(() => payload);
+        if (!navigated && !payload.context) await refreshPageContext();
+        return payload;
       })
       .catch(handleError)
       .finally(() => {
@@ -289,8 +365,7 @@ export function ApplicationRuntime() {
           const context = values.find(isEntityRecord) || null;
           await openPage(effect.page, context);
         } else if (effect.type === 'close_page') {
-          const count = Math.max(1, Number(effect.count) || 1);
-          window.history.go(-count);
+          await closePage(Number(effect.count));
         }
       }
       setError(null);
@@ -299,6 +374,61 @@ export function ApplicationRuntime() {
       setError(apiFailure(failure));
       return null;
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const runClientAction = async (event: WidgetEvent, record: EntityRecord | null) => {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
+    setBusy(true);
+    try {
+      switch (event.handler) {
+        case 'save_changes': {
+          await edits.flush();
+          const pending = edits.pending();
+          const submitted = new Map(edits.changes);
+          const response = pending.length
+            ? await request<{ records: EntityRecord[] }>('/api/records/commit', {
+                method: 'POST',
+                body: JSON.stringify({ records: pending }),
+              })
+            : { records: [] };
+          edits.accept(response.records, submitted);
+          break;
+        }
+        case 'cancel_changes':
+          // Discard text still focused, as well as changes already staged on blur.
+          edits.cancel();
+          setEditReset((value) => value + 1);
+          break;
+        case 'delete':
+          if (!record || record.transient) throw new Error('Select a persisted object to delete');
+          await request(
+            `/api/entities/${encodeURIComponent(record.type)}/${encodeURIComponent(record.id)}`,
+            {
+              method: 'DELETE',
+            },
+          );
+          edits.forget(record);
+          setPageContext((current) =>
+            current?.id === record.id && current.type === record.type ? null : current,
+          );
+          break;
+        case 'close_page':
+          await closePage();
+          return;
+        default:
+          throw new Error(`Unsupported client action: ${event.handler}`);
+      }
+      setRevision((value) => value + 1);
+      setError(null);
+      if (event.close_page ?? ['save_changes', 'cancel_changes'].includes(event.handler))
+        await closePage();
+    } catch (failure) {
+      handleError(failure);
+    } finally {
+      actionInFlight.current = false;
       setBusy(false);
     }
   };
@@ -347,11 +477,13 @@ export function ApplicationRuntime() {
         />
       }
     >
-      <PageRuntimeContext.Provider value={pageRuntime}>
-        <SelectionScope key={page.name}>
-          <PageOutlet key={page.name} page={page} busy={busy} Widget={RuntimePageWidget} />
-        </SelectionScope>
-      </PageRuntimeContext.Provider>
+      <ClientActions.Provider value={{ edits, reset: editReset, run: runClientAction }}>
+        <PageRuntimeContext.Provider value={pageRuntime}>
+          <SelectionScope key={page.name}>
+            <PageOutlet key={page.name} page={page} busy={busy} Widget={RuntimePageWidget} />
+          </SelectionScope>
+        </PageRuntimeContext.Provider>
+      </ClientActions.Provider>
     </AppLayout>
   );
 }

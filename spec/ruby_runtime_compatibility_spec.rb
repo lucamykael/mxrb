@@ -87,6 +87,54 @@ RSpec.describe 'Standalone runtime compatibility' do
     expect(@application.record('System.Image', photo[:id])).to be_nil
   end
 
+  it 'commits multiple page objects atomically, with concrete permissions and reference conversion' do
+    app = @application
+    report = app.create_record('Files.Report', 'Name' => 'Before')
+    tag = app.create_record('Files.Tag', 'Name' => 'Tag')
+    entries = [
+      { 'type' => 'Files.Document', 'id' => report[:id], 'attributes' => { 'Name' => 'After', 'Tags' => [tag] } },
+      { 'type' => 'Files.Tag', 'id' => tag[:id], 'attributes' => { 'Name' => 'Renamed' } }
+    ]
+    expect(app.commit_records(entries).map { _1[:type] }).to eq(%w[Files.Report Files.Tag])
+    expect(app.record('Files.Report', report[:id]).dig(:attributes, 'Tags', 0, :id)).to eq(tag[:id])
+    expect(app.record('Files.Tag', tag[:id]).dig(:attributes, 'Name')).to eq('Renamed')
+    entries.first['attributes'] = { 'Name' => 'Must rollback' }
+    entries.last['id'] = 'missing'
+    expect { app.commit_records(entries) }.to raise_error(ArgumentError, /not found/)
+    expect(app.record('Files.Report', report[:id]).dig(:attributes, 'Name')).to eq('After')
+    entries.last['id'] = tag[:id]
+    context = app.session_manager.authenticate(nil)
+    allow(app.access_control).to receive(:authorize!).and_call_original
+    allow(app.access_control).to receive(:authorize!).with('Files.Tag', anything)
+                                                     .and_raise(Mxrb::Runtime::AuthorizationError)
+    expect { app.commit_records(entries, context:) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+    expect(app.record('Files.Report', report[:id]).dig(:attributes, 'Name')).to eq('After')
+    expect(app.commit_records([])).to eq([])
+    invalid = [nil, {}, [nil], [{ 'type' => 1 }], [{ 'type' => '' }],
+               [{ 'type' => 'Files.Tag', 'id' => '1', 'attributes' => nil }],
+               [{ 'type' => 'Files.Tag', 'id' => '1', 'attributes' => { Name: 'Bad' } }], entries * 501]
+    invalid.each { |value| expect { app.commit_records(value) }.to raise_error(ArgumentError, /records must/) }
+  end
+
+  it 'exposes transactional page commits through the existing authenticated HTTP boundary' do
+    server = Mxrb::RubyApp::Server.allocate
+    server.instance_variable_set(:@application, @application)
+    record = @application.create_record('Files.Tag', 'Name' => 'Before')
+    request = Struct.new(:body) do
+      def path = '/api/records/commit'
+      def request_method = 'POST'
+      def query = {}
+      def [](_key) = nil
+    end.new(JSON.generate(records: [{ type: 'Files.Tag', id: record[:id], attributes: { Name: 'HTTP' } }]))
+    response = Mxrb::Http::Response.new
+    server.send(:dispatch, request, response)
+    expect(response.status).to eq(200)
+    expect(JSON.parse(response.body).dig('records', 0, 'attributes', 'Name')).to eq('HTTP')
+    request.body = '{}'
+    server.send(:dispatch, request, response)
+    expect(response.status).to eq(400)
+  end
+
   it 'filters nested and reverse association XPath on the server before pagination' do
     app = @application
     tag = app.create_record('Files.Tag', 'Name' => "A]B's")

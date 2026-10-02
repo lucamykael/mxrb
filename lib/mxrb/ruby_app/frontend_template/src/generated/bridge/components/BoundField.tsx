@@ -1,4 +1,5 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
+import { ClientActions } from '../PageEdits';
 import { editable, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import type {
   ApiRequest,
@@ -44,6 +45,7 @@ export function BoundField({
   onError,
 }: BoundFieldProps) {
   const fieldId = useId();
+  const actions = useContext(ClientActions);
   const options = widget.options || {};
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
@@ -138,6 +140,25 @@ export function BoundField({
     pending.current = task;
     return task;
   };
+  const flushField = useRef<() => Promise<unknown>>(async () => {});
+  flushField.current = () => persist(draft);
+  useEffect(() => {
+    if (!actions) return;
+    const flush = () => flushField.current();
+    actions.edits.fields.add(flush);
+    return () => {
+      actions.edits.fields.delete(flush);
+    };
+  }, [actions?.edits]);
+  const resetVersion = useRef(actions?.reset);
+  useEffect(() => {
+    if (resetVersion.current === actions?.reset) return;
+    resetVersion.current = actions?.reset;
+    const next = kind === 'check_box' ? Boolean(value) : draftValue(value);
+    committed.current = next;
+    setDraft(next);
+  }, [actions?.reset]);
+
   const changed = (next: string | number | boolean) => {
     void persist(next).catch(onError);
   };

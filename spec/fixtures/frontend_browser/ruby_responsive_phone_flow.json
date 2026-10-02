@@ -1,0 +1,36 @@
+{
+  "name": "ruby-responsive-phone",
+  "authentication": false,
+  "viewport": {
+    "width": 390,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "responsive-phone",
+      "path": "/pages/Presentation.Edit",
+      "steps": [
+        {
+          "wait_for_selector": "[data-widget-name=DraftName] input"
+        },
+        {
+          "wait_for_style": {
+            "selector": "[data-widget-name=ResponsiveGrid] .mxrb-layout-grid__column",
+            "property": "flex-basis",
+            "value": "100%"
+          }
+        },
+        {
+          "wait_for_style": {
+            "selector": "[data-widget-name=ResponsiveGrid] .mxrb-layout-grid__row",
+            "property": "flex-wrap",
+            "value": "wrap"
+          }
+        }
+      ],
+      "selectors": [
+        "[data-widget-name=ResponsiveGrid]"
+      ]
+    }
+  ]
+}

@@ -125,12 +125,45 @@ continuam sendo configuradas no `SessionManager` pelo ambiente da aplicação.
 
 Limites ainda abertos: funções/eixos/tokens restantes do XPath completo,
 equivalência de todos os eventos/validações herdados do runtime Mendix,
-ações cliente nativas adicionais, parâmetros tipados/variáveis locais mais
+ações cliente além do recorte abaixo, parâmetros tipados/variáveis locais mais
 avançadas e integrações particulares. Layouts móveis/nativos, comportamento
 responsivo exato de cada tema e equivalência visual com Studio Pro não estão
 certificados. Os limites novos têm testes em `ruby_advanced_presentation_spec.rb`
 e nos componentes React; isso não elimina os gates pendentes em projetos reais.
 Esse gate certifica o fixture e os contratos descritos, não conversão universal.
+
+### Ações cliente e layout responsivo
+
+`save_changes`, `cancel_changes`, `delete` e `close_page` executam ações cliente
+sem procurar microflows com esses nomes. A opção `close_page: true/false` de
+salvar/cancelar/excluir é preservada na leitura, no Ruby editável e na reconstrução
+Mendix. Efeitos `close_page` de microflows e nanoflows também são aplicados.
+Voltar/Avançar restaura a página e seu objeto, atualizado pelo backend; fechar
+na primeira página não sai da aplicação.
+
+Páginas com Salvar/Cancelar, inclusive em snippets compartilhados, mantêm
+rascunhos dos membros editados. Salvar inclui o texto ainda em foco e envia os
+objetos persistentes em uma transação (`POST /api/records/commit`, até 1.000
+objetos): erro ou falta de permissão desfaz o lote inteiro. Cancelar restaura a
+última versão confirmada. Falhas de gravação preservam o rascunho para nova
+tentativa; edições feitas durante uma gravação permanecem pendentes. DTOs
+continuam locais. Páginas sem essas ações mantêm a gravação imediata existente.
+Uploads e efeitos já persistidos por microflows não pertencem a essa transação
+de edição. Excluir usa o objeto de contexto; exclusão múltipla, seleção de
+`SourceVariable`, confirmações nativas e os demais tipos de ação continuam
+pendentes. Popups são apresentados pela navegação de páginas, sem uma pilha
+visual de janelas modais.
+
+LayoutGrid aplica pesos de 1–12, `grow` e `auto` por desktop, tablet (até 991 px)
+e celular (até 767 px), quebra de linha e alinhamentos de linha/coluna. Isso
+certifica o grid web declarado; não equivale a aplicativos móveis nativos nem
+a todos os breakpoints e estilos de temas particulares.
+
+O fixture de apresentação existente verifica 54 passos no Chromium, incluindo
+cancelamento, confirmação, persistência após recarga e retorno à página anterior.
+Dois cenários adicionais verificam o mesmo grid em 800 px e 390 px. Os três
+rodam com acesso ao MPR proibido. Testes React cobrem texto em foco, falha/retry,
+múltiplos objetos e histórico do navegador.
 
 ### Campos e Data Views editáveis
 

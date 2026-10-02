@@ -1190,11 +1190,17 @@ module Mxrb
           end
           { kind: :page, handler: handler, arguments: arguments }
         elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "save_changes" }
+          { kind: :action, handler: "save_changes" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$CancelChangesClientAction Forms$CancelChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "cancel_changes" }
+          { kind: :action, handler: "cancel_changes" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$DeleteClientAction Forms$DeleteClientAction].include?(action["$Type"])
-          { kind: :action, handler: "delete" }
+          { kind: :action, handler: "delete" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action["$Type"])
           { kind: :action, handler: "close_page" }
         end
