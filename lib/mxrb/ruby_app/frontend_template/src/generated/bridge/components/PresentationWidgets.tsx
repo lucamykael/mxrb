@@ -10,7 +10,6 @@ import type { WidgetRuntimeProps } from '../contracts';
 import { editable, ReadOnlyContext } from './FieldPolicy';
 import { WidgetRenderer } from './WidgetRenderer';
 import { VariableScope } from './VariableScope';
-import { selectable } from '../selectable';
 import {
   classes,
   displayValue,
@@ -374,17 +373,18 @@ export function ReferenceSetSelector(
           if (!payload.records.length) return;
           owner = payload.records[0];
         }
+        const query = new URLSearchParams();
+        if (options.selectable_xpath) {
+          query.set('xpath', String(options.selectable_xpath));
+          query.set('xpath_context_type', record.type);
+          query.set('xpath_context_id', record.id);
+        }
         const response = await request<EntityCollectionResponse>(
-          `/api/entities/${encodeURIComponent(target)}`,
-        );
-        const filtered = selectable(
-          response.records,
-          String(options.selectable_xpath || ''),
-          record,
+          `/api/entities/${encodeURIComponent(target)}${query.size ? `?${query}` : ''}`,
         );
         if (active) {
           setCurrent(owner);
-          setChoices(filtered);
+          setChoices(response.records);
         }
       })()
         .catch((error) => {

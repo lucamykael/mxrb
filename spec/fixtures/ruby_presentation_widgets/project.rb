@@ -8,8 +8,13 @@ require 'base64'
 Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
   mendix_version '11.12.1'
   self.module :Presentation do
-    entity(:Tag) { string :Name }
+    entity(:Category) { string :Name }
+    entity :Tag do
+      string :Name
+      association 'Presentation.Category', name: :Tag_Category
+    end
     entity :Document do
+      generalizes 'System.FileDocument'
       string :Name
       association 'Presentation.Tag', type: :ReferenceSet, name: :Document_Tags
     end
@@ -20,7 +25,10 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       decision '$existing != empty' do
         on(true) { return_value '$existing' }
         on(false) do
-          create_object 'Presentation.Tag', as: :tag, commit: true, set: { Name: "'Ruby tag'" }
+          create_object 'Presentation.Category', as: :category, commit: true, set: { Name: "'Visible'" }
+          create_object 'Presentation.Tag', as: :tag, commit: true,
+                                            set: { Name: "'Ruby tag'", Tag_Category: '$category' }
+          create_object 'Presentation.Tag', as: :hidden_tag, commit: true, set: { Name: "'Hidden tag'" }
           create_object 'Presentation.Document', as: :document, commit: true, set: { Name: "'Standalone'" }
           return_value '$document'
         end
@@ -55,8 +63,9 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       file_manager :File, mode: :both
       image_uploader :UploadImage, caption: 'Image upload'
       image_viewer :Preview, entity: 'Presentation.Document', alternative_text: 'Stored image',
-                             default_image: 'Presentation.Images.Pixel'
+                             default_image: 'Presentation.Images.Pixel', show_as_thumbnail: true
       native_widget :Tags, type: 'Forms$InputReferenceSetSelector', deep_structure: {
+        'SelectableXPathConstraint' => "[Presentation.Tag_Category/Presentation.Category[Name = 'Visible']]",
         'AttributeRef' => {
           '$Type' => 'DomainModels$AttributeRef',
           'Attribute' => 'Presentation.Tag.Name',

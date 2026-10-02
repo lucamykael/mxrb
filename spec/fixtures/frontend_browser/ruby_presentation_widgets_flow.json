@@ -20,6 +20,8 @@
         { "wait_for_selector": "[data-widget-name=File] input[type=file]:not(:disabled)" },
         { "wait_for_selector": "[data-widget-name=UploadImage] input[type=file]:not(:disabled)" },
         { "wait_for_selector": "[data-widget-name=Tags] input[type=checkbox]" },
+        { "wait_for_count": { "selector": "[data-widget-name=Tags] input[type=checkbox]", "equals": 1 } },
+        { "wait_for_selector": "[data-widget-name=Preview] img[src*=thumbnail_width]" },
         { "click_selector": "[data-widget-name=Tags] input[type=checkbox]" },
         { "wait_for_selector": "[data-widget-name=Tags] input:checked" },
         { "navigate": "/" },

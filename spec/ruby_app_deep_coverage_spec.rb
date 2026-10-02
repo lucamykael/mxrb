@@ -439,7 +439,9 @@ RSpec.describe 'Ruby application internal contracts' do
     allow(store).to receive(:database).and_return(double)
     allow(Mxrb::RubyApp::FileContent).to receive(:new).with(store.database).and_return(double(delete: nil))
 
+    allow(policy).to receive(:entity_allowed?).and_return(true)
     expect(app.records('M.E', context: Object.new)).to contain_exactly(include(id: '1'))
+    allow(policy).to receive(:entity_allowed?).and_return(false)
     expect(app.record('M.E', '1', context: Object.new)).to be_nil
     allow(policy).to receive(:entity_allowed?).and_return(true)
     expect(app.record('M.E', '1', context: Object.new)).to include(id: '1')

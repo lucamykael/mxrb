@@ -85,6 +85,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     ambiguous = Mxrb::Runtime::RuntimeSchema.new([first, second], [link_a, link_b])
 
     expect(single.entity('Item')).to eq(first)
+    expect(single.concrete_entities('Item')).to eq([first])
     expect(single.association('Link')).to eq(link_a)
     expect { single.entity('Missing') }.to raise_error(ArgumentError, /unknown entity/)
     expect { ambiguous.entity('Item') }.to raise_error(ArgumentError, /ambiguous entity/)

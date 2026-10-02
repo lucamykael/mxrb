@@ -56,7 +56,10 @@ function FileContentWidget(props: WidgetRuntimeProps) {
       ? 'image/png,image/jpeg,image/gif,image/webp'
       : undefined;
   const defaultImage = props.schema.presentation?.[String(options.default_image || '')]?.path;
-  const image = !record || missing ? defaultImage : `${path}?v=${revision}-${version}`;
+  const thumbnail = options.show_as_thumbnail
+    ? `&thumbnail_width=${Number(options.thumbnail_width || 100)}&thumbnail_height=${Number(options.thumbnail_height || 75)}`
+    : '';
+  const image = !record || missing ? defaultImage : `${path}?v=${revision}-${version}${thumbnail}`;
   return (
     <div {...presentationFrame(props)} aria-busy={busy}>
       {isImage && image && (
