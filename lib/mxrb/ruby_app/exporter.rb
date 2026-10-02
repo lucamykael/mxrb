@@ -2203,7 +2203,7 @@ module Mxrb
         return false if widget.key?('events') && !widget['events'].is_a?(Array)
 
         Array(widget['events']).all? do |event|
-          runtime_keys?(event, %w[event kind handler arguments]) &&
+          runtime_keys?(event, %w[event kind handler arguments close_page]) &&
             WIDGET_EVENT_METHODS.include?(event['event'].to_s) &&
             WIDGET_EVENT_HANDLERS.include?(event['kind'].to_s) &&
             %w[event kind handler].all? { event[_1].is_a?(String) && !event[_1].empty? } &&
@@ -2215,6 +2215,7 @@ module Mxrb
       def runtime_widget_event_source(widget, indentation, preserve_empty: false)
         Array(widget['events']).map do |event|
           arguments = ["#{event.fetch('kind')}: #{event.fetch('handler').inspect}"]
+          arguments << "close_page: #{event.fetch('close_page').inspect}" if event.key?('close_page')
           # Existing native-widget sinks compacted empty mappings. Preserve
           # that runtime projection while migrating literal events (which did
           # retain empty mappings) using an explicitly empty argument block.
@@ -3975,6 +3976,7 @@ module Mxrb
             kind: 'microflow' | 'nanoflow' | 'page' | string;
             handler: string;
             arguments?: RuntimeVariables;
+            close_page?: boolean;
           }
 
           export interface WidgetColumn {

@@ -9,6 +9,7 @@ import type {
 import type { WidgetRuntimeProps } from '../contracts';
 import { editable, ReadOnlyContext } from './FieldPolicy';
 import { WidgetRenderer } from './WidgetRenderer';
+import { ClientActions } from '../PageEdits';
 import { VariableScope } from './VariableScope';
 import {
   classes,
@@ -41,6 +42,7 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
   const { widget, schema, navigate, invoke, onError } = props;
   const options = widget.options || {};
   const stack = useContext(SnippetStack);
+  const actions = useContext(ClientActions);
   const inheritedVariables = useContext(VariableScope);
   const name = String(options.snippet || options.menu || options.image || '');
   const resource = schema.presentation?.[name];
@@ -153,6 +155,8 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
                         props.context || props.pageContext,
                         { pageParameter: props.pageContext, snippetParameters: inheritedVariables },
                       );
+                      if (item.action.kind === 'action' && actions)
+                        return actions.run(item.action, props.context || props.pageContext);
                       if (item.action.kind === 'page') {
                         const candidate = Object.values(parameters).find(isEntityRecord);
                         return navigate(
@@ -329,6 +333,7 @@ export function ReferenceSetSelector(
 ) {
   const { widget, context, pageContext, request, revision, saveRecord, onError, onChanged } = props;
   const record = context || pageContext;
+  const actions = useContext(ClientActions);
   const options = widget.options || {};
   const readOnly = useContext(ReadOnlyContext);
   const [choices, setChoices] = useState<EntityRecord[]>([]);
@@ -383,7 +388,7 @@ export function ReferenceSetSelector(
           `/api/entities/${encodeURIComponent(target)}${query.size ? `?${query}` : ''}`,
         );
         if (active) {
-          setCurrent(owner);
+          setCurrent(actions?.edits.resolve(owner) || owner);
           setChoices(response.records);
         }
       })()

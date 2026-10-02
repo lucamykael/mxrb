@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ClientActions } from '../PageEdits';
 import { VariableScope } from './VariableScope';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
@@ -73,14 +74,29 @@ const tableColumnWidth = (
   return totalWeight > 0 ? `${(value / totalWeight) * 100}%` : undefined;
 };
 
+const gridAlignment = (alignment: unknown) =>
+  alignment === 'center'
+    ? 'center'
+    : alignment === 'start'
+      ? 'flex-start'
+      : alignment === 'end'
+        ? 'flex-end'
+        : undefined;
+
 const layoutColumnStyle = (options: WidgetOptions): CSSProperties => {
-  const width = options.desktop;
-  if (width === 'auto') return { flex: '0 0 auto' };
-  if (width === 'grow' || width === undefined) return { flex: '1 1 0' };
-  const columns = Number(width);
-  return Number.isFinite(columns) && columns > 0
-    ? { flex: `0 0 ${(columns / 12) * 100}%` }
-    : { flex: '1 1 0' };
+  const flex = (width: unknown) => {
+    if (width === 'auto') return '0 0 auto';
+    const columns = Number(width);
+    return Number.isFinite(columns) && columns > 0 && columns <= 12
+      ? `0 0 ${(columns / 12) * 100}%`
+      : '1 1 0';
+  };
+  return {
+    alignSelf: gridAlignment(options.vertical_alignment),
+    '--mxrb-desktop-flex': flex(options.desktop),
+    '--mxrb-tablet-flex': flex(options.tablet ?? options.desktop),
+    '--mxrb-phone-flex': flex(options.phone ?? options.tablet ?? options.desktop),
+  } as CSSProperties;
 };
 
 function Gallery({
@@ -400,8 +416,8 @@ export function WidgetRenderer({
   invoke,
   invokeNanoflow,
   navigate,
-  context,
-  pageContext,
+  context: suppliedContext,
+  pageContext: suppliedPageContext,
   revision,
   schema,
   request,
@@ -410,6 +426,9 @@ export function WidgetRenderer({
   onMutation,
   onSelectRecord,
 }: WidgetRuntimeProps) {
+  const actions = useContext(ClientActions);
+  const context = actions ? actions.edits.resolve(suppliedContext) : suppliedContext;
+  const pageContext = actions ? actions.edits.resolve(suppliedPageContext) : suppliedPageContext;
   const selections = useSelections();
   const variables = useContext(VariableScope);
   const pageTitle = useContext(PageTitleContext);
@@ -458,6 +477,11 @@ export function WidgetRenderer({
     eventContext: EntityRecord | null = context || pageContext,
   ): Promise<unknown> => {
     if (!event) return Promise.resolve();
+    if (event.kind === 'action') {
+      if (actions) return actions.run(event, eventContext);
+      onError(new Error(`Client action runtime is missing: ${event.handler}`));
+      return Promise.resolve();
+    }
     const handler = event.handler.includes('.') ? event.handler : `${moduleName}.${event.handler}`;
     let parameters: RuntimeVariables;
     try {
@@ -700,6 +724,9 @@ export function WidgetRenderer({
                 style={{
                   ...inlineStyle(row.options?.style),
                   display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: gridAlignment(row.options?.horizontal_alignment),
+                  alignItems: gridAlignment(row.options?.vertical_alignment),
                   gap: row.options?.gutters === false ? 0 : undefined,
                 }}
               >

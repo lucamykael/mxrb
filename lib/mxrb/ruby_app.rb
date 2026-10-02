@@ -2008,6 +2008,38 @@ module Mxrb
         end
       end
 
+      # Commit page drafts together: a missing object or denied member rolls
+      # back every object, including the store's identity map.
+      def commit_records(records, context: nil)
+        unless records.is_a?(Array) && records.length <= 1000 && records.all? { valid_record_changes?(_1) }
+          raise ArgumentError, 'records must contain at most 1000 objects with type, id and attributes'
+        end
+
+        runtime_synchronize do
+          store = bridge.interpreter.store
+          store.transaction do
+            records.map do |entry|
+              value = store.find(entry.fetch('type'), entry.fetch('id'))
+              raise ArgumentError, "record #{entry.fetch('type')} #{entry.fetch('id')} not found" unless value
+
+              authorize_entity!(value.entity, :write, context, record: value)
+              entry.fetch('attributes').each do |member, member_value|
+                authorize_entity!(value.entity, :write, context, member:, record: value)
+                value.members[member] = deserialize(member_value, context:)
+              end
+              store.commit(value)
+              serialize(value, context:)
+            end
+          end
+        end
+      end
+
+      def valid_record_changes?(entry)
+        entry.is_a?(Hash) && %w[type id].all? { entry[_1].is_a?(String) && !entry[_1].empty? } &&
+          entry['attributes'].is_a?(Hash) && entry['attributes'].keys.all? { _1.is_a?(String) }
+      end
+      private :valid_record_changes?
+
       def file_content(name, id, context: nil, upload: nil, thumbnail: nil)
         if upload && (!upload.is_a?(Hash) || !%w[name content].all? { upload[_1].is_a?(String) })
           raise ArgumentError, 'file upload requires string name and base64 content'
@@ -3235,6 +3267,11 @@ module Mxrb
         if (name = route_name(path, '/api/microflows/')) && method == 'POST'
           invocation = application.invoke_service(name, request_json(request), context:)
           return render_json(response, 200, { ok: true }.merge(invocation))
+        end
+
+        if method == 'POST' && path == '/api/records/commit'
+          records = application.commit_records(request_json(request)['records'], context:)
+          return render_json(response, 200, records:)
         end
 
         if (tail = route_name(path, '/api/files/')) && %w[GET PUT].include?(method)

@@ -520,7 +520,8 @@ module Mxrb
 
     module WidgetEvents
       %i[on_change on_click on_enter on_leave].each do |event|
-        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET, &block|
+        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET,
+                                 close_page: UNSET, &block|
           raise ArgumentError, "#{event} accepts either pass: or an argument block" if block && !pass.equal?(UNSET)
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
@@ -531,6 +532,7 @@ module Mxrb
           declaration = {
             event:, kind: choices.keys.first, handler: choices.values.first.to_s
           }
+          declaration[:close_page] = close_page == true unless close_page.equal?(UNSET)
           if block
             declaration[:arguments] = WidgetEventArguments.new.evaluate(&block).arguments
             declaration = WidgetEventArguments.snapshot(declaration)

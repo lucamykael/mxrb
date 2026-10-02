@@ -183,3 +183,21 @@ select {
 .native-widget:empty {
   min-height: 1px;
 }
+
+.mxrb-layout-grid__column {
+  box-sizing: border-box;
+  min-width: 0;
+  flex: var(--mxrb-desktop-flex, 1 1 0);
+}
+
+@media (max-width: 991px) {
+  .mxrb-layout-grid__column {
+    flex: var(--mxrb-tablet-flex, 1 1 0);
+  }
+}
+
+@media (max-width: 767px) {
+  .mxrb-layout-grid__column {
+    flex: var(--mxrb-phone-flex, 1 1 0);
+  }
+}

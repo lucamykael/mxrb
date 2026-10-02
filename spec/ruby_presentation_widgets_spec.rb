@@ -65,7 +65,7 @@ RSpec.describe 'Standalone presentation export' do
       end
       widgets = nodes.call(page).find { _1['type'] == 'data_view' }.fetch('body')
       expect(widgets.map { _1.fetch('type') }).to contain_exactly(
-        *%w[menu_bar navigation_tree static_image snippet file_manager image_uploader image_viewer
+        *%w[button menu_bar navigation_tree static_image snippet file_manager image_uploader image_viewer
             reference_set_selector scroll_container navigation_list]
       )
       expect(widgets.find { _1['type'] == 'scroll_container' }.dig('regions', 'center', 0, 'name')).to eq('RegionName')
