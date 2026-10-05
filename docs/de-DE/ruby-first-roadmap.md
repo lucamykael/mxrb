@@ -1,5 +1,33 @@
 # MXRB: Ruby über alles
 
+## Editierbare Menü-Icons und JavaScript-Callbacks
+
+Die Prüfung von acht Projekten fand 125 zusätzliche BSON-Dateien. Für 112 davon
+existierten bereits typisierte `Mxrb::Forms`-Deklarationen ohne verbleibenden
+Verweis auf die Hilfsdatei. BSON-Dateien sind daher kein Maß für nicht editierbare
+Dokumente. Die 13 generischen Fälle waren zwölf Menüs mit Collection-Icons und
+die Signatur von `NativeMobileActions.RegisterDeepLink`.
+
+Menüs exportieren jetzt `icon: { collection: "Modul.Collection.Icon" }`. Icons
+lassen sich hinzufügen, ändern, durch Glyphen ersetzen und entfernen; die
+Identitäten der Menüeinträge bleiben erhalten. Native Standardfelder und
+BSON-Listenmarker bleiben beim Neuaufbau erhalten, entfernte Einträge bleiben
+entfernt. JavaScript-Parameter unterstützen `kind: :nanoflow` mit stabilen IDs.
+Die SLA-Menüs und die Aktionssignatur sind nach dem Neuaufbau strukturell identisch.
+
+Das Ruby-Frontend erhält lokale Schriftdateien mit Modul- und Collection-Namen und editierbare
+Icon-Ressourcen. `editable_menu_icons_flow.json` prüft Darstellung und Navigation
+in Chromium ohne MPR-Zugriff. Der Windows-Test prüft Menü und Callback-Signatur
+im Original und nach dem Neuaufbau; er führt den Callback nicht aus und
+zertifiziert keine native Deep-Link-Integration.
+
+Neue Exporte der acht Projekte enthalten weder generische `native_document`-
+Deklarationen noch opake Menüs. Die 112 Hilfsdateien bleiben neben den typisierten
+Ruby-Deklarationen erhalten. Das belegt keine vollständige Laufzeit-, Mobile-
+oder Java/JavaScript-Kompatibilität. Siehe
+[Nachweis der Editierbarkeit](../evidence/editability-2026-10-05.json).
+
+
 ## Diagramme mit gebundenen Daten
 
 Das Frontend liest autorisierte Entitätsquellen mit XPath und Kontext, sortiert

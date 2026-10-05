@@ -62,6 +62,10 @@ RSpec.describe 'writer regressions from the VetClinic acceptance project' do # r
     expect(writer.send(:glyph_icon_doc, 'checklist')['Code']).to eq(57_655)
     expect(writer.send(:glyph_icon_doc, 57_349)['Code']).to eq(57_349)
     expect(writer.send(:glyph_icon_doc, nil)).to be_nil
+    icon = writer.send(:glyph_icon_doc, { collection: 'App.Symbols.Home' }, previous: { '$ID' => 'icon-id' })
+    expect(icon).to eq('$ID' => 'icon-id', '$Type' => 'Forms$IconCollectionIcon', 'Image' => 'App.Symbols.Home')
+    expect(writer.send(:glyph_icon_doc, :home, previous: icon))
+      .to eq('$ID' => 'icon-id', '$Type' => 'Forms$GlyphIcon', 'Code' => 57_377)
     expect { writer.send(:glyph_icon_doc, 'not-a-mendix-glyph') }
       .to raise_error(ArgumentError, /unsupported navigation icon/)
   end

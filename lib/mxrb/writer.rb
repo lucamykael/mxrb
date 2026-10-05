@@ -2679,12 +2679,17 @@ module Mxrb
     def glyph_icon_doc(icon, previous: nil)
       return unless icon
 
+      if icon.is_a?(Hash) && icon.key?(:collection)
+        return { '$ID' => previous&.fetch('$ID', nil) || SecureRandom.uuid,
+                 '$Type' => 'Forms$IconCollectionIcon', 'Image' => icon.fetch(:collection).to_s }
+      end
+
       code = icon.is_a?(Integer) ? icon : GLYPH_ICON_CODES[icon.to_s.downcase]
       raise ArgumentError, "unsupported navigation icon #{icon.inspect}" unless code
 
       previous ||= {}
       { '$ID' => previous['$ID'] || SecureRandom.uuid,
-        '$Type' => previous['$Type'] || 'Forms$GlyphIcon', 'Code' => code }
+        '$Type' => 'Forms$GlyphIcon', 'Code' => code }
     end
 
     def navigation_microflow_action_doc(microflow, previous: nil)
@@ -3155,10 +3160,30 @@ module Mxrb
         preserve_allowed_roles(merged, existing, generated)
       when 'Menus$MenuDocument'
         Forms::MprCodec.new.preserve_storage_identities!(generated, existing)
-        existing.merge(generated)
+        merge_menu_storage(existing, generated)
       else
         merged
       end
+    end
+
+    # Ruby owns declared items and fields; native defaults and BSON collection
+    # markers survive without restoring removed items or an old action/icon type.
+    def merge_menu_storage(previous, current)
+      if previous.is_a?(Hash) && current.is_a?(Hash)
+        return current unless previous['$Type'] == current['$Type']
+
+        return previous.merge(current) { |_key, old, value| merge_menu_storage(old, value) }
+      end
+      return current unless previous.is_a?(Array) && current.is_a?(Array)
+
+      old_items = array_items(previous).select { _1.is_a?(Hash) }.to_h do |item|
+        [IO::BsonCodec.extract_id(item['$ID']).to_s, item]
+      end
+      items = array_items(current).map do |item|
+        old = item.is_a?(Hash) && old_items[IO::BsonCodec.extract_id(item['$ID']).to_s]
+        old ? merge_menu_storage(old, item) : item
+      end
+      IO::BsonCodec.build_array(items, marker: navigation_array_marker(previous))
     end
 
     def strip_internal_keys(doc)

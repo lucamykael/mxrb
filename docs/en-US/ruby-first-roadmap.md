@@ -1,5 +1,32 @@
 # MXRB: Ruby above all
 
+## Editable collection menu icons and JavaScript callbacks
+
+The eight-project audit found 125 auxiliary BSON files. Of these, 112 already
+had typed `Mxrb::Forms` declarations and no remaining reference to the auxiliary
+file. Counting BSON files as uneditable documents therefore overstated the gap.
+The 13 generic cases were 12 collection-icon menus and the signature of
+`NativeMobileActions.RegisterDeepLink`.
+
+Menus now emit `icon: { collection: "Module.Collection.Icon" }`. Adding, changing,
+switching to glyphs and removing icons preserves item identities. Native defaults
+and BSON collection markers survive reconstruction without reviving removed
+items. JavaScript action parameters support `kind: :nanoflow` with stable IDs.
+The original and rebuilt SLA menus and action signature compare identically.
+
+The Ruby frontend exports local fonts named by module and collection and editable icon resources. The
+Chromium scenario `editable_menu_icons_flow.json` checks display and navigation
+with MPR access forbidden. Windows certification includes the menu and callback
+contract in source and roundtrip variants; it does not execute the callback or
+certify native deep-link integration.
+
+Fresh exports of all eight projects contain no generic `native_document` or
+opaque menus. The 112 auxiliary files remain alongside their typed Ruby
+representations. This does not certify every runtime, mobile layout or custom
+Java/JavaScript integration. See the
+[editability evidence](../evidence/editability-2026-10-05.json).
+
+
 ## Charts with bound data
 
 The frontend queries authorized entity sources with XPath and context, sorts

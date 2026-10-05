@@ -37,7 +37,7 @@ module Mxrb
           caption:, caption_translations: translations, caption_locale: locale,
           page: action.dig("FormSettings", "Form"),
           microflow: action.dig('MicroflowSettings', 'Microflow'),
-          icon: doc.dig('Icon', 'Code'),
+          icon: menu_icon(doc['Icon']),
           items: parse_array(doc["Items"]).map { menu_item(_1) }
         }.compact
       end
@@ -64,8 +64,15 @@ module Mxrb
         action.nil? || (action.is_a?(Hash) && SUPPORTED_ACTIONS.include?(action['$Type']))
       end
 
+      def menu_icon(icon)
+        return unless icon.is_a?(Hash)
+        return { collection: icon['Image'] } if icon['$Type'] == 'Forms$IconCollectionIcon'
+
+        icon['Code']
+      end
+
       def supported_icon?(icon)
-        icon.nil? || (icon.is_a?(Hash) && icon['$Type'] == 'Forms$GlyphIcon')
+        icon.nil? || (icon.is_a?(Hash) && %w[Forms$GlyphIcon Forms$IconCollectionIcon].include?(icon['$Type']))
       end
     end
   end

@@ -13,7 +13,8 @@ module StudioProBatch
     'presentation' => 'native_presentation_widgets/project.rb',
     'core-widgets' => 'ruby_frontend_core_widgets/project.rb',
     'validation' => 'native_validation_rules/project.rb',
-    'compatibility' => 'native_compatibility/project.rb'
+    'compatibility' => 'native_compatibility/project.rb',
+    'editable-menus' => 'editable_menu_actions/project.rb'
   }.freeze
 
   module_function

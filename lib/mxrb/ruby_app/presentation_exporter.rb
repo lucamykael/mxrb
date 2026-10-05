@@ -15,7 +15,7 @@ module Mxrb
 
       def export!
         @project.modules.each do |mod|
-          declarations = menus(mod) + snippets(mod) + layouts(mod) + images(mod)
+          declarations = menus(mod) + snippets(mod) + layouts(mod) + images(mod) + icons(mod)
           next if declarations.empty?
 
           filename = @exporter.send(:underscore, mod.name)
@@ -103,6 +103,32 @@ module Mxrb
         end
       end
 
+      def icons(mod)
+        mod.asset_documents.flat_map do |entry|
+          next [] unless entry[:type] == 'CustomIcons$CustomIconCollection'
+
+          document = entry.fetch(:doc)
+          path = export_icon_font(document.fetch('FontData').data, "#{mod.name}.#{entry[:name]}")
+          array(document['Icons']).map { icon_source("#{mod.name}.#{entry[:name]}", _1, path) }
+        end
+      end
+
+      def icon_source(collection, icon, path)
+        name = "#{collection}.#{icon.fetch('Name')}"
+        "Mxrb::RubyApp::Presentation.icon #{name.inspect}, path: #{path.inspect}, " \
+          "character: #{icon.fetch('CharacterCode').to_i}"
+      end
+
+      def export_icon_font(font, name)
+        unless name.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+          raise SerializationError, 'icon font requires a qualified collection name'
+        end
+
+        path = "/assets/fonts/#{name}.woff"
+        @exporter.send(:write, "frontend/public#{path}", font)
+        path
+      end
+
       def image_source(name, image)
         extension = image_format(image)
         unless %w[png gif jpg jpeg bmp ico webp svg].include?(extension)
@@ -124,11 +150,20 @@ module Mxrb
       end
 
       def menu_item_source(item, indent)
+        "#{' ' * indent}item #{menu_item_arguments(item).join(', ')}"
+      end
+
+      def menu_item_arguments(item)
         arguments = [item.fetch(:caption).inspect]
-        arguments.concat(item.slice(:page, :microflow, :icon).map { |key, value| "#{key}: #{value.inspect}" })
+        arguments.concat(item.slice(:page, :microflow).map { |key, value| "#{key}: #{value.inspect}" })
+        arguments << "icon: #{menu_icon_source(item[:icon])}" if item[:icon]
         translations = item.fetch(:caption_translations, {}).to_a
         arguments << "translations: #{translations.inspect}" unless translations.empty?
-        "#{' ' * indent}item #{arguments.join(', ')}"
+        arguments
+      end
+
+      def menu_icon_source(icon)
+        icon.is_a?(Hash) ? "collection_icon(#{icon.fetch(:collection).inspect})" : icon.inspect
       end
 
       def menu_item_body(item, indent)

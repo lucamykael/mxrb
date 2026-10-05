@@ -104,6 +104,8 @@ module Mxrb
           )
         when :microflow
           identity.merge('$Type' => 'JavaActions$MicroflowJavaActionParameterType')
+        when :nanoflow
+          identity.merge('$Type' => 'JavaScriptActions$NanoflowJavaScriptActionParameterType')
         else
           raise ArgumentError, "unsupported code action parameter type #{kind.inspect}"
         end

@@ -73,6 +73,44 @@ RSpec.describe 'semantic menu documents' do
     end
   end
 
+  it 'edits collection icons, switches to glyphs and removes icons without opaque menu sources' do
+    Dir.mktmpdir('mxrb-menu-icons-') do |dir|
+      source = File.join(dir, 'Icons.mpr')
+      exported = File.join(dir, 'ruby')
+      rebuilt = File.join(dir, 'rebuilt.mpr')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module :Menus do
+          menu :Icons do
+            item 'Collection', icon: { collection: 'Menus.Symbols.home' }
+            item 'Glyph', icon: :home
+            item 'Remove', icon: { collection: 'Menus.Symbols.remove' }
+          end
+        end
+      end
+      original = menu_documents(source).fetch('Icons')
+      Mxrb::Exporter.new(source, exported).export!
+      path = File.join(exported, 'modules', 'Menus', 'presentation', 'menus', 'icons.rb')
+      text = File.read(path)
+      expect(text).to include('icon: {collection: "Menus.Symbols.home"}')
+      expect(text).not_to include('deep_structure', 'native_fragment')
+      generate(exported, rebuilt)
+      expect(menu_documents(rebuilt).fetch('Icons')).to eq(original)
+      text = text.sub('icon: {collection: "Menus.Symbols.home"}', 'icon: 57369')
+                 .sub('icon: 57377', 'icon: {collection: "Menus.Symbols.add"}')
+                 .sub(', icon: {collection: "Menus.Symbols.remove"}', '')
+      File.write(path, text)
+      generate(exported, rebuilt)
+      edited = menu_documents(rebuilt).fetch('Icons')
+      expect(menu_item(edited, 'Collection')['Icon']).to include('$Type' => 'Forms$GlyphIcon', 'Code' => 57_369)
+      expect(menu_item(edited, 'Glyph')['Icon']).to include(
+        '$Type' => 'Forms$IconCollectionIcon', 'Image' => 'Menus.Symbols.add'
+      )
+      expect(menu_item(edited, 'Remove')['Icon']).to be_nil
+      expect(native_id(menu_item(edited, 'Collection'))).to eq(native_id(menu_item(original, 'Collection')))
+    end
+  end
+
   it 'falls back to a lossless native declaration for unsupported menu actions' do
     Dir.mktmpdir('mxrb-opaque-menu-') do |dir|
       source = File.join(dir, 'Menus.mpr')
