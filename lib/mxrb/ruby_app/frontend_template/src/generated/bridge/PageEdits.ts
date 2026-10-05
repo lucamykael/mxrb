@@ -32,6 +32,13 @@ export class PageEdits {
     for (const field of this.fields) await field();
   }
 
+  refresh(record: EntityRecord, submitted: RuntimeVariables = {}): EntityRecord {
+    if (!this.originals.has(key(record))) return record;
+    this.accept([record], new Map([[key(record), submitted]]));
+    if (record.new_record) this.stage(record, {});
+    return this.resolve(record)!;
+  }
+
   pending() {
     return [...this.changes].flatMap(([id, attributes]) => {
       const record = this.records.get(id)!;
@@ -41,8 +48,9 @@ export class PageEdits {
             {
               type: record.type,
               id: record.id,
-              attributes: record.new_record ? record.attributes : attributes,
+              attributes: record.new_record && !record.draft_token ? record.attributes : attributes,
               ...(record.new_record ? { new_record: true } : {}),
+              ...(record.draft_token ? { draft_token: record.draft_token } : {}),
             },
           ];
     });

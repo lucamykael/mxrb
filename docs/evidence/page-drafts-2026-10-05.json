@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "scope": "Persistent page objects survive requests without implicit commit; explicit Save retains identity and authorization",
+  "ruby": {
+    "examples": 2271,
+    "failures": 0,
+    "lines": {
+      "covered": 40712,
+      "total": 40712,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17792,
+      "total": 17792,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 99,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "projection": {
+    "public_source": {},
+    "valid": true,
+    "identical": true
+  },
+  "browser": {
+    "passed": true,
+    "steps": 11,
+    "mpr_access": "forbidden",
+    "console_errors": [],
+    "screenshots": [
+      {
+        "name": "draft-until-save",
+        "sha256": "647edf27aed97bdc31c21053bb681d2246ce469b3d11e97bb59fd71ceac24902"
+      }
+    ]
+  },
+  "package": {
+    "name": "com.mendix.widget.web.Datagrid.mpk",
+    "sha256": "f725c2dabb92dbd7e47c0a2f742cf00d00f606e7b9f504bf94576b6957519bb7"
+  },
+  "builds": [
+    {
+      "label": "page-drafts-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "308a5a83031641cd88ed21cf43b6c58de57c788e1fcbd4d11c2c18bb0436bedc",
+      "package_sha256": "d1539f355f921fa08c0240222ade87b5427fdea83eb59b24c009acdf4a7a1f9e"
+    },
+    {
+      "label": "page-drafts-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "5e334d335465e56b451cdde3d5467c4ae6e7e6fd383e5aea925d5b72888b1631",
+      "package_sha256": "aa949ea787e6378d9c357dce6ef9bf9b9a2f01d52d51dadb7c476d8a8ee0a18c"
+    }
+  ],
+  "native_runtime": [
+    {
+      "variant": "source",
+      "status": "passed",
+      "package_sha256": "d1539f355f921fa08c0240222ade87b5427fdea83eb59b24c009acdf4a7a1f9e",
+      "scenario_sha256": "1b91c00deaab974a28c98e457fdeb4f6a844e4a1e3471b21004f87ac5db3f19b",
+      "acceptance": {
+        "status": "passed",
+        "before": 0,
+        "afterChange": 0,
+        "afterSave": 1,
+        "value": "Changed before Save"
+      }
+    },
+    {
+      "variant": "roundtrip",
+      "status": "passed",
+      "package_sha256": "aa949ea787e6378d9c357dce6ef9bf9b9a2f01d52d51dadb7c476d8a8ee0a18c",
+      "scenario_sha256": "1b91c00deaab974a28c98e457fdeb4f6a844e4a1e3471b21004f87ac5db3f19b",
+      "acceptance": {
+        "status": "passed",
+        "before": 0,
+        "afterChange": 0,
+        "afterSave": 1,
+        "value": "Changed before Save"
+      }
+    }
+  ],
+  "security": [
+    "user-bound opaque tokens",
+    "server-owned hidden defaults",
+    "read/write/create permissions",
+    "one-hour expiry",
+    "atomic commit/delete/rollback invalidation",
+    "cross-instance SQLite snapshots",
+    "failed invocation rollback"
+  ],
+  "diagnostics": [
+    "Initial builds correctly rejected the missing Data Grid 2 package; the final source and roundtrip include the pinned package and pass strict input integrity checks."
+  ]
+}

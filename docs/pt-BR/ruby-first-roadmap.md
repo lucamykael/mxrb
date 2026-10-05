@@ -1,5 +1,72 @@
 # MXRB: Ruby acima de tudo
 
+## Expressões condicionais e aritméticas
+
+O backend valida a expressão inteira antes de executá-la e avalia apenas o ramo
+selecionado de `if ... then ... else ...`. `and` e `or` preservam curto-circuito,
+inclusive quando o ramo ignorado acessaria um objeto vazio ou lançaria erro.
+Backend e frontend calculam `div` e `:` sem truncar; `mod` preserva o sinal do
+dividendo. Condições exigem booleanos. A barra continua disponível para caminhos
+XPath, mas não é aceita como divisão em expressões de microflow.
+
+Studio Pro 11.12.1 confirmou 36 casos em fonte e round-trip. A aplicação Ruby
+exportada executa os mesmos casos com MPR proibido. Há 100 testes de frontend e
+cobertura Ruby de linhas/branches em 100%. O contrato numérico continua usando
+Float/number; precisão Decimal arbitrária e operações de calendário/DST não
+fazem parte dessa certificação. Veja a [evidência](../evidence/expression-parity-2026-10-05.json)
+e a [semântica aritmética do Mendix](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
+## Propriedades de apresentação tipadas
+
+Os toggles de design agora usam `design_property "Phone", toggle: true`, inclusive
+em grupos. Para desativar, remova a declaração; `toggle: false` é rejeitado para
+não representar um estado inexistente no formato nativo. IDs permanecem privados.
+O esquema legado de widgets aceita `phonegap_enabled true` ou `false`, distinguindo
+explicitamente a ausência da propriedade. O TreeNode do FirstMedix deixa de emitir
+um hash genérico em suas propriedades.
+
+Os oito projetos passam na auditoria pública e na reconstrução válida e idêntica
+sem o sidecar Mendix. Hashes antigos do SLA e RubyBridgeSandbox são reparados
+somente em cópias temporárias. Os 45 esquemas de widgets do FirstMedix preservam
+os bytes. Isso fecha as duas lacunas de representação encontradas na auditoria
+anterior; não certifica execução de PhoneGap nem todos os comportamentos visuais.
+Veja a [evidência](../evidence/presentation-source-contracts-2026-10-05.json).
+
+## Arquivos auxiliares da apresentação
+
+Layouts e snippets usam armazenamento temporário durante a conversão para
+construtores `Mxrb::Forms`. Novas exportações dos oito projetos auditados passaram
+de 112 BSON auxiliares sem referência para zero. Arquivos preexistentes e
+fragmentos ainda necessários a outras partes do projeto são preservados.
+O teste reconstrói o MPR e compara seu conteúdo; a remoção não transforma
+metadados binários em prova de compatibilidade de runtime.
+
+A verificação ampliada de fontes encontrou duas representações ainda genéricas:
+toggles de propriedades de design no SLA e um atributo legado do esquema TreeNode
+no FirstMedix. Ambas foram corrigidas pela implementação descrita acima.
+Veja a [auditoria](../evidence/presentation-fragments-2026-10-05.json).
+
+## Objetos de página persistíveis sem commit
+
+Objetos retornados por uma fonte de dados permanecem editáveis entre chamadas
+sem aparecer nas consultas de registros salvos. O servidor mantém o rascunho
+privado em SQLite, protegido por um token opaco vinculado ao usuário, com
+expiração de uma hora. Os defaults privados ficam no servidor; leitura, escrita
+e criação continuam sujeitas às permissões. Commit, exclusão e rollback explícito
+invalidam o token dentro da mesma transação. Uma chamada que falha não grava
+parcialmente nem perde o rascunho anterior.
+
+A página reutiliza a fonte já carregada, evitando criar outro objeto ao montar
+seu data view. Respostas de microflows atualizam o rascunho e preservam edições
+feitas enquanto a requisição estava em andamento. Save aceita também um objeto
+novo ainda sem alterações de campos.
+
+O cenário `persistent_page_drafts_flow.json` verifica alteração e Save no
+navegador Ruby sem MPR. Studio Pro 11.12.1 confirmou o mesmo resultado em fonte
+e round-trip: zero registros ao abrir, zero após alterar, um após salvar.
+A fixture exige `MXRB_DATAGRID_PACKAGE`; o CI obtém Data Grid 2 de uma revisão
+fixada e verifica seu SHA256. Veja a [evidência](../evidence/page-drafts-2026-10-05.json).
+
 ## Menus com ícones e callbacks JavaScript editáveis
 
 A auditoria dos oito projetos modernos encontrou 125 arquivos BSON auxiliares,
@@ -8,7 +75,7 @@ restante ao arquivo auxiliar. Portanto, contar arquivos BSON como documentos
 não editáveis superestimava a pendência. Os 13 casos genéricos eram 12 menus com
 ícones de coleção e a assinatura `NativeMobileActions.RegisterDeepLink`.
 
-Menus agora exportam `icon: { collection: "Modulo.Colecao.Icone" }`; adicionar,
+Menus agora exportam `icon: collection_icon("Modulo.Colecao.Icone")`; adicionar,
 alterar, trocar por glyph e remover ícones preserva a identidade dos itens.
 Defaults nativos e marcadores BSON sobrevivem ao round-trip sem restaurar itens
 removidos. Parâmetros de ações JavaScript aceitam `kind: :nanoflow`, mantendo os
@@ -22,8 +89,8 @@ e callback na origem e após reconstrução; o callback não é executado e não
 certifica integração de deep links nativos.
 
 A nova exportação dos oito projetos não contém `native_document` genérico nem
-menus opacos. Os 112 arquivos auxiliares continuam presentes, com declarações
-Ruby tipadas correspondentes; isso não certifica todas as variantes de runtime,
+menus opacos. Os 112 arquivos auxiliares deixaram de ser gerados; as declarações
+Ruby tipadas permanecem editáveis; isso não certifica todas as variantes de runtime,
 layouts móveis ou integrações Java/JavaScript. Veja a
 [evidência de editabilidade](../evidence/editability-2026-10-05.json).
 

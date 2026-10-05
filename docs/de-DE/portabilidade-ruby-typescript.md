@@ -76,8 +76,10 @@ angezeigt. Kurze und qualifizierte Enum-Werte werden erkannt; Schreiboperationen
 behalten die empfangene Darstellung bei. Enum-Bedingungen unterscheiden weiterhin
 verschiedene qualifizierte Typen. Werte und Übersetzungen exportierter Enums stammen
 aus Ruby-Definitionen; nicht geladene Legacy-Definitionen verwenden das Manifest.
-Nach Quelländerungen die Anwendung neu laden. Neue Dokumente und die Entfernung
-des Manifests als Katalog bleiben offen.
+Nach Quelländerungen die Anwendung neu laden. Anwendungen mit `runtime_model: ruby`
+erkennen geladene Deklarationen und gleichen Löschungen und Umbenennungen ab.
+Legacy-Einträge benötigen einen neuen Export. Das Manifest bleibt als private
+Rekonstruktionsmetadaten erhalten; der Runtime-Katalog braucht keine manuelle Pflege.
 
 Seitentitel verwenden den geladenen Ruby-Titel. Tabs zeigen ein Panel, unterstützen
 Pfeile/Home/End und erhalten Eingaben bereits geöffneter Panels; ungeöffnete Panels

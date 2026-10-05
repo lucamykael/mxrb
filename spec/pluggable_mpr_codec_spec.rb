@@ -57,6 +57,26 @@ RSpec.describe Mxrb::Pluggable::MprCodec do
     [described_class.new(forms_codec:, catalog: registry), definition, registry]
   end
 
+  it 'preserves absent, disabled and enabled legacy PhoneGap metadata through editable schema source' do
+    [nil, false, true].each do |flag|
+      registry = Mxrb::Pluggable::Catalog.new
+      definition = widget_type.with(phonegap_enabled: flag)
+      registry.register(definition)
+      codec = Mxrb::Forms::MprCodec.new(pluggable_catalog: registry)
+      node = Mxrb::Pluggable.widget(definition.id, catalog: registry)
+      baseline = codec.encode(node)
+      expect(baseline.fetch('Type').key?('WidgetPhoneGapEnabled')).to eq(!flag.nil?)
+      source = Mxrb::Pluggable::SchemaSourceEmitter.new.emit(definition)
+      restored = eval(source) # rubocop:disable Security/Eval
+      expect(restored.phonegap_enabled).to eq(flag)
+      decoded = codec.decode(baseline)
+      expect(decoded.widget_type.phonegap_enabled).to eq(flag)
+      expect(schema_bytes(codec.encode(decoded, baseline:).fetch('Type'))).to eq(schema_bytes(baseline.fetch('Type')))
+    end
+    builder = Mxrb::Pluggable::WidgetTypeBuilder.new('example.Invalid')
+    expect { builder.phonegap_enabled('false') }.to raise_error(ArgumentError, /true or false/)
+  end
+
   it 'round-trips selection through its physical field rather than the unrelated primitive field' do
     schema = widget_type.with(id: 'com.example.selection.Input',
                               object_type: Mxrb::Pluggable::ObjectType.new([property('selection', 'Selection')]))

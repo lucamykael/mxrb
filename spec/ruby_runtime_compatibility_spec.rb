@@ -46,6 +46,72 @@ RSpec.describe 'Standalone runtime compatibility' do
     ["\x89PNG\r\n\x1a\n".b, png_chunk('IHDR', header), png_chunk('IDAT', pixels), png_chunk('IEND', '')].join
   end
 
+  it 'keeps a datasource object private and editable until an explicit commit' do
+    Class.new(Mxrb::RubyApp::Service) do
+      mendix_name 'Files.Draft'
+      flow :microflow do
+        create_object 'Files.Tag', as: :tag, set: { Name: "'Unsaved'" }
+        return_type object_of('Files.Tag')
+        return_value '$tag'
+      end
+      def call(**arguments) = execute_flow(arguments)
+    end
+    Class.new(Mxrb::RubyApp::Service) do
+      mendix_name 'Files.Echo'
+      def call(tag:) = tag
+    end
+    Class.new(Mxrb::RubyApp::Service) do
+      mendix_name 'Files.FailedSave'
+      def call(tag:)
+        @application.records('Files.Tag')
+        @application.send(:bridge).store.commit(tag)
+        raise 'Save interrupted'
+      end
+    end
+    draft = JSON.parse(JSON.generate(@application.invoke_service('Files.Draft').fetch(:result)))
+    expect(@application.records('Files.Tag')).to eq([])
+    draft.fetch('attributes')['Name'] = 'Edited before Save'
+    result = @application.invoke_service('Files.Echo', 'tag' => draft, '__mxrb_context' => draft)
+    expect(result.dig(:result, :attributes, 'Name')).to eq('Edited before Save')
+    expect(@application.records('Files.Tag')).to eq([])
+    expect do
+      @application.invoke_service('Files.FailedSave', 'tag' => draft, '__mxrb_context' => draft)
+    end.to raise_error('Save interrupted')
+    expect(@application.records('Files.Tag')).to eq([])
+    saved = @application.commit_records([draft]).first
+    expect(saved[:id]).to eq(draft.fetch('id'))
+    expect(saved).not_to have_key(:draft_token)
+    expect(@application.records('Files.Tag').map { _1.dig(:attributes, 'Name') }).to eq(['Edited before Save'])
+  end
+
+  it 'retains hidden draft defaults without allowing client edits or another principal to replace them' do
+    app = @application
+    store = app.send(:bridge).store
+    alice = Mxrb::Runtime::SecurityContext.new(user: 'alice')
+    bob = Mxrb::Runtime::SecurityContext.new(user: 'bob')
+    allow(app.access_control).to receive(:authorize!).and_return(true)
+    allow(app.access_control).to receive(:member_allowed?).and_return(false)
+    value = store.transaction do
+      store.create('Files.Tag').tap { _1.members['Name'] = 'Server private default' }
+    end
+    draft = JSON.parse(JSON.generate(app.send(:serialize, value, context: alice)))
+    expect(draft.fetch('attributes')).to eq({})
+    store.release_cache!
+    expect { app.commit_records([draft], context: bob) }.to raise_error(Mxrb::NativeRuntimeError, /another user/)
+    allow(app.access_control).to receive(:authorize!).with('Files.Tag', hash_including(action: :create))
+                                                     .and_raise(Mxrb::Runtime::AuthorizationError)
+    expect { app.commit_records([draft], context: alice) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+    allow(app.access_control).to receive(:authorize!).with('Files.Tag', hash_including(action: :create))
+                                                     .and_return(true)
+    allow(app.access_control).to receive(:authorize!).with('Files.Tag', hash_including(member: 'Name'))
+                                                     .and_raise(Mxrb::Runtime::AuthorizationError)
+    forged = draft.merge('attributes' => { 'Name' => 'Forged' })
+    expect { app.commit_records([forged], context: alice) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+    expect(app.records('Files.Tag')).to eq([])
+    app.commit_records([draft], context: alice)
+    expect(app.record('Files.Tag', draft.fetch('id')).dig(:attributes, 'Name')).to eq('Server private default')
+  end
+
   it 'persists inherited members, associations and blobs and retrieves concrete subtypes through their bases' do
     app = @application
     tag = app.create_record('Files.Tag', 'Name' => 'Visible')

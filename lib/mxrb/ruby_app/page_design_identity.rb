@@ -114,7 +114,7 @@ module Mxrb
 
       def semantic_property?(value)
         value.is_a?(Hash) && value.key?('key') &&
-          (value.key?('option') || value['properties'].is_a?(Array))
+          (value.key?('option') || value['toggle'] == true || value['properties'].is_a?(Array))
       end
 
       def resolve_properties(previous, declarations) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity

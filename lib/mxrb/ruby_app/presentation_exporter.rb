@@ -14,6 +14,14 @@ module Mxrb
       end
 
       def export!
+        @exporter.send(:with_presentation_fragments) { export_modules }
+      end
+
+      def project_widgets(document) = PresentationProjection.new(@exporter).call(document)
+
+      private
+
+      def export_modules
         @project.modules.each do |mod|
           declarations = menus(mod) + snippets(mod) + layouts(mod) + images(mod) + icons(mod)
           next if declarations.empty?
@@ -23,10 +31,6 @@ module Mxrb
                          "# frozen_string_literal: true\n\n#{declarations.join("\n\n")}\n")
         end
       end
-
-      def project_widgets(document) = PresentationProjection.new(@exporter).call(document)
-
-      private
 
       def layouts(mod)
         mod.presentation_documents.filter_map do |entry|

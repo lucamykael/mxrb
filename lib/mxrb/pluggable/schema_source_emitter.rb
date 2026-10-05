@@ -37,9 +37,15 @@ module Mxrb
 
           "#{pad(indent)}#{name} #{value.inspect}"
         end
+        lines.concat(widget_flag_lines(widget, indent))
+      end
+
+      def widget_flag_lines(widget, indent)
+        lines = []
         lines << "#{pad(indent)}offline!" if widget.offline
         lines << "#{pad(indent)}needs_context!" if widget.needs_context
         lines << "#{pad(indent)}plugin!" if widget.plugin
+        lines << "#{pad(indent)}phonegap_enabled #{widget.phonegap_enabled}" unless widget.phonegap_enabled.nil?
         lines
       end
 

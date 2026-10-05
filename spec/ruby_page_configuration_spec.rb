@@ -96,6 +96,36 @@ RSpec.describe 'private Ruby page configuration' do
     end.to raise_error(ArgumentError, /either option/)
   end
 
+  it 'round-trips toggle design properties as editable declarations with private identities' do
+    toggle = design.except('option').merge('key' => 'Phone', 'toggle' => true)
+    compound = design.except('option').merge('properties' => [toggle.merge(
+      'id' => '44444444-4444-4444-8444-444444444444',
+      'value_id' => '55555555-5555-4555-8555-555555555555'
+    )])
+    configured = widget.merge('options' => widget.fetch('options').merge('design_properties' => [compound]))
+    source, projection = emitted_widgets([configured])
+    expect(source).to include('design_property "Phone", toggle: true')
+    expect(source).not_to include(property_id, '$Type', 'design_properties(')
+    Mxrb::RubyApp::PageDesignIdentity.with(manifest([configured])) do
+      expect(Mxrb::RubyApp::PageDesignIdentity.restore(page_id, projection)).to eq([configured])
+    end
+    writer = Mxrb::Writer.allocate
+    document = writer.send(:data_view_design_property_doc, compound)
+    parsed = Mxrb::Model::Page.allocate.send(:design_property_spec, document)
+    expect(normalize(parsed)).to eq(compound)
+    leaf = writer.send(:data_view_design_property_doc, toggle)
+    expect(leaf.fetch('Value')).to eq('$ID' => value_id, '$Type' => 'Forms$ToggleDesignPropertyValue')
+    tree = Mxrb::RubyApp::Page::WidgetTree.new
+    tree.data_view('details', from: source_spec) { design_property('Phone', toggle: true) }
+    expect(tree.widgets.first.dig('options', 'design_properties').first).to include('toggle' => true)
+
+    builder = Mxrb::Dsl::DesignPropertyBuilder.new
+    expect { builder.build('Phone', toggle: false) }.to raise_error(ArgumentError, /remove the declaration/)
+    expect { builder.build('Phone', toggle: true, option: 'M') }.to raise_error(ArgumentError, /either option/)
+    expect(exporter.send(:runtime_design_property_supported?, toggle.merge('toggle' => false))).to be(false)
+    expect(exporter.send(:runtime_design_property_supported?, toggle.merge('extra' => true))).to be(false)
+  end
+
   it 'keeps authored option changes while restoring IDs through Page.configure' do
     source, = emitted_widgets([widget])
     source = source.sub('option: "Large"', 'option: "Small"')

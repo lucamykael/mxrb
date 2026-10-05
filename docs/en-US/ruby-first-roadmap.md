@@ -1,5 +1,68 @@
 # MXRB: Ruby above all
 
+## Conditional and arithmetic expressions
+
+The backend parses the full expression before evaluating only the selected
+`if ... then ... else ...` branch. Boolean `and`/`or` short-circuit, including
+branches that would dereference empty objects or raise errors. Backend and
+frontend support fractional `div` and `:`, and signed `mod` remainders.
+Conditions require booleans. Slash remains available for XPath paths but is
+rejected as microflow expression division.
+
+Studio Pro 11.12.1 confirmed 36 cases in source and roundtrip. Exported Ruby runs
+the same cases with MPR access forbidden. The frontend passes 100 tests; Ruby
+line/branch coverage is 100%. Existing Float/number precision remains; arbitrary
+Decimal precision and calendar/DST operations are outside this certification.
+See the [evidence](../evidence/expression-parity-2026-10-05.json) and
+[Mendix arithmetic semantics](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
+## Typed presentation properties
+
+Design toggles now use `design_property "Phone", toggle: true`, including nested
+groups. Remove the declaration to disable it; `toggle: false` is rejected because
+the native value has no disabled state. Identities stay private. Legacy widget
+schemas support `phonegap_enabled true` or `false`, preserving absence separately.
+FirstMedix TreeNode properties now emit typed declarations instead of a generic hash.
+
+All eight projects pass the public source audit and reconstruct valid, identical
+MPRs without the Mendix sidecar. Stale hashes in SLA and RubyBridgeSandbox are
+repaired only in temporary copies. All 45 FirstMedix widget schemas preserve their
+bytes. These changes close the two representation gaps found in the previous
+audit; they do not certify PhoneGap execution or every visual behavior.
+See the [evidence](../evidence/presentation-source-contracts-2026-10-05.json).
+
+## Auxiliary presentation files
+
+Layouts and snippets use temporary storage while converting to typed
+`Mxrb::Forms` constructors. Fresh exports of the eight audited projects now
+contain zero unreferenced auxiliary BSON files, down from 112. Existing files
+and fragments required elsewhere remain intact. Reconstruction tests compare
+the MPR content; file counts are not proof of runtime compatibility.
+
+The expanded source audit identified two other generic representations: design
+property toggles in SLA and a legacy TreeNode schema field in FirstMedix. Both
+are resolved by the implementation described above.
+See the [audit](../evidence/presentation-fragments-2026-10-05.json).
+
+## Persistent page objects before commit
+
+Objects returned by a data source remain editable across requests without
+appearing in queries for saved records. SQLite holds private server snapshots,
+protected by opaque tokens bound to the user and expiring after one hour.
+Hidden defaults stay on the server; read, write and create permissions still
+apply. Commit, deletion and explicit rollback invalidate the token atomically.
+A failed call neither partially saves nor loses the previous draft.
+
+The page reuses its loaded source instead of creating another object when the
+data view mounts. Microflow responses refresh the draft while preserving edits
+made during the request. Save also accepts a new object without field changes.
+
+`persistent_page_drafts_flow.json` checks edit and Save in the Ruby browser with
+MPR access forbidden. Studio Pro 11.12.1 confirmed source and roundtrip behavior:
+zero stored objects on load, zero after editing, one after Save. The fixture uses
+`MXRB_DATAGRID_PACKAGE`; CI fetches pinned Data Grid 2 and verifies its SHA256.
+See the [evidence](../evidence/page-drafts-2026-10-05.json).
+
 ## Editable collection menu icons and JavaScript callbacks
 
 The eight-project audit found 125 auxiliary BSON files. Of these, 112 already
@@ -8,7 +71,7 @@ file. Counting BSON files as uneditable documents therefore overstated the gap.
 The 13 generic cases were 12 collection-icon menus and the signature of
 `NativeMobileActions.RegisterDeepLink`.
 
-Menus now emit `icon: { collection: "Module.Collection.Icon" }`. Adding, changing,
+Menus now emit `icon: collection_icon("Module.Collection.Icon")`. Adding, changing,
 switching to glyphs and removing icons preserves item identities. Native defaults
 and BSON collection markers survive reconstruction without reviving removed
 items. JavaScript action parameters support `kind: :nanoflow` with stable IDs.
@@ -21,8 +84,8 @@ contract in source and roundtrip variants; it does not execute the callback or
 certify native deep-link integration.
 
 Fresh exports of all eight projects contain no generic `native_document` or
-opaque menus. The 112 auxiliary files remain alongside their typed Ruby
-representations. This does not certify every runtime, mobile layout or custom
+opaque menus. The 112 auxiliary files are no longer generated; their typed Ruby
+representations remain editable. This does not certify every runtime, mobile layout or custom
 Java/JavaScript integration. See the
 [editability evidence](../evidence/editability-2026-10-05.json).
 

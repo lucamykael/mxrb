@@ -1104,7 +1104,7 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
 
     expression = Mxrb::Runtime::Native::Expression.new
     expect(expression.evaluate('5 - 2', {})).to eq(3)
-    expect(expression.evaluate('6 / 2', {})).to eq(3)
+    expect(expression.evaluate('6 div 2', {})).to eq(3)
     expect(expression.evaluate('not false', {})).to be(true)
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'Native.mpr')

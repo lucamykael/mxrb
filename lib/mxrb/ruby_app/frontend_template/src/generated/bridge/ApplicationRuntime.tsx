@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
 import { invokeAsync } from './AsyncInvocation';
 import { ClientActions, PageEdits, hasPageEdits } from './PageEdits';
+import { PageDataSource, pageSourceWidget } from './PageDataSource';
 import {
   PageParameters,
   VariableEnvironment,
@@ -146,7 +147,7 @@ export function ApplicationRuntime({
     try {
       let value = await api<PageDefinition>(`/api/pages/${encodeURIComponent(name)}`, {});
       let resolvedContext = context;
-      if (!updateLocation && context && !context.transient) {
+      if (!updateLocation && context && !context.transient && !context.new_record) {
         try {
           resolvedContext = await request<EntityRecord>(
             `/api/entities/${encodeURIComponent(context.type)}/${encodeURIComponent(context.id)}`,
@@ -412,6 +413,9 @@ export function ApplicationRuntime({
   const invoke: InvokeHandler = (name, parameters = {}, contextOverride = null, options = {}) => {
     setBusy(true);
     const activeContext = contextOverride || pageContext;
+    const submitted = activeContext
+      ? edits.changes.get(`${activeContext.type}/${activeContext.id}`)
+      : undefined;
     const argumentsValue = {
       ...parameters,
       ...(activeContext ? { __mxrb_context: activeContext } : {}),
@@ -433,7 +437,7 @@ export function ApplicationRuntime({
     return execute()
       .then(async (payload) => {
         setRevision((value) => value + 1);
-        if (payload.context) setPageContext(payload.context);
+        if (payload.context) setPageContext(edits.refresh(payload.context, submitted));
         let navigated = false;
         for (const effect of payload.effects || []) {
           if (effect.type === 'show_message' && effect.message) setNotice(String(effect.message));
@@ -728,12 +732,14 @@ export function ApplicationRuntime({
               <LayoutState.Provider value={layoutState.current}>
                 <NavigationSelection.Provider value={navigationSelection.current}>
                   <SelectionScope key={page.name}>
-                    <PageOutlet
-                      key={page.name}
-                      page={page}
-                      busy={busy}
-                      Widget={RuntimePageWidget}
-                    />
+                    <PageDataSource.Provider value={pageSourceWidget(page)}>
+                      <PageOutlet
+                        key={page.name}
+                        page={page}
+                        busy={busy}
+                        Widget={RuntimePageWidget}
+                      />
+                    </PageDataSource.Provider>
                   </SelectionScope>
                 </NavigationSelection.Provider>
               </LayoutState.Provider>

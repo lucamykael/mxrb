@@ -9,6 +9,9 @@ RSpec.describe 'Standalone presentation export' do
     Dir.mktmpdir do |directory|
       source = File.join(directory, 'Layout.mpr')
       target = File.join(directory, 'ruby')
+      existing = File.join(target, '.mxrb', 'native_fragments', 'user-owned.bson')
+      FileUtils.mkdir_p(File.dirname(existing))
+      File.binwrite(existing, 'existing user file')
       Mxrb.define(source) do
         mendix_version '11.12.1'
         self.module :Example do
@@ -19,6 +22,11 @@ RSpec.describe 'Standalone presentation export' do
         end
       end
       Mxrb::Exporter.new(source, target, mode: :ruby).export!
+      expect(Dir[File.join(target, '.mxrb', 'native_fragments', '*.bson')]).to eq([existing])
+      expect(File.binread(existing)).to eq('existing user file')
+      rebuilt = File.join(directory, 'rebuilt.mpr')
+      Mxrb::RubyApp.compile(target, rebuilt)
+      expect(Mxrb.compare(source, rebuilt)).to be_identical
       path = File.join(target, 'app', 'presentation', 'example.rb')
       expect(File.read(path)).to include('form_widget(', 'Mxrb::Forms.header')
       expect(Mxrb::PublicSourceAudit.new(target)).to be_clean

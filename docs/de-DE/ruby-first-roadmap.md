@@ -1,5 +1,71 @@
 # MXRB: Ruby über alles
 
+## Bedingte und arithmetische Ausdrücke
+
+Das Backend prüft den gesamten Ausdruck und wertet nur den gewählten Zweig von
+`if ... then ... else ...` aus. `and`/`or` verwenden Kurzschlussauswertung, auch
+wenn der übersprungene Zweig ein leeres Objekt lesen oder einen Fehler auslösen
+würde. Backend und Frontend unterstützen nicht abgeschnittene Ergebnisse von
+`div` und `:` sowie vorzeichenbehaftete `mod`-Reste. Bedingungen verlangen Boolean.
+Der Schrägstrich bleibt für XPath-Pfade erhalten, gilt aber nicht als Division
+in Microflow-Ausdrücken.
+
+Studio Pro 11.12.1 bestätigte 36 Fälle vor und nach dem Roundtrip. Exportierter
+Ruby-Code führt dieselben Fälle bei verbotenem MPR-Zugriff aus. 100 Frontend-Tests
+bestehen; Ruby-Zeilen und -Branches sind zu 100 % abgedeckt. Die vorhandene
+Float/number-Präzision bleibt; beliebige Decimal-Präzision und Kalender-/DST-
+Operationen sind nicht zertifiziert. Siehe [Nachweis](../evidence/expression-parity-2026-10-05.json)
+und [Mendix-Arithmetik](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
+## Typisierte Präsentationseigenschaften
+
+Design-Toggles verwenden jetzt `design_property "Phone", toggle: true`, auch in
+verschachtelten Gruppen. Zum Deaktivieren wird die Deklaration entfernt;
+`toggle: false` wird abgelehnt, da das native Format keinen deaktivierten Wert
+enthält. Identitäten bleiben privat. Alte Widget-Schemas unterstützen
+`phonegap_enabled true` oder `false` und unterscheiden eine fehlende Eigenschaft.
+FirstMedix-TreeNode-Eigenschaften erhalten typisierte Deklarationen.
+
+Alle acht Projekte bestehen die öffentliche Quellcodeprüfung und erzeugen ohne
+Mendix-Sidecar gültige, identische MPRs. Veraltete Hashes in SLA und RubyBridgeSandbox
+werden nur in temporären Kopien repariert. Alle 45 FirstMedix-Widget-Schemas bleiben
+bytegleich. Damit sind die beiden Darstellungslücken der vorherigen Prüfung
+behoben; PhoneGap-Ausführung und sämtliche visuellen Varianten sind nicht zertifiziert.
+Siehe [Nachweis](../evidence/presentation-source-contracts-2026-10-05.json).
+
+## Zusätzliche Präsentationsdateien
+
+Layouts und Snippets verwenden bei der Umwandlung in typisierte `Mxrb::Forms`-
+Konstruktoren temporären Speicher. Neue Exporte der acht geprüften Projekte
+enthalten keine unreferenzierten BSON-Hilfsdateien mehr; zuvor waren es 112.
+Vorhandene Dateien und anderweitig benötigte Fragmente bleiben erhalten.
+Roundtrip-Tests vergleichen den MPR-Inhalt. Dateizahlen belegen keine allgemeine
+Runtime-Kompatibilität.
+
+Die erweiterte Quellcodeprüfung fand zwei weitere generische Darstellungen:
+Design-Property-Toggles in SLA und ein altes TreeNode-Schemafeld in FirstMedix.
+Beide wurden mit der oben beschriebenen Implementierung behoben.
+Siehe [Prüfergebnisse](../evidence/presentation-fragments-2026-10-05.json).
+
+## Persistierbare Seitenobjekte vor dem Commit
+
+Objekte einer Datenquelle bleiben über mehrere Anfragen editierbar, ohne in
+Abfragen gespeicherter Datensätze zu erscheinen. SQLite hält private Kopien auf
+dem Server. Ein undurchsichtiger, an den Benutzer gebundener Token läuft nach
+einer Stunde ab. Verborgene Standardwerte bleiben auf dem Server; Lese-, Schreib-
+und Erstellungsrechte gelten weiterhin. Commit, Löschen und explizites Rollback
+widerrufen den Token atomar. Fehlgeschlagene Aufrufe speichern keine Teiländerungen.
+
+Die Seite verwendet ihre bereits geladene Datenquelle wieder. Antworten von
+Microflows aktualisieren den Entwurf und erhalten Änderungen, die während der
+Anfrage eingegeben wurden. Save speichert auch unveränderte neue Objekte.
+
+`persistent_page_drafts_flow.json` prüft Bearbeiten und Save im Ruby-Browser ohne
+MPR-Zugriff. Studio Pro 11.12.1 bestätigte Quelle und Roundtrip: null gespeicherte
+Objekte beim Öffnen und nach der Änderung, eines nach Save. Die Fixture benötigt
+`MXRB_DATAGRID_PACKAGE`; CI prüft Revision und SHA256 des Data-Grid-2-Pakets.
+Siehe [Nachweise](../evidence/page-drafts-2026-10-05.json).
+
 ## Editierbare Menü-Icons und JavaScript-Callbacks
 
 Die Prüfung von acht Projekten fand 125 zusätzliche BSON-Dateien. Für 112 davon
@@ -8,7 +74,7 @@ Verweis auf die Hilfsdatei. BSON-Dateien sind daher kein Maß für nicht editier
 Dokumente. Die 13 generischen Fälle waren zwölf Menüs mit Collection-Icons und
 die Signatur von `NativeMobileActions.RegisterDeepLink`.
 
-Menüs exportieren jetzt `icon: { collection: "Modul.Collection.Icon" }`. Icons
+Menüs exportieren jetzt `icon: collection_icon("Modul.Collection.Icon")`. Icons
 lassen sich hinzufügen, ändern, durch Glyphen ersetzen und entfernen; die
 Identitäten der Menüeinträge bleiben erhalten. Native Standardfelder und
 BSON-Listenmarker bleiben beim Neuaufbau erhalten, entfernte Einträge bleiben
@@ -22,8 +88,8 @@ im Original und nach dem Neuaufbau; er führt den Callback nicht aus und
 zertifiziert keine native Deep-Link-Integration.
 
 Neue Exporte der acht Projekte enthalten weder generische `native_document`-
-Deklarationen noch opake Menüs. Die 112 Hilfsdateien bleiben neben den typisierten
-Ruby-Deklarationen erhalten. Das belegt keine vollständige Laufzeit-, Mobile-
+Deklarationen noch opake Menüs. Die 112 Hilfsdateien werden nicht mehr erzeugt; die typisierten
+Ruby-Deklarationen bleiben editierbar. Das belegt keine vollständige Laufzeit-, Mobile-
 oder Java/JavaScript-Kompatibilität. Siehe
 [Nachweis der Editierbarkeit](../evidence/editability-2026-10-05.json).
 

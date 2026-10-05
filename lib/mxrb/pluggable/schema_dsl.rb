@@ -134,6 +134,7 @@ module Mxrb
         @platform = 'Web'
         @offline = @needs_context = @plugin = false
         @help_url = ''
+        @phonegap_enabled = nil
         @object_type = ObjectType.new([].freeze)
       end
 
@@ -145,6 +146,12 @@ module Mxrb
       def offline! = (@offline = true)
       def needs_context! = (@needs_context = true)
       def plugin! = (@plugin = true)
+
+      def phonegap_enabled(value)
+        raise ArgumentError, 'phonegap_enabled must be true or false' unless [true, false].include?(value)
+
+        @phonegap_enabled = value
+      end
 
       def properties(&block)
         builder = ObjectTypeBuilder.new
@@ -158,7 +165,7 @@ module Mxrb
           prompt: @prompt.freeze, studio_pro_category: @studio_pro_category.freeze,
           studio_category: @studio_category.freeze, platform: @platform.freeze,
           offline: @offline, needs_context: @needs_context, plugin: @plugin,
-          help_url: @help_url.freeze, object_type: @object_type
+          help_url: @help_url.freeze, object_type: @object_type, phonegap_enabled: @phonegap_enabled
         )
       end
     end

@@ -1,0 +1,507 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "scope": "Conditional expressions, boolean short circuit, decimal division and signed remainder; existing string/rule regressions",
+  "ruby": {
+    "examples": 2274,
+    "lines": {
+      "covered": 40776,
+      "total": 40776,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17845,
+      "total": 17845,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 100,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "builds": {
+    "status": "completed",
+    "cases": [
+      {
+        "label": "compatibility-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "ce64050d4afa463a2946c0d5973179ad3e221f83924fe13427890e9490283684"
+      },
+      {
+        "label": "compatibility-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "fae1ad5781e34f871dd5dcc9007092da83bc32934bb8dd8e62826803836e34b3"
+      }
+    ]
+  },
+  "native_runtime": [
+    {
+      "variant": "runtime-compatibility-roundtrip",
+      "report_sha256": "76f6d0253a26590c2eaf0d1875c40c9416914465d64645ba1ded2162b814cb90",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "fae1ad5781e34f871dd5dcc9007092da83bc32934bb8dd8e62826803836e34b3",
+      "scenario_sha256": "6e0d48a955b26924adb8aa3b23f4fffe2f24b6eddea06695340af2d0c180c5ca",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "FindUnicode",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "FindOffset",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindEmptyPastEnd",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindNegative",
+            "actual": "0",
+            "expected": "0",
+            "passed": true
+          },
+          {
+            "name": "FindLast",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindLastUnicode",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "SubstringUnicode",
+            "actual": "ab",
+            "expected": "ab",
+            "passed": true
+          },
+          {
+            "name": "SubstringTail",
+            "actual": "abc",
+            "expected": "abc",
+            "passed": true
+          },
+          {
+            "name": "SubstringBoundary",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "SubstringPastEnd",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringTooLong",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringNegative",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "TrimNbsp",
+            "actual": " Ruby ",
+            "expected": " Ruby ",
+            "passed": true
+          },
+          {
+            "name": "IfTrue",
+            "actual": "chosen",
+            "expected": "chosen",
+            "passed": true
+          },
+          {
+            "name": "IfFalse",
+            "actual": "chosen",
+            "expected": "chosen",
+            "passed": true
+          },
+          {
+            "name": "IfNested",
+            "actual": "nested",
+            "expected": "nested",
+            "passed": true
+          },
+          {
+            "name": "IfGrouped",
+            "actual": "20",
+            "expected": "20",
+            "passed": true
+          },
+          {
+            "name": "AndLazy",
+            "actual": "false",
+            "expected": "false",
+            "passed": true
+          },
+          {
+            "name": "OrLazy",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "AndEvaluated",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "OrEvaluated",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "DivisionNegative",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "ModuloPositive",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "ModuloNegative",
+            "actual": "-2",
+            "expected": "-2",
+            "passed": true
+          },
+          {
+            "name": "ModuloNegativeDivisor",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "ModuloDecimal",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "variant": "runtime-compatibility-source",
+      "report_sha256": "dff085cbe07f8db1e3a0a27703a191e61ce1f597c6fa97fb2de6df7292d26a93",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "ce64050d4afa463a2946c0d5973179ad3e221f83924fe13427890e9490283684",
+      "scenario_sha256": "6e0d48a955b26924adb8aa3b23f4fffe2f24b6eddea06695340af2d0c180c5ca",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "FindUnicode",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "FindOffset",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindEmptyPastEnd",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindNegative",
+            "actual": "0",
+            "expected": "0",
+            "passed": true
+          },
+          {
+            "name": "FindLast",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindLastUnicode",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "SubstringUnicode",
+            "actual": "ab",
+            "expected": "ab",
+            "passed": true
+          },
+          {
+            "name": "SubstringTail",
+            "actual": "abc",
+            "expected": "abc",
+            "passed": true
+          },
+          {
+            "name": "SubstringBoundary",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "SubstringPastEnd",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringTooLong",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringNegative",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "TrimNbsp",
+            "actual": " Ruby ",
+            "expected": " Ruby ",
+            "passed": true
+          },
+          {
+            "name": "IfTrue",
+            "actual": "chosen",
+            "expected": "chosen",
+            "passed": true
+          },
+          {
+            "name": "IfFalse",
+            "actual": "chosen",
+            "expected": "chosen",
+            "passed": true
+          },
+          {
+            "name": "IfNested",
+            "actual": "nested",
+            "expected": "nested",
+            "passed": true
+          },
+          {
+            "name": "IfGrouped",
+            "actual": "20",
+            "expected": "20",
+            "passed": true
+          },
+          {
+            "name": "AndLazy",
+            "actual": "false",
+            "expected": "false",
+            "passed": true
+          },
+          {
+            "name": "OrLazy",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "AndEvaluated",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "OrEvaluated",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "DivisionNegative",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "ModuloPositive",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "ModuloNegative",
+            "actual": "-2",
+            "expected": "-2",
+            "passed": true
+          },
+          {
+            "name": "ModuloNegativeDivisor",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "ModuloDecimal",
+            "actual": "true",
+            "expected": "true",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Numeric values still use the existing Ruby Float/JavaScript number representation; arbitrary precision Decimal parity is not certified.",
+    "Date arithmetic across daylight-saving changes is a separate contract."
+  ]
+}

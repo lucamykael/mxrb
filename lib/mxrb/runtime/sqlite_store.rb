@@ -5,6 +5,7 @@ require 'securerandom'
 require 'time'
 require_relative 'native'
 require_relative 'schema_migrator'
+require_relative 'client_drafts'
 
 module Mxrb
   module Runtime
@@ -24,7 +25,7 @@ module Mxrb
       }.freeze
       FILE_TABLES = %w[mxrb_file_contents mxrb_file_thumbnails].freeze
 
-      attr_reader :database, :schema
+      attr_reader :database, :schema, :client_drafts
 
       def initialize(project, path: ':memory:', defaults: {}, hooks: {}, allow_destructive: false,
                      schema: nil, transient_entities: nil)
@@ -46,8 +47,11 @@ module Mxrb
         @identity = {}
         @persisted = {}
         @staged_new = {}
+        @detached_new = {}
+        @resumed_drafts = {}
         @sequence_values = {}
         @manual_transaction = false
+        @client_drafts = ClientDrafts.new(self)
         hooks.each { |event, callbacks| Array(callbacks).each { on(event, &_1) } }
       end
 
@@ -124,9 +128,29 @@ module Mxrb
       end
 
       def release_cache!
+        @resumed_drafts.each_key do |id|
+          @staged_new.delete(id)
+          @identity.delete(id)
+        end
+        @resumed_drafts.clear
+        @detached_new.clear
         @identity = @staged_new.dup
         @persisted = {}
         self
+      end
+
+      def draft?(value)
+        @staged_new[value.id].equal?(value) || @detached_new[value.id].equal?(value)
+      end
+
+      def resume_draft(value)
+        @resumed_drafts[value.id] = value
+        stage(value)
+      end
+
+      def detached_draft(entity, id)
+        value = @detached_new[id]
+        value if value&.entity == entity
       end
 
       def retrieve_association(association, start)
@@ -374,6 +398,8 @@ module Mxrb
           @identity.delete(value.id)
           @persisted.delete(value.id)
           @staged_new.delete(value.id)
+          @detached_new.delete(value.id)
+          @client_drafts.delete(value)
           run_hooks(:after_delete, value) if events
         end
       end
@@ -412,6 +438,8 @@ module Mxrb
         insert_value(value, definition)
         advance_sequences(value, definition)
         @staged_new.delete(value.id)
+        @detached_new.delete(value.id)
+        @client_drafts.delete(value)
         cache(value)
         run_hooks(:after_commit, value) if events
         value
@@ -648,7 +676,9 @@ module Mxrb
         transient, persistent = Array(values).compact.partition { transient?(_1.entity) }
         @transient.rollback(transient) unless transient.empty?
         persistent.each do |value|
-          if @staged_new.delete(value.id)
+          if @staged_new.delete(value.id) || @detached_new.key?(value.id)
+            @detached_new.delete(value.id)
+            @client_drafts.delete(value)
             @identity.delete(value.id)
             next
           end
@@ -716,6 +746,7 @@ module Mxrb
 
       def detach_uncommitted
         dirty_values.each do |value|
+          @detached_new[value.id] = value if @staged_new.key?(value.id)
           @identity.delete(value.id)
           @persisted.delete(value.id)
           @staged_new.delete(value.id)

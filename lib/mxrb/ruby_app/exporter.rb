@@ -7,6 +7,7 @@ require 'find'
 require 'json'
 require 'pp'
 require 'time'
+require 'tmpdir'
 require_relative '../native_fragment_store'
 require_relative 'legacy_service_source_migration'
 require_relative 'legacy_widget_source_migration'
@@ -103,6 +104,18 @@ module Mxrb
       end
 
       private
+
+      # Shared presentation always emits typed Forms declarations. Its decoding
+      # fragments are intermediate values, not dependencies of the exported app.
+      def with_presentation_fragments
+        previous = @native_fragment_store
+        Dir.mktmpdir('mxrb-presentation-fragments-') do |directory|
+          @native_fragment_store = NativeFragmentStore.new(directory)
+          yield
+        end
+      ensure
+        @native_fragment_store = previous
+      end
 
       def read_embedded_sources
         mpr = IO::MprFile.open(@mpr_path, readonly: true)
@@ -2602,6 +2615,8 @@ module Mxrb
 
         if value.key?('option')
           value.keys.sort == %w[id key option value_id] && value.fetch('option').is_a?(String)
+        elsif value.key?('toggle')
+          value.keys.sort == %w[id key toggle value_id] && value.fetch('toggle') == true
         elsif value.key?('properties')
           value.keys.sort == %w[id key properties value_id] &&
             value.fetch('properties').is_a?(Array) && value.fetch('properties').any? &&
@@ -2615,6 +2630,11 @@ module Mxrb
         arguments = [value.fetch('key').inspect]
         if value.key?('option')
           arguments << "option: #{value.fetch('option').inspect}"
+          return runtime_widget_declaration('design_property', arguments, indentation, false)
+        end
+
+        if value.key?('toggle')
+          arguments << 'toggle: true'
           return runtime_widget_declaration('design_property', arguments, indentation, false)
         end
 
@@ -3783,6 +3803,7 @@ module Mxrb
             transient?: boolean;
             new_record?: boolean;
             draft_id?: string;
+            draft_token?: string;
           }
 
           export interface WidgetEvent {
