@@ -11,3 +11,4 @@ AllCops:
     - "coverage/**/*"
     - "tmp/**/*"
     - "vendor/**/*"
+    - "script/*.ps1"
