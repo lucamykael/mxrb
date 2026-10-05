@@ -1,0 +1,227 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "chart_package": "Charts 6.2.1",
+  "chart_package_sha256": "13e999c4e519dc6baeb783dd8d58b92009338bc4b5c0a3aac3f734d7185b8d1e",
+  "scope": "Nine chart aggregations with repeated categories, null values, source ordering and data refresh",
+  "ruby": {
+    "examples": 2274,
+    "lines": {
+      "covered": 40776,
+      "total": 40776,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17845,
+      "total": 17845,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 109,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "browser": {
+    "passed": true,
+    "steps": 59,
+    "mpr_access": "forbidden",
+    "screenshot_sha256": "c404b701dbbb6e8573aa505e393b840bcc41609fc4224752f548ce73fda2a662",
+    "console_errors": []
+  },
+  "builds": {
+    "status": "completed",
+    "cases": [
+      {
+        "label": "chart-aggregation-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "775b8dfbfcb09d01cf0e16cb77e67635452abc6340325cef58f64ea1ee34dbc9"
+      },
+      {
+        "label": "chart-aggregation-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "d6b8ce6e52cb0c998eef0ab191d224b848bf4fb0d10d899d38ee6c995c5638cf"
+      }
+    ]
+  },
+  "native_runtime": [
+    {
+      "variant": "runtime-chart-aggregation-roundtrip",
+      "report_sha256": "9943afd7f61cfe316d5e8f45893c1e11c5f622941914424ca72f8a4a249d7cf6",
+      "status": "passed",
+      "package_sha256": "d6b8ce6e52cb0c998eef0ab191d224b848bf4fb0d10d899d38ee6c995c5638cf",
+      "scenario_sha256": "292b28c4d3de5cd3778eb51ca26e760c9e3beccf25818117c4706cbe27a65dc7",
+      "acceptance": {
+        "status": "passed",
+        "before": {
+          "count": {
+            "A": 4,
+            "B": 3
+          },
+          "sum": {
+            "A": 80,
+            "B": 30
+          },
+          "avg": {
+            "A": 20,
+            "B": 10
+          },
+          "min": {
+            "A": 10,
+            "B": 5
+          },
+          "max": {
+            "A": 40,
+            "B": 20
+          },
+          "median": {
+            "A": 15,
+            "B": 5
+          },
+          "mode": {
+            "A": 10,
+            "B": 5
+          },
+          "first": {
+            "A": 10,
+            "B": 5
+          },
+          "last": {
+            "A": 40,
+            "B": 20
+          }
+        },
+        "after": {
+          "count": {
+            "A": 5,
+            "B": 3
+          },
+          "sum": {
+            "A": 180,
+            "B": 30
+          },
+          "avg": {
+            "A": 36,
+            "B": 10
+          },
+          "min": {
+            "A": 10,
+            "B": 5
+          },
+          "max": {
+            "A": 100,
+            "B": 20
+          },
+          "median": {
+            "A": 20,
+            "B": 5
+          },
+          "mode": {
+            "A": 10,
+            "B": 5
+          },
+          "first": {
+            "A": 10,
+            "B": 5
+          },
+          "last": {
+            "A": 100,
+            "B": 20
+          }
+        }
+      }
+    },
+    {
+      "variant": "runtime-chart-aggregation-source",
+      "report_sha256": "646f233cb15653aaf897cd962e8d8993da8d58edda8fd8ffef2e9639fd9942fd",
+      "status": "passed",
+      "package_sha256": "775b8dfbfcb09d01cf0e16cb77e67635452abc6340325cef58f64ea1ee34dbc9",
+      "scenario_sha256": "292b28c4d3de5cd3778eb51ca26e760c9e3beccf25818117c4706cbe27a65dc7",
+      "acceptance": {
+        "status": "passed",
+        "before": {
+          "count": {
+            "A": 4,
+            "B": 3
+          },
+          "sum": {
+            "A": 80,
+            "B": 30
+          },
+          "avg": {
+            "A": 20,
+            "B": 10
+          },
+          "min": {
+            "A": 10,
+            "B": 5
+          },
+          "max": {
+            "A": 40,
+            "B": 20
+          },
+          "median": {
+            "A": 15,
+            "B": 5
+          },
+          "mode": {
+            "A": 10,
+            "B": 5
+          },
+          "first": {
+            "A": 10,
+            "B": 5
+          },
+          "last": {
+            "A": 40,
+            "B": 20
+          }
+        },
+        "after": {
+          "count": {
+            "A": 5,
+            "B": 3
+          },
+          "sum": {
+            "A": 180,
+            "B": 30
+          },
+          "avg": {
+            "A": 36,
+            "B": 10
+          },
+          "min": {
+            "A": 10,
+            "B": 5
+          },
+          "max": {
+            "A": 100,
+            "B": 20
+          },
+          "median": {
+            "A": 20,
+            "B": 5
+          },
+          "mode": {
+            "A": 10,
+            "B": 5
+          },
+          "first": {
+            "A": 10,
+            "B": 5
+          },
+          "last": {
+            "A": 100,
+            "B": 20
+          }
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "This fixture certifies aggregate values on line charts. Dynamic series, stacking, point actions and full visual/Plotly option parity remain separate contracts."
+  ]
+}

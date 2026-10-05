@@ -1,5 +1,20 @@
 # MXRB: Ruby über alles
 
+## Diagrammaggregation
+
+Diagramme gruppieren wiederholte Kategorien und berechnen `count`, `sum`, `avg`,
+`min`, `max`, `median`, `mode`, `first` und `last`. Die Quellreihenfolge bestimmt
+den ersten und letzten Wert; Nullwerte werden ausgeschlossen. Datenänderungen
+berechnen die Ergebnisse neu. Tabelle und Diagramm zeigen dieselben Aggregate.
+
+Charts 6.2.1 unter Studio Pro 11.12.1 bestätigt alle neun Funktionen für zwei
+Kategorien vor und nach dem Einfügen, im Original und nach dem Roundtrip.
+Ruby-Chromium besteht 59 Schritte ohne MPR; 109 Frontend-Tests und 100% Ruby-Coverage
+bestehen. CI wiederholt den Test mit dem per Prüfsumme fixierten Paket. Geprüft
+sind aggregierte Liniendiagrammwerte; dynamische Serien, Stapelung, Punktaktionen
+und weitere visuelle Optionen benötigen eigene Verträge.
+Siehe [Nachweis](../evidence/chart-aggregation-2026-10-05.json).
+
 ## Bedingte und arithmetische Ausdrücke
 
 Das Backend prüft den gesamten Ausdruck und wertet nur den gewählten Zweig von
@@ -117,7 +132,7 @@ Ruby-Version mit verbotenem MPR-Zugriff aus.
 Die native Prüfung umfasst Werte und Aktualisierung von Linien-, Balken- und
 Kreisdiagrammen. Sie belegt keine vollständige visuelle Gleichheit, parametrisierten
 Templates, Punktereignisse, Themes, benutzerdefinierten Layouts oder sämtliche
-Plotly-Optionen. Aggregationen, dynamische Reihen und Balkenmodi außer `group`
+Plotly-Optionen. Dynamische Reihen und Balkenmodi außer `group`
 benötigen weiterhin einen Adapter; der Renderer weist diese Konfigurationen ab,
 anstatt falsche Daten darzustellen.
 Siehe die [Diagrammnachweise](../evidence/chart-data-2026-10-05.json).
