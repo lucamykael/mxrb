@@ -17,13 +17,13 @@ RSpec.describe 'annotated rule and expression compatibility' do # rubocop:disabl
       cases << { 'name' => 'VerifyRule', 'expected' => 'passed' }
       Mxrb.open(source) do |project|
         interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
-        cases.each { expect(interpreter.call("Compatibility.#{_1['name']}")).to eq(_1['expected']) }
+        cases.each { |item| expect_oracle_result(item) { interpreter.call("Compatibility.#{item['name']}") } }
       end
       target = File.join(directory, 'ruby')
       Mxrb::Exporter.new(source, target, mode: :ruby).export!
       allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR is unavailable')
       application = Mxrb::RubyApp::Application.new(target)
-      cases.each { expect(application.call_service("Compatibility.#{_1['name']}")).to eq(_1['expected']) }
+      cases.each { |item| expect_oracle_result(item) { application.call_service("Compatibility.#{item['name']}") } }
       rule_path = File.join(target, 'app/services/compatibility/non_empty.rb')
       File.write(rule_path, File.read(rule_path).sub('> 0', '> 100'))
       application.close
@@ -31,6 +31,14 @@ RSpec.describe 'annotated rule and expression compatibility' do # rubocop:disabl
       expect(application.call_service('Compatibility.VerifyRule')).to eq('failed')
     ensure
       application&.close
+    end
+  end
+
+  def expect_oracle_result(item, &block)
+    if item['expected_error']
+      expect(&block).to raise_error(Mxrb::NativeRuntimeError, /substring range/)
+    else
+      expect(block.call).to eq(item.fetch('expected'))
     end
   end
 

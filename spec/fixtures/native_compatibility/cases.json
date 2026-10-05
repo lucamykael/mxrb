@@ -1,11 +1,112 @@
 [
-  {"name":"Length","expression":"toString(length('😀a'))","expected":"3"},
-  {"name":"Trim","expression":"trim('  Ruby  ')","expected":"Ruby"},
-  {"name":"TrimEmpty","expression":"trim('')","expected":""},
-  {"name":"Lower","expression":"toLowerCase('RuBy')","expected":"ruby"},
-  {"name":"Upper","expression":"toUpperCase('RuBy')","expected":"RUBY"},
-  {"name":"Encode","expression":"urlEncode('a b+c/ç')","expected":"a%20b%2Bc%2F%C3%A7"},
-  {"name":"EncodeSymbols","expression":"urlEncode('*~!()')","expected":"%2A~%21%28%29"},
-  {"name":"DecodeSpaces","expression":"urlDecode('a%20b%2Bc%2F%C3%A7')","expected":"a b+c/ç"},
-  {"name":"Decode","expression":"urlDecode('a+b%2Bc%2F%C3%A7')","expected":"a b+c/ç"}
+  {
+    "name": "Length",
+    "expression": "toString(length('😀a'))",
+    "expected": "3"
+  },
+  {
+    "name": "Trim",
+    "expression": "trim('  Ruby  ')",
+    "expected": "Ruby"
+  },
+  {
+    "name": "TrimEmpty",
+    "expression": "trim('')",
+    "expected": ""
+  },
+  {
+    "name": "Lower",
+    "expression": "toLowerCase('RuBy')",
+    "expected": "ruby"
+  },
+  {
+    "name": "Upper",
+    "expression": "toUpperCase('RuBy')",
+    "expected": "RUBY"
+  },
+  {
+    "name": "Encode",
+    "expression": "urlEncode('a b+c/ç')",
+    "expected": "a%20b%2Bc%2F%C3%A7"
+  },
+  {
+    "name": "EncodeSymbols",
+    "expression": "urlEncode('*~!()')",
+    "expected": "%2A~%21%28%29"
+  },
+  {
+    "name": "DecodeSpaces",
+    "expression": "urlDecode('a%20b%2Bc%2F%C3%A7')",
+    "expected": "a b+c/ç"
+  },
+  {
+    "name": "Decode",
+    "expression": "urlDecode('a+b%2Bc%2F%C3%A7')",
+    "expected": "a b+c/ç"
+  },
+  {
+    "name": "FindUnicode",
+    "expression": "toString(find('😀abc😀', 'a'))",
+    "expected": "2"
+  },
+  {
+    "name": "FindOffset",
+    "expression": "toString(find('banana', 'an', 2))",
+    "expected": "3"
+  },
+  {
+    "name": "FindEmptyPastEnd",
+    "expression": "toString(find('abc', '', 9))",
+    "expected": "3"
+  },
+  {
+    "name": "FindNegative",
+    "expression": "toString(find('abc', 'a', -1))",
+    "expected": "0"
+  },
+  {
+    "name": "FindLast",
+    "expression": "toString(findLast('banana', 'an'))",
+    "expected": "3"
+  },
+  {
+    "name": "FindLastUnicode",
+    "expression": "toString(findLast('😀a😀', '😀'))",
+    "expected": "3"
+  },
+  {
+    "name": "SubstringUnicode",
+    "expression": "substring('😀abc', 2, 2)",
+    "expected": "ab"
+  },
+  {
+    "name": "SubstringTail",
+    "expression": "substring('😀abc', 2)",
+    "expected": "abc"
+  },
+  {
+    "name": "SubstringBoundary",
+    "expression": "substring('abc', 3, 0)",
+    "expected": ""
+  },
+  {
+    "name": "SubstringPastEnd",
+    "expression": "substring('abc', 4)",
+    "expected_error": true
+  },
+  {
+    "name": "SubstringTooLong",
+    "expression": "substring('abc', 1, 3)",
+    "expected_error": true
+  },
+  {
+    "name": "SubstringNegative",
+    "expression": "substring('abc', -1)",
+    "expected_error": true
+  },
+  {
+    "name": "TrimNbsp",
+    "expression": "trim(' Ruby ')",
+    "expected": " Ruby "
+  }
 ]

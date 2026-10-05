@@ -32,6 +32,13 @@ revealed and helped correct non-text rule decision captions and URL encoding
 [compatibility evidence](../evidence/compatibility-2026-10-05.json).
 
 
+String search and slicing now count UTF-16 units: `find` honors its start
+position, `findLast` locates the final occurrence, and `substring` rejects
+invalid ranges. Complete surrogate pairs are preserved; invalid Unicode
+strings are explicitly rejected. Certified native cases are listed in the
+[string evidence](../evidence/string-parity-2026-10-05.json).
+
+
 ## October 5, 2026 update
 
 The runtime catalog discovers new models, DTOs, pages, enumerations and services
