@@ -31,7 +31,8 @@ RSpec.describe 'Acceptance status report' do
   end
 
   it 'reports successful nonempty native builds and exact line/branch coverage' do
-    build = { status: 'completed', case_count: 1, cases: [{ label: 'source', status: 'passed', mxbuild_exit_code: 0 }] }
+    build = { status: 'completed', case_count: 1,
+              cases: [{ label: 'source', status: 'completed', mxbuild_exit_code: 0, package_present: true }] }
     coverage = { lines: { covered: 5, total: 5, percent: 100 }, branches: { covered: 2, total: 2, percent: 100 } }
     runtime = { status: 'passed', http_status: 200, page_ready: true, package_sha256: 'fixture',
                 crud: { status: 'passed', steps: %w[create read update delete] } }
@@ -53,6 +54,14 @@ RSpec.describe 'Acceptance status report' do
     report, _error, status = status_report([:runtime, { status: 'failed', package_sha256: 'fixture' }])
     expect(status).to eq(1)
     expect(report['status']).to eq('failed')
+  end
+
+  it 'rejects a missing package even when the process exited successfully' do
+    build = { status: 'completed', case_count: 1,
+              cases: [{ label: 'source', status: 'completed', mxbuild_exit_code: 0, package_present: false }] }
+    report, _error, status = status_report([:native, build])
+    expect(status).to eq(1)
+    expect(report['checks'].first['passed']).to be(false)
   end
 
   it 'rejects malformed report types and missing inputs' do

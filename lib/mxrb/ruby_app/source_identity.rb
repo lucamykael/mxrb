@@ -79,7 +79,7 @@ module Mxrb
           unless clean == entry.fetch('path') && !clean.split('/').include?('..')
             raise SerializationError, 'unsafe Ruby source identity path'
           end
-          if entry['kind'] == 'service' && !%w[microflow nanoflow].include?(entry['native_kind'])
+          if entry['kind'] == 'service' && !%w[microflow nanoflow rule].include?(entry['native_kind'])
             raise SerializationError, 'invalid Ruby service identity kind'
           end
 
@@ -318,7 +318,7 @@ module Mxrb
         end
         mod.entities.each { add.call('record', "#{mod.name}.#{_1.name}", _1.id) }
         mod.pages.each { add.call('page', "#{mod.name}.#{_1.name}", _1.id) }
-        { 'microflow' => mod.microflows, 'nanoflow' => mod.nanoflows }.each do |kind, flows|
+        { 'microflow' => mod.microflows, 'nanoflow' => mod.nanoflows, 'rule' => mod.rules }.each do |kind, flows|
           flows.each { add.call('service', "#{mod.name}.#{_1.name}", _1.id, kind) }
         end
         { 'constant' => mod.constants, 'enumeration' => mod.enumerations,
@@ -346,7 +346,7 @@ module Mxrb
               'kind' => kind, 'id' => entry.fetch('id').to_s, 'name' => entry.fetch('name').to_s,
               'path' => path.to_s, 'ruby_class' => entry.fetch('ruby_class', '').to_s,
               'native_kind' => if kind == 'service'
-                                 collection == 'nanoflows' ? 'nanoflow' : 'microflow'
+                                 entry.fetch('kind', collection == 'nanoflows' ? 'nanoflow' : 'microflow')
                                else
                                  ''
                                end

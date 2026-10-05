@@ -1,12 +1,44 @@
 # MXRB: Ruby acima de tudo
 
+## Catálogo, regras e widgets: revisão adicional
+
+O catálogo de aplicações `runtime_model: ruby` agora reconcilia remoções e
+renomeações de declarações carregadas, preservando o manifesto de exportação.
+Renomeações persistentes usam `renamed_from`; excluir uma classe não autoriza
+apagar sua tabela. O modo legado continua preservando metadados não declarados.
+
+Regras são exportadas como serviços `flow :rule`, com nível de exportação
+preservado. Decisões chamam a implementação Ruby atual, inclusive após edição,
+e anotações podem apontar para essas decisões. O Writer gera legendas textuais
+e aceita snapshots imutáveis das declarações.
+
+O frontend expõe `registerMarketplaceWidget` para adapters por identidade exata.
+Imagens, sliders, intervalos, progresso, avaliação, cor e botões de enumeração
+usam propriedades e dados vinculados, respeitando a política de edição herdada.
+Isso não certifica gráficos, scanners, ações Java/JS ou todos os widgets nativos.
+
+VetClinic editado passou criação e leitura persistida no Chromium autenticado,
+em 1280×900 e 390×900, com abertura de MPR proibida. A preparação está em
+`spec/fixtures/frontend_browser/prepare_vetclinic_edited.rb`; o servidor de prova
+é `serve_without_mpr.rb`, no mesmo diretório. Ambos usam uma exportação nova;
+os projetos originais permanecem intactos.
+
+
+A rodada adicional passou dez builds: contratos, apresentação, widgets core,
+validações e compatibilidade, cada um na origem e após round-trip Ruby. Dez
+casos de regras e strings passaram no Runtime de cada pacote de compatibilidade.
+O oráculo revelou e permitiu corrigir a legenda não textual de decisões por regra
+e a codificação URL (espaço `%20`, asterisco `%2A`, til `~`). Veja a
+[evidência de compatibilidade](../evidence/compatibility-2026-10-05.json).
+
+
 ## Atualização de 5 de outubro de 2026
 
 O catálogo do runtime descobre novos modelos, DTOs, páginas, enums e serviços
 nos arquivos Ruby carregados, sem exigir edição manual do manifesto. Aplicações
 com `runtime_model: ruby` executam sem abrir MPR; projetos legados precisam ser
-exportados novamente para adotar esse contrato. Remoção e renomeação de entradas
-legadas ainda precisam de reconciliação explícita.
+exportados novamente para adotar esse contrato. A reconciliação automática exige o contrato Ruby; entradas legadas ainda
+precisam de uma nova exportação.
 
 A UI avalia papéis de módulo e expressões de visibilidade/editabilidade,
 combinando-os com a política herdada do Data View. Papéis desconhecidos não

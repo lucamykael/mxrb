@@ -1,5 +1,41 @@
 # MXRB: Ruby über alles
 
+## Weitere Überarbeitung von Katalog, Regeln und Widgets
+
+Der Katalog für Anwendungen mit `runtime_model: ruby` gleicht entfernte und
+umbenannte geladene Deklarationen ab, ohne das Exportmanifest zu verändern.
+Persistente Umbenennungen verwenden `renamed_from`; das Entfernen einer Klasse
+erlaubt kein Löschen ihrer Tabelle. Der Legacy-Modus behält nicht deklarierte
+Metadaten weiterhin bei.
+
+Regeln werden als `flow :rule`-Services mit erhaltenem Exportlevel exportiert.
+Entscheidungen rufen die aktuelle Ruby-Implementierung auch nach Änderungen auf;
+Annotationen können auf diese Entscheidungen verweisen. Der Writer erzeugt
+textuelle Beschriftungen und akzeptiert unveränderliche Deklarations-Snapshots.
+
+Das Frontend bietet `registerMarketplaceWidget` für Adapter anhand der exakten
+Widget-Identität. Bilder, Schieberegler, Bereiche, Fortschritt, Bewertungen,
+Farben und Enumerationsschaltflächen verwenden gebundene Eigenschaften und
+Daten unter Beachtung der geerbten Bearbeitungsregeln. Diagramme, Scanner,
+Java/JS-Aktionen und sämtliche nativen Widgets sind damit nicht zertifiziert.
+
+Das in Ruby bearbeitete VetClinic bestand authentifizierte Chromium-Tests für
+Erstellung und persistiertes Lesen bei 1280×900 und 390×900, während MPR-Zugriffe
+verboten waren. Die Vorbereitung steht in
+`spec/fixtures/frontend_browser/prepare_vetclinic_edited.rb`; der Prüfserver
+heißt `serve_without_mpr.rb` im selben Verzeichnis. Beide verwenden einen neuen
+Export; die Originalprojekte bleiben unverändert.
+
+
+Eine weitere Runde bestand zehn Builds: Verträge, Darstellung, Core-Widgets,
+Validierung und Kompatibilität, jeweils als Original und Ruby-Round-trip.
+Zehn Regel- und String-Prüfungen bestanden in der Runtime jedes
+Kompatibilitätspakets. Das Orakel zeigte Fehler bei textuellen Beschriftungen
+von Regelentscheidungen und URL-Kodierung auf; diese wurden korrigiert
+(Leerzeichen `%20`, Stern `%2A`, Tilde `~`). Siehe die
+[Kompatibilitätsnachweise](../evidence/compatibility-2026-10-05.json).
+
+
 ## Aktualisierung vom 5. Oktober 2026
 
 Der Runtime-Katalog erkennt neue Modelle, DTOs, Seiten, Enumerationen und Dienste

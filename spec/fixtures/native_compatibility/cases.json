@@ -1,0 +1,11 @@
+[
+  {"name":"Length","expression":"toString(length('😀a'))","expected":"3"},
+  {"name":"Trim","expression":"trim('  Ruby  ')","expected":"Ruby"},
+  {"name":"TrimEmpty","expression":"trim('')","expected":""},
+  {"name":"Lower","expression":"toLowerCase('RuBy')","expected":"ruby"},
+  {"name":"Upper","expression":"toUpperCase('RuBy')","expected":"RUBY"},
+  {"name":"Encode","expression":"urlEncode('a b+c/ç')","expected":"a%20b%2Bc%2F%C3%A7"},
+  {"name":"EncodeSymbols","expression":"urlEncode('*~!()')","expected":"%2A~%21%28%29"},
+  {"name":"DecodeSpaces","expression":"urlDecode('a%20b%2Bc%2F%C3%A7')","expected":"a b+c/ç"},
+  {"name":"Decode","expression":"urlDecode('a+b%2Bc%2F%C3%A7')","expected":"a b+c/ç"}
+]

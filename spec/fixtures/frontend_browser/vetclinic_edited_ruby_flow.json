@@ -1,0 +1,21 @@
+{
+  "name": "vetclinic-edited-ruby-without-mpr",
+  "authentication": true,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [{
+    "name": "edited-page-and-service",
+    "path": "/",
+    "steps": [
+      { "wait_for_text": "VetClinic" },
+      { "click_text": "Animals" },
+      { "wait_for_text": "Ruby Edited Animals" },
+      { "click_text": "Create from edited Ruby" },
+      { "wait_for_text": "Ruby edited: Browser acceptance" },
+      { "navigate": "/" },
+      { "click_text": "Animals" },
+      { "wait_for_text": "Ruby edited: Browser acceptance" },
+      { "wait_for_absence": "[role=alert]" }
+    ],
+    "selectors": [".mxrb-navigation", "[data-widget-name=AnimalsGrid]"]
+  }]
+}

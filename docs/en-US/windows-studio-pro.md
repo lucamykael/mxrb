@@ -1,5 +1,13 @@
 # Windows and Studio Pro validation with Omarchy
 
+An additional run passed ten builds: contracts, presentation, core widgets,
+validation and compatibility, each as source and Ruby round-trip. Ten rule and
+string probes passed in each compatibility package's Runtime. The oracle
+revealed and helped correct non-text rule decision captions and URL encoding
+(space `%20`, asterisk `%2A`, tilde `~`). See the
+[compatibility evidence](../evidence/compatibility-2026-10-05.json).
+
+
 ## Verified on October 5, 2026
 
 The existing Windows VM on the USB drive was reused with its installed Studio
@@ -49,8 +57,8 @@ database and Edge profile.
 
 [Windows native certification](../../.github/workflows/studio-pro.yml) runs
 weekly, manually and on relevant PRs. Hosted Windows uses the official MxBuild
-11.12.1 archive pinned by SHA-256, JDK 21 and headless Edge. The current matrix checks eight builds (including validation rules)
-and boots both source and rebuilt core packages. Evidence artifacts are retained
+11.12.1 archive pinned by SHA-256, JDK 21 and headless Edge. The current matrix checks ten builds
+and boots source and rebuilt core, validation and compatibility packages. Evidence artifacts are retained
 for 14 days. This job does not install the Studio Pro GUI; visual certification
 is recorded separately.
 

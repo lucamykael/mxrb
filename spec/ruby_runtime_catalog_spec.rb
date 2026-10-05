@@ -4,6 +4,7 @@ require 'spec_helper'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe Mxrb::RubyApp::RuntimeCatalog do
+  before { Mxrb::RubyApp::Registry.reset! }
   after { Mxrb::RubyApp::Registry.reset! }
 
   it 'discovers newly added Ruby documents during reload without editing the manifest or opening MPR' do
@@ -57,6 +58,60 @@ RSpec.describe Mxrb::RubyApp::RuntimeCatalog do
     ensure
       application&.close
     end
+  end
+  it 'removes deleted and renamed documents after reload without changing the manifest or stored rows' do
+    Dir.mktmpdir do |directory|
+      source = File.join(directory, 'Catalog.mpr')
+      target = File.join(directory, 'app')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module :Catalog do
+          entity(:Item) { string :Name }
+          entity(:Removed) do
+            non_persistent!
+            string :Name
+          end
+          page(:Home) { text :Hello, caption: 'Home' }
+          microflow(:Answer) do
+            return_type :String
+            return_value "'answer'"
+          end
+          enumeration(:State) { value :Ready, caption: 'Ready' }
+        end
+      end
+      Mxrb::Exporter.new(source, target, mode: :ruby).export!
+      original = File.binread(File.join(target, '.mxrb/ruby-app.json'))
+      allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR is unavailable')
+      application = Mxrb::RubyApp::Application.new(target, reload: true)
+      id = application.create_record('Catalog.Item', { 'Name' => 'Retained' }).fetch(:id)
+      manifest = application.manifest
+      mod = manifest.modules.find { _1['name'] == 'Catalog' }
+      %w[models dtos pages services enumerations].each do |collection|
+        mod.fetch(collection).each do |entry|
+          path = File.join(target, entry.fetch('path'))
+          if entry.fetch('name') == 'Catalog.Item'
+            File.write(path,
+                       File.read(path).sub('mendix_name "Catalog.Item"',
+                                           "mendix_name 'Catalog.Renamed', renamed_from: 'Catalog.Item'"))
+          else
+            File.unlink(path)
+          end
+        end
+      end
+      expect(application.reload_if_changed!).to be(true)
+      catalog = application.schema.fetch(:modules).find { _1['name'] == 'Catalog' }
+      expect(catalog.fetch('models').map { _1.fetch('name') }).to eq(['Catalog.Renamed'])
+      expect(catalog.values_at('pages', 'services', 'enumerations')).to eq([[], [], []])
+      expect(application.record('Catalog.Renamed', id)).to include(attributes: include('Name' => 'Retained'))
+      expect(File.binread(File.join(target, '.mxrb/ruby-app.json'))).to eq(original)
+    ensure
+      application&.close
+    end
+  end
+
+  it 'retains undeclared legacy documents when the native bridge supplies the model' do
+    modules = [{ 'name' => 'Legacy', 'pages' => [{ 'name' => 'Legacy.Home' }] }]
+    expect(described_class.new(modules).modules).to eq(modules)
   end
 end
 # rubocop:enable Metrics/BlockLength

@@ -1,0 +1,329 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "scope": "Ten fixture builds and ten rule/string probes per native package; not universal Mendix compatibility.",
+  "native_builds": {
+    "status": "completed",
+    "report_sha256": "c9371c7891ac4ba458a8d1b7109ed415926c64f83b4553d271d4daf4f5ae98b7",
+    "cases": [
+      {
+        "label": "contracts-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "4a9079c2f088f4a6cebc626402ea8b133cd83655135ee47954fa0ed9e0d3b466",
+        "package_sha256": "ac0c8c612e162abd04056413d847bf2311b0743155a59794c69b214494596f17"
+      },
+      {
+        "label": "contracts-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "9e26b970f55149655a98e59a50313172278de6a8fde7d281230b5e7470195549",
+        "package_sha256": "ab549b947fb640684489691b7a9113ec6627d460d64899eda1fca244879e8f96"
+      },
+      {
+        "label": "presentation-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "81c0e1f764423a02544de29ebef61e03a3f7488dc3162297a4a6a6c196f1f3e3",
+        "package_sha256": "cbe325815bc7c43fca22b78d6545a6a3cc3b1a225fa6e18d2f9771290e2743e6"
+      },
+      {
+        "label": "presentation-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "97e31e6c665ecdeced619f5d52ea88d0369f0dd9ad02d3f5717c24fbaf1e0cd2",
+        "package_sha256": "1fb384163efe134d9687508a4056a49049b5f8bf177f3aabee6ac31eac7d8893"
+      },
+      {
+        "label": "core-widgets-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "e528dd6569b331a47e65dc847afb474013d8e0ab4e9dab57d802b96f44a6f880",
+        "package_sha256": "f144565278c9935a1ba729195da3801054254fba094fe03394ba6ba229d09ffc"
+      },
+      {
+        "label": "core-widgets-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "4b7cd271207aefdfd6b94c62bbbdad76baaf5e9f91400db15d4cb41eb99667d7",
+        "package_sha256": "9f5fd0b476bff40e6d1989bc8f604fd3280233b57ad1cca0a7dbbe71e43e011c"
+      },
+      {
+        "label": "validation-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "cacda78ae8cba41295ab4f9594cbbcf85f2f2d6312589bf68ec26c155f12eece",
+        "package_sha256": "ec7fc10e447c6051a86550d260a7224100125640800a108fbf96a2ffa649a8b5"
+      },
+      {
+        "label": "validation-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "3ee8b22c6732e47a586e3e09d8d34c48731bcb9566017a8b2f1403af099d571a",
+        "package_sha256": "3c232a9339ed25dbdc2c5fe92934cb5fa52b5154218fd5cb2d10f92c263b72f4"
+      },
+      {
+        "label": "compatibility-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "2fda06ff5fb141c139e9db2ea3ac5b71c98b8e5617120f822d1b0ac9c2debc91",
+        "package_sha256": "73c2283c6503747cf7fad9137d531db16b09a34a5ab95700dbc97793ef15a2c4"
+      },
+      {
+        "label": "compatibility-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_present": true,
+        "expected_sha256": "1ff73088de30a8c467fe023f5dfa0e5a8dc966743de5c9d95cb7b0a2e4e12d20",
+        "package_sha256": "618689ccedbf25feabb25e8c767d2a965da13d313327cf4406fcd1e15a19bf1a"
+      }
+    ]
+  },
+  "native_runtime": [
+    {
+      "variant": "source",
+      "report_sha256": "1a07a2bb38d4cc88e8d2970f859df9a9b727379b6632624b7af1cfccb623f95a",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "73c2283c6503747cf7fad9137d531db16b09a34a5ab95700dbc97793ef15a2c4",
+      "scenario_sha256": "2c435806c9968711506201991e25084a1436ac37b9fd3e1f0232e3b0fd2138a5",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "variant": "roundtrip",
+      "report_sha256": "67ae4111bd53f41e2031516ee061ef89a3d8a589b8f3894db6cbd31034ac0af5",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "618689ccedbf25feabb25e8c767d2a965da13d313327cf4406fcd1e15a19bf1a",
+      "scenario_sha256": "2c435806c9968711506201991e25084a1436ac37b9fd3e1f0232e3b0fd2138a5",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    }
+  ],
+  "ruby_browser": [
+    {
+      "report_sha256": "28f5939b083d1362a56e7f9694f9e7e21285908a2949e14953b5aa0dd7a3c58b",
+      "passed": true,
+      "scenario": "vetclinic-edited-ruby-without-mpr",
+      "authenticated": true,
+      "steps": 9,
+      "console_errors": [],
+      "pages": [
+        {
+          "viewport": {
+            "width": 1280,
+            "height": 900
+          },
+          "snapshot_sha256": "19912642464918695da0f889f751a3145d96eb89beb6997514ff0a36278b172d",
+          "screenshot_sha256": "d9536af6a2a789a881c5a5190a8dd0f238223ed85d9fda24968cbdb6a83988a9"
+        }
+      ]
+    },
+    {
+      "report_sha256": "60b023f43d811066d6b4e78b069b1fea9738b8103efffd5a0c5100745c14b22e",
+      "passed": true,
+      "scenario": "vetclinic-edited-ruby-phone",
+      "authenticated": true,
+      "steps": 9,
+      "console_errors": [],
+      "pages": [
+        {
+          "viewport": {
+            "width": 390,
+            "height": 900
+          },
+          "snapshot_sha256": "08f3e48ae8a7460629d66f92d5e155c7105c7aba6fd0d03d40605a928f9a867d",
+          "screenshot_sha256": "f4ce82b9239499c7da95b36beef7956540a4b9f2f4ee655412d86d3da60a2003"
+        }
+      ]
+    }
+  ],
+  "oracle_corrections": [
+    "Rule split Caption must be text, not a hash.",
+    "urlEncode in this 11.12.1 Runtime uses %20 for spaces, %2A for asterisk and preserves tilde. Earlier failed reports were retained."
+  ],
+  "remaining": [
+    "Broader XPath/expression semantic parity, including dates/time zones.",
+    "External charts/scanners and remaining native widgets require execution contracts.",
+    "Application-specific Java/JavaScript integrations and mobile/offline acceptance.",
+    "Real-project business-flow acceptance beyond the edited VetClinic scenario."
+  ],
+  "fixtures": {
+    "spec/fixtures/frontend_browser/native_vetclinic_reference.json": "194aa095422e2c29287a2dc85e1fc51e2f6bb54b73519bf7f9f55e0b9d58dba9",
+    "spec/fixtures/frontend_browser/prepare_vetclinic_edited.rb": "42539746531d257aede08da64ca7ae98bdcdfa767efb01c477ab62163e6a233f",
+    "spec/fixtures/frontend_browser/serve_without_mpr.rb": "87a4d645a1e96ea2dd80260a4c42ff61c103a6c5317ade11f3eb95f43ecc4834",
+    "spec/fixtures/frontend_browser/vetclinic_edited_ruby_flow.json": "6d97ae638b67891bdc320b798f9016dd729c946d01c9c109c99b0211a5d0cf53",
+    "spec/fixtures/frontend_browser/vetclinic_edited_ruby_phone_flow.json": "cedce5d4f6dbdebba3640dfa5e73474295d1e71feaad94fb93e42c03bf3cb618",
+    "spec/fixtures/frontend_browser/vetclinic_real_project_flow.json": "05d5df8c226acf66f7c95b75457a4d6a37ee4d2b0c0d29bdb9435a076d4afdc3",
+    "spec/fixtures/native_compatibility/cases.json": "099c944cfd4b06d32e751f2ee8c40f8e8b39fef3787b0689eefe1e6f3b7358a1",
+    "spec/fixtures/native_compatibility/project.rb": "de8391995b858d5a79102daef1b9366bbdd94d96c622d817fde6d6110c336db7",
+    "spec/fixtures/native_compatibility/scenario.ts": "81ba3c5bc0d21eac6649ef178597670caf29eba57c44497753c6f887d9cdf42e"
+  },
+  "source_project": {
+    "name": "VetClinic",
+    "mpr_sha256": "c0e6048d024b315211a6eaf8e620be25ade645be9f488809183c1f2caffdd9a9",
+    "original_modified": false
+  },
+  "ruby_tests": {
+    "examples": 2261,
+    "failures": 0,
+    "seed": 58945,
+    "coverage": {
+      "lines": {
+        "covered": 40513,
+        "total": 40513,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 17703,
+        "total": 17703,
+        "percent": 100.0
+      }
+    }
+  },
+  "frontend_tests": {
+    "files": 17,
+    "tests": 85,
+    "failures": 0,
+    "typecheck": "passed",
+    "build": "passed"
+  }
+}

@@ -3162,27 +3162,17 @@ module Mxrb
     end
 
     def strip_internal_keys(doc)
-      doc.delete("__mxrb_allowed_roles_declared")
-      doc.delete("__mxrb_body_declared")
-      doc.delete("__mxrb_return_type_declared")
-      doc.delete("__mxrb_preserve_native_body")
-      doc.delete("__mxrb_deep_structure_declared")
-      doc.delete("__mxrb_allow_concurrent_execution_declared")
-      doc.delete("__mxrb_apply_entity_access_declared")
-      doc.delete("__mxrb_mark_as_used_declared")
-      doc.delete("__mxrb_excluded_declared")
-      doc.delete("__mxrb_annotations_declared")
-      strip_nested_internal_keys(doc)
-      doc
+      doc.replace(strip_nested_internal_keys(doc))
     end
 
     def strip_nested_internal_keys(value)
       case value
       when Hash
-        value.delete_if { |key, _| key.to_s.start_with?("__mxrb_") }
-        value.each_value { strip_nested_internal_keys(_1) }
+        value.reject { |key, _| key.to_s.start_with?("__mxrb_") }
+             .transform_values { strip_nested_internal_keys(_1) }
       when Array
-        value.each { strip_nested_internal_keys(_1) }
+        value.map { strip_nested_internal_keys(_1) }
+      else value
       end
     end
 
@@ -6507,7 +6497,7 @@ module Mxrb
         split_id, "Microflows$ExclusiveSplit", x, y, "90;60"
       ).merge(
         "SplitCondition" => split_condition_doc(activity[:condition]),
-        "Caption" => activity[:condition],
+        "Caption" => activity[:condition].is_a?(Hash) ? activity[:condition][:rule].to_s : activity[:condition],
         "ErrorHandlingType" => "Rollback",
         "Documentation" => ""
       )

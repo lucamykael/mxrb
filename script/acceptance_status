@@ -37,9 +37,14 @@ module AcceptanceStatus
     data, source = read(path)
     cases = data.fetch('cases')
     passed = data.fetch('status') == 'completed' && !cases.empty? && cases.length == data.fetch('case_count')
-    passed &&= cases.all? { _1.fetch('status') == 'passed' && _1.fetch('mxbuild_exit_code').eql?(0) }
+    passed &&= cases.all? { native_case_passed?(_1) }
     { source:, kind: 'Native builds', passed:,
       cases: cases.map { _1.slice('label', 'status', 'mxbuild_exit_code', 'expected_sha256', 'package_sha256') } }
+  end
+
+  def native_case_passed?(item)
+    item.fetch('status') == 'completed' && item.fetch('mxbuild_exit_code').eql?(0) &&
+      item.fetch('package_present') == true
   end
 
   def runtime(path)

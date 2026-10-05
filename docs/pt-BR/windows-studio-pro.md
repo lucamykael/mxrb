@@ -1,5 +1,13 @@
 # Validação Windows e Studio Pro com Omarchy
 
+A rodada adicional passou dez builds: contratos, apresentação, widgets core,
+validações e compatibilidade, cada um na origem e após round-trip Ruby. Dez
+casos de regras e strings passaram no Runtime de cada pacote de compatibilidade.
+O oráculo revelou e permitiu corrigir a legenda não textual de decisões por regra
+e a codificação URL (espaço `%20`, asterisco `%2A`, til `~`). Veja a
+[evidência de compatibilidade](../evidence/compatibility-2026-10-05.json).
+
+
 ## Estado verificado em 5 de outubro de 2026
 
 A VM Windows existente no HD USB foi reutilizada, com Studio Pro 11.12.1 já
@@ -50,7 +58,8 @@ os processos que iniciou. O banco HSQLDB e o perfil Edge são descartáveis.
 [Windows native certification](../../.github/workflows/studio-pro.yml) executa
 semanalmente, manualmente e em PRs relevantes. O runner Windows hospedado usa o
 arquivo oficial MxBuild 11.12.1 fixado por SHA-256, JDK 21 e Edge headless. A matriz atual
-valida oito builds (incluindo regras de validação) e inicia o Runtime nos pacotes core original e reconstruído.
+valida dez builds e inicia o Runtime nos pacotes core, validação e compatibilidade,
+originais e reconstruídos.
 Os artefatos de evidência ficam disponíveis por 14 dias. O job não instala a
 GUI Studio Pro; a certificação visual continua registrada separadamente.
 
