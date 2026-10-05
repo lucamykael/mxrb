@@ -502,7 +502,8 @@ module Mxrb
       class Interpreter
         attr_reader :store, :log, :effects
 
-        def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil)
+        def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
+                       service_dispatch: nil)
           @project = project
           @expression = Expression.new
           @log = []
@@ -520,6 +521,7 @@ module Mxrb
           @java_action_parameter_names = {}
           @http = http || method(:http_request)
           @policy = policy
+          @service_dispatch = service_dispatch
           @security_context = nil
           @apply_entity_access = false
           @flows = project.modules.flat_map do |mod|
@@ -854,27 +856,12 @@ module Mxrb
           variables[action['ResultVariableName'].to_s] = values
         end
 
-        # Narrows a value set by a Mendix XPath constraint. Only attribute
-        # predicates (comparisons, and/or, boolean shorthand) are understood;
-        # anything else is rejected by the expression evaluator rather than
-        # silently ignored.
         def filter_by_xpath(values, xpath, variables)
-          predicate = xpath_predicate(xpath)
-          return values if predicate.empty?
-
-          values.select { @expression.evaluate(predicate, variables, node: _1) }
-        end
-
-        def xpath_predicate(xpath)
-          text = xpath.strip
-          return '' if text.empty?
-
-          groups = text.scan(/\[([^\[\]]*)\]/).flatten.map(&:strip).reject(&:empty?)
-          unless groups.any? && text.gsub(/\[[^\[\]]*\]/, '').strip.empty?
-            raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
-          end
-
-          groups.map { "(#{_1})" }.join(' and ')
+          require_relative 'xpath'
+          policy = enforce_entity_access? ? @policy : nil
+          XPath.new(xpath, store:, policy:, context: @security_context).filter(values, variables)
+        rescue ArgumentError, TypeError
+          raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
         end
 
         def sort_values(values, sortings)
@@ -925,7 +912,11 @@ module Mxrb
           arguments = items(call_doc['ParameterMappings']).to_h do |mapping|
             [mapping['Parameter'].to_s.split('.').last, @expression.evaluate(mapping['Argument'], variables)]
           end
-          result = call(call_doc['Microflow'].to_s, arguments)
+          result = if @service_dispatch
+                     @service_dispatch.call(call_doc['Microflow'].to_s, arguments, @security_context)
+                   else
+                     call(call_doc['Microflow'].to_s, arguments)
+                   end
           variables[action['ResultVariableName'].to_s] = result if action['UseReturnVariable'] == true
         end
 
@@ -1078,6 +1069,8 @@ module Mxrb
         end
 
         def java_action_parameter_names(name)
+          return @project.java_action_parameter_names(name) if @project.respond_to?(:java_action_parameter_names)
+
           @java_action_parameter_names[name] ||= begin
             artifact = @project.find_artifact(name, kind: :java_action)
             document = artifact && @project.parse_bson(@project.raw_unit(artifact.unit_id))

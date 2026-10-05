@@ -19,6 +19,11 @@ require_relative 'ruby_app/schedule_builder'
 require_relative 'ruby_app/page_data_sources'
 require_relative 'ruby_app/page_design_identity'
 require_relative 'ruby_app/pluggable_properties'
+require_relative 'ruby_app/runtime_project'
+require_relative 'ruby_app/presentation'
+require_relative 'ruby_app/file_content'
+require_relative 'ruby_app/record_inheritance'
+require_relative 'runtime/xpath'
 require_relative 'http/server'
 
 module Mxrb
@@ -34,7 +39,8 @@ module Mxrb
     ].freeze
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[
-      constants enumerations models dtos controllers services pages security scheduled_events regular_expressions
+      constants enumerations models dtos controllers services pages presentation security
+      scheduled_events regular_expressions
     ].freeze
 
     def self.application_files(root)
@@ -237,7 +243,7 @@ module Mxrb
         controller: :@controllers, service: :@services, page: :@pages,
         module_security: :@module_security, project_security: :@project_security,
         scheduled_event: :@scheduled_events, regular_expression: :@regular_expressions,
-        adapter: :@adapters, java_custom_action: :@java_custom_actions
+        adapter: :@adapters, java_custom_action: :@java_custom_actions, presentation: :@presentation
       }.freeze
 
       module_function
@@ -255,6 +261,7 @@ module Mxrb
         @regular_expressions = {}
         @adapters = {}
         @java_custom_actions = {}
+        @presentation = {}
       end
 
       def register(kind, name, implementation, unit_id: nil)
@@ -386,6 +393,7 @@ module Mxrb
 
     # Base for generated persistent models.
     class Record
+      extend RecordInheritance
       LIFECYCLE_EVENTS = Runtime::Native::Store::LIFECYCLE_EVENTS
       NATIVE_LIFECYCLE_EVENTS = %i[before_commit after_commit before_delete after_delete].freeze
       ASSOCIATION_TYPES = %i[Reference ReferenceSet].freeze
@@ -426,6 +434,18 @@ module Mxrb
         end
 
         def persistence(value) = (@persistable = value == true)
+
+        # Server-owned upload policy; browser widget settings are only UX hints.
+        def file_policy(max_bytes: FileContent::MAX_BYTES, extensions: [], images_only: false)
+          size = Integer(max_bytes)
+          raise ArgumentError, 'file policy size must be between 1 byte and 20 MiB' unless
+            size.positive? && size <= FileContent::MAX_BYTES
+
+          @file_policy = { max_bytes: size, extensions: Array(extensions).map { _1.to_s.downcase.delete_prefix('.') },
+                           images_only: images_only == true }
+        end
+
+        def file_upload_policy = @file_policy || {}
 
         def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil,
                       documentation: '', length: nil, localize_date: ATTRIBUTE_OPTION_UNSET,
@@ -634,7 +654,7 @@ module Mxrb
         end
 
         def from_native(value)
-          values = attributes.to_a.to_h do |attribute|
+          values = runtime_attributes.to_h do |attribute|
             [attribute.fetch(:name), value.members[attribute.fetch(:mendix_name)]]
           end
           new(id: value.id, **values).tap { _1.instance_variable_set(:@native_value, value) }
@@ -717,18 +737,22 @@ module Mxrb
 
       def initialize(id: nil, **values)
         @id = id
+        self.class.runtime_attributes.each do |attribute|
+          name = attribute.fetch(:name)
+          singleton_class.attr_accessor(name) unless respond_to?("#{name}=")
+        end
         values.each { public_send("#{_1}=", _2) if respond_to?("#{_1}=") }
       end
 
       def to_h
-        values = self.class.attributes.to_a.to_h { [_1.fetch(:name), public_send(_1.fetch(:name))] }
+        values = self.class.runtime_attributes.to_h { [_1.fetch(:name), public_send(_1.fetch(:name))] }
         { id:, type: self.class.mendix_name, attributes: values }
       end
 
       def sync_to_native!
         return self unless @native_value
 
-        self.class.attributes.to_a.each do |attribute|
+        self.class.runtime_attributes.each do |attribute|
           @native_value.members[attribute.fetch(:mendix_name)] = public_send(attribute.fetch(:name))
         end
         self
@@ -1498,7 +1522,7 @@ module Mxrb
           file_manager image_uploader image_viewer native_widget layout_grid menu_bar
           navigation_list navigation_tree number_input page_title
           pluggable_widget radio_button_group reference_selector reference_set_selector
-          scroll_container snippet static_image tab_control table text text_area text_box
+          scroll_container snippet static_image tab_control table text text_area text_box layout placeholder
         ].freeze
 
         attr_reader :widgets
@@ -1612,6 +1636,13 @@ module Mxrb
           append_structured(value, declared_fields: false)
         end
 
+        def form_widget(node)
+          document = Forms::MprCodec.new.encode(node)
+          page = Model::Page.allocate
+          page.decode('Widgets' => [2, document])
+          page.widgets.each { append_structured(_1, declared_fields: false) }
+        end
+
         def grid_column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
           builder = Dsl::WidgetBuilder.new(:data_grid, '')
           normalize(builder.column(name, attribute:, caption:, filter:, sortable:).last)
@@ -1656,7 +1687,7 @@ module Mxrb
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
                     :appearance_style, :data_source, :native_definition,
-                    :navigation_definition
+                    :navigation_definition, :allowed_module_roles
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -1667,6 +1698,7 @@ module Mxrb
         end
 
         def configure(title:, widgets: nil, appearance_class: '', appearance_style: '', data_source: nil,
+                      allowed_roles: nil,
                       &block)
           raise ArgumentError, 'configure accepts either widgets: or a widget block, not both' \
             if widgets && block
@@ -1689,6 +1721,7 @@ module Mxrb
           @appearance_class = appearance_class
           @appearance_style = appearance_style
           @data_source = data_source
+          @allowed_module_roles = allowed_roles&.map(&:to_s)
         end
 
         # Declares an editable native Mendix page with the typed page/widget
@@ -1778,7 +1811,8 @@ module Mxrb
         result = {
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
           navigation: manifest.data.fetch('navigation', {}),
-          modules: manifest.modules, coverage: manifest.coverage
+          presentation: Registry.all(:presentation),
+          modules: runtime_schema_modules, coverage: manifest.coverage
         }
         context ? secure_schema(result, context) : result
       end
@@ -1847,14 +1881,17 @@ module Mxrb
       end
 
       def records(name, context: nil, association: nil, context_type: nil, context_id: nil,
-                  filters: [], sort: [], offset: 0, limit: nil)
+                  filters: [], sort: [], offset: 0, limit: nil,
+                  xpath: nil, xpath_context_type: nil, xpath_context_id: nil)
         record_page(
-          name, context:, association:, context_type:, context_id:, filters:, sort:, offset:, limit:
+          name, context:, association:, context_type:, context_id:, filters:, sort:, offset:, limit:,
+                xpath:, xpath_context_type:, xpath_context_id:
         ).fetch(:records)
       end
 
       def record_page(name, context: nil, association: nil, context_type: nil, context_id: nil,
-                      filters: [], sort: [], offset: 0, limit: nil)
+                      filters: [], sort: [], offset: 0, limit: nil,
+                      xpath: nil, xpath_context_type: nil, xpath_context_id: nil)
         runtime_synchronize do
           filter = [association, context_type, context_id]
           if filter.any? && !filter.all? { !_1.to_s.empty? }
@@ -1864,12 +1901,38 @@ module Mxrb
           store = bridge.interpreter.store
           values = if filter.all? { !_1.to_s.empty? }
                      parent = store.find(context_type.to_s, context_id.to_s)
+                     if parent
+                       authorize_entity!(parent.entity, :read, context, record: parent)
+                       authorize_entity!(parent.entity, :read, context, member: association.to_s.split('.').last,
+                                                                        record: parent)
+                     end
                      parent ? store.retrieve_association(association.to_s, parent) : []
                    else
                      store.retrieve(name.to_s)
                    end
-          values = values.select { _1.entity == name.to_s }
-          values = access_control.filter_readable(name.to_s, values, context:) if context
+          values = values.select do |value|
+            value.entity == name.to_s || (store.respond_to?(:schema) && store.schema.assignable?(value.entity,
+                                                                                                 name.to_s))
+          end
+          if context
+            values = values.select do |value|
+              access_control.entity_allowed?(value.entity, action: :read, context:, record: value)
+            end
+          end
+          unless xpath.nil?
+            current = nil
+            if xpath_context_type || xpath_context_id
+              raise ArgumentError, 'XPath context requires type and id' if
+                xpath_context_type.to_s.empty? || xpath_context_id.to_s.empty?
+
+              current = store.find(xpath_context_type, xpath_context_id)
+              raise ArgumentError, 'XPath context object not found' unless current
+
+              authorize_entity!(current.entity, :read, context, record: current)
+            end
+            constraint = Runtime::XPath.new(xpath, store:, policy: context && access_control, context:)
+            values = constraint.filter(values, 'currentObject' => current)
+          end
           values = values.select { grid_record_matches?(_1, filters) }
           values = grid_sort_records(values, sort)
           total = values.length
@@ -1890,7 +1953,7 @@ module Mxrb
         runtime_synchronize do
           value = bridge.interpreter.store.find(name.to_s, id.to_s)
           next unless value
-          next unless !context || access_control.entity_allowed?(name, action: :read, context:, record: value)
+          next unless !context || access_control.entity_allowed?(value.entity, action: :read, context:, record: value)
 
           serialize(value, context:)
         end
@@ -1917,8 +1980,12 @@ module Mxrb
           value = bridge.interpreter.store.find(name.to_s, id.to_s)
           next false unless value
 
+          name = value.entity
           authorize_entity!(name, :delete, context, record: value)
-          bridge.interpreter.store.delete(value)
+          bridge.interpreter.store.transaction do
+            bridge.interpreter.store.delete(value)
+            FileContent.new(bridge.interpreter.store.database).delete(name, id)
+          end
           true
         end
       end
@@ -1928,14 +1995,79 @@ module Mxrb
           value = bridge.interpreter.store.find(name.to_s, id.to_s)
           next unless value
 
+          name = value.entity
           authorize_entity!(name, :write, context, record: value)
           bridge.interpreter.store.transaction do
             attributes.to_h.each do |member, member_value|
               authorize_entity!(name, :write, context, member: member, record: value)
-              value.members[member.to_s] = deserialize(member_value)
+              value.members[member.to_s] = deserialize(member_value, context:)
             end
             bridge.interpreter.store.commit(value)
             serialize(value, context:)
+          end
+        end
+      end
+
+      # Commit page drafts together: a missing object or denied member rolls
+      # back every object, including the store's identity map.
+      def commit_records(records, context: nil)
+        unless records.is_a?(Array) && records.length <= 1000 && records.all? { valid_record_changes?(_1) }
+          raise ArgumentError, 'records must contain at most 1000 objects with type, id and attributes'
+        end
+
+        runtime_synchronize do
+          store = bridge.interpreter.store
+          store.transaction do
+            records.map do |entry|
+              value = store.find(entry.fetch('type'), entry.fetch('id'))
+              raise ArgumentError, "record #{entry.fetch('type')} #{entry.fetch('id')} not found" unless value
+
+              authorize_entity!(value.entity, :write, context, record: value)
+              entry.fetch('attributes').each do |member, member_value|
+                authorize_entity!(value.entity, :write, context, member:, record: value)
+                value.members[member] = deserialize(member_value, context:)
+              end
+              store.commit(value)
+              serialize(value, context:)
+            end
+          end
+        end
+      end
+
+      def valid_record_changes?(entry)
+        entry.is_a?(Hash) && %w[type id].all? { entry[_1].is_a?(String) && !entry[_1].empty? } &&
+          entry['attributes'].is_a?(Hash) && entry['attributes'].keys.all? { _1.is_a?(String) }
+      end
+      private :valid_record_changes?
+
+      def file_content(name, id, context: nil, upload: nil, thumbnail: nil)
+        if upload && (!upload.is_a?(Hash) || !%w[name content].all? { upload[_1].is_a?(String) })
+          raise ArgumentError, 'file upload requires string name and base64 content'
+        end
+
+        runtime_synchronize do
+          store = bridge.interpreter.store
+          value = store.find(name.to_s, id.to_s)
+          next unless value
+
+          name = value.entity
+          authorize_entity!(name, :read, context, record: value)
+          authorize_entity!(name, upload ? :write : :read, context, member: 'Contents', record: value)
+          files = FileContent.new(store.database)
+          next files.thumbnail(name, id, *thumbnail) if thumbnail && !upload
+          next files.read(name, id) unless upload
+
+          store.transaction do
+            files.attach(store.schema.entity(name))
+            policy = Registry.fetch(:record, name.to_s)&.runtime_file_policy || {}
+            metadata = files.write(name, id, upload.fetch('name'), upload.fetch('content'), **policy)
+            fields = store.schema.entity(name).columns.map(&:name)
+            { 'Name' => metadata.fetch(:name), 'FileSize' => metadata.fetch(:size),
+              'HasContents' => true }.each do |key, item|
+              value.members[key] = item if fields.include?(key)
+            end
+            store.commit(value)
+            metadata
           end
         end
       end
@@ -1948,7 +2080,7 @@ module Mxrb
 
         {
           name: implementation.mendix_name, id: implementation.mendix_id,
-          title: implementation.title, widgets: implementation.widgets,
+          title: implementation.title, widgets: Presentation.compose(implementation.widgets),
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
@@ -1982,6 +2114,40 @@ module Mxrb
       end
 
       private
+
+      def runtime_schema_modules
+        manifest.modules.map do |mod|
+          enumerations = mod.fetch('enumerations', []).map do |definition|
+            implementation = Registry.fetch(:enumeration, definition.fetch('name'))
+            next definition unless implementation
+
+            values = implementation.values.map do |value|
+              captions = value.fetch(:captions)
+              {
+                'name' => value.fetch(:name), 'id' => value.fetch(:id), 'captions' => captions,
+                'caption' => captions['en_US'] || captions.values.first || value.fetch(:name)
+              }
+            end
+            definition.merge('values' => values)
+          end
+          models = mod.fetch('models', []).map { runtime_model_definition(_1) }
+          dtos = mod.fetch('dtos', []).map { runtime_model_definition(_1) }
+          mod.merge('enumerations' => enumerations, 'models' => models, 'dtos' => dtos)
+        end
+      end
+
+      def runtime_model_definition(definition)
+        implementation = Registry.fetch(:record, definition.fetch('name'))
+        return definition unless implementation
+
+        attributes = implementation.runtime_attributes.map do |attribute|
+          attribute.transform_keys(&:to_s).merge(
+            'name' => attribute.fetch(:mendix_name), 'ruby_name' => attribute.fetch(:name).to_s,
+            'type' => attribute.fetch(:type).to_s
+          )
+        end
+        definition.merge('attributes' => attributes)
+      end
 
       GRID_FILTER_OPERATORS = {
         'text' => %w[contains equals not_equals starts_with ends_with empty not_empty],
@@ -2124,6 +2290,11 @@ module Mxrb
           end
         end
         secured[:navigation] = secure_navigation(secured[:navigation], allowed_pages, allowed_services)
+        secured.fetch(:presentation, {}).each_value do |resource|
+          next unless resource[:kind] == 'menu'
+
+          resource[:items] = secure_navigation_items(resource[:items], allowed_pages, allowed_services)
+        end
         secured
       end
 
@@ -2151,8 +2322,12 @@ module Mxrb
           children = secure_navigation_items(item[:items], pages, services)
           allowed = (!item[:page] || pages.include?(item[:page])) &&
                     (!item[:microflow] || services.include?(item[:microflow]))
+          action = item[:action].to_h.transform_keys(&:to_sym)
+          allowed &&= pages.include?(action[:handler]) if action[:kind].to_s == 'page'
+          allowed &&= services.include?(action[:handler]) if %w[microflow nanoflow].include?(action[:kind].to_s)
           next unless allowed || children.any?
 
+          item = item.reject { %i[page microflow action].include?(_1) } unless allowed
           item.merge(items: children)
         end
       end
@@ -2224,13 +2399,17 @@ module Mxrb
       def build_bridge
         NativeBridge.new(
           manifest.absolute_path('runtime_mpr'),
+          runtime_project: manifest.data['runtime_model'] == 'ruby' ? RuntimeProject.new(manifest) : nil,
           database: runtime_database_path,
           record_hooks: Registry.all(:record), adapters: Registry.adapters,
           java_custom_actions: Registry.java_custom_actions,
           allow_destructive: environment['MXRB_ALLOW_DESTRUCTIVE_MIGRATIONS'].to_s.casecmp?('true'),
           coordinator: shared_store,
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
-          runtime_records: Registry.all(:record)
+          runtime_records: Registry.all(:record),
+          service_dispatch: lambda { |name, arguments, context|
+            deserialize(call_service(name, arguments, context:), context:)
+          }
         )
       end
 
@@ -2307,6 +2486,7 @@ module Mxrb
 
       def deserialize(value = nil, context: nil, synchronize: false, **keyword_value)
         value = keyword_value if value.nil? && !keyword_value.empty?
+        value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:id) && value.key?(:type)
         if value.is_a?(Hash) && value['id'] && value['type']
           object = bridge.interpreter.store.find(value['type'].to_s, value['id'].to_s)
           if !object && value['transient'] == true
@@ -2318,6 +2498,8 @@ module Mxrb
             end
           end
           raise NativeRuntimeError, "object #{value['type']} #{value['id']} not found" unless object
+
+          authorize_entity!(object.entity, :read, context, record: object)
 
           value.fetch('attributes', {}).each do |member, member_value|
             next unless synchronize
@@ -2393,22 +2575,28 @@ module Mxrb
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
-                     runtime_records: nil)
+                     runtime_records: nil, runtime_project: nil, service_dispatch: nil)
         FileUtils.mkdir_p(File.dirname(database))
-        @project = Model::Project.open(path)
-        schema = runtime_records && Runtime::SchemaMigrator.derive_overlay(@project, runtime_records)
+        @project = runtime_project || Model::Project.open(path)
+        schema = if runtime_project
+                   Runtime::SchemaMigrator.derive_records(runtime_records)
+                 elsif runtime_records
+                   Runtime::SchemaMigrator.derive_overlay(@project, runtime_records)
+                 end
         transient = runtime_records && runtime_transient_entities(runtime_records)
         store_options = { path: database, allow_destructive: }
         store_options.merge!(schema:, transient_entities: transient) if runtime_records
         @store = Runtime::SQLiteStore.new(@project, **store_options)
         @access_control = Runtime::AccessControl.new(@project)
         @interpreter = Runtime::Native::Interpreter.new(
-          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:
+          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
         register_record_hooks(record_hooks)
         @scheduler = Runtime::Scheduler.new(
           @project,
-          executor: ->(name, **_metadata) { @interpreter.call(name) }, coordinator:,
+          executor: lambda { |name, **_metadata|
+            service_dispatch ? service_dispatch.call(name, {}, nil) : @interpreter.call(name)
+          }, coordinator:,
           lease_ttl: scheduler_lease_ttl
         )
       rescue StandardError
@@ -3081,6 +3269,36 @@ module Mxrb
           return render_json(response, 200, { ok: true }.merge(invocation))
         end
 
+        if method == 'POST' && path == '/api/records/commit'
+          records = application.commit_records(request_json(request)['records'], context:)
+          return render_json(response, 200, records:)
+        end
+
+        if (tail = route_name(path, '/api/files/')) && %w[GET PUT].include?(method)
+          name, id = tail.split('/', 2)
+          raise ArgumentError, 'file record id is required' if id.to_s.empty?
+
+          upload = method == 'PUT' ? request_json(request, max_bytes: 28 * 1024 * 1024) : nil
+          thumbnail = if request.query.key?('thumbnail_width') || request.query.key?('thumbnail_height')
+                        [request.query['thumbnail_width'], request.query['thumbnail_height']]
+                      end
+          content = application.file_content(name, id, context:, upload:, thumbnail:)
+          return render_json(response, 404, error('not_found', 'file not found')) unless content
+          return render_json(response, 200, content) if upload
+
+          response.status = 200
+          response['Content-Type'] = content.fetch('media_type')
+          inline = content.fetch('media_type').start_with?('image/') && request.query['download'] != '1'
+          disposition = inline ? 'inline' : 'attachment'
+          response['Content-Disposition'] =
+            "#{disposition}; filename*=UTF-8''#{URI.encode_www_form_component(content.fetch('name'))}"
+          response['X-Content-Type-Options'] = 'nosniff'
+          response['Content-Security-Policy'] = "default-src 'none'; sandbox"
+          response['Cache-Control'] = 'private, no-store'
+          response.body = content.fetch('content')
+          return
+        end
+
         if (tail = route_name(path, '/api/entities/'))
           name, id = tail.split('/', 2)
           if method == 'GET' && id.nil?
@@ -3089,6 +3307,10 @@ module Mxrb
               context:, association: query['association'], context_type: query['context_type'],
               context_id: query['context_id']
             }
+            if query.key?('xpath')
+              scope.merge!(xpath: query['xpath'], xpath_context_type: query['xpath_context_type'],
+                           xpath_context_id: query['xpath_context_id'])
+            end
             page = if %w[filters sort offset limit].any? { query.key?(_1) }
                      application.record_page(
                        name, **scope, filters: query_json_array(query['filters'], 'filters'),
@@ -3240,9 +3462,12 @@ module Mxrb
         URI.decode_www_form_component(path.delete_prefix(prefix))
       end
 
-      def request_json(request)
+      def request_json(request, max_bytes: MAX_BODY_BYTES)
         body = request.body.to_s
-        raise ArgumentError, 'request body exceeds 1 MiB' if body.bytesize > MAX_BODY_BYTES
+        if body.bytesize > max_bytes
+          raise ArgumentError,
+                max_bytes == MAX_BODY_BYTES ? 'request body exceeds 1 MiB' : 'request body exceeds allowed limit'
+        end
         return {} if body.empty?
 
         JSON.parse(body).tap do |payload|

@@ -182,9 +182,13 @@ module Mxrb
                                  control_bar: true, select_first: false, show_empty_rows: false,
                                  paging: :yes_with_total_count, tab_index: 0,
                                  width_unit: :weight, class_name: nil, style: nil,
-                                 dynamic_class: nil, visible: nil, &block)
+                                 dynamic_class: nil, visible: nil, association: nil, target_entity: nil,
+                                 display_attribute: nil, association_steps: 1, association_path: nil,
+                                 caption: nil, editable: :always, &block)
         _add_widget(
           :reference_set_selector, name, selection:, number_of_rows: number_of_rows.to_i,
+                                         association:, target_entity:, display_attribute:, association_steps:,
+                                         caption:, editable:, association_path:,
                                          selectable_xpath: selectable_xpath.to_s,
                                          control_bar: control_bar == true,
                                          select_first: select_first == true,
@@ -206,9 +210,9 @@ module Mxrb
                            hide_scrollbars: false, scroll_behavior: :per_region,
                            tab_index: 0, width: 0, width_mode: :auto,
                            class_name: nil, style: nil, dynamic_class: nil,
-                           visible: nil, &block)
+                           visible: nil, region_options: nil, &block)
         _add_widget(
-          :scroll_container, name, alignment:, layout_mode:,
+          :scroll_container, name, alignment:, layout_mode:, region_options:,
                                    hide_scrollbars: hide_scrollbars == true,
                                    scroll_behavior:, tab_index: tab_index.to_i,
                                    width: width.to_i, width_mode:, class: class_name,
@@ -216,13 +220,13 @@ module Mxrb
         )
       end
 
-      def image_viewer(name, entity:, alternative_text: '', default_image: '',
+      def image_viewer(name, entity: nil, source: nil, alternative_text: '', default_image: '',
                        force_full_objects: false, width: 100, height: 100,
                        width_unit: :auto, height_unit: :auto, responsive: true,
                        show_as_thumbnail: false, on_click_enlarge: false, tab_index: 0,
                        class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
         _add_widget(
-          :image_viewer, name, entity: entity.to_s, alternative_text: alternative_text.to_s,
+          :image_viewer, name, entity: entity.to_s, source:, alternative_text: alternative_text.to_s,
                                default_image: default_image.to_s,
                                force_full_objects: force_full_objects == true,
                                width: width.to_i, height: height.to_i,
@@ -371,6 +375,14 @@ module Mxrb
         compact_data_view_source(kind: kind.to_sym, **options)
       end
 
+      def association_path(*steps)
+        steps.map { |name, entity| { association: name, entity: } }
+      end
+
+      def scroll_regions(**regions) = regions
+      def scroll_region(**options) = options
+      def snippet_arguments(*pairs) = pairs.to_h
+
       def page_variable(name, kind: :page_parameter, sub_key: nil, use_all_pages: false,
                         native: nil)
         allowed = %i[page_parameter snippet_parameter local_variable widget current]
@@ -405,10 +417,10 @@ module Mxrb
         { expression: expression.to_s }
       end
 
-      def snippet(name, from: nil)
+      def snippet(name, from: nil, arguments: {}, **appearance)
         _widget_list << {
           type: :snippet, name: name.to_s,
-          options: { snippet: (from || name).to_s },
+          options: { snippet: (from || name).to_s, arguments:, **appearance },
           events: []
         }
       end
@@ -432,6 +444,13 @@ module Mxrb
         builder = PluggableWidgetBuilder.new(name, options:, properties_declared:)
         builder.instance_eval(&block) if block
         _widget_list << builder.to_h
+      end
+
+      def form_widget(node)
+        document = Forms::MprCodec.new.encode(node)
+        page = Model::Page.allocate
+        page.decode('Widgets' => [2, document])
+        _widget_list.concat(page.widgets)
       end
 
       def native_widget(name, type:, deep_structure:)
@@ -501,7 +520,8 @@ module Mxrb
 
     module WidgetEvents
       %i[on_change on_click on_enter on_leave].each do |event|
-        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET, &block|
+        define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET,
+                                 close_page: UNSET, &block|
           raise ArgumentError, "#{event} accepts either pass: or an argument block" if block && !pass.equal?(UNSET)
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
@@ -512,6 +532,7 @@ module Mxrb
           declaration = {
             event:, kind: choices.keys.first, handler: choices.values.first.to_s
           }
+          declaration[:close_page] = close_page == true unless close_page.equal?(UNSET)
           if block
             declaration[:arguments] = WidgetEventArguments.new.evaluate(&block).arguments
             declaration = WidgetEventArguments.snapshot(declaration)
@@ -543,6 +564,10 @@ module Mxrb
         @toolbar     = nil
         @children    = []
         @filters     = []
+        initialize_widget_composite(
+          key_transform: :to_sym.to_proc, path_normalizer: ->(path) { path },
+          child_factory: -> { WidgetSlotBuilder.new }
+        )
       end
 
       def column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
@@ -579,8 +604,7 @@ module Mxrb
         options[:toolbar]    = @toolbar    if @toolbar
         options[:filters]    = @filters    unless @filters.empty?
         value = { type: @type, name: @name, options: options, events: @events }
-        value[:children] = @children unless @children.empty?
-        value
+        append_widget_composite(value, children: @children)
       end
 
       private
@@ -646,6 +670,10 @@ module Mxrb
       end
 
       def widget_composite_key(name) = @widget_composite_key_transform.call(name)
+    end
+
+    class WidgetBuilder
+      include WidgetComposite
     end
 
     class GenericWidgetBuilder

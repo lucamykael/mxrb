@@ -41,7 +41,7 @@ RSpec.describe 'remaining defensive edge contracts' do # rubocop:disable Metrics
         .to raise_error(Mxrb::ValidationError, /require their private runtime baseline/)
     end
 
-    manifest = double('manifest', absolute_path: '/definitely/missing/private.mpr')
+    manifest = double('manifest', data: {}, absolute_path: '/definitely/missing/private.mpr')
     missing_file = Mxrb::RubyApp::PluggableContext.new(manifest:)
     missing_file.with_page('page') do
       expect { missing_file.for_widget('widget', widget_id: 'vendor.Widget') }

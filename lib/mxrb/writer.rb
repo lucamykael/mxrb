@@ -5877,7 +5877,9 @@ module Mxrb
       kind = event.fetch(:kind).to_sym
       case kind
       when :action
-        native_action_doc(event.fetch(:handler))
+        native_action_doc(event.fetch(:handler)).tap do |action|
+          action["ClosePage"] = event[:close_page] if event.key?(:close_page)
+        end
       when :page
         form_action_doc(event.fetch(:handler), arguments: event.fetch(:arguments, {}))
       when :nanoflow

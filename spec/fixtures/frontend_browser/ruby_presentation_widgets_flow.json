@@ -1,0 +1,194 @@
+{
+  "name": "ruby-standalone-ten-presentation-widgets",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "standalone-presentation",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "[data-widget-name=MainMenu] button"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=SnippetName] input:not(:disabled)"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=RegionName] input:not(:disabled)"
+        },
+        {
+          "click_selector": "[data-widget-name=Scroll] button[aria-expanded=false]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left]:not([hidden]) [data-widget-name=AdvancedRegionName] input:not(:disabled)"
+        },
+        {
+          "wait_for_style": {
+            "selector": "[data-widget-name=Scroll] [data-widget-region=left]",
+            "property": "width",
+            "value": "240px"
+          }
+        },
+        {
+          "click_selector": "[data-widget-name=Scroll] button[aria-expanded=true]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left][hidden]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Logo]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Preview] img"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=File] input[type=file]:not(:disabled)"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=UploadImage] input[type=file]:not(:disabled)"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Tags] input[type=checkbox]"
+        },
+        {
+          "wait_for_count": {
+            "selector": "[data-widget-name=Tags] input[type=checkbox]",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Preview] img[src*=thumbnail_width]"
+        },
+        {
+          "click_selector": "[data-widget-name=Tags] input[type=checkbox]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Tags] input:checked"
+        },
+        {
+          "navigate": "/"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Tags] input:checked"
+        },
+        {
+          "click_selector": "[data-widget-name=Tree] summary"
+        },
+        {
+          "click_selector": "[data-widget-name=Tree] details button"
+        },
+        {
+          "wait_for_text": "Ruby action executed"
+        },
+        {
+          "click_selector": "[data-widget-name=MainMenu] button"
+        },
+        {
+          "wait_for_text": "Alternate page content"
+        },
+        {
+          "navigate": "/"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Links] [role=button]"
+        },
+        {
+          "click_selector": "[data-widget-name=Links] [role=button]"
+        },
+        {
+          "wait_for_text": "Alternate page content"
+        },
+        {
+          "navigate": "/"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=Tags] input:checked"
+        },
+        {
+          "click_selector": "[data-widget-name=Tags] input:checked"
+        },
+        {
+          "wait_for_absence": "[data-widget-name=Tags] input:checked"
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        },
+        {
+          "click_selector": "[data-widget-name=EditDraft]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=DraftApproved] input:not(:checked)"
+        },
+        {
+          "wait_for_style": {
+            "selector": "[data-widget-name=ResponsiveGrid] .mxrb-layout-grid__column",
+            "property": "flex-basis",
+            "value": "50%"
+          }
+        },
+        {
+          "click_selector": "[data-widget-name=DraftApproved] input"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=DraftApproved] input:checked"
+        },
+        {
+          "click_selector": "[data-widget-name=CancelDraft]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=DraftApproved] input:not(:checked)"
+        },
+        {
+          "click_selector": "[data-widget-name=DraftApproved] input"
+        },
+        {
+          "click_selector": "[data-widget-name=SaveDraft]"
+        },
+        {
+          "wait_for_idle": {}
+        },
+        {
+          "navigate": "/pages/Presentation.Edit"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=DraftApproved] input:checked"
+        },
+        {
+          "click_selector": "[data-widget-name=DraftApproved] input"
+        },
+        {
+          "click_selector": "[data-widget-name=SaveDraft]"
+        },
+        {
+          "wait_for_idle": {}
+        },
+        {
+          "navigate": "/"
+        },
+        {
+          "click_selector": "[data-widget-name=EditDraft]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=DraftApproved] input:not(:checked)"
+        },
+        {
+          "click_selector": "[data-widget-name=CloseDraft]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=MainMenu] button"
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        }
+      ],
+      "selectors": [
+        "[data-widget-name=SnippetName] input",
+        "[data-widget-name=Tree]",
+        "[data-widget-name=Preview] img"
+      ]
+    }
+  ]
+}

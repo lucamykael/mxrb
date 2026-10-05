@@ -31,6 +31,22 @@ editing, selection, and persistence after reload in Ruby/React. Component tests
 cover focus, rejected writes, expression semantics, and association traversal.
 This verifies that slice, not the entire frontend or independence from every baseline.
 
+Radio groups support boolean/enumeration choices, captions, horizontal/vertical
+layout, keyboard selection, persistence and group focus/leave events. Inherited
+read-only policies remain enforced. Unknown values are reported without mutation.
+Both bare and qualified enum values are recognized; writes preserve their incoming
+representation, and enum-literal conditions recognize both without conflating
+different qualified types. Exported enumeration values/captions are read from Ruby
+definitions, with a manifest fallback for unloaded legacy definitions. Reload the
+application after editing enumeration source. Discovery of new documents and
+removal of the manifest as a catalog are still open.
+
+Page-title widgets use the loaded Ruby page title. Tabs show one panel, support
+arrow/Home/End navigation and retain mounted drafts in previously opened panels;
+unopened panels load on demand. The `ruby_frontend_core_widgets` fixture and
+`frontend_browser/ruby_core_widgets_flow.json` scenario test these behaviors,
+enum-based editability and persistence. Unprojected native tab variants remain open.
+
 MXRB reports every Ruby application artifact as `native` (materialized as an
 editable MPR document), `preserved_native` (kept losslessly in the Mendix
 sidecar), or `runtime_only` (requires the MXRB runtime).

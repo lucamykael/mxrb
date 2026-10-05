@@ -1,6 +1,12 @@
-import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { ClientActions } from '../PageEdits';
+import { VariableScope } from './VariableScope';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
+import { TabControl } from './TabControl';
+import { SharedPresentation, ScrollContainer, ReferenceSetSelector } from './PresentationWidgets';
+import { FileWidget } from './FileWidget';
+import { PageTitleContext } from './PageTitleContext';
 import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import { useSelections } from './SelectionScope';
 import { MarketplaceWidget, type MarketplaceWidgetRegion } from '../marketplace';
@@ -22,7 +28,6 @@ import {
   dynamicClass,
   entityCollectionPath,
   eventArguments,
-  expressionValue,
   inlineStyle,
   isEntityRecord,
   isVisible,
@@ -69,14 +74,29 @@ const tableColumnWidth = (
   return totalWeight > 0 ? `${(value / totalWeight) * 100}%` : undefined;
 };
 
+const gridAlignment = (alignment: unknown) =>
+  alignment === 'center'
+    ? 'center'
+    : alignment === 'start'
+      ? 'flex-start'
+      : alignment === 'end'
+        ? 'flex-end'
+        : undefined;
+
 const layoutColumnStyle = (options: WidgetOptions): CSSProperties => {
-  const width = options.desktop;
-  if (width === 'auto') return { flex: '0 0 auto' };
-  if (width === 'grow' || width === undefined) return { flex: '1 1 0' };
-  const columns = Number(width);
-  return Number.isFinite(columns) && columns > 0
-    ? { flex: `0 0 ${(columns / 12) * 100}%` }
-    : { flex: '1 1 0' };
+  const flex = (width: unknown) => {
+    if (width === 'auto') return '0 0 auto';
+    const columns = Number(width);
+    return Number.isFinite(columns) && columns > 0 && columns <= 12
+      ? `0 0 ${(columns / 12) * 100}%`
+      : '1 1 0';
+  };
+  return {
+    alignSelf: gridAlignment(options.vertical_alignment),
+    '--mxrb-desktop-flex': flex(options.desktop),
+    '--mxrb-tablet-flex': flex(options.tablet ?? options.desktop),
+    '--mxrb-phone-flex': flex(options.phone ?? options.tablet ?? options.desktop),
+  } as CSSProperties;
 };
 
 function Gallery({
@@ -147,7 +167,7 @@ function Gallery({
   );
 }
 
-function DataView({
+export function DataView({
   widget,
   moduleName,
   invoke,
@@ -162,14 +182,24 @@ function DataView({
   onError,
   onMutation,
   onSelectRecord,
-}: WidgetRuntimeProps) {
+  renderRecord,
+}: WidgetRuntimeProps & { renderRecord?: (record: EntityRecord | null) => ReactNode }) {
   const options = widget.options || {};
   const source = options.source as DataViewSource | undefined;
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
   const selections = useSelections();
+  const variables = useContext(VariableScope);
   const listenTarget = source?.target?.split('.').at(-1) || '';
-  const inheritedContext = context || pageContext;
+  const variable = source?.variable as { kind?: string; name?: string } | undefined;
+  const namedRecord =
+    variable?.kind === 'snippet_parameter' ? variables[memberName(variable.name || '')] : undefined;
+  const inheritedContext =
+    variable?.kind === 'snippet_parameter'
+      ? isEntityRecord(namedRecord)
+        ? namedRecord
+        : null
+      : context || pageContext;
   const [record, setRecord] = useState<EntityRecord | null>(inheritedContext);
   const [loading, setLoading] = useState(false);
   const [unsupported, setUnsupported] = useState<string | null>(null);
@@ -194,8 +224,25 @@ function DataView({
             String(mapping.parameter || '')
               .split('.')
               .pop() || '';
-          if (mapping.variable) return [parameter, activeContext || undefined];
-          return [parameter, expressionValue(String(mapping.expression || ''), activeContext)];
+          return [
+            parameter,
+            eventArguments(
+              {
+                event: 'source',
+                kind: 'source',
+                handler: '',
+                arguments: {
+                  value: (mapping.variable || String(mapping.expression || '')) as RuntimeValue,
+                },
+              },
+              activeContext,
+              {
+                pageParameter: pageContext,
+                snippetParameters: variables,
+                widgetValues: selections.records,
+              },
+            ).value,
+          ];
         }),
       );
 
@@ -268,7 +315,15 @@ function DataView({
     return () => {
       current = false;
     };
-  }, [source, inheritedContext?.type, inheritedContext?.id, sourceRevision, request, onError]);
+  }, [
+    source,
+    inheritedContext?.type,
+    inheritedContext?.id,
+    sourceRevision,
+    request,
+    onError,
+    variables,
+  ]);
 
   const resolvedRecord =
     source?.kind === 'listen'
@@ -317,6 +372,7 @@ function DataView({
         Loading…
       </div>
     );
+  if (renderRecord) return renderRecord(resolvedRecord);
   if (!resolvedRecord)
     return (
       <div className="mxrb-data-view mxrb-data-view--empty">
@@ -360,8 +416,8 @@ export function WidgetRenderer({
   invoke,
   invokeNanoflow,
   navigate,
-  context,
-  pageContext,
+  context: suppliedContext,
+  pageContext: suppliedPageContext,
   revision,
   schema,
   request,
@@ -370,7 +426,12 @@ export function WidgetRenderer({
   onMutation,
   onSelectRecord,
 }: WidgetRuntimeProps) {
+  const actions = useContext(ClientActions);
+  const context = actions ? actions.edits.resolve(suppliedContext) : suppliedContext;
+  const pageContext = actions ? actions.edits.resolve(suppliedPageContext) : suppliedPageContext;
   const selections = useSelections();
+  const variables = useContext(VariableScope);
+  const pageTitle = useContext(PageTitleContext);
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
   const className = classes(
@@ -416,12 +477,18 @@ export function WidgetRenderer({
     eventContext: EntityRecord | null = context || pageContext,
   ): Promise<unknown> => {
     if (!event) return Promise.resolve();
+    if (event.kind === 'action') {
+      if (actions) return actions.run(event, eventContext);
+      onError(new Error(`Client action runtime is missing: ${event.handler}`));
+      return Promise.resolve();
+    }
     const handler = event.handler.includes('.') ? event.handler : `${moduleName}.${event.handler}`;
     let parameters: RuntimeVariables;
     try {
       parameters = eventArguments(event, eventContext, {
         pageParameter: pageContext,
         widgetValues: { ...selections.records, [widget.name]: eventContext },
+        snippetParameters: variables,
       });
     } catch (failure) {
       onError(failure);
@@ -440,7 +507,23 @@ export function WidgetRenderer({
   const onEntered = (record: EntityRecord) => runEvent(enter, record);
   const onLeft = (record: EntityRecord) => runEvent(leave, record);
   const activeRecord = context || pageContext;
-  const label = caption(widget, options, activeRecord);
+  const sharedProps = {
+    widget,
+    moduleName,
+    invoke,
+    invokeNanoflow,
+    navigate,
+    context,
+    pageContext,
+    revision,
+    schema,
+    request,
+    saveRecord,
+    onError,
+    onMutation,
+    onSelectRecord,
+  };
+  const label = caption(widget, options, activeRecord, variables);
   const renderWidgets = (widgets: WidgetDefinition[] | undefined, region: string) =>
     (widgets || []).map((child, index) => (
       <WidgetRenderer
@@ -495,6 +578,25 @@ export function WidgetRenderer({
   ];
 
   switch (widget.type) {
+    case 'file_manager':
+    case 'image_uploader':
+    case 'image_viewer':
+      return <FileWidget {...sharedProps} />;
+    case 'snippet':
+    case 'static_image':
+    case 'menu_bar':
+    case 'navigation_tree':
+      return <SharedPresentation {...sharedProps} />;
+    case 'scroll_container':
+      return <ScrollContainer {...sharedProps} />;
+    case 'reference_set_selector':
+      return <ReferenceSetSelector {...sharedProps} onChanged={onChanged} />;
+    case 'navigation_list':
+      return (
+        <nav {...runtimeProps} className={className} aria-label={widget.name}>
+          {children}
+        </nav>
+      );
     case 'container':
       return (
         <div
@@ -502,6 +604,19 @@ export function WidgetRenderer({
           className={className}
           style={inlineStyle(options.style)}
           onClick={onClick}
+          onKeyDown={
+            onClick
+              ? (event) => {
+                  if (
+                    event.target === event.currentTarget &&
+                    (event.key === 'Enter' || event.key === ' ')
+                  ) {
+                    event.preventDefault();
+                    void onClick();
+                  }
+                }
+              : undefined
+          }
           role={onClick ? 'button' : undefined}
           tabIndex={onClick ? 0 : undefined}
         >
@@ -609,6 +724,9 @@ export function WidgetRenderer({
                 style={{
                   ...inlineStyle(row.options?.style),
                   display: 'flex',
+                  flexWrap: 'wrap',
+                  justifyContent: gridAlignment(row.options?.horizontal_alignment),
+                  alignItems: gridAlignment(row.options?.vertical_alignment),
                   gap: row.options?.gutters === false ? 0 : undefined,
                 }}
               >
@@ -645,6 +763,12 @@ export function WidgetRenderer({
           {label}
         </span>
       );
+    case 'page_title':
+      return (
+        <h1 {...runtimeProps} className={className} style={inlineStyle(options.style)}>
+          {pageTitle}
+        </h1>
+      );
     case 'button':
       return (
         <button {...runtimeProps} type="button" className={className} onClick={onClick}>
@@ -668,6 +792,24 @@ export function WidgetRenderer({
           />
           {label}
         </label>
+      );
+    case 'radio_button_group':
+      return (
+        <fieldset {...runtimeProps} className={className} style={inlineStyle(options.style)}>
+          <legend>{label}</legend>
+          <BoundField
+            widget={widget}
+            record={activeRecord}
+            schema={schema}
+            request={request}
+            saveRecord={saveRecord}
+            revision={revision}
+            onChanged={onChanged}
+            onEntered={onEntered}
+            onLeft={onLeft}
+            onError={onError}
+          />
+        </fieldset>
       );
     case 'text_area':
     case 'text_box':
@@ -695,30 +837,11 @@ export function WidgetRenderer({
     case 'tab_control':
       return (
         <div {...runtimeProps} className={className}>
-          {(options.tabs || []).map((tab) => (
-            <section key={tab.name}>
-              <h3>{tab.caption || tab.name}</h3>
-              {(tab.widgets || []).map((child, index) => (
-                <WidgetRenderer
-                  key={`${child.name}-${index}`}
-                  widget={child}
-                  moduleName={moduleName}
-                  invoke={invoke}
-                  invokeNanoflow={invokeNanoflow}
-                  navigate={navigate}
-                  context={context}
-                  pageContext={pageContext}
-                  revision={revision}
-                  schema={schema}
-                  request={request}
-                  saveRecord={saveRecord}
-                  onError={onError}
-                  onMutation={onMutation}
-                  onSelectRecord={onSelectRecord}
-                />
-              ))}
-            </section>
-          ))}
+          <TabControl
+            tabs={options.tabs || []}
+            label={label}
+            renderPanel={(tab) => renderWidgets(tab.widgets, `tab-${tab.name}`)}
+          />
         </div>
       );
     case 'data_grid':

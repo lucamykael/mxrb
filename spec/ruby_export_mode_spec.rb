@@ -110,13 +110,13 @@ RSpec.describe 'Ruby application export mode' do
         "api<ApplicationSchema>('/api/schema')", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
         'const execution = await definition.execute(resolvedParameters, invoke)',
-        "effect): effect is ShowMessageEffect => effect.type === 'show_message'",
+        "effect.type === 'show_message' && effect.message",
         "method: 'PATCH'", "api<LoginResponse>('/api/login'",
         "api<Session>('/api/session'", "api('/api/logout'",
         'if (payload.context) setPageContext(payload.context)',
         'const activeContext = contextOverride || pageContext;',
         'if (invocationInFlight.current) return Promise.resolve(null)',
-        'payload.context ||', 'payload.result ||'
+        'payload.context ||', 'isEntityRecord(payload.result) ? payload.result : null'
       )
       service_sources = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join
       expect(service_sources).to include('flow :microflow do')
@@ -278,6 +278,8 @@ RSpec.describe 'Ruby application export mode' do
         .to raise_error(Mxrb::NativeRuntimeError, /app_service adapter is not configured/)
       dashboard = application.page('Sales.Dashboard')
       expect(dashboard).to include(title: 'Dashboard')
+      expect(dashboard.fetch(:widgets).first.fetch('type')).to eq('scroll_container')
+      dashboard[:widgets] = dashboard.fetch(:widgets).first.dig('regions', 'center')
       expect(dashboard.fetch(:widgets).map { _1.fetch('type') }).to include(
         'text_box', 'text_area', 'check_box', 'date_picker', 'drop_down', 'reference_selector', 'data_grid'
       )

@@ -12,7 +12,20 @@ module Mxrb
     AssociationSchema = Data.define(
       :name, :qualified_name, :storage_key, :table, :from_entity, :to_entity, :type
     )
-    RuntimeSchema = Data.define(:entities, :associations) do
+    RuntimeSchema = Data.define(:entities, :associations, :inheritance) do
+      def initialize(entities:, associations:, inheritance: {})
+        super(entities:, associations:, inheritance:)
+      end
+
+      def assignable?(actual, expected)
+        actual == expected || inheritance.fetch(actual, []).include?(expected)
+      end
+
+      def concrete_entities(name)
+        matches = entities.select { assignable?(_1.name, name.to_s) }
+        matches.empty? ? [entity(name)] : matches
+      end
+
       def entity(name)
         qualified = name.to_s
         exact = entities.find { _1.name == qualified }
@@ -87,7 +100,8 @@ module Mxrb
         implementations = records.to_h.values.uniq
         entities = implementations.filter_map { record_entity_schema(_1) }
         associations = implementations.flat_map { record_association_schemas(_1) }
-        RuntimeSchema.new(entities.freeze, associations.freeze)
+        inheritance = implementations.to_h { [_1.mendix_name, _1.runtime_ancestors] }
+        RuntimeSchema.new(entities.freeze, associations.freeze, inheritance.freeze)
       end
 
       def self.derive_overlay(project, records)
@@ -98,7 +112,7 @@ module Mxrb
         associations = native.associations.reject do |association|
           authoritative.include?(association.from_entity)
         end + ruby.associations
-        RuntimeSchema.new(entities.freeze, associations.freeze)
+        RuntimeSchema.new(entities.freeze, associations.freeze, ruby.inheritance)
       end
 
       def self.record_entity_schema(record)
@@ -107,7 +121,7 @@ module Mxrb
         qualified = record.mendix_name.to_s
         key = record.mendix_id.to_s
         key = qualified if key.empty?
-        columns = Array(record.attributes).map do |attribute|
+        columns = record.runtime_attributes.map do |attribute|
           name = attribute.fetch(:mendix_name).to_s
           member_key = attribute[:id].to_s
           member_key = "#{key}:#{name}" if member_key.empty?

@@ -1,6 +1,19 @@
 import type { EntityRecord, RuntimeValue, RuntimeVariables } from '../types';
 
-type Value = RuntimeValue | undefined;
+// Keep enum identity until comparison. Backend records can contain either the
+// qualified literal or the bare member used by model defaults.
+class EnumLiteral {
+  constructor(readonly qualified: string) {}
+  get member(): string {
+    return this.qualified.split('.').at(-1)!;
+  }
+  matches(value: Value): boolean {
+    return value instanceof EnumLiteral
+      ? this.qualified === value.qualified
+      : value === this.qualified || value === this.member;
+  }
+}
+type Value = RuntimeValue | undefined | EnumLiteral;
 type Expression = () => Value;
 const precedence: Record<string, number> = {
   or: 1,
@@ -34,8 +47,11 @@ function binary(operator: string, left: Expression, right: Expression): Value {
   if (operator === 'or') return boolean(left()) || boolean(right());
   const a = left();
   const b = right();
-  if (operator === '=') return a === b;
-  if (operator === '!=') return a !== b;
+  if (operator === '=' || operator === '!=') {
+    const equal =
+      a instanceof EnumLiteral ? a.matches(b) : b instanceof EnumLiteral ? b.matches(a) : a === b;
+    return operator === '=' ? equal : !equal;
+  }
   if (operator === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
   if (['>', '<', '>=', '<='].includes(operator)) {
     if (!(
@@ -64,7 +80,7 @@ export function evaluate(
   source: string,
   context: EntityRecord | null,
   variables: RuntimeVariables = {},
-): Value {
+): RuntimeValue | undefined {
   const tokens: string[] = [];
   let remaining = source.trim();
   while (remaining) {
@@ -98,12 +114,7 @@ export function evaluate(
     if (token.startsWith('$')) {
       const [name, member] = token.slice(1).split('/');
       return () => {
-        const value =
-          name === 'currentObject'
-            ? context
-            : Object.hasOwn(variables, name)
-              ? variables[name]
-              : context;
+        const value = Object.hasOwn(variables, name) ? variables[name] : context;
         if (!member) return value;
         if (!value || typeof value !== 'object' || !('attributes' in value)) return undefined;
         const attributes = value.attributes as Record<string, Value>;
@@ -114,9 +125,27 @@ export function evaluate(
       consume('(');
       const value = parse(1);
       consume(')');
-      return () => String(value() ?? '');
+      return () => {
+        const result = value();
+        return result instanceof EnumLiteral ? result.member : String(result ?? '');
+      };
     }
-    if (/^\w+\.\w+\.\w+$/.test(token)) return () => token.split('.').at(-1);
+    if (['contains', 'starts-with', 'startsWith', 'endsWith'].includes(token)) {
+      consume('(');
+      const left = parse(1);
+      consume(',');
+      const right = parse(1);
+      consume(')');
+      return () => {
+        const value = left();
+        const search = right();
+        if (typeof value !== 'string' || typeof search !== 'string')
+          throw new Error('String predicate requires two strings');
+        if (token === 'contains') return value.includes(search);
+        return token === 'endsWith' ? value.endsWith(search) : value.startsWith(search);
+      };
+    }
+    if (/^\w+\.\w+\.\w+$/.test(token)) return () => new EnumLiteral(token);
     throw new Error(`Unsupported expression: ${token}`);
   };
   const parse = (minimum: number): Expression => {
@@ -132,7 +161,8 @@ export function evaluate(
   if (!tokens.length) return undefined;
   const result = parse(1);
   if (cursor !== tokens.length) throw new Error(`Unexpected expression token: ${tokens[cursor]}`);
-  return result();
+  const value = result();
+  return value instanceof EnumLiteral ? value.member : value;
 }
 
 export const evaluateCondition = (

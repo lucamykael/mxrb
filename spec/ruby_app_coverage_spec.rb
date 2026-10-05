@@ -180,7 +180,7 @@ RSpec.describe 'Ruby application defensive coverage' do
     profile = secured[:navigation][:profiles].first
     expect(profile).to include(home_page: nil, sign_in_page: 'allowed', home_microflow: nil)
     expect(profile[:role_homes].size).to eq(2)
-    expect(profile[:items]).to contain_exactly(include(page: 'denied', items: [include(page: 'allowed')]))
+    expect(profile[:items]).to contain_exactly(items: [include(page: 'allowed')])
 
     store = double
     interpreter = double(store: store)

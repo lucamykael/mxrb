@@ -89,6 +89,11 @@ module Mxrb
         items.each do |widget|
           next unless widget.is_a?(Hash)
           type = widget["$Type"]
+          if %w[Forms$Placeholder Pages$Placeholder].include?(type)
+            target << { type: :placeholder, name: widget['Name'].to_s,
+                        options: { parameter: local_name(widget['Parameter'] || widget['Name']) }, events: [] }
+            next
+          end
           if %w[Pages$DataView Forms$DataView].include?(type)
             target << data_view_widget(widget)
             next
@@ -113,12 +118,37 @@ module Mxrb
             target << layout_grid_widget(widget)
             next
           end
+          if %w[Forms$ScrollContainer Pages$ScrollContainer].include?(type)
+            regions = %w[Top Bottom Left Right CenterRegion].to_h do |key|
+              region = widget[key] || (widget['Center'] if key == 'CenterRegion')
+              children = []
+              parse_widgets(parse_array(region&.[]('Widgets')), children)
+              [key == 'CenterRegion' ? 'center' : key.downcase, children]
+            end
+            target << { type: :scroll_container, name: widget['Name'],
+                        options: scroll_container_options(widget), regions:, events: [] }
+            next
+          end
+          if %w[Forms$NavigationList Pages$NavigationList].include?(type)
+            children = parse_array(widget['Items']).map do |item|
+              content = []
+              parse_widgets(parse_array(item['Widgets']), content)
+              action = parse_action(item['Action'])
+              { type: :container, name: item['Name'].to_s, options: appearance_options(item),
+                children: content, events: action ? [action.merge(event: :on_click)] : [] }
+            end
+            target << { type: :navigation_list, name: widget['Name'],
+                        options: navigation_list_options(widget), children:, events: [] }
+            next
+          end
           if %w[Pages$SnippetCall Forms$SnippetCall Forms$SnippetCallWidget].include?(type)
-            snippet_ref = (
-              widget.dig("SnippetSettings", "Snippet") || widget.dig("FormCall", "Form")
-            ).to_s
+            settings = widget['SnippetCall'] || widget['SnippetSettings'] || widget['FormCall'] || {}
+            snippet_ref = (settings['Snippet'] || settings['Form']).to_s
+            arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
+              [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
+            end
             target << { type: :snippet, name: widget["Name"] || "snippet",
-                        options: { snippet: snippet_ref }, events: [] }
+                        options: appearance_options(widget).merge(snippet: snippet_ref, arguments:), events: [] }
             next
           end
           if %w[Pages$Container Forms$Container Forms$DivContainer].include?(type)
@@ -175,8 +205,7 @@ module Mxrb
           :check_box
         when "Pages$DatePicker", "Forms$DatePicker"
           :date_picker
-        when "Pages$ReferenceSelector", "Forms$ReferenceSelector",
-             "Pages$InputReferenceSetSelector", "Forms$InputReferenceSetSelector"
+        when "Pages$ReferenceSelector", "Forms$ReferenceSelector"
           :reference_selector
         when "Pages$DynamicText", "Forms$DynamicText", "Pages$Label", "Forms$Label"
           :text
@@ -190,13 +219,14 @@ module Mxrb
           :page_title
         when "Forms$FileManager"
           :file_manager
-        when "Forms$ReferenceSetSelector"
+        when "Forms$ReferenceSetSelector", "Pages$ReferenceSetSelector",
+             "Pages$InputReferenceSetSelector", "Forms$InputReferenceSetSelector"
           :reference_set_selector
         when "Forms$NavigationList"
           :navigation_list
         when "Forms$ScrollContainer"
           :scroll_container
-        when "Forms$ImageViewer"
+        when "Forms$ImageViewer", "Forms$DynamicImageViewer", "Pages$DynamicImageViewer"
           :image_viewer
         when "Forms$ImageUploader"
           :image_uploader
@@ -267,7 +297,16 @@ module Mxrb
       end
 
       def reference_set_selector_options(widget)
+        reference = widget['AttributeRef'] || {}
+        steps = parse_array(reference.dig('EntityRef', 'Steps'))
+        step = steps.last || {}
         appearance_options(widget).merge(
+          association: step['Association'], target_entity: step['DestinationEntity'],
+          display_attribute: reference['Attribute'],
+          association_steps: steps.length,
+          association_path: steps.map { { association: _1['Association'], entity: _1['DestinationEntity'] } },
+          caption: extract_text(widget['LabelTemplate']),
+          editable: data_view_enum(widget.fetch('Editable', 'Always')),
           selection: data_view_enum(widget.fetch('SelectionMode', 'Multi')),
           number_of_rows: widget.fetch('NumberOfRows', 20),
           selectable_xpath: widget.fetch('SelectableXPathConstraint', ''),
@@ -277,7 +316,7 @@ module Mxrb
           paging: data_view_enum(widget.fetch('ShowPagingBar', 'YesWithTotalCount')),
           tab_index: widget.fetch('TabIndex', 0),
           width_unit: data_view_enum(widget.fetch('WidthUnit', 'Weight'))
-        )
+        ).compact
       end
 
       def navigation_list_options(widget)
@@ -285,7 +324,15 @@ module Mxrb
       end
 
       def scroll_container_options(widget)
+        regions = %w[Top Bottom Left Right Center].to_h do |key|
+          region = widget[key] || (widget['CenterRegion'] if key == 'Center') || {}
+          [key.downcase, appearance_options(region).merge(
+            size: region.fetch('Size', 200), size_mode: data_view_enum(region.fetch('SizeMode', 'Auto')),
+            toggle_mode: data_view_enum(region.fetch('ToggleMode', 'None'))
+          )]
+        end
         appearance_options(widget).merge(
+          region_options: regions,
           alignment: data_view_enum(widget.fetch('Alignment', 'Center')),
           layout_mode: data_view_enum(widget.fetch('LayoutMode', 'Headline')),
           hide_scrollbars: widget['NativeHideScrollbars'] == true,
@@ -299,6 +346,7 @@ module Mxrb
         source = widget['DataSource'].is_a?(Hash) ? widget.fetch('DataSource') : {}
         appearance_options(widget).merge(
           entity: source.dig('EntityRef', 'Entity') || source['EntityPath'],
+          source: source.empty? ? nil : parse_data_view_source(source),
           alternative_text: extract_text(widget['AlternativeText']),
           default_image: widget.fetch('DefaultImage', '').to_s,
           force_full_objects: source['ForceFullObjects'] == true,
@@ -490,7 +538,7 @@ module Mxrb
                      }
                    when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
                      { kind: :listen, target: source["ListenTarget"].to_s }
-                   when "Pages$DataViewSource", "Forms$DataViewSource"
+                   when "Pages$DataViewSource", "Forms$DataViewSource", "Forms$ImageViewerSource", "Pages$ImageViewerSource"
                      parse_context_data_view_source(source)
                    else
                      { kind: :native, native_type: type }
@@ -510,7 +558,7 @@ module Mxrb
           common + %w[Microflow MicroflowSettings]
         when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
           common + %w[ListenTarget]
-        when "Pages$DataViewSource", "Forms$DataViewSource"
+        when "Pages$DataViewSource", "Forms$DataViewSource", "Forms$ImageViewerSource", "Pages$ImageViewerSource"
           common + %w[EntityPath EntityRef PageParameter SourceVariable]
         else common
         end
@@ -1142,11 +1190,17 @@ module Mxrb
           end
           { kind: :page, handler: handler, arguments: arguments }
         elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "save_changes" }
+          { kind: :action, handler: "save_changes" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$CancelChangesClientAction Forms$CancelChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "cancel_changes" }
+          { kind: :action, handler: "cancel_changes" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$DeleteClientAction Forms$DeleteClientAction].include?(action["$Type"])
-          { kind: :action, handler: "delete" }
+          { kind: :action, handler: "delete" }.tap do |event|
+            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+          end
         elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action["$Type"])
           { kind: :action, handler: "close_page" }
         end

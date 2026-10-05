@@ -28,14 +28,51 @@ fontes microflow, preservou foco e implementou Data Views por seleção e
 associações em múltiplas etapas. Evidências e limites estão no
 [contrato de conversão](portabilidade-ruby-typescript.md).
 
+O segundo recorte implementa seleção por rádio booleana/enumeração e título da
+página, torna as abas interativas com teclado e preservação de rascunhos, e
+projeta valores/legendas de enumeração a partir do Ruby carregado. O terceiro
+bloco adiciona implementações web e fontes editáveis para os dez tipos restantes:
+`file_manager`, `image_uploader`, `image_viewer`, `menu_bar`, `navigation_list`,
+`navigation_tree`, `reference_set_selector`, `scroll_container`, `snippet` e
+`static_image`. Menus, snippets e imagens são exportados em `app/presentation`
+e assets públicos; arquivos têm API autorizada e persistência em SQLite.
+Novas exportações executam os grafos construídos das declarações Ruby e não
+abrem o MPR. Chamadas internas respeitam implementações Ruby dos serviços.
+O fixture de apresentação foi validado com MPR e sidecar de reconstrução
+retirados da aplicação, incluindo seleção múltipla persistida após recarregar.
+
+O quarto bloco acrescenta parâmetros nomeados de snippets, caminhos compostos
+de seletores, predicados XPath simples sobre dados autorizados, tamanhos/toggles
+de regiões, fontes alternativas de imagens e composição de layouts Ruby com
+placeholders. Menus preservam parâmetros, tradução e módulo da ação; arquivos
+têm políticas por entidade, metadados declarados e exclusão transacional pelo
+runtime. O fluxo de apresentação passou inicialmente em 31 passos no Chromium sem MPR.
+
+O quinto bloco move XPath de seletores para o servidor e compartilha o parser
+com retrieves: associações diretas/inversas, predicados aninhados, contexto
+autorizado e paginação após filtro. Atributos herdados passam a existir no
+runtime; consultas, associações e arquivos resolvem subtipos pela entidade base,
+com permissões do tipo concreto. `System.FileDocument` fornece metadados e
+`System.Image` exige imagem. Thumbnails PNG são gerados por ImageMagick,
+armazenados em cache no SQLite e invalidados por substituição/exclusão.
+Snapshots do interpretador também preservam blobs e miniaturas no rollback.
+O fixture ampliado tem 33 passos no Chromium, sem MPR nem sidecar, além de
+contratos de persistência, acesso e HTTP em `ruby_runtime_compatibility_spec.rb`.
+
+A existência desses contratos **não** certifica todas as variantes nativas:
+funções/eixos/tokens restantes de XPath, todos os eventos/validações herdados,
+ações cliente adicionais e layouts móveis ainda precisam de implementação e
+gates próprios. Não chamar o conjunto de variantes avançadas de concluído.
+
 Ainda devem ser fechados, com provas de edição e execução:
 
-1. Demais widgets core, ações cliente, layouts/snippets, validações e fontes de
+1. Variantes dos widgets core, ações cliente, layouts/snippets, validações e fontes de
    dados ainda sem equivalente funcional no frontend Ruby.
 2. Condições de visibilidade/editabilidade por papéis e variantes nativas;
    contratos de widgets externos e custom actions, com adapters explícitos.
-3. Fluxos e documentos ainda delegados ao modelo preservado: produzir fontes
-   Ruby autoritativos e remover a necessidade desse baseline em execução.
+3. Grafos sem declaração Ruby e integrações externas: produzir implementações
+   ou adapters explícitos. O runtime novo não usa o MPR como fallback. Aplicações
+   legadas sem `runtime_model: ruby` conservam o bridge antigo até nova exportação.
 4. Gates em projetos reais: editar o código exportado, testar a aplicação
    convertida e distinguir qualquer dependência residual de mera preservação
    opcional para round-trip. Não declarar conversão universal com base apenas
@@ -298,3 +335,15 @@ de 10.24 e 11.12; `mx check` também preserva diagnósticos observáveis dos
 pacotes byte a byte em cada round-trip. O MXRB permanece independente: `mx` e
 MxBuild são somente oráculos de validação, nunca geradores, mutadores ou
 dependências de runtime.
+
+### Continuação de 02/10: ações cliente e grid responsivo
+
+Salvar/Cancelar mantém rascunhos por página, com confirmação atômica e ACL por
+objeto/membro no backend; Excluir/Fechar deixa de ser tratado como microflow.
+A opção ClosePage retorna ao MPR, efeitos de fechamento são aplicados e o
+histórico restaura página/contexto. LayoutGrid aplica os pesos e alinhamentos
+por desktop/tablet/celular. O fixture existente cobre 54 passos de navegador,
+com mais dois cenários de viewport. Ver o recorte e as limitações específicas
+em `portabilidade-ruby-typescript.md`: uploads/efeitos de flows fora do lote,
+modais, outras ações nativas, parâmetros avançados e equivalência visual ampla
+continuam fora desta certificação.

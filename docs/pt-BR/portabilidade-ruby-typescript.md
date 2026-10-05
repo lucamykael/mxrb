@@ -10,11 +10,160 @@ podem ser integralmente editáveis mesmo sem projeção de volta ao Studio Pro.
 Por isso, `portability --require-native` verifica a direção Ruby → Mendix;
 ele **não** certifica a conclusão de Mendix → Ruby.
 
-O runtime Ruby ainda abre uma cópia interna do MPR para metadados e execução
-dos grafos que dependem dela. Não confundir “sem JVM/runtime Mendix” com
-“sem baseline MPR”. Variantes não traduzidas, custom actions sem adapter e
-widgets sem implementação web continuam sendo lacunas de conversão, não
-funcionalidades concluídas por estarem preservadas.
+Novas exportações declaram `runtime_model: ruby`: o modelo de execução, esquema
+de persistência, segurança e grafos vêm das definições Ruby carregadas. Não se
+abre nem se gera um MPR para executá-los. O manifesto e metadados de identidade
+continuam presentes; não são interpretados como código de negócio. MPR e
+sidecar de reconstrução são preservados para round-trip, não como fallback de
+execução. Aplicações antigas sem essa configuração mantêm o bridge legado;
+faça nova exportação para obter o contrato novo.
+
+Schemas de widgets pluggable são exportados separadamente em
+`.mxrb/widget_schemas`, mantendo a revisão exata de cada widget por página,
+layout ou snippet. Eles validam as propriedades Ruby sem abrir o MPR; não
+contêm os valores de negócio dos widgets. Uma exportação nova exige esses
+schemas e falha explicitamente se estiverem ausentes.
+
+Widgets incomuns de layouts podem aparecer como `form_widget(Mxrb::Forms...)`:
+suas propriedades continuam editáveis em construtores tipados, sem hashes ou
+referências a fragmentos opacos. Essa representação não acrescenta um renderer
+web para tipos ainda não suportados.
+
+Isso não traduz automaticamente grafos sem declaração Ruby nem implementações
+Java externas: exigem implementação Ruby/adapter explícito. Preservação desses
+artefatos não conta como funcionalidade concluída.
+
+### Dez widgets de apresentação e execução sem MPR
+
+`menu_bar` e `navigation_tree` usam menus recursivos de `app/presentation`, com
+ações de página/microflow/nanoflow, parâmetros, traduções de legenda, ícones e
+filtragem pelas permissões. Referências mantêm o módulo de origem do menu;
+ações negadas são removidas mesmo quando seus filhos continuam autorizados. `navigation_list`
+preserva conteúdo e ações de seus itens. `snippet` expande widgets reutilizáveis
+com parâmetros nomeados de objetos/escalares, mapeamentos e proteção contra
+recursão. DataViews podem editar objetos diferentes no mesmo snippet sem trocar
+o objeto da página. Parâmetros ausentes são reportados.
+`static_image` aponta para arquivos exportados em `frontend/public/assets/images`.
+`scroll_container` preserva as cinco regiões, dimensões em pixels/percentual,
+layouts headline/sidebar e os modos de abertura/fechamento, sobreposição e
+deslocamento. Layouts compartilhados também são declarações Ruby em
+`app/presentation`: seus placeholders recebem argumentos nomeados e layouts
+aninhados são compostos a cada leitura da página, com detecção de ciclos.
+
+`reference_set_selector`, incluindo a forma nativa InputReferenceSetSelector,
+grava coleções de referências e respeita bloqueios herdados. Referências aos
+objetos-alvo e leitura das associações são autorizadas no backend. Caminhos
+compostos resolvem um único objeto proprietário antes de gravar; caminhos
+ambíguos/vazios não viram consultas sem escopo. O servidor avalia XPath antes da
+paginação: comparações, booleanos, aritmética, funções de strings, referências
+a variáveis, caminhos de associações diretas/inversas e predicados aninhados.
+Por exemplo, `[App.Item_Tags/App.Tag[Name = 'Visible']]` filtra pelo objeto
+relacionado. Caminhos vazios não correspondem a objetos e comparações de conjuntos
+são existenciais. O mesmo avaliador atende retrieves de microflows.
+Cada objeto e membro acessado pela consulta HTTP passa por autorização; campos
+privados não podem ser usados para inferir resultados. O contexto de
+`$currentObject` é recuperado do banco e autorizado. Referências previamente
+selecionadas fora do filtro são preservadas. Sintaxe inválida é rejeitada, com
+limites de tamanho e profundidade. Isso não implementa todos os eixos, tokens e
+funções do XPath nativo.
+
+`file_manager`, `image_uploader` e `image_viewer` usam `/api/files/:entity/:id`.
+O backend exige autorização sobre o objeto e seu membro `Contents`; mutações
+por cookie também exigem CSRF. Conteúdo binário fica no banco SQLite, com teto
+de 20 MiB por arquivo. Nome e MIME fornecidos pelo cliente não controlam caminhos
+de disco nem conteúdo executável: somente assinaturas raster reconhecidas são
+exibidas inline; os demais arquivos são anexos, com `nosniff` e CSP restritiva.
+Limites/extensões próprios do widget são verificações adicionais da UI, não uma
+política de segurança do servidor. O modelo Ruby pode declarar
+`file_policy max_bytes: 1048576, extensions: %w[png], images_only: true`, aplicada
+também contra uploads que ignoram a UI. `Name`, `FileSize` e `HasContents` são
+atualizados também quando herdados de `System.FileDocument`. `generalizes`
+resolve atributos da cadeia de entidades nas tabelas, nos objetos Ruby e no
+schema enviado ao frontend. Consultas pela entidade base encontram seus subtipos,
+inclusive associações com destino em `System.FileDocument` ou `System.Image`.
+Uploads para subtipos de `System.Image` exigem assinatura raster. CRUD e arquivos
+verificam as permissões do tipo concreto: consultar pela base não concede acesso
+adicional. As regras de acesso continuam próprias de cada entidade, conforme o
+[contrato de segurança do Mendix](https://docs.mendix.com/refguide/access-rules/).
+Um trigger transacional remove blobs na exclusão pelo runtime, inclusive com
+eventos desativados; rollback SQL e restauração de snapshots do interpretador
+restauram registro, conteúdo e miniaturas. Downloads usam cookie de mesma origem.
+Imagens usam fontes de contexto, associação, microflow e nanoflow; dimensões
+percentuais/automáticas, fallback e abertura da imagem são cobertos.
+
+`show_as_thumbnail` solicita uma miniatura PNG real pelo mesmo endpoint, com
+`thumbnail_width` e `thumbnail_height` entre 1 e 1024. A imagem mantém proporção,
+não é ampliada e tem orientação corrigida e metadados removidos. GIF/WebP animado
+usa o primeiro quadro. O cache no SQLite é invalidado por substituição/exclusão
+do arquivo e respeita as mesmas permissões do download original.
+O processamento requer ImageMagick 7 (`magick` no PATH), ou ImageMagick 6 com
+`MXRB_IMAGEMAGICK=convert`. A ausência do worker ou imagem inválida gera erro
+explícito. A execução usa argumentos separados, decodificador raster explícito,
+limites de memória/tempo e encerramento após 15 segundos, seguindo as opções de
+[recursos do ImageMagick](https://imagemagick.org/security-policy/). A CI instala
+e executa esse worker; downloads originais não precisam dele.
+
+O fixture `spec/fixtures/ruby_presentation_widgets/project.rb` testa os dez tipos,
+recursos exportados, edição pública e persistência. O cenário
+`spec/fixtures/frontend_browser/ruby_presentation_widgets_flow.json` verifica
+33 passos no Chromium, inclusive seleção filtrada por associação aninhada,
+persistência após recarregar, solicitação de thumbnail, navegação e abertura
+de região lateral com largura de 240 px,
+com MPR e sidecar removidos da aplicação de teste. Upload é coberto por testes de
+componente e API. `ruby_standalone_runtime_spec.rb` proíbe abrir projetos MPR e
+verifica alteração de fluxos, chamada interna a Ruby personalizado e reabertura
+do banco; custom actions têm teste próprio de resolução sem MPR.
+
+Os contratos de XPath por associação, persistência polimórfica de arquivos e
+miniaturas reais têm gates em `spec/runtime/xpath_spec.rb` e
+`spec/ruby_runtime_compatibility_spec.rb`, incluindo reinício, permissões,
+cache, rollback, HTTP e runtime proibido de abrir MPR.
+O Sudoku usado na CI também inicializa 9 módulos, 19 páginas e 4 entidades
+persistentes sem MPR. Senhas de demonstração ocultadas na exportação não são
+necessárias para construir o modelo de autorização; credenciais do runtime
+continuam sendo configuradas no `SessionManager` pelo ambiente da aplicação.
+
+Limites ainda abertos: funções/eixos/tokens restantes do XPath completo,
+equivalência de todos os eventos/validações herdados do runtime Mendix,
+ações cliente além do recorte abaixo, parâmetros tipados/variáveis locais mais
+avançadas e integrações particulares. Layouts móveis/nativos, comportamento
+responsivo exato de cada tema e equivalência visual com Studio Pro não estão
+certificados. Os limites novos têm testes em `ruby_advanced_presentation_spec.rb`
+e nos componentes React; isso não elimina os gates pendentes em projetos reais.
+Esse gate certifica o fixture e os contratos descritos, não conversão universal.
+
+### Ações cliente e layout responsivo
+
+`save_changes`, `cancel_changes`, `delete` e `close_page` executam ações cliente
+sem procurar microflows com esses nomes. A opção `close_page: true/false` de
+salvar/cancelar/excluir é preservada na leitura, no Ruby editável e na reconstrução
+Mendix. Efeitos `close_page` de microflows e nanoflows também são aplicados.
+Voltar/Avançar restaura a página e seu objeto, atualizado pelo backend; fechar
+na primeira página não sai da aplicação.
+
+Páginas com Salvar/Cancelar, inclusive em snippets compartilhados, mantêm
+rascunhos dos membros editados. Salvar inclui o texto ainda em foco e envia os
+objetos persistentes em uma transação (`POST /api/records/commit`, até 1.000
+objetos): erro ou falta de permissão desfaz o lote inteiro. Cancelar restaura a
+última versão confirmada. Falhas de gravação preservam o rascunho para nova
+tentativa; edições feitas durante uma gravação permanecem pendentes. DTOs
+continuam locais. Páginas sem essas ações mantêm a gravação imediata existente.
+Uploads e efeitos já persistidos por microflows não pertencem a essa transação
+de edição. Excluir usa o objeto de contexto; exclusão múltipla, seleção de
+`SourceVariable`, confirmações nativas e os demais tipos de ação continuam
+pendentes. Popups são apresentados pela navegação de páginas, sem uma pilha
+visual de janelas modais.
+
+LayoutGrid aplica pesos de 1–12, `grow` e `auto` por desktop, tablet (até 991 px)
+e celular (até 767 px), quebra de linha e alinhamentos de linha/coluna. Isso
+certifica o grid web declarado; não equivale a aplicativos móveis nativos nem
+a todos os breakpoints e estilos de temas particulares.
+
+O fixture de apresentação existente verifica 54 passos no Chromium, incluindo
+cancelamento, confirmação, persistência após recarga e retorno à página anterior.
+Dois cenários adicionais verificam o mesmo grid em 800 px e 390 px. Os três
+rodam com acesso ao MPR proibido. Testes React cobrem texto em foco, falha/retry,
+múltiplos objetos e histórico do navegador.
 
 ### Campos e Data Views editáveis
 
@@ -46,6 +195,30 @@ condicional, seleção e persistência após recarregar, usando somente Ruby e
 React. Testes de componente cobrem escrita rejeitada, foco, eventos, condições
 e associações com múltiplas etapas. Isso fecha esse recorte, não toda a matriz
 de frontend nem todas as dependências do baseline.
+
+### Seleção por rádio, títulos e abas
+
+`radio_button_group` oferece seleção booleana ou por enumeração, legendas,
+orientação horizontal/vertical, navegação nativa por teclado, persistência e
+eventos de foco/saída do grupo. Respeita os bloqueios herdados de Data Views;
+opções desconhecidas são sinalizadas, sem substituir o valor armazenado.
+Valores de enumeração curtos e qualificados são reconhecidos. A gravação
+preserva a representação recebida, e comparações com literais de enumeração
+em condições reconhecem ambas sem confundir tipos qualificados diferentes.
+
+O schema servido usa os valores e traduções Ruby das enumerações exportadas,
+com fallback ao manifesto para definições legadas sem implementação carregada.
+Alterar `app/enumerations/**/*.rb` não exige recompilar o MPR; recarregue a
+aplicação para obter o schema atualizado. Descoberta de novos documentos e
+remoção do manifesto como catálogo ainda não estão concluídas.
+
+`page_title` usa o título da página Ruby carregada. `tab_control` seleciona um
+painel por vez, suporta setas/Home/End e mantém os campos dos painéis já abertos
+montados, preservando rascunhos. Painéis ainda não abertos são carregados sob
+demanda. O fixture `spec/fixtures/ruby_frontend_core_widgets/project.rb` e o
+cenário `spec/fixtures/frontend_browser/ruby_core_widgets_flow.json` verificam
+esse comportamento, condições por enumeração e persistência após recarregar.
+Variantes nativas de abas ainda não projetadas não estão cobertas por esse contrato.
 
 ## O que o MXRB garante
 

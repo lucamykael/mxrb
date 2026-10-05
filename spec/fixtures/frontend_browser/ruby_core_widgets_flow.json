@@ -1,0 +1,36 @@
+{
+  "name": "ruby-core-radio-tabs-and-title",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [
+    {
+      "name": "ruby-core-widgets",
+      "path": "/",
+      "steps": [
+        { "wait_for_selector": "h1[data-widget-name=Title]" },
+        { "wait_for_text": "Ruby core widgets" },
+        { "wait_for_selector": "[data-widget-name=Active] input[value=false]:checked" },
+        { "wait_for_absence": "[data-widget-name=Status]" },
+        { "click_selector": "[data-widget-name=Active] input[value=true]" },
+        { "click_text": "Progress" },
+        { "wait_for_selector": "[data-widget-name=Status] input[value=Open]:checked" },
+        { "wait_for_selector": "[data-widget-name=CompletedName] input:disabled" },
+        { "wait_for_selector": "[data-widget-name=LockedStatus] input:disabled" },
+        { "click_selector": "[data-widget-name=Status] input[value=Done]" },
+        { "wait_for_selector": "[data-widget-name=LockedStatus] input[value=Done]:checked" },
+        { "wait_for_selector": "[data-widget-name=CompletedName] input:not(:disabled)" },
+        { "navigate": "/" },
+        { "wait_for_selector": "[data-widget-name=Active] input[value=true]:checked" },
+        { "click_text": "Progress" },
+        { "wait_for_selector": "[data-widget-name=Status] input[value=Done]:checked" },
+        { "wait_for_selector": "[data-widget-name=CompletedName] input:not(:disabled)" },
+        { "click_selector": "[data-widget-name=Status] input[value=Open]" },
+        { "click_text": "General" },
+        { "click_selector": "[data-widget-name=Active] input[value=false]" },
+        { "wait_for_selector": "[data-widget-name=Active] input[value=false]:checked" },
+        { "wait_for_absence": "[role=alert]" }
+      ],
+      "selectors": ["h1[data-widget-name=Title]", "[role=tab][aria-selected=true]", "[data-widget-name=Active] input[value=false]:checked"]
+    }
+  ]
+}
