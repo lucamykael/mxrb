@@ -48,6 +48,11 @@ jobs:
       - name: Install the raster thumbnail worker
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
+      - name: Check out pinned imported-module fixture
+        run: |
+          git clone --quiet https://github.com/ako/ConnectorKitDemo.git /tmp/ConnectorKitDemo
+          git -C /tmp/ConnectorKitDemo checkout --quiet 9eed61f1fb737d189a3b018ac7691c87569053de
+
       - name: Run strict test suite
         env:
           MXRB_IMAGEMAGICK: convert
@@ -55,6 +60,7 @@ jobs:
           MXRB_LINE_COVERAGE_MIN: "100"
           MXRB_BRANCH_COVERAGE_MIN: "100"
           MXRB_ACCEPTANCE_MPRS: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
+          MXRB_CONNECTOR_FIXTURE: /tmp/ConnectorKitDemo/ConnectorKitDemo.mpr
         run: bundle exec rspec
 
       - name: Run gradual Ruby quality gate

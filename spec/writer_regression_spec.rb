@@ -4,6 +4,18 @@ require 'spec_helper'
 require 'tmpdir'
 
 RSpec.describe 'writer regressions from the VetClinic acceptance project' do # rubocop:disable Metrics/BlockLength
+  it 'supplies the required native Boolean default while preserving explicit and existing defaults' do
+    writer = Mxrb::Writer.new('/tmp/boolean.mpr', version: '11.12.1', modules: [])
+    attribute = { name: 'Active', type: :boolean }
+    generated = writer.send(:attribute_doc, attribute, nil)
+    expect(generated.dig('Value', 'DefaultValue')).to eq('false')
+    enabled = writer.send(:attribute_doc, attribute.merge(default: true), generated)
+    expect(enabled.dig('Value', 'DefaultValue')).to eq('true')
+    expect(writer.send(:attribute_doc, attribute, enabled).dig('Value', 'DefaultValue')).to eq('true')
+    expect(writer.send(:attribute_doc, attribute.merge(default: false), enabled).dig('Value', 'DefaultValue'))
+      .to eq('false')
+  end
+
   it 'updates a return-only microflow when its return expression changes' do
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'return-value.mpr')
@@ -26,6 +38,20 @@ RSpec.describe 'writer regressions from the VetClinic acceptance project' do # r
       end
       expect(ending['ReturnValue']).to eq('true')
     end
+  end
+
+  it 'writes native snippet arguments with qualified parameters and object bindings' do
+    writer = Mxrb::Writer.new('/tmp/snippet.mpr', version: '11.12.1', modules: [])
+    widget = { name: 'Details', options: { snippet: 'App.Details', arguments: {
+      Document: { kind: :widget, name: 'documentView' }, Title: "'Details'"
+    } } }
+    document = writer.send(:snippet_call_doc, widget)
+    mappings = Mxrb::IO::BsonCodec.parse_array(document.dig('FormCall', 'ParameterMappings'))[:items]
+    expect(mappings.first).to include('$Type' => 'Forms$SnippetParameterMapping',
+                                      'Parameter' => 'App.Details.Document', 'Argument' => '')
+    expect(mappings.first.dig('Variable', 'Widget')).to eq('documentView')
+    expect(mappings.last).to include('Parameter' => 'App.Details.Title', 'Argument' => "'Details'", 'Variable' => nil)
+    expect(mappings).to all(satisfy { !_1.key?('Expression') })
   end
 
   it 'stores navigation glyph names as valid Mendix integer codes' do

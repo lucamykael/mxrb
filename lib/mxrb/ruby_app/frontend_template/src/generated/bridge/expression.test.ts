@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate, evaluateCondition } from './expression';
-import { editable } from './components/FieldPolicy';
+import { editable, matchesCondition } from './components/FieldPolicy';
 import type { EntityRecord } from '../types';
 
 const record: EntityRecord = {
@@ -10,6 +10,19 @@ const record: EntityRecord = {
 };
 
 describe('presentation expressions', () => {
+  it('combines exact module roles with expressions and rejects unknown conditions', () => {
+    const condition = { roles: ['App.Editor'], expression: '$currentObject/Active' };
+    expect(matchesCondition(condition, record, ['App.Editor'])).toBe(true);
+    expect(matchesCondition(condition, record, ['Other.Editor'])).toBe(false);
+    expect(matchesCondition(condition, { ...record, attributes: { Active: false } }, ['App.Editor'])).toBe(false);
+    expect(matchesCondition({ roles: ['App.Editor'] }, null, ['App.Editor'])).toBe(true);
+    expect(matchesCondition({ roles: ['App.Editor'] }, null)).toBe(false);
+    expect(matchesCondition({ roles: ['App.Editor'], ignore_security: true }, null)).toBe(true);
+    for (const invalid of [{ roles: 'App.Editor' }, { roles: [true] }, { ignore_security: 'true' }, { expression: true }, { roles: [], extra: true }])
+      expect(matchesCondition(invalid, record, ['App.Editor'])).toBe(false);
+    expect(editable({ editable: 'conditional', editability: condition }, record, ['App.Editor'])).toBe(true);
+  });
+
   it('compares qualified and bare enum members without conflating different enum types', () => {
     for (const status of ['Ready', 'App.Status.Ready']) {
       const current = { ...record, attributes: { Status: status } };

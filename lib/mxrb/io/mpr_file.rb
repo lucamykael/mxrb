@@ -208,6 +208,10 @@ module Mxrb
         raise ArgumentError, "storage format must be v1 or v2" unless %i[v1 v2].include?(requested)
         return self if requested == @format_version
 
+        if (owner = foreign_contents_owner)
+          raise IncompletePackageError, "#{contents_dir} belongs to #{owner}; use a separate output directory"
+        end
+
         units = storage_migration_units
         requested == :v2 ? migrate_units_to_v2!(units) : migrate_units_to_v1!(units)
         @unit_columns = nil
@@ -889,6 +893,11 @@ module Mxrb
 
       # MPR v2 stores unit contents in mprcontents/ folder next to the .mpr.
       def detect_format
+        if (owner = foreign_contents_owner)
+          return :v1 if contents_column?
+
+          raise IncompletePackageError, "#{@path}: external unit contents belong to #{owner}"
+        end
         unless contents_column?
           unless File.directory?(contents_dir)
             raise IncompletePackageError,
@@ -900,6 +909,14 @@ module Mxrb
         end
 
         File.directory?(contents_dir) ? :v2 : :v1
+      end
+
+      def foreign_contents_owner
+        marker = File.join(contents_dir, 'mprname')
+        return unless File.file?(marker)
+
+        owner = File.read(marker).strip
+        owner unless owner == File.basename(@path)
       end
 
       def contents_dir

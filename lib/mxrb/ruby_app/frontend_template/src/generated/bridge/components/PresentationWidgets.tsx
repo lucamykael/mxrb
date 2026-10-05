@@ -426,7 +426,7 @@ export function ReferenceSetSelector(
     !record ||
     !current ||
     readOnly ||
-    !editable(options, record) ||
+    !editable(options, record, props.schema.module_roles) ||
     !association ||
     !target ||
     unsupported ||

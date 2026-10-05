@@ -44,6 +44,20 @@ const props = (widget: WidgetDefinition): WidgetRuntimeProps => ({
 });
 
 describe('Ruby data view editing', () => {
+  it('updates role-based visibility and editing when the authorized schema changes', () => {
+    const guarded = { ...field, options: { ...field.options, editable: 'conditional', editability: { roles: ['App.Editor'] } } };
+    const input = props(guarded);
+    const { rerender } = render(<WidgetRenderer {...input} />);
+    expect(screen.getByRole('textbox')).toBeDisabled();
+    rerender(<WidgetRenderer {...input} schema={{ ...input.schema, module_roles: ['App.Editor'] }} />);
+    expect(screen.getByRole('textbox')).toBeEnabled();
+    const hidden = { ...guarded, options: { ...guarded.options, visibility: { roles: ['App.Editor'] } } };
+    rerender(<WidgetRenderer {...input} widget={hidden} />);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    rerender(<WidgetRenderer {...input} widget={hidden} schema={{ ...input.schema, module_roles: ['App.Editor'] }} />);
+    expect(screen.getByRole('textbox')).toBeEnabled();
+  });
+
   it('applies data view visibility conditions and read-only text style', () => {
     const visible: WidgetDefinition = {
       ...view,

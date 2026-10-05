@@ -1,0 +1,96 @@
+name: Windows native certification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/studio-pro.yml'
+      - 'script/studio_pro_*'
+      - 'spec/fixtures/native_presentation_widgets/**'
+      - 'spec/fixtures/ruby_page_contracts/**'
+      - 'spec/fixtures/ruby_frontend_core_widgets/**'
+      - 'lib/mxrb/writer*'
+      - 'lib/mxrb/writer/**'
+      - 'lib/mxrb/ruby_app/**'
+  workflow_dispatch:
+  schedule:
+    - cron: "20 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-native-certification
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Generate original and Ruby round-trip projects
+        run: bundle exec ruby script/studio_pro_batch "${RUNNER_TEMP}/native-batch"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-inputs
+          path: ${{ runner.temp }}/native-batch
+          retention-days: 14
+
+  mxbuild:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-inputs
+          path: ${{ runner.temp }}/native-batch
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download pinned official Windows MxBuild
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'mxbuild.tar.gz'
+          Invoke-WebRequest 'https://cdn.mendix.com/runtime/win-mxbuild-11.12.1.tar.gz' -OutFile $archive
+          $expected = '1c59f25e5933b68e90e122204c99ea4ff4cac88535b720eae882b24c48d0daa6'
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
+            throw 'Official MxBuild archive checksum mismatch'
+          }
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/mxbuild" | Out-Null
+          tar -xzf $archive -C "$env:RUNNER_TEMP/mxbuild"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot extract MxBuild' }
+      - name: Certify native builds without changing transported inputs
+        shell: powershell
+        run: >-
+          ./script/studio_pro_gate.ps1
+          -BatchDirectory "$env:RUNNER_TEMP/native-batch"
+          -WorkspaceRoot "$env:RUNNER_TEMP/native-workspaces"
+          -ToolRoot "$env:RUNNER_TEMP/mxbuild"
+          -BuildToolsOnly
+          -PinnedMxBuildSha256 b56513ff1926dbc7997d4d318dd71d2df6350fb1f78c2cb0c00b4f9d789e2c91
+      - name: Boot native Runtime and exercise browser CRUD for both projects
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($variant in @('source', 'roundtrip')) {
+            $label = "core-widgets-$variant"
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./script/studio_pro_runtime.ps1 `
+              -Package "$env:RUNNER_TEMP/native-batch/results/$label/$label.mda" `
+              -ToolRoot "$env:RUNNER_TEMP/mxbuild" -JavaHome "$env:JAVA_HOME" `
+              -EvidenceDirectory "$env:RUNNER_TEMP/native-batch/results/runtime-$label"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw 'Native Runtime/browser acceptance failed; inspect both evidence reports' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native-evidence
+          path: ${{ runner.temp }}/native-batch/results
+          retention-days: 14

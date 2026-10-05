@@ -4,6 +4,9 @@ require 'spec_helper'
 require 'tmpdir'
 
 RSpec.describe 'Ruby frontend core widget source' do # rubocop:disable Metrics/BlockLength
+  before { Mxrb::RubyApp::Registry.reset! }
+  after { Mxrb::RubyApp::Registry.reset! }
+
   it 'serves edited titles, tab captions and enumeration choices directly from public Ruby' do # rubocop:disable Metrics/BlockLength
     Dir.mktmpdir('mxrb-core-widgets-') do |root| # rubocop:disable Metrics/BlockLength
       source = File.join(root, 'Source.mpr')

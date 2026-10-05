@@ -4252,6 +4252,7 @@ module Mxrb
           }
 
           export interface ApplicationSchema {
+            module_roles?: string[];
             presentation?: Record<string, PresentationResource>;
             project: { name: string; mendix_version: string };
             navigation?: { profiles?: NavigationProfile[] };

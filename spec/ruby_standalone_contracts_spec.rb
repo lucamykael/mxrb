@@ -19,6 +19,8 @@ RSpec.describe 'Standalone runtime defensive contracts' do
       application = Mxrb::RubyApp::Application.new(target)
       context = application.session_manager.authenticate(nil)
       expect(application.schema(context:).fetch(:presentation).fetch('Presentation.Main')[:items]).not_to be_empty
+      role_context = Mxrb::Runtime::SecurityContext.new(user: 'reader', module_roles: ['Presentation.Reader'])
+      expect(application.schema(context: role_context).fetch(:module_roles)).to eq(['Presentation.Reader'])
       bridge = application.send(:bridge)
       bridge.scheduler.instance_variable_get(:@executor).call('Presentation.Ping')
       expect(bridge.interpreter.effects).to include(include(type: 'show_message', message: 'Ruby action executed'))

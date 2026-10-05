@@ -1,0 +1,62 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require_relative '../lib/mxrb'
+
+# Generates a transportable batch. Studio Pro consumes copies and never these inputs.
+module StudioProBatch
+  FIXTURES = {
+    'contracts' => 'ruby_page_contracts',
+    'presentation' => 'native_presentation_widgets',
+    'core-widgets' => 'ruby_frontend_core_widgets'
+  }.freeze
+
+  module_function
+
+  def generate(destination)
+    raise ArgumentError, 'batch destination already exists' if File.exist?(destination)
+
+    FileUtils.mkdir_p(File.join(destination, 'inputs'))
+    cases = FIXTURES.flat_map { |name, fixture| fixture_cases(destination, name, fixture) }
+    File.write(File.join(destination, 'cases.json'), JSON.pretty_generate(cases))
+    puts JSON.generate(batch: destination, cases: cases.map { _1.fetch(:label) })
+  end
+
+  def fixture_cases(destination, name, fixture)
+    original = File.join(destination, 'inputs', "#{name}-source", 'Application.mpr')
+    rebuilt = File.join(destination, 'inputs', "#{name}-roundtrip", 'Application.mpr')
+    ruby = File.join(destination, 'ruby', name)
+    compile(File.expand_path("../spec/fixtures/#{fixture}/project.rb", __dir__), original)
+    Mxrb::Exporter.new(original, ruby, mode: :ruby).export!
+    compile(File.join(ruby, 'project.rb'), rebuilt)
+    [original, rebuilt].map { transport_case(_1) }
+  end
+
+  def compile(source, destination)
+    previous = ENV['MXRB_OUTPUT_PATH']
+    ENV['MXRB_OUTPUT_PATH'] = destination
+    FileUtils.mkdir_p(File.dirname(destination))
+    load source
+  ensure
+    previous ? ENV['MXRB_OUTPUT_PATH'] = previous : ENV.delete('MXRB_OUTPUT_PATH')
+  end
+
+  def transport_case(path)
+    directory = File.dirname(path)
+    { label: File.basename(directory), directory: File.basename(directory), mpr: File.basename(path),
+      sha256: Digest::SHA256.file(path).hexdigest, units: Dir[File.join(directory, 'mprcontents/**/*.mxunit')].length,
+      files: transport_hashes(directory) }
+  end
+
+  def transport_hashes(directory)
+    Dir.glob(File.join(directory, '**', '*'), File::FNM_DOTMATCH).select { File.file?(_1) }.sort.to_h do |file|
+      [file.delete_prefix("#{directory}/"), Digest::SHA256.file(file).hexdigest]
+    end
+  end
+end
+
+abort 'Usage: script/studio_pro_batch NEW_BATCH_DIRECTORY' unless ARGV.length == 1
+StudioProBatch.generate(File.expand_path(ARGV.fetch(0)))
