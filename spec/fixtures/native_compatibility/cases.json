@@ -108,5 +108,70 @@
     "name": "TrimNbsp",
     "expression": "trim(' Ruby ')",
     "expected": " Ruby "
+  },
+  {
+    "name": "IfTrue",
+    "expression": "if true then 'chosen' else substring('a', 5)",
+    "expected": "chosen"
+  },
+  {
+    "name": "IfFalse",
+    "expression": "if false then substring('a', 5) else 'chosen'",
+    "expected": "chosen"
+  },
+  {
+    "name": "IfNested",
+    "expression": "if true then if false then 'wrong' else 'nested' else 'wrong'",
+    "expected": "nested"
+  },
+  {
+    "name": "IfGrouped",
+    "expression": "toString(2 + (if false then 4 else 6) * 3)",
+    "expected": "20"
+  },
+  {
+    "name": "AndLazy",
+    "expression": "toString(false and substring('a', 5) = 'x')",
+    "expected": "false"
+  },
+  {
+    "name": "OrLazy",
+    "expression": "toString(true or substring('a', 5) = 'x')",
+    "expected": "true"
+  },
+  {
+    "name": "AndEvaluated",
+    "expression": "toString(true and 3 div 5 = 0.6)",
+    "expected": "true"
+  },
+  {
+    "name": "OrEvaluated",
+    "expression": "toString(false or 12 : 5 = 2.4)",
+    "expected": "true"
+  },
+  {
+    "name": "DivisionNegative",
+    "expression": "toString(-12 div 5 = -2.4)",
+    "expected": "true"
+  },
+  {
+    "name": "ModuloPositive",
+    "expression": "toString(12 mod 5)",
+    "expected": "2"
+  },
+  {
+    "name": "ModuloNegative",
+    "expression": "toString(-12 mod 5)",
+    "expected": "-2"
+  },
+  {
+    "name": "ModuloNegativeDivisor",
+    "expression": "toString(12 mod -5)",
+    "expected": "2"
+  },
+  {
+    "name": "ModuloDecimal",
+    "expression": "toString(12.5 mod 5 = 2.5)",
+    "expected": "true"
   }
 ]

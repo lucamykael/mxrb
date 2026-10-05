@@ -42,6 +42,22 @@ RSpec.describe 'annotated rule and expression compatibility' do # rubocop:disabl
     end
   end
 
+  it 'validates all branch syntax while evaluating only selected operations' do
+    expression = Mxrb::Runtime::Native::Expression.new
+    expect(expression.evaluate('$item != empty and $item/Name = \'safe\'', { 'item' => nil })).to be(false)
+    expect(expression.evaluate('$item = empty or $item/Name = \'safe\'', { 'item' => nil })).to be(true)
+    expect(expression.evaluate('false or false or true', {})).to be(true)
+    expect(expression.evaluate('true and true and false', {})).to be(false)
+    expect(expression.evaluate('if false then 1 else if true then 2 else 3', {})).to eq(2)
+    [
+      'if true 1 else 2', 'if true then 1', 'if true then 1 else (2',
+      'if 1 then 2 else 3', '1 and true', 'not empty',
+      '1 div 0', '1 : 0', '1 mod 0', "'one' div 2", "2 div 'two'", '4 / 2'
+    ].each do |source|
+      expect { expression.evaluate(source, {}) }.to raise_error(Mxrb::NativeRuntimeError)
+    end
+  end
+
   it 'evaluates required temporal additions with signed offsets and rejects malformed calls' do
     expression = Mxrb::Runtime::Native::Expression.new
     value = Time.utc(2026, 10, 5, 12)

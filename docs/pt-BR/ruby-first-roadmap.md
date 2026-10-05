@@ -1,5 +1,21 @@
 # MXRB: Ruby acima de tudo
 
+## Expressões condicionais e aritméticas
+
+O backend valida a expressão inteira antes de executá-la e avalia apenas o ramo
+selecionado de `if ... then ... else ...`. `and` e `or` preservam curto-circuito,
+inclusive quando o ramo ignorado acessaria um objeto vazio ou lançaria erro.
+Backend e frontend calculam `div` e `:` sem truncar; `mod` preserva o sinal do
+dividendo. Condições exigem booleanos. A barra continua disponível para caminhos
+XPath, mas não é aceita como divisão em expressões de microflow.
+
+Studio Pro 11.12.1 confirmou 36 casos em fonte e round-trip. A aplicação Ruby
+exportada executa os mesmos casos com MPR proibido. Há 100 testes de frontend e
+cobertura Ruby de linhas/branches em 100%. O contrato numérico continua usando
+Float/number; precisão Decimal arbitrária e operações de calendário/DST não
+fazem parte dessa certificação. Veja a [evidência](../evidence/expression-parity-2026-10-05.json)
+e a [semântica aritmética do Mendix](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
 ## Propriedades de apresentação tipadas
 
 Os toggles de design agora usam `design_property "Phone", toggle: true`, inclusive

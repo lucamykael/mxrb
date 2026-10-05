@@ -309,7 +309,7 @@ module Mxrb
             value = parse_or
             raise ArgumentError unless @token == :eof
 
-            value
+            evaluate(value)
           end
 
           private
@@ -318,7 +318,7 @@ module Mxrb
             left = parse_and
             while accept_word('or')
               right = parse_and
-              left = truthy?(left) || truthy?(right)
+              left = [:binary, 'or', left, right]
             end
             left
           end
@@ -327,7 +327,7 @@ module Mxrb
             left = parse_comparison
             while accept_word('and')
               right = parse_comparison
-              left = truthy?(left) && truthy?(right)
+              left = [:binary, 'and', left, right]
             end
             left
           end
@@ -336,7 +336,7 @@ module Mxrb
             left = parse_addition
             while @token == :operator && COMPARISONS.key?(@value)
               operator = consume(:operator)
-              left = COMPARISONS.fetch(operator).call(left, parse_addition)
+              left = [:binary, operator, left, parse_addition]
             end
             left
           end
@@ -346,36 +346,38 @@ module Mxrb
             while @token == :operator && %w[+ -].include?(@value)
               operator = consume(:operator)
               right = parse_multiplication
-              left = operator == '+' ? left + right : left - right
+              left = [:binary, operator, left, right]
             end
             left
           end
 
           def parse_multiplication
             left = parse_unary
-            while @token == :operator && %w[* /].include?(@value)
-              operator = consume(:operator)
+            while (@token == :operator && %w[* :].include?(@value)) ||
+                  (@token == :identifier && %w[div mod].include?(@value.downcase))
+              operator = consume(@token).downcase
               right = parse_unary
-              left = operator == '*' ? left * right : left / right
+              left = [:binary, operator, left, right]
             end
             left
           end
 
           def parse_unary
-            return !parse_unary if accept_word('not')
-            return -parse_unary if accept_operator('-')
+            return [:unary, 'not', parse_unary] if accept_word('not')
+            return [:unary, '-', parse_unary] if accept_operator('-')
 
             parse_primary
           end
 
           def parse_primary
-            return consume(@token) if %i[number string].include?(@token)
+            return [:literal, consume(@token)] if %i[number string].include?(@token)
 
             if @token == :datetime
               consume(:datetime)
-              return Time.now
+              return [:datetime]
             end
-            return @expression.resolve_variable(consume(:variable), @variables) if @token == :variable
+            return [:variable, consume(:variable)] if @token == :variable
+            return conditional if accept_word('if')
             return grouped if accept(:left_parenthesis)
             return identifier if @token == :identifier
 
@@ -390,7 +392,7 @@ module Mxrb
 
           def identifier
             name = consume(:identifier)
-            return @expression.resolve_identifier(name, @node) unless accept(:left_parenthesis)
+            return [:identifier, name] unless accept(:left_parenthesis)
 
             arguments = []
             unless accept(:right_parenthesis)
@@ -401,7 +403,48 @@ module Mxrb
                 consume(:comma)
               end
             end
-            @expression.invoke(name, arguments)
+            [:call, name, arguments]
+          end
+
+          def conditional
+            condition = parse_or
+            raise ArgumentError, 'expected then' unless accept_word('then')
+
+            consequent = parse_or
+            raise ArgumentError, 'expected else' unless accept_word('else')
+
+            [:conditional, condition, consequent, parse_or]
+          end
+
+          def evaluate(tree)
+            kind, value, left, right = tree
+            case kind
+            when :literal then value
+            when :datetime then Time.now
+            when :variable then @expression.resolve_variable(value, @variables)
+            when :identifier then @expression.resolve_identifier(value, @node)
+            when :call then @expression.invoke(value, left.map { evaluate(_1) })
+            when :unary then value == 'not' ? !truthy?(evaluate(left)) : -evaluate(left)
+            when :conditional then truthy?(evaluate(value)) ? evaluate(left) : evaluate(right)
+            else binary(value, left, right)
+            end
+          end
+
+          def binary(operator, left, right)
+            return truthy?(evaluate(left)) && truthy?(evaluate(right)) if operator == 'and'
+            return truthy?(evaluate(left)) || truthy?(evaluate(right)) if operator == 'or'
+
+            first = evaluate(left)
+            second = evaluate(right)
+            return COMPARISONS.fetch(operator).call(first, second) if COMPARISONS.key?(operator)
+            return first + second if operator == '+'
+            return first - second if operator == '-'
+            return first * second if operator == '*'
+
+            raise ArgumentError, 'numeric operands required' unless first.is_a?(Numeric) && second.is_a?(Numeric)
+            raise ArgumentError, 'division by zero' if second.zero?
+
+            operator == 'mod' ? first.remainder(second) : first.fdiv(second)
           end
 
           def accept_word(word)
@@ -439,7 +482,9 @@ module Mxrb
           end
 
           def truthy?(value)
-            value != false && !value.nil?
+            raise ArgumentError, 'boolean operand required' unless [true, false].include?(value)
+
+            value
           end
         end
 
@@ -469,7 +514,7 @@ module Mxrb
             return [:number, number(@scanner.scan(/\d+(?:\.\d+)?/))] if @scanner.check(/\d/)
             return [:variable, @scanner.scan(%r{\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)?})] if @scanner.check(/\$/)
             return [:identifier, @scanner.scan(/[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*/)] if @scanner.check(/[A-Za-z_]/)
-            return [:operator, @scanner.scan(%r{!=|>=|<=|=|>|<|\+|-|\*|/})] if @scanner.check(%r{[!><=+*/-]})
+            return [:operator, @scanner.scan(%r{!=|>=|<=|=|>|<|\+|-|\*|:|/})] if @scanner.check(%r{[!><=+*:/-]})
 
             punctuation
           end

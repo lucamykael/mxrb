@@ -1,5 +1,22 @@
 # MXRB: Ruby über alles
 
+## Bedingte und arithmetische Ausdrücke
+
+Das Backend prüft den gesamten Ausdruck und wertet nur den gewählten Zweig von
+`if ... then ... else ...` aus. `and`/`or` verwenden Kurzschlussauswertung, auch
+wenn der übersprungene Zweig ein leeres Objekt lesen oder einen Fehler auslösen
+würde. Backend und Frontend unterstützen nicht abgeschnittene Ergebnisse von
+`div` und `:` sowie vorzeichenbehaftete `mod`-Reste. Bedingungen verlangen Boolean.
+Der Schrägstrich bleibt für XPath-Pfade erhalten, gilt aber nicht als Division
+in Microflow-Ausdrücken.
+
+Studio Pro 11.12.1 bestätigte 36 Fälle vor und nach dem Roundtrip. Exportierter
+Ruby-Code führt dieselben Fälle bei verbotenem MPR-Zugriff aus. 100 Frontend-Tests
+bestehen; Ruby-Zeilen und -Branches sind zu 100 % abgedeckt. Die vorhandene
+Float/number-Präzision bleibt; beliebige Decimal-Präzision und Kalender-/DST-
+Operationen sind nicht zertifiziert. Siehe [Nachweis](../evidence/expression-parity-2026-10-05.json)
+und [Mendix-Arithmetik](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
 ## Typisierte Präsentationseigenschaften
 
 Design-Toggles verwenden jetzt `design_property "Phone", toggle: true`, auch in

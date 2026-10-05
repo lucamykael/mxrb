@@ -28,6 +28,7 @@ const precedence: Record<string, number> = {
   '-': 4,
   '*': 5,
   div: 5,
+  ':': 5,
   mod: 5,
 };
 
@@ -71,7 +72,7 @@ function binary(operator: string, left: Expression, right: Expression): Value {
   if (operator === '-') return x - y;
   if (operator === '*') return x * y;
   if (y === 0) throw new Error('Division by zero');
-  return operator === 'div' ? Math.trunc(x / y) : x % y;
+  return operator === 'mod' ? x % y : x / y;
 }
 
 // A small explicit expression grammar, never JavaScript eval. Unsupported
@@ -85,7 +86,7 @@ export function evaluate(
   let remaining = source.trim();
   while (remaining) {
     const match = remaining.match(
-      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,\-])/,
+      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
     );
     if (!match) throw new Error(`Unsupported expression syntax: ${remaining}`);
     tokens.push(match[0]);
@@ -102,6 +103,14 @@ export function evaluate(
       const value = parse(1);
       consume(')');
       return value;
+    }
+    if (token === 'if') {
+      const condition = parse(1);
+      consume('then');
+      const consequent = parse(1);
+      consume('else');
+      const alternative = parse(1);
+      return () => (boolean(condition()) ? consequent() : alternative());
     }
     if (token === 'not' || token === '-') {
       const value = atom();

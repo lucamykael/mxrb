@@ -44,9 +44,21 @@ describe('presentation expressions', () => {
     expect(evaluateCondition('$currentObject/Status = App.Status.Ready', record)).toBe(true);
     expect(evaluate('toString(2 + 3 * 4)', record)).toBe('14');
     expect(evaluate("'it''s' + ' editable'", record)).toBe("it's editable");
-    expect(evaluate('-12 div 5', record)).toBe(-2);
+    expect(evaluate('-12 div 5', record)).toBe(-2.4);
     expect(evaluate('12 mod 5', record)).toBe(2);
     expect(evaluate('$Item', record, { Item: null })).toBeNull();
+  });
+
+  it('evaluates conditional branches lazily and preserves decimal division', () => {
+    expect(evaluate('if true then 3 div 5 else 1 div 0', record)).toBe(0.6);
+    expect(evaluate('if false then 1 div 0 else 12 : 5', record)).toBe(2.4);
+    expect(evaluate('if true then if false then 1 else 2 else 3', record)).toBe(2);
+    expect(evaluate('2 + (if false then 4 else 6) * 3', record)).toBe(20);
+    expect(evaluate('false and 1 div 0 = 0', record)).toBe(false);
+    expect(evaluate('true or 1 div 0 = 0', record)).toBe(true);
+    expect(evaluate('-12 mod 5', record)).toBe(-2);
+    for (const invalid of ['if 1 then 2 else 3', 'if true 2 else 3', 'if true then 2', 'if true then 2 else (3', '4 / 2'])
+      expect(() => evaluate(invalid, record)).toThrow();
   });
 
   it('rejects unsupported syntax and nonboolean conditions without evaluating code', () => {

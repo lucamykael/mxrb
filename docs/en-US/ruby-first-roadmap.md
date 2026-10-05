@@ -1,5 +1,21 @@
 # MXRB: Ruby above all
 
+## Conditional and arithmetic expressions
+
+The backend parses the full expression before evaluating only the selected
+`if ... then ... else ...` branch. Boolean `and`/`or` short-circuit, including
+branches that would dereference empty objects or raise errors. Backend and
+frontend support fractional `div` and `:`, and signed `mod` remainders.
+Conditions require booleans. Slash remains available for XPath paths but is
+rejected as microflow expression division.
+
+Studio Pro 11.12.1 confirmed 36 cases in source and roundtrip. Exported Ruby runs
+the same cases with MPR access forbidden. The frontend passes 100 tests; Ruby
+line/branch coverage is 100%. Existing Float/number precision remains; arbitrary
+Decimal precision and calendar/DST operations are outside this certification.
+See the [evidence](../evidence/expression-parity-2026-10-05.json) and
+[Mendix arithmetic semantics](https://docs.mendix.com/refguide/arithmetic-expressions/).
+
 ## Typed presentation properties
 
 Design toggles now use `design_property "Phone", toggle: true`, including nested

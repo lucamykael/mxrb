@@ -247,8 +247,10 @@ em condições reconhecem ambas sem confundir tipos qualificados diferentes.
 O schema servido usa os valores e traduções Ruby das enumerações exportadas,
 com fallback ao manifesto para definições legadas sem implementação carregada.
 Alterar `app/enumerations/**/*.rb` não exige recompilar o MPR; recarregue a
-aplicação para obter o schema atualizado. Descoberta de novos documentos e
-remoção do manifesto como catálogo ainda não estão concluídas.
+aplicação para obter o schema atualizado. Aplicações `runtime_model: ruby`
+descobrem novas declarações carregadas e reconciliam remoções e renomeações;
+entradas legadas precisam de nova exportação. O manifesto permanece como
+metadado privado de reconstrução, sem exigir cadastro manual do runtime.
 
 `page_title` usa o título da página Ruby carregada. `tab_control` seleciona um
 painel por vez, suporta setas/Home/End e mantém os campos dos painéis já abertos

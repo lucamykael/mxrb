@@ -73,8 +73,10 @@ Both bare and qualified enum values are recognized; writes preserve their incomi
 representation, and enum-literal conditions recognize both without conflating
 different qualified types. Exported enumeration values/captions are read from Ruby
 definitions, with a manifest fallback for unloaded legacy definitions. Reload the
-application after editing enumeration source. Discovery of new documents and
-removal of the manifest as a catalog are still open.
+application after editing enumeration source. Applications using `runtime_model: ruby`
+discover loaded declarations and reconcile removals and renames; legacy entries
+need a fresh export. The manifest remains private reconstruction metadata rather
+than a manually maintained runtime catalog.
 
 Page-title widgets use the loaded Ruby page title. Tabs show one panel, support
 arrow/Home/End navigation and retain mounted drafts in previously opened panels;
