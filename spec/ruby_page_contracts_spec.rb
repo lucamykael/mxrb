@@ -82,11 +82,11 @@ RSpec.describe 'Page invocation contracts' do
   it 'round-trips client action settings and return mappings' do
     writer = Mxrb::Writer.allocate
     parser = Mxrb::Model::Page.allocate
-    source = { kind: :local_variable, name: 'App.Home.Label' }
+    source = { kind: :local_variable, name: 'Label' }
     settings = {
       disabled_during_execution: false, close_count: '2',
       confirmation: { question: 'Continue?', proceed: 'Yes', cancel: 'No' },
-      progress: 'Modal', progress_message: 'Working', asynchronous: true,
+      progress: 'Blocking', progress_message: 'Working', asynchronous: true,
       outputs: [{ source:, expression: 'toString($ActionReturnValue)', attribute: 'App.Item.Name',
                   source_attribute: 'App.Item.Other' }]
     }
@@ -95,6 +95,10 @@ RSpec.describe 'Page invocation contracts' do
       decoded = parser.send(:parse_action, encoded)
       expect(decoded[:settings]).to eq(settings)
     end
+    asynchronous = writer.send(:client_action_doc, kind: :microflow, handler: 'App.Run',
+                                                   settings: { asynchronous: true })
+    expect(parser.send(:parse_action, asynchronous).fetch(:settings))
+      .to include(asynchronous: true, progress: 'NonBlocking')
     event = { kind: :action, handler: 'delete', close_page: false,
               settings: { source: { kind: :widget, name: 'App.Home.Rows', use_all_pages: true } } }
     expect(parser.send(:parse_action, writer.send(:client_action_doc, event))).to eq(event)
@@ -200,7 +204,7 @@ RSpec.describe 'Page invocation contracts' do
     tree = Mxrb::RubyApp::Page::WidgetTree.new
     tree.instance_eval(code)
     expect(tree.widgets.first.dig('options', 'source_variable'))
-      .to include('kind' => 'local_variable', 'name' => 'App.Editor.Draft')
+      .to include('kind' => 'local_variable', 'name' => 'Draft')
     expect(tree.widgets.first.dig('options', 'max_length')).to eq(0)
     expect(tree.widgets[1]).to include('type' => 'sidebar_toggle')
     expect(tree.widgets[1].fetch('options')).to include('caption' => 'Menu', 'tooltip' => 'Open menu')

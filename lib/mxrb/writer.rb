@@ -5941,6 +5941,9 @@ module Mxrb
       settings['ProgressBar'] = options[:progress] if options.key?(:progress)
       settings['ProgressMessage'] = text_doc(options[:progress_message]) if options.key?(:progress_message)
       settings['Asynchronous'] = options[:asynchronous] if options.key?(:asynchronous)
+      if options[:asynchronous] == true && !options.key?(:progress)
+        settings['ProgressBar'] = 'NonBlocking'
+      end
       if options[:outputs]
         settings['OutputMappings'] = IO::BsonCodec.build_array(options[:outputs].map do |mapping|
           { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$OutputMapping',
@@ -6191,6 +6194,7 @@ module Mxrb
       )
       field = fields[variable.fetch(:kind, :page_parameter).to_sym]
       doc[field] = variable.fetch(:name, "").to_s if field
+      doc[field] = doc[field].split('.').last.to_s if field == 'LocalVariable'
       doc
     end
 
