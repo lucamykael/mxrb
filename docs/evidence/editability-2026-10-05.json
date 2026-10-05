@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "scope": "Collection menu icon declarations, local icon fonts and JavaScript nanoflow parameter contracts",
+  "audit": {
+    "projects": [
+      {
+        "project": "CourseManager",
+        "coverage": {
+          "executable_bidirectional": 6,
+          "native_projection_source_preserved": 15,
+          "mendix_dsl_bidirectional": 8
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 0,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "LearnNow Trainning Management",
+        "coverage": {
+          "executable_bidirectional": 24,
+          "native_projection_source_preserved": 48,
+          "mendix_dsl_bidirectional": 330
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "MyFirstModule",
+        "coverage": {
+          "executable_bidirectional": 50,
+          "native_projection_source_preserved": 72,
+          "executable_backend_route": 1,
+          "mendix_dsl_bidirectional": 374
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "RubyBridgeSandbox",
+        "coverage": {
+          "executable_bidirectional": 27,
+          "native_projection_source_preserved": 45,
+          "mendix_dsl_bidirectional": 306
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "SLATaskApp",
+        "coverage": {
+          "executable_bidirectional": 85,
+          "native_projection_source_preserved": 117,
+          "executable_backend_route": 2,
+          "mendix_dsl_bidirectional": 481
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "VetClinic",
+        "coverage": {
+          "executable_bidirectional": 30,
+          "native_projection_source_preserved": 23,
+          "mendix_dsl_bidirectional": 182
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "FirstMedix App",
+        "coverage": {
+          "executable_bidirectional": 36,
+          "native_projection_source_preserved": 44,
+          "mendix_dsl_bidirectional": 277
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      },
+      {
+        "project": "Sudoku",
+        "coverage": {
+          "executable_bidirectional": 31,
+          "native_projection_source_preserved": 75,
+          "mendix_dsl_bidirectional": 313
+        },
+        "generic_native_documents": 0,
+        "auxiliary_fragment_files": 16,
+        "referenced_fragment_files": 0,
+        "opaque_menu_sources": 0
+      }
+    ],
+    "before": {
+      "auxiliary_bson_files": 125,
+      "already_typed_unreferenced_fragments": 112,
+      "opaque_menus": 12,
+      "generic_native_documents": 1
+    },
+    "after": {
+      "auxiliary_bson_files": 112,
+      "unreferenced_fragments": 112,
+      "opaque_menus": 0,
+      "generic_native_documents": 0
+    },
+    "note": "File counts include project duplicates. Auxiliary fragments are not counts of uneditable documents. Source-preserved projections remain editable."
+  },
+  "roundtrip": {
+    "project": "SLATaskApp",
+    "menus_and_RegisterDeepLink_signature": "identical including native identities and BSON markers",
+    "probe_differences": 0
+  },
+  "ruby": {
+    "examples": 2266,
+    "failures": 0,
+    "lines": {
+      "covered": 40585,
+      "total": 40585,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17738,
+      "total": 17738,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 96,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "browser": {
+    "scenario": "spec/fixtures/frontend_browser/editable_menu_icons_flow.json",
+    "passed": true,
+    "steps": 8,
+    "mpr_access": "forbidden",
+    "console_errors": [],
+    "screenshots": [
+      {
+        "name": "collection-icons",
+        "screenshot_sha256": "94edad4bb11e46199593569401f66165b7c6dadaf73fce7e36c06c447d3cd5c7"
+      },
+      {
+        "name": "menu-navigation",
+        "screenshot_sha256": "800c6563497a0b6aa4cd5ba914bcaa1f570c8db7e747e723cde7c8a2523eb582"
+      }
+    ]
+  },
+  "native_builds": [
+    {
+      "label": "compatibility-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "ed8e622c54d04db05fc619a47aed2c884346c8b7f9bf0bb8499a394ea5c00ef9",
+      "package_sha256": "d097710d33ea9910056af05450a24005169b043907af9a36431c73cdf32239c1"
+    },
+    {
+      "label": "compatibility-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "e6903abff7e069140fc22e4086dc90e725ff62749b439fbe78bc33a1f1d75ca4",
+      "package_sha256": "39391e6dc5d58321b326f62d4c8b19803b8b8bf5efd8ac875dbbe80bc3b096e5"
+    },
+    {
+      "label": "contracts-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "e04fa2fda2baabba1789482df23caf8c23a9b58a5973ae1babf1764fe1b5fe11",
+      "package_sha256": "527504fe16162c7c7bbe0312d6c9047ba518c2a039494e3247cdf871ecae0eff"
+    },
+    {
+      "label": "contracts-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "2a755de8099109c882cb0adc5e8c3a9264519de88cc68192292c21a9811aea0f",
+      "package_sha256": "8bb29919edfa4b8cd0898a851ea4afc20be08989956c3046dbedfddfdc26de12"
+    },
+    {
+      "label": "core-widgets-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "f7e7d30ec1668d76f10dbb9e516c861394f9a0019194e6d9a9ca27da535338bf",
+      "package_sha256": "c509f9cf18ce4e21d415f77d421b93150ba87afb1cd53d3ebff56cb6af13cf91"
+    },
+    {
+      "label": "core-widgets-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "617440f17079b45e3e3391fc41dd7c7cee9b92062d50f3cfebbd4d8c6649be5d",
+      "package_sha256": "0747cb04a02e0ff4347177ac313d936d235a1f44f085051a362885746ed3ec11"
+    },
+    {
+      "label": "presentation-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "5097ecd701078a209a939eeecc5ccc323c5e45961986e5b47f01ff0e42f1e25a",
+      "package_sha256": "5fe4f5d432e578cee7c328f8ea32a6fb06b1ec05ab9d76dfaee4b84dc9e4cc89"
+    },
+    {
+      "label": "presentation-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "8bfc25fbfcd5da36d3db7e430178833eccb230f58e8c4e5c9429bf4bd777734d",
+      "package_sha256": "1351946e731045426b8ae46457ef7f1c0595f38f67c620d3629cdf56aeeb5277"
+    },
+    {
+      "label": "validation-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "1ad6eec96244b030928fd1758a61300b6c8eadeb90984391d00c5652122964a9",
+      "package_sha256": "2f1215908ef852641f2d56853c7fd6aef168390eade762d668916268c966b41f"
+    },
+    {
+      "label": "validation-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "2ed9f9fc1c865bac461481ccd62fbfc1ab9a76d7d02131f639b91e1ece0ff935",
+      "package_sha256": "7f86c225944e7abe0a1c02f47391dca2b6a8da8c389ec4b0620b8f6b27028f51"
+    },
+    {
+      "label": "editable-menus-roundtrip",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "10f7f4e98c5e6380d3bc853b053322c49d5ef560e9f187b3a8783fdb64908300",
+      "package_sha256": "c89898c60f8bacd0c1eddfb766aa11ca28533034df4bed878856b0feba0fde03"
+    },
+    {
+      "label": "editable-menus-source",
+      "status": "completed",
+      "mxbuild_exit_code": 0,
+      "expected_sha256": "0fa9d69d5ba5ad73d7babffdd329167412764753320d2e996e7ae12be524f34a",
+      "package_sha256": "1193323e8bb7b74b0799644bbf0207161d06af64c7662497e3fba4b1c535d952"
+    }
+  ],
+  "diagnostics": [
+    "The initial two new cases built successfully but the strict copy-hash gate detected MxBuild rewriting the fixture JavaScript header. The unused signature fixture now provides no JavaScript implementation; both corrected cases passed every gate. Original inputs were unchanged."
+  ],
+  "limitations": [
+    "Callback signature certified; callback execution and native deep-link integration are not certified.",
+    "The eight-project inventory is not an exhaustive compatibility matrix.",
+    "112 unreferenced auxiliary BSON files remain; corresponding typed Ruby declarations already exist."
+  ]
+}

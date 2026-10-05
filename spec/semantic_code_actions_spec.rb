@@ -30,7 +30,7 @@ RSpec.describe 'semantic code action documents' do
       expect(ruby).to include(
         'java_action :Normalize', 'javascript_action :Notify',
         ':kind => :entity_type_parameter', ':kind => :list',
-        ':kind => :string_template', 'platform: "Web"'
+        ':kind => :string_template', ':kind => :nanoflow', 'platform: "Web"'
       )
       expect(ruby).not_to include('native_document', 'deep_structure:', 'bson_binary(')
       native_source = File.read(File.join(exported, '.mxrb', 'native_units.rb'))
@@ -73,6 +73,13 @@ RSpec.describe 'semantic code action documents' do
     javascript = action_document(
       'JavaScriptActions$JavaScriptAction', 'Notify',
       parameters: [{
+        '$ID' => SecureRandom.uuid, '$Type' => 'JavaScriptActions$JavaScriptActionParameter',
+        'Category' => '', 'Description' => '', 'IsRequired' => false, 'Name' => 'callback',
+        'ParameterType' => {
+          '$ID' => SecureRandom.uuid,
+          '$Type' => 'JavaScriptActions$NanoflowJavaScriptActionParameterType'
+        }
+      }, {
         '$ID' => SecureRandom.uuid, '$Type' => 'JavaScriptActions$JavaScriptActionParameter',
         'Category' => '', 'Description' => '', 'IsRequired' => false, 'Name' => 'message',
         'ParameterType' => {

@@ -8,6 +8,7 @@ on:
       - 'spec/fixtures/native_presentation_widgets/**'
       - 'spec/fixtures/native_validation_rules/**'
       - 'spec/fixtures/native_compatibility/**'
+      - 'spec/fixtures/editable_menu_actions/**'
       - 'spec/fixtures/frontend_browser/marketplace_chart*'
       - 'spec/fixtures/ruby_page_contracts/**'
       - 'spec/fixtures/ruby_frontend_core_widgets/**'

@@ -27,6 +27,36 @@ RSpec.describe 'semantic asset documents' do
     end
   end
 
+  it 'exports collection fonts and editable icon resources for the standalone frontend' do
+    Dir.mktmpdir('mxrb-menu-fonts-') do |dir|
+      source = File.join(dir, 'Assets.mpr')
+      root = File.join(dir, 'app')
+      define_project(source)
+      Mxrb::Exporter.new(source, root, mode: :ruby).export!
+      path = File.join(root, 'app', 'presentation', 'assets.rb')
+      text = File.read(path)
+      expect(text).to include('Presentation.icon "Assets.Icons.Add"', 'character: 65')
+      application = Mxrb::RubyApp::Application.new(root)
+      resource = application.schema.fetch(:presentation).fetch('Assets.Icons.Add')
+      expect(resource).to include(kind: 'icon', character: 65)
+      expect(File.binread(File.join(root, 'frontend/public', resource.fetch(:path)))).to eq('font')
+      application.close
+      File.write(path, text.sub('character: 65', 'character: 66'))
+      application = Mxrb::RubyApp::Application.new(root)
+      expect(application.schema.dig(:presentation, 'Assets.Icons.Add', :character)).to eq(66)
+      presentation = Mxrb::RubyApp::Presentation
+      [nil, '65', -1, 0x110000].each do |character|
+        expect { presentation.icon('Invalid', path: resource.fetch(:path), character:) }
+          .to raise_error(ArgumentError, /local font and Unicode/)
+      end
+      expect { presentation.icon('Invalid', path: '/outside/font.woff', character: 65) }
+        .to raise_error(ArgumentError, /local font and Unicode/)
+    ensure
+      application&.close
+      Mxrb::RubyApp::Registry.reset!
+    end
+  end
+
   def define_project(path)
     encoded_image = Base64.strict_encode64('png')
     encoded_font = Base64.strict_encode64('font')

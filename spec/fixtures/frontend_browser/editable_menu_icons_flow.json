@@ -1,0 +1,26 @@
+{
+  "name": "editable-collection-menu-icons",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [{
+    "name": "collection-icons",
+    "path": "/",
+    "steps": [
+      { "wait_for_text": "Editable menus and callbacks" },
+      { "wait_for_count": { "selector": "[data-icon-collection]", "equals": 2 } },
+      { "wait_for_selector": "[data-icon-collection='Menus.Symbols.Square']" },
+      { "wait_for_selector": "[data-icon-collection='Menus.Symbols.Triangle']" },
+      { "wait_for_absence": "[role=alert]" }
+    ],
+    "selectors": [".mxrb-menu_bar", "[data-icon-collection]"]
+  }, {
+    "name": "menu-navigation",
+    "path": "/",
+    "steps": [
+      { "click_text": "Triangle" },
+      { "wait_for_text": "Alternate page" },
+      { "wait_for_absence": "[role=alert]" }
+    ],
+    "selectors": ["main"]
+  }]
+}

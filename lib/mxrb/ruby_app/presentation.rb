@@ -49,6 +49,15 @@ module Mxrb
         Registry.register(:presentation, name.to_s, { kind: 'image', path: })
       end
 
+      def self.icon(name, path:, character:)
+        unless path.to_s.match?(%r{\A/assets/fonts/[a-f0-9]{64}\.woff\z}) &&
+               character.is_a?(Integer) && character.between?(0, 0x10ffff)
+          raise ArgumentError, 'presentation icons require a local font and Unicode character'
+        end
+
+        Registry.register(:presentation, name.to_s, { kind: 'icon', path:, character: })
+      end
+
       def self.layout(name, &block)
         tree = Page::WidgetTree.new
         PluggableProperties.with_page(name) { tree.instance_eval(&block) } if block

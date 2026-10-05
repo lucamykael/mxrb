@@ -456,3 +456,24 @@ describe('Standalone presentation widgets', () => {
     expect(input.request).not.toHaveBeenCalled();
   });
 });
+
+it('renders collection menu icons from exported fonts and keeps missing icons explicit', () => {
+  const runtime = props({ type: 'menu_bar', name: 'Menu', options: { menu: 'Files.Menu' } });
+  runtime.schema.presentation!['Files.Symbols.home'] = {
+    kind: 'icon',
+    path: '/assets/fonts/test.woff',
+    character: 0xe001,
+  };
+  runtime.schema.presentation!['Files.Menu'].items = [
+    { caption: 'Home', page: 'Files.Home', icon: { collection: 'Files.Symbols.home' } },
+    { caption: 'Missing', icon: { collection: 'Files.Symbols.missing' } },
+  ];
+  const { container } = render(<WidgetRenderer {...runtime} />);
+  const icon = container.querySelector('[data-icon-collection="Files.Symbols.home"]');
+  expect(icon?.textContent).toBe(String.fromCodePoint(0xe001));
+  expect((icon as HTMLElement).style.fontFamily).toBe('mxrb-icon-_assets_fonts_test_woff');
+  expect(container.querySelector('style')?.textContent).toContain('/assets/fonts/test.woff');
+  expect(screen.getByRole('img', { name: 'Missing icon: Files.Symbols.missing' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+  expect(runtime.navigate).toHaveBeenCalledWith('Files.Home', expect.anything(), expect.anything());
+});

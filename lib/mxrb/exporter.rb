@@ -1783,6 +1783,8 @@ module Mxrb
         )
       when 'JavaActions$MicroflowJavaActionParameterType'
         common.merge(kind: :microflow)
+      when 'JavaScriptActions$NanoflowJavaScriptActionParameterType'
+        common.merge(kind: :nanoflow)
       else
         raise KeyError, "unsupported code action parameter type #{kind}"
       end

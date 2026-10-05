@@ -15,7 +15,7 @@ module Mxrb
 
       def export!
         @project.modules.each do |mod|
-          declarations = menus(mod) + snippets(mod) + layouts(mod) + images(mod)
+          declarations = menus(mod) + snippets(mod) + layouts(mod) + images(mod) + icons(mod)
           next if declarations.empty?
 
           filename = @exporter.send(:underscore, mod.name)
@@ -101,6 +101,28 @@ module Mxrb
             image_source("#{mod.name}.#{entry[:name]}.#{image.fetch('Name')}", image)
           end
         end
+      end
+
+      def icons(mod)
+        mod.asset_documents.flat_map do |entry|
+          next [] unless entry[:type] == 'CustomIcons$CustomIconCollection'
+
+          document = entry.fetch(:doc)
+          path = export_icon_font(document.fetch('FontData').data)
+          array(document['Icons']).map { icon_source("#{mod.name}.#{entry[:name]}", _1, path) }
+        end
+      end
+
+      def icon_source(collection, icon, path)
+        name = "#{collection}.#{icon.fetch('Name')}"
+        "Mxrb::RubyApp::Presentation.icon #{name.inspect}, path: #{path.inspect}, " \
+          "character: #{icon.fetch('CharacterCode').to_i}"
+      end
+
+      def export_icon_font(font)
+        path = "/assets/fonts/#{Digest::SHA256.hexdigest(font)}.woff"
+        @exporter.send(:write, "frontend/public#{path}", font)
+        path
       end
 
       def image_source(name, image)

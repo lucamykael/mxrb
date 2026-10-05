@@ -3971,7 +3971,7 @@ module Mxrb
           }
 
           export interface NavigationItem {
-            icon?: string | number;
+            icon?: string | number | { collection: string };
             page?: string;
             caption?: Record<string, string>;
             items?: NavigationItem[];
@@ -4005,17 +4005,18 @@ module Mxrb
             caption: string;
             page?: string;
             microflow?: string;
-            icon?: string | number;
+            icon?: string | number | { collection: string };
             items?: PresentationMenuItem[];
             caption_translations?: Record<string, string>;
             action?: WidgetEvent;
           }
 
           export interface PresentationResource {
-            kind: 'menu' | 'snippet' | 'image' | 'layout';
+            kind: 'menu' | 'snippet' | 'image' | 'layout' | 'icon';
             items?: PresentationMenuItem[];
             widgets?: WidgetDefinition[];
             path?: string;
+            character?: number;
             parameters?: Array<string | ValueDefinition>;
             variables?: ValueDefinition[];
           }

@@ -167,19 +167,25 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
   };
   const itemLabel = (item: PresentationMenuItem) => (
     <>
-      {item.icon && (
-        <>
-          <span
-            aria-hidden="true"
-            className={typeof item.icon === 'number' ? 'glyphicon' : `mxrb-menu-icon ${item.icon}`}
-          >
-            {typeof item.icon === 'number'
-              ? String.fromCodePoint(item.icon)
-              : item.icon.startsWith('glyphicon')
-                ? ''
-                : item.icon}
-          </span>{' '}
-        </>
+      {typeof item.icon === 'object' ? (
+        <CollectionIcon name={item.icon.collection} schema={schema} />
+      ) : (
+        item.icon && (
+          <>
+            <span
+              aria-hidden="true"
+              className={
+                typeof item.icon === 'number' ? 'glyphicon' : `mxrb-menu-icon ${item.icon}`
+              }
+            >
+              {typeof item.icon === 'number'
+                ? String.fromCodePoint(item.icon)
+                : item.icon.startsWith('glyphicon')
+                  ? ''
+                  : item.icon}
+            </span>{' '}
+          </>
+        )
       )}
       {itemCaption(item)}
     </>
@@ -534,5 +540,20 @@ export function ReferenceSetSelector(
         </label>
       ))}
     </fieldset>
+  );
+}
+
+function CollectionIcon({ name, schema }: { name: string; schema: WidgetRuntimeProps['schema'] }) {
+  const resource = schema.presentation?.[name];
+  if (resource?.kind !== 'icon' || !resource.path || resource.character === undefined)
+    return <span role="img" aria-label={`Missing icon: ${name}`} />;
+  const family = `mxrb-icon-${resource.path.replace(/\W/g, '_')}`;
+  return (
+    <>
+      <style>{`@font-face { font-family: ${JSON.stringify(family)}; src: url(${JSON.stringify(resource.path)}); }`}</style>
+      <span aria-hidden="true" data-icon-collection={name} style={{ fontFamily: family }}>
+        {String.fromCodePoint(resource.character)}
+      </span>{' '}
+    </>
   );
 }
