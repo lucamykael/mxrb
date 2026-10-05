@@ -7,6 +7,7 @@ require 'find'
 require 'json'
 require 'pp'
 require 'time'
+require 'tmpdir'
 require_relative '../native_fragment_store'
 require_relative 'legacy_service_source_migration'
 require_relative 'legacy_widget_source_migration'
@@ -103,6 +104,18 @@ module Mxrb
       end
 
       private
+
+      # Shared presentation always emits typed Forms declarations. Its decoding
+      # fragments are intermediate values, not dependencies of the exported app.
+      def with_presentation_fragments
+        previous = @native_fragment_store
+        Dir.mktmpdir('mxrb-presentation-fragments-') do |directory|
+          @native_fragment_store = NativeFragmentStore.new(directory)
+          yield
+        end
+      ensure
+        @native_fragment_store = previous
+      end
 
       def read_embedded_sources
         mpr = IO::MprFile.open(@mpr_path, readonly: true)

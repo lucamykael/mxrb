@@ -1,5 +1,19 @@
 # MXRB: Ruby über alles
 
+## Zusätzliche Präsentationsdateien
+
+Layouts und Snippets verwenden bei der Umwandlung in typisierte `Mxrb::Forms`-
+Konstruktoren temporären Speicher. Neue Exporte der acht geprüften Projekte
+enthalten keine unreferenzierten BSON-Hilfsdateien mehr; zuvor waren es 112.
+Vorhandene Dateien und anderweitig benötigte Fragmente bleiben erhalten.
+Roundtrip-Tests vergleichen den MPR-Inhalt. Dateizahlen belegen keine allgemeine
+Runtime-Kompatibilität.
+
+Die erweiterte Quellcodeprüfung fand zwei weitere generische Darstellungen:
+Design-Property-Toggles in SLA und ein altes TreeNode-Schemafeld in FirstMedix.
+Diese sind von den entfernten Hilfsdateien getrennt zu behandeln.
+Siehe [Prüfergebnisse](../evidence/presentation-fragments-2026-10-05.json).
+
 ## Persistierbare Seitenobjekte vor dem Commit
 
 Objekte einer Datenquelle bleiben über mehrere Anfragen editierbar, ohne in

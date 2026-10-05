@@ -1,5 +1,18 @@
 # MXRB: Ruby above all
 
+## Auxiliary presentation files
+
+Layouts and snippets use temporary storage while converting to typed
+`Mxrb::Forms` constructors. Fresh exports of the eight audited projects now
+contain zero unreferenced auxiliary BSON files, down from 112. Existing files
+and fragments required elsewhere remain intact. Reconstruction tests compare
+the MPR content; file counts are not proof of runtime compatibility.
+
+The expanded source audit identified two other generic representations: design
+property toggles in SLA and a legacy TreeNode schema field in FirstMedix. These
+remain separate from the eliminated intermediate files.
+See the [audit](../evidence/presentation-fragments-2026-10-05.json).
+
 ## Persistent page objects before commit
 
 Objects returned by a data source remain editable across requests without

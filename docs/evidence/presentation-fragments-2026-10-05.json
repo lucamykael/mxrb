@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-05",
+  "scope": "No persistent BSON intermediates for typed shared presentation declarations",
+  "projects": [
+    {
+      "project": "CourseManager",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "LearnNow Trainning Management",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "MyFirstModule",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "RubyBridgeSandbox",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "SLATaskApp",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "VetClinic",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "FirstMedix App",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "Sudoku",
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    }
+  ],
+  "before": 112,
+  "after": 0,
+  "existing_files": "preserved",
+  "ruby": {
+    "examples": 2271,
+    "failures": 0,
+    "lines": 40721,
+    "branches": 17792,
+    "coverage_percent": 100
+  },
+  "projection": {
+    "passed_without_repairs": [
+      "CourseManager",
+      "LearnNow Trainning Management",
+      "MyFirstModule",
+      "VetClinic",
+      "Sudoku"
+    ],
+    "remaining_findings": {
+      "SLATaskApp": "Toggle design property falls back to raw representation",
+      "FirstMedix App": "Legacy WidgetPhoneGapEnabled schema field prevents typed TreeNode property emission"
+    },
+    "passed_with_temporary_hash_repair": {
+      "project": "RubyBridgeSandbox",
+      "repaired_units": [
+        "4a8475b3-14cb-4100-8963-58f2fd3a0be8",
+        "5c6805fc-cadf-4d72-a5ef-f25da7cf4c97"
+      ],
+      "public_source": {},
+      "valid": true,
+      "identical": true
+    }
+  }
+}

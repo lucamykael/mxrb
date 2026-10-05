@@ -1,5 +1,19 @@
 # MXRB: Ruby acima de tudo
 
+## Arquivos auxiliares da apresentação
+
+Layouts e snippets usam armazenamento temporário durante a conversão para
+construtores `Mxrb::Forms`. Novas exportações dos oito projetos auditados passaram
+de 112 BSON auxiliares sem referência para zero. Arquivos preexistentes e
+fragmentos ainda necessários a outras partes do projeto são preservados.
+O teste reconstrói o MPR e compara seu conteúdo; a remoção não transforma
+metadados binários em prova de compatibilidade de runtime.
+
+A verificação ampliada de fontes encontrou duas representações ainda genéricas:
+toggles de propriedades de design no SLA e um atributo legado do esquema TreeNode
+no FirstMedix. São pendências distintas dos arquivos auxiliares eliminados.
+Veja a [auditoria](../evidence/presentation-fragments-2026-10-05.json).
+
 ## Objetos de página persistíveis sem commit
 
 Objetos retornados por uma fonte de dados permanecem editáveis entre chamadas
