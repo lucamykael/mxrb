@@ -9,10 +9,13 @@ require_relative "forms/mpr_codec"
 require_relative "pluggable/schema_source_emitter"
 require_relative "settings/mpr_codec"
 require_relative "settings/source_emitter"
+require_relative "exporter/data_sources"
 
 module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
   class Exporter
+    include DataSources
+
     INLINE_NATIVE_MAX_BYTES = 96 * 1024
     INLINE_NATIVE_MAX_LINE_BYTES = 1_600
     MODES = %i[mendix ruby].freeze
@@ -4436,99 +4439,6 @@ module Mxrb
         lines << "#{child_pad}unknown_native(#{native_ruby(options[:unknown_native], indent + 2)})"
       end
       lines << "#{pad}end"
-    end
-
-    def data_view_source_ruby(raw_source)
-      source = raw_source.transform_keys(&:to_sym)
-      kind = source.fetch(:kind).to_sym
-      return complex_data_view_source_ruby(source) if complex_data_view_source?(source)
-
-      common = []
-      common << "force_full_objects: true" if source[:force_full_objects] == true
-      common << "native: #{native_ruby(source[:unknown_native])}" unless source.fetch(:unknown_native, {}).empty?
-      case kind
-      when :context
-        variable = source[:variable]&.transform_keys(&:to_sym)
-        args = []
-        args << symbol(variable[:name]) if variable&.fetch(:name, nil)
-        args << "entity: #{ruby(source.fetch(:entity))}"
-        args << "kind: #{symbol(variable[:kind])}" if variable && variable.fetch(:kind, :page_parameter).to_sym != :page_parameter
-        args << "sub_key: #{ruby(variable[:sub_key])}" if variable&.fetch(:sub_key, nil)
-        args << "use_all_pages: true" if variable&.fetch(:use_all_pages, false)
-        "context(#{(args + common).join(', ')})"
-      when :association
-        steps = Array(source[:steps])
-        step_value = if steps.one?
-          ruby(steps.first[:association] || steps.first['association'])
-        else
-          native_ruby(steps.map { |step| [step[:association], step[:entity]] })
-        end
-        args = [step_value, "entity: #{ruby(source.fetch(:entity))}"]
-        args << "from: #{page_variable_ruby(source[:variable])}" if source[:variable]
-        "association(#{(args + common).join(', ')})"
-      when :microflow, :nanoflow
-        args = [reference(source.fetch(:name))]
-        pass = data_view_pass_ruby(source[:mappings])
-        args << "pass: #{pass}" if pass
-        "#{kind}_source(#{(args + common).join(', ')})"
-      when :listen
-        "listen_to(#{symbol(source.fetch(:target))}#{common.empty? ? '' : ", #{common.join(', ')}"})"
-      else
-        complex_data_view_source_ruby(source)
-      end
-    end
-
-    def complex_data_view_source?(source)
-      return true if source[:settings_native] || source[:entity_ref_native]
-
-      Array(source[:mappings]).any? { _1[:unknown_native] || _1['unknown_native'] }
-    end
-
-    def complex_data_view_source_ruby(source)
-      kind = source.fetch(:kind).to_sym
-      options = source.reject { |key, _value| key == :kind }
-      "view_source(#{symbol(kind)}, **#{native_ruby(options)})"
-    end
-
-    def data_view_pass_ruby(mappings)
-      values = Array(mappings)
-      return if values.empty?
-
-      pairs = values.map do |mapping|
-        mapping = mapping.transform_keys(&:to_sym)
-        value = mapping[:variable] ? page_variable_ruby(mapping[:variable]) : ruby(mapping[:expression])
-        "#{symbol(mapping.fetch(:parameter))} => #{value}"
-      end
-      "{ #{pairs.join(', ')} }"
-    end
-
-    def page_variable_ruby(raw_variable)
-      variable = raw_variable.transform_keys(&:to_sym)
-      args = [variable[:name] ? symbol(variable[:name]) : 'nil']
-      args << "kind: #{symbol(variable[:kind])}" if variable.fetch(:kind, :page_parameter).to_sym != :page_parameter
-      args << "sub_key: #{ruby(variable[:sub_key])}" if variable[:sub_key]
-      args << "use_all_pages: true" if variable[:use_all_pages] == true
-      unless variable.fetch(:unknown_native, {}).empty?
-        args << "native: #{native_ruby(variable[:unknown_native])}"
-      end
-      "page_variable(#{args.join(', ')})"
-    end
-
-    def data_view_condition_ruby(method, raw_condition, indent)
-      return [] unless raw_condition
-
-      condition = raw_condition.transform_keys(&:to_sym)
-      args = []
-      args << ruby(condition[:expression]) if condition[:expression]
-      args << "roles: #{ruby(Array(condition[:roles]))}" unless Array(condition[:roles]).empty?
-      args << "attribute: #{ruby(condition[:attribute])}" if condition[:attribute]
-      args << "conditions: #{native_ruby(condition[:conditions], indent)}" unless Array(condition[:conditions]).empty?
-      args << "ignore_security: true" if condition[:ignore_security] == true
-      args << "source: #{page_variable_ruby(condition[:source_variable])}" if condition[:source_variable]
-      unless condition.fetch(:unknown_native, {}).empty?
-        args << "native: #{native_ruby(condition[:unknown_native], indent)}"
-      end
-      [(" " * indent) + "#{method} #{args.join(', ')}"]
     end
 
     def render_table_widget(widget, indent)

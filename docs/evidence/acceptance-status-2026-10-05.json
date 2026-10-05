@@ -1,0 +1,401 @@
+{
+  "status": "failed",
+  "catalogs": [
+    {
+      "source": {
+        "name": ".mxrb/ruby-app.json",
+        "sha256": "4f38ba0a44cbcf1c527b2a9a53fed97edcbcf8207b869147c34a797f55f5cd4a"
+      },
+      "project": "VetClinic",
+      "runtime_model": "ruby",
+      "declared_artifacts": 235,
+      "declarations_by_status": {
+        "executable_bidirectional": 30,
+        "native_projection_source_preserved": 21,
+        "mendix_dsl_bidirectional": 184
+      },
+      "note": "Declaration categories do not certify runtime execution or native parity."
+    }
+  ],
+  "checks": [
+    {
+      "source": {
+        "name": "coverage/coverage.json",
+        "sha256": "f581ee6ebb685b67dc6eb06294d17a68d38d59e40729d14841a60edbff6035df"
+      },
+      "kind": "Ruby coverage",
+      "passed": true,
+      "metrics": {
+        "lines": {
+          "covered": 40491,
+          "total": 40491,
+          "percent": 100.0
+        },
+        "branches": {
+          "covered": 17682,
+          "total": 17682,
+          "percent": 100.0
+        }
+      }
+    },
+    {
+      "source": {
+        "name": "mxrb-ci-windows-expanded-evidence/summary.json",
+        "sha256": "d820acc7cde80e7b0c0f701f7839efaaaca48724d7593a807e99b4d152e14f16"
+      },
+      "kind": "Native builds",
+      "passed": false,
+      "cases": [
+        {
+          "label": "contracts-source",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "14f13a090bbf8310d66f9b72ee6532ef085251d6c07ca7185a30b1ceabd4e246",
+          "package_sha256": "48071f1dae4fe5a67cb304247f51a9b49d1f9e438120047b3b447399ceb3a40b"
+        },
+        {
+          "label": "contracts-roundtrip",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "9feda4f987c1eb18224e6cd403a0c456ebcba2a8c7cb4668849c24e57f5af525",
+          "package_sha256": "22a657f474f750cf6b777d3e067f7ff23502ffae2323cd1fca9fd9949b585cb3"
+        },
+        {
+          "label": "presentation-source",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "2a004be0e0acc0c8c9e2ec0c487c56d02926c2bc17b73c6b0628cb2944f1bfaf",
+          "package_sha256": "aec25cd34f5200f5cbdf666f5375371f17583adee92f27167e71210d3446b561"
+        },
+        {
+          "label": "presentation-roundtrip",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "221c3f77856f7f282fa90308d10ad6cb6313cf616798ef7ece7c9842cafe37e9",
+          "package_sha256": "2382d5b60fe2e448065c6411158a8280e45e4b02835942b546e0ffcd656e7fda"
+        },
+        {
+          "label": "core-widgets-source",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "bce775d86b2a076ebe3f89940e8984f995a3998cc6195032429872c6700f549f",
+          "package_sha256": "d71f464070c880a41a962b91516a4f81feb5e213cf54c311d72b0e8c7a6ff889"
+        },
+        {
+          "label": "core-widgets-roundtrip",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "f058bb8db5e11a1b4bf0048aab726b16ad3cf054a05957d1725d1efe13f5cdc2",
+          "package_sha256": "7af491d08e3cdbd1f7dd8fa57d1cadd757d899d42e7ba356bd84cffd462d5e77"
+        },
+        {
+          "label": "validation-source",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "1127498992b4ff82dc86a0e33d69e83689843bbe1d33c2e534b062e73eeaeb11",
+          "package_sha256": "4da30ace9456b9be818065746aed417f28856521f9dd9d17aafd7d8eaf30f9d9"
+        },
+        {
+          "label": "validation-roundtrip",
+          "status": "completed",
+          "mxbuild_exit_code": 0,
+          "expected_sha256": "ae26afb8a6ed032d01b1e3c5acef87465b4a17f092afeb72ce50a54d54ffcc90",
+          "package_sha256": "5e9cfff37cb59a1c75a6e22219b2dc2062fff38ed983bfd4d690ce4608158af4"
+        }
+      ]
+    },
+    {
+      "source": {
+        "name": "runtime-core-widgets-source/runtime.json",
+        "sha256": "b70d6a43bd0a2d9ccdf4769dbe99d77b465b06e15dd722e902e236a87b3622ad"
+      },
+      "kind": "Native Runtime/browser",
+      "passed": true,
+      "package_sha256": "d71f464070c880a41a962b91516a4f81feb5e213cf54c311d72b0e8c7a6ff889",
+      "scenario": {
+        "steps": [
+          "create",
+          "read",
+          "update",
+          "delete"
+        ],
+        "status": "passed"
+      }
+    },
+    {
+      "source": {
+        "name": "runtime-core-widgets-roundtrip/runtime.json",
+        "sha256": "f1509bde4bade3ee1cae29f373fc3c61bdbf474b40bda5c208a1499f4f8acb8c"
+      },
+      "kind": "Native Runtime/browser",
+      "passed": true,
+      "package_sha256": "7af491d08e3cdbd1f7dd8fa57d1cadd757d899d42e7ba356bd84cffd462d5e77",
+      "scenario": {
+        "steps": [
+          "create",
+          "read",
+          "update",
+          "delete"
+        ],
+        "status": "passed"
+      }
+    },
+    {
+      "source": {
+        "name": "runtime-validation-source/runtime.json",
+        "sha256": "d3cc9bd230a34478876638e0abcba4c4c2f9996ecb3089518da90c45a460adc0"
+      },
+      "kind": "Native Runtime/browser",
+      "passed": true,
+      "package_sha256": "4da30ace9456b9be818065746aed417f28856521f9dd9d17aafd7d8eaf30f9d9",
+      "scenario": {
+        "status": "passed",
+        "results": [
+          {
+            "label": "required-blank",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7881299347898606\",\"fields\":{\"Name\":\"Required name\"}}]"
+          },
+          {
+            "label": "required-unicode-space",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7881299347898655\",\"fields\":{\"Name\":\"Required name\"}}]"
+          },
+          {
+            "label": "required-nonbreaking-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "required-figure-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "required-zero-width-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "unique-first-child",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "unique-across-sibling",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"6192449487634614\",\"fields\":{\"Name\":\"Unique name\"}}]"
+          },
+          {
+            "label": "range-minimum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "range-maximum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "range-below",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7036874417766854\",\"fields\":{\"Amount\":\"Amount must be in range\"}}]"
+          },
+          {
+            "label": "range-above",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7036874417766938\",\"fields\":{\"Amount\":\"Amount must be in range\"}}]"
+          },
+          {
+            "label": "range-empty",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "equals-match",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "equals-mismatch",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"15762598695797001\",\"fields\":{\"Name\":\"Name must equal Expected\"}}]"
+          },
+          {
+            "label": "equals-empty",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"15762598695797218\",\"fields\":{\"Name\":\"Name must equal Expected\"}}]"
+          },
+          {
+            "label": "length-two-utf16",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "length-three-utf16",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"12384898975269171\",\"fields\":{\"Name\":\"Maximum two characters\"}}]"
+          },
+          {
+            "label": "length-empty",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "date-minimum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "date-before",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"9570149208162618\",\"fields\":{\"Value\":\"Date minimum\"}}]"
+          },
+          {
+            "label": "date-empty",
+            "accepted": true,
+            "expected": true
+          }
+        ]
+      }
+    },
+    {
+      "source": {
+        "name": "runtime-validation-roundtrip/runtime.json",
+        "sha256": "c004a29fa7cdb46faf6ebcf955e537001193eaaa03093576797982241d707226"
+      },
+      "kind": "Native Runtime/browser",
+      "passed": true,
+      "package_sha256": "5e9cfff37cb59a1c75a6e22219b2dc2062fff38ed983bfd4d690ce4608158af4",
+      "scenario": {
+        "status": "passed",
+        "results": [
+          {
+            "label": "required-blank",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7881299347898501\",\"fields\":{\"Name\":\"Required name\"}}]"
+          },
+          {
+            "label": "required-unicode-space",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7881299347898628\",\"fields\":{\"Name\":\"Required name\"}}]"
+          },
+          {
+            "label": "required-nonbreaking-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "required-figure-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "required-zero-width-space",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "unique-first-child",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "unique-across-sibling",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"6192449487634580\",\"fields\":{\"Name\":\"Unique name\"}}]"
+          },
+          {
+            "label": "range-minimum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "range-maximum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "range-below",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7036874417766861\",\"fields\":{\"Amount\":\"Amount must be in range\"}}]"
+          },
+          {
+            "label": "range-above",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"7036874417767039\",\"fields\":{\"Amount\":\"Amount must be in range\"}}]"
+          },
+          {
+            "label": "range-empty",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "equals-match",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "equals-mismatch",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"15762598695797118\",\"fields\":{\"Name\":\"Name must equal Expected\"}}]"
+          },
+          {
+            "label": "equals-empty",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"15762598695797165\",\"fields\":{\"Name\":\"Name must equal Expected\"}}]"
+          },
+          {
+            "label": "length-two-utf16",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "length-three-utf16",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"12384898975269222\",\"fields\":{\"Name\":\"Maximum two characters\"}}]"
+          },
+          {
+            "label": "length-empty",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "date-minimum",
+            "accepted": true,
+            "expected": true
+          },
+          {
+            "label": "date-before",
+            "accepted": false,
+            "expected": false,
+            "error": "validation [{\"guid\":\"9570149208162653\",\"fields\":{\"Value\":\"Date minimum\"}}]"
+          },
+          {
+            "label": "date-empty",
+            "accepted": true,
+            "expected": true
+          }
+        ]
+      }
+    }
+  ],
+  "scope": "Only supplied reports; no claim of universal Mendix compatibility or untested application behavior."
+}

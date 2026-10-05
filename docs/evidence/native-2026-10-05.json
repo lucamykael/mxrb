@@ -88,5 +88,20 @@
     "runtime_source": "passed",
     "runtime_roundtrip": "passed",
     "pull_request": 104
+  },
+  "expanded_hosted_ci": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/37342564686",
+    "status": "passed",
+    "build_count": 8,
+    "core_crud_variants": [
+      "source",
+      "roundtrip"
+    ],
+    "validation_cases_per_variant": 21,
+    "validation_variants": [
+      "source",
+      "roundtrip"
+    ],
+    "pull_request": 105
   }
 }
