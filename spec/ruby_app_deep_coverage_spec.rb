@@ -886,7 +886,7 @@ RSpec.describe 'Ruby application internal contracts' do
 
   it 'wires scheduled microflows through the native bridge executor' do
     project = double(close: nil, all_units: [])
-    store = double(close: nil)
+    store = double(close: nil, on: nil)
     interpreter = double
     allow(interpreter).to receive(:call).with('M.Tick').and_return(:done)
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)

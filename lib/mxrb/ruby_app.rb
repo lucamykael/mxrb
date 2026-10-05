@@ -26,6 +26,7 @@ require_relative 'ruby_app/presentation_contracts'
 require_relative 'ruby_app/async_invocations'
 require_relative 'ruby_app/file_content'
 require_relative 'ruby_app/record_inheritance'
+require_relative 'ruby_app/record_validation'
 require_relative 'runtime/xpath'
 require_relative 'http/server'
 
@@ -242,7 +243,7 @@ module Mxrb
     # Per-process registry populated by conventional app/**/*.rb files.
     module Registry
       ADAPTER_KINDS = %i[
-        app_service web_service import_xml import_mapping export_mapping document
+        app_service web_service import_xml import_mapping export_mapping document regular_expression
       ].freeze
       COLLECTIONS = {
         constant: :@constants, enumeration: :@enumerations, record: :@records,
@@ -2683,6 +2684,8 @@ module Mxrb
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
         register_record_hooks(record_hooks)
+        validator = RecordValidation.new(record_hooks, @store)
+        @store.on(:before_commit) { |value| validator.call(value) }
         @scheduler = Runtime::Scheduler.new(
           @project,
           executor: lambda { |name, **_metadata|
@@ -3510,6 +3513,8 @@ module Mxrb
         render_json(response, 403, error('forbidden', e.message))
       rescue NotFoundError => e
         render_json(response, 404, error('not_found', e.message))
+      rescue RecordValidationError => e
+        render_json(response, 422, error('validation_failed', e.message).merge(validation: e.errors))
       rescue NativeRuntimeError => e
         render_json(response, 422, error('runtime_error', e.message))
       end

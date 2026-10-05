@@ -176,6 +176,16 @@ module Mxrb
         end
       end
 
+      # Uses durable rows, including writes earlier in this transaction, rather
+      # than unrelated uncommitted drafts held in the identity map.
+      def unique_value?(entity, member, value, except_id)
+        schema.concrete_entities(entity).none? do |definition|
+          column = definition.columns.find { _1.name == member }
+          sql = "SELECT 1 FROM #{quote(definition.table)} WHERE #{quote(column.sql_name)} IS ? AND id != ? LIMIT 1"
+          database.get_first_value(sql, [serialize(value, column.type), except_id])
+        end
+      end
+
       def commit(value = nil, events: true)
         values = value.nil? ? dirty_values : Array(value)
         transient, persistent = values.compact.partition { transient?(_1.entity) }
@@ -195,13 +205,16 @@ module Mxrb
       end
 
       def transaction
+        owner = !database.transaction_active?
+        return yield self unless owner
+
         begin_transaction
         result = yield self
         finish_manual_transaction
         detach_uncommitted
         result
       rescue Exception # rubocop:disable Lint/RescueException
-        rollback if @manual_transaction
+        rollback if owner && @manual_transaction
         raise
       end
 

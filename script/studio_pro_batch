@@ -11,7 +11,8 @@ module StudioProBatch
   FIXTURES = {
     'contracts' => 'ruby_page_contracts',
     'presentation' => 'native_presentation_widgets',
-    'core-widgets' => 'ruby_frontend_core_widgets'
+    'core-widgets' => 'ruby_frontend_core_widgets',
+    'validation' => 'native_validation_rules'
   }.freeze
 
   module_function

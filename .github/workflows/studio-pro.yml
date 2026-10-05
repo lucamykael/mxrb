@@ -6,6 +6,7 @@ on:
       - '.github/workflows/studio-pro.yml'
       - 'script/studio_pro_*'
       - 'spec/fixtures/native_presentation_widgets/**'
+      - 'spec/fixtures/native_validation_rules/**'
       - 'spec/fixtures/ruby_page_contracts/**'
       - 'spec/fixtures/ruby_frontend_core_widgets/**'
       - 'lib/mxrb/writer*'
@@ -34,6 +35,19 @@ jobs:
           bundler-cache: true
       - name: Generate original and Ruby round-trip projects
         run: bundle exec ruby script/studio_pro_batch "${RUNNER_TEMP}/native-batch"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Compile TypeScript browser scenario
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+          import { stripTypeScriptTypes } from 'node:module';
+          const output = `${process.env.RUNNER_TEMP}/native-batch/scenarios`;
+          mkdirSync(output);
+          writeFileSync(`${output}/validation.js`, stripTypeScriptTypes(
+            readFileSync('spec/fixtures/native_validation_rules/scenario.ts', 'utf8')));
+          JS
       - uses: actions/upload-artifact@v4
         with:
           name: native-inputs
@@ -88,6 +102,20 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
           if ($failed) { throw 'Native Runtime/browser acceptance failed; inspect both evidence reports' }
+      - name: Verify inherited validation rules against native Runtime
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($variant in @('source', 'roundtrip')) {
+            $label = "validation-$variant"
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./script/studio_pro_runtime.ps1 `
+              -Package "$env:RUNNER_TEMP/native-batch/results/$label/$label.mda" `
+              -ToolRoot "$env:RUNNER_TEMP/mxbuild" -JavaHome "$env:JAVA_HOME" `
+              -EvidenceDirectory "$env:RUNNER_TEMP/native-batch/results/runtime-$label" `
+              -ScenarioPath "$env:RUNNER_TEMP/native-batch/scenarios/validation.js"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw 'Native validation acceptance failed; inspect both evidence reports' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
