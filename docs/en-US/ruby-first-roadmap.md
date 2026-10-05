@@ -1,5 +1,40 @@
 # MXRB: Ruby above all
 
+## October 5, 2026 update
+
+The runtime catalog discovers new models, DTOs, pages, enumerations and services
+from loaded Ruby files without hand-editing the manifest. Applications marked
+`runtime_model: ruby` run without opening an MPR; legacy exports must be exported
+again to adopt this contract. Deleting or renaming legacy catalog entries still
+requires explicit reconciliation.
+
+UI policy now combines module roles and visibility/editability expressions with
+inherited Data View restrictions. Unknown roles cannot grant access. Server
+permissions remain authoritative. XPath includes string/date functions, period
+keywords and session time zones, with calendar month/year boundaries and DST
+tests. This does not establish universal database or native-function parity.
+
+Persistent and transient callbacks reach subtypes. Inherited validation rules
+now enforce required values, uniqueness across subtype tables, equality,
+inclusive ranges and UTF-16 length at commits with events. Rejected transactions
+roll back and HTTP returns structured 422 feedback. JVM regular expressions need
+an explicit `regular_expression` adapter; unsupported rules fail explicitly.
+A 21-case matrix matched native Runtime: see the
+[parity evidence](../evidence/validation-parity-2026-10-05.json). Equality uses
+`Value` in native storage. Date-only bounds were certified; Runtime 11.12.1
+rejected a bound with time that MxBuild accepted, so that variant is not certified.
+
+Edited VetClinic Ruby sources passed service creation, a new model column,
+page projection, persistence after reopening, rollback and deletion with MPR
+access forbidden ([evidence](../evidence/vetclinic-ruby-2026-10-05.json)). Native
+lifecycle callbacks now share the API transaction.
+
+[Windows certification](windows-studio-pro.md) passed six local native builds
+and official Runtime CRUD. VetClinic passed themed rendering and native client
+API CRUD. The [report](../evidence/native-2026-10-05.json) distinguishes this from
+complete form, theme, external-widget, custom Java/JS and mobile-layout parity.
+The weekly workflow adds native builds and headless runtime acceptance.
+
 [Português](../pt-BR/ruby-first-roadmap.md) · **English** · [Deutsch](../de-DE/ruby-first-roadmap.md)
 
 ## Architectural principle

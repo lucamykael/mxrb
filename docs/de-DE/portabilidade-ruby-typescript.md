@@ -1,5 +1,42 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Aktualisierung vom 5. Oktober 2026
+
+Der Runtime-Katalog erkennt neue Modelle, DTOs, Seiten, Enumerationen und Dienste
+aus geladenen Ruby-Dateien ohne manuelle Manifeständerungen. Anwendungen mit
+`runtime_model: ruby` laufen ohne MPR-Zugriff; ältere Exporte müssen dafür erneut
+exportiert werden. Löschen und Umbenennen alter Katalogeinträge erfordern noch
+einen ausdrücklichen Abgleich.
+
+UI-Regeln kombinieren Modulrollen und Sichtbarkeits-/Editierbarkeitsausdrücke mit
+geerbten Data-View-Einschränkungen. Unbekannte Rollen gewähren keinen Zugriff;
+Serverberechtigungen bleiben maßgeblich. XPath unterstützt zusätzliche String-
+und Datumsfunktionen, Perioden und Sitzungszeitzonen, einschließlich kalender-
+gerechter Monats-/Jahresgrenzen und DST-Tests. Das belegt keine universelle
+Gleichheit aller Datenbanken und nativen Funktionen.
+
+Persistente und transiente Callbacks erreichen Untertypen. Geerbte Validierungen
+prüfen Pflichtwerte, Eindeutigkeit über Untertyptabellen, Gleichheit, inklusive
+Intervalle und UTF-16-Länge beim Commit mit Events. Fehler rollen Transaktionen
+zurück und liefern strukturiertes HTTP-422-Feedback. JVM-Regulärausdrücke brauchen
+einen expliziten `regular_expression`-Adapter; unbekannte Regeln werden abgelehnt.
+Eine Matrix aus 21 Fällen stimmt mit der nativen Runtime überein
+([Evidenz](../evidence/validation-parity-2026-10-05.json)). Gleichheit verwendet
+`Value` im nativen Speicher. Datumsgrenzen ohne Uhrzeit sind geprüft; eine von
+MxBuild akzeptierte Grenze mit Uhrzeit wurde beim Runtime-Start abgelehnt.
+
+Geänderte VetClinic-Ruby-Quellen bestanden Dienstausführung, neue Modellspalte,
+Seitenprojektion, Persistenz nach Neustart, Rollback und Löschen bei verbotenem
+MPR-Zugriff ([Evidenz](../evidence/vetclinic-ruby-2026-10-05.json)). Native
+Lifecycle-Callbacks teilen jetzt die API-Transaktion.
+
+Die [Windows-Zertifizierung](windows-studio-pro.md) bestand sechs lokale native
+Builds und CRUD in der offiziellen Runtime. VetClinic bestand Darstellung mit
+Theme und native Client-API-CRUD. Der [Bericht](../evidence/native-2026-10-05.json)
+grenzt dies von vollständiger Formular-, Theme-, Fremdwidget-, Java/JS- und
+Mobil-Layout-Parität ab. Der wöchentliche Workflow ergänzt native Builds und
+Headless-Runtime-Prüfungen.
+
 ## Hauptrichtung: Mendix → Ruby + React/TypeScript
 
 Ziel ist ein editierbares Ruby-Backend mit React/TypeScript-Frontend ohne Mendix-
@@ -7,8 +44,8 @@ Runtime. Die Rückübersetzung in ein MPR ist ein zusätzlicher Vertrag.
 `runtime_only` bedeutet nicht uneditierbar. `portability --require-native` prüft
 Ruby → Mendix, nicht die Vollständigkeit der Konvertierung nach Ruby.
 
-Die Ruby-Runtime liest weiterhin eine interne MPR-Kopie für Metadaten und davon
-abhängige Graphen. Ohne JVM/Mendix-Runtime bedeutet noch nicht ohne MPR-Baseline.
+Alte Exporte können weiterhin eine interne MPR-Kopie lesen. Neue Exporte mit
+`runtime_model: ruby` erzeugen das Laufzeitmodell aus Ruby-Definitionen.
 Nicht übersetzte Varianten, Custom Actions ohne Adapter und nicht unterstützte
 Widgets bleiben offene Konvertierungslücken.
 
@@ -17,7 +54,7 @@ Maximallänge, ARIA-Label/Pflichtkennzeichnung, Tab-Reihenfolge und Autocomplete
 werden als Ruby-Seitenoptionen exportiert. Änderungen in `app/pages/**/*.rb`
 wirken ohne MPR-Neukompilierung. Verschachtelte Data Views können eine gesperrte
 übergeordnete View nicht entsperren. Unbekannte Bedingungen bleiben gesperrt;
-rollenbasierte/native Varianten benötigen noch eine Übersetzung. Backend-
+Modulrollen werden gemeinsam mit unterstützten Ausdrücken geprüft. Backend-
 Autorisierung bleibt unabhängig von dieser UI-Steuerung.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf

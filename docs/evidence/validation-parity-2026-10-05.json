@@ -1,0 +1,132 @@
+{
+  "status": "passed",
+  "native_package_sha256": "c0cc932095f0306202740a43cc3240c765575f08b120a9a4f368c53a109a7143",
+  "cases": [
+    {
+      "label": "required-blank",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "required-unicode-space",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "required-nonbreaking-space",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "required-figure-space",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "required-zero-width-space",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "unique-first-child",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "unique-across-sibling",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "range-minimum",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "range-maximum",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "range-below",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "range-above",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "range-empty",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "equals-match",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "equals-mismatch",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "equals-empty",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "length-two-utf16",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "length-three-utf16",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "length-empty",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "date-minimum",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    },
+    {
+      "label": "date-before",
+      "ruby_accepted": false,
+      "native_accepted": false,
+      "passed": true
+    },
+    {
+      "label": "date-empty",
+      "ruby_accepted": true,
+      "native_accepted": true,
+      "passed": true
+    }
+  ]
+}

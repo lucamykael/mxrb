@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-05",
+  "scope": "Local Windows USB VM; Studio Pro and MxBuild 11.12.1; isolated Xvfb/RDP desktop",
+  "implementation_commits": [
+    "35c198a",
+    "360befe",
+    "babc0f1"
+  ],
+  "build_status": "completed",
+  "builds": [
+    {
+      "label": "contracts-source",
+      "status": "completed",
+      "mpr_sha256": "d3c74132c950d39308626cb30c24d66ae50282c30b07cc742109913f25790c3a",
+      "mxunit_count": 0,
+      "exit_code": 0
+    },
+    {
+      "label": "contracts-roundtrip",
+      "status": "completed",
+      "mpr_sha256": "5729c44ff16af7d37beb78fbecf518136374c24089b0042ab862375431010d7b",
+      "mxunit_count": 14,
+      "exit_code": 0
+    },
+    {
+      "label": "presentation-source",
+      "status": "completed",
+      "mpr_sha256": "761c0ce1d119640ebe5b689550729d4536d74e255331252b4379a4947c7f1295",
+      "mxunit_count": 0,
+      "exit_code": 0
+    },
+    {
+      "label": "presentation-roundtrip",
+      "status": "completed",
+      "mpr_sha256": "eb1e59dc90574f750b7af652b2e78b9b7d0841dc163c37c02240a5864ff50b88",
+      "mxunit_count": 15,
+      "exit_code": 0
+    },
+    {
+      "label": "core-widgets-source",
+      "status": "completed",
+      "mpr_sha256": "2fb5018abae561db3ab58569b872558d8e2202ab7489b476e188cbc9d98f5ce9",
+      "mxunit_count": 0,
+      "exit_code": 0
+    },
+    {
+      "label": "core-widgets-roundtrip",
+      "status": "completed",
+      "mpr_sha256": "6056939b946afd19699ee0bca6d3bede165a1ba04dd872426fb084ce138bf8a7",
+      "mxunit_count": 12,
+      "exit_code": 0
+    }
+  ],
+  "runtime": {
+    "status": "passed",
+    "package_sha256": "234b8f3c45a291646bd3f202764ca582da1b49f955a9fdc4a010afc164aaa44f",
+    "http_status": 200,
+    "page_ready": true,
+    "crud": {
+      "steps": [
+        "create",
+        "read",
+        "update",
+        "delete"
+      ],
+      "status": "passed"
+    }
+  },
+  "tamper_probe": {
+    "rejected_before_build": true,
+    "error": "Transported file SHA256 mismatch: mprcontents/b7/74/b7744caa-84e6-4c5c-ba8e-4b47e5936806.mxunit"
+  },
+  "manual_checks": [
+    "Contracts popup arguments, shared child context, close_count=2, asynchronous completion",
+    "VetClinic original and Ruby round-trip native builds",
+    "VetClinic themed page render, native client API CRUD and empty grid after real navigation"
+  ],
+  "limits": [
+    "Native GUI checks do not certify every theme, mobile layout or widget variant",
+    "Native CRUD uses mx.data; it is not a form-button acceptance test",
+    "Legacy presentation renderer fixture is broader than Mendix 11 React page validity",
+    "Hosted CI is tracked separately in GitHub Actions"
+  ],
+  "hosted_ci": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/37339093309",
+    "status": "passed",
+    "build_count": 6,
+    "runtime_source": "passed",
+    "runtime_roundtrip": "passed",
+    "pull_request": 104
+  }
+}
