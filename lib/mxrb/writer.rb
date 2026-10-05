@@ -5532,7 +5532,7 @@ module Mxrb
 
       nested = semantic[:properties]
       option = semantic[:option]
-      return value if option.nil? && !nested.is_a?(Array)
+      return value if option.nil? && !nested.is_a?(Array) && semantic[:toggle] != true
 
       property_value = {
         '$ID' => semantic[:value_id].to_s.empty? ? SecureRandom.uuid : semantic[:value_id].to_s
@@ -5544,6 +5544,8 @@ module Mxrb
             nested.map { data_view_design_property_doc(_1) }, marker: 2
           )
         )
+      elsif semantic[:toggle] == true
+        property_value['$Type'] = 'Forms$ToggleDesignPropertyValue'
       else
         property_value.merge!(
           '$Type' => 'Forms$OptionDesignPropertyValue', 'Option' => option.to_s

@@ -1,5 +1,20 @@
 # MXRB: Ruby above all
 
+## Typed presentation properties
+
+Design toggles now use `design_property "Phone", toggle: true`, including nested
+groups. Remove the declaration to disable it; `toggle: false` is rejected because
+the native value has no disabled state. Identities stay private. Legacy widget
+schemas support `phonegap_enabled true` or `false`, preserving absence separately.
+FirstMedix TreeNode properties now emit typed declarations instead of a generic hash.
+
+All eight projects pass the public source audit and reconstruct valid, identical
+MPRs without the Mendix sidecar. Stale hashes in SLA and RubyBridgeSandbox are
+repaired only in temporary copies. All 45 FirstMedix widget schemas preserve their
+bytes. These changes close the two representation gaps found in the previous
+audit; they do not certify PhoneGap execution or every visual behavior.
+See the [evidence](../evidence/presentation-source-contracts-2026-10-05.json).
+
 ## Auxiliary presentation files
 
 Layouts and snippets use temporary storage while converting to typed
@@ -9,8 +24,8 @@ and fragments required elsewhere remain intact. Reconstruction tests compare
 the MPR content; file counts are not proof of runtime compatibility.
 
 The expanded source audit identified two other generic representations: design
-property toggles in SLA and a legacy TreeNode schema field in FirstMedix. These
-remain separate from the eliminated intermediate files.
+property toggles in SLA and a legacy TreeNode schema field in FirstMedix. Both
+are resolved by the implementation described above.
 See the [audit](../evidence/presentation-fragments-2026-10-05.json).
 
 ## Persistent page objects before commit
@@ -40,7 +55,7 @@ file. Counting BSON files as uneditable documents therefore overstated the gap.
 The 13 generic cases were 12 collection-icon menus and the signature of
 `NativeMobileActions.RegisterDeepLink`.
 
-Menus now emit `icon: { collection: "Module.Collection.Icon" }`. Adding, changing,
+Menus now emit `icon: collection_icon("Module.Collection.Icon")`. Adding, changing,
 switching to glyphs and removing icons preserves item identities. Native defaults
 and BSON collection markers survive reconstruction without reviving removed
 items. JavaScript action parameters support `kind: :nanoflow` with stable IDs.
@@ -53,8 +68,8 @@ contract in source and roundtrip variants; it does not execute the callback or
 certify native deep-link integration.
 
 Fresh exports of all eight projects contain no generic `native_document` or
-opaque menus. The 112 auxiliary files remain alongside their typed Ruby
-representations. This does not certify every runtime, mobile layout or custom
+opaque menus. The 112 auxiliary files are no longer generated; their typed Ruby
+representations remain editable. This does not certify every runtime, mobile layout or custom
 Java/JavaScript integration. See the
 [editability evidence](../evidence/editability-2026-10-05.json).
 

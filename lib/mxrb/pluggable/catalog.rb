@@ -51,8 +51,12 @@ module Mxrb
     WidgetType = Data.define(
       :id, :name, :description, :prompt, :studio_pro_category,
       :studio_category, :platform, :offline, :needs_context, :plugin,
-      :help_url, :object_type
-    )
+      :help_url, :object_type, :phonegap_enabled
+    ) do
+      def initialize(phonegap_enabled: nil, **attributes)
+        super(**attributes, phonegap_enabled:)
+      end
+    end
 
     # A semantic registry resolves the stable widget id used in Ruby source to
     # its complete embedded/MPK schema. It never exposes physical TypePointers.

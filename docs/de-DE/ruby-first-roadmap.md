@@ -1,5 +1,21 @@
 # MXRB: Ruby über alles
 
+## Typisierte Präsentationseigenschaften
+
+Design-Toggles verwenden jetzt `design_property "Phone", toggle: true`, auch in
+verschachtelten Gruppen. Zum Deaktivieren wird die Deklaration entfernt;
+`toggle: false` wird abgelehnt, da das native Format keinen deaktivierten Wert
+enthält. Identitäten bleiben privat. Alte Widget-Schemas unterstützen
+`phonegap_enabled true` oder `false` und unterscheiden eine fehlende Eigenschaft.
+FirstMedix-TreeNode-Eigenschaften erhalten typisierte Deklarationen.
+
+Alle acht Projekte bestehen die öffentliche Quellcodeprüfung und erzeugen ohne
+Mendix-Sidecar gültige, identische MPRs. Veraltete Hashes in SLA und RubyBridgeSandbox
+werden nur in temporären Kopien repariert. Alle 45 FirstMedix-Widget-Schemas bleiben
+bytegleich. Damit sind die beiden Darstellungslücken der vorherigen Prüfung
+behoben; PhoneGap-Ausführung und sämtliche visuellen Varianten sind nicht zertifiziert.
+Siehe [Nachweis](../evidence/presentation-source-contracts-2026-10-05.json).
+
 ## Zusätzliche Präsentationsdateien
 
 Layouts und Snippets verwenden bei der Umwandlung in typisierte `Mxrb::Forms`-
@@ -11,7 +27,7 @@ Runtime-Kompatibilität.
 
 Die erweiterte Quellcodeprüfung fand zwei weitere generische Darstellungen:
 Design-Property-Toggles in SLA und ein altes TreeNode-Schemafeld in FirstMedix.
-Diese sind von den entfernten Hilfsdateien getrennt zu behandeln.
+Beide wurden mit der oben beschriebenen Implementierung behoben.
 Siehe [Prüfergebnisse](../evidence/presentation-fragments-2026-10-05.json).
 
 ## Persistierbare Seitenobjekte vor dem Commit
@@ -41,7 +57,7 @@ Verweis auf die Hilfsdatei. BSON-Dateien sind daher kein Maß für nicht editier
 Dokumente. Die 13 generischen Fälle waren zwölf Menüs mit Collection-Icons und
 die Signatur von `NativeMobileActions.RegisterDeepLink`.
 
-Menüs exportieren jetzt `icon: { collection: "Modul.Collection.Icon" }`. Icons
+Menüs exportieren jetzt `icon: collection_icon("Modul.Collection.Icon")`. Icons
 lassen sich hinzufügen, ändern, durch Glyphen ersetzen und entfernen; die
 Identitäten der Menüeinträge bleiben erhalten. Native Standardfelder und
 BSON-Listenmarker bleiben beim Neuaufbau erhalten, entfernte Einträge bleiben
@@ -55,8 +71,8 @@ im Original und nach dem Neuaufbau; er führt den Callback nicht aus und
 zertifiziert keine native Deep-Link-Integration.
 
 Neue Exporte der acht Projekte enthalten weder generische `native_document`-
-Deklarationen noch opake Menüs. Die 112 Hilfsdateien bleiben neben den typisierten
-Ruby-Deklarationen erhalten. Das belegt keine vollständige Laufzeit-, Mobile-
+Deklarationen noch opake Menüs. Die 112 Hilfsdateien werden nicht mehr erzeugt; die typisierten
+Ruby-Deklarationen bleiben editierbar. Das belegt keine vollständige Laufzeit-, Mobile-
 oder Java/JavaScript-Kompatibilität. Siehe
 [Nachweis der Editierbarkeit](../evidence/editability-2026-10-05.json).
 

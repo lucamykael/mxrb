@@ -2615,6 +2615,8 @@ module Mxrb
 
         if value.key?('option')
           value.keys.sort == %w[id key option value_id] && value.fetch('option').is_a?(String)
+        elsif value.key?('toggle')
+          value.keys.sort == %w[id key toggle value_id] && value.fetch('toggle') == true
         elsif value.key?('properties')
           value.keys.sort == %w[id key properties value_id] &&
             value.fetch('properties').is_a?(Array) && value.fetch('properties').any? &&
@@ -2628,6 +2630,11 @@ module Mxrb
         arguments = [value.fetch('key').inspect]
         if value.key?('option')
           arguments << "option: #{value.fetch('option').inspect}"
+          return runtime_widget_declaration('design_property', arguments, indentation, false)
+        end
+
+        if value.key?('toggle')
+          arguments << 'toggle: true'
           return runtime_widget_declaration('design_property', arguments, indentation, false)
         end
 

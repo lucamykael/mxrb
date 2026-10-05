@@ -1,0 +1,120 @@
+{
+  "date": "2026-10-05",
+  "scope": "Typed design toggles and legacy PhoneGap schema metadata; eight-project public source reconstruction",
+  "projects": [
+    {
+      "project": "CourseManager",
+      "source_sha256": "56edd93fe9791c5430cddafe17ffab30da75aa844c4c3e198ec51b68b76a7861",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "LearnNow Trainning Management",
+      "source_sha256": "91b5a971639aad53df4e58311991c119dc2ae82eec66846a0c3d9564bd6ee093",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "MyFirstModule",
+      "source_sha256": "728d4f6882452b43505540a976d1d2f31c8960d3e500a2edc1e3c04f63d29972",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "RubyBridgeSandbox",
+      "source_sha256": "04fe01bab020f4133a6f7708b453bfa924414299026ce8b84cc692adb5527faa",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 2,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "SLATaskApp",
+      "source_sha256": "772533ea96ae55a021d3e222a33cd04c4f8aac02414044b86e327279be0d3b15",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 1,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "VetClinic",
+      "source_sha256": "c0e6048d024b315211a6eaf8e620be25ade645be9f488809183c1f2caffdd9a9",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "FirstMedix App",
+      "source_sha256": "a40e6ccb4288ffca695ab6137ff15bbf3c81e562d0dfc196bc51a0a01a9b2262",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    },
+    {
+      "project": "Sudoku",
+      "source_sha256": "e1efffd88259faf6454d0444cfeb33b16f6131678b6678a5053092b879d6c91e",
+      "original_unchanged": true,
+      "public_source": {},
+      "valid": true,
+      "identical": true,
+      "temporary_hash_repairs": 0,
+      "auxiliary_fragment_files": 0,
+      "generic_native_document_files": 0
+    }
+  ],
+  "embedded_schemas": {
+    "scope": "embedded_pluggable_schema_round_trip",
+    "passed": true,
+    "units": 346,
+    "widgets": 45,
+    "schemas_equal": 45,
+    "schemas_byte_equal": 45,
+    "failures": []
+  },
+  "ruby": {
+    "examples": 2273,
+    "lines": {
+      "covered": 40744,
+      "total": 40744,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17811,
+      "total": 17811,
+      "percent": 100.0
+    }
+  },
+  "limitations": [
+    "This certifies source representation and reconstruction, not PhoneGap runtime execution or every visual variant.",
+    "Stale contents hashes in SLA and RubyBridgeSandbox were repaired only in temporary copies. Original projects were unchanged."
+  ]
+}

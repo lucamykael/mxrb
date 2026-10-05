@@ -1,5 +1,21 @@
 # MXRB: Ruby acima de tudo
 
+## Propriedades de apresentação tipadas
+
+Os toggles de design agora usam `design_property "Phone", toggle: true`, inclusive
+em grupos. Para desativar, remova a declaração; `toggle: false` é rejeitado para
+não representar um estado inexistente no formato nativo. IDs permanecem privados.
+O esquema legado de widgets aceita `phonegap_enabled true` ou `false`, distinguindo
+explicitamente a ausência da propriedade. O TreeNode do FirstMedix deixa de emitir
+um hash genérico em suas propriedades.
+
+Os oito projetos passam na auditoria pública e na reconstrução válida e idêntica
+sem o sidecar Mendix. Hashes antigos do SLA e RubyBridgeSandbox são reparados
+somente em cópias temporárias. Os 45 esquemas de widgets do FirstMedix preservam
+os bytes. Isso fecha as duas lacunas de representação encontradas na auditoria
+anterior; não certifica execução de PhoneGap nem todos os comportamentos visuais.
+Veja a [evidência](../evidence/presentation-source-contracts-2026-10-05.json).
+
 ## Arquivos auxiliares da apresentação
 
 Layouts e snippets usam armazenamento temporário durante a conversão para
@@ -11,7 +27,7 @@ metadados binários em prova de compatibilidade de runtime.
 
 A verificação ampliada de fontes encontrou duas representações ainda genéricas:
 toggles de propriedades de design no SLA e um atributo legado do esquema TreeNode
-no FirstMedix. São pendências distintas dos arquivos auxiliares eliminados.
+no FirstMedix. Ambas foram corrigidas pela implementação descrita acima.
 Veja a [auditoria](../evidence/presentation-fragments-2026-10-05.json).
 
 ## Objetos de página persistíveis sem commit
@@ -43,7 +59,7 @@ restante ao arquivo auxiliar. Portanto, contar arquivos BSON como documentos
 não editáveis superestimava a pendência. Os 13 casos genéricos eram 12 menus com
 ícones de coleção e a assinatura `NativeMobileActions.RegisterDeepLink`.
 
-Menus agora exportam `icon: { collection: "Modulo.Colecao.Icone" }`; adicionar,
+Menus agora exportam `icon: collection_icon("Modulo.Colecao.Icone")`; adicionar,
 alterar, trocar por glyph e remover ícones preserva a identidade dos itens.
 Defaults nativos e marcadores BSON sobrevivem ao round-trip sem restaurar itens
 removidos. Parâmetros de ações JavaScript aceitam `kind: :nanoflow`, mantendo os
@@ -57,8 +73,8 @@ e callback na origem e após reconstrução; o callback não é executado e não
 certifica integração de deep links nativos.
 
 A nova exportação dos oito projetos não contém `native_document` genérico nem
-menus opacos. Os 112 arquivos auxiliares continuam presentes, com declarações
-Ruby tipadas correspondentes; isso não certifica todas as variantes de runtime,
+menus opacos. Os 112 arquivos auxiliares deixaram de ser gerados; as declarações
+Ruby tipadas permanecem editáveis; isso não certifica todas as variantes de runtime,
 layouts móveis ou integrações Java/JavaScript. Veja a
 [evidência de editabilidade](../evidence/editability-2026-10-05.json).
 

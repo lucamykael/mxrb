@@ -1084,10 +1084,10 @@ module Mxrb
 
       def design_properties(*values) = (@design_properties = values.flatten)
 
-      def design_property(key, option: UNSET, id: nil, value_id: nil, &block)
+      def design_property(key, option: UNSET, toggle: UNSET, id: nil, value_id: nil, &block)
         builder = DesignPropertyBuilder.new
         @design_properties << builder.build(
-          key, option:, id:, value_id:, &block
+          key, option:, toggle:, id:, value_id:, &block
         )
       end
 
@@ -1152,22 +1152,24 @@ module Mxrb
 
       def initialize = (@properties = [])
 
-      def design_property(key, option: UNSET, id: nil, value_id: nil, &block)
-        @properties << build(key, option:, id:, value_id:, &block)
+      def design_property(key, option: UNSET, toggle: UNSET, id: nil, value_id: nil, &block)
+        @properties << build(key, option:, toggle:, id:, value_id:, &block)
       end
 
-      def build(key, option: UNSET, id: nil, value_id: nil, &block)
-        if block && !option.equal?(UNSET)
-          raise ArgumentError, 'design property accepts either option: or a nested block'
-        end
-        raise ArgumentError, 'design property requires option: or a nested block' if
-          !block && option.equal?(UNSET)
+      def build(key, option: UNSET, toggle: UNSET, id: nil, value_id: nil, &block)
+        choices = [!option.equal?(UNSET), !toggle.equal?(UNSET), !block.nil?].count(true)
+        raise ArgumentError, 'design property accepts either option:, toggle: true or a nested block' if choices > 1
+        raise ArgumentError, 'design property requires option:, toggle: true or a nested block' if choices.zero?
+        raise ArgumentError, 'design property toggle must be true; remove the declaration to disable it' if
+          !toggle.equal?(UNSET) && toggle != true
 
         value = { key: key.to_s, id: id&.to_s, value_id: value_id&.to_s }
         if block
           nested = self.class.new
           nested.instance_eval(&block)
           value[:properties] = nested.properties
+        elsif toggle == true
+          value[:toggle] = true
         else
           value[:option] = option.to_s
         end

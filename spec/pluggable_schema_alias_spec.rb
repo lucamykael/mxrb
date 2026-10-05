@@ -123,16 +123,15 @@ RSpec.describe 'Pluggable schema storage aliases' do
     expect(codec.decode(rebuilt).object.fetch(:caption)).to eq('After')
   end
 
-  it 'rejects the unrepresented PhoneGap field rather than silently dropping it' do
+  it 'preserves the represented PhoneGap field in legacy schemas' do
     node = Mxrb::Pluggable.widget(widget_id, catalog: registry)
     baseline = codec.encode(node)
 
     [true, false].each do |enabled|
       baseline.fetch('Type')['WidgetPhoneGapEnabled'] = enabled
-      expect { codec.decode(baseline) }
-        .to raise_error(Mxrb::Pluggable::UnsupportedStoragePropertyError, /WidgetPhoneGapEnabled/)
-      expect { codec.encode(node, baseline:) }
-        .to raise_error(Mxrb::Pluggable::UnsupportedStoragePropertyError, /WidgetPhoneGapEnabled/)
+      decoded = codec.decode(baseline)
+      expect(decoded.widget_type.phonegap_enabled).to eq(enabled)
+      expect(bytes(codec.encode(decoded, baseline:).fetch('Type'))).to eq(bytes(baseline.fetch('Type')))
     end
   end
 end

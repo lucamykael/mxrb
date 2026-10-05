@@ -514,6 +514,8 @@ module Mxrb
         case option['$Type']
         when 'Forms$OptionDesignPropertyValue'
           result.merge(option: option.fetch('Option', ''))
+        when 'Forms$ToggleDesignPropertyValue'
+          result.merge(toggle: true)
         when 'Forms$CompoundDesignPropertyValue'
           properties = parse_array(option['Properties']).map { design_property_spec(_1) }
           return value unless properties.all? { semantic_design_property?(_1) }
@@ -525,7 +527,7 @@ module Mxrb
 
       def semantic_design_property?(value)
         value.is_a?(Hash) && value.key?(:key) &&
-          (value.key?(:option) || value[:properties].is_a?(Array))
+          (value.key?(:option) || value[:toggle] == true || value[:properties].is_a?(Array))
       end
 
       def parse_data_view_source(source)

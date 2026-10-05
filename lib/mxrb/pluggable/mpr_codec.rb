@@ -100,7 +100,7 @@ module Mxrb
           definition.id, definition.name, definition.description, definition.prompt,
           definition.studio_pro_category, definition.studio_category, definition.platform,
           definition.offline, definition.needs_context, definition.plugin, definition.help_url,
-          ObjectType.new((definition.object_type.properties + additions).freeze)
+          ObjectType.new((definition.object_type.properties + additions).freeze), definition.phonegap_enabled
         )
       end
 
@@ -150,13 +150,14 @@ module Mxrb
           boolean(document.fetch('WidgetNeedsEntityContext', document.fetch('NeedsEntityContext', false))),
           boolean(document.fetch('WidgetPluginWidget', document.fetch('PluginWidget', false))),
           document.fetch('HelpUrl', '').to_s.freeze,
-          object_type
+          object_type,
+          document.key?('WidgetPhoneGapEnabled') ? boolean(document.fetch('WidgetPhoneGapEnabled')) : nil
         )
         known = %w[
           $ID $Type WidgetId WidgetName Name WidgetDescription Description Prompt
           StudioProCategory StudioCategory SupportedPlatform OfflineCapable
           WidgetNeedsEntityContext NeedsEntityContext WidgetPluginWidget PluginWidget
-          HelpUrl ObjectType
+          HelpUrl ObjectType WidgetPhoneGapEnabled
         ]
         assert_known!(document, known, path)
         [definition, context]
@@ -361,6 +362,7 @@ module Mxrb
           'WidgetNeedsEntityContext' => widget_type.needs_context,
           'WidgetPluginWidget' => widget_type.plugin, 'ObjectType' => object_type
         }
+        document['WidgetPhoneGapEnabled'] = widget_type.phonegap_enabled unless widget_type.phonegap_enabled.nil?
         [document, context]
       end
 
