@@ -408,7 +408,7 @@ module Mxrb
       def valid_scalar?(property, value)
         schema = Pluggable::ObjectType.new([property].freeze)
         Pluggable::ObjectNode.new(schema).tap do |node|
-          node.set(property.key, value)
+          node.set(property.key, value.nil? ? nil : bridge_value(property, value))
         end
         true
       rescue TypeError, ArgumentError

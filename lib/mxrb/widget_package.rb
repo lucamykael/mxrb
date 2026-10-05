@@ -285,7 +285,7 @@ module Mxrb
     end
 
     # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
-    # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:disable Metrics/MethodLength
     def default_widget_value(value, property)
       case property[:type]
       when 'Boolean' then value['PrimitiveValue'] = property[:default].empty? ? 'false' : property[:default]
@@ -296,13 +296,12 @@ module Mxrb
       when 'Selection'
         value['Selection'] = property[:default].empty? ? property[:selection_types].first || 'None' : property[:default]
       when 'TextTemplate'
-        value['TextTemplate'] = client_template(property[:translations]) \
-          if property[:required] || !property[:default].empty? || !property[:translations].empty?
+        value['TextTemplate'] = client_template(property[:translations]) if property[:data_source].to_s.empty?
       end
       value
     end
     # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
-    # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:enable Metrics/MethodLength
 
     def client_template(translations)
       items = translations.map do |language, value|

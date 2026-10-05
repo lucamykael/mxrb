@@ -97,7 +97,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
     boolean = value_type('Boolean', default: 'false')
     expression = value_type('Expression')
     optional_text = value_type('TextTemplate')
-    expect(default_value(optional_text)['TextTemplate']).to be_nil
+    expect(default_value(optional_text).dig('TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
+    expect(default_value(optional_text.merge('DataSourceProperty' => 'inactive'))['TextTemplate']).to be_nil
     explicit_selection = value_type('Selection', default: 'Multi', selections: %w[Single Multi])
     expect(default_value(explicit_selection)['Selection']).to eq('Multi')
     invalid = default_value(boolean).merge('PrimitiveValue' => 'maybe')

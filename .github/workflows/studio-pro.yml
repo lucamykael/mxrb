@@ -8,6 +8,7 @@ on:
       - 'spec/fixtures/native_presentation_widgets/**'
       - 'spec/fixtures/native_validation_rules/**'
       - 'spec/fixtures/native_compatibility/**'
+      - 'spec/fixtures/frontend_browser/marketplace_chart*'
       - 'spec/fixtures/ruby_page_contracts/**'
       - 'spec/fixtures/ruby_frontend_core_widgets/**'
       - 'lib/mxrb/writer*'
@@ -21,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-native-certification
+  group: windows-native-certification-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -34,7 +35,14 @@ jobs:
         with:
           ruby-version: "4.0"
           bundler-cache: true
+      - name: Fetch pinned compatible chart package
+        run: |
+          git clone --quiet https://github.com/ako/mxcli-sudoku.git "${RUNNER_TEMP}/mxcli-sudoku"
+          git -C "${RUNNER_TEMP}/mxcli-sudoku" checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
+          echo "13e999c4e519dc6baeb783dd8d58b92009338bc4b5c0a3aac3f734d7185b8d1e  ${RUNNER_TEMP}/mxcli-sudoku/Sudoku/widgets/Charts.mpk" | sha256sum --check
       - name: Generate original and Ruby round-trip projects
+        env:
+          MXRB_CHARTS_PACKAGE: ${{ runner.temp }}/mxcli-sudoku/Sudoku/widgets/Charts.mpk
         run: bundle exec ruby script/studio_pro_batch "${RUNNER_TEMP}/native-batch"
       - uses: actions/setup-node@v4
         with:
@@ -46,9 +54,13 @@ jobs:
           import { stripTypeScriptTypes } from 'node:module';
           const output = `${process.env.RUNNER_TEMP}/native-batch/scenarios`;
           mkdirSync(output);
-          for (const [name, fixture] of [['validation', 'native_validation_rules'], ['compatibility', 'native_compatibility']]) {
+          for (const [name, fixture] of [
+            ['validation', 'native_validation_rules/scenario.ts'],
+            ['compatibility', 'native_compatibility/scenario.ts'],
+            ['charts', 'frontend_browser/marketplace_chart_native.ts']
+          ]) {
             writeFileSync(`${output}/${name}.js`, stripTypeScriptTypes(
-              readFileSync(`spec/fixtures/${fixture}/scenario.ts`, 'utf8')));
+              readFileSync(`spec/fixtures/${fixture}`, 'utf8')));
           }
           JS
       - uses: actions/upload-artifact@v4
@@ -105,11 +117,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
           if ($failed) { throw 'Native Runtime/browser acceptance failed; inspect both evidence reports' }
-      - name: Verify validation rules and expression compatibility against native Runtime
+      - name: Verify validation, expressions and chart data against native Runtime
         shell: powershell
         run: |
           $failed = $false
-          foreach ($scenario in @('validation', 'compatibility')) {
+          foreach ($scenario in @('validation', 'compatibility', 'charts')) {
             foreach ($variant in @('source', 'roundtrip')) {
               $label = "$scenario-$variant"
               & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./script/studio_pro_runtime.ps1 `

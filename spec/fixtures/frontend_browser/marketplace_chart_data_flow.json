@@ -1,0 +1,20 @@
+{
+  "name": "marketplace-chart-real-data",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 1000 },
+  "pages": [{
+    "name": "live-chart-data",
+    "path": "/",
+    "steps": [
+      { "wait_for_selector": "input[value='Live chart data']" },
+      { "wait_for_count": { "selector": ".mxrb-marketplace-chart svg", "equals": 3 } },
+      { "wait_for_count": { "selector": ".mxrb-marketplace-chart tbody tr", "equals": 6 } },
+      { "click_text": "Add chart point" },
+      { "wait_for_count": { "selector": ".mxrb-marketplace-chart tbody tr", "equals": 9 } },
+      { "click_selector": { "selector": ".mxrb-marketplace-chart summary", "index": 0 } },
+      { "wait_for_text": "New value" },
+      { "wait_for_absence": "[role=alert]" }
+    ],
+    "selectors": [".mxrb-marketplace-chart", ".mxrb-marketplace-chart svg"]
+  }]
+}

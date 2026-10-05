@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { MarketplaceControl, MarketplaceImage } from './components/MarketplaceControls';
+import { MarketplaceChart } from './components/MarketplaceChart';
 import type { ComponentType, ReactNode } from 'react';
-import type { ApplicationSchema, EntityRecord, RuntimeValue, WidgetDefinition } from '../types';
+import type {
+  ApiRequest,
+  ApplicationSchema,
+  EntityRecord,
+  RuntimeValue,
+  WidgetDefinition,
+} from '../types';
 
 export interface MarketplaceWidgetRegion {
   path: Array<string | number>;
@@ -14,6 +21,8 @@ export interface MarketplaceWidgetProps {
   context: EntityRecord | null;
   children?: ReactNode;
   schema?: ApplicationSchema;
+  request?: ApiRequest;
+  revision?: number;
   onClick?(): unknown;
   regions?: MarketplaceWidgetRegion[];
   onChange(attribute: string | undefined, value: RuntimeValue): unknown;
@@ -160,25 +169,6 @@ const accordion = (
   );
 };
 
-const chart = (name: string, children?: ReactNode) => (
-  <>
-    <figure className="mxrb-marketplace-chart">
-      <svg viewBox="0 0 240 100" role="img" aria-label={name}>
-        <title>{name}</title>
-        <polyline
-          points="8,82 48,55 88,68 128,25 168,42 228,12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="4"
-        />
-        <line x1="8" y1="90" x2="232" y2="90" stroke="currentColor" />
-      </svg>
-      <figcaption>{name}</figcaption>
-    </figure>
-    {children}
-  </>
-);
-
 function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   const { widget, context, children, regions = [], onChange } = props;
   const options = widget.options || {};
@@ -208,7 +198,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
     id.includes('timeseries') ||
     id.includes('heatmap')
   )
-    return chart(name, content);
+    return <MarketplaceChart {...props}>{content}</MarketplaceChart>;
   if (id.includes('progresscircle') || id.includes('progressbar')) {
     const value = numericValue(current ?? localValue, 50);
     return (
