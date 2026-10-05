@@ -1,5 +1,14 @@
 # Windows- und Studio-Pro-Validierung mit Omarchy
 
+Eine weitere Runde bestand zehn Builds: Verträge, Darstellung, Core-Widgets,
+Validierung und Kompatibilität, jeweils als Original und Ruby-Round-trip.
+Zehn Regel- und String-Prüfungen bestanden in der Runtime jedes
+Kompatibilitätspakets. Das Orakel zeigte Fehler bei textuellen Beschriftungen
+von Regelentscheidungen und URL-Kodierung auf; diese wurden korrigiert
+(Leerzeichen `%20`, Stern `%2A`, Tilde `~`). Siehe die
+[Kompatibilitätsnachweise](../evidence/compatibility-2026-10-05.json).
+
+
 ## Geprüft am 5. Oktober 2026
 
 Die vorhandene Windows-VM auf dem USB-Laufwerk wurde mit dem bereits
@@ -51,7 +60,8 @@ Prozesse und verwendet eine temporäre HSQLDB-Datenbank und ein eigenes Edge-Pro
 [Windows native certification](../../.github/workflows/studio-pro.yml) läuft
 wöchentlich, manuell und bei relevanten PRs. Der gehostete Windows-Runner nutzt
 das offizielle MxBuild-Archiv 11.12.1 mit festem SHA-256, JDK 21 und Edge Headless.
-Die aktuelle Matrix prüft acht Builds (einschließlich Validierungsregeln) und startet Original sowie Rekonstruktion des Core-Pakets.
+Die aktuelle Matrix prüft zehn Builds und startet Original sowie Rekonstruktion
+der Pakete für Core-Widgets, Validierung und Kompatibilität.
 Evidenz-Artefakte bleiben 14 Tage verfügbar. Die Studio-Pro-GUI wird dabei nicht
 installiert; visuelle Prüfungen werden separat dokumentiert.
 

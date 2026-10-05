@@ -109,7 +109,7 @@ module Mxrb
         definition = service.native_definition
         return unless definition
 
-        kind = service.native_kind == :nanoflow ? :nanoflow_doc : :microflow_doc
+        kind = { nanoflow: :nanoflow_doc, rule: :rule_doc }.fetch(service.native_kind, :microflow_doc)
         document = @writer.send(kind, definition, module_name)
         model = Model::Microflow.allocate
         model.decode(document)

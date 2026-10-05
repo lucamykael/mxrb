@@ -924,6 +924,8 @@ function WidgetContent({
             widget={widget}
             context={activeRecord}
             regions={marketplaceRegions}
+            schema={schema}
+            onClick={onClick}
             onChange={(attribute, value) => {
               const member = memberName(attribute);
               if (!activeRecord || !member) return Promise.resolve(activeRecord);

@@ -5,19 +5,43 @@ module Mxrb
     # Joins source declarations with legacy metadata without mutating the export manifest.
     class RuntimeCatalog
       COLLECTIONS = { page: 'pages', enumeration: 'enumerations' }.freeze
+      KIND_COLLECTIONS = { record: %w[models dtos], page: %w[pages],
+                           service: %w[services nanoflows], enumeration: %w[enumerations] }.freeze
 
-      def initialize(modules)
+      def initialize(modules, authoritative: false)
         @modules = Marshal.load(Marshal.dump(modules))
+        @authoritative = authoritative
       end
 
       def modules
         %i[record page service enumeration].each do |kind|
           Registry.all(kind).each_value { add(kind, _1) }
         end
+        prune_removed_documents if @authoritative
         @modules
       end
 
       private
+
+      def prune_removed_documents
+        KIND_COLLECTIONS.each do |kind, collections|
+          prune_collections(kind, Registry.all(kind).values, collections)
+        end
+        owners = Registry.all(:record).keys
+        @modules.each do |mod|
+          mod['associations'] = Array(mod['associations']).select { owners.include?(_1['from_entity']) }
+        end
+      end
+
+      def prune_collections(kind, implementations, collections)
+        @modules.each do |mod|
+          collections.each do |key|
+            mod[key] = Array(mod[key]).select do |entry|
+              implementations.any? { collection(kind, _1) == key && same_document?(entry, _1) }
+            end
+          end
+        end
+      end
 
       def add(kind, implementation)
         mod = module_for(implementation.mendix_name.split('.').first)

@@ -12,7 +12,8 @@ module StudioProBatch
     'contracts' => 'ruby_page_contracts',
     'presentation' => 'native_presentation_widgets',
     'core-widgets' => 'ruby_frontend_core_widgets',
-    'validation' => 'native_validation_rules'
+    'validation' => 'native_validation_rules',
+    'compatibility' => 'native_compatibility'
   }.freeze
 
   module_function

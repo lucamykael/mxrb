@@ -3018,7 +3018,7 @@ module Mxrb
         value = reference.to_s
         raise ArgumentError, 'flow node reference cannot be empty' if value.empty?
 
-        activity[:node_ref] = value
+        _acts[-1] = activity.merge(node_ref: value)
       end
 
       def annotation_flow(from:, to:, origin_index: 1, destination_index: 0,

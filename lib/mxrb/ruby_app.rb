@@ -1375,7 +1375,7 @@ module Mxrb
         @entries = {}
         @registered = manifest.modules.flat_map do |mod|
           { 'services' => 'Microflows$Microflow', 'nanoflows' => 'Microflows$Nanoflow' }.flat_map do |key, native_type|
-            Array(mod[key]).map { [_1.fetch('id').to_s, native_type] }
+            Array(mod[key]).map { [_1.fetch('id').to_s, _1['kind'] == 'rule' ? 'Microflows$Rule' : native_type] }
           end
         end.to_set
         path = File.join(manifest.root, '.mxrb', 'semantic_metadata.json')
@@ -1426,18 +1426,19 @@ module Mxrb
 
         # Declares how this Ruby service materializes as a Mendix flow. The
         # typed block is ordinary editable Ruby and supports both runtimes.
-        def flow(kind = :microflow, public: false, &block)
+        def flow(kind = :microflow, public: false, export_level: 'Hidden', &block)
           qualified = require_qualified_mendix_name!
           runtime, flow_kind = case kind.to_sym
-                               when :microflow then %i[server use_case]
+                               when :microflow, :rule then %i[server use_case]
                                when :nanoflow then %i[client client_action]
                                else
-                                 raise ArgumentError, 'flow kind must be microflow or nanoflow'
+                                 raise ArgumentError, 'flow kind must be microflow, nanoflow or rule'
                                end
           unit_id = native_unit_id(kind)
           SourceIdentity.validate_flow!(self, kind)
           @mendix_id = unit_id if @mendix_id.to_s.empty?
-          native_type = kind.to_sym == :nanoflow ? 'Microflows$Nanoflow' : 'Microflows$Microflow'
+          native_type = { microflow: 'Microflows$Microflow', nanoflow: 'Microflows$Nanoflow',
+                          rule: 'Microflows$Rule' }.fetch(kind.to_sym)
           builder = Dsl::FlowBuilder.new(
             qualified.split('.', 2).last,
             runtime:, kind: flow_kind, public:, unit_id:, metadata: FlowMetadata.for(unit_id, native_type)
@@ -1446,6 +1447,8 @@ module Mxrb
           FlowMetadata.validate!(unit_id, native_type, builder)
           @native_kind = kind.to_sym
           @native_definition = builder.to_h
+          @native_definition[:export_level] = export_level.to_s if kind.to_sym == :rule
+          @native_definition
         end
 
         # Compatibility for Ruby applications exported before `flow` became
@@ -2208,7 +2211,8 @@ module Mxrb
       private
 
       def runtime_schema_modules
-        RuntimeCatalog.new(manifest.modules).modules.map do |mod|
+        RuntimeCatalog.new(manifest.modules,
+                           authoritative: manifest.data['runtime_model'] == 'ruby').modules.map do |mod|
           enumerations = mod.fetch('enumerations', []).map do |definition|
             implementation = Registry.fetch(:enumeration, definition.fetch('name'))
             next definition unless implementation
@@ -3073,6 +3077,7 @@ module Mxrb
                                                     .map(&:native_definition),
                          nanoflows: module_services.select { _1.native_kind == :nanoflow }
                                                    .map(&:native_definition),
+                         rules: module_services.select { _1.native_kind == :rule }.map(&:native_definition),
                          navigation_items: module_pages.filter_map(&:navigation_definition)
           )
         end

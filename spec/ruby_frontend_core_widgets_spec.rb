@@ -44,7 +44,7 @@ RSpec.describe 'Ruby frontend core widget source' do # rubocop:disable Metrics/B
   it 'projects current enumeration values with localization fallbacks and retains legacy metadata' do
     application = Mxrb::RubyApp::Application.allocate
     definitions = [{ 'name' => 'App.Status', 'values' => [{ 'name' => 'Old' }] }, { 'name' => 'Legacy.Status' }]
-    manifest = instance_double(Mxrb::RubyApp::Manifest, modules: [{ 'enumerations' => definitions }, {}])
+    manifest = instance_double(Mxrb::RubyApp::Manifest, data: {}, modules: [{ 'enumerations' => definitions }, {}])
     allow(application).to receive(:manifest).and_return(manifest)
     implementation = double(values: [
                               { name: 'Translated', id: '1', captions: { 'pt_BR' => 'Traduzido' } },

@@ -210,6 +210,15 @@ module Mxrb
 
         def invoke(name, arguments)
           case name.downcase
+          when 'length' then arguments.fetch(0).to_s.encode('UTF-16LE').bytesize / 2
+          when 'trim' then arguments.fetch(0).to_s.gsub(/\A[\x00-\x20]+|[\x00-\x20]+\z/, '')
+          when 'tolowercase' then arguments.fetch(0).to_s.downcase
+          when 'touppercase' then arguments.fetch(0).to_s.upcase
+          when 'urlencode' then URI::RFC2396_PARSER.escape(arguments.fetch(0).to_s, /[^A-Za-z0-9\-._~]/)
+          when 'urldecode' then URI.decode_www_form_component(arguments.fetch(0).to_s)
+          when 'addseconds' then arguments.fetch(0) + arguments.fetch(1)
+          when 'addminutes' then arguments.fetch(0) + (arguments.fetch(1) * 60)
+          when 'adddays' then arguments.fetch(0) + (arguments.fetch(1) * 86_400)
           when 'tostring' then mendix_string(arguments.fetch(0))
           when 'parseinteger' then Integer(arguments.fetch(0))
           when 'parsedecimal' then Float(arguments.fetch(0))
@@ -525,7 +534,9 @@ module Mxrb
           @security_context = nil
           @apply_entity_access = false
           @flows = project.modules.flat_map do |mod|
-            (mod.microflows + mod.nanoflows).map { ["#{mod.name}.#{_1.name}", _1] }
+            (mod.microflows + mod.nanoflows + (mod.respond_to?(:rules) ? mod.rules : [])).map do
+              ["#{mod.name}.#{_1.name}", _1]
+            end
           end.to_h
           entity_names = project.modules.flat_map do |mod|
             mod.entities.map { [_1.id.to_s, "#{mod.name}.#{_1.name}"] }
@@ -769,6 +780,8 @@ module Mxrb
           if object['$Type'] == 'Microflows$InheritanceSplit'
             value = variables.fetch(object['SplitVariableName'].to_s)
             value.respond_to?(:entity) ? value.entity : value.class.name
+          elsif object.dig('SplitCondition', '$Type') == 'Microflows$RuleSplitCondition'
+            invoke_flow_call(object.dig('SplitCondition', 'RuleCall'), variables)
           else
             @expression.evaluate(object.dig('SplitCondition', 'Expression'), variables)
           end
@@ -908,16 +921,19 @@ module Mxrb
         end
 
         def action_microflow_call(action, variables)
-          call_doc = action['MicroflowCall'] || {}
+          result = invoke_flow_call(action['MicroflowCall'] || {}, variables)
+          variables[action['ResultVariableName'].to_s] = result if action['UseReturnVariable'] == true
+        end
+
+        def invoke_flow_call(call_doc, variables)
           arguments = items(call_doc['ParameterMappings']).to_h do |mapping|
             [mapping['Parameter'].to_s.split('.').last, @expression.evaluate(mapping['Argument'], variables)]
           end
-          result = if @service_dispatch
-                     @service_dispatch.call(call_doc['Microflow'].to_s, arguments, @security_context)
-                   else
-                     call(call_doc['Microflow'].to_s, arguments)
-                   end
-          variables[action['ResultVariableName'].to_s] = result if action['UseReturnVariable'] == true
+          if @service_dispatch
+            @service_dispatch.call(call_doc['Microflow'].to_s, arguments, @security_context)
+          else
+            call(call_doc['Microflow'].to_s, arguments)
+          end
         end
 
         def action_commit(action, variables)

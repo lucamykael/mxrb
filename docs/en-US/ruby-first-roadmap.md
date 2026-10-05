@@ -1,5 +1,37 @@
 # MXRB: Ruby above all
 
+## Additional catalog, rule and widget revision
+
+The catalog for `runtime_model: ruby` applications now reconciles removed and
+renamed loaded declarations while preserving the export manifest. Persistent
+renames use `renamed_from`; removing a class does not authorize dropping its
+table. Legacy mode continues to retain undeclared metadata.
+
+Rules export as `flow :rule` services with their export level preserved.
+Decisions call the current Ruby implementation, including after edits, and
+annotations can reference those decisions. The Writer emits textual captions
+and accepts immutable declaration snapshots.
+
+The frontend exposes `registerMarketplaceWidget` for exact widget identity
+adapters. Images, sliders, ranges, progress, ratings, colors and enumeration
+buttons use bound properties and data, respecting inherited editing policy.
+This does not certify charts, scanners, Java/JS actions or every native widget.
+
+Edited VetClinic passed authenticated Chromium creation and persisted reads at
+1280×900 and 390×900 with MPR opening forbidden. Preparation lives in
+`spec/fixtures/frontend_browser/prepare_vetclinic_edited.rb`; the proof server
+is `serve_without_mpr.rb` in the same directory. Both use a fresh export and
+leave original projects intact.
+
+
+An additional run passed ten builds: contracts, presentation, core widgets,
+validation and compatibility, each as source and Ruby round-trip. Ten rule and
+string probes passed in each compatibility package's Runtime. The oracle
+revealed and helped correct non-text rule decision captions and URL encoding
+(space `%20`, asterisk `%2A`, tilde `~`). See the
+[compatibility evidence](../evidence/compatibility-2026-10-05.json).
+
+
 ## October 5, 2026 update
 
 The runtime catalog discovers new models, DTOs, pages, enumerations and services

@@ -496,7 +496,7 @@ RSpec.describe 'Ruby application internal contracts' do
     unnamed_service = Class.new(Mxrb::RubyApp::Service)
     expect { unnamed_service.native }.to raise_error(ArgumentError, /mendix_name/)
     service = Class.new(Mxrb::RubyApp::Service) { mendix_name 'M.Valid', id: 'service-id' }
-    expect { service.native(:invalid) }.to raise_error(ArgumentError, /microflow or nanoflow/)
+    expect { service.native(:invalid) }.to raise_error(ArgumentError, /microflow, nanoflow or rule/)
     expect(service.native(:nanoflow)).to include(unit_id: 'service-id')
 
     unnamed_page = Class.new(Mxrb::RubyApp::Page)

@@ -4,6 +4,8 @@ require 'spec_helper'
 require 'tmpdir'
 
 RSpec.describe 'typed rule decisions' do # rubocop:disable Metrics/BlockLength
+  before { Mxrb::RubyApp::Registry.reset! }
+  after { Mxrb::RubyApp::Registry.reset! }
   def builder
     Mxrb::Dsl::FlowBuilder.new(:Check, runtime: :server, kind: :microflow, public: false)
   end
@@ -66,17 +68,21 @@ RSpec.describe 'typed rule decisions' do # rubocop:disable Metrics/BlockLength
       Mxrb.define(source) do
         mendix_version '11.12.1'
         self.module(:App) do
-          rule(:Rule) do
+          rule(:Rule, export_level: 'Public') do
             parameter :Value, type: :string
             return_type :boolean
-            return_value 'true'
+            return_value "$Value = 'yes'"
           end
           microflow(:Check) do
             parameter :Input, type: :string
+            annotation 'Named rule decision'
+            as_node :note
             decision({ rule: 'App.Rule', pass: { 'App.Rule.Value' => '$Input' } }) do
               on(true) { change_variable :Input, to: "'valid'" }
               on(false) { change_variable :Input, to: "'invalid'" }
             end
+            as_node :check
+            annotation_flow from: :note, to: :check
             return_type :string
             return_value :Input
           end
@@ -88,6 +94,12 @@ RSpec.describe 'typed rule decisions' do # rubocop:disable Metrics/BlockLength
       text = File.read(file)
       expect(text).to include('rule_decision "App.Rule" do', 'argument "App.Rule.Value", "$Input"')
       expect(text).not_to include('pass:', 'decision ({')
+      application = Mxrb::RubyApp::Application.new(root)
+      allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR is unavailable')
+      expect(application.call_service('App.Check', { 'Input' => 'yes' })).to eq('valid')
+      expect(application.call_service('App.Check', { 'Input' => 'no' })).to eq('invalid')
+      application.close
+      allow(Mxrb::IO::MprFile).to receive(:open).and_call_original
       rebuilt = Mxrb::RubyApp.compile(root, File.join(directory, 'Rebuilt.mpr'))
       expect(documents(rebuilt)).to eq(documents(source))
 
@@ -96,6 +108,7 @@ RSpec.describe 'typed rule decisions' do # rubocop:disable Metrics/BlockLength
       split = documents(edited).fetch('Check').dig('ObjectCollection', 'Objects').grep(Hash)
                                .find { _1['$Type'] == 'Microflows$ExclusiveSplit' }
       mappings = split.dig('SplitCondition', 'RuleCall', 'ParameterMappings').grep(Hash)
+      expect(split.fetch('Caption')).to eq('App.Rule')
       expect(mappings.first.fetch('Argument')).to eq('001')
       expect(documents(edited).fetch('Rule')).to eq(documents(source).fetch('Rule'))
     end

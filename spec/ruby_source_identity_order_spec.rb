@@ -191,8 +191,8 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
   it 'fails when an existing materialized identity disappears or changes' do
     empty_module = Struct.new(
       :name, :entities, :pages, :microflows, :nanoflows, :constants, :enumerations,
-      :scheduled_events, :module_security_id, :domain_documents
-    ).new('App', [], [], [], [], [], [], [], '', [])
+      :scheduled_events, :module_security_id, :domain_documents, :rules
+    ).new('App', [], [], [], [], [], [], [], '', [], [])
     project = Struct.new(:modules).new([empty_module])
 
     missing = context
@@ -210,7 +210,7 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
   it 'clears unmatched new identities and rejects ambiguous materialized records' do
     module_type = Struct.new(
       :name, :entities, :pages, :microflows, :nanoflows, :constants, :enumerations,
-      :scheduled_events, :module_security_id, :domain_documents
+      :scheduled_events, :module_security_id, :domain_documents, :rules
     )
     record_type = Struct.new(:name, :id)
     project_type = Struct.new(:modules)
@@ -218,7 +218,7 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
     resolver = context([])
     added = owner('Added')
     bind(resolver, added)
-    empty = module_type.new('App', [], [], [], [], [], [], [], '', [])
+    empty = module_type.new('App', [], [], [], [], [], [], [], '', [], [])
     expect(resolver.reconcile!(project_type.new([empty]))).to equal(resolver)
     expect(resolver.bundle.fetch(:contents)).not_to include('App.Added')
 
@@ -226,7 +226,7 @@ RSpec.describe Mxrb::RubyApp::SourceIdentity do
     duplicate = owner('Added')
     bind(ambiguous, duplicate)
     mod = module_type.new('App', [record_type.new('Added', ''), record_type.new('Added', '')],
-                          [], [], [], [], [], [], '', [])
+                          [], [], [], [], [], [], '', [], [])
     expect { ambiguous.reconcile!(project_type.new([mod])) }
       .to raise_error(Mxrb::ValidationError, /ambiguous materialized Ruby identity/)
   end
