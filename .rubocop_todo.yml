@@ -38,7 +38,6 @@ Layout/BlockAlignment:
 Layout/CaseIndentation:
   Exclude:
     - 'lib/mxrb/exporter.rb'
-    - 'lib/mxrb/writer.rb'
 
 # Offense count: 21
 # This cop supports safe autocorrection (--autocorrect).
@@ -48,7 +47,6 @@ Layout/ElseAlignment:
     - 'lib/mxrb/exporter.rb'
     - 'lib/mxrb/marketplace.rb'
     - 'lib/mxrb/model/page.rb'
-    - 'lib/mxrb/writer.rb'
 
 # Offense count: 68
 # This cop supports safe autocorrection (--autocorrect).
@@ -90,7 +88,6 @@ Layout/EndAlignment:
     - 'lib/mxrb/exporter.rb'
     - 'lib/mxrb/marketplace.rb'
     - 'lib/mxrb/model/page.rb'
-    - 'lib/mxrb/writer.rb'
 
 # Offense count: 35
 # This cop supports safe autocorrection (--autocorrect).
@@ -105,7 +102,6 @@ Layout/ExtraSpacing:
     - 'lib/mxrb/model/module.rb'
     - 'lib/mxrb/model/page.rb'
     - 'lib/mxrb/semantic/extractor.rb'
-    - 'lib/mxrb/writer.rb'
     - 'spec/coverage_spec.rb'
     - 'spec/mxrb_spec.rb'
     - 'spec/new_features_spec.rb'
@@ -116,7 +112,6 @@ Layout/ExtraSpacing:
 # SupportedStyles: consistent, consistent_relative_to_receiver, special_for_inner_method_call, special_for_inner_method_call_in_parentheses
 Layout/FirstArgumentIndentation:
   Exclude:
-    - 'lib/mxrb/writer.rb'
     - 'spec/coverage_spec.rb'
     - 'spec/mxrb_spec.rb'
 
@@ -126,7 +121,6 @@ Layout/FirstArgumentIndentation:
 # SupportedStyles: special_inside_parentheses, consistent, align_brackets
 Layout/FirstArrayElementIndentation:
   Exclude:
-    - 'lib/mxrb/writer.rb'
     - 'spec/coverage_spec.rb'
     - 'spec/mxrb_spec.rb'
 
@@ -158,7 +152,6 @@ Layout/HashAlignment:
     - 'lib/mxrb/model/unit.rb'
     - 'lib/mxrb/semantic/inliner.rb'
     - 'lib/mxrb/semantic/renamer.rb'
-    - 'lib/mxrb/writer.rb'
     - 'spec/contracts_spec.rb'
     - 'spec/coverage_spec.rb'
     - 'spec/defensive_paths_spec.rb'
@@ -183,7 +176,6 @@ Layout/IndentationWidth:
     - 'lib/mxrb/exporter.rb'
     - 'lib/mxrb/marketplace.rb'
     - 'lib/mxrb/model/page.rb'
-    - 'lib/mxrb/writer.rb'
 
 # Offense count: 22
 # This cop supports safe autocorrection (--autocorrect).
@@ -217,7 +209,6 @@ Layout/MultilineArrayBraceLayout:
 # SupportedStyles: symmetrical, new_line, same_line
 Layout/MultilineMethodCallBraceLayout:
   Exclude:
-    - 'lib/mxrb/writer.rb'
     - 'spec/mxrb_spec.rb'
 
 # Offense count: 8
@@ -255,7 +246,6 @@ Layout/SpaceAroundOperators:
     - 'lib/mxrb/model/domain_model.rb'
     - 'lib/mxrb/model/entity.rb'
     - 'lib/mxrb/model/module.rb'
-    - 'lib/mxrb/writer.rb'
     - 'spec/mxrb_spec.rb'
 
 # Offense count: 2
