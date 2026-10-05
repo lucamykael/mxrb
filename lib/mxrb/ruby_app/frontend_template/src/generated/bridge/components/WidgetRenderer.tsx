@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useWidgetEvent } from '../useWidgetEvent';
 import { ClientActions } from '../PageEdits';
+import { PageDataSource } from '../PageDataSource';
 import { SidebarToggle } from './NativeScrollContainer';
 import { VariableScope } from './VariableScope';
 import { PageParameters, LocalVariables } from '../PageVariables';
@@ -196,6 +197,7 @@ export function DataView({
 }: WidgetRuntimeProps & { renderRecord?: (record: EntityRecord | null) => ReactNode }) {
   const options = widget.options || {};
   const source = options.source as DataViewSource | undefined;
+  const pageSource = useContext(PageDataSource) === widget;
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
   const selections = useSelections();
@@ -265,7 +267,7 @@ export function DataView({
 
     setUnsupported(null);
     setLoading(false);
-    if (!source || source.kind === 'context') {
+    if (pageSource || !source || source.kind === 'context') {
       return () => {
         current = false;
       };
@@ -333,6 +335,7 @@ export function DataView({
       current = false;
     };
   }, [
+    pageSource,
     source,
     inheritedContext?.type,
     inheritedContext?.id,
@@ -345,7 +348,7 @@ export function DataView({
   const resolvedRecord =
     source?.kind === 'listen'
       ? selections.records[listenTarget] || null
-      : !source || source.kind === 'context'
+      : pageSource || !source || source.kind === 'context'
         ? inheritedContext
         : record;
   const saveResolvedRecord: typeof saveRecord = async (current, changes) => {

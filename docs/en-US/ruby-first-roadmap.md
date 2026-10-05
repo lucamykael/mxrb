@@ -1,5 +1,24 @@
 # MXRB: Ruby above all
 
+## Persistent page objects before commit
+
+Objects returned by a data source remain editable across requests without
+appearing in queries for saved records. SQLite holds private server snapshots,
+protected by opaque tokens bound to the user and expiring after one hour.
+Hidden defaults stay on the server; read, write and create permissions still
+apply. Commit, deletion and explicit rollback invalidate the token atomically.
+A failed call neither partially saves nor loses the previous draft.
+
+The page reuses its loaded source instead of creating another object when the
+data view mounts. Microflow responses refresh the draft while preserving edits
+made during the request. Save also accepts a new object without field changes.
+
+`persistent_page_drafts_flow.json` checks edit and Save in the Ruby browser with
+MPR access forbidden. Studio Pro 11.12.1 confirmed source and roundtrip behavior:
+zero stored objects on load, zero after editing, one after Save. The fixture uses
+`MXRB_DATAGRID_PACKAGE`; CI fetches pinned Data Grid 2 and verifies its SHA256.
+See the [evidence](../evidence/page-drafts-2026-10-05.json).
+
 ## Editable collection menu icons and JavaScript callbacks
 
 The eight-project audit found 125 auxiliary BSON files. Of these, 112 already

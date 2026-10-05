@@ -1,0 +1,23 @@
+{
+  "name": "persistent-page-drafts",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [{
+    "name": "draft-until-save",
+    "path": "/",
+    "steps": [
+      { "wait_for_text": "Persistent page drafts" },
+      { "wait_for_selector": "input[value='Unsaved item']" },
+      { "click_text": "Change draft" },
+      { "wait_for_selector": "input[value='Changed before Save']" },
+      { "wait_for_selector": ".widget-datagrid-grid-body" },
+      { "wait_for_count": { "selector": ".widget-datagrid-grid-body [role=row]", "equals": 0 } },
+      { "wait_for_absence": "[role=alert]" },
+      { "click_text": "Save draft" },
+      { "wait_for_count": { "selector": ".widget-datagrid-grid-body [role=row]", "equals": 1 } },
+      { "wait_for_text": "Changed before Save" },
+      { "wait_for_absence": "[role=alert]" }
+    ],
+    "selectors": ["main"]
+  }]
+}

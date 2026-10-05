@@ -5,8 +5,8 @@ require 'spec_helper'
 RSpec.describe Mxrb::RubyApp::Application do
   it 'serializes complete service invocations before they reach the shared SQLite runtime' do
     application = described_class.allocate
-    application.instance_variable_set(:@runtime_monitor, Monitor.new)
     store = instance_double(Mxrb::Runtime::SQLiteStore, release_cache!: nil)
+    allow(store).to receive(:transaction).and_yield
     interpreter = instance_double(Mxrb::Runtime::Native::Interpreter, effects: [], store:)
     bridge = instance_double(Mxrb::RubyApp::NativeBridge, interpreter:)
     allow(application).to receive(:bridge).and_return(bridge)

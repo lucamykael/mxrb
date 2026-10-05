@@ -1853,12 +1853,14 @@ module Mxrb
           bridge.interpreter.clear_effects!
           invocation_arguments = arguments.to_h.dup
           synchronized_context = invocation_arguments.delete('__mxrb_context')
-          active_context = synchronize_context(synchronized_context, context:) if synchronized_context
-          result = call_service(name, invocation_arguments, context:)
-          {
-            result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:),
-            context: serialize(active_context, context:)
-          }
+          bridge.interpreter.store.transaction do
+            active_context = synchronize_context(synchronized_context, context:) if synchronized_context
+            result = call_service(name, invocation_arguments, context:)
+            {
+              result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:),
+              context: serialize(active_context, context:)
+            }
+          end
         ensure
           release_runtime_cache
         end
@@ -2000,7 +2002,7 @@ module Mxrb
           store = bridge.interpreter.store
           value = store.create(name.to_s)
           begin
-            serialize(value, context:).merge(new_record: true)
+            serialize(value, context:).except(:draft_token).merge(new_record: true)
           ensure
             store.rollback(value)
           end
@@ -2078,7 +2080,9 @@ module Mxrb
           store.transaction do
             objects = records.to_h do |entry|
               key = [entry.fetch('type'), entry.fetch('id')]
-              value = if entry['new_record'] == true
+              value = if entry['draft_token']
+                        deserialize(entry, context:)
+                      elsif entry['new_record'] == true
                         authorize_entity!(key.first, :create, context)
                         store.create(key.first)
                       else
@@ -2086,6 +2090,7 @@ module Mxrb
                       end
               raise ArgumentError, "record #{key.join(' ')} not found" unless value
 
+              authorize_entity!(value.entity, :create, context) if entry['draft_token']
               authorize_entity!(value.entity, :write, context, record: value)
               [key, value]
             end
@@ -2105,6 +2110,8 @@ module Mxrb
               result
             end
           end
+        ensure
+          release_runtime_cache
         end
       end
 
@@ -2344,8 +2351,15 @@ module Mxrb
         name
       end
 
-      def runtime_synchronize(&block)
-        (@runtime_monitor ||= Monitor.new).synchronize(&block)
+      def runtime_synchronize
+        (@runtime_monitor ||= Monitor.new).synchronize do
+          @runtime_depth = @runtime_depth.to_i + 1
+          begin
+            yield
+          ensure
+            @runtime_depth -= 1
+          end
+        end
       end
 
       def microflow_exists?(name)
@@ -2573,7 +2587,13 @@ module Mxrb
               )
             end
           end
-          { id: value.id, type: value.entity, attributes: serialize(members, branch, context:) }
+          result = { id: value.id, type: value.entity, attributes: serialize(members, branch, context:) }
+          store = bridge.interpreter.store
+          if store.respond_to?(:draft?) && store.draft?(value)
+            token = store.client_drafts.capture(value, owner: draft_owner(context))
+            result.merge!(new_record: true, draft_token: token)
+          end
+          result
         when Hash then value.to_h { [serialize(_1, seen, context:), serialize(_2, seen, context:)] }
         when Array then value.map { serialize(_1, seen, context:) }
         else value
@@ -2584,7 +2604,13 @@ module Mxrb
         value = keyword_value if value.nil? && !keyword_value.empty?
         value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:id) && value.key?(:type)
         if value.is_a?(Hash) && value['id'] && value['type']
-          object = bridge.interpreter.store.find(value['type'].to_s, value['id'].to_s)
+          store = bridge.interpreter.store
+          object = if value['draft_token']
+                     store.client_drafts.resume(value['draft_token'], entity: value['type'].to_s,
+                                                                      id: value['id'].to_s, owner: draft_owner(context))
+                   else
+                     store.find(value['type'].to_s, value['id'].to_s)
+                   end
           if !object && value['transient'] == true
             object = Runtime::Native::ObjectValue.new(
               entity: value['type'].to_s, id: value['id'].to_s, members: {}
@@ -2631,7 +2657,7 @@ module Mxrb
             authorize_entity!(object.entity, :write, context, member:, record: object)
             object.members[member] = member_value
           end
-          store.commit(object) if value['transient'] != true && store.respond_to?(:commit)
+          store.commit(object) if value['transient'] != true && !value['draft_token'] && store.respond_to?(:commit)
           object
         end
         return apply.call unless store.respond_to?(:transaction)
@@ -2660,8 +2686,14 @@ module Mxrb
       end
 
       def release_runtime_cache
+        return if @runtime_depth.to_i > 1
+
         store = bridge.interpreter.store
         store.release_cache! if store.respond_to?(:release_cache!)
+      end
+
+      def draft_owner(context)
+        context&.user ? "user:#{context.user}" : 'anonymous'
       end
     end
 

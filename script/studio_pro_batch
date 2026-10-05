@@ -29,9 +29,10 @@ module StudioProBatch
   end
 
   def fixtures
-    return FIXTURES unless ENV['MXRB_CHARTS_PACKAGE']
-
-    FIXTURES.merge('charts' => 'frontend_browser/marketplace_chart_project.rb')
+    result = FIXTURES.dup
+    result['charts'] = 'frontend_browser/marketplace_chart_project.rb' if ENV['MXRB_CHARTS_PACKAGE']
+    result['page-drafts'] = 'persistent_page_drafts/project.rb' if ENV['MXRB_DATAGRID_PACKAGE']
+    result
   end
 
   def fixture_cases(destination, name, fixture)

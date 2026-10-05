@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WidgetRenderer } from './WidgetRenderer';
+import { PageDataSource } from '../PageDataSource';
 import { SelectionScope, useSelections } from './SelectionScope';
 import type { WidgetRuntimeProps } from '../contracts';
 import type { ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
@@ -44,6 +45,17 @@ const props = (widget: WidgetDefinition): WidgetRuntimeProps => ({
 });
 
 describe('Ruby data view editing', () => {
+  it('uses the already loaded page source and follows its updated draft without invoking it again', () => {
+    const sourced: WidgetDefinition = { ...view, options: { source: { kind: 'microflow', name: 'App.Load' } } };
+    const input = props(sourced);
+    const { rerender } = render(<PageDataSource.Provider value={sourced}><WidgetRenderer {...input} /></PageDataSource.Provider>);
+    expect(screen.getByRole('textbox')).toHaveValue('Before');
+    const updated = { ...record, attributes: { Name: 'Changed' } };
+    rerender(<PageDataSource.Provider value={sourced}><WidgetRenderer {...input} context={updated} /></PageDataSource.Provider>);
+    expect(screen.getByRole('textbox')).toHaveValue('Changed');
+    expect(input.request).not.toHaveBeenCalled();
+  });
+
   it('updates role-based visibility and editing when the authorized schema changes', () => {
     const guarded = { ...field, options: { ...field.options, editable: 'conditional', editability: { roles: ['App.Editor'] } } };
     const input = props(guarded);

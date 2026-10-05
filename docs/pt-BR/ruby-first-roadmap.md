@@ -1,5 +1,26 @@
 # MXRB: Ruby acima de tudo
 
+## Objetos de página persistíveis sem commit
+
+Objetos retornados por uma fonte de dados permanecem editáveis entre chamadas
+sem aparecer nas consultas de registros salvos. O servidor mantém o rascunho
+privado em SQLite, protegido por um token opaco vinculado ao usuário, com
+expiração de uma hora. Os defaults privados ficam no servidor; leitura, escrita
+e criação continuam sujeitas às permissões. Commit, exclusão e rollback explícito
+invalidam o token dentro da mesma transação. Uma chamada que falha não grava
+parcialmente nem perde o rascunho anterior.
+
+A página reutiliza a fonte já carregada, evitando criar outro objeto ao montar
+seu data view. Respostas de microflows atualizam o rascunho e preservam edições
+feitas enquanto a requisição estava em andamento. Save aceita também um objeto
+novo ainda sem alterações de campos.
+
+O cenário `persistent_page_drafts_flow.json` verifica alteração e Save no
+navegador Ruby sem MPR. Studio Pro 11.12.1 confirmou o mesmo resultado em fonte
+e round-trip: zero registros ao abrir, zero após alterar, um após salvar.
+A fixture exige `MXRB_DATAGRID_PACKAGE`; o CI obtém Data Grid 2 de uma revisão
+fixada e verifica seu SHA256. Veja a [evidência](../evidence/page-drafts-2026-10-05.json).
+
 ## Menus com ícones e callbacks JavaScript editáveis
 
 A auditoria dos oito projetos modernos encontrou 125 arquivos BSON auxiliares,

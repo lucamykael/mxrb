@@ -3783,6 +3783,7 @@ module Mxrb
             transient?: boolean;
             new_record?: boolean;
             draft_id?: string;
+            draft_token?: string;
           }
 
           export interface WidgetEvent {

@@ -113,7 +113,7 @@ RSpec.describe 'Ruby application export mode' do
         "effect.type === 'show_message' && effect.message",
         "method: 'PATCH'", "api<LoginResponse>('/api/login'",
         "api<Session>('/api/session'", "api('/api/logout'",
-        'if (payload.context) setPageContext(payload.context)',
+        'if (payload.context) setPageContext(edits.refresh(payload.context, submitted))',
         'const activeContext = contextOverride || pageContext;',
         'payload.context ||', 'isEntityRecord(payload.result) ? payload.result : null'
       )

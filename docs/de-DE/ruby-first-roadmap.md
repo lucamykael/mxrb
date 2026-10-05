@@ -1,5 +1,24 @@
 # MXRB: Ruby über alles
 
+## Persistierbare Seitenobjekte vor dem Commit
+
+Objekte einer Datenquelle bleiben über mehrere Anfragen editierbar, ohne in
+Abfragen gespeicherter Datensätze zu erscheinen. SQLite hält private Kopien auf
+dem Server. Ein undurchsichtiger, an den Benutzer gebundener Token läuft nach
+einer Stunde ab. Verborgene Standardwerte bleiben auf dem Server; Lese-, Schreib-
+und Erstellungsrechte gelten weiterhin. Commit, Löschen und explizites Rollback
+widerrufen den Token atomar. Fehlgeschlagene Aufrufe speichern keine Teiländerungen.
+
+Die Seite verwendet ihre bereits geladene Datenquelle wieder. Antworten von
+Microflows aktualisieren den Entwurf und erhalten Änderungen, die während der
+Anfrage eingegeben wurden. Save speichert auch unveränderte neue Objekte.
+
+`persistent_page_drafts_flow.json` prüft Bearbeiten und Save im Ruby-Browser ohne
+MPR-Zugriff. Studio Pro 11.12.1 bestätigte Quelle und Roundtrip: null gespeicherte
+Objekte beim Öffnen und nach der Änderung, eines nach Save. Die Fixture benötigt
+`MXRB_DATAGRID_PACKAGE`; CI prüft Revision und SHA256 des Data-Grid-2-Pakets.
+Siehe [Nachweise](../evidence/page-drafts-2026-10-05.json).
+
 ## Editierbare Menü-Icons und JavaScript-Callbacks
 
 Die Prüfung von acht Projekten fand 125 zusätzliche BSON-Dateien. Für 112 davon
