@@ -13,7 +13,9 @@ module AcceptanceStatus
     value = JSON.parse(File.read(path))
     raise ArgumentError, "expected JSON object: #{path}" unless value.is_a?(Hash)
 
-    [value, { name: File.join(File.basename(File.dirname(path)), File.basename(path)), sha256: Digest::SHA256.file(path).hexdigest }]
+    [value,
+     { name: File.join(File.basename(File.dirname(path)), File.basename(path)),
+       sha256: Digest::SHA256.file(path).hexdigest }]
   end
 
   def manifest(path)
