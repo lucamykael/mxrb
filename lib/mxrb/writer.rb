@@ -8,6 +8,7 @@ require "securerandom"
 require "sqlite3"
 require "time"
 require_relative "writer/page_overlay"
+require_relative "writer/data_sources"
 require_relative "forms/mpr_codec"
 require_relative "settings/mpr_codec"
 require_relative 'ruby_app/presentation_contracts'
@@ -16,6 +17,8 @@ module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
   # stable key, making repeated `mxrb generate` runs idempotent.
   class Writer
+    include DataSources
+
     ATTRIBUTE_DEFAULTS = { boolean: false }.freeze
     CONVENTIONAL_DOCUMENT_FOLDERS = {
       'Microflows$Microflow' => 'Flows',
@@ -1743,7 +1746,7 @@ module Mxrb
           else
             cross << cross_association_doc(
               association, from_id:, target: "#{target_module}.#{target_name}", previous: prior,
-              oql_view: !entity[:oql_view].nil?
+                           oql_view: !entity[:oql_view].nil?
             )
           end
         end
@@ -3114,8 +3117,8 @@ module Mxrb
         merged
       when "Microflows$Microflow", "Microflows$Nanoflow", "Microflows$Rule"
         preserve_keys(merged, existing, %w[
-          MicroflowParameterCollection UseListParameterByReference
-        ])
+                        MicroflowParameterCollection UseListParameterByReference
+                      ])
         if generated["__mxrb_preserve_native_body"]
           preserve_keys(
             merged, existing, %w[ObjectCollection Flows ReturnVariableName MicroflowReturnType]
@@ -3700,7 +3703,7 @@ module Mxrb
       }
       default = value_type["DefaultValue"].to_s
       case value_type["Type"]
-      when "Expression"   then doc["Expression"] = default
+      when "Expression" then doc["Expression"] = default
       when "TextTemplate"
         doc["TextTemplate"] = client_template_doc(default) if value_type['Required'] || !default.empty?
       else doc["PrimitiveValue"] = default
@@ -4046,18 +4049,18 @@ module Mxrb
       attribute_ids = attrs.to_h { [_1['Name'] || _1.fetch('name'), _1.fetch('$ID')] }
       rules_declared = !entity[:access_rules].nil?
       access_rules = if rules_declared
-        IO::BsonCodec.build_array(
-          entity.fetch(:access_rules).map do |rule|
-            access_rule_doc(
-              rule, module_name, entity.fetch(:name),
-              attributes: entity.fetch(:attributes).map { _1.fetch(:name) },
-              associations: access_associations
-            )
-          end
-        )
-      else
-        previous&.dig(rules_key) || IO::BsonCodec.build_array([])
-      end
+                       IO::BsonCodec.build_array(
+                         entity.fetch(:access_rules).map do |rule|
+                           access_rule_doc(
+                             rule, module_name, entity.fetch(:name),
+                             attributes: entity.fetch(:attributes).map { _1.fetch(:name) },
+                             associations: access_associations
+                           )
+                         end
+                       )
+                     else
+                       previous&.dig(rules_key) || IO::BsonCodec.build_array([])
+                     end
       doc = (previous || {}).merge(
         "$ID" => id, "$Type" => previous&.fetch("$Type", nil) || "DomainModels$EntityImpl",
         "Name" => entity.fetch(:name), "Documentation" => entity.fetch(:documentation, ""),
@@ -4132,10 +4135,10 @@ module Mxrb
       documentation_key = native_key(previous, "documentation", "Documentation")
       previous_type = previous&.dig(type_key)
       type_doc = if previous_type.is_a?(Hash) && previous_type["$Type"] == storage_type
-        previous_type
-      else
-        { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
-      end
+                   previous_type
+                 else
+                   { "$ID" => SecureRandom.uuid, "$Type" => storage_type }
+                 end
       if attr.key?(:enumeration)
         type_doc = type_doc.reject { |key, _value| %w[enumeration Enumeration].include?(key) }
         type_doc = type_doc.merge("Enumeration" => attr[:enumeration].to_s) if attr[:enumeration]
@@ -4153,29 +4156,29 @@ module Mxrb
       end
       previous_value = previous&.dig(value_key)
       value_doc = if oql_view
-        current = previous_value.is_a?(Hash) ? previous_value : {}
-        current = current.merge(
-          "$ID" => current["$ID"] || SecureRandom.uuid,
-          "$Type" => "DomainModels$OqlViewValue",
-          "Reference" => attr.fetch(:name)
-        )
-        current.delete("DefaultValue")
-        current.delete("defaultValue")
-        current
-      elsif previous_value && !attr.key?(:default) &&
-            previous_value["$Type"] != "DomainModels$OqlViewValue"
-        previous_value
-      elsif previous_value.is_a?(Hash) && previous_value["$Type"] == "DomainModels$StoredValue"
-        updated = previous_value.dup
-        default_key = native_key(previous_value, "defaultValue", "DefaultValue")
-        updated[default_key] = attribute_default_expression(attr)
-        updated
-      else
-        {
-          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$StoredValue",
-          "DefaultValue" => attribute_default_expression(attr)
-        }
-      end
+                    current = previous_value.is_a?(Hash) ? previous_value : {}
+                    current = current.merge(
+                      "$ID" => current["$ID"] || SecureRandom.uuid,
+                      "$Type" => "DomainModels$OqlViewValue",
+                      "Reference" => attr.fetch(:name)
+                    )
+                    current.delete("DefaultValue")
+                    current.delete("defaultValue")
+                    current
+                  elsif previous_value && !attr.key?(:default) &&
+                        previous_value["$Type"] != "DomainModels$OqlViewValue"
+                    previous_value
+                  elsif previous_value.is_a?(Hash) && previous_value["$Type"] == "DomainModels$StoredValue"
+                    updated = previous_value.dup
+                    default_key = native_key(previous_value, "defaultValue", "DefaultValue")
+                    updated[default_key] = attribute_default_expression(attr)
+                    updated
+                  else
+                    {
+                      "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$StoredValue",
+                      "DefaultValue" => attribute_default_expression(attr)
+                    }
+                  end
       doc = (previous || {}).merge(
         "$ID" => previous&.dig("$ID") || SecureRandom.uuid,
         "$Type" => "DomainModels$Attribute",
@@ -4505,10 +4508,10 @@ module Mxrb
         target[event_property(event.fetch(:event))] = client_action_doc(event) if target
       end
       content = if page[:data_source]
-        [data_view_doc(page.fetch(:data_source), widgets, module_name:)]
-      else
-        widgets
-      end
+                  [data_view_doc(page.fetch(:data_source), widgets, module_name:)]
+                else
+                  widgets
+                end
       content = content.map { legacy_widget_tree(_1) } if oldest_layout_contract?
       roles_declared = !page[:allowed_roles].nil?
       argument = {
@@ -4526,19 +4529,19 @@ module Mxrb
         "Form" => page.fetch(:layout)
       }
       doc = { "$ID" => SecureRandom.uuid, "$Type" => "Forms$Page", "Name" => page.fetch(:name),
-        "__mxrb_unit_id" => page[:unit_id],
-        "Documentation" => "", "Url" => "", "FormCall" => form_call,
-        "Title" => text_doc(page.fetch(:title)), "MarkAsUsed" => false, "Excluded" => false,
-        "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
-        "__mxrb_allowed_roles_declared" => roles_declared,
-        "__mxrb_deep_structure_declared" => false,
-        "Parameters" => IO::BsonCodec.build_array(
-          page.fetch(:parameters, []).map { page_parameter_doc(_1) }, marker: 3
-        ),
-        "PopupWidth" => page.fetch(:popup) ? 600 : 0,
-        "PopupHeight" => page.fetch(:popup) ? 400 : 0,
-        "PopupResizable" => page.fetch(:popup),
-        "ExportLevel" => page[:public] == true ? "Public" : "Hidden" }
+              "__mxrb_unit_id" => page[:unit_id],
+              "Documentation" => "", "Url" => "", "FormCall" => form_call,
+              "Title" => text_doc(page.fetch(:title)), "MarkAsUsed" => false, "Excluded" => false,
+              "AllowedModuleRoles" => IO::BsonCodec.build_array(Array(page[:allowed_roles]), marker: 1),
+              "__mxrb_allowed_roles_declared" => roles_declared,
+              "__mxrb_deep_structure_declared" => false,
+              "Parameters" => IO::BsonCodec.build_array(
+                page.fetch(:parameters, []).map { page_parameter_doc(_1) }, marker: 3
+              ),
+              "PopupWidth" => page.fetch(:popup) ? 600 : 0,
+              "PopupHeight" => page.fetch(:popup) ? 400 : 0,
+              "PopupResizable" => page.fetch(:popup),
+              "ExportLevel" => page[:public] == true ? "Public" : "Hidden" }
       if page[:overlay_metadata]
         doc["__mxrb_page_overlay"] = {
           baseline: nil, metadata: page.fetch(:overlay_metadata),
@@ -5099,10 +5102,10 @@ module Mxrb
         attribute = widget.dig(:options, :attribute).to_s
         own = if (input_widget?(type) || type == :drop_down) &&
                  !attribute.empty? && !attribute.include?('.') && !attribute.include?('/')
-          [attribute]
-        else
-          []
-        end
+                [attribute]
+              else
+                []
+              end
         nested = direct_widget_children(widget)
         nested.concat(
           Array(widget.dig(:options, :rows)).flat_map do |row|
@@ -5196,27 +5199,27 @@ module Mxrb
 
     def widget_storage_type(type)
       {
-        button:             "Forms$ActionButton",
-        text_box:           "Forms$TextBox",
-        number_input:       "Forms$TextBox",
-        text_area:          "Forms$TextArea",
-        check_box:          "Forms$CheckBox",
-        date_picker:        "Forms$DatePicker",
+        button: "Forms$ActionButton",
+        text_box: "Forms$TextBox",
+        number_input: "Forms$TextBox",
+        text_area: "Forms$TextArea",
+        check_box: "Forms$CheckBox",
+        date_picker: "Forms$DatePicker",
         radio_button_group: "Forms$RadioButtonGroup",
-        text:               "Forms$DynamicText",
-        page_title:         "Forms$Title",
-        static_image:       "Forms$StaticImageViewer",
-        file_manager:       "Forms$FileManager",
-        image_viewer:       "Forms$ImageViewer",
-        image_uploader:     "Forms$ImageUploader",
-        menu_bar:           "Forms$MenuBar",
-        navigation_tree:    "Forms$NavigationTree",
+        text: "Forms$DynamicText",
+        page_title: "Forms$Title",
+        static_image: "Forms$StaticImageViewer",
+        file_manager: "Forms$FileManager",
+        image_viewer: "Forms$ImageViewer",
+        image_uploader: "Forms$ImageUploader",
+        menu_bar: "Forms$MenuBar",
+        navigation_tree: "Forms$NavigationTree",
         reference_set_selector: "Forms$ReferenceSetSelector",
-        navigation_list:    "Forms$NavigationList",
-        scroll_container:   "Forms$ScrollContainer",
-        sidebar_toggle:     "Forms$SidebarToggleButton",
-        tab_control:        "Forms$TabControl",
-        container:          "Forms$DivContainer"
+        navigation_list: "Forms$NavigationList",
+        scroll_container: "Forms$ScrollContainer",
+        sidebar_toggle: "Forms$SidebarToggleButton",
+        tab_control: "Forms$TabControl",
+        container: "Forms$DivContainer"
       }.fetch(type.to_sym)
     end
 
@@ -5294,7 +5297,7 @@ module Mxrb
     def menu_widget_fields(options)
       if options[:navigation_profile]
         return { 'MenuSource' => { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationSource',
-                                  'NavigationProfile' => options.fetch(:navigation_profile).to_s } }
+                                   'NavigationProfile' => options.fetch(:navigation_profile).to_s } }
       end
 
       {
@@ -6093,128 +6096,6 @@ module Mxrb
       end
     end
 
-    def data_view_doc(source, widgets, module_name: nil)
-      source = qualify_data_view_source(symbolize_data_view_value(source), module_name)
-      {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Forms$DataView",
-        "Name" => "dataView",
-        "Appearance" => appearance_doc, "ConditionalEditabilitySettings" => nil,
-        "ConditionalVisibilitySettings" => nil, "DataSource" => data_view_source_doc(source),
-        "Editability" => "Always", "FooterWidgets" => IO::BsonCodec.build_array([], marker: 2),
-        "LabelWidth" => 0, "NoEntityMessage" => text_doc(""), "ReadOnlyStyle" => "Control",
-        "ShowFooter" => false, "TabIndex" => 0,
-        "Widgets" => IO::BsonCodec.build_array(widgets, marker: 2)
-      }
-    end
-
-    def data_view_source_doc(source)
-      source = symbolize_data_view_value(source)
-      native = deep_copy(source.fetch(:unknown_native, {}))
-      type, fields = case source.fetch(:kind).to_sym
-      when :context, :association
-        [
-          "Forms$DataViewSource",
-          {
-            "EntityRef" => data_view_entity_ref_doc(source),
-            "SourceVariable" => data_view_page_variable_doc(source[:variable])
-          }
-        ]
-      when :nanoflow
-        [
-          "Forms$NanoflowSource",
-          {
-            "Nanoflow" => source.fetch(:name),
-            "ParameterMappings" => data_view_mappings_doc(source[:mappings], :nanoflow)
-          }
-        ]
-      when :microflow
-        settings = client_microflow_settings_doc(source.fetch(:name)).merge(
-          deep_copy(source.fetch(:settings_native, {}))
-        )
-        settings["ParameterMappings"] = data_view_mappings_doc(source[:mappings], :microflow)
-        ["Forms$MicroflowSource", { "MicroflowSettings" => settings }]
-      when :listen
-        ["Forms$ListenTargetSource", { "ListenTarget" => source.fetch(:target) }]
-      when :native
-        [source.fetch(:native_type), {}]
-      else
-        raise ArgumentError, "unsupported data view source #{source.fetch(:kind).inspect}"
-      end
-      storage = { "$ID" => SecureRandom.uuid, "$Type" => type }
-      native.each { |key, value| storage[key] = value unless %w[$ID $Type].include?(key.to_s) }
-      storage["ForceFullObjects"] = source[:force_full_objects] == true
-      storage.merge(fields)
-    end
-
-    def data_view_entity_ref_doc(source)
-      native = deep_copy(source.fetch(:entity_ref_native, {}))
-      if source.fetch(:kind).to_sym == :association
-        steps = Array(source[:steps]).map do |step|
-          step = symbolize_data_view_value(step)
-          deep_copy(step.fetch(:unknown_native, {})).merge(
-            "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$EntityRefStep",
-            "Association" => step.fetch(:association).to_s,
-            "DestinationEntity" => step.fetch(:entity).to_s
-          )
-        end
-        native.merge(
-          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$IndirectEntityRef",
-          "Steps" => IO::BsonCodec.build_array(steps, marker: 2)
-        )
-      else
-        native.merge(
-          "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$DirectEntityRef",
-          "Entity" => source.fetch(:entity).to_s
-        )
-      end
-    end
-
-    def data_view_mappings_doc(mappings, kind)
-      docs = Array(mappings).map do |mapping|
-        mapping = symbolize_data_view_value(mapping)
-        type = kind == :nanoflow ? "Forms$NanoflowParameterMapping" : "Forms$MicroflowParameterMapping"
-        deep_copy(mapping.fetch(:unknown_native, {})).merge(
-          "$ID" => SecureRandom.uuid, "$Type" => type,
-          "Expression" => mapping.fetch(:expression, "").to_s,
-          "Parameter" => mapping.fetch(:parameter).to_s,
-          "Variable" => data_view_page_variable_doc(mapping[:variable])
-        )
-      end
-      IO::BsonCodec.build_array(docs, marker: 2)
-    end
-
-    def data_view_page_variable_doc(raw_variable)
-      return nil unless raw_variable
-
-      variable = symbolize_data_view_value(raw_variable)
-      fields = {
-        local_variable: "LocalVariable", page_parameter: "PageParameter",
-        snippet_parameter: "SnippetParameter", widget: "Widget"
-      }
-      native = deep_copy(variable.fetch(:unknown_native, {}))
-      doc = native.merge(
-        "$ID" => SecureRandom.uuid, "$Type" => "Forms$PageVariable",
-        "LocalVariable" => "", "PageParameter" => "", "SnippetParameter" => "",
-        "SubKey" => variable.fetch(:sub_key, "").to_s,
-        "UseAllPages" => variable[:use_all_pages] == true, "Widget" => ""
-      )
-      field = fields[variable.fetch(:kind, :page_parameter).to_sym]
-      doc[field] = variable.fetch(:name, "").to_s if field
-      doc[field] = doc[field].split('.').last.to_s if field == 'LocalVariable'
-      doc
-    end
-
-    def client_microflow_settings_doc(name)
-      {
-        "$ID" => SecureRandom.uuid, "$Type" => "Forms$MicroflowSettings",
-        "Asynchronous" => false, "ConfirmationInfo" => nil, "FormValidations" => "All",
-        "Microflow" => name, "OutputMappings" => IO::BsonCodec.build_array([], marker: 3),
-        "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2),
-        "ProgressBar" => "None", "ProgressMessage" => nil
-      }
-    end
-
     def microflow_doc(flow, module_name = nil, identity_by_unit_id: false)
       flow_name = flow.fetch(:name)
       identity = identity_by_unit_id ? flow.fetch(:unit_id) : flow_name
@@ -6290,17 +6171,17 @@ module Mxrb
 
       name = type.to_s
       native = case name.downcase
-      when "", "void", "nil" then "DataTypes$VoidType"
-      when "boolean", "bool" then "DataTypes$BooleanType"
-      when "string" then "DataTypes$StringType"
-      when "integer" then "DataTypes$IntegerType"
-      when "long" then "DataTypes$IntegerType"
-      when "decimal" then "DataTypes$DecimalType"
-      when "float" then "DataTypes$FloatType"
-      when "datetime", "date_time" then "DataTypes$DateTimeType"
-      else
-        "DataTypes$ObjectType"
-      end
+               when "", "void", "nil" then "DataTypes$VoidType"
+               when "boolean", "bool" then "DataTypes$BooleanType"
+               when "string" then "DataTypes$StringType"
+               when "integer" then "DataTypes$IntegerType"
+               when "long" then "DataTypes$IntegerType"
+               when "decimal" then "DataTypes$DecimalType"
+               when "float" then "DataTypes$FloatType"
+               when "datetime", "date_time" then "DataTypes$DateTimeType"
+               else
+                 "DataTypes$ObjectType"
+               end
       doc = {
         "$ID" => stable_id("data_type", module_name, name, *identity_parts), "$Type" => native
       }
@@ -6458,23 +6339,23 @@ module Mxrb
         Array(rescue_block[:activities]).each_with_index do |act, i|
           act_id = flow_node_id(act)
           object = case act[:type].to_sym
-          when :return_event
-            terminal = true
-            flow_object_doc(
-              act_id, "Microflows$EndEvent", x_err, y_err, "20;20"
-            ).merge("Documentation" => "", "ReturnValue" => act[:expression].to_s)
-          when :error_event
-            terminal = true
-            flow_object_doc(act_id, "Microflows$ErrorEvent", x_err, y_err, "20;20")
-          when :continue_event
-            terminal = true
-            flow_object_doc(act_id, "Microflows$ContinueEvent", x_err, y_err, "20;20")
-          when :break_event
-            terminal = true
-            flow_object_doc(act_id, "Microflows$BreakEvent", x_err, y_err, "20;20")
-          else
-            build_activity(act, act_id, x_err, y_err)
-          end
+                   when :return_event
+                     terminal = true
+                     flow_object_doc(
+                       act_id, "Microflows$EndEvent", x_err, y_err, "20;20"
+                     ).merge("Documentation" => "", "ReturnValue" => act[:expression].to_s)
+                   when :error_event
+                     terminal = true
+                     flow_object_doc(act_id, "Microflows$ErrorEvent", x_err, y_err, "20;20")
+                   when :continue_event
+                     terminal = true
+                     flow_object_doc(act_id, "Microflows$ContinueEvent", x_err, y_err, "20;20")
+                   when :break_event
+                     terminal = true
+                     flow_object_doc(act_id, "Microflows$BreakEvent", x_err, y_err, "20;20")
+                   else
+                     build_activity(act, act_id, x_err, y_err)
+                   end
           objects << object
           if i == 0
             error_flow = sequence_flow_doc(err_pid, act_id)
@@ -6616,7 +6497,7 @@ module Mxrb
     end
 
     def process_decision(activity, prev_id, objects, flows, x, y)
-      split_id  = flow_node_id(activity)
+      split_id = flow_node_id(activity)
       branches = activity[:branches] || {
         true => Array(activity[:true_branch]),
         false => Array(activity[:false_branch])
@@ -6625,10 +6506,11 @@ module Mxrb
       objects << flow_object_doc(
         split_id, "Microflows$ExclusiveSplit", x, y, "90;60"
       ).merge(
-                   "SplitCondition" => split_condition_doc(activity[:condition]),
-                   "Caption" => activity[:condition],
-                   "ErrorHandlingType" => "Rollback",
-                   "Documentation" => "")
+        "SplitCondition" => split_condition_doc(activity[:condition]),
+        "Caption" => activity[:condition],
+        "ErrorHandlingType" => "Rollback",
+        "Documentation" => ""
+      )
       flows << sequence_flow_doc(prev_id, split_id) if prev_id
 
       branch_width = [branches.values.map(&:size).max.to_i, 1].max
@@ -6788,7 +6670,7 @@ module Mxrb
     end
 
     def loop_activity_doc(activity, id, x, y, all_flows)
-      inner_objs  = []
+      inner_objs = []
       i_prev = nil
       i_x    = 50
       started = false
@@ -6806,25 +6688,26 @@ module Mxrb
       end
 
       source = if activity[:type].to_sym == :while_loop
-        {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Microflows$WhileLoopCondition",
-          "WhileExpression" => activity[:condition]
-        }
-      else
-        {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Microflows$IterableList",
-          "ListVariableName" => activity[:variable],
-          "VariableName" => activity[:iterator]
-        }
-      end
+                 {
+                   "$ID" => SecureRandom.uuid,
+                   "$Type" => "Microflows$WhileLoopCondition",
+                   "WhileExpression" => activity[:condition]
+                 }
+               else
+                 {
+                   "$ID" => SecureRandom.uuid,
+                   "$Type" => "Microflows$IterableList",
+                   "ListVariableName" => activity[:variable],
+                   "VariableName" => activity[:iterator]
+                 }
+               end
       doc = flow_object_doc(id, "Microflows$LoopedActivity", x, y, "300;200").merge(
         "ErrorHandlingType" => "Rollback",
         "ObjectCollection" => {
           "$ID" => SecureRandom.uuid, "$Type" => "Microflows$MicroflowObjectCollection",
           "Objects" => IO::BsonCodec.build_array(inner_objs)
-        })
+        }
+      )
       major = @definition.fetch(:version).to_s.split(".").first.to_i
       if major < 8 && activity[:type].to_sym == :loop_over
         doc["ListVariableName"] = activity[:variable]
@@ -6931,10 +6814,10 @@ module Mxrb
       case activity[:type].to_sym
       when :create_object
         commit = if activity[:commit] == true
-          activity[:with_events] == false ? "YesWithoutEvents" : "Yes"
-        else
-          "No"
-        end
+                   activity[:with_events] == false ? "YesWithoutEvents" : "Yes"
+                 else
+                   "No"
+                 end
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$CreateChangeAction",
           "Commit" => commit,
           "Entity" => activity[:entity], "ErrorHandlingType" => "Rollback",
@@ -6946,10 +6829,10 @@ module Mxrb
           "VariableName" => activity[:variable] }
       when :change_object
         commit = if activity[:commit] == true
-          activity[:with_events] == false ? "YesWithoutEvents" : "Yes"
-        else
-          "No"
-        end
+                   activity[:with_events] == false ? "YesWithoutEvents" : "Yes"
+                 else
+                   "No"
+                 end
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ChangeAction",
           "ChangeVariableName" => activity[:variable],
           "Commit" => commit,
@@ -7023,10 +6906,10 @@ module Mxrb
           }.tap { |call| call["Queue"] = "" if major.between?(8, 9) } }
       when :create_variable
         doc = { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$CreateVariableAction",
-          "ErrorHandlingType" => "Rollback",
-          "InitialValue" => member_value_expr(activity[:value]),
-          "InitialValueModel" => no_expression_doc,
-          "VariableName" => activity[:variable] }
+                "ErrorHandlingType" => "Rollback",
+                "InitialValue" => member_value_expr(activity[:value]),
+                "InitialValueModel" => no_expression_doc,
+                "VariableName" => activity[:variable] }
         doc["VariableType"] = variable_type_doc(activity[:variable_type]) if activity[:variable_type]
         doc
       when :change_variable
@@ -7578,7 +7461,7 @@ module Mxrb
       mappings = Array(activity[:mappings]).map do |mapping|
         value = code_action_parameter_doc(
           mapping[:value], basic_type: value_type, code: false,
-          modern_java: major >= 11
+                           modern_java: major >= 11
         )
         if value["Argument"] &&
            (major.between?(8, 10) || (major == 7 && minor >= 11))
@@ -7660,14 +7543,14 @@ module Mxrb
 
       suffix = code ? "CodeActionParameterValue" : "JavaActionParameterValue"
       prefix, field = case kind
-      when :entity         then ["EntityType", "Entity"]
-      when :microflow      then ["Microflow", "Microflow"]
-      when :import_mapping then ["ImportMapping", "ImportMapping"]
-      when :export_mapping then ["ExportMapping", "ExportMapping"]
-      else
-        return value[:value] if value[:value].is_a?(Hash)
-        ["Basic", "Argument"]
-      end
+                      when :entity         then ["EntityType", "Entity"]
+                      when :microflow      then ["Microflow", "Microflow"]
+                      when :import_mapping then ["ImportMapping", "ImportMapping"]
+                      when :export_mapping then ["ExportMapping", "ExportMapping"]
+                      else
+                        return value[:value] if value[:value].is_a?(Hash)
+                        ["Basic", "Argument"]
+                      end
       {
         "$ID" => SecureRandom.uuid,
         "$Type" => "Microflows$#{prefix}#{suffix}",
@@ -7834,7 +7717,7 @@ module Mxrb
 
     def member_value_expr(value)
       case value
-      when Symbol        then "$#{value}"
+      when Symbol then "$#{value}"
       when Integer, Float then value.to_s
       when true, false    then value.to_s
       when nil            then ""
@@ -7877,9 +7760,9 @@ module Mxrb
     def text_doc(text)
       { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text",
         "Items" => IO::BsonCodec.build_array([
-          { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
-            "LanguageCode" => "en_US", "Text" => text }
-        ]) }
+                                               { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Translation",
+                                                 "LanguageCode" => "en_US", "Text" => text }
+                                             ]) }
     end
 
     def client_template_doc(text, parameters: [], entity: nil)

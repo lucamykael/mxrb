@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory=$true)][string]$ToolRoot,
     [Parameter(Mandatory=$true)][string]$JavaHome,
     [Parameter(Mandatory=$true)][string]$EvidenceDirectory,
+    [string]$ScenarioPath,
     [int]$HttpPort = 18080,
     [int]$AdminPort = 18090,
     [int]$BrowserPort = 19222
@@ -148,8 +149,14 @@ logging = [{ name = Console, type = console, autoSubscribe = INFO, levels {} }]
     $crudExpression = @'
 (async()=>{const call=(method,args)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error(method+' timed out')),15000);mx.data[method]({...args,callback:value=>{clearTimeout(timer);resolve(value)},error:error=>{clearTimeout(timer);reject(error)},onValidation:()=>{clearTimeout(timer);reject(new Error('validation rejected '+method))}})});const marker='MXRB-native-'+Date.now();const result={steps:[]};let id;try{const object=await call('create',{entity:'Core.Item'});id=object.getGuid();object.set('Name',marker);object.set('Active',true);await call('commit',{mxobj:object});result.steps.push('create');const read=await call('get',{guid:id,noCache:true});if(read.get('Name')!==marker)throw new Error('Read mismatch');result.steps.push('read');read.set('Name',marker+'-updated');await call('commit',{mxobj:read});const changed=await call('get',{guid:id,noCache:true});if(changed.get('Name')!==marker+'-updated')throw new Error('Update mismatch');result.steps.push('update');await call('remove',{guid:id});const remaining=await call('get',{xpath:'//Core.Item[id='+id+']'});if(remaining.length)throw new Error('Delete did not persist');id=null;result.steps.push('delete');result.status='passed';return result;}finally{if(id)await call('remove',{guid:id});}})()
 '@
-    $report['crud'] = Evaluate-Browser $crudExpression
-    if ($report.crud.status -ne 'passed') { throw 'Native CRUD did not pass' }
+    $scenarioKey = 'crud'
+    if ($ScenarioPath) {
+        $crudExpression = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $ScenarioPath).ProviderPath)
+        $report['scenario_sha256'] = (Get-FileHash -LiteralPath $ScenarioPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $scenarioKey = 'acceptance'
+    }
+    $report[$scenarioKey] = Evaluate-Browser $crudExpression
+    if ($report[$scenarioKey].status -ne 'passed') { throw 'Native browser scenario did not pass' }
     $screenshot = Invoke-Cdp 'Page.captureScreenshot' @{ format = 'png' }
     [System.IO.File]::WriteAllBytes((Join-Path $EvidenceDirectory 'native-page.png'), [Convert]::FromBase64String($screenshot.data))
     $report['status'] = 'passed'

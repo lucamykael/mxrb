@@ -1,5 +1,43 @@
 # MXRB: Ruby acima de tudo
 
+## Atualização de 5 de outubro de 2026
+
+O catálogo do runtime descobre novos modelos, DTOs, páginas, enums e serviços
+nos arquivos Ruby carregados, sem exigir edição manual do manifesto. Aplicações
+com `runtime_model: ruby` executam sem abrir MPR; projetos legados precisam ser
+exportados novamente para adotar esse contrato. Remoção e renomeação de entradas
+legadas ainda precisam de reconciliação explícita.
+
+A UI avalia papéis de módulo e expressões de visibilidade/editabilidade,
+combinando-os com a política herdada do Data View. Papéis desconhecidos não
+liberam acesso. Isso complementa a autorização do servidor. XPath inclui funções
+de strings e datas, palavras de período e fuso horário da sessão; limites de
+mês/ano usam calendário, com testes de DST. A cobertura não representa paridade
+universal entre bancos e todas as funções nativas.
+
+Callbacks persistentes e transitórios alcançam subtipos. Regras de validação
+herdadas agora verificam obrigatoriedade, unicidade entre tabelas de subtipos,
+igualdade, intervalos inclusivos e comprimento UTF-16 antes do commit com eventos.
+Falhas revertem a transação e retornam feedback estruturado HTTP 422. Expressões
+regulares JVM exigem um adapter `regular_expression` explícito; a sintaxe não é
+reinterpretada silenciosamente como Ruby Regexp. Regras desconhecidas falham
+explicitamente. Uma matriz de 21 casos concordou com o Runtime nativo: veja a
+[evidência de paridade](../evidence/validation-parity-2026-10-05.json). A sintaxe
+de igualdade usa `Value` no armazenamento nativo; datas sem horário foram
+certificadas. No 11.12.1, um limite de data com horário aceito pelo MxBuild
+falhou ao iniciar o Runtime e permanece fora dessa certificação.
+
+VetClinic editado em Ruby passou criação pelo serviço alterado, nova coluna,
+projeção de página, persistência após reabrir, rollback e exclusão com MPR
+proibido ([evidência](../evidence/vetclinic-ruby-2026-10-05.json)). Isso também
+cobre callbacks nativos que compartilham a transação da API.
+
+A [certificação Windows](windows-studio-pro.md) passou seis builds nativos locais
+e CRUD no runtime oficial. VetClinic passou renderização e CRUD pela API nativa.
+O [relatório](../evidence/native-2026-10-05.json) separa essas provas de equivalência
+visual, formulários, widgets externos, Java/JS customizado e layouts móveis ainda
+sem uma matriz completa. O workflow semanal adiciona build e runtime headless.
+
 **Português** · [English](../en-US/ruby-first-roadmap.md) · [Deutsch](../de-DE/ruby-first-roadmap.md)
 
 ## Princípio arquitetural
@@ -68,8 +106,8 @@ Ainda devem ser fechados, com provas de edição e execução:
 
 1. Variantes dos widgets core, ações cliente, layouts/snippets, validações e fontes de
    dados ainda sem equivalente funcional no frontend Ruby.
-2. Condições de visibilidade/editabilidade por papéis e variantes nativas;
-   contratos de widgets externos e custom actions, com adapters explícitos.
+2. Variantes nativas adicionais de visibilidade/editabilidade; contratos de
+   widgets externos e custom actions, com adapters explícitos.
 3. Grafos sem declaração Ruby e integrações externas: produzir implementações
    ou adapters explícitos. O runtime novo não usa o MPR como fallback. Aplicações
    legadas sem `runtime_model: ruby` conservam o bridge antigo até nova exportação.

@@ -1,5 +1,43 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Atualização de 5 de outubro de 2026
+
+O catálogo do runtime descobre novos modelos, DTOs, páginas, enums e serviços
+nos arquivos Ruby carregados, sem exigir edição manual do manifesto. Aplicações
+com `runtime_model: ruby` executam sem abrir MPR; projetos legados precisam ser
+exportados novamente para adotar esse contrato. Remoção e renomeação de entradas
+legadas ainda precisam de reconciliação explícita.
+
+A UI avalia papéis de módulo e expressões de visibilidade/editabilidade,
+combinando-os com a política herdada do Data View. Papéis desconhecidos não
+liberam acesso. Isso complementa a autorização do servidor. XPath inclui funções
+de strings e datas, palavras de período e fuso horário da sessão; limites de
+mês/ano usam calendário, com testes de DST. A cobertura não representa paridade
+universal entre bancos e todas as funções nativas.
+
+Callbacks persistentes e transitórios alcançam subtipos. Regras de validação
+herdadas agora verificam obrigatoriedade, unicidade entre tabelas de subtipos,
+igualdade, intervalos inclusivos e comprimento UTF-16 antes do commit com eventos.
+Falhas revertem a transação e retornam feedback estruturado HTTP 422. Expressões
+regulares JVM exigem um adapter `regular_expression` explícito; a sintaxe não é
+reinterpretada silenciosamente como Ruby Regexp. Regras desconhecidas falham
+explicitamente. Uma matriz de 21 casos concordou com o Runtime nativo: veja a
+[evidência de paridade](../evidence/validation-parity-2026-10-05.json). A sintaxe
+de igualdade usa `Value` no armazenamento nativo; datas sem horário foram
+certificadas. No 11.12.1, um limite de data com horário aceito pelo MxBuild
+falhou ao iniciar o Runtime e permanece fora dessa certificação.
+
+VetClinic editado em Ruby passou criação pelo serviço alterado, nova coluna,
+projeção de página, persistência após reabrir, rollback e exclusão com MPR
+proibido ([evidência](../evidence/vetclinic-ruby-2026-10-05.json)). Isso também
+cobre callbacks nativos que compartilham a transação da API.
+
+A [certificação Windows](windows-studio-pro.md) passou seis builds nativos locais
+e CRUD no runtime oficial. VetClinic passou renderização e CRUD pela API nativa.
+O [relatório](../evidence/native-2026-10-05.json) separa essas provas de equivalência
+visual, formulários, widgets externos, Java/JS customizado e layouts móveis ainda
+sem uma matriz completa. O workflow semanal adiciona build e runtime headless.
+
 ## Direção principal: Mendix → Ruby + React/TypeScript
 
 O objetivo da conversão é uma aplicação com backend e regras em Ruby e frontend
@@ -176,8 +214,8 @@ recompilar um MPR. A apresentação React aplica as opções suportadas.
 Data Views propagam o bloqueio de edição aos campos, inclusive em views
 aninhadas. Condições booleanas de expressão são avaliadas com tipos, parênteses,
 precedência e strings literais, sem `eval`. Condições desconhecidas ou ainda
-opacas não liberam edição. Regras baseadas em roles/condições nativas adicionais
-ainda exigem tradução; esse bloqueio conservador não conta como equivalência.
+opacas não liberam edição. Papéis de módulo são combinados com as expressões;
+variantes nativas adicionais precisam de seus próprios contratos.
 As regras de autorização do backend continuam independentes desse controle UI.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e

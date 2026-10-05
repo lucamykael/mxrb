@@ -131,6 +131,29 @@ RSpec.describe 'Standalone runtime compatibility' do
     expect(@application.record('Files.Report', created[:id]).dig(:attributes, 'Label')).to eq('Checked: Report')
   end
 
+  it 'joins the API transaction when a native before-commit flow validates the object' do
+    parent = Mxrb::RubyApp::Registry.fetch(:record, 'Files.Document')
+    parent.before_commit microflow: 'Files.Validate', pass_event_object: true, raise_error_on_false: true
+    Class.new(Mxrb::RubyApp::Service) do
+      mendix_name 'Files.Validate'
+      flow :microflow do
+        parameter :Document, type: object_of('Files.Document')
+        return_type :boolean
+        return_value "$Document/Label != 'Rejected'"
+      end
+
+      def call(**arguments) = execute_flow(arguments)
+    end
+    created = @application.create_record('Files.Report', 'Label' => 'Valid')
+    @application.update_record('Files.Report', created[:id], { 'Label' => 'Changed' })
+    expect { @application.update_record('Files.Report', created[:id], { 'Label' => 'Rejected' }) }
+      .to raise_error(Mxrb::NativeRuntimeError, /lifecycle.*rejected/)
+    expect(@application.record('Files.Report', created[:id]).dig(:attributes, 'Label')).to eq('Changed')
+    expect { @application.create_record('Files.Report', 'Label' => 'Rejected') }
+      .to raise_error(Mxrb::NativeRuntimeError, /lifecycle.*rejected/)
+    expect(@application.records('Files.Report').size).to eq(1)
+  end
+
   it 'keeps new client drafts private until an atomic save and resolves references between new drafts' do
     app = @application
     page = Class.new(Mxrb::RubyApp::Page)
@@ -294,6 +317,26 @@ RSpec.describe 'Standalone runtime compatibility' do
     expect(app.file_content('Files.Photo', photo[:id], thumbnail: [4, 4])).to eq(thumbnail)
     app.delete_record('System.Image', photo[:id])
     expect(database.get_first_value('SELECT COUNT(*) FROM mxrb_file_thumbnails')).to eq(0)
+  end
+
+  it 'returns structured validation feedback from inherited rules through HTTP' do
+    @application.close
+    server = Mxrb::RubyApp::Server.new(@root, port: 0)
+    @application = server.application
+    parent = Mxrb::RubyApp::Registry.fetch(:record, 'Files.Document')
+    parent.validation_rule('Label', kind: :required) { translation 'en_US', 'Label is required' }
+    request = Struct.new(:path, :body) do
+      def request_method = 'POST'
+      def query = {}
+      def [](_key) = nil
+    end.new('/api/entities/Files.Report', JSON.generate(attributes: { 'Label' => '  ' }))
+    response = Mxrb::Http::Response.new
+    server.send(:dispatch, request, response)
+    expect(response.status).to eq(422)
+    result = JSON.parse(response.body)
+    expect(result.dig('error', 'code')).to eq('validation_failed')
+    expect(result.fetch('validation').first).to include('attribute' => 'Label', 'message' => 'Label is required')
+    expect(@application.records('Files.Report')).to be_empty
   end
 
   it 'serves constrained queries and thumbnails over HTTP without bypassing concrete entity permissions' do

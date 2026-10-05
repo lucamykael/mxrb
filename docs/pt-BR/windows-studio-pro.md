@@ -1,45 +1,59 @@
 # Validação Windows e Studio Pro com Omarchy
 
-## Situação verificada em 12 de agosto de 2026
+## Estado verificado em 5 de outubro de 2026
 
-O host possui AMD-V e os módulos KVM carregados. O comando oficial disponível é:
+A VM Windows existente no HD USB foi reutilizada, com Studio Pro 11.12.1 já
+instalado. Não é necessário reinstalar ou formatar o disco. A sessão RDP foi
+aberta em um servidor Xvfb dedicado (`DISPLAY=:97`), sem usar ou modificar as
+telas físicas do usuário. Credenciais ficam fora dos comandos e relatórios.
+Copie os projetos para um diretório local da VM antes de abrir no Studio Pro;
+a conversão e gravação de units sobre uma pasta RDP compartilhada pode falhar.
+
+Seis builds passaram: origem e round-trip Ruby dos fixtures de contratos,
+apresentação nativa e widgets core. O runtime nativo respondeu HTTP 200,
+renderizou a página e passou create/read/update/delete pelo cliente Mendix em
+Edge headless. Os testes GUI verificaram parâmetros e contexto compartilhado de
+popups, fechamento de duas janelas e conclusão assíncrona. VetClinic também
+passou build, renderização com tema e CRUD pela API do cliente. Isso não equivale
+a testar todos os formulários, temas e layouts móveis.
+
+O [relatório versionado](../evidence/native-2026-10-05.json) delimita essas provas.
+
+## Execução reproduzível
+
+Gere um destino novo no Linux e transporte a pasta inteira para Windows.
+Ajuste os caminhos de instalação nos comandos abaixo:
 
 ```bash
-omarchy windows vm install
+bundle exec ruby script/studio_pro_batch /tmp/native-batch
 ```
 
-O instalador do Omarchy usa `dockurr/windows`, RDP e uma pasta compartilhada em
-`~/Windows`. Ele exige 74 GB livres antes da instalação padrão. Na verificação,
-o filesystem de `/home` tinha 60 GB livres, portanto a instalação não foi
-iniciada. O SSD secundário `/dev/sda1`, ext4 com label `storage`, foi montado
-somente para leitura, apresentou 435 GB livres e foi desmontado sem alteração.
-
-Para seguir com o instalador oficial é necessário primeiro escolher uma ação
-consciente:
-
-1. liberar pelo menos 14 GB no filesystem raiz; ou
-2. preparar um destino gravável no SSD secundário e confirmar como o diretório
-   da VM será integrado, sem mexer em `filmails` nem em outros dados existentes.
-
-Não se deve contornar a checagem de espaço nem alterar os scripts instalados do
-Omarchy. Depois de haver espaço:
-
-```bash
-omarchy windows vm install
-omarchy windows vm status
-omarchy windows vm start
+```powershell
+./script/studio_pro_gate.ps1 -BatchDirectory C:\incoming\native-batch `
+  -WorkspaceRoot C:\mxrb-projects -StudioVersion 11.12.1
+./script/studio_pro_runtime.ps1 `
+  -Package C:\incoming\native-batch\results\core-widgets-roundtrip\core-widgets-roundtrip.mda `
+  -ToolRoot C:\Mendix\11.12.1 -JavaHome C:\Java\jdk-21 `
+  -EvidenceDirectory C:\incoming\runtime-evidence
 ```
 
-## Checklist no Studio Pro
+O gate confere a versão e assinatura dos executáveis, os hashes de todos os
+arquivos, o proprietário de `mprcontents` e a quantidade física de `.mxunit`.
+Ele constrói cópias locais e verifica novamente as entradas após o build.
+Destinos existentes são recusados. Uma unit adulterada foi rejeitada antes do
+build. `summary.json`, logs, erros e pacotes ficam em `results`; o teste do
+runtime acrescenta `runtime.json` e uma captura de página, encerrando apenas
+os processos que iniciou. O banco HSQLDB e o perfil Edge são descartáveis.
 
-Copie o MPR compilado para a pasta compartilhada e, no Windows:
+## CI
 
-1. abra a cópia no Studio Pro da mesma versão declarada pelo projeto;
-2. sincronize o App Directory;
-3. confirme domínio, validações, páginas, navegação, microflows e nanoflows;
-4. compile sem erros e execute localmente;
-5. teste página → nanoflow → microflow → retorno visível;
-6. feche sem conversão automática não revisada e guarde o log da versão.
+[Windows native certification](../../.github/workflows/studio-pro.yml) executa
+semanalmente, manualmente e em PRs relevantes. O runner Windows hospedado usa o
+arquivo oficial MxBuild 11.12.1 fixado por SHA-256, JDK 21 e Edge headless. A matriz atual
+valida oito builds (incluindo regras de validação) e inicia o Runtime nos pacotes core original e reconstruído.
+Os artefatos de evidência ficam disponíveis por 14 dias. O job não instala a
+GUI Studio Pro; a certificação visual continua registrada separadamente.
 
-Essa validação GUI complementa `mxbuild`; ela não substitui os gates Linux,
-Docker, TypeScript e Chromium.
+Não reduzir os gates Ruby (100% linhas e branches), frontend ou Chromium para
+acomodar diferenças do oráculo. A VM existente pode ser iniciada pelos comandos
+Omarchy instalados; use uma sessão virtual separada para novas verificações GUI.
