@@ -5,6 +5,7 @@ param(
     [ValidatePattern('^[a-zA-Z0-9.-]+$')][string]$StudioVersion = '11.12.1',
     [string]$ToolRoot,
     [switch]$BuildToolsOnly,
+    [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$PinnedMxBuildSha256,
     [ValidateRange(1,120)][int]$BuildTimeoutMinutes = 30
 )
 
@@ -91,7 +92,7 @@ function Get-TransportEvidence([string]$Directory, $Case) {
     }
 }
 
-function Get-SignedStudioTool([string]$Path) {
+function Get-SignedStudioTool([string]$Path, [switch]$AllowPinnedUnsigned) {
     $item = Get-Item -LiteralPath $Path
     $version = [string]$item.VersionInfo.ProductVersion
     $fileVersion = [string]$item.VersionInfo.FileVersion
@@ -99,15 +100,21 @@ function Get-SignedStudioTool([string]$Path) {
         throw "Wrong Studio tool version: $Path ($version / $fileVersion)"
     }
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
-    if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate) {
+    $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    # The official standalone archive has an unsigned .NET apphost. Only its
+    # explicitly pinned executable is accepted; installed Studio still requires
+    # a valid publisher signature. Invalid signatures never use this exception.
+    $pinned = $AllowPinnedUnsigned -and $BuildToolsOnly -and $PinnedMxBuildSha256 -and
+        $hash -ceq $PinnedMxBuildSha256.ToLowerInvariant() -and $signature.Status -eq 'NotSigned'
+    if (-not $pinned -and ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate)) {
         throw "Invalid Studio tool signature: $Path ($($signature.Status))"
     }
-    $signer = $signature.SignerCertificate.Subject
-    if ($signer -notmatch '(?i)Mendix|Siemens') { throw "Unexpected Studio tool publisher: $Path ($signer)" }
+    $signer = if ($pinned) { $null } else { $signature.SignerCertificate.Subject }
+    if (-not $pinned -and $signer -notmatch '(?i)Mendix|Siemens') { throw "Unexpected Studio tool publisher: $Path ($signer)" }
     return [ordered]@{
         path = $item.FullName; product_version = $version; file_version = $fileVersion
         signature = [string]$signature.Status; signer = $signer
-        sha256 = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        sha256 = $hash; verification = $(if ($pinned) { 'pinned-official-archive-executable' } else { 'authenticode' })
     }
 }
 
@@ -129,7 +136,7 @@ function Find-StudioTools {
     $rejections = New-Object System.Collections.Generic.List[object]
     foreach ($candidate in ($candidates | Sort-Object FullName)) {
         try {
-            $mxbuild = Get-SignedStudioTool $candidate.FullName
+            $mxbuild = Get-SignedStudioTool $candidate.FullName -AllowPinnedUnsigned
             $studio = $null
             foreach ($name in @('studiopro.exe', 'modeler.exe')) {
                 $studioPath = Join-Path $candidate.DirectoryName $name

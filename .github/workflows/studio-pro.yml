@@ -74,6 +74,7 @@ jobs:
           -WorkspaceRoot "$env:RUNNER_TEMP/native-workspaces"
           -ToolRoot "$env:RUNNER_TEMP/mxbuild"
           -BuildToolsOnly
+          -PinnedMxBuildSha256 b56513ff1926dbc7997d4d318dd71d2df6350fb1f78c2cb0c00b4f9d789e2c91
       - name: Boot native Runtime and exercise browser CRUD for both projects
         shell: powershell
         run: |
