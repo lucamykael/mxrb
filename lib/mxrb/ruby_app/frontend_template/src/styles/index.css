@@ -201,6 +201,27 @@ select {
   }
 }
 
+:where(.mxrb-popup .mx-window-content) {
+  color: #111827;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1rem 3rem #0004;
+}
+:where(.mxrb-popup .mx-window-header) {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+:where(.mxrb-popup .mx-window-header h4) {
+  margin: 0;
+}
+:where(.mxrb-popup .mx-window-header .close) {
+  float: right;
+}
+:where(.mxrb-popup .mx-window-body) {
+  padding: 1rem;
+}
+
 .mxrb-popup {
   position: fixed;
   inset: auto;

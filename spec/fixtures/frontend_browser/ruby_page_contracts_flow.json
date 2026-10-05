@@ -10,6 +10,7 @@
         { "click_text": "Open editor" },
         { "wait_for_selector": "dialog[open] [data-widget-name=DraftInput] input" },
         { "wait_for_style": { "selector": "dialog[open]", "property": "width", "value": "520px" } },
+        { "wait_for_style": { "selector": "dialog[open] .mx-window-content", "property": "background-color", "value": "rgb(255, 255, 255)" } },
         { "wait_for_count": { "selector": "dialog[open] .mx-resizer", "equals": 8 } },
         { "click_text": "Open child" },
         { "wait_for_count": { "selector": "dialog[open]", "equals": 2 } },
