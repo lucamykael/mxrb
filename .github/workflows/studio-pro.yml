@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-native-certification
+  group: windows-native-certification-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
