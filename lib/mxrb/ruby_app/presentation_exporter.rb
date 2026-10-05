@@ -79,9 +79,12 @@ module Mxrb
         page = Model::Page.allocate
         page.decode(document)
         widgets = page.widgets.map { @exporter.send(:widget_manifest, _1) }
-        parameters = array(document['Parameters']).map { _1.fetch('Name') }
-        "Mxrb::RubyApp::Presentation.snippet #{name.inspect}, parameters: #{parameters.inspect} do\n" \
-          "#{widget_source(name, document, widgets)}\nend"
+        parameters = PresentationContracts.parameters(document)
+        variables = PresentationContracts.variables(document)
+        parameter_source = PresentationContracts.source(parameters, kind: :parameter)
+        variable_source = PresentationContracts.source(variables, kind: :variable)
+        "Mxrb::RubyApp::Presentation.snippet #{name.inspect}, parameters: #{parameter_source}, " \
+          "variables: #{variable_source} do\n#{widget_source(name, document, widgets)}\nend"
       end
 
       def widget_source(name, document, widgets)

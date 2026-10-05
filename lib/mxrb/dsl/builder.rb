@@ -154,6 +154,12 @@ module Mxrb
         )
       end
 
+      def sidebar_toggle(name, caption: 'Menu', button_style: :default, tooltip: '',
+                         class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
+        _add_widget(:sidebar_toggle, name, caption:, button_style:, tooltip:,
+                                           class: class_name, style:, dynamic_class:, visible:, &block)
+      end
+
       def static_image(name, image:, alternative_text: '', width: 0, height: 0,
                        width_unit: :pixels, height_unit: :pixels, responsive: true,
                        class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
@@ -210,9 +216,9 @@ module Mxrb
                            hide_scrollbars: false, scroll_behavior: :per_region,
                            tab_index: 0, width: 0, width_mode: :auto,
                            class_name: nil, style: nil, dynamic_class: nil,
-                           visible: nil, region_options: nil, &block)
+                           visible: nil, region_options: nil, native_layout: nil, &block)
         _add_widget(
-          :scroll_container, name, alignment:, layout_mode:, region_options:,
+          :scroll_container, name, alignment:, layout_mode:, region_options:, native_layout:,
                                    hide_scrollbars: hide_scrollbars == true,
                                    scroll_behavior:, tab_index: tab_index.to_i,
                                    width: width.to_i, width_mode:, class: class_name,
@@ -254,22 +260,27 @@ module Mxrb
       end
 
       def menu_bar(name, menu:, tab_index: 0, class_name: nil, style: nil,
-                   dynamic_class: nil, visible: nil, &block)
+                   dynamic_class: nil, visible: nil, navigation_profile: nil, &block)
         navigation_menu_widget(
-          :menu_bar, name, menu:, tab_index:, class_name:, style:, dynamic_class:, visible:, &block
+          :menu_bar, name, menu:, tab_index:, class_name:, style:, dynamic_class:, visible:, navigation_profile:, &block
         )
       end
 
       def navigation_tree(name, menu:, tab_index: 0, class_name: nil, style: nil,
-                          dynamic_class: nil, visible: nil, &block)
+                          dynamic_class: nil, visible: nil, navigation_profile: nil, &block)
         navigation_menu_widget(
           :navigation_tree, name, menu:, tab_index:, class_name:, style:, dynamic_class:,
-                                  visible:, &block
+                                  visible:, navigation_profile:, &block
         )
       end
 
-      def data_grid(name, entity: nil, selection: nil, &block)
-        options = { entity:, selection: }.compact
+      def data_grid(name, entity: nil, selection: nil, **runtime_options, &block)
+        allowed = %i[page_size pageSize server_side sort toolbar presentation
+                     columns_resizable columns_draggable columns_hidable]
+        unknown = runtime_options.keys - allowed
+        raise ArgumentError, "unknown data grid options: #{unknown.join(', ')}" unless unknown.empty?
+
+        options = { entity:, selection:, **runtime_options }.compact
         _add_widget(:data_grid, name, **options, &block)
       end
 
@@ -396,10 +407,10 @@ module Mxrb
       end
 
       def button(name, caption: nil, parameters: [], class_name: nil, style: nil,
-                 dynamic_class: nil, visible: nil, &block)
+                 dynamic_class: nil, visible: nil, button_style: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:
+          class: class_name, style:, dynamic_class:, visible:, button_style:
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:button, name, **options, &block)
@@ -482,9 +493,9 @@ module Mxrb
       private
 
       def navigation_menu_widget(type, name, menu:, tab_index:, class_name:, style:,
-                                 dynamic_class:, visible:, &block)
+                                 dynamic_class:, visible:, navigation_profile: nil, &block)
         _add_widget(
-          type, name, menu: menu.to_s, tab_index: tab_index.to_i, class: class_name,
+          type, name, navigation_profile:, menu: menu.to_s, tab_index: tab_index.to_i, class: class_name,
                       style:, dynamic_class:, visible:, &block
         )
       end
@@ -519,9 +530,32 @@ module Mxrb
     end
 
     module WidgetEvents
+      def client_settings(disabled_during_execution: nil, close_count: nil, source: nil,
+                          confirmation: nil, progress: nil, progress_message: nil,
+                          asynchronous: nil, title: nil, link: nil, create: nil, outputs: nil)
+        { disabled_during_execution:, close_count:, source:, confirmation:, progress:,
+          progress_message:, asynchronous:, title:, link:, create:, outputs: }.compact
+      end
+
+      def action_confirmation(question:, proceed: 'Proceed', cancel: 'Cancel')
+        { question:, proceed:, cancel: }
+      end
+
+      def action_output(source:, expression: '', attribute: nil, source_attribute: nil)
+        { source:, expression:, attribute:, source_attribute: }.compact
+      end
+
+      def action_create(entity:, page: nil, association: nil)
+        { entity:, page:, association: }.compact
+      end
+
+      def action_link(type: 'Web', value: '', attribute: nil)
+        { type:, value:, attribute: }.compact
+      end
+
       %i[on_change on_click on_enter on_leave].each do |event|
         define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET,
-                                 close_page: UNSET, &block|
+                                 close_page: UNSET, settings: UNSET, &block|
           raise ArgumentError, "#{event} accepts either pass: or an argument block" if block && !pass.equal?(UNSET)
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
@@ -532,6 +566,7 @@ module Mxrb
           declaration = {
             event:, kind: choices.keys.first, handler: choices.values.first.to_s
           }
+          declaration[:settings] = settings unless settings.equal?(UNSET)
           declaration[:close_page] = close_page == true unless close_page.equal?(UNSET)
           if block
             declaration[:arguments] = WidgetEventArguments.new.evaluate(&block).arguments
@@ -2075,7 +2110,13 @@ module Mxrb
         pb = PageBuilder.new(name, default_layout:, public:, unit_id:)
         pb.instance_eval(&block) if block
         page = pb.to_h
-        ensure_application_layout if page[:forms_model].nil? && page.fetch(:layout) == default_layout
+        if page[:forms_model].nil? && page.fetch(:layout) == default_layout
+          if page[:popup_options]
+            page[:layout] = ensure_popup_layout(page.fetch(:popup_options).fetch(:mode))
+          else
+            ensure_application_layout
+          end
+        end
         @pages << page
       end
 
@@ -2316,6 +2357,22 @@ module Mxrb
         end
 
         layout(:ApplicationLayout, title: @name, navigation: nil)
+      end
+
+      def ensure_popup_layout(mode)
+        layout_type = { 'modal' => :modal_popup, 'popup' => :popup }.fetch(mode)
+        layout_name = mode == 'modal' ? 'ModalPopupLayout' : 'PopupLayout'
+        unless @native_documents.any? { _1[:type] == 'Forms$Layout' && _1[:name] == layout_name }
+          node = Forms::Node.build(:layout) do
+            name layout_name
+            content(:web_layout_content) do
+              layout_type layout_type
+              widgets(:placeholder) { name 'Main' }
+            end
+          end
+          native_document(layout_name, type: 'Forms$Layout', deep_structure: Forms::MprCodec.new.encode(node))
+        end
+        "#{@name}.#{layout_name}"
       end
 
       def evaluate(path)
@@ -2597,6 +2654,9 @@ module Mxrb
         @events        = []
         @widgets       = []
         @parameters    = []
+        @variables = []
+        @popup_options = nil
+        @autofocus = nil
         @allowed_roles = nil
         @deep_structure = nil
         @forms_model = nil
@@ -2607,7 +2667,23 @@ module Mxrb
 
       def layout(l) = (@layout = l)
       def title(t)  = (@title = t)
-      def popup!    = (@popup = true)
+
+      def popup!(mode: :modal, width: 600, height: 400, resizable: true, close_action: '')
+        raise ArgumentError, 'popup mode must be modal or popup' unless %i[modal popup].include?(mode.to_sym)
+        raise ArgumentError, 'popup dimensions must be nonnegative' unless [width, height].all? do
+          _1.is_a?(Integer) && _1 >= 0
+        end
+
+        @popup = true
+        @popup_options = { mode: mode.to_s, width:, height:, resizable:, close_action: close_action.to_s }
+      end
+
+      def autofocus(mode)
+        value = { disabled: 'Off', desktop: 'DesktopOnly', all: 'AllPlatforms' }.fetch(mode.to_sym) do
+          raise ArgumentError, 'autofocus must be disabled, desktop or all'
+        end
+        @autofocus = value
+      end
 
       # Complete schema-checked Forms representation for lossless Ruby-first
       # pages. The block runs directly against Mxrb::Forms::Node.
@@ -2670,11 +2746,18 @@ module Mxrb
         @allowed_roles = roles.map(&:to_s)
       end
 
-      def parameter(name, entity:, required: true, default_value: '', id: nil, type_id: nil)
+      def parameter(name, entity: nil, type: nil, enumeration: nil, required: true,
+                    default_value: '', id: nil, type_id: nil)
         @parameters << {
-          name: name.to_s, entity: entity.to_s, required: required == true,
+          name: name.to_s, entity: entity&.to_s, type: type&.to_s, enumeration: enumeration&.to_s,
+          required: required == true,
           default_value: default_value.to_s, id: id&.to_s, type_id: type_id&.to_s
-        }
+        }.compact
+      end
+
+      def variable(name, type: nil, entity: nil, enumeration: nil, default_value: '')
+        @variables << { name: name.to_s, type: type&.to_s, entity: entity&.to_s,
+                        enumeration: enumeration&.to_s, default_value: default_value.to_s }.compact
       end
 
       def data_source(query: nil, microflow: nil, nanoflow: nil)
@@ -2704,6 +2787,7 @@ module Mxrb
           name: @name, public: @public, layout: @layout, title: @title, popup: @popup,
           data_source: @data_source, events: @events, widgets: @widgets,
           parameters: @parameters, allowed_roles: @allowed_roles,
+          variables: @variables, popup_options: @popup_options, autofocus: @autofocus,
           deep_structure: @deep_structure, write_mode: @write_mode
         }.merge(
           unit_id: @unit_id, overlay_metadata: @overlay_metadata,

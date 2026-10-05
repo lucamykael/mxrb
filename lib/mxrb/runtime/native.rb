@@ -1216,11 +1216,30 @@ module Mxrb
           arguments = items(settings['ParameterMappings']).to_h do |mapping|
             [mapping['Parameter'].to_s, @expression.evaluate(mapping['Argument'], variables)]
           end
-          @effects << { type: 'open_page', page: settings['Form'].to_s, arguments: }
+          count = page_close_count(action, variables, default: '0')
+          @effects << { type: 'close_page', count: } if count.positive?
+          effect = { type: 'open_page', page: settings['Form'].to_s, arguments: }
+          title = settings['TitleOverride'] || settings['FormTitle']
+          effect[:title] = render_text_template(title.key?('Items') ? { 'Text' => title } : title, variables) if title
+          location = { 'Content' => 'content', 'Popup' => 'popup', 'ModalPopup' => 'modal' }[settings['Location']]
+          effect[:location] = location if location
+          variable = action['FormObjectVariable'].to_s
+          effect[:context] = variables[variable] unless variable.empty?
+          @effects << effect
         end
 
-        def action_close_form(_action, _variables)
-          @effects << { type: 'close_page' }
+        def action_close_form(action, variables)
+          @effects << { type: 'close_page', count: page_close_count(action, variables, default: '1') }
+        end
+
+        def page_close_count(action, variables, default:)
+          expression = action['NumberOfPagesToClose'].to_s
+          value = @expression.evaluate(expression.empty? ? default : expression, variables)
+          unless value.is_a?(Numeric) && value >= 0 && value == value.to_i
+            raise NativeRuntimeError, 'Number of pages to close must be a non-negative integer'
+          end
+
+          value.to_i
         end
 
         def list_operation(type, list, second, expression, variables)

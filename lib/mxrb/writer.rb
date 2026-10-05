@@ -10,6 +10,7 @@ require "time"
 require_relative "writer/page_overlay"
 require_relative "forms/mpr_codec"
 require_relative "settings/mpr_codec"
+require_relative 'ruby_app/presentation_contracts'
 
 module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
@@ -2269,7 +2270,8 @@ module Mxrb
         'CanvasWidth' => source.fetch('CanvasWidth', 800),
         'Class' => source.dig('Appearance', 'Class').to_s,
         'Documentation' => source.fetch('Documentation', ''), 'Excluded' => false,
-        'FormCall' => nil, 'LayoutType' => 'Responsive', 'Name' => source.fetch('Name'),
+        'FormCall' => nil, 'LayoutType' => source.dig('Content', 'LayoutType') || 'Responsive',
+        'Name' => source.fetch('Name'),
         'Style' => source.dig('Appearance', 'Style').to_s
       }
       return common.merge('Widgets' => IO::BsonCodec.build_array([placeholder], marker: 2)) \
@@ -3139,10 +3141,12 @@ module Mxrb
         preserve_allowed_roles(merged, existing, generated)
       when "Forms$Page"
         unless generated["__mxrb_deep_structure_declared"]
-          preserve_keys(merged, existing, %w[
+          fields = %w[
             AllowedRoles Appearance Autofocus CanvasHeight CanvasWidth
             Excluded MarkAsUsed Parameters PopupCloseAction Variables
-          ])
+          ]
+          fields -= Array(generated['__mxrb_presentation_fields'])
+          preserve_keys(merged, existing, fields)
         end
         preserve_allowed_roles(merged, existing, generated)
       when 'Menus$MenuDocument'
@@ -4536,20 +4540,48 @@ module Mxrb
           widgets: page.fetch(:widgets, []), encoded_widgets: widgets
         }
       end
-      doc
+      apply_page_contract(doc, page)
     end
 
     def page_parameter_doc(parameter)
       {
         '$ID' => parameter[:id].to_s.empty? ? SecureRandom.uuid : parameter.fetch(:id),
         '$Type' => 'Forms$PageParameter', 'Name' => parameter.fetch(:name),
-        'ParameterType' => {
-          '$ID' => parameter[:type_id].to_s.empty? ? SecureRandom.uuid : parameter.fetch(:type_id),
-          '$Type' => 'DataTypes$ObjectType', 'Entity' => parameter.fetch(:entity)
-        },
+        'ParameterType' => page_value_type_doc(parameter),
         'IsRequired' => parameter.fetch(:required),
         'DefaultValue' => parameter.fetch(:default_value)
       }
+    end
+
+    def page_value_type_doc(definition)
+      type = RubyApp::PresentationContracts.declared_type(definition)
+      native = { 'datetime' => 'DateTime', 'long' => 'Integer' }.fetch(type.fetch('kind')) { type.fetch('kind').capitalize }
+      { '$ID' => definition[:type_id] || SecureRandom.uuid, '$Type' => "DataTypes$#{native}Type",
+        'Entity' => type['entity'], 'Enumeration' => type['enumeration'] }.compact
+    end
+
+    def apply_page_contract(document, page)
+      fields = []
+      fields << 'Parameters' unless Array(page[:parameters]).empty?
+      unless Array(page[:variables]).empty?
+        fields << 'Variables'
+        document['Variables'] = IO::BsonCodec.build_array(page[:variables].map do |entry|
+          { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$LocalVariable', 'Name' => entry.fetch(:name),
+            'VariableType' => page_value_type_doc(entry), 'DefaultValue' => entry.fetch(:default_value) }
+        end, marker: 2)
+      end
+      if page[:autofocus]
+        fields << 'Autofocus'
+        document['Autofocus'] = page[:autofocus]
+      end
+      if page[:popup_options]
+        fields << 'PopupCloseAction'
+        settings = page.fetch(:popup_options)
+        document.merge!('PopupWidth' => settings.fetch(:width), 'PopupHeight' => settings.fetch(:height),
+                        'PopupResizable' => settings.fetch(:resizable), 'PopupCloseAction' => settings.fetch(:close_action))
+      end
+      document['__mxrb_presentation_fields'] = fields
+      document
     end
 
     def legacy_widget_tree(value)
@@ -4971,7 +5003,7 @@ module Mxrb
       return data_view_widget_doc(widget, context_entity:, module_name:) if type == :data_view
       if %i[
         file_manager image_uploader image_viewer menu_bar navigation_tree
-        reference_set_selector navigation_list scroll_container
+        reference_set_selector navigation_list scroll_container sidebar_toggle
       ].include?(type)
         return legacy_semantic_widget_doc(widget)
       end
@@ -5175,6 +5207,7 @@ module Mxrb
         reference_set_selector: "Forms$ReferenceSetSelector",
         navigation_list:    "Forms$NavigationList",
         scroll_container:   "Forms$ScrollContainer",
+        sidebar_toggle:     "Forms$SidebarToggleButton",
         tab_control:        "Forms$TabControl",
         container:          "Forms$DivContainer"
       }.fetch(type.to_sym)
@@ -5189,6 +5222,12 @@ module Mxrb
         'TabIndex' => options.fetch(:tab_index, 0).to_i
       }
       case type
+      when :sidebar_toggle
+        common.merge('CaptionTemplate' => client_template_doc(options.fetch(:caption, 'Menu')),
+                     'ButtonStyle' => options.fetch(:button_style, :default).to_s.capitalize,
+                     'Tooltip' => text_doc(options.fetch(:tooltip, '')),
+                     'ConditionalVisibilitySettings' => conditional_visibility_doc(options[:visible]),
+                     'Icon' => nil, 'RenderType' => 'Button')
       when :file_manager then common.merge(file_manager_widget_fields(options))
       when :image_viewer then common.merge(image_viewer_widget_fields(widget, options))
       when :image_uploader then common.merge(image_uploader_widget_fields(options))
@@ -5246,6 +5285,11 @@ module Mxrb
     end
 
     def menu_widget_fields(options)
+      if options[:navigation_profile]
+        return { 'MenuSource' => { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$NavigationSource',
+                                  'NavigationProfile' => options.fetch(:navigation_profile).to_s } }
+      end
+
       {
         'MenuSource' => {
           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MenuDocumentSource',
@@ -5709,7 +5753,8 @@ module Mxrb
         }
       when :button
         {
-          "Action" => no_action_doc(disabled: true), "AriaRole" => "Button", "ButtonStyle" => "Default",
+          "Action" => no_action_doc(disabled: true), "AriaRole" => "Button",
+          "ButtonStyle" => camelized_enum(options.fetch(:button_style, 'Default')),
           "CaptionTemplate" => client_template_doc(
             options[:caption], parameters: options[:parameters], entity: context_entity
           ),
@@ -5757,9 +5802,9 @@ module Mxrb
     def text_box_properties(options)
       editable_widget_properties(options).merge(
         "Autocomplete" => true, "AutocompletePurpose" => "On", "AutoFocus" => false,
-        "FormattingInfo" => formatting_info_doc, "InputMask" => "", "IsPasswordBox" => false,
-        "KeyboardType" => "Default", "MaxLengthCode" => -1,
-        "OnEnterKeyPressAction" => no_action_doc, "PlaceholderTemplate" => client_template_doc(""),
+        "FormattingInfo" => formatting_info_doc, "InputMask" => "", "IsPasswordBox" => options.fetch(:password, false),
+        "KeyboardType" => "Default", "MaxLengthCode" => options.fetch(:max_length, options[:source_variable] ? 0 : -1),
+        "OnEnterKeyPressAction" => no_action_doc, "PlaceholderTemplate" => client_template_doc(options.fetch(:placeholder, '')),
         "SubmitBehaviour" => "OnEndEditing", "SubmitOnInputDelay" => 300
       )
     end
@@ -5787,14 +5832,15 @@ module Mxrb
 
     def editable_widget_properties(options)
       {
-        "AriaRequired" => false, "AttributeRef" => attribute_ref_doc(options[:attribute]),
+        "AriaRequired" => options.fetch(:aria_required, false), "AttributeRef" => attribute_ref_doc(options[:attribute]),
         "ConditionalEditabilitySettings" => nil,
         "ConditionalVisibilitySettings" => conditional_visibility_doc(options[:visible]),
         "Editable" => "Always", "LabelTemplate" => client_template_doc(options[:caption]),
         "NativeAccessibilitySettings" => nil,
         "OnChangeAction" => no_action_doc, "OnEnterAction" => no_action_doc,
         "OnLeaveAction" => no_action_doc, "ReadOnlyStyle" => "Inherit",
-        "ScreenReaderLabel" => nil, "SourceVariable" => nil, "TabIndex" => 0,
+        "ScreenReaderLabel" => options[:aria_label] ? client_template_doc(options[:aria_label]) : nil,
+        "SourceVariable" => data_view_page_variable_doc(options[:source_variable]), "TabIndex" => options.fetch(:tab_index, 0),
         "Validation" => widget_validation_doc
       }
     end
@@ -5874,6 +5920,63 @@ module Mxrb
     end
 
     def client_action_doc(event)
+      document = client_action_base_doc(event)
+      options = symbolize_data_view_value(event.fetch(:settings, {}))
+      document['DisabledDuringExecution'] = options[:disabled_during_execution] if options.key?(:disabled_during_execution)
+      if options.key?(:close_count)
+        field = event.fetch(:handler).to_s == 'close_page' ? 'NumberOfPagesToClose' : 'NumberOfPagesToClose2'
+        document[field] = options[:close_count].to_s
+      end
+      document['SourceVariable'] = data_view_page_variable_doc(options[:source]) if options.key?(:source)
+      settings = document['MicroflowSettings'] || document
+      if options[:confirmation]
+        confirmation = options.fetch(:confirmation)
+        settings['ConfirmationInfo'] = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ConfirmationInfo',
+          'Question' => text_doc(confirmation.fetch(:question)),
+          'ProceedButtonCaption' => text_doc(confirmation.fetch(:proceed, 'Proceed')),
+          'CancelButtonCaption' => text_doc(confirmation.fetch(:cancel, 'Cancel'))
+        }
+      end
+      settings['ProgressBar'] = options[:progress] if options.key?(:progress)
+      settings['ProgressMessage'] = text_doc(options[:progress_message]) if options.key?(:progress_message)
+      settings['Asynchronous'] = options[:asynchronous] if options.key?(:asynchronous)
+      if options[:outputs]
+        settings['OutputMappings'] = IO::BsonCodec.build_array(options[:outputs].map do |mapping|
+          { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$OutputMapping',
+            'SourceVariable' => data_view_page_variable_doc(mapping[:source]),
+            'Expression' => mapping.fetch(:expression, ''),
+            'AttributeRef' => mapping[:attribute] ? attribute_ref_doc(mapping[:attribute]) : nil,
+            'SourceAttributeRef' => mapping[:source_attribute] ? attribute_ref_doc(mapping[:source_attribute]) : nil }
+        end, marker: 3)
+      end
+      if options[:create]
+        creation = options.fetch(:create)
+        reference = if creation[:association]
+                      { kind: :association, steps: [{ association: creation.fetch(:association),
+                                                      entity: creation.fetch(:entity) }] }
+                    else
+                      { kind: :context, entity: creation.fetch(:entity) }
+                    end
+        document['EntityRef'] = data_view_entity_ref_doc(reference)
+        document['FormSettings'] = form_action_doc(creation[:page], arguments: event.fetch(:arguments, {}))['FormSettings'] if creation[:page]
+      end
+      if options[:title] && document['FormSettings']
+        document['FormSettings']['TitleOverride'] = page_title_template_doc('en_US' => options[:title])
+      end
+      if options[:link]
+        link = options.fetch(:link)
+        document['LinkType'] = link.fetch(:type, 'Web')
+        document['Address'] = {
+          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$StaticOrDynamicString',
+          'Value' => link.fetch(:value, ''), 'IsDynamic' => link.key?(:attribute),
+          'AttributeRef' => link[:attribute] ? attribute_ref_doc(link[:attribute]) : nil
+        }
+      end
+      document
+    end
+
+    def client_action_base_doc(event)
       kind = event.fetch(:kind).to_sym
       case kind
       when :action
@@ -5960,6 +6063,14 @@ module Mxrb
           "$Type" => "Forms$DeleteClientAction",
           "ClosePage" => false, "DisabledDuringExecution" => true,
           "SourceVariable" => nil
+        }
+      when "create_object"
+        { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$CreateObjectClientAction', 'DisabledDuringExecution' => true }
+      when "sign_out", "open_link"
+        {
+          '$ID' => SecureRandom.uuid,
+          '$Type' => "Forms$#{handler.to_s == 'sign_out' ? 'SignOut' : 'OpenLink'}ClientAction",
+          'DisabledDuringExecution' => true
         }
       when "close_page"
         {

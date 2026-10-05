@@ -1,0 +1,45 @@
+{
+  "name": "ruby-page-parameters-nested-popups-and-async-actions",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [
+    {
+      "name": "nested-popups",
+      "path": "/",
+      "steps": [
+        { "click_text": "Open editor" },
+        { "wait_for_selector": "dialog[open] [data-widget-name=DraftInput] input" },
+        { "wait_for_style": { "selector": "dialog[open]", "property": "width", "value": "520px" } },
+        { "wait_for_count": { "selector": "dialog[open] .mx-resizer", "equals": 8 } },
+        { "click_text": "Open child" },
+        { "wait_for_count": { "selector": "dialog[open]", "equals": 2 } },
+        { "wait_for_selector": "dialog[open] [data-widget-name=NestedDraft] input" }
+      ],
+      "selectors": ["dialog[open]", "[data-widget-name=NestedDraft] input"]
+    },
+    {
+      "name": "close-nested-popups",
+      "path": "/",
+      "steps": [
+        { "click_text": "Open editor" },
+        { "click_text": "Open child" },
+        { "click_text": "Close both" },
+        { "wait_for_absence": "dialog[open]" },
+        { "wait_for_selector": "[data-widget-name=OpenEditor]" },
+        { "click_text": "Open editor" },
+        { "click_text": "Close editor" },
+        { "wait_for_absence": "dialog[open]" }
+      ],
+      "selectors": ["[data-widget-name=OpenEditor]"]
+    },
+    {
+      "name": "async-action",
+      "path": "/",
+      "steps": [
+        { "click_text": "Run asynchronously" },
+        { "wait_for_text": "Background action completed" }
+      ],
+      "selectors": ["[role=status]"]
+    }
+  ]
+}

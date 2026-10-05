@@ -638,6 +638,35 @@ RSpec.describe Mxrb::Runtime::Native do
     end
   end
 
+  it 'orders page closure before opening and evaluates navigation context, titles and close counts' do
+    object = @interpreter.store.create('Clinic.Animal')
+    variables = { 'Item' => object, 'Count' => 2, 'Name' => 'Animal' }
+    text = { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Edit' }] }
+    action = { 'NumberOfPagesToClose' => '$Count', 'FormObjectVariable' => 'Item', 'FormSettings' => {
+      'Form' => 'Clinic.Edit', 'Location' => 'ModalPopup', 'TitleOverride' => text,
+      'ParameterMappings' => [2, { 'Parameter' => 'Clinic.Edit.Item', 'Argument' => '$Item' }]
+    } }
+    @interpreter.send(:action_show_form, action, variables)
+    expect(@interpreter.effects.last(2)).to eq([
+                                                 { type: 'close_page', count: 2 },
+                                                 { type: 'open_page', page: 'Clinic.Edit', context: object,
+                                                   location: 'modal', title: 'Edit',
+                                                   arguments: { 'Clinic.Edit.Item' => object } }
+                                               ])
+    action['FormSettings']['TitleOverride'] = {
+      'Text' => { 'Items' => [2, { 'LanguageCode' => 'en_US', 'Text' => 'Edit {1}' }] },
+      'Parameters' => [2, { 'Expression' => '$Name' }]
+    }
+    @interpreter.send(:action_show_form, action, variables)
+    expect(@interpreter.effects.last[:title]).to eq('Edit Animal')
+    %w[-1 1.5 true].each do |expression|
+      expect { @interpreter.send(:action_close_form, { 'NumberOfPagesToClose' => expression }, {}) }
+        .to raise_error(Mxrb::NativeRuntimeError, /non-negative integer/)
+    end
+    @interpreter.send(:action_close_form, { 'NumberOfPagesToClose' => '0' }, {})
+    expect(@interpreter.effects.last).to eq(type: 'close_page', count: 0)
+  end
+
   it 'normalizes lifecycle arguments and wraps low-level REST failures' do
     object = @interpreter.store.create('Clinic.Animal')
     expect(@interpreter.send(:qualify_flow, 'Clinic', 'Child')).to eq('Clinic.Child')

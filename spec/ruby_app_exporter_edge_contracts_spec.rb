@@ -81,7 +81,7 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
         'Form' => 'Sales.Edit', 'ParameterMappings' => mapping
       } }, include('page' => 'Sales.Edit')],
       [{ '$Type' => 'Microflows$CloseFormAction', 'NumberOfPagesToClose' => 200 },
-       include('count' => 100)],
+       include('count' => '200')],
       [{ '$Type' => 'Microflows$ValidationFeedbackAction', 'Attribute' => '',
          'Association' => 'Sales.Item_Owner', 'ValidationVariableName' => 'Item',
          'FeedbackTemplate' => {} }, include('member' => 'Item_Owner')]
@@ -337,8 +337,18 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
       logo = File.join(dir, 'frontend', 'src', 'generated', 'platform', 'theme', 'web', 'logo.png')
       FileUtils.mkdir_p(File.dirname(logo))
       File.binwrite(logo, 'logo')
+      public_assets = File.join(dir, 'theme', 'web')
+      FileUtils.mkdir_p(public_assets)
+      File.write(File.join(public_assets, 'index.html'), '<html>Legacy entry point</html>')
+      File.write(File.join(public_assets, 'help.htm'), '<html>Legacy help</html>')
+      File.write(File.join(public_assets, 'theme.css'), '.mx-page { color: blue; }')
+      File.binwrite(File.join(public_assets, 'logo.png'), 'logo')
       allow(exporter).to receive(:write)
       expect(exporter.send(:copy_frontend_theme)).to be_nil
+      target = File.join(dir, 'frontend', 'public')
+      expect(File).not_to exist(File.join(target, 'index.html'))
+      expect(File).not_to exist(File.join(target, 'help.htm'))
+      expect(File.read(File.join(target, 'theme.css'))).to include('color: blue')
     end
     expect { exporter.send(:flow_identity_suffix, double(id: '', name: 'Run')) }
       .to raise_error(Mxrb::SerializationError, /has no unit id/)

@@ -977,9 +977,10 @@ module Mxrb
           nanoflow_await_source(invocation, action['result_variable'])
         when 'ShowForm'
           "runtime.showPage(#{JSON.generate(action['page'].to_s)}, " \
-            "#{JSON.generate(action.fetch('arguments', {}))});\n"
+            "#{JSON.generate(action.fetch('arguments', {}))}, " \
+            "#{JSON.generate(action.fetch('settings', {}))});\n"
         when 'CloseForm'
-          "runtime.closePage(#{Integer(action.fetch('count', 1))});\n"
+          "runtime.closePage(#{JSON.generate(action.fetch('count', '1').to_s)});\n"
         when 'ValidationFeedback'
           "runtime.validationFeedback(#{JSON.generate(action['variable'].to_s)}, " \
             "#{JSON.generate(action['member'].to_s)}, #{JSON.generate(action['message'].to_s)});\n"
@@ -1102,9 +1103,10 @@ module Mxrb
         when 'ShowForm'
           settings = action['FormSettings'] || {}
           result.merge!('page' => settings['Form'].to_s,
-                        'arguments' => nanoflow_call_arguments(settings['ParameterMappings']))
+                        'arguments' => nanoflow_call_arguments(settings['ParameterMappings']),
+                        'settings' => nanoflow_page_settings(action, settings))
         when 'CloseForm'
-          result['count'] = action.fetch('NumberOfPagesToClose', 1).to_i.clamp(1, 100)
+          result['count'] = action.fetch('NumberOfPagesToClose', '1').to_s
         when 'ValidationFeedback'
           member = (action['Attribute'].to_s.empty? ? action['Association'] : action['Attribute']).to_s
           result.merge!('variable' => action['ValidationVariableName'].to_s,
@@ -1112,6 +1114,18 @@ module Mxrb
                         'message' => translated_text_template(action['FeedbackTemplate']))
         end
         result
+      end
+
+      def nanoflow_page_settings(action, settings)
+        title = settings['TitleOverride'] || settings['FormTitle']
+        title = { 'Text' => title } if title&.key?('Items')
+        {
+          'close' => action['NumberOfPagesToClose'].to_s,
+          'context' => action['FormObjectVariable'].to_s,
+          'location' => { 'Content' => 'content', 'Popup' => 'popup', 'ModalPopup' => 'modal' }[settings['Location']],
+          'title' => title ? translated_text_template(title) : nil,
+          'title_parameters' => native_items(title&.dig('Parameters')).map { _1['Expression'].to_s }
+        }.compact
       end
 
       def nanoflow_changes(action)
@@ -1171,13 +1185,17 @@ module Mxrb
                    File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
         qualified = "#{mod.name}.#{page.name}"
         widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document)
+        layouts = @project.modules.flat_map do |owner|
+          owner.presentation_documents.map { ["#{owner.name}.#{_1[:name]}", _1[:doc]] }
+        end.to_h
+        contract = PresentationContracts.page(page.raw_document, layouts:)
         write(
           relative,
           page_source(namespace, class_name, qualified, page.id, page.title, widgets,
                       appearance_class: page.appearance_class,
                       appearance_style: page.appearance_style,
                       allowed_roles: page.allowed_module_roles,
-                      data_source: page.data_source)
+                      data_source: page.data_source, presentation: contract)
         )
         add_coverage(page.id, qualified, 'page', relative, 'native_projection_source_preserved')
         manifest = {
@@ -1188,7 +1206,7 @@ module Mxrb
           'data_source' => page.data_source,
           'allowed_module_roles' => page.allowed_module_roles.map(&:to_s),
           'widgets' => widgets
-        }
+        }.merge(contract.transform_keys(&:to_s))
         export_frontend_page(manifest, root, page.name)
         manifest
       end
@@ -1198,7 +1216,8 @@ module Mxrb
           'frontend', 'src', 'generated', 'pages', root, "#{underscore(page_name)}.tsx"
         )
         component = "#{typescript_identifier(manifest.fetch('name'))}Page"
-        definition = manifest.slice('name', 'title', 'appearance_class', 'appearance_style', 'widgets')
+        definition = manifest.slice('name', 'title', 'appearance_class', 'appearance_style', 'widgets',
+                                    'parameters', 'variables', 'popup', 'autofocus')
         declarations = []
         compiled_widgets = definition.fetch('widgets').each_with_index.map do |widget, index|
           frontend_widget_jsx(widget, [index], declarations, 6)
@@ -1898,7 +1917,7 @@ module Mxrb
       end
 
       def page_source(namespace, class_name, qualified, id, title, widgets,
-                      appearance_class:, appearance_style:, data_source:, allowed_roles: [])
+                      appearance_class:, appearance_style:, data_source:, allowed_roles: [], presentation: {})
         widget_source = PluggableProperties.with_page(id) { runtime_widget_dsl_source(widgets, 6) }
         data_source_expression = PageDataSources.configuration_expression(data_source) || data_source.inspect
         <<~RUBY
@@ -1912,7 +1931,8 @@ module Mxrb
                 allowed_roles: #{allowed_roles.map(&:to_s).inspect},
                 appearance_class: #{appearance_class.inspect},
                 appearance_style: #{appearance_style.inspect},
-                data_source: #{data_source_expression}
+                data_source: #{data_source_expression},
+                presentation: #{PresentationContracts.source(presentation)}
               ) do
           #{widget_source}
               end
@@ -1970,6 +1990,8 @@ module Mxrb
             keyword = runtime_widget_keyword(type, key, generic_sink:)
             expression = if key.to_s == 'source'
                            PageDataSources.source_expression(value)
+                         elsif key.to_s == 'source_variable'
+                           PageDataSources.variable_reference_expression(value)
                          elsif key.to_s == 'association_path'
                            steps = value.map { [_1['association'], _1['entity']].inspect }
                            "association_path(#{steps.join(', ')})"
@@ -2039,7 +2061,8 @@ module Mxrb
         layout_grid: %w[width tab_index class style dynamic_class visible rows]
       }.freeze
       DSL_SINK_OPTIONS = {
-        button: %w[caption parameters class style dynamic_class visible],
+        sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip],
+        button: %w[caption parameters class style dynamic_class visible button_style],
         check_box: %w[attribute caption class style dynamic_class visible],
         container: %w[class style dynamic_class visible],
         date_picker: %w[attribute caption class style dynamic_class visible],
@@ -2058,9 +2081,9 @@ module Mxrb
           height_unit responsive show_as_thumbnail on_click_enlarge tab_index
           class style dynamic_class visible
         ],
-        menu_bar: %w[menu tab_index class style dynamic_class visible],
+        menu_bar: %w[menu navigation_profile tab_index class style dynamic_class visible],
         navigation_list: %w[tab_index class style dynamic_class visible],
-        navigation_tree: %w[menu tab_index class style dynamic_class visible],
+        navigation_tree: %w[menu navigation_profile tab_index class style dynamic_class visible],
         number_input: %w[attribute caption class style dynamic_class visible],
         page_title: %w[class style dynamic_class visible],
         pluggable_widget: %w[
@@ -2074,7 +2097,7 @@ module Mxrb
           paging tab_index width_unit class style dynamic_class visible
         ],
         scroll_container: %w[
-          alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode region_options
+          alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode region_options native_layout
           class style dynamic_class visible
         ],
         snippet: %w[snippet arguments class style dynamic_class visible],
@@ -2203,7 +2226,7 @@ module Mxrb
         return false if widget.key?('events') && !widget['events'].is_a?(Array)
 
         Array(widget['events']).all? do |event|
-          runtime_keys?(event, %w[event kind handler arguments close_page]) &&
+          runtime_keys?(event, %w[event kind handler arguments close_page settings]) &&
             WIDGET_EVENT_METHODS.include?(event['event'].to_s) &&
             WIDGET_EVENT_HANDLERS.include?(event['kind'].to_s) &&
             %w[event kind handler].all? { event[_1].is_a?(String) && !event[_1].empty? } &&
@@ -2212,10 +2235,38 @@ module Mxrb
         end
       end
 
+      def client_settings_source(settings)
+        fields = settings.map do |key, value|
+          expression = case key.to_s
+                       when 'source' then PageDataSources.variable_reference_expression(value)
+                       when 'outputs'
+                         entries = value.map do |mapping|
+                           arguments = mapping.map do |name, item|
+                             source = if name.to_s == 'source'
+                                        PageDataSources.variable_reference_expression(item)
+                                      else
+                                        item.inspect
+                                      end
+                             "#{name}: #{source}"
+                           end
+                           "action_output(#{arguments.join(', ')})"
+                         end
+                         "[#{entries.join(', ')}]"
+                       when 'confirmation', 'link', 'create'
+                         arguments = value.map { |name, item| "#{name}: #{item.inspect}" }.join(', ')
+                         "action_#{key}(#{arguments})"
+                       else value.inspect
+                       end
+          "#{key}: #{expression}"
+        end
+        "client_settings(#{fields.join(', ')})"
+      end
+
       def runtime_widget_event_source(widget, indentation, preserve_empty: false)
         Array(widget['events']).map do |event|
           arguments = ["#{event.fetch('kind')}: #{event.fetch('handler').inspect}"]
           arguments << "close_page: #{event.fetch('close_page').inspect}" if event.key?('close_page')
+          arguments << "settings: #{client_settings_source(event.fetch('settings'))}" if event.key?('settings')
           # Existing native-widget sinks compacted empty mappings. Preserve
           # that runtime projection while migrating literal events (which did
           # retain empty mappings) using an explicitly empty argument block.
@@ -2665,7 +2716,8 @@ module Mxrb
       def runtime_data_grid_supported?(type, options, widget)
         return false unless type == :data_grid
         return false unless runtime_keys?(
-          options, %w[entity selection columns page_size pageSize server_side sort toolbar]
+          options, %w[entity selection columns page_size pageSize server_side sort toolbar
+                      presentation columns_resizable columns_draggable columns_hidable]
         )
         return false unless Array(widget['children']).empty?
         return false unless runtime_dsl_sink_regions_supported?(type, widget)
@@ -2680,7 +2732,8 @@ module Mxrb
         padding = ' ' * indentation
         options = widget.fetch('options')
         arguments = [widget.fetch('name', '').inspect]
-        %w[entity selection page_size pageSize server_side sort toolbar].each do |name|
+        %w[entity selection page_size pageSize server_side sort toolbar
+           presentation columns_resizable columns_draggable columns_hidable].each do |name|
           arguments << "#{name}: #{pretty_ruby_value(options.fetch(name), indentation + 2)}" if options.key?(name)
         end
         lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
@@ -2953,14 +3006,16 @@ module Mxrb
         sources << File.join(@mendix_sidecar, 'theme', 'web')
         sources.select { File.directory?(_1) }.each do |source|
           overlay_frontend_web_assets(source, destination)
+          overlay_frontend_web_assets(source, File.join(@output_dir, 'frontend', 'public'), public: true)
         end
       end
 
-      def overlay_frontend_web_assets(source, destination)
+      def overlay_frontend_web_assets(source, destination, public: false)
         Find.find(source) do |path|
           relative_path = path.delete_prefix("#{source}/")
           next if path == source || File.directory?(path)
           next if %w[.js .jsx .scss].include?(File.extname(path).downcase)
+          next if public && %w[.html .htm].include?(File.extname(path).downcase)
 
           target = File.join(destination, relative_path)
           FileUtils.mkdir_p(File.dirname(target))
@@ -3505,7 +3560,8 @@ module Mxrb
             readonly #changes = new Map<string, EntityRecord>();
             readonly #messages: Array<{ message: string; level: string; blocking: boolean }> = [];
             readonly #effects: Array<{
-              type: string; page?: string; arguments?: NanoflowParameters; count?: number
+              type: string; page?: string; arguments?: NanoflowParameters; count?: number;
+              context?: EntityRecord; location?: 'content' | 'modal' | 'popup'; title?: string
             }> = [];
             readonly #validation: Array<{ variable: string; member: string; message: string }> = [];
 
@@ -3639,14 +3695,28 @@ module Mxrb
               this.#messages.push({ message, level, blocking });
             }
 
-            showPage(page: string, expressions: Record<string, string>): void {
+            showPage(page: string, expressions: Record<string, string>, settings: {
+              close?: string; context?: string; location?: 'content' | 'modal' | 'popup';
+              title?: string; title_parameters?: string[];
+            } = {}): void {
               const argumentsValue = Object.fromEntries(
                 Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)])
               );
-              this.#effects.push({ type: 'open_page', page, arguments: argumentsValue });
+              if (settings.close) this.closePage(settings.close);
+              const title = settings.title?.replace(/\\{(\\d+)\\}/g, (_placeholder, index) =>
+                this.string(settings.title_parameters?.[Number(index) - 1] || "''"));
+              const context = settings.context ? this.value('$' + settings.context) : undefined;
+              if (context != null && !isRecord(context)) throw new Error('Page context must be an object');
+              this.#effects.push({ type: 'open_page', page, arguments: argumentsValue,
+                ...(settings.location ? { location: settings.location } : {}),
+                ...(title !== undefined ? { title } : {}),
+                ...(isRecord(context) ? { context } : {}) });
             }
 
-            closePage(count = 1): void {
+            closePage(expression = '1'): void {
+              const count = this.value(expression || '1');
+              if (typeof count !== 'number' || !Number.isInteger(count) || count < 0)
+                throw new Error('Number of pages to close must be a non-negative integer');
               this.#effects.push({ type: 'close_page', count });
             }
 
@@ -3969,6 +4039,8 @@ module Mxrb
             type: Name;
             attributes: Attributes;
             transient?: boolean;
+            new_record?: boolean;
+            draft_id?: string;
           }
 
           export interface WidgetEvent {
@@ -3977,6 +4049,19 @@ module Mxrb
             handler: string;
             arguments?: RuntimeVariables;
             close_page?: boolean;
+            settings?: {
+              disabled_during_execution?: boolean;
+              close_count?: string;
+              source?: RuntimeValue;
+              confirmation?: { question: string; proceed?: string; cancel?: string };
+              progress?: string;
+              progress_message?: string;
+              asynchronous?: boolean;
+              outputs?: Array<{ source: RuntimeValue; expression?: string; attribute?: string; source_attribute?: string }>;
+              title?: string;
+              link?: { type?: string; value?: string; attribute?: string };
+              create?: { entity: string; page?: string; arguments?: RuntimeVariables; association?: string };
+            };
           }
 
           export interface WidgetColumn {
@@ -4065,9 +4150,42 @@ module Mxrb
             slots?: WidgetSlot[];
           }
 
+          export interface ValueType {
+            kind: string;
+            entity?: string;
+            enumeration?: string;
+          }
+
+          export interface ValueDefinition {
+            name: string;
+            type?: ValueType;
+            required?: boolean;
+            default?: string;
+          }
+
+          export interface PopupDefinition {
+            mode: 'modal' | 'popup';
+            width?: number;
+            height?: number;
+            resizable?: boolean;
+            close_action?: string;
+          }
+
+          export interface PageOpenOptions {
+            drafts?: Array<{ record: EntityRecord; changes: RuntimeVariables }>;
+            arguments?: RuntimeVariables;
+            location?: 'content' | 'modal' | 'popup';
+            title?: string;
+          }
+
           export interface PageDefinition<Name extends string = string, WidgetName extends string = string> {
+            layout?: string;
             name: Name;
             title: string;
+            parameters?: ValueDefinition[];
+            variables?: ValueDefinition[];
+            popup?: PopupDefinition;
+            autofocus?: string;
             appearance_class?: string;
             appearance_style?: string;
             data_source?: { kind: 'microflow' | 'nanoflow' | string; name: string } | null;
@@ -4094,6 +4212,7 @@ module Mxrb
           export interface EntityDefinition {
             name: string;
             attributes?: AttributeDefinition[];
+            generalization?: { target: string };
           }
 
           export interface EnumerationDefinition {
@@ -4110,12 +4229,14 @@ module Mxrb
           }
 
           export interface NavigationItem {
+            icon?: string | number;
             page?: string;
             caption?: Record<string, string>;
             items?: NavigationItem[];
           }
 
           export interface NavigationProfile {
+            name?: string;
             kind: string;
             home_page?: string;
             items?: NavigationItem[];
@@ -4141,7 +4262,7 @@ module Mxrb
             caption: string;
             page?: string;
             microflow?: string;
-            icon?: string;
+            icon?: string | number;
             items?: PresentationMenuItem[];
             caption_translations?: Record<string, string>;
             action?: WidgetEvent;
@@ -4152,12 +4273,16 @@ module Mxrb
             items?: PresentationMenuItem[];
             widgets?: WidgetDefinition[];
             path?: string;
-            parameters?: string[];
+            parameters?: Array<string | ValueDefinition>;
+            variables?: ValueDefinition[];
           }
 
           export interface OpenPageEffect {
             type: 'open_page';
             page: string;
+            context?: EntityRecord;
+            location?: 'content' | 'modal' | 'popup';
+            title?: string;
             arguments?: Record<string, RuntimeValue>;
           }
 
@@ -4222,7 +4347,8 @@ module Mxrb
             changes: EntityRecord[];
             messages: Array<{ message: string; level: string; blocking: boolean }>;
             effects: Array<{
-              type: string; page?: string; arguments?: NanoflowParameters; count?: number
+              type: string; page?: string; arguments?: NanoflowParameters; count?: number;
+              context?: EntityRecord; location?: 'content' | 'modal' | 'popup'; title?: string
             }>;
             validation: Array<{ variable: string; member: string; message: string }>;
           }

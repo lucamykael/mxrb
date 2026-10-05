@@ -85,6 +85,12 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
                                           'Attribute' => 'Presentation.Document.Name' }
                     }] },
         'CenterRegion' => { '$Type' => 'Forms$ScrollContainerRegion', 'Widgets' => [2, {
+          '$Type' => 'Forms$SidebarToggleButton', 'Name' => 'ToggleRegion',
+          'CaptionTemplate' => { '$Type' => 'Forms$ClientTemplate',
+                                 'Template' => { 'Items' => [2,
+                                                             { 'LanguageCode' => 'en_US',
+                                                               'Text' => 'Toggle sidebar' }] } }
+        }, {
           '$Type' => 'Forms$TextBox', 'Name' => 'RegionName',
           'AttributeRef' => { '$Type' => 'DomainModels$AttributeRef', 'Attribute' => 'Presentation.Document.Name' }
         }] }

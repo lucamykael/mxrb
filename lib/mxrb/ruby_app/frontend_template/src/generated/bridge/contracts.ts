@@ -6,6 +6,7 @@ import type {
   RuntimeValue,
   RuntimeVariables,
   WidgetDefinition,
+  PageOpenOptions,
 } from '../types';
 
 export type ErrorHandler = (failure: unknown) => void;
@@ -17,8 +18,13 @@ export type InvokeHandler = (
   name: string,
   parameters?: RuntimeVariables,
   contextOverride?: EntityRecord | null,
+  options?: { asynchronous?: boolean },
 ) => Promise<unknown>;
-export type NavigateHandler = (name: string, context?: EntityRecord | null) => Promise<unknown>;
+export type NavigateHandler = (
+  name: string,
+  context?: EntityRecord | null,
+  options?: PageOpenOptions,
+) => Promise<unknown>;
 export type SelectRecord = (record: EntityRecord | null) => void;
 
 export interface WidgetRuntimeProps {

@@ -1,5 +1,6 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { ClientActions } from '../PageEdits';
+import { LocalVariables, PageParameterBindings, SnippetParameterBindings } from '../PageVariables';
 import { editable, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import type {
   ApiRequest,
@@ -20,24 +21,26 @@ import {
 } from '../value';
 
 interface BoundFieldProps {
+  id?: string;
   widget: WidgetDefinition;
   record: EntityRecord | null;
   schema: ApplicationSchema;
   request: ApiRequest;
   saveRecord: SaveRecord;
   revision: number;
-  onChanged?: (record: EntityRecord) => unknown;
-  onEntered?: (record: EntityRecord) => unknown;
-  onLeft?: (record: EntityRecord) => unknown;
+  onChanged?: (record: EntityRecord | null) => unknown;
+  onEntered?: (record: EntityRecord | null) => unknown;
+  onLeft?: (record: EntityRecord | null) => unknown;
   onError: ErrorHandler;
 }
 
 export function BoundField({
+  id,
   widget,
-  record,
+  record: suppliedRecord,
   schema,
   request,
-  saveRecord,
+  saveRecord: suppliedSaveRecord,
   revision,
   onChanged,
   onEntered,
@@ -47,6 +50,37 @@ export function BoundField({
   const fieldId = useId();
   const actions = useContext(ClientActions);
   const options = widget.options || {};
+  const locals = useContext(LocalVariables);
+  const pageBindings = useContext(PageParameterBindings);
+  const snippetBindings = useContext(SnippetParameterBindings);
+  const source = options.source_variable as { kind?: string; name?: string } | undefined;
+  const bindings =
+    source?.kind === 'page_parameter'
+      ? pageBindings
+      : source?.kind === 'snippet_parameter'
+        ? snippetBindings
+        : locals;
+  const local =
+    source && ['local_variable', 'page_parameter', 'snippet_parameter'].includes(source.kind || '')
+      ? memberName(source.name || '')
+      : '';
+  const boundValue = local ? bindings.values[local] : undefined;
+  const primitive = !!local && !isEntityRecord(boundValue);
+  const record = isEntityRecord(boundValue)
+    ? actions?.edits.resolve(boundValue) || boundValue
+    : local
+      ? {
+          id: local,
+          type: '$Local',
+          attributes: { [memberName(options.attribute || widget.name)]: bindings.values[local] },
+        }
+      : suppliedRecord;
+  const saveRecord: SaveRecord = primitive
+    ? async (current, changes) => {
+        bindings.set(local, Object.values(changes)[0]);
+        return current ? { ...current, attributes: { ...current.attributes, ...changes } } : null;
+      }
+    : suppliedSaveRecord;
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
   const member = memberName(options.attribute || widget.name);
@@ -69,9 +103,10 @@ export function BoundField({
   const entityDefinition = (schema.modules || [])
     .flatMap((module) => [...(module.models || []), ...(module.dtos || [])])
     .find((entity) => entity.name === record?.type);
-  const attributeDefinition = (entityDefinition?.attributes || []).find(
-    (attribute) => attribute.name === member,
-  );
+  const boundType = primitive ? bindings.types?.[local] : undefined;
+  const attributeDefinition = boundType
+    ? { name: member, type: boundType.kind, enumeration: boundType.enumeration }
+    : (entityDefinition?.attributes || []).find((attribute) => attribute.name === member);
   const enumeration = (schema.modules || [])
     .flatMap((module) => module.enumerations || [])
     .find(
@@ -134,7 +169,7 @@ export function BoundField({
         if (!updated) return null;
         committed.current = next;
         latestRecord.current = updated;
-        await onChanged?.(updated);
+        await onChanged?.(primitive ? suppliedRecord : updated);
         return updated;
       });
     pending.current = task;
@@ -164,17 +199,19 @@ export function BoundField({
   };
   const blur = () => {
     void persist(draft)
-      .then((updated) => updated && onLeft?.(updated))
+      .then((updated) => updated && onLeft?.(primitive ? suppliedRecord : updated))
       .catch(onError);
   };
   const focus = () => {
     if (!disabled && record) {
       void Promise.resolve()
-        .then(() => onEntered?.(record))
+        .then(() => onEntered?.(primitive ? suppliedRecord : record))
         .catch(onError);
     }
   };
   const controlProps = {
+    id: id || fieldId,
+    className: kind === 'check_box' ? undefined : 'form-control',
     disabled,
     onFocus: focus,
     onBlur: blur,

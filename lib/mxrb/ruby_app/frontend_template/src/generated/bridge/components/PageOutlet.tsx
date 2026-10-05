@@ -1,5 +1,5 @@
 import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
-import { PageTitleContext } from './PageTitleContext';
+import { PageTitleContext, PageNameContext, PageLayoutContext } from './PageTitleContext';
 
 interface PageOutletProps {
   page: PageDefinition;
@@ -18,9 +18,15 @@ export function PageOutlet({ page, busy, Widget }: PageOutletProps) {
 
   return (
     <PageTitleContext.Provider value={page.title}>
-      <main className="app-page mxrb-page region-content" aria-busy={busy} data-page={page.name}>
-        {(page.widgets || []).map((widget, index) => renderWidget(widget, index, String(index)))}
-      </main>
+      <PageNameContext.Provider value={page.name}>
+        <PageLayoutContext.Provider value={page.layout || page.name}>
+          <main className="app-page mxrb-page" aria-busy={busy} data-page={page.name}>
+            {(page.widgets || []).map((widget, index) =>
+              renderWidget(widget, index, String(index)),
+            )}
+          </main>
+        </PageLayoutContext.Provider>
+      </PageNameContext.Provider>
     </PageTitleContext.Provider>
   );
 }

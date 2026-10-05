@@ -68,7 +68,8 @@ RSpec.describe 'Standalone presentation export' do
         *%w[button menu_bar navigation_tree static_image snippet file_manager image_uploader image_viewer
             reference_set_selector scroll_container navigation_list]
       )
-      expect(widgets.find { _1['type'] == 'scroll_container' }.dig('regions', 'center', 0, 'name')).to eq('RegionName')
+      expect(widgets.find { _1['type'] == 'scroll_container' }.dig('regions', 'center').map { _1.fetch('name') })
+        .to eq(%w[ToggleRegion RegionName])
       expect(widgets.find { _1['type'] == 'navigation_list' }.dig('children', 0, 'events', 0, 'handler'))
         .to eq('Presentation.Alternate')
       resources = application.schema.fetch(:presentation)
