@@ -255,7 +255,8 @@ try {
     $casesPath = Join-Path $BatchDirectory 'cases.json'
     $rawCases = [System.IO.File]::ReadAllText($casesPath)
     if (-not $rawCases.TrimStart().StartsWith('[')) { throw 'cases.json must be a JSON array' }
-    $cases = @(ConvertFrom-Json -InputObject $rawCases)
+    $parsedCases = ConvertFrom-Json -InputObject $rawCases
+    $cases = @($parsedCases)
     if ($cases.Count -eq 0) { throw 'cases.json is empty' }
     $labels = @{}
     foreach ($case in $cases) {
