@@ -16,6 +16,7 @@ module Mxrb
   # Applies a DSL definition to a new or existing MPR. Names are used as the
   # stable key, making repeated `mxrb generate` runs idempotent.
   class Writer
+    ATTRIBUTE_DEFAULTS = { boolean: false }.freeze
     CONVENTIONAL_DOCUMENT_FOLDERS = {
       'Microflows$Microflow' => 'Flows',
       'Microflows$Nanoflow' => 'Flows',
@@ -4167,12 +4168,12 @@ module Mxrb
       elsif previous_value.is_a?(Hash) && previous_value["$Type"] == "DomainModels$StoredValue"
         updated = previous_value.dup
         default_key = native_key(previous_value, "defaultValue", "DefaultValue")
-        updated[default_key] = attr.fetch(:default, "").to_s
+        updated[default_key] = attribute_default_expression(attr)
         updated
       else
         {
           "$ID" => SecureRandom.uuid, "$Type" => "DomainModels$StoredValue",
-          "DefaultValue" => attr.fetch(:default, "").to_s
+          "DefaultValue" => attribute_default_expression(attr)
         }
       end
       doc = (previous || {}).merge(
@@ -4185,6 +4186,10 @@ module Mxrb
       doc[type_key] = type_doc
       doc[value_key] = value_doc
       doc
+    end
+
+    def attribute_default_expression(attr)
+      attr.fetch(:default) { ATTRIBUTE_DEFAULTS.fetch(attr.fetch(:type).to_sym, '') }.to_s
     end
 
     def native_key(hash, lower, upper)
@@ -5177,7 +5182,9 @@ module Mxrb
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$SnippetCall",
           "Form" => widget.dig(:options, :snippet).to_s,
-          "ParameterMappings" => IO::BsonCodec.build_array([], marker: 2)
+          "ParameterMappings" => client_parameter_mapping_docs(
+            widget.dig(:options, :arguments) || {}, handler: widget.dig(:options, :snippet), kind: :snippet
+          )
         }
       }
     end
@@ -6026,7 +6033,7 @@ module Mxrb
     def client_parameter_mapping_docs(arguments, handler:, kind:)
       mappings = arguments.map do |parameter, configured|
         variable = configured if configured.is_a?(Hash)
-        value_field = kind.to_sym == :page ? "Argument" : "Expression"
+        value_field = %i[page snippet].include?(kind.to_sym) ? "Argument" : "Expression"
         {
           "$ID" => SecureRandom.uuid,
           "$Type" => "Forms$#{kind.to_s.capitalize}ParameterMapping",

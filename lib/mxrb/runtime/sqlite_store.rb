@@ -59,11 +59,10 @@ module Mxrb
         raise ArgumentError, 'lifecycle hook requires a block' unless block
 
         @hooks[key] << [entity&.to_s, block]
-        @transient.on(transient_name(entity), key) { |value| block.call(value, self) } if entity && transient?(entity)
-        unless entity
-          @transient_entities.each do |name|
-            @transient.on(name, key) { |value| block.call(value, self) }
-          end
+        @transient_entities.each do |name|
+          next if entity && !schema.assignable?(name, transient_name(entity) || entity.to_s)
+
+          @transient.on(name, key) { |value| block.call(value, self) }
         end
         self
       end

@@ -729,7 +729,9 @@ RSpec.describe 'Ruby application internal contracts' do
       old ? ENV['MXRB_OUTPUT_PATH'] = old : ENV.delete('MXRB_OUTPUT_PATH')
     end
 
-    migration = double(mendix_version: '1', close: nil)
+    storage = instance_double(Mxrb::IO::MprFile)
+    expect(storage).to receive(:ensure_storage_for_version!).with('2').twice
+    migration = double(mendix_version: '1', close: nil, mpr: storage)
     expect(migration).to receive(:migrate_to!).with('2')
     allow(Mxrb::Model::Project).to receive(:open).and_return(migration)
     Mxrb::RubyApp.transition('x', '2')

@@ -282,6 +282,25 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     store.close
   end
 
+  it 'inherits transient callbacks without firing them for unrelated entities or disabled events' do
+    records = %w[Base Child Other].map do |name|
+      entity(name, id: name, guid: name, attributes: [], persistable: false)
+    end
+    runtime_project = project(extra_entities: records)
+    schema = Mxrb::Runtime::SchemaMigrator.derive(runtime_project)
+    schema = schema.with(inheritance: { 'Store.Child' => ['Store.Base'] })
+    store = described_class.new(runtime_project, schema:)
+    called = []
+    store.on('Base', :before_commit) { |value| called << value.entity }
+    child = store.create('Child')
+    store.commit(child)
+    store.commit(store.create('Other'))
+    store.commit(child, events: false)
+    expect(called).to eq(['Store.Child'])
+  ensure
+    store&.close
+  end
+
   it 'keeps hybrid associations bidirectional and volatile' do
     scratch = entity(
       'Scratch', id: 'scratch', guid: 'scratch', attributes: [], persistable: false

@@ -163,6 +163,9 @@ module Mxrb
     def self.transition(path, version)
       project = Model::Project.open(path, readonly: false)
       project.migrate_to!(version) unless project.mendix_version == version.to_s
+      # An explicit native target also normalizes legacy storage at the same
+      # version. A plain lossless compile retains the source storage format.
+      project.mpr.ensure_storage_for_version!(version)
     ensure
       project&.close
     end

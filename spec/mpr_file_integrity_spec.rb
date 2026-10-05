@@ -56,6 +56,28 @@ RSpec.describe Mxrb::IO::MprFile do
     end
   end
 
+  it 'keeps inline projects independent of a neighboring split project and protects its contents' do
+    Dir.mktmpdir do |dir|
+      inline = File.join(dir, 'Inline.mpr')
+      Mxrb.define(inline) { mendix_version '11.12.1' }
+      split = make_v2_project(dir)
+      contents = File.join(dir, 'mprcontents')
+      before = mxunit_snapshot(contents)
+      mpr = described_class.open(inline)
+      expect(mpr.format_version).to eq(:v1)
+      expect(mpr.parse_contents(mpr.root_unit)).to include('$Type' => 'Projects$Project')
+      expect { mpr.ensure_storage_for_version!('11.12.1') }
+        .to raise_error(Mxrb::IncompletePackageError, /belongs to project.mpr/)
+      expect(mxunit_snapshot(contents)).to eq(before)
+      renamed = File.join(dir, 'Renamed.mpr')
+      FileUtils.cp(split, renamed)
+      expect { described_class.open(renamed) }
+        .to raise_error(Mxrb::IncompletePackageError, /external unit contents belong to project.mpr/)
+    ensure
+      mpr&.close
+    end
+  end
+
   it 'rejects duplicate nested object identities before Studio Pro conversion' do
     Dir.mktmpdir do |dir|
       path = make_v2_project(dir)

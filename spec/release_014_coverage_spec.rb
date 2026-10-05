@@ -1267,8 +1267,10 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     expect { Mxrb::RubyApp.transition('nil-project', '11.12.1') }.to raise_error(NoMethodError)
   end
 
-  it 'skips an unnecessary Mendix version transition' do
-    project = instance_double(Mxrb::Model::Project, mendix_version: '11.12.1')
+  it 'normalizes native storage without an unnecessary Mendix model version transition' do
+    storage = instance_double(Mxrb::IO::MprFile)
+    expect(storage).to receive(:ensure_storage_for_version!).with('11.12.1')
+    project = instance_double(Mxrb::Model::Project, mendix_version: '11.12.1', mpr: storage)
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)
     expect(project).not_to receive(:migrate_to!)
     expect(project).to receive(:close)

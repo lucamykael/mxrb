@@ -468,15 +468,20 @@ RSpec.describe 'Ruby application export mode' do
         mendix_version '11.12.1'
         self.module(:App) { page(:Home) { text :Title, caption: 'Legacy' } }
       end
+      mpr = Mxrb::IO::MprFile.open(source)
+      mpr.migrate_storage_format!(:v1)
+      mpr.close
       SQLite3::Database.new(source) { _1.execute("UPDATE _MetaData SET _SchemaHash = ''") }
       Mxrb::Exporter.new(source, root, mode: :ruby).export!
       Mxrb::RubyApp.compile(root, rebuilt, mendix_version: '11.12.1')
       expected = Mxrb::StudioCompatibility.new('11.12.1').schema_hash
       SQLite3::Database.new(rebuilt) do |database|
         expect(database.get_first_value('SELECT _SchemaHash FROM _MetaData')).to eq(expected)
+        expect(database.get_first_value('SELECT _FormatVersion FROM _MetaData')).to eq(2)
       end
       SQLite3::Database.new(source) do |database|
         expect(database.get_first_value('SELECT _SchemaHash FROM _MetaData')).to eq('')
+        expect(database.table_info('_MetaData').map { _1['name'] }).not_to include('_FormatVersion')
       end
     end
   end
