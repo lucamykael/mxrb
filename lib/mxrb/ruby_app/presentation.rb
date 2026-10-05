@@ -16,6 +16,8 @@ module Mxrb
           @events = []
         end
 
+        def collection_icon(name) = { collection: name.to_s }
+
         def item(caption, page: nil, microflow: nil, icon: nil, translations: [], &block)
           children = self.class.new
           children.instance_eval(&block) if block
@@ -50,7 +52,7 @@ module Mxrb
       end
 
       def self.icon(name, path:, character:)
-        unless path.to_s.match?(%r{\A/assets/fonts/[a-f0-9]{64}\.woff\z}) &&
+        unless path.to_s.match?(%r{\A/assets/fonts/(?:[a-f0-9]{64}|[A-Za-z_]\w*\.[A-Za-z_]\w*)\.woff\z}) &&
                character.is_a?(Integer) && character.between?(0, 0x10ffff)
           raise ArgumentError, 'presentation icons require a local font and Unicode character'
         end

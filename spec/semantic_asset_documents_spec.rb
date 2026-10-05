@@ -35,7 +35,13 @@ RSpec.describe 'semantic asset documents' do
       Mxrb::Exporter.new(source, root, mode: :ruby).export!
       path = File.join(root, 'app', 'presentation', 'assets.rb')
       text = File.read(path)
-      expect(text).to include('Presentation.icon "Assets.Icons.Add"', 'character: 65')
+      expect(text).to include('Presentation.icon "Assets.Icons.Add"', 'character: 65',
+                              'icon: collection_icon("Assets.Icons.Add")', '/assets/fonts/Assets.Icons.woff',
+                              'icon: 43')
+      expect(Mxrb::PublicSourceAudit.new(root).summary).to eq({})
+      exporter = Mxrb::RubyApp::PresentationExporter.new(double, nil)
+      expect { exporter.send(:export_icon_font, 'font', '../Invalid') }
+        .to raise_error(Mxrb::SerializationError, /qualified collection/)
       application = Mxrb::RubyApp::Application.new(root)
       resource = application.schema.fetch(:presentation).fetch('Assets.Icons.Add')
       expect(resource).to include(kind: 'icon', character: 65)
@@ -63,6 +69,10 @@ RSpec.describe 'semantic asset documents' do
     Mxrb.define(path) do
       mendix_version '11.12.1'
       self.module(:Assets) do
+        menu(:Main) do
+          item 'Add', icon: { collection: 'Assets.Icons.Add' }
+          item 'Built in', icon: 43
+        end
         image_collection :Images, images: [{
           id: SecureRandom.uuid, name: 'Logo', format: 'Png',
           data: { data: encoded_image, subtype: :generic }

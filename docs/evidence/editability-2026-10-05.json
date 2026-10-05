@@ -126,13 +126,13 @@
     "examples": 2266,
     "failures": 0,
     "lines": {
-      "covered": 40585,
-      "total": 40585,
+      "covered": 40593,
+      "total": 40593,
       "percent": 100.0
     },
     "branches": {
-      "covered": 17738,
-      "total": 17738,
+      "covered": 17744,
+      "total": 17744,
       "percent": 100.0
     }
   },
@@ -252,5 +252,13 @@
     "Callback signature certified; callback execution and native deep-link integration are not certified.",
     "The eight-project inventory is not an exhaustive compatibility matrix.",
     "112 unreferenced auxiliary BSON files remain; corresponding typed Ruby declarations already exist."
-  ]
+  ],
+  "public_source_projection": {
+    "fixture": "Sudoku",
+    "source_audit": {},
+    "valid": true,
+    "identical": true,
+    "font_paths": "qualified module and collection names",
+    "menu_icon_references": "typed collection_icon declarations"
+  }
 }

@@ -14,7 +14,7 @@ and BSON collection markers survive reconstruction without reviving removed
 items. JavaScript action parameters support `kind: :nanoflow` with stable IDs.
 The original and rebuilt SLA menus and action signature compare identically.
 
-The Ruby frontend exports local fonts by hash and editable icon resources. The
+The Ruby frontend exports local fonts named by module and collection and editable icon resources. The
 Chromium scenario `editable_menu_icons_flow.json` checks display and navigation
 with MPR access forbidden. Windows certification includes the menu and callback
 contract in source and roundtrip variants; it does not execute the callback or

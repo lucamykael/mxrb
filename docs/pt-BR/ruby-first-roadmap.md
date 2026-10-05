@@ -15,7 +15,7 @@ removidos. Parâmetros de ações JavaScript aceitam `kind: :nanoflow`, mantendo
 IDs. O projeto SLA original e reconstruído apresentou menus e assinatura
 idênticos na comparação estrutural.
 
-O frontend Ruby recebe fontes locais por hash e recursos de ícones editáveis.
+O frontend Ruby recebe fontes locais com nomes de módulo e coleção e recursos de ícones editáveis.
 O cenário `editable_menu_icons_flow.json` verifica exibição e navegação em
 Chromium com abertura de MPR proibida. O lote Windows inclui o contrato de menus
 e callback na origem e após reconstrução; o callback não é executado e não

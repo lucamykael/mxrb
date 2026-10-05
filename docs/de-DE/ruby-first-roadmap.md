@@ -15,7 +15,7 @@ BSON-Listenmarker bleiben beim Neuaufbau erhalten, entfernte Einträge bleiben
 entfernt. JavaScript-Parameter unterstützen `kind: :nanoflow` mit stabilen IDs.
 Die SLA-Menüs und die Aktionssignatur sind nach dem Neuaufbau strukturell identisch.
 
-Das Ruby-Frontend erhält lokale Schriftdateien mit Hash und editierbare
+Das Ruby-Frontend erhält lokale Schriftdateien mit Modul- und Collection-Namen und editierbare
 Icon-Ressourcen. `editable_menu_icons_flow.json` prüft Darstellung und Navigation
 in Chromium ohne MPR-Zugriff. Der Windows-Test prüft Menü und Callback-Signatur
 im Original und nach dem Neuaufbau; er führt den Callback nicht aus und
