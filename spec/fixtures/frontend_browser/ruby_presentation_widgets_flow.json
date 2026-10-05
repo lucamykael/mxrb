@@ -23,7 +23,7 @@
           "click_selector": "[data-widget-name=Scroll] button[aria-expanded=false]"
         },
         {
-          "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left]:not([hidden]) [data-widget-name=AdvancedRegionName] input:not(:disabled)"
+          "wait_for_selector": "[data-widget-name=Scroll].mx-scrollcontainer-open [data-widget-region=left] [data-widget-name=AdvancedRegionName] input:not(:disabled)"
         },
         {
           "wait_for_style": {
@@ -36,7 +36,7 @@
           "click_selector": "[data-widget-name=Scroll] button[aria-expanded=true]"
         },
         {
-          "wait_for_selector": "[data-widget-name=Scroll] [data-widget-region=left][hidden]"
+          "wait_for_selector": "[data-widget-name=Scroll]:not(.mx-scrollcontainer-open) [data-widget-region=left]"
         },
         {
           "wait_for_selector": "[data-widget-name=Logo]"

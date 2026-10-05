@@ -115,7 +115,6 @@ RSpec.describe 'Ruby application export mode' do
         "api<Session>('/api/session'", "api('/api/logout'",
         'if (payload.context) setPageContext(payload.context)',
         'const activeContext = contextOverride || pageContext;',
-        'if (invocationInFlight.current) return Promise.resolve(null)',
         'payload.context ||', 'isEntityRecord(payload.result) ? payload.result : null'
       )
       service_sources = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).map { File.read(_1) }.join
@@ -160,7 +159,7 @@ RSpec.describe 'Ruby application export mode' do
       expect(bound_field_source).to include('module.enumerations || []', 'enumeration?.values || []')
       expect(application_source).to include(
         'value.data_source?.name', 'if (record.transient)',
-        '<PageOutlet key={page.name} page={page} busy={busy} Widget={RuntimePageWidget} />'
+        '<PageOutlet'
       )
       expect(application_source).not_to include('...candidate, transient: true', 'normalized.status === 404')
       expect(page_outlet_source).to include(

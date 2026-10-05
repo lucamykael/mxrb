@@ -92,7 +92,7 @@ describe('Standalone presentation widgets', () => {
     });
     input.schema.presentation!['Files.Snippet'].parameters = ['Required'];
     render(<WidgetRenderer {...input} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Missing snippet parameter: Required');
+    expect(screen.getByRole('alert')).toHaveTextContent('Missing required parameter: Required');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
@@ -201,8 +201,10 @@ describe('Standalone presentation widgets', () => {
     render(<WidgetRenderer {...input} />);
     await userEvent.setup().click(await screen.findByRole('checkbox', { name: 'Visible' }));
     expect(screen.queryByRole('checkbox', { name: 'Hidden' })).not.toBeInTheDocument();
-    expect(input.request).toHaveBeenNthCalledWith(2,
-      '/api/entities/Files.Tag?xpath=%5BName+%3D+%27Visible%27%5D&xpath_context_type=Files.Document&xpath_context_id=1');
+    expect(input.request).toHaveBeenNthCalledWith(
+      2,
+      '/api/entities/Files.Tag?xpath=%5BName+%3D+%27Visible%27%5D&xpath_context_type=Files.Document&xpath_context_id=1',
+    );
     await waitFor(() =>
       expect(input.saveRecord).toHaveBeenCalledWith(owner, { Tags: [hidden, visible] }),
     );
@@ -294,7 +296,7 @@ describe('Standalone presentation widgets', () => {
     await user.tab();
     expect(screen.getByRole('button')).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(input.navigate).toHaveBeenCalledWith('Files.Home', record);
+    expect(input.navigate).toHaveBeenCalledWith('Files.Home', record, { arguments: {} });
   });
   it.each(['menu_bar', 'navigation_tree'])(
     'runs nested %s navigation and flow actions',
@@ -303,7 +305,7 @@ describe('Standalone presentation widgets', () => {
       render(<WidgetRenderer {...input} />);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: 'Home' }));
-      expect(input.navigate).toHaveBeenCalledWith('Files.Home', record);
+      expect(input.navigate).toHaveBeenCalledWith('Files.Home', record, { arguments: {} });
       await user.click(screen.getByText('More'));
       await user.click(screen.getByRole('button', { name: 'Run' }));
       expect(input.invoke).toHaveBeenCalledWith('Files.Run', {}, record);
@@ -371,7 +373,7 @@ describe('Standalone presentation widgets', () => {
       'top',
     );
     await userEvent.setup().click(screen.getByRole('button', { name: 'Go' }));
-    expect(input.navigate).toHaveBeenCalledWith('Files.Home', record);
+    expect(input.navigate).toHaveBeenCalledWith('Files.Home', record, { arguments: {} });
   });
 
   it('persists a reference set and propagates inherited read-only restrictions', async () => {

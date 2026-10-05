@@ -1,0 +1,27 @@
+{
+  "name": "native-popup-reference",
+  "viewport": { "width": 1440, "height": 1000 },
+  "pages": [
+    {
+      "name": "popup-open",
+      "path": "/",
+      "steps": [
+        { "click_text": "Open parameter editor" },
+        { "wait_for_text": "Parameter editor" },
+        { "wait_for_selector": ".mx-name-DraftInput input" }
+      ],
+      "selectors": [".mx-window", ".mx-name-DraftInput input"]
+    },
+    {
+      "name": "popup-close",
+      "path": "/",
+      "steps": [
+        { "click_text": "Open parameter editor" },
+        { "wait_for_text": "Parameter editor" },
+        { "click_text": "Close editor" },
+        { "wait_for_absence": ".mx-name-DraftInput" }
+      ],
+      "selectors": [".mx-page"]
+    }
+  ]
+}

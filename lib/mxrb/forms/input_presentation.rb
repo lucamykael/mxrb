@@ -6,7 +6,7 @@ module Mxrb
     module InputPresentation
       OPTION_KEYS = %i[
         editable read_only_style placeholder aria_label password max_length aria_required
-        tab_index editability autocomplete
+        tab_index editability autocomplete source_variable
       ].freeze
 
       def self.options(values)

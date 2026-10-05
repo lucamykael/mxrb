@@ -242,7 +242,7 @@ RSpec.describe 'Ruby application internal contracts' do
                       'type' => 'ShowForm', 'page' => 'Sales.Edit', 'arguments' => {}))
         .to include('runtime.showPage')
       expect(exp.send(:nanoflow_action_source,
-                      'type' => 'CloseForm', 'count' => 2)).to include('runtime.closePage(2)')
+                      'type' => 'CloseForm', 'count' => 2)).to include('runtime.closePage("2")')
       expect(exp.send(:nanoflow_action_source,
                       'type' => 'ValidationFeedback', 'variable' => 'Item',
                       'member' => 'Name', 'message' => 'Required')).to include('runtime.validationFeedback')

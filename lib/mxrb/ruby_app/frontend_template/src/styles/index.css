@@ -1,4 +1,4 @@
-:root {
+html {
   font:
     16px/1.5 system-ui,
     sans-serif;
@@ -29,7 +29,6 @@ select {
 
 .app-page[aria-busy='true'] {
   cursor: progress;
-  pointer-events: none;
 }
 
 .app-navigation {
@@ -200,4 +199,228 @@ select {
   .mxrb-layout-grid__column {
     flex: var(--mxrb-phone-flex, 1 1 0);
   }
+}
+
+:where(.mxrb-popup .mx-window-content) {
+  color: #111827;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  box-shadow: 0 1rem 3rem #0004;
+}
+:where(.mxrb-popup .mx-window-header) {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+:where(.mxrb-popup .mx-window-header h4) {
+  margin: 0;
+}
+:where(.mxrb-popup .mx-window-header .close) {
+  float: right;
+}
+:where(.mxrb-popup .mx-window-body) {
+  padding: 1rem;
+}
+
+.mxrb-popup {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  min-width: min(20rem, calc(100vw - 2rem));
+  overflow: auto;
+  background: transparent;
+  color: inherit;
+}
+.mxrb-popup::backdrop {
+  background: rgba(10, 19, 37, 0.5);
+}
+.mxrb-popup .mx-window-body {
+  overflow: auto;
+}
+.mxrb-popup .app-page {
+  min-height: 0;
+}
+.mxrb-popup:not(:modal) {
+  z-index: 40;
+}
+
+.mxrb-page-surface {
+  display: contents;
+}
+.app-page:has(> .mx-scrollcontainer) {
+  display: contents;
+}
+.app-shell:has(.mx-scrollcontainer) {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.mx-scrollcontainer {
+  display: flex;
+  flex: 1 0 0;
+}
+.mx-scrollcontainer-vertical {
+  flex-direction: column;
+}
+.mx-scrollcontainer-horizontal {
+  flex-direction: row;
+}
+.mx-scrollcontainer-center,
+.mx-scrollcontainer-middle {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+.mx-scrollcontainer-wrapper {
+  flex: 1 1 auto;
+}
+.mx-scrollcontainer-nested {
+  display: flex;
+}
+.mx-scrollcontainer-left,
+.mx-scrollcontainer-right,
+.mx-scrollcontainer-top,
+.mx-scrollcontainer-bottom {
+  flex: 0 0 var(--sidebar-size, auto);
+}
+.mx-scrollcontainer:not(.mx-scrollcontainer-open) > .mx-scrollcontainer-toggleable {
+  flex-basis: 0;
+  overflow: hidden;
+}
+.mx-scrollcontainer-open > .mx-scrollcontainer-toggleable {
+  flex-basis: var(--sidebar-size);
+}
+
+.mx-progress-nonblocking {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1000;
+  padding: 1rem;
+  background: white;
+  box-shadow: 0 2px 10px #0003;
+}
+.mx-progress-blocking::backdrop {
+  background: #0006;
+}
+.widget-datagrid-grid-head,
+.widget-datagrid-grid-body,
+.widget-datagrid-grid .tr {
+  display: contents;
+}
+.widget-datagrid .column-container {
+  flex: 1;
+  min-width: 0;
+}
+.widget-datagrid .column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.widget-datagrid .column-header.clickable {
+  cursor: pointer;
+}
+.widget-datagrid .svg-inline--fa {
+  display: inline-block;
+  height: 1em;
+  overflow: visible;
+  vertical-align: -0.125em;
+}
+.widget-datagrid .fa-w-8 {
+  width: 0.5em;
+}
+.widget-datagrid .fa-w-18 {
+  width: 1.125em;
+}
+.widget-datagrid .column-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.widget-datagrid .column-selectors {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 2px 8px #0003;
+}
+.widget-datagrid .column-selectors label {
+  display: flex;
+  gap: 0.5rem;
+}
+.widget-datagrid-paging-bottom {
+  display: flex;
+  justify-content: space-between;
+}
+
+.mxrb-popup {
+  outline: none;
+  overflow: visible;
+}
+.mxrb-popup > .mx-resizer {
+  position: absolute;
+  touch-action: none;
+  user-select: none;
+}
+.mxrb-popup > .mx-resizer-n,
+.mxrb-popup > .mx-resizer-s {
+  left: 6px;
+  right: 6px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.mxrb-popup > .mx-resizer-e,
+.mxrb-popup > .mx-resizer-w {
+  top: 6px;
+  bottom: 6px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.mxrb-popup > .mx-resizer-n {
+  top: -3px;
+}
+.mxrb-popup > .mx-resizer-s {
+  bottom: -3px;
+}
+.mxrb-popup > .mx-resizer-e {
+  right: -3px;
+}
+.mxrb-popup > .mx-resizer-w {
+  left: -3px;
+}
+.mxrb-popup > .mx-resizer-ne,
+.mxrb-popup > .mx-resizer-se,
+.mxrb-popup > .mx-resizer-sw,
+.mxrb-popup > .mx-resizer-nw {
+  width: 10px;
+  height: 10px;
+}
+.mxrb-popup > .mx-resizer-ne {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+.mxrb-popup > .mx-resizer-se {
+  bottom: -3px;
+  right: -3px;
+  cursor: nwse-resize;
+}
+.mxrb-popup > .mx-resizer-sw {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+.mxrb-popup > .mx-resizer-nw {
+  top: -3px;
+  left: -3px;
+  cursor: nwse-resize;
 }

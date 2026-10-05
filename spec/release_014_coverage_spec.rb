@@ -1282,7 +1282,7 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       :data_grid2_widget,
       'Name' => 'Grid', 'Object' => {}, 'Type' => {}
     )
-    expect(grid).to include(type: :data_grid, name: 'Grid', options: { columns: [] })
+    expect(grid).to include(type: :data_grid, name: 'Grid', options: include(columns: [], presentation: 'datagrid2'))
 
     exporter = Mxrb::RubyApp::Exporter.allocate
     expect(exporter.send(:translated_caption, nil, 'Fallback')).to eq('Fallback')

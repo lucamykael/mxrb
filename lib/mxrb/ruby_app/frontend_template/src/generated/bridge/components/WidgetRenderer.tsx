@@ -1,6 +1,17 @@
-import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { useWidgetEvent } from '../useWidgetEvent';
 import { ClientActions } from '../PageEdits';
+import { SidebarToggle } from './NativeScrollContainer';
 import { VariableScope } from './VariableScope';
+import { PageParameters, LocalVariables } from '../PageVariables';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
 import { TabControl } from './TabControl';
@@ -18,7 +29,6 @@ import type {
   RuntimeValue,
   RuntimeVariables,
   WidgetDefinition,
-  WidgetEvent,
   WidgetOptions,
 } from '../../types';
 import type { WidgetRuntimeProps } from '../contracts';
@@ -190,12 +200,17 @@ export function DataView({
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
   const selections = useSelections();
   const variables = useContext(VariableScope);
+  const pageParameters = useContext(PageParameters);
+  const localVariables = useContext(LocalVariables);
   const listenTarget = source?.target?.split('.').at(-1) || '';
   const variable = source?.variable as { kind?: string; name?: string } | undefined;
   const namedRecord =
-    variable?.kind === 'snippet_parameter' ? variables[memberName(variable.name || '')] : undefined;
+    variable?.kind === 'page_parameter'
+      ? pageParameters[memberName(variable.name || '')]
+      : variables[memberName(variable?.name || '')];
   const inheritedContext =
-    variable?.kind === 'snippet_parameter'
+    variable &&
+    ['snippet_parameter', 'page_parameter', 'local_variable'].includes(variable.kind || '')
       ? isEntityRecord(namedRecord)
         ? namedRecord
         : null
@@ -238,8 +253,10 @@ export function DataView({
               activeContext,
               {
                 pageParameter: pageContext,
+                pageParameters,
+                localVariables: localVariables.values,
                 snippetParameters: variables,
-                widgetValues: selections.records,
+                widgetValues: { ...selections.records, ...selections.lists },
               },
             ).value,
           ];
@@ -409,7 +426,18 @@ export function DataView({
   );
 }
 
-export function WidgetRenderer({
+export function WidgetRenderer(props: WidgetRuntimeProps) {
+  const execution = useWidgetEvent(props);
+  return (
+    <>
+      {execution.feedback}
+      <WidgetContent {...props} execution={execution} />
+    </>
+  );
+}
+
+function WidgetContent({
+  execution,
   widget,
   children: compiledChildren,
   moduleName,
@@ -425,7 +453,9 @@ export function WidgetRenderer({
   onError,
   onMutation,
   onSelectRecord,
-}: WidgetRuntimeProps) {
+}: WidgetRuntimeProps & { execution: ReturnType<typeof useWidgetEvent> }) {
+  const { runEvent, running } = execution;
+  const fieldId = useId();
   const actions = useContext(ClientActions);
   const context = actions ? actions.edits.resolve(suppliedContext) : suppliedContext;
   const pageContext = actions ? actions.edits.resolve(suppliedPageContext) : suppliedPageContext;
@@ -472,40 +502,10 @@ export function WidgetRenderer({
   const change = (widget.events || []).find((event) => event.event === 'on_change');
   const enter = (widget.events || []).find((event) => event.event === 'on_enter');
   const leave = (widget.events || []).find((event) => event.event === 'on_leave');
-  const runEvent = (
-    event: WidgetEvent | undefined,
-    eventContext: EntityRecord | null = context || pageContext,
-  ): Promise<unknown> => {
-    if (!event) return Promise.resolve();
-    if (event.kind === 'action') {
-      if (actions) return actions.run(event, eventContext);
-      onError(new Error(`Client action runtime is missing: ${event.handler}`));
-      return Promise.resolve();
-    }
-    const handler = event.handler.includes('.') ? event.handler : `${moduleName}.${event.handler}`;
-    let parameters: RuntimeVariables;
-    try {
-      parameters = eventArguments(event, eventContext, {
-        pageParameter: pageContext,
-        widgetValues: { ...selections.records, [widget.name]: eventContext },
-        snippetParameters: variables,
-      });
-    } catch (failure) {
-      onError(failure);
-      return Promise.resolve();
-    }
-    if (event.kind === 'nanoflow') return invokeNanoflow(handler, parameters, eventContext);
-    if (event.kind === 'page') {
-      const candidate = Object.values(parameters)[0];
-      const targetContext = isEntityRecord(candidate) ? candidate : pageContext || context || null;
-      return navigate(handler, targetContext);
-    }
-    return invoke(handler, parameters, eventContext);
-  };
   const onClick = click ? () => runEvent(click) : undefined;
-  const onChanged = (updated: EntityRecord) => runEvent(change, updated);
-  const onEntered = (record: EntityRecord) => runEvent(enter, record);
-  const onLeft = (record: EntityRecord) => runEvent(leave, record);
+  const onChanged = (updated: EntityRecord | null) => runEvent(change, updated);
+  const onEntered = (record: EntityRecord | null) => runEvent(enter, record);
+  const onLeft = (record: EntityRecord | null) => runEvent(leave, record);
   const activeRecord = context || pageContext;
   const sharedProps = {
     widget,
@@ -587,6 +587,8 @@ export function WidgetRenderer({
     case 'menu_bar':
     case 'navigation_tree':
       return <SharedPresentation {...sharedProps} />;
+    case 'sidebar_toggle':
+      return <SidebarToggle {...sharedProps} />;
     case 'scroll_container':
       return <ScrollContainer {...sharedProps} />;
     case 'reference_set_selector':
@@ -759,7 +761,11 @@ export function WidgetRenderer({
     }
     case 'text':
       return (
-        <span {...runtimeProps} className={className}>
+        <span
+          {...runtimeProps}
+          className={classes('mx-text', className)}
+          style={inlineStyle(options.style)}
+        >
           {label}
         </span>
       );
@@ -771,7 +777,18 @@ export function WidgetRenderer({
       );
     case 'button':
       return (
-        <button {...runtimeProps} type="button" className={className} onClick={onClick}>
+        <button
+          {...runtimeProps}
+          type="button"
+          className={classes(
+            className,
+            'btn mx-button',
+            `btn-${String(options.button_style || 'default')}`,
+          )}
+          onClick={onClick}
+          disabled={running && click?.settings?.disabled_during_execution !== false}
+          aria-busy={running || undefined}
+        >
           {label}
         </button>
       );
@@ -818,9 +835,19 @@ export function WidgetRenderer({
     case 'drop_down':
     case 'reference_selector':
       return (
-        <label {...runtimeProps} className={className}>
-          {label}
+        <div
+          {...runtimeProps}
+          className={classes(
+            className,
+            'form-group no-columns',
+            `mx-${widget.type === 'text_box' || widget.type === 'number_input' ? 'textbox' : widget.type.replaceAll('_', '')}`,
+          )}
+        >
+          <label className="control-label" htmlFor={fieldId}>
+            {label}
+          </label>
           <BoundField
+            id={fieldId}
             widget={widget}
             record={activeRecord}
             schema={schema}
@@ -832,7 +859,7 @@ export function WidgetRenderer({
             onLeft={onLeft}
             onError={onError}
           />
-        </label>
+        </div>
       );
     case 'tab_control':
       return (
@@ -854,6 +881,10 @@ export function WidgetRenderer({
             revision={revision}
             onError={onError}
             onMutation={onMutation}
+            onSelectRecords={(records) => {
+              selections.selectMany(widget.name, records);
+              onSelectRecord(records[0] || null);
+            }}
             onSelectRecord={(record) => {
               selections.select(widget.name, record);
               onSelectRecord(record);

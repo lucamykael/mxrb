@@ -9,6 +9,7 @@ import type {
 } from '../../types';
 import type { ErrorHandler, SelectRecord } from '../contracts';
 import { classes, displayValue, entityCollectionPath, recordValue, sortRecords } from '../value';
+import { NativeDataGrid } from './NativeDataGrid';
 
 interface DataGridProps {
   widget: WidgetDefinition;
@@ -19,6 +20,7 @@ interface DataGridProps {
   onMutation: () => void;
   onRowAction: (record: EntityRecord) => unknown;
   onSelectRecord: SelectRecord;
+  onSelectRecords?: (records: EntityRecord[]) => void;
 }
 
 type FilterType = 'text' | 'number' | 'date' | 'boolean' | 'enum';
@@ -61,10 +63,7 @@ const filterConfig = (column: WidgetColumn): FilterConfig | null => {
   return { type, operator: String(source.operator || defaultOperator[type]), options };
 };
 
-const comparable = (
-  value: RuntimeValue | undefined,
-  type: FilterType,
-): string | number | null => {
+const comparable = (value: RuntimeValue | undefined, type: FilterType): string | number | null => {
   if (value == null || value === '') return null;
   if (type === 'number') {
     const number = Number(value);
@@ -107,7 +106,9 @@ export const matchesGridFilter = (
     if (!range) return false;
     const start = comparable(range[0], config.type);
     const finish = comparable(range[1], config.type);
-    return start != null && finish != null && compare(left, start) >= 0 && compare(left, finish) <= 0;
+    return (
+      start != null && finish != null && compare(left, start) >= 0 && compare(left, finish) <= 0
+    );
   }
   const right = comparable(query, config.type);
   if (right == null) return false;
@@ -211,12 +212,15 @@ export function DataGrid({
   onMutation,
   onRowAction,
   onSelectRecord,
+  onSelectRecords,
 }: DataGridProps) {
   const options = widget.options || {};
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNumber, setPageNumber] = useState(0);
   const [reload, setReload] = useState(0);
+  const multi = ['multi', 'multiple'].includes(String(options.selection));
+  const [selection, setSelection] = useState<EntityRecord[]>([]);
   const [selected, setSelected] = useState<EntityRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -226,6 +230,14 @@ export function DataGrid({
       direction: item.direction === 'Descending' ? 'Descending' : 'Ascending',
     })),
   );
+  const toggleSelection = (record: EntityRecord) => {
+    const values = selection.some((item) => item.id === record.id && item.type === record.type)
+      ? selection.filter((item) => item.id !== record.id || item.type !== record.type)
+      : [...selection, record];
+    setSelection(values);
+    setSelected(values[0] || null);
+    onSelectRecords?.(values);
+  };
   const pageSize = Math.max(1, Number(options.page_size || options.pageSize || 20));
   const columns = options.columns || [];
   const serverSide = options.server_side === true;
@@ -348,6 +360,49 @@ export function DataGrid({
     setPageNumber(0);
   };
 
+  if (options.presentation === 'datagrid2')
+    return (
+      <NativeDataGrid
+        columns={columns}
+        records={visible}
+        sorting={sorting}
+        sort={toggleSort}
+        filter={(column) => (
+          <FilterInput
+            column={column}
+            value={filters[column.name || column.attribute || ''] || ''}
+            onChange={(value) => {
+              setFilters((current) => ({
+                ...current,
+                [column.name || column.attribute || '']: value,
+              }));
+              setPageNumber(0);
+            }}
+          />
+        )}
+        selected={(record) =>
+          multi
+            ? selection.some((entry) => entry.id === record.id && entry.type === record.type)
+            : selected?.id === record.id && selected.type === record.type
+        }
+        select={(record) => {
+          if (multi) toggleSelection(record);
+          else if (options.selection) {
+            setSelected(record);
+            onSelectRecord(record);
+          }
+          onRowAction(record);
+        }}
+        page={pageNumber}
+        pageSize={pageSize}
+        total={rowCount}
+        setPage={setPageNumber}
+        resizable={options.columns_resizable !== false}
+        draggable={options.columns_draggable !== false}
+        hidable={options.columns_hidable !== false}
+      />
+    );
+
   return (
     <div
       className={classes('data-grid', 'mxrb-data-grid-runtime', loading && 'is-loading')}
@@ -429,8 +484,31 @@ export function DataGrid({
           {visible.map((record) => (
             <tr
               key={record.id}
-              className={selected?.id === record.id ? 'is-selected' : ''}
+              className={
+                (
+                  multi
+                    ? selection.some((item) => item.id === record.id)
+                    : selected?.id === record.id
+                )
+                  ? 'is-selected'
+                  : ''
+              }
+              aria-selected={
+                multi ? selection.some((item) => item.id === record.id) : selected?.id === record.id
+              }
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === ' ' || event.key === 'Enter') {
+                  event.preventDefault();
+                  event.currentTarget.click();
+                }
+              }}
               onClick={() => {
+                if (multi) {
+                  toggleSelection(record);
+                  onRowAction(record);
+                  return;
+                }
                 setSelected(record);
                 onSelectRecord(record);
                 onRowAction(record);

@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'tmpdir'
+require 'mxrb/ruby_app/presentation_exporter'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Advanced standalone presentation contracts' do

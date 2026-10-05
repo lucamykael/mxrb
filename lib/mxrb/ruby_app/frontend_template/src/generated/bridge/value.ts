@@ -114,6 +114,7 @@ export const inlineStyle = (value: string | undefined): CSSProperties =>
 
 export interface EventArgumentSources {
   pageParameter?: EntityRecord | null;
+  pageParameters?: RuntimeVariables;
   widgetValues?: RuntimeVariables;
   localVariables?: RuntimeVariables;
   snippetParameters?: RuntimeVariables;
@@ -152,6 +153,8 @@ const structuredEventArgument = (
     case 'current':
       return context;
     case 'pageparameter':
+      if (sources.pageParameters && Object.hasOwn(sources.pageParameters, memberName(name)))
+        return sources.pageParameters[memberName(name)];
       if (!Object.prototype.hasOwnProperty.call(sources, 'pageParameter')) {
         throw new Error(`Cannot resolve PageParameter event argument ${name || '(unnamed)'}`);
       }
@@ -177,6 +180,7 @@ export const eventArguments = (
       name,
       typeof argument === 'string'
         ? expressionValue(argument, context, {
+            ...sources.pageParameters,
             ...sources.localVariables,
             ...sources.snippetParameters,
           })

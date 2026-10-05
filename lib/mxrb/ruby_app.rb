@@ -21,6 +21,8 @@ require_relative 'ruby_app/page_design_identity'
 require_relative 'ruby_app/pluggable_properties'
 require_relative 'ruby_app/runtime_project'
 require_relative 'ruby_app/presentation'
+require_relative 'ruby_app/presentation_contracts'
+require_relative 'ruby_app/async_invocations'
 require_relative 'ruby_app/file_content'
 require_relative 'ruby_app/record_inheritance'
 require_relative 'runtime/xpath'
@@ -1522,7 +1524,8 @@ module Mxrb
           file_manager image_uploader image_viewer native_widget layout_grid menu_bar
           navigation_list navigation_tree number_input page_title
           pluggable_widget radio_button_group reference_selector reference_set_selector
-          scroll_container snippet static_image tab_control table text text_area text_box layout placeholder
+          scroll_container sidebar_toggle snippet static_image tab_control table text text_area
+          text_box layout placeholder
         ].freeze
 
         attr_reader :widgets
@@ -1687,7 +1690,7 @@ module Mxrb
       class << self
         attr_reader :mendix_id, :title, :widgets, :appearance_class,
                     :appearance_style, :data_source, :native_definition,
-                    :navigation_definition, :allowed_module_roles
+                    :navigation_definition, :allowed_module_roles, :presentation_contract
 
         def mendix_name(value = nil, id: nil)
           return @mendix_name unless value
@@ -1698,7 +1701,7 @@ module Mxrb
         end
 
         def configure(title:, widgets: nil, appearance_class: '', appearance_style: '', data_source: nil,
-                      allowed_roles: nil,
+                      allowed_roles: nil, presentation: {},
                       &block)
           raise ArgumentError, 'configure accepts either widgets: or a widget block, not both' \
             if widgets && block
@@ -1722,6 +1725,7 @@ module Mxrb
           @appearance_style = appearance_style
           @data_source = data_source
           @allowed_module_roles = allowed_roles&.map(&:to_s)
+          @presentation_contract = presentation
         end
 
         # Declares an editable native Mendix page with the typed page/widget
@@ -1733,6 +1737,7 @@ module Mxrb
           builder.instance_eval(&block) if block
           definition = builder.to_h.merge(unit_id: native_unit_id)
           @native_definition = definition
+          @presentation_contract = PresentationContracts.declared(definition)
           @title = definition.fetch(:title).to_s
           @widgets = definition.fetch(:widgets).freeze
           @data_source = definition[:data_source]
@@ -1776,6 +1781,7 @@ module Mxrb
       def initialize(root, environment: nil, process: ENV, reload: nil)
         @root = File.expand_path(root)
         @runtime_monitor = Monitor.new
+        @async_invocations_mutex = Mutex.new
         @manifest = Manifest.load(@root)
         @environment = if environment.is_a?(Environment)
                          environment
@@ -1975,6 +1981,46 @@ module Mxrb
         end
       end
 
+      # Client-created objects remain private to the browser until Save. The
+      # temporary store object is removed before this synchronized call returns.
+      def draft_record(name, context: nil)
+        raise ArgumentError, 'type must be a nonempty string' unless name.is_a?(String) && !name.empty?
+
+        runtime_synchronize do
+          authorize_entity!(name, :create, context)
+          store = bridge.interpreter.store
+          value = store.create(name.to_s)
+          begin
+            serialize(value, context:).merge(new_record: true)
+          ensure
+            store.rollback(value)
+          end
+        end
+      end
+
+      def delete_records(records, context: nil)
+        unless records.is_a?(Array) && records.length <= 1000 && records.all? do |entry|
+          entry.is_a?(Hash) && %w[type id].all? { entry[_1].is_a?(String) && !entry[_1].empty? }
+        end
+          raise ArgumentError, 'records must contain at most 1000 objects with type and id'
+        end
+
+        runtime_synchronize do
+          bridge.interpreter.store.transaction do
+            records.each do |entry|
+              store = bridge.interpreter.store
+              value = store.find(entry.fetch('type'), entry.fetch('id'))
+              raise ArgumentError, 'record not found' unless value
+
+              authorize_entity!(value.entity, :delete, context, record: value)
+              store.delete(value)
+              FileContent.new(store.database).delete(value.entity, value.id)
+            end
+          end
+        end
+        true
+      end
+
       def delete_record(name, id, context: nil)
         runtime_synchronize do
           value = bridge.interpreter.store.find(name.to_s, id.to_s)
@@ -2015,24 +2061,57 @@ module Mxrb
           raise ArgumentError, 'records must contain at most 1000 objects with type, id and attributes'
         end
 
+        keys = records.map { [_1.fetch('type'), _1.fetch('id')] }
+        raise ArgumentError, 'duplicate record in commit' unless keys.uniq.size == keys.size
+
         runtime_synchronize do
           store = bridge.interpreter.store
           store.transaction do
-            records.map do |entry|
-              value = store.find(entry.fetch('type'), entry.fetch('id'))
-              raise ArgumentError, "record #{entry.fetch('type')} #{entry.fetch('id')} not found" unless value
+            objects = records.to_h do |entry|
+              key = [entry.fetch('type'), entry.fetch('id')]
+              value = if entry['new_record'] == true
+                        authorize_entity!(key.first, :create, context)
+                        store.create(key.first)
+                      else
+                        store.find(*key)
+                      end
+              raise ArgumentError, "record #{key.join(' ')} not found" unless value
 
               authorize_entity!(value.entity, :write, context, record: value)
+              [key, value]
+            end
+            records.each do |entry|
+              value = objects.fetch([entry.fetch('type'), entry.fetch('id')])
               entry.fetch('attributes').each do |member, member_value|
                 authorize_entity!(value.entity, :write, context, member:, record: value)
-                value.members[member] = deserialize(member_value, context:)
+                value.members[member] = deserialize_draft_member(member_value, objects, context:)
               end
-              store.commit(value)
-              serialize(value, context:)
+            end
+            store.database.execute('PRAGMA defer_foreign_keys = ON')
+            store.commit(objects.values)
+            records.map do |entry|
+              value = objects.fetch([entry.fetch('type'), entry.fetch('id')])
+              result = serialize(value, context:)
+              result[:draft_id] = entry.fetch('id') if entry['new_record'] == true
+              result
             end
           end
         end
       end
+
+      def deserialize_draft_member(value, objects, context:)
+        value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:type) && value.key?(:id)
+        if value.is_a?(Hash) && value['type'] && value['id']
+          objects[[value['type'], value['id']]] || deserialize(value, context:)
+        elsif value.is_a?(Hash)
+          value.transform_values { deserialize_draft_member(_1, objects, context:) }
+        elsif value.is_a?(Array)
+          value.map { deserialize_draft_member(_1, objects, context:) }
+        else
+          value
+        end
+      end
+      private :deserialize_draft_member
 
       def valid_record_changes?(entry)
         entry.is_a?(Hash) && %w[type id].all? { entry[_1].is_a?(String) && !entry[_1].empty? } &&
@@ -2080,11 +2159,16 @@ module Mxrb
 
         {
           name: implementation.mendix_name, id: implementation.mendix_id,
+          layout: Array(implementation.widgets).find { _1['type'] == 'layout' }&.dig('options', 'layout'),
           title: implementation.title, widgets: Presentation.compose(implementation.widgets),
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
-        }
+        }.merge(implementation.presentation_contract || {})
+      end
+
+      def async_invocations
+        @async_invocations_mutex.synchronize { @async_invocations ||= AsyncInvocations.new(self) }
       end
 
       def access_control = (@access_control ||= bridge.access_control)
@@ -2104,6 +2188,8 @@ module Mxrb
       end
 
       def close
+        @async_invocations&.close
+        @async_invocations = nil
         @bridge&.close
         @shared_store&.close
         @bridge = nil
@@ -3264,9 +3350,29 @@ module Mxrb
           page = application.page(name, context:)
           return render_json(response, page ? 200 : 404, page || error('not_found', "page #{name} not found"))
         end
+        if method == 'POST' && path == '/api/microflow-jobs'
+          values = request_json(request)
+          job = application.async_invocations.submit(values['name'], values.fetch('arguments', {}),
+                                                     owner: authorization, context:)
+          return render_json(response, 202, job)
+        end
+        if (id = route_name(path, '/api/microflow-jobs/')) && method == 'GET'
+          job = application.async_invocations.fetch(id, owner: authorization)
+          return render_json(response, job ? 200 : 404, job || error('not_found', 'invocation not found'))
+        end
+
         if (name = route_name(path, '/api/microflows/')) && method == 'POST'
           invocation = application.invoke_service(name, request_json(request), context:)
           return render_json(response, 200, { ok: true }.merge(invocation))
+        end
+
+        if method == 'POST' && path == '/api/records/draft'
+          return render_json(response, 200, application.draft_record(request_json(request)['type'], context:))
+        end
+
+        if method == 'POST' && path == '/api/records/delete'
+          application.delete_records(request_json(request)['records'], context:)
+          return render_json(response, 200, ok: true)
         end
 
         if method == 'POST' && path == '/api/records/commit'

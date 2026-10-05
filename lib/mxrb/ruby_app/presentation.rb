@@ -32,11 +32,12 @@ module Mxrb
         Registry.register(:presentation, name.to_s, { kind: 'menu', items: menu.items })
       end
 
-      def self.snippet(name, parameters: [], &block)
+      def self.snippet(name, parameters: [], variables: [], &block)
         tree = Page::WidgetTree.new
         PluggableProperties.with_page(name) { tree.instance_eval(&block) } if block
         resource = { kind: 'snippet', widgets: tree.widgets }
         resource[:parameters] = parameters unless parameters.empty?
+        resource[:variables] = variables unless variables.empty?
         Registry.register(:presentation, name.to_s, resource)
       end
 

@@ -1,0 +1,76 @@
+{
+  "name": "native-vetclinic-reference",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "native-home",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": ".mx-page"
+        }
+      ],
+      "selectors": [
+        ".mx-page"
+      ]
+    },
+    {
+      "name": "menu-open",
+      "path": "/",
+      "steps": [
+        {
+          "click_text": "Menu"
+        },
+        {
+          "wait_for_style": {
+            "selector": ".region-sidebar",
+            "property": "flex-basis",
+            "value": "264px"
+          }
+        }
+      ],
+      "selectors": [
+        ".region-sidebar"
+      ]
+    },
+    {
+      "name": "appointments",
+      "path": "/",
+      "steps": [
+        {
+          "click_text": "Menu"
+        },
+        {
+          "click_text": "Appointments"
+        },
+        {
+          "wait_for_text": "Appointments"
+        }
+      ],
+      "selectors": [
+        ".mx-name-pageHeader"
+      ]
+    },
+    {
+      "name": "animals",
+      "path": "/",
+      "steps": [
+        {
+          "click_text": "Menu"
+        },
+        {
+          "click_text": "Animals"
+        },
+        {
+          "wait_for_text": "Animal Overview"
+        }
+      ],
+      "selectors": [
+        ".mx-name-AnimalsGrid"
+      ]
+    }
+  ]
+}

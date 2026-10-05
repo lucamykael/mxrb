@@ -4166,7 +4166,7 @@ module Mxrb
       return render_data_view_widget(widget, indent) if type == :data_view
       if %i[
         file_manager image_uploader image_viewer menu_bar navigation_tree
-        reference_set_selector navigation_list scroll_container
+        reference_set_selector navigation_list scroll_container sidebar_toggle
       ].include?(type)
         return render_legacy_semantic_widget(widget, indent)
       end
@@ -4218,11 +4218,24 @@ module Mxrb
       if %i[text_box number_input text_area check_box date_picker radio_button_group
             reference_selector drop_down].include?(type)
         append_appearance_ruby_args(args, options)
+        Forms::InputPresentation::OPTION_KEYS.each do |key|
+          next unless options.key?(key)
+
+          value = if key == :source_variable
+                    page_variable_ruby(options.fetch(key))
+                  elsif key == :editability && options.fetch(key).keys == [:expression]
+                    "input_condition(#{ruby(options.fetch(key).fetch(:expression))})"
+                  else
+                    native_ruby(options.fetch(key))
+                  end
+          args << "#{key}: #{value}"
+        end
       end
       if %i[button text].include?(type)
         args << "parameters: #{native_ruby(options[:parameters])}" unless Array(options[:parameters]).empty?
         append_appearance_ruby_args(args, options)
       end
+      args << "button_style: #{symbol(options[:button_style])}" if type == :button && options[:button_style]
       args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
       args << "horizontal: true" if type == :radio_button_group && options[:horizontal]
       if type == :reference_selector && options[:display_attribute]
@@ -4300,6 +4313,10 @@ module Mxrb
       declaration = "#{' ' * indent}#{event.fetch(:event)} " \
                     "#{event.fetch(:kind)}: #{handler}"
       declaration += ", close_page: #{event.fetch(:close_page).inspect}" if event.key?(:close_page)
+      if event.key?(:settings)
+        settings = JSON.parse(JSON.generate(event.fetch(:settings)))
+        declaration += ", settings: #{RubyApp::Exporter.allocate.send(:client_settings_source, settings)}"
+      end
       return declaration if arguments.empty?
 
       "#{declaration}, pass: #{native_ruby(arguments, indent)}"
@@ -4319,10 +4336,13 @@ module Mxrb
                  %i[allowed_extensions caption editable max_file_size thumbnail_width
                     thumbnail_height tab_index]
                when :menu_bar, :navigation_tree
-                 %i[menu tab_index]
+                 %i[menu tab_index navigation_profile]
+               when :sidebar_toggle
+                 %i[caption button_style tooltip]
                when :reference_set_selector
                  %i[selection number_of_rows selectable_xpath control_bar select_first show_empty_rows
-                    paging tab_index width_unit]
+                    paging tab_index width_unit association target_entity display_attribute association_path
+                    caption editable]
                when :navigation_list
                  %i[tab_index]
                when :scroll_container
@@ -4333,7 +4353,12 @@ module Mxrb
       fields.each do |field|
         next unless options.key?(field)
 
-        value = symbol_fields.include?(field) ? symbol(options[field]) : native_ruby(options[field])
+        value = if field == :association_path
+                  steps = options.fetch(field).map { [ruby(_1.fetch(:association)), ruby(_1.fetch(:entity))].join(', ') }
+                  "association_path(#{steps.map { "[#{_1}]" }.join(', ')})"
+                else
+                  symbol_fields.include?(field) ? symbol(options[field]) : native_ruby(options[field])
+                end
         args << "#{field}: #{value}"
       end
       append_appearance_ruby_args(args, options)

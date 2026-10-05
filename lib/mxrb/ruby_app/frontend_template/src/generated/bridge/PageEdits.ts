@@ -13,13 +13,15 @@ export class PageEdits {
   constructor(readonly deferred: boolean) {}
 
   resolve(record: EntityRecord | null | undefined): EntityRecord | null {
-    return record ? this.records.get(key(record)) || record : null;
+    if (!record) return null;
+    const resolved = this.records.get(key(record)) || record;
+    return this.records.get(key(resolved)) || resolved;
   }
 
   stage(record: EntityRecord, changes: RuntimeVariables): EntityRecord {
-    const id = key(record);
-    if (!this.originals.has(id)) this.originals.set(id, record);
     const current = this.resolve(record)!;
+    const id = key(current);
+    if (!this.originals.has(id)) this.originals.set(id, current);
     const updated = { ...current, attributes: { ...current.attributes, ...changes } };
     this.records.set(id, updated);
     this.changes.set(id, { ...this.changes.get(id), ...changes });
@@ -33,12 +35,23 @@ export class PageEdits {
   pending() {
     return [...this.changes].flatMap(([id, attributes]) => {
       const record = this.records.get(id)!;
-      return record.transient ? [] : [{ type: record.type, id: record.id, attributes }];
+      return record.transient
+        ? []
+        : [
+            {
+              type: record.type,
+              id: record.id,
+              attributes: record.new_record ? record.attributes : attributes,
+              ...(record.new_record ? { new_record: true } : {}),
+            },
+          ];
     });
   }
 
   accept(records: EntityRecord[], submitted = new Map(this.changes)) {
-    const responses = new Map(records.map((record) => [key(record), record]));
+    const responses = new Map(
+      records.map((record) => [`${record.type}/${record.draft_id || record.id}`, record]),
+    );
     for (const [id, attributes] of submitted) {
       const original = this.originals.get(id)!;
       const committed = responses.get(id) || {
@@ -51,9 +64,14 @@ export class PageEdits {
         ),
       );
       this.originals.set(id, committed);
-      this.records.set(id, { ...committed, attributes: { ...committed.attributes, ...remaining } });
-      if (Object.keys(remaining).length) this.changes.set(id, remaining);
-      else this.changes.delete(id);
+      const updated = { ...committed, attributes: { ...committed.attributes, ...remaining } };
+      if (committed.draft_id) {
+        this.originals.set(key(committed), committed);
+        this.records.set(key(committed), updated);
+      }
+      this.records.set(id, updated);
+      this.changes.delete(id);
+      if (Object.keys(remaining).length) this.changes.set(key(committed), remaining);
     }
   }
 
@@ -92,5 +110,11 @@ export function hasPageEdits(page: unknown, schema: ApplicationSchema): boolean 
 export const ClientActions = createContext<{
   edits: PageEdits;
   reset: number;
-  run: (event: WidgetEvent, record: EntityRecord | null) => Promise<unknown>;
+  run: (
+    event: WidgetEvent,
+    record: EntityRecord | null,
+    parameters?: RuntimeVariables,
+  ) => Promise<unknown>;
+  confirm?: (settings: NonNullable<WidgetEvent['settings']>['confirmation']) => Promise<boolean>;
+  close?: (count?: number) => Promise<void>;
 } | null>(null);

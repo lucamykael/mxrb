@@ -3,6 +3,7 @@
 require 'spec_helper'
 require 'tmpdir'
 require 'zlib'
+require 'timeout'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Standalone runtime compatibility' do
@@ -116,6 +117,52 @@ RSpec.describe 'Standalone runtime compatibility' do
     invalid.each { |value| expect { app.commit_records(value) }.to raise_error(ArgumentError, /records must/) }
   end
 
+  it 'keeps new client drafts private until an atomic save and resolves references between new drafts' do
+    app = @application
+    page = Class.new(Mxrb::RubyApp::Page)
+    page.mendix_name('Files.Empty')
+    page.configure(title: 'Empty', widgets: [])
+    expect(app.page('Files.Empty')[:layout]).to be_nil
+    draft = app.draft_record('Files.Tag')
+    report = app.draft_record('Files.Report')
+    expect(draft).to include(new_record: true, type: 'Files.Tag')
+    expect(app.records('Files.Tag')).to be_empty
+    expect(app.record('Files.Report', report[:id])).to be_nil
+    entries = [
+      { 'type' => 'Files.Report', 'id' => report[:id], 'new_record' => true,
+        'attributes' => { 'Name' => 'Draft report', 'Tags' => [draft] } },
+      { 'type' => 'Files.Tag', 'id' => draft[:id], 'new_record' => true, 'attributes' => { 'Name' => 'Draft tag' } }
+    ]
+    saved = app.commit_records(entries)
+    expect(saved.map { _1[:draft_id] }).to eq([report[:id], draft[:id]])
+    expect(saved.first.dig(:attributes, 'Tags', 0, :id)).to eq(saved.last[:id])
+    expect(app.records('Files.Report').first.dig(:attributes, 'Tags', 0, :attributes, 'Name')).to eq('Draft tag')
+    nested = app.send(:deserialize_draft_member, { 'payload' => { 'selected' => draft } },
+                      { ['Files.Tag', draft[:id]] => :saved_reference }, context: nil)
+    expect(nested).to eq('payload' => { 'selected' => :saved_reference })
+    expect { app.commit_records([entries.first, entries.first]) }.to raise_error(ArgumentError, /duplicate/)
+    expect { app.draft_record(nil) }.to raise_error(ArgumentError, /type/)
+    context = app.session_manager.authenticate(nil)
+    allow(app.access_control).to receive(:authorize!).and_call_original
+    allow(app.access_control).to receive(:authorize!).with('Files.Tag', anything)
+                                                     .and_raise(Mxrb::Runtime::AuthorizationError)
+    expect { app.commit_records(entries, context:) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+    expect(app.records('Files.Report').length).to eq(1)
+  end
+
+  it 'deletes a selection atomically and restores the first object when a later deletion fails' do
+    app = @application
+    first = app.create_record('Files.Tag')
+    second = app.create_record('Files.Tag')
+    entries = [first, second].map { { 'type' => _1[:type], 'id' => _1[:id] } }
+    expect { app.delete_records([entries.first, entries.last.merge('id' => 'missing')]) }
+      .to raise_error(ArgumentError, /not found/)
+    expect(app.records('Files.Tag').length).to eq(2)
+    expect(app.delete_records(entries)).to be(true)
+    expect(app.records('Files.Tag')).to be_empty
+    expect { app.delete_records([nil]) }.to raise_error(ArgumentError, /records/)
+  end
+
   it 'exposes transactional page commits through the existing authenticated HTTP boundary' do
     server = Mxrb::RubyApp::Server.allocate
     server.instance_variable_set(:@application, @application)
@@ -133,6 +180,57 @@ RSpec.describe 'Standalone runtime compatibility' do
     request.body = '{}'
     server.send(:dispatch, request, response)
     expect(response.status).to eq(400)
+  end
+
+  it 'serves draft creation, batch deletion and asynchronous invocation results through HTTP' do
+    server = Mxrb::RubyApp::Server.allocate
+    server.instance_variable_set(:@application, @application)
+    request_type = Struct.new(:path, :request_method, :body) do
+      def query = {}
+      def [](_key) = nil
+    end
+    call = lambda do |path, method = 'GET', body = {}|
+      response = Mxrb::Http::Response.new
+      server.send(:dispatch, request_type.new(path, method, JSON.generate(body)), response)
+      [response.status, JSON.parse(response.body)]
+    end
+    status, draft = call.call('/api/records/draft', 'POST', type: 'Files.Tag')
+    expect(status).to eq(200)
+    expect(draft).to include('new_record' => true)
+    expect(@application.records('Files.Tag')).to be_empty
+    first = @application.create_record('Files.Tag')
+    second = @application.create_record('Files.Tag')
+    expect(call.call('/api/records/delete', 'POST', records: [first, second])).to eq([200, { 'ok' => true }])
+    expect(@application.records('Files.Tag')).to be_empty
+    allow(@application).to receive(:invoke_service).with('Files.Run', { 'Value' => 42 }, context: anything)
+                                                   .and_return(result: 42)
+    status, job = call.call('/api/microflow-jobs', 'POST', name: 'Files.Run', arguments: { Value: 42 })
+    expect(status).to eq(202)
+    @application.async_invocations.close
+    expect(call.call("/api/microflow-jobs/#{job.fetch('id')}"))
+      .to eq([200, { 'status' => 'completed', 'result' => { 'result' => 42 } }])
+    expect(call.call('/api/microflow-jobs/missing').first).to eq(404)
+    expect(call.call('/api/microflow-jobs', 'POST', name: 'Files.Run').first).to eq(400)
+    expect(call.call('/api/records/draft', 'POST').first).to eq(400)
+    expect(call.call('/api/records/delete', 'POST').first).to eq(400)
+  end
+
+  it 'polls an asynchronous job without acquiring the running microflow execution lock' do
+    started = Queue.new
+    release = Queue.new
+    allow(@application).to receive(:invoke_service) do
+      @application.send(:runtime_synchronize) do
+        started << true
+        release.pop
+        { result: 'finished' }
+      end
+    end
+    job = @application.async_invocations.submit('Files.Run', {}, owner: nil, context: nil)
+    started.pop
+    state = Timeout.timeout(1) { @application.async_invocations.fetch(job.fetch(:id), owner: nil) }
+    expect(state).to eq(status: 'pending')
+  ensure
+    release << true
   end
 
   it 'filters nested and reverse association XPath on the server before pagination' do

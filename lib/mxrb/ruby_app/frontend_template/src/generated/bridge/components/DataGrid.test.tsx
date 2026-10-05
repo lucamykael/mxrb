@@ -59,9 +59,7 @@ describe('DataGrid', () => {
   });
 
   it('supports typed client-side operators', () => {
-    expect(
-      matchesGridFilter(12, '10', { type: 'number', operator: 'gt', options: [] }),
-    ).toBe(true);
+    expect(matchesGridFilter(12, '10', { type: 'number', operator: 'gt', options: [] })).toBe(true);
     expect(
       matchesGridFilter('2026-02-10', '2026-01-01,2026-03-01', {
         type: 'date',
@@ -83,9 +81,9 @@ describe('DataGrid', () => {
         options: [],
       }),
     ).toBe(true);
-    expect(
-      matchesGridFilter(null, '', { type: 'text', operator: 'empty', options: [] }),
-    ).toBe(true);
+    expect(matchesGridFilter(null, '', { type: 'text', operator: 'empty', options: [] })).toBe(
+      true,
+    );
   });
 
   it('sends filters, sorting, and pagination to the server-side collection endpoint', async () => {

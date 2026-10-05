@@ -67,6 +67,7 @@ module Mxrb
         return obj if obj.is_a?(String)
         return "" unless obj.is_a?(Hash)
         return extract_text(obj["Template"]) if obj["$Type"] == "Forms$ClientTemplate"
+        return extract_text(obj["Text"]) if obj["$Type"].to_s.end_with?("$TextTemplate")
 
         translations = parse_array(obj["Translations"] || obj["Items"] || obj["translations"] || [])
         translation = translations.first
@@ -215,6 +216,8 @@ module Mxrb
           :radio_button_group
         when "Forms$StaticImageViewer"
           :static_image
+        when "Forms$SidebarToggleButton", "Pages$SidebarToggleButton"
+          :sidebar_toggle
         when "Forms$Title"
           :page_title
         when "Forms$FileManager"
@@ -238,6 +241,11 @@ module Mxrb
       end
 
       def widget_options(widget, widget_type)
+        if widget_type == :sidebar_toggle
+          return appearance_options(widget).merge(caption: extract_text(widget['CaptionTemplate']),
+                                                  button_style: widget.fetch('ButtonStyle', 'Default').downcase,
+                                                  tooltip: extract_text(widget['Tooltip']))
+        end
         return appearance_options(widget) if widget_type == :page_title
         return static_image_options(widget) if widget_type == :static_image
         return file_manager_options(widget) if widget_type == :file_manager
@@ -256,6 +264,7 @@ module Mxrb
         options[:parameters] = parameters unless parameters.empty?
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
         options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
+        options[:button_style] = widget['ButtonStyle'].downcase if widget_type == :button && widget['ButtonStyle']
         options.merge!(input_options(widget)) if %i[
           text_box text_area check_box date_picker drop_down reference_selector radio_button_group
         ].include?(widget_type)
@@ -266,12 +275,16 @@ module Mxrb
       # public Ruby options now, consumed directly by the Ruby web runtime.
       def input_options(widget)
         result = {}
+        source = parse_page_variable(widget["SourceVariable"])
+        result[:source_variable] = source if source
         { 'Editable' => :editable, 'ReadOnlyStyle' => :read_only_style }.each do |native, key|
           result[key] = data_view_editability(widget[native]) if widget.key?(native)
         end
         { 'PlaceholderTemplate' => :placeholder, 'ScreenReaderLabel' => :aria_label }.each do |native, key|
           result[key] = extract_text(widget[native]) if widget.key?(native)
         end
+        result[:placeholder] = extract_text(widget['Placeholder']) if
+          widget.key?('Placeholder') && !widget.key?('PlaceholderTemplate')
         {
           'IsPasswordBox' => :password, 'MaxLengthCode' => :max_length,
           'AriaRequired' => :aria_required, 'TabIndex' => :tab_index
@@ -332,7 +345,7 @@ module Mxrb
           )]
         end
         appearance_options(widget).merge(
-          region_options: regions,
+          region_options: regions, native_layout: true,
           alignment: data_view_enum(widget.fetch('Alignment', 'Center')),
           layout_mode: data_view_enum(widget.fetch('LayoutMode', 'Headline')),
           hide_scrollbars: widget['NativeHideScrollbars'] == true,
@@ -379,8 +392,9 @@ module Mxrb
       def menu_widget_options(widget)
         appearance_options(widget).merge(
           menu: widget.dig('MenuSource', 'Menu').to_s,
-          tab_index: widget.fetch('TabIndex', 0).to_i
-        )
+          tab_index: widget.fetch('TabIndex', 0).to_i,
+          navigation_profile: widget.dig('MenuSource', 'NavigationProfile')
+        ).compact
       end
 
       def static_image_options(widget)
@@ -907,6 +921,11 @@ module Mxrb
           type: :data_grid, name: widget["Name"],
           options: {
             entity: entity, columns: columns,
+            presentation: 'datagrid2',
+            page_size: properties.dig('pageSize', 'PrimitiveValue').to_i.nonzero? || 20,
+            columns_resizable: properties.dig('columnsResizable', 'PrimitiveValue') != 'false',
+            columns_draggable: properties.dig('columnsDraggable', 'PrimitiveValue') != 'false',
+            columns_hidable: properties.dig('columnsHidable', 'PrimitiveValue') != 'false',
             selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym)
           }.compact,
           events: (grid_events(widget) + property_events).uniq
@@ -1162,6 +1181,58 @@ module Mxrb
 
       def parse_action(action)
         return nil unless action.is_a?(Hash)
+
+        event = parse_action_base(action)
+        return unless event
+
+        settings = action['MicroflowSettings'] || action['NanoflowSettings'] || action
+        options = {}
+        options[:disabled_during_execution] = false if action['DisabledDuringExecution'] == false
+        count = action['NumberOfPagesToClose'] || action['NumberOfPagesToClose2']
+        options[:close_count] = count unless count.to_s.empty?
+        source = parse_page_variable(action['SourceVariable'])
+        options[:source] = source if source
+        confirmation = settings['ConfirmationInfo']
+        if confirmation
+          options[:confirmation] = {
+            question: extract_text(confirmation['Question']),
+            proceed: extract_text(confirmation['ProceedButtonCaption']),
+            cancel: extract_text(confirmation['CancelButtonCaption'])
+          }
+        end
+        options[:progress] = settings['ProgressBar'] if settings['ProgressBar'] && settings['ProgressBar'] != 'None'
+        options[:progress_message] = extract_text(settings['ProgressMessage']) if settings['ProgressMessage']
+        options[:asynchronous] = true if settings['Asynchronous'] == true
+        outputs = parse_array(settings['OutputMappings']).map do |mapping|
+          { source: parse_page_variable(mapping['SourceVariable']), expression: mapping['Expression'],
+            attribute: mapping.dig('AttributeRef', 'Attribute'),
+            source_attribute: mapping.dig('SourceAttributeRef', 'Attribute') }.compact
+        end
+        options[:outputs] = outputs unless outputs.empty?
+        page_settings = action['FormSettings'] || action['PageSettings']
+        if page_settings && page_settings['TitleOverride']
+          options[:title] = extract_text(page_settings['TitleOverride'])
+        end
+        if event[:handler] == 'create_object'
+          reference = action['EntityRef'] || {}
+          steps = parse_array(reference['Steps'])
+          options[:create] = {
+            entity: reference['Entity'] || steps.last&.fetch('DestinationEntity', nil),
+            page: page_settings && (page_settings['Form'] || page_settings['Page']),
+            association: steps.last&.fetch('Association', nil)
+          }.compact
+        end
+        if action['Address']
+          address = action['Address']
+          options[:link] = { type: action.fetch('LinkType', 'Web'), value: address['Value'],
+                            attribute: address['IsDynamic'] ? address.dig('AttributeRef', 'Attribute') : nil }.compact
+        end
+        event[:settings] = options unless options.empty?
+        event
+      end
+
+      def parse_action_base(action)
+        return nil unless action.is_a?(Hash)
         if %w[Pages$CallNanoflowClientAction Forms$CallNanoflowClientAction].include?(action["$Type"])
           settings = action["NanoflowSettings"] || action
           handler = local_name(action["Nanoflow"] || settings["Nanoflow"])
@@ -1180,9 +1251,9 @@ module Mxrb
             [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
           end
           { kind: :microflow, handler: handler, arguments: arguments }
-        elsif %w[Pages$FormAction Forms$FormAction].include?(action["$Type"])
-          settings = action["FormSettings"] || action
-          handler = settings["Form"].to_s
+        elsif %w[Pages$FormAction Forms$FormAction Pages$PageClientAction Forms$PageClientAction].include?(action["$Type"])
+          settings = action["FormSettings"] || action["PageSettings"] || action
+          handler = (settings["Form"] || settings["Page"]).to_s
           return nil if handler.empty?
 
           arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
@@ -1203,6 +1274,16 @@ module Mxrb
           end
         elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action["$Type"])
           { kind: :action, handler: "close_page" }
+        elsif %w[Pages$CreateObjectClientAction Forms$CreateObjectClientAction].include?(action['$Type'])
+          settings = action['FormSettings'] || action['PageSettings'] || {}
+          arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
+            [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
+          end
+          { kind: :action, handler: 'create_object', arguments: }
+        elsif %w[Pages$SignOutClientAction Forms$SignOutClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'sign_out' }
+        elsif %w[Pages$OpenLinkClientAction Forms$OpenLinkClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'open_link' }
         end
       end
 

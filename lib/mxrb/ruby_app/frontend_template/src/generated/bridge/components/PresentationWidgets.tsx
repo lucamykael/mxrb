@@ -1,16 +1,27 @@
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type {
   EntityCollectionResponse,
   EntityRecord,
   PresentationMenuItem,
+  PresentationResource,
+  NavigationItem,
   RuntimeVariables,
 } from '../../types';
 import type { WidgetRuntimeProps } from '../contracts';
 import { editable, ReadOnlyContext } from './FieldPolicy';
 import { WidgetRenderer } from './WidgetRenderer';
+import { NativeScrollContainer } from './NativeScrollContainer';
+import { PageNameContext, NavigationSelection } from './PageTitleContext';
 import { ClientActions } from '../PageEdits';
+import { useWidgetEvent } from '../useWidgetEvent';
 import { VariableScope } from './VariableScope';
+import {
+  PageParameters,
+  LocalVariables,
+  VariableEnvironment,
+  resolveParameters,
+} from '../PageVariables';
 import {
   classes,
   displayValue,
@@ -39,13 +50,30 @@ export const presentationFrame = ({ widget, context, pageContext }: WidgetRuntim
 });
 
 export function SharedPresentation(props: WidgetRuntimeProps) {
-  const { widget, schema, navigate, invoke, onError } = props;
+  const { widget, schema } = props;
   const options = widget.options || {};
   const stack = useContext(SnippetStack);
-  const actions = useContext(ClientActions);
   const inheritedVariables = useContext(VariableScope);
+  const pageParameters = useContext(PageParameters);
+  const localVariables = useContext(LocalVariables);
   const name = String(options.snippet || options.menu || options.image || '');
-  const resource = schema.presentation?.[name];
+  const profile = options.navigation_profile
+    ? schema.navigation?.profiles?.find(
+        (entry) =>
+          entry.kind === options.navigation_profile || entry.name === options.navigation_profile,
+      )
+    : undefined;
+  const convert = (entries: NavigationItem[]): PresentationMenuItem[] =>
+    entries.map((entry) => ({
+      caption: entry.caption?.en_US || entry.page || '',
+      caption_translations: entry.caption,
+      page: entry.page,
+      icon: entry.icon,
+      items: convert(entry.items || []),
+    }));
+  const resource: PresentationResource | undefined = profile
+    ? { kind: 'menu', items: convert(profile.items || []) }
+    : schema.presentation?.[name];
   const frame = presentationFrame(props);
   if (!resource)
     return (
@@ -70,12 +98,19 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
           arguments: options.arguments as RuntimeVariables,
         },
         props.context || props.pageContext,
-        { pageParameter: props.pageContext, snippetParameters: inheritedVariables },
+        {
+          pageParameter: props.pageContext,
+          pageParameters,
+          localVariables: localVariables.values,
+          snippetParameters: inheritedVariables,
+        },
       );
-      for (const parameter of resource.parameters || []) {
-        if (!Object.prototype.hasOwnProperty.call(variables, parameter))
-          throw new Error(`Missing snippet parameter: ${parameter}`);
-      }
+      variables = resolveParameters(
+        resource.parameters,
+        variables,
+        props.context || props.pageContext,
+        schema,
+      );
     } catch (failure) {
       return (
         <div {...frame} role="alert">
@@ -85,13 +120,20 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
     }
     return (
       <SnippetStack.Provider value={[...stack, name]}>
-        <VariableScope.Provider value={variables}>
+        <VariableEnvironment
+          scope="snippet"
+          parameters={variables}
+          parameterDefinitions={resource.parameters}
+          definitions={resource.variables}
+          context={props.context || props.pageContext}
+          schema={schema}
+        >
           <div {...frame}>
             {resource.widgets?.map((child, index) => (
               <WidgetRenderer {...props} key={`${child.name}-${index}`} widget={child} />
             ))}
           </div>
-        </VariableScope.Provider>
+        </VariableEnvironment>
       </SnippetStack.Provider>
     );
   }
@@ -126,9 +168,18 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
   const itemLabel = (item: PresentationMenuItem) => (
     <>
       {item.icon && (
-        <span aria-hidden="true" className={`mxrb-menu-icon ${item.icon}`}>
-          {item.icon.startsWith('glyphicon') ? '' : item.icon}
-        </span>
+        <>
+          <span
+            aria-hidden="true"
+            className={typeof item.icon === 'number' ? 'glyphicon' : `mxrb-menu-icon ${item.icon}`}
+          >
+            {typeof item.icon === 'number'
+              ? String.fromCodePoint(item.icon)
+              : item.icon.startsWith('glyphicon')
+                ? ''
+                : item.icon}
+          </span>{' '}
+        </>
       )}
       {itemCaption(item)}
     </>
@@ -144,49 +195,9 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
       {entries.map((item, index) => (
         <li key={`${depth}-${index}`}>
           {item.page || item.microflow || item.action ? (
-            <button
-              type="button"
-              onClick={() => {
-                void Promise.resolve()
-                  .then(() => {
-                    if (item.action) {
-                      const parameters = eventArguments(
-                        item.action,
-                        props.context || props.pageContext,
-                        { pageParameter: props.pageContext, snippetParameters: inheritedVariables },
-                      );
-                      if (item.action.kind === 'action' && actions)
-                        return actions.run(item.action, props.context || props.pageContext);
-                      if (item.action.kind === 'page') {
-                        const candidate = Object.values(parameters).find(isEntityRecord);
-                        return navigate(
-                          item.action.handler,
-                          candidate || props.context || props.pageContext,
-                        );
-                      }
-                      if (item.action.kind === 'nanoflow')
-                        return props.invokeNanoflow(
-                          item.action.handler,
-                          parameters,
-                          props.context || props.pageContext,
-                        );
-                      if (item.action.kind === 'microflow')
-                        return invoke(
-                          item.action.handler,
-                          parameters,
-                          props.context || props.pageContext,
-                        );
-                      throw new Error(`Unsupported menu action: ${item.action.kind}`);
-                    }
-                    return item.page
-                      ? navigate(item.page, props.context || props.pageContext)
-                      : invoke(item.microflow!, {}, props.context || props.pageContext);
-                  })
-                  .catch(onError);
-              }}
-            >
+            <MenuAction props={props} item={item} link={!!profile}>
               {itemLabel(item)}
-            </button>
+            </MenuAction>
           ) : item.items?.length ? null : (
             <span>{itemLabel(item)}</span>
           )}
@@ -201,13 +212,77 @@ export function SharedPresentation(props: WidgetRuntimeProps) {
     </ul>
   );
   return (
-    <nav {...frame} aria-label={widget.name}>
-      {items(resource.items || [])}
+    <nav
+      {...frame}
+      className={classes(
+        frame.className,
+        widget.type === 'navigation_tree' ? 'mx-navigationtree' : 'mx-navbar',
+      )}
+      aria-label={widget.name}
+    >
+      <div className="navbar-inner">{items(resource.items || [])}</div>
     </nav>
   );
 }
 
+function MenuAction({
+  props,
+  item,
+  link,
+  children,
+}: {
+  props: WidgetRuntimeProps;
+  item: PresentationMenuItem;
+  link: boolean;
+  children: ReactNode;
+}) {
+  const execution = useWidgetEvent(props);
+  const selected = useContext(NavigationSelection);
+  const currentPage = useContext(PageNameContext);
+  const menuKey = String(
+    props.widget.options?.navigation_profile || props.widget.options?.menu || props.widget.name,
+  );
+  const page = item.page || (item.action?.kind === 'page' ? item.action.handler : undefined);
+  const action = item.action || {
+    event: 'on_click',
+    kind: item.page ? 'page' : 'microflow',
+    handler: item.page || item.microflow!,
+  };
+  const disabled = execution.running && action.settings?.disabled_during_execution !== false;
+  const Button = link ? 'a' : 'button';
+  return (
+    <>
+      {execution.feedback}
+      <Button
+        className={
+          page && page === currentPage && selected?.get(menuKey) === page ? 'active' : undefined
+        }
+        href={link ? '#' : undefined}
+        type={link ? undefined : 'button'}
+        disabled={link ? undefined : disabled}
+        aria-disabled={disabled || undefined}
+        aria-busy={execution.running || undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          if (page) selected?.set(menuKey, page);
+          void execution.runEvent(action);
+        }}
+      >
+        {children}
+      </Button>
+    </>
+  );
+}
+
 export function ScrollContainer(props: WidgetRuntimeProps) {
+  return props.widget.options?.native_layout ? (
+    <NativeScrollContainer {...props} />
+  ) : (
+    <LegacyScrollContainer {...props} />
+  );
+}
+
+function LegacyScrollContainer(props: WidgetRuntimeProps) {
   const { widget } = props;
   const regions = widget.regions || {};
   const options = widget.options || {};
@@ -331,9 +406,9 @@ export function ScrollContainer(props: WidgetRuntimeProps) {
 export function ReferenceSetSelector(
   props: WidgetRuntimeProps & { onChanged: (record: EntityRecord) => unknown },
 ) {
+  const actions = useContext(ClientActions);
   const { widget, context, pageContext, request, revision, saveRecord, onError, onChanged } = props;
   const record = context || pageContext;
-  const actions = useContext(ClientActions);
   const options = widget.options || {};
   const readOnly = useContext(ReadOnlyContext);
   const [choices, setChoices] = useState<EntityRecord[]>([]);
