@@ -8,6 +8,7 @@ require 'monitor'
 require 'net/http'
 require 'openssl'
 require 'uri'
+require_relative 'string_functions'
 
 module Mxrb
   module Runtime
@@ -167,6 +168,8 @@ module Mxrb
       # Deliberately small Mendix-expression evaluator. Unsupported syntax is
       # rejected rather than guessed, preserving deterministic test semantics.
       class Expression
+        include StringFunctions
+
         def initialize
           @token_cache = {}
         end
@@ -177,7 +180,7 @@ module Mxrb
 
           tokens = (@token_cache[text] ||= Lexer.new(text).tokens.freeze)
           Parser.new(tokens, self, variables, node).parse
-        rescue ArgumentError, TypeError, KeyError
+        rescue ArgumentError, TypeError, KeyError, EncodingError
           raise NativeRuntimeError, "unsupported Mendix expression: #{source.inspect}"
         end
 
@@ -225,7 +228,8 @@ module Mxrb
           when 'round' then arguments.fetch(0).round
           when 'random' then Random.rand
           when 'substring' then substring(*arguments)
-          when 'find' then arguments.fetch(0).to_s.index(arguments.fetch(1).to_s) || -1
+          when 'find' then string_find(*arguments)
+          when 'findlast' then string_find_last(*arguments)
           when 'formatdatetime' then format_datetime(*arguments)
           when 'contains' then arguments.fetch(0).to_s.include?(arguments.fetch(1).to_s)
           when 'startswith' then arguments.fetch(0).to_s.start_with?(arguments.fetch(1).to_s)
@@ -271,11 +275,6 @@ module Mxrb
           return 'false' if value == false
 
           value.to_s
-        end
-
-        def substring(value, start, length = nil)
-          result = length.nil? ? value.to_s.slice(start..) : value.to_s.slice(start, length)
-          result.to_s
         end
 
         def format_datetime(value, pattern)

@@ -36,6 +36,13 @@ von Regelentscheidungen und URL-Kodierung auf; diese wurden korrigiert
 [Kompatibilitätsnachweise](../evidence/compatibility-2026-10-05.json).
 
 
+String-Suche und Ausschnitte zählen jetzt UTF-16-Einheiten: `find` beachtet
+die Startposition, `findLast` findet das letzte Vorkommen und `substring` lehnt
+ungültige Bereiche ab. Vollständige Surrogatpaare bleiben erhalten; ungültige
+Unicode-Strings werden ausdrücklich abgelehnt. Zertifizierte native Fälle
+stehen im [String-Nachweis](../evidence/string-parity-2026-10-05.json).
+
+
 ## Aktualisierung vom 5. Oktober 2026
 
 Der Runtime-Katalog erkennt neue Modelle, DTOs, Seiten, Enumerationen und Dienste

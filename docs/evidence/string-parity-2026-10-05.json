@@ -1,0 +1,352 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "scope": "UTF-16 indexing, find offset, findLast, substring bounds and existing string/rule probes.",
+  "builds": {
+    "status": "completed",
+    "report_sha256": "0e23e093d50e88cff18deaa0ce72912467816f61251bc3773e132223142fdbf3",
+    "cases": [
+      {
+        "label": "compatibility-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "b400998a7350a6c590ecd4e81feb87e837a328b31a395f92335f0b4cb2e28d12"
+      },
+      {
+        "label": "compatibility-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "package_sha256": "361d7ca35bd5ecf897aeeda7599f3e7ca268e06afde6d2cb87f912699cae736b"
+      }
+    ]
+  },
+  "native_runtime": [
+    {
+      "report_sha256": "b86dc76bae3c59b73f7a06e7866d962eed7d442286ea8dcfe137589d18c63cce",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "b400998a7350a6c590ecd4e81feb87e837a328b31a395f92335f0b4cb2e28d12",
+      "scenario_sha256": "738903441a36c2ffce56473dd2b5aa7d2ccc410b2138f8fe690f81f1e30b62eb",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "FindUnicode",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "FindOffset",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindEmptyPastEnd",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindNegative",
+            "actual": "0",
+            "expected": "0",
+            "passed": true
+          },
+          {
+            "name": "FindLast",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindLastUnicode",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "SubstringUnicode",
+            "actual": "ab",
+            "expected": "ab",
+            "passed": true
+          },
+          {
+            "name": "SubstringTail",
+            "actual": "abc",
+            "expected": "abc",
+            "passed": true
+          },
+          {
+            "name": "SubstringBoundary",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "SubstringPastEnd",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringTooLong",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringNegative",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "TrimNbsp",
+            "actual": " Ruby ",
+            "expected": " Ruby ",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "report_sha256": "fda4c7e17cea9c83af5f2f9acd313b56b4a7e82926106e8efc817a74d41521c8",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "361d7ca35bd5ecf897aeeda7599f3e7ca268e06afde6d2cb87f912699cae736b",
+      "scenario_sha256": "738903441a36c2ffce56473dd2b5aa7d2ccc410b2138f8fe690f81f1e30b62eb",
+      "acceptance": {
+        "status": "passed",
+        "results": [
+          {
+            "name": "Length",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "Trim",
+            "actual": "Ruby",
+            "expected": "Ruby",
+            "passed": true
+          },
+          {
+            "name": "TrimEmpty",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "Lower",
+            "actual": "ruby",
+            "expected": "ruby",
+            "passed": true
+          },
+          {
+            "name": "Upper",
+            "actual": "RUBY",
+            "expected": "RUBY",
+            "passed": true
+          },
+          {
+            "name": "Encode",
+            "actual": "a%20b%2Bc%2F%C3%A7",
+            "expected": "a%20b%2Bc%2F%C3%A7",
+            "passed": true
+          },
+          {
+            "name": "EncodeSymbols",
+            "actual": "%2A~%21%28%29",
+            "expected": "%2A~%21%28%29",
+            "passed": true
+          },
+          {
+            "name": "DecodeSpaces",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "Decode",
+            "actual": "a b+c/ç",
+            "expected": "a b+c/ç",
+            "passed": true
+          },
+          {
+            "name": "FindUnicode",
+            "actual": "2",
+            "expected": "2",
+            "passed": true
+          },
+          {
+            "name": "FindOffset",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindEmptyPastEnd",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindNegative",
+            "actual": "0",
+            "expected": "0",
+            "passed": true
+          },
+          {
+            "name": "FindLast",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "FindLastUnicode",
+            "actual": "3",
+            "expected": "3",
+            "passed": true
+          },
+          {
+            "name": "SubstringUnicode",
+            "actual": "ab",
+            "expected": "ab",
+            "passed": true
+          },
+          {
+            "name": "SubstringTail",
+            "actual": "abc",
+            "expected": "abc",
+            "passed": true
+          },
+          {
+            "name": "SubstringBoundary",
+            "actual": "",
+            "expected": "",
+            "passed": true
+          },
+          {
+            "name": "SubstringPastEnd",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringTooLong",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "SubstringNegative",
+            "error": "Error: Internal server error",
+            "expected_error": true,
+            "passed": true
+          },
+          {
+            "name": "TrimNbsp",
+            "actual": " Ruby ",
+            "expected": " Ruby ",
+            "passed": true
+          },
+          {
+            "name": "VerifyRule",
+            "actual": "passed",
+            "expected": "passed",
+            "passed": true
+          }
+        ]
+      }
+    }
+  ],
+  "ruby": {
+    "examples": 2263,
+    "failures": 0,
+    "seed": 53844,
+    "coverage": {
+      "lines": {
+        "covered": 40537,
+        "total": 40537,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 17708,
+        "total": 17708,
+        "percent": 100.0
+      }
+    }
+  },
+  "limitations": [
+    "Native case matrix does not certify isolated UTF-16 surrogate values. Ruby rejects strings that cannot be encoded as valid UTF-8."
+  ],
+  "fixture_sha256": {
+    "spec/fixtures/native_compatibility/cases.json": "545dbf68c59d844ff0aab8a01db7c24d70b26d3705d5247ee4747754a7fa7992",
+    "spec/fixtures/native_compatibility/project.rb": "de8391995b858d5a79102daef1b9366bbdd94d96c622d817fde6d6110c336db7",
+    "spec/fixtures/native_compatibility/scenario.ts": "ca672ab144ced23a54d7cb797dc031bbff686f5e16ff98a962ae81a56e4a03d6"
+  }
+}

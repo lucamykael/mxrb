@@ -32,6 +32,13 @@ e a codificação URL (espaço `%20`, asterisco `%2A`, til `~`). Veja a
 [evidência de compatibilidade](../evidence/compatibility-2026-10-05.json).
 
 
+Busca e recorte de strings agora contam unidades UTF-16: `find` respeita a
+posição inicial, `findLast` localiza a última ocorrência e `substring` rejeita
+intervalos inválidos. A implementação preserva pares completos de substitutos;
+strings Unicode inválidas são rejeitadas explicitamente. Os casos nativos
+certificados constam na [evidência de strings](../evidence/string-parity-2026-10-05.json).
+
+
 ## Atualização de 5 de outubro de 2026
 
 O catálogo do runtime descobre novos modelos, DTOs, páginas, enums e serviços
