@@ -1,5 +1,31 @@
 # MXRB: Ruby acima de tudo
 
+## Gráficos com dados vinculados
+
+O frontend consulta fontes de entidades autorizadas, respeita XPath e contexto,
+ordena os registros e atualiza os gráficos após alterações. Linha, área, colunas,
+barras horizontais, bolhas, séries temporais, pizza e mapa de calor usam valores
+reais; CustomChart aceita séries JSON explícitas de barras ou dispersão. A tabela
+acessível preserva os valores, categorias comuns se alinham entre séries e valores
+nulos não viram zeros. Falhas da fonte aparecem como erro, sem gráfico ilustrativo.
+
+A fixture `marketplace_chart_project.rb`, em `spec/fixtures/frontend_browser`,
+usa `MXRB_OUTPUT_PATH` e `MXRB_CHARTS_PACKAGE`. A certificação usa Charts 6.2.1:
+o pacote 4.2.4 disponível localmente falhou na montagem do cliente React do
+Studio 11.12.1. O pacote de terceiros não é distribuído pelo repositório.
+
+O oráculo também revelou templates opcionais ausentes. O gerador inicializa
+textos vazios nas fontes ativas, preserva fontes inativas e limpeza explícita,
+e a exportação mantém os nomes das séries aninhadas. Os testes de navegador
+executam a versão Ruby com abertura de MPR proibida.
+
+O recorte nativo verifica valores e atualização de linha, barras e pizza. Não
+estabelece equivalência visual completa, templates parametrizados, eventos por
+ponto, temas, layouts personalizados ou todas as opções do Plotly. Agregações,
+séries dinâmicas e modos de barras diferentes de `group` ainda exigem um adapter;
+o renderer recusa essas configurações em vez de representar dados incorretos.
+Veja a [evidência de gráficos](../evidence/chart-data-2026-10-05.json).
+
 ## Catálogo, regras e widgets: revisão adicional
 
 O catálogo de aplicações `runtime_model: ruby` agora reconcilia remoções e
@@ -15,7 +41,8 @@ e aceita snapshots imutáveis das declarações.
 O frontend expõe `registerMarketplaceWidget` para adapters por identidade exata.
 Imagens, sliders, intervalos, progresso, avaliação, cor e botões de enumeração
 usam propriedades e dados vinculados, respeitando a política de edição herdada.
-Isso não certifica gráficos, scanners, ações Java/JS ou todos os widgets nativos.
+Scanners, ações Java/JS e outras variantes nativas continuam exigindo
+implementação e certificação específicas; o recorte de gráficos está descrito acima.
 
 VetClinic editado passou criação e leitura persistida no Chromium autenticado,
 em 1280×900 e 390×900, com abertura de MPR proibida. A preparação está em

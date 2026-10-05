@@ -3226,6 +3226,7 @@ module Mxrb
           context_entity: options[:__context_entity], module_name: options[:__module_name]
         )
       end
+      initialize_widget_text_templates!(properties, options.fetch(:properties, {}))
       configure_pluggable_widget_slots!(
         widget, options.fetch(:__slots, []),
         context_entity: options[:__context_entity], module_name: options[:__module_name]
@@ -3350,9 +3351,27 @@ module Mxrb
             nested.fetch(key.to_s), configured, context_entity:, module_name:
           )
         end
+        initialize_widget_text_templates!(nested, configuration)
         object
       end
       value['Objects'] = IO::BsonCodec.build_array(objects, marker: 2)
+    end
+
+    def initialize_widget_text_templates!(properties, configuration)
+      configuration = configuration.transform_keys(&:to_s)
+      properties.each do |key, property|
+        type = property.fetch('ValueType')
+        next unless type['Type'] == 'TextTemplate' && property['Value']['TextTemplate'].nil?
+        next if configuration.key?(key) && configuration[key].nil?
+
+        source = type['DataSourceProperty'].to_s
+        next unless source.empty? || properties.dig(source, 'Value', 'DataSource')
+
+        translations = array_items(type['Translations']).map { [_1['LanguageCode'], _1['Text']] }
+        property['Value']['TextTemplate'] = empty_client_template_doc.merge(
+          'Template' => localized_text_doc(translations)
+        )
+      end
     end
 
     def reusable_widget_object!(object_type, object, configuration, index)
@@ -3695,7 +3714,7 @@ module Mxrb
       case value_type["Type"]
       when "Expression" then doc["Expression"] = default
       when "TextTemplate"
-        doc["TextTemplate"] = client_template_doc(default) if value_type['Required'] || !default.empty?
+        doc["TextTemplate"] = client_template_doc(default) if value_type['DataSourceProperty'].to_s.empty?
       else doc["PrimitiveValue"] = default
       end
       doc

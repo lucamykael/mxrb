@@ -1,5 +1,31 @@
 # MXRB: Ruby above all
 
+## Charts with bound data
+
+The frontend queries authorized entity sources with XPath and context, sorts
+records and refreshes charts after changes. Line, area, column, horizontal bar,
+bubble, time-series, pie and heatmap charts use actual values; CustomChart accepts
+explicit bar/scatter JSON series. An accessible table preserves values, common
+categories align across series and nulls do not become zeros. Source failures
+produce an error instead of a decorative graph.
+
+The `marketplace_chart_project.rb` fixture in `spec/fixtures/frontend_browser`
+uses `MXRB_OUTPUT_PATH` and `MXRB_CHARTS_PACKAGE`. Certification uses Charts 6.2.1;
+the locally available 4.2.4 package failed React client bundling in Studio 11.12.1.
+The third-party package is not distributed by this repository.
+
+The oracle also exposed missing optional templates. The generator initializes
+empty text for active sources, preserves inactive sources and explicit clearing,
+and exports nested series names. Browser tests run the Ruby version with MPR
+opening forbidden.
+
+The native scope checks values and refresh behavior for line, bar and pie charts.
+It does not establish complete visual equivalence, parameterized templates,
+point events, themes, custom layouts or every Plotly option. Aggregations, dynamic
+series and bar modes other than `group` still require an adapter; the renderer
+rejects these configurations instead of displaying incorrect data.
+See the [chart evidence](../evidence/chart-data-2026-10-05.json).
+
 ## Additional catalog, rule and widget revision
 
 The catalog for `runtime_model: ruby` applications now reconciles removed and
@@ -15,7 +41,8 @@ and accepts immutable declaration snapshots.
 The frontend exposes `registerMarketplaceWidget` for exact widget identity
 adapters. Images, sliders, ranges, progress, ratings, colors and enumeration
 buttons use bound properties and data, respecting inherited editing policy.
-This does not certify charts, scanners, Java/JS actions or every native widget.
+Scanners, Java/JS actions and other native variants still require specific
+implementation and certification; the chart scope is described above.
 
 Edited VetClinic passed authenticated Chromium creation and persisted reads at
 1280×900 and 390×900 with MPR opening forbidden. Preparation lives in

@@ -1,0 +1,295 @@
+{
+  "date": "2026-10-05",
+  "studio_version": "11.12.1",
+  "widget_package": {
+    "name": "Charts",
+    "version": "6.2.1",
+    "sha256": "13e999c4e519dc6baeb783dd8d58b92009338bc4b5c0a3aac3f734d7185b8d1e"
+  },
+  "scope": "Database-backed line, horizontal bar and pie chart values before and after creating a committed record; original and Ruby round-trip. Ruby browser acceptance forbids MPR reads.",
+  "builds": {
+    "status": "completed",
+    "report_sha256": "46e44bf65c33e20bb54b489a2c50ff148da9e5418f3db327c38e2142b0b72c47",
+    "cases": [
+      {
+        "label": "charts-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "source_sha256": "99aec46bc6dbf894f3a48b04add66eca510698332dfb67516efb87419c55f4a6",
+        "package_sha256": "8f6fbf022a711d12036af2cf7d3a6da62df1197c639be6d0ad6b837f275ceab7"
+      },
+      {
+        "label": "charts-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0,
+        "source_sha256": "754eb7ccb5e167f63d81efe33e4b8680357cccb36212a1355cbbf874f40b7cb9",
+        "package_sha256": "059f3730b042527d1858de0181f0473fa0a40868233e0842d5e9186b99f62a8f"
+      }
+    ]
+  },
+  "native_runtime": [
+    {
+      "variant": "source",
+      "report_sha256": "32c9f91c1fdb898da10d09ea7359e06d3b286e1311d3f8e0b6a7fc718ada38e6",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "059f3730b042527d1858de0181f0473fa0a40868233e0842d5e9186b99f62a8f",
+      "scenario_sha256": "0e25d631a68af0f9cec356b9268e34fe4cd946d0983535def10a43b3ebee08e8",
+      "acceptance": {
+        "status": "passed",
+        "before": [
+          [
+            {
+              "type": "scatter",
+              "x": [
+                "First",
+                "Second"
+              ],
+              "y": [
+                10,
+                20
+              ],
+              "values": [
+                10,
+                20
+              ]
+            }
+          ],
+          [
+            {
+              "type": "bar",
+              "orientation": "h",
+              "x": [
+                10,
+                20
+              ],
+              "y": [
+                "First",
+                "Second"
+              ],
+              "values": [
+                10,
+                20
+              ]
+            }
+          ],
+          [
+            {
+              "type": "pie",
+              "values": [
+                10,
+                20
+              ]
+            }
+          ]
+        ],
+        "after": [
+          [
+            {
+              "type": "scatter",
+              "x": [
+                "First",
+                "Second",
+                "New value"
+              ],
+              "y": [
+                10,
+                20,
+                40
+              ],
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ],
+          [
+            {
+              "type": "bar",
+              "orientation": "h",
+              "x": [
+                10,
+                20,
+                40
+              ],
+              "y": [
+                "First",
+                "Second",
+                "New value"
+              ],
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ],
+          [
+            {
+              "type": "pie",
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ]
+        ]
+      },
+      "screenshot_sha256": "b5cc2969f07b5d3ff4a0a18eb5526e1a60324237452f3273da24b8cb6f1e5c9f"
+    },
+    {
+      "variant": "roundtrip",
+      "report_sha256": "826cb1c4f1dd8be4079e6371362d5014e3bf996afe26b1d796842dc845132059",
+      "status": "passed",
+      "http_status": 200,
+      "page_ready": true,
+      "package_sha256": "8f6fbf022a711d12036af2cf7d3a6da62df1197c639be6d0ad6b837f275ceab7",
+      "scenario_sha256": "0e25d631a68af0f9cec356b9268e34fe4cd946d0983535def10a43b3ebee08e8",
+      "acceptance": {
+        "status": "passed",
+        "before": [
+          [
+            {
+              "type": "scatter",
+              "x": [
+                "First",
+                "Second"
+              ],
+              "y": [
+                10,
+                20
+              ],
+              "values": [
+                10,
+                20
+              ]
+            }
+          ],
+          [
+            {
+              "type": "bar",
+              "orientation": "h",
+              "x": [
+                10,
+                20
+              ],
+              "y": [
+                "First",
+                "Second"
+              ],
+              "values": [
+                10,
+                20
+              ]
+            }
+          ],
+          [
+            {
+              "type": "pie",
+              "values": [
+                10,
+                20
+              ]
+            }
+          ]
+        ],
+        "after": [
+          [
+            {
+              "type": "scatter",
+              "x": [
+                "First",
+                "Second",
+                "New value"
+              ],
+              "y": [
+                10,
+                20,
+                40
+              ],
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ],
+          [
+            {
+              "type": "bar",
+              "orientation": "h",
+              "x": [
+                10,
+                20,
+                40
+              ],
+              "y": [
+                "First",
+                "Second",
+                "New value"
+              ],
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ],
+          [
+            {
+              "type": "pie",
+              "values": [
+                10,
+                20,
+                40
+              ]
+            }
+          ]
+        ]
+      },
+      "screenshot_sha256": "b5cc2969f07b5d3ff4a0a18eb5526e1a60324237452f3273da24b8cb6f1e5c9f"
+    }
+  ],
+  "ruby_browser": {
+    "passed": true,
+    "report_sha256": "0fd68e7b7d8d22d34530fad57539387e03d2039d667b7f764a4662ac4f0b74c4",
+    "steps": 8,
+    "console_errors": [],
+    "screenshot_sha256": "87549c580efd016ad290252c6e80d59eceeae871de1edda4b0e2632bf98b4ef6"
+  },
+  "fixtures": {
+    "project": "spec/fixtures/frontend_browser/marketplace_chart_project.rb",
+    "native_scenario": "spec/fixtures/frontend_browser/marketplace_chart_native.ts",
+    "browser_scenario": "spec/fixtures/frontend_browser/marketplace_chart_data_flow.json"
+  },
+  "findings_fixed": [
+    "Active optional text templates must be initialized; inactive data-source templates remain absent.",
+    "Nested series captions must survive the typed Ruby projection.",
+    "Horizontal BarChart binds numeric values to X and category labels to Y."
+  ],
+  "limitations": [
+    "No claim of complete visual equivalence, parameterized captions or point-action parity.",
+    "Dynamic series, aggregation and non-grouped bar modes require an explicit adapter.",
+    "Charts 4.2.4 failed React client bundling in Studio 11.12.1; this test uses the locally installed 6.2.1 package."
+  ],
+  "checks": {
+    "ruby_examples": 2264,
+    "ruby_failures": 0,
+    "line_coverage": {
+      "covered": 40549,
+      "total": 40549
+    },
+    "branch_coverage": {
+      "covered": 17716,
+      "total": 17716
+    },
+    "frontend_tests": 95,
+    "frontend_typecheck": "passed",
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "rubocop_files": 551
+  }
+}

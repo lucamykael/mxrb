@@ -925,6 +925,8 @@ function WidgetContent({
             context={activeRecord}
             regions={marketplaceRegions}
             schema={schema}
+            request={request}
+            revision={revision}
             onClick={onClick}
             onChange={(attribute, value) => {
               const member = memberName(attribute);

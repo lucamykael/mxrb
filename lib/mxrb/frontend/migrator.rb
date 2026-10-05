@@ -349,6 +349,7 @@ module Mxrb
           property = {
             type: value_type.fetch('Type'), default: value_type.fetch('DefaultValue', '').to_s,
             translations: [], required: value_type.fetch('Required', false),
+            data_source: value_type['DataSourceProperty'].to_s,
             selection_types: array_items(value_type['SelectionTypes'])
           }
           {
@@ -375,6 +376,7 @@ module Mxrb
         property = {
           type: value_type.fetch('Type'), default: value_type.fetch('DefaultValue', '').to_s,
           translations:, required: value_type.fetch('Required', false),
+          data_source: value_type['DataSourceProperty'].to_s,
           selection_types: array_items(value_type['SelectionTypes'])
         }
         WidgetPackage.allocate.send(:widget_value, value_type, property)

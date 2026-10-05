@@ -144,8 +144,10 @@ RSpec.describe 'Ruby application export mode' do
                                        root, 'frontend', 'src', 'generated', 'bridge', 'marketplace.tsx'
                                      ))
       expect(marketplace_source).to include(
-        'export function MarketplaceWidget', 'mxrb-marketplace-chart', "id.includes('slider')"
+        'export function MarketplaceWidget', '<MarketplaceChart', "id.includes('slider')"
       )
+      expect(File.read(File.join(root, 'frontend', 'src', 'generated', 'bridge', 'components',
+                                 'MarketplaceChart.tsx'))).to include('mxrb-marketplace-chart')
       expect(File.read(File.join(root, 'frontend', 'src', 'styles', 'index.css')))
         .to include(".app-page[aria-busy='true']")
       bound_field_source = File.read(File.join(

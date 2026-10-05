@@ -1,5 +1,33 @@
 # MXRB: Ruby über alles
 
+## Diagramme mit gebundenen Daten
+
+Das Frontend liest autorisierte Entitätsquellen mit XPath und Kontext, sortiert
+Datensätze und aktualisiert Diagramme nach Änderungen. Linien-, Flächen-, Säulen-,
+horizontale Balken-, Blasen-, Zeitreihen-, Kreis- und Heatmap-Diagramme verwenden
+echte Werte; CustomChart akzeptiert explizite JSON-Reihen für Balken und Scatter.
+Eine zugängliche Tabelle erhält die Werte, gemeinsame Kategorien werden über
+Reihen hinweg ausgerichtet und Nullwerte werden nicht zu Nullen. Quellenfehler
+erscheinen als Fehler anstelle eines dekorativen Diagramms.
+
+Die Fixture `marketplace_chart_project.rb` in `spec/fixtures/frontend_browser`
+verwendet `MXRB_OUTPUT_PATH` und `MXRB_CHARTS_PACKAGE`. Die Zertifizierung nutzt
+Charts 6.2.1; das lokal vorhandene Paket 4.2.4 scheiterte beim React-Client-Build
+in Studio 11.12.1. Das Drittanbieterpaket wird nicht im Repository verteilt.
+
+Das Orakel zeigte außerdem fehlende optionale Templates. Der Generator erzeugt
+leere Texte für aktive Quellen, erhält inaktive Quellen und explizites Löschen
+und exportiert Namen verschachtelter Datenreihen. Browsertests führen die
+Ruby-Version mit verbotenem MPR-Zugriff aus.
+
+Die native Prüfung umfasst Werte und Aktualisierung von Linien-, Balken- und
+Kreisdiagrammen. Sie belegt keine vollständige visuelle Gleichheit, parametrisierten
+Templates, Punktereignisse, Themes, benutzerdefinierten Layouts oder sämtliche
+Plotly-Optionen. Aggregationen, dynamische Reihen und Balkenmodi außer `group`
+benötigen weiterhin einen Adapter; der Renderer weist diese Konfigurationen ab,
+anstatt falsche Daten darzustellen.
+Siehe die [Diagrammnachweise](../evidence/chart-data-2026-10-05.json).
+
 ## Weitere Überarbeitung von Katalog, Regeln und Widgets
 
 Der Katalog für Anwendungen mit `runtime_model: ruby` gleicht entfernte und
@@ -16,8 +44,9 @@ textuelle Beschriftungen und akzeptiert unveränderliche Deklarations-Snapshots.
 Das Frontend bietet `registerMarketplaceWidget` für Adapter anhand der exakten
 Widget-Identität. Bilder, Schieberegler, Bereiche, Fortschritt, Bewertungen,
 Farben und Enumerationsschaltflächen verwenden gebundene Eigenschaften und
-Daten unter Beachtung der geerbten Bearbeitungsregeln. Diagramme, Scanner,
-Java/JS-Aktionen und sämtliche nativen Widgets sind damit nicht zertifiziert.
+Daten unter Beachtung der geerbten Bearbeitungsregeln. Scanner, Java/JS-Aktionen
+und weitere native Varianten benötigen weiterhin eigene Implementierungen und
+Prüfungen; der Diagrammumfang ist oben beschrieben.
 
 Das in Ruby bearbeitete VetClinic bestand authentifizierte Chromium-Tests für
 Erstellung und persistiertes Lesen bei 1280×900 und 390×900, während MPR-Zugriffe

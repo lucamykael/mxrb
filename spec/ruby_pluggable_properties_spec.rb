@@ -27,6 +27,7 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
           list!
           properties do
             property :name, :string
+            property :label, :text_template
             property :run, :action
             property :source, :data_source
             property :content, :widgets
@@ -178,7 +179,7 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     properties = {
       'action' => { kind: :page, handler: 'App.Detail', arguments: {} },
       'source' => { data_source: 'App.Item', xpath: '', sort: [] },
-      'objects' => { objects: [{ name: 'First', run: nil, content: {} }] }
+      'objects' => { objects: [{ name: 'First', label: 'Revenue', run: nil, content: {} }] }
     }
     bridge = described_class.try_supported_subset_for_widget('example', widget_id:, properties:)
     expect(bridge.to_projection.keys).to eq(%w[action source objects])
@@ -189,9 +190,10 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
       'data_source(entity: "App.Item", xpath: "")'
     )
     expect(bridge.source_expression(:objects)).to include(
-      'objects do', 'object do', 'set "name", "First"', 'set "run", nil'
+      'objects do', 'object do', 'set "name", "First"', 'set "label", "Revenue"', 'set "run", nil'
     )
     expect(bridge.source_expression(:objects)).not_to include('content')
+    expect(bridge.to_projection.dig('objects', :objects, 0, 'label')).to eq('Revenue')
   end
 
   it 'builds nested object lists without exposing property Hashes in Ruby source' do

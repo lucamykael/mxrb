@@ -115,7 +115,8 @@ RSpec.describe Mxrb::WidgetPackage do
       expect(values.dig('count', 'PrimitiveValue')).to eq('0')
       expect(values.dig('limit', 'PrimitiveValue')).to eq('25')
       expect(values.dig('title', 'TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
-      expect(values.dig('subtitle', 'TextTemplate')).to be_nil
+      expect(values.dig('subtitle', 'TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
+      expect(array(values.dig('subtitle', 'TextTemplate', 'Template', 'Items'))).to be_empty
       expect(values.dig('formula', 'Expression')).to eq('$currentObject/Name')
       expect(values.dig('action', 'Expression')).to eq('')
     end
@@ -139,6 +140,43 @@ RSpec.describe Mxrb::WidgetPackage do
         zip.get_output_stream('widget.xml') { _1.write(widget_xml(id: 'after.Blank')) }
       end
       expect(described_class.new(blank_first).definition('after.Blank')).not_to be_nil
+    end
+  end
+
+  it 'initializes active optional captions while preserving inactive and explicitly cleared captions' do
+    xml = <<~XML
+      <widget id="example.Chart"><name>Chart</name><properties>
+        <property key="title" type="textTemplate" required="false"><caption>Title</caption></property>
+        <property key="rows" type="object" isList="true"><caption>Rows</caption><properties>
+          <property key="source" type="datasource" required="false"><caption>Source</caption></property>
+          <property key="tooltip" type="textTemplate" required="false" dataSource="source">
+            <caption>Tooltip</caption>
+            <translations><translation lang="en_US">Details</translation></translations>
+          </property>
+        </properties></property>
+      </properties></widget>
+    XML
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, 'widgets'))
+      write_package(File.join(dir, 'widgets', 'chart.mpk'), xml:)
+      writer = Mxrb::Writer.new(File.join(dir, 'project.mpr'), version: '11.12.1', modules: [])
+      source = { data_source: 'App.Item' }
+      widget = writer.send(:pluggable_widget_doc, {
+        type: :pluggable_widget, name: 'Chart', events: [],
+        options: { properties: { title: { text: 'Revenue' }, rows: { objects: [
+          { source: }, { source:, 'tooltip' => nil }, {}
+        ] } } }
+      }, id: 'example.Chart', name: 'Chart', studio_category: '', studio_pro_category: '')
+      properties = writer.send(:custom_widget_properties, widget)
+      expect(properties.dig('title', 'Value', 'TextTemplate', 'Template', 'Items').last['Text']).to eq('Revenue')
+      rows = array(properties.dig('rows', 'Value', 'Objects'))
+      types = properties.dig('rows', 'ValueType', 'ObjectType')
+      values = rows.map { writer.send(:widget_object_properties, types, _1) }
+      expect(values[0].dig('tooltip', 'Value', 'TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
+      expect(array(values[0].dig('tooltip', 'Value', 'TextTemplate', 'Template',
+                                 'Items')).last['Text']).to eq('Details')
+      expect(values[1].dig('tooltip', 'Value', 'TextTemplate')).to be_nil
+      expect(values[2].dig('tooltip', 'Value', 'TextTemplate')).to be_nil
     end
   end
 
