@@ -44,7 +44,7 @@ function FileContentWidget(props: WidgetRuntimeProps) {
   }, [path, revision]);
   const isImage = widget.type !== 'file_manager';
   const viewer = widget.type === 'image_viewer';
-  const disabled = !record || busy || inheritedReadOnly || !editable(options, record);
+  const disabled = !record || busy || inheritedReadOnly || !editable(options, record, props.schema.module_roles);
   const mode = String(options.mode || 'both').toLowerCase();
   const extensions = String(options.allowed_extensions || '')
     .split(/[;,\s]+/)

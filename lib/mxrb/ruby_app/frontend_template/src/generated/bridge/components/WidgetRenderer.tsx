@@ -376,7 +376,7 @@ export function DataView({
       />
     ));
 
-  if (options.visibility && !matchesCondition(options.visibility, resolvedRecord)) return null;
+  if (options.visibility && !matchesCondition(options.visibility, resolvedRecord, schema.module_roles)) return null;
   if (unsupported)
     return (
       <div className="mxrb-data-view mxrb-data-view--unsupported" role="alert">
@@ -398,7 +398,7 @@ export function DataView({
     );
 
   return (
-    <ReadOnlyContext.Provider value={inheritedReadOnly || !editable(options, resolvedRecord)}>
+    <ReadOnlyContext.Provider value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles)}>
       <ReadOnlyStyleContext.Provider
         value={
           options.read_only_style === 'text' || options.read_only_style === 'control'
@@ -464,6 +464,8 @@ function WidgetContent({
   const pageTitle = useContext(PageTitleContext);
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
+  if (widget.type !== 'data_view' && options.visibility &&
+      !matchesCondition(options.visibility, context || pageContext, schema.module_roles)) return null;
   const className = classes(
     'app-widget',
     `app-widget--${widget.type}`,

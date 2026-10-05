@@ -20,6 +20,7 @@ require_relative 'ruby_app/page_data_sources'
 require_relative 'ruby_app/page_design_identity'
 require_relative 'ruby_app/pluggable_properties'
 require_relative 'ruby_app/runtime_project'
+require_relative 'ruby_app/runtime_catalog'
 require_relative 'ruby_app/presentation'
 require_relative 'ruby_app/presentation_contracts'
 require_relative 'ruby_app/async_invocations'
@@ -1818,7 +1819,8 @@ module Mxrb
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
           navigation: manifest.data.fetch('navigation', {}),
           presentation: Registry.all(:presentation),
-          modules: runtime_schema_modules, coverage: manifest.coverage
+          modules: runtime_schema_modules, coverage: manifest.coverage,
+          module_roles: context&.module_roles || []
         }
         context ? secure_schema(result, context) : result
       end
@@ -2202,7 +2204,7 @@ module Mxrb
       private
 
       def runtime_schema_modules
-        manifest.modules.map do |mod|
+        RuntimeCatalog.new(manifest.modules).modules.map do |mod|
           enumerations = mod.fetch('enumerations', []).map do |definition|
             implementation = Registry.fetch(:enumeration, definition.fetch('name'))
             next definition unless implementation
@@ -2760,6 +2762,7 @@ module Mxrb
         synchronize_native_documents(project)
         synchronize_scheduled_events(project)
         @source_identities.reconcile!(project)
+        finalize_studio_schema!(project)
         project.close
         project = nil
         embed_sources!
@@ -2769,6 +2772,15 @@ module Mxrb
       end
 
       private
+
+      def finalize_studio_schema!(project)
+        return if StudioCompatibility.new(project.mendix_version).schema_hash.empty?
+
+        project.mpr.transaction do
+          project.mpr.apply_studio_compatibility!
+          project.mpr.update_version!(project.mendix_version)
+        end
+      end
 
       def embed_sources!
         files = RubyApp.source_bundle(@root)

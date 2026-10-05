@@ -117,6 +117,20 @@ RSpec.describe 'Standalone runtime compatibility' do
     invalid.each { |value| expect { app.commit_records(value) }.to raise_error(ArgumentError, /records must/) }
   end
 
+  it 'runs inherited lifecycle callbacks for concrete records and rolls back a rejected commit' do
+    parent = Mxrb::RubyApp::Registry.fetch(:record, 'Files.Document')
+    parent.before_commit do |record|
+      raise ArgumentError, 'parent rejected this report' if record.label == 'Rejected'
+
+      record.label = "Checked: #{record.label}"
+    end
+    created = @application.create_record('Files.Report', 'Label' => 'Report')
+    expect(created.dig(:attributes, 'Label')).to eq('Checked: Report')
+    expect { @application.update_record('Files.Report', created[:id], { 'Label' => 'Rejected' }) }
+      .to raise_error(ArgumentError, /parent rejected/)
+    expect(@application.record('Files.Report', created[:id]).dig(:attributes, 'Label')).to eq('Checked: Report')
+  end
+
   it 'keeps new client drafts private until an atomic save and resolves references between new drafts' do
     app = @application
     page = Class.new(Mxrb::RubyApp::Page)

@@ -65,7 +65,55 @@ RSpec.describe Mxrb::Runtime::XPath do
     end
     expect { filter('x' * 8193) }.to raise_error(ArgumentError, /too large/)
     expect { filter("[#{'not ' * 33}true]") }.to raise_error(ArgumentError, /nesting/)
-    expect { filter('[contains(Tags, \'Tag\')]') }.to raise_error(ArgumentError, /single value/)
+    expect { filter('[contains(Tags, \'Tag\')]') }.to raise_error(ArgumentError, /string attribute/)
+    expect { filter('[contains(Name, Single)]') }.to raise_error(ArgumentError, /single value/)
+    expect { filter('[Single + 1 = 2]') }.to raise_error(ArgumentError, /single value/)
+    expect { filter('[Rank div 0 = 2]') }.to raise_error(ArgumentError, /invalid XPath operand/)
+  end
+
+  it 'evaluates the documented string and date functions over association attribute sets' do
+    another = store.create('App.Tag')
+    another.members['Name'] = 'Another'
+    first.members['Tags'] << another
+    expect(filter("[starts-with(App.Tags/App.Tag/Name, 'An')][ends-with(Name, 's')]")).to eq([first])
+    expect(filter('[string-length(Name) = 5][length(Name) = 5]')).to eq([first, second])
+    expect(filter('[contains(Name, Name)]')).to eq([first, second])
+    expect(filter('[Single = NULL]')).to eq([first, second])
+    first.members['Created'] = Time.utc(2021, 1, 3, 2, 4, 5)
+    second.members['Created'] = nil
+    parts = { 'year' => 2021, 'month' => 1, 'day' => 3, 'hours' => 2, 'minutes' => 4,
+              'seconds' => 5, 'quarter' => 1, 'day-of-year' => 3, 'week' => 53, 'weekday' => 1 }
+    parts.each do |part, expected|
+      expect(filter("[#{part}-from-dateTime(Created, 'UTC') = #{expected}]")).to eq([first]), part
+    end
+    expect(filter("[day-from-dateTime(Created, 'America/Boa_Vista') = 2]")).to eq([first])
+    context = Mxrb::Runtime::SecurityContext.new(attributes: { 'time_zone' => 'America/Boa_Vista' })
+    expect(described_class.new('[hours-from-dateTime(Created) = 22]', store:, context:).filter([first])).to eq([first])
+    expect(filter("[length('abc') = 3]")).to eq([first, second])
+    expect(filter('[length(empty) = empty]')).to eq([first, second])
+  end
+
+  it 'rejects invalid function arity, types and time zones without expanding unauthorized paths' do
+    first.members['Created'] = Time.utc(2026)
+    ['[length(Name, 1)]', '[contains(Name, 1)]', '[year-from-dateTime(Name)]',
+     "[year-from-dateTime(Created, '+02:00')]", '[contains(Name, Tags)]'].each do |source|
+      expect { filter(source) }.to raise_error(ArgumentError)
+    end
+    policy = instance_double(Mxrb::Runtime::AccessControl)
+    allow(policy).to receive(:entity_allowed?).and_return(true)
+    allow(policy).to receive(:authorize!).and_raise(Mxrb::Runtime::AuthorizationError)
+    query = described_class.new("[starts-with(App.Tags/App.Tag/Name, 'T')]", store:, policy:)
+    expect { query.filter([first]) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+  end
+
+  it 'resolves the current time at execution rather than freezing it when the query is parsed' do
+    now = Time.utc(2026)
+    first.members['Created'] = now + 10
+    allow(Time).to receive(:now).and_return(now)
+    query = described_class.new('[Created < [%CurrentDateTime%]]', store:)
+    expect(query.filter([first])).to eq([])
+    allow(Time).to receive(:now).and_return(now + 20)
+    expect(query.filter([first])).to eq([first])
   end
 
   it 'enforces record and member permissions at every traversal and variable dereference' do

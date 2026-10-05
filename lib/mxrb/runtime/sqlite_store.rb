@@ -712,7 +712,7 @@ module Mxrb
 
       def run_hooks(event, value)
         @hooks[event].each do |entity, callback|
-          next if entity && entity != value.entity && entity != value.entity.split('.').last
+          next if entity && !schema.assignable?(value.entity, entity) && entity != value.entity.split('.').last
 
           callback.call(value, self)
         end

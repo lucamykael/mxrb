@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative 'native'
+require_relative 'xpath_functions'
+require_relative 'xpath_dates'
 
 module Mxrb
   module Runtime
@@ -21,6 +23,7 @@ module Mxrb
         @policy = policy
         @context = context
         @expression = Native::Expression.new
+        @functions = XPathFunctions.new(context)
         @tree = Parser.new(source.to_s).parse
       end
 
@@ -52,7 +55,8 @@ module Mxrb
         when :literal then parts.first
         when :variable then variable(parts.first, variables)
         when :path then path(record, parts.first, variables)
-        when :call then @expression.invoke(parts.first, parts.last.map { scalar(evaluate(_1, record, variables)) })
+        when :call then invoke(parts.first, parts.last.map { evaluate(_1, record, variables) })
+        when :system then system_variable(parts.first, variables)
         when :not then !truthy?(evaluate(parts.first, record, variables))
         when :negative then -scalar(evaluate(parts.first, record, variables))
         when :and, :or
@@ -61,6 +65,40 @@ module Mxrb
           kind == :and ? left & right : left | right
         else compare(kind, evaluate(parts.first, record, variables), evaluate(parts.last, record, variables))
         end
+      end
+
+      def invoke(name, arguments)
+        normalized = name.downcase
+        return @functions.invoke(normalized, arguments) if @functions.supported?(normalized)
+
+        @expression.invoke(name, arguments.map { scalar(_1) })
+      end
+
+      def system_variable(source, variables)
+        return identity(@context&.user) if source == '[%CurrentUser%]'
+        return identity(variable('currentObject', variables)) if source == '[%CurrentObject%]'
+        return user_role(source.delete_prefix('[%UserRole_').delete_suffix('%]')) if source.start_with?('[%UserRole_')
+
+        XPathDates.new(@context).resolve(source)
+      end
+
+      def identity(value)
+        return value.id if value.is_a?(Native::ObjectValue)
+        return value['id'] || value[:id] if value.is_a?(Hash)
+
+        value
+      end
+
+      def user_role(name)
+        found = @store.retrieve('System.UserRole').find do |role|
+          next false unless readable?(role)
+
+          authorize_member(role, 'Name')
+          role.members['Name'] == name
+        end
+        raise ArgumentError, "unknown or unreadable XPath user role #{name}" unless found
+
+        found.id
       end
 
       def variable(name, variables)
@@ -219,10 +257,8 @@ module Mxrb
             return value
           end
           kind, = peek
-          if kind == :datetime
-            consume(kind)
-            return [:literal, Time.now]
-          end
+          return [:system, consume(kind)] if kind == :system
+          return [:system, consume(kind)] if kind == :string && peek.last.start_with?('[%')
           return [:literal, consume(kind)] if %i[number string].include?(kind)
           return [:variable, consume(kind)] if kind == :variable
 
@@ -231,9 +267,9 @@ module Mxrb
 
         def identifier
           name = consume(:identifier)
-          if %w[true false empty].include?(name)
+          if %w[true false empty NULL].include?(name)
             consume(:right_parenthesis) if accept(:left_parenthesis)
-            return [:literal, { 'true' => true, 'false' => false, 'empty' => nil }.fetch(name)]
+            return [:literal, { 'true' => true, 'false' => false, 'empty' => nil, 'NULL' => nil }.fetch(name)]
           end
 
           if accept(:left_parenthesis)
@@ -275,6 +311,13 @@ module Mxrb
         private
 
         def next_token
+          @scanner.skip(/\s+/)
+          system = @scanner.scan(/\[%[A-Za-z_]\w*%\]/)
+          return [:system, system] if system
+
+          function = @scanner.scan(/[A-Za-z_]\w*(?:-[A-Za-z_]\w*)+(?=\s*\()/)
+          return [:identifier, function] if function
+
           position = @scanner.pos
           token = super
           raise ArgumentError, 'invalid XPath token' if @scanner.pos == position && token.first != :eof
