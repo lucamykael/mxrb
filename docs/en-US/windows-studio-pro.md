@@ -57,3 +57,20 @@ is recorded separately.
 Keep the Ruby gates at 100% line and branch coverage, along with frontend and
 Chromium checks. Start the existing VM with the installed Omarchy commands and
 use a separate virtual display for further GUI work.
+
+## Status from evidence
+
+`script/acceptance_status` generates JSON from current manifests and reports.
+Options can be repeated. Declaration catalogs remain separate from executed
+checks; a manifest alone cannot certify runtime behavior. Empty batches, failed
+startup and incomplete coverage do not pass. Exit status is 1 for failed
+evidence and 2 for invalid input.
+
+```bash
+bundle exec ruby script/acceptance_status \
+  --manifest /tmp/app/.mxrb/ruby-app.json \
+  --coverage coverage/coverage.json \
+  --native /tmp/native-evidence/summary.json \
+  --runtime /tmp/native-evidence/runtime-core-widgets-roundtrip/runtime.json \
+  > /tmp/acceptance-status.json
+```

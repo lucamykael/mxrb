@@ -1,0 +1,88 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'digest'
+require 'json'
+require 'optparse'
+
+# Summarizes supplied evidence; catalog classifications are not execution proof.
+module AcceptanceStatus
+  module_function
+
+  def read(path)
+    value = JSON.parse(File.read(path))
+    raise ArgumentError, "expected JSON object: #{path}" unless value.is_a?(Hash)
+
+    [value, { name: File.join(File.basename(File.dirname(path)), File.basename(path)), sha256: Digest::SHA256.file(path).hexdigest }]
+  end
+
+  def manifest(path)
+    data, source = read(path)
+    entries = data.fetch('coverage')
+    { source:, project: data.fetch('project').fetch('name'), runtime_model: data['runtime_model'],
+      declared_artifacts: entries.length, declarations_by_status: entries.map { _1.fetch('status') }.tally,
+      note: 'Declaration categories do not certify runtime execution or native parity.' }
+  end
+
+  def coverage(path)
+    data, source = read(path)
+    metrics = %w[lines branches].to_h { [_1, data.fetch(_1).slice('covered', 'total', 'percent')] }
+    passed = metrics.values.all? { _1.fetch('total').positive? && _1.fetch('covered') == _1.fetch('total') }
+    { source:, kind: 'Ruby coverage', passed:, metrics: }
+  end
+
+  def native(path)
+    data, source = read(path)
+    cases = data.fetch('cases')
+    passed = data.fetch('status') == 'completed' && !cases.empty? && cases.length == data.fetch('case_count')
+    passed &&= cases.all? { _1.fetch('status') == 'passed' && _1.fetch('mxbuild_exit_code').eql?(0) }
+    { source:, kind: 'Native builds', passed:,
+      cases: cases.map { _1.slice('label', 'status', 'mxbuild_exit_code', 'expected_sha256', 'package_sha256') } }
+  end
+
+  def runtime(path)
+    data, source = read(path)
+    scenario = data['acceptance'] || data['crud'] || {}
+    passed = data.fetch('status') == 'passed' && data.fetch('http_status') == 200 &&
+             data.fetch('page_ready') == true && scenario.fetch('status') == 'passed'
+    { source:, kind: 'Native Runtime/browser', passed:, package_sha256: data.fetch('package_sha256'), scenario: }
+  end
+
+  def report(paths)
+    catalogs = paths.fetch(:manifest).map { manifest(_1) }
+    checks = %i[coverage native runtime].flat_map { |kind| paths.fetch(kind).map { send(kind, _1) } }
+    { status: evidence_status(checks), catalogs:, checks:,
+      scope: 'Only supplied reports; no claim of universal Mendix compatibility or untested application behavior.' }
+  end
+
+  def evidence_status(checks)
+    return 'no_execution_evidence' if checks.empty?
+
+    checks.all? { _1.fetch(:passed) } ? 'passed_for_supplied_evidence' : 'failed'
+  end
+end
+
+paths = %i[manifest coverage native runtime].to_h { [_1, []] }
+parser = OptionParser.new do |options|
+  options.banner = 'Usage: script/acceptance_status [--manifest JSON] [--coverage JSON] ' \
+                   '[--native JSON] [--runtime JSON]'
+  paths.each_key { |kind| options.on("--#{kind} PATH", String) { paths.fetch(kind) << _1 } }
+  options.on('--help') do
+    puts options
+    exit
+  end
+end
+begin
+  parser.parse!(ARGV)
+  if paths.values.all?(&:empty?) || ARGV.any?
+    raise ArgumentError,
+          'supply at least one report and no positional arguments'
+  end
+
+  result = AcceptanceStatus.report(paths)
+  puts JSON.pretty_generate(result)
+  exit 1 if result.fetch(:status) == 'failed'
+rescue ArgumentError, KeyError, TypeError, JSON::ParserError, Errno::ENOENT => e
+  warn "acceptance status: #{e.message}"
+  exit 2
+end

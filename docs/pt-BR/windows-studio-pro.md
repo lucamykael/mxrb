@@ -57,3 +57,20 @@ GUI Studio Pro; a certificação visual continua registrada separadamente.
 Não reduzir os gates Ruby (100% linhas e branches), frontend ou Chromium para
 acomodar diferenças do oráculo. A VM existente pode ser iniciada pelos comandos
 Omarchy instalados; use uma sessão virtual separada para novas verificações GUI.
+
+## Status derivado das evidências
+
+`script/acceptance_status` gera JSON a partir dos manifests e relatórios atuais.
+As opções podem ser repetidas. O catálogo de declarações aparece separado dos
+checks executados; um manifesto sozinho não certifica runtime. Lotes vazios,
+falhas de inicialização e cobertura incompleta não recebem status aprovado.
+O código de saída é 1 para evidência reprovada e 2 para entrada inválida.
+
+```bash
+bundle exec ruby script/acceptance_status \
+  --manifest /tmp/app/.mxrb/ruby-app.json \
+  --coverage coverage/coverage.json \
+  --native /tmp/native-evidence/summary.json \
+  --runtime /tmp/native-evidence/runtime-core-widgets-roundtrip/runtime.json \
+  > /tmp/acceptance-status.json
+```

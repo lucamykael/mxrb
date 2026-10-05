@@ -59,3 +59,20 @@ Ruby-Gates bleiben bei 100 % Zeilen- und Branch-Coverage; Frontend- und
 Chromium-Prüfungen bleiben ebenfalls bestehen. Für weitere GUI-Prüfungen die
 vorhandene VM über die installierten Omarchy-Befehle starten und ein separates
 virtuelles Display verwenden.
+
+## Status aus Evidenz
+
+`script/acceptance_status` erzeugt JSON aus aktuellen Manifesten und Berichten.
+Optionen sind wiederholbar. Deklarationskataloge bleiben von ausgeführten Checks
+getrennt; ein Manifest allein zertifiziert kein Laufzeitverhalten. Leere Batches,
+fehlgeschlagene Starts und unvollständige Coverage werden nicht als bestanden
+gewertet. Exit-Code 1 bedeutet fehlgeschlagene Evidenz, 2 ungültige Eingaben.
+
+```bash
+bundle exec ruby script/acceptance_status \
+  --manifest /tmp/app/.mxrb/ruby-app.json \
+  --coverage coverage/coverage.json \
+  --native /tmp/native-evidence/summary.json \
+  --runtime /tmp/native-evidence/runtime-core-widgets-roundtrip/runtime.json \
+  > /tmp/acceptance-status.json
+```

@@ -10,6 +10,7 @@ require 'time'
 require_relative '../native_fragment_store'
 require_relative 'legacy_service_source_migration'
 require_relative 'legacy_widget_source_migration'
+require_relative 'exporter/domain_behaviors'
 
 module Mxrb
   module RubyApp
@@ -17,6 +18,8 @@ module Mxrb
     # retaining the complete Mendix-mode tree as the reversible sidecar.
     # rubocop:disable Metrics
     class Exporter
+      include DomainBehaviors
+
       REST_STATUS_CODES = {
         'ok' => 200, 'created' => 201, 'accepted' => 202,
         'nocontent' => 204, 'movedpermanently' => 301, 'found' => 302,
@@ -583,51 +586,6 @@ module Mxrb
           result['query'] = entity.oql_query
         end
         result.compact
-      end
-
-      def generalization_manifest(entity)
-        target = entity.respond_to?(:generalization_target) ? entity.generalization_target : nil
-        return unless target
-
-        {
-          'target' => target,
-          'id' => IO::BsonCodec.extract_id(
-            entity.respond_to?(:generalization) ? entity.generalization&.fetch('$ID', nil) : nil
-          )
-        }.compact
-      end
-
-      def lifecycle_manifest(callback)
-        {
-          'id' => callback.fetch(:id, '').to_s,
-          'event' => callback.fetch(:event).to_s,
-          'handler' => callback.fetch(:handler).to_s,
-          'pass_event_object' => callback.fetch(:pass_event_object, true) == true,
-          'raise_error_on_false' => callback.fetch(:raise_error_on_false, false) == true
-        }
-      end
-
-      def validation_rule_manifest(rule)
-        info = rule['RuleInfo'].is_a?(Hash) ? rule['RuleInfo'] : {}
-        type = info['$Type'].to_s
-        short_kind = type.sub(/\ADomainModels\$/, '').sub(/RuleInfo\z/, '')
-        kind = %w[Required Unique].include?(short_kind) ? short_kind.downcase : type
-        message = rule['Message'].is_a?(Hash) ? rule['Message'] : {}
-        {
-          'id' => native_identifier(rule['$ID']),
-          'attribute' => rule['Attribute'].to_s.split('.').last,
-          'kind' => kind,
-          'message_id' => native_identifier(message['$ID']),
-          'translations' => native_items(message['Items']).map do |translation|
-            {
-              'id' => native_identifier(translation['$ID']),
-              'language_code' => translation['LanguageCode'].to_s,
-              'text' => translation['Text'].to_s
-            }
-          end,
-          'rule_info_id' => native_identifier(info['$ID']),
-          'rule_info' => runtime_value(info.reject { |key, _value| %w[$ID $Type].include?(key) })
-        }
       end
 
       def export_service(flow, mod, namespace, root, kind, duplicate_name: false)
