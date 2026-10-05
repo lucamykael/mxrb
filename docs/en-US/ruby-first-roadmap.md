@@ -25,6 +25,7 @@ point events, themes, custom layouts or every Plotly option. Aggregations, dynam
 series and bar modes other than `group` still require an adapter; the renderer
 rejects these configurations instead of displaying incorrect data.
 See the [chart evidence](../evidence/chart-data-2026-10-05.json).
+Windows CI repeats this scenario with the package pinned by commit and checksum.
 
 ## Additional catalog, rule and widget revision
 

@@ -25,6 +25,7 @@ ponto, temas, layouts personalizados ou todas as opções do Plotly. Agregaçõe
 séries dinâmicas e modos de barras diferentes de `group` ainda exigem um adapter;
 o renderer recusa essas configurações em vez de representar dados incorretos.
 Veja a [evidência de gráficos](../evidence/chart-data-2026-10-05.json).
+O CI Windows repete esse cenário com o pacote fixado por commit e checksum.
 
 ## Catálogo, regras e widgets: revisão adicional
 

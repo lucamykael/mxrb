@@ -27,6 +27,7 @@ Plotly-Optionen. Aggregationen, dynamische Reihen und Balkenmodi außer `group`
 benötigen weiterhin einen Adapter; der Renderer weist diese Konfigurationen ab,
 anstatt falsche Daten darzustellen.
 Siehe die [Diagrammnachweise](../evidence/chart-data-2026-10-05.json).
+Windows-CI wiederholt dieses Szenario mit per Commit und Prüfsumme fixiertem Paket.
 
 ## Weitere Überarbeitung von Katalog, Regeln und Widgets
 

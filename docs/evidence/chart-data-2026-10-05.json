@@ -291,5 +291,62 @@
     "frontend_lint": "passed",
     "frontend_build": "passed",
     "rubocop_files": 551
+  },
+  "native_regression": {
+    "status": "completed",
+    "case_count": 10,
+    "report_sha256": "2415094edd0d2dd51d5c1260f3a82df161837358dfe3af658ac2f27acfb06887",
+    "cases": [
+      {
+        "label": "contracts-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "contracts-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "presentation-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "presentation-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "core-widgets-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "core-widgets-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "validation-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "validation-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "compatibility-source",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      },
+      {
+        "label": "compatibility-roundtrip",
+        "status": "completed",
+        "mxbuild_exit_code": 0
+      }
+    ]
   }
 }

@@ -9,11 +9,11 @@ require_relative '../lib/mxrb'
 # Generates a transportable batch. Studio Pro consumes copies and never these inputs.
 module StudioProBatch
   FIXTURES = {
-    'contracts' => 'ruby_page_contracts',
-    'presentation' => 'native_presentation_widgets',
-    'core-widgets' => 'ruby_frontend_core_widgets',
-    'validation' => 'native_validation_rules',
-    'compatibility' => 'native_compatibility'
+    'contracts' => 'ruby_page_contracts/project.rb',
+    'presentation' => 'native_presentation_widgets/project.rb',
+    'core-widgets' => 'ruby_frontend_core_widgets/project.rb',
+    'validation' => 'native_validation_rules/project.rb',
+    'compatibility' => 'native_compatibility/project.rb'
   }.freeze
 
   module_function
@@ -22,16 +22,22 @@ module StudioProBatch
     raise ArgumentError, 'batch destination already exists' if File.exist?(destination)
 
     FileUtils.mkdir_p(File.join(destination, 'inputs'))
-    cases = FIXTURES.flat_map { |name, fixture| fixture_cases(destination, name, fixture) }
+    cases = fixtures.flat_map { |name, fixture| fixture_cases(destination, name, fixture) }
     File.write(File.join(destination, 'cases.json'), JSON.pretty_generate(cases))
     puts JSON.generate(batch: destination, cases: cases.map { _1.fetch(:label) })
+  end
+
+  def fixtures
+    return FIXTURES unless ENV['MXRB_CHARTS_PACKAGE']
+
+    FIXTURES.merge('charts' => 'frontend_browser/marketplace_chart_project.rb')
   end
 
   def fixture_cases(destination, name, fixture)
     original = File.join(destination, 'inputs', "#{name}-source", 'Application.mpr')
     rebuilt = File.join(destination, 'inputs', "#{name}-roundtrip", 'Application.mpr')
     ruby = File.join(destination, 'ruby', name)
-    compile(File.expand_path("../spec/fixtures/#{fixture}/project.rb", __dir__), original)
+    compile(File.expand_path("../spec/fixtures/#{fixture}", __dir__), original)
     Mxrb::Exporter.new(original, ruby, mode: :ruby).export!
     compile(File.join(ruby, 'project.rb'), rebuilt)
     [original, rebuilt].map { transport_case(_1) }
