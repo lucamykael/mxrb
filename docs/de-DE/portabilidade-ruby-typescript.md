@@ -15,6 +15,8 @@ zwingend der erste Datensatz der aggregierten Kategorie. Punktaktualisierungen
 erhalten den Seitenkontext. `chart-interactions` prüft beide Ausrichtungen,
 Aggregatklicks, negative Werte und eine neu erstellte Datenreihe.
 
+Die Aggregation horizontaler Balken wird weiterhin nicht unterstützt: Das Charts-Paket gruppiert nach der numerischen Achse und kann Beschriftungen verketten. Die Ruby-Laufzeit meldet diese Einschränkung ausdrücklich. Die horizontale Zertifizierung verwendet nicht aggregierte Punkte, einschließlich wiederholter Kategorien.
+
 ## Dynamische Diagrammreihen — 6. Oktober 2026
 
 Linien- und Säulendiagramme unterstützen dynamische Reihen, gruppiert nach dem

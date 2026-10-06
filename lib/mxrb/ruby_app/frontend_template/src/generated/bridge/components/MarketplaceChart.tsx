@@ -133,6 +133,8 @@ async function chartSeries(
       const aggregation = String(definition.aggregationType || 'none');
       if (!aggregations.includes(aggregation))
         throw new Error(`Chart aggregation is not supported: ${aggregation}`);
+      if (kind.includes('barchart') && aggregation !== 'none')
+        throw new Error('Horizontal chart aggregation is not supported');
       const configured = object(
         dynamic
           ? definition.dynamicDataSource

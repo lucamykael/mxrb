@@ -66,6 +66,7 @@ Mxrb.define(destination) do
                    dynamicOnClickAction: { action: { kind: :microflow, handler: 'Interactions.SelectPoint',
                                                      arguments: { Point: '$currentObject' } } } }
         if kind == 'BarChart'
+          series[:aggregationType] = 'none'
           series[:dynamicXAttribute], series[:dynamicYAttribute] = series.values_at(:dynamicYAttribute,
                                                                                     :dynamicXAttribute)
         end

@@ -44,7 +44,7 @@
         {
           "wait_for_count": {
             "selector": ".mxrb-marketplace-chart svg rect",
-            "equals": 10
+            "equals": 12
           }
         },
         {

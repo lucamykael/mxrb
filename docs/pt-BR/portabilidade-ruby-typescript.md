@@ -15,6 +15,8 @@ ao primeiro registro da categoria agregada. Atualizar um ponto preserva o
 contexto e os campos da página. O cenário `chart-interactions` verifica barras,
 colunas, clique em agregados, valores negativos e criação de uma nova série.
 
+A agregação de barras horizontais permanece não suportada: o pacote Charts agrupa pelo eixo numérico e pode concatenar rótulos. O runtime Ruby informa essa limitação explicitamente. A certificação horizontal usa pontos sem agregação, inclusive categorias repetidas.
+
 ## Séries dinâmicas de gráficos — 6 de outubro de 2026
 
 Gráficos de linhas e colunas aceitam séries dinâmicas agrupadas pelo atributo

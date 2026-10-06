@@ -14,6 +14,8 @@ the first record in the aggregated category. Point updates preserve the page
 context and its fields. The `chart-interactions` scenario covers horizontal and
 vertical stacks, aggregate clicks, negative values and a newly created series.
 
+Horizontal bar aggregation remains unsupported: the Charts package groups by the numeric axis and can concatenate labels. The Ruby runtime reports this limitation explicitly. Horizontal certification uses unaggregated points, including repeated categories.
+
 ## Dynamic chart series — October 6, 2026
 
 Line and column charts support dynamic series grouped by the configured

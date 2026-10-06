@@ -473,6 +473,22 @@ describe('Marketplace charts read actual application values', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
+  it('reports unsupported native horizontal aggregation', async () => {
+    const request = vi.fn();
+    render(
+      <MarketplaceWidget
+        {...props('BarChart', {
+          series: { objects: [{ ...series, aggregationType: 'sum' }] },
+        })}
+        request={request}
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Horizontal chart aggregation is not supported',
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['count', 4, 3],
     ['sum', 80, 30],
