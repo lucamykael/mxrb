@@ -1,3 +1,7 @@
 dist
 node_modules
-src/generated
+src/generated/*
+!src/generated/bridge
+src/generated/bridge/*
+!src/generated/bridge/api.ts
+!src/generated/bridge/nanoflow.ts
