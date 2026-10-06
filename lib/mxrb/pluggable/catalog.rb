@@ -62,7 +62,15 @@ module Mxrb
     # its complete embedded/MPK schema. It never exposes physical TypePointers.
     class Catalog
       def self.default
-        @default ||= new
+        Thread.current[:mxrb_pluggable_catalog] || (@default ||= new)
+      end
+
+      def self.with(catalog)
+        previous = Thread.current[:mxrb_pluggable_catalog]
+        Thread.current[:mxrb_pluggable_catalog] = catalog
+        yield
+      ensure
+        Thread.current[:mxrb_pluggable_catalog] = previous
       end
 
       def initialize

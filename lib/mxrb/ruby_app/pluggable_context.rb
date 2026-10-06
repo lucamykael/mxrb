@@ -6,9 +6,9 @@ require_relative 'pluggable_schemas'
 
 module Mxrb
   module RubyApp
-    # Resolves the exact embedded schema of one existing page widget. It does
-    # not union package revisions or execute private schema source files.
-    class PluggableContext
+    # Resolves embedded widget schemas within their owning document, without
+    # executing private schema source files or combining unrelated documents.
+    class PluggableContext # rubocop:disable Metrics/ClassLength
       THREAD_KEY = :mxrb_ruby_app_pluggable_context
 
       def self.current = Thread.current[THREAD_KEY]
@@ -34,10 +34,15 @@ module Mxrb
         @catalogs = {}
       end
 
-      def with_page(identifier)
+      def with_page(identifier, &block)
         previous = @page_id
         @page_id = identifier.to_s.dup.freeze
-        yield
+        if document_schema?
+          catalog = @catalogs[[:document, @page_id]] ||= document_catalog
+          Pluggable::Catalog.with(catalog, &block)
+        else
+          yield
+        end
       ensure
         @page_id = previous
       end
@@ -64,6 +69,11 @@ module Mxrb
       end
 
       private
+
+      def document_schema?
+        @pages.key?(@page_id) ||
+          (@manifest.respond_to?(:root) && File.file?(PluggableSchemas.path(@manifest.root, @page_id)))
+      end
 
       def mpr
         return @mpr if @mpr
@@ -106,6 +116,13 @@ module Mxrb
         when Array then value.each { collect_widgets(_1, found) }
         end
         found
+      end
+
+      def document_catalog
+        catalog = Pluggable::Catalog.new
+        codec = Pluggable::MprCodec.new(forms_codec: nil, catalog:)
+        page_widgets.each { codec.register_type(_1.fetch('Type')) }
+        catalog
       end
 
       def exact_catalog(name, widget_id)

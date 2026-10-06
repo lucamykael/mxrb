@@ -4546,6 +4546,7 @@ module Mxrb
 
     def editable_flow_body?(objects, flows, nested: false)
       return nested if objects.empty?
+      return false unless nested || editable_annotation_endpoints?(objects, flows)
       local_flows = flows_for_objects(flows, objects)
       unless nested
         return false unless objects.count { _1["$Type"] == "Microflows$StartEvent" } == 1
@@ -4592,6 +4593,14 @@ module Mxrb
           true
         end
       end
+    end
+
+    def editable_annotation_endpoints?(objects, flows)
+      references = annotation_flow_endpoint_refs(objects, flows)
+      body_dsl_lines(objects, flows) unless references.empty?
+      true
+    rescue SerializationError
+      false
     end
 
     def editable_action?(action)
@@ -4784,6 +4793,9 @@ module Mxrb
         start["$ID"], fwd_map, err_map, by_id, flows, {}, lines, indent, nil,
         endpoint_refs, emitted_refs
       )
+      if !nested && (endpoint_refs.values - emitted_refs.keys).any?
+        raise SerializationError, 'annotation flow references a node outside the exported graph'
+      end
       lines.concat(annotation_flow_dsl_lines(flows, endpoint_refs, indent)) unless nested
       lines
     end
