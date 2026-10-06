@@ -417,27 +417,40 @@ export function DataGrid({
 
   return (
     <div
-      className={classes('data-grid', 'mxrb-data-grid-runtime', loading && 'is-loading')}
+      className={classes(
+        'data-grid mx-grid mx-datagrid',
+        'mxrb-data-grid-runtime',
+        loading && 'is-loading',
+      )}
       data-entity={options.entity || ''}
       data-server-side={serverSide ? 'true' : 'false'}
     >
-      <div className="data-grid__toolbar mxrb-grid-toolbar">
+      <div className="data-grid__toolbar mxrb-grid-toolbar mx-grid-controlbar">
         {toolbar.some((button) => button.type === 'new') ? (
-          <button type="button" onClick={createRecord}>
+          <button type="button" className="btn btn-primary mx-button" onClick={createRecord}>
             New
           </button>
         ) : null}
         {toolbar.some((button) => button.type === 'delete') ? (
-          <button type="button" disabled={!selected} onClick={deleteRecord}>
+          <button
+            type="button"
+            className="btn btn-default mx-button"
+            disabled={!selected}
+            onClick={deleteRecord}
+          >
             Delete
           </button>
         ) : null}
-        <button type="button" onClick={() => setReload((value) => value + 1)}>
+        <button
+          type="button"
+          className="btn btn-default mx-button"
+          onClick={() => setReload((value) => value + 1)}
+        >
           Reload
         </button>
       </div>
-      <table>
-        <thead>
+      <table className="mx-datagrid-table">
+        <thead className="mx-datagrid-head">
           <tr>
             {columns.map((column) => {
               const key = column.name || column.attribute;
@@ -462,6 +475,7 @@ export function DataGrid({
                     <button
                       type="button"
                       aria-label={`Sort ${label}`}
+                      className="mx-datagrid-head-caption mxrb-grid-sort"
                       onClick={() => toggleSort(column)}
                     >
                       {label}
@@ -492,7 +506,7 @@ export function DataGrid({
             </tr>
           ) : null}
         </thead>
-        <tbody>
+        <tbody className="mx-datagrid-body">
           {visible.map((record) => (
             <tr
               key={record.id}
@@ -502,7 +516,7 @@ export function DataGrid({
                     ? selection.some((item) => item.id === record.id)
                     : selected?.id === record.id
                 )
-                  ? 'is-selected'
+                  ? 'is-selected selected'
                   : ''
               }
               aria-selected={
@@ -528,16 +542,19 @@ export function DataGrid({
             >
               {columns.map((column) => (
                 <td key={column.name || column.attribute}>
-                  {displayValue(recordValue(record, column.attribute || column.name))}
+                  <div className="mx-datagrid-data-wrapper">
+                    {displayValue(recordValue(record, column.attribute || column.name))}
+                  </div>
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="data-grid__pagination mxrb-grid-pagination">
+      <div className="data-grid__pagination mxrb-grid-pagination mx-grid-pagingbar">
         <button
           type="button"
+          className="btn btn-default mx-button"
           disabled={pageNumber === 0}
           onClick={() => setPageNumber((value) => value - 1)}
         >
@@ -548,6 +565,7 @@ export function DataGrid({
         </span>
         <button
           type="button"
+          className="btn btn-default mx-button"
           disabled={pageNumber + 1 >= pageCount}
           onClick={() => setPageNumber((value) => value + 1)}
         >

@@ -8,6 +8,28 @@ require 'mxrb/ruby_app/presentation_exporter'
 RSpec.describe 'Advanced standalone presentation contracts' do
   after { Mxrb::RubyApp::Registry.reset! }
 
+  it 'renders the declared native page layout with its Main slot through the page API' do
+    presentation = Mxrb::RubyApp::Presentation
+    presentation.layout('App.Shell') do
+      container :Header, class_name: 'region-topbar' do
+        text :Brand, caption: 'Shared theme header'
+      end
+      placeholder :Main, parameter: 'Main'
+    end
+    page = Class.new(Mxrb::RubyApp::Page) do
+      mendix_name 'App.Home'
+      native do
+        layout 'App.Shell'
+        text :Greeting, caption: 'Page content'
+      end
+    end
+    result = Mxrb::RubyApp::Application.allocate.page('App.Home')
+    expect(result[:layout]).to eq('App.Shell')
+    expect(result[:widgets].map { _1['name'] || _1[:name] }).to eq(%w[Header Greeting])
+    expect(result[:widgets].first.dig('options', 'class')).to eq('region-topbar')
+    expect(page.widgets.map { _1[:name] || _1['name'] }).to eq(['Greeting'])
+  end
+
   it 'keeps empty declarations, legacy file policy fallback and frontend child definitions supported' do
     presentation = Mxrb::RubyApp::Presentation
     presentation.layout('Empty')
