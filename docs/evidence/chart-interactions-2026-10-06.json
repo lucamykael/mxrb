@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-06",
+  "scope": "Stacked bar/column charts and static/dynamic point actions with page context preservation",
+  "frontend": {
+    "tests": 121,
+    "format": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 558,
+    "offenses": 0
+  },
+  "browser": {
+    "steps": 10,
+    "console_errors": [],
+    "sidecar": "detached before startup",
+    "screenshot_sha256": "9d8b27d9f300271592ade2e1cbbcd59a3b9a2644cdb16daada319914b7100ba7"
+  },
+  "roundtrip": {
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0
+  },
+  "native_static_check": {
+    "tool": "mx 11.12.1 check",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "native_ci": {
+    "scenario": "chart-interactions",
+    "variants": [
+      "source",
+      "roundtrip"
+    ]
+  },
+  "limits": [
+    "Aggregated point selection follows the native ordered source index, not necessarily the first matching category record.",
+    "Advanced caption formatting/translations and Plotly layout options are tracked separately."
+  ]
+}

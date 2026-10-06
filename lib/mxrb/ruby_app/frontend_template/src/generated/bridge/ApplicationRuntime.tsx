@@ -437,7 +437,16 @@ export function ApplicationRuntime({
     return execute()
       .then(async (payload) => {
         setRevision((value) => value + 1);
-        if (payload.context) setPageContext(edits.refresh(payload.context, submitted));
+        const updatesPage =
+          activeContext?.id === pageContext?.id && activeContext?.type === pageContext?.type;
+        if (payload.context) {
+          const refreshed = edits.refresh(payload.context, submitted);
+          setPageContext((current) =>
+            current?.id === activeContext?.id && current?.type === activeContext?.type
+              ? refreshed
+              : current,
+          );
+        }
         let navigated = false;
         for (const effect of payload.effects || []) {
           if (effect.type === 'show_message' && effect.message) setNotice(String(effect.message));
@@ -458,7 +467,7 @@ export function ApplicationRuntime({
             navigated = true;
           }
         }
-        if (!navigated && !payload.context) await refreshPageContext();
+        if (!navigated && (!payload.context || !updatesPage)) await refreshPageContext();
         return payload;
       })
       .finally(() => {

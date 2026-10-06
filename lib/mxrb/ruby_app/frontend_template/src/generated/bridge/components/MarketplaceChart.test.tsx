@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MarketplaceWidget, type MarketplaceWidgetProps } from '../marketplace';
 import type { EntityCollectionResponse, EntityRecord } from '../../types';
@@ -36,6 +36,125 @@ const props = (
 });
 
 describe('Marketplace charts read actual application values', () => {
+  it.each(['ColumnChart', 'BarChart'])(
+    'stacks %s in source order, including negative and zero values',
+    async (kind) => {
+      const definitions = [10, -4, 0, 8].map((value, index) => ({
+        ...series,
+        staticName: String(index),
+        staticDataSource: { data_source: `App.Point${value}` },
+        ...(kind === 'BarChart' ? { staticXAttribute: 'Value', staticYAttribute: 'Name' } : {}),
+      }));
+      const request = vi
+        .fn()
+        .mockImplementation((url: string) =>
+          Promise.resolve({ records: [record('A', Number(url.split('Point')[1]))] }),
+        );
+      render(
+        <MarketplaceWidget
+          {...props(kind, { barmode: 'stack', series: { objects: definitions } })}
+          request={request}
+        />,
+      );
+      const svg = await screen.findByRole('img');
+      const bars = [...svg.querySelectorAll('rect')];
+      expect(bars).toHaveLength(4);
+      const position = kind === 'BarChart' ? 'y' : 'x';
+      const thickness = kind === 'BarChart' ? 'height' : 'width';
+      expect(new Set(bars.map((bar) => bar.getAttribute(position))).size).toBe(1);
+      expect(new Set(bars.map((bar) => bar.getAttribute(thickness))).size).toBe(1);
+      const length = kind === 'BarChart' ? 'width' : 'height';
+      expect(Number(bars[2].getAttribute(length))).toBe(0);
+      const scale = Number(bars[0].getAttribute(length)) / 10;
+      expect(Number(bars[1].getAttribute(length))).toBeCloseTo(scale * 4);
+      expect(Number(bars[3].getAttribute(length))).toBeCloseTo(scale * 8);
+      expect(svg).toHaveTextContent('14');
+    },
+  );
+
+  it('executes point actions with the ordered source record, locks pending actions and supports keyboard activation', async () => {
+    const first = record('A', 10);
+    const second = { ...record('A', 20), id: 'second' };
+    const last = record('B', 7);
+    let finish: (value?: unknown) => void = () => {};
+    const onAction = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(
+      <MarketplaceWidget
+        {...props('ColumnChart', {
+          series: {
+            objects: [
+              {
+                ...series,
+                staticDataSource: { data_source: 'App.Point' },
+                aggregationType: 'sum',
+                staticOnClickAction: {
+                  action: {
+                    kind: 'microflow',
+                    handler: 'App.Select',
+                    arguments: { Point: '$currentObject' },
+                  },
+                },
+              },
+            ],
+          },
+        })}
+        request={vi.fn().mockResolvedValue({ records: [first, second, last] })}
+        onAction={onAction}
+      />,
+    );
+    const svg = await screen.findByRole('img');
+    const point = within(svg).getByRole('button', { name: 'Values B: 7' });
+    fireEvent.keyDown(point, { key: 'Enter' });
+    fireEvent.click(point);
+    await act(async () => {});
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'microflow', handler: 'App.Select' }),
+      second,
+    );
+    expect(point).toHaveAttribute('aria-disabled', 'true');
+    await act(async () => finish());
+    fireEvent.keyDown(point, { key: ' ' });
+    await act(async () => {});
+    expect(onAction).toHaveBeenCalledTimes(2);
+    await act(async () => finish());
+  });
+
+  it('dispatches dynamic actions and reports failures without leaving the chart locked', async () => {
+    const point = record('A', 12);
+    const onAction = vi.fn().mockRejectedValue(new Error('Action denied'));
+    render(
+      <MarketplaceWidget
+        {...props('LineChart', {
+          lines: {
+            objects: [
+              {
+                dataSet: 'dynamic',
+                dynamicDataSource: { data_source: 'App.Point' },
+                groupByAttribute: 'Name',
+                dynamicXAttribute: 'Name',
+                dynamicYAttribute: 'Value',
+                dynamicOnClickAction: { kind: 'nanoflow', handler: 'App.Select' },
+              },
+            ],
+          },
+        })}
+        request={vi.fn().mockResolvedValue({ records: [point] })}
+        onAction={onAction}
+      />,
+    );
+    const svg = await screen.findByRole('img');
+    fireEvent.click(within(svg).getByRole('button'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Action denied');
+    expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ kind: 'nanoflow' }), point);
+    expect(within(svg).getByRole('button')).toHaveAttribute('aria-disabled', 'false');
+  });
+
   it('groups dynamic series by typed values and aggregates independently after sorting', async () => {
     const point = (
       id: string,
@@ -49,18 +168,16 @@ describe('Marketplace charts read actual application values', () => {
       type: 'App.Point',
       attributes: { Group: group, Name: label, Value: value, Caption: name, Position: position },
     });
-    const request = vi
-      .fn()
-      .mockResolvedValue({
-        records: [
-          point('3', 1, 'A', 20, 'Later', 3),
-          point('1', 1, 'A', 10, '', 1),
-          point('2', 1, 'A', null, 'Numeric', 2),
-          point('4', '1', 'A', 4, 'String', 4),
-          point('5', null, 'B', 5, 'Empty', 5),
-          point('6', '', 'B', 6, 'Other', 6),
-        ],
-      });
+    const request = vi.fn().mockResolvedValue({
+      records: [
+        point('3', 1, 'A', 20, 'Later', 3),
+        point('1', 1, 'A', 10, '', 1),
+        point('2', 1, 'A', null, 'Numeric', 2),
+        point('4', '1', 'A', 4, 'String', 4),
+        point('5', null, 'B', 5, 'Empty', 5),
+        point('6', '', 'B', 6, 'Other', 6),
+      ],
+    });
     render(
       <MarketplaceWidget
         {...props('LineChart', {
@@ -369,20 +486,18 @@ describe('Marketplace charts read actual application values', () => {
   ])(
     'aggregates %s within each category after sorting and excluding nulls',
     async (aggregation, a, b) => {
-      const request = vi
-        .fn()
-        .mockResolvedValue({
-          records: [
-            record('A', 10),
-            record('B', 5),
-            record('A', 20),
-            record('B', 5),
-            record('A', 10),
-            record('B', 20),
-            record('A', 40),
-            record('A', null),
-          ],
-        });
+      const request = vi.fn().mockResolvedValue({
+        records: [
+          record('A', 10),
+          record('B', 5),
+          record('A', 20),
+          record('B', 5),
+          record('A', 10),
+          record('B', 20),
+          record('A', 40),
+          record('A', null),
+        ],
+      });
       render(
         <MarketplaceWidget
           {...props('LineChart', {

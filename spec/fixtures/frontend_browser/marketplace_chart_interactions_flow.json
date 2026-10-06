@@ -1,0 +1,56 @@
+{
+  "name": "marketplace-chart-interactions",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 1100
+  },
+  "pages": [
+    {
+      "name": "stacked-point-actions",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart svg",
+            "equals": 2
+          }
+        },
+        {
+          "click_selector": {
+            "selector": "[data-widget-name=\"Stacked_ColumnChart\"] svg [aria-label=\"Region North B: 8\"]"
+          }
+        },
+        {
+          "wait_for_selector": "[data-widget-name=\"Stacked_ColumnChart\"] svg [aria-label=\"Region North A: 31\"]"
+        },
+        {
+          "click_selector": {
+            "selector": "[data-widget-name=\"Stacked_BarChart\"] svg [aria-label=\"Region South A: -5\"]"
+          }
+        },
+        {
+          "wait_for_selector": "[data-widget-name=\"Stacked_BarChart\"] svg [aria-label=\"Region South A: -4\"]"
+        },
+        {
+          "click_text": "Add series value"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=\"Stacked_ColumnChart\"] svg [aria-label=\"Region North A: 38\"]"
+        },
+        {
+          "wait_for_selector": "[data-widget-name=\"Stacked_BarChart\"] svg [aria-label=\"Region East C: 12\"]"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart svg rect",
+            "equals": 10
+          }
+        },
+        {
+          "wait_for_selector": "input[value=\"Stacked chart actions\"]"
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,20 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Gestapelte Diagramme und Punktaktionen — 6. Oktober 2026
+
+Balken- und Säulendiagramme unterstützen `barmode: "stack"`. Die Basiswerte
+werden je Kategorie in der Reihenfolge der Datenreihen addiert, einschließlich
+negativer Werte und Null. Die Achsenskalierung berücksichtigt Basis und Summe.
+`staticOnClickAction` und `dynamicOnClickAction` verwenden die Ereignislaufzeit
+der Seite mit dem Datensatz des Punkts, Bestätigung und Ausführungssperre.
+Klick, Enter, Leertaste und die zugängliche Datentabelle lösen die Aktion aus.
+
+Bei Aggregation entspricht der Punktindex dem Index in der sortierten
+Quelldatenliste, wie beim zertifizierten Mendix-Charts-Paket; dies ist nicht
+zwingend der erste Datensatz der aggregierten Kategorie. Punktaktualisierungen
+erhalten den Seitenkontext. `chart-interactions` prüft beide Ausrichtungen,
+Aggregatklicks, negative Werte und eine neu erstellte Datenreihe.
+
 ## Dynamische Diagrammreihen — 6. Oktober 2026
 
 Linien- und Säulendiagramme unterstützen dynamische Reihen, gruppiert nach dem

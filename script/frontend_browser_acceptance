@@ -293,7 +293,7 @@ module MxrbFrontendBrowserAcceptance
           const target = elements.find(element => visible(element) &&
             element.textContent.replace(/\\s+/g, " ").trim().includes(expected));
           if (!target) return false;
-          target.click();
+          typeof target.click === "function" ? target.click() : target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
           return true;
         })()
       JS
@@ -312,7 +312,7 @@ module MxrbFrontendBrowserAcceptance
           const box = target.getBoundingClientRect();
           if (style.display === "none" || style.visibility === "hidden" ||
               box.width <= 0 || box.height <= 0) return false;
-          target.click();
+          typeof target.click === "function" ? target.click() : target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
           return true;
         })()
       JS
@@ -321,7 +321,9 @@ module MxrbFrontendBrowserAcceptance
 
     def measure_click(expectation)
       selector, index = selector_and_index(expectation)
-      measure_interaction(expectation, selector:, index:, action: 'target.click();', label: 'click')
+      action = 'typeof target.click === "function" ? target.click() : ' \
+               'target.dispatchEvent(new MouseEvent("click", { bubbles: true }));'
+      measure_interaction(expectation, selector:, index:, action:, label: 'click')
     end
 
     def input_value(expectation)

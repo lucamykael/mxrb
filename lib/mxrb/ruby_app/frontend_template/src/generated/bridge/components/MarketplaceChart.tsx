@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import type { ApiRequest, EntityCollectionResponse, EntityRecord } from '../../types';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import type { ApiRequest, EntityCollectionResponse, EntityRecord, WidgetEvent } from '../../types';
 import type { MarketplaceWidgetProps } from '../marketplace';
 import { expressionValue, memberName, sortRecords } from '../value';
 
 type Properties = Record<string, unknown>;
-type Point = { label: string; value: number; size?: number; row?: string };
-type Series = { name: string; points: Point[]; kind?: string };
+type Point = { label: string; value: number; size?: number; row?: string; record?: EntityRecord };
+type Series = { name: string; points: Point[]; kind?: string; action?: WidgetEvent };
 type ChartState = { key: string; series: Series[]; error?: string; request?: ApiRequest };
 const palette = ['#356ac3', '#b24c45', '#278575', '#9262ad', '#af751c', '#53717d'];
 const object = (value: unknown): Properties =>
@@ -98,7 +98,7 @@ async function chartSeries(
   props: Pick<MarketplaceWidgetProps, 'context' | 'request'>,
   kind: string,
 ): Promise<Series[]> {
-  if (properties.barmode && properties.barmode !== 'group')
+  if (properties.barmode && !['group', 'stack'].includes(String(properties.barmode)))
     throw new Error(`Chart bar mode is not supported: ${properties.barmode}`);
   if (properties.dataStatic !== undefined || properties.dataAttribute) {
     const raw = properties.dataAttribute
@@ -204,6 +204,9 @@ async function chartSeries(
       }
       return [...groups.values()].map((group) => ({
         name: group.name,
+        action: chartAction(
+          dynamic ? definition.dynamicOnClickAction : definition.staticOnClickAction,
+        ),
         points: aggregatePoints(
           group.records.flatMap((record, index) => {
             const value = read(record, y);
@@ -214,21 +217,57 @@ async function chartSeries(
                   ? String(read(record, x) ?? '')
                   : String(definition.seriesName ?? index + 1),
                 value: numeric(value),
+                record,
                 size: size ? numeric(read(record, size)) : undefined,
                 row: row ? String(read(record, row) ?? '') : undefined,
               },
             ];
           }),
           aggregation,
-        ),
+        ).map((point, index) => ({
+          ...point,
+          // Mendix Charts resolves aggregated point indices against the ordered source items.
+          record: aggregation === 'none' ? point.record : group.records[index],
+        })),
       }));
     }),
   );
   return batches.flat();
 }
 
-function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; name: string }) {
-  const values = series.flatMap((item) => item.points.map((point) => point.value));
+function chartAction(value: unknown): WidgetEvent | undefined {
+  if (value === null || value === undefined) return;
+  const action = object(object(value).action ?? value);
+  if (typeof action.kind !== 'string' || typeof action.handler !== 'string' || !action.handler)
+    throw new Error('Chart point action requires a kind and handler');
+  return { ...action, event: 'click' } as WidgetEvent;
+}
+
+function ChartPlot({
+  series,
+  kind,
+  name,
+  stacked,
+  activate,
+  running,
+}: {
+  series: Series[];
+  kind: string;
+  name: string;
+  stacked: boolean;
+  activate: (series: Series, point: Point) => void;
+  running: boolean;
+}) {
+  const totals = new Map<string, number>();
+  const bounds = series.map((item) =>
+    item.points.map((point) => {
+      const start = stacked ? (totals.get(point.label) ?? 0) : 0;
+      const end = start + point.value;
+      if (stacked) totals.set(point.label, end);
+      return { start, end };
+    }),
+  );
+  const values = bounds.flatMap((points) => points.flatMap(({ start, end }) => [start, end]));
   const low = values.reduce((bound, value) => Math.min(bound, value), 0);
   const high = values.reduce((bound, value) => Math.max(bound, value), 0);
   const span = high - low || 1;
@@ -323,6 +362,27 @@ function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; nam
             )}
             {item.points.map((point, index) => {
               const title = `${item.name} ${point.label}: ${point.value}`.trim();
+              const interaction = item.action
+                ? {
+                    role: 'button',
+                    tabIndex: running ? -1 : 0,
+                    'aria-label': title,
+                    'aria-disabled': running,
+                    style: { cursor: running ? 'wait' : 'pointer' },
+                    onClick: () => {
+                      if (!running) activate(item, point);
+                    },
+                    onKeyDown: (event: KeyboardEvent<SVGElement>) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        if (!running) activate(item, point);
+                      }
+                    },
+                  }
+                : {};
+              const { start, end } = bounds[seriesIndex][index];
+              const slot = stacked ? 0 : seriesIndex;
+              const slots = stacked ? 1 : series.length;
               if (pie) {
                 const start = angle;
                 angle += (Math.max(0, point.value) / (total || 1)) * Math.PI * 2;
@@ -331,12 +391,13 @@ function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; nam
                 const fill = palette[index % palette.length];
                 if (point.value === total && total > 0)
                   return (
-                    <circle key={index} cx="320" cy="145" r="110" fill={fill}>
+                    <circle {...interaction} key={index} cx="320" cy="145" r="110" fill={fill}>
                       <title>{title}</title>
                     </circle>
                   );
                 return (
                   <path
+                    {...interaction}
                     key={index}
                     d={`M320,145 L${px(start)},${py(start)} A110,110 0 ${angle - start > Math.PI ? 1 : 0},1 ${px(angle)},${py(angle)} Z`}
                     fill={fill}
@@ -350,6 +411,7 @@ function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; nam
                 const labels = [...new Set(item.points.map((p) => p.label))];
                 return (
                   <rect
+                    {...interaction}
                     key={index}
                     x={50 + (labels.indexOf(point.label) * 540) / labels.length}
                     y={25 + (rows.indexOf(point.row) * 240) / rows.length}
@@ -364,35 +426,29 @@ function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; nam
               if (bar)
                 return (
                   <rect
+                    {...interaction}
                     key={index}
                     x={
                       horizontal
-                        ? Math.min(valueX(0), valueX(point.value))
-                        : x(index, point) -
-                          width * 0.4 +
-                          (seriesIndex * width * 0.8) / series.length
+                        ? Math.min(valueX(start), valueX(end))
+                        : x(index, point) - width * 0.4 + (slot * width * 0.8) / slots
                     }
                     y={
                       horizontal
-                        ? categoryY(index, point) -
-                          92 / count +
-                          (seriesIndex * 184) / count / series.length
-                        : Math.min(y(0), y(point.value))
+                        ? categoryY(index, point) - 92 / count + (slot * 184) / count / slots
+                        : Math.min(y(start), y(end))
                     }
                     width={
-                      horizontal
-                        ? Math.abs(valueX(0) - valueX(point.value))
-                        : (width * 0.8) / series.length
+                      horizontal ? Math.abs(valueX(start) - valueX(end)) : (width * 0.8) / slots
                     }
-                    height={
-                      horizontal ? 184 / count / series.length : Math.abs(y(0) - y(point.value))
-                    }
+                    height={horizontal ? 184 / count / slots : Math.abs(y(start) - y(end))}
                   >
                     <title>{title}</title>
                   </rect>
                 );
               return (
                 <circle
+                  {...interaction}
                   key={index}
                   cx={x(index, point)}
                   cy={y(point.value)}
@@ -422,6 +478,25 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
   const kind = String(props.widget.options?.widget_id).toLowerCase();
   const key = `${kind}:${encoded}:${contextKey}:${revision}`;
   const [state, setState] = useState<ChartState>({ key: '', series: [] });
+  const pending = useRef(false);
+  const [running, setRunning] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const activate = (series: Series, point: Point) => {
+    if (pending.current || props.actionRunning || !series.action) return;
+    pending.current = true;
+    setRunning(true);
+    setActionError('');
+    Promise.resolve()
+      .then(() => {
+        if (!props.onAction) throw new Error('Chart point action runtime is unavailable');
+        return props.onAction(series.action!, point.record ?? props.context);
+      })
+      .catch((error: unknown) => setActionError(String(error)))
+      .finally(() => {
+        pending.current = false;
+        setRunning(false);
+      });
+  };
   useEffect(() => {
     let active = true;
     chartSeries(JSON.parse(encoded), { context: JSON.parse(contextKey), request }, kind)
@@ -448,8 +523,16 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
   if (!state.series.some((item) => item.points.length)) return <p role="status">No chart data</p>;
   return (
     <figure className="mxrb-marketplace-chart">
-      <ChartPlot series={state.series} kind={kind} name={name} />
+      <ChartPlot
+        series={state.series}
+        kind={kind}
+        name={name}
+        stacked={properties.barmode === 'stack'}
+        activate={activate}
+        running={running || !!props.actionRunning}
+      />
       <figcaption>{name}</figcaption>
+      {actionError && <p role="alert">{actionError}</p>}
       <details>
         <summary>Chart data</summary>
         <table>
@@ -466,7 +549,19 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
                 <tr key={`${i}:${j}`}>
                   <td>{item.name}</td>
                   <td>{point.row ? `${point.row} / ${point.label}` : point.label}</td>
-                  <td>{point.value}</td>
+                  <td>
+                    {item.action ? (
+                      <button
+                        type="button"
+                        disabled={running || props.actionRunning}
+                        onClick={() => activate(item, point)}
+                      >
+                        {point.value}
+                      </button>
+                    ) : (
+                      point.value
+                    )}
+                  </td>
                 </tr>
               )),
             )}
