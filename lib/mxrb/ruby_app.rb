@@ -2175,12 +2175,11 @@ module Mxrb
 
         {
           name: implementation.mendix_name, id: implementation.mendix_id,
-          layout: Array(implementation.widgets).find { _1['type'] == 'layout' }&.dig('options', 'layout'),
-          title: implementation.title, widgets: Presentation.compose(implementation.widgets),
+          title: implementation.title,
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
-        }.merge(implementation.presentation_contract || {})
+        }.merge(Presentation.page(implementation)).merge(implementation.presentation_contract || {})
       end
 
       def async_invocations

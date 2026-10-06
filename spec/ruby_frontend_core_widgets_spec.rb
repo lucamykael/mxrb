@@ -26,7 +26,9 @@ RSpec.describe 'Ruby frontend core widget source' do # rubocop:disable Metrics/B
       application = Mxrb::RubyApp::Application.new(target)
       page = application.page('Core.Home')
       expect(page.fetch(:title)).to eq('Edited page title')
-      content = page.fetch(:widgets).first.dig('regions', 'center')
+      layout = page.fetch(:widgets).first
+      expect(layout.dig('options', 'class')).to include('mxrb-application-shell')
+      content = layout.fetch('children').first.dig('regions', 'center')
       tabs = content.first.fetch('body').find { _1['type'] == 'tab_control' }.dig('options', 'tabs')
       expect(tabs.last.fetch('caption')).to eq('Edited tab')
       expect(tabs.last.fetch('widgets').first).to include('type' => 'radio_button_group')

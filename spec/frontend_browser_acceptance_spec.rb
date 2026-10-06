@@ -192,6 +192,18 @@ RSpec.describe MxrbFrontendBrowserAcceptance::Browser do
   end
 end
 
+RSpec.describe MxrbFrontendBrowserAcceptance::ChromiumTransport do
+  it 'reads a 127-byte payload without interpreting its length twice' do
+    transport = described_class.allocate
+    payload = 'x' * 127
+    stream = StringIO.new("#{[0x81, 126, 127].pack('CCn')}#{payload}#{[0x81, 2].pack('CC')}{}")
+    allow(transport).to receive(:read_exact) { |length, **| stream.read(length) }
+
+    expect(transport.read).to eq(payload)
+    expect(transport.read).to eq('{}')
+  end
+end
+
 RSpec.describe MxrbFrontendBrowserAcceptance::CdpClient do
   it 'correlates responses while retaining intervening browser events' do
     transport = instance_double(MxrbFrontendBrowserAcceptance::ChromiumTransport)

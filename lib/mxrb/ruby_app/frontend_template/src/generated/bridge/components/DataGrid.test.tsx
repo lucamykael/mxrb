@@ -42,6 +42,12 @@ describe('DataGrid', () => {
     );
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
+    expect(screen.getByRole('table').closest('.mx-grid')).toHaveClass('mx-datagrid');
+    expect(screen.getByText('Alice')).toHaveClass('mx-datagrid-data-wrapper');
+    expect(screen.getByRole('button', { name: 'Reload' })).toHaveClass('btn', 'btn-default');
+    expect(screen.getByRole('button', { name: 'Sort Customer' })).toHaveClass(
+      'mx-datagrid-head-caption',
+    );
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText('Bob')).toBeInTheDocument();
 

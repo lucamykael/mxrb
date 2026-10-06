@@ -137,8 +137,11 @@ module MxrbFrontendBrowserAcceptance
       opcode = header[0] & 0x0F
       masked = (header[1] & 0x80).positive?
       length = header[1] & 0x7F
-      length = read_exact(2, timeout:).unpack1('n') if length == 126
-      length = read_exact(8, timeout:).unpack1('Q>') if length == 127
+      length = case length
+               when 126 then read_exact(2, timeout:).unpack1('n')
+               when 127 then read_exact(8, timeout:).unpack1('Q>')
+               else length
+               end
       mask = read_exact(4, timeout:) if masked
       payload = read_exact(length, timeout:)
       if masked

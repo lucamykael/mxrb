@@ -33,6 +33,32 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
     bridge.for_widget(name, widget_id:).tap { _1.set(:value, value) }.to_projection
   end
 
+  it 'loads nested Forms pluggable widgets with document-local schemas and restores the catalog' do
+    original = Mxrb::Pluggable::Catalog.default
+    bridge.with_mpr(nil) do
+      context = described_class.current
+      context.with_document('Outer', page(widget(:boolean))) do
+        outer = Mxrb::Pluggable::Catalog.default
+        node = Mxrb::Forms::Node.build(:div_container) do
+          widgets('com.example.Revision') do
+            identifier 'nested'
+            properties { value false }
+          end
+        end
+        expect(node).to be_a(Mxrb::Forms::Node)
+        expect do
+          context.with_document('Inner', page(widget(:string))) do
+            nested = Mxrb::Pluggable::Node.build(widget_id)
+            expect { nested.properties { value 'text' } }.not_to raise_error
+            raise 'restore catalog'
+          end
+        end.to raise_error('restore catalog')
+        expect(Mxrb::Pluggable::Catalog.default).to equal(outer)
+      end
+    end
+    expect(Mxrb::Pluggable::Catalog.default).to equal(original)
+  end
+
   it 'resolves the exact page and widget revision, never the package union' do
     mpr = mpr_for('one' => page(widget(:boolean), widget(:integer, name: 'second')),
                   'two' => page(widget(:string)))
@@ -46,6 +72,19 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
       end
     end
     expect(described_class.current).to be_nil
+  end
+
+  it 'leaves borrowed document schemas mutable when loading nested Forms widgets' do
+    document = Marshal.load(Marshal.dump(page(widget(:boolean))))
+    original = Marshal.dump(document)
+    bridge.with_mpr(nil) do
+      described_class.current.with_document('App.Shared', document) do
+        expect(resolve(false)).to eq('value' => false)
+        expect(Mxrb::Pluggable::Node.build(widget_id)).to be_a(Mxrb::Pluggable::Node)
+      end
+    end
+    expect(document.dig('Widgets', 0, 'Type', 'WidgetId')).not_to be_frozen
+    expect(Marshal.dump(document)).to eq(original)
   end
 
   it 'rejects ambiguous identity during loading and retains legacy emission' do

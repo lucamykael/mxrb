@@ -1,5 +1,27 @@
 # MXRB: Ruby über alles
 
+## Layouts, Anmeldung und Export von Ruby-Anwendungen
+
+Mit `native` erstellte Seiten verwenden das angegebene Layout und dessen Slot
+`Main`. Exportierte Layouts behalten Klassen und Stile; Tabellen, Navigation und
+Popups stellen die für vorhandenes CSS benötigte Struktur bereit. Die Startseite
+vermeidet Pflichtparameter und Popups. Geschützte Links öffnen die Anmeldung;
+Startfehler werden angezeigt und können erneut versucht werden.
+
+Forms-Widgets verwenden den Katalog ihres Dokuments, ohne übernommene Schemas
+einzufrieren. Annotationen zu nicht ausgebbaren Knoten behalten ihren nativen
+Graphen, statt eine unvollständige Rekonstruktion zu erzeugen. Dies erweitert
+nicht die Ruby-Ausführung dieser Graphen. Der CDP-Reader unterscheidet außerdem
+erweiterte Frame-Längen korrekt.
+
+Lokale Prüfung: 2.301 Ruby-Tests mit 100 % Zeilen- und Branch-Coverage, 132
+Frontend-Tests, Build und Lint; 22 Browserschritte ohne Konsolenfehler. Der
+Sudoku-Roundtrip ist ohne Mendix-Sidecar gültig und identisch. `mx check` 11.12.1
+meldet für core-widgets vor und nach dem Roundtrip keine Fehler. Visuelle
+Gleichwertigkeit aller Themes und die Ausführung sämtlicher Integrationen sind
+nicht Gegenstand dieser Prüfung.
+Siehe [Nachweis](../evidence/ruby-runtime-hardening-2026-10-06.json).
+
 ## Diagrammaggregation
 
 Diagramme gruppieren wiederholte Kategorien und berechnen `count`, `sum`, `avg`,

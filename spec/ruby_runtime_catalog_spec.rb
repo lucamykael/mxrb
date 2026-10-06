@@ -7,6 +7,19 @@ RSpec.describe Mxrb::RubyApp::RuntimeCatalog do
   before { Mxrb::RubyApp::Registry.reset! }
   after { Mxrb::RubyApp::Registry.reset! }
 
+  it 'includes page parameters and popup contracts in the discovery schema' do
+    page = Class.new(Mxrb::RubyApp::Page) do
+      mendix_name 'App.Edit'
+      native do
+        parameter :Item, entity: 'App.Item'
+        popup! mode: :modal
+      end
+    end
+    definition = described_class.new([]).modules.first.fetch('pages').first
+    expect(definition.fetch('parameters')).to eq(page.presentation_contract.fetch(:parameters))
+    expect(definition.fetch('popup')).to include(mode: 'modal')
+  end
+
   it 'discovers newly added Ruby documents during reload without editing the manifest or opening MPR' do
     Dir.mktmpdir do |directory|
       source = File.join(directory, 'Catalog.mpr')

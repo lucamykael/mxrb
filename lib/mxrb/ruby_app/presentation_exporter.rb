@@ -38,9 +38,19 @@ module Mxrb
 
           name = "#{mod.name}.#{entry[:name]}"
           widgets = project_widgets(entry.fetch(:doc))
+          widgets = layout_appearance(widgets, entry.fetch(:doc))
           "Mxrb::RubyApp::Presentation.layout #{name.inspect} do\n" \
             "#{widget_source(name, entry.fetch(:doc), widgets)}\nend"
         end
+      end
+
+      def layout_appearance(widgets, document)
+        appearance = document.fetch('Appearance', {})
+        options = { 'class' => appearance['Class'], 'style' => appearance['Style'] }
+                  .reject { |_key, value| value.to_s.empty? }
+        return widgets if options.empty?
+
+        [{ 'type' => 'container', 'name' => 'LayoutAppearance', 'options' => options, 'children' => widgets }]
       end
 
       def menus(mod)

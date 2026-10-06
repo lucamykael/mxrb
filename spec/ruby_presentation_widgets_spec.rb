@@ -16,6 +16,7 @@ RSpec.describe 'Standalone presentation export' do
         mendix_version '11.12.1'
         self.module :Example do
           native_document :Shell, type: 'Forms$Layout', deep_structure: {
+            'Appearance' => { '$Type' => 'Forms$Appearance', 'Class' => 'layout-atlas', 'Style' => '' },
             'Content' => { '$Type' => 'Forms$WebLayoutContent',
                            'Widgets' => [2, { '$Type' => 'Forms$Header', 'Name' => 'heading' }] }
           }
@@ -29,12 +30,15 @@ RSpec.describe 'Standalone presentation export' do
       expect(Mxrb.compare(source, rebuilt)).to be_identical
       path = File.join(target, 'app', 'presentation', 'example.rb')
       expect(File.read(path)).to include('form_widget(', 'Mxrb::Forms.header')
+      expect(File.read(path)).to include('class_name: "layout-atlas"')
       expect(Mxrb::PublicSourceAudit.new(target)).to be_clean
       File.write(path, File.read(path).sub('heading', 'editedHeading'))
       expect(Mxrb::Model::Project).not_to receive(:open)
       application = Mxrb::RubyApp::Application.new(target)
       resource = Mxrb::RubyApp::Registry.fetch(:presentation, 'Example.Shell')
-      expect(resource.fetch(:widgets).first.fetch('name')).to eq('editedHeading')
+      wrapper = resource.fetch(:widgets).first
+      expect(wrapper.dig('options', 'class')).to eq('layout-atlas')
+      expect(wrapper.fetch('children').first.fetch('name')).to eq('editedHeading')
       tree = Mxrb::RubyApp::Page::WidgetTree.new
       tree.layout_grid('grid') do
         row do

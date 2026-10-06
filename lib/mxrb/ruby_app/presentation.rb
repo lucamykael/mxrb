@@ -66,6 +66,20 @@ module Mxrb
         Registry.register(:presentation, name.to_s, { kind: 'layout', widgets: tree.widgets })
       end
 
+      # Native Ruby pages bind their content to the same Main layout slot as
+      # the MPR writer. Exported pages already contain explicit layout calls.
+      def self.page(implementation)
+        widgets = Array(implementation.widgets)
+        name = implementation.native_definition&.dig(:layout)
+        if name && Registry.fetch(:presentation, name)&.fetch(:kind) == 'layout'
+          widgets = [{ 'type' => 'layout', 'options' => { 'layout' => name },
+                       'regions' => { 'Main' => widgets } }]
+        else
+          name = widgets.find { _1['type'] == 'layout' }&.dig('options', 'layout')
+        end
+        { layout: name, widgets: compose(widgets) }
+      end
+
       # Resolve reusable layout slots at request time so edits to shared Ruby
       # resources affect every page, including after a restart without an MPR.
       def self.compose(value, slots: {}, stack: [])

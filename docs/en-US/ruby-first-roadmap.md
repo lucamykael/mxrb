@@ -1,5 +1,26 @@
 # MXRB: Ruby above all
 
+## Ruby application layouts, authentication and export
+
+Pages authored with `native` apply their declared layout and `Main` slot.
+Exported layouts preserve classes and styles; grids, navigation and popups expose
+the structure needed by existing CSS. Initial fallback avoids required page
+parameters and popups. Protected links open login; startup errors are visible
+and can be retried.
+
+Forms widgets use the owning document catalog without freezing borrowed schemas.
+Annotations targeting nodes that cannot be emitted retain their preserved native
+graph instead of producing an incomplete reconstruction. This does not extend
+Ruby execution of those graphs. The CDP reader also distinguishes extended frame
+lengths correctly.
+
+Local validation: 2,301 Ruby tests with 100% line and branch coverage, 132 frontend
+tests, build and lint; 22 browser steps without console errors. Sudoku roundtrip
+is valid and identical without the Mendix sidecar; `mx check` 11.12.1 reports no
+errors for core-widgets source and roundtrip. Visual equivalence across all themes
+and execution of all integrations remain outside this scope.
+See the [evidence](../evidence/ruby-runtime-hardening-2026-10-06.json).
+
 ## Chart aggregation
 
 Charts group repeated categories and calculate `count`, `sum`, `avg`, `min`,

@@ -220,6 +220,66 @@ RSpec.describe 'Flow annotation certification' do
     expect(writer.send(:flow_node_id, node_ref: "annotation:#{native_id}")).to eq(native_id)
   end
 
+  it 'preserves annotations attached to implicit merge nodes instead of exporting an invalid body' do
+    Dir.mktmpdir('mxrb-merge-annotation-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module :App do
+          microflow :Annotated do
+            annotation 'Merge note'
+            decision 'true' do
+              on(true) { show_message 'Yes' }
+              on(false) { show_message 'No' }
+            end
+          end
+        end
+      end
+      mpr = Mxrb::IO::MprFile.open(source, readonly: false)
+      raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Microflows$Microflow' }
+      document = mpr.parse_contents(raw)
+      objects = native_items(document.dig('ObjectCollection', 'Objects'))
+      note = objects.find { _1['$Type'] == 'Microflows$Annotation' }
+      merge = objects.find { _1['$Type'] == 'Microflows$ExclusiveMerge' }
+      flows = native_items(document['Flows'])
+      flows << annotation_flow(note.fetch('$ID'), merge.fetch('$ID'))
+      document['Flows'] = Mxrb::IO::BsonCodec.build_array(flows)
+      mpr.transaction { mpr.update_unit(raw.fetch('UnitID'), document) }
+      mpr.close
+      target = File.join(dir, 'ruby')
+      Mxrb::Exporter.new(source, target, mode: :ruby).export!
+      rebuilt = File.join(dir, 'Rebuilt.mpr')
+      Mxrb::RubyApp.compile(target, rebuilt)
+      expect(Mxrb.compare(source, rebuilt)).to be_identical
+    end
+  end
+
+  it 'preserves annotation edges to activities outside the reachable sequence graph' do
+    Dir.mktmpdir('mxrb-disconnected-annotation-') do |dir|
+      source = File.join(dir, 'Source.mpr')
+      build_source(source)
+      mpr = Mxrb::IO::MprFile.open(source, readonly: false)
+      raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Microflows$Microflow' }
+      document = mpr.parse_contents(raw)
+      objects = native_items(document.dig('ObjectCollection', 'Objects'))
+      note = objects.find { _1['$Type'] == 'Microflows$Annotation' }
+      activity = objects.find { _1['$Type'] == 'Microflows$ActionActivity' }.fetch('$ID')
+      flows = native_items(document['Flows'])
+      outgoing = flows.find { _1['OriginPointer'] == activity }
+      flows.find { _1['DestinationPointer'] == activity }['DestinationPointer'] = outgoing['DestinationPointer']
+      flows.delete(outgoing)
+      flows << annotation_flow(note.fetch('$ID'), activity)
+      document['Flows'] = Mxrb::IO::BsonCodec.build_array(flows)
+      mpr.transaction { mpr.update_unit(raw.fetch('UnitID'), document) }
+      mpr.close
+      target = File.join(dir, 'ruby')
+      Mxrb::Exporter.new(source, target, mode: :ruby).export!
+      rebuilt = File.join(dir, 'Rebuilt.mpr')
+      Mxrb::RubyApp.compile(target, rebuilt)
+      expect(Mxrb.compare(source, rebuilt)).to be_identical
+    end
+  end
+
   def build_source(path)
     Mxrb.define(path) do
       mendix_version '11.12.1'

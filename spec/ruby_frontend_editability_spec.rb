@@ -87,7 +87,9 @@ RSpec.describe 'Ruby frontend input editability' do # rubocop:disable Metrics/Bl
       File.write(path, code.sub('editable: "never"', 'editable: "always"')
                            .sub('Original placeholder', 'Edited in Ruby'))
       application = Mxrb::RubyApp::Application.new(target)
-      content = application.page('App.Home').fetch(:widgets).first.dig('regions', 'center')
+      layout = application.page('App.Home').fetch(:widgets).first
+      expect(layout.dig('options', 'class')).to include('mxrb-application-shell')
+      content = layout.fetch('children').first.dig('regions', 'center')
       widget = content.first.fetch('body').first
       expect(widget.fetch('options')).to include(
         'editable' => 'always', 'placeholder' => 'Edited in Ruby', 'password' => true

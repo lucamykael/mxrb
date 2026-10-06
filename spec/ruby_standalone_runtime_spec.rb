@@ -35,7 +35,9 @@ RSpec.describe 'Standalone Ruby runtime' do
       expect(application.call_service('Standalone.Answer')).to eq('Edited Ruby')
       expect(application.call_service('Standalone.Nested')).to eq('Edited Ruby')
       record = application.create_record('Standalone.Item', { 'Name' => 'Persisted' })
-      expect(application.page('Standalone.Home').fetch(:widgets).first.fetch('type')).to eq('scroll_container')
+      layout = application.page('Standalone.Home').fetch(:widgets).first
+      expect(layout.dig('options', 'class')).to include('mxrb-application-shell')
+      expect(layout.fetch('children').first.fetch('type')).to eq('scroll_container')
       expect(JSON.generate(application.page('Standalone.Home'))).to include('Editable')
       application.close
       application = Mxrb::RubyApp::Application.new(target)

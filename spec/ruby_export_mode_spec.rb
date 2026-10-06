@@ -279,8 +279,10 @@ RSpec.describe 'Ruby application export mode' do
         .to raise_error(Mxrb::NativeRuntimeError, /app_service adapter is not configured/)
       dashboard = application.page('Sales.Dashboard')
       expect(dashboard).to include(title: 'Dashboard')
-      expect(dashboard.fetch(:widgets).first.fetch('type')).to eq('scroll_container')
-      dashboard[:widgets] = dashboard.fetch(:widgets).first.dig('regions', 'center')
+      layout = dashboard.fetch(:widgets).first
+      expect(layout.dig('options', 'class')).to include('mxrb-application-shell')
+      expect(layout.fetch('children').first.fetch('type')).to eq('scroll_container')
+      dashboard[:widgets] = layout.fetch('children').first.dig('regions', 'center')
       expect(dashboard.fetch(:widgets).map { _1.fetch('type') }).to include(
         'text_box', 'text_area', 'check_box', 'date_picker', 'drop_down', 'reference_selector', 'data_grid'
       )

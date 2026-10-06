@@ -148,6 +148,7 @@ select {
 .data-grid__toolbar,
 .data-grid__pagination {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-block: 0.5rem;
@@ -251,8 +252,15 @@ select {
 .mxrb-page-surface {
   display: contents;
 }
-.app-page:has(> .mx-scrollcontainer) {
+.app-page:has(> .mx-scrollcontainer),
+.app-page:has(> [data-widget-name='LayoutAppearance'] > .mx-scrollcontainer) {
   display: contents;
+}
+.app-page > [data-widget-name='LayoutAppearance']:has(> .mx-scrollcontainer) {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .app-shell:has(.mx-scrollcontainer) {
   height: 100dvh;
@@ -260,6 +268,7 @@ select {
   flex-direction: column;
 }
 .mx-scrollcontainer {
+  min-width: 0;
   display: flex;
   flex: 1 0 0;
 }
@@ -271,11 +280,14 @@ select {
 }
 .mx-scrollcontainer-center,
 .mx-scrollcontainer-middle {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
 }
 .mx-scrollcontainer-wrapper {
+  min-width: 0;
   flex: 1 1 auto;
 }
 .mx-scrollcontainer-nested {
@@ -423,4 +435,34 @@ select {
   top: -3px;
   left: -3px;
   cursor: nwse-resize;
+}
+
+/* Structural bridge styles; colors, typography and spacing come from the theme. */
+.mxrb-grid-sort {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.mxrb-popup {
+  padding: 0;
+  border: 0;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+.mxrb-popup .modal-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.mxrb-popup .app-page {
+  min-height: 0;
 }
