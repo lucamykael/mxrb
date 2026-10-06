@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../io/bson_codec'
+require_relative 'decimal_values'
 
 # Public authorization calls intentionally accept complete security contexts,
 # and the XPath interpreter is clearer as small decision-oriented methods.
@@ -330,7 +331,7 @@ module Mxrb
         return true if token.match?(/\Atrue\(\)\z/i)
         return false if token.match?(/\Afalse\(\)\z/i)
         return nil if token.match?(/\A(empty|null)\z/i)
-        return token.to_f if token.match?(/\A-?\d+\.\d+\z/)
+        return DecimalValues.parse(token) if token.match?(/\A-?\d+\.\d+\z/)
         return token.to_i if token.match?(/\A-?\d+\z/)
         return user_identity(context.user) if token == '[%CurrentUser%]'
         return variable(token.delete_prefix('$'), context) if token.start_with?('$')

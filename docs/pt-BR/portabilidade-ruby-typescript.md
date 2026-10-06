@@ -1,5 +1,28 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Precisão Decimal
+
+Ruby usa `BigDecimal` e o frontend usa `decimal.js`. Literais, soma, subtração,
+multiplicação, resto, comparação e divisão evitam conversões intermediárias para
+`Float`/`Number`. Divisão usa 38 dígitos significativos, conforme o runtime 11.12.1
+instalado; `round` respeita `HalfUp`/`HalfEven`, e o export preserva `DecimalScale`.
+`floor`, `ceil`, `abs` e `parseDecimal` sem formato também usam valores exatos.
+
+A API interna transporta Decimal como `{"__mxrb_decimal":"9007199254740993.12345678"}`.
+Use os helpers de `bridge/decimal` em extensões TypeScript. O contrato inclui
+campos editáveis, parâmetros de página, filtros, ordenação, rascunhos e nanoflows.
+Coordenadas de gráficos passam para ponto flutuante somente na apresentação.
+
+SQLite grava Decimal em `TEXT` canônico, aplica escala e arredondamento do projeto
+no commit e rejeita valores fora do limite nativo. Colunas `REAL` existentes são
+migradas preservando as linhas; dígitos já perdidos em gravações antigas não podem
+ser recuperados. SQL externo sobre essas colunas precisa de comparação decimal,
+pois a ordenação textual do SQLite não é numérica. Clientes da API devem adotar o
+tag Decimal junto com o frontend regenerado. Parsing e formatação localizados
+com padrões Java continuam fora deste contrato.
+
+[Evidência de Decimal](../evidence/decimal-runtime-2026-10-06.json).
+
 ## Expressões de calendário
 
 O avaliador Ruby e o frontend TypeScript executam `dateTime[UTC]`,

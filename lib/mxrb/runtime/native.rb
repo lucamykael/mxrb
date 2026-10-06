@@ -10,6 +10,7 @@ require 'openssl'
 require 'uri'
 require_relative 'string_functions'
 require_relative 'calendar_functions'
+require_relative 'decimal_values'
 
 module Mxrb
   module Runtime
@@ -171,8 +172,9 @@ module Mxrb
       class Expression
         include StringFunctions
 
-        def initialize(time_zone: 'UTC')
+        def initialize(time_zone: 'UTC', decimal: DecimalContext.new)
           @token_cache = {}
+          @decimal = decimal
           @calendar = CalendarFunctions.new(time_zone:)
         end
 
@@ -225,8 +227,11 @@ module Mxrb
           when 'urldecode' then URI.decode_www_form_component(arguments.fetch(0).to_s)
           when 'tostring' then mendix_string(arguments.fetch(0))
           when 'parseinteger' then Integer(arguments.fetch(0))
-          when 'parsedecimal' then Float(arguments.fetch(0))
-          when 'round' then arguments.fetch(0).round
+          when 'parsedecimal' then parse_decimal(arguments)
+          when 'round' then @decimal.round(*arguments)
+          when 'floor' then DecimalValues.parse(arguments.fetch(0)).floor
+          when 'ceil' then DecimalValues.parse(arguments.fetch(0)).ceil
+          when 'abs' then arguments.fetch(0).abs
           when 'random' then Random.rand
           when 'substring' then substring(*arguments)
           when 'find' then string_find(*arguments)
@@ -239,7 +244,22 @@ module Mxrb
           end
         end
 
+        def divide(left, right) = @decimal.divide(left, right)
+
         private
+
+        def parse_decimal(arguments)
+          raise ArgumentError, 'parseDecimal requires one or two arguments' unless (1..2).cover?(arguments.size)
+          if arguments.size == 2 && !arguments[1].nil? && !arguments[1].is_a?(Numeric)
+            raise ArgumentError, 'unsupported decimal format'
+          end
+
+          DecimalValues.parse(arguments[0])
+        rescue ArgumentError
+          raise unless arguments.size == 2 && (arguments[1].nil? || arguments[1].is_a?(Numeric))
+
+          arguments[1].nil? ? nil : DecimalValues.parse(arguments[1])
+        end
 
         def unwrap(source)
           source.is_a?(Hash) ? (source['Value'] || source['Expression'] || '') : source.to_s
@@ -275,7 +295,7 @@ module Mxrb
           return 'true' if value == true
           return 'false' if value == false
 
-          value.to_s
+          value.is_a?(BigDecimal) ? DecimalValues.text(value) : value.to_s
         end
 
         def format_datetime(value, pattern)
@@ -445,7 +465,7 @@ module Mxrb
             raise ArgumentError, 'numeric operands required' unless first.is_a?(Numeric) && second.is_a?(Numeric)
             raise ArgumentError, 'division by zero' if second.zero?
 
-            operator == 'mod' ? first.remainder(second) : first.fdiv(second)
+            operator == 'mod' ? first.remainder(second) : @expression.divide(first, second)
           end
 
           def accept_word(word)
@@ -539,7 +559,7 @@ module Mxrb
           end
 
           def number(value)
-            value.include?('.') ? Float(value) : Integer(value)
+            value.include?('.') ? DecimalValues.parse(value) : Integer(value)
           end
 
           def punctuation
@@ -559,7 +579,8 @@ module Mxrb
         def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
                        service_dispatch: nil)
           @project = project
-          @expression = Expression.new(time_zone: lambda {
+          @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
+          @expression = Expression.new(decimal: @decimal, time_zone: lambda {
             attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
             attributes.fetch('time_zone', 'UTC')
           })
@@ -661,7 +682,7 @@ module Mxrb
           case attribute.type
           when :boolean then value.casecmp?('true')
           when :integer, :long, :autonumber then value.empty? ? nil : Integer(value)
-          when :decimal then value.empty? ? nil : Float(value)
+          when :decimal then value.empty? ? nil : DecimalValues.parse(value)
           when :string then value
           else value.empty? ? nil : value
           end
@@ -1471,7 +1492,8 @@ module Mxrb
           when 'sum' then values.compact.sum
           when 'minimum', 'min' then values.compact.min
           when 'maximum', 'max' then values.compact.max
-          when 'average', 'avg' then values.empty? ? nil : values.compact.sum.to_f / values.compact.size
+          when 'average', 'avg'
+            values.compact.empty? ? nil : @decimal.divide(values.compact.sum, values.compact.size)
           else raise NativeRuntimeError, "unsupported aggregate #{function}"
           end
         end

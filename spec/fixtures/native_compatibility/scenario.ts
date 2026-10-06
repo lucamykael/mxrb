@@ -207,6 +207,50 @@ type OracleCase = { name: string; expected?: string; expected_error?: boolean };
     "expected": "true"
   },
   {
+    "name": "DecimalExactSum",
+    "expected": "0.3"
+  },
+  {
+    "name": "DecimalLarge",
+    "expected": "9007199254740993.00000002"
+  },
+  {
+    "name": "DecimalDivision",
+    "expected": "0.42857142857142857142857142857142857143"
+  },
+  {
+    "name": "DecimalDivisionCarry",
+    "expected": "4"
+  },
+  {
+    "name": "DecimalNegativeRound",
+    "expected": "-3"
+  },
+  {
+    "name": "DecimalRoundPlaces",
+    "expected": "88.73"
+  },
+  {
+    "name": "DecimalRemainder",
+    "expected": "-0.5"
+  },
+  {
+    "name": "DecimalFloor",
+    "expected": "-2"
+  },
+  {
+    "name": "DecimalParseDefault",
+    "expected": "1.25"
+  },
+  {
+    "name": "DecimalStoreWrite",
+    "expected": "written"
+  },
+  {
+    "name": "DecimalStoreRead",
+    "expected": "9007199254740993.12345679"
+  },
+  {
     "name": "VerifyRule",
     "expected": "passed"
   }

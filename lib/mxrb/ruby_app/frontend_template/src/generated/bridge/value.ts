@@ -1,3 +1,4 @@
+import { isDecimal, isNumeric, numericCompare, numericText } from './decimal';
 import type { CSSProperties } from 'react';
 import { evaluate, evaluateCondition } from './expression';
 import type {
@@ -71,10 +72,10 @@ export const dynamicClass = (source: string | undefined, context: EntityRecord |
   );
   text = text.replace(
     /toString\(\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)\)/g,
-    (_match: string, member: string) => String(attributes(context)[memberName(member)] ?? ''),
+    (_match: string, member: string) => numericText(attributes(context)[memberName(member)]),
   );
   text = text.replace(/\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)/g, (_match: string, member: string) =>
-    String(attributes(context)[memberName(member)] ?? ''),
+    numericText(attributes(context)[memberName(member)]),
   );
   return text
     .replace(/[+()']/g, ' ')
@@ -195,6 +196,7 @@ export const recordValue = (
 
 export const displayValue = (value: RuntimeValue | undefined): string | number | boolean => {
   if (value == null) return '';
+  if (isDecimal(value)) return numericText(value);
   if (Array.isArray(value)) return value.map(displayValue).join(', ');
   if (isEntityRecord(value))
     return (
@@ -214,6 +216,7 @@ export const choiceValue = (value: RuntimeValue, key: string): RuntimeValue | un
 
 export const draftValue = (value: RuntimeValue | undefined): string | number | boolean => {
   if (isEntityRecord(value)) return value.id;
+  if (isDecimal(value)) return numericText(value);
   return ['string', 'number', 'boolean'].includes(typeof value)
     ? (value as string | number | boolean)
     : '';
@@ -233,15 +236,16 @@ export const sortRecords = (
     .forEach((sorting) => {
       const member = memberName(sorting.attribute);
       const direction = sorting.direction === 'Descending' ? -1 : 1;
-      result.sort(
-        (left, right) =>
+      result.sort((left, right) => {
+        const a = left.attributes?.[member];
+        const b = right.attributes?.[member];
+        return (
           direction *
-          String(left.attributes?.[member] ?? '').localeCompare(
-            String(right.attributes?.[member] ?? ''),
-            undefined,
-            { numeric: true },
-          ),
-      );
+          (isNumeric(a) && isNumeric(b)
+            ? numericCompare(a, b)
+            : numericText(a).localeCompare(numericText(b), undefined, { numeric: true }))
+        );
+      });
     });
   return result;
 };

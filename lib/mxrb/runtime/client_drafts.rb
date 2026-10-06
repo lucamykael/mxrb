@@ -99,12 +99,9 @@ module Mxrb
       def encode(value, owner, seen)
         case value
         when Native::ObjectValue then encode_reference(value, owner, seen)
-        when Time then { 'time' => value.iso8601(9) }
-        when DateTime then { 'datetime' => value.iso8601(9) }
-        when Date then { 'date' => value.iso8601 }
         when Hash then { 'hash' => value.map { [encode(_1, owner, seen), encode(_2, owner, seen)] } }
         when Array then value.map { encode(_1, owner, seen) }
-        else value
+        else encode_scalar(value)
         end
       end
 
@@ -117,9 +114,20 @@ module Mxrb
 
       private
 
+      def encode_scalar(value)
+        case value
+        when BigDecimal then { 'decimal' => DecimalValues.text(value) }
+        when Time then { 'time' => value.iso8601(9) }
+        when DateTime then { 'datetime' => value.iso8601(9) }
+        when Date then { 'date' => value.iso8601 }
+        else value
+        end
+      end
+
       def decode_tagged(value, owner)
         case value.keys.first
         when 'hash' then value.fetch('hash').to_h { [decode(_1, owner), decode(_2, owner)] }
+        when 'decimal' then DecimalValues.parse(value.fetch('decimal'))
         when 'time' then Time.iso8601(value.fetch('time'))
         when 'datetime' then DateTime.iso8601(value.fetch('datetime'))
         when 'date' then Date.iso8601(value.fetch('date'))

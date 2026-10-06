@@ -2,6 +2,7 @@
 
 require 'digest'
 require 'sqlite3'
+require_relative 'decimal_values'
 
 module Mxrb
   module Runtime
@@ -82,7 +83,7 @@ module Mxrb
       }.freeze
       TYPE_MAP = {
         integer: 'INTEGER', long: 'INTEGER', autonumber: 'INTEGER', boolean: 'INTEGER',
-        float: 'REAL', decimal: 'REAL', binary: 'BLOB', datetime: 'TEXT', enum: 'TEXT',
+        float: 'REAL', decimal: 'TEXT', binary: 'BLOB', datetime: 'TEXT', enum: 'TEXT',
         hashstring: 'TEXT', string: 'TEXT'
       }.freeze
 
@@ -93,6 +94,9 @@ module Mxrb
         @allow_destructive = allow_destructive == true
         @owns_database = !database.is_a?(SQLite3::Database)
         @database = @owns_database ? SQLite3::Database.new(database.to_s) : database
+        @database.create_function('mxrb_decimal_text', 1) do |function, value|
+          function.result = value.nil? ? nil : DecimalValues.text(value)
+        end
         @schema = schema || self.class.derive(project)
       end
 
@@ -531,6 +535,7 @@ module Mxrb
                          else
                            quote(name)
                          end
+            expression = "mxrb_decimal_text(#{expression})" if column&.type == :decimal
             [name, expression]
           elsif columns[name]&.required && !columns[name].default.nil?
             [name, sql_literal(columns[name].default, columns[name].type)]
@@ -539,9 +544,12 @@ module Mxrb
       end
 
       def sql_literal(value, type)
+        return 'NULL' if type == :decimal && value == ''
+
         return value ? '1' : '0' if type == :boolean
         return value.to_i.to_s if %i[integer long autonumber].include?(type)
-        return value.to_f.to_s if %i[float decimal].include?(type)
+        return value.to_f.to_s if type == :float
+        return "'#{DecimalValues.text(value)}'" if type == :decimal
 
         "'#{value.to_s.gsub("'", "''")}'"
       end

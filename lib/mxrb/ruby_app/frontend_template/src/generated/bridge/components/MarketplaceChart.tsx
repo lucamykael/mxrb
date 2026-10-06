@@ -1,3 +1,4 @@
+import { isDecimal, numericText } from '../decimal';
 import { useEffect, useState } from 'react';
 import type { ApiRequest, EntityCollectionResponse, EntityRecord } from '../../types';
 import type { MarketplaceWidgetProps } from '../marketplace';
@@ -12,6 +13,8 @@ const object = (value: unknown): Properties =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Properties) : {};
 const attribute = (value: unknown) => memberName(String(object(value).attribute ?? value ?? ''));
 const numeric = (value: unknown): number => {
+  // Plot coordinates intentionally cross into binary floating point only here.
+  if (isDecimal(value)) value = numericText(value);
   if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '')
     throw new Error('Chart values must be numbers');
   const result = Number(value);

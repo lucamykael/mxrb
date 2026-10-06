@@ -365,7 +365,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
       .to raise_error(Mxrb::Runtime::UnsafeSchemaMigrationError, /allow_destructive/)
     expect(migrator.migration_plan.removed_attributes.map { _1.fetch(:name) }).to eq(['Weight'])
     expect(database.get_first_value("SELECT \"#{weight_column}\" FROM \"#{definition.table}\""))
-      .to eq(12.5)
+      .to eq('12.5')
 
     result = described_class.new(evolved, database: database, allow_destructive: true).migrate!
     expect(result.rebuilt_tables).to eq([definition.table])
@@ -494,7 +494,8 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     expect(migrator.send(:sql_literal, true, :boolean)).to eq('1')
     expect(migrator.send(:sql_literal, false, :boolean)).to eq('0')
     expect(migrator.send(:sql_literal, 7, :integer)).to eq('7')
-    expect(migrator.send(:sql_literal, 1.5, :decimal)).to eq('1.5')
+    expect(migrator.send(:sql_literal, 1.5, :float)).to eq('1.5')
+    expect(migrator.send(:sql_literal, 1.5, :decimal)).to eq("'1.5'")
     expect(migrator.send(:sql_literal, "O'Brien", :string)).to eq("'O''Brien'")
     database.close
   end

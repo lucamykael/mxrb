@@ -171,7 +171,7 @@ RSpec.describe 'Ruby application internal contracts' do
       expect(exp.send(:typescript_flow_type,
                       '$Type' => 'ListType', 'Entity' => 'Sales.Order')).to include('Array<EntityTypeMap')
       expect(exp.send(:typescript_flow_type, '$Type' => 'BooleanType')).to eq('boolean')
-      expect(exp.send(:typescript_flow_type, '$Type' => 'DecimalType')).to eq('number')
+      expect(exp.send(:typescript_flow_type, '$Type' => 'DecimalType')).to eq('DecimalValue')
       expect(exp.send(:typescript_flow_type, '$Type' => 'DateTimeType')).to eq('string')
       expect(exp.send(:typescript_flow_type, '$Type' => 'VoidType')).to eq('undefined')
       expect(exp.send(:typescript_flow_type, nil)).to eq('undefined')

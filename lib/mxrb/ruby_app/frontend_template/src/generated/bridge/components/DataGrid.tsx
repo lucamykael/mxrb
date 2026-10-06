@@ -1,3 +1,4 @@
+import { decimal, type DecimalValue, isDecimal, numericCompare, numericText } from '../decimal';
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import type {
   ApiRequest,
@@ -63,11 +64,17 @@ const filterConfig = (column: WidgetColumn): FilterConfig | null => {
   return { type, operator: String(source.operator || defaultOperator[type]), options };
 };
 
-const comparable = (value: RuntimeValue | undefined, type: FilterType): string | number | null => {
+const comparable = (
+  value: RuntimeValue | undefined,
+  type: FilterType,
+): string | number | DecimalValue | null => {
   if (value == null || value === '') return null;
   if (type === 'number') {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : null;
+    try {
+      return decimal(value);
+    } catch {
+      return null;
+    }
   }
   if (type === 'date') {
     const date = Date.parse(String(value).slice(0, 10));
@@ -87,10 +94,15 @@ const bounds = (query: string): [string, string] | null => {
   return values.length === 2 && values.every(Boolean) ? [values[0], values[1]] : null;
 };
 
-const compare = (left: string | number, right: string | number): number =>
-  typeof left === 'number' && typeof right === 'number'
-    ? left - right
-    : String(left).localeCompare(String(right), undefined, { numeric: true });
+const compare = (
+  left: string | number | DecimalValue,
+  right: string | number | DecimalValue,
+): number =>
+  isDecimal(left) && isDecimal(right)
+    ? numericCompare(left, right)
+    : typeof left === 'number' && typeof right === 'number'
+      ? left - right
+      : numericText(left).localeCompare(numericText(right), undefined, { numeric: true });
 
 export const matchesGridFilter = (
   actual: RuntimeValue | undefined,
@@ -112,15 +124,15 @@ export const matchesGridFilter = (
   }
   const right = comparable(query, config.type);
   if (right == null) return false;
-  if (config.operator === 'contains') return String(left).includes(String(right));
-  if (config.operator === 'starts_with') return String(left).startsWith(String(right));
-  if (config.operator === 'ends_with') return String(left).endsWith(String(right));
-  if (config.operator === 'not_equals') return left !== right;
+  if (config.operator === 'contains') return numericText(left).includes(numericText(right));
+  if (config.operator === 'starts_with') return numericText(left).startsWith(numericText(right));
+  if (config.operator === 'ends_with') return numericText(left).endsWith(numericText(right));
+  if (config.operator === 'not_equals') return compare(left, right) !== 0;
   if (['gt', 'after'].includes(config.operator)) return compare(left, right) > 0;
   if (['gte', 'on_or_after'].includes(config.operator)) return compare(left, right) >= 0;
   if (['lt', 'before'].includes(config.operator)) return compare(left, right) < 0;
   if (['lte', 'on_or_before'].includes(config.operator)) return compare(left, right) <= 0;
-  return left === right;
+  return compare(left, right) === 0;
 };
 
 const activeFilter = (value: string, config: FilterConfig): boolean =>

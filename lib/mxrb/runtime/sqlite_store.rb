@@ -29,6 +29,7 @@ module Mxrb
 
       def initialize(project, path: ':memory:', defaults: {}, hooks: {}, allow_destructive: false,
                      schema: nil, transient_entities: nil)
+        @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
         @database = SQLite3::Database.new(path.to_s)
         @database.results_as_hash = true
         @database.execute('PRAGMA foreign_keys = ON')
@@ -468,7 +469,9 @@ module Mxrb
         values = []
         definition.columns.each do |column|
           fields << column.sql_name
-          values << serialize(value.members[column.name], column.type)
+          stored = serialize(value.members[column.name], column.type)
+          values << stored
+          value.members[column.name] = deserialize(stored, :decimal) if column.type == :decimal
         end
         definition.system_members.each do |name, (sql_name, _type)|
           fields << sql_name
@@ -618,7 +621,8 @@ module Mxrb
         return nil if value.nil? || value == ''
         return value == true || value.to_s.casecmp?('true') if type == :boolean
         return value.to_i if %i[integer long autonumber].include?(type)
-        return value.to_f if %i[float decimal].include?(type)
+        return value.to_f if type == :float
+        return DecimalValues.parse(value) if type == :decimal
 
         value
       end
@@ -636,6 +640,7 @@ module Mxrb
       def serialize(value, type)
         return nil if value.nil?
         return value ? 1 : 0 if type == :boolean
+        return DecimalValues.text(@decimal.persist(value)) if type == :decimal
         return value.utc.iso8601(6) if type == :datetime && value.respond_to?(:utc)
         return value.iso8601 if type == :datetime && value.respond_to?(:iso8601)
 
@@ -645,6 +650,7 @@ module Mxrb
       def deserialize(value, type)
         return nil if value.nil?
         return value.to_i != 0 if type == :boolean
+        return DecimalValues.parse(value) if type == :decimal
         return Time.parse(value) if type == :datetime
 
         value

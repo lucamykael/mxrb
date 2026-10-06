@@ -1,3 +1,4 @@
+import { decimal } from '../decimal';
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { ClientActions } from '../PageEdits';
 import { LocalVariables, PageParameterBindings, SnippetParameterBindings } from '../PageVariables';
@@ -151,12 +152,19 @@ export function BoundField({
       .catch(onError);
   }, [kind, referenceEntity, revision, request, onError]);
 
-  const disabled = !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles);
+  const disabled =
+    !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles);
   const persist = async (next: string | number | boolean): Promise<EntityRecord | null> => {
     if (disabled || !record) return null;
     setDraft(next);
     let normalized: RuntimeValue = next;
-    if (kind === 'number_input') normalized = next === '' ? null : Number(next);
+    if (kind === 'number_input')
+      normalized =
+        next === ''
+          ? null
+          : attributeDefinition?.type.toLowerCase() === 'decimal'
+            ? decimal(next)
+            : Number(next);
     if (kind === 'reference_selector') {
       normalized = references.find((item) => item.id === next) || null;
     }
@@ -363,10 +371,14 @@ export function BoundField({
       </select>
     );
   }
+  // Native number-input steppers coerce through binary floats. Decimal input
+  // stays text, including when edited with the browser's keyboard controls.
+  const decimalInput =
+    kind === 'number_input' && attributeDefinition?.type.toLowerCase() === 'decimal';
   const inputType =
     kind === 'date_picker'
       ? 'date'
-      : kind === 'number_input'
+      : kind === 'number_input' && !decimalInput
         ? 'number'
         : options.password === true
           ? 'password'
@@ -382,6 +394,7 @@ export function BoundField({
       {...controlProps}
       {...textProps}
       type={inputType}
+      inputMode={decimalInput ? 'decimal' : undefined}
       value={inputValue}
       onChange={(event) => setDraft(event.target.value)}
     />

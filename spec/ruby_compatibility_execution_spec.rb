@@ -15,23 +15,43 @@ RSpec.describe 'annotated rule and expression compatibility' do # rubocop:disabl
       load File.expand_path('fixtures/native_compatibility/project.rb', __dir__)
       cases = JSON.parse(File.read(File.expand_path('fixtures/native_compatibility/cases.json', __dir__)))
       cases << { 'name' => 'VerifyRule', 'expected' => 'passed' }
-      Mxrb.open(source) do |project|
-        interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
-        cases.each { |item| expect_oracle_result(item) { interpreter.call("Compatibility.#{item['name']}") } }
-      end
+      verify_persisted_oracle(source, cases)
       target = File.join(directory, 'ruby')
       Mxrb::Exporter.new(source, target, mode: :ruby).export!
       allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR is unavailable')
       application = Mxrb::RubyApp::Application.new(target)
       cases.each { |item| expect_oracle_result(item) { application.call_service("Compatibility.#{item['name']}") } }
+      created, changed = verify_decimal_api(application)
       rule_path = File.join(target, 'app/services/compatibility/non_empty.rb')
       File.write(rule_path, File.read(rule_path).sub('> 0', '> 100'))
       application.close
       application = Mxrb::RubyApp::Application.new(target)
       expect(application.call_service('Compatibility.VerifyRule')).to eq('failed')
+      restored = application.record('Compatibility.Item', created.fetch(:id))
+      expect(restored.fetch(:attributes).fetch('Amount')).to eq(changed)
     ensure
       application&.close
     end
+  end
+
+  def verify_persisted_oracle(source, cases)
+    Mxrb.open(source) do |project|
+      store = Mxrb::Runtime::SQLiteStore.new(project)
+      interpreter = Mxrb::Runtime::Native::Interpreter.new(project, store:)
+      cases.each { |item| expect_oracle_result(item) { interpreter.call("Compatibility.#{item['name']}") } }
+    ensure
+      store&.close
+    end
+  end
+
+  def verify_decimal_api(application)
+    amount = { '__mxrb_decimal' => '9007199254740993.12345678' }
+    created = application.create_record('Compatibility.Item', 'Name' => 'Client', 'Amount' => amount)
+    expect(created.fetch(:attributes).fetch('Amount')).to eq(amount)
+    changed = { '__mxrb_decimal' => '9007199254740993.12345679' }
+    updated = application.update_record('Compatibility.Item', created.fetch(:id), { 'Amount' => changed })
+    expect(updated.fetch(:attributes).fetch('Amount')).to eq(changed)
+    [created, changed]
   end
 
   def expect_oracle_result(item, &block)
