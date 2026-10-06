@@ -63,6 +63,7 @@ jobs:
             ['compatibility', 'native_compatibility/scenario.ts'],
             ['charts', 'frontend_browser/marketplace_chart_native.ts'],
             ['chart-aggregation', 'frontend_browser/marketplace_chart_aggregation_native.ts'],
+            ['chart-series', 'frontend_browser/marketplace_chart_series_native.ts'],
             ['page-drafts', 'persistent_page_drafts/scenario.ts']
           ]) {
             writeFileSync(`${output}/${name}.js`, stripTypeScriptTypes(
@@ -127,7 +128,7 @@ jobs:
         shell: powershell
         run: |
           $failed = $false
-          foreach ($scenario in @('validation', 'compatibility', 'charts', 'chart-aggregation', 'page-drafts')) {
+          foreach ($scenario in @('validation', 'compatibility', 'charts', 'chart-aggregation', 'chart-series', 'page-drafts')) {
             foreach ($variant in @('source', 'roundtrip')) {
               $label = "$scenario-$variant"
               & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./script/studio_pro_runtime.ps1 `

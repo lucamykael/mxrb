@@ -217,6 +217,63 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.source_expression(:objects)).not_to include('{', '=>')
   end
 
+  it 'keeps parameterized captions immutable and emits them in nested object properties' do
+    bridge = described_class.new(widget_id, catalog:)
+    text = +'Revenue {1}'
+    parameter = +'$currentObject/Name'
+    value = bridge.caption(text, parameters: [parameter])
+    text.replace('changed')
+    parameter.replace('changed')
+    expect(value.text).to eq('Revenue {1}')
+    expect(value.parameters).to eq(['$currentObject/Name'])
+    expect(value.text).to be_frozen
+    expect(value.parameters).to be_frozen
+    expect(value.parameters.first).to be_frozen
+    bridge.set(:label, value)
+    expect(bridge.to_projection.fetch('label')).to eq(text: 'Revenue {1}', parameters: ['$currentObject/Name'])
+    expect(bridge.source_expression(:label)).to eq('caption("Revenue {1}", parameters: ["$currentObject/Name"])')
+    bridge.set(:objects, bridge.objects do
+      object { set :label, caption('Series {1}', parameters: ['$currentObject/Name']) }
+    end)
+    expect(bridge.source_expression(:objects)).to include('set "label", caption("Series {1}"')
+    expect { bridge.set(:title, value) }.to raise_error(described_class::UnsupportedProjection)
+    [[nil, []], ['text', nil], ['text', [1]]].each do |invalid_text, parameters|
+      expect { bridge.caption(invalid_text, parameters:) }.to raise_error(ArgumentError)
+    end
+  end
+
+  it 'projects captions without dropping unknown metadata or accepting malformed parameters' do
+    bridge = described_class.new(widget_id, catalog:)
+    bridge.populate_supported_subset('label' => { text: 'Series {1}', parameters: ['$currentObject/Name'] })
+    expect(bridge.source_expression(:label)).to include('caption("Series {1}"')
+    bridge = described_class.new(widget_id, catalog:)
+    bridge.populate_supported_subset('label' => { text: 'Title' })
+    expect(bridge.to_projection.fetch('label')).to eq(text: 'Title', parameters: [])
+    [{ text: 'Title', translations: { pt_BR: 'Título' } },
+     { text: 'Title', parameters: [1] }, { parameters: [] }].each do |unsupported|
+      bridge = described_class.new(widget_id, catalog:)
+      bridge.populate_supported_subset('label' => unsupported)
+      expect(bridge.to_projection).to eq({})
+    end
+  end
+
+  it 'retains expression and attribute caption parameters through the native writer and reader' do
+    writer = Mxrb::Writer.allocate
+    template = writer.send(:client_template_doc, 'Region {1}: {2}',
+                           parameters: ['$currentObject/App.Item.Name', "'total'"], entity: 'App.Item')
+    parameters = Mxrb::IO::BsonCodec.parse_array(template.fetch('Parameters')).fetch(:items)
+    expect(parameters.first.dig('AttributeRef', 'Attribute')).to eq('App.Item.Name')
+    expect(parameters.last.fetch('Expression')).to eq("'total'")
+    page = Mxrb::Model::Page.allocate
+    projected = page.send(:pluggable_template, template)
+    expect(projected).to eq(text: 'Region {1}: {2}', parameters: ['$currentObject/App.Item.Name', "'total'"])
+    parameters.last['Expression'] = ''
+    parameters.last['AttributeRef'] = nil
+    template['Parameters'] = Mxrb::IO::BsonCodec.build_array(parameters, marker: 2)
+    expect(page.send(:pluggable_template, template).fetch(:parameters).last).to eq('')
+    expect(page.send(:pluggable_template, writer.send(:client_template_doc, 'Static'))).to eq('Static')
+  end
+
   it 'validates malformed semantic collections and emits nested data sources' do
     bridge = described_class.new(widget_id, catalog:)
     expect { bridge.action(kind: :page, handler: 'App.Home', arguments: [1]) }

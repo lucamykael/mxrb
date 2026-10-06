@@ -1,5 +1,20 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Dynamic chart series — October 6, 2026
+
+Line and column charts support dynamic series grouped by the configured
+attribute, with source ordering and independent aggregation per group. Data
+changes update existing points and add new groups. Typed Ruby properties accept
+`caption("Region {1}", parameters: ["$currentObject/App.Point.Region"])`;
+the frontend evaluates each parameter against the series record. Numeric and
+string values with the same spelling remain separate groups.
+
+Tests cover simple expression and attribute parameters. Translations, custom
+formatting and references to other page variables are not certified by this
+caption projection. Stacking, point actions and advanced Plotly options remain
+outside this increment. The Windows workflow runs the new `chart-series`
+scenario against both source and rebuilt models.
+
 ## October 5, 2026 update
 
 The runtime catalog discovers new models, DTOs, pages, enumerations and services

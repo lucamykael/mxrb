@@ -1,5 +1,20 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Séries dinâmicas de gráficos — 6 de outubro de 2026
+
+Gráficos de linhas e colunas aceitam séries dinâmicas agrupadas pelo atributo
+configurado, com ordenação da fonte e agregação independente por grupo. Alterar
+os dados recalcula os pontos e inclui novos grupos. Nomes de série podem usar
+`caption("Região {1}", parameters: ["$currentObject/App.Point.Region"])` nas
+propriedades Ruby tipadas; o frontend resolve o parâmetro no registro da série.
+Valores numéricos e strings de mesmo conteúdo permanecem grupos distintos.
+
+Os testes cobrem parâmetros simples de expressão ou atributo. Traduções,
+formatação personalizada e referências a outras variáveis de página ainda não
+estão certificadas nessa projeção de captions. Empilhamento, ações em pontos e
+opções avançadas de Plotly permanecem fora deste incremento. O workflow Windows
+executa o novo cenário `chart-series` no original e no modelo reconstruído.
+
 ## Atualização de 5 de outubro de 2026
 
 O catálogo do runtime descobre novos modelos, DTOs, páginas, enums e serviços

@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-06",
+  "scope": "Dynamic line and column series, per-group aggregation and simple expression/attribute captions",
+  "ruby": {
+    "examples": 2277,
+    "failures": 0,
+    "lines": {
+      "covered": 40803,
+      "total": 40803,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17864,
+      "total": 17864,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 115,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 557,
+    "offenses": 0
+  },
+  "browser": {
+    "passed": true,
+    "steps": 15,
+    "sidecar": "detached before startup",
+    "console_errors": [],
+    "screenshot_sha256": "5c1025b1af9906801f81db999037b342fd9082176471476031f79f93c9f91db0"
+  },
+  "roundtrip": {
+    "modern_projects": 8,
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0,
+    "new_series_fixture": {
+      "valid": true,
+      "identical": true
+    }
+  },
+  "native_ci": {
+    "workflow": ".github/workflows/studio-pro.yml",
+    "scenario": "chart-series",
+    "variants": [
+      "source",
+      "roundtrip"
+    ]
+  },
+  "limits": [
+    "Parameterized caption certification covers simple expressions and attributes, not alternate source variables, translations or custom formatting.",
+    "Stacking, point actions and advanced Plotly options remain open.",
+    "A separate legacy fixture still fails the public placeholder-source audit on both the baseline and this branch."
+  ]
+}

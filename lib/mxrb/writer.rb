@@ -3285,7 +3285,11 @@ module Mxrb
       value['PrimitiveValue'] = configured[:primitive].to_s if configured.key?(:primitive)
       value['Expression'] = configured[:expression].to_s if configured.key?(:expression)
       value['Selection'] = configured[:selection].to_s if configured.key?(:selection)
-      value['TextTemplate'] = client_template_doc(configured[:text]) if configured.key?(:text)
+      if configured.key?(:text)
+        value['TextTemplate'] = client_template_doc(
+          configured[:text], parameters: configured.fetch(:parameters, []), entity: context_entity
+        )
+      end
       value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
       value['EntityRef'] = indirect_entity_ref_doc(configured[:association]) if configured.key?(:association)
       value['Action'] = client_action_doc(configured[:action]) if configured.key?(:action)

@@ -1,5 +1,21 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Dynamische Diagrammreihen — 6. Oktober 2026
+
+Linien- und Säulendiagramme unterstützen dynamische Reihen, gruppiert nach dem
+konfigurierten Attribut, mit Quellsortierung und eigener Aggregation pro Gruppe.
+Datenänderungen aktualisieren Punkte und ergänzen Gruppen. Typisierte
+Ruby-Eigenschaften akzeptieren
+`caption("Region {1}", parameters: ["$currentObject/App.Point.Region"])`;
+das Frontend wertet Parameter im Datensatz der Reihe aus. Zahlen und gleich
+lautende Zeichenketten bleiben unterschiedliche Gruppen.
+
+Geprüft sind einfache Ausdrucks- und Attributparameter. Übersetzungen,
+benutzerdefinierte Formatierung und andere Seitenvariablen sind durch diese
+Caption-Projektion nicht zertifiziert. Stapelung, Punktaktionen und erweiterte
+Plotly-Optionen bleiben offen. Der Windows-Workflow führt `chart-series` sowohl
+für das ursprüngliche als auch für das rekonstruierte Modell aus.
+
 ## Aktualisierung vom 5. Oktober 2026
 
 Der Runtime-Katalog erkennt neue Modelle, DTOs, Seiten, Enumerationen und Dienste
