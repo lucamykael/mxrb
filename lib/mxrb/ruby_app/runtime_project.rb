@@ -41,6 +41,8 @@ module Mxrb
         @security = build_security
       end
 
+      def decimal_settings = @manifest.data.fetch('decimal', {})
+
       def close; end
       def all_units = @security ? [@security] : []
       def parse_bson(value) = value

@@ -1,0 +1,64 @@
+{
+  "date": "2026-10-06",
+  "scope": "Exact Decimal arithmetic, typed JSON transport, SQLite storage, fields and nanoflows",
+  "frontend": {
+    "tests": 124,
+    "format": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "ruby": {
+    "examples": 2293,
+    "failures": 0,
+    "lines": {
+      "covered": 40993,
+      "total": 40993
+    },
+    "branches": {
+      "covered": 17970,
+      "total": 17970
+    },
+    "log": "/tmp/mxrb-decimal-full-v3.log"
+  },
+  "browser": {
+    "steps": 8,
+    "passed": true,
+    "console_errors": [],
+    "sidecar": "detached before startup",
+    "screenshot_sha256": "2903e1310b76b771f155f585794f11b77eb9bac6ce854b94fc7096041b12c7a8",
+    "report": "tmp/decimal-browser-v2/browser-flow-report.json"
+  },
+  "roundtrip": {
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0
+  },
+  "native_static_check": {
+    "version": "11.12.1",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "direct_native_oracle": {
+    "harness": "spec/fixtures/native_compatibility/DecimalOracle.java",
+    "precision": 38,
+    "rounding": "HalfUp",
+    "scale": 8,
+    "division_3_by_7": "0.42857142857142857142857142857142857143",
+    "scope": "ModelRuntimeSettings and DecimalUtils helper calls; full application persistence checked separately by CI fixture"
+  },
+  "native_ci": {
+    "status": "pending publication"
+  },
+  "limitations": [
+    "Java decimal formatting patterns and locale parsing remain separate",
+    "Legacy REAL values cannot recover precision already lost",
+    "Internal API decimal wire values now use __mxrb_decimal; regenerate frontend and adapt clients",
+    "External SQL over TEXT decimal columns requires decimal-aware comparisons",
+    "Native precision evidence targets Mendix 11.12.1"
+  ],
+  "rubocop": {
+    "files": 561,
+    "offenses": 0
+  }
+}

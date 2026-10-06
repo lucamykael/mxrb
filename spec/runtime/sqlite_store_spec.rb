@@ -434,6 +434,7 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     store.commit(pet, events: false)
     expect(events).to be_empty
     expect(pet.members['Ratio']).to eq(1.25)
+    expect(store.send(:cast_default, '1.25', :float)).to eq(1.25)
     pet.members['Name'] = 'run matching hooks'
     store.commit(pet)
     expect(events).not_to include(:wrong_entity)
@@ -632,6 +633,50 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     migrated = described_class.new(project, path: @database_path, allow_destructive: true)
     expect(migrated.retrieve('Store.Pet').first.members['Name']).to eq('unnamed')
     expect(migrated.schema.entity('Store.Pet').columns.map(&:name)).not_to include('Legacy')
+    migrated.close
+  end
+
+  it 'preserves Decimal digits across commit, restart, uniqueness checks and draft snapshots' do
+    model = project(extra_pet_attributes: [attribute('Amount', type: :decimal, default: '0.1')])
+    store = described_class.new(model, path: @database_path)
+    first = store.create('Store.Pet')
+    expect(first.members['Amount']).to be_a(BigDecimal)
+    first.members['Amount'] = BigDecimal('9007199254740993.123456785')
+    store.commit(first)
+    expect(first.members['Amount']).to eq(BigDecimal('9007199254740993.12345679'))
+    draft = store.create('Store.Pet')
+    draft.members['Amount'] = BigDecimal('0.12345678901234567890123456789012345678')
+    token = store.client_drafts.capture(draft, owner: 'alice')
+    store.close
+    reopened = described_class.new(model, path: @database_path)
+    expect(reopened.find('Store.Pet', first.id).members['Amount']).to eq(BigDecimal('9007199254740993.12345679'))
+    expect(reopened.unique_value?('Store.Pet', 'Amount', BigDecimal('9007199254740993.123456790'), 'another'))
+      .to be(false)
+    restored = reopened.client_drafts.resume(token, entity: draft.entity, id: draft.id, owner: 'alice')
+    expect(restored.members['Amount']).to eq(draft.members['Amount'])
+    reopened.close
+  end
+
+  it 'migrates an existing REAL decimal column to text without losing stored rows' do
+    model = project(extra_pet_attributes: [attribute('Amount', type: :decimal)])
+    legacy = Mxrb::Runtime::SchemaMigrator.derive(model)
+    definitions = legacy.entities.map do |entry|
+      columns = entry.columns.map { _1.type == :decimal ? _1.with(sql_type: 'REAL') : _1 }
+      entry.with(columns:)
+    end
+    store = described_class.new(model, path: @database_path, schema: legacy.with(entities: definitions))
+    object = store.create('Store.Pet')
+    object.members['Amount'] = BigDecimal('12')
+    store.commit(object)
+    empty = store.create('Store.Pet')
+    store.commit(empty)
+    store.close
+    migrated = described_class.new(model, path: @database_path)
+    expect(migrated.find('Store.Pet', object.id).members['Amount']).to eq(BigDecimal('12'))
+    expect(migrated.find('Store.Pet', empty.id).members['Amount']).to be_nil
+    expect(migrated.unique_value?('Store.Pet', 'Amount', BigDecimal('12.000'), 'other')).to be(false)
+    column = migrated.schema.entity('Store.Pet').columns.find { _1.name == 'Amount' }
+    expect(column.sql_type).to eq('TEXT')
     migrated.close
   end
 end

@@ -1,3 +1,4 @@
+import { decimal } from '../decimal';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { fireEvent as dispatchEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
@@ -34,6 +35,35 @@ const props = () => ({
 });
 
 describe('editable exported fields', () => {
+  it('saves decimal edits without passing through a JavaScript number', async () => {
+    const input = props();
+    const amount = '9007199254740993.12345678';
+    render(
+      <BoundField
+        {...input}
+        record={{ ...record, attributes: { Amount: decimal('0.1') } }}
+        schema={
+          {
+            modules: [
+              { models: [{ name: 'App.Item', attributes: [{ name: 'Amount', type: 'decimal' }] }] },
+            ],
+          } as unknown as ApplicationSchema
+        }
+        widget={{
+          name: 'Amount',
+          type: 'number_input',
+          options: { attribute: 'App.Item.Amount', aria_label: 'Amount' },
+        }}
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    fireEvent.change(field, { target: { value: amount } });
+    fireEvent.blur(field);
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenCalledWith(expect.anything(), { Amount: decimal(amount) }),
+    );
+    expect(input.onError).not.toHaveBeenCalled();
+  });
   it('does not overwrite an edit made before passive initialization effects run', async () => {
     function EarlyEdit() {
       useLayoutEffect(() => {

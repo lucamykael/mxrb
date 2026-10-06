@@ -1984,7 +1984,7 @@ module Mxrb
             value = bridge.interpreter.store.create(name.to_s)
             attributes.to_h.each do |member, member_value|
               authorize_entity!(name, :write, context, member: member, record: value)
-              value.members[member.to_s] = member_value
+              value.members[member.to_s] = deserialize(member_value, context:)
             end
             bridge.interpreter.store.commit(value)
             serialize(value, context:)
@@ -2308,7 +2308,7 @@ module Mxrb
 
         case type
         when 'text', 'enum' then value.to_s.downcase
-        when 'number' then Float(value)
+        when 'number' then Runtime::DecimalValues.parse(value)
         when 'date' then Date.iso8601(value.to_s[0, 10])
         when 'boolean'
           return value if [true, false].include?(value)
@@ -2594,6 +2594,7 @@ module Mxrb
             result.merge!(new_record: true, draft_token: token)
           end
           result
+        when BigDecimal then Runtime::DecimalValues.encode(value)
         when Hash then value.to_h { [serialize(_1, seen, context:), serialize(_2, seen, context:)] }
         when Array then value.map { serialize(_1, seen, context:) }
         else value
@@ -2603,7 +2604,9 @@ module Mxrb
       def deserialize(value = nil, context: nil, synchronize: false, **keyword_value)
         value = keyword_value if value.nil? && !keyword_value.empty?
         value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:id) && value.key?(:type)
-        if value.is_a?(Hash) && value['id'] && value['type']
+        if Runtime::DecimalValues.tagged?(value)
+          Runtime::DecimalValues.parse(value.fetch(Runtime::DecimalValues::TAG))
+        elsif value.is_a?(Hash) && value['id'] && value['type']
           store = bridge.interpreter.store
           object = if value['draft_token']
                      store.client_drafts.resume(value['draft_token'], entity: value['type'].to_s,

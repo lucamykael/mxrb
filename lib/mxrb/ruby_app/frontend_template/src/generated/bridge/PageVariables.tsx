@@ -1,3 +1,4 @@
+import { isDecimal, decimalNumber } from './decimal';
 import { createContext, useRef, useState, type ReactNode } from 'react';
 import type {
   ApplicationSchema,
@@ -48,6 +49,11 @@ export function validateValue(
           : typeof value === 'string' && /^-?\d+$/.test(value);
       break;
     case 'decimal':
+      if (isDecimal(value)) {
+        valid = decimalNumber(value).isFinite();
+        break;
+      }
+    // Legacy numeric and textual callers remain supported.
     case 'float':
       valid =
         typeof value === 'number'

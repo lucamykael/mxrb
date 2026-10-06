@@ -1,5 +1,27 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Decimal-Präzision
+
+Ruby verwendet `BigDecimal`, das Frontend `decimal.js`. Decimal-Literale,
+Arithmetik und Vergleiche vermeiden zwischenzeitliche `Float`-/`Number`-Konvertierungen.
+Die Division nutzt 38 signifikante Stellen entsprechend der installierten Runtime
+11.12.1. `round` berücksichtigt `HalfUp`/`HalfEven`; der Export übernimmt `DecimalScale`.
+Auch `floor`, `ceil`, `abs` und `parseDecimal` ohne Format arbeiten mit exakten Werten.
+
+Die interne API überträgt Decimal als `{"__mxrb_decimal":"9007199254740993.12345678"}`.
+TypeScript-Erweiterungen verwenden die Hilfsfunktionen aus `bridge/decimal`.
+Eingabefelder, Seitenparameter, Filter, Sortierung, Entwürfe und Nanoflows erhalten
+die Genauigkeit. Diagrammkoordinaten werden erst zur Darstellung in Gleitkommazahlen umgewandelt.
+
+SQLite speichert kanonischen Decimal-Text. Beim Commit gelten Skalierung,
+Rundung und Wertebereich des Projekts. Vorhandene `REAL`-Spalten werden unter
+Erhalt der Zeilen migriert; bereits verlorene Stellen lassen sich nicht rekonstruieren.
+Externes SQL benötigt dezimale Vergleiche statt textueller SQLite-Sortierung.
+API-Clients müssen das Decimal-Tag zusammen mit dem neu generierten Frontend übernehmen.
+Lokalisierte Formatierung und Java-Formatmuster sind weiterhin nicht abgedeckt.
+
+[Decimal-Nachweise](../evidence/decimal-runtime-2026-10-06.json).
+
 ## Kalenderausdrücke
 
 Ruby und TypeScript unterstützen Datumserzeugung, Addition/Subtraktion von

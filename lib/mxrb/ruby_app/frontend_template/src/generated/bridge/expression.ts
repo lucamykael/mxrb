@@ -1,4 +1,14 @@
 import type { EntityRecord, RuntimeValue, RuntimeVariables } from '../types';
+import {
+  arithmetic,
+  decimal,
+  decimalFunction,
+  isDecimal,
+  isDecimalFunction,
+  isNumeric,
+  numericCompare,
+  numericText,
+} from './decimal';
 import { calendarFunction, isCalendarFunction } from './calendar';
 
 // Keep enum identity until comparison. Backend records can contain either the
@@ -38,12 +48,6 @@ function boolean(value: Value): boolean {
   return value;
 }
 
-function number(value: Value): number {
-  if (typeof value !== 'number' || !Number.isFinite(value))
-    throw new Error('Expected a finite number');
-  return value;
-}
-
 function binary(operator: string, left: Expression, right: Expression): Value {
   if (operator === 'and') return boolean(left()) && boolean(right());
   if (operator === 'or') return boolean(left()) || boolean(right());
@@ -51,11 +55,27 @@ function binary(operator: string, left: Expression, right: Expression): Value {
   const b = right();
   if (operator === '=' || operator === '!=') {
     const equal =
-      a instanceof EnumLiteral ? a.matches(b) : b instanceof EnumLiteral ? b.matches(a) : a === b;
+      a instanceof EnumLiteral
+        ? a.matches(b)
+        : b instanceof EnumLiteral
+          ? b.matches(a)
+          : isNumeric(a) && isNumeric(b)
+            ? numericCompare(a, b) === 0
+            : a === b;
     return operator === '=' ? equal : !equal;
   }
   if (operator === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
   if (['>', '<', '>=', '<='].includes(operator)) {
+    if (isNumeric(a) && isNumeric(b)) {
+      const order = numericCompare(a, b);
+      return operator === '>'
+        ? order > 0
+        : operator === '<'
+          ? order < 0
+          : operator === '>='
+            ? order >= 0
+            : order <= 0;
+    }
     if (!(
       (typeof a === 'number' && typeof b === 'number') ||
       (typeof a === 'string' && typeof b === 'string')
@@ -67,13 +87,7 @@ function binary(operator: string, left: Expression, right: Expression): Value {
     if (operator === '>=') return a >= b;
     return a <= b;
   }
-  const x = number(a);
-  const y = number(b);
-  if (operator === '+') return x + y;
-  if (operator === '-') return x - y;
-  if (operator === '*') return x * y;
-  if (y === 0) throw new Error('Division by zero');
-  return operator === 'mod' ? x % y : x / y;
+  return arithmetic(operator, a, b);
 }
 
 // A small explicit expression grammar, never JavaScript eval. Unsupported
@@ -116,10 +130,10 @@ export function evaluate(
     }
     if (token === 'not' || token === '-') {
       const value = atom();
-      return () => (token === 'not' ? !boolean(value()) : -number(value()));
+      return () => (token === 'not' ? !boolean(value()) : arithmetic('*', value(), -1));
     }
     if (token.startsWith("'")) return () => token.slice(1, -1).replaceAll("''", "'");
-    if (/^\d/.test(token)) return () => Number(token);
+    if (/^\d/.test(token)) return () => (token.includes('.') ? decimal(token) : Number(token));
     if (token === 'true' || token === 'false') return () => token === 'true';
     if (token === 'empty') return () => null;
     if (token.startsWith('$')) {
@@ -132,7 +146,7 @@ export function evaluate(
         return attributes[member.split('.').at(-1) || member];
       };
     }
-    if (isCalendarFunction(token)) {
+    if (isCalendarFunction(token) || isDecimalFunction(token)) {
       consume('(');
       const arguments_: Expression[] = [];
       if (tokens[cursor] !== ')') {
@@ -143,6 +157,12 @@ export function evaluate(
         }
       }
       consume(')');
+      if (isDecimalFunction(token))
+        return () =>
+          decimalFunction(
+            token,
+            arguments_.map((argument) => argument()),
+          );
       return () =>
         calendarFunction(
           token,
@@ -156,7 +176,11 @@ export function evaluate(
       consume(')');
       return () => {
         const result = value();
-        return result instanceof EnumLiteral ? result.member : String(result ?? '');
+        return result instanceof EnumLiteral
+          ? result.member
+          : isDecimal(result)
+            ? numericText(result)
+            : String(result ?? '');
       };
     }
     if (['contains', 'starts-with', 'startsWith', 'endsWith'].includes(token)) {

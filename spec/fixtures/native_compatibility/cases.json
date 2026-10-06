@@ -253,5 +253,62 @@
     "name": "CalendarEpoch",
     "expression": "toString(dateTimeToEpoch(epochToDateTime(-123)) = -123)",
     "expected": "true"
+  },
+  {
+    "name": "DecimalExactSum",
+    "expression": "toString(0.1 + 0.2)",
+    "expected": "0.3"
+  },
+  {
+    "name": "DecimalLarge",
+    "expression": "toString(9007199254740993.00000001 + 0.00000001)",
+    "expected": "9007199254740993.00000002"
+  },
+  {
+    "name": "DecimalDivision",
+    "expression": "toString(3 : 7)",
+    "expected": "0.42857142857142857142857142857142857143"
+  },
+  {
+    "name": "DecimalDivisionCarry",
+    "expression": "toString(ceil((3 : 7) * 7))",
+    "expected": "4"
+  },
+  {
+    "name": "DecimalNegativeRound",
+    "expression": "toString(round(-2.5))",
+    "expected": "-3"
+  },
+  {
+    "name": "DecimalRoundPlaces",
+    "expression": "toString(round(88.725, 2))",
+    "expected": "88.73"
+  },
+  {
+    "name": "DecimalRemainder",
+    "expression": "toString(-12.5 mod 2)",
+    "expected": "-0.5"
+  },
+  {
+    "name": "DecimalFloor",
+    "expression": "toString(floor(-1.2))",
+    "expected": "-2"
+  },
+  {
+    "name": "DecimalParseDefault",
+    "expression": "toString(parseDecimal('not-a-decimal', 1.25))",
+    "expected": "1.25"
+  },
+  {
+    "name": "DecimalStoreWrite",
+    "persist_decimal": "9007199254740993.123456785",
+    "expression": "'written'",
+    "expected": "written"
+  },
+  {
+    "name": "DecimalStoreRead",
+    "read_decimal": true,
+    "expression": "toString($stored/Amount)",
+    "expected": "9007199254740993.12345679"
   }
 ]

@@ -813,7 +813,7 @@ module Mxrb
         end
         <<~TS
           import { defineNanoflow } from '../../bridge/nanoflow';
-          import type { EntityRecord, EntityTypeMap, NanoflowParameters, RuntimeValue } from '../../types';
+          import type { DecimalValue, EntityRecord, EntityTypeMap, NanoflowParameters, RuntimeValue } from '../../types';
 
           type Parameters = NanoflowParameters & #{parameters};
 
@@ -857,7 +857,8 @@ module Mxrb
         return "Array<#{typescript_entity_reference(entity)}>" if
           kind.end_with?('ListType') && !entity.empty?
         return 'boolean' if kind.match?(/Boolean/)
-        return 'number' if kind.match?(/Integer|Long|Decimal|Float/)
+        return 'DecimalValue' if kind.match?(/Decimal/)
+        return 'number' if kind.match?(/Integer|Long|Float/)
         return 'string' if kind.match?(/String|DateTime|Enumeration/)
         return 'undefined' if kind.empty? || kind.match?(/Void|MicroflowReturnType/)
 
@@ -2937,6 +2938,8 @@ module Mxrb
       end
 
       def write_generated_frontend_contract
+        write(File.join('frontend', 'src', 'generated', 'decimalConfig.ts'),
+              "export default #{JSON.generate(Runtime::DecimalContext.settings(@project))} as { rounding?: string };\n")
         write(File.join('frontend', 'src', 'generated', 'types.ts'), frontend_types)
         write(File.join('frontend', 'src', 'generated', 'pages.ts'), generated_frontend_pages)
         write(File.join('frontend', 'src', 'generated', 'nanoflows.ts'), generated_frontend_nanoflows)
@@ -3046,6 +3049,7 @@ module Mxrb
         payload = {
           'format_version' => 1, 'mode' => 'ruby',
           'project' => { 'name' => project.name, 'mendix_version' => project.mendix_version },
+          'decimal' => Runtime::DecimalContext.settings(project),
           'security' => @security_manifest,
           'navigation' => runtime_value(project.navigation.to_h),
           'source' => {
@@ -3290,7 +3294,7 @@ module Mxrb
           },
           'dependencies' => {
             'react' => '^19.2.8', 'react-dom' => '^19.2.8',
-            'react-router-dom' => '^7.18.2'
+            'react-router-dom' => '^7.18.2', 'decimal.js' => '^10.6.0'
           },
           'devDependencies' => {
             '@eslint/js' => '^10.0.1',
@@ -3514,8 +3518,11 @@ module Mxrb
             NanoflowParameters, RegisteredNanoflow, RuntimeValue
           } from '../types';
 
+          import { evaluate, evaluateCondition } from './expression';
+          import { numericText, isDecimal } from './decimal';
+
           type ChangeExpressions = Record<string, string>;
-          type Comparable = string | number;
+          // Expressions and decimals share the same evaluator as page bindings.
           type JavaScriptAction = (
             parameters: NanoflowParameters
           ) => RuntimeValue | undefined | Promise<RuntimeValue | undefined>;
@@ -3558,46 +3565,11 @@ module Mxrb
             }
 
             value(source: string | undefined, context: EntityRecord | null = null): RuntimeValue | undefined {
-              const text = (source || '').trim();
-              if (/\s(?:and|or)\s|(?:=|!=|>=|<=|>|<)/.test(text)) {
-                return this.condition(text, context);
-              }
-              const wrapped = text.match(/^toString\((.*)\)$/);
-              if (wrapped) return this.string(wrapped[1], context);
-              if (text === '$currentObject') return context;
-              const variable = text.match(/^\$([A-Za-z_]\w*)$/);
-              if (variable) return this.variables[variable[1]] ?? context;
-              const member = text.match(/^\$([A-Za-z_]\w*)\/([A-Za-z_][\w.]*)$/);
-              if (member) {
-                return attributes(this.variables[member[1]] ?? context)[memberName(member[2])];
-              }
-              if (text === 'empty') return null;
-              if (text === 'true') return true;
-              if (text === 'false') return false;
-              if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
-              if (/^'.*'$/.test(text)) return text.slice(1, -1).replaceAll("''", "'");
-              return text;
+              return evaluate(source || '', context, this.variables);
             }
 
             condition(source: string | undefined, context: EntityRecord | null = null): boolean {
-              const text = (source || '').trim().replace(/^\((.*)\)$/, '$1');
-              const orParts = text.split(/\s+or\s+/);
-              if (orParts.length > 1) return orParts.some(part => this.condition(part, context));
-              const andParts = text.split(/\s+and\s+/);
-              if (andParts.length > 1) return andParts.every(part => this.condition(part, context));
-              const comparison = text.match(/^(.*?)\s*(=|!=|>=|<=|>|<)\s*(.*?)$/);
-              if (!comparison) return Boolean(this.value(text, context));
-              const left = this.value(comparison[1], context);
-              const right = this.value(comparison[3], context);
-              switch (comparison[2]) {
-                case '=': return left === right;
-                case '!=': return left !== right;
-                case '>': return this.comparable(left) > this.comparable(right);
-                case '<': return this.comparable(left) < this.comparable(right);
-                case '>=': return this.comparable(left) >= this.comparable(right);
-                case '<=': return this.comparable(left) <= this.comparable(right);
-                default: return false;
-              }
+              return evaluateCondition(source || '', context, this.variables);
             }
 
             boolean(source: string | undefined, context: EntityRecord | null = null): boolean {
@@ -3605,11 +3577,13 @@ module Mxrb
             }
 
             number(source: string | undefined, context: EntityRecord | null = null): number {
-              return Number(this.value(source, context));
+              const value = this.value(source, context);
+              if (isDecimal(value)) throw new Error('Decimal cannot be returned as Integer');
+              return Number(value);
             }
 
             string(source: string | undefined, context: EntityRecord | null = null): string {
-              return String(this.value(source, context) ?? '');
+              return numericText(this.value(source, context));
             }
 
             set(name: string, value: RuntimeValue | undefined): void {
@@ -3735,9 +3709,6 @@ module Mxrb
               return new Error(`Nanoflow ${this.metadata.name} exceeded 10000 steps`);
             }
 
-            private comparable(value: RuntimeValue | undefined): Comparable {
-              return typeof value === 'number' ? value : String(value ?? '');
-            }
           }
 
           export const defineNanoflow = <P extends NanoflowParameters, R extends RuntimeValue | undefined>(
@@ -3791,6 +3762,7 @@ module Mxrb
           // Generated from the Mendix domain, page, widget, effect, and API contracts.
           import type { ComponentType, ReactNode } from 'react';
 
+          export type DecimalValue = { __mxrb_decimal: string };
           export type RuntimeScalar = string | number | boolean | null;
           export type RuntimeValue = RuntimeScalar | EntityRecord | RuntimeValue[] | { [key: string]: RuntimeValue };
           export type RuntimeVariables = Record<string, RuntimeValue | undefined>;
@@ -4167,7 +4139,7 @@ module Mxrb
 
         {
           'boolean' => 'boolean', 'integer' => 'number', 'long' => 'number',
-          'autonumber' => 'number', 'decimal' => 'number', 'datetime' => 'string',
+          'autonumber' => 'number', 'decimal' => 'DecimalValue', 'datetime' => 'string',
           'binary' => 'string'
         }.fetch(attribute['type'].to_s, 'string')
       end
