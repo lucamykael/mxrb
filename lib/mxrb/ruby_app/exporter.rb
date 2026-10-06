@@ -2066,6 +2066,7 @@ module Mxrb
         navigation_tree: %w[menu navigation_profile tab_index class style dynamic_class visible],
         number_input: %w[attribute caption class style dynamic_class visible],
         page_title: %w[class style dynamic_class visible],
+        placeholder: %w[parameter],
         pluggable_widget: %w[
           widget_id widget_name properties class style dynamic_class visible platform
         ],
@@ -2089,12 +2090,13 @@ module Mxrb
         text_area: %w[attribute caption lines class style dynamic_class visible],
         text_box: %w[attribute caption class style dynamic_class visible]
       }.freeze
-      DSL_SINK_BLOCK_METHODS = (DSL_SINK_OPTIONS.keys - [:snippet]).freeze
+      DSL_SINK_BLOCK_METHODS = (DSL_SINK_OPTIONS.keys - %i[snippet placeholder]).freeze
       DSL_SINK_REQUIRED_OPTIONS = {
         button: %w[caption], pluggable_widget: %w[widget_id widget_name properties],
         image_viewer: %w[entity], menu_bar: %w[menu], navigation_tree: %w[menu],
         radio_button_group: %w[horizontal],
         snippet: %w[snippet],
+        placeholder: %w[parameter],
         static_image: %w[image alternative_text width height width_unit height_unit responsive],
         text: %w[caption], text_area: %w[lines]
       }.freeze
