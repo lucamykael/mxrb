@@ -71,6 +71,56 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect { filter('[Rank div 0 = 2]') }.to raise_error(ArgumentError, /invalid XPath operand/)
   end
 
+  it 'reverses only the marked self-association step, including nested predicates and multiple hops' do
+    leaf = store.create('App.Item')
+    first.members['Parent'] = nil
+    second.members['Parent'] = first
+    leaf.members['Parent'] = second
+    tag.members['Parent'] = first
+    variables = { 'root' => first, 'leaf' => leaf }
+    expect(filter('[App.Parent = $root]', variables)).to eq([second])
+    expect(filter('[App.Parent[reversed()] = $leaf]', variables)).to eq([second])
+    expect(filter('[App.Parent[reversed()]/App.Item/App.Parent = $root]', variables)).to eq([first])
+    expect(filter('[App.Parent[reversed()][Rank = 3]/App.Item]', variables)).to eq([first])
+    expect(filter('[App.Parent[reversed()]/App.Item/App.Parent[reversed()] = $leaf]', variables)).to eq([first])
+    second.members['App.Links'] = [first, leaf, 'unrelated']
+    expect(filter('[App.Links[reversed()] = $leaf]', variables)).to eq([])
+    expect(filter('[App.Links[reversed()]/App.Item[Rank = 3]]')).to eq([first])
+    second.members['App.Links'] = [tag]
+    expect(filter('[App.Links[reversed()]/App.Item]')).to eq([])
+  end
+
+  it 'validates reverse markers even before querying an empty table' do
+    ['[reversed()]', '[App.Parent[reversed(1)]]', '[App.Parent[reversed() or true]]',
+     '[App.Parent[reversed()][reversed()]]', '[not reversed()]'].each do |source|
+      expect { described_class.new(source, store:).filter([]) }.to raise_error(ArgumentError)
+    end
+  end
+
+  it 'keeps an attribute named reversed separate from the reversed() marker' do
+    first.members['reversed'] = true
+    second.members['reversed'] = false
+    second.members['Parent'] = first
+    expect(filter('[reversed = true]')).to eq([first])
+    expect(filter('[App.Parent[reversed = true]/App.Item]')).to eq([second])
+  end
+
+  it 'enforces association permissions and related record visibility in reverse paths' do
+    second.members['Parent'] = first
+    policy = instance_double(Mxrb::Runtime::AccessControl)
+    allow(policy).to receive(:entity_allowed?).and_return(true)
+    allow(policy).to receive(:authorize!).and_return(true)
+    query = described_class.new('[App.Parent[reversed()]/App.Item/Rank = 3]', store:, policy:, context: :reader)
+    expect(query.filter([first])).to eq([first])
+    expect(policy).to have_received(:authorize!).with('App.Item', kind: :entity, action: :read,
+                                                                  context: :reader, member: 'Parent', record: first)
+    allow(policy).to receive(:entity_allowed?).with('App.Item', action: :read, context: :reader, record: second)
+                                              .and_return(false)
+    expect(query.filter([first])).to eq([])
+    allow(policy).to receive(:authorize!).and_raise(Mxrb::Runtime::AuthorizationError)
+    expect { query.filter([first]) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+  end
+
   it 'evaluates the documented string and date functions over association attribute sets' do
     another = store.create('App.Tag')
     another.members['Name'] = 'Another'

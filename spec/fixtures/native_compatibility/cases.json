@@ -310,5 +310,59 @@
     "read_decimal": true,
     "expression": "toString($stored/Amount)",
     "expected": "9007199254740993.12345679"
+  },
+  {
+    "name": "XPathForwardChild",
+    "xpath": "[Compatibility.Folder_Parent = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:child"
+  },
+  {
+    "name": "XPathReverseParent",
+    "xpath": "[Compatibility.Folder_Parent[reversed()] = $child]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseGrandparent",
+    "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder/Compatibility.Folder_Parent[reversed()] = $leaf]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseThenForward",
+    "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder/Compatibility.Folder_Parent = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseNested",
+    "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder[Name = 'child']][id = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseEmpty",
+    "xpath": "[Compatibility.Folder_Parent[reversed()] = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "0:missing"
+  },
+  {
+    "name": "XPathReverseSet",
+    "xpath": "[Compatibility.Folder_Links[reversed()] = $child][id = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathForwardSet",
+    "xpath": "[Compatibility.Folder_Links = $root]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:child"
+  },
+  {
+    "name": "XPathReverseColumn",
+    "xpath": "[Compatibility.Folder_DirectParent[reversed()] = $child]",
+    "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
+    "expected": "1:root"
   }
 ]

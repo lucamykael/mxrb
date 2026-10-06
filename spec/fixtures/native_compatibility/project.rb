@@ -12,6 +12,12 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       string :Name
       decimal :Amount
     end
+    entity(:Folder) do
+      string :Name
+      association 'Compatibility.Folder', name: :Folder_Parent, storage_format: :Table
+      association 'Compatibility.Folder', name: :Folder_DirectParent, storage_format: :Column
+      association 'Compatibility.Folder', name: :Folder_Links, type: :ReferenceSet
+    end
     rule :NonEmpty do
       parameter :Value, type: :String
       return_type :Boolean
@@ -32,6 +38,26 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
     cases.each do |item|
       microflow(item.fetch('name')) do
         return_type :String
+        if item['xpath']
+          create_object 'Compatibility.Folder', as: :root, commit: true, set: { Name: "'root'" }
+          create_object 'Compatibility.Folder', as: :child, commit: true do
+            set :Name, to: "'child'"
+            set_association :Folder_Parent, to: :root
+            set_association :Folder_DirectParent, to: :root
+          end
+          create_object 'Compatibility.Folder', as: :leaf, commit: true do
+            set :Name, to: "'leaf'"
+            set_association :Folder_Parent, to: :child
+            set_association :Folder_DirectParent, to: :child
+          end
+          create_list 'Compatibility.Folder', as: :links
+          change_list :links, action: :add, value: '$root'
+          change_list :links, action: :add, value: '$leaf'
+          change_object(:child, commit: true) { set_association :Folder_Links, to: :links }
+          retrieve_objects 'Compatibility.Folder', as: :matches, xpath: item['xpath']
+          aggregate :matches, function: :count, as: :match_count
+          list_operation :head, :matches, as: :match
+        end
         if item['persist_decimal']
           create_object 'Compatibility.Item', as: :stored, commit: true,
                                               set: { Name: "'Decimal oracle'", Amount: item['persist_decimal'] }

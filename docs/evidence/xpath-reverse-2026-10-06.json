@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-06",
+  "scope": "XPath reversed() on self-association paths",
+  "ruby": {
+    "examples": 2307,
+    "failures": 0,
+    "lines": {
+      "covered": 41045,
+      "total": 41045
+    },
+    "branches": {
+      "covered": 17999,
+      "total": 17999
+    },
+    "seed": 17135
+  },
+  "rubocop": {
+    "files": 561,
+    "offenses": 0
+  },
+  "roundtrip": {
+    "fixture": "Sudoku",
+    "public_source_violations": 0,
+    "valid": true,
+    "identical": true,
+    "sidecar": "detached"
+  },
+  "native_static_check": {
+    "tool": "mx 11.12.1",
+    "fixture": "compatibility",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "oracle": {
+    "new_cases": [
+      {
+        "name": "XPathForwardChild",
+        "xpath": "[Compatibility.Folder_Parent = $root]",
+        "expected": "1:child"
+      },
+      {
+        "name": "XPathReverseParent",
+        "xpath": "[Compatibility.Folder_Parent[reversed()] = $child]",
+        "expected": "1:root"
+      },
+      {
+        "name": "XPathReverseGrandparent",
+        "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder/Compatibility.Folder_Parent[reversed()] = $leaf]",
+        "expected": "1:root"
+      },
+      {
+        "name": "XPathReverseThenForward",
+        "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder/Compatibility.Folder_Parent = $root]",
+        "expected": "1:root"
+      },
+      {
+        "name": "XPathReverseNested",
+        "xpath": "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder[Name = 'child']][id = $root]",
+        "expected": "1:root"
+      },
+      {
+        "name": "XPathReverseEmpty",
+        "xpath": "[Compatibility.Folder_Parent[reversed()] = $root]",
+        "expected": "0:missing"
+      },
+      {
+        "name": "XPathReverseSet",
+        "xpath": "[Compatibility.Folder_Links[reversed()] = $child][id = $root]",
+        "expected": "1:root"
+      },
+      {
+        "name": "XPathForwardSet",
+        "xpath": "[Compatibility.Folder_Links = $root]",
+        "expected": "1:child"
+      },
+      {
+        "name": "XPathReverseColumn",
+        "xpath": "[Compatibility.Folder_DirectParent[reversed()] = $child]",
+        "expected": "1:root"
+      }
+    ],
+    "total_cases": 72,
+    "ruby": "passed on SQLite directly and from exported Ruby with MPR access forbidden",
+    "native_runtime": "pending; final exact-revision results recorded in the pull request"
+  },
+  "restart": {
+    "ruby_application": "passed with MPR access forbidden",
+    "inverse_sqlite_reference_set": "passed"
+  },
+  "access_control": {
+    "association_permission": "tested",
+    "related_record_visibility": "tested"
+  },
+  "corpus_syntax": {
+    "constraints": 115,
+    "reverse_constraints": 19,
+    "passed": true,
+    "execution_certification": false
+  },
+  "limits": [
+    "Only self-associations with identical declared endpoint types are supported by reversed().",
+    "Markers must be standalone association predicates; combined reversed() boolean expressions are rejected.",
+    "XPath arithmetic and other remaining functions are outside this increment.",
+    "Native scenarios do not certify all private project flows or all security policies."
+  ],
+  "documentation": "https://docs.mendix.com/refguide/query-over/"
+}

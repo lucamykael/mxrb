@@ -1,5 +1,24 @@
 # MXRB: Ruby über alles
 
+## Umgekehrte XPath-Selbstreferenzen
+
+Der Marker `[reversed()]` kehrt nur den jeweiligen Selbstreferenzschritt um.
+Mehrstufige Pfade können normale und umgekehrte Schritte kombinieren;
+verschachtelte Prädikate werden weiterhin am verknüpften Objekt ausgewertet.
+Die Runtime prüft Mitgliedsberechtigungen und die Sichtbarkeit verknüpfter
+Objekte und liest gespeicherte SQLite-Referenzen in der gewünschten Richtung.
+
+Neun reproduzierbare Fälle prüfen Anzahl und Namen der Ergebnisse für Referenzen,
+Referenzmengen, gemischte Pfade, leere Ergebnisse und native Speicherung in
+Tabellen oder Spalten. Die Ruby-Anwendung prüft Referenzen auch nach erneutem
+Öffnen der Datenbank bei verbotenem MPR-Zugriff. Original und Roundtrip bestehen
+`mx check` 11.12.1. Alle 115 XPath-Felder des Korpus werden weiterhin geparst,
+darunter 19 mit `reversed()`; dies zertifiziert nicht die Ausführung sämtlicher
+Projektabläufe. Referenzen zwischen unterschiedlichen deklarierten Entitätstypen,
+XPath-Arithmetik und weitere Funktionen bleiben außerhalb dieses Umfangs.
+Siehe [Nachweis](../evidence/xpath-reverse-2026-10-06.json) und
+[nativen Vertrag](https://docs.mendix.com/refguide/query-over/).
+
 ## Layouts, Anmeldung und Export von Ruby-Anwendungen
 
 Mit `native` erstellte Seiten verwenden das angegebene Layout und dessen Slot

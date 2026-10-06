@@ -68,6 +68,15 @@ module Mxrb
           (direct + inverse).uniq
         end
 
+        def retrieve_reverse_association(association, start)
+          member = association.to_s.split('.').last
+          retrieve(start.entity).select do |object|
+            Array(object.members[association] || object.members[member]).any? do |target|
+              target.is_a?(ObjectValue) && target.entity == start.entity && target.id == start.id
+            end
+          end
+        end
+
         def delete(value, events: true)
           Array(value).each do |object|
             run_hooks(:before_delete, object) if events

@@ -183,6 +183,20 @@ module Mxrb
         end
       end
 
+      def retrieve_reverse_association(association, start)
+        definition = schema.association(association)
+        unless definition.from_entity == definition.to_entity && schema.assignable?(start.entity,
+                                                                                    definition.from_entity)
+          raise ArgumentError, 'XPath reversed() requires a self-association of the current entity'
+        end
+        return @transient.retrieve_reverse_association(association, start) if transient?(start.entity)
+
+        ids = database.execute(
+          "SELECT source_id FROM #{quote(definition.table)} WHERE target_id = ? ORDER BY rowid", [start.id]
+        ).map { _1['source_id'] }
+        materialize_ids(definition.from_entity, ids)
+      end
+
       def delete(value, events: true)
         transient, persistent = Array(value).compact.partition { transient?(_1.entity) }
         @transient.delete(transient, events:) unless transient.empty?
