@@ -1,0 +1,82 @@
+{
+  "name": "marketplace-chart-series",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "dynamic-series",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart svg",
+            "equals": 2
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart tbody tr",
+            "equals": 8
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 0
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 1
+          }
+        },
+        {
+          "wait_for_text": "Region North\tA\t30"
+        },
+        {
+          "wait_for_text": "Region North\tB\t8"
+        },
+        {
+          "wait_for_text": "Region South\tA\t5"
+        },
+        {
+          "wait_for_text": "Region South\tB\t15"
+        },
+        {
+          "click_text": "Add series value"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart tbody tr",
+            "equals": 10
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 0
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 1
+          }
+        },
+        {
+          "wait_for_text": "Region North\tA\t37"
+        },
+        {
+          "wait_for_text": "Region East\tC\t12"
+        }
+      ]
+    }
+  ]
+}

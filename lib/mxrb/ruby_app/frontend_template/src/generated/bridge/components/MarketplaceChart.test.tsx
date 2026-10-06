@@ -36,6 +36,141 @@ const props = (
 });
 
 describe('Marketplace charts read actual application values', () => {
+  it('groups dynamic series by typed values and aggregates independently after sorting', async () => {
+    const point = (
+      id: string,
+      group: string | number | null,
+      label: string,
+      value: number | null,
+      name: string,
+      position: number,
+    ): EntityRecord => ({
+      id,
+      type: 'App.Point',
+      attributes: { Group: group, Name: label, Value: value, Caption: name, Position: position },
+    });
+    const request = vi
+      .fn()
+      .mockResolvedValue({
+        records: [
+          point('3', 1, 'A', 20, 'Later', 3),
+          point('1', 1, 'A', 10, '', 1),
+          point('2', 1, 'A', null, 'Numeric', 2),
+          point('4', '1', 'A', 4, 'String', 4),
+          point('5', null, 'B', 5, 'Empty', 5),
+          point('6', '', 'B', 6, 'Other', 6),
+        ],
+      });
+    render(
+      <MarketplaceWidget
+        {...props('LineChart', {
+          lines: {
+            objects: [
+              {
+                dataSet: 'dynamic',
+                dynamicDataSource: {
+                  data_source: 'App.Point',
+                  sort: [{ attribute: 'App.Point.Position', direction: 'Ascending' }],
+                },
+                groupByAttribute: 'App.Point.Group',
+                dynamicXAttribute: 'App.Point.Name',
+                dynamicYAttribute: 'App.Point.Value',
+                dynamicName: { text: '{1}', parameters: ['$currentObject/Caption'] },
+                aggregationType: 'sum',
+              },
+            ],
+          },
+        })}
+        request={request}
+      />,
+    );
+    const svg = await screen.findByRole('img');
+    expect(svg).toHaveTextContent('Numeric A: 30');
+    expect(svg).toHaveTextContent('String A: 4');
+    expect(svg).toHaveTextContent('Empty B: 11');
+    expect(svg.querySelectorAll('circle')).toHaveLength(3);
+    expect(svg).not.toHaveTextContent('Later');
+  });
+
+  it('renders parameterized static names using the page context and mixes static and dynamic series', async () => {
+    const request = vi.fn().mockResolvedValue({ records: [record('Alpha', 12)] });
+    const input = props('BarChart', {
+      series: {
+        objects: [
+          {
+            ...series,
+            staticName: { text: 'Owner {1}', parameters: ['$currentObject/Name'] },
+            staticXAttribute: 'App.Point.Value',
+            staticYAttribute: 'App.Point.Name',
+          },
+          {
+            dataSet: 'dynamic',
+            dynamicDataSource: { data_source: 'App.Point' },
+            groupByAttribute: 'App.Point.Name',
+            dynamicXAttribute: 'App.Point.Value',
+            dynamicYAttribute: 'App.Point.Name',
+            dynamicName: 'Dynamic',
+          },
+        ],
+      },
+    });
+    render(
+      <MarketplaceWidget
+        {...input}
+        context={{ id: 'owner', type: 'App.Owner', attributes: { Name: 'Context' } }}
+        request={request}
+      />,
+    );
+    const svg = await screen.findByRole('img');
+    expect(svg).toHaveTextContent('Owner Context Alpha: 12');
+    expect(svg).toHaveTextContent('Dynamic Alpha: 12');
+    expect(svg.querySelectorAll('rect')).toHaveLength(2);
+  });
+
+  it('refreshes dynamic groups after mutations without retaining removed series', async () => {
+    const request = vi.fn().mockResolvedValue({ records: [record('First', 1)] });
+    const input = props('LineChart', {
+      lines: {
+        objects: [
+          {
+            dataSet: 'dynamic',
+            dynamicDataSource: { data_source: 'App.Point' },
+            groupByAttribute: 'App.Point.Name',
+            dynamicXAttribute: 'App.Point.Name',
+            dynamicYAttribute: 'App.Point.Value',
+          },
+        ],
+      },
+    });
+    const { rerender } = render(<MarketplaceWidget {...input} request={request} />);
+    expect(await screen.findByRole('img')).toHaveTextContent('First: 1');
+    request.mockResolvedValue({ records: [record('Second', 2)] });
+    rerender(<MarketplaceWidget {...input} request={request} revision={1} />);
+    const svg = await screen.findByRole('img');
+    expect(svg).toHaveTextContent('Second: 2');
+    expect(svg).not.toHaveTextContent('First');
+  });
+
+  it.each([
+    [{ dataSet: 'other' }, 'Chart data set is not supported: other'],
+    [
+      { dataSet: 'dynamic', dynamicDataSource: source },
+      'Dynamic chart group attribute is unavailable',
+    ],
+    [
+      { staticName: { text: 'Bad', parameters: [1] } },
+      'Chart caption requires text and expression parameters',
+    ],
+  ])('reports invalid dynamic or caption configuration', async (configuration, message) => {
+    render(
+      <MarketplaceWidget
+        {...props('LineChart', { lines: { objects: [{ ...series, ...configuration }] } })}
+        request={vi.fn().mockResolvedValue({ records: [record('A', 1)] })}
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  });
+
   it('aligns equal categories across series with different data points', async () => {
     const request = vi
       .fn()
@@ -222,21 +357,56 @@ describe('Marketplace charts read actual application values', () => {
   });
 
   it.each([
-    ['count', 4, 3], ['sum', 80, 30], ['avg', 20, 10], ['min', 10, 5],
-    ['max', 40, 20], ['median', 15, 5], ['mode', 10, 5], ['first', 10, 5], ['last', 40, 20],
-  ])('aggregates %s within each category after sorting and excluding nulls', async (aggregation, a, b) => {
-    const request = vi.fn().mockResolvedValue({ records: [
-      record('A', 10), record('B', 5), record('A', 20), record('B', 5),
-      record('A', 10), record('B', 20), record('A', 40), record('A', null),
-    ] });
-    render(<MarketplaceWidget {...props('LineChart', { lines: { objects: [{
-      ...series, staticDataSource: { data_source: 'App.Point' }, aggregationType: aggregation,
-    }] } })} request={request} />);
-    const table = await screen.findByRole('table', { hidden: true });
-    expect([...table.querySelectorAll('tbody tr')].map((row) => row.textContent))
-      .toEqual([`ValuesA${a}`, `ValuesB${b}`]);
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
+    ['count', 4, 3],
+    ['sum', 80, 30],
+    ['avg', 20, 10],
+    ['min', 10, 5],
+    ['max', 40, 20],
+    ['median', 15, 5],
+    ['mode', 10, 5],
+    ['first', 10, 5],
+    ['last', 40, 20],
+  ])(
+    'aggregates %s within each category after sorting and excluding nulls',
+    async (aggregation, a, b) => {
+      const request = vi
+        .fn()
+        .mockResolvedValue({
+          records: [
+            record('A', 10),
+            record('B', 5),
+            record('A', 20),
+            record('B', 5),
+            record('A', 10),
+            record('B', 20),
+            record('A', 40),
+            record('A', null),
+          ],
+        });
+      render(
+        <MarketplaceWidget
+          {...props('LineChart', {
+            lines: {
+              objects: [
+                {
+                  ...series,
+                  staticDataSource: { data_source: 'App.Point' },
+                  aggregationType: aggregation,
+                },
+              ],
+            },
+          })}
+          request={request}
+        />,
+      );
+      const table = await screen.findByRole('table', { hidden: true });
+      expect([...table.querySelectorAll('tbody tr')].map((row) => row.textContent)).toEqual([
+        `ValuesA${a}`,
+        `ValuesB${b}`,
+      ]);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
 
   it('uses declared pie and heatmap bindings and leaves null values out of the plot', async () => {
     const input = props('PieChart', {

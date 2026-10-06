@@ -738,6 +738,16 @@ module Mxrb
         end
       end
 
+      def pluggable_template(template)
+        parameters = parse_array(template['Parameters']).map do |parameter|
+          expression = parameter['Expression'].to_s
+          attribute = parameter.dig('AttributeRef', 'Attribute').to_s
+          expression.empty? && !attribute.empty? ? "$currentObject/#{attribute}" : expression
+        end
+        text = extract_text(template)
+        parameters.empty? ? text : { text:, parameters: }
+      end
+
       def clearable_pluggable_value_type?(value_type)
         value_type.is_a?(Hash) && %w[
           String Boolean Integer Decimal Number Enumeration Expression TextTemplate
@@ -761,7 +771,7 @@ module Mxrb
           return { objects: objects.map { pluggable_properties(_1, object_type) } }
         end
 
-        return extract_text(value["TextTemplate"]) if value["TextTemplate"].is_a?(Hash)
+        return pluggable_template(value["TextTemplate"]) if value["TextTemplate"].is_a?(Hash)
         return value.dig("AttributeRef", "Attribute") if value["AttributeRef"].is_a?(Hash)
         return value.dig("EntityRef", "Entity") if value["EntityRef"].is_a?(Hash)
         return pluggable_data_source(value["DataSource"]) if value["DataSource"].is_a?(Hash)
@@ -789,7 +799,7 @@ module Mxrb
           sort: parse_array(source.dig("SortBar", "SortItems")).map do |item|
             {
               attribute: item.dig("AttributeRef", "Attribute"),
-              direction: item["SortDirection"].to_s
+              direction: (item["SortOrder"] || item["SortDirection"]).to_s
             }.compact
           end
         }.compact

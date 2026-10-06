@@ -13,6 +13,7 @@ module Mxrb
       CatalogLoad = Data.define(:catalog, :unsupported_widget_ids)
       ActionValue = Data.define(:kind, :handler, :arguments)
       DataSourceValue = Data.define(:entity, :xpath, :sort)
+      CaptionValue = Data.define(:text, :parameters)
       ObjectValue = Data.define(:assignments)
       ObjectListValue = Data.define(:objects)
 
@@ -38,6 +39,7 @@ module Mxrb
 
         def action(**options) = @owner.action(**options)
         def data_source(**options) = @owner.data_source(**options)
+        def caption(text, **options) = @owner.caption(text, **options)
         def objects(&block) = @owner.objects(&block)
       end
 
@@ -200,6 +202,14 @@ module Mxrb
         DataSourceValue.new(entity.freeze, xpath.to_s.freeze, order.freeze)
       end
 
+      def caption(text, parameters: [])
+        unless text.is_a?(String) && parameters.is_a?(Array) && parameters.all? { _1.is_a?(String) }
+          raise ArgumentError, 'caption requires text and an array of expression strings'
+        end
+
+        CaptionValue.new(text.dup.freeze, parameters.map { _1.dup.freeze }.freeze)
+      end
+
       def objects(&block)
         raise ArgumentError, 'objects requires a block' unless block
 
@@ -261,6 +271,7 @@ module Mxrb
         case value
         when ActionValue then action_source(value)
         when DataSourceValue then data_source_source(value)
+        when CaptionValue then caption_source(value)
         when ObjectListValue then object_list_source(value, indentation)
         end
       end
@@ -296,9 +307,18 @@ module Mxrb
         case property.value_type.kind
         when 'Action' then supported_action_value(normalized)
         when 'DataSource' then supported_data_source_value(normalized)
+        when 'TextTemplate' then supported_caption_value(normalized)
         when 'Object' then supported_object_list_value(property, normalized)
         else value
         end
+      end
+
+      def supported_caption_value(value)
+        unless (value.keys - %i[text parameters]).empty?
+          raise ArgumentError, 'caption metadata requires the full Forms codec'
+        end
+
+        caption(value.fetch(:text), parameters: value.fetch(:parameters, []))
       end
 
       def supported_action_value(value)
@@ -345,7 +365,7 @@ module Mxrb
       def ensure_supported!(property, value)
         type = property.value_type
         return if value.nil? && (!type.list? || type.widgets? || type.object?)
-        return if scalar_supported?(type) || semantic_supported?(type, value)
+        return if semantic_value?(value) ? semantic_supported?(type, value) : scalar_supported?(type)
 
         raise UnsupportedProjection, 'pluggable property requires the legacy projection or full Forms codec'
       end
@@ -355,13 +375,18 @@ module Mxrb
       end
 
       def semantic_supported?(type, value)
-        (type.kind == 'Action' && value.is_a?(ActionValue)) ||
-          (type.kind == 'DataSource' && value.is_a?(DataSourceValue)) ||
-          (type.object? && value.is_a?(ObjectListValue) && valid_object_list?(type, value))
+        case type.kind
+        when 'Action' then value.is_a?(ActionValue)
+        when 'DataSource' then value.is_a?(DataSourceValue)
+        when 'TextTemplate' then value.is_a?(CaptionValue)
+        when 'Object' then value.is_a?(ObjectListValue) && valid_object_list?(type, value)
+        else false
+        end
       end
 
       def semantic_value?(value)
-        value.is_a?(ActionValue) || value.is_a?(DataSourceValue) || value.is_a?(ObjectListValue)
+        value.is_a?(ActionValue) || value.is_a?(DataSourceValue) ||
+          value.is_a?(CaptionValue) || value.is_a?(ObjectListValue)
       end
 
       def apply_semantic_value(property, value)
@@ -378,6 +403,7 @@ module Mxrb
         when DataSourceValue
           sort = value.sort.map { |attribute, direction| { attribute:, direction: } }
           { data_source: { entity: value.entity, xpath: value.xpath, sort: } }
+        when CaptionValue then { text: value.text, parameters: value.parameters }
         when ObjectListValue
           { objects: value.objects.map { project_object_value(_1) } }
         end
@@ -450,6 +476,10 @@ module Mxrb
         "data_source(entity: #{value.entity.inspect}, xpath: #{value.xpath.inspect}#{sort})"
       end
 
+      def caption_source(value)
+        "caption(#{value.text.inspect}, parameters: #{value.parameters.inspect})"
+      end
+
       def object_list_source(value, indentation)
         pad = ' ' * indentation
         body = value.objects.map { object_value_source(_1, indentation + 2) }
@@ -469,6 +499,7 @@ module Mxrb
         case value
         when ActionValue then action_source(value)
         when DataSourceValue then data_source_source(value)
+        when CaptionValue then caption_source(value)
         when ObjectListValue then object_list_source(value, indentation)
         end
       end

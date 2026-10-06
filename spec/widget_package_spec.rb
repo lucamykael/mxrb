@@ -149,6 +149,7 @@ RSpec.describe Mxrb::WidgetPackage do
         <property key="title" type="textTemplate" required="false"><caption>Title</caption></property>
         <property key="rows" type="object" isList="true"><caption>Rows</caption><properties>
           <property key="source" type="datasource" required="false"><caption>Source</caption></property>
+          <property key="staticName" type="textTemplate" required="false"><caption>Name</caption></property>
           <property key="tooltip" type="textTemplate" required="false" dataSource="source">
             <caption>Tooltip</caption>
             <translations><translation lang="en_US">Details</translation></translations>
@@ -172,6 +173,7 @@ RSpec.describe Mxrb::WidgetPackage do
       rows = array(properties.dig('rows', 'Value', 'Objects'))
       types = properties.dig('rows', 'ValueType', 'ObjectType')
       values = rows.map { writer.send(:widget_object_properties, types, _1) }
+      expect(values.map { _1.dig('staticName', 'Value', 'TextTemplate') }).to eq([nil, nil, nil])
       expect(values[0].dig('tooltip', 'Value', 'TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
       expect(array(values[0].dig('tooltip', 'Value', 'TextTemplate', 'Template',
                                  'Items')).last['Text']).to eq('Details')

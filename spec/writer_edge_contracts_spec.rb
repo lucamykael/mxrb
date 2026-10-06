@@ -685,7 +685,14 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       ]
     )
     items = Mxrb::IO::BsonCodec.parse_array(source.dig('SortBar', 'SortItems')).fetch(:items)
-    expect(items.map { _1.fetch('SortDirection') }).to eq(%w[Ascending Descending])
+    expect(items.map { _1.fetch('SortOrder') }).to eq(%w[Ascending Descending])
+    expect(items.flat_map(&:keys)).not_to include('SortDirection')
+    page = Mxrb::Model::Page.allocate
+    expect(page.send(:pluggable_data_source, source).fetch(:sort).map { _1.fetch(:direction) })
+      .to eq(%w[Ascending Descending])
+    items.each { _1['SortDirection'] = _1.delete('SortOrder') }
+    expect(page.send(:pluggable_data_source, source).fetch(:sort).map { _1.fetch(:direction) })
+      .to eq(%w[Ascending Descending])
   end
 
   it 'covers OQL, generalization, page context, and legacy widget alternatives' do

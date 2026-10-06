@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-06",
+  "scope": "Dynamic line and column series, per-group aggregation and simple expression/attribute captions",
+  "ruby": {
+    "examples": 2278,
+    "failures": 0,
+    "lines": {
+      "covered": 40809,
+      "total": 40809,
+      "percent": 100.0
+    },
+    "branches": {
+      "covered": 17866,
+      "total": 17866,
+      "percent": 100.0
+    }
+  },
+  "frontend": {
+    "tests": 115,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 557,
+    "offenses": 0
+  },
+  "browser": {
+    "passed": true,
+    "steps": 15,
+    "sidecar": "detached before startup",
+    "console_errors": [],
+    "screenshot_sha256": "dd92138e618352037db1be027e25f99c9196e6a0f58f80f3ec0a372d3bf34c95"
+  },
+  "roundtrip": {
+    "modern_projects": 8,
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0,
+    "new_series_fixture": {
+      "valid": true,
+      "identical": true
+    }
+  },
+  "native_ci": {
+    "workflow": ".github/workflows/studio-pro.yml",
+    "scenario": "chart-series",
+    "variants": [
+      "source",
+      "roundtrip"
+    ]
+  },
+  "limits": [
+    "Parameterized caption certification covers simple expressions and attributes, not alternate source variables, translations or custom formatting.",
+    "Stacking, point actions and advanced Plotly options remain open."
+  ],
+  "native_static_check": {
+    "tool": "mx 11.12.1 check",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  }
+}

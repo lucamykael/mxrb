@@ -3285,7 +3285,11 @@ module Mxrb
       value['PrimitiveValue'] = configured[:primitive].to_s if configured.key?(:primitive)
       value['Expression'] = configured[:expression].to_s if configured.key?(:expression)
       value['Selection'] = configured[:selection].to_s if configured.key?(:selection)
-      value['TextTemplate'] = client_template_doc(configured[:text]) if configured.key?(:text)
+      if configured.key?(:text)
+        value['TextTemplate'] = client_template_doc(
+          configured[:text], parameters: configured.fetch(:parameters, []), entity: context_entity
+        )
+      end
       value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
       value['EntityRef'] = indirect_entity_ref_doc(configured[:association]) if configured.key?(:association)
       value['Action'] = client_action_doc(configured[:action]) if configured.key?(:action)
@@ -3391,12 +3395,17 @@ module Mxrb
 
         source = type['DataSourceProperty'].to_s
         next unless source.empty? || properties.dig(source, 'Value', 'DataSource')
+        next if source.empty? && !default_widget_caption?(type)
 
         translations = array_items(type['Translations']).map { [_1['LanguageCode'], _1['Text']] }
         property['Value']['TextTemplate'] = empty_client_template_doc.merge(
           'Template' => localized_text_doc(translations)
         )
       end
+    end
+
+    def default_widget_caption?(type)
+      type['Required'] || !type['DefaultValue'].to_s.empty? || !array_items(type['Translations']).empty?
     end
 
     def reusable_widget_object!(object_type, object, configuration, index)
@@ -3671,7 +3680,7 @@ module Mxrb
         attribute, direction = item.is_a?(Array) ? item : item.values_at(:attribute, :direction)
         {
           "$ID" => SecureRandom.uuid, "$Type" => "Forms$GridSortItem",
-          "AttributeRef" => attribute_ref_doc(attribute), "SortDirection" => direction.to_s
+          "AttributeRef" => attribute_ref_doc(attribute), "SortOrder" => direction.to_s
         }
       end
       {
@@ -3739,7 +3748,8 @@ module Mxrb
       case value_type["Type"]
       when "Expression" then doc["Expression"] = default
       when "TextTemplate"
-        doc["TextTemplate"] = client_template_doc(default) if value_type['DataSourceProperty'].to_s.empty?
+        doc["TextTemplate"] = client_template_doc(default) if
+          value_type['DataSourceProperty'].to_s.empty? && default_widget_caption?(value_type)
       else doc["PrimitiveValue"] = default
       end
       doc

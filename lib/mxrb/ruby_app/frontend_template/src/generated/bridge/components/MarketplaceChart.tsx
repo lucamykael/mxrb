@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ApiRequest, EntityCollectionResponse, EntityRecord } from '../../types';
 import type { MarketplaceWidgetProps } from '../marketplace';
-import { memberName, sortRecords } from '../value';
+import { expressionValue, memberName, sortRecords } from '../value';
 
 type Properties = Record<string, unknown>;
 type Point = { label: string; value: number; size?: number; row?: string };
@@ -19,7 +19,18 @@ const numeric = (value: unknown): number => {
   return result;
 };
 
-const aggregations = ['none', 'count', 'sum', 'avg', 'min', 'max', 'median', 'mode', 'first', 'last'];
+const aggregations = [
+  'none',
+  'count',
+  'sum',
+  'avg',
+  'min',
+  'max',
+  'median',
+  'mode',
+  'first',
+  'last',
+];
 
 function aggregatePoints(points: Point[], operation: string): Point[] {
   if (operation === 'none') return points;
@@ -61,6 +72,27 @@ function aggregatePoints(points: Point[], operation: string): Point[] {
   });
 }
 
+function chartCaption(value: unknown, context: EntityRecord | null | undefined): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  const template = object(value);
+  if (
+    typeof template.text !== 'string' ||
+    (template.parameters !== undefined &&
+      (!Array.isArray(template.parameters) ||
+        template.parameters.some((item) => typeof item !== 'string')))
+  )
+    throw new Error('Chart caption requires text and expression parameters');
+  let text = template.text;
+  for (const [index, parameter] of ((template.parameters ?? []) as string[]).entries()) {
+    text = text.replaceAll(
+      `{${index + 1}}`,
+      String(expressionValue(parameter, context ?? null) ?? ''),
+    );
+  }
+  return text;
+}
+
 async function chartSeries(
   properties: Properties,
   props: Pick<MarketplaceWidgetProps, 'context' | 'request'>,
@@ -93,14 +125,19 @@ async function chartSeries(
 
   const grouped = object(properties.series ?? properties.lines).objects;
   const definitions = Array.isArray(grouped) ? grouped.map(object) : [properties];
-  return Promise.all(
+  const batches = await Promise.all(
     definitions.map(async (definition) => {
-      if (definition.dataSet && definition.dataSet !== 'static')
-        throw new Error('Dynamic chart series are not supported');
+      const dynamic = definition.dataSet === 'dynamic';
+      if (definition.dataSet && !['static', 'dynamic'].includes(String(definition.dataSet)))
+        throw new Error(`Chart data set is not supported: ${definition.dataSet}`);
       const aggregation = String(definition.aggregationType || 'none');
       if (!aggregations.includes(aggregation))
         throw new Error(`Chart aggregation is not supported: ${aggregation}`);
-      const configured = object(definition.staticDataSource ?? definition.seriesDataSource);
+      const configured = object(
+        dynamic
+          ? definition.dynamicDataSource
+          : (definition.staticDataSource ?? definition.seriesDataSource),
+      );
       const source =
         typeof configured.data_source === 'string'
           ? { ...configured, entity: configured.data_source }
@@ -127,39 +164,67 @@ async function chartSeries(
             };
           })
         : [];
+      const horizontal = kind.includes('barchart');
+      const xAttribute = dynamic ? definition.dynamicXAttribute : definition.staticXAttribute;
+      const yAttribute = dynamic ? definition.dynamicYAttribute : definition.staticYAttribute;
       const x = attribute(
-        (kind.includes('barchart') ? definition.staticYAttribute : definition.staticXAttribute) ??
+        (horizontal ? yAttribute : xAttribute) ??
           definition.horizontalAxisAttribute ??
           definition.seriesNameAttribute,
       );
       const y = attribute(
-        (kind.includes('barchart') ? definition.staticXAttribute : definition.staticYAttribute) ??
-          definition.seriesValueAttribute,
+        (horizontal ? xAttribute : yAttribute) ?? definition.seriesValueAttribute,
       );
-      const size = attribute(definition.staticSizeAttribute);
+      const size = attribute(
+        dynamic ? definition.dynamicSizeAttribute : definition.staticSizeAttribute,
+      );
       const row = attribute(definition.verticalAxisAttribute);
       const read = (record: EntityRecord, name: string) => {
         if (!(name in record.attributes))
           throw new Error(`Chart attribute is unavailable: ${name}`);
         return record.attributes[name];
       };
-      return {
-        name: String(definition.staticName ?? definition.seriesName ?? ''),
-        points: aggregatePoints(sortRecords(response.records, sorting).flatMap((record, index) => {
-          const value = read(record, y);
-          if (value === null || value === undefined) return [];
-          return [
-            {
-              label: x ? String(read(record, x) ?? '') : String(definition.seriesName ?? index + 1),
-              value: numeric(value),
-              size: size ? numeric(read(record, size)) : undefined,
-              row: row ? String(read(record, row) ?? '') : undefined,
-            },
-          ];
-        }), aggregation),
-      };
+      const groups = new Map<unknown, { name: string; records: EntityRecord[] }>();
+      const groupAttribute = attribute(definition.groupByAttribute);
+      if (dynamic && !groupAttribute)
+        throw new Error('Dynamic chart group attribute is unavailable');
+      for (const record of sortRecords(response.records, sorting)) {
+        const groupKey = dynamic ? (read(record, groupAttribute) ?? '') : '';
+        if (groupKey !== null && typeof groupKey === 'object')
+          throw new Error('Chart groups must contain scalar values');
+        const group = groups.get(groupKey) ?? { name: '', records: [] };
+        group.records.push(record);
+        if (!group.name || group.name === '(empty)') {
+          group.name = chartCaption(
+            dynamic ? definition.dynamicName : (definition.staticName ?? definition.seriesName),
+            dynamic ? record : props.context,
+          );
+        }
+        groups.set(groupKey, group);
+      }
+      return [...groups.values()].map((group) => ({
+        name: group.name,
+        points: aggregatePoints(
+          group.records.flatMap((record, index) => {
+            const value = read(record, y);
+            if (value === null || value === undefined) return [];
+            return [
+              {
+                label: x
+                  ? String(read(record, x) ?? '')
+                  : String(definition.seriesName ?? index + 1),
+                value: numeric(value),
+                size: size ? numeric(read(record, size)) : undefined,
+                row: row ? String(read(record, row) ?? '') : undefined,
+              },
+            ];
+          }),
+          aggregation,
+        ),
+      }));
     }),
   );
+  return batches.flat();
 }
 
 function ChartPlot({ series, kind, name }: { series: Series[]; kind: string; name: string }) {
