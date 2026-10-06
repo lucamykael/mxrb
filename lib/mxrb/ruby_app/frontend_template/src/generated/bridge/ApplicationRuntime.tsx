@@ -278,6 +278,7 @@ export function ApplicationRuntime({
   }, [location.key, pageName]);
 
   const loadApplication = async () => {
+    setError(null);
     try {
       const activeSession = await api<Session>('/api/session');
       setSession(activeSession);
@@ -290,10 +291,15 @@ export function ApplicationRuntime({
       const profile =
         value.navigation?.profiles?.find((item) => item.kind === 'Responsive') ||
         value.navigation?.profiles?.[0];
-      const fallback = value.modules.flatMap((module) => module.pages)[0]?.name;
+      const accessiblePages = value.modules.flatMap((module) => module.pages);
+      const fallback = accessiblePages.find(
+        (candidate) =>
+          !candidate.parameters?.some((parameter) => parameter.required !== false) &&
+          !candidate.popup?.mode,
+      )?.name;
       const routeTarget = pageName ? decodeURIComponent(pageName) : null;
       const target = routeTarget || profile?.home_page || fallback;
-      if (!target && !activeSession.user) {
+      if (!activeSession.user && !accessiblePages.some((candidate) => candidate.name === target)) {
         setAuthRequired(true);
         return;
       }
@@ -668,7 +674,20 @@ export function ApplicationRuntime({
 
   if (authRequired) return <LoginForm onLogin={login} error={error} busy={busy} />;
   if (!schema || !page)
-    return <main className="loading-page mxrb-loading">Loading application…</main>;
+    return (
+      <main className="loading-page mxrb-loading">
+        {error ? (
+          <div>
+            <p role="alert">{error.message}</p>
+            <button type="button" onClick={() => void loadApplication()}>
+              Try again
+            </button>
+          </div>
+        ) : (
+          'Loading application…'
+        )}
+      </main>
+    );
   const profile =
     schema.navigation?.profiles?.find((item) => item.kind === 'Responsive') ||
     schema.navigation?.profiles?.[0];

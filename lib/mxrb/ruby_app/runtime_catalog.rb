@@ -81,6 +81,7 @@ module Mxrb
         when :page
           { 'title' => implementation.title, 'widgets' => implementation.widgets,
             'allowed_module_roles' => implementation.allowed_module_roles }
+            .merge(implementation.presentation_contract.to_h.transform_keys(&:to_s))
         when :service then { 'kind' => implementation.native_kind.to_s }
         else {}
         end
