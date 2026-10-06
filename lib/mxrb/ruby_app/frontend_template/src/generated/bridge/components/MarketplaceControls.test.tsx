@@ -1,3 +1,4 @@
+import { decimal } from '../decimal';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -23,6 +24,23 @@ const props = (kind: string, properties: Record<string, unknown> = {}): Marketpl
 });
 
 describe('Marketplace controls use source properties and runtime data', () => {
+  it('reads Decimal slider attributes and preserves their type when changed', () => {
+    const input = props('Slider', { valueAttribute: 'App.Item.Amount', stepSize: '0.1' });
+    input.context!.attributes.Amount = decimal('0.1');
+    render(<MarketplaceWidget {...input} />);
+    const slider = screen.getByRole('slider');
+    expect(slider).toHaveValue('0.1');
+    fireEvent.change(slider, { target: { value: '0.2' } });
+    expect(input.onChange).toHaveBeenCalledWith('App.Item.Amount', decimal('0.2'));
+  });
+
+  it('renders Decimal progress values without converting the tagged object to NaN', () => {
+    const input = props('ProgressBar', { progressAttribute: 'App.Item.Amount' });
+    input.context!.attributes.Amount = decimal('42.5');
+    render(<MarketplaceWidget {...input} />);
+    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '42.5');
+  });
+
   it('executes an application-owned adapter for the exact widget identity', () => {
     const input = props('External', { caption: 'Edited adapter' });
     const restore = registerMarketplaceWidget(

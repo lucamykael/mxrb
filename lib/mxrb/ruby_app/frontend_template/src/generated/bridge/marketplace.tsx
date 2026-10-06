@@ -1,3 +1,4 @@
+import { decimal, isDecimal, numericText } from './decimal';
 import { useState } from 'react';
 import { MarketplaceControl, MarketplaceImage } from './components/MarketplaceControls';
 import { MarketplaceChart } from './components/MarketplaceChart';
@@ -85,7 +86,7 @@ const findAttribute = (value: unknown): string | undefined => {
 const memberName = (value: string | undefined): string => (value || '').split(/[./]/).pop() || '';
 
 const numericValue = (value: RuntimeValue | undefined, fallback = 0): number => {
-  const number = Number(value);
+  const number = Number(isDecimal(value) ? numericText(value) : value);
   return Number.isFinite(number) ? number : fallback;
 };
 
@@ -179,6 +180,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   const current = context?.attributes?.[memberName(attribute)];
   const [localValue, setLocalValue] = useState<RuntimeValue>(current ?? 0);
   const update = (value: RuntimeValue) => {
+    if (typeof value === 'number' && isDecimal(current)) value = decimal(value);
     setLocalValue(value);
     return onChange(attribute, value);
   };
