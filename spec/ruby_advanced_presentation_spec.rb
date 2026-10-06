@@ -8,6 +8,16 @@ require 'mxrb/ruby_app/presentation_exporter'
 RSpec.describe 'Advanced standalone presentation contracts' do
   after { Mxrb::RubyApp::Registry.reset! }
 
+  it 'keeps a newly authored page usable when its default layout is not registered' do
+    page = Class.new(Mxrb::RubyApp::Page) do
+      mendix_name 'App.NewPage'
+      native { text :Greeting, caption: 'Hello' }
+    end
+    result = Mxrb::RubyApp::Presentation.page(page)
+    expect(result[:layout]).to be_nil
+    expect(result[:widgets]).to eq(page.widgets)
+  end
+
   it 'renders the declared native page layout with its Main slot through the page API' do
     presentation = Mxrb::RubyApp::Presentation
     presentation.layout('App.Shell') do

@@ -121,7 +121,7 @@ module Mxrb
       def document_catalog
         catalog = Pluggable::Catalog.new
         codec = Pluggable::MprCodec.new(forms_codec: nil, catalog:)
-        page_widgets.each { codec.register_type(_1.fetch('Type')) }
+        page_widgets.each { codec.register_type(Marshal.load(Marshal.dump(_1.fetch('Type')))) }
         catalog
       end
 

@@ -1,5 +1,26 @@
 # MXRB: Ruby acima de tudo
 
+## Layouts, autenticação e exportação de aplicações Ruby
+
+Páginas criadas com `native` aplicam o layout declarado e seu slot `Main`.
+Layouts exportados preservam classes e estilos; tabelas, navegação e popups
+recebem a estrutura necessária para o CSS existente. O fallback inicial evita
+páginas com parâmetros obrigatórios e popups. Links protegidos abrem o login;
+erros de inicialização ficam visíveis e permitem nova tentativa.
+
+Widgets Forms usam o catálogo do documento, sem congelar o esquema original.
+Anotações ligadas a nós que não podem ser emitidos mantêm o grafo na representação
+nativa preservada, evitando uma reconstrução incompleta. Isso não amplia a
+execução Ruby desses grafos. O leitor CDP também distingue os tamanhos de frame
+estendido corretamente.
+
+Validação local: 2.301 testes Ruby, 100% de linhas e ramificações, 132 testes
+frontend, build e lint; 22 passos no navegador sem erros de console. O round-trip
+Sudoku é válido e idêntico sem o sidecar Mendix, e `mx check` 11.12.1 encontra zero
+erros na fixture core-widgets original e reconstruída. A equivalência visual de
+todos os temas e a execução de todas as integrações continuam fora deste recorte.
+Veja a [evidência](../evidence/ruby-runtime-hardening-2026-10-06.json).
+
 ## Agregações de gráficos
 
 Gráficos agrupam categorias repetidas e calculam `count`, `sum`, `avg`, `min`,

@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-06",
+  "scope": "Ruby application layouts, startup authentication, embedded widget schemas and annotated flow preservation",
+  "ruby": {
+    "examples": 2301,
+    "failures": 0,
+    "lines": {
+      "covered": 41015,
+      "total": 41015
+    },
+    "branches": {
+      "covered": 17986,
+      "total": 17986
+    },
+    "seed": 30427
+  },
+  "frontend": {
+    "tests": 132,
+    "format": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 561,
+    "offenses": 0
+  },
+  "roundtrip": {
+    "fixture": "Sudoku",
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0,
+    "sidecar": "detached"
+  },
+  "browser": {
+    "scenario": "ruby-core-radio-tabs-and-title",
+    "steps": 22,
+    "passed": true,
+    "console_errors": [],
+    "screenshot_sha256": "0dbaf808588a9b3c63bea06bce1b4d4785ba738e4deb19ce87459449573b2483"
+  },
+  "native_static_check": {
+    "tool": "mx 11.12.1",
+    "fixture": "core-widgets",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "native_ci": {
+    "status": "pending; exact revision results will be recorded in the pull request",
+    "prepared_build_cases": 20
+  },
+  "limits": [
+    "Native graph preservation is not Ruby runtime execution certification.",
+    "Existing CSS requires matching supported widget markup; this is not universal theme equivalence.",
+    "Java/JavaScript integrations and mobile/offline execution remain separate backlog items."
+  ]
+}

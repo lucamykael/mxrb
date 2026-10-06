@@ -74,6 +74,19 @@ RSpec.describe Mxrb::RubyApp::PluggableContext do
     expect(described_class.current).to be_nil
   end
 
+  it 'leaves borrowed document schemas mutable when loading nested Forms widgets' do
+    document = Marshal.load(Marshal.dump(page(widget(:boolean))))
+    original = Marshal.dump(document)
+    bridge.with_mpr(nil) do
+      described_class.current.with_document('App.Shared', document) do
+        expect(resolve(false)).to eq('value' => false)
+        expect(Mxrb::Pluggable::Node.build(widget_id)).to be_a(Mxrb::Pluggable::Node)
+      end
+    end
+    expect(document.dig('Widgets', 0, 'Type', 'WidgetId')).not_to be_frozen
+    expect(Marshal.dump(document)).to eq(original)
+  end
+
   it 'rejects ambiguous identity during loading and retains legacy emission' do
     mpr = mpr_for('one' => page(widget(:boolean), widget(:boolean)))
     bridge.with_mpr(mpr) do
