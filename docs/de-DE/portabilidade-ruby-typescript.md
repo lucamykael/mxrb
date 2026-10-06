@@ -1,5 +1,22 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Kalenderausdrücke
+
+Ruby und TypeScript unterstützen Datumserzeugung, Addition/Subtraktion von
+Millisekunden bis Jahren, Periodenanfänge und Epoch-Konvertierung in Millisekunden.
+Kalenderoperationen haben UTC-Varianten. Ruby verwendet die IANA-Zeitzone des
+Sicherheitskontexts; das Frontend verwendet die Browser-Zeitzone oder eine explizite
+`timeZone`. Folgeanfragen übernehmen keine Zeitzone vorheriger Benutzer.
+Monats-/Jahresoperationen begrenzen den Tag auf das Monatsende; Stunden und kleinere
+Einheiten sind Zeitdauern, Kalendertage behalten die lokale Uhrzeit bei DST-Wechseln.
+
+Lokale Tests prüfen New York, Lord Howe und Apia. Die native Matrix ergänzt 16
+UTC-Fälle für Original und Round-trip. Lokale Tests allein belegen keine native
+Gleichwertigkeit. Lokalisierte Datumsformate und Datumsdifferenzen bleiben separate Verträge.
+
+
+[Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
+
 ## Dynamische Diagrammreihen — 6. Oktober 2026
 
 Linien- und Säulendiagramme unterstützen dynamische Reihen, gruppiert nach dem

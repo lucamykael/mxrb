@@ -5,6 +5,29 @@ require 'tmpdir'
 
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Native runtime entity security context' do
+  it 'uses the current session calendar and restores it after a request' do
+    Dir.mktmpdir('mxrb-calendar-context-') do |dir|
+      path = File.join(dir, 'Calendar.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module :M do
+          microflow :Date do
+            return_type :DateTime
+            return_value 'dateTime(2024, 3, 10, 12)'
+          end
+        end
+      end
+      Mxrb.open(path) do |project|
+        interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
+        context = Mxrb::Runtime::SecurityContext.new(user: 'ada', attributes: { 'time_zone' => 'America/New_York' })
+        expect(interpreter.call('M.Date', context:)).to eq(Time.utc(2024, 3, 10, 16))
+        expect(interpreter.call('M.Date')).to eq(Time.utc(2024, 3, 10, 12))
+        utc = Mxrb::Runtime::SecurityContext.new(user: 'grace')
+        expect(interpreter.call('M.Date', context: utc)).to eq(Time.utc(2024, 3, 10, 12))
+      end
+    end
+  end
+
   it 'round-trips ApplyEntityAccess in microflow model documents' do
     mpr = double
     allow(mpr).to receive(:parse_contents) { _1 }

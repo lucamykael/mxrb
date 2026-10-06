@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-06",
+  "scope": "Calendar creation, shifts, trims and epoch conversion in Ruby and TypeScript",
+  "frontend": {
+    "tests": 120,
+    "format": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 559,
+    "offenses": 0
+  },
+  "roundtrip": {
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0,
+    "sidecar": "detached"
+  },
+  "native_static_check": {
+    "tool": "mx 11.12.1",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "direct_native_oracle": {
+    "runtime_version": "11.12.1",
+    "mxruntime_jar_sha256": "a81a7f98ab7da6bf7ad0cd0f8cd23a93e4b671bbe19a75f4e0c502c5034f3af5",
+    "harness": "spec/fixtures/native_compatibility/CalendarOracle.java",
+    "context": "Test locale/timezone services; invokes installed DateTimeFunctions, no full application boot",
+    "results": {
+      "spring": "2024-03-10T16:00:00Z",
+      "springGap": "2024-03-10T06:30:00Z",
+      "autumn": "2024-11-03T05:30:00Z",
+      "overlap": "2024-11-03T06:30:00Z",
+      "lordHowe": "2024-10-05T15:45:00Z",
+      "apia": "2011-12-30T22:00:00Z",
+      "trimHours": "2024-11-03T06:00:00Z",
+      "monthOverlap": "2024-11-03T06:30:00Z",
+      "createGap": "2024-03-10T07:30:00Z",
+      "subtractDayGap": "2024-03-10T07:30:00Z",
+      "monthGap": "2024-03-10T07:30:00Z",
+      "lordHoweDay": "2024-10-05T15:15:00Z",
+      "apiaDay": "2011-12-30T22:00:00Z",
+      "trimToSeconds": "2024-11-03T06:45:30Z",
+      "trimToMinutes": "2024-11-03T06:45:00Z",
+      "trimToDays": "2024-11-03T04:00:00Z",
+      "trimToMonths": "2024-11-01T04:00:00Z",
+      "trimToYears": "2024-01-01T05:00:00Z",
+      "month": "2024-02-29T17:00:00Z"
+    }
+  },
+  "native_ci": {
+    "scenario": "compatibility",
+    "additional_cases": 16,
+    "status": "not run for this branch"
+  },
+  "limits": [
+    "Localized date parsing/formatting and date difference functions remain outside this increment.",
+    "TypeScript uses ISO date transport; non-localized native attributes require separate certification."
+  ],
+  "ruby": {
+    "examples": 2286,
+    "failures": 0,
+    "lines": {
+      "covered": 40895,
+      "total": 40895
+    },
+    "branches": {
+      "covered": 17905,
+      "total": 17905
+    },
+    "seed": 24087
+  }
+}

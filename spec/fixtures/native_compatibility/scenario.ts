@@ -143,6 +143,70 @@ type OracleCase = { name: string; expected?: string; expected_error?: boolean };
     "expected": "true"
   },
   {
+    "name": "CalendarMonthEnd",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarLeapYear",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarQuarter",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarWeek",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarNegativeMonth",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarDays",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarMilliseconds",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarMinutes",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarHours",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimSeconds",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimMinutes",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimHours",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimDays",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimMonths",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimYears",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarEpoch",
+    "expected": "true"
+  },
+  {
     "name": "VerifyRule",
     "expected": "passed"
   }

@@ -173,5 +173,85 @@
     "name": "ModuloDecimal",
     "expression": "toString(12.5 mod 5 = 2.5)",
     "expected": "true"
+  },
+  {
+    "name": "CalendarMonthEnd",
+    "expression": "toString(addMonthsUTC(dateTimeUTC(2024, 1, 31, 12), 1) = dateTimeUTC(2024, 2, 29, 12))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarLeapYear",
+    "expression": "toString(addYearsUTC(dateTimeUTC(2024, 2, 29), 1) = dateTimeUTC(2025, 2, 28))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarQuarter",
+    "expression": "toString(subtractQuartersUTC(dateTimeUTC(2024, 5, 31), 1) = dateTimeUTC(2024, 2, 29))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarWeek",
+    "expression": "toString(addWeeksUTC(dateTimeUTC(2024, 12, 25), 1) = dateTimeUTC(2025))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarNegativeMonth",
+    "expression": "toString(addMonthsUTC(dateTimeUTC(2024, 3, 31), -1) = dateTimeUTC(2024, 2, 29))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarDays",
+    "expression": "toString(subtractDaysUTC(dateTimeUTC(2024, 3, 1), 1) = dateTimeUTC(2024, 2, 29))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarMilliseconds",
+    "expression": "toString(addMilliseconds(dateTimeUTC(2024), 1000) = addSeconds(dateTimeUTC(2024), 1))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarMinutes",
+    "expression": "toString(subtractMinutes(dateTimeUTC(2024, 1, 1, 1), 60) = dateTimeUTC(2024))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarHours",
+    "expression": "toString(addHours(dateTimeUTC(2024, 1, 1, 23), 2) = dateTimeUTC(2024, 1, 2, 1))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimSeconds",
+    "expression": "toString(trimToSeconds(addMilliseconds(dateTimeUTC(2024), 123)) = dateTimeUTC(2024))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimMinutes",
+    "expression": "toString(trimToMinutes(dateTimeUTC(2024, 1, 1, 1, 2, 3)) = dateTimeUTC(2024, 1, 1, 1, 2))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimHours",
+    "expression": "toString(trimToHoursUTC(dateTimeUTC(2024, 1, 1, 1, 2, 3)) = dateTimeUTC(2024, 1, 1, 1))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimDays",
+    "expression": "toString(trimToDaysUTC(dateTimeUTC(2024, 1, 2, 1, 2, 3)) = dateTimeUTC(2024, 1, 2))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimMonths",
+    "expression": "toString(trimToMonthsUTC(dateTimeUTC(2024, 2, 29, 12)) = dateTimeUTC(2024, 2))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarTrimYears",
+    "expression": "toString(trimToYearsUTC(dateTimeUTC(2024, 2, 29, 12)) = dateTimeUTC(2024))",
+    "expected": "true"
+  },
+  {
+    "name": "CalendarEpoch",
+    "expression": "toString(dateTimeToEpoch(epochToDateTime(-123)) = -123)",
+    "expected": "true"
   }
 ]

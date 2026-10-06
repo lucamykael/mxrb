@@ -186,6 +186,8 @@ RSpec.describe 'MXRB UML diagrams' do
 
     expect(dotted).not_to eq(underscored)
     expect(Mxrb::Uml::Support.identifier('', prefix: 'empty')).to eq('empty_e3b0c442')
+    expect(Mxrb::Uml::Support.identifier('123', prefix: 'node')).to match(/\Anode_123_[a-f0-9]{8}\z/)
+    expect(Mxrb::Uml::Support.identifier('123', prefix: 'node')).not_to eq('node_123')
     expect(Mxrb::Uml::Support.mermaid_text(%(<tag> & "name"\nnext)))
       .to eq('&lt;tag&gt; &amp; &quot;name&quot; next')
     expect(Mxrb::Uml::Support.plantuml_text("path\\name\nnext"))
