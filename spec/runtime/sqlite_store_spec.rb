@@ -122,6 +122,40 @@ RSpec.describe Mxrb::Runtime::SQLiteStore do
     reopened.close
   end
 
+  it 'queries the inverse of persisted self-references after reopening without following outgoing links' do
+    store = described_class.new(project, path: @database_path)
+    first, second, third = Array.new(3) { store.create('Store.Pet') }
+    first.members['Pet_Friends'] = [second]
+    second.members['Pet_Friends'] = [third]
+    store.commit([first, second, third])
+    store.close
+    store = described_class.new(project, path: @database_path)
+    restored = store.find('Store.Pet', second.id)
+    expect(store.retrieve_reverse_association('Store.Pet_Friends', restored).map(&:id)).to eq([first.id])
+    expect(store.retrieve_association('Store.Pet_Friends', restored).map(&:id)).to eq([third.id])
+    expect do
+      store.retrieve_reverse_association('Pet_Owner', restored)
+    end.to raise_error(ArgumentError, /self-association/)
+    owner = store.create('Store.Owner')
+    expect { store.retrieve_reverse_association('Pet_Friends', owner) }.to raise_error(ArgumentError, /current entity/)
+  ensure
+    store&.close
+  end
+
+  it 'reverses transient self-associations without storing durable rows' do
+    scratch = entity('Scratch', id: 'scratch', guid: 'scratch', attributes: [], persistable: false)
+    runtime_project = project(extra_entities: [scratch])
+    runtime_project.modules.first.associations << association('Scratch_Link', id: 'scratch-link',
+                                                                              from: 'scratch', to: 'scratch')
+    store = described_class.new(runtime_project, path: @database_path)
+    first, second = Array.new(2) { store.create('Store.Scratch') }
+    first.members['Scratch_Link'] = second
+    expect(store.retrieve_reverse_association('Store.Scratch_Link', second)).to eq([first])
+    expect(store.retrieve_reverse_association('Scratch_Link', first)).to eq([])
+  ensure
+    store&.close
+  end
+
   it 'does not overwrite a dirty association while reloading persisted records' do
     store = described_class.new(project, path: @database_path)
     owner = store.create('Store.Owner')

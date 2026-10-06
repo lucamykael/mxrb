@@ -116,8 +116,8 @@ module Mxrb
 
       def path(record, steps, variables)
         values = [record]
-        steps.each do |name, predicates|
-          values = values.flat_map { step(_1, name) }
+        steps.each do |name, predicates, reverse|
+          values = values.flat_map { step(_1, name, reverse:) }
           predicates.each do |predicate|
             values = values.select { truthy?(evaluate(predicate, _1, variables)) }
           end
@@ -125,8 +125,13 @@ module Mxrb
         values
       end
 
-      def step(record, name)
+      def step(record, name, reverse: false)
         raise ArgumentError, 'XPath path must traverse objects' unless record.is_a?(Native::ObjectValue)
+
+        if reverse
+          authorize_member(record, name.split('.').last)
+          return @store.retrieve_reverse_association(name, record).select { readable?(_1) }
+        end
         return [record] if entity_type?(record, name)
         return [name] if name.split('.').length == 3 && !entity_type?(record, name.rpartition('.').first)
 
@@ -274,6 +279,8 @@ module Mxrb
           end
 
           if accept(:left_parenthesis)
+            raise ArgumentError, 'XPath reversed() must be an association path predicate' if name == 'reversed'
+
             arguments = []
             unless accept(:right_parenthesis)
               arguments << nested { expression }
@@ -282,12 +289,31 @@ module Mxrb
             end
             return [:call, name, arguments]
           end
-          steps = [[name, predicates]]
+          steps = [path_step(name)]
           while peek == [:operator, '/'] && @tokens.fetch(@index + 1).first == :identifier
             consume(:operator)
-            steps << [consume(:identifier), predicates]
+            steps << path_step(consume(:identifier))
           end
           [:path, steps]
+        end
+
+        def path_step(name)
+          constraints = []
+          reverse = false
+          while accept(:left_bracket)
+            if peek == [:identifier, 'reversed'] && @tokens.fetch(@index + 1).first == :left_parenthesis
+              consume(:identifier)
+              raise ArgumentError, 'duplicate XPath reversed() predicate' if reverse
+
+              consume(:left_parenthesis)
+              consume(:right_parenthesis)
+              reverse = true
+            else
+              constraints << nested { expression }
+            end
+            consume(:right_bracket)
+          end
+          [name, constraints, reverse]
         end
 
         def peek = @tokens.fetch(@index)

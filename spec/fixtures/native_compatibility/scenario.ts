@@ -251,6 +251,42 @@ type OracleCase = { name: string; expected?: string; expected_error?: boolean };
     "expected": "9007199254740993.12345679"
   },
   {
+    "name": "XPathForwardChild",
+    "expected": "1:child"
+  },
+  {
+    "name": "XPathReverseParent",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseGrandparent",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseThenForward",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseNested",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathReverseEmpty",
+    "expected": "0:missing"
+  },
+  {
+    "name": "XPathReverseSet",
+    "expected": "1:root"
+  },
+  {
+    "name": "XPathForwardSet",
+    "expected": "1:child"
+  },
+  {
+    "name": "XPathReverseColumn",
+    "expected": "1:root"
+  },
+  {
     "name": "VerifyRule",
     "expected": "passed"
   }

@@ -1,5 +1,22 @@
 # MXRB: Ruby above all
 
+## XPath reverse self-associations
+
+The `[reversed()]` marker reverses only its own self-association step. Multi-hop
+paths can mix forward and reverse steps; nested predicates still evaluate on
+the related object. The runtime checks member permission and related record
+visibility, and queries persisted SQLite references in the requested direction.
+
+Nine reproducible cases verify result counts and names for references, reference
+sets, mixed paths, empty results and native table or column storage. The Ruby
+application also queries references after reopening the database with MPR access
+forbidden. Both source and roundtrip fixtures pass `mx check` 11.12.1. All 115
+corpus XPath fields still parse, including 19 using `reversed()`; this does not
+certify execution of every flow in those projects. References between distinct
+declared entity types, XPath arithmetic and other functions remain outside this
+increment. See the [evidence](../evidence/xpath-reverse-2026-10-06.json) and the
+[native contract](https://docs.mendix.com/refguide/query-over/).
+
 ## Ruby application layouts, authentication and export
 
 Pages authored with `native` apply their declared layout and `Main` slot.

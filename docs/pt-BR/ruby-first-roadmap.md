@@ -1,5 +1,24 @@
 # MXRB: Ruby acima de tudo
 
+## XPath com associações reversas
+
+O marcador `[reversed()]` inverte somente a associação autorreferente em que
+aparece. Caminhos com vários níveis podem combinar passos diretos e reversos;
+filtros aninhados continuam sendo aplicados ao objeto relacionado. O runtime
+verifica a permissão do membro e a visibilidade dos objetos relacionados, e
+consulta as referências persistidas no SQLite na direção correta.
+
+Nove casos reproduzíveis verificam quantidade e nome dos resultados para
+referências, conjuntos de referências, caminhos mistos, ausência de resultados
+e armazenamento nativo por tabela ou coluna. A aplicação Ruby também consulta
+as referências após reabrir o banco com acesso ao MPR proibido. A fixture original
+e a reconstruída passam no `mx check` 11.12.1. Os 115 campos XPath do corpus
+continuam passando no parser, incluindo os 19 com `reversed()`; isso não certifica
+a execução de todos os fluxos desses projetos. Referências entre entidades
+declaradas distintas, aritmética XPath e outras funções permanecem fora deste
+incremento. Veja a [evidência](../evidence/xpath-reverse-2026-10-06.json) e o
+[contrato nativo](https://docs.mendix.com/refguide/query-over/).
+
 ## Layouts, autenticação e exportação de aplicações Ruby
 
 Páginas criadas com `native` aplicam o layout declarado e seu slot `Main`.

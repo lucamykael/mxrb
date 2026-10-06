@@ -29,9 +29,17 @@ RSpec.describe 'annotated rule and expression compatibility' do # rubocop:disabl
       expect(application.call_service('Compatibility.VerifyRule')).to eq('failed')
       restored = application.record('Compatibility.Item', created.fetch(:id))
       expect(restored.fetch(:attributes).fetch('Amount')).to eq(changed)
+      verify_restored_folders(application)
     ensure
       application&.close
     end
+  end
+
+  def verify_restored_folders(application)
+    xpath = "[Compatibility.Folder_Parent[reversed()]/Compatibility.Folder/Name = 'leaf']"
+    folders = application.records('Compatibility.Folder', xpath:)
+    expect(folders.length).to eq(9)
+    expect(folders.map { _1.fetch(:attributes).fetch('Name') }.uniq).to eq(['child'])
   end
 
   def verify_persisted_oracle(source, cases)
