@@ -209,16 +209,33 @@ describe('Marketplace charts read actual application values', () => {
     render(
       <MarketplaceWidget
         {...props('LineChart', {
-          lines: { objects: [{ ...series, aggregationType: 'sum' }] },
+          lines: { objects: [{ ...series, aggregationType: 'unsupported' }] },
         })}
         request={request}
       />,
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Chart aggregation is not supported: sum',
+      'Chart aggregation is not supported: unsupported',
     );
     expect(request).not.toHaveBeenCalled();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['count', 4, 3], ['sum', 80, 30], ['avg', 20, 10], ['min', 10, 5],
+    ['max', 40, 20], ['median', 15, 5], ['mode', 10, 5], ['first', 10, 5], ['last', 40, 20],
+  ])('aggregates %s within each category after sorting and excluding nulls', async (aggregation, a, b) => {
+    const request = vi.fn().mockResolvedValue({ records: [
+      record('A', 10), record('B', 5), record('A', 20), record('B', 5),
+      record('A', 10), record('B', 20), record('A', 40), record('A', null),
+    ] });
+    render(<MarketplaceWidget {...props('LineChart', { lines: { objects: [{
+      ...series, staticDataSource: { data_source: 'App.Point' }, aggregationType: aggregation,
+    }] } })} request={request} />);
+    const table = await screen.findByRole('table', { hidden: true });
+    expect([...table.querySelectorAll('tbody tr')].map((row) => row.textContent))
+      .toEqual([`ValuesA${a}`, `ValuesB${b}`]);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('uses declared pie and heatmap bindings and leaves null values out of the plot', async () => {

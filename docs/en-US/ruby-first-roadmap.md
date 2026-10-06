@@ -1,5 +1,20 @@
 # MXRB: Ruby above all
 
+## Chart aggregation
+
+Charts group repeated categories and calculate `count`, `sum`, `avg`, `min`,
+`max`, `median`, `mode`, `first` and `last`. Source ordering determines first and
+last; null values are excluded. Record changes recompute results. The accessible
+table and plot use the same aggregate values.
+
+Charts 6.2.1 on Studio Pro 11.12.1 confirmed all nine functions for two categories
+before and after insertion, in source and roundtrip packages. Ruby Chromium passes
+59 steps without MPR; 109 frontend tests and the 100% Ruby coverage gate pass.
+CI repeats the fixture with the checksum-pinned package. The fixture certifies
+line-chart aggregate values; dynamic series, stacking, point actions and further
+visual options remain separate contracts.
+See the [evidence](../evidence/chart-aggregation-2026-10-05.json).
+
 ## Conditional and arithmetic expressions
 
 The backend parses the full expression before evaluating only the selected
@@ -111,7 +126,7 @@ opening forbidden.
 
 The native scope checks values and refresh behavior for line, bar and pie charts.
 It does not establish complete visual equivalence, parameterized templates,
-point events, themes, custom layouts or every Plotly option. Aggregations, dynamic
+point events, themes, custom layouts or every Plotly option. Dynamic
 series and bar modes other than `group` still require an adapter; the renderer
 rejects these configurations instead of displaying incorrect data.
 See the [chart evidence](../evidence/chart-data-2026-10-05.json).

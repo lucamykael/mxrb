@@ -1,5 +1,20 @@
 # MXRB: Ruby acima de tudo
 
+## Agregações de gráficos
+
+Gráficos agrupam categorias repetidas e calculam `count`, `sum`, `avg`, `min`,
+`max`, `median`, `mode`, `first` e `last`. A ordem da fonte determina primeiro e
+último; valores nulos ficam fora da agregação. Mudanças nos registros recalculam
+os resultados. A tabela acessível e o desenho usam os mesmos valores agregados.
+
+Charts 6.2.1 no Studio Pro 11.12.1 confirmou as nove funções em duas categorias,
+antes e depois de uma inclusão, na fonte e no round-trip. O Chromium Ruby passou
+59 passos sem MPR; 109 testes de frontend e o gate Ruby de 100% passaram.
+O CI repete a fixture com o mesmo pacote fixado por checksum. Isso certifica os
+valores do cenário de linhas; séries dinâmicas, barras empilhadas, ações por ponto
+e opções visuais adicionais continuam em contratos separados.
+Veja a [evidência](../evidence/chart-aggregation-2026-10-05.json).
+
 ## Expressões condicionais e aritméticas
 
 O backend valida a expressão inteira antes de executá-la e avalia apenas o ramo
@@ -116,8 +131,8 @@ executam a versão Ruby com abertura de MPR proibida.
 
 O recorte nativo verifica valores e atualização de linha, barras e pizza. Não
 estabelece equivalência visual completa, templates parametrizados, eventos por
-ponto, temas, layouts personalizados ou todas as opções do Plotly. Agregações,
-séries dinâmicas e modos de barras diferentes de `group` ainda exigem um adapter;
+ponto, temas, layouts personalizados ou todas as opções do Plotly.
+Séries dinâmicas e modos de barras diferentes de `group` ainda exigem um adapter;
 o renderer recusa essas configurações em vez de representar dados incorretos.
 Veja a [evidência de gráficos](../evidence/chart-data-2026-10-05.json).
 O CI Windows repete esse cenário com o pacote fixado por commit e checksum.

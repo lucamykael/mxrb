@@ -1,0 +1,257 @@
+{
+  "name": "marketplace-chart-aggregation",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "aggregated-chart-values",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart svg",
+            "equals": 9
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart tbody tr",
+            "equals": 18
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 0
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 1
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 2
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 3
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 4
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 5
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 6
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 7
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 8
+          }
+        },
+        {
+          "wait_for_text": "count\tA\t4"
+        },
+        {
+          "wait_for_text": "count\tB\t3"
+        },
+        {
+          "wait_for_text": "sum\tA\t80"
+        },
+        {
+          "wait_for_text": "sum\tB\t30"
+        },
+        {
+          "wait_for_text": "avg\tA\t20"
+        },
+        {
+          "wait_for_text": "avg\tB\t10"
+        },
+        {
+          "wait_for_text": "min\tA\t10"
+        },
+        {
+          "wait_for_text": "min\tB\t5"
+        },
+        {
+          "wait_for_text": "max\tA\t40"
+        },
+        {
+          "wait_for_text": "max\tB\t20"
+        },
+        {
+          "wait_for_text": "median\tA\t15"
+        },
+        {
+          "wait_for_text": "median\tB\t5"
+        },
+        {
+          "wait_for_text": "mode\tA\t10"
+        },
+        {
+          "wait_for_text": "mode\tB\t5"
+        },
+        {
+          "wait_for_text": "first\tA\t10"
+        },
+        {
+          "wait_for_text": "first\tB\t5"
+        },
+        {
+          "wait_for_text": "last\tA\t40"
+        },
+        {
+          "wait_for_text": "last\tB\t20"
+        },
+        {
+          "click_text": "Add aggregate value"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 0
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 1
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 2
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 3
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 4
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 5
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 6
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 7
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary",
+            "index": 8
+          }
+        },
+        {
+          "wait_for_text": "count\tA\t5"
+        },
+        {
+          "wait_for_text": "count\tB\t3"
+        },
+        {
+          "wait_for_text": "sum\tA\t180"
+        },
+        {
+          "wait_for_text": "sum\tB\t30"
+        },
+        {
+          "wait_for_text": "avg\tA\t36"
+        },
+        {
+          "wait_for_text": "avg\tB\t10"
+        },
+        {
+          "wait_for_text": "min\tA\t10"
+        },
+        {
+          "wait_for_text": "min\tB\t5"
+        },
+        {
+          "wait_for_text": "max\tA\t100"
+        },
+        {
+          "wait_for_text": "max\tB\t20"
+        },
+        {
+          "wait_for_text": "median\tA\t20"
+        },
+        {
+          "wait_for_text": "median\tB\t5"
+        },
+        {
+          "wait_for_text": "mode\tA\t10"
+        },
+        {
+          "wait_for_text": "mode\tB\t5"
+        },
+        {
+          "wait_for_text": "first\tA\t10"
+        },
+        {
+          "wait_for_text": "first\tB\t5"
+        },
+        {
+          "wait_for_text": "last\tA\t100"
+        },
+        {
+          "wait_for_text": "last\tB\t20"
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        }
+      ],
+      "selectors": [
+        ".mxrb-marketplace-chart svg",
+        ".mxrb-marketplace-chart table"
+      ]
+    }
+  ]
+}

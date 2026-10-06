@@ -30,7 +30,10 @@ module StudioProBatch
 
   def fixtures
     result = FIXTURES.dup
-    result['charts'] = 'frontend_browser/marketplace_chart_project.rb' if ENV['MXRB_CHARTS_PACKAGE']
+    if ENV['MXRB_CHARTS_PACKAGE']
+      result['charts'] = 'frontend_browser/marketplace_chart_project.rb'
+      result['chart-aggregation'] = 'frontend_browser/marketplace_chart_aggregation_project.rb'
+    end
     result['page-drafts'] = 'persistent_page_drafts/project.rb' if ENV['MXRB_DATAGRID_PACKAGE']
     result
   end

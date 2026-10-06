@@ -19,6 +19,48 @@ const numeric = (value: unknown): number => {
   return result;
 };
 
+const aggregations = ['none', 'count', 'sum', 'avg', 'min', 'max', 'median', 'mode', 'first', 'last'];
+
+function aggregatePoints(points: Point[], operation: string): Point[] {
+  if (operation === 'none') return points;
+  const groups = new Map<string, Point[]>();
+  for (const point of points) {
+    const group = groups.get(point.label) ?? [];
+    group.push(point);
+    groups.set(point.label, group);
+  }
+  return [...groups.values()].map((group) => {
+    const values = group.map((point) => point.value);
+    let value: number;
+    if (operation === 'count') value = values.length;
+    else if (operation === 'first') value = values[0];
+    else if (operation === 'last') value = values[values.length - 1];
+    else if (operation === 'min') value = values.reduce((a, b) => Math.min(a, b));
+    else if (operation === 'max') value = values.reduce((a, b) => Math.max(a, b));
+    else if (operation === 'median') {
+      const ordered = [...values].sort((a, b) => a - b);
+      const upper = Math.floor(ordered.length / 2);
+      value = (ordered[upper] + ordered[Math.floor((ordered.length - 1) / 2)]) / 2;
+    } else if (operation === 'mode') {
+      const counts = new Map<number, number>();
+      value = values[0];
+      let highest = 0;
+      for (const candidate of values) {
+        const frequency = (counts.get(candidate) ?? 0) + 1;
+        counts.set(candidate, frequency);
+        if (frequency > highest) {
+          highest = frequency;
+          value = candidate;
+        }
+      }
+    } else {
+      value = values.reduce((sum, item) => sum + item, 0);
+      if (operation === 'avg') value /= values.length;
+    }
+    return { ...group[0], value };
+  });
+}
+
 async function chartSeries(
   properties: Properties,
   props: Pick<MarketplaceWidgetProps, 'context' | 'request'>,
@@ -55,8 +97,9 @@ async function chartSeries(
     definitions.map(async (definition) => {
       if (definition.dataSet && definition.dataSet !== 'static')
         throw new Error('Dynamic chart series are not supported');
-      if (definition.aggregationType && definition.aggregationType !== 'none')
-        throw new Error(`Chart aggregation is not supported: ${definition.aggregationType}`);
+      const aggregation = String(definition.aggregationType || 'none');
+      if (!aggregations.includes(aggregation))
+        throw new Error(`Chart aggregation is not supported: ${aggregation}`);
       const configured = object(definition.staticDataSource ?? definition.seriesDataSource);
       const source =
         typeof configured.data_source === 'string'
@@ -102,7 +145,7 @@ async function chartSeries(
       };
       return {
         name: String(definition.staticName ?? definition.seriesName ?? ''),
-        points: sortRecords(response.records, sorting).flatMap((record, index) => {
+        points: aggregatePoints(sortRecords(response.records, sorting).flatMap((record, index) => {
           const value = read(record, y);
           if (value === null || value === undefined) return [];
           return [
@@ -113,7 +156,7 @@ async function chartSeries(
               row: row ? String(read(record, row) ?? '') : undefined,
             },
           ];
-        }),
+        }), aggregation),
       };
     }),
   );
