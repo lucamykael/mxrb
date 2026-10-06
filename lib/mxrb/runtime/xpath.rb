@@ -22,7 +22,8 @@ module Mxrb
         @store = store
         @policy = policy
         @context = context
-        @expression = Native::Expression.new
+        attributes = context.respond_to?(:attributes) ? context.attributes : {}
+        @expression = Native::Expression.new(time_zone: attributes.fetch('time_zone', 'UTC'))
         @functions = XPathFunctions.new(context)
         @tree = Parser.new(source.to_s).parse
       end

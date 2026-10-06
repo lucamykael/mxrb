@@ -1,5 +1,22 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Calendar expressions
+
+Ruby and TypeScript evaluate date creation, additions/subtractions from milliseconds
+to years, period trimming and millisecond epoch conversion. Calendar operations
+support UTC variants. Ruby uses the security context's IANA time zone; the frontend
+uses the browser zone or an explicit evaluator `timeZone`. Subsequent requests do
+not inherit the previous user's zone. Month/year shifts clamp to the final valid
+day; elapsed hours and smaller units differ from calendar days across DST.
+
+Local tests cover New York, Lord Howe and Apia transitions. The native compatibility
+matrix adds 16 UTC cases in both source and round-trip projects; local tests alone
+do not establish native equivalence. Localized parsing/formatting and date differences
+remain separate contracts.
+
+
+[Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
+
 ## Dynamic chart series — October 6, 2026
 
 Line and column charts support dynamic series grouped by the configured

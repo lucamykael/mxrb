@@ -1,4 +1,5 @@
 import type { EntityRecord, RuntimeValue, RuntimeVariables } from '../types';
+import { calendarFunction, isCalendarFunction } from './calendar';
 
 // Keep enum identity until comparison. Backend records can contain either the
 // qualified literal or the bare member used by model defaults.
@@ -81,6 +82,7 @@ export function evaluate(
   source: string,
   context: EntityRecord | null,
   variables: RuntimeVariables = {},
+  options: { timeZone?: string } = {},
 ): RuntimeValue | undefined {
   const tokens: string[] = [];
   let remaining = source.trim();
@@ -129,6 +131,24 @@ export function evaluate(
         const attributes = value.attributes as Record<string, Value>;
         return attributes[member.split('.').at(-1) || member];
       };
+    }
+    if (isCalendarFunction(token)) {
+      consume('(');
+      const arguments_: Expression[] = [];
+      if (tokens[cursor] !== ')') {
+        arguments_.push(parse(1));
+        while (tokens[cursor] === ',') {
+          consume(',');
+          arguments_.push(parse(1));
+        }
+      }
+      consume(')');
+      return () =>
+        calendarFunction(
+          token,
+          arguments_.map((argument) => argument()),
+          options.timeZone,
+        );
     }
     if (token === 'toString') {
       consume('(');

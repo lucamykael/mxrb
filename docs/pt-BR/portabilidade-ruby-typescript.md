@@ -1,5 +1,28 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Expressões de calendário
+
+O avaliador Ruby e o frontend TypeScript executam `dateTime[UTC]`,
+`add`/`subtract` de milissegundos até anos (incluindo semanas e trimestres),
+`trimToSeconds/Minutes/Hours/Days/Months/Years` e conversão de epoch em
+milissegundos. Operações de calendário têm variantes UTC; o backend usa o fuso
+IANA do contexto de segurança e o navegador usa seu fuso local ou `timeZone`
+explícito no avaliador. Uma chamada seguinte não herda o fuso do usuário anterior.
+
+Meses e anos ajustam o dia ao último dia válido do destino. Horas e unidades
+menores são durações; dias e semanas preservam o horário local através de DST.
+Testes cobrem transições de Nova York, o salto de meia hora de Lord Howe e o dia
+omitido em Apia. Esses testes locais não substituem a certificação do runtime
+Mendix. A matriz nativa acrescenta 16 casos UTC na origem e no round-trip.
+
+Veja os contratos oficiais de [adição de datas](https://docs.mendix.com/refguide/add-date-function-calls/),
+[criação](https://docs.mendix.com/refguide/date-creation/) e
+[início de períodos](https://docs.mendix.com/refguide/trim-to-date/).
+Parsing/formatação localizada e diferenças entre datas continuam em contratos separados.
+
+
+[Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
+
 ## Séries dinâmicas de gráficos — 6 de outubro de 2026
 
 Gráficos de linhas e colunas aceitam séries dinâmicas agrupadas pelo atributo

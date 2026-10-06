@@ -9,6 +9,7 @@ require 'net/http'
 require 'openssl'
 require 'uri'
 require_relative 'string_functions'
+require_relative 'calendar_functions'
 
 module Mxrb
   module Runtime
@@ -170,8 +171,9 @@ module Mxrb
       class Expression
         include StringFunctions
 
-        def initialize
+        def initialize(time_zone: 'UTC')
           @token_cache = {}
+          @calendar = CalendarFunctions.new(time_zone:)
         end
 
         def evaluate(source, variables, node: nil)
@@ -212,6 +214,8 @@ module Mxrb
         end
 
         def invoke(name, arguments)
+          return @calendar.invoke(name.downcase, arguments) if @calendar.supported?(name.downcase)
+
           case name.downcase
           when 'length' then arguments.fetch(0).to_s.encode('UTF-16LE').bytesize / 2
           when 'trim' then arguments.fetch(0).to_s.gsub(/\A[\x00-\x20]+|[\x00-\x20]+\z/, '')
@@ -219,9 +223,6 @@ module Mxrb
           when 'touppercase' then arguments.fetch(0).to_s.upcase
           when 'urlencode' then URI::RFC2396_PARSER.escape(arguments.fetch(0).to_s, /[^A-Za-z0-9\-._~]/)
           when 'urldecode' then URI.decode_www_form_component(arguments.fetch(0).to_s)
-          when 'addseconds' then arguments.fetch(0) + arguments.fetch(1)
-          when 'addminutes' then arguments.fetch(0) + (arguments.fetch(1) * 60)
-          when 'adddays' then arguments.fetch(0) + (arguments.fetch(1) * 86_400)
           when 'tostring' then mendix_string(arguments.fetch(0))
           when 'parseinteger' then Integer(arguments.fetch(0))
           when 'parsedecimal' then Float(arguments.fetch(0))
@@ -558,7 +559,10 @@ module Mxrb
         def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
                        service_dispatch: nil)
           @project = project
-          @expression = Expression.new
+          @expression = Expression.new(time_zone: lambda {
+            attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
+            attributes.fetch('time_zone', 'UTC')
+          })
           @log = []
           @effects = []
           @call_depth = 0
