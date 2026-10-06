@@ -154,6 +154,10 @@ module Mxrb
         )
       end
 
+      def placeholder(name, parameter:)
+        _add_widget(:placeholder, name, parameter:)
+      end
+
       def sidebar_toggle(name, caption: 'Menu', button_style: :default, tooltip: '',
                          class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
         _add_widget(:sidebar_toggle, name, caption:, button_style:, tooltip:,

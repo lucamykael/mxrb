@@ -110,6 +110,31 @@ RSpec.describe 'Advanced standalone presentation contracts' do
       .to raise_error(ArgumentError, /missing layout/)
   end
 
+  it 'exports nested layout placeholders as typed declarations that preserve slot composition' do
+    original = Mxrb::RubyApp::Page::WidgetTree.new
+    original.layout_grid('Shell') do
+      row do
+        column { widget :placeholder, 'Main', options: { parameter: 'Main' }, events: [] }
+      end
+    end
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    source = exporter.send(:runtime_widget_dsl_source, original.widgets, 0)
+    expect(source).to include('placeholder "Main", parameter: "Main"')
+    expect(source).not_to include('widget :placeholder', '=>')
+    reconstructed = Mxrb::RubyApp::Page::WidgetTree.new
+    reconstructed.instance_eval(source)
+    expect(reconstructed.widgets).to eq(original.widgets)
+    Mxrb::RubyApp::Presentation.layout('App.Shell') { instance_eval(source) }
+    composed = Mxrb::RubyApp::Presentation.compose(
+      reconstructed.widgets, slots: { 'Main' => [{ 'type' => 'text', 'name' => 'Content' }] }
+    )
+    expect(JSON.generate(composed)).to include('Content')
+    expect(JSON.generate(composed)).not_to include('placeholder')
+    missing_parameter = { 'type' => 'placeholder', 'name' => 'Main', 'options' => {}, 'events' => [] }
+    expect(exporter.send(:runtime_widget_dsl_source, [missing_parameter], 0, generic_sink: true))
+      .to include('widget :placeholder')
+  end
+
   it 'declares translated menu actions with editable named arguments and snippet parameters' do
     Mxrb::RubyApp::Presentation.menu('App.Menu') do
       item 'Open', translations: [%w[pt_BR Abrir]], icon: 'home' do
