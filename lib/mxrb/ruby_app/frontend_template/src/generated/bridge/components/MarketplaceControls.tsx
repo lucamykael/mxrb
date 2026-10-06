@@ -1,3 +1,4 @@
+import { decimal, isDecimal, numericText } from '../decimal';
 import { useContext } from 'react';
 import type { CSSProperties } from 'react';
 import type { MarketplaceWidgetProps } from '../marketplace';
@@ -61,14 +62,22 @@ export function MarketplaceControl(props: MarketplaceWidgetProps) {
     !editable(widget.options || {}, context, schema?.module_roles);
   const label = String(p.label || widget.options?.caption || widget.name);
   const number = (value: unknown, fallback: number) => {
-    const parsed = Number(marketplaceValue(value, props) ?? fallback);
+    const resolved = marketplaceValue(value, props) ?? fallback;
+    const parsed = Number(isDecimal(resolved) ? numericText(resolved) : resolved);
     if (!Number.isFinite(parsed)) throw new Error(`Invalid numeric property in ${widget.name}`);
     return parsed;
   };
   const read = (attribute: unknown, fallback: unknown = 0) =>
     context?.attributes[memberName(String(attribute || ''))] ?? fallback;
   const write = (attribute: unknown, value: string | number) => {
-    if (!disabled && typeof attribute === 'string' && attribute) return onChange(attribute, value);
+    if (disabled || typeof attribute !== 'string' || !attribute) return;
+    const field = schema?.modules
+      .flatMap((module) => [...(module.models || []), ...(module.dtos || [])])
+      .find((entity) => entity.name === context?.type)
+      ?.attributes?.find((entry) => entry.name === memberName(attribute));
+    const exact =
+      typeof value === 'number' && (isDecimal(read(attribute)) || field?.type === 'decimal');
+    return onChange(attribute, exact ? decimal(value) : value);
   };
   const minimum = number(p.minimumValue, 0);
   const maximum = number(p.maximumValue, 100);
@@ -135,10 +144,10 @@ export function MarketplaceControl(props: MarketplaceWidgetProps) {
               key={value}
               type="button"
               aria-label={`${value} stars`}
-              aria-pressed={value <= Number(read(attribute))}
+              aria-pressed={value <= number(read(attribute), 0)}
               onClick={() => write(attribute, value)}
             >
-              {value <= Number(read(attribute)) ? '★' : '☆'}
+              {value <= number(read(attribute), 0) ? '★' : '☆'}
             </button>
           ),
         )}
@@ -155,7 +164,7 @@ export function MarketplaceControl(props: MarketplaceWidgetProps) {
         min={min}
         max={max}
         step={number(p.stepSize, 1)}
-        value={Number(read(attribute, min))}
+        value={number(read(attribute, min), min)}
         onChange={(event) => write(attribute, Number(event.target.value))}
       />
     </label>
@@ -168,12 +177,12 @@ export function MarketplaceControl(props: MarketplaceWidgetProps) {
           p.lowerValueAttribute,
           `${label} minimum`,
           minimum,
-          Number(read(p.upperValueAttribute, maximum)),
+          number(read(p.upperValueAttribute, maximum), maximum),
         )}
         {slider(
           p.upperValueAttribute,
           `${label} maximum`,
-          Number(read(p.lowerValueAttribute, minimum)),
+          number(read(p.lowerValueAttribute, minimum), minimum),
           maximum,
         )}
       </fieldset>

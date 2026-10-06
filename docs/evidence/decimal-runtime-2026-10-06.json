@@ -2,7 +2,7 @@
   "date": "2026-10-06",
   "scope": "Exact Decimal arithmetic, typed JSON transport, SQLite storage, fields and nanoflows",
   "frontend": {
-    "tests": 124,
+    "tests": 126,
     "format": "passed",
     "lint": "passed",
     "typecheck": "passed",
@@ -48,10 +48,17 @@
     "scope": "ModelRuntimeSettings and DecimalUtils helper calls; full application persistence checked separately by CI fixture"
   },
   "native_ci": {
-    "status": "pending publication"
+    "status": "passed for 53565b7; awaiting revalidation of final controls adjustment",
+    "run": 37498463873,
+    "head": "53565b7",
+    "builds": 20,
+    "runtimes": 14,
+    "compatibility_cases": 63,
+    "source_roundtrip_identical": true,
+    "artifacts": "/tmp/mxrb-decimal-windows-evidence-v1"
   },
   "limitations": [
-    "Java decimal formatting patterns and locale parsing remain separate",
+    "Java decimal formatting patterns and locale parsing remain separate; slider positions and chart coordinates use presentation floats",
     "Legacy REAL values cannot recover precision already lost",
     "Internal API decimal wire values now use __mxrb_decimal; regenerate frontend and adapt clients",
     "External SQL over TEXT decimal columns requires decimal-aware comparisons",
