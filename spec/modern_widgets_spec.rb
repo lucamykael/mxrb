@@ -181,7 +181,7 @@ RSpec.describe 'modern page widgets' do
       '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'XPathConstraint' => '[Active = true]'
     )
     expect(writer.send(:array_items, values.dig('source', 'Value', 'DataSource', 'SortBar', 'SortItems')).first)
-      .to include('SortDirection' => 'Ascending', 'AttributeRef' => include('Attribute' => 'Ui.Item.Name'))
+      .to include('SortOrder' => 'Ascending', 'AttributeRef' => include('Attribute' => 'Ui.Item.Name'))
     expect(values.dig('label', 'Value', 'AttributeRef', 'Attribute')).to eq('Ui.Item.Name')
     expect(values.dig('selected', 'Value', 'Selection')).to eq('Single')
     expect(values.dig('action', 'Value', 'Action', '$Type')).to eq('Forms$MicroflowAction')

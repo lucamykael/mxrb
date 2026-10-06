@@ -15,6 +15,8 @@ interface SeriesPlot extends HTMLElement {
     while (Date.now() < deadline) {
       const actual = read();
       if (names.every((name) => Object.keys(actual[name]).length === Object.keys(expected).length &&
+        (!expected['Region East'] || Object.keys(actual[name])[0] ===
+          (name === 'ColumnChart' ? 'Region East' : 'Region North')) &&
         Object.entries(expected).every(([series, points]) =>
           Object.keys(actual[name][series] ?? {}).length === Object.keys(points).length &&
           Object.entries(points).every(([label, value]) => actual[name][series]?.[label] === value)))) return actual;

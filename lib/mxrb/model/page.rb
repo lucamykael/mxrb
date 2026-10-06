@@ -799,7 +799,7 @@ module Mxrb
           sort: parse_array(source.dig("SortBar", "SortItems")).map do |item|
             {
               attribute: item.dig("AttributeRef", "Attribute"),
-              direction: item["SortDirection"].to_s
+              direction: (item["SortOrder"] || item["SortDirection"]).to_s
             }.compact
           end
         }.compact

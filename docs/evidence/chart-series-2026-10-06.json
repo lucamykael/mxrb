@@ -2,16 +2,16 @@
   "date": "2026-10-06",
   "scope": "Dynamic line and column series, per-group aggregation and simple expression/attribute captions",
   "ruby": {
-    "examples": 2277,
+    "examples": 2278,
     "failures": 0,
     "lines": {
-      "covered": 40803,
-      "total": 40803,
+      "covered": 40809,
+      "total": 40809,
       "percent": 100.0
     },
     "branches": {
-      "covered": 17864,
-      "total": 17864,
+      "covered": 17866,
+      "total": 17866,
       "percent": 100.0
     }
   },
@@ -30,7 +30,7 @@
     "steps": 15,
     "sidecar": "detached before startup",
     "console_errors": [],
-    "screenshot_sha256": "5c1025b1af9906801f81db999037b342fd9082176471476031f79f93c9f91db0"
+    "screenshot_sha256": "dd92138e618352037db1be027e25f99c9196e6a0f58f80f3ec0a372d3bf34c95"
   },
   "roundtrip": {
     "modern_projects": 8,
@@ -52,7 +52,11 @@
   },
   "limits": [
     "Parameterized caption certification covers simple expressions and attributes, not alternate source variables, translations or custom formatting.",
-    "Stacking, point actions and advanced Plotly options remain open.",
-    "A separate legacy fixture still fails the public placeholder-source audit on both the baseline and this branch."
-  ]
+    "Stacking, point actions and advanced Plotly options remain open."
+  ],
+  "native_static_check": {
+    "tool": "mx 11.12.1 check",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  }
 }

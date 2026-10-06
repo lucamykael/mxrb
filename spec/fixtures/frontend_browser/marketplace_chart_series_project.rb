@@ -51,8 +51,9 @@ Mxrb.define(destination) do
       text_box :Name, attribute: 'Series.ChartContext.Name', caption: 'Title'
       button(:AddPoint, caption: 'Add series value') { on_click microflow: 'Series.AddPoint' }
       %w[LineChart ColumnChart].each do |kind|
+        direction = kind == 'ColumnChart' ? 'Descending' : 'Ascending'
         source = { data_source: { entity: 'Series.Point',
-                                  sort: [{ attribute: 'Series.Point.Position', direction: 'Ascending' }] } }
+                                  sort: [{ attribute: 'Series.Point.Position', direction: }] } }
         series = { dataSet: 'dynamic', dynamicDataSource: source,
                    groupByAttribute: { attribute: 'Series.Point.Region' },
                    dynamicName: { text: 'Region {1}', parameters: ['$currentObject/Series.Point.Region'] },
