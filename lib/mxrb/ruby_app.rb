@@ -2021,6 +2021,29 @@ module Mxrb
         end
       end
 
+      # Storage restoration creates an uncommitted object, with a capability that
+      # lets subsequent microflows resume it without persisting it prematurely.
+      def restore_record(name, attributes, context: nil)
+        unless name.is_a?(String) && !name.empty? && attributes.is_a?(Hash)
+          raise ArgumentError, 'restore requires an entity type and attributes'
+        end
+
+        runtime_synchronize do
+          authorize_entity!(name, :create, context)
+          store = bridge.interpreter.store
+          store.transaction do
+            value = store.create(name)
+            attributes.each do |member, member_value|
+              authorize_entity!(name, :write, context, member:, record: value)
+              value.members[member] = deserialize(member_value, context:)
+            end
+            serialize(value, context:)
+          end
+        ensure
+          release_runtime_cache
+        end
+      end
+
       def delete_records(records, context: nil)
         unless records.is_a?(Array) && records.length <= 1000 && records.all? do |entry|
           entry.is_a?(Hash) && %w[type id].all? { entry[_1].is_a?(String) && !entry[_1].empty? }
@@ -3437,6 +3460,11 @@ module Mxrb
 
         if method == 'POST' && path == '/api/records/draft'
           return render_json(response, 200, application.draft_record(request_json(request)['type'], context:))
+        end
+
+        if method == 'POST' && path == '/api/records/restore'
+          values = request_json(request)
+          return render_json(response, 200, application.restore_record(values['type'], values['attributes'], context:))
         end
 
         if method == 'POST' && path == '/api/records/delete'

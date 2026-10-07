@@ -1,5 +1,24 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Reading and restoring Feedback objects
+
+The verified `JS_GetFeedbackStorageObject` and `GetStorageItemObject` getters
+reuse available objects and refresh stored JSON with their current values.
+Missing objects are recreated with decimals, dates and booleans preserved and a
+new guid written to storage. Entity type arguments reach TypeScript nanoflows.
+
+Restoration does not commit the object. Persistent objects receive an owner-bound
+draft capability for subsequent microflow calls and explicit save. Persisted
+objects are looked up again on later reads; current local context values take
+precedence over stale snapshots. Access errors, malformed storage and unknown
+members propagate explicitly.
+
+Two native builds and runtimes, 21 browser steps without MPR access, and three
+cases from the unchanged SLA Task App getter nanoflow passed. Restored integers
+must fit the frontend's exact numeric range. Cross-browser synchronization,
+AsyncStorage and offline use are not certified.
+[Evidence](../evidence/feedback-object-restore-2026-10-07.json).
+
 ## Parsing numeric UTC dates
 
 `parseDateTimeUTC(text, pattern[, fallback])` runs in Ruby microflows and

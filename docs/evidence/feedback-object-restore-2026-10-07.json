@@ -1,0 +1,103 @@
+{
+  "date": "2026-10-07",
+  "scope": "Verified Web Feedback object getters, entity type arguments and uncommitted restoration",
+  "actions": {
+    "JS_GetFeedbackStorageObject": {
+      "sha256_lf_normalized": "a93f11149c06faff956cf6d7540193e0a307f20bc93d697af409542eab3defa3",
+      "model_parameters": [
+        "key",
+        "entity"
+      ]
+    },
+    "GetStorageItemObject": {
+      "sha256_lf_normalized": "5a4d423f7e867940bf74d5bdbf8dda617c3eb1f475000d44afba383ae56c219c",
+      "model_parameters": [
+        "Key",
+        "Entity"
+      ]
+    }
+  },
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "results": [
+        {
+          "variant": "ReadLegacy",
+          "existing_guid_preserved": true,
+          "missing_guid_replaced": true,
+          "repeated_guid_preserved": true,
+          "existing": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "restored": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "repeated": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "values": {
+            "guid": "<generated>",
+            "Name": "Current",
+            "Amount": "9007199254740993.12345678",
+            "Count": "12",
+            "When": 1767323045000,
+            "Active": false
+          }
+        },
+        {
+          "variant": "ReadCurrent",
+          "existing_guid_preserved": true,
+          "missing_guid_replaced": true,
+          "repeated_guid_preserved": true,
+          "existing": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "restored": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "repeated": "Current|9007199254740993.12345678|12|false|1767323045000",
+          "values": {
+            "guid": "<generated>",
+            "Name": "Current",
+            "Amount": "9007199254740993.12345678",
+            "Count": "12",
+            "When": 1767323045000,
+            "Active": false
+          }
+        }
+      ]
+    }
+  },
+  "validation": {
+    "ruby_examples": 2347,
+    "ruby_failures": 0,
+    "coverage_lines": {
+      "covered": 41431,
+      "total": 41431,
+      "percent": 100
+    },
+    "coverage_branches": {
+      "covered": 18187,
+      "total": 18187,
+      "percent": 100
+    },
+    "rubocop_files": 585,
+    "rubocop_offenses": 0,
+    "frontend_tests": 197,
+    "frontend_check_passed": true,
+    "browser_steps": 21,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "unchanged_real_nanoflow": "SLATaskApp FeedbackModule.SUB_Feedback_GetOrCreate",
+    "real_nanoflow_cases": 3
+  },
+  "behavior": [
+    "Existing visible objects take precedence over stale stored attributes.",
+    "Missing objects are restored without committing, with a new guid written to storage.",
+    "Restored persistent objects carry an owner-bound draft capability for later microflow use and explicit save.",
+    "Persisted objects are looked up again so subsequent deletion does not return a cached object.",
+    "Entity type arguments are preserved in generated nanoflows.",
+    "Malformed storage, lookup failures other than not-found, denied creation and unsupported members propagate errors."
+  ],
+  "limitations": [
+    "Web localStorage only; React Native AsyncStorage and offline synchronization are not certified.",
+    "Restored integer fields must fit the exact JavaScript integer range.",
+    "Cross-browser identity and storage synchronization are not provided.",
+    "Associations require known schema members and resolvable reference identifiers."
+  ]
+}

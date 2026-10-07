@@ -91,6 +91,14 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     end
   end
 
+  it 'passes entity type arguments to JavaScript actions as literal qualified entity names' do
+    mapping = [{ 'Parameter' => 'FeedbackModule.Read.Entity', 'ParameterValue' => {
+      '$Type' => 'Microflows$EntityTypeCodeActionParameterValue', 'Entity' => 'FeedbackModule.Feedback'
+    } }]
+    expect(exporter.send(:javascript_action_arguments, mapping))
+      .to eq('Entity' => "'FeedbackModule.Feedback'")
+  end
+
   it 'recovers embedded artifact paths by identity and qualified name' do
     exporter.instance_variable_set(:@embedded_sources, [
                                      { path: 'README.md', contents: 'ignored' },
