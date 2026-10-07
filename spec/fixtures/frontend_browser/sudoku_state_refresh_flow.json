@@ -1,0 +1,154 @@
+{
+  "name": "real-sudoku-gameplay",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "gameplay",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": ".sd-card-easy button"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": ".sd-card-easy button"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-cell",
+            "equals": 81
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": ".sd-cell:not(.sd-given)"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-sel",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 1
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-cell:not(.sd-given) .sd-num",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 2
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-cell:not(.sd-given) .sd-num",
+            "equals": 0
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 4
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-tool-on",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 4
+          }
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-tool-on",
+            "equals": 0
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 3
+          }
+        },
+        {
+          "wait_for_selector": ".sd-card-medium button"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": ".sd-card-medium button"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-cell",
+            "equals": 81
+          }
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".sd-tools .sd-tool",
+            "index": 3
+          }
+        },
+        {
+          "wait_for_selector": ".sd-card-hard button"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": ".sd-card-hard button"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".sd-cell",
+            "equals": 81
+          }
+        },
+        {
+          "wait_for_idle": true
+        }
+      ]
+    }
+  ]
+}

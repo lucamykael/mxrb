@@ -1,0 +1,31 @@
+{
+  "name": "live-named-page-parameters",
+  "authentication": false,
+  "pages": [
+    {
+      "name": "editor",
+      "path": "/",
+      "steps": [
+        { "wait_for_text": "Open editor" },
+        { "click_text": "Open editor" },
+        { "wait_for_text": "Initial" },
+        { "wait_for_selector": ".live-off" },
+        { "wait_for_idle": true },
+        { "click_text": "Toggle" },
+        { "wait_for_selector": ".live-on" },
+        { "wait_for_selector": ".live-enabled" },
+        { "wait_for_idle": true },
+        { "click_text": "Toggle" },
+        { "wait_for_selector": ".live-off" },
+        { "wait_for_absence": ".live-enabled" },
+        { "wait_for_idle": true },
+        { "click_text": "Rename" },
+        { "wait_for_text": "Updated" },
+        { "wait_for_idle": true },
+        { "click_text": "Toggle" },
+        { "wait_for_selector": ".live-on" },
+        { "wait_for_text": "Updated" }
+      ]
+    }
+  ]
+}

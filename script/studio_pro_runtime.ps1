@@ -5,6 +5,7 @@ param(
     [Parameter(Mandatory=$true)][string]$JavaHome,
     [Parameter(Mandatory=$true)][string]$EvidenceDirectory,
     [string]$ScenarioPath,
+    [string]$PageReadySelector = 'input',
     [int]$HttpPort = 18080,
     [int]$AdminPort = 18090,
     [int]$BrowserPort = 19222
@@ -144,14 +145,16 @@ logging = [{ name = Console, type = console, autoSubscribe = INFO, levels {} }]
     $socket.ConnectAsync([Uri]$target.webSocketDebuggerUrl, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null
     $until = [DateTime]::UtcNow.AddSeconds(45)
     $pageReady = $false
+    $pageReadySelectorJson = ConvertTo-Json -InputObject $PageReadySelector -Compress
+    $report['page_ready_selector'] = $PageReadySelector
     do {
         # The initial '/' redirect can destroy an execution context. Read-only
         # readiness probes may retry; the mutating CRUD scenario runs once.
-        try { $pageReady = Evaluate-Browser "Boolean(window.mx && mx.data && document.querySelector('input'))" }
+        try { $pageReady = Evaluate-Browser "Boolean(window.mx && mx.data && document.querySelector($pageReadySelectorJson))" }
         catch { $pageReady = $false }
         if (-not $pageReady) { Start-Sleep -Milliseconds 300 }
     } until ($pageReady -or [DateTime]::UtcNow -gt $until)
-    if (-not $pageReady) { throw 'Native page did not render its input widgets within 45 seconds' }
+    if (-not $pageReady) { throw "Native page did not render selector '$PageReadySelector' within 45 seconds" }
     $report['page_ready'] = $true
     $crudExpression = @'
 (async()=>{const call=(method,args)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error(method+' timed out')),15000);mx.data[method]({...args,callback:value=>{clearTimeout(timer);resolve(value)},error:error=>{clearTimeout(timer);reject(error)},onValidation:()=>{clearTimeout(timer);reject(new Error('validation rejected '+method))}})});const marker='MXRB-native-'+Date.now();const result={steps:[]};let id;try{const object=await call('create',{entity:'Core.Item'});id=object.getGuid();object.set('Name',marker);object.set('Active',true);await call('commit',{mxobj:object});result.steps.push('create');const read=await call('get',{guid:id,noCache:true});if(read.get('Name')!==marker)throw new Error('Read mismatch');result.steps.push('read');read.set('Name',marker+'-updated');await call('commit',{mxobj:read});const changed=await call('get',{guid:id,noCache:true});if(changed.get('Name')!==marker+'-updated')throw new Error('Update mismatch');result.steps.push('update');await call('remove',{guid:id});const remaining=await call('get',{xpath:'//Core.Item[id='+id+']'});if(remaining.length)throw new Error('Delete did not persist');id=null;result.steps.push('delete');result.status='passed';return result;}finally{if(id)await call('remove',{guid:id});}})()

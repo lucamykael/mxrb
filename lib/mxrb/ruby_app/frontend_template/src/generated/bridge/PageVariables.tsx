@@ -149,6 +149,27 @@ export function initializeVariables(
 }
 
 export const PageParameters = createContext<RuntimeVariables>({});
+
+// A page argument and its active context can be separate JSON snapshots of
+// the same object. Keep named references current after saves and flow results.
+export function liveParameters(
+  parameters: RuntimeVariables,
+  context: EntityRecord | null,
+): RuntimeVariables {
+  const replace = (value: RuntimeValue | undefined): RuntimeValue | undefined => {
+    if (Array.isArray(value)) return value.map(replace) as RuntimeValue;
+    return context &&
+      isEntityRecord(value) &&
+      value.type === context.type &&
+      value.id === context.id
+      ? context
+      : value;
+  };
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => [name, replace(value)]),
+  );
+}
+
 export const PageParameterBindings = createContext<{
   values: RuntimeVariables;
   types?: Record<string, ValueType | undefined>;

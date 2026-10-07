@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-07",
+  "scope": "Refresh named page arguments referring to the active context object after flow updates",
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "toggles": [
+        true,
+        false,
+        true
+      ],
+      "name": "Updated"
+    },
+    "page_ready_selector": ".mx-name-Open"
+  },
+  "ruby": {
+    "examples": 2338,
+    "failures": 0,
+    "coverage": {
+      "lines": {
+        "covered": 41331,
+        "total": 41331,
+        "percent": 100
+      },
+      "branches": {
+        "covered": 18134,
+        "total": 18134,
+        "percent": 100
+      }
+    },
+    "rubocop_files": 580,
+    "rubocop_offenses": 0,
+    "frontend_tests": 179,
+    "frontend_check_passed": true,
+    "fixture_browser_steps": 19,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "regression_before_fix": "Timed out waiting for .live-on after the first toggle"
+  },
+  "corpus": {
+    "project": "Sudoku",
+    "browser_steps": 32,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "checks": [
+      "Easy, medium and hard games each have 81 cells",
+      "Select a blank cell",
+      "Hint adds a value",
+      "Reset clears the hint",
+      "Notes mode toggles on and off"
+    ]
+  },
+  "limitations": [
+    "Only aliases of the active context object are refreshed; unrelated page arguments are preserved",
+    "Does not certify all Sudoku functions or a general shared object cache",
+    "No mobile/offline certification"
+  ]
+}
