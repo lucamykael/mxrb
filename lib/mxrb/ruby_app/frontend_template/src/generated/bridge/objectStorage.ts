@@ -4,9 +4,21 @@ import { decimalNumber, isDecimal } from './decimal';
 import { isEntityRecord, memberName } from './value';
 
 let schema: ApplicationSchema | null = null;
+const objects = new Map<string, EntityRecord>();
+
+export const objectStorageSchema = (): ApplicationSchema | null => schema;
+export const cachedStorageObject = (id: string): EntityRecord | undefined => objects.get(id);
+export const rememberStorageObject = (record: EntityRecord): EntityRecord => {
+  // Persisted records must be looked up again: they may have been deleted or
+  // changed by a microflow since the previous storage read.
+  if (record.new_record || record.transient) objects.set(record.id, record);
+  else objects.delete(record.id);
+  return record;
+};
 
 export const registerObjectStorageSchema = (value: ApplicationSchema | null): void => {
   schema = value;
+  objects.clear();
 };
 
 const reference = (value: RuntimeValue | undefined): RuntimeValue => {
@@ -78,4 +90,5 @@ export const writeStorageObject: JavaScriptAction = async ({ Key, Value }) => {
   if (!Value) throw new Error("Input parameter 'Value' is required");
   if (!isEntityRecord(Value)) throw new TypeError('Storage value must be an application record');
   window.localStorage.setItem(String(Key), JSON.stringify(serializeStorageObject(Value)));
+  rememberStorageObject(Value);
 };

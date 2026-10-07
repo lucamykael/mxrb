@@ -15,6 +15,7 @@ type ChangeExpressions = Record<string, string>;
 // Expressions and decimals share the same evaluator as page bindings.
 export type JavaScriptAction = (
   parameters: NanoflowParameters,
+  variables?: NanoflowParameters,
 ) => RuntimeValue | undefined | Promise<RuntimeValue | undefined>;
 
 let nanoflowRegistry: Record<string, RegisteredNanoflow> = {};
@@ -173,7 +174,7 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     const parameters = Object.fromEntries(
       Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)]),
     );
-    return action(parameters);
+    return action(parameters, this.variables);
   }
 
   showMessage(message: string, level = 'information', blocking = false): void {

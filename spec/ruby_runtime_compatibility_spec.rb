@@ -220,6 +220,31 @@ RSpec.describe 'Standalone runtime compatibility' do
     expect(@application.records('Files.Report').size).to eq(1)
   end
 
+  it 'restores an uncommitted storage object with a resumable capability and preserves explicit save' do
+    app = @application
+    Class.new(Mxrb::RubyApp::Service) do
+      mendix_name 'Files.RestoredEcho'
+      def call(item:) = item
+    end
+    restored = app.restore_record('Files.Tag', { 'Name' => 'Restored' })
+    expect(restored).to include(new_record: true, draft_token: a_string_matching(/\A[0-9a-f]{64}\z/))
+    expect(app.records('Files.Tag')).to be_empty
+    entry = JSON.parse(JSON.generate(restored))
+    result = app.invoke_service('Files.RestoredEcho', 'item' => entry)
+    expect(result.dig(:result, :attributes, 'Name')).to eq('Restored')
+    expect(app.records('Files.Tag')).to be_empty
+    saved = app.commit_records([entry])
+    expect(saved.first[:id]).to eq(restored[:id])
+    expect(app.records('Files.Tag').first.dig(:attributes, 'Name')).to eq('Restored')
+    [[nil, {}], ['', {}], ['Files.Tag', nil]].each do |name, attributes|
+      expect { app.restore_record(name, attributes) }.to raise_error(ArgumentError, /restore requires/)
+    end
+    context = app.session_manager.authenticate(nil)
+    allow(app.access_control).to receive(:authorize!).and_raise(Mxrb::Runtime::AuthorizationError)
+    expect { app.restore_record('Files.Tag', {}, context:) }.to raise_error(Mxrb::Runtime::AuthorizationError)
+    expect(app.records('Files.Tag').size).to eq(1)
+  end
+
   it 'keeps new client drafts private until an atomic save and resolves references between new drafts' do
     app = @application
     page = Class.new(Mxrb::RubyApp::Page)
@@ -301,6 +326,12 @@ RSpec.describe 'Standalone runtime compatibility' do
     expect(status).to eq(200)
     expect(draft).to include('new_record' => true)
     expect(@application.records('Files.Tag')).to be_empty
+    status, restored = call.call('/api/records/restore', 'POST', type: 'Files.Tag', attributes: { Name: 'Restored' })
+    expect(status).to eq(200)
+    expect(restored).to include('new_record' => true, 'draft_token' => a_kind_of(String))
+    expect(restored.dig('attributes', 'Name')).to eq('Restored')
+    expect(@application.records('Files.Tag')).to be_empty
+    expect(call.call('/api/records/restore', 'POST').first).to eq(400)
     first = @application.create_record('Files.Tag')
     second = @application.create_record('Files.Tag')
     expect(call.call('/api/records/delete', 'POST', records: [first, second])).to eq([200, { 'ok' => true }])

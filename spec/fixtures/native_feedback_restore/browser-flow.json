@@ -1,0 +1,75 @@
+{
+  "name": "feedback-object-restore",
+  "authentication": false,
+  "pages": [
+    {
+      "name": "restore",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_text": "ReadLegacy"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Seed"
+        },
+        {
+          "wait_for_text": "Seeded"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadLegacy"
+        },
+        {
+          "wait_for_text": "Current|9007199254740993.12345678|12|false|1767323045000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadCurrent"
+        },
+        {
+          "wait_for_text": "Current|9007199254740993.12345678|12|false|1767323045000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadLegacy"
+        },
+        {
+          "wait_for_text": "Current|9007199254740993.12345678|12|false|1767323045000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadCurrent"
+        },
+        {
+          "wait_for_text": "Current|9007199254740993.12345678|12|false|1767323045000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        }
+      ]
+    }
+  ]
+}

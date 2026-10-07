@@ -1134,7 +1134,13 @@ module Mxrb
 
       def javascript_action_arguments(mappings)
         native_items(mappings).to_h do |mapping|
-          [mapping['Parameter'].to_s.split('.').last, mapping.dig('ParameterValue', 'Argument').to_s]
+          value = mapping.fetch('ParameterValue', {})
+          argument = if value['$Type'].to_s.end_with?('EntityTypeCodeActionParameterValue')
+                       "'#{value['Entity'].to_s.gsub("'", "''")}'"
+                     else
+                       value['Argument'].to_s
+                     end
+          [mapping['Parameter'].to_s.split('.').last, argument]
         end
       end
 

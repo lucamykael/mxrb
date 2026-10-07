@@ -1,6 +1,7 @@
 import type { NanoflowParameters, RuntimeValue } from '../types';
 import type { JavaScriptAction } from './nanoflow';
 import { writeStorageObject } from './objectStorage';
+import { readStorageObject } from './objectRestore';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -11,7 +12,10 @@ const required = (parameters: NanoflowParameters, name: string, label = name): s
 const readString: JavaScriptAction = async (parameters) => {
   const key = required(parameters, 'LocalStorageKey', 'localStorageKey');
   const member = required(parameters, 'ObjectItemKey', 'objectItemKey');
-  const value = JSON.parse(window.localStorage.getItem(key) ?? 'null') as Record<string, RuntimeValue> | null;
+  const value = JSON.parse(window.localStorage.getItem(key) ?? 'null') as Record<
+    string,
+    RuntimeValue
+  > | null;
   return value?.[member] ?? null;
 };
 
@@ -48,6 +52,9 @@ const writeImage: JavaScriptAction = async (parameters) => {
 };
 
 const handlers: Record<string, JavaScriptAction> = {
+  JS_GetFeedbackStorageObject: ({ key, entity }, variables) =>
+    readStorageObject({ Key: key, Entity: entity }, variables),
+  GetStorageItemObject: readStorageObject,
   JS_SetFeedbackStorageObject: ({ key, value }) => writeStorageObject({ Key: key, Value: value }),
   SetStorageItemObject: writeStorageObject,
   JS_GetSingleLocalStorageObjectItem: readLegacy,
@@ -57,8 +64,10 @@ const handlers: Record<string, JavaScriptAction> = {
 };
 
 export const feedbackStorageActions = (names: string[]): Record<string, JavaScriptAction> =>
-  Object.fromEntries(names.map((name) => {
-    const action = handlers[name];
-    if (!action) throw new Error(`Unknown Feedback storage action: ${name}`);
-    return [`FeedbackModule.${name}`, action];
-  }));
+  Object.fromEntries(
+    names.map((name) => {
+      const action = handlers[name];
+      if (!action) throw new Error(`Unknown Feedback storage action: ${name}`);
+      return [`FeedbackModule.${name}`, action];
+    }),
+  );

@@ -1,5 +1,25 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Leitura e recriação de objetos do Feedback
+
+Os getters verificados `JS_GetFeedbackStorageObject` e `GetStorageItemObject`
+reutilizam objetos disponíveis e atualizam o JSON com seus valores atuais.
+Quando o objeto não existe, recriam seus atributos, preservam decimais, datas e
+booleanos e substituem o GUID no armazenamento. Parâmetros de tipo de entidade
+chegam corretamente aos nanoflows TypeScript.
+
+A recriação não confirma o objeto no banco. Objetos persistentes recebem uma
+capacidade de rascunho vinculada ao usuário para passar a microflows e serem
+salvos explicitamente. Leituras de objetos já persistidos consultam novamente o
+servidor; valores locais do contexto têm prioridade sobre snapshots antigos.
+Erros de acesso, armazenamento inválido e membros desconhecidos são propagados.
+
+Dois builds e dois runtimes nativos, 21 passos no navegador sem MPR e três casos
+do nanoflow real de leitura do SLA Task App passaram. Inteiros restaurados ficam
+limitados à precisão exata do frontend; sincronização entre navegadores,
+AsyncStorage e uso offline não estão certificados.
+[Evidência](../evidence/feedback-object-restore-2026-10-07.json).
+
 ## Conversão de datas numéricas em UTC
 
 `parseDateTimeUTC(texto, formato[, alternativa])` funciona em microflows Ruby e
