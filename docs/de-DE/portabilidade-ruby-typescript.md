@@ -1,5 +1,16 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Abfragbare OQL-Views erzeugen
+
+`oql_view` erhält das Persistenzflag der Entität. Neue Views verwenden den für
+Mendix-Datenbankabfragen erforderlichen persistenten Standard; die OQL-Quelle
+verhindert weiterhin eine physische SQLite-Tabelle. Zuvor erzwang die Erzeugung
+`Persistable=false`, wodurch MxBuild Abrufaktivitäten ablehnte. Nach der Korrektur
+bestanden zwei Builds und zwei Laufzeiten in der Windows-VM mit identischen
+Ergebnissen des Originals und Wiederaufbaus sowie unveränderten Hashes.
+[Nachweis](../evidence/oql-view-persistence-2026-10-07.json).
+Die Ausführung von View-Abfragen in der Ruby-Laufzeit ist noch nicht implementiert.
+
 ## Nanoflow-Commons-Speicher
 
 `GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,

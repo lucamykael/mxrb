@@ -2505,7 +2505,6 @@ module Mxrb
         raise ArgumentError, 'oql_view requires source or query' if source.nil? && query.nil?
 
         @oql_view = { source: source&.to_s, query: query&.to_s }.compact
-        @persistable = false
       end
 
       def generalizes(entity, id: nil)

@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-07",
+  "scope": "Preserve the persistability flag when declaring an OQL view",
+  "regression": "New views were marked non-persistable and rejected by native database retrieval. Existing real view entities have Persistable=true.",
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_and_copied_source_hashes_unchanged": true,
+    "acceptance": {
+      "status": "passed",
+      "results": {
+        "Seed": "Seeded",
+        "ReadView": "2: North"
+      }
+    }
+  },
+  "ruby": {
+    "examples": 2326,
+    "failures": 0,
+    "coverage": {
+      "lines": {
+        "covered": 41236,
+        "total": 41236,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 18092,
+        "total": 18092,
+        "percent": 100.0
+      }
+    }
+  },
+  "limit": "This fixes native model generation. Executing view queries in the Ruby SQLite runtime remains unsupported."
+}

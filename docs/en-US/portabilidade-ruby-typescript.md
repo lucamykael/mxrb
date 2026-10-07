@@ -1,5 +1,16 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Generating queryable OQL views
+
+Declaring `oql_view` preserves the entity persistability flag. New views use
+the persistent default required by Mendix database retrieval; the OQL source
+still prevents physical SQLite table creation. Previously, generation forced
+`Persistable=false`, causing MxBuild to reject retrieve activities. Two builds
+and two runtimes in the Windows VM passed after the fix, with identical source
+and rebuilt results and unchanged hashes.
+[Evidence](../evidence/oql-view-persistence-2026-10-07.json).
+Executing view queries in the Ruby runtime remains unimplemented.
+
 ## Nanoflow Commons storage
 
 `GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,

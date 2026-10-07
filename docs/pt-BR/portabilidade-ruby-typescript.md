@@ -1,5 +1,16 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Geração de views OQL consultáveis
+
+Declarar `oql_view` preserva a flag de persistência da entidade. Views novas
+usam o padrão persistente exigido pelo Mendix para consultas de banco; a fonte
+OQL continua impedindo a criação de uma tabela física no SQLite. A geração
+anterior forçava `Persistable=false` e o MxBuild rejeitava atividades de consulta.
+Dois builds e dois runtimes na VM passaram após a correção, com original e
+reconstruído retornando o mesmo resultado e hashes preservados.
+[Evidência](../evidence/oql-view-persistence-2026-10-07.json).
+A execução de consultas de views no runtime Ruby ainda não está implementada.
+
 ## Armazenamento Nanoflow Commons
 
 `GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,

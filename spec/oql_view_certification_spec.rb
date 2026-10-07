@@ -12,6 +12,15 @@ RSpec.describe 'OQL view certification' do
       current = File.join(dir, 'OqlView.mpr')
       build_source(current)
       baseline = oql_snapshot(current)
+      Mxrb.open(current) do |project|
+        view = project.modules.find { _1.name == 'App' }.entities.find { _1.name == 'LocationsView' }
+        expect(view.persistable).to be(true)
+        expect(view).to be_oql_view
+        # The Mendix flag permits database retrieval; the OQL source still
+        # excludes the view from physical SQLite table creation.
+        expect(Mxrb::Runtime::SchemaMigrator.derive(project).entities.map(&:name))
+          .not_to include('App.LocationsView')
+      end
 
       ruby_app = File.join(dir, 'ruby-app')
       ruby_rebuilt = File.join(dir, 'ruby-rebuilt.mpr')
