@@ -1,0 +1,139 @@
+{
+  "name": "oql-view-execution",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "oql-view-execution",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"View entity oracle\"]"
+        },
+        {
+          "click_text": "Seed"
+        },
+        {
+          "wait_for_text": "Seeded"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReadView"
+        },
+        {
+          "wait_for_text": "2: North"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReadAssociation"
+        },
+        {
+          "wait_for_text": "Source: Street 1"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReadDirtySource"
+        },
+        {
+          "wait_for_text": "Durable: North"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "CommitChange"
+        },
+        {
+          "wait_for_text": "Committed"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReadView"
+        },
+        {
+          "wait_for_text": "2: Changed"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "DeleteSource"
+        },
+        {
+          "wait_for_text": "Deleted"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReadView"
+        },
+        {
+          "wait_for_text": "1: South"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        }
+      ]
+    }
+  ]
+}

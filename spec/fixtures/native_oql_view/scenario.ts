@@ -4,12 +4,18 @@
       if (check()) return;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    throw new Error("Commons action timed out");
+    throw new Error("OQL view action timed out");
   };
-  const results: Record<string, string> = {};
+  const results: {action: string; message: string}[] = [];
   for (const [name, expected] of [
     ["Seed", "Seeded"],
     ["ReadView", "2: North"],
+    ["ReadAssociation", "Source: Street 1"],
+    ["ReadDirtySource", "Durable: North"],
+    ["CommitChange", "Committed"],
+    ["ReadView", "2: Changed"],
+    ["DeleteSource", "Deleted"],
+    ["ReadView", "1: South"],
   ]) {
     const button = document.querySelector<HTMLButtonElement>(
       `.mx-name-${name}`,
@@ -21,7 +27,7 @@
         node.textContent?.includes(expected),
       ),
     );
-    results[name] = expected;
+    results.push({action: name, message: expected});
     const confirm = document.querySelector<HTMLButtonElement>(
       ".modal-dialog button.btn-primary",
     );

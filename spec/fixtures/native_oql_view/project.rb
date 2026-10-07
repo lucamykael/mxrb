@@ -34,12 +34,39 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       aggregate :items, function: :count, as: :count
       show_message '{1}: {2}', parameters: ['toString($count)', '$first/Name'], blocking: true
     end
+    microflow :ReadAssociation do
+      retrieve_objects 'Views.LocationsView', as: :items
+      list_operation :head, :items, as: :first
+      retrieve_association :first, association: 'Views.LocationId', as: :location
+      show_message 'Source: {1}', parameters: ['$location/Address'], blocking: true
+    end
+    microflow :ReadDirtySource do
+      retrieve_objects 'Views.Location', as: :locations
+      list_operation :head, :locations, as: :location
+      change_object :location, set: { 'Views.Location.Name' => "'Unsaved'" }
+      retrieve_objects 'Views.LocationsView', as: :items
+      list_operation :head, :items, as: :first
+      show_message 'Durable: {1}', parameters: ['$first/Name'], blocking: true
+    end
+    microflow :CommitChange do
+      retrieve_objects 'Views.Location', as: :locations
+      list_operation :head, :locations, as: :location
+      change_object :location, set: { 'Views.Location.Name' => "'Changed'" }, commit: true
+      show_message 'Committed', blocking: true
+    end
+    microflow :DeleteSource do
+      retrieve_objects 'Views.Location', as: :locations
+      list_operation :head, :locations, as: :location
+      delete :location
+      show_message 'Deleted', blocking: true
+    end
     page :Home do
       title 'View entity oracle'
       data_source microflow: 'Views.Load'
       text_box :Name, attribute: 'Views.Probe.Name', caption: 'Name'
-      button(:Seed, caption: 'Seed') { on_click microflow: 'Views.Seed' }
-      button(:ReadView, caption: 'ReadView') { on_click microflow: 'Views.ReadView' }
+      %w[Seed ReadView ReadAssociation ReadDirtySource CommitChange DeleteSource].each do |flow|
+        button(flow, caption: flow) { on_click microflow: "Views.#{flow}" }
+      end
     end
   end
   navigation { profile :Responsive, home_page: 'Views.Home' }
