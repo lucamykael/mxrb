@@ -1,5 +1,24 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Filtros de views OQL
+
+Projeções de uma entidade persistente aceitam `WHERE` com comparações `=`, `!=`,
+`<`, `<=`, `>` e `>=`, `AND`, `OR`, `NOT`, parênteses e `IS [NOT] NULL`.
+Literais numéricos preservam a precisão decimal; strings aceitam aspas duplicadas.
+As formas `FROM ... WHERE ... SELECT` e `SELECT ... FROM ... WHERE` são aceitas.
+Palavras como `SELECT` dentro de strings não são interpretadas como cláusulas.
+
+O comportamento de nulos foi comparado com Mendix 11.12.1: igualdade com o literal
+`NULL` funciona como `IS NULL`; desigualdade com um literal não nulo inclui os
+registros nulos. Comparações entre colunas preservam o resultado desconhecido.
+Os filtros leem valores salvos, refletem commits/exclusões e validam todos os
+atributos e tipos antes da leitura, mesmo sem registros. O texto nunca é executado
+como SQL. Ordenações comparativas exigem números; funções, `LIKE`, `IN`, parâmetros,
+joins e agregações permanecem fora deste subconjunto.
+
+A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
+[Evidência](../evidence/oql-view-filters-2026-10-07.json).
+
 ## Metadados do Feedback no navegador
 
 As versões verificadas de `JS_PopulateFeedbackMetadata` e `JS_isStrictMode`
@@ -120,8 +139,9 @@ reconstruído retornando o mesmo resultado e hashes preservados.
 O runtime Ruby também consulta projeções simples de uma entidade persistente:
 colunas com aliases opcionais e `ID` projetado como associação de referência.
 As views leem valores salvos, refletem commits e exclusões e rejeitam gravações.
-O texto OQL é validado e nunca executado diretamente como SQL. Joins, filtros,
-agregações e encadeamento de views ainda não são suportados e geram erro explícito.
+O texto OQL é validado e nunca executado diretamente como SQL. Os filtros do
+subconjunto descrito acima são suportados; joins, agregações e encadeamento de
+views continuam gerando erro explícito.
 Oito resultados coincidiram entre Ruby e os dois runtimes Mendix; 41 passos de
 navegador passaram sem acesso ao MPR. A consulta aos modelos dos oito projetos
 reais passou nas 98 entidades, incluindo `MyFirstModule.LocationsView`.

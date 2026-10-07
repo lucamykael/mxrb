@@ -1,5 +1,24 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## OQL view filters
+
+Single persistent-entity projections accept `WHERE` with `=`, `!=`, `<`, `<=`,
+`>`, `>=`, `AND`, `OR`, `NOT`, parentheses and `IS [NOT] NULL`. Numeric literals
+retain decimal precision; string literals accept doubled quotes. Both
+`FROM ... WHERE ... SELECT` and `SELECT ... FROM ... WHERE` are accepted; keywords
+inside strings are never treated as clauses.
+
+Native Mendix 11.12.1 comparisons establish the NULL rules: equality to literal
+`NULL` acts as `IS NULL`; inequality to a non-null literal includes null rows.
+Column-to-column comparisons retain the unknown result. Filters read durable
+values, reflect commits/deletes and validate attributes and types before reading
+even an empty source. OQL text is never executed as SQL. Ordered comparisons
+require numbers; functions, `LIKE`, `IN`, parameters, joins and aggregates remain
+outside this subset.
+
+The matrix covers 30 filters and 125 browser steps with MPR access prohibited.
+[Evidence](../evidence/oql-view-filters-2026-10-07.json).
+
 ## Feedback browser metadata
 
 The verified `JS_PopulateFeedbackMetadata` and `JS_isStrictMode` versions used by
@@ -120,8 +139,8 @@ and rebuilt results and unchanged hashes.
 The Ruby runtime also retrieves simple projections of one persistent entity:
 columns with optional aliases and `ID` projected as a reference association.
 Views read durable values, reflect commits and deletions, and reject writes.
-OQL text is validated and never executed directly as SQL. Joins, filters,
-aggregates and chained views remain unsupported and fail explicitly.
+OQL text is validated and never executed directly as SQL. The filter subset above
+is supported; joins, aggregates and chained views still fail explicitly.
 Eight outcomes matched Ruby and both Mendix runtimes; 41 browser steps passed
 without MPR access. Model retrieval across eight real projects passed for all
 98 entities, including `MyFirstModule.LocationsView`.

@@ -1,0 +1,391 @@
+{
+  "name": "oql-filters",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "pages": [
+    {
+      "name": "oql-filters",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"OQL filter oracle\"]"
+        },
+        {
+          "click_text": "Seed"
+        },
+        {
+          "wait_for_text": "Seeded"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Exact"
+        },
+        {
+          "wait_for_text": "Rows:North,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Different"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Less"
+        },
+        {
+          "wait_for_text": "Rows:Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "LessEqual"
+        },
+        {
+          "wait_for_text": "Rows:South,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Greater"
+        },
+        {
+          "wait_for_text": "Rows:North,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "GreaterEqual"
+        },
+        {
+          "wait_for_text": "Rows:North,South,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "NegativeValue"
+        },
+        {
+          "wait_for_text": "Rows:Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Conjunction"
+        },
+        {
+          "wait_for_text": "Rows:North,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Precedence"
+        },
+        {
+          "wait_for_text": "Rows:North,South,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Grouped"
+        },
+        {
+          "wait_for_text": "Rows:South,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "BooleanValue"
+        },
+        {
+          "wait_for_text": "Rows:South,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "IsNull"
+        },
+        {
+          "wait_for_text": "Rows:Empty,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "IsNotNull"
+        },
+        {
+          "wait_for_text": "Rows:North,South,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "EqualNull"
+        },
+        {
+          "wait_for_text": "Rows:Empty,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "UnequalNull"
+        },
+        {
+          "wait_for_text": "Rows:North,South,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ColumnsEqual"
+        },
+        {
+          "wait_for_text": "Rows:North,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ColumnsUnequal"
+        },
+        {
+          "wait_for_text": "Rows:South,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "NotColumnsEqual"
+        },
+        {
+          "wait_for_text": "Rows:South,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "QuotedKeywords"
+        },
+        {
+          "wait_for_text": "Rows:North,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "EscapedQuote"
+        },
+        {
+          "wait_for_text": "Rows:South,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "UnknownOrTrue"
+        },
+        {
+          "wait_for_text": "Rows:North,South,Empty,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "UnknownAndFalse"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "NotLiteralEqual"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReversedLiteral"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "ReversedNull"
+        },
+        {
+          "wait_for_text": "Rows:Empty,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "SlashPath"
+        },
+        {
+          "wait_for_text": "Rows:South,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "StringEmpty"
+        },
+        {
+          "wait_for_text": "Rows:Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "StringNull"
+        },
+        {
+          "wait_for_text": "Rows:Empty,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "StringUnequal"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "NotStringEqual"
+        },
+        {
+          "wait_for_text": "Rows:North,Empty,Zero,Negative,"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        }
+      ]
+    }
+  ]
+}

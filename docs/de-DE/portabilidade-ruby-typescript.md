@@ -1,5 +1,25 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Filter für OQL-Views
+
+Projektionen einer persistenten Entität unterstützen `WHERE` mit `=`, `!=`, `<`,
+`<=`, `>`, `>=`, `AND`, `OR`, `NOT`, Klammern und `IS [NOT] NULL`. Numerische
+Literale behalten ihre Dezimalpräzision; Zeichenfolgen unterstützen doppelte
+Anführungszeichen als Escape. Beide Formen `FROM ... WHERE ... SELECT` und
+`SELECT ... FROM ... WHERE` funktionieren. Schlüsselwörter innerhalb einer
+Zeichenfolge werden nicht als Klauseln interpretiert.
+
+Vergleiche mit Mendix 11.12.1 bestätigen die NULL-Regeln: Gleichheit mit dem Literal
+`NULL` wirkt wie `IS NULL`; Ungleichheit mit einem nichtleeren Literal schließt
+NULL-Datensätze ein. Vergleiche zwischen Spalten erhalten den unbekannten Wert.
+Filter lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und prüfen
+Attribute sowie Typen auch bei leeren Quellen. OQL wird niemals als SQL ausgeführt.
+Ordnungsvergleiche verlangen Zahlen; Funktionen, `LIKE`, `IN`, Parameter, Joins
+und Aggregationen bleiben außerhalb dieses Teilumfangs.
+
+Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
+[Nachweis](../evidence/oql-view-filters-2026-10-07.json).
+
 ## Feedback-Metadaten im Browser
 
 Die verifizierten Versionen von `JS_PopulateFeedbackMetadata` und `JS_isStrictMode`
@@ -130,8 +150,8 @@ Die Ruby-Laufzeit unterstützt außerdem einfache Projektionen einer persistente
 Entität: Spalten mit optionalen Aliasnamen und `ID` als Referenzassoziation.
 Views lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und
 weisen Schreibzugriffe zurück. OQL-Text wird validiert und nie direkt als SQL
-ausgeführt. Joins, Filter, Aggregate und verkettete Views sind weiterhin nicht
-unterstützt und erzeugen explizite Fehler. Acht Ergebnisse stimmten zwischen
+ausgeführt. Der oben beschriebene Filterumfang wird unterstützt; Joins, Aggregate
+und verkettete Views erzeugen weiterhin explizite Fehler. Acht Ergebnisse stimmten zwischen
 Ruby und beiden Mendix-Laufzeiten überein; 41 Browserschritte bestanden ohne
 MPR-Zugriff. Der Modellabruf in acht realen Projekten bestand für alle 98
 Entitäten, einschließlich `MyFirstModule.LocationsView`.
