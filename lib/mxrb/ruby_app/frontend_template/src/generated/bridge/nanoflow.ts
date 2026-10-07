@@ -87,6 +87,25 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     console.info(`[nanoflow] ${message || this.metadata.name}`);
   }
 
+  changeList(variable: string, operation: string, expression: string): void {
+    const list = this.variables[variable];
+    if (!Array.isArray(list)) throw new Error(`Nanoflow list $${variable} is missing`);
+    const kind = operation.toLowerCase();
+    if (kind === 'clear') {
+      list.splice(0);
+      return;
+    }
+    if (kind !== 'add' && kind !== 'remove')
+      throw new Error(`Unsupported list change: ${operation}`);
+    const value = this.value(expression);
+    if (!isRecord(value)) throw new Error('List changes require an object');
+    const index = list.findIndex(
+      (item) => isRecord(item) && item.id === value.id && item.type === value.type,
+    );
+    if (kind === 'add' && index < 0) list.push(value);
+    if (kind === 'remove' && index >= 0) list.splice(index, 1);
+  }
+
   change(variable: string, expressions: ChangeExpressions): void {
     const record = this.variables[variable];
     if (!isRecord(record)) throw new Error(`Nanoflow object $${variable} is missing`);

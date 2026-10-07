@@ -1,5 +1,21 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Nanoflow Commons actions and lists
+
+Export registers `Base64Encode`, `Base64Decode`, `GetGuid`, `GetPlatform` and
+`FindObjectWithGUID` only when implementation hashes match verified sources.
+Base64 uses `js-base64` 3.7.7, the native reference version. Registration keeps
+the model parameter `EntityObject` and the Feedback adapters together. Exported
+nanoflows also create lists and add, remove or clear objects while preserving
+references to the same list.
+
+Validation passed 22 comparisons with original JavaScript, 169 frontend tests
+and 13 Chromium steps without MPR access. Two builds and runtimes in the Windows
+VM confirmed identical original/round-trip results without modifying sources.
+The scenario certifies Web; environment detection is not certification of a
+React Native or Cordova application.
+[Evidence](../evidence/nanoflow-commons-2026-10-07.json).
+
 ## CustomChart with Plotly
 
 `CustomChart` loads Plotly 3.0.1 on demand and applies the model's JSON data,

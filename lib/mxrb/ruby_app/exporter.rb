@@ -932,6 +932,11 @@ module Mxrb
           changes = action.fetch('changes', []).to_h { [_1['member'].to_s, _1['value'].to_s] }
           "runtime.create(#{JSON.generate(action['variable'].to_s)}, " \
             "#{JSON.generate(action['entity'].to_s)}, #{JSON.generate(changes)});\n"
+        when 'CreateList'
+          "runtime.set(#{JSON.generate(action['variable'].to_s)}, []);\n"
+        when 'ChangeList'
+          "runtime.changeList(#{JSON.generate(action['variable'].to_s)}, " \
+            "#{JSON.generate(action['operation'].to_s)}, #{JSON.generate(action['value'].to_s)});\n"
         when 'MicroflowCall'
           variable = action['result_variable'].to_s
           invocation = "runtime.callMicroflow(#{JSON.generate(action['microflow'].to_s)}, " \
@@ -1050,6 +1055,11 @@ module Mxrb
         when 'CreateChange'
           result.merge!('variable' => action['VariableName'].to_s,
                         'entity' => action['Entity'].to_s, 'changes' => nanoflow_changes(action))
+        when 'CreateList'
+          result['variable'] = action['VariableName'].to_s
+        when 'ChangeList'
+          result.merge!('variable' => action['ChangeVariableName'].to_s,
+                        'operation' => action['Type'].to_s, 'value' => action['Value'].to_s)
         when 'LogMessage'
           result['message'] = translated_text_template(action['MessageTemplate'])
         when 'MicroflowCall'
@@ -3289,7 +3299,8 @@ module Mxrb
           },
           'dependencies' => {
             'react' => '^19.2.8', 'react-dom' => '^19.2.8',
-            'react-router-dom' => '^7.18.2', 'decimal.js' => '^10.6.0', 'plotly.js-dist-min' => '3.0.1'
+            'react-router-dom' => '^7.18.2', 'decimal.js' => '^10.6.0', 'plotly.js-dist-min' => '3.0.1',
+            'js-base64' => '3.7.7'
           },
           'devDependencies' => {
             '@eslint/js' => '^10.0.1',
@@ -3394,6 +3405,9 @@ module Mxrb
 
       def frontend_nanoflows
         javascript_actions = KnownJavaScriptActions.matching(File.dirname(@mpr_path))
+        commons = KnownJavaScriptActions.matching(File.dirname(@mpr_path),
+                                                  sources: KnownJavaScriptActions::COMMONS_SOURCES,
+                                                  module_name: 'nanoflowcommons')
         imports = @nanoflow_entries.map do |entry|
           relative = entry.fetch('path').delete_prefix('frontend/src/')
           "import #{entry.fetch('import_name')} from './#{relative.delete_suffix('.ts')}';"
@@ -3404,6 +3418,7 @@ module Mxrb
         <<~TS
           import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';
           import { feedbackStorageActions } from './bridge/feedbackStorage';
+          import { nanoflowCommonsActions } from './bridge/nanoflowCommons';
           import type { RegisteredNanoflow } from './types';
 
           #{imports.join("\n")}
@@ -3413,7 +3428,10 @@ module Mxrb
           };
 
           registerNanoflows(nanoflows);
-          registerJavaScriptActions(feedbackStorageActions(#{JSON.generate(javascript_actions)}));
+          registerJavaScriptActions({
+            ...feedbackStorageActions(#{JSON.generate(javascript_actions)}),
+            ...nanoflowCommonsActions(#{JSON.generate(commons)})
+          });
 
           export default nanoflows;
         TS
