@@ -10,6 +10,7 @@ require 'openssl'
 require 'uri'
 require_relative 'string_functions'
 require_relative 'calendar_functions'
+require_relative 'date_parsing'
 require_relative 'decimal_values'
 
 module Mxrb
@@ -228,6 +229,7 @@ module Mxrb
           return @calendar.invoke(name.downcase, arguments) if @calendar.supported?(name.downcase)
 
           case name.downcase
+          when 'parsedatetimeutc' then DateParsing.invoke(arguments)
           when 'length' then arguments.fetch(0).to_s.encode('UTF-16LE').bytesize / 2
           when 'trim' then arguments.fetch(0).to_s.gsub(/\A[\x00-\x20]+|[\x00-\x20]+\z/, '')
           when 'tolowercase' then arguments.fetch(0).to_s.downcase

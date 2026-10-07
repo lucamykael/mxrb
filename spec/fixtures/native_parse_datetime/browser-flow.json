@@ -1,0 +1,255 @@
+{
+  "name": "native-utc-date-parsing",
+  "authentication": false,
+  "pages": [
+    {
+      "name": "dates",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientStandard"
+        },
+        {
+          "wait_for_text": "1767323045000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientQuoted"
+        },
+        {
+          "wait_for_text": "1767323045123"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientDateOnly"
+        },
+        {
+          "wait_for_text": "1767312000000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientCompact"
+        },
+        {
+          "wait_for_text": "1767312000000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientOverflowDay"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientOverflowMonth"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientLeapOverflow"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientOverflowTime"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientShortMillis"
+        },
+        {
+          "wait_for_text": "1704067200001"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientLongMillis"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientTrailing"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientLeadingSpace"
+        },
+        {
+          "wait_for_text": "1704153600000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientNegativeDay"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientTimeOnly"
+        },
+        {
+          "wait_for_selector": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientNotDate"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientEmptyInput"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientWrongDelimiter"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientOffsetColon"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientOffsetCompact"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ClientZulu"
+        },
+        {
+          "wait_for_text": "946684800000"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        }
+      ]
+    }
+  ]
+}

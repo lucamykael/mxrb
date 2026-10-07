@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-07",
+  "scope": "Numeric parseDateTimeUTC patterns in Ruby microflows and TypeScript nanoflows",
+  "patterns": [
+    "yyyy",
+    "M",
+    "MM",
+    "d",
+    "dd",
+    "H",
+    "HH",
+    "m",
+    "mm",
+    "s",
+    "ss",
+    "S",
+    "SS",
+    "SSS",
+    "X",
+    "XX",
+    "XXX",
+    "Z"
+  ],
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "cases_per_execution_kind": 20,
+    "acceptance": {
+      "status": "passed",
+      "microflows": {
+        "Standard": "1767323045000",
+        "Quoted": "1767323045123",
+        "DateOnly": "1767312000000",
+        "Compact": "1767312000000",
+        "OverflowDay": "946684800000",
+        "OverflowMonth": "946684800000",
+        "LeapOverflow": "946684800000",
+        "OverflowTime": "946684800000",
+        "ShortMillis": "1704067200001",
+        "LongMillis": "946684800000",
+        "Trailing": "1704153600000",
+        "LeadingSpace": "1704153600000",
+        "NegativeDay": "946684800000",
+        "TimeOnly": "45296000",
+        "NotDate": "946684800000",
+        "EmptyInput": "946684800000",
+        "WrongDelimiter": "946684800000",
+        "OffsetColon": "1704155645000",
+        "OffsetCompact": "1704173645000",
+        "Zulu": "1704164645000"
+      },
+      "nanoflows": {
+        "Standard": "1767323045000",
+        "Quoted": "1767323045123",
+        "DateOnly": "1767312000000",
+        "Compact": "1767312000000",
+        "OverflowDay": "946684800000",
+        "OverflowMonth": "946684800000",
+        "LeapOverflow": "946684800000",
+        "OverflowTime": "946684800000",
+        "ShortMillis": "1704067200001",
+        "LongMillis": "946684800000",
+        "Trailing": "946684800000",
+        "LeadingSpace": "1704153600000",
+        "NegativeDay": "946684800000",
+        "TimeOnly": "1791376496000",
+        "NotDate": "946684800000",
+        "EmptyInput": "946684800000",
+        "WrongDelimiter": "946684800000",
+        "OffsetColon": "946684800000",
+        "OffsetCompact": "946684800000",
+        "Zulu": "946684800000"
+      }
+    }
+  },
+  "validation": {
+    "ruby_examples": 2345,
+    "ruby_failures": 0,
+    "coverage_lines": {
+      "covered": 41411,
+      "total": 41411,
+      "percent": 100
+    },
+    "coverage_branches": {
+      "covered": 18181,
+      "total": 18181,
+      "percent": 100
+    },
+    "rubocop_files": 584,
+    "rubocop_offenses": 0,
+    "frontend_tests": 190,
+    "frontend_check_passed": true,
+    "browser_steps": 81,
+    "console_errors": 0,
+    "mpr_access_prohibited": true
+  },
+  "observed_differences": [
+    "Both execution paths reject invalid calendar and time components.",
+    "Microflows accept a parsed prefix; nanoflows reject trailing text.",
+    "Time-only microflows use 1970-01-01; nanoflows use the current UTC date.",
+    "Offset examples X, XXX and Z parse in microflows and use the fallback in nanoflows.",
+    "The recorded nanoflow TimeOnly epoch is specific to the execution date; the scenario asserts the current UTC date dynamically."
+  ],
+  "limitations": [
+    "Numeric UTC patterns only; years 1800 through 9999.",
+    "Localized month names, two-digit years and week-based patterns fail explicitly.",
+    "Local-time parseDateTime is not included.",
+    "Unsupported or malformed patterns fail explicitly even when a fallback is supplied."
+  ]
+}
