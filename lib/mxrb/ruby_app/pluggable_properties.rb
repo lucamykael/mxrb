@@ -2,6 +2,7 @@
 
 require_relative '../pluggable/mpr_codec'
 require_relative 'pluggable_context'
+require_relative '../caption'
 
 module Mxrb
   module RubyApp
@@ -13,7 +14,7 @@ module Mxrb
       CatalogLoad = Data.define(:catalog, :unsupported_widget_ids)
       ActionValue = Data.define(:kind, :handler, :arguments)
       DataSourceValue = Data.define(:entity, :xpath, :sort)
-      CaptionValue = Data.define(:text, :parameters)
+      CaptionValue = Data.define(:text, :parameters, :translations, :fallback)
       ObjectValue = Data.define(:assignments)
       ObjectListValue = Data.define(:objects)
 
@@ -40,6 +41,9 @@ module Mxrb
         def action(**options) = @owner.action(**options)
         def data_source(**options) = @owner.data_source(**options)
         def caption(text, **options) = @owner.caption(text, **options)
+        def caption_parameter(**options) = @owner.caption_parameter(**options)
+        def caption_format(**options) = @owner.caption_format(**options)
+        def caption_variable(**options) = @owner.caption_variable(**options)
         def objects(&block) = @owner.objects(&block)
       end
 
@@ -202,13 +206,18 @@ module Mxrb
         DataSourceValue.new(entity.freeze, xpath.to_s.freeze, order.freeze)
       end
 
-      def caption(text, parameters: [])
-        unless text.is_a?(String) && parameters.is_a?(Array) && parameters.all? { _1.is_a?(String) }
-          raise ArgumentError, 'caption requires text and an array of expression strings'
-        end
+      def caption(text, parameters: [], translations: {}, fallback: nil)
+        raise ArgumentError, 'caption parameters must be an Array' unless parameters.is_a?(Array)
 
-        CaptionValue.new(text.dup.freeze, parameters.map { _1.dup.freeze }.freeze)
+        CaptionValue.new(
+          Caption.string(text, 'caption text'), parameters.map { Caption.parameter(_1) }.freeze,
+          Caption.translations(translations), fallback.nil? ? nil : Caption.string(fallback, 'caption fallback')
+        )
       end
+
+      def caption_parameter(**options) = Caption.parameter(options)
+      def caption_format(**options) = Caption.format(options)
+      def caption_variable(**options) = Caption.source(options)
 
       def objects(&block)
         raise ArgumentError, 'objects requires a block' unless block
@@ -314,11 +323,11 @@ module Mxrb
       end
 
       def supported_caption_value(value)
-        unless (value.keys - %i[text parameters]).empty?
+        unless (value.keys - %i[text parameters translations fallback]).empty?
           raise ArgumentError, 'caption metadata requires the full Forms codec'
         end
 
-        caption(value.fetch(:text), parameters: value.fetch(:parameters, []))
+        caption(value.fetch(:text), **value.except(:text))
       end
 
       def supported_action_value(value)
@@ -403,9 +412,16 @@ module Mxrb
         when DataSourceValue
           sort = value.sort.map { |attribute, direction| { attribute:, direction: } }
           { data_source: { entity: value.entity, xpath: value.xpath, sort: } }
-        when CaptionValue then { text: value.text, parameters: value.parameters }
+        when CaptionValue then caption_projection(value)
         when ObjectListValue
           { objects: value.objects.map { project_object_value(_1) } }
+        end
+      end
+
+      def caption_projection(value)
+        { text: value.text, parameters: value.parameters }.tap do |projection|
+          projection[:translations] = value.translations unless value.translations.empty?
+          projection[:fallback] = value.fallback unless value.fallback.nil?
         end
       end
 
@@ -477,7 +493,29 @@ module Mxrb
       end
 
       def caption_source(value)
-        "caption(#{value.text.inspect}, parameters: #{value.parameters.inspect})"
+        parameters = value.parameters.map { caption_parameter_source(_1) }.join(', ')
+        options = "parameters: [#{parameters}]"
+        options += ", translations: #{value.translations.to_a.inspect}" unless value.translations.empty?
+        options += ", fallback: #{value.fallback.inspect}" unless value.fallback.nil?
+        "caption(#{value.text.inspect}, #{options})"
+      end
+
+      def caption_parameter_source(value)
+        return value.inspect if value.is_a?(String)
+
+        options = value.map do |key, item|
+          rendered = case key
+                     when :source then caption_options_source('caption_variable', item)
+                     when :format then caption_options_source('caption_format', item)
+                     else item.inspect
+                     end
+          "#{key}: #{rendered}"
+        end
+        "caption_parameter(#{options.join(', ')})"
+      end
+
+      def caption_options_source(method, options)
+        "#{method}(#{options.map { |key, value| "#{key}: #{value.inspect}" }.join(', ')})"
       end
 
       def object_list_source(value, indentation)

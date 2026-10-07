@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../caption'
+
 require_relative "unit"
 require_relative '../forms/input_presentation'
 
@@ -739,13 +741,39 @@ module Mxrb
       end
 
       def pluggable_template(template)
-        parameters = parse_array(template['Parameters']).map do |parameter|
-          expression = parameter['Expression'].to_s
-          attribute = parameter.dig('AttributeRef', 'Attribute').to_s
-          expression.empty? && !attribute.empty? ? "$currentObject/#{attribute}" : expression
-        end
+        parameters = parse_array(template['Parameters']).map { pluggable_template_parameter(_1) }
         text = extract_text(template)
-        parameters.empty? ? text : { text:, parameters: }
+        translations = parse_array(template.dig('Template', 'Items')).to_h do |item|
+          [item['LanguageCode'].to_s, item['Text'].to_s]
+        end
+        translations.reject! { |language, value| language.empty? || (language == 'en_US' && value == text) }
+        fallback = extract_text(template['Fallback'])
+        return text if parameters.empty? && translations.empty? && fallback.empty?
+
+        { text:, parameters: }.tap do |result|
+          result[:translations] = translations unless translations.empty?
+          result[:fallback] = fallback unless fallback.empty?
+        end
+      end
+
+      def pluggable_template_parameter(parameter)
+        expression = parameter['Expression'].to_s
+        attribute = parameter.dig('AttributeRef', 'Attribute').to_s
+        source = parse_page_variable(parameter['SourceVariable'])
+        formatting = parameter['FormattingInfo'] || {}
+        format = Caption::FORMAT_FIELDS.filter_map do |key, field|
+          [key, formatting[field]] if formatting.key?(field) && formatting[field] != Caption::FORMAT_DEFAULTS[key]
+        end.to_h
+        unknown = unknown_native_fields(formatting, %w[$ID $Type] + Caption::FORMAT_FIELDS.values)
+        format[:unknown_native] = unknown unless unknown.empty?
+        if source.nil? && format.empty?
+          return expression.empty? && !attribute.empty? ? "$currentObject/#{attribute}" : expression
+        end
+
+        result = attribute.empty? ? { expression: } : { attribute: }
+        result[:source] = source if source
+        result[:format] = format unless format.empty?
+        result
       end
 
       def clearable_pluggable_value_type?(value_type)

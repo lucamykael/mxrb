@@ -2,7 +2,8 @@ import { isDecimal, numericText } from '../decimal';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { ApiRequest, EntityCollectionResponse, EntityRecord, WidgetEvent } from '../../types';
 import type { MarketplaceWidgetProps } from '../marketplace';
-import { expressionValue, memberName, sortRecords } from '../value';
+import { memberName, sortRecords } from '../value';
+import { chartCaption, useCaptionEnvironment, type CaptionEnvironment } from '../captions';
 
 type Properties = Record<string, unknown>;
 type Point = { label: string; value: number; size?: number; row?: string; record?: EntityRecord };
@@ -75,31 +76,11 @@ function aggregatePoints(points: Point[], operation: string): Point[] {
   });
 }
 
-function chartCaption(value: unknown, context: EntityRecord | null | undefined): string {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'string') return value;
-  const template = object(value);
-  if (
-    typeof template.text !== 'string' ||
-    (template.parameters !== undefined &&
-      (!Array.isArray(template.parameters) ||
-        template.parameters.some((item) => typeof item !== 'string')))
-  )
-    throw new Error('Chart caption requires text and expression parameters');
-  let text = template.text;
-  for (const [index, parameter] of ((template.parameters ?? []) as string[]).entries()) {
-    text = text.replaceAll(
-      `{${index + 1}}`,
-      String(expressionValue(parameter, context ?? null) ?? ''),
-    );
-  }
-  return text;
-}
-
 async function chartSeries(
   properties: Properties,
   props: Pick<MarketplaceWidgetProps, 'context' | 'request'>,
   kind: string,
+  environment: CaptionEnvironment,
 ): Promise<Series[]> {
   if (properties.barmode && !['group', 'stack'].includes(String(properties.barmode)))
     throw new Error(`Chart bar mode is not supported: ${properties.barmode}`);
@@ -203,6 +184,7 @@ async function chartSeries(
           group.name = chartCaption(
             dynamic ? definition.dynamicName : (definition.staticName ?? definition.seriesName),
             dynamic ? record : props.context,
+            environment,
           );
         }
         groups.set(groupKey, group);
@@ -479,9 +461,10 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
   const encoded = JSON.stringify(properties);
   const context = props.context;
   const contextKey = JSON.stringify(context);
+  const captionKey = JSON.stringify(useCaptionEnvironment(props.schema));
   const { request, revision = 0 } = props;
   const kind = String(props.widget.options?.widget_id).toLowerCase();
-  const key = `${kind}:${encoded}:${contextKey}:${revision}`;
+  const key = `${kind}:${encoded}:${contextKey}:${captionKey}:${revision}`;
   const [state, setState] = useState<ChartState>({ key: '', series: [] });
   const pending = useRef(false);
   const [running, setRunning] = useState(false);
@@ -504,7 +487,12 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
   };
   useEffect(() => {
     let active = true;
-    chartSeries(JSON.parse(encoded), { context: JSON.parse(contextKey), request }, kind)
+    chartSeries(
+      JSON.parse(encoded),
+      { context: JSON.parse(contextKey), request },
+      kind,
+      JSON.parse(captionKey),
+    )
       .then((series) => {
         if (
           kind.includes('timeseries') &&
@@ -521,7 +509,7 @@ export function MarketplaceChart(props: MarketplaceWidgetProps) {
     return () => {
       active = false;
     };
-  }, [encoded, contextKey, request, key, kind]);
+  }, [encoded, contextKey, captionKey, request, key, kind]);
   const name = String(properties.title || props.widget.options?.widget_name || props.widget.name);
   if (state.key !== key || state.request !== request) return <p role="status">Loading chart…</p>;
   if (state.error) return <p role="alert">{state.error}</p>;

@@ -1,5 +1,17 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Captions estruturadas
+
+Captions aceitam traduções, fallback, parâmetros por atributo ou expressão,
+formatação numérica/data e referências a objetos da página, snippet ou widget.
+As declarações Ruby preservam esses metadados no round-trip. O frontend aplica
+a localidade selecionada e mantém a precisão do transporte Decimal, inclusive
+acima do limite exato de Number. Atualizar a série não substitui seu contexto.
+
+O cenário chart-captions compara nomes e valores antes/depois de uma alteração
+no runtime nativo. Padrões de data não reconhecidos são rejeitados explicitamente.
+Opções visuais avançadas de Plotly permanecem uma frente separada.
+
 ## Precisão Decimal
 
 Ruby usa `BigDecimal` e o frontend usa `decimal.js`. Literais, soma, subtração,

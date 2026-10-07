@@ -11,7 +11,7 @@ import { useWidgetEvent } from '../useWidgetEvent';
 import { ClientActions } from '../PageEdits';
 import { PageDataSource } from '../PageDataSource';
 import { SidebarToggle } from './NativeScrollContainer';
-import { VariableScope } from './VariableScope';
+import { VariableScope, WidgetObjectScope } from './VariableScope';
 import { PageParameters, LocalVariables } from '../PageVariables';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
@@ -202,6 +202,7 @@ export function DataView({
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
   const selections = useSelections();
   const variables = useContext(VariableScope);
+  const widgetObjects = useContext(WidgetObjectScope);
   const pageParameters = useContext(PageParameters);
   const localVariables = useContext(LocalVariables);
   const listenTarget = source?.target?.split('.').at(-1) || '';
@@ -379,7 +380,11 @@ export function DataView({
       />
     ));
 
-  if (options.visibility && !matchesCondition(options.visibility, resolvedRecord, schema.module_roles)) return null;
+  if (
+    options.visibility &&
+    !matchesCondition(options.visibility, resolvedRecord, schema.module_roles)
+  )
+    return null;
   if (unsupported)
     return (
       <div className="mxrb-data-view mxrb-data-view--unsupported" role="alert">
@@ -392,7 +397,12 @@ export function DataView({
         Loading…
       </div>
     );
-  if (renderRecord) return renderRecord(resolvedRecord);
+  if (renderRecord)
+    return (
+      <WidgetObjectScope.Provider value={{ ...widgetObjects, [widget.name]: resolvedRecord }}>
+        {renderRecord(resolvedRecord)}
+      </WidgetObjectScope.Provider>
+    );
   if (!resolvedRecord)
     return (
       <div className="mxrb-data-view mxrb-data-view--empty">
@@ -401,31 +411,35 @@ export function DataView({
     );
 
   return (
-    <ReadOnlyContext.Provider value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles)}>
-      <ReadOnlyStyleContext.Provider
-        value={
-          options.read_only_style === 'text' || options.read_only_style === 'control'
-            ? options.read_only_style
-            : inheritedReadOnlyStyle
-        }
+    <WidgetObjectScope.Provider value={{ ...widgetObjects, [widget.name]: resolvedRecord }}>
+      <ReadOnlyContext.Provider
+        value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles)}
       >
-        <section
-          className={classes('app-widget', 'mxrb-widget', 'mxrb-data-view', options.class)}
-          data-widget-name={widget.name}
-          data-widget-type={widget.type}
-          data-editability={String(options.editable || 'always')}
+        <ReadOnlyStyleContext.Provider
+          value={
+            options.read_only_style === 'text' || options.read_only_style === 'control'
+              ? options.read_only_style
+              : inheritedReadOnlyStyle
+          }
         >
-          <div className="mxrb-data-view__body" data-widget-region="body">
-            {render(widget.body, 'body')}
-          </div>
-          {options.show_footer !== false && (widget.footer || []).length > 0 && (
-            <footer className="mxrb-data-view__footer" data-widget-region="footer">
-              {render(widget.footer, 'footer')}
-            </footer>
-          )}
-        </section>
-      </ReadOnlyStyleContext.Provider>
-    </ReadOnlyContext.Provider>
+          <section
+            className={classes('app-widget', 'mxrb-widget', 'mxrb-data-view', options.class)}
+            data-widget-name={widget.name}
+            data-widget-type={widget.type}
+            data-editability={String(options.editable || 'always')}
+          >
+            <div className="mxrb-data-view__body" data-widget-region="body">
+              {render(widget.body, 'body')}
+            </div>
+            {options.show_footer !== false && (widget.footer || []).length > 0 && (
+              <footer className="mxrb-data-view__footer" data-widget-region="footer">
+                {render(widget.footer, 'footer')}
+              </footer>
+            )}
+          </section>
+        </ReadOnlyStyleContext.Provider>
+      </ReadOnlyContext.Provider>
+    </WidgetObjectScope.Provider>
   );
 }
 
@@ -467,8 +481,12 @@ function WidgetContent({
   const pageTitle = useContext(PageTitleContext);
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
-  if (widget.type !== 'data_view' && options.visibility &&
-      !matchesCondition(options.visibility, context || pageContext, schema.module_roles)) return null;
+  if (
+    widget.type !== 'data_view' &&
+    options.visibility &&
+    !matchesCondition(options.visibility, context || pageContext, schema.module_roles)
+  )
+    return null;
   const className = classes(
     'app-widget',
     `app-widget--${widget.type}`,
