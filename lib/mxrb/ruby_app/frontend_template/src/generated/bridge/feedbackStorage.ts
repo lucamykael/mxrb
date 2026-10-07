@@ -1,5 +1,6 @@
 import type { NanoflowParameters, RuntimeValue } from '../types';
 import type { JavaScriptAction } from './nanoflow';
+import { writeStorageObject } from './objectStorage';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -47,6 +48,8 @@ const writeImage: JavaScriptAction = async (parameters) => {
 };
 
 const handlers: Record<string, JavaScriptAction> = {
+  JS_SetFeedbackStorageObject: ({ key, value }) => writeStorageObject({ Key: key, Value: value }),
+  SetStorageItemObject: writeStorageObject,
   JS_GetSingleLocalStorageObjectItem: readLegacy,
   JS_GetSingleStringLocalStorageObjectItem: readString,
   JS_GetShowEmailBooleanLocalStorageObjectItem: readShowEmail,

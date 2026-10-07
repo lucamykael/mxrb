@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-07",
+  "scope": "Verified Web Feedback object-storage writers for complete record snapshots",
+  "actions": {
+    "JS_SetFeedbackStorageObject": {
+      "sha256_lf_normalized": "698ec24426711a1733bc9cb6984683011db137d808c2642a88b1c07119f2798c",
+      "model_parameters": [
+        "key",
+        "value"
+      ]
+    },
+    "SetStorageItemObject": {
+      "sha256_lf_normalized": "8b1d18178290f7325e8acc20d44db26497c94bf98d39f898569fc95541cbaa50",
+      "model_parameters": [
+        "Key",
+        "Value"
+      ]
+    }
+  },
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "same_guid": true,
+      "variants": [
+        {
+          "Name": "Object oracle",
+          "Amount": "9007199254740993.12345678",
+          "Count": "12",
+          "Active": true,
+          "When": 1767323045000,
+          "FeedbackModule.Probe_Related": null
+        },
+        {
+          "Name": "Object oracle",
+          "Amount": "9007199254740993.12345678",
+          "Count": "12",
+          "Active": true,
+          "When": 1767323045000,
+          "FeedbackModule.Probe_Related": null
+        }
+      ]
+    }
+  },
+  "validation": {
+    "ruby_full_suite": "passed",
+    "coverage_lines": {
+      "covered": 41331,
+      "total": 41331,
+      "percent": 100
+    },
+    "coverage_branches": {
+      "covered": 18134,
+      "total": 18134,
+      "percent": 100
+    },
+    "rubocop_files": 581,
+    "rubocop_offenses": 0,
+    "frontend_tests": 186,
+    "frontend_check_passed": true,
+    "original_javascript_comparisons": 12,
+    "unchanged_real_nanoflows": 2,
+    "real_nanoflow_projects": [
+      "RubyBridgeSandbox",
+      "SLATaskApp"
+    ],
+    "browser_steps": 25,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "ruby_examples": 2338,
+    "ruby_failures": 0
+  },
+  "limitations": [
+    "Object retrieval/recreation is not implemented",
+    "Incomplete object snapshots and members absent from the schema fail explicitly",
+    "Unsafe JavaScript integer numbers are rejected; lost precision cannot be recovered",
+    "React Native AsyncStorage and offline synchronization are not certified",
+    "parseDateTimeUTC with a format remains unsupported; fixture uses dateTimeUTC"
+  ]
+}

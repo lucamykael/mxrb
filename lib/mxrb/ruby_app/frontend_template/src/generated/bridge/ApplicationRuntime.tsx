@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
 import { registerClientConstants } from './expression';
+import { registerObjectStorageSchema } from './objectStorage';
 import { invokeAsync } from './AsyncInvocation';
 import { ClientActions, PageEdits, hasPageEdits } from './PageEdits';
 import { PageDataSource, pageSourceWidget } from './PageDataSource';
@@ -282,12 +283,14 @@ export function ApplicationRuntime({
   const loadApplication = async () => {
     setError(null);
     registerClientConstants({});
+    registerObjectStorageSchema(null);
     try {
       const activeSession = await api<Session>('/api/session');
       setSession(activeSession);
       setCsrfToken(activeSession.csrf || null);
       const value = await api<ApplicationSchema>('/api/schema');
       registerClientConstants(value.constants || {});
+      registerObjectStorageSchema(value);
       schemaRef.current = value;
       setSchema(value);
       setAuthRequired(false);
