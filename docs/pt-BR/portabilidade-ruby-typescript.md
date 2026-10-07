@@ -1,5 +1,19 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Adaptadores Java com fonte verificada
+
+A exportação reconhece duas implementações do Feedback Module pelo SHA-256 do
+Java: `ValidateEmail` e `XSS_Sanitizer`. Somente as versões verificadas geram
+registros explícitos em `config/adapters.rb`; fontes ausentes ou alteradas
+continuam exigindo um adaptador do projeto. O runtime executa Ruby e dispensa
+o MPR e a JVM. Os registros são código Ruby editável.
+
+Os testes comparam 32 entradas com o Java original, incluindo Unicode,
+entradas vazias e nulas. A ação legada `XSS_Sanitizer` mantém seu comportamento
+por expressões regulares; ela não substitui escape de HTML ou uma política de
+sanitização da aplicação. Outras ações Java/JavaScript e integrações externas
+continuam precisando de implementação e aceitação próprias.
+
 ## Precisão Decimal
 
 Ruby usa `BigDecimal` e o frontend usa `decimal.js`. Literais, soma, subtração,

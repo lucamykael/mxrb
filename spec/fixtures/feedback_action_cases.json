@@ -1,0 +1,162 @@
+[
+  {
+    "kind": "email",
+    "input": null,
+    "error": "NullPointerException"
+  },
+  {
+    "kind": "email",
+    "input": "",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "a@example.com",
+    "expected": "true"
+  },
+  {
+    "kind": "email",
+    "input": "a+b@example.co.uk",
+    "expected": "true"
+  },
+  {
+    "kind": "email",
+    "input": "a@[999.1.2.3]",
+    "expected": "true"
+  },
+  {
+    "kind": "email",
+    "input": "a b@example.com",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "a@example.c",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "á@example.com",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "a@example.com\n",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "a@-example.com",
+    "expected": "true"
+  },
+  {
+    "kind": "email",
+    "input": "a..b@example.com",
+    "expected": "true"
+  },
+  {
+    "kind": "email",
+    "input": "a@ex_ample.com",
+    "expected": "false"
+  },
+  {
+    "kind": "email",
+    "input": "x!#$%&'*+/=?^_`{|}~-@example.com",
+    "expected": "true"
+  },
+  {
+    "kind": "sanitize",
+    "input": null,
+    "expected": null
+  },
+  {
+    "kind": "sanitize",
+    "input": "",
+    "expected": ""
+  },
+  {
+    "kind": "sanitize",
+    "input": "plain text",
+    "expected": "plain text"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<b>bold</b>",
+    "expected": "bold"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<script>alert(1)</script>safe",
+    "expected": "safe"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<SCRIPT>x</SCRIPT>safe",
+    "expected": "safe"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<script>line\nnext</script>",
+    "expected": "line\nnext"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<script>line\rnext</script>",
+    "expected": "line\rnext"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<script>linenext</script>",
+    "expected": "linenext"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<ſcript>x</ſcript>",
+    "expected": "x"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<iframe>x</iframe><object>x</object><embed>x</embed><applet>x</applet>safe",
+    "expected": "safe"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<a onclick=\"alert(1)\" href=\"javascript:x\">Hello</a>",
+    "expected": "Hello"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<meta http-equiv=\"refresh\" content=\"1\">keep",
+    "expected": "keep"
+  },
+  {
+    "kind": "sanitize",
+    "input": "a <broken",
+    "expected": "a "
+  },
+  {
+    "kind": "sanitize",
+    "input": "outside onclick=hello javascript:world",
+    "expected": "outside  world"
+  },
+  {
+    "kind": "sanitize",
+    "input": "éonclick=x",
+    "expected": "é"
+  },
+  {
+    "kind": "sanitize",
+    "input": "é onclick=x",
+    "expected": "é "
+  },
+  {
+    "kind": "sanitize",
+    "input": "<script>x y</script>",
+    "expected": "x y"
+  },
+  {
+    "kind": "sanitize",
+    "input": "<b title=\"x>y\">Hi</b>",
+    "expected": "y\">Hi"
+  }
+]

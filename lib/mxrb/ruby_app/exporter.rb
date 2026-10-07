@@ -3250,6 +3250,7 @@ module Mxrb
           #
           # Supported kinds: :app_service, :web_service, :import_xml,
           # :import_mapping, :export_mapping, and :document.
+          #{KnownJavaActions.registrations(File.dirname(@mpr_path))}
         RUBY
       end
 

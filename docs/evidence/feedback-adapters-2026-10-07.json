@@ -1,0 +1,219 @@
+{
+  "date": "2026-10-07",
+  "scope": [
+    "FeedbackModule.ValidateEmail",
+    "FeedbackModule.XSS_Sanitizer"
+  ],
+  "selection": "Exact normalized Java SHA-256 allowlist; no matching by action name alone",
+  "ruby": {
+    "examples": 2313,
+    "failures": 0,
+    "lines": 41080,
+    "branches": 18007,
+    "coverage_percent": 100,
+    "standalone_microflows": 30
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 on Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "cases_per_runtime": 30,
+    "identical_results": true,
+    "input_hashes_unchanged": true,
+    "results": [
+      {
+        "name": "Case0",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case1",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case2",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case3",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case4",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case5",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case6",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case7",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case8",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case9",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case10",
+        "expected": "false",
+        "actual": "false",
+        "passed": true
+      },
+      {
+        "name": "Case11",
+        "expected": "true",
+        "actual": "true",
+        "passed": true
+      },
+      {
+        "name": "Case12",
+        "expected": "",
+        "actual": "",
+        "passed": true
+      },
+      {
+        "name": "Case13",
+        "expected": "plain text",
+        "actual": "plain text",
+        "passed": true
+      },
+      {
+        "name": "Case14",
+        "expected": "bold",
+        "actual": "bold",
+        "passed": true
+      },
+      {
+        "name": "Case15",
+        "expected": "safe",
+        "actual": "safe",
+        "passed": true
+      },
+      {
+        "name": "Case16",
+        "expected": "safe",
+        "actual": "safe",
+        "passed": true
+      },
+      {
+        "name": "Case17",
+        "expected": "line\nnext",
+        "actual": "line\nnext",
+        "passed": true
+      },
+      {
+        "name": "Case18",
+        "expected": "line\rnext",
+        "actual": "line\rnext",
+        "passed": true
+      },
+      {
+        "name": "Case19",
+        "expected": "linenext",
+        "actual": "linenext",
+        "passed": true
+      },
+      {
+        "name": "Case20",
+        "expected": "x",
+        "actual": "x",
+        "passed": true
+      },
+      {
+        "name": "Case21",
+        "expected": "safe",
+        "actual": "safe",
+        "passed": true
+      },
+      {
+        "name": "Case22",
+        "expected": "Hello",
+        "actual": "Hello",
+        "passed": true
+      },
+      {
+        "name": "Case23",
+        "expected": "keep",
+        "actual": "keep",
+        "passed": true
+      },
+      {
+        "name": "Case24",
+        "expected": "a ",
+        "actual": "a ",
+        "passed": true
+      },
+      {
+        "name": "Case25",
+        "expected": "outside  world",
+        "actual": "outside  world",
+        "passed": true
+      },
+      {
+        "name": "Case26",
+        "expected": "é",
+        "actual": "é",
+        "passed": true
+      },
+      {
+        "name": "Case27",
+        "expected": "é ",
+        "actual": "é ",
+        "passed": true
+      },
+      {
+        "name": "Case28",
+        "expected": "x y",
+        "actual": "x y",
+        "passed": true
+      },
+      {
+        "name": "Case29",
+        "expected": "y\">Hi",
+        "actual": "y\">Hi",
+        "passed": true
+      }
+    ]
+  },
+  "direct_java_oracle": {
+    "cases": 32,
+    "includes_null_inputs": true,
+    "runtime_boot": false
+  },
+  "corpus": {
+    "projects_with_both_source_hashes_recognized": 5
+  },
+  "limits": [
+    "Other Java and JavaScript actions need explicit implementations.",
+    "Legacy XSS_Sanitizer behavior is not an application HTML security policy.",
+    "Source-free or customized actions are not registered automatically."
+  ]
+}
