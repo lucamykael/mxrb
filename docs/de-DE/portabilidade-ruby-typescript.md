@@ -81,8 +81,8 @@ Ganzzahlen führen zu einem ausdrücklichen Fehler.
 Beide Schreibaktionen stimmen in zwei Builds und zwei Laufzeiten mit Mendix
 überein. Zwölf Vergleiche mit dem ursprünglichen JavaScript, zwei unveränderte
 reale Nanoflows und 25 Browser-Schritte ohne MPR-Zugriff bestanden ebenfalls.
-Das Lesen und Wiederherstellen von Objekten, AsyncStorage und Offline-Synchronisierung
-sind noch nicht unterstützt.
+Das Lesen und Wiederherstellen von Objekten ist im obigen Abschnitt abgedeckt;
+AsyncStorage und Offline-Synchronisierung sind noch nicht unterstützt.
 [Nachweis](../evidence/feedback-object-storage-2026-10-07.json).
 
 ## Aktualisierung von Seitenparametern

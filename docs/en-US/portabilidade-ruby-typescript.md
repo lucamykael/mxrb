@@ -74,8 +74,8 @@ and integers already outside the frontend's exact range fail explicitly.
 
 Both writers matched Mendix in two builds and two runtimes. Twelve comparisons
 with original JavaScript, two unchanged real nanoflows and 25 browser steps without
-MPR access also passed. Object retrieval/recreation, AsyncStorage and offline
-synchronization remain unsupported.
+MPR access also passed. Object retrieval/recreation is covered in the section above;
+AsyncStorage and offline synchronization remain unsupported.
 [Evidence](../evidence/feedback-object-storage-2026-10-07.json).
 
 ## Refreshing page arguments

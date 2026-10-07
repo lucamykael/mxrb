@@ -74,8 +74,8 @@ schema e inteiros que já excedem a precisão exata do frontend geram erro expl�
 
 As duas gravações coincidiram com o Mendix em dois builds e dois runtimes.
 Também passaram 12 comparações com o JavaScript original, dois nanoflows reais
-sem alterações e 25 passos no navegador sem MPR. A leitura/recriação de objetos,
-`AsyncStorage` e sincronização offline continuam pendentes.
+sem alterações e 25 passos no navegador sem MPR. A leitura/recriação de objetos
+está coberta na seção acima; `AsyncStorage` e sincronização offline continuam pendentes.
 [Evidência](../evidence/feedback-object-storage-2026-10-07.json).
 
 ## Atualização de parâmetros de página
