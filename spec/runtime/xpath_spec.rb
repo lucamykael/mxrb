@@ -61,6 +61,18 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(filter("[contains(App.Tags/App.Tag/Name, '/')]")).to eq([first])
   end
 
+  it 'matches native signed integer division and remainder while preserving decimal quotients' do
+    first.members.merge!('Rank' => -12, 'Amount' => BigDecimal('-12.5'))
+    second.members.merge!('Rank' => 12, 'Amount' => BigDecimal('12.5'))
+    expect(filter('[Rank div 5 = -2][Rank mod 5 = -2]')).to eq([first])
+    expect(filter('[Rank div 5 = -3][Rank mod 5 = 3]')).to eq([])
+    expect(filter('[Rank div -5 = -2][Rank mod -5 = 2]')).to eq([second])
+    expect(filter('[Amount div 5 = -2.5][Amount mod 5 = -2.5]')).to eq([first])
+    expect(filter('[Amount div 5 = 2.5][Amount mod 5 = 2.5]')).to eq([second])
+    expect(filter('[Rank div 5.0 = 2.4]')).to eq([second])
+    expect { filter('[Rank mod 0 = 1]') }.to raise_error(ArgumentError, /invalid XPath operand/)
+  end
+
   it 'uses existential comparisons, related-object predicates and inverse traversal' do
     expect(filter('[App.Tags/App.Tag/Name = \'Tag\']')).to eq([first])
     expect(filter("[App.Tags[Name = 'Tag']/App.Tag]")).to eq([first])
@@ -70,6 +82,21 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(reverse.filter([tag])).to eq([tag])
     first.members['Single'] = tag
     expect(filter('[Single/App.Tag = $tag]', 'tag' => tag)).to eq([first])
+  end
+
+  it 'coerces numeric query parameters to integer operands without truncating decimal columns' do
+    first.members.merge!('Rank' => -12, 'Amount' => BigDecimal('-12.4'))
+    second.members.merge!('Rank' => 12, 'Amount' => BigDecimal('12.4'))
+    expect(filter('[Rank = 12.4][12.4 = Rank][Rank div 5 = 2.9]')).to eq([second])
+    expect(filter('[Rank = -12.4][-12.4 = Rank][Rank div 5 = -2.9]')).to eq([first])
+    expect(filter('[Rank < 12.4][Rank != 12.4]')).to eq([first])
+    expect(filter('[Rank = Amount]')).to eq([])
+    expect(filter('[Amount = Rank]')).to eq([])
+    expect(filter('[12 = 12.4][12.4 != 12]')).to eq([first, second])
+    expect(filter('[-Rank = 12.4]')).to eq([first])
+    expect(filter('[Rank = $v][$v = Rank]', 'v' => BigDecimal('12.4'))).to eq([second])
+    expect(filter('[Amount = $v]', 'v' => 12)).to eq([])
+    expect(filter('[Tags/Rank = 12.4]')).to eq([])
   end
 
   it 'rejects malformed expressions, unknown variables, invalid traversal and excessive nesting' do

@@ -287,6 +287,194 @@ type OracleCase = { name: string; expected?: string; expected_error?: boolean };
     "expected": "1:root"
   },
   {
+    "name": "XPathIntDivTruncated",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeTruncated",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeFloor",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntDivNegativeDivisor",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDiv",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDivNegative",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntMod",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRemainder",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntModNegativeDivisor",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeDivisorRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathDecimalMod",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRemainder",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPrecedence",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveEq",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveNotEq",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveLess",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveGreater",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveEqReverse",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDivideFraction",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDivideRound",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDecimalCompare",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveColumnCompare",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveModuloFloat",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeEq",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeNotEq",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeLess",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeGreater",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeEqReverse",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDivideFraction",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDivideRound",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDecimalCompare",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeColumnCompare",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeModuloFloat",
+    "expected": "1"
+  },
+  {
+    "name": "XPathLiteralIntLeft",
+    "expected": "1"
+  },
+  {
+    "name": "XPathLiteralDecimalLeft",
+    "expected": "0"
+  },
+  {
+    "name": "XPathLiteralBothDecimal",
+    "expected": "0"
+  },
+  {
+    "name": "XPathLiteralDiv",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableEquals",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableReverse",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableLess",
+    "expected": "0"
+  },
+  {
+    "name": "XPathVariableNegative",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativePath",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegNegativePath",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalPath",
+    "expected": "0"
+  },
+  {
+    "name": "XPathArithmeticCompare",
+    "expected": "1"
+  },
+  {
     "name": "VerifyRule",
     "expected": "passed"
   }
