@@ -1,5 +1,13 @@
 # MXRB: Ruby above all
 
+## XPath division validation
+
+The parser rejects `/` as division before querying records, including empty
+tables and nested predicates. Slashes remain valid in association paths,
+variable members and strings. `mx check` 11.12.1 rejects `[Rank / 2 = 1.5]`
+with CE0161 and accepts `[Rank div 2 = 1.5]`. This is static validation;
+execution equivalence for `div` and `mod` remains pending.
+
 ## XPath reverse self-associations
 
 The `[reversed()]` marker reverses only its own self-association step. Multi-hop

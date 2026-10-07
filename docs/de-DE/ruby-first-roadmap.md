@@ -1,5 +1,14 @@
 # MXRB: Ruby über alles
 
+## Validierung der XPath-Division
+
+Der Parser lehnt `/` als Division vor der Datensatzabfrage ab, auch bei leeren
+Tabellen und verschachtelten Prädikaten. Schrägstriche bleiben in
+Assoziationspfaden, Variablenzugriffen und Zeichenketten gültig. `mx check`
+11.12.1 lehnt `[Rank / 2 = 1.5]` mit CE0161 ab und akzeptiert
+`[Rank div 2 = 1.5]`. Dies ist eine statische Prüfung; die Gleichwertigkeit
+der Ausführung von `div` und `mod` muss noch bestätigt werden.
+
 ## Umgekehrte XPath-Selbstreferenzen
 
 Der Marker `[reversed()]` kehrt nur den jeweiligen Selbstreferenzschritt um.
