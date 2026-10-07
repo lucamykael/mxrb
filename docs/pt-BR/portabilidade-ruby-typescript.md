@@ -1,5 +1,38 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Armazenamento Nanoflow Commons
+
+`GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,
+`StorageItemExists` e `ClearLocalStorage` têm adaptadores Web selecionados por
+SHA-256 da fonte original. Os parâmetros do modelo são `Key` e `Value`.
+Preservam os erros de chave/valor obrigatório, a distinção entre chave ausente
+e string armazenada vazia, remoção e limpeza. `ClearLocalStorage` limpa todo o
+armazenamento da origem atual, como a ação original.
+
+Validação: 60 comparações com o JavaScript original, 176 testes frontend,
+51 passos no Chromium sem acesso ao MPR e dois builds/dois runtimes na VM
+Windows, com resultados idênticos ao Ruby e hashes preservados. A suíte Ruby
+passou 2.326 exemplos com cobertura de linhas e branches de 100%. O Sudoku
+real passou auditoria e reconstrução idêntica.
+[Evidência](../evidence/commons-storage-2026-10-07.json).
+O escopo é `localStorage` Web; `AsyncStorage` React Native ainda não está implementado.
+
+## Ações Nanoflow Commons e listas
+
+O exportador registra `Base64Encode`, `Base64Decode`, `GetGuid`, `GetPlatform`
+e `FindObjectWithGUID` somente quando o hash da implementação corresponde à
+fonte verificada. Base64 usa `js-base64` 3.7.7, a versão da referência nativa.
+O registro preserva o parâmetro `EntityObject` e mantém simultaneamente os
+adaptadores Feedback. Nanoflows exportados também executam criação de listas
+e adição, remoção e limpeza de objetos, preservando referências à mesma lista.
+
+A validação passou 22 comparações com o JavaScript original, 169 testes de
+frontend e 13 etapas no Chromium sem MPR. Dois builds e dois runtimes na VM
+confirmaram os mesmos resultados no original e na reconstrução, sem modificar
+as fontes. O cenário certifica a plataforma Web; classificação de ambiente
+não equivale à certificação de aplicativos React Native ou Cordova.
+[Evidências](../evidence/nanoflow-commons-2026-10-07.json).
+
 ## CustomChart com Plotly
 
 O `CustomChart` usa Plotly 3.0.1, carregado sob demanda, para aplicar os dados,

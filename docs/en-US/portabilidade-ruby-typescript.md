@@ -1,5 +1,36 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Nanoflow Commons storage
+
+`GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,
+`StorageItemExists` and `ClearLocalStorage` have Web adapters selected by the
+original source SHA-256. Model parameters are `Key` and `Value`. They preserve
+required key/value errors, missing versus empty stored strings, removal and
+clearing. `ClearLocalStorage` clears the entire current origin, as the original does.
+
+Validation: 60 original JavaScript comparisons, 176 frontend tests, 51 Chromium
+steps without MPR access, and two builds/two runtimes in the Windows VM with
+identical Ruby results and unchanged hashes. All 2,326 Ruby examples passed
+with 100% line/branch coverage. Real Sudoku audit and identical rebuild passed.
+[Evidence](../evidence/commons-storage-2026-10-07.json).
+Scope is Web `localStorage`; React Native `AsyncStorage` is not implemented.
+
+## Nanoflow Commons actions and lists
+
+Export registers `Base64Encode`, `Base64Decode`, `GetGuid`, `GetPlatform` and
+`FindObjectWithGUID` only when implementation hashes match verified sources.
+Base64 uses `js-base64` 3.7.7, the native reference version. Registration keeps
+the model parameter `EntityObject` and the Feedback adapters together. Exported
+nanoflows also create lists and add, remove or clear objects while preserving
+references to the same list.
+
+Validation passed 22 comparisons with original JavaScript, 169 frontend tests
+and 13 Chromium steps without MPR access. Two builds and runtimes in the Windows
+VM confirmed identical original/round-trip results without modifying sources.
+The scenario certifies Web; environment detection is not certification of a
+React Native or Cordova application.
+[Evidence](../evidence/nanoflow-commons-2026-10-07.json).
+
 ## CustomChart with Plotly
 
 `CustomChart` loads Plotly 3.0.1 on demand and applies the model's JSON data,

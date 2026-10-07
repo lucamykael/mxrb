@@ -1,5 +1,38 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Nanoflow-Commons-Speicher
+
+`GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,
+`StorageItemExists` und `ClearLocalStorage` erhalten Web-Adapter, ausgewählt
+anhand des SHA-256 der Originalquelle. Die Modellparameter heißen `Key` und
+`Value`. Pflichtfeldfehler, fehlende gegenüber leeren Werten, Entfernen und
+Leeren bleiben erhalten. `ClearLocalStorage` leert wie das Original den gesamten
+Speicher des aktuellen Ursprungs.
+
+Validierung: 60 Vergleiche mit dem Original-JavaScript, 176 Frontend-Tests,
+51 Chromium-Schritte ohne MPR-Zugriff sowie zwei Builds und zwei Laufzeiten
+in der Windows-VM mit identischen Ruby-Ergebnissen und unveränderten Hashes.
+Alle 2.326 Ruby-Beispiele bestanden bei 100% Zeilen- und Zweigabdeckung.
+Audit und identischer Wiederaufbau des echten Sudoku-Projekts bestanden.
+[Nachweis](../evidence/commons-storage-2026-10-07.json).
+Der Umfang ist Web-`localStorage`; React Native `AsyncStorage` ist nicht implementiert.
+
+## Nanoflow-Commons-Aktionen und Listen
+
+Der Export registriert `Base64Encode`, `Base64Decode`, `GetGuid`, `GetPlatform`
+und `FindObjectWithGUID` nur bei übereinstimmenden Hashes der geprüften Quellen.
+Base64 verwendet `js-base64` 3.7.7 aus der nativen Referenz. Die Registrierung
+erhält den Modellparameter `EntityObject` und gleichzeitig die Feedback-Adapter.
+Exportierte Nanoflows erstellen außerdem Listen und fügen Objekte hinzu,
+entfernen sie oder leeren die Liste, ohne bestehende Listenreferenzen zu ersetzen.
+
+22 Vergleiche mit dem Original-JavaScript, 169 Frontend-Tests und 13 Chromium-
+Schritte ohne MPR-Zugriff bestanden. Zwei Builds und Runtimes in der Windows-VM
+bestätigten identische Original-/Roundtrip-Ergebnisse und unveränderte Quellen.
+Das Szenario zertifiziert Web; Umgebungserkennung ist keine Zertifizierung
+einer React-Native- oder Cordova-Anwendung.
+[Nachweis](../evidence/nanoflow-commons-2026-10-07.json).
+
 ## CustomChart mit Plotly
 
 `CustomChart` lädt Plotly 3.0.1 bei Bedarf und übernimmt JSON-Daten, Layout und

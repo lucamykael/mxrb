@@ -1,0 +1,55 @@
+{
+  "name": "nanoflow-commons",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "verified-commons",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"Commons oracle\"]"
+        },
+        {
+          "click_text": "Encode"
+        },
+        {
+          "wait_for_text": "T2zDoSDkuJbnlYwg8J+MjQ=="
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Decode"
+        },
+        {
+          "wait_for_text": "Olá 世界 🌍"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "PlatformName"
+        },
+        {
+          "wait_for_text": "Web"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ObjectLookup"
+        },
+        {
+          "wait_for_text": "Found synthetic object"
+        },
+        {
+          "wait_for_idle": true
+        }
+      ]
+    }
+  ]
+}

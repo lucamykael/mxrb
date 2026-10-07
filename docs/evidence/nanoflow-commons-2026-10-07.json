@@ -1,0 +1,66 @@
+{
+  "date": "2026-10-07",
+  "scope": "Five source-verified Nanoflow Commons adapters and frontend list mutation",
+  "actions": [
+    "Base64Encode",
+    "Base64Decode",
+    "GetGuid",
+    "GetPlatform",
+    "FindObjectWithGUID"
+  ],
+  "dependency": {
+    "js-base64": "3.7.7"
+  },
+  "selection": "Exact normalized source SHA-256 in NanoflowCommons namespace; GetGuid uses model parameter EntityObject",
+  "original_javascript": {
+    "comparisons": 22,
+    "all_passed": true
+  },
+  "frontend": {
+    "tests": 169,
+    "format_lint_typecheck_build": "passed"
+  },
+  "browser": {
+    "steps": 13,
+    "passed": true,
+    "mpr_access": "prohibited",
+    "console_errors": []
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_and_copied_source_hashes_unchanged": true,
+    "acceptance": {
+      "status": "passed",
+      "results": {
+        "Encode": "T2zDoSDkuJbnlYwg8J+MjQ==",
+        "Decode": "Olá 世界 🌍",
+        "PlatformName": "Web",
+        "ObjectLookup": "Found synthetic object"
+      }
+    }
+  },
+  "limits": [
+    "Native acceptance covers browser platform Web, not a React Native or Cordova deployment.",
+    "List mutation supports object Add, Remove and Clear; other list activities retain their own support scope.",
+    "Customized or missing action sources require explicit adapters."
+  ],
+  "ruby": {
+    "examples": 2326,
+    "failures": 0,
+    "coverage_percent": 100,
+    "lines": 41237,
+    "branches": 18092
+  },
+  "lint": {
+    "files": 574,
+    "offenses": 0
+  },
+  "real_project": {
+    "name": "Sudoku",
+    "public_source": {},
+    "valid": true,
+    "identical": true
+  }
+}
