@@ -14,6 +14,18 @@ behavior; it does not replace HTML escaping or an application's sanitization
 policy. Other Java/JavaScript actions and external integrations still require
 their own implementation and acceptance.
 
+## Structured captions
+
+Captions support translations, fallback text, attribute/expression parameters,
+number/date formatting and references to page, snippet or widget objects. Ruby
+declarations preserve this metadata across roundtrips. The frontend uses the
+selected locale and retains transported Decimal precision beyond the exact
+Number range. Updating a series preserves its context.
+
+The chart-captions scenario compares names and values before/after a change in
+the native runtime. Unknown date patterns are rejected explicitly. Advanced
+Plotly visual options remain a separate workstream.
+
 ## Decimal precision
 
 Ruby uses `BigDecimal` and the frontend uses `decimal.js`. Decimal literals,

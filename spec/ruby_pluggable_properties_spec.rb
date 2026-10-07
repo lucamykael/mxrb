@@ -249,12 +249,45 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     bridge = described_class.new(widget_id, catalog:)
     bridge.populate_supported_subset('label' => { text: 'Title' })
     expect(bridge.to_projection.fetch('label')).to eq(text: 'Title', parameters: [])
-    [{ text: 'Title', translations: { pt_BR: 'Título' } },
+    [{ text: 'Title', unknown_metadata: { pt_BR: 'Título' } },
      { text: 'Title', parameters: [1] }, { parameters: [] }].each do |unsupported|
       bridge = described_class.new(widget_id, catalog:)
       bridge.populate_supported_subset('label' => unsupported)
       expect(bridge.to_projection).to eq({})
     end
+  end
+
+  it 'emits structured caption metadata as editable Ruby values' do
+    bridge = described_class.new(widget_id, catalog:)
+    parameters = [bridge.caption_parameter(
+      attribute: 'App.Item.Amount', format: bridge.caption_format(decimal_precision: 3),
+      source: bridge.caption_variable(kind: :widget, name: 'Owner')
+    )]
+    bridge.set(:label,
+               bridge.caption('Value {1}', translations: { pt_BR: 'Valor {1}' }, fallback: 'Missing', parameters:))
+    projection = bridge.to_projection.fetch('label')
+    expect(projection).to include(translations: { 'pt_BR' => 'Valor {1}' }, fallback: 'Missing')
+    expect(bridge.source_expression(:label)).to include('translations:', 'decimal_precision:', 'fallback: "Missing"')
+    expected = bridge.caption('Value {1}', translations: { pt_BR: 'Valor {1}' }, fallback: 'Missing', parameters:)
+    expect(bridge.instance_eval(bridge.source_expression(:label))).to eq(expected)
+    restored = described_class.new(widget_id, catalog:)
+    restored.populate_supported_subset('label' => projection)
+    expect(restored.to_projection).to eq(bridge.to_projection)
+  end
+
+  it 'loads typed captions inside nested widget objects' do
+    bridge = described_class.new(widget_id, catalog:)
+    bridge.set(:objects, bridge.objects do
+      object do
+        set :label, caption('Value {1}', parameters: [caption_parameter(
+          attribute: 'App.Item.Amount', format: caption_format(decimal_precision: 4),
+          source: caption_variable(kind: :current)
+        )])
+      end
+    end)
+    restored = described_class.new(widget_id, catalog:)
+    restored.set(:objects, restored.instance_eval(bridge.source_expression(:objects)))
+    expect(restored.to_projection).to eq(bridge.to_projection)
   end
 
   it 'retains expression and attribute caption parameters through the native writer and reader' do

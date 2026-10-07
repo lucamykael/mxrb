@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'caption'
+
 require "base64"
 require "digest"
 require "fileutils"
@@ -3287,7 +3289,8 @@ module Mxrb
       value['Selection'] = configured[:selection].to_s if configured.key?(:selection)
       if configured.key?(:text)
         value['TextTemplate'] = client_template_doc(
-          configured[:text], parameters: configured.fetch(:parameters, []), entity: context_entity
+          configured[:text], parameters: configured.fetch(:parameters, []), entity: context_entity,
+                             translations: configured.fetch(:translations, {}), fallback: configured.fetch(:fallback, '')
         )
       end
       value['AttributeRef'] = attribute_ref_doc(configured[:attribute]) if configured.key?(:attribute)
@@ -7811,18 +7814,32 @@ module Mxrb
                                              ]) }
     end
 
-    def client_template_doc(text, parameters: [], entity: nil)
+    def client_template_doc(text, parameters: [], entity: nil, translations: {}, fallback: '')
       {
         "$ID" => SecureRandom.uuid, "$Type" => "Forms$ClientTemplate",
-        "Fallback" => text_doc(""),
+        "Fallback" => text_doc(fallback),
         "Parameters" => IO::BsonCodec.build_array(
           Array(parameters).map { client_template_parameter_doc(_1, entity:) }, marker: 2
         ),
-        "Template" => text_doc(text.to_s)
+        "Template" => caption_text_doc(text.to_s, translations)
       }
     end
 
+    def caption_text_doc(text, translations)
+      document = text_doc(text)
+      return document if translations.empty?
+
+      document['Items'] = IO::BsonCodec.build_array(
+        { 'en_US' => text }.merge(Caption.translations(translations)).map do |language, translation|
+          { '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Translation', 'LanguageCode' => language, 'Text' => translation }
+        end
+      )
+      document
+    end
+
     def client_template_parameter_doc(expression, entity: nil)
+      return structured_caption_parameter_doc(expression, entity:) if expression.is_a?(Hash)
+
       expression = expression.to_s
       attribute = expression.delete_prefix('$currentObject/') if expression.start_with?('$currentObject/')
       {
@@ -7832,6 +7849,18 @@ module Mxrb
         "FormattingInfo" => formatting_info_doc,
         "SourceVariable" => nil
       }
+    end
+
+    def structured_caption_parameter_doc(parameter, entity: nil)
+      parameter = Caption.parameter(parameter)
+      document = client_template_parameter_doc('', entity:)
+      document['AttributeRef'] = attribute_ref_doc(parameter[:attribute], entity:)
+      document['Expression'] = parameter.fetch(:expression, '')
+      document['SourceVariable'] = data_view_page_variable_doc(parameter[:source])
+      parameter.fetch(:format, {}).each do |key, value|
+        document['FormattingInfo'][Caption::FORMAT_FIELDS.fetch(key)] = value
+      end
+      document
     end
 
     def empty_client_template_doc

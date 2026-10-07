@@ -1,12 +1,24 @@
 # MXRB: Ruby above all
 
+## Signed XPath division and remainder
+
+Integer `div` truncates toward zero; `mod` retains the dividend's sign. For
+example, `-12 div 5 = -2` and `-12 mod 5 = -2`. Decimal operands retain decimal
+quotients. Numeric constants and variables compared to integer
+expressions are truncated to integers; two columns retain their types. For
+constant-to-constant comparisons, the left operand determines the type.
+Forty-seven new cases passed on Studio Pro 11.12.1, within 119 identical
+source/round-trip results. Mixed arithmetic that fails in native HSQLDB
+remains outside this certification. See the
+[evidence](../evidence/xpath-arithmetic-2026-10-07.json).
+
 ## XPath division validation
 
 The parser rejects `/` as division before querying records, including empty
 tables and nested predicates. Slashes remain valid in association paths,
 variable members and strings. `mx check` 11.12.1 rejects `[Rank / 2 = 1.5]`
 with CE0161 and accepts `[Rank div 2 = 1.5]`. This is static validation;
-execution equivalence for `div` and `mod` remains pending.
+the certified execution scope is described above.
 
 ## XPath reverse self-associations
 

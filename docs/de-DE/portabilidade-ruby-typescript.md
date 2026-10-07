@@ -14,6 +14,18 @@ mit regulären Ausdrücken; sie ersetzt weder HTML-Escaping noch eine
 Sanitierungsrichtlinie der Anwendung. Weitere Java-/JavaScript-Aktionen und
 externe Integrationen brauchen eigene Implementierung und Abnahme.
 
+## Strukturierte Beschriftungen
+
+Beschriftungen unterstützen Übersetzungen, Ersatztexte, Attribut- und
+Ausdrucksparameter, Zahlen-/Datumsformate sowie Seiten-, Snippet- und
+Widget-Objekte. Ruby-Deklarationen erhalten diese Metadaten beim Roundtrip.
+Das Frontend verwendet die gewählte Sprache und bewahrt Decimal-Präzision
+auch jenseits des exakten Number-Bereichs. Serien behalten ihren Kontext.
+
+Das Szenario chart-captions vergleicht Namen und Werte vor und nach einer
+Änderung in der nativen Runtime. Unbekannte Datumsmuster werden ausdrücklich
+abgelehnt. Erweiterte Plotly-Optionen bleiben ein separater Arbeitsbereich.
+
 ## Decimal-Präzision
 
 Ruby verwendet `BigDecimal`, das Frontend `decimal.js`. Decimal-Literale,

@@ -1,0 +1,319 @@
+{
+  "date": "2026-10-07",
+  "scope": "Signed XPath arithmetic and integer query parameter coercion",
+  "ruby": {
+    "examples": 2319,
+    "failures": 0,
+    "lines": 41182,
+    "branches": 18076,
+    "coverage_percent": 100
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM / HSQLDB",
+    "builds": 2,
+    "runtimes": 2,
+    "compatibility_cases": 119,
+    "identical_results": true,
+    "input_hashes_unchanged": true,
+    "arithmetic_results": [
+      {
+        "name": "XPathForwardChild",
+        "actual": "1:child",
+        "expected": "1:child",
+        "passed": true
+      },
+      {
+        "name": "XPathForwardSet",
+        "actual": "1:child",
+        "expected": "1:child",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivTruncated",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeTruncated",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeFloor",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeDivisor",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalDiv",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalDivNegative",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntMod",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeRemainder",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeDivisor",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeDivisorRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalMod",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalModNegativeRemainder",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalModNegativeRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPrecedence",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveEq",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveNotEq",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveLess",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveGreater",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveEqReverse",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveDivideFraction",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveDivideRound",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveDecimalCompare",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveColumnCompare",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPositiveModuloFloat",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeEq",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeNotEq",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeLess",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeGreater",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeEqReverse",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeDivideFraction",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeDivideRound",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeDecimalCompare",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeColumnCompare",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativeModuloFloat",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathLiteralIntLeft",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathLiteralDecimalLeft",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathLiteralBothDecimal",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathLiteralDiv",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathVariableEquals",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathVariableReverse",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathVariableLess",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathVariableNegative",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegativePath",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathNegNegativePath",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalPath",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathArithmeticCompare",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      }
+    ]
+  },
+  "limits": [
+    "Rank div 5.0 produced a native HSQLDB numeric overflow; mixed integer/decimal coercion is not certified across databases.",
+    "Corpus parsing does not certify execution of every original flow."
+  ]
+}

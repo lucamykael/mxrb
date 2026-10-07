@@ -1,12 +1,24 @@
 # MXRB: Ruby acima de tudo
 
+## Divisão e resto com sinal em XPath
+
+A divisão inteira `div` trunca em direção a zero; `mod` conserva o sinal do
+dividendo. Por exemplo, `-12 div 5 = -2` e `-12 mod 5 = -2`. Operandos decimais
+mantêm o quociente decimal. Constantes e variáveis numéricas comparadas
+a expressões inteiras são truncadas para o tipo inteiro; duas colunas mantêm
+seus tipos. Em comparações entre constantes, o operando esquerdo define o tipo.
+Quarenta e sete casos novos passaram no Studio Pro 11.12.1, dentro de 119
+resultados idênticos entre original e reconstruído. Aritmética mista que falha
+no próprio HSQLDB permanece fora dessa certificação. Veja a
+[evidência](../evidence/xpath-arithmetic-2026-10-07.json).
+
 ## Validação de divisão em XPath
 
 O parser rejeita `/` como divisão antes de consultar registros, inclusive em
 tabelas vazias e predicados aninhados. A barra continua válida em caminhos de
 associação, membros de variáveis e strings. `mx check` 11.12.1 rejeita
 `[Rank / 2 = 1.5]` com CE0161 e aceita `[Rank div 2 = 1.5]`. Essa verificação
-é estática; a equivalência de execução de `div` e `mod` continua pendente.
+é estática; o recorte de execução certificado está descrito acima.
 
 ## XPath com associações reversas
 

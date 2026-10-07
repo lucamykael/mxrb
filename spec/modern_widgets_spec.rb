@@ -969,6 +969,7 @@ RSpec.describe 'modern page widgets' do
     expect(page.send(:pluggable_value, { 'Objects' => [2, object] }, nil)).to eq(objects: [{}])
 
     text = { 'TextTemplate' => { 'Template' => { 'Items' => [3, { 'Text' => 'Caption' }] } } }
+    allow(page).to receive(:extract_text).and_call_original
     allow(page).to receive(:extract_text).with(text['TextTemplate']).and_return('Caption')
     expect(page.send(:pluggable_value, text, {})).to eq('Caption')
     expect(page.send(:pluggable_value, { 'AttributeRef' => { 'Attribute' => 'M.E.Name' } }, {}))
