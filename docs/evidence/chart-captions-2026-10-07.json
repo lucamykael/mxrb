@@ -1054,5 +1054,38 @@
     "deprecations": [],
     "total-problems": 0
   },
-  "native_runtime": "pending certification; not inferred from static check"
+  "native_runtime": {
+    "oracle": "Studio Pro 11.12.1 on Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_hashes_unchanged": true,
+    "cases": [
+      {
+        "variant": "source",
+        "input_sha256": "fd5c8b77c083681e22b9facbf1719d935dc194d18c588be997f73614b0dcf040",
+        "package_sha256": "2b62cbed2a5b3268795845cfe4a2eca5cee089ad0c46b671f12c37145739ea3e",
+        "before": {
+          "name": "North: 1,234.500 on 2026-10-06 by Owner",
+          "value": 1234.5
+        },
+        "after": {
+          "name": "North: 1,235.500 on 2026-10-06 by Owner",
+          "value": 1235.5
+        }
+      },
+      {
+        "variant": "roundtrip",
+        "input_sha256": "d88b09db218f51e01b6a896707a167edf5f89b0f9755da1787fe3be63c36b4ab",
+        "package_sha256": "28e2e402aa1bb8845cbe72060a95a1f84e383ccb51ebda49c3d1c802a4c026ae",
+        "before": {
+          "name": "North: 1,234.500 on 2026-10-06 by Owner",
+          "value": 1234.5
+        },
+        "after": {
+          "name": "North: 1,235.500 on 2026-10-06 by Owner",
+          "value": 1235.5
+        }
+      }
+    ]
+  }
 }
