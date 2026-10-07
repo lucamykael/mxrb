@@ -1,0 +1,169 @@
+{
+  "date": "2026-10-07",
+  "scope": "Single-entity OQL WHERE filters over durable rows",
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "status": "passed",
+    "results": {
+      "Exact": [
+        "North"
+      ],
+      "Different": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ],
+      "Less": [
+        "Negative",
+        "Zero"
+      ],
+      "LessEqual": [
+        "Negative",
+        "South",
+        "Zero"
+      ],
+      "Greater": [
+        "North"
+      ],
+      "GreaterEqual": [
+        "North",
+        "South"
+      ],
+      "NegativeValue": [
+        "Negative"
+      ],
+      "Conjunction": [
+        "North"
+      ],
+      "Precedence": [
+        "North",
+        "South"
+      ],
+      "Grouped": [
+        "South"
+      ],
+      "BooleanValue": [
+        "Negative",
+        "South",
+        "Zero"
+      ],
+      "IsNull": [
+        "Empty"
+      ],
+      "IsNotNull": [
+        "Negative",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "EqualNull": [
+        "Empty"
+      ],
+      "UnequalNull": [
+        "Negative",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "ColumnsEqual": [
+        "North"
+      ],
+      "ColumnsUnequal": [
+        "Negative",
+        "South"
+      ],
+      "NotColumnsEqual": [
+        "Negative",
+        "South"
+      ],
+      "QuotedKeywords": [
+        "North"
+      ],
+      "EscapedQuote": [
+        "South"
+      ],
+      "UnknownOrTrue": [
+        "Empty",
+        "North",
+        "South"
+      ],
+      "UnknownAndFalse": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ],
+      "NotLiteralEqual": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ],
+      "ReversedLiteral": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ],
+      "ReversedNull": [
+        "Empty"
+      ],
+      "SlashPath": [
+        "South"
+      ],
+      "StringEmpty": [
+        "Negative",
+        "Zero"
+      ],
+      "StringNull": [
+        "Empty"
+      ],
+      "StringUnequal": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ],
+      "NotStringEqual": [
+        "Empty",
+        "Negative",
+        "North",
+        "Zero"
+      ]
+    }
+  },
+  "validation": {
+    "ruby_full_suite": "passed",
+    "focused_examples": 17,
+    "browser_steps": 125,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "ruby_examples": 2354,
+    "ruby_failures": 0,
+    "coverage_lines": {
+      "covered": 41583,
+      "total": 41583,
+      "percent": 100.0
+    },
+    "coverage_branches": {
+      "covered": 18260,
+      "total": 18260,
+      "percent": 100.0
+    },
+    "rubocop_files": 590,
+    "rubocop_offenses": 0,
+    "frontend_tests": 203,
+    "frontend_check_passed": true
+  },
+  "limitations": [
+    "Single persistent source only; joins, aggregates and chained views unsupported.",
+    "No LIKE, IN, parameters, arithmetic, functions or quoted identifiers.",
+    "Ordered comparisons require numeric operands."
+  ],
+  "reference": "https://docs.mendix.com/refguide/oql-expression-syntax/"
+}

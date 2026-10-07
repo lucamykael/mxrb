@@ -1,18 +1,14 @@
 # frozen_string_literal: true
 
 require 'digest'
+require_relative 'oql_predicate'
+require_relative 'oql_view_query'
 
 module Mxrb
   module Runtime
     # Read-only projections over durable rows. OQL text is parsed into a small
     # supported grammar; it is never passed to SQLite as executable SQL.
     class OqlViews
-      WORD = '[A-Za-z_][A-Za-z0-9_]*'
-      SOURCE = "(?<entity>#{WORD}\\.#{WORD})(?:\\s+(?:AS\\s+)?(?<scope>#{WORD}))?".freeze
-      FROM_FIRST = /\AFROM\s+#{SOURCE}\s+SELECT\s+(?<columns>.+)\z/im
-      SELECT_FIRST = /\ASELECT\s+(?<columns>.+)\s+FROM\s+#{SOURCE}\z/im
-      COLUMN = %r{\A(?:(?<scope>#{WORD})[/.])?(?<column>#{WORD})(?:\s+AS\s+(?<alias>#{WORD}))?\z}i
-
       def initialize(project, store, decoder:)
         @store = store
         @decoder = decoder
@@ -35,11 +31,11 @@ module Mxrb
 
       def retrieve(name)
         entity, mod = @definitions.fetch(name.to_s)
-        source, columns = parse(query(entity, mod))
+        parsed = OqlViewQuery.new(query(entity, mod))
         associations = @store.schema.associations.select { _1.from_entity == name.to_s }
-        validate_projections(name, entity, columns, associations)
-        @store.schema.concrete_entities(source).flat_map do |definition|
-          read_rows(name, definition, projections(columns, definition, associations))
+        validate_projections(name, entity, parsed.columns, associations)
+        @store.schema.concrete_entities(parsed.source).flat_map do |definition|
+          read_definition(name, definition, parsed, associations)
         end
       end
 
@@ -53,6 +49,12 @@ module Mxrb
 
       private
 
+      def read_definition(name, definition, parsed, associations)
+        readers = projections(parsed.columns, definition, associations)
+        filter = predicate(parsed.filter, parsed.scope, definition)
+        read_rows(name, definition, readers, filter)
+      end
+
       def validate_projections(name, entity, columns, associations)
         expected = entity.attributes.map(&:name) + associations.map(&:name)
         return if columns.map(&:last).sort == expected.sort
@@ -60,9 +62,11 @@ module Mxrb
         raise NativeRuntimeError, "OQL view #{name} projections must match its attributes and associations"
       end
 
-      def read_rows(name, definition, projections)
+      def read_rows(name, definition, projections, predicate)
         table = definition.table.gsub('"', '""')
-        @store.database.execute("SELECT * FROM \"#{table}\" ORDER BY rowid").map do |row|
+        @store.database.execute("SELECT * FROM \"#{table}\" ORDER BY rowid").filter_map do |row|
+          next unless predicate.call(row)
+
           members = projections.to_h { |key, reader| [key, reader.call(row)] }
           id = Digest::SHA256.hexdigest([name, definition.name, row.fetch('id')].join("\0"))
           Native::ObjectValue.new(entity: name.to_s, id: "view:#{id}", members:)
@@ -78,22 +82,13 @@ module Mxrb
         document&.dig(:doc, 'Oql').to_s
       end
 
-      def parse(text)
-        match = FROM_FIRST.match(text.to_s.strip) || SELECT_FIRST.match(text.to_s.strip)
-        raise NativeRuntimeError, 'Unsupported OQL view query: expected a single-entity projection' unless match
+      def predicate(filter, scope, definition)
+        return ->(_row) { true } unless filter
 
-        scope = match[:scope] || match[:entity].split('.').last
-        columns = match[:columns].split(',', -1).map { parse_column(_1, scope) }
-        [match[:entity], columns]
-      end
-
-      def parse_column(value, scope)
-        column = COLUMN.match(value.strip)
-        unless column && (column[:scope].nil? || column[:scope] == scope)
-          raise NativeRuntimeError, "Unsupported OQL view projection: #{value.strip}"
+        OqlPredicate.new(filter, scope) do |column|
+          reader = attribute_reader(column, definition)
+          [definition.columns.find { _1.name == column }.type, reader]
         end
-
-        [column[:column], column[:alias] || column[:column]]
       end
 
       def projections(columns, definition, associations)
