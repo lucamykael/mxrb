@@ -1,0 +1,1058 @@
+{
+  "scope": "Structured captions: editable metadata, formatting, translations and variable sources",
+  "date": "2026-10-07",
+  "ruby": {
+    "examples": 2317,
+    "failures": 0,
+    "lines": 41169,
+    "branches": 18068,
+    "coverage_percent": 100
+  },
+  "frontend": {
+    "tests": 146,
+    "check": "passed"
+  },
+  "browser": {
+    "passed": true,
+    "scenario": "marketplace-chart-captions",
+    "base_url": "http://127.0.0.1:15221",
+    "authenticated": false,
+    "baseline": {
+      "mode": "evidence_only"
+    },
+    "pages": [
+      {
+        "name": "formatted-captions",
+        "url": "/",
+        "snapshot": {
+          "title": "Application \u00b7 MXRB Ruby",
+          "path": "/pages/Captions.Home",
+          "viewport": {
+            "width": 1280,
+            "height": 850
+          },
+          "elements": [
+            {
+              "tag": "div",
+              "id": "root",
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                850
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                850
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "nav",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Main navigation",
+              "box": [
+                1191,
+                16,
+                73,
+                28
+              ],
+              "style": [
+                "block",
+                "fixed",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "button",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Sign out",
+              "box": [
+                1191,
+                16,
+                73,
+                28
+              ],
+              "style": [
+                "inline-block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                850
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                850
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                72
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                24
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                0,
+                1280,
+                24
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "span",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Captions",
+              "box": [
+                0,
+                3,
+                63,
+                17
+              ],
+              "style": [
+                "inline",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                778
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                778
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                778
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                778
+              ],
+              "style": [
+                "flex",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                778
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                366
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "section",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                366
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                366
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                72,
+                1280,
+                30
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "label",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Owner",
+              "box": [
+                0,
+                78,
+                47,
+                17
+              ],
+              "style": [
+                "inline",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "input",
+              "id": "_r_6_",
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                47,
+                72,
+                215,
+                30
+              ],
+              "style": [
+                "inline-block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgb(255, 255, 255)"
+              ]
+            },
+            {
+              "tag": "button",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Change amount",
+              "box": [
+                0,
+                102,
+                130,
+                30
+              ],
+              "style": [
+                "inline-block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgb(239, 239, 239)"
+              ]
+            },
+            {
+              "tag": "div",
+              "id": null,
+              "role": null,
+              "widget": "com.mendix.widget.web.linechart.LineChart",
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                140,
+                1280,
+                298
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "figure",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                140,
+                1280,
+                298
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "figcaption",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Line chart",
+              "box": [
+                0,
+                332,
+                1280,
+                24
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "details",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                356,
+                1280,
+                82
+              ],
+              "style": [
+                "block",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "summary",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Chart data",
+              "box": [
+                0,
+                356,
+                1280,
+                24
+              ],
+              "style": [
+                "list-item",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "table",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                0,
+                380,
+                405,
+                58
+              ],
+              "style": [
+                "table",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "thead",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                2,
+                382,
+                401,
+                26
+              ],
+              "style": [
+                "table-header-group",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "tr",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                2,
+                382,
+                401,
+                26
+              ],
+              "style": [
+                "table-row",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "th",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Series",
+              "box": [
+                2,
+                382,
+                303,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "700",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "th",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Label",
+              "box": [
+                307,
+                382,
+                44,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "700",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "th",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "Value",
+              "box": [
+                352,
+                382,
+                51,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "700",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "tbody",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                2,
+                410,
+                401,
+                26
+              ],
+              "style": [
+                "table-row-group",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "tr",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "",
+              "box": [
+                2,
+                410,
+                401,
+                26
+              ],
+              "style": [
+                "table-row",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "td",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "North: 1,235.500 on 2026-10-06 by Owner",
+              "box": [
+                2,
+                410,
+                303,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "td",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "A",
+              "box": [
+                307,
+                410,
+                44,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            },
+            {
+              "tag": "td",
+              "id": null,
+              "role": null,
+              "widget": null,
+              "state": [
+                null,
+                null,
+                false
+              ],
+              "text": "1235.5",
+              "box": [
+                352,
+                410,
+                51,
+                26
+              ],
+              "style": [
+                "table-cell",
+                "static",
+                "16px",
+                "400",
+                "rgb(0, 0, 0)",
+                "rgba(0, 0, 0, 0)"
+              ]
+            }
+          ]
+        },
+        "snapshot_sha256": "a79110e8ef28d4d358cfa6dc21f8244bd63b9427bf47477d04eedb78729f25e4",
+        "screenshot": "/home/mykael/Personal_Projects/mxrb-caption-integration/tmp/captions-20261007/browser/formatted-captions.png",
+        "screenshot_sha256": "10de0d586c33662e837dc1889bbd944ea1cccd4394fa18b38d54862aad7d6bb9",
+        "measurements": [],
+        "media": [],
+        "widget_resource_errors": []
+      }
+    ],
+    "console_errors": [],
+    "certification": null,
+    "exit_code": 0,
+    "validation": {
+      "valid": true,
+      "name": "marketplace-chart-captions",
+      "authentication": false,
+      "pages": 1,
+      "steps": 8,
+      "path": "/home/mykael/Personal_Projects/mxrb-caption-integration/spec/fixtures/frontend_browser/marketplace_chart_captions_flow.json"
+    }
+  },
+  "projection": {
+    "public_source": {},
+    "valid": true,
+    "identical": true
+  },
+  "native_static": {
+    "serialization_version": 1,
+    "errors": [],
+    "warnings": [],
+    "deprecations": [],
+    "total-problems": 0
+  },
+  "native_runtime": "pending certification; not inferred from static check"
+}
