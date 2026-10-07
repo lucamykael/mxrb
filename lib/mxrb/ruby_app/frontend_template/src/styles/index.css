@@ -115,7 +115,7 @@ select {
 
 .mxrb-marketplace-widget img,
 .mxrb-marketplace-widget video,
-.mxrb-marketplace-chart svg {
+.mxrb-marketplace-chart > svg {
   display: block;
   width: 100%;
   height: 12rem;

@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-07",
+  "scope": "CustomChart Plotly JSON rendering and events",
+  "plotly_version": "3.0.1",
+  "frontend": {
+    "tests": 160,
+    "format_lint_typecheck_build": "passed",
+    "dynamic_chunk_gzip_bytes": 1331190
+  },
+  "ruby": {
+    "examples": 2324,
+    "failures": 0,
+    "coverage_percent": 100,
+    "lines": 41231,
+    "branches": 18088
+  },
+  "browser": {
+    "steps": 10,
+    "pages": 1,
+    "passed": true,
+    "mpr_access": "prohibited",
+    "console_errors": []
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_hashes_unchanged": true,
+    "ruby_source_roundtrip_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "before": {
+        "traces": [
+          {
+            "name": "Static",
+            "y": [
+              10,
+              20
+            ]
+          },
+          {
+            "name": "Dynamic",
+            "y": [
+              15,
+              25
+            ]
+          }
+        ],
+        "title": "Dynamic title",
+        "range": [
+          0,
+          50
+        ],
+        "width": 800,
+        "height": 400,
+        "modebar": true,
+        "zoom": true
+      },
+      "after": {
+        "traces": [
+          {
+            "name": "Static",
+            "y": [
+              10,
+              20
+            ]
+          },
+          {
+            "name": "Changed",
+            "y": [
+              30,
+              40
+            ]
+          }
+        ],
+        "title": "Dynamic title",
+        "range": [
+          0,
+          50
+        ],
+        "width": 800,
+        "height": 400,
+        "modebar": true,
+        "zoom": true
+      },
+      "event": "",
+      "clicks": "1"
+    }
+  },
+  "limits": [
+    "Internal playground/editor and its sample-data initialization overrides are not reproduced.",
+    "The native fixture certifies bar/scatter traces; other Plotly trace types require their own acceptance.",
+    "Other chart widgets retain their existing option scope."
+  ]
+}
