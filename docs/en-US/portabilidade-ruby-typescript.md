@@ -1,5 +1,32 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Browser storage actions
+
+Three Feedback Module actions receive TypeScript adapters when their original
+source hash matches: reading a value, reading `ShowEmail`, and writing `ImageB64`.
+Registration preserves model parameter names, including case. Invalid JSON,
+missing values and storage failures retain the verified implementation behavior.
+
+All 33 comparisons with original JavaScript passed. Ruby Chromium acceptance
+ran ten steps without MPR access, including persistence after navigation. The
+Windows VM certified the original and rebuilt projects with identical results.
+Customized sources, native AsyncStorage and offline synchronization remain
+outside this contract. See the [evidence](../evidence/feedback-storage-2026-10-07.json).
+
+## Java adapters selected by verified source
+
+Export recognizes two Feedback Module implementations by the Java source's
+SHA-256: `ValidateEmail` and `XSS_Sanitizer`. Only verified versions produce
+explicit registrations in `config/adapters.rb`; absent or modified sources
+still require a project adapter. Runtime execution uses Ruby without an MPR
+or JVM. Registrations remain editable Ruby code.
+
+Tests compare 32 inputs with the original Java, including Unicode, empty and
+null values. The legacy `XSS_Sanitizer` preserves its regular-expression
+behavior; it does not replace HTML escaping or an application's sanitization
+policy. Other Java/JavaScript actions and external integrations still require
+their own implementation and acceptance.
+
 ## Structured captions
 
 Captions support translations, fallback text, attribute/expression parameters,

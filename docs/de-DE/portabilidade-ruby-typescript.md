@@ -1,5 +1,32 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Speicheraktionen im Browser
+
+Drei Aktionen des Feedback Module erhalten TypeScript-Adapter, wenn der Hash
+der Originalquelle übereinstimmt: Wert lesen, `ShowEmail` lesen und `ImageB64`
+schreiben. Die Registrierung erhält Parameternamen und deren Groß-/Kleinschreibung.
+Ungültiges JSON, fehlende Werte und Speicherfehler behalten das geprüfte Verhalten.
+
+Alle 33 Vergleiche mit dem Original-JavaScript bestanden. Chromium führte zehn
+Schritte ohne MPR-Zugriff aus, einschließlich Persistenz nach neuer Navigation.
+Die Windows-VM bestätigte identische Ergebnisse im Original und im Roundtrip.
+Geänderte Quellen, natives AsyncStorage und Offline-Synchronisation sind nicht
+enthalten. Siehe den [Nachweis](../evidence/feedback-storage-2026-10-07.json).
+
+## Java-Adapter anhand geprüfter Quellen
+
+Der Export erkennt zwei Implementierungen des Feedback Module am SHA-256 der
+Java-Quelle: `ValidateEmail` und `XSS_Sanitizer`. Nur geprüfte Versionen erzeugen
+explizite Registrierungen in `config/adapters.rb`; fehlende oder geänderte
+Quellen benötigen weiterhin einen projektspezifischen Adapter. Die Ausführung
+verwendet Ruby ohne MPR oder JVM. Registrierungen bleiben editierbarer Ruby-Code.
+
+Die Tests vergleichen 32 Eingaben mit dem Java-Original, einschließlich Unicode,
+leerer Werte und null. Die ältere Aktion `XSS_Sanitizer` behält ihr Verhalten
+mit regulären Ausdrücken; sie ersetzt weder HTML-Escaping noch eine
+Sanitierungsrichtlinie der Anwendung. Weitere Java-/JavaScript-Aktionen und
+externe Integrationen brauchen eigene Implementierung und Abnahme.
+
 ## Strukturierte Beschriftungen
 
 Beschriftungen unterstützen Übersetzungen, Ersatztexte, Attribut- und

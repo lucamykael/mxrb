@@ -13,7 +13,7 @@ import { numericText, isDecimal } from './decimal';
 
 type ChangeExpressions = Record<string, string>;
 // Expressions and decimals share the same evaluator as page bindings.
-type JavaScriptAction = (
+export type JavaScriptAction = (
   parameters: NanoflowParameters,
 ) => RuntimeValue | undefined | Promise<RuntimeValue | undefined>;
 

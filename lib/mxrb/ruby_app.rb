@@ -27,6 +27,7 @@ require_relative 'ruby_app/async_invocations'
 require_relative 'ruby_app/file_content'
 require_relative 'ruby_app/record_inheritance'
 require_relative 'ruby_app/record_validation'
+require_relative 'ruby_app/known_java_actions'
 require_relative 'runtime/xpath'
 require_relative 'http/server'
 
