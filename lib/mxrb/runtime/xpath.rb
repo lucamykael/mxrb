@@ -15,7 +15,7 @@ module Mxrb
     class XPath
       ARITHMETIC = {
         '+' => ->(left, right) { left + right }, '-' => ->(left, right) { left - right },
-        '*' => ->(left, right) { left * right }, '/' => ->(left, right) { left / right },
+        '*' => ->(left, right) { left * right },
         'div' => ->(left, right) { left / right }, 'mod' => ->(left, right) { left % right }
       }.freeze
       def initialize(source, store:, policy: nil, context: nil)
@@ -249,7 +249,7 @@ module Mxrb
 
         def multiplication
           left = primary
-          left = [consume(peek.first).to_sym, left, primary] while %w[* / div mod].include?(peek.last)
+          left = [consume(peek.first).to_sym, left, primary] while %w[* div mod].include?(peek.last)
           left
         end
 

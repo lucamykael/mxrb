@@ -38,12 +38,27 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(filter('[empty = Single]')).to eq([first, second])
     expect(filter('[App.Item.Rank = 2]')).to eq([first])
     expect(filter('[Rank * 2 + 1 = 5][Rank - 1 = 1]')).to eq([first])
-    expect(filter('[Rank / 2 = 1][Rank div 2 = 1][Rank mod 2 = 0]')).to eq([first])
+    expect(filter('[Rank div 2 = 1][Rank mod 2 = 0]')).to eq([first])
     first.members['Created'] = Time.now - 1
     second.members['Created'] = nil
     expect(described_class.new('[Created < [%CurrentDateTime%]]', store:).filter([first])).to eq([first])
     expect(filter('[Created < [%CurrentDateTime%]]')).to eq([first])
     expect(filter('[empty < Rank]')).to eq([])
+  end
+
+  it 'rejects slash division before evaluating any records, including nested and unreachable operands' do
+    ['[Rank / 2 = 1]', '[6 / 2 = 3]', '[(Rank) / 2 = 1]', '[Rank / $divisor = 1]',
+     '[true() or Rank / 2 = 1]', '[App.Tags[Rank / 2 = 1]/App.Tag]',
+     '[length(Name) / 2 = 1]'].each do |source|
+      expect { described_class.new(source, store:).filter([]) }.to raise_error(ArgumentError, /invalid XPath/)
+    end
+  end
+
+  it 'preserves slashes in association paths, variable members and string values' do
+    tag.members['Name'] = 'docs/reference'
+    expect(filter("[App.Tags/App.Tag/Name = 'docs/reference']")).to eq([first])
+    expect(filter('[App.Tags/App.Tag/Name = $tag/Name]', 'tag' => tag)).to eq([first])
+    expect(filter("[contains(App.Tags/App.Tag/Name, '/')]")).to eq([first])
   end
 
   it 'uses existential comparisons, related-object predicates and inverse traversal' do

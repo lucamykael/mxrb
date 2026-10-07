@@ -1,5 +1,13 @@
 # MXRB: Ruby acima de tudo
 
+## Validação de divisão em XPath
+
+O parser rejeita `/` como divisão antes de consultar registros, inclusive em
+tabelas vazias e predicados aninhados. A barra continua válida em caminhos de
+associação, membros de variáveis e strings. `mx check` 11.12.1 rejeita
+`[Rank / 2 = 1.5]` com CE0161 e aceita `[Rank div 2 = 1.5]`. Essa verificação
+é estática; a equivalência de execução de `div` e `mod` continua pendente.
+
 ## XPath com associações reversas
 
 O marcador `[reversed()]` inverte somente a associação autorreferente em que
