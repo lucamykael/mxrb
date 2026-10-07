@@ -25,6 +25,33 @@ afterEach(() => {
   registerNanoflows({});
 });
 describe('Feedback browser metadata', () => {
+  it('keeps screen and viewport variants distinct, including numeric zero and null fallbacks', async () => {
+    vi.stubGlobal('innerWidth', 1024);
+    vi.stubGlobal('innerHeight', 768);
+    const screenAction = feedbackStorageActions(['JS_PopulateFeedbackMetadata'], 'screen')[
+      'FeedbackModule.JS_PopulateFeedbackMetadata'
+    ];
+    const viewportAction = feedbackStorageActions(['JS_PopulateFeedbackMetadata'], 'viewport')[
+      'FeedbackModule.JS_PopulateFeedbackMetadata'
+    ];
+    expect(await screenAction({ Feedback: structuredClone(record) })).toMatchObject({
+      attributes: { ScreenWidth: 1440, ScreenHeight: 900 },
+    });
+    expect(await viewportAction({ Feedback: structuredClone(record) })).toMatchObject({
+      attributes: { ScreenWidth: 1024, ScreenHeight: 768 },
+    });
+    vi.spyOn(window.screen, 'width', 'get').mockReturnValue(0);
+    vi.spyOn(window.screen, 'height', 'get').mockReturnValue(0);
+    vi.stubGlobal('innerWidth', 0);
+    vi.stubGlobal('innerHeight', 0);
+    expect(await screenAction({ Feedback: structuredClone(record) })).toMatchObject({
+      attributes: { ScreenWidth: 0, ScreenHeight: 0 },
+    });
+    expect(await viewportAction({ Feedback: structuredClone(record) })).toMatchObject({
+      attributes: { ScreenWidth: null, ScreenHeight: null },
+    });
+    vi.unstubAllGlobals();
+  });
   it('preserves integer dimensions when the native empty-dimension assignment fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(window.screen, 'width', 'get').mockReturnValue(0);

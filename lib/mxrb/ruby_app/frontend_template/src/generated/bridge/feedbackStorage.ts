@@ -2,7 +2,8 @@ import type { NanoflowParameters, RuntimeValue } from '../types';
 import type { JavaScriptAction } from './nanoflow';
 import { writeStorageObject } from './objectStorage';
 import { readStorageObject } from './objectRestore';
-import { feedbackStrictMode, populateFeedbackMetadata } from './feedbackMetadata';
+import { feedbackStrictMode, feedbackMetadataAction } from './feedbackMetadata';
+import type { FeedbackMetadataVariant } from './feedbackMetadata';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -54,7 +55,6 @@ const writeImage: JavaScriptAction = async (parameters) => {
 
 const handlers: Record<string, JavaScriptAction> = {
   JS_isStrictMode: feedbackStrictMode,
-  JS_PopulateFeedbackMetadata: populateFeedbackMetadata,
   JS_GetFeedbackStorageObject: ({ key, entity }, variables) =>
     readStorageObject({ Key: key, Entity: entity }, variables),
   GetStorageItemObject: readStorageObject,
@@ -66,10 +66,16 @@ const handlers: Record<string, JavaScriptAction> = {
   JS_SetSingleLocalStorageObjectItem: writeImage,
 };
 
-export const feedbackStorageActions = (names: string[]): Record<string, JavaScriptAction> =>
+export const feedbackStorageActions = (
+  names: string[],
+  metadataVariant: FeedbackMetadataVariant = 'legacy',
+): Record<string, JavaScriptAction> =>
   Object.fromEntries(
     names.map((name) => {
-      const action = handlers[name];
+      const action =
+        name === 'JS_PopulateFeedbackMetadata'
+          ? feedbackMetadataAction(metadataVariant)
+          : handlers[name];
       if (!action) throw new Error(`Unknown Feedback storage action: ${name}`);
       return [`FeedbackModule.${name}`, action];
     }),

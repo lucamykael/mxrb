@@ -16,31 +16,34 @@ export const feedbackStrictMode: JavaScriptAction = async () => {
   return false;
 };
 
-export const populateFeedbackMetadata: JavaScriptAction = async (
-  { Feedback },
-  _variables,
-  environment = {},
-) => {
-  try {
-    if (!isEntityRecord(Feedback))
-      throw new Error('Feedback metadata requires an application record');
-    Object.assign(Feedback.attributes, {
-      ActiveUserRoles: environment.userRoles?.[0] || '',
-      PageName: environment.pagePath || '',
-      EnvironmentURL: window.location.href || '',
-      Browser: navigator.userAgent || '',
-    });
-    // The original action passes an empty string for a zero dimension. Mendix
-    // rejects that integer assignment, leaving this and subsequent fields intact.
-    for (const [member, value] of [
-      ['ScreenWidth', window.screen.width],
-      ['ScreenHeight', window.screen.height],
-    ] as const) {
-      if (!value) throw new Error('Cannot assign an empty screen dimension to ' + member);
-      Feedback.attributes[member] = value;
+export type FeedbackMetadataVariant = 'legacy' | 'screen' | 'viewport';
+
+export const feedbackMetadataAction =
+  (variant: FeedbackMetadataVariant): JavaScriptAction =>
+  async ({ Feedback }, _variables, environment = {}) => {
+    try {
+      if (!isEntityRecord(Feedback))
+        throw new Error('Feedback metadata requires an application record');
+      Object.assign(Feedback.attributes, {
+        ActiveUserRoles: environment.userRoles?.[0] || '',
+        PageName: environment.pagePath || '',
+        EnvironmentURL: window.location.href || '',
+        Browser: navigator.userAgent || '',
+      });
+      // Source-verified variants differ in both the dimension source and the zero
+      // fallback; these values must not be normalized to one shared behavior.
+      for (const [member, value] of [
+        ['ScreenWidth', variant === 'viewport' ? window.innerWidth : window.screen.width],
+        ['ScreenHeight', variant === 'viewport' ? window.innerHeight : window.screen.height],
+      ] as const) {
+        if (variant === 'legacy' && !value)
+          throw new Error('Cannot assign an empty screen dimension to ' + member);
+        Feedback.attributes[member] = variant === 'viewport' ? value || null : value;
+      }
+      return Feedback;
+    } catch (error) {
+      console.error('Feedback Module cannot correctly set meta data.', error);
     }
-    return Feedback;
-  } catch (error) {
-    console.error('Feedback Module cannot correctly set meta data.', error);
-  }
-};
+  };
+
+export const populateFeedbackMetadata = feedbackMetadataAction('legacy');

@@ -3,19 +3,22 @@
 ## Feedback browser metadata
 
 The verified `JS_PopulateFeedbackMetadata` and `JS_isStrictMode` versions used by
-Sudoku and RubyBridgeSandbox have Web adapters. Metadata includes the current
+the five corpus projects have Web adapters. Metadata includes the current
 page, first user role, URL, browser and screen dimensions. Nested nanoflows retain
 the calling context, and popups inherit workspace roles. Mutations to record
 parameters are tracked even when the action return is ignored.
 
 The strict-mode probe creates and discards a draft. This Web runtime exposes
 creation and returns `false`, including asynchronous failures, matching the
-original action. Zero dimensions reproduce the native empty-string-to-integer
+original action. In the legacy variant, zero dimensions reproduce the native empty-string-to-integer
 assignment failure: previous dimensions remain and an error is logged.
 
-Two native builds and runtimes, 202 frontend tests and 18 browser steps without
-MPR access passed. Other metadata variants, screenshot capture/annotation and
-native or strict-mode clients remain outside this certification.
+The original source hash selects three behaviors: screen dimensions rejecting
+zero (Sudoku and RubyBridgeSandbox), screen dimensions accepting zero (SLA Task
+App), and viewport dimensions using null for zero (MyFirstModule and LearnNow).
+Six native builds and runtimes, 203 frontend tests and 18 browser steps without
+MPR access passed. Screenshot capture/annotation and native or strict-mode clients
+remain outside this certification.
 [Evidence](../evidence/feedback-browser-metadata-2026-10-07.json).
 
 ## Reading and restoring Feedback objects

@@ -3411,6 +3411,8 @@ module Mxrb
 
       def frontend_nanoflows
         javascript_actions = KnownJavaScriptActions.matching(File.dirname(@mpr_path))
+        metadata_variant = KnownJavaScriptActions.metadata_variant(File.dirname(@mpr_path))
+        feedback_options = metadata_variant ? ", #{JSON.generate(metadata_variant)}" : ''
         commons = KnownJavaScriptActions.matching(File.dirname(@mpr_path),
                                                   sources: KnownJavaScriptActions::COMMONS_SOURCES,
                                                   module_name: 'nanoflowcommons')
@@ -3435,7 +3437,7 @@ module Mxrb
 
           registerNanoflows(nanoflows);
           registerJavaScriptActions({
-            ...feedbackStorageActions(#{JSON.generate(javascript_actions)}),
+            ...feedbackStorageActions(#{JSON.generate(javascript_actions)}#{feedback_options}),
             ...nanoflowCommonsActions(#{JSON.generate(commons)})
           });
 

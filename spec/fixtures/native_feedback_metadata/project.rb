@@ -74,7 +74,7 @@ FileUtils.mkdir_p(target)
 %w[JS_PopulateFeedbackMetadata JS_SetFeedbackStorageObject JS_isStrictMode].each do |name|
   source = File.join(source_directory, "#{name}.js")
   digest = Digest::SHA256.hexdigest(File.binread(source).gsub("\r\n", "\n"))
-  unless Mxrb::RubyApp::KnownJavaScriptActions::SOURCES.fetch(name) == digest
+  unless Array(Mxrb::RubyApp::KnownJavaScriptActions::SOURCES.fetch(name)).include?(digest)
     raise "Unrecognized Feedback source: #{name}"
   end
 
