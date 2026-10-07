@@ -76,6 +76,12 @@ try {
     $launcher = Join-Path $ToolRoot 'runtime/launcher/runtimelauncher.jar'
     $java = Join-Path $JavaHome 'bin/java.exe'
     if (-not (Test-Path $launcher) -or -not (Test-Path $java)) { throw 'Native Runtime launcher or Java is missing' }
+    $metadata = Get-Content -LiteralPath (Join-Path $app 'model/metadata.json') -Raw | ConvertFrom-Json
+    $constants = @{}
+    foreach ($constant in $metadata.Constants) {
+        $constants[$constant.Name] = $constant.DefaultValue
+    }
+    $constantConfig = ConvertTo-Json -InputObject $constants -Compress
     $configuration = @"
 admin { adminPassword = "$adminSecret", port = $AdminPort, addresses = [ "127.0.0.1" ] }
 runtime {
@@ -83,6 +89,7 @@ runtime {
   adminUser.password = "$adminSecret"
   debugger.password = ""
   params {
+    MicroflowConstants = $constantConfig
     DTAPMode = D
     DatabaseType = HSQLDB
     DatabaseName = default

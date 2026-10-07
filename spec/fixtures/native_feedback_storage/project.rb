@@ -7,16 +7,19 @@ output = ENV.fetch('MXRB_OUTPUT_PATH')
 source_directory = ENV.fetch('MXRB_FEEDBACK_JAVASCRIPT_DIR')
 actions = {
   'WriteImage' => ['JS_SetSingleLocalStorageObjectItem', %w[localStorageKey imageDataB64],
-                   ["'mxrb-feedback-oracle'", "'synthetic-image'"], :void],
+                   ['@FeedbackModule.LocalStorageKey', "'synthetic-image'"], :void],
   'ReadImage' => ['JS_GetSingleStringLocalStorageObjectItem', %w[LocalStorageKey ObjectItemKey],
-                  ["'mxrb-feedback-oracle'", "'ImageB64'"], :string],
+                  ['@FeedbackModule.LocalStorageKey', "'ImageB64'"], :string],
   'ReadBoolean' => ['JS_GetShowEmailBooleanLocalStorageObjectItem', %w[LocalStorageKey ObjectItemKey],
-                    ["'mxrb-feedback-oracle'", "'ShowEmail'"], :boolean]
+                    ['@FeedbackModule.LocalStorageKey', "'ShowEmail'"], :boolean],
+  'ReadLegacy' => ['JS_GetSingleLocalStorageObjectItem', %w[LocalStorageKey ObjectItemKey],
+                   ['@FeedbackModule.LocalStorageKey', "'ImageB64'"], :string]
 }
 # rubocop:disable Metrics/BlockLength
 Mxrb.define(output) do
   mendix_version '11.12.1'
   self.module :FeedbackModule do
+    constant :LocalStorageKey, type: :string, value: 'mxrb-feedback-oracle', exposed_to_client: true
     entity(:Probe) { string :Name }
     microflow :Load do
       return_type 'FeedbackModule.Probe'
@@ -33,7 +36,8 @@ Mxrb.define(output) do
         if kind == :void
           show_message 'stored', blocking: true
         else
-          show_message '{1}', parameters: ['toString($result)'], blocking: true
+          show_message '{1}', parameters: [flow == 'ReadLegacy' ? "'Legacy: [' + $result + ']'" : 'toString($result)'],
+                              blocking: true
         end
       end
     end

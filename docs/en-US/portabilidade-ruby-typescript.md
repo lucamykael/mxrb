@@ -1,5 +1,22 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Legacy Feedback and frontend constants
+
+`JS_GetSingleLocalStorageObjectItem`, used by Sudoku and RubyBridgeSandbox,
+has an adapter selected by source SHA-256. It uses the model parameters
+`LocalStorageKey` and `ObjectItemKey` and preserves the `""` fallback for missing
+items, unlike the newer getter's `null` fallback.
+
+Frontend expressions resolve `@Module.Constant` from current Ruby definitions
+exposed to the client. Private and excluded constants are omitted from the schema;
+integers, booleans and decimals retain their types. Application loading replaces
+previous registrations; unavailable references fail explicitly.
+
+The unchanged exported nanoflows from both real projects passed with missing,
+empty and populated storage. The fixture uses a constant as its storage key and
+checks the same behavior in Ruby and Mendix.
+[Evidence](../evidence/legacy-feedback-2026-10-07.json).
+
 ## Generating queryable OQL views
 
 Declaring `oql_view` preserves the entity persistability flag. New views use

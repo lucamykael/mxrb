@@ -3727,6 +3727,7 @@ module Mxrb
           }
 
           export interface ApplicationSchema {
+            constants?: Record<string, RuntimeValue>;
             module_roles?: string[];
             presentation?: Record<string, PresentationResource>;
             project: { name: string; mendix_version: string };

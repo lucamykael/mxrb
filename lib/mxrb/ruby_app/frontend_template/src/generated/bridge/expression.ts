@@ -25,6 +25,10 @@ class EnumLiteral {
   }
 }
 type Value = RuntimeValue | undefined | EnumLiteral;
+let clientConstants: Record<string, RuntimeValue> = {};
+export const registerClientConstants = (values: Record<string, RuntimeValue>): void => {
+  clientConstants = structuredClone(values);
+};
 type Expression = () => Value;
 const precedence: Record<string, number> = {
   or: 1,
@@ -102,7 +106,7 @@ export function evaluate(
   let remaining = source.trim();
   while (remaining) {
     const match = remaining.match(
-      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
+      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|@[A-Za-z_]\w*\.[A-Za-z_]\w*|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
     );
     if (!match) throw new Error(`Unsupported expression syntax: ${remaining}`);
     tokens.push(match[0]);
@@ -136,6 +140,11 @@ export function evaluate(
     if (/^\d/.test(token)) return () => (token.includes('.') ? decimal(token) : Number(token));
     if (token === 'true' || token === 'false') return () => token === 'true';
     if (token === 'empty') return () => null;
+    if (token.startsWith('@')) return () => {
+      const name = token.slice(1);
+      if (!Object.hasOwn(clientConstants, name)) throw new Error(`Client constant is unavailable: ${name}`);
+      return clientConstants[name];
+    };
     if (token.startsWith('$')) {
       const [name, member] = token.slice(1).split('/');
       return () => {

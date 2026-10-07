@@ -14,6 +14,8 @@ const readString: JavaScriptAction = async (parameters) => {
   return value?.[member] ?? null;
 };
 
+const readLegacy: JavaScriptAction = async (parameters) => (await readString(parameters)) ?? '';
+
 const readShowEmail: JavaScriptAction = async (parameters) => {
   const key = required(parameters, 'LocalStorageKey', 'localStorageKey');
   const member = required(parameters, 'ObjectItemKey', 'objectItemKey');
@@ -45,6 +47,7 @@ const writeImage: JavaScriptAction = async (parameters) => {
 };
 
 const handlers: Record<string, JavaScriptAction> = {
+  JS_GetSingleLocalStorageObjectItem: readLegacy,
   JS_GetSingleStringLocalStorageObjectItem: readString,
   JS_GetShowEmailBooleanLocalStorageObjectItem: readShowEmail,
   JS_SetSingleLocalStorageObjectItem: writeImage,

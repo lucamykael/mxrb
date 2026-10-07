@@ -5,7 +5,9 @@ import { NanoflowRuntime, registerJavaScriptActions } from './nanoflow';
 const readName = 'JS_GetSingleStringLocalStorageObjectItem';
 const showName = 'JS_GetShowEmailBooleanLocalStorageObjectItem';
 const writeName = 'JS_SetSingleLocalStorageObjectItem';
-const actions = feedbackStorageActions([readName, showName, writeName]);
+const legacyName = 'JS_GetSingleLocalStorageObjectItem';
+const actions = feedbackStorageActions([readName, showName, writeName, legacyName]);
+const legacy = actions[`FeedbackModule.${legacyName}`];
 const read = actions[`FeedbackModule.${readName}`];
 const show = actions[`FeedbackModule.${showName}`];
 const write = actions[`FeedbackModule.${writeName}`];
@@ -28,6 +30,20 @@ afterEach(() => {
 });
 
 describe('verified Feedback storage actions', () => {
+  it('preserves the legacy empty-string fallback and native model parameter names', async () => {
+    registerJavaScriptActions(actions);
+    const runtime = new NanoflowRuntime({}, { name: 'Feedback.Test', id: 'test', parameters: [] });
+    const expressions = { LocalStorageKey: "'feedback-test'", ObjectItemKey: "'ShowEmail'" };
+    expect(await runtime.callJavaScript(`FeedbackModule.${legacyName}`, expressions)).toBe('');
+    for (const value of [null, '', false, 0, 'text', ['item'], { nested: true }]) {
+      localStorage.setItem('feedback-test', JSON.stringify({ ShowEmail: value }));
+      expect(await runtime.callJavaScript(`FeedbackModule.${legacyName}`, expressions)).toEqual(value ?? '');
+    }
+    localStorage.setItem('feedback-test', 'invalid');
+    await expect(legacy({ LocalStorageKey: 'feedback-test', ObjectItemKey: 'ShowEmail' })).rejects.toThrow(SyntaxError);
+    await expect(legacy({})).rejects.toThrow("'localStorageKey' is required");
+    await expect(legacy({ LocalStorageKey: 'feedback-test' })).rejects.toThrow("'objectItemKey' is required");
+  });
   it('runs registered actions through the nanoflow expression and parameter bridge', async () => {
     registerJavaScriptActions(actions);
     const runtime = new NanoflowRuntime({}, { name: 'Feedback.Test', id: 'test', parameters: [] });

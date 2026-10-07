@@ -19,12 +19,15 @@
     await waitFor(() => document.querySelector('.modal-dialog') === null);
   };
   localStorage.removeItem('mxrb-feedback-oracle');
+  click('ReadLegacy'); await message('Legacy: []');
   click('ReadBoolean'); await message('true');
   click('WriteImage'); await message('stored');
   const stored = JSON.parse(localStorage.getItem('mxrb-feedback-oracle') || 'null');
   if (stored?.ImageB64 !== 'synthetic-image') throw new Error('Stored image differs');
   click('ReadImage'); await message('synthetic-image');
+  click('ReadLegacy'); await message('Legacy: [synthetic-image]');
   localStorage.setItem('mxrb-feedback-oracle', JSON.stringify({...stored, ShowEmail: false}));
   click('ReadBoolean'); await message('false');
-  return {status:'passed', image:stored.ImageB64, boolean_fallback:true, stored_boolean:false};
+  return {status:'passed', image:stored.ImageB64, boolean_fallback:true, stored_boolean:false,
+    legacy_missing:'', legacy_image:'synthetic-image'};
 })();
