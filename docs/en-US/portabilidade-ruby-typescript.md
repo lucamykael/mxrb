@@ -1,5 +1,23 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Writing Feedback objects to storage
+
+`JS_SetFeedbackStorageObject` and `SetStorageItemObject` use Web adapters selected
+by source hash. Model parameter names are preserved: `key`/`value` for the first
+action and `Key`/`Value` for the second.
+
+The JSON contains `guid`, numeric strings, epoch dates and module-qualified
+references. False, null and empty strings are retained; related objects are
+represented by identifiers. The action uses the current Ruby schema without
+mutating the input object. Incomplete snapshots, members missing from the schema
+and integers already outside the frontend's exact range fail explicitly.
+
+Both writers matched Mendix in two builds and two runtimes. Twelve comparisons
+with original JavaScript, two unchanged real nanoflows and 25 browser steps without
+MPR access also passed. Object retrieval/recreation, AsyncStorage and offline
+synchronization remain unsupported.
+[Evidence](../evidence/feedback-object-storage-2026-10-07.json).
+
 ## Refreshing page arguments
 
 When a change updates the context object, named page arguments referring to that

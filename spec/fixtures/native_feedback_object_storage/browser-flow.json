@@ -1,0 +1,87 @@
+{
+  "name": "feedback-object-storage",
+  "authentication": false,
+  "pages": [
+    {
+      "name": "storage",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_text": "WriteLegacy"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "WriteLegacy"
+        },
+        {
+          "wait_for_text": "stored"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadName"
+        },
+        {
+          "wait_for_text": "Object oracle"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadAmount"
+        },
+        {
+          "wait_for_text": "9007199254740993.12345678"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "WriteCurrent"
+        },
+        {
+          "wait_for_text": "stored"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadName"
+        },
+        {
+          "wait_for_text": "Object oracle"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "ReadAmount"
+        },
+        {
+          "wait_for_text": "9007199254740993.12345678"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        }
+      ]
+    }
+  ]
+}

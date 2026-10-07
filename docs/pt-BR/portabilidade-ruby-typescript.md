@@ -1,5 +1,23 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Gravação de objetos do Feedback
+
+`JS_SetFeedbackStorageObject` e `SetStorageItemObject` usam adaptadores Web
+selecionados pelo hash da fonte. Os nomes dos parâmetros são preservados:
+`key`/`value` na primeira ação e `Key`/`Value` na segunda.
+
+O JSON contém `guid`, números como texto, datas em milissegundos e referências
+qualificadas por módulo. Valores falsos, nulos e strings vazias são preservados;
+objetos relacionados são representados por identificadores. A ação usa o schema
+Ruby atual e não altera o objeto recebido. Snapshots incompletos, membros sem
+schema e inteiros que já excedem a precisão exata do frontend geram erro explícito.
+
+As duas gravações coincidiram com o Mendix em dois builds e dois runtimes.
+Também passaram 12 comparações com o JavaScript original, dois nanoflows reais
+sem alterações e 25 passos no navegador sem MPR. A leitura/recriação de objetos,
+`AsyncStorage` e sincronização offline continuam pendentes.
+[Evidência](../evidence/feedback-object-storage-2026-10-07.json).
+
 ## Atualização de parâmetros de página
 
 Quando uma alteração atualiza o objeto de contexto, referências ao mesmo objeto
