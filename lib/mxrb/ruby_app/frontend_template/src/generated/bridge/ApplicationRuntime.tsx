@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
+import { registerClientConstants } from './expression';
 import { invokeAsync } from './AsyncInvocation';
 import { ClientActions, PageEdits, hasPageEdits } from './PageEdits';
 import { PageDataSource, pageSourceWidget } from './PageDataSource';
@@ -279,11 +280,13 @@ export function ApplicationRuntime({
 
   const loadApplication = async () => {
     setError(null);
+    registerClientConstants({});
     try {
       const activeSession = await api<Session>('/api/session');
       setSession(activeSession);
       setCsrfToken(activeSession.csrf || null);
       const value = await api<ApplicationSchema>('/api/schema');
+      registerClientConstants(value.constants || {});
       schemaRef.current = value;
       setSchema(value);
       setAuthRequired(false);

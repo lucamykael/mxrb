@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-07",
+  "scope": "Legacy Feedback localStorage getter and exposed client constants",
+  "adapter": {
+    "name": "FeedbackModule.JS_GetSingleLocalStorageObjectItem",
+    "source_sha256_lf_normalized": "73f3fba8544c003aedca4f34c1fbdce337facffa2e332f416e78ef038e93af77",
+    "model_parameters": [
+      "LocalStorageKey",
+      "ObjectItemKey"
+    ],
+    "missing_value": "",
+    "original_javascript_comparisons_passed": 11
+  },
+  "constants": {
+    "source": "Current Ruby constant definitions marked exposed_to_client and not excluded",
+    "types": [
+      "string",
+      "integer",
+      "boolean",
+      "decimal"
+    ],
+    "private_and_excluded_values_not_exposed": true,
+    "stale_manifest_defaults_removed_from_schema": true,
+    "unknown_references": "Explicit error",
+    "native_harness": "Pass packaged metadata constant defaults via runtime.params.MicroflowConstants"
+  },
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "image": "synthetic-image",
+      "boolean_fallback": true,
+      "stored_boolean": false,
+      "legacy_missing": "",
+      "legacy_image": "synthetic-image"
+    }
+  },
+  "ruby": {
+    "examples": 2338,
+    "failures": 0,
+    "coverage": {
+      "lines": {
+        "covered": 41331,
+        "total": 41331,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 18134,
+        "total": 18134,
+        "percent": 100.0
+      }
+    },
+    "rubocop_files": 579,
+    "rubocop_offenses": 0,
+    "frontend_tests": 178,
+    "frontend_check_passed": true,
+    "browser_steps_passed": 24,
+    "browser_pages": 2,
+    "console_errors": 0,
+    "mpr_access_prohibited": true
+  },
+  "corpus": {
+    "projects": [
+      "Sudoku",
+      "RubyBridgeSandbox"
+    ],
+    "unchanged_exported_nanoflow": "FeedbackModule.Get_And_Set_Feedback_NPE",
+    "cases_passed": 6,
+    "states": [
+      "missing storage",
+      "empty object",
+      "populated object"
+    ]
+  },
+  "limitations": [
+    "Getter compatibility is restricted to the verified source hash",
+    "Does not implement remaining Feedback screenshot, metadata or object-storage actions",
+    "No mobile/offline certification"
+  ]
+}

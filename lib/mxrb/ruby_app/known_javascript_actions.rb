@@ -7,6 +7,8 @@ module Mxrb
     # Selects TypeScript adapters only for verified web action implementations.
     module KnownJavaScriptActions
       SOURCES = {
+        'JS_GetSingleLocalStorageObjectItem' =>
+          '73f3fba8544c003aedca4f34c1fbdce337facffa2e332f416e78ef038e93af77',
         'JS_GetSingleStringLocalStorageObjectItem' =>
           'b7a2183846a918ace84441b0e8788567b8b7acc030ecad888ed50996772a7888',
         'JS_GetShowEmailBooleanLocalStorageObjectItem' =>

@@ -1050,6 +1050,15 @@ module Mxrb
             export_level: @export_level.to_s
           }
         end
+
+        def client_value
+          case type
+          when :integer then Integer(default)
+          when :decimal then Runtime::DecimalValues.encode(BigDecimal(default.to_s))
+          when :boolean then default.to_s == 'true'
+          else default
+          end
+        end
       end
     end
 
@@ -1828,6 +1837,8 @@ module Mxrb
           navigation: manifest.data.fetch('navigation', {}),
           presentation: Registry.all(:presentation),
           modules: runtime_schema_modules, coverage: manifest.coverage,
+          constants: Registry.all(:constant).values.select { _1.exposed_to_client && !_1.excluded }
+                             .to_h { [_1.mendix_name, _1.client_value] },
           module_roles: context&.module_roles || []
         }
         context ? secure_schema(result, context) : result
@@ -2235,7 +2246,7 @@ module Mxrb
           end
           models = mod.fetch('models', []).map { runtime_model_definition(_1) }
           dtos = mod.fetch('dtos', []).map { runtime_model_definition(_1) }
-          mod.merge('enumerations' => enumerations, 'models' => models, 'dtos' => dtos)
+          mod.except('constants').merge('enumerations' => enumerations, 'models' => models, 'dtos' => dtos)
         end
       end
 
