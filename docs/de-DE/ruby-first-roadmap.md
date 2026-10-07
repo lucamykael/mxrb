@@ -4,11 +4,12 @@
 
 Ganzzahliges `div` schneidet in Richtung null ab; `mod` behält das Vorzeichen
 des Dividenden. Beispielsweise gelten `-12 div 5 = -2` und `-12 mod 5 = -2`.
-Dezimaloperanden behalten einen dezimalen Quotienten. Fünfzehn neue Fälle
-bestanden im Original und im Ruby-Roundtrip unter Studio Pro 11.12.1;
-alle 87 Kompatibilitätsergebnisse stimmen überein. Vergleiche ganzzahliger
-Ausdrücke mit gebrochenen Konstanten und gemischte Ganzzahl-/Dezimalkonvertierung
-sind nicht zertifiziert. Siehe den
+Dezimaloperanden behalten einen dezimalen Quotienten. Numerische Konstanten und Variablen werden beim
+Vergleich mit ganzzahligen Ausdrücken auf Ganzzahlen gekürzt; zwei Spalten
+behalten ihre Typen. Bei zwei Konstanten bestimmt der linke Operand den Typ.
+47 neue Fälle bestanden unter Studio Pro 11.12.1; alle 119 Ergebnisse im
+Original und Ruby-Roundtrip stimmen überein. Gemischte Arithmetik, die bereits
+im nativen HSQLDB fehlschlägt, ist nicht zertifiziert. Siehe den
 [Nachweis](../evidence/xpath-arithmetic-2026-10-07.json).
 
 ## Validierung der XPath-Division

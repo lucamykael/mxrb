@@ -71,8 +71,16 @@ module Mxrb
           left = truthy?(evaluate(parts.first, record, variables))
           right = truthy?(evaluate(parts.last, record, variables))
           kind == :and ? left & right : left | right
-        else compare(kind, evaluate(parts.first, record, variables), evaluate(parts.last, record, variables))
+        else
+          compare(kind, evaluate(parts.first, record, variables), evaluate(parts.last, record, variables),
+                  left_parameter: parameter_operand?(parts.first), right_parameter: parameter_operand?(parts.last))
         end
+      end
+
+      def parameter_operand?(tree)
+        return parameter_operand?(tree.last) if tree.first == :negative
+
+        %i[literal variable system].include?(tree.first)
       end
 
       def invoke(name, arguments)
@@ -160,7 +168,7 @@ module Mxrb
         name == record.entity || (@store.respond_to?(:schema) && @store.schema.assignable?(record.entity, name))
       end
 
-      def compare(operator, left, right)
+      def compare(operator, left, right, left_parameter: false, right_parameter: false)
         arithmetic = ARITHMETIC[operator.to_s]
         return arithmetic.call(scalar(left), scalar(right)) if arithmetic
 
@@ -174,9 +182,19 @@ module Mxrb
             other = other.id if other.is_a?(Native::ObjectValue)
             next false if (one.nil? || other.nil?) && !%i[= !=].include?(operator)
 
-            Native::Expression::Parser::COMPARISONS.fetch(operator.to_s).call(one, other)
+            operands = comparison_operands(one, other, left_parameter, right_parameter)
+            Native::Expression::Parser::COMPARISONS.fetch(operator.to_s).call(*operands)
           end
         end
+      end
+
+      def comparison_operands(left, right, left_parameter, right_parameter)
+        if right_parameter && left.is_a?(Integer) && right.is_a?(BigDecimal)
+          right = right.truncate
+        elsif left_parameter && !right_parameter && right.is_a?(Integer) && left.is_a?(BigDecimal)
+          left = left.truncate
+        end
+        [left, right]
       end
 
       def scalar(value)

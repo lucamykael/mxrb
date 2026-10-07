@@ -45,6 +45,7 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
         return_type :String
         if item['xpath_numeric']
           numeric = item.fetch('xpath_numeric')
+          create_variable :v, type: :Decimal, value: numeric.fetch('variable_decimal') if numeric['variable_decimal']
           constraint = "[Name = '#{item.fetch('name')}'][#{numeric.fetch('constraint')}]"
           create_object 'Compatibility.NumericProbe', as: :probe, commit: true,
                                                       set: { Name: "'#{item.fetch('name')}'",

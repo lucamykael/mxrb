@@ -514,5 +514,337 @@
     },
     "expression": "toString($match_count)",
     "expected": "1"
+  },
+  {
+    "name": "XPathPositiveEq",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank = 12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveNotEq",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank != 12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveLess",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank < 12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveGreater",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank > 12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveEqReverse",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "12.4 = Rank"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDivideFraction",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank div 5 = 2.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDivideRound",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank div 5 = 2.9"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathPositiveDecimalCompare",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Amount = 12"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveColumnCompare",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank = Amount"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPositiveModuloFloat",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank mod 5.0 = 2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeEq",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank = -12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeNotEq",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank != -12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeLess",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank < -12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeGreater",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank > -12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeEqReverse",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "-12.4 = Rank"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDivideFraction",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank div 5 = -2.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDivideRound",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank div 5 = -2.9"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativeDecimalCompare",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Amount = -12"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeColumnCompare",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank = Amount"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathNegativeModuloFloat",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank mod 5.0 = -2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathLiteralIntLeft",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "12 = 12.4",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathLiteralDecimalLeft",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "12.4 = 12",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathLiteralBothDecimal",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "12.0 = 12.4",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathLiteralDiv",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "12 div 5 = 2.4",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableEquals",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank = $v",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableReverse",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "$v = Rank",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathVariableLess",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank < $v",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathVariableNegative",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank = $v",
+      "variable_decimal": "-12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegativePath",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "-Rank = -12.4",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathNegNegativePath",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "-Rank = 12.4",
+      "variable_decimal": "-12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalPath",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Amount = 12.4",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathArithmeticCompare",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank * 2 = 24.9",
+      "variable_decimal": "12.4"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
   }
 ]

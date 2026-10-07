@@ -4,10 +4,12 @@
 
 Integer `div` truncates toward zero; `mod` retains the dividend's sign. For
 example, `-12 div 5 = -2` and `-12 mod 5 = -2`. Decimal operands retain decimal
-quotients. Fifteen new cases passed in the source and Ruby round-trip runtimes
-on Studio Pro 11.12.1, within 87 identical compatibility results. Comparisons
-of integer expressions with fractional constants and mixed integer/decimal
-coercion remain outside this certification. See the
+quotients. Numeric constants and variables compared to integer
+expressions are truncated to integers; two columns retain their types. For
+constant-to-constant comparisons, the left operand determines the type.
+Forty-seven new cases passed on Studio Pro 11.12.1, within 119 identical
+source/round-trip results. Mixed arithmetic that fails in native HSQLDB
+remains outside this certification. See the
 [evidence](../evidence/xpath-arithmetic-2026-10-07.json).
 
 ## XPath division validation

@@ -84,6 +84,21 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(filter('[Single/App.Tag = $tag]', 'tag' => tag)).to eq([first])
   end
 
+  it 'coerces numeric query parameters to integer operands without truncating decimal columns' do
+    first.members.merge!('Rank' => -12, 'Amount' => BigDecimal('-12.4'))
+    second.members.merge!('Rank' => 12, 'Amount' => BigDecimal('12.4'))
+    expect(filter('[Rank = 12.4][12.4 = Rank][Rank div 5 = 2.9]')).to eq([second])
+    expect(filter('[Rank = -12.4][-12.4 = Rank][Rank div 5 = -2.9]')).to eq([first])
+    expect(filter('[Rank < 12.4][Rank != 12.4]')).to eq([first])
+    expect(filter('[Rank = Amount]')).to eq([])
+    expect(filter('[Amount = Rank]')).to eq([])
+    expect(filter('[12 = 12.4][12.4 != 12]')).to eq([first, second])
+    expect(filter('[-Rank = 12.4]')).to eq([first])
+    expect(filter('[Rank = $v][$v = Rank]', 'v' => BigDecimal('12.4'))).to eq([second])
+    expect(filter('[Amount = $v]', 'v' => 12)).to eq([])
+    expect(filter('[Tags/Rank = 12.4]')).to eq([])
+  end
+
   it 'rejects malformed expressions, unknown variables, invalid traversal and excessive nesting' do
     ['[', '[]', ']', "[Name = 'bad]", 'Name = 1', '[[Name = 1]]', '[Rank =]', '[Name = 2 3]', '[!]',
      '[contains(Name,)]', '[contains()]', '[Name/Other = 1]', '[Rank = $missing]',

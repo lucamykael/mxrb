@@ -4,10 +4,12 @@
 
 A divisão inteira `div` trunca em direção a zero; `mod` conserva o sinal do
 dividendo. Por exemplo, `-12 div 5 = -2` e `-12 mod 5 = -2`. Operandos decimais
-mantêm o quociente decimal. Quinze casos novos passaram nos runtimes original
-e reconstruído pelo Ruby no Studio Pro 11.12.1, dentro de 87 casos idênticos.
-Comparações de expressões inteiras com constantes fracionárias e coerções
-mistas de inteiro/decimal permanecem fora dessa certificação. Veja a
+mantêm o quociente decimal. Constantes e variáveis numéricas comparadas
+a expressões inteiras são truncadas para o tipo inteiro; duas colunas mantêm
+seus tipos. Em comparações entre constantes, o operando esquerdo define o tipo.
+Quarenta e sete casos novos passaram no Studio Pro 11.12.1, dentro de 119
+resultados idênticos entre original e reconstruído. Aritmética mista que falha
+no próprio HSQLDB permanece fora dessa certificação. Veja a
 [evidência](../evidence/xpath-arithmetic-2026-10-07.json).
 
 ## Validação de divisão em XPath
