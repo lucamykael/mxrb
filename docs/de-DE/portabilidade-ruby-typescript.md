@@ -1,5 +1,17 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Strukturierte Beschriftungen
+
+Beschriftungen unterstützen Übersetzungen, Ersatztexte, Attribut- und
+Ausdrucksparameter, Zahlen-/Datumsformate sowie Seiten-, Snippet- und
+Widget-Objekte. Ruby-Deklarationen erhalten diese Metadaten beim Roundtrip.
+Das Frontend verwendet die gewählte Sprache und bewahrt Decimal-Präzision
+auch jenseits des exakten Number-Bereichs. Serien behalten ihren Kontext.
+
+Das Szenario chart-captions vergleicht Namen und Werte vor und nach einer
+Änderung in der nativen Runtime. Unbekannte Datumsmuster werden ausdrücklich
+abgelehnt. Erweiterte Plotly-Optionen bleiben ein separater Arbeitsbereich.
+
 ## Decimal-Präzision
 
 Ruby verwendet `BigDecimal`, das Frontend `decimal.js`. Decimal-Literale,
@@ -38,6 +50,23 @@ Gleichwertigkeit. Lokalisierte Datumsformate und Datumsdifferenzen bleiben separ
 
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
+
+## Gestapelte Diagramme und Punktaktionen — 6. Oktober 2026
+
+Balken- und Säulendiagramme unterstützen `barmode: "stack"`. Die Basiswerte
+werden je Kategorie in der Reihenfolge der Datenreihen addiert, einschließlich
+negativer Werte und Null. Die Achsenskalierung berücksichtigt Basis und Summe.
+`staticOnClickAction` und `dynamicOnClickAction` verwenden die Ereignislaufzeit
+der Seite mit dem Datensatz des Punkts, Bestätigung und Ausführungssperre.
+Klick, Enter, Leertaste und die zugängliche Datentabelle lösen die Aktion aus.
+
+Bei Aggregation entspricht der Punktindex dem Index in der sortierten
+Quelldatenliste, wie beim zertifizierten Mendix-Charts-Paket; dies ist nicht
+zwingend der erste Datensatz der aggregierten Kategorie. Punktaktualisierungen
+erhalten den Seitenkontext. `chart-interactions` prüft beide Ausrichtungen,
+Aggregatklicks, negative Werte und eine neu erstellte Datenreihe.
+
+Die Aggregation horizontaler Balken wird weiterhin nicht unterstützt: Das Charts-Paket gruppiert nach der numerischen Achse und kann Beschriftungen verketten. Die Ruby-Laufzeit meldet diese Einschränkung ausdrücklich. Die horizontale Zertifizierung verwendet nicht aggregierte Punkte, einschließlich wiederholter Kategorien.
 
 ## Dynamische Diagrammreihen — 6. Oktober 2026
 

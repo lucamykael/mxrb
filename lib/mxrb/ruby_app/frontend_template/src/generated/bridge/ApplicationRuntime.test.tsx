@@ -9,6 +9,77 @@ vi.mock('./api', () => ({ api: vi.fn(), setCsrfToken: vi.fn() }));
 vi.mock('../nanoflows', () => ({ default: {} }));
 
 describe('application field lifetime', () => {
+  it('refreshes a chart point without replacing the page object with its action context', async () => {
+    const owner = {
+      id: 'owner',
+      type: 'App.Owner',
+      transient: true,
+      attributes: { Name: 'Owner' },
+    };
+    let point = { id: 'point', type: 'App.Point', attributes: { Name: 'Point', Value: 8 } };
+    const page = {
+      name: 'App.Home',
+      title: 'Home',
+      data_source: { kind: 'microflow', name: 'App.Load' },
+      widgets: [
+        {
+          name: 'Name',
+          type: 'text_box',
+          options: { attribute: 'App.Owner.Name', caption: 'Name' },
+        },
+        {
+          name: 'Chart',
+          type: 'pluggable_widget',
+          options: {
+            widget_id: 'com.mendix.widget.web.columnchart.ColumnChart',
+            properties: {
+              series: {
+                objects: [
+                  {
+                    staticDataSource: { data_source: 'App.Point' },
+                    staticName: 'Points',
+                    staticXAttribute: 'Name',
+                    staticYAttribute: 'Value',
+                    staticOnClickAction: {
+                      action: {
+                        kind: 'microflow',
+                        handler: 'App.Increment',
+                        arguments: { Point: '$currentObject' },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    };
+    vi.mocked(api).mockReset();
+    vi.mocked(api).mockImplementation(async (path, options) => {
+      if (path === '/api/session') return { user: 'tester' } as never;
+      if (path === '/api/schema')
+        return { project: { name: 'App' }, modules: [{ name: 'App', pages: [page] }] } as never;
+      if (path === '/api/pages/App.Home') return page as never;
+      if (path === '/api/microflows/App.Load') return { result: owner } as never;
+      if (path === '/api/entities/App.Point') return { records: [point] } as never;
+      if (path === '/api/microflows/App.Increment') {
+        expect(JSON.parse(String(options?.body)).Point.id).toBe('point');
+        point = { ...point, attributes: { ...point.attributes, Value: 9 } };
+        return { context: point } as never;
+      }
+      throw new Error(`Unexpected request ${path}`);
+    });
+    render(
+      <MemoryRouter>
+        <ApplicationRuntime />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Points Point: 8' }));
+    expect(await screen.findByRole('button', { name: 'Points Point: 9' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Owner');
+  });
+
   it.each([false, true])(
     'persists server records and reports failed writes (missing: %s)',
     async (missing) => {

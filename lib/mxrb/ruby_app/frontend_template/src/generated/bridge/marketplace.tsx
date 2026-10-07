@@ -9,6 +9,7 @@ import type {
   EntityRecord,
   RuntimeValue,
   WidgetDefinition,
+  WidgetEvent,
 } from '../types';
 
 export interface MarketplaceWidgetRegion {
@@ -25,6 +26,8 @@ export interface MarketplaceWidgetProps {
   request?: ApiRequest;
   revision?: number;
   onClick?(): unknown;
+  onAction?(event: WidgetEvent, context: EntityRecord | null): Promise<unknown>;
+  actionRunning?: boolean;
   regions?: MarketplaceWidgetRegion[];
   onChange(attribute: string | undefined, value: RuntimeValue): unknown;
 }

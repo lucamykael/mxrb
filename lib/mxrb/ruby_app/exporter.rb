@@ -3658,6 +3658,7 @@ module Mxrb
             name: string;
             type: string;
             enumeration?: string;
+            localize_date?: boolean;
           }
 
           export interface EntityDefinition {
@@ -3669,7 +3670,7 @@ module Mxrb
           export interface EnumerationDefinition {
             id: string;
             name: string;
-            values: Array<{ name: string; caption: string }>;
+            values: Array<{ name: string; caption: string; caption_translations?: Record<string, string> }>;
           }
 
           export interface AssociationDefinition {

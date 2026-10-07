@@ -1,0 +1,47 @@
+{
+  "name": "marketplace-chart-captions",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 850
+  },
+  "pages": [
+    {
+      "name": "formatted-captions",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_count": {
+            "selector": ".mxrb-marketplace-chart svg",
+            "equals": 1
+          }
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary"
+          }
+        },
+        {
+          "wait_for_text": "North: 1,234.500 on 2026-10-06 by Owner"
+        },
+        {
+          "click_text": "Change amount"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": {
+            "selector": ".mxrb-marketplace-chart summary"
+          }
+        },
+        {
+          "wait_for_text": "North: 1,235.500 on 2026-10-06 by Owner"
+        },
+        {
+          "wait_for_selector": "input[value=\"Owner\"]"
+        }
+      ]
+    }
+  ]
+}

@@ -34,6 +34,8 @@ module StudioProBatch
       result['charts'] = 'frontend_browser/marketplace_chart_project.rb'
       result['chart-aggregation'] = 'frontend_browser/marketplace_chart_aggregation_project.rb'
       result['chart-series'] = 'frontend_browser/marketplace_chart_series_project.rb'
+      result['chart-interactions'] = 'frontend_browser/marketplace_chart_interactions_project.rb'
+      result['chart-captions'] = 'frontend_browser/marketplace_chart_captions_project.rb'
     end
     result['page-drafts'] = 'persistent_page_drafts/project.rb' if ENV['MXRB_DATAGRID_PACKAGE']
     result
