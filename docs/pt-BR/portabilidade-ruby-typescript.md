@@ -46,6 +46,23 @@ Parsing/formatação localizada e diferenças entre datas continuam em contratos
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
 
+## Empilhamento e ações nos pontos — 6 de outubro de 2026
+
+Gráficos de barras e colunas aceitam `barmode: "stack"`, com bases acumuladas
+por categoria na ordem das séries, inclusive valores negativos e zero. A escala
+inclui as bases e os totais. Ações `staticOnClickAction` e `dynamicOnClickAction`
+executam pelo mesmo runtime de eventos usado pelas páginas, com o registro do
+ponto, confirmação e bloqueio durante execução. Os pontos aceitam clique, Enter
+e Espaço; a tabela acessível também permite executar a ação.
+
+Em séries agregadas, a seleção segue o índice do ponto na lista ordenada de
+origem, como no pacote Mendix Charts certificado. Não equivale necessariamente
+ao primeiro registro da categoria agregada. Atualizar um ponto preserva o
+contexto e os campos da página. O cenário `chart-interactions` verifica barras,
+colunas, clique em agregados, valores negativos e criação de uma nova série.
+
+A agregação de barras horizontais permanece não suportada: o pacote Charts agrupa pelo eixo numérico e pode concatenar rótulos. O runtime Ruby informa essa limitação explicitamente. A certificação horizontal usa pontos sem agregação, inclusive categorias repetidas.
+
 ## Séries dinâmicas de gráficos — 6 de outubro de 2026
 
 Gráficos de linhas e colunas aceitam séries dinâmicas agrupadas pelo atributo
