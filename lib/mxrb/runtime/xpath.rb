@@ -16,7 +16,14 @@ module Mxrb
       ARITHMETIC = {
         '+' => ->(left, right) { left + right }, '-' => ->(left, right) { left - right },
         '*' => ->(left, right) { left * right },
-        'div' => ->(left, right) { left / right }, 'mod' => ->(left, right) { left % right }
+        'div' => lambda { |left, right|
+          if left.is_a?(Integer) && right.is_a?(Integer)
+            (left.to_r / right).truncate
+          else
+            DecimalContext.new.divide(left, right)
+          end
+        },
+        'mod' => ->(left, right) { left.remainder(right) }
       }.freeze
       def initialize(source, store:, policy: nil, context: nil)
         @store = store

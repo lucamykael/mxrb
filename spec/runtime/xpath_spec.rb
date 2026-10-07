@@ -61,6 +61,18 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(filter("[contains(App.Tags/App.Tag/Name, '/')]")).to eq([first])
   end
 
+  it 'matches native signed integer division and remainder while preserving decimal quotients' do
+    first.members.merge!('Rank' => -12, 'Amount' => BigDecimal('-12.5'))
+    second.members.merge!('Rank' => 12, 'Amount' => BigDecimal('12.5'))
+    expect(filter('[Rank div 5 = -2][Rank mod 5 = -2]')).to eq([first])
+    expect(filter('[Rank div 5 = -3][Rank mod 5 = 3]')).to eq([])
+    expect(filter('[Rank div -5 = -2][Rank mod -5 = 2]')).to eq([second])
+    expect(filter('[Amount div 5 = -2.5][Amount mod 5 = -2.5]')).to eq([first])
+    expect(filter('[Amount div 5 = 2.5][Amount mod 5 = 2.5]')).to eq([second])
+    expect(filter('[Rank div 5.0 = 2.4]')).to eq([second])
+    expect { filter('[Rank mod 0 = 1]') }.to raise_error(ArgumentError, /invalid XPath operand/)
+  end
+
   it 'uses existential comparisons, related-object predicates and inverse traversal' do
     expect(filter('[App.Tags/App.Tag/Name = \'Tag\']')).to eq([first])
     expect(filter("[App.Tags[Name = 'Tag']/App.Tag]")).to eq([first])

@@ -18,6 +18,11 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       association 'Compatibility.Folder', name: :Folder_DirectParent, storage_format: :Column
       association 'Compatibility.Folder', name: :Folder_Links, type: :ReferenceSet
     end
+    entity(:NumericProbe) do
+      string :Name
+      integer :Rank
+      decimal :Amount
+    end
     rule :NonEmpty do
       parameter :Value, type: :String
       return_type :Boolean
@@ -38,6 +43,17 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
     cases.each do |item|
       microflow(item.fetch('name')) do
         return_type :String
+        if item['xpath_numeric']
+          numeric = item.fetch('xpath_numeric')
+          constraint = "[Name = '#{item.fetch('name')}'][#{numeric.fetch('constraint')}]"
+          create_object 'Compatibility.NumericProbe', as: :probe, commit: true,
+                                                      set: { Name: "'#{item.fetch('name')}'",
+                                                             Rank: numeric.fetch('rank').to_s,
+                                                             Amount: numeric.fetch('amount') }
+          retrieve_objects 'Compatibility.NumericProbe', as: :matches,
+                                                         xpath: constraint
+          aggregate :matches, function: :count, as: :match_count
+        end
         if item['xpath']
           create_object 'Compatibility.Folder', as: :root, commit: true, set: { Name: "'root'" }
           create_object 'Compatibility.Folder', as: :child, commit: true do

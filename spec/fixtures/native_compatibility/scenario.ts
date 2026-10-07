@@ -287,6 +287,66 @@ type OracleCase = { name: string; expected?: string; expected_error?: boolean };
     "expected": "1:root"
   },
   {
+    "name": "XPathIntDivTruncated",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeTruncated",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeFloor",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntDivNegativeDivisor",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDiv",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDivNegative",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntMod",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRemainder",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntModNegativeDivisor",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeDivisorRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathDecimalMod",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRemainder",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRuby",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPrecedence",
+    "expected": "1"
+  },
+  {
     "name": "VerifyRule",
     "expected": "passed"
   }

@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-07",
+  "scope": "Signed XPath integer division and remainder",
+  "ruby": {
+    "examples": 2310,
+    "failures": 0,
+    "lines": 41048,
+    "branches": 18001,
+    "coverage_percent": 100
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM / HSQLDB",
+    "builds": 2,
+    "runtimes": 2,
+    "compatibility_cases": 87,
+    "identical_results": true,
+    "input_hashes_unchanged": true,
+    "arithmetic_results": [
+      {
+        "name": "XPathForwardChild",
+        "actual": "1:child",
+        "expected": "1:child",
+        "passed": true
+      },
+      {
+        "name": "XPathForwardSet",
+        "actual": "1:child",
+        "expected": "1:child",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivTruncated",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeTruncated",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeFloor",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathIntDivNegativeDivisor",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalDiv",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalDivNegative",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntMod",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeRemainder",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeDivisor",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathIntModNegativeDivisorRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalMod",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalModNegativeRemainder",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      },
+      {
+        "name": "XPathDecimalModNegativeRuby",
+        "actual": "0",
+        "expected": "0",
+        "passed": true
+      },
+      {
+        "name": "XPathPrecedence",
+        "actual": "1",
+        "expected": "1",
+        "passed": true
+      }
+    ]
+  },
+  "limits": [
+    "Integer-expression comparisons against fractional constants require separate coercion validation.",
+    "Rank div 5.0 produced a native HSQLDB numeric overflow; mixed integer/decimal coercion is not certified across databases.",
+    "Corpus parsing does not certify execution of every original flow."
+  ]
+}

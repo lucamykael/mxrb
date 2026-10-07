@@ -364,5 +364,155 @@
     "xpath": "[Compatibility.Folder_DirectParent[reversed()] = $child]",
     "expression": "toString($match_count) + ':' + (if $match = empty then 'missing' else $match/Name)",
     "expected": "1:root"
+  },
+  {
+    "name": "XPathIntDivTruncated",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank div 5 = 2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeTruncated",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank div 5 = -2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntDivNegativeFloor",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank div 5 = -3"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntDivNegativeDivisor",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank div -5 = -2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDiv",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Amount div 5 = 2.5"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalDivNegative",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Amount div 5 = -2.5"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntMod",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank mod 5 = 2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRemainder",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank mod 5 = -2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeRuby",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Rank mod 5 = 3"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathIntModNegativeDivisor",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank mod -5 = 2"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathIntModNegativeDivisorRuby",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank mod -5 = -3"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathDecimalMod",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Amount mod 5 = 2.5"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRemainder",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Amount mod 5 = -2.5"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
+  },
+  {
+    "name": "XPathDecimalModNegativeRuby",
+    "xpath_numeric": {
+      "rank": -12,
+      "amount": "-12.5",
+      "constraint": "Amount mod 5 = 2.5"
+    },
+    "expression": "toString($match_count)",
+    "expected": "0"
+  },
+  {
+    "name": "XPathPrecedence",
+    "xpath_numeric": {
+      "rank": 12,
+      "amount": "12.5",
+      "constraint": "Rank + 3 * 2 = 18"
+    },
+    "expression": "toString($match_count)",
+    "expected": "1"
   }
 ]
