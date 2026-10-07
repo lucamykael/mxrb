@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-06",
+  "scope": "Stacked bar/column charts and static/dynamic point actions with page context preservation",
+  "frontend": {
+    "tests": 122,
+    "format": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "rubocop": {
+    "files": 558,
+    "offenses": 0
+  },
+  "browser": {
+    "steps": 10,
+    "console_errors": [],
+    "sidecar": "detached before startup",
+    "screenshot_sha256": "f068b46d1dcca21d55c6d20c690b14e924b31597287cf031492fb8dfafc17d95"
+  },
+  "roundtrip": {
+    "valid": true,
+    "identical": true,
+    "public_source_violations": 0
+  },
+  "native_static_check": {
+    "tool": "mx 11.12.1 check",
+    "source_errors": 0,
+    "roundtrip_errors": 0
+  },
+  "native_ci": {
+    "scenario": "chart-interactions",
+    "variants": [
+      "source",
+      "roundtrip"
+    ],
+    "prior_failure": "37490468777: horizontal aggregation mismatch; scenario now verifies raw horizontal points and explicit runtime limitation"
+  },
+  "limits": [
+    "Aggregated point selection follows the native ordered source index, not necessarily the first matching category record.",
+    "Advanced caption formatting/translations and Plotly layout options are tracked separately.",
+    "Horizontal bar aggregation remains unsupported: the Charts package groups by the numeric axis and can concatenate labels. The Ruby runtime reports this limitation explicitly. Horizontal certification uses unaggregated points, including repeated categories."
+  ],
+  "ruby": {
+    "examples": 2278,
+    "failures": 0,
+    "lines": "40809/40809",
+    "branches": "17866/17866"
+  }
+}

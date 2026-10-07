@@ -39,6 +39,22 @@ remain separate contracts.
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
 
+## Stacking and point actions — October 6, 2026
+
+Bar and column charts support `barmode: "stack"`, accumulating category bases
+in series order, including negative and zero values. Axis bounds include bases
+and totals. `staticOnClickAction` and `dynamicOnClickAction` use the page event
+runtime with the point record, confirmation and execution locking. Points
+support click, Enter and Space; the accessible table also exposes the action.
+
+For aggregated series, selection uses the point index in the ordered source
+items, matching the certified Mendix Charts package. This is not necessarily
+the first record in the aggregated category. Point updates preserve the page
+context and its fields. The `chart-interactions` scenario covers horizontal and
+vertical stacks, aggregate clicks, negative values and a newly created series.
+
+Horizontal bar aggregation remains unsupported: the Charts package groups by the numeric axis and can concatenate labels. The Ruby runtime reports this limitation explicitly. Horizontal certification uses unaggregated points, including repeated categories.
+
 ## Dynamic chart series — October 6, 2026
 
 Line and column charts support dynamic series grouped by the configured

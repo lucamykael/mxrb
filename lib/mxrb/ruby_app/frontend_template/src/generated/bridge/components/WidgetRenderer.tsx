@@ -931,6 +931,8 @@ function WidgetContent({
             request={request}
             revision={revision}
             onClick={onClick}
+            onAction={runEvent}
+            actionRunning={running}
             onChange={(attribute, value) => {
               const member = memberName(attribute);
               if (!activeRecord || !member) return Promise.resolve(activeRecord);

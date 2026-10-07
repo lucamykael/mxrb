@@ -45,28 +45,92 @@ const props = (widget: WidgetDefinition): WidgetRuntimeProps => ({
 });
 
 describe('Ruby data view editing', () => {
+  it('routes Marketplace point actions through the page event executor with the clicked record', async () => {
+    const chart: WidgetDefinition = {
+      type: 'pluggable_widget',
+      name: 'Chart',
+      options: {
+        widget_id: 'com.mendix.widget.web.columnchart.ColumnChart',
+        properties: {
+          series: {
+            objects: [
+              {
+                staticDataSource: { data_source: 'App.Item' },
+                staticXAttribute: 'Name',
+                staticYAttribute: 'Value',
+                staticName: 'Items',
+                staticOnClickAction: {
+                  action: {
+                    kind: 'microflow',
+                    handler: 'Select',
+                    arguments: { Item: '$currentObject' },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    const input = props(chart);
+    const point = { ...record, id: 'point', attributes: { Name: 'Clicked', Value: 8 } };
+    render(<WidgetRenderer {...input} request={vi.fn().mockResolvedValue({ records: [point] })} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Items Clicked: 8' }));
+    expect(input.invoke).toHaveBeenCalledWith('App.Select', { Item: point }, point);
+    expect(input.onError).not.toHaveBeenCalled();
+  });
+
   it('uses the already loaded page source and follows its updated draft without invoking it again', () => {
-    const sourced: WidgetDefinition = { ...view, options: { source: { kind: 'microflow', name: 'App.Load' } } };
+    const sourced: WidgetDefinition = {
+      ...view,
+      options: { source: { kind: 'microflow', name: 'App.Load' } },
+    };
     const input = props(sourced);
-    const { rerender } = render(<PageDataSource.Provider value={sourced}><WidgetRenderer {...input} /></PageDataSource.Provider>);
+    const { rerender } = render(
+      <PageDataSource.Provider value={sourced}>
+        <WidgetRenderer {...input} />
+      </PageDataSource.Provider>,
+    );
     expect(screen.getByRole('textbox')).toHaveValue('Before');
     const updated = { ...record, attributes: { Name: 'Changed' } };
-    rerender(<PageDataSource.Provider value={sourced}><WidgetRenderer {...input} context={updated} /></PageDataSource.Provider>);
+    rerender(
+      <PageDataSource.Provider value={sourced}>
+        <WidgetRenderer {...input} context={updated} />
+      </PageDataSource.Provider>,
+    );
     expect(screen.getByRole('textbox')).toHaveValue('Changed');
     expect(input.request).not.toHaveBeenCalled();
   });
 
   it('updates role-based visibility and editing when the authorized schema changes', () => {
-    const guarded = { ...field, options: { ...field.options, editable: 'conditional', editability: { roles: ['App.Editor'] } } };
+    const guarded = {
+      ...field,
+      options: {
+        ...field.options,
+        editable: 'conditional',
+        editability: { roles: ['App.Editor'] },
+      },
+    };
     const input = props(guarded);
     const { rerender } = render(<WidgetRenderer {...input} />);
     expect(screen.getByRole('textbox')).toBeDisabled();
-    rerender(<WidgetRenderer {...input} schema={{ ...input.schema, module_roles: ['App.Editor'] }} />);
+    rerender(
+      <WidgetRenderer {...input} schema={{ ...input.schema, module_roles: ['App.Editor'] }} />,
+    );
     expect(screen.getByRole('textbox')).toBeEnabled();
-    const hidden = { ...guarded, options: { ...guarded.options, visibility: { roles: ['App.Editor'] } } };
+    const hidden = {
+      ...guarded,
+      options: { ...guarded.options, visibility: { roles: ['App.Editor'] } },
+    };
     rerender(<WidgetRenderer {...input} widget={hidden} />);
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    rerender(<WidgetRenderer {...input} widget={hidden} schema={{ ...input.schema, module_roles: ['App.Editor'] }} />);
+    rerender(
+      <WidgetRenderer
+        {...input}
+        widget={hidden}
+        schema={{ ...input.schema, module_roles: ['App.Editor'] }}
+      />,
+    );
     expect(screen.getByRole('textbox')).toBeEnabled();
   });
 
