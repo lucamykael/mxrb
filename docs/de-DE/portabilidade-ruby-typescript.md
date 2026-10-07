@@ -1,5 +1,27 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## CustomChart mit Plotly
+
+`CustomChart` lädt Plotly 3.0.1 bei Bedarf und übernimmt JSON-Daten, Layout und
+Konfiguration aus dem Modell. Statische und attributgebundene Datenreihen werden
+aneinandergefügt; Kontextänderungen zeichnen das Diagramm neu. Abmessungen,
+Höhenbegrenzungen, Legenden, Achsen und Werkzeugleiste bleiben erhalten. Ein Klick
+schreibt die `bbox` des ersten Punktes ins Ereignisattribut, führt die konfigurierte
+Aktion aus und leert das Attribut. Laufende Aktionen werden geschützt; beim
+Entfernen der Komponente wird das Diagramm freigegeben.
+
+Die Abnahme vergleicht Datenreihen, Titel, Skala, Größe und Klickverhalten vor und
+nach einer Änderung. 160 Frontend-Tests und zehn Chromium-Schritte ohne MPR-Zugriff
+bestanden. Die vollständige Engine lädt bei Bedarf etwa 1,33 MB gzip. Der interne
+Playground/Editor, seine Initialisierungseffekte auf Beispieldaten und die
+Zertifizierung sämtlicher Diagrammtypen sind nicht enthalten. Die übrigen
+Diagramm-Widgets behalten ihren bisherigen Optionsumfang.
+
+Die Windows-VM bestätigte beide Builds und Runtimes, Original und Roundtrip,
+mit identischen Ruby-Ergebnissen und unveränderten Eingabe-Hashes.
+[Nachweis](../evidence/custom-plotly-2026-10-07.json).
+
+
 ## Speicheraktionen im Browser
 
 Drei Aktionen des Feedback Module erhalten TypeScript-Adapter, wenn der Hash

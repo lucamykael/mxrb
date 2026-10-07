@@ -1,0 +1,28 @@
+{
+  "name": "marketplace-custom-plotly",
+  "authentication": false,
+  "viewport": { "width": 1280, "height": 900 },
+  "pages": [
+    {
+      "name": "custom-options",
+      "path": "/",
+      "steps": [
+        { "wait_for_selector": ".js-plotly-plot .barlayer path" },
+        { "wait_for_text": "Dynamic title" },
+        { "wait_for_selector": ".modebar" },
+        { "click_selector": { "selector": ".mxrb-marketplace-chart summary" } },
+        { "wait_for_text": "Dynamic" },
+        { "click_text": "Change traces" },
+        { "wait_for_idle": true },
+        { "wait_for_text": "Changed" },
+        {
+          "click_selector": {
+            "selector": ".js-plotly-plot .barlayer path",
+            "index": 0
+          }
+        },
+        { "wait_for_idle": true }
+      ]
+    }
+  ]
+}

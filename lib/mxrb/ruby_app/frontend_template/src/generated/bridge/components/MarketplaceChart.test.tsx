@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { MarketplaceWidget, type MarketplaceWidgetProps } from '../marketplace';
 import type { EntityCollectionResponse, EntityRecord } from '../../types';
 
+vi.mock('plotly.js-dist-min', () => ({
+  default: {
+    react: vi.fn(async (graph: HTMLDivElement) => {
+      Object.assign(graph, { on: vi.fn(), removeAllListeners: vi.fn() });
+    }),
+    purge: vi.fn(),
+  },
+}));
+
 const record = (name: string, value: number | null): EntityRecord => ({
   id: name,
   type: 'App.Point',
@@ -435,8 +444,8 @@ describe('Marketplace charts read actual application values', () => {
     });
     const { rerender } = render(<MarketplaceWidget {...input} />);
     const svg = await screen.findByRole('img');
-    expect(svg.querySelectorAll('rect')).toHaveLength(2);
-    expect(svg).toHaveTextContent('Budget B: 21');
+    expect(svg).toHaveAttribute('aria-label', 'Live chart');
+    expect(screen.getByText(/"name": "Budget"/)).toHaveTextContent('21');
     rerender(<MarketplaceWidget {...props('CustomChart', { dataStatic: '[]' })} />);
     expect(await screen.findByText('No chart data')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();

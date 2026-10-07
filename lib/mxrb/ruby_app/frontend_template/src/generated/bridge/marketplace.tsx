@@ -2,6 +2,7 @@ import { decimal, isDecimal, numericText } from './decimal';
 import { useState } from 'react';
 import { MarketplaceControl, MarketplaceImage } from './components/MarketplaceControls';
 import { MarketplaceChart } from './components/MarketplaceChart';
+import { MarketplacePlotly } from './components/MarketplacePlotly';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   ApiRequest,
@@ -195,6 +196,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   const content = renderRegions(regions, children);
 
   if (id.endsWith('.image')) return <MarketplaceImage {...props} />;
+  if (id.includes('customchart')) return <MarketplacePlotly {...props}>{content}</MarketplacePlotly>;
   if (/(progressbar|progresscircle|rangeslider|slider|rating|colorpicker|togglebuttons)\./.test(id))
     return <MarketplaceControl {...props} />;
 
