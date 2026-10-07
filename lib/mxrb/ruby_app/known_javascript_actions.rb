@@ -25,7 +25,17 @@ module Mxrb
         'GetPlatform' =>
           '99f9043fe12c66c228971c213fbb520f9ecb7b4f89515cc46b27e93acd622780',
         'FindObjectWithGUID' =>
-          '8bdf42c7f08e7997d7ff59083eae638b271b662b6c1b9a8ff290c35d9ff10350'
+          '8bdf42c7f08e7997d7ff59083eae638b271b662b6c1b9a8ff290c35d9ff10350',
+        'GetStorageItemString' =>
+          '36a583f85a4f31d92dab90fc95a710f3862d0bb56ca96daaa4fa6a4f871e53e0',
+        'SetStorageItemString' =>
+          'fba61d01cec648eb96fd90d45792d2aa81deaee24a201ca4830d03e36fa44ff4',
+        'RemoveStorageItem' =>
+          '815e0e72c30c383855cae5f48504962e889df5efebd87c63bdc37ba0419c5f3b',
+        'StorageItemExists' =>
+          'f87e5b1da5009611020462b1652c1add271334c7d864e2a492079552dfba58e7',
+        'ClearLocalStorage' =>
+          '6d40ff267ad85c52173500c81fd49fabd0a1413d024e2bcc7ebc8d843f424bca'
       }.freeze
 
       module_function

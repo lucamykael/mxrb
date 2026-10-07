@@ -1,5 +1,22 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Armazenamento Nanoflow Commons
+
+`GetStorageItemString`, `SetStorageItemString`, `RemoveStorageItem`,
+`StorageItemExists` e `ClearLocalStorage` têm adaptadores Web selecionados por
+SHA-256 da fonte original. Os parâmetros do modelo são `Key` e `Value`.
+Preservam os erros de chave/valor obrigatório, a distinção entre chave ausente
+e string armazenada vazia, remoção e limpeza. `ClearLocalStorage` limpa todo o
+armazenamento da origem atual, como a ação original.
+
+Validação: 60 comparações com o JavaScript original, 176 testes frontend,
+51 passos no Chromium sem acesso ao MPR e dois builds/dois runtimes na VM
+Windows, com resultados idênticos ao Ruby e hashes preservados. A suíte Ruby
+passou 2.326 exemplos com cobertura de linhas e branches de 100%. O Sudoku
+real passou auditoria e reconstrução idêntica.
+[Evidência](../evidence/commons-storage-2026-10-07.json).
+O escopo é `localStorage` Web; `AsyncStorage` React Native ainda não está implementado.
+
 ## Ações Nanoflow Commons e listas
 
 O exportador registra `Base64Encode`, `Base64Decode`, `GetGuid`, `GetPlatform`

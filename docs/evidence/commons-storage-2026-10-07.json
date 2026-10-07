@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-07",
+  "scope": "Five source-verified Nanoflow Commons Web storage adapters",
+  "actions": [
+    "GetStorageItemString",
+    "SetStorageItemString",
+    "RemoveStorageItem",
+    "StorageItemExists",
+    "ClearLocalStorage"
+  ],
+  "selection": "Exact normalized source SHA-256; model parameters Key and Value",
+  "original_javascript": {
+    "comparisons": 60,
+    "all_passed": true
+  },
+  "frontend": {
+    "tests": 176,
+    "format_lint_typecheck_build": "passed"
+  },
+  "browser": {
+    "steps": 51,
+    "passed": true,
+    "mpr_access": "prohibited",
+    "console_errors": []
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_and_copied_source_hashes_unchanged": true,
+    "ruby_acceptance_identical": true,
+    "acceptance": {
+      "status": "passed",
+      "results": [
+        {
+          "action": "Clear",
+          "message": "true",
+          "stored": null
+        },
+        {
+          "action": "Exists",
+          "message": "false",
+          "stored": null
+        },
+        {
+          "action": "Write",
+          "message": "Written",
+          "stored": "Olá 世界 🌍"
+        },
+        {
+          "action": "Read",
+          "message": "Olá 世界 🌍",
+          "stored": "Olá 世界 🌍"
+        },
+        {
+          "action": "Exists",
+          "message": "true",
+          "stored": "Olá 世界 🌍"
+        },
+        {
+          "action": "Remove",
+          "message": "true",
+          "stored": null
+        },
+        {
+          "action": "Exists",
+          "message": "false",
+          "stored": null
+        },
+        {
+          "action": "Write",
+          "message": "Written",
+          "stored": "Olá 世界 🌍"
+        },
+        {
+          "action": "Clear",
+          "message": "true",
+          "stored": null
+        },
+        {
+          "action": "Exists",
+          "message": "false",
+          "stored": null
+        }
+      ]
+    }
+  },
+  "ruby": {
+    "examples": 2326,
+    "failures": 0,
+    "coverage_percent": 100,
+    "lines": 41237,
+    "branches": 18092
+  },
+  "lint": {
+    "files": 575,
+    "offenses": 0
+  },
+  "real_project": {
+    "name": "Sudoku",
+    "public_source": {},
+    "valid": true,
+    "identical": true
+  },
+  "limits": [
+    "Only browser localStorage is certified; React Native AsyncStorage is not implemented.",
+    "ClearLocalStorage clears the entire current origin, matching the original action; acceptance runs use isolated synthetic origins.",
+    "Customized or missing sources require explicit adapters."
+  ]
+}

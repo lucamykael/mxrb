@@ -1,8 +1,10 @@
 import { Base64 } from 'js-base64';
 import type { JavaScriptAction } from './nanoflow';
 import { isEntityRecord } from './value';
+import { commonsStorageHandlers } from './commonsStorage';
 
 const handlers: Record<string, JavaScriptAction> = {
+  ...commonsStorageHandlers,
   Base64Encode: async ({ stringToEncode }) => Base64.encode(stringToEncode as string),
   Base64Decode: async ({ base64 }) => Base64.decode(base64 as string),
   GetGuid: async ({ EntityObject }) => {
