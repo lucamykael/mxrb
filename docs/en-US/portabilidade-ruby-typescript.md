@@ -1,5 +1,25 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Parsing numeric UTC dates
+
+`parseDateTimeUTC(text, pattern[, fallback])` runs in Ruby microflows and
+TypeScript nanoflows without MPR access. It supports numeric year, month, day,
+hour, minute, second and millisecond fields, quoted literals and adjacent fields.
+Years are limited to 1800–9999. Invalid input uses the optional date/empty fallback
+or raises an error; unsupported patterns always fail explicitly.
+
+Twenty cases were checked in both execution paths in Mendix 11.12.1, using the
+source and rebuilt project. Both reject invalid calendar/time components.
+Microflows accept a parsed prefix and support numeric offsets; nanoflows reject
+trailing text and the tested offset patterns. Time-only input uses 1970-01-01 in
+microflows and today's UTC date in nanoflows. These observed differences are
+preserved. Localized names, two-digit years and local-time `parseDateTime` are
+outside this scope.
+
+The Ruby suite passed 2,345 examples with 100% line and branch coverage; the
+frontend passed 190 tests and 81 browser steps without MPR access.
+[Evidence](../evidence/parse-datetime-utc-2026-10-07.json).
+
 ## Writing Feedback objects to storage
 
 `JS_SetFeedbackStorageObject` and `SetStorageItemObject` use Web adapters selected

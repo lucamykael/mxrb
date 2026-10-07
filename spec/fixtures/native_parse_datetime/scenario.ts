@@ -1,0 +1,215 @@
+declare const mx: { data: { action(options: Record<string, unknown>): void } };
+(async () => {
+  const oracle = [
+    {
+      name: "Standard",
+      input: "2026-01-02 03:04:05",
+      format: "yyyy-MM-dd HH:mm:ss",
+      expected: "1767323045000",
+      client_expected: "1767323045000",
+    },
+    {
+      name: "Quoted",
+      input: "2026-01-02T03:04:05.123",
+      format: "yyyy-MM-dd'T'HH:mm:ss.SSS",
+      expected: "1767323045123",
+      client_expected: "1767323045123",
+    },
+    {
+      name: "DateOnly",
+      input: "2/1/2026",
+      format: "dd/MM/yyyy",
+      expected: "1767312000000",
+      client_expected: "1767312000000",
+    },
+    {
+      name: "Compact",
+      input: "20260102",
+      format: "yyyyMMdd",
+      expected: "1767312000000",
+      client_expected: "1767312000000",
+    },
+    {
+      name: "OverflowDay",
+      input: "35-11-2015",
+      format: "dd-MM-yyyy",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "OverflowMonth",
+      input: "2024-13-01",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "LeapOverflow",
+      input: "2023-02-29",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "OverflowTime",
+      input: "2024-01-01 25:61:62",
+      format: "yyyy-MM-dd HH:mm:ss",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "ShortMillis",
+      input: "2024-01-01 00:00:00.1",
+      format: "yyyy-MM-dd HH:mm:ss.SSS",
+      expected: "1704067200001",
+      client_expected: "1704067200001",
+    },
+    {
+      name: "LongMillis",
+      input: "2024-01-01 00:00:00.1234",
+      format: "yyyy-MM-dd HH:mm:ss.SSS",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "Trailing",
+      input: "2024-01-02 trailing",
+      format: "yyyy-MM-dd",
+      expected: "1704153600000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "LeadingSpace",
+      input: " 2024-01-02",
+      format: "yyyy-MM-dd",
+      expected: "1704153600000",
+      client_expected: "1704153600000",
+    },
+    {
+      name: "NegativeDay",
+      input: "2024-01--1",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "TimeOnly",
+      input: "12:34:56",
+      format: "HH:mm:ss",
+      expected: "45296000",
+      client_uses_current_date: true,
+    },
+    {
+      name: "NotDate",
+      input: "invalid",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "EmptyInput",
+      input: "",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "WrongDelimiter",
+      input: "2024/01/02",
+      format: "yyyy-MM-dd",
+      expected: "946684800000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "OffsetColon",
+      input: "2024-01-02T03:04:05+02:30",
+      format: "yyyy-MM-dd'T'HH:mm:ssXXX",
+      expected: "1704155645000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "OffsetCompact",
+      input: "2024-01-02T03:04:05-0230",
+      format: "yyyy-MM-dd'T'HH:mm:ssZ",
+      expected: "1704173645000",
+      client_expected: "946684800000",
+    },
+    {
+      name: "Zulu",
+      input: "2024-01-02T03:04:05Z",
+      format: "yyyy-MM-dd'T'HH:mm:ssX",
+      expected: "1704164645000",
+      client_expected: "946684800000",
+    },
+  ];
+  const names = [
+    "Standard",
+    "Quoted",
+    "DateOnly",
+    "Compact",
+    "OverflowDay",
+    "OverflowMonth",
+    "LeapOverflow",
+    "OverflowTime",
+    "ShortMillis",
+    "LongMillis",
+    "Trailing",
+    "LeadingSpace",
+    "NegativeDay",
+    "TimeOnly",
+    "NotDate",
+    "EmptyInput",
+    "WrongDelimiter",
+    "OffsetColon",
+    "OffsetCompact",
+    "Zulu",
+  ];
+  const waitFor = async (check: () => boolean) => {
+    for (let i = 0; i < 160; i++) {
+      if (check()) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error("Date oracle timed out");
+  };
+  const microflows: Record<string, unknown> = {},
+    nanoflows: Record<string, string> = {};
+  for (const name of names) {
+    microflows[name] = await new Promise((resolve, reject) =>
+      mx.data.action({
+        params: { actionname: "Dates." + name },
+        callback: resolve,
+        error: reject,
+      }),
+    );
+    document
+      .querySelector<HTMLButtonElement>(".mx-name-Client" + name)!
+      .click();
+    await waitFor(() => document.querySelector(".modal-dialog") !== null);
+    nanoflows[name] = document
+      .querySelector(".modal-dialog .modal-body")!
+      .textContent!.trim();
+    document
+      .querySelector<HTMLButtonElement>(".modal-dialog button.btn-primary")!
+      .click();
+    await waitFor(() => document.querySelector(".modal-dialog") === null);
+  }
+  for (const item of oracle) {
+    const expectedClient = item.client_uses_current_date
+      ? String(
+          Date.UTC(
+            new Date().getUTCFullYear(),
+            new Date().getUTCMonth(),
+            new Date().getUTCDate(),
+            12,
+            34,
+            56,
+          ),
+        )
+      : item.client_expected;
+    if (microflows[item.name] !== item.expected)
+      throw new Error("Microflow mismatch: " + item.name);
+    if (nanoflows[item.name] !== expectedClient)
+      throw new Error("Nanoflow mismatch: " + item.name);
+  }
+  return { status: "passed", microflows, nanoflows };
+})();

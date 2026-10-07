@@ -10,6 +10,7 @@ import {
   numericText,
 } from './decimal';
 import { calendarFunction, isCalendarFunction } from './calendar';
+import { parseDateTimeUTC } from './dateParsing';
 
 // Keep enum identity until comparison. Backend records can contain either the
 // qualified literal or the bare member used by model defaults.
@@ -140,11 +141,13 @@ export function evaluate(
     if (/^\d/.test(token)) return () => (token.includes('.') ? decimal(token) : Number(token));
     if (token === 'true' || token === 'false') return () => token === 'true';
     if (token === 'empty') return () => null;
-    if (token.startsWith('@')) return () => {
-      const name = token.slice(1);
-      if (!Object.hasOwn(clientConstants, name)) throw new Error(`Client constant is unavailable: ${name}`);
-      return clientConstants[name];
-    };
+    if (token.startsWith('@'))
+      return () => {
+        const name = token.slice(1);
+        if (!Object.hasOwn(clientConstants, name))
+          throw new Error(`Client constant is unavailable: ${name}`);
+        return clientConstants[name];
+      };
     if (token.startsWith('$')) {
       const [name, member] = token.slice(1).split('/');
       return () => {
@@ -155,7 +158,11 @@ export function evaluate(
         return attributes[member.split('.').at(-1) || member];
       };
     }
-    if (isCalendarFunction(token) || isDecimalFunction(token)) {
+    if (
+      isCalendarFunction(token) ||
+      isDecimalFunction(token) ||
+      token.toLowerCase() === 'parsedatetimeutc'
+    ) {
       consume('(');
       const arguments_: Expression[] = [];
       if (tokens[cursor] !== ')') {
@@ -166,6 +173,8 @@ export function evaluate(
         }
       }
       consume(')');
+      if (token.toLowerCase() === 'parsedatetimeutc')
+        return () => parseDateTimeUTC(arguments_.map((argument) => argument()));
       if (isDecimalFunction(token))
         return () =>
           decimalFunction(
