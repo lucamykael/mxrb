@@ -12,6 +12,7 @@ require_relative '../native_fragment_store'
 require_relative 'legacy_service_source_migration'
 require_relative 'legacy_widget_source_migration'
 require_relative 'exporter/domain_behaviors'
+require_relative 'known_javascript_actions'
 
 module Mxrb
   module RubyApp
@@ -3392,6 +3393,7 @@ module Mxrb
       end
 
       def frontend_nanoflows
+        javascript_actions = KnownJavaScriptActions.matching(File.dirname(@mpr_path))
         imports = @nanoflow_entries.map do |entry|
           relative = entry.fetch('path').delete_prefix('frontend/src/')
           "import #{entry.fetch('import_name')} from './#{relative.delete_suffix('.ts')}';"
@@ -3400,7 +3402,8 @@ module Mxrb
           "  #{entry.fetch('name').inspect}: #{entry.fetch('import_name')}"
         end
         <<~TS
-          import { registerNanoflows } from './bridge/nanoflow';
+          import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';
+          import { feedbackStorageActions } from './bridge/feedbackStorage';
           import type { RegisteredNanoflow } from './types';
 
           #{imports.join("\n")}
@@ -3410,6 +3413,7 @@ module Mxrb
           };
 
           registerNanoflows(nanoflows);
+          registerJavaScriptActions(feedbackStorageActions(#{JSON.generate(javascript_actions)}));
 
           export default nanoflows;
         TS
