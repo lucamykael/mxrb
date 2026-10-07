@@ -22,6 +22,8 @@ module Mxrb
         def persistable = implementation.persistable
         def access_rules = Array(implementation.access_rules)
         def lifecycle = Array(implementation.native_lifecycle_definitions)
+        def oql_view? = !implementation.oql_view_definition.nil?
+        def oql_query = implementation.oql_view_definition&.fetch(:query, nil)
 
         def attributes
           implementation.runtime_attributes.map do |entry|

@@ -6,6 +6,7 @@ require 'time'
 require_relative 'native'
 require_relative 'schema_migrator'
 require_relative 'client_drafts'
+require_relative 'oql_views'
 
 module Mxrb
   module Runtime
@@ -53,6 +54,7 @@ module Mxrb
         @sequence_values = {}
         @manual_transaction = false
         @client_drafts = ClientDrafts.new(self)
+        @views = OqlViews.new(project, self, decoder: method(:deserialize))
         hooks.each { |event, callbacks| Array(callbacks).each { on(event, &_1) } }
       end
 
@@ -73,6 +75,8 @@ module Mxrb
       end
 
       def create(entity, events: true)
+        raise NativeRuntimeError, "OQL view #{entity} is read-only" if @views.include?(entity)
+
         return @transient.create(transient_name(entity), events:) if transient?(entity)
 
         definition = schema.entity(entity)
@@ -93,6 +97,8 @@ module Mxrb
       end
 
       def retrieve(entity)
+        return @views.retrieve(entity) if @views.include?(entity)
+
         return @transient.retrieve(transient_name(entity)) if transient?(entity)
 
         schema.concrete_entities(entity).flat_map { retrieve_exact(_1) }
@@ -107,6 +113,8 @@ module Mxrb
       end
 
       def find(entity, id)
+        return @views.retrieve(entity).find { _1.id == id.to_s } if @views.include?(entity)
+
         return @transient.find(transient_name(entity), id) if transient?(entity)
 
         schema.concrete_entities(entity).each do |definition|
@@ -164,6 +172,8 @@ module Mxrb
 
           raise
         end
+        return @views.associated(definition, start) if @views.include?(definition.from_entity)
+
         return volatile_association_values(definition, association, start) if hybrid_association?(definition)
 
         return @transient.retrieve_association(association, start) if transient?(start.entity)
@@ -198,6 +208,7 @@ module Mxrb
       end
 
       def delete(value, events: true)
+        @views.reject_writes!(value)
         transient, persistent = Array(value).compact.partition { transient?(_1.entity) }
         @transient.delete(transient, events:) unless transient.empty?
         persistent.each { delete_one(_1, events:) }
@@ -205,6 +216,11 @@ module Mxrb
       end
 
       def count(entity, predicate = nil)
+        if @views.include?(entity)
+          values = @views.retrieve(entity)
+          return predicate ? values.count { predicate.call(_1) } : values.length
+        end
+
         return @transient.count(transient_name(entity), predicate) if transient?(entity)
 
         return retrieve(entity).count { predicate.call(_1) } if predicate
@@ -226,6 +242,7 @@ module Mxrb
       end
 
       def commit(value = nil, events: true)
+        @views.reject_writes!(value)
         values = value.nil? ? dirty_values : Array(value)
         transient, persistent = values.compact.partition { transient?(_1.entity) }
         @transient.commit(transient, events:) unless transient.empty?

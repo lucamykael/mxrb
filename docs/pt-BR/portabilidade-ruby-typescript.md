@@ -9,7 +9,16 @@ anterior forçava `Persistable=false` e o MxBuild rejeitava atividades de consul
 Dois builds e dois runtimes na VM passaram após a correção, com original e
 reconstruído retornando o mesmo resultado e hashes preservados.
 [Evidência](../evidence/oql-view-persistence-2026-10-07.json).
-A execução de consultas de views no runtime Ruby ainda não está implementada.
+
+O runtime Ruby também consulta projeções simples de uma entidade persistente:
+colunas com aliases opcionais e `ID` projetado como associação de referência.
+As views leem valores salvos, refletem commits e exclusões e rejeitam gravações.
+O texto OQL é validado e nunca executado diretamente como SQL. Joins, filtros,
+agregações e encadeamento de views ainda não são suportados e geram erro explícito.
+Oito resultados coincidiram entre Ruby e os dois runtimes Mendix; 41 passos de
+navegador passaram sem acesso ao MPR. A consulta aos modelos dos oito projetos
+reais passou nas 98 entidades, incluindo `MyFirstModule.LocationsView`.
+[Evidência de execução](../evidence/oql-view-execution-2026-10-07.json).
 
 ## Armazenamento Nanoflow Commons
 

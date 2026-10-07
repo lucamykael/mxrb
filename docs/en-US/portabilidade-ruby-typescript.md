@@ -9,7 +9,16 @@ still prevents physical SQLite table creation. Previously, generation forced
 and two runtimes in the Windows VM passed after the fix, with identical source
 and rebuilt results and unchanged hashes.
 [Evidence](../evidence/oql-view-persistence-2026-10-07.json).
-Executing view queries in the Ruby runtime remains unimplemented.
+
+The Ruby runtime also retrieves simple projections of one persistent entity:
+columns with optional aliases and `ID` projected as a reference association.
+Views read durable values, reflect commits and deletions, and reject writes.
+OQL text is validated and never executed directly as SQL. Joins, filters,
+aggregates and chained views remain unsupported and fail explicitly.
+Eight outcomes matched Ruby and both Mendix runtimes; 41 browser steps passed
+without MPR access. Model retrieval across eight real projects passed for all
+98 entities, including `MyFirstModule.LocationsView`.
+[Execution evidence](../evidence/oql-view-execution-2026-10-07.json).
 
 ## Nanoflow Commons storage
 

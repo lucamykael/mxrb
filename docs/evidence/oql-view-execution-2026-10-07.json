@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-07",
+  "scope": "Read-only single-entity OQL projections in the Ruby runtime",
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "results": [
+      {
+        "action": "Seed",
+        "message": "Seeded"
+      },
+      {
+        "action": "ReadView",
+        "message": "2: North"
+      },
+      {
+        "action": "ReadAssociation",
+        "message": "Source: Street 1"
+      },
+      {
+        "action": "ReadDirtySource",
+        "message": "Durable: North"
+      },
+      {
+        "action": "CommitChange",
+        "message": "Committed"
+      },
+      {
+        "action": "ReadView",
+        "message": "2: Changed"
+      },
+      {
+        "action": "DeleteSource",
+        "message": "Deleted"
+      },
+      {
+        "action": "ReadView",
+        "message": "1: South"
+      }
+    ]
+  },
+  "ruby": {
+    "examples": 2337,
+    "failures": 0,
+    "coverage": {
+      "lines": {
+        "covered": 41323,
+        "total": 41323,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 18130,
+        "total": 18130,
+        "percent": 100.0
+      }
+    },
+    "rubocop_files": 578,
+    "rubocop_offenses": 0,
+    "browser_steps_passed": 41,
+    "browser_console_errors": 0,
+    "mpr_access_prohibited": true
+  },
+  "corpus": {
+    "projects": 8,
+    "entity_retrievals_passed": 98,
+    "scope": "Empty-database model retrieval including MyFirstModule.LocationsView; not full functional acceptance"
+  },
+  "supported": [
+    "Single persistent source entity",
+    "FROM-first and SELECT-first projections",
+    "Optional entity and column aliases",
+    "ID projected as a reference association",
+    "Durable values, stable view identifiers, commit/delete refresh and read-only write guards"
+  ],
+  "limitations": [
+    "No joins, query filters, aggregates or chained view sources",
+    "Unsupported queries fail explicitly",
+    "No claim of complete OQL compatibility"
+  ]
+}
