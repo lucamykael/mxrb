@@ -1,5 +1,25 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Metadados do Feedback no navegador
+
+As versões verificadas de `JS_PopulateFeedbackMetadata` e `JS_isStrictMode`
+encontradas nos cinco projetos do corpus têm adaptadores Web. Os metadados incluem
+a página atual, o primeiro papel do usuário, URL, navegador e dimensões da tela.
+O contexto acompanha chamadas de nanoflows aninhados e papéis de janelas popup.
+Alterações nos parâmetros são registradas mesmo quando a ação ignora seu retorno.
+
+A sonda de modo estrito cria e descarta um rascunho. Este runtime Web permite
+criação e retorna `false`, inclusive para falhas assíncronas, como a ação original.
+Na versão legada, dimensões zeradas reproduzem a falha nativa ao atribuir uma string vazia a um
+inteiro: as dimensões anteriores permanecem e o erro é registrado.
+
+O hash original seleciona três comportamentos: tela com falha para zero (Sudoku
+e RubyBridgeSandbox), tela aceitando zero (SLA Task App) e janela com `null` para
+zero (MyFirstModule e LearnNow). Seis builds e seis runtimes nativos, 203 testes
+frontend e 18 passos no navegador sem MPR passaram. Captura/anotação de tela e
+clientes nativos/estritos permanecem fora desta certificação.
+[Evidência](../evidence/feedback-browser-metadata-2026-10-07.json).
+
 ## Leitura e recriação de objetos do Feedback
 
 Os getters verificados `JS_GetFeedbackStorageObject` e `GetStorageItemObject`
@@ -54,8 +74,8 @@ schema e inteiros que já excedem a precisão exata do frontend geram erro expl�
 
 As duas gravações coincidiram com o Mendix em dois builds e dois runtimes.
 Também passaram 12 comparações com o JavaScript original, dois nanoflows reais
-sem alterações e 25 passos no navegador sem MPR. A leitura/recriação de objetos,
-`AsyncStorage` e sincronização offline continuam pendentes.
+sem alterações e 25 passos no navegador sem MPR. A leitura/recriação de objetos
+está coberta na seção acima; `AsyncStorage` e sincronização offline continuam pendentes.
 [Evidência](../evidence/feedback-object-storage-2026-10-07.json).
 
 ## Atualização de parâmetros de página

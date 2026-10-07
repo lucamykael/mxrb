@@ -109,7 +109,8 @@ RSpec.describe 'Ruby application export mode' do
       expect(application_source).to include(
         "api<ApplicationSchema>('/api/schema')", 'useState',
         'resolvedParameters[definition.parameters[0]] = activeContext',
-        'const execution = await definition.execute(resolvedParameters, invoke)',
+        'const execution = await definition.execute(resolvedParameters, invoke, {',
+        "pagePath: page?.name || ''", 'workspace?.userRoles()',
         "effect.type === 'show_message' && effect.message",
         "method: 'PATCH'", "api<LoginResponse>('/api/login'",
         "api<Session>('/api/session'", "api('/api/logout'",

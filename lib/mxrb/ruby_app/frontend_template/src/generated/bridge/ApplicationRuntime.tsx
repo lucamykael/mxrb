@@ -64,6 +64,7 @@ interface Surface {
   drafts?: PageOpenOptions['drafts'];
 }
 interface Workspace {
+  userRoles: () => string[];
   open: (surface: Surface) => void;
   close: (id: string, count: number) => Promise<void>;
   navigate: (name: string, context: EntityRecord | null, options: PageOpenOptions) => Promise<void>;
@@ -506,7 +507,14 @@ export function ApplicationRuntime({
         resolvedParameters[definition.parameters[0]] = activeContext;
       }
       if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
-      const execution = await definition.execute(resolvedParameters, invoke);
+      const execution = await definition.execute(resolvedParameters, invoke, {
+        pagePath: page?.name || '',
+        userRoles:
+          workspace?.userRoles() ||
+          (Array.isArray(session?.roles)
+            ? session.roles.filter((role): role is string => typeof role === 'string')
+            : []),
+      });
       for (const changed of execution.changes) {
         await saveRecord(changed, changed.attributes);
       }
@@ -725,6 +733,10 @@ export function ApplicationRuntime({
   };
 
   const popupWorkspace: Workspace = workspace || {
+    userRoles: () =>
+      Array.isArray(session?.roles)
+        ? session.roles.filter((role): role is string => typeof role === 'string')
+        : [],
     open: (popup) => updatePopups([...popupsRef.current, popup]),
     close: async (id, count) => {
       const index = popupsRef.current.findIndex((popup) => popup.id === id);

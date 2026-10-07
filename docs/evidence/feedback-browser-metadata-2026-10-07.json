@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-07",
+  "scope": "Web Feedback metadata variants and strict-mode capability probe selected by verified original source hashes",
+  "actions": {
+    "JS_isStrictMode": "87da5aef414593bd793d95a0139efa8257f922fff8f92255a934771d2767d104",
+    "JS_PopulateFeedbackMetadata": {
+      "legacy": "9a6c9fd171c55282508a22638996ac9b6461093592b1815c470f76cd889e4654",
+      "screen": "70b119c394b738ac372d63bd8acee372a9892fc863ab47ee6791c7db869f0daa",
+      "viewport": "84a491512704e2cc2911f5e066cd6ecb9c54a3d946ebe2d32bf91c1e78d74db0"
+    }
+  },
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 6,
+    "runtimes_passed": 6,
+    "all_source_and_copy_hashes_unchanged": true,
+    "source_and_roundtrip_results_identical": true,
+    "variants": {
+      "legacy": {
+        "status": "passed",
+        "strict": "false",
+        "page_path": "FeedbackModule.Home",
+        "history_page": "FeedbackModule.Home",
+        "role": "Administrator",
+        "browser_matches": true,
+        "url_matches": true,
+        "screen_matches": true,
+        "zero_dimensions_preserved": true
+      },
+      "screen": {
+        "status": "passed",
+        "variant": "screen",
+        "strict": "false",
+        "page_path": "FeedbackModule.Home",
+        "history_page": "FeedbackModule.Home",
+        "role": "Administrator",
+        "browser_matches": true,
+        "url_matches": true,
+        "screen_matches": true,
+        "zero_dimensions_verified": true,
+        "zero_width": "0",
+        "zero_height": "0"
+      },
+      "viewport": {
+        "status": "passed",
+        "variant": "viewport",
+        "strict": "false",
+        "page_path": "FeedbackModule.Home",
+        "history_page": "FeedbackModule.Home",
+        "role": "Administrator",
+        "browser_matches": true,
+        "url_matches": true,
+        "screen_matches": true,
+        "zero_dimensions_verified": true,
+        "zero_width": null,
+        "zero_height": null
+      }
+    }
+  },
+  "validation": {
+    "ruby_full_suite": "passed",
+    "rubocop_files": 586,
+    "rubocop_offenses": 0,
+    "frontend_tests": 203,
+    "frontend_check_passed": true,
+    "browser_steps": 18,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "ruby_examples": 2348,
+    "ruby_failures": 0,
+    "coverage_lines": {
+      "covered": 41438,
+      "total": 41438,
+      "percent": 100
+    },
+    "coverage_branches": {
+      "covered": 18191,
+      "total": 18191,
+      "percent": 100
+    }
+  },
+  "behavior": [
+    "Metadata uses the current page, first user role, URL, user agent and screen dimensions.",
+    "Nested nanoflows retain the invoking page and role context; popup roles come from their workspace.",
+    "Mutated record parameters are tracked even when an action return is ignored.",
+    "Zero screen dimensions reproduce the native integer setter failure: earlier string mutations remain, previous dimensions are preserved and the error is logged.",
+    "The strict-mode probe creates and discards a draft; this Web runtime reports false, including asynchronous creation failures.",
+    "The screen variant stores numeric zero; the viewport variant uses innerWidth/innerHeight and stores null for zero dimensions."
+  ],
+  "limitations": [
+    "Only listed source hashes are recognized; customized actions are rejected.",
+    "React Native, Mendix strict-mode clients, screenshot capture and annotation widgets are not included."
+  ]
+}

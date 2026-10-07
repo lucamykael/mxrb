@@ -1,0 +1,66 @@
+{
+  "name": "feedback-browser-metadata",
+  "authentication": false,
+  "pages": [
+    {
+      "name": "metadata",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_text": "Populate"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Strict"
+        },
+        {
+          "wait_for_text": "false"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Populate"
+        },
+        {
+          "wait_for_text": "FeedbackModule.Home"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Populate"
+        },
+        {
+          "wait_for_text": "FeedbackModule.Home"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_text": "Strict"
+        },
+        {
+          "wait_for_text": "false"
+        },
+        {
+          "click_selector": "[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_idle": true
+        }
+      ]
+    }
+  ]
+}

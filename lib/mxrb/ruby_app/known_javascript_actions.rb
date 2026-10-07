@@ -6,7 +6,16 @@ module Mxrb
   module RubyApp
     # Selects TypeScript adapters only for verified web action implementations.
     module KnownJavaScriptActions
+      METADATA_VARIANTS = {
+        '9a6c9fd171c55282508a22638996ac9b6461093592b1815c470f76cd889e4654' => 'legacy',
+        '70b119c394b738ac372d63bd8acee372a9892fc863ab47ee6791c7db869f0daa' => 'screen',
+        '84a491512704e2cc2911f5e066cd6ecb9c54a3d946ebe2d32bf91c1e78d74db0' => 'viewport'
+      }.freeze
+
       SOURCES = {
+        'JS_isStrictMode' =>
+          '87da5aef414593bd793d95a0139efa8257f922fff8f92255a934771d2767d104',
+        'JS_PopulateFeedbackMetadata' => METADATA_VARIANTS.keys.freeze,
         'JS_GetFeedbackStorageObject' =>
           'a93f11149c06faff956cf6d7540193e0a307f20bc93d697af409542eab3defa3',
         'GetStorageItemObject' =>
@@ -54,10 +63,17 @@ module Mxrb
         sources.filter_map do |name, digest|
           path = File.join(directory, 'javascriptsource', module_name, 'actions', "#{name}.js")
           next unless File.file?(path)
-          next unless Digest::SHA256.hexdigest(File.binread(path).gsub("\r\n", "\n")) == digest
+          next unless Array(digest).include?(Digest::SHA256.hexdigest(File.binread(path).gsub("\r\n", "\n")))
 
           name
         end
+      end
+
+      def metadata_variant(directory)
+        path = File.join(directory, 'javascriptsource/feedbackmodule/actions/JS_PopulateFeedbackMetadata.js')
+        return unless File.file?(path)
+
+        METADATA_VARIANTS[Digest::SHA256.hexdigest(File.binread(path).gsub("\r\n", "\n"))]
       end
     end
   end

@@ -46,7 +46,15 @@ jobs:
           git -C /tmp/mxcli-sudoku checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
 
       - name: Install the raster thumbnail worker
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+        timeout-minutes: 5
+        run: |
+          if command -v convert >/dev/null && convert -version >/dev/null; then
+            exit 0
+          fi
+          apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install -y imagemagick
+          convert -version
 
       - name: Check out pinned imported-module fixture
         run: |
