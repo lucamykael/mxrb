@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-07",
+  "scope": "Verified Feedback localStorage TypeScript adapters",
+  "actions": [
+    "JS_GetSingleStringLocalStorageObjectItem",
+    "JS_GetShowEmailBooleanLocalStorageObjectItem",
+    "JS_SetSingleLocalStorageObjectItem"
+  ],
+  "selection": "Exact normalized source SHA-256; preserves declared Mendix parameter case",
+  "frontend": {
+    "tests": 150,
+    "format_lint_typecheck_build": "passed"
+  },
+  "browser": {
+    "passed": true,
+    "steps": 10,
+    "pages": 2,
+    "mpr_access": "prohibited",
+    "console_errors": [],
+    "storage_survives_navigation": true
+  },
+  "native": {
+    "oracle": "Studio Pro 11.12.1 Windows VM",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "input_hashes_unchanged": true,
+    "identical_results": {
+      "status": "passed",
+      "image": "synthetic-image",
+      "boolean_fallback": true,
+      "stored_boolean": false
+    }
+  },
+  "original_javascript": {
+    "comparisons": 33,
+    "all_passed": true
+  },
+  "limits": [
+    "Web localStorage only; React Native AsyncStorage and offline synchronization are not included.",
+    "Missing or customized sources require explicit adapters.",
+    "Other Feedback browser/device actions remain separate."
+  ],
+  "ruby": {
+    "examples": 2324,
+    "failures": 0,
+    "lines": 41231,
+    "branches": 18088,
+    "coverage_percent": 100
+  }
+}

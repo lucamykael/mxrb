@@ -1,22 +1,22 @@
 import type { NanoflowParameters, RuntimeValue } from '../types';
 import type { JavaScriptAction } from './nanoflow';
 
-const required = (parameters: NanoflowParameters, name: string): string => {
+const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
-  if (!value) throw new Error(`Input parameter '${name}' is required`);
+  if (!value) throw new Error(`Input parameter '${label}' is required`);
   return String(value);
 };
 
 const readString: JavaScriptAction = async (parameters) => {
-  const key = required(parameters, 'localStorageKey');
-  const member = required(parameters, 'objectItemKey');
+  const key = required(parameters, 'LocalStorageKey', 'localStorageKey');
+  const member = required(parameters, 'ObjectItemKey', 'objectItemKey');
   const value = JSON.parse(window.localStorage.getItem(key) ?? 'null') as Record<string, RuntimeValue> | null;
   return value?.[member] ?? null;
 };
 
 const readShowEmail: JavaScriptAction = async (parameters) => {
-  const key = required(parameters, 'localStorageKey');
-  const member = required(parameters, 'objectItemKey');
+  const key = required(parameters, 'LocalStorageKey', 'localStorageKey');
+  const member = required(parameters, 'ObjectItemKey', 'objectItemKey');
   const source = window.localStorage.getItem(key);
   if (!source) return true;
   let value: Record<string, unknown> | null;

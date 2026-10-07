@@ -1,0 +1,52 @@
+{
+  "name": "feedback-storage-actions",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 850
+  },
+  "pages": [
+    {
+      "name": "storage-actions",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"Storage oracle\"]"
+        },
+        {
+          "click_text": "ReadBoolean"
+        },
+        {
+          "wait_for_text": "true"
+        },
+        {
+          "click_text": "WriteImage"
+        },
+        {
+          "wait_for_text": "stored"
+        },
+        {
+          "click_text": "ReadImage"
+        },
+        {
+          "wait_for_text": "synthetic-image"
+        }
+      ]
+    },
+    {
+      "name": "storage-after-navigation",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"Storage oracle\"]"
+        },
+        {
+          "click_text": "ReadImage"
+        },
+        {
+          "wait_for_text": "synthetic-image"
+        }
+      ]
+    }
+  ]
+}

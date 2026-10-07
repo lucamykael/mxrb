@@ -1,5 +1,19 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Ações de armazenamento no navegador
+
+Três ações do Feedback Module recebem adaptadores TypeScript quando o hash da
+fonte original é reconhecido: leitura de valor, leitura de `ShowEmail` e gravação
+de `ImageB64`. O registro preserva os nomes dos parâmetros do modelo, incluindo
+maiúsculas e minúsculas. JSON inválido, valores ausentes e falhas de armazenamento
+mantêm o comportamento das implementações verificadas.
+
+As 33 comparações com o JavaScript original passaram. O Chromium Ruby executou
+dez passos sem MPR, incluindo persistência após nova navegação. A VM certificou
+os projetos original e reconstruído com os mesmos resultados. Fontes alteradas,
+AsyncStorage nativo e sincronização offline continuam fora desse contrato.
+Veja a [evidência](../evidence/feedback-storage-2026-10-07.json).
+
 ## Adaptadores Java com fonte verificada
 
 A exportação reconhece duas implementações do Feedback Module pelo SHA-256 do

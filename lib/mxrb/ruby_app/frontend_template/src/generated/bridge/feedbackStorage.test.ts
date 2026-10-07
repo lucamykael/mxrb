@@ -9,7 +9,7 @@ const actions = feedbackStorageActions([readName, showName, writeName]);
 const read = actions[`FeedbackModule.${readName}`];
 const show = actions[`FeedbackModule.${showName}`];
 const write = actions[`FeedbackModule.${writeName}`];
-const parameters = { localStorageKey: 'feedback-test', objectItemKey: 'ShowEmail' };
+const parameters = { LocalStorageKey: 'feedback-test', ObjectItemKey: 'ShowEmail' };
 
 beforeEach(() => {
   const data = new Map<string, string>();
@@ -35,7 +35,7 @@ describe('verified Feedback storage actions', () => {
       localStorageKey: "'feedback-test'", imageDataB64: "'from nanoflow'",
     });
     expect(await runtime.callJavaScript(`FeedbackModule.${readName}`, {
-      localStorageKey: "'feedback-test'", objectItemKey: "'ImageB64'",
+      LocalStorageKey: "'feedback-test'", ObjectItemKey: "'ImageB64'",
     })).toBe('from nanoflow');
   });
   it('preserves values and the native boolean fallback', async () => {
@@ -66,7 +66,7 @@ describe('verified Feedback storage actions', () => {
 
   it('rejects missing parameters and unrecognized action names', async () => {
     await expect(read({})).rejects.toThrow("'localStorageKey' is required");
-    await expect(read({ localStorageKey: 'feedback-test' })).rejects.toThrow("'objectItemKey' is required");
+    await expect(read({ LocalStorageKey: 'feedback-test' })).rejects.toThrow("'objectItemKey' is required");
     await expect(show({})).rejects.toThrow("'localStorageKey' is required");
     await expect(write({})).rejects.toThrow("'localStorageKey' is required");
     expect(() => feedbackStorageActions(['Unknown'])).toThrow('Unknown Feedback storage action');
