@@ -1,5 +1,17 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Refreshing page arguments
+
+When a change updates the context object, named page arguments referring to that
+same object receive its current state. This keeps data views, conditional classes
+and action arguments synchronized after nanoflows and microflows. Other objects,
+primitive values and empty arguments remain intact.
+
+The regression reproduced Sudoku's notes mode: the value changed while the page
+kept displaying its initial snapshot. The real application passed 32 steps without
+MPR access; a 19-step fixture covers repeated toggles and a microflow update.
+[Evidence](../evidence/live-page-parameters-2026-10-07.json).
+
 ## Legacy Feedback and frontend constants
 
 `JS_GetSingleLocalStorageObjectItem`, used by Sudoku and RubyBridgeSandbox,

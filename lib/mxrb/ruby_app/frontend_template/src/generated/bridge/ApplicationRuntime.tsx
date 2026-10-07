@@ -9,6 +9,7 @@ import {
   PageParameters,
   VariableEnvironment,
   resolveParameters,
+  liveParameters,
   assignable,
 } from './PageVariables';
 import { Popup } from './components/Popup';
@@ -736,12 +737,13 @@ export function ApplicationRuntime({
       void refreshPageContext();
     },
   };
+  const currentParameters = liveParameters(parameters, pageContext);
   const content = (
     <div ref={surfaceElement} className="mxrb-page-surface">
-      <PageParameters.Provider value={parameters}>
+      <PageParameters.Provider value={currentParameters}>
         <VariableEnvironment
           key={`${surface?.id || page.name}`}
-          parameters={parameters}
+          parameters={currentParameters}
           definitions={page.variables}
           parameterDefinitions={page.parameters}
           context={pageContext}

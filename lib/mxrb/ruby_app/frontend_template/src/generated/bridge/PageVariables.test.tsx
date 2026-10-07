@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initializeVariables, resolveParameters } from './PageVariables';
+import { initializeVariables, resolveParameters, liveParameters } from './PageVariables';
 import { eventArguments } from './value';
 import type { ApplicationSchema, ValueDefinition } from '../types';
 
@@ -15,6 +15,29 @@ const schema = {
 const record = { type: 'App.Child', id: '1', attributes: {} };
 
 describe('page value contracts', () => {
+  it('refreshes named aliases and list entries after an active object changes without replacing other arguments', () => {
+    const original = { ...record, attributes: { Enabled: false } };
+    const updated = { ...record, attributes: { Enabled: true } };
+    const differentId = { ...original, id: '2' };
+    const differentType = { ...original, type: 'App.Other' };
+    const parameters = {
+      Item: original,
+      Alias: original,
+      Items: [original, differentId],
+      Other: differentType,
+      Empty: null,
+      Caption: 'title',
+    };
+    const refreshed = liveParameters(parameters, updated);
+    expect(refreshed.Item).toBe(updated);
+    expect(refreshed.Alias).toBe(updated);
+    expect(refreshed.Items).toEqual([updated, differentId]);
+    expect(refreshed.Other).toBe(differentType);
+    expect(refreshed.Empty).toBeNull();
+    expect(refreshed.Caption).toBe('title');
+    expect(parameters.Item.attributes.Enabled).toBe(false);
+    expect(liveParameters(parameters, null)).toEqual(parameters);
+  });
   it('resolves qualified named object and primitive arguments without replacing explicit empty values', () => {
     const definitions: ValueDefinition[] = [
       { name: 'Item', type: { kind: 'object', entity: 'App.Base' } },

@@ -1,5 +1,18 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Aktualisierung von Seitenparametern
+
+Wenn sich das Kontextobjekt ändert, erhalten benannte Seitenparameter, die auf
+dasselbe Objekt verweisen, dessen aktuellen Zustand. Data Views, bedingte Klassen
+und Aktionsargumente bleiben dadurch nach Nanoflows und Microflows synchron.
+Andere Objekte, primitive Werte und leere Argumente bleiben erhalten.
+
+Die Regression reproduzierte den Notizmodus von Sudoku: Der Wert änderte sich,
+doch die Seite zeigte weiterhin den ursprünglichen Zustand. Die reale Anwendung
+bestand 32 Schritte ohne MPR-Zugriff; ein isolierter Test prüft wiederholtes
+Umschalten und eine Microflow-Aktualisierung in 19 Schritten.
+[Nachweis](../evidence/live-page-parameters-2026-10-07.json).
+
 ## Älteres Feedback und Frontend-Konstanten
 
 `JS_GetSingleLocalStorageObjectItem`, verwendet von Sudoku und RubyBridgeSandbox,

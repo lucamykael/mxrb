@@ -1,5 +1,17 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Atualização de parâmetros de página
+
+Quando uma alteração atualiza o objeto de contexto, referências ao mesmo objeto
+nos parâmetros nomeados da página recebem o estado atual. Isso mantém data views,
+classes condicionais e argumentos de ações sincronizados após nanoflows e
+microflows. Outros objetos, valores primitivos e argumentos vazios são preservados.
+
+A regressão reproduzia o modo de anotações do Sudoku: o valor mudava, mas a página
+continuava mostrando a cópia inicial. O fluxo real passou em 32 passos sem acesso
+ao MPR; o caso isolado cobre alternâncias e atualização por microflow em 19 passos.
+[Evidência](../evidence/live-page-parameters-2026-10-07.json).
+
 ## Feedback legado e constantes no frontend
 
 `JS_GetSingleLocalStorageObjectItem`, usado por Sudoku e RubyBridgeSandbox,
