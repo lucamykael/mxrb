@@ -3839,8 +3839,14 @@ module Mxrb
 
           export interface RegisteredNanoflow extends NanoflowMetadata {
             execute(
-              parameters: NanoflowParameters, invokeMicroflow?: NanoflowMicroflowInvoker
+              parameters: NanoflowParameters, invokeMicroflow?: NanoflowMicroflowInvoker,
+              environment?: NanoflowEnvironment
             ): Promise<NanoflowExecution>;
+          }
+
+          export interface NanoflowEnvironment {
+            pagePath?: string;
+            userRoles?: string[];
           }
 
           #{enumeration_types.join("\n")}

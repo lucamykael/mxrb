@@ -1,5 +1,25 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Feedback-Metadaten im Browser
+
+Die verifizierten Versionen von `JS_PopulateFeedbackMetadata` und `JS_isStrictMode`
+aus Sudoku und RubyBridgeSandbox haben Webadapter. Die Metadaten enthalten die
+aktuelle Seite, die erste Benutzerrolle, URL, Browser und Bildschirmabmessungen.
+Verschachtelte Nanoflows behalten den Aufrufkontext; Popups übernehmen die Rollen
+ihres Arbeitsbereichs. Änderungen an Objektparametern werden auch bei ignoriertem
+Rückgabewert erfasst.
+
+Die Strict-Mode-Prüfung erstellt und verwirft einen Entwurf. Diese Weblaufzeit
+unterstützt die Erstellung und liefert wie die ursprüngliche Aktion `false`,
+auch bei asynchronen Fehlern. Abmessungen von null reproduzieren den nativen Fehler
+bei der Zuweisung einer leeren Zeichenfolge an eine Ganzzahl: Die bisherigen
+Abmessungen bleiben erhalten und der Fehler wird protokolliert.
+
+Zwei native Builds und Runtimes, 202 Frontendtests und 18 Browserschritte ohne MPR
+bestanden. Andere Metadatenvarianten, Screenshot-/Anmerkungsfunktionen sowie native
+und Strict-Mode-Clients sind nicht zertifiziert.
+[Nachweis](../evidence/feedback-browser-metadata-2026-10-07.json).
+
 ## Feedback-Objekte lesen und wiederherstellen
 
 Die verifizierten Getter `JS_GetFeedbackStorageObject` und `GetStorageItemObject`

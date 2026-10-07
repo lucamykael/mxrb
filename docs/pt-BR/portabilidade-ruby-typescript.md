@@ -1,5 +1,23 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Metadados do Feedback no navegador
+
+As versões verificadas de `JS_PopulateFeedbackMetadata` e `JS_isStrictMode`
+usadas por Sudoku e RubyBridgeSandbox têm adaptadores Web. Os metadados incluem
+a página atual, o primeiro papel do usuário, URL, navegador e dimensões da tela.
+O contexto acompanha chamadas de nanoflows aninhados e papéis de janelas popup.
+Alterações nos parâmetros são registradas mesmo quando a ação ignora seu retorno.
+
+A sonda de modo estrito cria e descarta um rascunho. Este runtime Web permite
+criação e retorna `false`, inclusive para falhas assíncronas, como a ação original.
+Dimensões zeradas reproduzem a falha nativa ao atribuir uma string vazia a um
+inteiro: as dimensões anteriores permanecem e o erro é registrado.
+
+Dois builds e dois runtimes nativos, 202 testes frontend e 18 passos no navegador
+sem MPR passaram. Outras variantes de metadados, captura/anotação de tela e
+clientes nativos/estritos permanecem fora desta certificação.
+[Evidência](../evidence/feedback-browser-metadata-2026-10-07.json).
+
 ## Leitura e recriação de objetos do Feedback
 
 Os getters verificados `JS_GetFeedbackStorageObject` e `GetStorageItemObject`

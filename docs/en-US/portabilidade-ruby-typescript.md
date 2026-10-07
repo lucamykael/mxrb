@@ -1,5 +1,23 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Feedback browser metadata
+
+The verified `JS_PopulateFeedbackMetadata` and `JS_isStrictMode` versions used by
+Sudoku and RubyBridgeSandbox have Web adapters. Metadata includes the current
+page, first user role, URL, browser and screen dimensions. Nested nanoflows retain
+the calling context, and popups inherit workspace roles. Mutations to record
+parameters are tracked even when the action return is ignored.
+
+The strict-mode probe creates and discards a draft. This Web runtime exposes
+creation and returns `false`, including asynchronous failures, matching the
+original action. Zero dimensions reproduce the native empty-string-to-integer
+assignment failure: previous dimensions remain and an error is logged.
+
+Two native builds and runtimes, 202 frontend tests and 18 browser steps without
+MPR access passed. Other metadata variants, screenshot capture/annotation and
+native or strict-mode clients remain outside this certification.
+[Evidence](../evidence/feedback-browser-metadata-2026-10-07.json).
+
 ## Reading and restoring Feedback objects
 
 The verified `JS_GetFeedbackStorageObject` and `GetStorageItemObject` getters

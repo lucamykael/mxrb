@@ -7,6 +7,10 @@ module Mxrb
     # Selects TypeScript adapters only for verified web action implementations.
     module KnownJavaScriptActions
       SOURCES = {
+        'JS_isStrictMode' =>
+          '87da5aef414593bd793d95a0139efa8257f922fff8f92255a934771d2767d104',
+        'JS_PopulateFeedbackMetadata' =>
+          '9a6c9fd171c55282508a22638996ac9b6461093592b1815c470f76cd889e4654',
         'JS_GetFeedbackStorageObject' =>
           'a93f11149c06faff956cf6d7540193e0a307f20bc93d697af409542eab3defa3',
         'GetStorageItemObject' =>

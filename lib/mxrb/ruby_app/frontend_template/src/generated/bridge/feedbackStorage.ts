@@ -2,6 +2,7 @@ import type { NanoflowParameters, RuntimeValue } from '../types';
 import type { JavaScriptAction } from './nanoflow';
 import { writeStorageObject } from './objectStorage';
 import { readStorageObject } from './objectRestore';
+import { feedbackStrictMode, populateFeedbackMetadata } from './feedbackMetadata';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -52,6 +53,8 @@ const writeImage: JavaScriptAction = async (parameters) => {
 };
 
 const handlers: Record<string, JavaScriptAction> = {
+  JS_isStrictMode: feedbackStrictMode,
+  JS_PopulateFeedbackMetadata: populateFeedbackMetadata,
   JS_GetFeedbackStorageObject: ({ key, entity }, variables) =>
     readStorageObject({ Key: key, Entity: entity }, variables),
   GetStorageItemObject: readStorageObject,

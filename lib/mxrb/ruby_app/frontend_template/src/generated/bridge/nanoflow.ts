@@ -1,6 +1,7 @@
 import type {
   EntityRecord,
   NanoflowExecution,
+  NanoflowEnvironment,
   NanoflowMetadata,
   NanoflowMicroflowInvoker,
   NanoflowParameters,
@@ -16,6 +17,7 @@ type ChangeExpressions = Record<string, string>;
 export type JavaScriptAction = (
   parameters: NanoflowParameters,
   variables?: NanoflowParameters,
+  environment?: NanoflowEnvironment,
 ) => RuntimeValue | undefined | Promise<RuntimeValue | undefined>;
 
 let nanoflowRegistry: Record<string, RegisteredNanoflow> = {};
@@ -54,6 +56,7 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     parameters: P,
     readonly metadata: NanoflowMetadata,
     readonly microflowInvoker?: NanoflowMicroflowInvoker,
+    readonly environment: NanoflowEnvironment = {},
   ) {
     this.variables = structuredClone(parameters);
   }
@@ -157,7 +160,7 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     const parameters = Object.fromEntries(
       Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)]),
     );
-    const execution = await definition.execute(parameters, this.microflowInvoker);
+    const execution = await definition.execute(parameters, this.microflowInvoker, this.environment);
     execution.changes.forEach((record) => this.#changes.set(`${record.type}:${record.id}`, record));
     this.#messages.push(...execution.messages);
     this.#effects.push(...execution.effects);
@@ -174,7 +177,16 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     const parameters = Object.fromEntries(
       Object.entries(expressions).map(([key, expression]) => [key, this.value(expression)]),
     );
-    return action(parameters, this.variables);
+    const records = Object.values(parameters).filter(isRecord);
+    const before = records.map((record) => JSON.stringify(record.attributes));
+    try {
+      return await action(parameters, this.variables, this.environment);
+    } finally {
+      records.forEach((record, index) => {
+        if (JSON.stringify(record.attributes) !== before[index])
+          this.#changes.set(`${record.type}:${record.id}`, record);
+      });
+    }
   }
 
   showMessage(message: string, level = 'information', blocking = false): void {
@@ -257,6 +269,6 @@ export const defineNanoflow = <P extends NanoflowParameters, R extends RuntimeVa
   compiled: (runtime: NanoflowRuntime<P>) => NanoflowExecution<R> | Promise<NanoflowExecution<R>>,
 ): RegisteredNanoflow => ({
   ...metadata,
-  execute: async (parameters, invokeMicroflow) =>
-    compiled(new NanoflowRuntime(parameters as P, metadata, invokeMicroflow)),
+  execute: async (parameters, invokeMicroflow, environment) =>
+    compiled(new NanoflowRuntime(parameters as P, metadata, invokeMicroflow, environment)),
 });
