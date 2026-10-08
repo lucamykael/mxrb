@@ -13,6 +13,10 @@ module Mxrb
       }.freeze
 
       SOURCES = {
+        'JS_ToggleFeedbackScreenshotWidget' =>
+          'e9540c12c5b114d110d8f3637955690bb70c98d93b25809194c2e3aa5dd732db',
+        'JS_ToggleFeedbackAnnotateWidget' =>
+          '76b3ca00c5967e95640f5951e87bcf3c3e04211eb2a141fad645646504803524',
         'JS_isStrictMode' =>
           '87da5aef414593bd793d95a0139efa8257f922fff8f92255a934771d2767d104',
         'JS_PopulateFeedbackMetadata' => METADATA_VARIANTS.keys.freeze,

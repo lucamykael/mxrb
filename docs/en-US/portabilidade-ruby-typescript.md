@@ -1,5 +1,28 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Web Feedback capture and annotation
+
+`JS_ToggleFeedbackScreenshotWidget` and `JS_ToggleFeedbackAnnotateWidget` have
+adapters selected by the original source hash. Export copies the verified ESM
+bundle from the project's own `SprintrFeedbackWidget.mpk`, together with its
+license; MXRB does not distribute that code. The three recognized bundles keep
+the button, captions, legacy action, target container and capture settings.
+The project must also supply the matching theme.
+
+The flow supports drawing, clearing, saving PNG and cancellation. Screenshot
+cancellation returns `uploadCancelled`; annotation cancellation keeps the
+original action's empty return. Concurrent operations are rejected and unmounting
+the last widget releases pending work. Certification uses real DOM capture and
+compares the annotated PNG pixels with MPR access prohibited in the Ruby server.
+The operating system screen picker, capture permissions and mobile/offline
+clients are outside this evidence.
+
+The widget's embedded html2canvas rejects some modern CSS colors
+(`color()`/`color-mix()`). Capture tests use the compatible SLA Task App theme;
+they do not certify DOM capture across all themes. Unknown or modified bundles
+are not registered automatically. See the
+[capture evidence](../evidence/feedback-capture-2026-10-08.json).
+
 ## OQL view filters
 
 Single persistent-entity projections accept `WHERE` with `=`, `!=`, `<`, `<=`,

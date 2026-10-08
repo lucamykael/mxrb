@@ -1,0 +1,313 @@
+{
+  "date": "2026-10-08",
+  "scope": "Verified project-owned Web Feedback bundles and screenshot/annotation JavaScript adapters",
+  "widget_bundles": {
+    "current": "4ab4d672dccdbe8336ee55071f37aab1bd7689c890fa0f56f9a1ffbb60e06619",
+    "legacy": "f8a1af46b2e7da3b43d93a45e82338b835bdd9ab1dfc2a0d3fb2e485af7f6c89",
+    "portal": "a1821880941bbabfb4a626484ebacd813d7dbe3e63c91a9518db528d9706e8e8"
+  },
+  "browser": {
+    "mpr_access_prohibited": true,
+    "variants": {
+      "legacy": {
+        "status": "passed",
+        "source_dimensions": [
+          160,
+          100
+        ],
+        "background": [
+          53,
+          106,
+          195,
+          255
+        ],
+        "drawing": true,
+        "clear": true,
+        "saved_pixels_match": true,
+        "cancelled_annotation": "{}",
+        "screenshot_cancellation": "uploadCancelled",
+        "screenshot_dimensions": [
+          1024,
+          720
+        ],
+        "screenshot_png": true
+      },
+      "current": {
+        "status": "passed",
+        "source_dimensions": [
+          160,
+          100
+        ],
+        "background": [
+          53,
+          106,
+          195,
+          255
+        ],
+        "drawing": true,
+        "clear": true,
+        "saved_pixels_match": true,
+        "cancelled_annotation": "{}",
+        "screenshot_cancellation": "uploadCancelled",
+        "screenshot_dimensions": [
+          1024,
+          720
+        ],
+        "screenshot_png": true
+      },
+      "portal": {
+        "status": "passed",
+        "source_dimensions": [
+          160,
+          100
+        ],
+        "background": [
+          53,
+          106,
+          195,
+          255
+        ],
+        "drawing": true,
+        "clear": true,
+        "saved_pixels_match": true,
+        "cancelled_annotation": "{}",
+        "screenshot_cancellation": "uploadCancelled",
+        "screenshot_dimensions": [
+          896,
+          630
+        ],
+        "screenshot_png": true
+      }
+    },
+    "flow_steps": 16,
+    "console_errors": []
+  },
+  "validation": {
+    "ruby_examples": 2355,
+    "ruby_failures": 0,
+    "ruby_pending_external_fixtures": 3,
+    "external_fixture_followup_examples": 16,
+    "external_fixture_followup_failures": 0,
+    "line_coverage": {
+      "covered": 41617,
+      "total": 41617,
+      "percent": 100.0
+    },
+    "branch_coverage": {
+      "covered": 18268,
+      "total": 18268,
+      "percent": 100.0
+    },
+    "rubocop_files": 593,
+    "rubocop_offenses": 0,
+    "frontend_tests": 210
+  },
+  "native": {
+    "status": "passed",
+    "mendix_version": "11.12.1",
+    "builds": 6,
+    "runtimes": 6,
+    "input_policy": "All model, JavaScript, widget and theme source files are hashed before and after copy/build. Derived theme-cache is not transported to native builds; Mendix compiles it from the theme sources.",
+    "cases": {
+      "legacy-source": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "fc7763084b3c9a60acf756f291bea78b168579019f73d7a4e0e0d0d14b6c6e61",
+        "package_sha256": "a0e266f24a6994bd154c06b244aaff6db3830b9fcb4a5e8366b5cb55604d2ef5",
+        "transported_files": 313,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            604,
+            390
+          ],
+          "screenshot_png": true
+        }
+      },
+      "legacy-roundtrip": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "e317e65d664e1c778896dfa8ea9b938c1081e4916bd3e485ab39206e6bcf5456",
+        "package_sha256": "0d07c7004df9cc8551c16b756ba4a8b460c423f613eba4fcd782123756cb39c7",
+        "transported_files": 331,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            604,
+            390
+          ],
+          "screenshot_png": true
+        }
+      },
+      "current-source": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "af668c10580f679e6a47e5ee51abc7a53ada1e3713e67194633e7cd1673579d1",
+        "package_sha256": "f0ba7657b8f1ad12b134095d252ac52d4def24b52aa6c3c9c669ded19af12d58",
+        "transported_files": 313,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            604,
+            390
+          ],
+          "screenshot_png": true
+        }
+      },
+      "current-roundtrip": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "a2cf846e0fdc66ee41b8bbfd959f2d4e0a2caf632ae62c25eda8c32f757b78c7",
+        "package_sha256": "6ae5a3ace53d6731b9a92b4e7a58e0b1d5a86fdec8923895b55405742e0cf91e",
+        "transported_files": 331,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            604,
+            390
+          ],
+          "screenshot_png": true
+        }
+      },
+      "portal-source": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "ac9ded88b983c156ee6988f8a02d8203f14306d121dde0c9200b2c2550de19ac",
+        "package_sha256": "ab3b45f871ab677e258abc8f2856a5134a0916b2d4f71b7acd85a1697b26d24f",
+        "transported_files": 313,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            469,
+            303
+          ],
+          "screenshot_png": true
+        }
+      },
+      "portal-roundtrip": {
+        "build": "passed",
+        "runtime": "passed",
+        "source_sha256": "9dc42fbf641f69583b8069e2f93c7da41742abb1b3a43011be1d5adcfb29bff8",
+        "package_sha256": "e2348095a563b6ccdf853801ab985f3daaf969df85e27ebb104881841dce58c9",
+        "transported_files": 331,
+        "all_four_file_hash_sets_equal": true,
+        "scenario_sha256": "b0abfac017f4ccb57f2d66f0a69f1b9392f732efa98701129b149c1baf7ef4ad",
+        "acceptance": {
+          "status": "passed",
+          "source_dimensions": [
+            160,
+            100
+          ],
+          "background": [
+            53,
+            106,
+            195,
+            255
+          ],
+          "drawing": true,
+          "clear": true,
+          "saved_pixels_match": true,
+          "cancelled_annotation": "{}",
+          "screenshot_cancellation": "uploadCancelled",
+          "screenshot_dimensions": [
+            469,
+            303
+          ],
+          "screenshot_png": true
+        }
+      }
+    },
+    "comparison": "Native and Ruby capture results agree; page screenshot dimensions differ with each browser viewport. Saved annotations match their original image plus drawing pixel for pixel."
+  },
+  "limitations": [
+    "DOM capture uses the compatible SLA Task App theme for all three widget variants.",
+    "Bundled html2canvas rejects modern CSS color()/color-mix() in the current Sudoku theme.",
+    "OS screen picker, screen permission grants, clipboard permissions and mobile/offline are not certified.",
+    "Project-owned widget code and theme must be present; unknown or customized bundle hashes are not registered."
+  ]
+}
