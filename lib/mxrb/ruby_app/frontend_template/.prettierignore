@@ -1,5 +1,6 @@
 dist
 node_modules
+public
 src/generated/*
 !src/generated/bridge
 src/generated/bridge/*

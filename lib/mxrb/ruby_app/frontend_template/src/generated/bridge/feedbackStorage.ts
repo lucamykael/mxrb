@@ -4,6 +4,7 @@ import { writeStorageObject } from './objectStorage';
 import { readStorageObject } from './objectRestore';
 import { feedbackStrictMode, feedbackMetadataAction } from './feedbackMetadata';
 import type { FeedbackMetadataVariant } from './feedbackMetadata';
+import { feedbackScreenshot, feedbackAnnotate } from './feedbackCapture';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -54,6 +55,8 @@ const writeImage: JavaScriptAction = async (parameters) => {
 };
 
 const handlers: Record<string, JavaScriptAction> = {
+  JS_ToggleFeedbackScreenshotWidget: feedbackScreenshot,
+  JS_ToggleFeedbackAnnotateWidget: feedbackAnnotate,
   JS_isStrictMode: feedbackStrictMode,
   JS_GetFeedbackStorageObject: ({ key, entity }, variables) =>
     readStorageObject({ Key: key, Entity: entity }, variables),

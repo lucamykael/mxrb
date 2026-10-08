@@ -1,0 +1,68 @@
+{
+  "name": "native-feedback-capture",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "capture-cancel",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"Capture oracle\"]"
+        },
+        {
+          "wait_for_style": {
+            "selector": ".mxfeedback-start-button",
+            "property": "position",
+            "equals": "fixed"
+          }
+        },
+        {
+          "click_text": "Feedback"
+        },
+        {
+          "wait_for_text": "Feedback opened"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Annotate image"
+        },
+        {
+          "wait_for_selector": "canvas"
+        },
+        {
+          "click_text": "Cancel"
+        },
+        {
+          "wait_for_text": "Finished Annotate"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_text": "Capture page"
+        },
+        {
+          "wait_for_text": "Take screenshot"
+        },
+        {
+          "click_text": "Cancel"
+        },
+        {
+          "wait_for_text": "Finished Screenshot"
+        }
+      ]
+    }
+  ]
+}

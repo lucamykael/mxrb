@@ -13,6 +13,7 @@ require_relative 'legacy_service_source_migration'
 require_relative 'legacy_widget_source_migration'
 require_relative 'exporter/domain_behaviors'
 require_relative 'known_javascript_actions'
+require_relative 'known_feedback_widget'
 
 module Mxrb
   module RubyApp
@@ -2952,6 +2953,7 @@ module Mxrb
       end
 
       def write_generated_frontend_contract
+        write_feedback_widget
         write(File.join('frontend', 'src', 'generated', 'decimalConfig.ts'),
               "export default #{JSON.generate(Runtime::DecimalContext.settings(@project))} as { rounding?: string };\n")
         write(File.join('frontend', 'src', 'generated', 'types.ts'), frontend_types)
@@ -2964,6 +2966,28 @@ module Mxrb
           portable model. Build application code in `features`, `components`, `hooks`, `layouts`,
           `core`, and `styles`; those directories survive every Ruby/TypeScript/MPR round-trip.
         MARKDOWN
+      end
+
+      def write_feedback_widget
+        source = KnownFeedbackWidget.source(File.dirname(@mpr_path))
+        registration = "export {};\n"
+        if source
+          root = File.join('frontend', 'src', 'generated', 'bridge', 'vendor', 'feedback')
+          write(File.join(root, 'Feedback.mjs'), source.fetch(:bundle))
+          write(File.join(root, 'LICENSE'), source.fetch(:license))
+          write(File.join(root, 'Feedback.d.mts'), <<~TS)
+            import type { ComponentType } from 'react';
+            import type { NativeFeedbackProps } from '../../feedbackCaptureWidget';
+            declare const Feedback: ComponentType<NativeFeedbackProps>;
+            export default Feedback;
+          TS
+          registration = <<~TS
+            import Feedback from './bridge/vendor/feedback/Feedback.mjs';
+            import { registerFeedbackWidget } from './bridge/feedbackCaptureWidget';
+            registerFeedbackWidget(Feedback);
+          TS
+        end
+        write(File.join('frontend', 'src', 'generated', 'feedbackWidget.ts'), registration)
       end
 
       def generated_frontend_pages
@@ -3424,6 +3448,7 @@ module Mxrb
           "  #{entry.fetch('name').inspect}: #{entry.fetch('import_name')}"
         end
         <<~TS
+          import './feedbackWidget';
           import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';
           import { feedbackStorageActions } from './bridge/feedbackStorage';
           import { nanoflowCommonsActions } from './bridge/nanoflowCommons';
