@@ -1,5 +1,28 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Relationale OQL-Views
+
+Der Ruby-Runtime unterstützt `INNER`, `LEFT`, `RIGHT` und `FULL` Joins zwischen
+persistenten Entitäten, mit `ON` oder einem Assoziationsschritt je Join.
+`GROUP BY`, `COUNT(*)`, `COUNT(Spalte)`, `SUM`, `AVG`, `MIN` und `MAX` erhalten
+Duplikate, NULL-Gruppen, exakte Dezimalwerte und Datumswerte. IDs verknüpfter
+Entitäten können kompatible Referenzassoziationen projizieren. Abfragen lesen
+gespeicherte Werte; Gruppen-IDs bleiben nach Commits stabil. Namen, Klauseln und
+Typen werden auch bei leeren Quellen vorab geprüft. OQL wird nie als SQL ausgeführt.
+
+Die relationale Grammatik beginnt mit `SELECT` und verlangt Projektionsaliase.
+Dataset-Ausführung, Unterabfragen, verkettete Views, `HAVING`, `DISTINCT`, Parameter,
+skalare Funktionen, `LIKE` und `IN` bleiben offen. Native Views
+[erlauben kein `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
+die Sortierung erfolgt beim Verbraucher. Das geprüfte explizite Datumsmuster von
+`formatDateTimeUTC` funktioniert auch für Aggregatergebnisse; lokalisierte und
+Standardformate sind nicht Teil dieser Erweiterung.
+
+Alle 22 Ergebnismengen stimmen zwischen originalem Mendix, dem Ruby-Roundtrip
+in Mendix und dem Ruby-Browser ohne MPR-Zugriff überein. Zwei native Builds und
+Runtimes sowie 197 Browserschritte bestanden mit unveränderten Eingabe-Hashes.
+[Nachweis](../evidence/oql-relational-views-2026-10-08.json).
+
 ## Aufnahme und Annotation mit Web Feedback
 
 Für `JS_ToggleFeedbackScreenshotWidget` und `JS_ToggleFeedbackAnnotateWidget`
@@ -38,8 +61,8 @@ Vergleiche mit Mendix 11.12.1 bestätigen die NULL-Regeln: Gleichheit mit dem Li
 NULL-Datensätze ein. Vergleiche zwischen Spalten erhalten den unbekannten Wert.
 Filter lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und prüfen
 Attribute sowie Typen auch bei leeren Quellen. OQL wird niemals als SQL ausgeführt.
-Ordnungsvergleiche verlangen Zahlen; Funktionen, `LIKE`, `IN`, Parameter, Joins
-und Aggregationen bleiben außerhalb dieses Teilumfangs.
+Ordnungsvergleiche verlangen Zahlen; skalare Funktionen, `LIKE`, `IN` und Parameter
+bleiben offen. Joins und Aggregate verwenden die oben beschriebene relationale Grammatik.
 
 Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-view-filters-2026-10-07.json).
@@ -174,8 +197,8 @@ Die Ruby-Laufzeit unterstützt außerdem einfache Projektionen einer persistente
 Entität: Spalten mit optionalen Aliasnamen und `ID` als Referenzassoziation.
 Views lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und
 weisen Schreibzugriffe zurück. OQL-Text wird validiert und nie direkt als SQL
-ausgeführt. Der oben beschriebene Filterumfang wird unterstützt; Joins, Aggregate
-und verkettete Views erzeugen weiterhin explizite Fehler. Acht Ergebnisse stimmten zwischen
+ausgeführt. Der Filterumfang und die relationale Erweiterung oben werden unterstützt;
+verkettete Views erzeugen weiterhin explizite Fehler. Acht Ergebnisse stimmten zwischen
 Ruby und beiden Mendix-Laufzeiten überein; 41 Browserschritte bestanden ohne
 MPR-Zugriff. Der Modellabruf in acht realen Projekten bestand für alle 98
 Entitäten, einschließlich `MyFirstModule.LocationsView`.

@@ -1,0 +1,208 @@
+{
+  "date": "2026-10-08",
+  "scope": "Relational OQL view entities over durable Ruby storage",
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "scenarios": 22,
+    "hashed_files_across_cases": 59,
+    "all_source_and_copy_hashes_unchanged": true,
+    "runtime_package_hashes_match_builds": true,
+    "source_and_roundtrip_results_identical": true,
+    "results": {
+      "InnerPath": [
+        "<null>|G",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ],
+      "LeftPath": [
+        "<null>|G",
+        "Empty|<null>",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ],
+      "RightPath": [
+        "<null>|D",
+        "<null>|G",
+        "<null>|H",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ],
+      "FullPath": [
+        "<null>|D",
+        "<null>|G",
+        "<null>|H",
+        "Empty|<null>",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ],
+      "InnerOn": [
+        "Huge|F",
+        "North|A",
+        "North|A",
+        "North|B",
+        "North|B",
+        "North|E",
+        "North|E",
+        "South|C"
+      ],
+      "LeftOn": [
+        "<null>|<null>",
+        "Empty|<null>",
+        "Huge|F",
+        "North|A",
+        "North|A",
+        "North|B",
+        "North|B",
+        "North|E",
+        "North|E",
+        "South|C"
+      ],
+      "FullOn": [
+        "<null>|<null>",
+        "<null>|D",
+        "<null>|G",
+        "<null>|H",
+        "Empty|<null>",
+        "Huge|F",
+        "North|A",
+        "North|A",
+        "North|B",
+        "North|B",
+        "North|E",
+        "North|E",
+        "South|C"
+      ],
+      "ReversePath": [
+        "<null>|D",
+        "<null>|G",
+        "<null>|H",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ],
+      "FilteredJoin": [
+        "Huge|F",
+        "North|A",
+        "North|B"
+      ],
+      "MultipleJoins": [
+        "A|B",
+        "B|A"
+      ],
+      "GroupedFull": [
+        "<null>|3|3|2|5.5|2.75|-2|7.5|1999-01-01|2004-01-01",
+        "Empty|1|0|0|<null>|<null>|<null>|<null>|<null>|<null>",
+        "Huge|1|1|1|9007199254740993.125|9007199254740993.125|9007199254740993.125|9007199254740993.125|2003-01-01|2003-01-01",
+        "North|3|3|3|36|12|5.5|20.375|2000-01-01|2002-01-01",
+        "South|1|1|0|<null>|<null>|<null>|<null>|<null>|<null>"
+      ],
+      "GlobalAggregate": [
+        "8|8|6|9007199254741034.625|1501199875790172.4375|-2|9007199254740993.125|1999-01-01|2004-01-01"
+      ],
+      "EmptyAggregate": [
+        "0|0|0|<null>|<null>|<null>|<null>|<null>|<null>"
+      ],
+      "EmptyGrouped": [],
+      "NullAggregate": [
+        "2|2|0|<null>|<null>|<null>|<null>|<null>|<null>"
+      ],
+      "GroupStrings": [
+        "<null>|G|H|2",
+        "Huge|F|F|1",
+        "Missing|D|D|1",
+        "North|A|E|3",
+        "South|C|C|1"
+      ],
+      "RecurringAverage": [
+        "7.70833333"
+      ],
+      "PathWithOn": [
+        "<null>|<null>",
+        "Empty|<null>",
+        "Huge|F",
+        "North|<null>",
+        "North|A",
+        "North|B",
+        "South|<null>"
+      ],
+      "CrossOnTrue": [
+        "48"
+      ],
+      "UnqualifiedGroup": [
+        "<null>|G|2",
+        "Huge|F|1",
+        "Missing|D|1",
+        "North|A|3",
+        "South|C|1"
+      ],
+      "GroupWithoutAggregate": [
+        "<null>",
+        "Huge",
+        "Missing",
+        "North",
+        "South"
+      ],
+      "LinkedEmployee": [
+        "<null>|G",
+        "Empty|<null>",
+        "Huge|F",
+        "North|A",
+        "North|B",
+        "North|E",
+        "South|C"
+      ]
+    }
+  },
+  "validation": {
+    "ruby_examples": 2361,
+    "ruby_failures": 0,
+    "ruby_pending": 0,
+    "coverage_lines": {
+      "covered": 41918,
+      "total": 41918,
+      "percent": 100.0
+    },
+    "coverage_branches": {
+      "covered": 18394,
+      "total": 18394,
+      "percent": 100.0
+    },
+    "rubocop_files": 599,
+    "rubocop_offenses": 0,
+    "frontend_tests": 210,
+    "frontend_check_passed": true,
+    "browser_steps": 197,
+    "console_errors": 0,
+    "mpr_access_prohibited": true,
+    "exact_browser_results_match_native": true
+  },
+  "limitations": [
+    "View entities only; dataset execution and nested subqueries remain unsupported.",
+    "SELECT-first relational grammar with explicit projection aliases; persistent entity sources only.",
+    "No HAVING, DISTINCT, ORDER BY, LIMIT/OFFSET, functions in OQL, parameters, LIKE or IN.",
+    "One association hop per JOIN; no chained view sources or reference-set projections.",
+    "Comparison ordering remains numeric-only; MIN/MAX support numeric, string and datetime columns.",
+    "formatDateTimeUTC uses the existing explicit pattern subset; locale and default-format parity are not claimed."
+  ],
+  "references": [
+    "https://docs.mendix.com/refguide/use-view-entities/",
+    "https://docs.mendix.com/refguide/oql-clauses/",
+    "https://docs.mendix.com/refguide/parse-and-format-date-function-calls/"
+  ]
+}

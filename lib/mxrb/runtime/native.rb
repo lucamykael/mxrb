@@ -248,6 +248,7 @@ module Mxrb
           when 'find' then string_find(*arguments)
           when 'findlast' then string_find_last(*arguments)
           when 'formatdatetime' then format_datetime(*arguments)
+          when 'formatdatetimeutc' then format_datetime(arguments.fetch(0).getutc, arguments.fetch(1))
           when 'contains' then arguments.fetch(0).to_s.include?(arguments.fetch(1).to_s)
           when 'startswith' then arguments.fetch(0).to_s.start_with?(arguments.fetch(1).to_s)
           when 'endswith' then arguments.fetch(0).to_s.end_with?(arguments.fetch(1).to_s)

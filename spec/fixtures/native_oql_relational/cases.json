@@ -1,0 +1,375 @@
+[
+  {
+    "name": "InnerPath",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d INNER JOIN d/Views.Employee_Department/Views.Employee e",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|G",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "LeftPath",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d LEFT JOIN d/Views.Employee_Department/Views.Employee e",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|G",
+      "Empty|<null>",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "RightPath",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d RIGHT JOIN d/Views.Employee_Department/Views.Employee e",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|D",
+      "<null>|G",
+      "<null>|H",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "FullPath",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d FULL JOIN d/Views.Employee_Department/Views.Employee e",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|D",
+      "<null>|G",
+      "<null>|H",
+      "Empty|<null>",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "InnerOn",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d INNER JOIN Views.Employee e ON d.Name = e.DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "Huge|F",
+      "North|A",
+      "North|A",
+      "North|B",
+      "North|B",
+      "North|E",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "LeftOn",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d LEFT JOIN Views.Employee e ON d.Name = e.DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|<null>",
+      "Empty|<null>",
+      "Huge|F",
+      "North|A",
+      "North|A",
+      "North|B",
+      "North|B",
+      "North|E",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "FullOn",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d FULL JOIN Views.Employee e ON d.Name = e.DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|<null>",
+      "<null>|D",
+      "<null>|G",
+      "<null>|H",
+      "Empty|<null>",
+      "Huge|F",
+      "North|A",
+      "North|A",
+      "North|B",
+      "North|B",
+      "North|E",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "ReversePath",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Employee e LEFT JOIN e/Views.Employee_Department/Views.Department d",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|D",
+      "<null>|G",
+      "<null>|H",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  },
+  {
+    "name": "FilteredJoin",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d FULL OUTER JOIN d/Views.Employee_Department/Views.Employee e WHERE e.Salary > 8",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "Huge|F",
+      "North|A",
+      "North|B"
+    ]
+  },
+  {
+    "name": "MultipleJoins",
+    "query": "SELECT e.Name AS Employee, peer.Name AS Peer FROM Views.Employee e INNER JOIN e/Views.Employee_Department/Views.Department d INNER JOIN d/Views.Employee_Department/Views.Employee peer WHERE e.Name != peer.Name",
+    "attributes": {
+      "Employee": "string",
+      "Peer": "string"
+    },
+    "expected": [
+      "A|B",
+      "B|A"
+    ]
+  },
+  {
+    "name": "GroupedFull",
+    "query": "SELECT d.Name AS Department, COUNT(*) AS RowsCount, COUNT(e.ID) AS EmployeesCount, COUNT(e.Salary) AS SalariesCount, SUM(e.Salary) AS TotalSalary, AVG(e.Salary) AS AverageSalary, MIN(e.Salary) AS MinimumSalary, MAX(e.Salary) AS MaximumSalary, MIN(e.DateOfBirth) AS EarliestBirth, MAX(e.DateOfBirth) AS LatestBirth FROM Views.Department d FULL JOIN d/Views.Employee_Department/Views.Employee e GROUP BY d.Name",
+    "attributes": {
+      "Department": "string",
+      "RowsCount": "integer",
+      "EmployeesCount": "integer",
+      "SalariesCount": "integer",
+      "TotalSalary": "decimal",
+      "AverageSalary": "decimal",
+      "MinimumSalary": "decimal",
+      "MaximumSalary": "decimal",
+      "EarliestBirth": "datetime",
+      "LatestBirth": "datetime"
+    },
+    "expected": [
+      "<null>|3|3|2|5.5|2.75|-2|7.5|1999-01-01|2004-01-01",
+      "Empty|1|0|0|<null>|<null>|<null>|<null>|<null>|<null>",
+      "Huge|1|1|1|9007199254740993.125|9007199254740993.125|9007199254740993.125|9007199254740993.125|2003-01-01|2003-01-01",
+      "North|3|3|3|36|12|5.5|20.375|2000-01-01|2002-01-01",
+      "South|1|1|0|<null>|<null>|<null>|<null>|<null>|<null>"
+    ]
+  },
+  {
+    "name": "GlobalAggregate",
+    "query": "SELECT COUNT(*) AS RowsCount, COUNT(e.ID) AS EmployeesCount, COUNT(e.Salary) AS SalariesCount, SUM(e.Salary) AS TotalSalary, AVG(e.Salary) AS AverageSalary, MIN(e.Salary) AS MinimumSalary, MAX(e.Salary) AS MaximumSalary, MIN(e.DateOfBirth) AS EarliestBirth, MAX(e.DateOfBirth) AS LatestBirth FROM Views.Employee e",
+    "attributes": {
+      "RowsCount": "integer",
+      "EmployeesCount": "integer",
+      "SalariesCount": "integer",
+      "TotalSalary": "decimal",
+      "AverageSalary": "decimal",
+      "MinimumSalary": "decimal",
+      "MaximumSalary": "decimal",
+      "EarliestBirth": "datetime",
+      "LatestBirth": "datetime"
+    },
+    "expected": [
+      "8|8|6|9007199254741034.625|1501199875790172.4375|-2|9007199254740993.125|1999-01-01|2004-01-01"
+    ]
+  },
+  {
+    "name": "EmptyAggregate",
+    "query": "SELECT COUNT(*) AS RowsCount, COUNT(e.ID) AS EmployeesCount, COUNT(e.Salary) AS SalariesCount, SUM(e.Salary) AS TotalSalary, AVG(e.Salary) AS AverageSalary, MIN(e.Salary) AS MinimumSalary, MAX(e.Salary) AS MaximumSalary, MIN(e.DateOfBirth) AS EarliestBirth, MAX(e.DateOfBirth) AS LatestBirth FROM Views.Employee e WHERE e.Salary > 999999999999999999",
+    "attributes": {
+      "RowsCount": "integer",
+      "EmployeesCount": "integer",
+      "SalariesCount": "integer",
+      "TotalSalary": "decimal",
+      "AverageSalary": "decimal",
+      "MinimumSalary": "decimal",
+      "MaximumSalary": "decimal",
+      "EarliestBirth": "datetime",
+      "LatestBirth": "datetime"
+    },
+    "expected": [
+      "0|0|0|<null>|<null>|<null>|<null>|<null>|<null>"
+    ]
+  },
+  {
+    "name": "EmptyGrouped",
+    "query": "SELECT e.DepartmentName AS Department, COUNT(*) AS RowsCount, COUNT(e.ID) AS EmployeesCount, COUNT(e.Salary) AS SalariesCount, SUM(e.Salary) AS TotalSalary, AVG(e.Salary) AS AverageSalary, MIN(e.Salary) AS MinimumSalary, MAX(e.Salary) AS MaximumSalary, MIN(e.DateOfBirth) AS EarliestBirth, MAX(e.DateOfBirth) AS LatestBirth FROM Views.Employee e WHERE e.Salary > 999999999999999999 GROUP BY e.DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "RowsCount": "integer",
+      "EmployeesCount": "integer",
+      "SalariesCount": "integer",
+      "TotalSalary": "decimal",
+      "AverageSalary": "decimal",
+      "MinimumSalary": "decimal",
+      "MaximumSalary": "decimal",
+      "EarliestBirth": "datetime",
+      "LatestBirth": "datetime"
+    },
+    "expected": []
+  },
+  {
+    "name": "NullAggregate",
+    "query": "SELECT COUNT(*) AS RowsCount, COUNT(e.ID) AS EmployeesCount, COUNT(e.Salary) AS SalariesCount, SUM(e.Salary) AS TotalSalary, AVG(e.Salary) AS AverageSalary, MIN(e.Salary) AS MinimumSalary, MAX(e.Salary) AS MaximumSalary, MIN(e.DateOfBirth) AS EarliestBirth, MAX(e.DateOfBirth) AS LatestBirth FROM Views.Employee e WHERE e.Salary IS NULL",
+    "attributes": {
+      "RowsCount": "integer",
+      "EmployeesCount": "integer",
+      "SalariesCount": "integer",
+      "TotalSalary": "decimal",
+      "AverageSalary": "decimal",
+      "MinimumSalary": "decimal",
+      "MaximumSalary": "decimal",
+      "EarliestBirth": "datetime",
+      "LatestBirth": "datetime"
+    },
+    "expected": [
+      "2|2|0|<null>|<null>|<null>|<null>|<null>|<null>"
+    ]
+  },
+  {
+    "name": "GroupStrings",
+    "query": "SELECT e.DepartmentName AS Department, MIN(e.Name) AS FirstName, MAX(e.Name) AS LastName, COUNT(*) AS RowsCount FROM Views.Employee e GROUP BY e.DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "FirstName": "string",
+      "LastName": "string",
+      "RowsCount": "integer"
+    },
+    "expected": [
+      "<null>|G|H|2",
+      "Huge|F|F|1",
+      "Missing|D|D|1",
+      "North|A|E|3",
+      "South|C|C|1"
+    ]
+  },
+  {
+    "name": "RecurringAverage",
+    "query": "SELECT AVG(e.Salary) AS AverageSalary FROM Views.Employee e WHERE e.Name = 'A' OR e.Name = 'E' OR e.Name = 'D'",
+    "attributes": {
+      "AverageSalary": "decimal"
+    },
+    "expected": [
+      "7.70833333"
+    ]
+  },
+  {
+    "name": "PathWithOn",
+    "query": "SELECT d.Name AS Department, e.Name AS Employee FROM Views.Department d LEFT JOIN d/Views.Employee_Department/Views.Employee e ON e.Salary > 8",
+    "attributes": {
+      "Department": "string",
+      "Employee": "string"
+    },
+    "expected": [
+      "<null>|<null>",
+      "Empty|<null>",
+      "Huge|F",
+      "North|<null>",
+      "North|A",
+      "North|B",
+      "South|<null>"
+    ]
+  },
+  {
+    "name": "CrossOnTrue",
+    "query": "SELECT COUNT(*) AS RowsCount FROM Views.Department JOIN Views.Employee AS e ON TRUE",
+    "attributes": {
+      "RowsCount": "integer"
+    },
+    "expected": [
+      "48"
+    ]
+  },
+  {
+    "name": "UnqualifiedGroup",
+    "query": "SELECT DepartmentName AS Department, MIN(Name) AS FirstName, COUNT(*) AS RowsCount FROM Views.Employee GROUP BY DepartmentName",
+    "attributes": {
+      "Department": "string",
+      "FirstName": "string",
+      "RowsCount": "integer"
+    },
+    "expected": [
+      "<null>|G|2",
+      "Huge|F|1",
+      "Missing|D|1",
+      "North|A|3",
+      "South|C|1"
+    ]
+  },
+  {
+    "name": "GroupWithoutAggregate",
+    "query": "SELECT e.DepartmentName AS Department FROM Views.Employee e GROUP BY e.DepartmentName",
+    "attributes": {
+      "Department": "string"
+    },
+    "expected": [
+      "<null>",
+      "Huge",
+      "Missing",
+      "North",
+      "South"
+    ]
+  },
+  {
+    "name": "LinkedEmployee",
+    "query": "SELECT d.Name AS Department, e.ID AS LinkedEmployee FROM Views.Department d LEFT JOIN d/Views.Employee_Department/Views.Employee e",
+    "attributes": {
+      "Department": "string"
+    },
+    "reference": {
+      "name": "LinkedEmployee",
+      "entity": "Views.Employee",
+      "attribute": "Name"
+    },
+    "expected": [
+      "<null>|G",
+      "Empty|<null>",
+      "Huge|F",
+      "North|A",
+      "North|B",
+      "North|E",
+      "South|C"
+    ]
+  }
+]

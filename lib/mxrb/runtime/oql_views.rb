@@ -3,6 +3,7 @@
 require 'digest'
 require_relative 'oql_predicate'
 require_relative 'oql_view_query'
+require_relative 'oql_relational_view'
 
 module Mxrb
   module Runtime
@@ -12,6 +13,7 @@ module Mxrb
       def initialize(project, store, decoder:)
         @store = store
         @decoder = decoder
+        @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
         @definitions = project.modules.flat_map do |mod|
           mod.entities.filter_map do |entity|
             next unless entity.respond_to?(:oql_view?) && entity.oql_view?
@@ -31,12 +33,12 @@ module Mxrb
 
       def retrieve(name)
         entity, mod = @definitions.fetch(name.to_s)
-        parsed = OqlViewQuery.new(query(entity, mod))
-        associations = @store.schema.associations.select { _1.from_entity == name.to_s }
-        validate_projections(name, entity, parsed.columns, associations)
-        @store.schema.concrete_entities(parsed.source).flat_map do |definition|
-          read_definition(name, definition, parsed, associations)
+        text = query(entity, mod)
+        if OqlRelationalQuery.relational?(text)
+          return OqlRelationalView.new(text, @store, decoder: @decoder, decimal: @decimal).retrieve(name.to_s, entity)
         end
+
+        retrieve_projection(name, entity, text)
       end
 
       def associated(definition, start)
@@ -48,6 +50,15 @@ module Mxrb
       end
 
       private
+
+      def retrieve_projection(name, entity, text)
+        parsed = OqlViewQuery.new(text)
+        associations = @store.schema.associations.select { _1.from_entity == name.to_s }
+        validate_projections(name, entity, parsed.columns, associations)
+        @store.schema.concrete_entities(parsed.source).flat_map do |definition|
+          read_definition(name, definition, parsed, associations)
+        end
+      end
 
       def read_definition(name, definition, parsed, associations)
         readers = projections(parsed.columns, definition, associations)

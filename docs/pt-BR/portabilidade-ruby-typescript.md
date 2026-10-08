@@ -1,5 +1,28 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Views OQL relacionais
+
+O runtime Ruby aceita joins `INNER`, `LEFT`, `RIGHT` e `FULL` entre entidades
+persistentes, com predicado `ON` ou um salto de associação por join. `GROUP BY`,
+`COUNT(*)`, `COUNT(coluna)`, `SUM`, `AVG`, `MIN` e `MAX` preservam duplicatas,
+grupos nulos, decimais exatos e datas. IDs das entidades ligadas podem projetar
+associações de referência compatíveis. A leitura usa valores salvos; os IDs dos
+grupos permanecem estáveis após commits. Nomes, cláusulas e tipos são validados
+antes da leitura, inclusive com fontes vazias. OQL nunca é executado como SQL.
+
+A gramática relacional começa por `SELECT` e exige aliases nas projeções.
+Execução de datasets, subconsultas, views encadeadas, `HAVING`, `DISTINCT`,
+parâmetros, funções escalares, `LIKE` e `IN` continuam pendentes. Views nativas
+[não permitem `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
+a ordenação pertence ao consumidor. O padrão explícito de `formatDateTimeUTC`
+usado para exibir as datas agregadas também funciona; formatos padrão e
+localizados permanecem fora deste incremento.
+
+Os 22 conjuntos de resultados coincidiram no Mendix original, no Mendix
+regenerado de Ruby e no navegador Ruby com acesso MPR proibido. Passaram dois
+builds/runtimes nativos e 197 passos de navegador, preservando todos os hashes
+de entrada. [Evidência](../evidence/oql-relational-views-2026-10-08.json).
+
 ## Captura e anotação do Feedback Web
 
 `JS_ToggleFeedbackScreenshotWidget` e `JS_ToggleFeedbackAnnotateWidget` têm
@@ -35,8 +58,8 @@ O comportamento de nulos foi comparado com Mendix 11.12.1: igualdade com o liter
 registros nulos. Comparações entre colunas preservam o resultado desconhecido.
 Os filtros leem valores salvos, refletem commits/exclusões e validam todos os
 atributos e tipos antes da leitura, mesmo sem registros. O texto nunca é executado
-como SQL. Ordenações comparativas exigem números; funções, `LIKE`, `IN`, parâmetros,
-joins e agregações permanecem fora deste subconjunto.
+como SQL. Ordenações comparativas exigem números; funções escalares, `LIKE`, `IN`
+e parâmetros permanecem pendentes. Joins e agregações usam a gramática relacional acima.
 
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
 [Evidência](../evidence/oql-view-filters-2026-10-07.json).
@@ -162,8 +185,8 @@ O runtime Ruby também consulta projeções simples de uma entidade persistente:
 colunas com aliases opcionais e `ID` projetado como associação de referência.
 As views leem valores salvos, refletem commits e exclusões e rejeitam gravações.
 O texto OQL é validado e nunca executado diretamente como SQL. Os filtros do
-subconjunto descrito acima são suportados; joins, agregações e encadeamento de
-views continuam gerando erro explícito.
+subconjunto descrito acima e a extensão relacional são suportados. Encadeamento
+de views continua gerando erro explícito.
 Oito resultados coincidiram entre Ruby e os dois runtimes Mendix; 41 passos de
 navegador passaram sem acesso ao MPR. A consulta aos modelos dos oito projetos
 reais passou nas 98 entidades, incluindo `MyFirstModule.LocationsView`.

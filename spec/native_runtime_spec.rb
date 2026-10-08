@@ -208,6 +208,10 @@ RSpec.describe Mxrb::Runtime::Native do
     expect(expression.evaluate("find('abcdef', 'cd')", variables)).to eq(2)
     expect(expression.evaluate('round(2.6) * 3 + parseInteger(\'4\')', variables)).to eq(13)
     expect(expression.evaluate("formatDateTime([%CurrentDateTime%], 'yyyy')", variables)).to match(/\A\d{4}\z/)
+    instant = Time.new(2026, 10, 8, 23, 30, 0, '-04:00')
+    expect(expression.evaluate("formatDateTimeUTC($instant, 'yyyy-MM-dd HH:mm:ss')", { 'instant' => instant }))
+      .to eq('2026-10-09 03:30:00')
+    expect(instant.utc_offset).to eq(-14_400)
     expect(expression.evaluate(
              "(Clinic.Animal_Owner = $owner and Name = 'Ada')", variables, node: animal
            )).to be(true)

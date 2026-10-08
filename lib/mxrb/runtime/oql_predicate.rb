@@ -13,7 +13,8 @@ module Mxrb
       TOKEN = %r{'(?:[^']|'')*'|[+-]?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.]}
       COMPARISONS = %w[= != < <= > >=].freeze
       KINDS = { integer: :number, long: :number, autonumber: :number, decimal: :number,
-                string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime }.freeze
+                string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime,
+                identifier: :identifier }.freeze
 
       def initialize(text, scope, &resolve)
         @tokens = tokenize(text)
@@ -97,15 +98,22 @@ module Mxrb
       end
 
       def column(token)
-        if take('.') || take('/')
-          error!("unknown scope #{token}") unless token == @scope
-          token = @tokens.shift.to_s
-        end
-        error!('expected an attribute or literal') unless token.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+        token = qualified_column(token)
+        pattern = /\A[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?\z/
+        error!('expected an attribute or literal') unless pattern.match?(token)
         type, reader = @resolve.call(token)
         kind = KINDS[type]
         error!("unsupported attribute type #{type}") unless kind
         Operand.new(kind, reader, false)
+      end
+
+      def qualified_column(token)
+        if take('.') || take('/')
+          error!("unknown scope #{token}") unless Array(@scope).include?(token)
+          name = @tokens.shift.to_s
+          token = @scope.is_a?(Array) ? "#{token}.#{name}" : name
+        end
+        token
       end
 
       def literal(kind, value) = Operand.new(kind, ->(_row) { value }, true)
