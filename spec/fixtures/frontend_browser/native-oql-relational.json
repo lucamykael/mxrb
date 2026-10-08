@@ -1,0 +1,607 @@
+{
+  "name": "native-oql-relational",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "relational-views",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"OQL relational oracle\"]"
+        },
+        {
+          "click_selector": ".mx-name-Seed"
+        },
+        {
+          "wait_for_text": "Seeded"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-InnerPath"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-LeftPath"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RightPath"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|D;"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "<null>|H;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-FullPath"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|D;"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "<null>|H;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-InnerOn"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-LeftOn"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|<null>;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-FullOn"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|<null>;"
+        },
+        {
+          "wait_for_text": "<null>|D;"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "<null>|H;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-ReversePath"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|D;"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "<null>|H;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-FilteredJoin"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-MultipleJoins"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "A|B;"
+        },
+        {
+          "wait_for_text": "B|A;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-GroupedFull"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|3|3|2|5.5|2.75|-2|7.5|1999-01-01|2004-01-01;"
+        },
+        {
+          "wait_for_text": "Empty|1|0|0|<null>|<null>|<null>|<null>|<null>|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|1|1|1|9007199254740993.125|9007199254740993.125|9007199254740993.125|9007199254740993.125|2003-01-01|2003-01-01;"
+        },
+        {
+          "wait_for_text": "North|3|3|3|36|12|5.5|20.375|2000-01-01|2002-01-01;"
+        },
+        {
+          "wait_for_text": "South|1|1|0|<null>|<null>|<null>|<null>|<null>|<null>;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-GlobalAggregate"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "8|8|6|9007199254741034.625|1501199875790172.4375|-2|9007199254740993.125|1999-01-01|2004-01-01;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-EmptyAggregate"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "0|0|0|<null>|<null>|<null>|<null>|<null>|<null>;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-EmptyGrouped"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-NullAggregate"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "2|2|0|<null>|<null>|<null>|<null>|<null>|<null>;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-GroupStrings"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|G|H|2;"
+        },
+        {
+          "wait_for_text": "Huge|F|F|1;"
+        },
+        {
+          "wait_for_text": "Missing|D|D|1;"
+        },
+        {
+          "wait_for_text": "North|A|E|3;"
+        },
+        {
+          "wait_for_text": "South|C|C|1;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RecurringAverage"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "7.70833333;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-PathWithOn"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|<null>;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|<null>;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "South|<null>;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-CrossOnTrue"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "48;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-UnqualifiedGroup"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|G|2;"
+        },
+        {
+          "wait_for_text": "Huge|F|1;"
+        },
+        {
+          "wait_for_text": "Missing|D|1;"
+        },
+        {
+          "wait_for_text": "North|A|3;"
+        },
+        {
+          "wait_for_text": "South|C|1;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-GroupWithoutAggregate"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>;"
+        },
+        {
+          "wait_for_text": "Huge;"
+        },
+        {
+          "wait_for_text": "Missing;"
+        },
+        {
+          "wait_for_text": "North;"
+        },
+        {
+          "wait_for_text": "South;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-LinkedEmployee"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_text": "<null>|G;"
+        },
+        {
+          "wait_for_text": "Empty|<null>;"
+        },
+        {
+          "wait_for_text": "Huge|F;"
+        },
+        {
+          "wait_for_text": "North|A;"
+        },
+        {
+          "wait_for_text": "North|B;"
+        },
+        {
+          "wait_for_text": "North|E;"
+        },
+        {
+          "wait_for_text": "South|C;"
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        }
+      ]
+    }
+  ]
+}
