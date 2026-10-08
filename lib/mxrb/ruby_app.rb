@@ -14,6 +14,7 @@ require_relative 'ruby_app/security_builders'
 require_relative 'ruby_app/member_identity'
 require_relative 'ruby_app/record_identity'
 require_relative 'ruby_app/regular_expression'
+require_relative 'ruby_app/dataset'
 require_relative 'ruby_app/security_identity'
 require_relative 'ruby_app/schedule_builder'
 require_relative 'ruby_app/page_data_sources'
@@ -28,6 +29,7 @@ require_relative 'ruby_app/file_content'
 require_relative 'ruby_app/record_inheritance'
 require_relative 'ruby_app/record_validation'
 require_relative 'ruby_app/known_java_actions'
+require_relative 'ruby_app/known_oql_actions'
 require_relative 'runtime/xpath'
 require_relative 'http/server'
 
@@ -45,7 +47,7 @@ module Mxrb
     SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/].freeze
     ARTIFACT_DIRECTORIES = %w[
       constants enumerations models dtos controllers services pages presentation security
-      scheduled_events regular_expressions
+      scheduled_events regular_expressions datasets
     ].freeze
 
     def self.application_files(root)
@@ -250,7 +252,7 @@ module Mxrb
         constant: :@constants, enumeration: :@enumerations, record: :@records,
         controller: :@controllers, service: :@services, page: :@pages,
         module_security: :@module_security, project_security: :@project_security,
-        scheduled_event: :@scheduled_events, regular_expression: :@regular_expressions,
+        scheduled_event: :@scheduled_events, regular_expression: :@regular_expressions, dataset: :@datasets,
         adapter: :@adapters, java_custom_action: :@java_custom_actions, presentation: :@presentation
       }.freeze
 
@@ -267,6 +269,7 @@ module Mxrb
         @project_security = {}
         @scheduled_events = {}
         @regular_expressions = {}
+        @datasets = {}
         @adapters = {}
         @java_custom_actions = {}
         @presentation = {}
@@ -356,7 +359,7 @@ module Mxrb
 
       def adapters = all(:adapter)
 
-      def register_java_custom_action(name, implementation = nil, &block)
+      def register_java_custom_action(name, implementation = nil, with_store: false, &block)
         qualified_name = name.to_s
         unless qualified_name.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
           raise ArgumentError, "Java Custom Action name must be qualified as Module.Action: #{name}"
@@ -364,6 +367,8 @@ module Mxrb
 
         callback = implementation || block
         raise ArgumentError, 'Java Custom Action adapter must respond to call' unless callback.respond_to?(:call)
+
+        callback = Runtime::Native::StoreJavaAction.new(callback) if with_store
 
         register(:java_custom_action, qualified_name, callback)
         callback
@@ -2823,6 +2828,7 @@ module Mxrb
           @source_identities = RubyApp.load_sources(@manifest, member_identity_project: identity_project)
         end
         @source_identities.validate_entity_names!
+        DatasetSynchronizer.new(project, @manifest).synchronize!
         preflight_regular_expressions!(project)
         synchronize_regular_expression_definitions(project)
         synchronize_constant_definitions(project)

@@ -44,6 +44,7 @@ module Mxrb
       end
 
       def decimal_settings = @manifest.data.fetch('decimal', {})
+      def oql_datasets = Registry.all(:dataset).values.map(&:definition)
 
       def close; end
       def all_units = @security ? [@security] : []

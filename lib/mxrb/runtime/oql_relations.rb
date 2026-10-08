@@ -8,10 +8,11 @@ module Mxrb
         def read(row) = row.dig(scope, name)
       end
 
-      def initialize(query, store, decoder:)
+      def initialize(query, store, decoder:, tables: {})
         @query = query
         @store = store
         @decoder = decoder
+        @tables = tables
         @definitions = {}
         @joins = query.sources.map { compile_join(_1) }
       end
@@ -20,7 +21,7 @@ module Mxrb
         scope, name = resolve_scope(reference)
         definition = @definitions[scope]
         invalid!("unknown scope #{scope}") unless definition
-        return Column.new(scope, 'ID', :identifier, definition.name) if name.casecmp?('ID')
+        return Column.new(scope, 'ID', :identifier, definition.name) if entity_identifier?(name, definition)
 
         attribute = definition.columns.find { _1.name == name }
         invalid!("unknown column #{reference}") unless attribute
@@ -45,8 +46,12 @@ module Mxrb
 
       private
 
+      def entity_identifier?(name, definition)
+        name.casecmp?('ID') && !@tables.key?(definition.name)
+      end
+
       def compile_join(source)
-        @definitions[source.scope] = @store.schema.entity(source.entity)
+        @definitions[source.scope] = @tables[source.entity]&.definition || @store.schema.entity(source.entity)
         condition = source.condition && predicate(source.condition)
         links = source.association && association(source)
         [source, condition, links]
@@ -63,6 +68,8 @@ module Mxrb
       end
 
       def records(source)
+        return @tables.fetch(source.entity).rows if @tables.key?(source.entity)
+
         @store.schema.concrete_entities(source.entity).flat_map do |definition|
           @store.database.execute("SELECT * FROM #{quote(definition.table)} ORDER BY rowid").map do |row|
             snapshot(definition, row)

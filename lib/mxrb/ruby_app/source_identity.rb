@@ -11,7 +11,7 @@ module Mxrb
         'models' => 'record', 'dtos' => 'record', 'constants' => 'constant',
         'enumerations' => 'enumeration', 'services' => 'service',
         'nanoflows' => 'service', 'pages' => 'page', 'scheduled_events' => 'scheduled_event',
-        'regular_expressions' => 'regular_expression'
+        'regular_expressions' => 'regular_expression', 'datasets' => 'dataset'
       }.freeze
       KINDS = (COLLECTIONS.values + %w[module_security project_security]).uniq.freeze
       FIELDS = %w[kind id name path ruby_class native_kind].freeze
@@ -328,6 +328,12 @@ module Mxrb
           end
         end
         add.call('module_security', mod.name, mod.module_security_id)
+        application_documents = mod.respond_to?(:application_documents) ? mod.application_documents : []
+        application_documents.each do |document|
+          if document[:type] == Runtime::OqlDatasets::TYPE
+            add.call('dataset', "#{mod.name}.#{document[:name]}", document[:id])
+          end
+        end
         mod.domain_documents.each do |document|
           next unless document[:type] == RegularExpression::TYPE
 

@@ -313,6 +313,9 @@ module Mxrb
           'services' => microflows, 'nanoflows' => nanoflows, 'pages' => pages,
           'endpoints' => endpoints,
           'constants' => mod.constants.map { export_constant(mod, _1, namespace, root) },
+          'datasets' => mod.application_documents.filter_map do |document|
+            export_dataset(mod, document, namespace, root) if document[:type] == Runtime::OqlDatasets::TYPE
+          end,
           'enumerations' => mod.enumerations.map { export_enumeration(mod, _1, namespace, root) },
           'regular_expressions' => mod.domain_documents.filter_map do |document|
             export_regular_expression(mod, document, namespace, root) if document[:type] == RegularExpression::TYPE
@@ -1318,6 +1321,36 @@ module Mxrb
         write(relative, enumeration_source(namespace, class_name, manifest))
         add_coverage(manifest.fetch('id'), manifest.fetch('name'), 'enumeration', relative,
                      'executable_bidirectional')
+        manifest
+      end
+
+      def export_dataset(mod, document, namespace, root)
+        query = document.dig(:doc, 'Source', 'Query')
+        return unless query.is_a?(String)
+
+        id = document.fetch(:id).to_s
+        name = document.fetch(:name)
+        qualified = "#{mod.name}.#{name}"
+        class_name = ruby_constant(name)
+        relative = embedded_identity_path(:dataset, id) || File.join('app', 'datasets', root, "#{underscore(name)}.rb")
+        parameters = IO::BsonCodec.parse_array(document.dig(:doc, 'Parameters'))[:items].map { _1.fetch('Name') }
+        excluded = document.dig(:doc, 'Excluded') == true
+        manifest = { 'name' => qualified, 'id' => id, 'path' => relative, 'parameters' => parameters,
+                     'excluded' => excluded, 'ruby_class' => "#{namespace}::Datasets::#{class_name}" }
+        write(relative, <<~RUBY)
+          # frozen_string_literal: true
+
+          module #{namespace}
+            module Datasets
+              class #{class_name} < Mxrb::RubyApp::Dataset
+                mendix_name #{qualified.inspect}
+                native_metadata parameters: #{parameters.inspect}, excluded: #{excluded.inspect}
+                oql #{query.inspect}
+              end
+            end
+          end
+        RUBY
+        add_coverage(id, qualified, 'dataset', relative, 'executable_bidirectional')
         manifest
       end
 
@@ -3292,6 +3325,7 @@ module Mxrb
           # Supported kinds: :app_service, :web_service, :import_xml,
           # :import_mapping, :export_mapping, and :document.
           #{KnownJavaActions.registrations(File.dirname(@mpr_path))}
+          #{KnownOqlActions.registrations(File.dirname(@mpr_path))}
         RUBY
       end
 

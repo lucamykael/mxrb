@@ -7,6 +7,7 @@ require_relative 'native'
 require_relative 'schema_migrator'
 require_relative 'client_drafts'
 require_relative 'oql_views'
+require_relative 'oql_datasets'
 
 module Mxrb
   module Runtime
@@ -55,8 +56,19 @@ module Mxrb
         @manual_transaction = false
         @client_drafts = ClientDrafts.new(self)
         @views = OqlViews.new(project, self, decoder: method(:deserialize))
+        @oql_project = project
         hooks.each { |event, callbacks| Array(callbacks).each { on(event, &_1) } }
       end
+
+      def query_oql(text) = oql_queries.query(text).rows
+      def query_dataset(name) = query_oql(oql_queries.dataset_query(name))
+      def oql_objects(text, entity) = oql_queries.objects(text, entity)
+      def dataset_objects(name, entity) = oql_objects(oql_queries.dataset_query(name), entity)
+
+      def oql_queries
+        @oql_queries ||= OqlDatasets.new(@oql_project, self, decoder: method(:deserialize), decimal: @decimal)
+      end
+      private :oql_queries
 
       def on(event_or_entity, positional_event = nil, entity: nil, &block)
         entity ||= event_or_entity if positional_event

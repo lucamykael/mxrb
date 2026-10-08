@@ -1,5 +1,32 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## OQL datasets and tabular queries
+
+Existing OQL datasets are exported to `app/datasets`, where query text can be
+edited in Ruby and preserved through Ruby → MPR → Ruby. Verified adapters for
+`Hr.RetrieveDatasetOql` and `Hr.RetrieveAdvancedOql` execute named datasets or
+explicit queries against Ruby storage. Registration requires a known Java source
+hash; changed implementations require an explicit adapter.
+
+The subset includes relational joins and aggregates, `ORDER BY` on projected
+columns or aliases, `LIMIT`, `OFFSET`, and one derived `FROM` source, nested up to
+16 levels. Ordered subqueries require `LIMIT` or `OFFSET`. `LIMIT 0` leaves the
+result unlimited. Certified ordering puts nulls first in both `ASC` and `DESC`,
+matching Mendix 11.12.1 with HSQLDB; other databases and collations are not
+certified. Equal sort keys have no guaranteed relative order.
+
+Actions instantiate distinct uncommitted objects, copy compatible attributes,
+and ignore unknown columns, matching the verified Java implementations. Queries
+read durable values and validate names, types and syntax before reading rows.
+The DSL rejects dataset creation, removal, renaming and metadata changes.
+Parameters, non-OQL sources, `SELECT *`, joins against derived sources,
+correlated subqueries, `HAVING`, `DISTINCT` and scalar functions remain outside
+this subset. Every projection requires an explicit alias.
+
+The matrix contains 18 queries executed through both actions, including two real
+queries from `QueryApiBlogPost`. The Ruby browser runs with MPR access prohibited.
+[Evidence](../evidence/oql-datasets-2026-10-08.json).
+
 ## Relational OQL views
 
 Ruby retrieval now supports `INNER`, `LEFT`, `RIGHT` and `FULL` joins over persistent
@@ -11,7 +38,7 @@ remain stable across commits. All names, clauses and types are checked before
 reading rows, including empty sources. OQL is never passed to SQLite as SQL.
 
 The bounded relational grammar starts with `SELECT` and requires projection
-aliases. Dataset execution, nested queries, chained views, `HAVING`, `DISTINCT`,
+aliases. Chained views, `HAVING`, `DISTINCT`,
 parameters, scalar functions, `LIKE` and `IN` remain unsupported. Native view
 queries [do not allow `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 sorting belongs to their consumer. The tested `formatDateTimeUTC` explicit date

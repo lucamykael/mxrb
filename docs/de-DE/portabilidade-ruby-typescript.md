@@ -1,5 +1,34 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## OQL-Datasets und tabellarische Abfragen
+
+Vorhandene OQL-Datasets werden nach `app/datasets` exportiert. Der Abfragetext
+kann in Ruby bearbeitet werden und bleibt im Weg Ruby → MPR → Ruby erhalten.
+Geprüfte Adapter für `Hr.RetrieveDatasetOql` und `Hr.RetrieveAdvancedOql` führen
+benannte Datasets oder Abfragetext auf dem Ruby-Datenbestand aus. Die Registrierung
+verlangt einen bekannten Java-Quellhash; geänderte Implementierungen benötigen
+einen expliziten Adapter.
+
+Die Teilmenge umfasst relationale Joins und Aggregate, `ORDER BY` für projizierte
+Spalten oder Aliase, `LIMIT`, `OFFSET` und eine abgeleitete Quelle in `FROM` mit
+bis zu 16 Ebenen. Sortierte Unterabfragen erfordern `LIMIT` oder `OFFSET`.
+`LIMIT 0` begrenzt das Ergebnis nicht. Zertifiziert ist die Nullsortierung am
+Anfang für `ASC` und `DESC`, entsprechend Mendix 11.12.1 mit HSQLDB. Andere
+Datenbanken und Kollationen sind nicht zertifiziert. Gleiche Sortierschlüssel
+haben keine garantierte relative Reihenfolge.
+
+Die Aktionen erzeugen unterschiedliche Objekte ohne Commit, kopieren kompatible
+Attribute und ignorieren unbekannte Spalten wie die geprüften Java-Implementierungen.
+Abfragen lesen gespeicherte Werte und prüfen Namen, Typen und Syntax vor dem Lesen.
+Die DSL lehnt das Anlegen, Entfernen, Umbenennen und Ändern von Dataset-Metadaten
+ab. Parameter, Quellen ohne OQL, `SELECT *`, Joins mit abgeleiteten Quellen,
+korrelierte Unterabfragen, `HAVING`, `DISTINCT` und skalare Funktionen bleiben
+außerhalb dieser Teilmenge. Jede Projektion benötigt einen expliziten Alias.
+
+Die Matrix enthält 18 Abfragen über beide Aktionen, darunter zwei echte Abfragen
+aus `QueryApiBlogPost`. Im Ruby-Browser ist der MPR-Zugriff gesperrt.
+[Nachweis](../evidence/oql-datasets-2026-10-08.json).
+
 ## Relationale OQL-Views
 
 Der Ruby-Runtime unterstützt `INNER`, `LEFT`, `RIGHT` und `FULL` Joins zwischen
@@ -11,7 +40,7 @@ gespeicherte Werte; Gruppen-IDs bleiben nach Commits stabil. Namen, Klauseln und
 Typen werden auch bei leeren Quellen vorab geprüft. OQL wird nie als SQL ausgeführt.
 
 Die relationale Grammatik beginnt mit `SELECT` und verlangt Projektionsaliase.
-Dataset-Ausführung, Unterabfragen, verkettete Views, `HAVING`, `DISTINCT`, Parameter,
+Verkettete Views, `HAVING`, `DISTINCT`, Parameter,
 skalare Funktionen, `LIKE` und `IN` bleiben offen. Native Views
 [erlauben kein `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 die Sortierung erfolgt beim Verbraucher. Das geprüfte explizite Datumsmuster von

@@ -1,5 +1,32 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Datasets OQL e consultas tabulares
+
+Datasets OQL existentes são exportados para `app/datasets` e permitem editar a
+consulta em Ruby, com preservação no caminho Ruby → MPR → Ruby. Os adaptadores
+verificados de `Hr.RetrieveDatasetOql` e `Hr.RetrieveAdvancedOql` executam a consulta
+por nome ou texto no banco Ruby. A seleção exige o hash de uma implementação
+Java conhecida; fontes alteradas precisam de adaptação explícita.
+
+O subconjunto inclui joins e agregações relacionais, `ORDER BY` de colunas
+projetadas ou aliases, `LIMIT`, `OFFSET` e uma fonte derivada em `FROM`, com até
+16 níveis. Subconsultas ordenadas exigem `LIMIT` ou `OFFSET`. `LIMIT 0` não limita
+as linhas. A ordenação certificada usa nulos primeiro tanto em `ASC` quanto em
+`DESC`, conforme o banco HSQLDB do Mendix 11.12.1; outras collations e bancos não
+estão certificados. Empates não têm ordem relativa garantida.
+
+As ações criam objetos distintos, sem commit, copiam atributos compatíveis e
+ignoram colunas desconhecidas, como as implementações Java verificadas. A leitura
+usa valores salvos e valida nomes, tipos e sintaxe antes de consultar as linhas.
+Criação, remoção, renomeação e edição de metadados de datasets pela DSL ainda são
+rejeitadas. Parâmetros, fontes sem OQL, `SELECT *`, joins com fontes derivadas,
+subconsultas correlacionadas, `HAVING`, `DISTINCT` e funções escalares continuam
+fora deste subconjunto. Cada projeção requer alias explícito.
+
+A matriz contém 18 consultas, executadas pelas duas ações, incluindo as duas
+consultas reais de `QueryApiBlogPost`. O navegador Ruby executa sem acesso ao MPR.
+[Evidência](../evidence/oql-datasets-2026-10-08.json).
+
 ## Views OQL relacionais
 
 O runtime Ruby aceita joins `INNER`, `LEFT`, `RIGHT` e `FULL` entre entidades
@@ -11,7 +38,7 @@ grupos permanecem estáveis após commits. Nomes, cláusulas e tipos são valida
 antes da leitura, inclusive com fontes vazias. OQL nunca é executado como SQL.
 
 A gramática relacional começa por `SELECT` e exige aliases nas projeções.
-Execução de datasets, subconsultas, views encadeadas, `HAVING`, `DISTINCT`,
+Views encadeadas, `HAVING`, `DISTINCT`,
 parâmetros, funções escalares, `LIKE` e `IN` continuam pendentes. Views nativas
 [não permitem `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 a ordenação pertence ao consumidor. O padrão explícito de `formatDateTimeUTC`
