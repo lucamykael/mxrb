@@ -80,17 +80,12 @@ RSpec.describe Mxrb::RubyApp::Application, 'advanced data-grid queries' do
     expect(app.send(:grid_filter_match?, 1, 'invalid', 'number', 'equals')).to be(false)
     expect(app.send(:grid_filter_match?, 'a', 'a', 'text', 'future')).to be_nil
 
-    expect(app.send(:grid_compare_values, nil, nil)).to eq(0)
-    expect(app.send(:grid_compare_values, nil, 'a')).to eq(-1)
-    expect(app.send(:grid_compare_values, 'a', nil)).to eq(1)
-    expect(app.send(:grid_compare_values, 2, 10)).to eq(-1)
-    expect(app.send(:grid_compare_values, 'b', 'a')).to eq(1)
     ordered = app.send(
       :grid_sort_records,
-      [record(1, 'Name' => 'Beta'), record(2, 'Name' => 'Alpha')],
-      [{ attribute: 'Name' }]
+      [record(1, 'Name' => 'beta'), record(2, 'Name' => 'Alpha'), record(3, 'Name' => nil)],
+      [{ attribute: 'Name', direction: 'Descending' }]
     )
-    expect(ordered.map(&:id)).to eq(%w[2 1])
+    expect(ordered.map(&:id)).to eq(%w[3 1 2])
     expect { app.send(:grid_member_name, '') }
       .to raise_error(ArgumentError, /attribute cannot be empty/)
   end

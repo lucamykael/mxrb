@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-09",
+  "scope": "Database sort order of retrieves, server-side data grids and page data sources",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "0e436bd5b97407ca8e80d83823f759f1a523e6499f7879b3f27d47202ff4352c",
+    "cases": 8,
+    "status": "passed",
+    "results": {
+      "NameAsc": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "NameDesc": [
+        "Zero",
+        "South",
+        "north",
+        "North",
+        "Nor",
+        "Negative",
+        "Empty"
+      ],
+      "NickAsc": [
+        "Empty",
+        "Negative",
+        "Zero",
+        "Nor",
+        "north",
+        "South",
+        "North"
+      ],
+      "NickDesc": [
+        "Empty",
+        "North",
+        "South",
+        "north",
+        "Nor",
+        "Negative",
+        "Zero"
+      ],
+      "AmountAsc": [
+        "Empty",
+        "Negative",
+        "Zero",
+        "Nor",
+        "South",
+        "north",
+        "North"
+      ],
+      "AmountDesc": [
+        "Empty",
+        "North",
+        "north",
+        "Nor",
+        "South",
+        "Zero",
+        "Negative"
+      ],
+      "RankDescNameAsc": [
+        "Empty",
+        "north",
+        "North",
+        "Negative",
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "ActiveAsc": [
+        "Zero",
+        "South",
+        "Negative",
+        "north",
+        "North",
+        "Nor",
+        "Empty"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_retrieve_identical": true,
+    "server_side_grid_identical": true
+  },
+  "typescript": {
+    "sortRecords_identical": true,
+    "frontend_tests": 212
+  },
+  "native_semantics": [
+    "NULL sorts first in both ascending and descending order",
+    "the empty string is an ordinary, smallest string",
+    "strings compare without regard to case; equal keys fall through to the next sort key",
+    "false sorts before true",
+    "digits are not collated numerically"
+  ],
+  "fixed": [
+    "NULL sorted last in ascending retrieves",
+    "case-sensitive string order",
+    "booleans could not be sorted in microflow retrieves",
+    "server-side grids chained unstable sorts and placed NULL last when descending",
+    "TypeScript sort used locale numeric collation and placed NULL last when descending"
+  ],
+  "limitations": [
+    "case folding uses Ruby downcase and JavaScript toLowerCase; non-ASCII collation is not certified",
+    "the in-memory list Sort operation is not covered: the runtime ignores its sort keys (separate follow-up)"
+  ]
+}

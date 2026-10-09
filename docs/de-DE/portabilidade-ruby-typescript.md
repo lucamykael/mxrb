@@ -24,6 +24,24 @@ Läufe stimmten überein und entsprachen Ruby bei Views, interpretierten Microfl
 und der exportierten Anwendung ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-predicates-2026-10-09.json).
 
+## Sortierung von Retrieves und Grids
+
+Sortierte Datenbank-Retrieves, serverseitig sortierte DataGrids und
+Seitendatenquellen folgen der Datenbankreihenfolge von Mendix 11.12.1: `NULL`
+steht bei `ASC` und `DESC` zuerst; die leere Zeichenfolge ist eine gewöhnliche,
+kleinste Zeichenfolge; Zeichenfolgen werden ohne Groß-/Kleinschreibung und ohne
+numerische Kollation verglichen (`a10` vor `A9`); `false` steht vor `true`.
+Gleichstände gehen an den nächsten Schlüssel und behalten zuletzt die
+gespeicherte Reihenfolge. Zuvor sortierte Ruby `NULL` bei `ASC` ans Ende, beachtete
+die Schreibweise und konnte Booleans nicht sortieren; TypeScript nutzte die
+numerische Kollation des Browsers.
+
+Alle acht Fixture-Reihenfolgen liefen mit `script/oql_native_oracle` auf dem
+offiziellen Runtime und stimmen mit dem Ruby-Interpreter, dem serverseitigen Grid
+und `sortRecords` im Frontend überein. Die Listenoperation `Sort` im Speicher ist
+nicht abgedeckt: Der Runtime ignoriert ihre Schlüssel noch.
+[Nachweis](../evidence/retrieve-sort-2026-10-09.json).
+
 ## OQL-Datasets und tabellarische Abfragen
 
 Vorhandene OQL-Datasets werden nach `app/datasets` exportiert. Der Abfragetext

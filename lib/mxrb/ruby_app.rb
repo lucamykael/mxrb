@@ -2360,27 +2360,16 @@ module Mxrb
       end
 
       def grid_sort_records(records, sortings)
-        Array(sortings).reverse_each.reduce(records.dup) do |values, raw|
+        keys = Array(sortings).map do |raw|
           sorting = raw.to_h.transform_keys(&:to_s)
-          attribute = grid_member_name(sorting.fetch('attribute'))
           direction = sorting.fetch('direction', 'Ascending').to_s
           unless %w[Ascending Descending asc desc].include?(direction)
             raise ArgumentError, "unsupported sort direction #{direction}"
           end
 
-          multiplier = %w[Descending desc].include?(direction) ? -1 : 1
-          values.sort do |left, right|
-            multiplier * grid_compare_values(left.members[attribute], right.members[attribute])
-          end
+          [grid_member_name(sorting.fetch('attribute')), %w[Descending desc].include?(direction)]
         end
-      end
-
-      def grid_compare_values(left, right)
-        return 0 if left.nil? && right.nil?
-        return -1 if left.nil?
-        return 1 if right.nil?
-
-        left.is_a?(Numeric) && right.is_a?(Numeric) ? left <=> right : left.to_s <=> right.to_s
+        Runtime::SortOrder.sort(records, keys) { |record, attribute| record.members[attribute] }
       end
 
       def grid_member_name(value)

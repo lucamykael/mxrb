@@ -23,6 +23,23 @@ execuções nativas deram o mesmo resultado, idêntico ao Ruby nas views, nos
 microflows interpretados e na aplicação exportada com acesso ao MPR proibido.
 [Evidência](../evidence/oql-predicates-2026-10-09.json).
 
+## Ordenação de retrieves e grids
+
+Retrieves de banco com ordenação, DataGrids ordenados no servidor e fontes de
+dados de páginas seguem a ordem do banco do Mendix 11.12.1: `NULL` vem primeiro
+tanto em `ASC` quanto em `DESC`; a string vazia é uma string comum, a menor;
+strings são comparadas sem diferenciar maiúsculas e sem collation numérica
+(`a10` antes de `A9`); `false` vem antes de `true`. Empates passam para a próxima
+chave e, por fim, mantêm a ordem armazenada. Antes, o Ruby colocava `NULL` por
+último em `ASC`, diferenciava maiúsculas e não ordenava booleanos; o TypeScript
+usava collation numérica do navegador.
+
+As oito ordenações do fixture foram executadas no Runtime oficial com
+`script/oql_native_oracle` e coincidem com o interpretador Ruby, o grid do servidor
+e o `sortRecords` do frontend. A operação de lista `Sort` em memória não está
+coberta: o runtime ainda ignora suas chaves.
+[Evidência](../evidence/retrieve-sort-2026-10-09.json).
+
 ## Datasets OQL e consultas tabulares
 
 Datasets OQL existentes são exportados para `app/datasets` e permitem editar a
