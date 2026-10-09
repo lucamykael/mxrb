@@ -878,6 +878,9 @@ module Mxrb
                when 'EndEvent' then nanoflow_end_source(object, result_type)
                when 'ExclusiveSplit' then nanoflow_split_source(object, outgoing)
                when 'ActionActivity' then nanoflow_action_case_source(object['action'], outgoing)
+               when 'LoopedActivity' then nanoflow_loop_source(object['loop'], flows, outgoing, result_type)
+               when 'BreakEvent' then "return 'break';"
+               when 'ContinueEvent' then "return 'continue';"
                else nanoflow_next_source(outgoing)
                end
         <<~TS.chomp
@@ -885,6 +888,39 @@ module Mxrb
           #{indent(body, 10)}
                 }
         TS
+      end
+
+      # A loop body runs as its own state machine and reports 'break' or 'continue'.
+      def nanoflow_loop_source(loop, flows, outgoing, result_type)
+        after = nanoflow_next_source(outgoing)
+        @nanoflow_loop_depth = @nanoflow_loop_depth.to_i + 1
+        cases = loop.fetch('objects').filter_map { nanoflow_typescript_case(_1, flows, result_type) }
+        <<~TS.chomp
+          for (const item of runtime.loop(#{JSON.generate(loop.slice('kind', 'list', 'condition'))})) {
+            #{loop['kind'] == 'iterable' ? "runtime.set(#{JSON.generate(loop['variable'])}, item);" : 'void item;'}
+            const signal = await (async (): Promise<'break' | 'continue'> => {
+              let current = #{JSON.generate(nanoflow_loop_entry(loop.fetch('objects'), flows))};
+              for (let step = 0; step < 10_000; step += 1) {
+                switch (current) {
+          #{indent(cases.join("\n"), 6)}
+                  default:
+                    throw runtime.missing(current);
+                }
+              }
+              throw runtime.exceeded();
+            })();
+            if (signal === 'break') break;
+          }
+          #{after}
+        TS
+      ensure
+        @nanoflow_loop_depth -= 1
+      end
+
+      def nanoflow_loop_entry(objects, flows)
+        ids = objects.reject { %w[MicroflowParameter Annotation].include?(_1['type']) }.map { _1['id'] }
+        targets = flows.map { _1['destination'] }
+        ids.find { !targets.include?(_1) }
       end
 
       def nanoflow_end_source(object, result_type)
@@ -923,7 +959,16 @@ module Mxrb
         action ||= {}
         case action['type']
         when 'LogMessage'
-          "runtime.log(#{JSON.generate(action['message'].to_s)});\n"
+          parameters = JSON.generate(action.fetch('parameters', []))
+          "runtime.log(#{JSON.generate(action['message'].to_s)}, #{parameters});\n"
+        when 'Retrieve'
+          spec = JSON.generate(action.except('type', 'variable'))
+          "await runtime.retrieve(#{JSON.generate(action['variable'])}, #{spec});\n"
+        when 'Commit' then "await runtime.commit(#{JSON.generate(action['variable'])});\n"
+        when 'Delete' then "await runtime.delete(#{JSON.generate(action['variable'])});\n"
+        when 'Rollback' then "await runtime.rollback(#{JSON.generate(action['variable'])});\n"
+        when 'ListOperations' then "runtime.listOperation(#{JSON.generate(action.except('type'))});\n"
+        when 'Aggregate' then "runtime.aggregate(#{JSON.generate(action.except('type'))});\n"
         when 'CreateVariable', 'ChangeVariable'
           "runtime.set(#{JSON.generate(action['variable'].to_s)}, " \
             "runtime.value(#{JSON.generate(action['value'].to_s)}));\n"
@@ -1007,6 +1052,7 @@ module Mxrb
 
       def nanoflow_next_source(flows)
         edge = flows.find { !_1['error'] }
+        return "return 'continue';" if !edge && @nanoflow_loop_depth.to_i.positive?
         return "throw runtime.stopped('node');" unless edge
 
         "current = #{JSON.generate(edge['destination'])};\nbreak;"
@@ -1040,7 +1086,18 @@ module Mxrb
         result['return'] = object['ReturnValue'].to_s if type == 'EndEvent'
         result['condition'] = object.dig('SplitCondition', 'Expression').to_s if type == 'ExclusiveSplit'
         result['action'] = nanoflow_action(object['Action']) if type == 'ActionActivity'
+        result['loop'] = nanoflow_loop(object) if type == 'LoopedActivity'
         result
+      end
+
+      def nanoflow_loop(object)
+        source = object['LoopSource'] || {}
+        {
+          'kind' => source['$Type'].to_s.end_with?('WhileLoopCondition') ? 'while' : 'iterable',
+          'list' => source['ListVariableName'].to_s, 'variable' => source['VariableName'].to_s,
+          'condition' => source['WhileExpression'].to_s,
+          'objects' => native_items(object.dig('ObjectCollection', 'Objects')).filter_map { nanoflow_object(_1) }
+        }
       end
 
       def nanoflow_action(action)
@@ -1066,6 +1123,16 @@ module Mxrb
                         'operation' => action['Type'].to_s, 'value' => action['Value'].to_s)
         when 'LogMessage'
           result['message'] = translated_text_template(action['MessageTemplate'])
+          result['parameters'] = native_items(action.dig('MessageTemplate', 'Parameters')).map { _1['Expression'].to_s }
+        when 'Retrieve' then result.merge!(nanoflow_retrieve(action))
+        when 'Commit' then result['variable'] = action['CommitVariableName'].to_s
+        when 'Delete' then result['variable'] = action['DeleteVariableName'].to_s
+        when 'Rollback' then result['variable'] = action['RollbackVariableName'].to_s
+        when 'ListOperations' then result.merge!(nanoflow_list_operation(action))
+        when 'Aggregate'
+          result.merge!('list' => action['AggregateVariableName'].to_s, 'function' => action['AggregateFunction'].to_s,
+                        'attribute' => action['Attribute'].to_s.split('.').last.to_s,
+                        'result_variable' => action['VariableName'].to_s)
         when 'MicroflowCall'
           call = action['MicroflowCall'] || {}
           arguments = native_items(call['ParameterMappings']).to_h do |mapping|
@@ -1109,6 +1176,50 @@ module Mxrb
                         'message' => translated_text_template(action['FeedbackTemplate']))
         end
         result
+      end
+
+      def nanoflow_retrieve(action)
+        source = action['RetrieveSource'] || {}
+        result = { 'variable' => action['ResultVariableName'].to_s }
+        if source['$Type'].to_s.end_with?('AssociationRetrieveSource')
+          return result.merge(nanoflow_association_retrieve(source))
+        end
+
+        range = source['Range'] || {}
+        result.merge(
+          'source' => 'database', 'entity' => source['Entity'].to_s, 'xpath' => source['XpathConstraint'].to_s,
+          'sort' => nanoflow_sortings(source.dig('NewSortings', 'Sortings')),
+          'single' => range['SingleObject'] == true, 'limit' => range['LimitExpression'].to_s,
+          'offset' => range['OffsetExpression'].to_s
+        )
+      end
+
+      def nanoflow_association_retrieve(source)
+        name = source['AssociationId'].to_s
+        link = @project.modules.flat_map { |mod| mod.associations.map { association_manifest(mod, _1) } }
+                       .find { _1['name'] == name }
+        raise SerializationError, "unknown nanoflow association #{name}" unless link
+
+        { 'source' => 'association', 'start' => source['StartVariableName'].to_s, 'association' => name,
+          'from' => link['from_entity'], 'to' => link['to_entity'], 'kind' => link['type'] }
+      end
+
+      def nanoflow_sortings(sortings)
+        native_items(sortings).map do |sorting|
+          attribute = sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')
+          { 'attribute' => attribute.to_s.split('.').last.to_s, 'direction' => sorting['SortOrder'].to_s }
+        end
+      end
+
+      def nanoflow_list_operation(action)
+        operation = action['NewOperation'] || {}
+        {
+          'operation' => operation['$Type'].to_s.delete_prefix('Microflows$'), 'list' => operation['ListName'].to_s,
+          'second' => operation['SecondListOrObjectName'].to_s, 'expression' => operation['Expression'].to_s,
+          'attribute' => operation['Attribute'].to_s.split('.').last.to_s,
+          'sort' => nanoflow_sortings(operation.dig('Sortings', 'Sortings')),
+          'result_variable' => action['ResultVariableName'].to_s
+        }
       end
 
       def nanoflow_page_settings(action, settings)

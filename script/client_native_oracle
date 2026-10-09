@@ -1,0 +1,122 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs a client oracle fixture in headless Chromium. Each case of the fixture's
+# cases.json is a button `.mx-name-<name>` whose nanoflow logs "ORACLE <name>=<value>".
+#
+#   script/client_native_oracle native FIXTURE_DIR results.json [MENDIX_HOME]
+#     builds the fixture with the official Linux MxBuild and runs the Mendix Runtime;
+#   script/client_native_oracle ruby FIXTURE_DIR results.json NODE_MODULES_DIR
+#     exports the fixture as a Ruby application and runs it with `mxrb run`.
+
+require 'fileutils'
+require 'json'
+require 'net/http'
+require 'open3'
+require 'socket'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+
+ROOT = File.expand_path('..', __dir__)
+STARTED = 'Mendix Runtime successfully started'
+
+def run!(*command, chdir: ROOT, env: {})
+  output, status = Open3.capture2e(env, *command, chdir:)
+  raise "#{command.first} failed:\n#{output[-3000..] || output}" unless status.success?
+
+  output
+end
+
+def free_port = TCPServer.new('127.0.0.1', 0).then { |server| server.addr[1].tap { server.close } }
+
+def serving?(url)
+  Net::HTTP.get_response(URI(url)).is_a?(Net::HTTPSuccess)
+rescue SystemCallError, IOError
+  false
+end
+
+def wait_until(seconds)
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+  until yield
+    raise 'timed out waiting for the application' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+    sleep 0.5
+  end
+end
+
+# Starts a process group, yields while it runs and stops the whole group.
+def serving(env, *command, chdir:, log:)
+  pid = Process.spawn(env, *command, chdir:, out: log, err: log, pgroup: true)
+  yield
+ensure
+  stop(pid) if pid
+end
+
+def stop(pid)
+  Process.kill('TERM', -pid)
+  Process.wait(pid)
+rescue Errno::ESRCH, Errno::ECHILD
+  nil
+end
+
+def native_url(fixture, work, mendix_home)
+  project = File.join(work, 'project', 'Oracle.mpr')
+  FileUtils.mkdir_p(File.dirname(project))
+  run!(RbConfig.ruby, "-I#{ROOT}/lib", File.join(fixture, 'project.rb'), env: { 'MXRB_OUTPUT_PATH' => project })
+  java = ENV.fetch('JAVA_HOME') { abort 'JAVA_HOME must point to the Java version Mendix requires' }
+  build(project, File.join(work, 'app.zip'), java, mendix_home)
+  run!('unzip', '-q', File.join(work, 'app.zip'), '-d', File.join(work, 'runtime'))
+  port = free_port
+  [runtime_env(java, port), ['bin/start', 'etc/Default'], File.join(work, 'runtime'), "http://localhost:#{port}/"]
+end
+
+def runtime_env(java, port)
+  { 'JAVA_HOME' => java, 'M2EE_ADMIN_PASS' => 'mxrb-client-oracle', 'RUNTIME_HTTP_PORT' => port.to_s,
+    'ADMIN_PORT' => free_port.to_s }
+end
+
+def build(project, package, java, mendix_home)
+  plan = Mxrb::Runtime::Toolchain.new(project, mendix_home:).plan
+  run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java}",
+       "--java-exe-path=#{java}/bin/java", "--output=#{package}", project)
+end
+
+def ruby_url(fixture, work, node_modules)
+  project = File.join(work, 'Oracle.mpr')
+  run!(RbConfig.ruby, "-I#{ROOT}/lib", File.join(fixture, 'project.rb'), env: { 'MXRB_OUTPUT_PATH' => project })
+  app = File.join(work, 'app')
+  run!(RbConfig.ruby, 'bin/mxrb', 'export', project, app, '--mode', 'ruby')
+  run!('cp', '-al', node_modules, File.join(app, 'frontend', 'node_modules'))
+  client = free_port
+  command = [RbConfig.ruby, 'bin/mxrb', 'run', app, '--server-port', free_port.to_s, '--client-port', client.to_s,
+             '--no-reload']
+  [{}, command, ROOT, "http://127.0.0.1:#{client}/"]
+end
+
+mode, fixture, output, extra = ARGV
+abort 'Usage: script/client_native_oracle native|ruby FIXTURE_DIR OUTPUT.json [MENDIX_HOME|NODE_MODULES]' unless
+  %w[native ruby].include?(mode) && fixture && output
+fixture = File.expand_path(fixture)
+names = JSON.parse(File.read(File.join(fixture, 'cases.json'))).map { _1.fetch('name') }
+
+Dir.mktmpdir('mxrb-client-oracle-') do |work|
+  env, command, directory, url = mode == 'native' ? native_url(fixture, work, extra) : ruby_url(fixture, work, extra)
+  console = +''
+  serving(env, *command, chdir: directory, log: File.join(work, 'server.log')) do
+    wait_until(300) do
+      log = File.read(File.join(work, 'server.log'))
+      raise "application stopped:\n#{log[-3000..]}" if log.include?('Starting Mendix Runtime failed')
+
+      (mode == 'ruby' || log.include?(STARTED)) && serving?(url)
+    end
+    selectors = names.map { ".mx-name-#{_1}" }.join(',')
+    console = run!('node', File.join(ROOT, 'script', 'cdp_console.mjs'), url, selectors)
+  end
+  lines = console.lines.map { JSON.parse(_1) }
+  failures = lines.select { %w[exception error].include?(_1['type']) }.map { _1['text'] }
+  results = lines.filter_map { _1['text'][/ORACLE ([A-Za-z0-9_]+)=(.*)\z/m, 0] }.to_h do |text|
+    text.delete_prefix('ORACLE ').split('=', 2)
+  end
+  File.write(output, "#{JSON.pretty_generate(mode:, results:, failures:)}\n")
+  puts "#{results.length} of #{names.length} client results written to #{output}"
+end
