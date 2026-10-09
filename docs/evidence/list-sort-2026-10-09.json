@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-09",
+  "scope": "In-memory microflow list Sort operation",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "d300bdc0d4b8796eda638bd3317e878b035c77aefebe6dbbea56d3ba5050dffe",
+    "cases": 8,
+    "status": "passed",
+    "results": {
+      "NameAsc": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "NameDesc": [
+        "Zero",
+        "South",
+        "North",
+        "north",
+        "Nor",
+        "Negative",
+        "Empty"
+      ],
+      "NickAsc": [
+        "Negative",
+        "Zero",
+        "Nor",
+        "north",
+        "South",
+        "North",
+        "Empty"
+      ],
+      "NickDesc": [
+        "North",
+        "South",
+        "north",
+        "Nor",
+        "Negative",
+        "Zero",
+        "Empty"
+      ],
+      "AmountAsc": [
+        "Negative",
+        "Zero",
+        "Nor",
+        "South",
+        "north",
+        "North",
+        "Empty"
+      ],
+      "AmountDesc": [
+        "North",
+        "north",
+        "Nor",
+        "South",
+        "Zero",
+        "Negative",
+        "Empty"
+      ],
+      "RankDescNameAsc": [
+        "north",
+        "North",
+        "Negative",
+        "Nor",
+        "South",
+        "Zero",
+        "Empty"
+      ],
+      "ActiveAsc": [
+        "Zero",
+        "South",
+        "Negative",
+        "North",
+        "north",
+        "Nor",
+        "Empty"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true,
+    "two_export_regeneration_cycles_identical": true
+  },
+  "native_semantics": [
+    "NULL sorts last in both directions (the database order places it first)",
+    "strings compare without regard to case; on a case-only tie lowercase sorts first, like a Java collator",
+    "the empty string is the smallest string; false sorts before true"
+  ],
+  "fixed": [
+    "the runtime ignored the Sort keys and returned the list unchanged",
+    "Ruby export dropped the Sort keys",
+    "the DSL could not declare Sort keys"
+  ],
+  "limitations": [
+    "punctuation and accent collation are not certified",
+    "nanoflow list operations are not implemented in the TypeScript runtime"
+  ]
+}
