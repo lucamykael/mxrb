@@ -38,10 +38,27 @@ abgelehnt. Zuvor übersetzte der Ruby-Runtime wenige Muster in `strftime` und
 ignorierte `SSS`, `h`, `a` und Anführungszeichen.
 
 Alle 55 Fälle liefen mit `script/oql_native_oracle` auf dem offiziellen Runtime und
-stimmen mit dem Ruby-Interpreter überein. Das Einlesen von Text (lokales
-`parseDateTime`, Monatsnamen und `yy`) und TypeScript-Nanoflows, die im Client
-formatieren, bleiben eigene Arbeitsbereiche.
+stimmen mit dem Ruby-Interpreter überein. TypeScript-Nanoflows, die im Client formatieren, bleiben ein eigener
+Arbeitsbereich.
 [Nachweis](../evidence/date-formatting-2026-10-09.json).
+
+## Einlesen von Datumswerten in Microflows
+
+`parseDateTimeUTC` und `parseDateTime` folgen in Microflows dem strikten
+`SimpleDateFormat` für `en_US`: Monats- und Tagesnamen in beliebiger Schreibweise
+(`MMM` akzeptiert auch den vollen Namen), zweistelliges `yy` im Fenster von 80 Jahren
+vor bis 20 Jahren nach heute, `h`/`K`/`k` mit `a`, `D` (Tag im Jahr), `w` (US-Woche),
+`G` sowie die Zeitzonen `Z`, `X` und `z` (`UTC`, `GMT`, `EST` und der lange Name von
+UTC). Fehlende Felder ergeben 1970-01-01; ein gültiges Präfix wird akzeptiert;
+widersprüchliche Wochentage, Stunden außerhalb des Bereichs, unbekannte Namen, das
+Jahr 0 und zusätzliche Leerzeichen vor Namen lehnen den Text ab. `parseDateTime`
+liest die Uhrzeit in der Zeitzone der Sitzung (im Systemkontext UTC).
+
+Mendix nutzt vor dem 15.10.1582 den julianischen Kalender; MXRB lehnt diese Daten
+ausdrücklich ab, statt sie zu verschieben. Die übrigen 80 Fälle liefen mit
+`script/oql_native_oracle` auf dem offiziellen Runtime und stimmen mit Ruby überein.
+TypeScript-Nanoflows behalten die numerische Teilmenge unten.
+[Nachweis](../evidence/date-parsing-2026-10-09.json).
 
 ## OQL-Ausdrücke
 
@@ -233,7 +250,8 @@ zwischen Browsern, AsyncStorage und Offlinebetrieb sind nicht zertifiziert.
 `parseDateTimeUTC(text, muster[, ersatzwert])` läuft in Ruby-Microflows und
 TypeScript-Nanoflows ohne MPR-Zugriff. Unterstützt werden numerische Felder für
 Jahr, Monat, Tag, Stunde, Minute, Sekunde und Millisekunde sowie zitierte Literale
-und benachbarte Felder. Der Jahresbereich ist 1800–9999. Ungültige Eingaben liefern
+und benachbarte Felder. In Nanoflows ist der Jahresbereich 1800–9999; Microflows folgen
+Einlesen von Datumswerten in Microflows. Ungültige Eingaben liefern
 den optionalen Datums-/Leerwert oder einen Fehler; nicht unterstützte Muster
 führen immer zu einem ausdrücklichen Fehler.
 
@@ -243,8 +261,7 @@ Kalender- und Zeitkomponenten ab. Microflows akzeptieren ein gültiges Präfix u
 numerische Zeitzonenversätze; Nanoflows lehnen nachgestellten Text und die geprüften
 Versatzmuster ab. Reine Uhrzeiten verwenden in Microflows den 01.01.1970 und in
 Nanoflows das aktuelle UTC-Datum. Diese beobachteten Unterschiede bleiben erhalten.
-Lokalisierte Namen, zweistellige Jahre und die lokale Funktion `parseDateTime`
-sind nicht enthalten.
+Namen, zweistellige Jahre und das lokale `parseDateTime` gelten nur in Microflows.
 
 Die Ruby-Suite bestand 2.345 Beispiele mit 100 % Zeilen- und Zweigabdeckung.
 Das Frontend bestand 190 Tests und 81 Browserschritte ohne MPR-Zugriff.

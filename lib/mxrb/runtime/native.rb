@@ -237,6 +237,7 @@ module Mxrb
 
           case name.downcase
           when 'parsedatetimeutc' then DateParsing.invoke(arguments)
+          when 'parsedatetime' then DateParsing.invoke(arguments, zone: @calendar.zone(false).identifier)
           when 'length' then arguments.fetch(0).to_s.encode('UTF-16LE').bytesize / 2
           when 'trim' then arguments.fetch(0).to_s.gsub(/\A[\x00-\x20]+|[\x00-\x20]+\z/, '')
           when 'tolowercase' then arguments.fetch(0).to_s.downcase
