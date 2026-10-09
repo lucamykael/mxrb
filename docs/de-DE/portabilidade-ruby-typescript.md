@@ -42,6 +42,27 @@ und SPC eine dieser Aktionen und schlugen fehl.
 Runtime unter Linux, Chromium headless) und in der exportierten Ruby-App aus: alle 15
 Fälle stimmen überein. [Nachweis](../evidence/nanoflow-data-actions-2026-10-09.json).
 
+## Ausdrücke in Nanoflows
+
+Der Mendix-Client wertet Nanoflow-Ausdrücke in JavaScript statt Java aus, und der
+exportierte TypeScript-Auswerter folgt dieser im Client 11.12.1 gemessenen Semantik:
+`trim` entfernt alle Unicode-Leerzeichen (auch NBSP), `toLowerCase('İ')` ergibt `i̇`,
+`substring(Text, Start, Länge)` schlägt außerhalb des Bereichs nie fehl,
+`find`/`findLast` entsprechen `indexOf`/`lastIndexOf`, `replaceAll`/`replaceFirst`/
+`isMatch` nutzen reguläre Ausdrücke von JavaScript (`(?i)` ist ungültig, `isMatch` muss
+den ganzen Text treffen) mit wörtlicher Ersetzung (`$1` wird nicht ausgewertet),
+`urlEncode` ist `encodeURIComponent` und `urlDecode` liest `+` als Leerzeichen. Leere
+Argumente gelten als `''`, `'a' + empty` ist `'a'` und verkettete Zahlen werden zu Text.
+Ausgewertet werden außerdem `getCaption`/`getKey` (übersetzt nach der Seitensprache),
+das Token `[%CurrentDateTime%]` und die Tokens `[%BeginOf…%]`/`[%EndOf…%]` für Minute,
+Stunde, Tag, Monat und Jahr (das Ende ist der Beginn des nächsten Zeitraums minus 1 ms,
+in der Zeitzone der Sitzung oder UTC), Pfade `$obj/Modul.Assoz/Modul.Entität/Attribut`
+über die vom Server mitgesendeten zugeordneten Objekte sowie Objektgleichheit nach
+Identität. In den 1.146 Ausdrücken der Nanoflows aus Korpus und SPC bleibt keine
+Funktion und keine Syntax ohne Unterstützung. Die 27 Fälle von
+`spec/fixtures/native_nanoflow_expressions` stimmen zwischen offiziellem Client und
+Ruby-App überein. [Nachweis](../evidence/nanoflow-expressions-2026-10-09.json).
+
 ## Ausdrucksfunktionen in Microflows
 
 Anders als in XPath und OQL beachten Textvergleiche in Ausdrücken (`=`, `<`) sowie

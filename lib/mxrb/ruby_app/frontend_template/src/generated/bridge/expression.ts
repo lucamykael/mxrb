@@ -11,6 +11,7 @@ import {
 } from './decimal';
 import { calendarFunction, isCalendarFunction } from './calendar';
 import { parseDateTimeUTC } from './dateParsing';
+import { attributeDefinition, enumerationDefinition, expressionSchema, translated } from './schemaLookup';
 
 // Keep enum identity until comparison. Backend records can contain either the
 // qualified literal or the bare member used by model defaults.
@@ -31,6 +32,84 @@ export const registerClientConstants = (values: Record<string, RuntimeValue>): v
   clientConstants = structuredClone(values);
 };
 type Expression = () => Value;
+const isRecord = (value: Value): value is EntityRecord =>
+  !!value && typeof value === 'object' && !Array.isArray(value) && 'attributes' in value && 'id' in value;
+const empty = (value: Value): boolean => value === null || value === undefined;
+
+// Nanoflows run in the Mendix client, so string functions follow JavaScript:
+// trim removes all Unicode blanks, substring takes a start and a length and
+// never fails, regular expressions use JavaScript syntax (isMatch must match
+// the whole text) and replacements are literal. Empty arguments read as ''.
+const text = (value: Value): string => {
+  if (empty(value)) return '';
+  if (typeof value !== 'string') throw new Error('String function requires a string');
+  return value;
+};
+const index = (value: Value): number => {
+  if (typeof value !== 'number' || !Number.isInteger(value)) throw new Error('Expected an integer');
+  return value;
+};
+const optionalIndex = (values: Value[], position: number) =>
+  values.length > position ? index(values[position]) : undefined;
+const substring = (value: string, start: number, length?: number): string => {
+  const first = start < 0 ? Math.max(value.length + start, 0) : start;
+  return value.slice(first, length === undefined ? undefined : first + Math.max(length, 0));
+};
+const stringFunctions: Record<string, [number, number, (values: Value[]) => Value]> = {
+  trim: [1, 1, ([value]) => text(value).trim()],
+  tolowercase: [1, 1, ([value]) => text(value).toLowerCase()],
+  touppercase: [1, 1, ([value]) => text(value).toUpperCase()],
+  length: [1, 1, ([value]) => text(value).length],
+  substring: [2, 3, (values) => substring(text(values[0]), index(values[1]), optionalIndex(values, 2))],
+  find: [2, 3, (values) => text(values[0]).indexOf(text(values[1]), optionalIndex(values, 2))],
+  findlast: [
+    2,
+    3,
+    (values) =>
+      values.length > 2
+        ? text(values[0]).lastIndexOf(text(values[1]), index(values[2]))
+        : text(values[0]).lastIndexOf(text(values[1])),
+  ],
+  contains: [2, 2, ([value, search]) => text(value).includes(text(search))],
+  startswith: [2, 2, ([value, search]) => text(value).startsWith(text(search))],
+  endswith: [2, 2, ([value, search]) => text(value).endsWith(text(search))],
+  replaceall: [
+    3,
+    3,
+    ([value, pattern, replacement]) =>
+      text(value).replace(new RegExp(text(pattern), 'g'), () => text(replacement)),
+  ],
+  replacefirst: [
+    3,
+    3,
+    ([value, pattern, replacement]) =>
+      text(value).replace(new RegExp(text(pattern)), () => text(replacement)),
+  ],
+  ismatch: [2, 2, ([value, pattern]) => new RegExp(`^(${text(pattern)})$`).test(text(value))],
+  urlencode: [1, 1, ([value]) => encodeURIComponent(text(value))],
+  urldecode: [1, 1, ([value]) => decodeURIComponent(text(value).replaceAll('+', ' '))],
+};
+
+// [%BeginOfCurrentDay%] and friends: the start of the period in the session
+// time zone (or UTC), and its end one millisecond before the next period.
+const tokenUnits = ['Minute', 'Hour', 'Day', 'Month', 'Year'];
+function dateToken(token: string, timeZone?: string): string {
+  const name = token.slice(2, -2);
+  const now = new Date().toISOString();
+  if (name === 'CurrentDateTime') return now;
+  const match = /^(BeginOf|EndOf)Current(\w+?)(UTC)?$/.exec(name);
+  if (!match || !tokenUnits.includes(match[2])) throw new Error(`Unsupported token: ${token}`);
+  const [, edge, unit, utc = ''] = match;
+  const begin = String(calendarFunction(`trimTo${unit}s${utc}`, [now], timeZone));
+  if (edge === 'BeginOf') return begin;
+  const next = Date.parse(String(calendarFunction(`add${unit}s${utc}`, [begin, 1], timeZone)));
+  return new Date(next - 1).toISOString();
+}
+
+const locale = () =>
+  (typeof document !== 'undefined' && document.documentElement.lang) ||
+  (typeof navigator !== 'undefined' && navigator.language) ||
+  'en-US';
 const precedence: Record<string, number> = {
   or: 1,
   and: 2,
@@ -53,6 +132,14 @@ function boolean(value: Value): boolean {
   return value;
 }
 
+// Text concatenation reads empty as '' and writes numbers as toString does.
+function concatenated(value: Value): string {
+  if (empty(value)) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || isDecimal(value)) return numericText(value);
+  throw new Error('Only text and numbers can be concatenated');
+}
+
 function binary(operator: string, left: Expression, right: Expression): Value {
   if (operator === 'and') return boolean(left()) && boolean(right());
   if (operator === 'or') return boolean(left()) || boolean(right());
@@ -66,10 +153,13 @@ function binary(operator: string, left: Expression, right: Expression): Value {
           ? b.matches(a)
           : isNumeric(a) && isNumeric(b)
             ? numericCompare(a, b) === 0
-            : a === b;
+            : isRecord(a) && isRecord(b)
+              ? a.id === b.id
+              : (a ?? null) === (b ?? null);
     return operator === '=' ? equal : !equal;
   }
-  if (operator === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
+  if (operator === '+' && (typeof a === 'string' || typeof b === 'string'))
+    return concatenated(a) + concatenated(b);
   if (['>', '<', '>=', '<='].includes(operator)) {
     if (isNumeric(a) && isNumeric(b)) {
       const order = numericCompare(a, b);
@@ -107,7 +197,7 @@ export function evaluate(
   let remaining = source.trim();
   while (remaining) {
     const match = remaining.match(
-      /^(?:'(?:[^']|'')*'|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)?|@[A-Za-z_]\w*\.[A-Za-z_]\w*|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
+      /^(?:'(?:[^']|'')*'|\[%[A-Za-z]+%\]|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)*|@[A-Za-z_]\w*\.[A-Za-z_]\w*|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
     );
     if (!match) throw new Error(`Unsupported expression syntax: ${remaining}`);
     tokens.push(match[0]);
@@ -116,6 +206,59 @@ export function evaluate(
   let cursor = 0;
   const consume = (expected: string) => {
     if (tokens[cursor++] !== expected) throw new Error(`Expected ${expected} in expression`);
+  };
+  const callArguments = (): Expression[] => {
+    consume('(');
+    const arguments_: Expression[] = [];
+    if (tokens[cursor] !== ')') {
+      arguments_.push(parse(1));
+      while (tokens[cursor] === ',') {
+        consume(',');
+        arguments_.push(parse(1));
+      }
+    }
+    consume(')');
+    return arguments_;
+  };
+  // $variable/Module.Association/Module.Entity/Attribute over the associated
+  // objects embedded in records; a missing object makes the rest empty.
+  // Enumeration attributes become literals so captions and keys are known.
+  const path = (token: string): Value => {
+    const [name, ...members] = token.slice(1).split('/');
+    let value: Value = Object.hasOwn(variables, name) ? variables[name] : context;
+    let owner: EntityRecord | null = null;
+    let afterAssociation = false;
+    for (const member of members) {
+      if (empty(value)) return null;
+      if (afterAssociation && member.includes('.')) {
+        afterAssociation = false;
+        continue;
+      }
+      if (!isRecord(value)) return undefined;
+      afterAssociation = member.includes('.');
+      owner = value;
+      value = (value.attributes as Record<string, Value>)[member.split('.').at(-1) || member];
+    }
+    if (members.length && value === undefined) return null;
+    const enumeration =
+      owner && typeof value === 'string'
+        ? attributeDefinition(expressionSchema(), owner.type, members.at(-1)!)?.enumeration
+        : undefined;
+    if (!enumeration) return value;
+    return new EnumLiteral(
+      (value as string).startsWith(`${enumeration}.`) ? (value as string) : `${enumeration}.${value}`,
+    );
+  };
+  // getCaption and getKey of an enumeration literal or attribute.
+  const enumerationText = (call: string, value: Value): string => {
+    if (empty(value)) return '';
+    if (!(value instanceof EnumLiteral)) return String(value);
+    if (call === 'getkey') return value.member;
+    const enumeration = value.qualified.split('.').slice(0, -1).join('.');
+    const item = enumerationDefinition(expressionSchema(), enumeration)?.values.find(
+      (candidate) => candidate.name === value.member,
+    );
+    return item ? translated(item.caption, item.caption_translations, locale()) : value.member;
   };
   const atom = (): Expression => {
     const token = tokens[cursor++];
@@ -148,31 +291,14 @@ export function evaluate(
           throw new Error(`Client constant is unavailable: ${name}`);
         return clientConstants[name];
       };
-    if (token.startsWith('$')) {
-      const [name, member] = token.slice(1).split('/');
-      return () => {
-        const value = Object.hasOwn(variables, name) ? variables[name] : context;
-        if (!member) return value;
-        if (!value || typeof value !== 'object' || !('attributes' in value)) return undefined;
-        const attributes = value.attributes as Record<string, Value>;
-        return attributes[member.split('.').at(-1) || member];
-      };
-    }
+    if (token.startsWith('[%')) return () => dateToken(token, options.timeZone);
+    if (token.startsWith('$')) return () => path(token);
     if (
       isCalendarFunction(token) ||
       isDecimalFunction(token) ||
       token.toLowerCase() === 'parsedatetimeutc'
     ) {
-      consume('(');
-      const arguments_: Expression[] = [];
-      if (tokens[cursor] !== ')') {
-        arguments_.push(parse(1));
-        while (tokens[cursor] === ',') {
-          consume(',');
-          arguments_.push(parse(1));
-        }
-      }
-      consume(')');
+      const arguments_ = callArguments();
       if (token.toLowerCase() === 'parsedatetimeutc')
         return () => parseDateTimeUTC(arguments_.map((argument) => argument()));
       if (isDecimalFunction(token))
@@ -188,6 +314,18 @@ export function evaluate(
           options.timeZone,
         );
     }
+    const call = token.toLowerCase();
+    if (Object.hasOwn(stringFunctions, call) || call === 'getcaption' || call === 'getkey') {
+      const arguments_ = callArguments();
+      if (call === 'getcaption' || call === 'getkey') {
+        if (arguments_.length !== 1) throw new Error(`${token} requires one enumeration value`);
+        return () => enumerationText(call, arguments_[0]());
+      }
+      const [minimum, maximum, implementation] = stringFunctions[call];
+      if (arguments_.length < minimum || arguments_.length > maximum)
+        throw new Error(`${token} expects ${minimum} to ${maximum} arguments`);
+      return () => implementation(arguments_.map((argument) => argument()));
+    }
     if (token === 'toString') {
       consume('(');
       const value = parse(1);
@@ -199,21 +337,6 @@ export function evaluate(
           : isDecimal(result)
             ? numericText(result)
             : String(result ?? '');
-      };
-    }
-    if (['contains', 'starts-with', 'startsWith', 'endsWith'].includes(token)) {
-      consume('(');
-      const left = parse(1);
-      consume(',');
-      const right = parse(1);
-      consume(')');
-      return () => {
-        const value = left();
-        const search = right();
-        if (typeof value !== 'string' || typeof search !== 'string')
-          throw new Error('String predicate requires two strings');
-        if (token === 'contains') return value.includes(search);
-        return token === 'endsWith' ? value.endsWith(search) : value.startsWith(search);
       };
     }
     if (/^\w+\.\w+\.\w+$/.test(token)) return () => new EnumLiteral(token);
