@@ -1,0 +1,65 @@
+[
+ {
+  "Name": "North",
+  "Nick": "SELECT WHERE FROM",
+  "Amount": "9007199254740993.125",
+  "Other": "9007199254740993.125",
+  "Active": true,
+  "Rank": 3,
+  "Moment": "2024-03-10T07:30:00.000Z"
+ },
+ {
+  "Name": "South",
+  "Nick": "O'Brien",
+  "Amount": "2.5",
+  "Other": "3",
+  "Active": false,
+  "Rank": 1,
+  "Moment": "2023-12-31T23:59:59.500Z"
+ },
+ {
+  "Name": "Empty",
+  "Nick": null,
+  "Amount": null,
+  "Other": null,
+  "Active": true,
+  "Rank": null,
+  "Moment": null
+ },
+ {
+  "Name": "Zero",
+  "Nick": "",
+  "Amount": "0",
+  "Other": null,
+  "Active": false,
+  "Rank": 1,
+  "Moment": "2000-02-29T12:00:00.000Z"
+ },
+ {
+  "Name": "Negative",
+  "Nick": "",
+  "Amount": "-1.25",
+  "Other": "1",
+  "Active": false,
+  "Rank": 2,
+  "Moment": "1999-01-01T00:00:00.000Z"
+ },
+ {
+  "Name": "north",
+  "Nick": "abc_def%",
+  "Amount": "7",
+  "Other": "7",
+  "Active": true,
+  "Rank": 3,
+  "Moment": "2024-01-01T00:00:00.000Z"
+ },
+ {
+  "Name": "Nor",
+  "Nick": "A",
+  "Amount": "2.5",
+  "Other": "2.5",
+  "Active": true,
+  "Rank": 2,
+  "Moment": "2024-02-29T08:15:30.250Z"
+ }
+]

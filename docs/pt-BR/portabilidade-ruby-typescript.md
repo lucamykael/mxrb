@@ -76,6 +76,16 @@ convertem e partes de data não verificadas. As 78 consultas foram executadas no
 MxBuild e no Runtime oficiais com `script/oql_native_oracle` e coincidem com o Ruby.
 [Evidência](../evidence/oql-expressions-2026-10-09.json).
 
+## Retrieves com XPath
+
+Como no Mendix 11.12.1, as comparações de strings em XPath (`=`, `!=`, `<`, `>=`)
+e `contains`, `starts-with` e `ends-with` não diferenciam maiúsculas. Antes, o
+runtime Ruby diferenciava, e `[Name = 'NORTH']` não encontrava `North`. Os 44 casos
+do fixture, com `empty`, `not()`, booleanos, decimais, precedência de `and`/`or`,
+predicados encadeados, `string-length` e as funções de data, foram executados no
+Runtime oficial com `script/oql_native_oracle` e coincidem com o Ruby.
+[Evidência](../evidence/xpath-retrieve-2026-10-09.json).
+
 ## Ordenação de retrieves e grids
 
 Retrieves de banco com ordenação, DataGrids ordenados no servidor e fontes de

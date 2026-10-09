@@ -1,0 +1,241 @@
+{
+  "date": "2026-10-09",
+  "scope": "Database retrieves with XPath constraints",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "0d5b4ca960360dcf1b4bf1027efcdefbf109ae532894320f85f65c15dc741bdf",
+    "cases": 44,
+    "status": "passed",
+    "results": {
+      "EqCase": [
+        "north",
+        "North"
+      ],
+      "NeCase": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "LtStr": [
+        "Empty"
+      ],
+      "GeStr": [
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "Contains": [
+        "Nor",
+        "north",
+        "North"
+      ],
+      "StartsWith": [
+        "Nor",
+        "north",
+        "North"
+      ],
+      "EndsWith": [
+        "north",
+        "North",
+        "South"
+      ],
+      "ContainsNick": [
+        "Negative",
+        "Nor",
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "EqEmpty": [
+        "Empty"
+      ],
+      "NeEmpty": [
+        "Negative",
+        "Nor",
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "EqEmptyStr": [
+        "Negative",
+        "Zero"
+      ],
+      "NotContains": [
+        "Empty",
+        "Negative"
+      ],
+      "NumEq": [
+        "Nor",
+        "South"
+      ],
+      "NumGt": [
+        "Nor",
+        "north",
+        "North",
+        "South"
+      ],
+      "NumNe": [
+        "Empty",
+        "Negative",
+        "north",
+        "North",
+        "Zero"
+      ],
+      "AmountEmpty": [
+        "Empty"
+      ],
+      "BoolTrue": [
+        "Empty",
+        "Nor",
+        "north",
+        "North"
+      ],
+      "BoolFunc": [
+        "Empty",
+        "Nor",
+        "north",
+        "North"
+      ],
+      "BoolFalse": [
+        "Negative",
+        "South",
+        "Zero"
+      ],
+      "BoolBare": [
+        "Empty",
+        "Nor",
+        "north",
+        "North"
+      ],
+      "AndOr": [
+        "north",
+        "North",
+        "South"
+      ],
+      "Parens": [
+        "Nor",
+        "north",
+        "North"
+      ],
+      "TwoPreds": [
+        "north",
+        "North"
+      ],
+      "RankNe": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "north",
+        "North"
+      ],
+      "NotEq": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "StrNum": [
+        "north",
+        "North"
+      ],
+      "ContainsQuote": [
+        "South"
+      ],
+      "Integer": [
+        "Negative",
+        "Nor",
+        "north",
+        "North"
+      ],
+      "Neg": [
+        "Negative"
+      ],
+      "Year": [
+        "Nor",
+        "north",
+        "North"
+      ],
+      "Month": [
+        "Nor",
+        "Zero"
+      ],
+      "Day": [
+        "Nor",
+        "Zero"
+      ],
+      "Hours": [
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "Minutes": [
+        "North"
+      ],
+      "Seconds": [
+        "South"
+      ],
+      "DayOfYear": [
+        "Nor",
+        "Zero"
+      ],
+      "Quarter": [
+        "South"
+      ],
+      "Week": [
+        "Nor",
+        "Zero"
+      ],
+      "Weekday": [
+        "North",
+        "South"
+      ],
+      "MomentEmpty": [
+        "Empty"
+      ],
+      "MomentNotEmpty": [
+        "Negative",
+        "Nor",
+        "north",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "StrLen": [
+        "Empty",
+        "Negative",
+        "north",
+        "North",
+        "South"
+      ],
+      "StrLenNick": [
+        "Negative",
+        "Zero"
+      ],
+      "YearUtc": [
+        "Negative"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "string comparisons and contains, starts-with and ends-with ignore case",
+    "[id > 0] is rejected by mx check",
+    "date functions use UTC in system context; week-from-dateTime is the ISO week; weekday-from-dateTime counts Sunday = 1"
+  ],
+  "fixed": [
+    "the Ruby runtime compared XPath strings and string functions case-sensitively"
+  ],
+  "limitations": [
+    "axes, tokens such as [%BeginOfCurrentDay%] and functions not in the fixture are not certified by this matrix"
+  ]
+}
