@@ -1,0 +1,324 @@
+{
+  "date": "2026-10-09",
+  "scope": "Microflow expression functions: text, regular expressions, numbers and decimal formatting",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "45898bd26b24eac5fae646de5fcab281e51800edb1a386f8d9f04c2695e7eb80",
+    "cases": 95,
+    "status": "passed",
+    "results": {
+      "EqCase": [
+        "false"
+      ],
+      "NeCase": [
+        "true"
+      ],
+      "LtStr": [
+        "false"
+      ],
+      "Upper": [
+        "AÇÃO SS"
+      ],
+      "Lower": [
+        "àé i̇"
+      ],
+      "Length": [
+        "4"
+      ],
+      "LengthEmoji": [
+        "3"
+      ],
+      "Substr1": [
+        "ndix"
+      ],
+      "Substr2": [
+        "end"
+      ],
+      "SubstrEnd": [],
+      "Find": [
+        "1"
+      ],
+      "FindFrom": [
+        "3"
+      ],
+      "FindMissing": [
+        "-1"
+      ],
+      "FindLast": [
+        "3"
+      ],
+      "FindCase": [
+        "-1"
+      ],
+      "Contains": [
+        "false"
+      ],
+      "StartsWith": [
+        "false"
+      ],
+      "EndsWith": [
+        "true"
+      ],
+      "Trim": [
+        "[a b]"
+      ],
+      "ReplaceAll": [
+        "a-b-c"
+      ],
+      "ReplaceAllGroup": [
+        "$3/$2/$1"
+      ],
+      "ReplaceFirst": [
+        "baa"
+      ],
+      "ReplaceCase": [
+        "AbcABC"
+      ],
+      "IsMatch": [
+        "true"
+      ],
+      "IsMatchPartial": [
+        "false"
+      ],
+      "ConcatNum": [
+        "n=5"
+      ],
+      "ConcatDec": [
+        "d=2.5"
+      ],
+      "ToStrDec": [
+        "2.5"
+      ],
+      "ToStrDecBig": [
+        "12345678901234.56789"
+      ],
+      "ToStrDecSmall": [
+        "0.0000001"
+      ],
+      "ToStrInt": [
+        "1000000"
+      ],
+      "ToStrNeg": [
+        "-0.5"
+      ],
+      "Round": [
+        "3"
+      ],
+      "Round2": [
+        "4"
+      ],
+      "RoundNeg": [
+        "-3"
+      ],
+      "RoundDigits": [
+        "1.01"
+      ],
+      "Floor": [
+        "-2"
+      ],
+      "Ceil": [
+        "-1"
+      ],
+      "Abs": [
+        "3.2"
+      ],
+      "Pow": [
+        "1024"
+      ],
+      "PowDec": [
+        "6.25"
+      ],
+      "Sqrt": [
+        "1.4142135623730950488016887242096980786"
+      ],
+      "Max": [
+        "3.5"
+      ],
+      "Min": [
+        "-1"
+      ],
+      "Div": [
+        "3.5"
+      ],
+      "DivNeg": [
+        "-3.5"
+      ],
+      "Mod": [
+        "1"
+      ],
+      "ModNeg": [
+        "-1"
+      ],
+      "DivColon": [
+        "0.33333333333333333333333333333333333333"
+      ],
+      "Mul": [
+        "0.3"
+      ],
+      "ParseInt": [
+        "42"
+      ],
+      "ParseIntSpace": [
+        "7"
+      ],
+      "ParseDec": [
+        "3.14"
+      ],
+      "ParseDecComma": [
+        "9"
+      ],
+      "IfElse": [
+        "b"
+      ],
+      "UrlEncode": [
+        "a%20b%26c%3D%C3%A9"
+      ],
+      "UrlDecode": [
+        "a b&c"
+      ],
+      "FormatDec": [
+        "1",
+        "234",
+        "567.89"
+      ],
+      "FD0": [
+        "3"
+      ],
+      "FD1": [
+        "4"
+      ],
+      "FD2": [
+        "1",
+        "235"
+      ],
+      "FD3": [
+        "0.13"
+      ],
+      "FD4": [
+        "01.500"
+      ],
+      "FD5": [
+        "1234.568"
+      ],
+      "FD6": [
+        "-1",
+        "234.5"
+      ],
+      "FD7": [
+        "0.5"
+      ],
+      "FD8": [
+        "25.6%"
+      ],
+      "FD9": [
+        "R$ 5.00"
+      ],
+      "FD10": [
+        "1",
+        "234",
+        "567"
+      ],
+      "FD11": [
+        "1.23E4"
+      ],
+      "FD12": [
+        "0.14"
+      ],
+      "FD13": [
+        "0.15"
+      ],
+      "FD14": [
+        "9007199254740993.13"
+      ],
+      "PowFrac": [
+        "1.4142135623730951"
+      ],
+      "PowNeg": [
+        "0.25"
+      ],
+      "PowZero": [
+        "1"
+      ],
+      "MaxInt": [
+        "2"
+      ],
+      "MinDec": [
+        "1.5"
+      ],
+      "MaxType": [
+        "2.5"
+      ],
+      "ParsePlus": [
+        "5"
+      ],
+      "ParseDecSpace": [
+        "0"
+      ],
+      "ParseDecExp": [
+        "1000"
+      ],
+      "ParseIntDec": [
+        "0"
+      ],
+      "ConcatDec2": [
+        "x1"
+      ],
+      "ConcatDec3": [
+        "x0.1"
+      ],
+      "ConcatInt": [
+        "5x"
+      ],
+      "RepDollar": [
+        "a$b"
+      ],
+      "RepBackslash": [
+        "a\\\\b"
+      ],
+      "RepEmpty": [
+        "-a-b-c-"
+      ],
+      "IsMatchCase": [
+        "false"
+      ],
+      "IsMatchInline": [
+        "true"
+      ],
+      "RepFirstRegex": [
+        "a#b2"
+      ],
+      "SqrtBig": [
+        "100000"
+      ],
+      "Sqrt3": [
+        "1.7320508075688772935274463415058723669"
+      ],
+      "Sqrt025": [
+        "0.5"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "text comparisons and contains, startsWith, endsWith are case-sensitive in expressions",
+    "replaceAll/replaceFirst replacement text is literal; isMatch matches the whole text",
+    "pow uses doubles; sqrt and : use 38 significant digits",
+    "formatDecimal is Java DecimalFormat with HALF_UP; the integer part shows at least one digit",
+    "text + number joins the toString form; text + boolean and text + empty are rejected by mx check",
+    "parseInteger accepts a sign, rejects blanks and fractions; parseDecimal accepts exponents and rejects blanks"
+  ],
+  "fixed": [
+    "replaceAll, replaceFirst, isMatch, pow, sqrt, max, min and formatDecimal were unsupported",
+    "text + number was unsupported",
+    "parseInteger accepted surrounding blanks",
+    "message and log templates dropped backslashes from parameter values"
+  ],
+  "limitations": [
+    "DecimalFormat patterns beyond prefixes/suffixes, 0, #, grouping, %, and E0 are rejected",
+    "Java and Ruby regular expression dialects differ in rare constructs"
+  ]
+}

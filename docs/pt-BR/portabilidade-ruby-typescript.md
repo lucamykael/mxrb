@@ -23,6 +23,21 @@ execuções nativas deram o mesmo resultado, idêntico ao Ruby nas views, nos
 microflows interpretados e na aplicação exportada com acesso ao MPR proibido.
 [Evidência](../evidence/oql-predicates-2026-10-09.json).
 
+## Funções de expressão em microflows
+
+Diferentemente de XPath e OQL, comparações de texto em expressões (`=`, `<`) e
+`contains`, `startsWith` e `endsWith` diferenciam maiúsculas, como no Mendix 11.12.1.
+`replaceAll`, `replaceFirst` e `isMatch` usam expressões regulares Java; `isMatch`
+exige o texto inteiro e o texto de substituição é literal (`$1` não é grupo). `pow`
+calcula em ponto flutuante duplo, `sqrt` com 38 dígitos significativos, `max`/`min`
+preservam o tipo, `parseInteger` rejeita espaços e frações, e `formatDecimal` segue o
+`DecimalFormat` Java arredondando meio para cima (`'#,##0.00'`, `%`, `E0`, prefixos).
+Texto mais número usa a forma de `toString` (`'x' + 1.0` = `x1`); texto com booleano
+ou `empty` é recusado. Parâmetros de mensagens e logs preservam `\` e `$`.
+
+Os 95 casos foram executados no Runtime oficial com `script/oql_native_oracle` e
+coincidem com o interpretador Ruby. [Evidência](../evidence/expression-functions-2026-10-09.json).
+
 ## Formatação de datas em microflows
 
 `formatDateTime`, `formatDateTimeUTC`, `formatDate`, `formatTime` e `toString` de

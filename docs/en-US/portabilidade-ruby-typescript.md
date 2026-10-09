@@ -23,6 +23,21 @@ runs agreed, and matched Ruby for views, interpreted microflows and the exported
 application with MPR access prohibited.
 [Evidence](../evidence/oql-predicates-2026-10-09.json).
 
+## Microflow expression functions
+
+Unlike XPath and OQL, text comparisons in expressions (`=`, `<`) and `contains`,
+`startsWith` and `endsWith` are case-sensitive, as in Mendix 11.12.1. `replaceAll`,
+`replaceFirst` and `isMatch` use Java regular expressions; `isMatch` requires the
+whole text and replacement text is literal (`$1` is not a group). `pow` computes
+with doubles, `sqrt` with 38 significant digits, `max`/`min` keep the type,
+`parseInteger` rejects blanks and fractions, and `formatDecimal` follows Java's
+`DecimalFormat`, rounding half up (`'#,##0.00'`, `%`, `E0`, prefixes). Text plus a
+number uses the `toString` form (`'x' + 1.0` is `x1`); text with a boolean or `empty`
+is refused. Message and log parameters keep `\` and `$`.
+
+All 95 cases ran on the official Runtime through `script/oql_native_oracle` and match
+the Ruby interpreter. [Evidence](../evidence/expression-functions-2026-10-09.json).
+
 ## Microflow date formatting
 
 `formatDateTime`, `formatDateTimeUTC`, `formatDate`, `formatTime` and `toString` of

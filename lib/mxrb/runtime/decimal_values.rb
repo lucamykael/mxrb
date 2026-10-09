@@ -70,6 +70,14 @@ module Mxrb
         places.zero? ? result.to_i : result
       end
 
+      # value rounded to the context's significant digits.
+      def significant(value)
+        number = DecimalValues.parse(value)
+        return number if number.zero?
+
+        number.round(precision - number.exponent, @mode)
+      end
+
       def persist(value)
         result = DecimalValues.parse(value).round(scale, @mode)
         raise ArgumentError, 'decimal value is not within range' if result.abs > 10**20
