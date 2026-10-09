@@ -31,6 +31,19 @@ module Mxrb
         end
       end
 
+      def zone(utc)
+        name = @time_zone.respond_to?(:call) ? @time_zone.call : @time_zone
+        TZInfo::Timezone.get(utc ? 'UTC' : name)
+      rescue TZInfo::InvalidTimezoneIdentifier
+        raise ArgumentError, 'invalid expression time zone'
+      end
+
+      def instant(value)
+        raise ArgumentError, 'expected a date and time' unless value.is_a?(Time) || value.is_a?(DateTime)
+
+        value.to_time.getutc
+      end
+
       private
 
       def shift_arguments(arguments, match)
@@ -48,13 +61,6 @@ module Mxrb
         Time.at(Rational(integer(arguments[0]), 1000)).utc
       end
 
-      def zone(utc)
-        name = @time_zone.respond_to?(:call) ? @time_zone.call : @time_zone
-        TZInfo::Timezone.get(utc ? 'UTC' : name)
-      rescue TZInfo::InvalidTimezoneIdentifier
-        raise ArgumentError, 'invalid expression time zone'
-      end
-
       def arity!(arguments, count)
         raise ArgumentError, "expected #{count} date arguments" unless arguments.length == count
       end
@@ -63,12 +69,6 @@ module Mxrb
         raise ArgumentError, 'date component must be an integer' unless value.is_a?(Integer)
 
         value
-      end
-
-      def instant(value)
-        raise ArgumentError, 'expected a date and time' unless value.is_a?(Time) || value.is_a?(DateTime)
-
-        value.to_time.getutc
       end
 
       def create(arguments, zone)
