@@ -30,15 +30,17 @@ RSpec.describe Mxrb::Runtime::DateParsing do # rubocop:disable Metrics/BlockLeng
     expect(described_class.invoke(['literal', "'literal'"])).to eq(Time.utc(1970))
   end
 
-  it 'falls back for unparseable values, invalid offsets, unsupported years and an empty pattern' do
+  it 'falls back for unparseable values, invalid offsets, year zero and an empty pattern' do
     [['2024-01-02+2400', 'yyyy-MM-ddZ'], ['2024-01-02+0299', 'yyyy-MM-ddZ'],
-     ['10000', 'yyyy'], ['1799', 'yyyy'], ['ignored', '']].each do |input, pattern|
+     ['0000', 'yyyy'], ['ignored', '']].each do |input, pattern|
       expect(described_class.invoke([input, pattern, Time.utc(2000)])).to eq(Time.utc(2000))
     end
+    expect(described_class.invoke(%w[1799 yyyy])).to eq(Time.utc(1799))
+    expect(described_class.invoke(%w[10000 yyyy])).to eq(Time.utc(10_000))
   end
 
   it 'rejects unsupported patterns and malformed literals even when a fallback exists' do
-    ['yy-MM-dd', 'dd MMM yyyy', 'yyyy-MM-dd Q', "yyyy-MM-dd'", "yyyy 'unfinished"].each do |pattern|
+    ['yyyy-MM-dd Q', 'yyyy-MM-dd F', "yyyy-MM-dd'", "yyyy 'unfinished"].each do |pattern|
       expect { described_class.invoke(['input', pattern, Time.utc(2000)]) }.to raise_error(ArgumentError)
     end
   end
