@@ -74,7 +74,9 @@ microflow "erstellt Bestellung",
 
 `mxrb test App.mpr functional_test.rb --docker` führt Check, Build und Runtime
 in wegwerfbaren Containern aus. JUnit und MDL sind nicht nötig; das Original-MPR
-wird nie verändert.
+wird nie verändert. Flows mit gleichem Namen in verschiedenen Modulen, auch das vom
+Test erzeugte `RunAll`, erhalten modulqualifizierte stabile IDs; zuvor verhinderte
+diese Kollision den Start von Mendix mit `NoSuchElementException: ModelStartEvent`.
 `--json ergebnis.json` und `--junit ergebnis.xml` erzeugen CI-Berichte. JUnit
 ist hier nur das XML-Austauschformat; MXRB schreibt es direkt in Ruby und
 installiert oder startet kein Java-JUnit-Framework.
