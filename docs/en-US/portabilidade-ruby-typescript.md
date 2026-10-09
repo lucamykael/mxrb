@@ -13,8 +13,8 @@ requires `GROUP BY`. The first stored row represents a group or distinct value
 that differs only by case.
 
 Mendix rejects `ESCAPE`, `BETWEEN`, `<>`, `HAVING` without `GROUP BY` and
-columns inside `IN`; MXRB rejects them as well. Scalar functions, `CAST`, `CASE`,
-concatenation and arithmetic remain unsupported. Case folding uses Ruby's
+columns inside `IN`; MXRB rejects them as well. Functions, `CAST`, `CASE` and
+arithmetic are described under OQL expressions. Case folding uses Ruby's
 `downcase`; non-ASCII collations are not certified.
 
 All 37 queries ran on the official Mendix 11.12.1 MxBuild and Runtime installed
@@ -22,6 +22,26 @@ on Linux through `script/oql_native_oracle`, without the Windows VM. Two native
 runs agreed, and matched Ruby for views, interpreted microflows and the exported
 application with MPR access prohibited.
 [Evidence](../evidence/oql-predicates-2026-10-09.json).
+
+## OQL expressions
+
+Projections, `WHERE`, `HAVING` and dataset `ORDER BY` accept arithmetic (`+`, `-`,
+`*`, `:` division and `%`), `+` concatenation, simple and searched `CASE`, `CAST` to
+`STRING`, `INTEGER`, `LONG`, `DECIMAL`, `BOOLEAN` and `DATETIME`, and the functions
+`LOWER`, `UPPER`, `LENGTH`, `REPLACE`, `COALESCE`, `ROUND`, `DATEPART` and `DATEDIFF`.
+The semantics were measured on the Mendix 11.12.1 HSQLDB: `/` is a path separator,
+not division; integer division truncates; decimal division truncates at the larger
+operand scale (`3 : 4.0 = 0.7`); `%` truncates its operands; `ROUND` rounds half
+away from zero; concatenation treats `NULL` as `''`, while `UPPER`, `LENGTH` and
+arithmetic propagate `NULL`; `REPLACE` is case-sensitive; casting a decimal to text
+uses eight decimals; dates use UTC, `WEEK` is the ISO week, `WEEKDAY` starts on
+Sunday and `DATEDIFF` counts crossed boundaries.
+
+As in Mendix, these fail: an untyped `NULL` literal in arithmetic, `REPLACE` with
+`NULL`, `CAST` to `INTEGER` outside 32 bits, division by zero, text that does not
+convert and unverified date parts. All 78 queries ran on the official MxBuild and
+Runtime through `script/oql_native_oracle` and match Ruby.
+[Evidence](../evidence/oql-expressions-2026-10-09.json).
 
 ## Retrieve and grid sort order
 
@@ -66,7 +86,7 @@ and ignore unknown columns, matching the verified Java implementations. Queries
 read durable values and validate names, types and syntax before reading rows.
 The DSL rejects dataset creation, removal, renaming and metadata changes.
 Parameters, non-OQL sources, `SELECT *`, joins against derived sources,
-correlated subqueries and scalar functions remain outside
+and correlated subqueries remain outside
 this subset. Every projection requires an explicit alias.
 
 The matrix contains 18 queries executed through both actions, including two real
@@ -84,7 +104,7 @@ remain stable across commits. All names, clauses and types are checked before
 reading rows, including empty sources. OQL is never passed to SQLite as SQL.
 
 The bounded relational grammar starts with `SELECT` and requires projection
-aliases. Chained views, parameters and scalar functions remain unsupported;
+aliases. Chained views and parameters remain unsupported;
 `LIKE`, `IN`, `DISTINCT` and `HAVING` are described above. Native view
 queries [do not allow `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 sorting belongs to their consumer. The tested `formatDateTimeUTC` explicit date
@@ -132,7 +152,7 @@ Native Mendix 11.12.1 comparisons establish the NULL rules: equality to literal
 Column-to-column comparisons retain the unknown result. Filters read durable
 values, reflect commits/deletes and validate attributes and types before reading
 even an empty source. OQL text is never executed as SQL. Ordered comparisons
-require numbers or strings; scalar functions and parameters remain unsupported.
+require numbers or strings; parameters remain unsupported.
 Joins and aggregates use the relational grammar described above.
 
 The matrix covers 30 filters and 125 browser steps with MPR access prohibited.
