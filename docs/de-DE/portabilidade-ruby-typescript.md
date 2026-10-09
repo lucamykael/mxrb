@@ -14,8 +14,8 @@ gespeicherte Zeile vertritt eine Gruppe oder einen DISTINCT-Wert, der sich nur i
 der Schreibweise unterscheidet.
 
 Mendix lehnt `ESCAPE`, `BETWEEN`, `<>`, `HAVING` ohne `GROUP BY` und Spalten in
-`IN` ab; MXRB ebenfalls. Skalare Funktionen, `CAST`, `CASE`, Verkettung und
-Arithmetik bleiben offen. Die Schreibweise wird mit Rubys `downcase` angeglichen;
+`IN` ab; MXRB ebenfalls. Funktionen, `CAST`, `CASE` und Arithmetik beschreibt der
+Abschnitt OQL-Ausdrücke. Die Schreibweise wird mit Rubys `downcase` angeglichen;
 Kollationen außerhalb von ASCII sind nicht zertifiziert.
 
 Alle 37 Abfragen liefen mit dem offiziellen MxBuild und Runtime von Mendix
@@ -23,6 +23,27 @@ Alle 37 Abfragen liefen mit dem offiziellen MxBuild und Runtime von Mendix
 Läufe stimmten überein und entsprachen Ruby bei Views, interpretierten Microflows
 und der exportierten Anwendung ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-predicates-2026-10-09.json).
+
+## OQL-Ausdrücke
+
+Projektionen, `WHERE`, `HAVING` und `ORDER BY` von Datasets akzeptieren Arithmetik
+(`+`, `-`, `*`, Division `:` und `%`), Verkettung mit `+`, einfache und bedingte
+`CASE`, `CAST` nach `STRING`, `INTEGER`, `LONG`, `DECIMAL`, `BOOLEAN` und `DATETIME`
+sowie `LOWER`, `UPPER`, `LENGTH`, `REPLACE`, `COALESCE`, `ROUND`, `DATEPART` und
+`DATEDIFF`. Die Semantik wurde an der HSQLDB von Mendix 11.12.1 gemessen: `/` trennt
+Pfade und dividiert nicht; Ganzzahldivision schneidet ab; Dezimaldivision schneidet
+bei der größeren Operandenskala ab (`3 : 4.0 = 0.7`); `%` schneidet die Operanden ab;
+`ROUND` rundet die Hälfte von null weg; Verkettung behandelt `NULL` als `''`, während
+`UPPER`, `LENGTH` und Arithmetik `NULL` weitergeben; `REPLACE` beachtet die
+Schreibweise; ein Dezimalwert wird mit acht Nachkommastellen zu Text; Datumswerte
+nutzen UTC, `WEEK` ist die ISO-Woche, `WEEKDAY` beginnt am Sonntag und `DATEDIFF`
+zählt überschrittene Grenzen.
+
+Wie in Mendix schlagen fehl: ein untypisiertes `NULL`-Literal in Arithmetik,
+`REPLACE` mit `NULL`, `CAST` nach `INTEGER` außerhalb von 32 Bit, Division durch null,
+nicht konvertierbarer Text und ungeprüfte Datumsteile. Alle 78 Abfragen liefen mit
+`script/oql_native_oracle` auf dem offiziellen MxBuild und Runtime und stimmen mit
+Ruby überein. [Nachweis](../evidence/oql-expressions-2026-10-09.json).
 
 ## Sortierung von Retrieves und Grids
 
@@ -72,7 +93,7 @@ Attribute und ignorieren unbekannte Spalten wie die geprüften Java-Implementier
 Abfragen lesen gespeicherte Werte und prüfen Namen, Typen und Syntax vor dem Lesen.
 Die DSL lehnt das Anlegen, Entfernen, Umbenennen und Ändern von Dataset-Metadaten
 ab. Parameter, Quellen ohne OQL, `SELECT *`, Joins mit abgeleiteten Quellen,
-korrelierte Unterabfragen und skalare Funktionen bleiben
+und korrelierte Unterabfragen bleiben
 außerhalb dieser Teilmenge. Jede Projektion benötigt einen expliziten Alias.
 
 Die Matrix enthält 18 Abfragen über beide Aktionen, darunter zwei echte Abfragen
@@ -90,7 +111,7 @@ gespeicherte Werte; Gruppen-IDs bleiben nach Commits stabil. Namen, Klauseln und
 Typen werden auch bei leeren Quellen vorab geprüft. OQL wird nie als SQL ausgeführt.
 
 Die relationale Grammatik beginnt mit `SELECT` und verlangt Projektionsaliase.
-Verkettete Views, Parameter und skalare Funktionen bleiben offen;
+Verkettete Views und Parameter bleiben offen;
 `LIKE`, `IN`, `DISTINCT` und `HAVING` sind oben beschrieben. Native Views
 [erlauben kein `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 die Sortierung erfolgt beim Verbraucher. Das geprüfte explizite Datumsmuster von
@@ -140,8 +161,7 @@ Vergleiche mit Mendix 11.12.1 bestätigen die NULL-Regeln: Gleichheit mit dem Li
 NULL-Datensätze ein. Vergleiche zwischen Spalten erhalten den unbekannten Wert.
 Filter lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und prüfen
 Attribute sowie Typen auch bei leeren Quellen. OQL wird niemals als SQL ausgeführt.
-Ordnungsvergleiche verlangen Zahlen oder Zeichenfolgen; skalare Funktionen und
-Parameter bleiben offen. Joins und Aggregate verwenden die oben beschriebene relationale Grammatik.
+Ordnungsvergleiche verlangen Zahlen oder Zeichenfolgen; Parameter bleiben offen. Joins und Aggregate verwenden die oben beschriebene relationale Grammatik.
 
 Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-view-filters-2026-10-07.json).

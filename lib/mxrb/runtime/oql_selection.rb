@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
+require_relative 'oql_selection_terms'
+
 module Mxrb
   module Runtime
     # Typed projection and aggregation shared by views and tabular OQL queries.
     # Group keys, DISTINCT and string MIN/MAX ignore case; the first stored row represents its group.
     class OqlSelection
+      include OqlSelectionTerms
+
       NUMBERS = %i[integer long autonumber decimal].freeze
       ORDERED = [*NUMBERS, :string, :datetime].freeze
       attr_reader :projections
@@ -22,7 +26,11 @@ module Mxrb
 
       def columns
         @columns.to_h do |projection, column|
-          [projection.name, projection.aggregate ? aggregate_type(projection.aggregate, column) : column.type]
+          type = if projection.expression then column.type
+                 elsif projection.aggregate then aggregate_type(projection.aggregate, column)
+                 else column.type
+                 end
+          [projection.name, type]
         end
       end
 
@@ -35,6 +43,8 @@ module Mxrb
       private
 
       def bind_projection(projection)
+        return [projection, computed_term(projection.expression)] if projection.expression
+
         column = @relations.column(projection.reference) unless projection.reference == '*'
         if @query.grouped? && !projection.aggregate && !@groups.include?(column)
           invalid!('non-aggregate projections must occur in GROUP BY')
@@ -61,31 +71,6 @@ module Mxrb
 
       def values(group) = @columns.to_h { |projection, column| [projection.name, project(projection, column, group)] }
 
-      def having_predicate(text)
-        OqlPredicate.new(text, @relations.scopes, aggregate: method(:having_aggregate)) { having_column(_1) }
-      end
-
-      def having_aggregate(function, reference)
-        column = @relations.column(reference) unless reference == '*'
-        validate_aggregate(function, column)
-        projection = OqlRelationalQuery::Projection.new(reference, nil, function)
-        [aggregate_type(function, column), ->(group) { project(projection, column, group) }]
-      end
-
-      def having_column(reference)
-        column = @relations.column(reference)
-        invalid!('HAVING columns must occur in GROUP BY') unless @groups.include?(column)
-        [column.type, ->(group) { column.read(group.first) }]
-      end
-
-      def aggregate_type(function, column)
-        case function
-        when 'COUNT' then :integer
-        when 'AVG' then :decimal
-        else column.type
-        end
-      end
-
       def distinct(results)
         results.group_by { |_identity, values| values.values.map { _1.is_a?(String) ? _1.downcase : _1 } }
                .map { |key, group| [[:distinct, key], group.first.last] }
@@ -108,7 +93,13 @@ module Mxrb
       end
 
       def project(projection, column, rows)
+        return column.read.call(rows) if projection.expression
         return column.read(rows.first) unless projection.aggregate
+
+        aggregate_value(projection, column, rows)
+      end
+
+      def aggregate_value(projection, column, rows)
         return rows.length if projection.reference == '*'
 
         values = rows.map { column.read(_1) }.compact
