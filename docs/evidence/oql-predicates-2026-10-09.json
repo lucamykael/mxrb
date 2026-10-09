@@ -1,0 +1,209 @@
+{
+  "date": "2026-10-09",
+  "scope": "OQL LIKE, IN, DISTINCT, HAVING and case-insensitive string comparison, grouping and ordering",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild --target=portable-app-package and the Mendix Runtime from the same installation, via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "0c6e9f15b09467ec923b0d5210891f1238b20485c05eda209d5d1eb5e5a67ded",
+    "cases": 37,
+    "repeat_runs_identical": true,
+    "status": "passed",
+    "results": {
+      "LikePrefix": [
+        "Nor",
+        "North",
+        "north"
+      ],
+      "LikeLower": [
+        "Nor",
+        "North",
+        "north"
+      ],
+      "LikeUnderscore": [
+        "Nor"
+      ],
+      "LikeContains": [
+        "South"
+      ],
+      "LikeQuote": [
+        "South"
+      ],
+      "LikeEmptyPattern": [
+        "Negative",
+        "Zero"
+      ],
+      "LikeNullPattern": [
+        "Negative",
+        "Zero"
+      ],
+      "LikePercentOnly": [
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "LikeWildcardText": [
+        "north"
+      ],
+      "NotLike": [
+        "Empty",
+        "South",
+        "Zero"
+      ],
+      "NotLikeParens": [
+        "Negative",
+        "Nor",
+        "Zero"
+      ],
+      "InStrings": [
+        "North",
+        "South",
+        "north"
+      ],
+      "InCase": [
+        "North",
+        "north"
+      ],
+      "InSingle": [
+        "Nor"
+      ],
+      "InNumbers": [
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "InIntegers": [
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "InBool": [
+        "Empty",
+        "Nor",
+        "North",
+        "north"
+      ],
+      "InWithNull": [
+        "Nor",
+        "South"
+      ],
+      "NotIn": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "Zero"
+      ],
+      "NotInNumbers": [
+        "North",
+        "north"
+      ],
+      "NotInWithNull": [],
+      "EqualsCase": [
+        "North",
+        "north"
+      ],
+      "NotEqualsCase": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "LessString": [
+        "Empty"
+      ],
+      "GreaterString": [
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "ColumnsCase": [
+        "North"
+      ],
+      "LikeAndIn": [
+        "Negative",
+        "Nor"
+      ],
+      "Distinct": [
+        "",
+        "A",
+        "O'Brien",
+        "SELECT WHERE FROM",
+        "abc_def%"
+      ],
+      "DistinctCase": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "GroupCase": [
+        "North"
+      ],
+      "HavingSum": [
+        "A",
+        "O'Brien",
+        "SELECT WHERE FROM",
+        "abc_def%"
+      ],
+      "HavingAvgMin": [
+        "",
+        "A",
+        "O'Brien"
+      ],
+      "HavingNull": [],
+      "HavingGroupColumn": [
+        "A",
+        "O'Brien",
+        "SELECT WHERE FROM",
+        "abc_def%"
+      ],
+      "MaxName": [
+        "North",
+        "Zero"
+      ],
+      "MinName": [
+        "Empty",
+        "Negative"
+      ],
+      "JoinCase": [
+        "North",
+        "North",
+        "north",
+        "north"
+      ]
+    }
+  },
+  "ruby": {
+    "views_identical": true,
+    "interpreter_microflows_identical": true,
+    "exported_app_with_mpr_access_prohibited_identical": true,
+    "tabular_queries": "HAVING, DISTINCT, LIKE and IN share the evaluator; ORDER BY compares strings case-insensitively"
+  },
+  "native_semantics": [
+    "=, !=, <, <=, >, >=, LIKE, IN, GROUP BY, DISTINCT, MIN, MAX and ORDER BY ignore string case",
+    "LIKE knows % and _ only; LIKE NULL behaves as LIKE ''",
+    "IN and NOT IN follow SQL three-valued logic: NOT IN (2.5, NULL) returns no row",
+    "the empty string and NULL remain distinct values and distinct groups"
+  ],
+  "rejected_by_native_and_ruby": [
+    "LIKE ... ESCAPE",
+    "BETWEEN",
+    "<>",
+    "HAVING without GROUP BY",
+    "IN with column operands"
+  ],
+  "limitations": [
+    "scalar functions, CAST, CASE, string concatenation and arithmetic remain unsupported",
+    "case folding uses Ruby downcase; non-ASCII collation is not certified",
+    "the order among rows that compare equal is not guaranteed",
+    "the first stored row represents a case-insensitive group or DISTINCT value"
+  ]
+}

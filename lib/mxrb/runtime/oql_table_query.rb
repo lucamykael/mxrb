@@ -8,7 +8,7 @@ module Mxrb
     # relational grammar. Tokens inside strings and parentheses remain opaque.
     class OqlTableQuery
       CLAUSES = %w[SELECT FROM WHERE GROUP HAVING ORDER LIMIT OFFSET UNION].freeze
-      ALLOWED = %w[SELECT FROM WHERE GROUP ORDER LIMIT OFFSET].freeze
+      ALLOWED = %w[SELECT FROM WHERE GROUP HAVING ORDER LIMIT OFFSET].freeze
       DERIVED_ENTITY = 'MxrbDerived.Source'
       Order = Data.define(:reference, :descending)
       attr_reader :relational, :derived, :orders, :limit, :offset

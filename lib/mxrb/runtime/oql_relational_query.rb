@@ -11,7 +11,7 @@ module Mxrb
       CLAUSES = %w[SELECT FROM WHERE GROUP HAVING ORDER LIMIT OFFSET UNION].freeze
       Projection = Data.define(:reference, :name, :aggregate)
 
-      attr_reader :sources, :projections, :groups, :filter
+      attr_reader :sources, :projections, :groups, :filter, :having
 
       def self.relational?(text)
         tokens = Oql::Translator.tokens(text).reject { _1.type == :space }
@@ -21,20 +21,32 @@ module Mxrb
       end
 
       def self.relational_word?(word, following)
-        %w[JOIN GROUP].include?(word) || (AGGREGATES.include?(word) && following == '(')
+        %w[JOIN GROUP DISTINCT].include?(word) || (AGGREGATES.include?(word) && following == '(')
       end
 
       def initialize(text)
         parts = clauses(text)
-        @projections = split_columns(parts.fetch('SELECT')).map { projection(_1) }
+        @projections = select_list(parts.fetch('SELECT'))
         @groups = parts.key?('GROUP') ? group_columns(parts.fetch('GROUP')) : []
-        @filter = parts['WHERE']&.map(&:text)&.join
+        @filter = clause_text(parts['WHERE'])
+        @having = clause_text(parts['HAVING'])
         @sources = OqlJoinSources.new(parts.fetch('FROM').map(&:text)).sources
       end
 
       def grouped? = !groups.empty? || projections.any?(&:aggregate)
+      def distinct? = @distinct
 
       private
+
+      def select_list(tokens)
+        tokens = tokens.drop_while { _1.type == :space }
+        @distinct = tokens.first&.type == :word && tokens.first.text.casecmp?('DISTINCT')
+        columns = split_columns(@distinct ? tokens.drop(1) : tokens)
+        invalid!('expected at least one projection') if columns.empty?
+        columns.map { projection(_1) }
+      end
+
+      def clause_text(tokens) = tokens&.map(&:text)&.join
 
       def clauses(text)
         tokens = Oql::Translator.tokens(text.strip)
@@ -53,12 +65,11 @@ module Mxrb
       end
 
       def validate_clause_order(starts, names)
-        expected = %w[SELECT FROM]
-        expected << 'WHERE' if names.include?('WHERE')
-        expected << 'GROUP' if names.include?('GROUP')
+        expected = %w[SELECT FROM] + %w[WHERE GROUP].select { names.include?(_1) }
+        expected << 'HAVING' if names.include?('HAVING') && names.include?('GROUP')
         return if starts.first&.zero? && names == expected
 
-        invalid!('expected SELECT, FROM, optional WHERE and GROUP BY')
+        invalid!('expected SELECT, FROM, optional WHERE, GROUP BY and HAVING after GROUP BY')
       end
 
       def split_columns(tokens)

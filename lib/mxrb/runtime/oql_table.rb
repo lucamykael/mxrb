@@ -70,8 +70,8 @@ module Mxrb
 
       def compare(left, right)
         @orders.each do |name, descending|
-          first = left[name]
-          second = right[name]
+          first = sortable(left[name])
+          second = sortable(right[name])
           next if first == second
           return -1 if first.nil?
           return 1 if second.nil?
@@ -81,6 +81,9 @@ module Mxrb
         end
         0
       end
+
+      # Mendix 11.12.1 orders strings case-insensitively.
+      def sortable(value) = value.is_a?(String) ? value.downcase : value
 
       def invalid!(message)
         raise NativeRuntimeError, "Unsupported tabular OQL: #{message}"

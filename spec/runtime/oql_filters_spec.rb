@@ -111,9 +111,11 @@ RSpec.describe Mxrb::Runtime::OqlPredicate do
     [
       '', 'Amount >', 'Amount IS', 'Amount IS NOT TRUE', '(Active', 'Active)',
       'Amount = 1; DROP TABLE x', 'Amount = 1 -- comment', "Name = 'unfinished",
-      'Amount IN (1, 2)', 'Amount <> 1', 'Name LIKE \'%x\'', 'x.Amount = 1',
+      'Amount IN (Other)', 'Amount IN ()', "Amount IN ('a')", 'Amount <> 1', 'Name LIKE Name',
+      "Amount LIKE '1'", "Name LIKE 'x' ESCAPE '!'", 'Amount BETWEEN 1 AND 2', 'Name NOT = NULL',
+      "'x' LIKE 'x'", 'COUNT(*) > 1', 'Active > TRUE', 'Name IN (NULL', 'x.Amount = 1',
       'l. = 1', 'Missing = 1', 'Custom IS NULL', 'Amount', 'Amount AND TRUE',
-      'TRUE OR Amount', 'NOT Name', 'Amount = TRUE', "Name > 'a'", 'Amount = 1e2',
+      'TRUE OR Amount', 'NOT Name', 'Amount = TRUE', 'Name > 1', 'Amount = 1e2',
       'l.Amount/Name = 1', 'Amount = $parameter', 'Amount = 1 /* comment */'
     ].each do |text|
       expect { predicate(text) }.to raise_error(Mxrb::NativeRuntimeError), text
