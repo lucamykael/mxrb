@@ -12,3 +12,4 @@ AllCops:
     - "tmp/**/*"
     - "vendor/**/*"
     - "script/*.ps1"
+    - "script/*.mjs"
