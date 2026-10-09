@@ -196,6 +196,11 @@ For the Ruby model Runtime, with no Java, `mx`, or `mxbuild`, use:
 bundle exec mxrb test App.mpr functional_test.rb --native
 ```
 
+Without `--native`, the build uses the MXRB materializer and the official Runtime.
+Flows with the same name in different modules, including the `RunAll` the test
+generates, receive module-qualified stable IDs; previously the collision stopped
+Mendix from starting with `NoSuchElementException: ModelStartEvent`.
+
 Native mode currently interprets the core data path (create/change/retrieve,
 commit/delete, variables, decisions, microflow calls, aggregates and logging)
 in a transactional in-memory store. Unsupported Java, REST, UI and connector
