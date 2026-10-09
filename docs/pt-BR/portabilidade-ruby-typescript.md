@@ -23,6 +23,23 @@ execuções nativas deram o mesmo resultado, idêntico ao Ruby nas views, nos
 microflows interpretados e na aplicação exportada com acesso ao MPR proibido.
 [Evidência](../evidence/oql-predicates-2026-10-09.json).
 
+## Formatação de datas em microflows
+
+`formatDateTime`, `formatDateTimeUTC`, `formatDate`, `formatTime` e `toString` de
+datas seguem o `SimpleDateFormat` do Java em `en_US`, como o Mendix 11.12.1: as
+letras `G y Y M L d D E u a h H k K m s S z Z X w W F`, textos entre aspas e `''`.
+`S` conta milissegundos (`S` → `45`), `Y` e `w` usam semanas iniciadas no domingo e
+`MMMM`/`EEEE` usam nomes completos. As formas sem padrão usam os formatos curtos do
+JDK 21 (`3/10/24, 7:05 AM`), com espaço estreito sem quebra antes de AM/PM. As
+formas locais usam o fuso da sessão, que é UTC no contexto do sistema. Nomes de fuso
+(`z`) só são aceitos para UTC; letras desconhecidas são rejeitadas. Antes, o runtime
+Ruby trocava poucos padrões por `strftime` e ignorava `SSS`, `h`, `a` e aspas.
+
+Os 55 casos foram executados no Runtime oficial com `script/oql_native_oracle` e
+coincidem com o interpretador Ruby. A interpretação de textos (`parseDateTime`
+local, nomes de mês e `yy`) e os nanoflows TypeScript, que formatam no cliente,
+continuam em frentes separadas. [Evidência](../evidence/date-formatting-2026-10-09.json).
+
 ## Expressões OQL
 
 Projeções, `WHERE`, `HAVING` e `ORDER BY` de datasets aceitam aritmética (`+`, `-`,
@@ -108,9 +125,8 @@ A gramática relacional começa por `SELECT` e exige aliases nas projeções.
 Views encadeadas e parâmetros continuam pendentes;
 `LIKE`, `IN`, `DISTINCT` e `HAVING` estão descritos acima. Views nativas
 [não permitem `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
-a ordenação pertence ao consumidor. O padrão explícito de `formatDateTimeUTC`
-usado para exibir as datas agregadas também funciona; formatos padrão e
-localizados permanecem fora deste incremento.
+a ordenação pertence ao consumidor. A formatação de datas está descrita em
+Formatação de datas em microflows.
 
 Os 22 conjuntos de resultados coincidiram no Mendix original, no Mendix
 regenerado de Ruby e no navegador Ruby com acesso MPR proibido. Passaram dois
@@ -422,7 +438,8 @@ Mendix. A matriz nativa acrescenta 16 casos UTC na origem e no round-trip.
 Veja os contratos oficiais de [adição de datas](https://docs.mendix.com/refguide/add-date-function-calls/),
 [criação](https://docs.mendix.com/refguide/date-creation/) e
 [início de períodos](https://docs.mendix.com/refguide/trim-to-date/).
-Parsing/formatação localizada e diferenças entre datas continuam em contratos separados.
+A formatação está descrita em Formatação de datas em microflows; a interpretação
+de textos localizados continua em contrato separado.
 
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
