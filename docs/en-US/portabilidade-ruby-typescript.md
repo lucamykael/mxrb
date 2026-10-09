@@ -76,6 +76,16 @@ convert and unverified date parts. All 78 queries ran on the official MxBuild an
 Runtime through `script/oql_native_oracle` and match Ruby.
 [Evidence](../evidence/oql-expressions-2026-10-09.json).
 
+## XPath retrieves
+
+As in Mendix 11.12.1, XPath string comparisons (`=`, `!=`, `<`, `>=`) and
+`contains`, `starts-with` and `ends-with` ignore case. Previously the Ruby runtime
+compared case-sensitively, so `[Name = 'NORTH']` missed `North`. The 44 fixture
+cases, covering `empty`, `not()`, booleans, decimals, `and`/`or` precedence, chained
+predicates, `string-length` and the date functions, ran on the official Runtime
+through `script/oql_native_oracle` and match Ruby.
+[Evidence](../evidence/xpath-retrieve-2026-10-09.json).
+
 ## Retrieve and grid sort order
 
 Sorted database retrieves, server-side data grids and page data sources follow
