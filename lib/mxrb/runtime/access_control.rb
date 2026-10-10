@@ -82,12 +82,15 @@ module Mxrb
         document_allowed?(:page, page, context:)
       end
 
+      # Without security the Runtime checks no access at all, also for the
+      # System entities that the project model does not declare.
       def entity_allowed?(entity, action:, context:, member: nil, record: nil)
+        return true unless security_enabled?
+
         entity = resolve(:entity, entity)
         return false unless entity
 
         ctx = normalized_context(context)
-        return true unless security_enabled?
         return true if admin?(ctx)
 
         rules = applicable_rules(entity, ctx, record:)

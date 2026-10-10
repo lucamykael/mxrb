@@ -101,6 +101,8 @@ RSpec.describe Mxrb::Runtime::AccessControl do
     anonymous = open_policy.context
     expect(open_policy.page_allowed?('Sales.Dashboard', context: anonymous)).to be true
     expect(open_policy.entity_allowed?('Sales.Audit', action: :delete, context: anonymous)).to be true
+    expect(open_policy.entity_allowed?('System.UserRole', action: :read, context: anonymous)).to be true
+    expect(secured.entity_allowed?('System.UserRole', action: :read, context: secured.context)).to be false
   end
 
   it 'supports direct module-role contexts and basic boolean XPath' do
