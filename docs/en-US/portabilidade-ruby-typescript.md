@@ -60,6 +60,32 @@ remains in the 1,146 expressions of the corpus and SPC nanoflows. The 27 cases o
 `spec/fixtures/native_nanoflow_expressions` match between the official client and the
 Ruby app. [Evidence](../evidence/nanoflow-expressions-2026-10-09.json).
 
+## Nanoflow date and number functions
+
+The Mendix client formats and parses nanoflow dates with the date-fns library, and the
+exported frontend uses the same library with the pattern conversion of the 11.12.1
+client: Java letters without an equivalent (`W`, `F`, `z`, `Z`, `X`) become literal
+text, `E`/`EE` and `S`/`SS` widen to `EEE` and `SSS`, `u` is the ISO day of week and any
+other unknown Latin letter is an error. `formatDateTime[UTC]` without a pattern,
+`formatDate[UTC]` and `formatTime[UTC]` use the short style of the session language (in
+English `3/5/24, 2:07 PM`, with a narrow space before AM/PM) and `toString` of a date uses
+the same style with a four-digit year. `parseDateTime[UTC]` is strict (it rejects
+February 30, suffixes and out-of-range hours), tries the two-digit year first and does not
+limit the year to 1800–9999. Month and day names, AM/PM, eras and week rules come from the
+session language.
+
+`parseInteger`, `min`/`max` (numbers or dates), `pow`, `sqrt`, `random`,
+`millisecondsBetween` … `weeksBetween` (absolute, decimal), `calendarMonthsBetween`,
+`calendarYearsBetween` and the tokens `[%BeginOf/EndOfCurrentWeek%]`,
+`[%BeginOf/EndOfYesterday%]` and `[%BeginOf/EndOfTomorrow%]` (with UTC variants, whose week
+always starts on Sunday) follow the client's big.js: quotients, roots and distances keep
+20 decimal places with the project rounding, and numbers from 1e21 or below 1e-6 print in
+exponential notation. `formatDecimal` and `trimToWeeks` do not exist in nanoflows. The 42
+cases of `spec/fixtures/native_nanoflow_functions` (9 expected errors), measured with the
+browser in America/New_York, match between the official client and the Ruby app. Other
+languages use the browser's names and were not certified in the official client.
+[Evidence](../evidence/nanoflow-functions-2026-10-10.json).
+
 ## Microflow expression functions
 
 Unlike XPath and OQL, text comparisons in expressions (`=`, `<`) and `contains`,
@@ -297,9 +323,9 @@ AsyncStorage and offline use are not certified.
 `parseDateTimeUTC(text, pattern[, fallback])` runs in Ruby microflows and
 TypeScript nanoflows without MPR access. It supports numeric year, month, day,
 hour, minute, second and millisecond fields, quoted literals and adjacent fields.
-In nanoflows, years are limited to 1800–9999; microflows follow Microflow date
-parsing. Invalid input uses the optional date/empty fallback
-or raises an error; unsupported patterns always fail explicitly.
+In nanoflows, the pattern follows Nanoflow date and number functions; microflows
+follow Microflow date parsing. Invalid input uses the optional date/empty fallback
+or raises an error.
 
 Twenty cases were checked in both execution paths in Mendix 11.12.1, using the
 source and rebuilt project. Both reject invalid calendar/time components.

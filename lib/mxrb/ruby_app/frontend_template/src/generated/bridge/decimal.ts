@@ -34,12 +34,34 @@ export const numericCompare = (left: unknown, right: unknown): number =>
 export const numericText = (value: unknown): string =>
   isDecimal(value) ? value.__mxrb_decimal : String(value ?? '');
 
+const scaled = (value: Decimal): [bigint, number] => {
+  const text = value.toFixed();
+  const [whole, fraction = ''] = text.replace('-', '').split('.');
+  return [BigInt(whole + fraction) * (text.startsWith('-') ? -1n : 1n), fraction.length];
+};
+
+// left / right to 20 decimal places with the application's rounding, exactly.
+export function quotient(left: Decimal, right: Decimal): Decimal {
+  if (right.isZero()) throw new Error('Division by zero');
+  const [a, aScale] = scaled(left);
+  const [b, bScale] = scaled(right);
+  const sign = (a < 0n) !== (b < 0n) ? '-' : '';
+  const numerator = (a < 0n ? -a : a) * 10n ** BigInt(bScale + 20);
+  const denominator = (b < 0n ? -b : b) * 10n ** BigInt(aScale);
+  let digits = numerator / denominator;
+  const twice = (numerator % denominator) * 2n;
+  const halfway = twice === denominator && (rounding === Decimal.ROUND_HALF_UP || digits % 2n === 1n);
+  if (twice > denominator || halfway) digits += 1n;
+  return new Decimal(`${sign}${digits}e-20`);
+}
+
 export function arithmetic(operator: string, left: unknown, right: unknown): number | DecimalValue {
   if (!isNumeric(left) || !isNumeric(right)) throw new Error('Expected a finite number');
   const a = decimalNumber(left);
   const b = decimalNumber(right);
   if (['div', ':', 'mod'].includes(operator) && b.isZero()) throw new Error('Division by zero');
-  // Addition/multiplication are exact; only division applies MathContext precision.
+  // Addition/multiplication are exact; division keeps 20 decimal places like
+  // big.js in the Mendix client.
   const precision = Math.max(38, a.sd() + b.sd() + Math.abs(a.e - b.e) + 2);
   const Exact = Decimal.clone({ precision, rounding });
   const x = new Exact(a);
@@ -48,7 +70,7 @@ export function arithmetic(operator: string, left: unknown, right: unknown): num
   else if (operator === '-') result = x.minus(b);
   else if (operator === '*') result = x.times(b);
   else if (operator === 'mod') result = x.mod(b);
-  else result = a.div(b);
+  else result = quotient(a, b);
   if (!isDecimal(left) && !isDecimal(right) && !['div', ':'].includes(operator))
     return result.toNumber();
   return decimal(result.toFixed());
