@@ -32,7 +32,6 @@
     "length of a list in a microflow expression is its item count"
   ],
   "limitations": [
-    "sign-in still uses MXRB_USERS_JSON; System.User sign-in, failed-login blocking and NanoflowCommons.SignIn are the next phase",
     "password policy enforcement on commit is not implemented yet"
   ]
 }

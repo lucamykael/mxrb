@@ -1,0 +1,116 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Signs in to the official Mendix Runtime with each step of FIXTURE_DIR/steps.json
+# (name, user name, password) through POST /xas/ and records the HTTP status and the
+# users returned by the fixture's anonymous GET rest/users/v1/users after every step.
+#
+#   script/login_native_oracle spec/fixtures/native_system_login results.json [MENDIX_HOME]
+
+require 'fileutils'
+require 'json'
+require 'net/http'
+require 'open3'
+require 'socket'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+
+STARTED = 'Mendix Runtime successfully started'
+
+def run!(*command, env: {})
+  output, status = Open3.capture2e(env, *command)
+  raise "#{command.first} failed:\n#{output[-4000..] || output}" unless status.success?
+
+  output
+end
+
+def after_startup!(path, microflow)
+  mpr = Mxrb::IO::MprFile.open(path)
+  raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Settings$ProjectSettings' }
+  doc = mpr.parse_contents(raw)
+  Mxrb::IO::BsonCodec.parse_array(doc['Settings'])[:items]
+                     .find { _1['$Type'] == 'Settings$ModelSettings' }['AfterStartupMicroflow'] = microflow
+  mpr.update_unit(raw.fetch('UnitID'), doc)
+ensure
+  mpr&.close
+end
+
+def free_port = TCPServer.new('127.0.0.1', 0).then { |server| server.addr[1].tap { server.close } }
+
+def login(port, user, password)
+  request = Net::HTTP::Post.new('/xas/', 'Content-Type' => 'application/json')
+  request.body = JSON.generate(action: 'login', params: { username: user, password: })
+  Net::HTTP.start('127.0.0.1', port) { _1.request(request) }.code.to_i
+end
+
+def users(port)
+  path = ENV.fetch('MXRB_LOGIN_USERS_PATH', 'rest/users/users')
+  response = Net::HTTP.get_response(URI("http://127.0.0.1:#{port}/#{path}"))
+  response.code == '200' ? response.body : "HTTP #{response.code} #{response.body.to_s[0, 200]}"
+end
+
+def build(fixture, work, java, mendix_home)
+  project = File.join(work, 'project', 'Oracle.mpr')
+  FileUtils.mkdir_p(File.dirname(project))
+  run!(RbConfig.ruby, "-I#{File.expand_path('../lib', __dir__)}", File.join(File.expand_path(fixture), 'project.rb'),
+       env: { 'MXRB_OUTPUT_PATH' => project })
+  after_startup!(project, 'Views.Setup')
+  package(project, File.join(work, 'app.zip'), java, mendix_home).tap do
+    run!('unzip', '-q', File.join(work, 'app.zip'), '-d', File.join(work, 'runtime'))
+  end
+end
+
+# Builds the portable app package and returns the Mendix version.
+def package(project, output, java, mendix_home)
+  plan = Mxrb::Runtime::Toolchain.new(project, mendix_home:).plan
+  run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java}",
+       "--java-exe-path=#{File.join(java, 'bin', 'java')}", "--output=#{output}", project)
+  plan.mendix_version
+end
+
+# Starts the Runtime, yields its HTTP port once started and stops it afterwards.
+def serving(work, java)
+  port = free_port
+  log = File.join(work, 'runtime.log')
+  pid = Process.spawn(runtime_env(java, port), 'bin/start', 'etc/Default',
+                      chdir: File.join(work, 'runtime'), out: log, err: log, pgroup: true)
+  wait_started(log)
+  yield port
+ensure
+  Process.kill('TERM', -pid) if pid
+  Process.wait(pid) if pid
+end
+
+def runtime_env(java, port)
+  { 'JAVA_HOME' => java, 'M2EE_ADMIN_PASS' => 'mxrb-login-oracle', 'RUNTIME_HTTP_PORT' => port.to_s,
+    'ADMIN_PORT' => free_port.to_s }
+end
+
+def wait_started(log)
+  deadline = Time.now + 300
+  sleep 1 until File.read(log).include?(STARTED) || Time.now > deadline
+  raise "Mendix Runtime did not start:\n#{File.read(log)[-4000..]}" unless File.read(log).include?(STARTED)
+end
+
+# Each step is [name, user name, password]; a step named WaitN sleeps N seconds.
+def run_steps(port, steps)
+  results = [{ 'step' => 'Initial', 'users' => users(port) }]
+  steps.first(ENV.fetch('MXRB_LOGIN_STEPS', steps.length).to_i).each do |name, user, password|
+    next sleep(name.delete_prefix('Wait').to_i) if name.start_with?('Wait')
+
+    results << { 'step' => name, 'status' => login(port, user, password), 'users' => users(port) }
+  end
+  results
+end
+
+fixture, output, mendix_home = ARGV
+abort 'Usage: script/login_native_oracle FIXTURE_DIR OUTPUT.json [MENDIX_HOME]' unless fixture && output
+java = ENV.fetch('JAVA_HOME') { abort 'JAVA_HOME must point to the Java version Mendix requires' }
+steps = JSON.parse(File.read(File.join(fixture, 'steps.json')))
+
+Dir.mktmpdir('mxrb-login-oracle-') do |work|
+  version = build(fixture, work, java, mendix_home)
+  results = serving(work, java) { run_steps(_1, steps) }
+  File.write(output, "#{JSON.pretty_generate(mendix_version: version, results:)}\n")
+  puts "#{results.length} login results from Mendix #{version} written to #{output}"
+end

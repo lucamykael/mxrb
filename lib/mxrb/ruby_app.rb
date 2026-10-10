@@ -2253,7 +2253,7 @@ module Mxrb
           access_control, users: environment['MXRB_USERS_JSON'],
                           tokens: environment['MXRB_AUTH_TOKENS'],
                           ttl: environment.fetch('MXRB_SESSION_TTL', '3600'),
-                          store: shared_store
+                          store: shared_store, directory: -> { bridge.store }
         )
       end
 

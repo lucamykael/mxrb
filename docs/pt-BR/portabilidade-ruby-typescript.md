@@ -333,9 +333,17 @@ algoritmo padrão do Mendix) e nunca são enviados ao navegador.
 ou `WebServiceUser`; senha vazia, errada ou usuário inexistente dão `false`. Em
 microflows, `length` de uma lista devolve a quantidade de itens. Os 13 resultados de
 `spec/fixtures/native_system_users` coincidem entre o Runtime oficial e o app Ruby
-exportado com acesso ao MPR proibido. O login pela tela de entrada ainda usa
-`MXRB_USERS_JSON`; o login contra `System.User` e `NanoflowCommons.SignIn` vêm em
-seguida. [Evidência](../evidence/system-users-2026-10-10.json).
+exportado com acesso ao MPR proibido. O login (`/api/login`) aceita os usuários de `MXRB_USERS_JSON` e, para os demais nomes,
+os `System.User` persistidos, como o Runtime: o nome ignora maiúsculas; usuários
+bloqueados, inativos, de web service ou sem papéis são recusados antes da senha; senha
+errada ou vazia soma `FailedLogins` e a terceira bloqueia (`Blocked`, `BlockedSince`)
+por 5 minutos; o sucesso zera as falhas e grava `LastLogin`. A sessão guarda o ID do
+usuário e seus papéis; `$currentUser` e `[%CurrentUser%]` apontam para ele (vazio sem
+login). `NanoflowCommons.SignIn` devolve 401 sem consultar o servidor quando nome ou
+senha estão vazios, senão o status do login (0 sem rede), e recarrega o app após o
+sucesso, como `mx.login`. Os 21 passos de `spec/fixtures/native_system_login`,
+executados por `script/login_native_oracle` (`POST /xas/`), coincidem no Runtime oficial
+e no app Ruby. [Evidência](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).
 
 ## Envio de imagens do Feedback
 

@@ -78,9 +78,13 @@ module Mxrb
       # System.VerifyPassword: the user name ignores case; Active, Blocked and
       # WebServiceUser do not matter.
       def verify_password(store, user_name, password)
-        name = user_name.to_s.downcase
-        user = store.retrieve(USER).find { _1.members['Name'].to_s.downcase == name }
+        user = find_user(store, user_name)
         !user.nil? && password_matches?(user.members['Password'], password)
+      end
+
+      def find_user(store, user_name)
+        name = user_name.to_s.downcase
+        store.retrieve(USER).find { _1.members['Name'].to_s.downcase == name }
       end
 
       # Creates the UserRole object of every project user role at startup and keeps

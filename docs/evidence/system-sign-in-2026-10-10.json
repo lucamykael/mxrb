@@ -1,0 +1,176 @@
+{
+  "date": "2026-10-10",
+  "scope": "Signing in with persisted System users and NanoflowCommons.SignIn (phase 2)",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime; script/login_native_oracle posts /xas/ login requests and reads the users through an anonymous published REST resource",
+    "status": "passed",
+    "steps": 20,
+    "results": [
+      {
+        "step": "Initial",
+        "users": "alice|true|false|false|0|false;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "AliceRight",
+        "user": "alice",
+        "password": "Secret#1",
+        "status": 200,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "AliceUpper",
+        "user": "ALICE",
+        "password": "Secret#1",
+        "status": 200,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "AliceWrong1",
+        "user": "alice",
+        "password": "wrong",
+        "status": 401,
+        "users": "alice|true|false|false|1|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "AliceRightAgain",
+        "user": "alice",
+        "password": "Secret#1",
+        "status": 200,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "BobInactive",
+        "user": "bob",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "CarolBlocked",
+        "user": "carol",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "ErinWebService",
+        "user": "erin",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "FrankNoRoles",
+        "user": "frank",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "Nobody",
+        "user": "nobody",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "BobWrong",
+        "user": "bob",
+        "password": "wrong",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "ErinWrong",
+        "user": "erin",
+        "password": "wrong",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "FrankWrong",
+        "user": "frank",
+        "password": "wrong",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|false;"
+      },
+      {
+        "step": "GinaWrong1",
+        "user": "gina",
+        "password": "x1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|1|false;"
+      },
+      {
+        "step": "GinaWrong2",
+        "user": "gina",
+        "password": "x2",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|2|false;"
+      },
+      {
+        "step": "GinaWrong3",
+        "user": "gina",
+        "password": "x3",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|true|true|3|false;"
+      },
+      {
+        "step": "GinaRightAfterThree",
+        "user": "gina",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|true|true|3|false;"
+      },
+      {
+        "step": "GinaWrong4",
+        "user": "gina",
+        "password": "x4",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|true|true|3|false;"
+      },
+      {
+        "step": "GinaRightBlocked",
+        "user": "gina",
+        "password": "Secret#1",
+        "status": 401,
+        "users": "alice|true|false|false|0|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|true|true|3|false;"
+      },
+      {
+        "step": "Empty",
+        "user": "alice",
+        "password": "",
+        "status": 401,
+        "users": "alice|true|false|false|1|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|true|true|3|false;"
+      },
+      {
+        "step": "Wait310"
+      },
+      {
+        "step": "GinaAfterFiveMinutes",
+        "user": "gina",
+        "password": "Secret#1",
+        "status": 200,
+        "users": "alice|true|false|false|1|true;bob|false|false|false|0|false;carol|true|true|false|0|false;erin|true|false|false|0|false;frank|true|false|false|0|false;gina|true|false|false|0|true;"
+      }
+    ]
+  },
+  "ruby": {
+    "session_manager_identical": true,
+    "note": "the Ruby spec replays the steps with a simulated clock for the five-minute block"
+  },
+  "native_semantics": [
+    "the user name ignores case",
+    "blocked, inactive and web service users and users without roles get 401 before the password is checked; their counters do not change",
+    "a wrong or empty password adds one FailedLogins; the third sets Blocked and BlockedSince, and later attempts are refused without counting",
+    "after five minutes a failed-login block expires: the next correct password signs in and clears Blocked, BlockedSince and FailedLogins",
+    "a block without BlockedSince (set directly) stays",
+    "success resets FailedLogins and sets LastLogin",
+    "NanoflowCommons.SignIn returns 401 without a request when the name or password is empty"
+  ],
+  "limitations": [
+    "the exact boundary of the five-minute block (>= vs >) was not measured",
+    "NanoflowCommons.SignIn useAuthToken is ignored; the Ruby app uses its session cookie"
+  ]
+}

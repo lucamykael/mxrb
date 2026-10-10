@@ -354,9 +354,19 @@ berücksichtigt `Active`, `Blocked` und `WebServiceUser` nicht; ein leeres oder 
 Passwort oder ein unbekannter Benutzer ergibt `false`. In Microflows liefert `length`
 einer Liste die Anzahl der Elemente. Die 13 Ergebnisse von
 `spec/fixtures/native_system_users` stimmen zwischen offiziellem Runtime und
-exportierter Ruby-App mit gesperrtem MPR-Zugriff überein. Die Anmeldeseite nutzt noch
-`MXRB_USERS_JSON`; die Anmeldung gegen `System.User` und `NanoflowCommons.SignIn` folgen.
-[Nachweis](../evidence/system-users-2026-10-10.json).
+exportierter Ruby-App mit gesperrtem MPR-Zugriff überein. Die Anmeldung (`/api/login`) akzeptiert die Benutzer aus `MXRB_USERS_JSON` und für
+andere Namen die gespeicherten `System.User` wie der Runtime: der Name ignoriert
+Groß-/Kleinschreibung; gesperrte, inaktive, Webservice-Benutzer und Benutzer ohne Rollen
+werden vor der Passwortprüfung abgewiesen; ein falsches oder leeres Passwort erhöht
+`FailedLogins`, beim dritten wird der Benutzer für 5 Minuten gesperrt (`Blocked`,
+`BlockedSince`); Erfolg setzt die Fehlversuche zurück und setzt `LastLogin`. Die Sitzung
+hält ID und Rollen des Benutzers; `$currentUser` und `[%CurrentUser%]` verweisen darauf
+(leer ohne Anmeldung). `NanoflowCommons.SignIn` liefert 401 ohne Serveranfrage, wenn
+Name oder Passwort leer sind, sonst den Anmeldestatus (0 offline), und lädt die App nach
+Erfolg neu wie `mx.login`. Die 21 Schritte von `spec/fixtures/native_system_login`,
+ausgeführt mit `script/login_native_oracle` (`POST /xas/`), stimmen im offiziellen
+Runtime und in der Ruby-App überein.
+[Nachweis](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).
 
 ## Bildupload im Feedback
 

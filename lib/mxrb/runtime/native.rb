@@ -706,7 +706,7 @@ module Mxrb
 
           @security_context = context unless context.nil?
           @apply_entity_access = flow.respond_to?(:apply_entity_access) && flow.apply_entity_access == true
-          normalized = normalize_arguments(flow, arguments)
+          normalized = with_current_user(normalize_arguments(flow, arguments))
           if root_call && store.respond_to?(:transaction)
             store.transaction { execute(flow, normalized) }
           else
@@ -720,6 +720,13 @@ module Mxrb
           @security_context = previous_context
           @apply_entity_access = previous_apply_entity_access
           @call_depth -= 1
+        end
+
+        # $currentUser is the signed-in System.User (or a specialization such as an Account).
+        def with_current_user(arguments)
+          id = @security_context.respond_to?(:user) && @security_context.user
+          user = store.find(SystemDomain::USER, id) if id.is_a?(String) && store.respond_to?(:schema)
+          arguments.merge('currentUser' => user)
         end
 
         def attribute_default(attribute)
