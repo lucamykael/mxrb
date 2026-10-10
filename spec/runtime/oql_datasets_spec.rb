@@ -137,7 +137,8 @@ RSpec.describe 'OQL dataset execution' do
       'SELECT t.Name AS Name FROM (SELECT e.Name AS Name FROM Hr.Employee e ORDER BY Name) t',
       'SELECT t.Missing AS Name FROM (SELECT e.Name AS Name FROM Hr.Employee e) t',
       'SELECT t.Name AS Name FROM (SELECT e.Unknown AS Name FROM Hr.Employee e) t',
-      "SELECT e.Name AS Name FROM Hr.Employee e WHERE e.Name LIKE 'A%'"
+      "SELECT e.Name AS Name FROM Hr.Employee e WHERE e.Name LIKE 'A%' ESCAPE '!'",
+      'SELECT e.Name AS Name FROM Hr.Employee e WHERE e.Name IN (e.Name)'
     ]
     nested = 'SELECT e.Name AS Name FROM Hr.Employee e'
     18.times { nested = "SELECT t.Name AS Name FROM (#{nested}) t" }

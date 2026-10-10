@@ -1,0 +1,99 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs an OQL oracle fixture on the official Mendix toolchain installed for Linux:
+# the fixture is built by MxBuild as a portable app, its Views.RunAll after-startup
+# microflow executes on the Mendix Runtime and the logged results are written as JSON.
+#
+#   script/oql_native_oracle spec/fixtures/native_oql_predicates results.json [MENDIX_HOME]
+
+require 'fileutils'
+require 'json'
+require 'open3'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+
+STARTED = 'Mendix Runtime successfully started'
+FAILED = /Starting Mendix Runtime failed|Runtime is now shut down/
+TIMEOUT = Integer(ENV.fetch('MXRB_ORACLE_TIMEOUT', '240'))
+
+def run!(*command, chdir: Dir.pwd, env: {})
+  output, status = Open3.capture2e(env, *command, chdir:)
+  raise "#{command.first} failed:\n#{output[-4000..] || output}" unless status.success?
+
+  output
+end
+
+def after_startup!(path, microflow)
+  mpr = Mxrb::IO::MprFile.open(path)
+  raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Settings$ProjectSettings' }
+  doc = mpr.parse_contents(raw)
+  settings = Mxrb::IO::BsonCodec.parse_array(doc['Settings'])[:items]
+  settings.find { _1['$Type'] == 'Settings$ModelSettings' }['AfterStartupMicroflow'] = microflow
+  mpr.update_unit(raw.fetch('UnitID'), doc)
+ensure
+  mpr&.close
+end
+
+def runtime_log(directory, java_home)
+  env = { 'JAVA_HOME' => java_home, 'M2EE_ADMIN_PASS' => 'mxrb-oql-oracle' }
+  log = Open3.popen2e(env, File.join(directory, 'bin', 'start'), 'etc/Default',
+                      chdir: directory, pgroup: true) do |stdin, out, thread|
+    stdin.close
+    read_until_started(out)
+  ensure
+    stop(thread)
+  end
+  raise "Mendix Runtime did not start:\n#{log[-4000..]}" unless log.include?(STARTED)
+
+  log
+end
+
+def read_until_started(out)
+  log = +''
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + TIMEOUT
+  until log.include?(STARTED) || log.match?(FAILED)
+    remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    raise 'Mendix Runtime startup timed out' unless remaining.positive? && out.wait_readable(remaining)
+
+    line = out.gets or break
+    log << line
+  end
+  log
+end
+
+def stop(thread)
+  Process.kill('TERM', -thread.pid)
+  thread.join(30) || Process.kill('KILL', -thread.pid)
+rescue Errno::ESRCH
+  nil
+end
+
+fixture, output, mendix_home = ARGV
+abort 'Usage: script/oql_native_oracle FIXTURE_DIR OUTPUT.json [MENDIX_HOME]' unless fixture && output
+java_home = ENV.fetch('JAVA_HOME') { abort 'JAVA_HOME must point to the Java version Mendix requires' }
+root = File.expand_path('..', __dir__)
+
+Dir.mktmpdir('mxrb-oql-oracle-') do |work|
+  project = File.join(work, 'project', 'Oracle.mpr')
+  FileUtils.mkdir_p(File.dirname(project))
+  run!(RbConfig.ruby, "-I#{File.join(root, 'lib')}", File.join(File.expand_path(fixture), 'project.rb'),
+       env: { 'MXRB_OUTPUT_PATH' => project })
+  after_startup!(project, 'Views.RunAll')
+  plan = Mxrb::Runtime::Toolchain.new(project, mendix_home:).plan
+  package = File.join(work, 'app.zip')
+  build = run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java_home}",
+               "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", "--output=#{package}", project)
+  runtime = File.join(work, 'runtime')
+  run!('unzip', '-q', package, '-d', runtime)
+  log = runtime_log(runtime, java_home)
+  results = log.scan(/ORACLE ([A-Za-z0-9_]+)=(.*)$/).to_h do |name, names|
+    [name, names.delete_suffix(',').split(',', -1).map { _1 == '<null>' ? nil : _1 }.drop(names.empty? ? 1 : 0)]
+  end
+  report = {
+    mendix_version: plan.mendix_version, mxbuild: build.lines.last.to_s.strip,
+    package_sha256: Digest::SHA256.file(package).hexdigest, results:
+  }
+  File.write(output, "#{JSON.pretty_generate(report)}\n")
+  puts "#{results.length} OQL results from Mendix #{plan.mendix_version} written to #{output}"
+end

@@ -1,5 +1,28 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Predicados OQL: `LIKE`, `IN`, `DISTINCT` e `HAVING`
+
+Views e consultas tabulares aceitam `LIKE`/`NOT LIKE` com `%` e `_`, e
+`IN`/`NOT IN` com listas de literais. Como no Mendix 11.12.1, strings são
+comparadas sem diferenciar maiúsculas em `=`, `!=`, `<`, `<=`, `>`, `>=`,
+`LIKE`, `IN`, `GROUP BY`, `DISTINCT`, `MIN`, `MAX` e `ORDER BY`. `NOT IN` com
+`NULL` na lista não retorna linhas; `LIKE NULL` equivale a `LIKE ''`; a string
+vazia e `NULL` continuam valores e grupos distintos. `SELECT DISTINCT` e
+`HAVING` com agregações, colunas agrupadas, `AND`, `OR`, `NOT` e `IS NULL`
+funcionam; `HAVING` exige `GROUP BY`. A primeira linha salva representa um grupo
+ou valor distinto que difere apenas por maiúsculas.
+
+O Mendix rejeita `ESCAPE`, `BETWEEN`, `<>`, `HAVING` sem `GROUP BY` e colunas
+dentro de `IN`; o MXRB também os rejeita. Funções escalares, `CAST`, `CASE`,
+concatenação e aritmética continuam pendentes. A comparação de maiúsculas usa
+`downcase` do Ruby; collations fora de ASCII não estão certificadas.
+
+As 37 consultas foram executadas pelo MxBuild e pelo Runtime oficiais do Mendix
+11.12.1 instalados no Linux, com `script/oql_native_oracle`, sem VM Windows. Duas
+execuções nativas deram o mesmo resultado, idêntico ao Ruby nas views, nos
+microflows interpretados e na aplicação exportada com acesso ao MPR proibido.
+[Evidência](../evidence/oql-predicates-2026-10-09.json).
+
 ## Datasets OQL e consultas tabulares
 
 Datasets OQL existentes são exportados para `app/datasets` e permitem editar a
@@ -20,7 +43,7 @@ ignoram colunas desconhecidas, como as implementações Java verificadas. A leit
 usa valores salvos e valida nomes, tipos e sintaxe antes de consultar as linhas.
 Criação, remoção, renomeação e edição de metadados de datasets pela DSL ainda são
 rejeitadas. Parâmetros, fontes sem OQL, `SELECT *`, joins com fontes derivadas,
-subconsultas correlacionadas, `HAVING`, `DISTINCT` e funções escalares continuam
+subconsultas correlacionadas e funções escalares continuam
 fora deste subconjunto. Cada projeção requer alias explícito.
 
 A matriz contém 18 consultas, executadas pelas duas ações, incluindo as duas
@@ -38,8 +61,8 @@ grupos permanecem estáveis após commits. Nomes, cláusulas e tipos são valida
 antes da leitura, inclusive com fontes vazias. OQL nunca é executado como SQL.
 
 A gramática relacional começa por `SELECT` e exige aliases nas projeções.
-Views encadeadas, `HAVING`, `DISTINCT`,
-parâmetros, funções escalares, `LIKE` e `IN` continuam pendentes. Views nativas
+Views encadeadas, parâmetros e funções escalares continuam pendentes;
+`LIKE`, `IN`, `DISTINCT` e `HAVING` estão descritos acima. Views nativas
 [não permitem `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 a ordenação pertence ao consumidor. O padrão explícito de `formatDateTimeUTC`
 usado para exibir as datas agregadas também funciona; formatos padrão e
@@ -85,7 +108,7 @@ O comportamento de nulos foi comparado com Mendix 11.12.1: igualdade com o liter
 registros nulos. Comparações entre colunas preservam o resultado desconhecido.
 Os filtros leem valores salvos, refletem commits/exclusões e validam todos os
 atributos e tipos antes da leitura, mesmo sem registros. O texto nunca é executado
-como SQL. Ordenações comparativas exigem números; funções escalares, `LIKE`, `IN`
+como SQL. Ordenações comparativas exigem números ou strings; funções escalares
 e parâmetros permanecem pendentes. Joins e agregações usam a gramática relacional acima.
 
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.

@@ -2,24 +2,28 @@
 
 require 'bigdecimal'
 require 'strscan'
+require_relative 'oql_membership'
 
 module Mxrb
   module Runtime
     # Compiles the supported WHERE grammar to typed Ruby readers, never SQL or eval.
     # Parsing validates every branch, including predicates over an empty source.
+    # Strings compare, match and sort case-insensitively, as Mendix 11.12.1 does.
     # rubocop:disable Metrics/ClassLength
     class OqlPredicate
       Operand = Data.define(:kind, :read, :literal)
-      TOKEN = %r{'(?:[^']|'')*'|[+-]?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.]}
+      TOKEN = %r{'(?:[^']|'')*'|[+-]?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.,*]}
+      AGGREGATES = %w[COUNT SUM AVG MIN MAX].freeze
       COMPARISONS = %w[= != < <= > >=].freeze
       KINDS = { integer: :number, long: :number, autonumber: :number, decimal: :number,
                 string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime,
                 identifier: :identifier }.freeze
 
-      def initialize(text, scope, &resolve)
+      def initialize(text, scope, aggregate: nil, &resolve)
         @tokens = tokenize(text)
         @scope = scope
         @resolve = resolve
+        @aggregate = aggregate
         @expression = disjunction
         error!('unexpected trailing tokens') unless @tokens.empty?
       end
@@ -75,26 +79,89 @@ module Mxrb
 
       def comparison
         left = operand
-        if take('IS')
-          negative = take('NOT')
-          expect('NULL')
-          result = null_test(left)
-          return negative ? invert(result) : result
-        end
+        return null_clause(left) if take('IS')
+
+        membership(left) || ordinary(left)
+      end
+
+      def null_clause(left)
+        negative = take('NOT')
+        expect('NULL')
+        result = null_test(left)
+        negative ? invert(result) : result
+      end
+
+      def ordinary(left)
         return boolean(left) unless COMPARISONS.include?(@tokens.first)
 
         operator = @tokens.shift
         compare(left, operand, operator)
       end
 
+      def membership(left)
+        negative = negated_membership?
+        result = membership_test(left)
+        negative ? invert(result) : result
+      end
+
+      def negated_membership?
+        return false unless @tokens.first.to_s.casecmp?('NOT') && %w[LIKE IN].include?(@tokens[1].to_s.upcase)
+
+        @tokens.shift
+        true
+      end
+
+      def membership_test(left)
+        return like(left, operand) if take('LIKE')
+
+        within(left, literal_list) if take('IN')
+      end
+
+      def like(left, pattern)
+        error!('LIKE requires a string attribute') unless left.kind == :string && !left.literal
+        error!('LIKE requires a literal pattern') unless pattern.literal && %i[string null].include?(pattern.kind)
+        Operand.new(:boolean, OqlMembership.like(left.read, pattern.read.call(nil).to_s), false)
+      end
+
+      def literal_list
+        expect('(')
+        values = [operand]
+        values << operand while take(',')
+        expect(')')
+        error!('IN accepts only literal values') unless values.all?(&:literal)
+        values
+      end
+
+      def within(left, values)
+        values.each { validate_comparison(left, _1, '=') }
+        normalize = ->(value) { comparable(left.kind, value) }
+        Operand.new(:boolean, OqlMembership.within(left.read, values.map { _1.read.call(nil) }, normalize), false)
+      end
+
       def operand
+        return aggregate_operand if AGGREGATES.include?(@tokens.first.to_s.upcase) && @tokens[1] == '('
+
         token = @tokens.shift.to_s
+        literal_token(token) || column(token)
+      end
+
+      def literal_token(token)
         return literal(:string, token[1...-1].gsub("''", "'")) if token.start_with?("'")
         return literal(:number, BigDecimal(token)) if token.match?(/\A[+-]?\d/)
         return literal(:null, nil) if token.casecmp?('NULL')
-        return literal(:boolean, token.casecmp?('TRUE')) if %w[TRUE FALSE].include?(token.upcase)
 
-        column(token)
+        literal(:boolean, token.casecmp?('TRUE')) if %w[TRUE FALSE].include?(token.upcase)
+      end
+
+      def aggregate_operand
+        error!('aggregates are only allowed in HAVING') unless @aggregate
+        function = @tokens.shift.upcase
+        expect('(')
+        reference = take('*') ? '*' : qualified_column(@tokens.shift.to_s)
+        expect(')')
+        error!('only COUNT accepts *') if reference == '*' && function != 'COUNT'
+        type, reader = @aggregate.call(function, reference)
+        Operand.new(KINDS.fetch(type), reader, false)
       end
 
       def column(token)
@@ -160,9 +227,13 @@ module Mxrb
           second = right.read.call(row)
           next null_comparison(left, right, operator) if first.nil? || second.nil?
 
+          first = comparable(left.kind, first)
+          second = comparable(right.kind, second)
           first.public_send(operator == '=' ? :== : operator, second)
         }, false)
       end
+
+      def comparable(kind, value) = kind == :string ? value.to_s.downcase : value
 
       def null_comparison(left, right, operator)
         return nil unless %w[= !=].include?(operator) && (left.literal || right.literal)
@@ -173,9 +244,9 @@ module Mxrb
       def validate_comparison(left, right, operator)
         types = [left.kind, right.kind].reject { _1 == :null }
         error!('incompatible comparison types') if types.uniq.length > 1
-        return if %w[= !=].include?(operator) || types.all? { _1 == :number }
+        return if %w[= !=].include?(operator) || types.all? { _1 == :number } || types.all? { _1 == :string }
 
-        error!('ordered comparisons require numbers')
+        error!('ordered comparisons require numbers or strings')
       end
 
       def error!(message)

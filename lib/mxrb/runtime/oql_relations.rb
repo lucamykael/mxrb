@@ -28,8 +28,10 @@ module Mxrb
         Column.new(scope, name, attribute.type, definition.name)
       end
 
+      def scopes = @definitions.keys
+
       def predicate(text)
-        OqlPredicate.new(text, @definitions.keys) do |reference|
+        OqlPredicate.new(text, scopes) do |reference|
           value = column(reference)
           [value.type, value.method(:read)]
         end
