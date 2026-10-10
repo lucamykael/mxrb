@@ -317,6 +317,20 @@ estão na seção do módulo OQL. Joins e agregações usam a gramática relacio
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
 [Evidência](../evidence/oql-view-filters-2026-10-07.json).
 
+## Envio de imagens do Feedback
+
+`JS_UploadAndConvertToFileBlobURL`, `JS_RevokeUploadedFileFromMemory` e
+`JS_Recalculate_MendixModal_Error_PopUp_Zindex` do módulo Feedback têm adaptadores
+TypeScript selecionados pelo SHA-256 da fonte. O envio abre um campo de arquivo oculto
+e devolve a URL `blob:` ou os textos do módulo (`uploadCancelled`,
+`fileTypeNotAccepted`, `fileSizeNotAccepted`, `fileNotConverted`). Como no original,
+cada tipo aceito é uma expressão regular aplicada ao tipo MIME e o limite em MB é o
+primeiro dígito significativo do valor informado mais 0,1 (`25` permite 2,1 MB). A
+revogação libera a URL ou falha sem ela; o ajuste de `z-index` age 500 ms depois, e o
+seletor de avisos do módulo, sem ponto, continua sem efeito. Um teste diferencial
+executou a fonte original (com big.js) e o adaptador em 294 cenários, sem diferenças.
+[Evidência](../evidence/feedback-file-actions-2026-10-10.json).
+
 ## Metadados do Feedback no navegador
 
 As versões verificadas de `JS_PopulateFeedbackMetadata` e `JS_isStrictMode`

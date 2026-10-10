@@ -35,7 +35,13 @@ module Mxrb
         'JS_GetShowEmailBooleanLocalStorageObjectItem' =>
           '0a88d00d8cc90e6256c51ab9dcb5189aa1ad13f6f532d19974866abbab9c7fab',
         'JS_SetSingleLocalStorageObjectItem' =>
-          'c87cccec1fb9063dfdf2eff5d4427944672b710ef47d64f4eaf83d0a574c1053'
+          'c87cccec1fb9063dfdf2eff5d4427944672b710ef47d64f4eaf83d0a574c1053',
+        'JS_UploadAndConvertToFileBlobURL' =>
+          'd8f245699ae0f2e2ad443c43bb9038ba82f0c9f2ce480f384c9a8c4df43d51f8',
+        'JS_RevokeUploadedFileFromMemory' =>
+          '99a113e34c9803c059762d6533bc0516c26bc960612ee002bf47e0ddd80ac294',
+        'JS_Recalculate_MendixModal_Error_PopUp_Zindex' =>
+          '9b447afb3344dcc200b342ed7d0c22b0772008bced983054650a622ea0996514'
       }.freeze
 
       COMMONS_SOURCES = {
