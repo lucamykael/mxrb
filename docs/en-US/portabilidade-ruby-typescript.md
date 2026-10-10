@@ -35,9 +35,16 @@ not sort booleans; TypeScript used the browser's numeric collation.
 
 All eight fixture orders ran on the official Runtime through
 `script/oql_native_oracle` and match the Ruby interpreter, the server-side grid
-and the frontend `sortRecords`. The in-memory list `Sort` operation is not
-covered: the runtime still ignores its keys.
+and the frontend `sortRecords`.
 [Evidence](../evidence/retrieve-sort-2026-10-09.json).
+
+The list `Sort` operation sorts in memory with a different rule, also measured on
+the Runtime: `NULL` sorts last in both directions and, among strings that differ
+only by case, lowercase comes first, like a Java collator. Previously the Ruby
+runtime ignored the keys and export dropped them; now
+`list_operation :sort, :list, sort: [[attribute, :ascending]], as: :sorted`
+keeps them through two Ruby → MPR cycles. Punctuation and accents are not
+certified. [Evidence](../evidence/list-sort-2026-10-09.json).
 
 ## OQL datasets and tabular queries
 

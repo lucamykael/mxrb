@@ -1,0 +1,10 @@
+[
+  {"name": "NameAsc", "sort": [["Name", "Ascending"], ["Amount", "Ascending"]], "expected": ["Empty", "Negative", "Nor", "north", "North", "South", "Zero"]},
+  {"name": "NameDesc", "sort": [["Name", "Descending"], ["Amount", "Ascending"]], "expected": ["Zero", "South", "North", "north", "Nor", "Negative", "Empty"]},
+  {"name": "NickAsc", "sort": [["Nick", "Ascending"], ["Name", "Ascending"], ["Amount", "Ascending"]], "expected": ["Negative", "Zero", "Nor", "north", "South", "North", "Empty"]},
+  {"name": "NickDesc", "sort": [["Nick", "Descending"], ["Name", "Ascending"], ["Amount", "Ascending"]], "expected": ["North", "South", "north", "Nor", "Negative", "Zero", "Empty"]},
+  {"name": "AmountAsc", "sort": [["Amount", "Ascending"], ["Name", "Ascending"]], "expected": ["Negative", "Zero", "Nor", "South", "north", "North", "Empty"]},
+  {"name": "AmountDesc", "sort": [["Amount", "Descending"], ["Name", "Ascending"]], "expected": ["North", "north", "Nor", "South", "Zero", "Negative", "Empty"]},
+  {"name": "RankDescNameAsc", "sort": [["Rank", "Descending"], ["Name", "Ascending"], ["Amount", "Ascending"]], "expected": ["north", "North", "Negative", "Nor", "South", "Zero", "Empty"]},
+  {"name": "ActiveAsc", "sort": [["Active", "Ascending"], ["Name", "Descending"], ["Amount", "Ascending"]], "expected": ["Zero", "South", "Negative", "North", "north", "Nor", "Empty"]}
+]

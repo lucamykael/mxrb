@@ -3059,11 +3059,14 @@ module Mxrb
         _acts << { type: :create_list, entity: entity.to_s, variable: as.to_s }
       end
 
-      def list_operation(operation, list, as:, with: nil, expression: nil)
+      # `sort:` lists [attribute, direction] pairs for the Sort operation.
+      def list_operation(operation, list, as:, with: nil, expression: nil, sort: nil)
+        raise ArgumentError, 'sort: applies only to the sort list operation' if sort && operation.to_s != 'sort'
+
         _acts << {
           type: :list_operation, operation: operation.to_s,
           variable: list.to_s, second: with&.to_s,
-          expression: expression&.to_s, output: as.to_s
+          expression: expression&.to_s, output: as.to_s, sortings: sort && Array(sort)
         }
       end
 
