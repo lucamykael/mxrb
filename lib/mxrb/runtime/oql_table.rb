@@ -3,6 +3,7 @@
 require_relative 'oql_table_query'
 require_relative 'oql_relations'
 require_relative 'oql_selection'
+require_relative 'oql_subquery'
 
 module Mxrb
   module Runtime
@@ -11,22 +12,31 @@ module Mxrb
     class OqlTable
       Definition = Data.define(:name, :columns)
       Column = Data.define(:name, :type)
-      attr_reader :definition
+      attr_reader :definition, :query
 
-      def initialize(text, store, decoder:, decimal:, depth: 0)
+      # context may hold depth: and outer:, outer_scopes:, sources: for OqlRelations.
+      def initialize(text, store, decoder:, decimal:, **context)
+        depth = context.delete(:depth) || 0
         parse_query(text, depth)
-        bind_selection(store, decoder, decimal, depth)
-        @orders = @query.orders.map { [order_column(_1.reference), _1.descending] }
+        bind_selection(store, decoder, decimal, depth, context)
+        @source_order = context.key?(:outer)
+        @orders = @query.orders.map { [order_key(_1.reference), _1.descending] }
       end
 
       def rows
-        values = @selection.each.map { |_identity, row| row }
-        values.sort! { |left, right| compare(left, right) } unless @orders.empty?
-        values = values.drop(@query.offset || 0)
+        values = ordered.drop(@query.offset || 0)
         @query.limit&.positive? ? values.take(@query.limit) : values
       end
 
       private
+
+      def ordered
+        entries = @selection.entries.map do |_identity, values, group|
+          [values, @orders.map { |key, _descending| key.call(values, group) }]
+        end
+        entries.sort! { |left, right| compare(left.last, right.last) } unless @orders.empty?
+        entries.map(&:first)
+      end
 
       def parse_query(text, depth)
         invalid!('subquery nesting exceeds 16') if depth > 16
@@ -36,27 +46,41 @@ module Mxrb
         invalid!('ordered subqueries require LIMIT or OFFSET')
       end
 
-      def bind_selection(store, decoder, decimal, depth)
-        tables = derived_tables(store, decoder, decimal, depth)
-        @relations = OqlRelations.new(@query.relational, store, decoder:, tables:)
+      def bind_selection(store, decoder, decimal, depth, context)
+        tables = derived_tables(store, decoder, decimal, depth, context[:sources])
+        subquery = OqlSubquery.factory(store, decoder:, decimal:, depth:, sources: context[:sources])
+        @relations = OqlRelations.new(@query.relational, store, decoder:, tables:, subquery:, **context)
         @selection = OqlSelection.new(@query.relational, @relations, decimal:)
         @definition = Definition.new(OqlTableQuery::DERIVED_ENTITY,
                                      @selection.columns.map { |name, type| Column.new(name, type) })
       end
 
-      def derived_tables(store, decoder, decimal, depth)
+      def derived_tables(store, decoder, decimal, depth, sources)
         return {} unless @query.derived
 
-        table = self.class.new(@query.derived, store, decoder:, decimal:, depth: depth + 1)
+        table = self.class.new(@query.derived, store, decoder:, decimal:, depth: depth + 1, sources:)
         { OqlTableQuery::DERIVED_ENTITY => table }
       end
 
-      def order_column(reference)
+      # A projected column or alias; subqueries may also order by an ungrouped source column.
+      def order_key(reference)
         found = ordered_projection(reference)
+        return source_order_key(reference) if !found && @source_order
+
         invalid!('ORDER BY must refer to a projected column or alias') unless found
-        type = @selection.columns.fetch(found.name)
+        ordered!(@selection.columns.fetch(found.name))
+        ->(values, _group) { values[found.name] }
+      end
+
+      def source_order_key(reference)
+        column = @relations.column(reference)
+        invalid!('ORDER BY of a grouped subquery must use its projections') if @query.relational.grouped?
+        ordered!(column.type)
+        ->(_values, group) { column.read(group.first) }
+      end
+
+      def ordered!(type)
         invalid!("ORDER BY does not support #{type}") unless OqlSelection::ORDERED.include?(type)
-        found.name
       end
 
       def ordered_projection(reference)
@@ -69,9 +93,9 @@ module Mxrb
       end
 
       def compare(left, right)
-        @orders.each do |name, descending|
-          first = sortable(left[name])
-          second = sortable(right[name])
+        @orders.each_with_index do |(_key, descending), index|
+          first = sortable(left[index])
+          second = sortable(right[index])
           next if first == second
           return -1 if first.nil?
           return 1 if second.nil?

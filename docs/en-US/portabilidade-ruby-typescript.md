@@ -206,9 +206,8 @@ Actions instantiate distinct uncommitted objects, copy compatible attributes,
 and ignore unknown columns, matching the verified Java implementations. Queries
 read durable values and validate names, types and syntax before reading rows.
 The DSL rejects dataset creation, removal, renaming and metadata changes.
-Parameters, non-OQL sources, `SELECT *`, joins against derived sources,
-and correlated subqueries remain outside
-this subset. Every projection requires an explicit alias.
+Parameters, non-OQL sources, `SELECT *` and joins against derived sources remain
+outside this subset; subqueries are described below. Every projection requires an explicit alias.
 
 The matrix contains 18 queries executed through both actions, including two real
 queries from `QueryApiBlogPost`. The Ruby browser runs with MPR access prohibited.
@@ -225,7 +224,8 @@ remain stable across commits. All names, clauses and types are checked before
 reading rows, including empty sources. OQL is never passed to SQLite as SQL.
 
 The bounded relational grammar starts with `SELECT` and requires projection
-aliases. Chained views and parameters remain unsupported;
+aliases. Parameters remain unsupported; subqueries, `UNION` and views over views are
+described in the next section;
 `LIKE`, `IN`, `DISTINCT` and `HAVING` are described above. Native view
 queries [do not allow `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 sorting belongs to their consumer. Date formatting is described under Microflow
@@ -235,6 +235,25 @@ All 22 result sets matched original Mendix, Ruby round-trip Mendix, and the Ruby
 browser with MPR access prohibited. Two native builds/runtimes and 197 browser
 steps passed, preserving all input hashes.
 [Evidence](../evidence/oql-relational-views-2026-10-08.json).
+
+## OQL subqueries, `UNION` and views over views
+
+Views and tabular queries accept `IN (SELECT …)`, `NOT IN (SELECT …)`,
+`EXISTS (SELECT …)`, `NOT EXISTS` and value subqueries in `WHERE`, `HAVING` and
+projections, correlated with the outer query and nested. As in Mendix 11.12.1, a
+value subquery needs an aggregate function as its column or `LIMIT 1`; with
+`GROUP BY` it fails when it yields more than one row. A subquery selects one column
+and may order by source columns when it has `LIMIT`. `NOT IN` with a `NULL`
+candidate selects nothing, and text comparisons ignore case.
+
+`UNION` removes duplicates ignoring case and `UNION ALL` keeps them; columns take
+the names of the first part. A view may read another view in `FROM` or in joins,
+also in chains; a view that reads itself is rejected. Mendix rejects `ANY`, `ALL`,
+`BETWEEN` and `SELECT *`, and `Count` is a reserved word.
+
+The 30 cases of `spec/fixtures/native_oql_subqueries` match between the official
+Runtime (`script/oql_native_oracle`), the Ruby interpreter and the exported Ruby app
+with MPR access prohibited. [Evidence](../evidence/oql-subqueries-2026-10-10.json).
 
 ## Web Feedback capture and annotation
 
