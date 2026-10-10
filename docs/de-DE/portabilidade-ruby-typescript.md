@@ -346,7 +346,12 @@ Der Ruby-Runtime speichert `System.User`, `System.UserRole`, `System.Language` u
 Abfragen von `System.User` schließen Spezialisierungen ein. Beim Start erhält jede
 Benutzerrolle des Projekts ihre `System.UserRole` (`ModelGUID` = GUID der Rolle, Name
 und Beschreibung). Wie im portablen Runtime wird der Administrator beim Start nicht
-angelegt. `HashedString`-Attribute wie `Password` werden mit BCrypt (dem
+angelegt; bei einer Bereitstellung legt `MXRB_ADMIN_PASSWORD` den aktiven
+`AdminUserName` (Standard `MxAdmin`) mit diesem Passwort und nur der `AdminUserRole` an
+oder aktualisiert ihn, wie `create_admin_user` von M2EE. Mit dem exportierten
+Sudoku-Projekt legen die echten Microflows des Administration-Moduls ein Konto an
+(`SaveNewAccount`), lehnen eine Änderung mit falschem altem Passwort ab und ändern das
+Passwort (`ChangeMyPassword`); die Anmeldung funktioniert weiter. `HashedString`-Attribute wie `Password` werden mit BCrypt (dem
 Standardalgorithmus von Mendix) gespeichert und nie an den Browser gesendet.
 
 `System.VerifyPassword` ignoriert die Groß-/Kleinschreibung des Benutzernamens und

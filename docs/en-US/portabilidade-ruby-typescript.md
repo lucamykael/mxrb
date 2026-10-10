@@ -328,7 +328,11 @@ System model. Entities such as `Administration.Account` inherit the attributes o
 `System.User`, and retrieving `System.User` includes the specializations. At startup
 every project user role gets its `System.UserRole` (`ModelGUID` = the role's GUID,
 name and description). As in the portable Runtime, the administrator is not created at
-startup. `HashedString` attributes such as `Password` are stored as BCrypt hashes (the
+startup; on deployment `MXRB_ADMIN_PASSWORD` creates or updates the active
+`AdminUserName` (default `MxAdmin`) with that password and only the `AdminUserRole`,
+like M2EE's `create_admin_user`. With the exported Sudoku project, the real Administration
+microflows create an account (`SaveNewAccount`), refuse a change with a wrong old
+password and change the password (`ChangeMyPassword`), and sign-in keeps working. `HashedString` attributes such as `Password` are stored as BCrypt hashes (the
 Mendix default algorithm) and are never sent to the browser.
 
 `System.VerifyPassword` ignores the case of the user name and does not consider

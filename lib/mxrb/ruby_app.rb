@@ -2565,6 +2565,7 @@ module Mxrb
           coordinator: shared_store,
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
           runtime_records: Registry.all(:record),
+          administrator_password: environment['MXRB_ADMIN_PASSWORD'],
           service_dispatch: lambda { |name, arguments, context|
             deserialize(call_service(name, arguments, context:), context:)
           }
@@ -2765,7 +2766,7 @@ module Mxrb
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
-                     runtime_records: nil, runtime_project: nil, service_dispatch: nil)
+                     runtime_records: nil, runtime_project: nil, service_dispatch: nil, administrator_password: nil)
         FileUtils.mkdir_p(File.dirname(database))
         @project = runtime_project || Model::Project.open(path)
         schema = if runtime_project
@@ -2782,6 +2783,10 @@ module Mxrb
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
+        if administrator_password
+          Runtime::SystemDomain.ensure_administrator(@store, password: administrator_password,
+                                                             **@access_control.administrator)
+        end
         register_record_hooks(record_hooks)
         validator = RecordValidation.new(record_hooks, @store)
         @store.on(:before_commit) { |value| validator.call(value) }

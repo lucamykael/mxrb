@@ -87,6 +87,17 @@ module Mxrb
         store.retrieve(USER).find { _1.members['Name'].to_s.downcase == name }
       end
 
+      # Creates or updates the administrator like a deployment's create_admin_user:
+      # active, with the given password and only the administrator user role.
+      def ensure_administrator(store, name:, password:, role:)
+        user = find_user(store, name) || store.create(USER)
+        roles = store.retrieve(USER_ROLE).select { _1.members['Name'] == role }
+        user.members.merge!('Name' => user.members['Name'] || name, 'Password' => password, 'Active' => true,
+                            'Blocked' => false, 'BlockedSince' => nil, 'FailedLogins' => 0, 'UserRoles' => roles)
+        store.commit(user)
+        user
+      end
+
       # Creates the UserRole object of every project user role at startup and keeps
       # its name and description current; ModelGUID identifies the role.
       def synchronize_roles(store, roles)

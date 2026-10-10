@@ -326,7 +326,11 @@ Mendix 11.12.1. Entidades como `Administration.Account` herdam os atributos de
 `System.User`, e consultas a `System.User` incluem as especializações. Na inicialização
 cada papel de usuário do projeto ganha seu `System.UserRole` (`ModelGUID` = GUID do
 papel, nome e descrição). Como no Runtime portátil, o administrador não é criado na
-inicialização. Atributos `HashedString`, como `Password`, são gravados com BCrypt (o
+inicialização; num deploy, `MXRB_ADMIN_PASSWORD` cria ou atualiza o `AdminUserName`
+(padrão `MxAdmin`) ativo, com essa senha e só o `AdminUserRole`, como o
+`create_admin_user` do M2EE. Com o Sudoku exportado, os microflows reais do módulo
+Administration criam a conta (`SaveNewAccount`), recusam a troca com senha antiga
+errada e trocam a senha (`ChangeMyPassword`), e o login segue funcionando. Atributos `HashedString`, como `Password`, são gravados com BCrypt (o
 algoritmo padrão do Mendix) e nunca são enviados ao navegador.
 
 `System.VerifyPassword` ignora maiúsculas no nome e não considera `Active`, `Blocked`

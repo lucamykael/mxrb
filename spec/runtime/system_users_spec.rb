@@ -44,6 +44,21 @@ RSpec.describe 'Persisted System users' do
     expected.each { |name, value| expect(logged.fetch(name)).to eq(value), name }
   end
 
+  it 'creates and updates the administrator of a deployment' do
+    target = File.join(@directory, 'ruby')
+    Mxrb::Exporter.new(@source, target, mode: :ruby).export!
+    process = { 'MXRB_DATABASE_PATH' => File.join(@directory, 'app.sqlite3'), 'MXRB_ADMIN_PASSWORD' => 'Adm1n!pass' }
+    @application = Mxrb::RubyApp::Application.new(target, process:)
+    expect(@application.session_manager.login('mxadmin', 'Adm1n!pass')[:roles]).to eq(['Administrator'])
+    @application.close
+    @application = Mxrb::RubyApp::Application.new(target, process: process.merge('MXRB_ADMIN_PASSWORD' => 'Other#1x'))
+    expect(@application.session_manager.login('MxAdmin', 'Other#1x')[:roles]).to eq(['Administrator'])
+    users = @application.send(:bridge).store.retrieve('System.User').map { _1.members['Name'] }
+    expect(users).to eq(['MxAdmin'])
+    plain = @application.access_control.dup.tap { _1.instance_variable_set(:@security, {}) }
+    expect(plain.administrator).to eq(name: 'MxAdmin', role: '')
+  end
+
   it 'stores BCrypt hashes and never serializes them to the client' do
     app = application
     app.call_service('Views.Users')

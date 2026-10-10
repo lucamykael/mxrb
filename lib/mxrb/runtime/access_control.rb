@@ -146,6 +146,12 @@ module Mxrb
       end
 
       # The project user roles as the Runtime seeds them into System.UserRole.
+      # The administrator account a deployment creates (AdminUserName, AdminUserRole).
+      def administrator
+        { name: value(@security, 'AdminUserName').to_s.then { _1.empty? ? 'MxAdmin' : _1 },
+          role: value(@security, 'AdminUserRole').to_s }
+      end
+
       def password_policy = PasswordPolicy.from_security(value(@security, 'PasswordPolicySettings'))
 
       def user_role_definitions
