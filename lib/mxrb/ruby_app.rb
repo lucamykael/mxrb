@@ -2620,6 +2620,17 @@ module Mxrb
         File.expand_path(configured, root)
       end
 
+      # Hashed strings such as System.User.Password never leave the server.
+      def hashed_members(entity)
+        (@hashed_members ||= {})[entity] ||= begin
+          store = bridge.interpreter.store
+          columns = store.respond_to?(:schema) ? store.schema.entity(entity).columns : []
+          columns.select { _1.type == :hashstring }.map(&:name)
+        rescue ArgumentError
+          []
+        end
+      end
+
       def serialize(value, seen = {}, context: nil)
         case value
         when Runtime::Native::ObjectValue
@@ -2627,7 +2638,7 @@ module Mxrb
           return { id: value.id, type: value.entity } if seen[key]
 
           branch = seen.merge(key => true)
-          members = value.members
+          members = value.members.except(*hashed_members(value.entity))
           if context
             members = members.select do |member, _member_value|
               access_control.member_allowed?(
@@ -2770,6 +2781,7 @@ module Mxrb
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
+        Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
         register_record_hooks(record_hooks)
         validator = RecordValidation.new(record_hooks, @store)
         @store.on(:before_commit) { |value| validator.call(value) }

@@ -319,6 +319,26 @@ Joins and aggregates use the relational grammar described above.
 The matrix covers 30 filters and 125 browser steps with MPR access prohibited.
 [Evidence](../evidence/oql-view-filters-2026-10-07.json).
 
+## System module users
+
+The Ruby runtime persists `System.User`, `System.UserRole`, `System.Language` and
+`System.TimeZone`, with `System.UserRoles`, `System.User_Language`,
+`System.User_TimeZone` and `System.grantableRoles`, as declared by the Mendix 11.12.1
+System model. Entities such as `Administration.Account` inherit the attributes of
+`System.User`, and retrieving `System.User` includes the specializations. At startup
+every project user role gets its `System.UserRole` (`ModelGUID` = the role's GUID,
+name and description). As in the portable Runtime, the administrator is not created at
+startup. `HashedString` attributes such as `Password` are stored as BCrypt hashes (the
+Mendix default algorithm) and are never sent to the browser.
+
+`System.VerifyPassword` ignores the case of the user name and does not consider
+`Active`, `Blocked` or `WebServiceUser`; an empty or wrong password or an unknown user
+gives `false`. In microflows, `length` of a list returns its number of items. The 13
+results of `spec/fixtures/native_system_users` match between the official Runtime and
+the exported Ruby app with MPR access prohibited. Sign-in on the login page still uses
+`MXRB_USERS_JSON`; signing in against `System.User` and `NanoflowCommons.SignIn` come
+next. [Evidence](../evidence/system-users-2026-10-10.json).
+
 ## Feedback image upload
 
 The Feedback module's `JS_UploadAndConvertToFileBlobURL`,

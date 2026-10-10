@@ -317,6 +317,26 @@ estão na seção do módulo OQL. Joins e agregações usam a gramática relacio
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
 [Evidência](../evidence/oql-view-filters-2026-10-07.json).
 
+## Usuários do módulo System
+
+O runtime Ruby persiste `System.User`, `System.UserRole`, `System.Language` e
+`System.TimeZone`, com `System.UserRoles`, `System.User_Language`,
+`System.User_TimeZone` e `System.grantableRoles`, conforme o modelo System do
+Mendix 11.12.1. Entidades como `Administration.Account` herdam os atributos de
+`System.User`, e consultas a `System.User` incluem as especializações. Na inicialização
+cada papel de usuário do projeto ganha seu `System.UserRole` (`ModelGUID` = GUID do
+papel, nome e descrição). Como no Runtime portátil, o administrador não é criado na
+inicialização. Atributos `HashedString`, como `Password`, são gravados com BCrypt (o
+algoritmo padrão do Mendix) e nunca são enviados ao navegador.
+
+`System.VerifyPassword` ignora maiúsculas no nome e não considera `Active`, `Blocked`
+ou `WebServiceUser`; senha vazia, errada ou usuário inexistente dão `false`. Em
+microflows, `length` de uma lista devolve a quantidade de itens. Os 13 resultados de
+`spec/fixtures/native_system_users` coincidem entre o Runtime oficial e o app Ruby
+exportado com acesso ao MPR proibido. O login pela tela de entrada ainda usa
+`MXRB_USERS_JSON`; o login contra `System.User` e `NanoflowCommons.SignIn` vêm em
+seguida. [Evidência](../evidence/system-users-2026-10-10.json).
+
 ## Envio de imagens do Feedback
 
 `JS_UploadAndConvertToFileBlobURL`, `JS_RevokeUploadedFileFromMemory` e

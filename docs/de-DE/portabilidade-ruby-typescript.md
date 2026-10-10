@@ -337,6 +337,27 @@ Ordnungsvergleiche verlangen Zahlen, Zeichenfolgen oder Datumswerte; Parameter b
 Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-view-filters-2026-10-07.json).
 
+## Benutzer des System-Moduls
+
+Der Ruby-Runtime speichert `System.User`, `System.UserRole`, `System.Language` und
+`System.TimeZone` mit `System.UserRoles`, `System.User_Language`,
+`System.User_TimeZone` und `System.grantableRoles` wie im System-Modell von Mendix
+11.12.1. Entitäten wie `Administration.Account` erben die Attribute von `System.User`;
+Abfragen von `System.User` schließen Spezialisierungen ein. Beim Start erhält jede
+Benutzerrolle des Projekts ihre `System.UserRole` (`ModelGUID` = GUID der Rolle, Name
+und Beschreibung). Wie im portablen Runtime wird der Administrator beim Start nicht
+angelegt. `HashedString`-Attribute wie `Password` werden mit BCrypt (dem
+Standardalgorithmus von Mendix) gespeichert und nie an den Browser gesendet.
+
+`System.VerifyPassword` ignoriert die Groß-/Kleinschreibung des Benutzernamens und
+berücksichtigt `Active`, `Blocked` und `WebServiceUser` nicht; ein leeres oder falsches
+Passwort oder ein unbekannter Benutzer ergibt `false`. In Microflows liefert `length`
+einer Liste die Anzahl der Elemente. Die 13 Ergebnisse von
+`spec/fixtures/native_system_users` stimmen zwischen offiziellem Runtime und
+exportierter Ruby-App mit gesperrtem MPR-Zugriff überein. Die Anmeldeseite nutzt noch
+`MXRB_USERS_JSON`; die Anmeldung gegen `System.User` und `NanoflowCommons.SignIn` folgen.
+[Nachweis](../evidence/system-users-2026-10-10.json).
+
 ## Bildupload im Feedback
 
 `JS_UploadAndConvertToFileBlobURL`, `JS_RevokeUploadedFileFromMemory` und

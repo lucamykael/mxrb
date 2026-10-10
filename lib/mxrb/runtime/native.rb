@@ -16,6 +16,8 @@ require_relative 'sort_order'
 require_relative 'date_formatting'
 require_relative 'expression_functions'
 
+require_relative 'system_domain'
+
 module Mxrb
   module Runtime
     module Native
@@ -233,13 +235,18 @@ module Mxrb
           raise ArgumentError, text
         end
 
+        # Mendix measures text in UTF-16 code units; a list's length is its size.
+        def text_or_list_length(value)
+          value.is_a?(Array) ? value.length : value.to_s.encode('UTF-16LE').bytesize / 2
+        end
+
         def invoke(name, arguments)
           return @calendar.invoke(name.downcase, arguments) if @calendar.supported?(name.downcase)
 
           case name.downcase
           when 'parsedatetimeutc' then DateParsing.invoke(arguments)
           when 'parsedatetime' then DateParsing.invoke(arguments, zone: @calendar.zone(false).identifier)
-          when 'length' then arguments.fetch(0).to_s.encode('UTF-16LE').bytesize / 2
+          when 'length' then text_or_list_length(arguments.fetch(0))
           when 'trim' then arguments.fetch(0).to_s.gsub(/\A[\x00-\x20]+|[\x00-\x20]+\z/, '')
           when 'tolowercase' then arguments.fetch(0).to_s.downcase
           when 'touppercase' then arguments.fetch(0).to_s.upcase
@@ -1114,9 +1121,18 @@ module Mxrb
           variables[action['ResultVariableName'].to_s] = result
         end
 
+        # Java actions the Runtime itself provides; an explicitly registered adapter still wins.
+        PLATFORM_JAVA_ACTIONS = {
+          'System.VerifyPassword' => lambda { |store, arguments|
+            SystemDomain.verify_password(store, arguments['userName'], arguments['password'])
+          }
+        }.freeze
+
         def action_java_action_call(action, variables)
           name = action['JavaAction'].to_s
           adapter = @java_custom_actions[name]
+          platform = PLATFORM_JAVA_ACTIONS[name]
+          adapter ||= platform && ->(arguments) { platform.call(@store, arguments) }
           unless adapter
             raise NativeRuntimeError,
                   "Java Custom Action #{name.empty? ? '(missing name)' : name} is not registered; " \

@@ -143,6 +143,14 @@ module Mxrb
         evaluate_boolean(source, record, normalized_context(context))
       end
 
+      # The project user roles as the Runtime seeds them into System.UserRole.
+      def user_role_definitions
+        parse_array(value(@security, 'UserRoles')).map do |role|
+          { name: value(role, 'Name').to_s, guid: IO::BsonCodec.extract_id(value(role, 'GUID')).to_s,
+            description: value(role, 'Description').to_s }
+        end
+      end
+
       private
 
       def normalized_context(context)
