@@ -1,0 +1,336 @@
+{
+  "date": "2026-10-08",
+  "scope": "Existing editable OQL datasets and bounded tabular queries",
+  "native": {
+    "studio_pro": "11.12.1",
+    "builds_passed": 2,
+    "runtimes_passed": 2,
+    "queries": 18,
+    "action_results": 36,
+    "hashed_files_across_cases": 75,
+    "all_source_and_copy_hashes_unchanged": true,
+    "runtime_package_hashes_match_builds": true,
+    "source_and_roundtrip_results_identical": true,
+    "cases": [
+      {
+        "label": "datasets-source",
+        "package_sha256": "1f0944c0e55b374f1df3f785fe6b924f61a8fe4597dfc1fd48629d3330c3afcb",
+        "files": 3,
+        "all_four_hash_maps_equal": true
+      },
+      {
+        "label": "datasets-roundtrip",
+        "package_sha256": "90c3fe61ad0e6d351f1a1daf8d8def1d311bcd110dfacd060a4f20df21a5294b",
+        "files": 72,
+        "all_four_hash_maps_equal": true
+      }
+    ],
+    "results": {
+      "RealSummaryDataset": [
+        "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+        "Empty|<null>|<null>|<null>|<null>|<null>",
+        "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125",
+        "North|2000-01-01|2002-01-01|36|12|5.5",
+        "South|<null>|<null>|<null>|<null>|<null>"
+      ],
+      "RealSummaryText": [
+        "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+        "Empty|<null>|<null>|<null>|<null>|<null>",
+        "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125",
+        "North|2000-01-01|2002-01-01|36|12|5.5",
+        "South|<null>|<null>|<null>|<null>|<null>"
+      ],
+      "RealNestedDataset": [
+        "Empty|<null>|<null>|<null>|<null>|<null>",
+        "South|<null>|<null>|<null>|<null>|<null>",
+        "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+        "North|2000-01-01|2002-01-01|36|12|5.5",
+        "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125"
+      ],
+      "RealNestedText": [
+        "Empty|<null>|<null>|<null>|<null>|<null>",
+        "South|<null>|<null>|<null>|<null>|<null>",
+        "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+        "North|2000-01-01|2002-01-01|36|12|5.5",
+        "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125"
+      ],
+      "NameAscDataset": [
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "NameAscText": [
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "NameDescDataset": [
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "E|5.5|2002-01-01",
+        "D|7.5|1999-01-01",
+        "C|<null>|<null>",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01"
+      ],
+      "NameDescText": [
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "E|5.5|2002-01-01",
+        "D|7.5|1999-01-01",
+        "C|<null>|<null>",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01"
+      ],
+      "DecimalAscDataset": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "E|5.5|2002-01-01",
+        "D|7.5|1999-01-01",
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "F|9007199254740993.125|2003-01-01"
+      ],
+      "DecimalAscText": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "E|5.5|2002-01-01",
+        "D|7.5|1999-01-01",
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "F|9007199254740993.125|2003-01-01"
+      ],
+      "DecimalDescDataset": [
+        "H|<null>|<null>",
+        "C|<null>|<null>",
+        "F|9007199254740993.125|2003-01-01",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "G|-2|2004-01-01"
+      ],
+      "DecimalDescText": [
+        "H|<null>|<null>",
+        "C|<null>|<null>",
+        "F|9007199254740993.125|2003-01-01",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "G|-2|2004-01-01"
+      ],
+      "DateAscDataset": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01"
+      ],
+      "DateAscText": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01"
+      ],
+      "DateDescDataset": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "E|5.5|2002-01-01",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01",
+        "D|7.5|1999-01-01"
+      ],
+      "DateDescText": [
+        "C|<null>|<null>",
+        "H|<null>|<null>",
+        "G|-2|2004-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "E|5.5|2002-01-01",
+        "B|20.375|2001-01-01",
+        "A|10.125|2000-01-01",
+        "D|7.5|1999-01-01"
+      ],
+      "PageDataset": [
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01"
+      ],
+      "PageText": [
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01"
+      ],
+      "OffsetOnlyDataset": [
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "OffsetOnlyText": [
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "ZeroLimitDataset": [
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "ZeroLimitText": [
+        "A|10.125|2000-01-01",
+        "B|20.375|2001-01-01",
+        "C|<null>|<null>",
+        "D|7.5|1999-01-01",
+        "E|5.5|2002-01-01",
+        "F|9007199254740993.125|2003-01-01",
+        "G|-2|2004-01-01",
+        "H|<null>|<null>"
+      ],
+      "EmptyRowsDataset": [],
+      "EmptyRowsText": [],
+      "AggregateEmptyDataset": [
+        "0|<null>"
+      ],
+      "AggregateEmptyText": [
+        "0|<null>"
+      ],
+      "AliasAggregateDataset": [
+        "North|3",
+        "<null>|2",
+        "Huge|1",
+        "Missing|1",
+        "South|1"
+      ],
+      "AliasAggregateText": [
+        "North|3",
+        "<null>|2",
+        "Huge|1",
+        "Missing|1",
+        "South|1"
+      ],
+      "DerivedPageDataset": [
+        "E|5.5",
+        "F|9007199254740993.125",
+        "G|-2",
+        "H|<null>"
+      ],
+      "DerivedPageText": [
+        "E|5.5",
+        "F|9007199254740993.125",
+        "G|-2",
+        "H|<null>"
+      ],
+      "DerivedFilterDataset": [
+        "A",
+        "B",
+        "F"
+      ],
+      "DerivedFilterText": [
+        "A",
+        "B",
+        "F"
+      ],
+      "DuplicateRowsDataset": [
+        "<null>",
+        "Empty",
+        "Huge",
+        "North",
+        "North",
+        "South"
+      ],
+      "DuplicateRowsText": [
+        "<null>",
+        "Empty",
+        "Huge",
+        "North",
+        "North",
+        "South"
+      ],
+      "IgnoredColumnDataset": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H"
+      ],
+      "IgnoredColumnText": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H"
+      ]
+    }
+  },
+  "ruby": {
+    "mpr_access_prohibited": true,
+    "browser_results_match_native": true,
+    "browser_flow_steps": 186,
+    "console_errors": [],
+    "real_project": "QueryApiBlogPost",
+    "original_microflows_passed": [
+      "RetrieveDepartmentSummaryByDatasetOql",
+      "RetrieveDepartmentSummaryOrderByByDatasetOql",
+      "RetrieveDepartmentSummaryByOql"
+    ],
+    "rspec_examples": 2374,
+    "rspec_failures": 0,
+    "coverage": {
+      "lines": {
+        "covered": 42232,
+        "total": 42232,
+        "percent": 100.0
+      },
+      "branches": {
+        "covered": 18515,
+        "total": 18515,
+        "percent": 100.0
+      }
+    },
+    "rubocop_files": 609,
+    "rubocop_offenses": 0,
+    "frontend_tests": 210
+  },
+  "limitations": [
+    "Query edits only; dataset creation/removal/renames/native metadata changes rejected",
+    "No dataset parameters or non-OQL sources",
+    "Explicit projection aliases; no SELECT *",
+    "One derived FROM source per level; at most 16 nested levels; no joins to derived sources or correlated subqueries",
+    "No HAVING, DISTINCT, scalar functions, LIKE or IN",
+    "ORDER BY projected columns or aliases only; HSQLDB null order certified; ties have unspecified relative order",
+    "Only source-pinned Hr query Java actions auto-register",
+    "Inherited result attributes and association outputs not certified"
+  ]
+}

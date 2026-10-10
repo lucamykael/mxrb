@@ -22,6 +22,11 @@ module Mxrb
       # rubocop:disable Metrics/ParameterLists
       ObjectValue = Data.define(:entity, :id, :members)
 
+      # Explicit opt-in for adapters that need the current application's store.
+      StoreJavaAction = Data.define(:handler) do
+        def bind(store) = ->(arguments) { handler.call(arguments, store:) }
+      end
+
       # Transactional in-memory persistence used by the Ruby model Runtime.
       class Store
         LIFECYCLE_EVENTS = %i[
@@ -633,6 +638,9 @@ module Mxrb
             mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
           end
           @store = store || Store.new(defaults:, transient_entities:)
+          @java_custom_actions = @java_custom_actions.transform_values do |adapter|
+            adapter.is_a?(StoreJavaAction) ? adapter.bind(@store) : adapter
+          end.freeze
           register_model_lifecycle
           @associations = project.modules.flat_map do |mod|
             mod.associations.map do |association|

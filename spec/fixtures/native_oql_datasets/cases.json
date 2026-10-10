@@ -1,0 +1,295 @@
+[
+  {
+    "name": "RealSummary",
+    "query": "select dept.Name               as Name\n,      min(emp.DateOfBirth)    as MinDateOfBirth\n,      max(emp.DateOfBirth)    as MaxDateOfBirth\n,      sum(emp.Salary)         as TotalSalary\n,      avg(emp.Salary)         as AvgSalary\n,      min(emp.Salary)         as MinSalary\nfrom   Hr.Department           as dept\n       full outer join dept/Hr.Employee_Department/Hr.Employee as emp\ngroup  by dept.Name\norder  by dept.Name\n",
+    "attributes": {
+      "Name": "string",
+      "MinDateOfBirth": "datetime",
+      "MaxDateOfBirth": "datetime",
+      "TotalSalary": "decimal",
+      "AvgSalary": "decimal",
+      "MinSalary": "decimal"
+    },
+    "expected": [
+      "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+      "Empty|<null>|<null>|<null>|<null>|<null>",
+      "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125",
+      "North|2000-01-01|2002-01-01|36|12|5.5",
+      "South|<null>|<null>|<null>|<null>|<null>"
+    ]
+  },
+  {
+    "name": "RealNested",
+    "query": "select Name as Name\n,      MinDateOfBirth as MinDateOfBirth\n,      MaxDateOfBirth as MaxDateOfBirth\n,      TotalSalary as TotalSalary\n,      AvgSalary as  AvgSalary\n,      MinSalary as MinSalary\nfrom   (\nselect dept.Name               as Name\n,      min(emp.DateOfBirth)    as MinDateOfBirth\n,      max(emp.DateOfBirth)    as MaxDateOfBirth\n,      sum(emp.Salary)         as TotalSalary\n,      avg(emp.Salary)         as AvgSalary\n,      min(emp.Salary)         as MinSalary\nfrom   Hr.Department           as dept\n       full outer join dept/Hr.Employee_Department/Hr.Employee as emp\ngroup  by dept.Name\n) as temp\norder  by temp.MinDateOfBirth\n",
+    "attributes": {
+      "Name": "string",
+      "MinDateOfBirth": "datetime",
+      "MaxDateOfBirth": "datetime",
+      "TotalSalary": "decimal",
+      "AvgSalary": "decimal",
+      "MinSalary": "decimal"
+    },
+    "tie_column": 1,
+    "expected": [
+      "Empty|<null>|<null>|<null>|<null>|<null>",
+      "South|<null>|<null>|<null>|<null>|<null>",
+      "<null>|1999-01-01|2004-01-01|5.5|2.75|-2",
+      "North|2000-01-01|2002-01-01|36|12|5.5",
+      "Huge|2003-01-01|2003-01-01|9007199254740993.125|9007199254740993.125|9007199254740993.125"
+    ]
+  },
+  {
+    "name": "NameAsc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY e.Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "A|10.125|2000-01-01",
+      "B|20.375|2001-01-01",
+      "C|<null>|<null>",
+      "D|7.5|1999-01-01",
+      "E|5.5|2002-01-01",
+      "F|9007199254740993.125|2003-01-01",
+      "G|-2|2004-01-01",
+      "H|<null>|<null>"
+    ]
+  },
+  {
+    "name": "NameDesc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY Name DESC",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "H|<null>|<null>",
+      "G|-2|2004-01-01",
+      "F|9007199254740993.125|2003-01-01",
+      "E|5.5|2002-01-01",
+      "D|7.5|1999-01-01",
+      "C|<null>|<null>",
+      "B|20.375|2001-01-01",
+      "A|10.125|2000-01-01"
+    ]
+  },
+  {
+    "name": "DecimalAsc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY TotalSalary, Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "C|<null>|<null>",
+      "H|<null>|<null>",
+      "G|-2|2004-01-01",
+      "E|5.5|2002-01-01",
+      "D|7.5|1999-01-01",
+      "A|10.125|2000-01-01",
+      "B|20.375|2001-01-01",
+      "F|9007199254740993.125|2003-01-01"
+    ]
+  },
+  {
+    "name": "DecimalDesc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY TotalSalary DESC, Name DESC",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "H|<null>|<null>",
+      "C|<null>|<null>",
+      "F|9007199254740993.125|2003-01-01",
+      "B|20.375|2001-01-01",
+      "A|10.125|2000-01-01",
+      "D|7.5|1999-01-01",
+      "E|5.5|2002-01-01",
+      "G|-2|2004-01-01"
+    ]
+  },
+  {
+    "name": "DateAsc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY MinDateOfBirth ASC, Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "C|<null>|<null>",
+      "H|<null>|<null>",
+      "D|7.5|1999-01-01",
+      "A|10.125|2000-01-01",
+      "B|20.375|2001-01-01",
+      "E|5.5|2002-01-01",
+      "F|9007199254740993.125|2003-01-01",
+      "G|-2|2004-01-01"
+    ]
+  },
+  {
+    "name": "DateDesc",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY MinDateOfBirth DESC, Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "C|<null>|<null>",
+      "H|<null>|<null>",
+      "G|-2|2004-01-01",
+      "F|9007199254740993.125|2003-01-01",
+      "E|5.5|2002-01-01",
+      "B|20.375|2001-01-01",
+      "A|10.125|2000-01-01",
+      "D|7.5|1999-01-01"
+    ]
+  },
+  {
+    "name": "Page",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY Name LIMIT 3 OFFSET 2",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "C|<null>|<null>",
+      "D|7.5|1999-01-01",
+      "E|5.5|2002-01-01"
+    ]
+  },
+  {
+    "name": "OffsetOnly",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY Name OFFSET 6",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "G|-2|2004-01-01",
+      "H|<null>|<null>"
+    ]
+  },
+  {
+    "name": "ZeroLimit",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY Name LIMIT 0",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": [
+      "A|10.125|2000-01-01",
+      "B|20.375|2001-01-01",
+      "C|<null>|<null>",
+      "D|7.5|1999-01-01",
+      "E|5.5|2002-01-01",
+      "F|9007199254740993.125|2003-01-01",
+      "G|-2|2004-01-01",
+      "H|<null>|<null>"
+    ]
+  },
+  {
+    "name": "EmptyRows",
+    "query": "SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e WHERE e.Name = 'Nobody' ORDER BY Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal",
+      "MinDateOfBirth": "datetime"
+    },
+    "expected": []
+  },
+  {
+    "name": "AggregateEmpty",
+    "query": "SELECT COUNT(*) AS RowsCount, SUM(e.Salary) AS TotalSalary FROM Hr.Employee e WHERE e.Name = 'Nobody'",
+    "attributes": {
+      "RowsCount": "integer",
+      "TotalSalary": "decimal"
+    },
+    "expected": [
+      "0|<null>"
+    ]
+  },
+  {
+    "name": "AliasAggregate",
+    "query": "SELECT e.DepartmentName AS Name, COUNT(*) AS RowsCount FROM Hr.Employee e GROUP BY e.DepartmentName ORDER BY RowsCount DESC, Name",
+    "attributes": {
+      "Name": "string",
+      "RowsCount": "integer"
+    },
+    "expected": [
+      "North|3",
+      "<null>|2",
+      "Huge|1",
+      "Missing|1",
+      "South|1"
+    ]
+  },
+  {
+    "name": "DerivedPage",
+    "query": "SELECT t.Name AS Name, t.TotalSalary AS TotalSalary FROM (SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e ORDER BY Name DESC LIMIT 4) t ORDER BY Name",
+    "attributes": {
+      "Name": "string",
+      "TotalSalary": "decimal"
+    },
+    "expected": [
+      "E|5.5",
+      "F|9007199254740993.125",
+      "G|-2",
+      "H|<null>"
+    ]
+  },
+  {
+    "name": "DerivedFilter",
+    "query": "SELECT t.Name AS Name FROM (SELECT e.Name AS Name, e.Salary AS TotalSalary, e.DateOfBirth AS MinDateOfBirth FROM Hr.Employee e) t WHERE t.TotalSalary >= 10 ORDER BY Name",
+    "attributes": {
+      "Name": "string"
+    },
+    "expected": [
+      "A",
+      "B",
+      "F"
+    ]
+  },
+  {
+    "name": "DuplicateRows",
+    "query": "SELECT d.Name AS Name FROM Hr.Department d ORDER BY Name",
+    "attributes": {
+      "Name": "string"
+    },
+    "expected": [
+      "<null>",
+      "Empty",
+      "Huge",
+      "North",
+      "North",
+      "South"
+    ]
+  },
+  {
+    "name": "IgnoredColumn",
+    "query": "SELECT e.Name AS Name, e.Salary AS Ignored FROM Hr.Employee e ORDER BY Name",
+    "attributes": {
+      "Name": "string"
+    },
+    "expected": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H"
+    ]
+  }
+]

@@ -1,0 +1,574 @@
+{
+  "name": "oql-datasets",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "dataset-actions",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_selector": "input[value=\"OQL dataset oracle\"]"
+        },
+        {
+          "click_selector": ".mx-name-Seed"
+        },
+        {
+          "wait_for_text": "Seeded"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RealSummaryDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RealSummaryText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RealNestedDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-RealNestedText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-NameAscDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-NameAscText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-NameDescDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-NameDescText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DecimalAscDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DecimalAscText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DecimalDescDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DecimalDescText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DateAscDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DateAscText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DateDescDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DateDescText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-PageDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-PageText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-OffsetOnlyDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-OffsetOnlyText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-ZeroLimitDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-ZeroLimitText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-EmptyRowsDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-EmptyRowsText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-AggregateEmptyDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-AggregateEmptyText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-AliasAggregateDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-AliasAggregateText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DerivedPageDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DerivedPageText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DerivedFilterDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DerivedFilterText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DuplicateRowsDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-DuplicateRowsText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-IgnoredColumnDataset"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        },
+        {
+          "click_selector": ".mx-name-IgnoredColumnText"
+        },
+        {
+          "wait_for_text": "Rows:"
+        },
+        {
+          "wait_for_idle": true
+        },
+        {
+          "click_selector": "button[aria-label=\"Dismiss notification\"]"
+        },
+        {
+          "wait_for_absence": ".mxrb-runtime-notice"
+        }
+      ]
+    }
+  ]
+}
