@@ -2785,6 +2785,11 @@ module Mxrb
         register_record_hooks(record_hooks)
         validator = RecordValidation.new(record_hooks, @store)
         @store.on(:before_commit) { |value| validator.call(value) }
+        policy = @access_control.password_policy
+        @store.on(:before_commit) do |value|
+          violation = policy.violation(value, @store.schema)
+          raise RecordValidationError, [violation] if violation
+        end
         @scheduler = Runtime::Scheduler.new(
           @project,
           executor: lambda { |name, **_metadata|

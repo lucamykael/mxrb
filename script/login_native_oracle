@@ -3,7 +3,8 @@
 
 # Signs in to the official Mendix Runtime with each step of FIXTURE_DIR/steps.json
 # (name, user name, password) through POST /xas/ and records the HTTP status and the
-# users returned by the fixture's anonymous GET rest/users/v1/users after every step.
+# users returned by the fixture's anonymous GET rest/users/users after every step.
+# A step [GET:Name, path] requests the path and records its status and logged errors.
 #
 #   script/login_native_oracle spec/fixtures/native_system_login results.json [MENDIX_HOME]
 
@@ -71,7 +72,7 @@ end
 # Starts the Runtime, yields its HTTP port once started and stops it afterwards.
 def serving(work, java)
   port = free_port
-  log = File.join(work, 'runtime.log')
+  log = @log = File.join(work, 'runtime.log')
   pid = Process.spawn(runtime_env(java, port), 'bin/start', 'etc/Default',
                       chdir: File.join(work, 'runtime'), out: log, err: log, pgroup: true)
   wait_started(log)
@@ -92,15 +93,30 @@ def wait_started(log)
   raise "Mendix Runtime did not start:\n#{File.read(log)[-4000..]}" unless File.read(log).include?(STARTED)
 end
 
+# GET:Name steps request a path and record the status and the Runtime's new error lines.
+def get(port, path, log)
+  seen = File.read(log).length
+  response = Net::HTTP.get_response(URI("http://127.0.0.1:#{port}/#{path}"))
+  sleep 0.5
+  errors = File.read(log)[seen..].lines.grep(/ ERROR - | WARNING - |Exception: /).map(&:strip).first(3)
+  { 'status' => response.code.to_i, 'body' => response.body.to_s[0, 300], 'errors' => errors }
+end
+
 # Each step is [name, user name, password]; a step named WaitN sleeps N seconds.
 def run_steps(port, steps)
-  results = [{ 'step' => 'Initial', 'users' => users(port) }]
-  steps.first(ENV.fetch('MXRB_LOGIN_STEPS', steps.length).to_i).each do |name, user, password|
+  steps.first(ENV.fetch('MXRB_LOGIN_STEPS', steps.length).to_i).each_with_object(
+    [{ 'step' => 'Initial', 'users' => users(port) }]
+  ) do |(name, user, password), results|
     next sleep(name.delete_prefix('Wait').to_i) if name.start_with?('Wait')
 
-    results << { 'step' => name, 'status' => login(port, user, password), 'users' => users(port) }
+    results << step(port, name, user, password)
   end
-  results
+end
+
+def step(port, name, user, password)
+  return { 'step' => name }.merge(get(port, user, @log)) if name.start_with?('GET:')
+
+  { 'step' => name, 'status' => login(port, user, password), 'users' => users(port) }
 end
 
 fixture, output, mendix_home = ARGV

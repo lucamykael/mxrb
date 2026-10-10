@@ -363,7 +363,12 @@ werden vor der Passwortprüfung abgewiesen; ein falsches oder leeres Passwort er
 hält ID und Rollen des Benutzers; `$currentUser` und `[%CurrentUser%]` verweisen darauf
 (leer ohne Anmeldung). `NanoflowCommons.SignIn` liefert 401 ohne Serveranfrage, wenn
 Name oder Passwort leer sind, sonst den Anmeldestatus (0 offline), und lädt die App nach
-Erfolg neu wie `mx.login`. Die 21 Schritte von `spec/fixtures/native_system_login`,
+Erfolg neu wie `mx.login`. Beim Speichern eines Benutzers mit geändertem Passwort gilt die
+Passwortrichtlinie des Projekts (Mindestlänge, Ziffer, Groß- und Kleinbuchstabe, ein
+Symbol aus dem festen Satz des Runtime; Leerzeichen ist kein Symbol), mit dem
+Validierungsfehler am Feld `Password` und den Standardtexten von Mendix; andere
+Attribute wenden sie nicht erneut an. Die 11 Fälle von
+`spec/fixtures/native_password_policy` stimmen überein. Die 21 Schritte von `spec/fixtures/native_system_login`,
 ausgeführt mit `script/login_native_oracle` (`POST /xas/`), stimmen im offiziellen
 Runtime und in der Ruby-App überein.
 [Nachweis](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).

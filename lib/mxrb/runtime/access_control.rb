@@ -8,6 +8,8 @@ require_relative 'decimal_values'
 # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
 # rubocop:disable Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
 
+require_relative 'password_policy'
+
 module Mxrb
   module Runtime
     class AuthorizationError < StandardError; end
@@ -144,6 +146,8 @@ module Mxrb
       end
 
       # The project user roles as the Runtime seeds them into System.UserRole.
+      def password_policy = PasswordPolicy.from_security(value(@security, 'PasswordPolicySettings'))
+
       def user_role_definitions
         parse_array(value(@security, 'UserRoles')).map do |role|
           { name: value(role, 'Name').to_s, guid: IO::BsonCodec.extract_id(value(role, 'GUID')).to_s,

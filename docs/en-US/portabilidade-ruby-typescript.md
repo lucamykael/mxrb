@@ -343,7 +343,11 @@ empty password counts `FailedLogins` and the third blocks the user (`Blocked`,
 session holds the user's ID and roles; `$currentUser` and `[%CurrentUser%]` refer to it
 (empty without sign-in). `NanoflowCommons.SignIn` returns 401 without asking the server
 when the name or password is empty, otherwise the sign-in status (0 offline), and
-reloads the app after success, like `mx.login`. The 21 steps of
+reloads the app after success, like `mx.login`. Committing a user whose password changed applies the project password
+policy (minimum length, digit, upper and lower case, a symbol from the Runtime's fixed
+set; a space is not a symbol), with the validation error on `Password` and the Mendix
+default texts; changing other attributes does not reapply it. The 11 cases of
+`spec/fixtures/native_password_policy` match. The 21 steps of
 `spec/fixtures/native_system_login`, run by `script/login_native_oracle` (`POST /xas/`),
 match on the official Runtime and in the Ruby app. [Evidence](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).
 

@@ -1,0 +1,50 @@
+[
+  {
+    "step": "Initial",
+    "users": "base;"
+  },
+  {
+    "step": "GET:CreateShort",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateNoDigit",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateNoUpper",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateNoLower",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateNoSymbol",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateValid",
+    "status": 200
+  },
+  {
+    "step": "GET:CreateEmpty",
+    "status": 403
+  },
+  {
+    "step": "GET:CreateSpaces",
+    "status": 200
+  },
+  {
+    "step": "GET:ChangeWeak",
+    "status": 403
+  },
+  {
+    "step": "GET:ChangeOther",
+    "status": 200
+  },
+  {
+    "step": "GET:AccountWeak",
+    "status": 403
+  }
+]

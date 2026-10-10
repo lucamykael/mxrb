@@ -341,7 +341,11 @@ por 5 minutos; o sucesso zera as falhas e grava `LastLogin`. A sessão guarda o 
 usuário e seus papéis; `$currentUser` e `[%CurrentUser%]` apontam para ele (vazio sem
 login). `NanoflowCommons.SignIn` devolve 401 sem consultar o servidor quando nome ou
 senha estão vazios, senão o status do login (0 sem rede), e recarrega o app após o
-sucesso, como `mx.login`. Os 21 passos de `spec/fixtures/native_system_login`,
+sucesso, como `mx.login`. Ao gravar um usuário cuja senha mudou, vale a política de senha do
+projeto (tamanho mínimo, dígito, maiúscula e minúscula, símbolo do conjunto fixo do
+Runtime; espaço não é símbolo), com o erro de validação no campo `Password` e os textos
+padrão do Mendix; mudar outros atributos não reaplica a política. Os 11 casos de
+`spec/fixtures/native_password_policy` coincidem. Os 21 passos de `spec/fixtures/native_system_login`,
 executados por `script/login_native_oracle` (`POST /xas/`), coincidem no Runtime oficial
 e no app Ruby. [Evidência](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).
 
