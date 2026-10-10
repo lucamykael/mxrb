@@ -40,6 +40,26 @@ nanoflows in the corpus and SPC used one of these actions and failed.
 MxBuild and Runtime, headless Chromium) and in the exported Ruby app: all 15 cases
 match. [Evidence](../evidence/nanoflow-data-actions-2026-10-09.json).
 
+## Nanoflow expressions
+
+The Mendix client evaluates nanoflow expressions in JavaScript, not Java, and the
+exported TypeScript evaluator follows those semantics, as measured on the 11.12.1
+client: `trim` removes every Unicode blank (including NBSP), `toLowerCase('İ')` gives
+`i̇`, `substring(text, start, length)` never fails out of range, `find`/`findLast` are
+`indexOf`/`lastIndexOf`, `replaceAll`/`replaceFirst`/`isMatch` use JavaScript regular
+expressions (`(?i)` is invalid, `isMatch` must match the whole text) with literal
+replacements (`$1` is not interpreted), `urlEncode` is `encodeURIComponent` and
+`urlDecode` reads `+` as a space. Empty arguments read as `''`, `'a' + empty` is `'a'`
+and concatenated numbers become text. The evaluator also handles `getCaption`/`getKey`
+(translated by the page language), the `[%CurrentDateTime%]` token and the
+`[%BeginOf…%]`/`[%EndOf…%]` tokens for minute, hour, day, month and year (the end is
+the next period's start minus 1 ms, in the session time zone or UTC),
+`$obj/Module.Assoc/Module.Entity/Attribute` paths over the associated objects the
+server sends, and object equality by identity. No unsupported function or syntax
+remains in the 1,146 expressions of the corpus and SPC nanoflows. The 27 cases of
+`spec/fixtures/native_nanoflow_expressions` match between the official client and the
+Ruby app. [Evidence](../evidence/nanoflow-expressions-2026-10-09.json).
+
 ## Microflow expression functions
 
 Unlike XPath and OQL, text comparisons in expressions (`=`, `<`) and `contains`,

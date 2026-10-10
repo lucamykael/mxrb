@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-09",
+  "scope": "Nanoflow expression evaluation in the exported TypeScript client",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app, Mendix Runtime and headless Chromium via script/client_native_oracle",
+    "cases": 27,
+    "status": "passed",
+    "results": {
+      "Trim": "[a b]|1|1",
+      "Casing": "àbç i̇|STRASSE FI|I",
+      "Length": "4|0",
+      "Substring": "cdef|bcd|[]",
+      "SubstringOut": "",
+      "SubstringLong": "bc",
+      "Find": "2|5|5|2|0|-1",
+      "Replace": "-----|a[$1]c|baa|a<$&>|a$$|-a-b-",
+      "Match": "false|true|true|true|false",
+      "Contains": "true|false|true|false",
+      "Url": "a%20b%26c%2F%C3%A7~*|a b cç",
+      "Caption": "Large thing|Big|Small one|Big",
+      "CaptionEmpty": "[]",
+      "Tokens": "true|true|true|true",
+      "Path": "probe|true|true|true",
+      "PathEmpty": "[]",
+      "PathObject": "true|true",
+      "TrimEmpty": "[]",
+      "LowerEmpty": "[]",
+      "LengthEmpty": "0",
+      "ContainsEmpty": "false",
+      "FindEmpty": "-1",
+      "ConcatMixed": "a1|b1.5|3c",
+      "TokenDay": "true|true|false|true",
+      "TokenUnits": "true|true|true|true|true|true",
+      "ReplaceInline": "<no result>",
+      "MatchInline": "<no result>"
+    },
+    "expected_failures": [
+      "[Client] An error occurred while executing an action of Probe.Home.ReplaceInline: Invalid regular expression: /(?i)b/g: Invalid group\n\nNanoflow stack:\n \"WriteLog\" in nanoflow \"Probe.CaseReplaceInline\" Error: An error occurred while executing an action of Probe.Home.ReplaceInline: Invalid regular expression: /(?i)b/g: Invalid group\n\nNanoflow stack:\n \"WriteLog\" in nanoflow \"Probe.CaseReplaceInline\"\n    at http://localhost:45615/dist/pages/Probe.Home.js:2:364\n    at Fx (http://localhost:45615/dist/chunks/BU5hCsdN.js:9:20788)\n    at r (http://localhost:45615/dist/chunks/BU5hCsdN.js:9:20478)\n    at u (http://localhost:45615/dist/pages/Probe.Home.js:1:2935)",
+      "[Client] An error occurred while executing an action of Probe.Home.MatchInline: Invalid regular expression: /^((?i)abc)$/: Invalid group\n\nNanoflow stack:\n \"WriteLog\" in nanoflow \"Probe.CaseMatchInline\" Error: An error occurred while executing an action of Probe.Home.MatchInline: Invalid regular expression: /^((?i)abc)$/: Invalid group\n\nNanoflow stack:\n \"WriteLog\" in nanoflow \"Probe.CaseMatchInline\"\n    at http://localhost:45615/dist/pages/Probe.Home.js:2:364\n    at Fx (http://localhost:45615/dist/chunks/BU5hCsdN.js:9:20788)\n    at r (http://localhost:45615/dist/chunks/BU5hCsdN.js:9:20478)\n    at u (http://localhost:45615/dist/pages/Probe.Home.js:1:2935)"
+    ]
+  },
+  "ruby": {
+    "exported_app_identical": true
+  },
+  "corpus_impact": "38 of 1146 nanoflow expressions in the public corpus and the SPC project used unsupported functions, tokens or association paths; none remain",
+  "native_semantics": [
+    "string functions follow JavaScript: trim removes Unicode blanks, substring(text, start, length) never fails, find/findLast are indexOf/lastIndexOf",
+    "regular expressions use JavaScript syntax; (?i) is invalid; isMatch matches the whole text; replacements are literal",
+    "urlEncode is encodeURIComponent; urlDecode reads + as a space",
+    "empty string arguments read as '' and concatenating empty or numbers yields text",
+    "[%EndOf...%] tokens are the next period start minus 1 ms",
+    "getCaption uses the enumeration caption, getKey and toString the key"
+  ],
+  "limitations": [
+    "week tokens, length tokens and [%CurrentUser%] are rejected",
+    "association paths read only the associated objects embedded by the server (one level)"
+  ]
+}

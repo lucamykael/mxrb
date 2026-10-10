@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
+import { registerExpressionSchema } from './schemaLookup';
 import { registerClientConstants } from './expression';
 import { registerObjectStorageSchema } from './objectStorage';
 import { invokeAsync } from './AsyncInvocation';
@@ -285,6 +286,7 @@ export function ApplicationRuntime({
     setError(null);
     registerClientConstants({});
     registerObjectStorageSchema(null);
+    registerExpressionSchema(null);
     try {
       const activeSession = await api<Session>('/api/session');
       setSession(activeSession);
@@ -292,6 +294,7 @@ export function ApplicationRuntime({
       const value = await api<ApplicationSchema>('/api/schema');
       registerClientConstants(value.constants || {});
       registerObjectStorageSchema(value);
+      registerExpressionSchema(value);
       schemaRef.current = value;
       setSchema(value);
       setAuthRequired(false);
