@@ -12,6 +12,7 @@ require_relative 'string_functions'
 require_relative 'calendar_functions'
 require_relative 'date_parsing'
 require_relative 'decimal_values'
+require_relative 'sort_order'
 
 module Mxrb
   module Runtime
@@ -970,24 +971,7 @@ module Mxrb
           return values if sortings.empty?
 
           keys = sortings.map { [sort_attribute(_1), descending?(_1)] }
-          values.sort { |left, right| compare_by_keys(left, right, keys) }
-        end
-
-        def compare_by_keys(left, right, keys)
-          keys.each do |attribute, descending|
-            comparison = compare_members(left.members[attribute], right.members[attribute])
-            comparison = -comparison if descending
-            return comparison unless comparison.zero?
-          end
-          0
-        end
-
-        def compare_members(left, right)
-          return 0 if left.nil? && right.nil?
-          return 1 if left.nil?
-          return -1 if right.nil?
-
-          (left <=> right) || raise(NativeRuntimeError, "cannot sort #{left.inspect} and #{right.inspect}")
+          SortOrder.sort(values, keys) { |value, attribute| value.members[attribute] }
         end
 
         def sort_attribute(sorting)

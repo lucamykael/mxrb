@@ -225,27 +225,45 @@ export const draftValue = (value: RuntimeValue | undefined): string | number | b
 export const apiFailure = (failure: unknown): ApiFailure =>
   failure instanceof Error ? (failure as ApiFailure) : new Error(String(failure));
 
+// Mendix 11.12.1 database order: NULL first in both directions, strings without
+// regard to case and without numeric collation, false before true.
+export const compareSortValues = (
+  left: RuntimeValue | undefined,
+  right: RuntimeValue | undefined,
+  descending = false,
+): number => {
+  if (left == null || right == null) return left == null ? (right == null ? 0 : -1) : 1;
+  let result: number;
+  if (isNumeric(left) && isNumeric(right)) result = numericCompare(left, right);
+  else if (typeof left === 'boolean' && typeof right === 'boolean') result = Number(left) - Number(right);
+  else {
+    const a = numericText(left).toLowerCase();
+    const b = numericText(right).toLowerCase();
+    result = a < b ? -1 : a > b ? 1 : 0;
+  }
+  return descending ? -result : result;
+};
+
 export const sortRecords = (
   records: EntityRecord[],
   sortings: Array<{ attribute: string; direction?: string }> = [],
 ): EntityRecord[] => {
-  const result = records.slice();
-  sortings
-    .slice()
-    .reverse()
-    .forEach((sorting) => {
-      const member = memberName(sorting.attribute);
-      const direction = sorting.direction === 'Descending' ? -1 : 1;
-      result.sort((left, right) => {
-        const a = left.attributes?.[member];
-        const b = right.attributes?.[member];
-        return (
-          direction *
-          (isNumeric(a) && isNumeric(b)
-            ? numericCompare(a, b)
-            : numericText(a).localeCompare(numericText(b), undefined, { numeric: true }))
+  const keys = sortings.map((sorting) => ({
+    member: memberName(sorting.attribute),
+    descending: sorting.direction === 'Descending',
+  }));
+  return records
+    .map((record, index) => ({ record, index }))
+    .sort((left, right) => {
+      for (const { member, descending } of keys) {
+        const comparison = compareSortValues(
+          left.record.attributes?.[member],
+          right.record.attributes?.[member],
+          descending,
         );
-      });
-    });
-  return result;
+        if (comparison !== 0) return comparison;
+      }
+      return left.index - right.index;
+    })
+    .map(({ record }) => record);
 };

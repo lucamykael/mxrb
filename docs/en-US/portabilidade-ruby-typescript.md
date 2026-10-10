@@ -23,6 +23,22 @@ runs agreed, and matched Ruby for views, interpreted microflows and the exported
 application with MPR access prohibited.
 [Evidence](../evidence/oql-predicates-2026-10-09.json).
 
+## Retrieve and grid sort order
+
+Sorted database retrieves, server-side data grids and page data sources follow
+the Mendix 11.12.1 database order: `NULL` sorts first in both `ASC` and `DESC`;
+the empty string is an ordinary, smallest string; strings compare without regard
+to case and without numeric collation (`a10` before `A9`); `false` sorts before
+`true`. Ties fall through to the next key and finally keep the stored order.
+Previously Ruby sorted `NULL` last in `ASC`, compared case-sensitively and could
+not sort booleans; TypeScript used the browser's numeric collation.
+
+All eight fixture orders ran on the official Runtime through
+`script/oql_native_oracle` and match the Ruby interpreter, the server-side grid
+and the frontend `sortRecords`. The in-memory list `Sort` operation is not
+covered: the runtime still ignores its keys.
+[Evidence](../evidence/retrieve-sort-2026-10-09.json).
+
 ## OQL datasets and tabular queries
 
 Existing OQL datasets are exported to `app/datasets`, where query text can be

@@ -468,11 +468,7 @@ RSpec.describe Mxrb::Runtime::Native do
     expect(expression.evaluate('3 <= 3', {})).to be(true)
     expect(expression.send(:matching_parenthesis, '(missing', 0)).to be_nil
     expect(expression.send(:matching_parenthesis, 'x()', 1)).to eq(2)
-    equal = described_class::ObjectValue.new(entity: 'Clinic.Animal', id: 'equal', members: { 'Age' => 4 })
-    expect(@interpreter.send(:compare_by_keys, equal, equal, [['Age', false]])).to eq(0)
-    expect(@interpreter.send(:compare_members, nil, nil)).to eq(0)
-    expect(@interpreter.send(:compare_members, nil, 1)).to eq(1)
-    expect(@interpreter.send(:compare_members, 1, nil)).to eq(-1)
+    expect(@interpreter.send(:sort_values, [1, 2], [])).to eq([1, 2])
   end
 
   it 'handles lower-level graph cases, mutations, templates, and collection encodings' do
