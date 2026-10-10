@@ -220,8 +220,8 @@ Die Aktionen erzeugen unterschiedliche Objekte ohne Commit, kopieren kompatible
 Attribute und ignorieren unbekannte Spalten wie die geprüften Java-Implementierungen.
 Abfragen lesen gespeicherte Werte und prüfen Namen, Typen und Syntax vor dem Lesen.
 Die DSL lehnt das Anlegen, Entfernen, Umbenennen und Ändern von Dataset-Metadaten
-ab. Parameter, Quellen ohne OQL, `SELECT *` und Joins mit abgeleiteten Quellen bleiben
-außerhalb dieser Teilmenge; Unterabfragen sind weiter unten beschrieben. Jede Projektion benötigt einen expliziten Alias.
+ab. Für diese beiden Aktionen bleiben Quellen ohne OQL, `SELECT *` und Joins mit
+abgeleiteten Quellen außerhalb dieser Teilmenge; Parameter gehören zum OQL-Modul (unten); Unterabfragen sind weiter unten beschrieben. Jede Projektion benötigt einen expliziten Alias.
 
 Die Matrix enthält 18 Abfragen über beide Aktionen, darunter zwei echte Abfragen
 aus `QueryApiBlogPost`. Im Ruby-Browser ist der MPR-Zugriff gesperrt.
@@ -230,7 +230,7 @@ aus `QueryApiBlogPost`. Im Ruby-Browser ist der MPR-Zugriff gesperrt.
 ## Relationale OQL-Views
 
 Der Ruby-Runtime unterstützt `INNER`, `LEFT`, `RIGHT` und `FULL` Joins zwischen
-persistenten Entitäten, mit `ON` oder einem Assoziationsschritt je Join.
+persistenten Entitäten, mit `ON` oder einem Assoziationspfad (auch mehrstufig, bei `INNER` und `LEFT`).
 `GROUP BY`, `COUNT(*)`, `COUNT(Spalte)`, `SUM`, `AVG`, `MIN` und `MAX` erhalten
 Duplikate, NULL-Gruppen, exakte Dezimalwerte und Datumswerte. IDs verknüpfter
 Entitäten können kompatible Referenzassoziationen projizieren. Abfragen lesen
@@ -273,6 +273,27 @@ Runtime (`script/oql_native_oracle`), Ruby-Interpreter und exportierter Ruby-App
 gesperrtem MPR-Zugriff überein.
 [Nachweis](../evidence/oql-subqueries-2026-10-10.json).
 
+## OQL-Parameter und das OQL-Modul aus dem Marketplace
+
+`OQL.ExecuteOQLStatement`, `OQL.CountRowsOQLStatement` und die Aktionen
+`OQL.Add…Parameter` des OQL-Moduls haben Adapter, die über den SHA-256 der Quelle jeder
+Aktion und von `oql/implementation/OQL.java` ausgewählt werden; MXRB verteilt diesen
+Code nicht. Wie im Modul gelten Parameter je Thread bis zur Ausführung, die sie
+verwirft, außer mit `preserveParameters`. Die Anweisung ist ein Dataset-Name oder OQL
+mit `$Name`-Parametern für Text, Ganzzahl, Dezimal, Boolean, Datum oder Objekt (über
+die ID verglichen); `amount` und `offset` blättern nach `ORDER BY`. Jede Spalte füllt
+das gleichnamige Attribut oder, bei IDs, die eigene Assoziation `Modul.Spalte`; Spalten
+ohne Ziel sind Fehler. Ein leerer Parameter in `=` wirkt wie `IS NULL`, wie das
+Literal `NULL`; ein nicht gesetzter Parameter ist ein Fehler. Enum-Attribute werden
+über ihren Schlüssel gelesen, auch in Filtern.
+
+Joins akzeptieren mehrstufige Assoziationspfade (`p/M.A_B/M.B/M.B_C/M.C AS c`) bei
+`INNER` und `LEFT`; Ordnungsvergleiche akzeptieren Datumswerte. Die neun SPC-Datasets,
+vier davon mit Parametern, werden in Ruby kompiliert und ausgeführt. Die 15 Fälle von
+`spec/fixtures/native_oql_parameters` (Modulquellen aus `MXRB_OQL_MODULE_SOURCE`)
+stimmen zwischen offiziellem Runtime und exportierter Ruby-App mit gesperrtem
+MPR-Zugriff überein. [Nachweis](../evidence/oql-parameters-2026-10-10.json).
+
 ## Aufnahme und Annotation mit Web Feedback
 
 Für `JS_ToggleFeedbackScreenshotWidget` und `JS_ToggleFeedbackAnnotateWidget`
@@ -311,7 +332,7 @@ Vergleiche mit Mendix 11.12.1 bestätigen die NULL-Regeln: Gleichheit mit dem Li
 NULL-Datensätze ein. Vergleiche zwischen Spalten erhalten den unbekannten Wert.
 Filter lesen gespeicherte Werte, berücksichtigen Commits und Löschungen und prüfen
 Attribute sowie Typen auch bei leeren Quellen. OQL wird niemals als SQL ausgeführt.
-Ordnungsvergleiche verlangen Zahlen oder Zeichenfolgen; Parameter bleiben offen. Joins und Aggregate verwenden die oben beschriebene relationale Grammatik.
+Ordnungsvergleiche verlangen Zahlen, Zeichenfolgen oder Datumswerte; Parameter beschreibt der Abschnitt zum OQL-Modul. Joins und Aggregate verwenden die oben beschriebene relationale Grammatik.
 
 Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-view-filters-2026-10-07.json).

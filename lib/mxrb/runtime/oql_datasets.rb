@@ -40,9 +40,17 @@ module Mxrb
         @entities = project.modules.flat_map { |mod| mod.entities.map { ["#{mod.name}.#{_1.name}", _1] } }.to_h
       end
 
-      def query(text)
-        OqlTable.new(text, @store, decoder: @decoder, decimal: @decimal)
+      def query(text, parameters: nil)
+        OqlTable.new(text, @store, decoder: @decoder, decimal: @decimal, parameters:)
       end
+
+      # The OQL of a declared dataset, parameters included, or nil for other names.
+      def dataset_text(name)
+        definition = @datasets[name.to_s]
+        definition.query if definition && !definition.excluded && definition.query.is_a?(String)
+      end
+
+      def entity(name) = @entities.fetch(name.to_s) { invalid!("unknown result entity #{name}") }
 
       def dataset_query(name)
         definition = @datasets[name.to_s]

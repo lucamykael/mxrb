@@ -206,8 +206,8 @@ Actions instantiate distinct uncommitted objects, copy compatible attributes,
 and ignore unknown columns, matching the verified Java implementations. Queries
 read durable values and validate names, types and syntax before reading rows.
 The DSL rejects dataset creation, removal, renaming and metadata changes.
-Parameters, non-OQL sources, `SELECT *` and joins against derived sources remain
-outside this subset; subqueries are described below. Every projection requires an explicit alias.
+For these two actions, non-OQL sources, `SELECT *` and joins against derived sources
+remain outside this subset and parameters belong to the OQL module (below); subqueries are described below. Every projection requires an explicit alias.
 
 The matrix contains 18 queries executed through both actions, including two real
 queries from `QueryApiBlogPost`. The Ruby browser runs with MPR access prohibited.
@@ -216,7 +216,8 @@ queries from `QueryApiBlogPost`. The Ruby browser runs with MPR access prohibite
 ## Relational OQL views
 
 Ruby retrieval now supports `INNER`, `LEFT`, `RIGHT` and `FULL` joins over persistent
-entities, through explicit `ON` predicates or one association hop per join.
+entities, through explicit `ON` predicates or an association path (also several hops, for `INNER`
+and `LEFT`).
 `GROUP BY`, `COUNT(*)`, `COUNT(column)`, `SUM`, `AVG`, `MIN` and `MAX` preserve
 duplicates, NULL groups, exact decimals and dates. Joined entity IDs may project
 compatible reference associations. Reads use committed values; group identities
@@ -255,6 +256,27 @@ The 30 cases of `spec/fixtures/native_oql_subqueries` match between the official
 Runtime (`script/oql_native_oracle`), the Ruby interpreter and the exported Ruby app
 with MPR access prohibited. [Evidence](../evidence/oql-subqueries-2026-10-10.json).
 
+## OQL parameters and the Marketplace OQL module
+
+`OQL.ExecuteOQLStatement`, `OQL.CountRowsOQLStatement` and the `OQL.Add…Parameter`
+actions of the Marketplace OQL module have adapters selected by the SHA-256 of each
+action's source and of `oql/implementation/OQL.java`; MXRB does not distribute that
+code. As in the module, parameters live per thread until a statement runs, which
+clears them unless `preserveParameters` is set. The statement is a dataset name or
+OQL with `$Name` text, integer, decimal, boolean, date or object (compared by ID)
+parameters; `amount` and `offset` page after `ORDER BY`. Each column fills the
+attribute of the same name or, for IDs, the owned association `Module.Column`;
+columns without a target are errors. An empty parameter in `=` acts as `IS NULL`,
+like the `NULL` literal; an unset parameter is an error. Enumeration attributes read
+as their keys, also in filters.
+
+Joins accept multi-step association paths (`p/M.A_B/M.B/M.B_C/M.C AS c`) for `INNER`
+and `LEFT`, and ordered comparisons accept dates. The nine SPC datasets, four of them
+with parameters, compile and run in Ruby. The 15 cases of
+`spec/fixtures/native_oql_parameters` (module sources copied from
+`MXRB_OQL_MODULE_SOURCE`) match between the official Runtime and the exported Ruby
+app with MPR access prohibited. [Evidence](../evidence/oql-parameters-2026-10-10.json).
+
 ## Web Feedback capture and annotation
 
 `JS_ToggleFeedbackScreenshotWidget` and `JS_ToggleFeedbackAnnotateWidget` have
@@ -291,7 +313,7 @@ Native Mendix 11.12.1 comparisons establish the NULL rules: equality to literal
 Column-to-column comparisons retain the unknown result. Filters read durable
 values, reflect commits/deletes and validate attributes and types before reading
 even an empty source. OQL text is never executed as SQL. Ordered comparisons
-require numbers or strings; parameters remain unsupported.
+require numbers, strings or dates; parameters are described with the OQL module.
 Joins and aggregates use the relational grammar described above.
 
 The matrix covers 30 filters and 125 browser steps with MPR access prohibited.

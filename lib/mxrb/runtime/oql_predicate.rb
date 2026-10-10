@@ -5,6 +5,7 @@ require 'strscan'
 require_relative 'oql_membership'
 require_relative 'oql_expression_grammar'
 require_relative 'oql_subquery_grammar'
+require_relative 'oql_parameters'
 
 module Mxrb
   module Runtime
@@ -20,12 +21,12 @@ module Mxrb
       Operand = Data.define(:kind, :read, :literal, :type, :scale) do
         def initialize(kind:, read:, literal:, type: nil, scale: 0) = super
       end
-      TOKEN = %r{'(?:[^']|'')*'|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.,*+\-:%]}
+      TOKEN = %r{'(?:[^']|'')*'|\$[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.,*+\-:%]}
       AGGREGATES = %w[COUNT SUM AVG MIN MAX].freeze
       COMPARISONS = %w[= != < <= > >=].freeze
       CONTINUATIONS = (COMPARISONS + %w[+ - * : % IS LIKE IN NOT]).freeze
       KINDS = { integer: :number, long: :number, autonumber: :number, decimal: :number,
-                string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime,
+                string: :string, enumeration: :string, enum: :string, boolean: :boolean, datetime: :datetime,
                 identifier: :identifier }.freeze
 
       # A token remembers where it starts so subqueries keep their original text.
@@ -39,16 +40,18 @@ module Mxrb
       end
 
       # A value expression (a projection) instead of a boolean predicate.
-      def self.value(text, scope, aggregate: nil, subquery: nil, &)
-        new(text, scope, aggregate:, subquery:, value: true, &).expression
+      def self.value(text, scope, aggregate: nil, subquery: nil, parameters: nil, &)
+        new(text, scope, aggregate:, subquery:, parameters:, value: true, &).expression
       end
 
       attr_reader :expression
 
       # subquery compiles "( SELECT ... )" with this predicate's references (see OqlSubquery).
-      def initialize(text, scope, aggregate: nil, subquery: nil, value: false, &resolve)
+      # parameters binds $Name (see OqlParameters); nil leaves them unsupported.
+      # options: aggregate:, subquery: and parameters:.
+      def initialize(text, scope, value: false, **options, &resolve)
         @text = text
-        @subquery = subquery
+        @subquery, @parameters, aggregate = options.values_at(:subquery, :parameters, :aggregate)
         @tokens = tokenize(text)
         @scope = scope
         @resolve = resolve
@@ -192,8 +195,15 @@ module Mxrb
         return literal(:string, token[1...-1].gsub("''", "'")) if token.start_with?("'")
         return number_literal(token) if token.match?(/\A\d/)
         return literal(:null, nil) if token.casecmp?('NULL')
+        return parameter(token.delete_prefix('$')) if token.start_with?('$')
 
         literal(:boolean, token.casecmp?('TRUE')) if %w[TRUE FALSE].include?(token.upcase)
+      end
+
+      def parameter(name)
+        error!("OQL parameter $#{name} is not set") unless @parameters&.key?(name)
+        kind, type, value, scale = OqlParameters.typed(@parameters.fetch(name))
+        Operand.new(kind, ->(_row) { value }, true, type, scale)
       end
 
       def aggregate_operand
@@ -298,9 +308,9 @@ module Mxrb
       def validate_comparison(left, right, operator)
         types = [left.kind, right.kind].reject { _1 == :null }
         error!('incompatible comparison types') if types.uniq.length > 1
-        return if %w[= !=].include?(operator) || types.all? { _1 == :number } || types.all? { _1 == :string }
+        return if %w[= !=].include?(operator) || %i[number string datetime].any? { |kind| types.all?(kind) }
 
-        error!('ordered comparisons require numbers or strings')
+        error!('ordered comparisons require numbers, strings or dates')
       end
 
       def error!(message)

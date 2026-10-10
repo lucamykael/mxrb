@@ -8,6 +8,9 @@ module Mxrb
         def read(row) = row.dig(scope, name)
       end
 
+      # OQL sees an enumeration value by its key; records may hold the qualified literal.
+      def self.value(decoded, type) = type == :enum && decoded.is_a?(String) ? decoded.split('.').last : decoded
+
       # outer resolves the enclosing query's references inside a subquery, sources supplies
       # view entities as tables and subquery compiles nested SELECTs (see OqlSubquery).
       def initialize(query, store, decoder:, tables: {}, **context)
@@ -15,7 +18,7 @@ module Mxrb
         @store = store
         @decoder = decoder
         @tables = tables.dup
-        @outer, @sources, @subquery = context.values_at(:outer, :sources, :subquery)
+        @outer, @sources, @subquery, @parameters = context.values_at(:outer, :sources, :subquery, :parameters)
         @outer_scopes = context.fetch(:outer_scopes, [])
         @definitions = {}
         @records = {}
@@ -23,6 +26,9 @@ module Mxrb
       end
 
       attr_reader :subquery
+
+      # Subqueries and parameters shared by every expression of this query.
+      def expression_options = { subquery: @subquery, parameters: @parameters }
 
       def column(reference)
         scope, name = resolve_scope(reference)
@@ -38,7 +44,7 @@ module Mxrb
       def scopes = @definitions.keys + @outer_scopes
 
       def predicate(text)
-        OqlPredicate.new(text, scopes, subquery: @subquery) { term(_1) }
+        OqlPredicate.new(text, scopes, **expression_options) { term(_1) }
       end
 
       # [type, reader] of a column, or of the enclosing query's column inside a subquery.
@@ -108,7 +114,9 @@ module Mxrb
       end
 
       def snapshot(definition, row)
-        values = definition.columns.to_h { [_1.name, @decoder.call(row[_1.sql_name], _1.type)] }
+        values = definition.columns.to_h do |column|
+          [column.name, self.class.value(@decoder.call(row[column.sql_name], column.type), column.type)]
+        end
         values.merge('ID' => row.fetch('id'), '__entity' => definition.name)
       end
 

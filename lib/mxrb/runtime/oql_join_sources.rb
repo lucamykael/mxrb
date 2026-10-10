@@ -18,7 +18,7 @@ module Mxrb
       def parse_sources(tokens)
         @tokens = tokens
         result = [source(nil)]
-        result << source(join_kind) until peek.empty?
+        result.concat(sources_of(join_kind)) until peek.empty?
         invalid!('duplicate source alias') unless result.map(&:scope).uniq.length == result.length
         result
       end
@@ -30,24 +30,44 @@ module Mxrb
         kind
       end
 
-      def source(kind)
-        origin, association = association_path(kind)
-        entity = entity_name
+      def source(kind) = sources_of(kind).first
+
+      # A path a/M.A_B/M.B/M.B_C/M.C joins every entity on the way; only the last
+      # one is named by the alias, the others get hidden scopes.
+      def sources_of(kind)
+        origin, hops = association_path(kind)
+        entity = hops.empty? ? entity_name : hops.last.last
         scope = source_alias(entity)
         condition = take('ON') ? join_condition : nil
-        invalid!('entity joins require ON') if kind && !association && !condition
-        Source.new(entity, scope, kind, origin, association, condition)
+        invalid!('entity joins require ON') if kind && hops.empty? && !condition
+        return [Source.new(entity, scope, kind, nil, nil, condition)] if hops.empty?
+
+        path_sources(kind, origin, hops, scope, condition)
+      end
+
+      def path_sources(kind, origin, hops, scope, condition)
+        if hops.length > 1 && %w[RIGHT FULL].include?(kind)
+          invalid!('multi-step association paths support only INNER and LEFT joins')
+        end
+        hops.each_with_index.map do |(association, entity), index|
+          last = index == hops.length - 1
+          step = last ? scope : "__#{scope}_path#{index}"
+          Source.new(entity, step, kind, origin, association, last ? condition : nil).tap { origin = step }
+        end
       end
 
       def association_path(kind)
-        return [nil, nil] unless @tokens.reject { _1.strip.empty? }[1] == '/'
+        return [nil, []] unless @tokens.reject { _1.strip.empty? }[1] == '/'
 
         invalid!('association paths require JOIN') unless kind
         origin = identifier
-        expect('/')
-        association = entity_name
-        expect('/')
-        [origin, association]
+        hops = []
+        while take('/')
+          association = entity_name
+          expect('/')
+          hops << [association, entity_name]
+        end
+        [origin, hops]
       end
 
       def source_alias(entity)
