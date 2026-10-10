@@ -3,8 +3,27 @@ import type { JavaScriptAction } from './nanoflow';
 import { isEntityRecord } from './value';
 import { commonsStorageHandlers } from './commonsStorage';
 
+// NanoflowCommons.SignIn returns 401 without a request when a field is empty and
+// otherwise the sign-in status (0 offline); success reloads the app like mx.login.
+const signIn: JavaScriptAction = async ({ username, password }) => {
+  if (!username || !password) return 401;
+  try {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ username, password }),
+    });
+    if (response.ok) setTimeout(() => window.location.reload(), 0);
+    return response.status;
+  } catch {
+    return 0;
+  }
+};
+
 const handlers: Record<string, JavaScriptAction> = {
   ...commonsStorageHandlers,
+  SignIn: signIn,
   Base64Encode: async ({ stringToEncode }) => Base64.encode(stringToEncode as string),
   Base64Decode: async ({ base64 }) => Base64.decode(base64 as string),
   GetGuid: async ({ EntityObject }) => {

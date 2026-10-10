@@ -317,6 +317,42 @@ estão na seção do módulo OQL. Joins e agregações usam a gramática relacio
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
 [Evidência](../evidence/oql-view-filters-2026-10-07.json).
 
+## Usuários do módulo System
+
+O runtime Ruby persiste `System.User`, `System.UserRole`, `System.Language` e
+`System.TimeZone`, com `System.UserRoles`, `System.User_Language`,
+`System.User_TimeZone` e `System.grantableRoles`, conforme o modelo System do
+Mendix 11.12.1. Entidades como `Administration.Account` herdam os atributos de
+`System.User`, e consultas a `System.User` incluem as especializações. Na inicialização
+cada papel de usuário do projeto ganha seu `System.UserRole` (`ModelGUID` = GUID do
+papel, nome e descrição). Como no Runtime portátil, o administrador não é criado na
+inicialização; num deploy, `MXRB_ADMIN_PASSWORD` cria ou atualiza o `AdminUserName`
+(padrão `MxAdmin`) ativo, com essa senha e só o `AdminUserRole`, como o
+`create_admin_user` do M2EE. Com o Sudoku exportado, os microflows reais do módulo
+Administration criam a conta (`SaveNewAccount`), recusam a troca com senha antiga
+errada e trocam a senha (`ChangeMyPassword`), e o login segue funcionando. Atributos `HashedString`, como `Password`, são gravados com BCrypt (o
+algoritmo padrão do Mendix) e nunca são enviados ao navegador.
+
+`System.VerifyPassword` ignora maiúsculas no nome e não considera `Active`, `Blocked`
+ou `WebServiceUser`; senha vazia, errada ou usuário inexistente dão `false`. Em
+microflows, `length` de uma lista devolve a quantidade de itens. Os 13 resultados de
+`spec/fixtures/native_system_users` coincidem entre o Runtime oficial e o app Ruby
+exportado com acesso ao MPR proibido. O login (`/api/login`) aceita os usuários de `MXRB_USERS_JSON` e, para os demais nomes,
+os `System.User` persistidos, como o Runtime: o nome ignora maiúsculas; usuários
+bloqueados, inativos, de web service ou sem papéis são recusados antes da senha; senha
+errada ou vazia soma `FailedLogins` e a terceira bloqueia (`Blocked`, `BlockedSince`)
+por 5 minutos; o sucesso zera as falhas e grava `LastLogin`. A sessão guarda o ID do
+usuário e seus papéis; `$currentUser` e `[%CurrentUser%]` apontam para ele (vazio sem
+login). `NanoflowCommons.SignIn` devolve 401 sem consultar o servidor quando nome ou
+senha estão vazios, senão o status do login (0 sem rede), e recarrega o app após o
+sucesso, como `mx.login`. Ao gravar um usuário cuja senha mudou, vale a política de senha do
+projeto (tamanho mínimo, dígito, maiúscula e minúscula, símbolo do conjunto fixo do
+Runtime; espaço não é símbolo), com o erro de validação no campo `Password` e os textos
+padrão do Mendix; mudar outros atributos não reaplica a política. Os 11 casos de
+`spec/fixtures/native_password_policy` coincidem. Os 21 passos de `spec/fixtures/native_system_login`,
+executados por `script/login_native_oracle` (`POST /xas/`), coincidem no Runtime oficial
+e no app Ruby. [Evidência](../evidence/system-users-2026-10-10.json), [login](../evidence/system-sign-in-2026-10-10.json).
+
 ## Envio de imagens do Feedback
 
 `JS_UploadAndConvertToFileBlobURL`, `JS_RevokeUploadedFileFromMemory` e

@@ -721,7 +721,7 @@ RSpec.describe 'Ruby application internal contracts' do
                             record_hooks: {}, adapters: {}, java_custom_actions: {},
                             allow_destructive: true, coordinator:,
                             scheduler_lease_ttl: '300', runtime_records: {}, runtime_project: nil,
-                            service_dispatch: instance_of(Proc)
+                            administrator_password: nil, service_dispatch: instance_of(Proc)
       ).and_return(native_bridge)
       expect(app.send(:bridge)).to eq(native_bridge)
       app.close

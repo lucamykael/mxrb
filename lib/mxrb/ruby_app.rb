@@ -2253,7 +2253,7 @@ module Mxrb
           access_control, users: environment['MXRB_USERS_JSON'],
                           tokens: environment['MXRB_AUTH_TOKENS'],
                           ttl: environment.fetch('MXRB_SESSION_TTL', '3600'),
-                          store: shared_store
+                          store: shared_store, directory: -> { bridge.store }
         )
       end
 
@@ -2565,6 +2565,7 @@ module Mxrb
           coordinator: shared_store,
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
           runtime_records: Registry.all(:record),
+          administrator_password: environment['MXRB_ADMIN_PASSWORD'],
           service_dispatch: lambda { |name, arguments, context|
             deserialize(call_service(name, arguments, context:), context:)
           }
@@ -2620,6 +2621,17 @@ module Mxrb
         File.expand_path(configured, root)
       end
 
+      # Hashed strings such as System.User.Password never leave the server.
+      def hashed_members(entity)
+        (@hashed_members ||= {})[entity] ||= begin
+          store = bridge.interpreter.store
+          columns = store.respond_to?(:schema) ? store.schema.entity(entity).columns : []
+          columns.select { _1.type == :hashstring }.map(&:name)
+        rescue ArgumentError
+          []
+        end
+      end
+
       def serialize(value, seen = {}, context: nil)
         case value
         when Runtime::Native::ObjectValue
@@ -2627,7 +2639,7 @@ module Mxrb
           return { id: value.id, type: value.entity } if seen[key]
 
           branch = seen.merge(key => true)
-          members = value.members
+          members = value.members.except(*hashed_members(value.entity))
           if context
             members = members.select do |member, _member_value|
               access_control.member_allowed?(
@@ -2754,7 +2766,7 @@ module Mxrb
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
-                     runtime_records: nil, runtime_project: nil, service_dispatch: nil)
+                     runtime_records: nil, runtime_project: nil, service_dispatch: nil, administrator_password: nil)
         FileUtils.mkdir_p(File.dirname(database))
         @project = runtime_project || Model::Project.open(path)
         schema = if runtime_project
@@ -2770,9 +2782,19 @@ module Mxrb
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
+        Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
+        if administrator_password
+          Runtime::SystemDomain.ensure_administrator(@store, password: administrator_password,
+                                                             **@access_control.administrator)
+        end
         register_record_hooks(record_hooks)
         validator = RecordValidation.new(record_hooks, @store)
         @store.on(:before_commit) { |value| validator.call(value) }
+        policy = @access_control.password_policy
+        @store.on(:before_commit) do |value|
+          violation = policy.violation(value, @store.schema)
+          raise RecordValidationError, [violation] if violation
+        end
         @scheduler = Runtime::Scheduler.new(
           @project,
           executor: lambda { |name, **_metadata|
