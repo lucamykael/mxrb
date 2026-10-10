@@ -753,6 +753,15 @@ wirken ohne MPR-Neukompilierung. Verschachtelte Data Views können eine gesperrt
 Modulrollen werden gemeinsam mit unterstützten Ausdrücken geprüft. Backend-
 Autorisierung bleibt unabhängig von dieser UI-Steuerung.
 
+Bedingungen auf Attributwerte (Boolean oder Enumeration) werden als
+`input_condition(attribute:, conditions: [["true", true], ...], source:)` sowie als
+`editable_when`/`visible_when` mit denselben Paaren exportiert, ohne
+Modellkennungen. Wie MxBuild 11.12.1 sie kompiliert, prüft die UI, ob das Attribut
+einem der markierten Werte entspricht, wobei `(empty)` für einen leeren Wert steht,
+und liest dazu das Objekt des in `source:` genannten Data Views. Unbekannte Quellen
+bleiben gesperrt. Ein Ruby-Export einer Kopie des privaten SPC-Projekts besteht
+damit die Prüfung des öffentlichen Quellcodes und den identischen Round-Trip.
+
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
 Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die

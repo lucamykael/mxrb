@@ -5609,12 +5609,19 @@ module Mxrb
       native.merge(
         "$ID" => SecureRandom.uuid, "$Type" => type,
         "Attribute" => condition.fetch(:attribute, "").to_s,
-        "Conditions" => IO::BsonCodec.build_array(Array(condition[:conditions]), marker: 2),
+        "Conditions" => IO::BsonCodec.build_array(
+          Array(condition[:conditions]).map { data_view_attribute_condition_doc(_1) }, marker: 2
+        ),
         "Expression" => condition.fetch(:expression, "").to_s,
         "IgnoreSecurity" => condition[:ignore_security] == true,
         "ModuleRoles" => IO::BsonCodec.build_array(Array(condition[:roles]).map(&:to_s), marker: 1),
         "SourceVariable" => data_view_page_variable_doc(condition[:source_variable])
       )
+    end
+
+    # Attribute values from the DSL pairs gain the identity of a model document.
+    def data_view_attribute_condition_doc(condition)
+      { "$ID" => SecureRandom.uuid, "$Type" => "Enumerations$Condition" }.merge(condition.transform_keys(&:to_s))
     end
 
     def data_view_source_entity(source)

@@ -323,11 +323,14 @@ RSpec.describe Mxrb::RubyApp::Exporter do
 
     [
       view.merge('x' => 1), view.merge('options' => options.merge('x' => 1)),
-      view.merge('events' => [{}]), without(view, 'body'), view.merge('body' => {}),
+      view.merge('events' => [{}]), view.merge('body' => {}),
       view.merge('footer' => {})
     ].map { copy(_1) }.each do |candidate|
       expect(exporter.send(:runtime_data_view_supported?, candidate['options'], candidate)).to be(false)
     end
+    empty = without(without(view, 'body'), 'footer')
+    expect(exporter.send(:runtime_data_view_supported?, options, empty)).to be(true)
+    expect(exporter.send(:runtime_widget_call_source, empty, 0)).not_to include('body do', 'footer do')
     expect(exporter.send(:runtime_data_view_region_supported?, [text_widget])).to be(true)
     expect(exporter.send(:runtime_data_view_region_supported?, {})).to be(false)
     expect(exporter.send(:runtime_data_view_region_supported?, [{}])).to be(false)

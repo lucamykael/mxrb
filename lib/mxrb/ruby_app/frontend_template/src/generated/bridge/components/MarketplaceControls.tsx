@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import type { MarketplaceWidgetProps } from '../marketplace';
 import { ReadOnlyContext, editable } from './FieldPolicy';
 import { expressionValue, memberName } from '../value';
+import { WidgetObjectScope } from './VariableScope';
 
 export const marketplaceValue = (value: unknown, props: MarketplaceWidgetProps): unknown =>
   typeof value === 'string' && (value.startsWith('$') || value.startsWith("'"))
@@ -54,12 +55,13 @@ export function MarketplaceControl(props: MarketplaceWidgetProps) {
   const p = widget.options?.properties || {};
   const id = String(widget.options?.widget_id).toLowerCase();
   const inheritedReadOnly = useContext(ReadOnlyContext);
+  const widgetObjects = useContext(WidgetObjectScope);
   const disabled =
     inheritedReadOnly ||
     !context ||
     p.editable === 'never' ||
     p.editable === false ||
-    !editable(widget.options || {}, context, schema?.module_roles);
+    !editable(widget.options || {}, context, schema?.module_roles, widgetObjects);
   const label = String(p.label || widget.options?.caption || widget.name);
   const number = (value: unknown, fallback: number) => {
     const resolved = marketplaceValue(value, props) ?? fallback;

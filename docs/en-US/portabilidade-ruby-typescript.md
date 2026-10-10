@@ -714,6 +714,14 @@ by React. Nested Data Views cannot unlock a read-only ancestor; unknown conditio
 stay locked. Module roles are evaluated together with supported expressions;
 other native variants require their own contracts. Backend authorization remains separate.
 
+Attribute-value conditions (Boolean or enumeration) are exported as
+`input_condition(attribute:, conditions: [["true", true], ...], source:)` and as
+`editable_when`/`visible_when` with the same pairs, without model identifiers. As
+MxBuild 11.12.1 compiles them, the UI evaluates "the attribute equals one of the
+marked values", with `(empty)` for no value, reading the object of the Data View
+named by `source:`. Unknown sources stay locked. A Ruby export of a copy of the
+private SPC project now passes the public-source audit and the identical round trip.
+
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
 are reported. Named grid selection feeds `listen_to` views. Multi-step association

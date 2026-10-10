@@ -21,6 +21,21 @@ module Mxrb
   module Dsl
     UNSET = Object.new.freeze
 
+    # The values of an attribute-based visibility or editability condition, in
+    # Studio Pro order: a pair of the attribute value ("(empty)" for no value)
+    # and whether it matches. Model documents pass through unchanged.
+    def self.attribute_conditions(conditions)
+      Array(conditions).map do |condition|
+        next condition if condition.is_a?(Hash)
+
+        value, matches = condition
+        raise ArgumentError, "attribute condition requires [value, true|false], got #{condition.inspect}" unless
+          condition.is_a?(Array) && condition.size == 2 && [true, false].include?(matches)
+
+        { 'AttributeValue' => value.to_s, 'EditableVisible' => matches }
+      end
+    end
+
     module OverlayFields
       private
 
@@ -428,8 +443,15 @@ module Mxrb
         )
       end
 
-      def input_condition(expression)
-        { expression: expression.to_s }
+      # Conditional editability of an input: an expression, or the values of an
+      # attribute of the source object (pairs of value and whether it matches).
+      def input_condition(expression = nil, attribute: nil, conditions: nil, source: nil)
+        return { expression: expression.to_s } if attribute.nil? && conditions.nil? && source.nil?
+
+        compact_data_view_source(
+          expression: expression&.to_s, attribute: attribute&.to_s,
+          conditions: Dsl.attribute_conditions(conditions), source_variable: source
+        )
       end
 
       def snippet(name, from: nil, arguments: {}, **appearance)
@@ -1144,7 +1166,7 @@ module Mxrb
       def condition(expression:, roles:, attribute:, conditions:, ignore_security:, source:, native:)
         compact_data_view_source(
           expression: expression&.to_s, roles: Array(roles).map(&:to_s),
-          attribute: attribute&.to_s, conditions: Array(conditions),
+          attribute: attribute&.to_s, conditions: Dsl.attribute_conditions(conditions),
           ignore_security: ignore_security == true, source_variable: source,
           unknown_native: native
         )

@@ -888,6 +888,15 @@ opacas não liberam edição. Papéis de módulo são combinados com as express�
 variantes nativas adicionais precisam de seus próprios contratos.
 As regras de autorização do backend continuam independentes desse controle UI.
 
+Condições por valor de atributo (booleano ou enumeração) são exportadas como
+`input_condition(attribute:, conditions: [["true", true], ...], source:)` e
+`editable_when`/`visible_when` com os mesmos pares, sem identificadores do modelo.
+Como o MxBuild 11.12.1 compila essas condições, a UI as avalia como "o atributo
+é igual a um dos valores marcados", com `(empty)` para valor vazio, lendo o
+objeto do Data View indicado em `source:`. Fontes desconhecidas continuam
+bloqueadas. Com isso, a exportação Ruby de uma cópia do projeto privado SPC passa
+a auditoria do código público e o round-trip idêntico.
+
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
 seu foco. Objetos vindos do servidor permanecem persistentes; falhas de gravação,

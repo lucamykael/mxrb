@@ -2154,8 +2154,8 @@ module Mxrb
                            runtime_grid_columns_expression(value)
                          elsif type == :gallery && key.to_s == 'sort'
                            runtime_gallery_sort_expression(value)
-                         elsif key.to_s == 'editability' && value.is_a?(Hash) && value.keys == ['expression']
-                           "input_condition(#{value.fetch('expression').inspect})"
+                         elsif key.to_s == 'editability'
+                           runtime_input_condition_source(value)
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
@@ -2620,7 +2620,7 @@ module Mxrb
         return false unless runtime_keys?(options, DATA_VIEW_OPTION_KEYS)
         return false unless runtime_data_view_options_supported?(options)
         return false unless Array(widget['events']).empty?
-        return false unless widget.key?('body') && runtime_data_view_region_supported?(widget['body'])
+        return false if widget.key?('body') && !runtime_data_view_region_supported?(widget['body'])
         return false if widget.key?('footer') && !runtime_data_view_region_supported?(widget['footer'])
 
         true
@@ -2853,10 +2853,56 @@ module Mxrb
           'ignore_security' => 'ignore_security', 'source_variable' => 'source',
           'unknown_native' => 'native'
         }.each do |name, keyword|
-          arguments << "#{keyword}: #{pretty_ruby_value(condition.fetch(name), indentation + 2)}" if
-            condition.key?(name)
+          next unless condition.key?(name)
+
+          value = condition.fetch(name)
+          source = case name
+                   when 'conditions' then runtime_attribute_conditions_source(value)
+                   when 'source_variable' then PageDataSources.variable_reference_expression(value)
+                   end
+          arguments << "#{keyword}: #{source || pretty_ruby_value(value, indentation + 2)}"
         end
         runtime_widget_declaration(method_name, arguments, indentation, false)
+      end
+
+      # An input's conditional editability: an expression and/or attribute values,
+      # optionally read from another widget's object. nil keeps the generic form.
+      def runtime_input_condition_source(condition)
+        return unless condition.is_a?(Hash) && condition.any? &&
+                      (condition.keys - %w[expression attribute conditions source_variable]).empty?
+        return unless %w[expression attribute].all? { !condition.key?(_1) || condition[_1].is_a?(String) }
+
+        arguments = []
+        arguments << condition.fetch('expression').inspect if condition.key?('expression')
+        return "input_condition(#{arguments.first})" if condition.keys == ['expression']
+
+        arguments << "attribute: #{condition.fetch('attribute').inspect}" if condition.key?('attribute')
+        if condition.key?('conditions')
+          values = runtime_attribute_conditions_source(condition.fetch('conditions'))
+          return unless values
+
+          arguments << "conditions: #{values}"
+        end
+        if condition.key?('source_variable')
+          source = PageDataSources.variable_reference_expression(condition.fetch('source_variable'))
+          return unless source
+
+          arguments << "source: #{source}"
+        end
+        "input_condition(#{arguments.join(', ')})"
+      end
+
+      # Attribute values as [value, matches] pairs; model identities are not public.
+      def runtime_attribute_conditions_source(conditions)
+        return unless conditions.is_a?(Array) && conditions.all? do |condition|
+          condition.is_a?(Hash) &&
+          (condition.keys - %w[$ID $Type]).sort == %w[AttributeValue EditableVisible] &&
+          condition.fetch('$Type', 'Enumerations$Condition') == 'Enumerations$Condition' &&
+          condition['AttributeValue'].is_a?(String) && [true, false].include?(condition['EditableVisible'])
+        end
+
+        pairs = conditions.map { "[#{_1.fetch('AttributeValue').inspect}, #{_1.fetch('EditableVisible')}]" }
+        "[#{pairs.join(', ')}]"
       end
 
       def non_negative_integer?(value)
