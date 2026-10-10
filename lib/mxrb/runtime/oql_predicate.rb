@@ -4,6 +4,7 @@ require 'bigdecimal'
 require 'strscan'
 require_relative 'oql_membership'
 require_relative 'oql_expression_grammar'
+require_relative 'oql_subquery_grammar'
 
 module Mxrb
   module Runtime
@@ -13,6 +14,7 @@ module Mxrb
     # rubocop:disable Metrics/ClassLength
     class OqlPredicate
       include OqlExpressionGrammar
+      include OqlSubqueryGrammar
 
       # type and scale refine :number operands for division, CAST and ROUND.
       Operand = Data.define(:kind, :read, :literal, :type, :scale) do
@@ -26,12 +28,27 @@ module Mxrb
                 string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime,
                 identifier: :identifier }.freeze
 
+      # A token remembers where it starts so subqueries keep their original text.
+      class Token < String
+        attr_reader :offset
+
+        def initialize(text, offset)
+          super(text)
+          @offset = offset
+        end
+      end
+
       # A value expression (a projection) instead of a boolean predicate.
-      def self.value(text, scope, aggregate: nil, &) = new(text, scope, aggregate:, value: true, &).expression
+      def self.value(text, scope, aggregate: nil, subquery: nil, &)
+        new(text, scope, aggregate:, subquery:, value: true, &).expression
+      end
 
       attr_reader :expression
 
-      def initialize(text, scope, aggregate: nil, value: false, &resolve)
+      # subquery compiles "( SELECT ... )" with this predicate's references (see OqlSubquery).
+      def initialize(text, scope, aggregate: nil, subquery: nil, value: false, &resolve)
+        @text = text
+        @subquery = subquery
         @tokens = tokenize(text)
         @scope = scope
         @resolve = resolve
@@ -50,9 +67,10 @@ module Mxrb
         until scanner.eos?
           next if scanner.scan(/\s+/)
 
+          offset = scanner.pos
           token = scanner.scan(TOKEN)
           error!('invalid token') unless token
-          tokens << token
+          tokens << Token.new(token, offset)
         end
         tokens
       end
@@ -82,7 +100,8 @@ module Mxrb
 
       def negation
         return invert(negation) if take('NOT')
-        return comparison unless @tokens.first == '('
+        return exists_operand if take('EXISTS')
+        return comparison if @tokens.first != '(' || subquery_ahead?
 
         grouped_condition || comparison
       end
@@ -141,7 +160,9 @@ module Mxrb
       def membership_test(left)
         return like(left, operand) if take('LIKE')
 
-        within(left, literal_list) if take('IN')
+        return unless take('IN')
+
+        subquery_ahead? ? within_subquery(left) : within(left, literal_list)
       end
 
       def like(left, pattern)

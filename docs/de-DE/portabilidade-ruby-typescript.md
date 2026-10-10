@@ -220,9 +220,8 @@ Die Aktionen erzeugen unterschiedliche Objekte ohne Commit, kopieren kompatible
 Attribute und ignorieren unbekannte Spalten wie die geprüften Java-Implementierungen.
 Abfragen lesen gespeicherte Werte und prüfen Namen, Typen und Syntax vor dem Lesen.
 Die DSL lehnt das Anlegen, Entfernen, Umbenennen und Ändern von Dataset-Metadaten
-ab. Parameter, Quellen ohne OQL, `SELECT *`, Joins mit abgeleiteten Quellen,
-und korrelierte Unterabfragen bleiben
-außerhalb dieser Teilmenge. Jede Projektion benötigt einen expliziten Alias.
+ab. Parameter, Quellen ohne OQL, `SELECT *` und Joins mit abgeleiteten Quellen bleiben
+außerhalb dieser Teilmenge; Unterabfragen sind weiter unten beschrieben. Jede Projektion benötigt einen expliziten Alias.
 
 Die Matrix enthält 18 Abfragen über beide Aktionen, darunter zwei echte Abfragen
 aus `QueryApiBlogPost`. Im Ruby-Browser ist der MPR-Zugriff gesperrt.
@@ -239,7 +238,8 @@ gespeicherte Werte; Gruppen-IDs bleiben nach Commits stabil. Namen, Klauseln und
 Typen werden auch bei leeren Quellen vorab geprüft. OQL wird nie als SQL ausgeführt.
 
 Die relationale Grammatik beginnt mit `SELECT` und verlangt Projektionsaliase.
-Verkettete Views und Parameter bleiben offen;
+Parameter bleiben offen; Unterabfragen, `UNION` und Views über Views stehen im
+nächsten Abschnitt;
 `LIKE`, `IN`, `DISTINCT` und `HAVING` sind oben beschrieben. Native Views
 [erlauben kein `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 die Sortierung erfolgt beim Verbraucher. Das geprüfte explizite Datumsmuster von
@@ -250,6 +250,28 @@ Alle 22 Ergebnismengen stimmen zwischen originalem Mendix, dem Ruby-Roundtrip
 in Mendix und dem Ruby-Browser ohne MPR-Zugriff überein. Zwei native Builds und
 Runtimes sowie 197 Browserschritte bestanden mit unveränderten Eingabe-Hashes.
 [Nachweis](../evidence/oql-relational-views-2026-10-08.json).
+
+## OQL-Unterabfragen, `UNION` und Views über Views
+
+Views und tabellarische Abfragen akzeptieren `IN (SELECT …)`, `NOT IN (SELECT …)`,
+`EXISTS (SELECT …)`, `NOT EXISTS` und Wert-Unterabfragen in `WHERE`, `HAVING` und
+Projektionen, auch mit der äußeren Abfrage korreliert und verschachtelt. Wie in
+Mendix 11.12.1 braucht eine Wert-Unterabfrage eine Aggregatfunktion als Spalte oder
+`LIMIT 1`; mit `GROUP BY` schlägt sie fehl, wenn sie mehrere Zeilen liefert. Eine
+Unterabfrage wählt genau eine Spalte und darf mit `LIMIT` nach Quellspalten sortieren.
+`NOT IN` mit einem `NULL`-Kandidaten wählt nichts aus; Textvergleiche ignorieren die
+Groß-/Kleinschreibung.
+
+`UNION` entfernt Duplikate ohne Rücksicht auf Groß-/Kleinschreibung, `UNION ALL`
+behält sie; die Spalten tragen die Namen des ersten Teils. Eine View kann eine andere
+View in `FROM` oder in Joins lesen, auch verkettet; eine View, die sich selbst liest,
+wird abgelehnt. Mendix lehnt `ANY`, `ALL`, `BETWEEN` und `SELECT *` ab, `Count` ist
+ein reserviertes Wort.
+
+Die 30 Fälle von `spec/fixtures/native_oql_subqueries` stimmen zwischen offiziellem
+Runtime (`script/oql_native_oracle`), Ruby-Interpreter und exportierter Ruby-App mit
+gesperrtem MPR-Zugriff überein.
+[Nachweis](../evidence/oql-subqueries-2026-10-10.json).
 
 ## Aufnahme und Annotation mit Web Feedback
 

@@ -2,6 +2,7 @@
 
 require_relative 'oql_join_sources'
 require_relative 'oql_query_shape'
+require_relative 'oql_nesting'
 
 module Mxrb
   module Runtime
@@ -39,7 +40,7 @@ module Mxrb
         @distinct = tokens.first&.type == :word && tokens.first.text.casecmp?('DISTINCT')
         columns = split_columns(@distinct ? tokens.drop(1) : tokens)
         invalid!('expected at least one projection') if columns == ['']
-        columns.map { projection(_1) }
+        columns.each_with_index.map { |column, index| projection(column, index) }
       end
 
       def clause_text(tokens) = tokens&.map(&:text)&.join
@@ -54,10 +55,9 @@ module Mxrb
         end
       end
 
+      # Clauses of subqueries stay inside their parentheses.
       def clause_starts(tokens)
-        tokens.each_index.select do |index|
-          tokens[index].type == :word && CLAUSES.include?(tokens[index].text.upcase)
-        end
+        OqlNesting.top_level(tokens) { _1.type == :word && CLAUSES.include?(_1.text.upcase) }
       end
 
       def validate_clause_order(starts, names)
@@ -77,10 +77,11 @@ module Mxrb
         columns.map(&:strip)
       end
 
-      def projection(text)
+      # Subqueries may leave a column unnamed: an attribute keeps its name, other terms get a position.
+      def projection(text, index)
         match = /\A(.+?)\s+(?:AS\s+)?([A-Za-z_][A-Za-z0-9_]*)\z/i.match(text)
-        invalid!('every projection requires an alias') unless match
-        expression, name = match.captures
+        match = nil if match && (!complete?(match[1]) || match[2].casecmp?('END'))
+        expression, name = match ? match.captures : [text, unnamed(text, index)]
         aggregate = AGGREGATE.match(expression)
         return aggregate_projection(aggregate, name) if aggregate
         return Projection.new(normalize_reference(expression), name, nil) if simple_reference?(expression)
@@ -95,10 +96,20 @@ module Mxrb
         Projection.new(reference, name, function)
       end
 
+      # Whether the text before a trailing word is a whole term, so that word is an alias.
+      def complete?(text)
+        Oql::Translator.tokens(text).sum { OqlNesting.paren(_1) }.zero? && !text.match?(%r{[-+*:%(,./]\s*\z})
+      end
+
+      def unnamed(text, index)
+        simple_reference?(text) ? normalize_reference(text).split('.').last : "Column#{index + 1}"
+      end
+
       def simple_reference?(text) = REFERENCE.match?(text.strip.gsub(%r{\s*([./])\s*}, '\\1'))
 
       def computed(expression, name)
-        tokens = Oql::Translator.tokens(expression).reject { _1.type == :space }
+        # Aggregates of a subquery do not group the outer query.
+        tokens = OqlNesting.outside_subqueries(Oql::Translator.tokens(expression).reject { _1.type == :space })
         aggregated = tokens.each_cons(2).any? { |word, open| AGGREGATES.include?(word.text.upcase) && open.text == '(' }
         Projection.new(nil, name, nil, expression, aggregated)
       end

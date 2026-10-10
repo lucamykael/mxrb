@@ -206,9 +206,8 @@ As ações criam objetos distintos, sem commit, copiam atributos compatíveis e
 ignoram colunas desconhecidas, como as implementações Java verificadas. A leitura
 usa valores salvos e valida nomes, tipos e sintaxe antes de consultar as linhas.
 Criação, remoção, renomeação e edição de metadados de datasets pela DSL ainda são
-rejeitadas. Parâmetros, fontes sem OQL, `SELECT *`, joins com fontes derivadas,
-e subconsultas correlacionadas continuam
-fora deste subconjunto. Cada projeção requer alias explícito.
+rejeitadas. Parâmetros, fontes sem OQL, `SELECT *` e joins com fontes derivadas continuam
+fora deste subconjunto; subconsultas estão descritas adiante. Cada projeção requer alias explícito.
 
 A matriz contém 18 consultas, executadas pelas duas ações, incluindo as duas
 consultas reais de `QueryApiBlogPost`. O navegador Ruby executa sem acesso ao MPR.
@@ -225,7 +224,8 @@ grupos permanecem estáveis após commits. Nomes, cláusulas e tipos são valida
 antes da leitura, inclusive com fontes vazias. OQL nunca é executado como SQL.
 
 A gramática relacional começa por `SELECT` e exige aliases nas projeções.
-Views encadeadas e parâmetros continuam pendentes;
+Parâmetros continuam pendentes; subconsultas, `UNION` e views sobre views
+estão na seção seguinte;
 `LIKE`, `IN`, `DISTINCT` e `HAVING` estão descritos acima. Views nativas
 [não permitem `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 a ordenação pertence ao consumidor. A formatação de datas está descrita em
@@ -235,6 +235,26 @@ Os 22 conjuntos de resultados coincidiram no Mendix original, no Mendix
 regenerado de Ruby e no navegador Ruby com acesso MPR proibido. Passaram dois
 builds/runtimes nativos e 197 passos de navegador, preservando todos os hashes
 de entrada. [Evidência](../evidence/oql-relational-views-2026-10-08.json).
+
+## Subconsultas OQL, `UNION` e views sobre views
+
+Views e consultas tabulares aceitam `IN (SELECT …)`, `NOT IN (SELECT …)`,
+`EXISTS (SELECT …)`, `NOT EXISTS` e subconsultas de valor em `WHERE`, `HAVING` e
+projeções, inclusive correlacionadas com a consulta externa e aninhadas. Como no
+Mendix 11.12.1, uma subconsulta de valor exige uma função de agregação como coluna
+ou `LIMIT 1`; com `GROUP BY` ela falha ao produzir mais de uma linha. Uma
+subconsulta escolhe uma única coluna e pode ordenar por colunas da fonte quando
+tem `LIMIT`. `NOT IN` com `NULL` entre os candidatos não seleciona nada e as
+comparações de texto ignoram maiúsculas.
+
+`UNION` remove duplicatas sem diferenciar maiúsculas e `UNION ALL` as mantém; as
+colunas recebem os nomes da primeira parte. Uma view pode ler outra view em `FROM`
+ou em joins, inclusive em cadeia; uma view que lê a si mesma é rejeitada. O Mendix
+rejeita `ANY`, `ALL`, `BETWEEN` e `SELECT *`, e `Count` é palavra reservada.
+
+Os 30 casos de `spec/fixtures/native_oql_subqueries` coincidem entre o Runtime
+oficial (`script/oql_native_oracle`), o interpretador Ruby e o app Ruby exportado
+com acesso ao MPR proibido. [Evidência](../evidence/oql-subqueries-2026-10-10.json).
 
 ## Captura e anotação do Feedback Web
 
