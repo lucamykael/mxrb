@@ -47,18 +47,18 @@ module Mxrb
       end
 
       def bind_selection(store, decoder, decimal, depth, context)
-        tables = derived_tables(store, decoder, decimal, depth, context[:sources])
-        subquery = OqlSubquery.factory(store, decoder:, decimal:, depth:, sources: context[:sources])
+        tables = derived_tables(store, decoder, decimal, depth, context.slice(:sources, :parameters))
+        subquery = OqlSubquery.factory(store, decoder:, decimal:, depth:, **context.slice(:sources, :parameters))
         @relations = OqlRelations.new(@query.relational, store, decoder:, tables:, subquery:, **context)
         @selection = OqlSelection.new(@query.relational, @relations, decimal:)
         @definition = Definition.new(OqlTableQuery::DERIVED_ENTITY,
                                      @selection.columns.map { |name, type| Column.new(name, type) })
       end
 
-      def derived_tables(store, decoder, decimal, depth, sources)
+      def derived_tables(store, decoder, decimal, depth, shared)
         return {} unless @query.derived
 
-        table = self.class.new(@query.derived, store, decoder:, decimal:, depth: depth + 1, sources:)
+        table = self.class.new(@query.derived, store, decoder:, decimal:, depth: depth + 1, **shared)
         { OqlTableQuery::DERIVED_ENTITY => table }
       end
 
