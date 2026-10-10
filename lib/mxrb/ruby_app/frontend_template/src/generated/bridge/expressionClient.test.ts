@@ -113,12 +113,16 @@ describe('client expression functions', () => {
     expect(value('[%EndOfCurrentMonthUTC%]')).toBe('2026-03-31T23:59:59.999Z');
     expect(value('[%BeginOfCurrentHour%] < [%EndOfCurrentMinute%]')).toBe(true);
     expect(value('[%BeginOfCurrentYear%]')).toBe('2026-01-01T04:00:00.000Z');
+    // Week, yesterday and tomorrow tokens use the browser's zone like the Mendix client.
+    const zone = process.env.TZ;
+    process.env.TZ = 'America/New_York';
     expect(value('[%BeginOfCurrentWeek%]')).toBe('2026-03-29T04:00:00.000Z');
     expect(value('[%EndOfCurrentWeek%]')).toBe('2026-04-05T03:59:59.999Z');
     expect(value('[%BeginOfCurrentWeekUTC%]')).toBe('2026-03-29T00:00:00.000Z');
     expect(value('[%BeginOfYesterday%]')).toBe('2026-03-29T04:00:00.000Z');
     expect(value('[%EndOfTomorrow%]')).toBe('2026-04-01T03:59:59.999Z');
     expect(value('[%EndOfYesterdayUTC%]')).toBe('2026-03-30T23:59:59.999Z');
+    process.env.TZ = zone;
     expect(() => value('[%BeginOfCurrentDecade%]')).toThrow('Unsupported token');
     expect(() => value('[%CurrentUser%]')).toThrow('Unsupported token');
   });
