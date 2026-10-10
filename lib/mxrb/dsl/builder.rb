@@ -295,7 +295,7 @@ module Mxrb
 
       def data_grid(name, entity: nil, selection: nil, **runtime_options, &block)
         allowed = %i[page_size pageSize server_side sort toolbar presentation
-                     columns_resizable columns_draggable columns_hidable]
+                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger]
         unknown = runtime_options.keys - allowed
         raise ArgumentError, "unknown data grid options: #{unknown.join(', ')}" unless unknown.empty?
 
@@ -319,6 +319,12 @@ module Mxrb
 
       def sort_by(attribute, direction: 'Ascending')
         { attribute: attribute.to_s, direction: direction.to_s }
+      end
+
+      # A data grid column filter: text, number, date, drop_down, boolean or enum,
+      # optionally with its default operator (contains, equals, gt, between, ...).
+      def grid_filter(type, operator: nil)
+        { type: type.to_s, operator: operator&.to_s }.compact
       end
 
       def tab_control(name, &block)
@@ -631,10 +637,24 @@ module Mxrb
         )
       end
 
-      def column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
-        @columns << {
-          name: name.to_s, attribute: attribute&.to_s, caption:, filter:, sortable:
+      # A data grid column. Data grid 2 columns may show the attribute over an
+      # association path, a dynamic text or the widgets of the block, per row.
+      def column(name, attribute: nil, caption: nil, association_path: nil, dynamic_text: nil,
+                 parameters: nil, filter: nil, sortable: nil, hidable: nil, width: nil, size: nil,
+                 alignment: nil, &block)
+        column = {
+          name: name.to_s, attribute: attribute&.to_s, caption:,
+          association_path: association_path && data_grid_association_path(association_path),
+          dynamic_text:, parameters:, filter:, sortable:, hidable:, width: width&.to_s, size:,
+          alignment: alignment&.to_s
         }.compact
+        column[:content] = widget_composite_content(&block) if block
+        @columns << column
+      end
+
+      # Widgets shown above a Data grid 2 (its filtersPlaceholder).
+      def header(&block)
+        @header = widget_composite_content(&block)
       end
 
       def filter(widget) = @filters << widget
@@ -665,10 +685,19 @@ module Mxrb
         options[:toolbar]    = @toolbar    if @toolbar
         options[:filters]    = @filters    unless @filters.empty?
         value = { type: @type, name: @name, options: options, events: @events }
+        value[:header] = @header if @header
         append_widget_composite(value, children: @children)
       end
 
       private
+
+      def data_grid_association_path(steps)
+        Array(steps).map do |step|
+          next { association: step.fetch(0).to_s, entity: step.fetch(1).to_s } if step.is_a?(Array)
+
+          step.to_h.transform_keys(&:to_sym).transform_values(&:to_s)
+        end
+      end
 
       def _widget_list = @children
     end

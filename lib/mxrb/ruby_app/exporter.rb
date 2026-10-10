@@ -2564,13 +2564,13 @@ module Mxrb
 
       def runtime_nested_widget_supported?(widget)
         return false unless runtime_keys?(
-          widget, %w[type name caption options events children body footer regions slots]
+          widget, %w[type name caption options events children body footer header regions slots]
         )
         return false unless widget.key?('type') && widget.key?('name')
         return false if widget.key?('caption')
         return false unless widget.key?('options') && widget['options'].is_a?(Hash)
         return false if widget.key?('events') && !widget['events'].is_a?(Array)
-        return false unless %w[children body footer].all? do |name|
+        return false unless %w[children body footer header].all? do |name|
           !widget.key?(name) || runtime_widget_collection_supported?(widget[name])
         end
         return false unless widget.fetch('regions', {}).is_a?(Hash)
@@ -2911,18 +2911,32 @@ module Mxrb
         false
       end
 
+      DATA_GRID_OPTION_KEYS = %w[
+        entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
+        columns_draggable columns_hidable xpath on_click_trigger
+      ].freeze
+      DATA_GRID_COLUMN_KEYS = %w[
+        attribute caption association_path dynamic_text parameters filter sortable hidable width size alignment
+      ].freeze
+
       def runtime_data_grid_supported?(type, options, widget)
         return false unless type == :data_grid
-        return false unless runtime_keys?(
-          options, %w[entity selection columns page_size pageSize server_side sort toolbar
-                      presentation columns_resizable columns_draggable columns_hidable]
-        )
+        return false unless runtime_keys?(options, %w[columns] + DATA_GRID_OPTION_KEYS)
         return false unless Array(widget['children']).empty?
         return false unless runtime_dsl_sink_regions_supported?(type, widget)
         return false unless runtime_widget_events_supported?(widget)
+        return false if widget.key?('header') && !runtime_widget_collection_supported?(widget['header'])
 
-        Array(options['columns']).all? do |column|
-          runtime_keys?(column, %w[name attribute caption filter sortable]) && column.key?('name')
+        Array(options['columns']).all? { runtime_data_grid_column_supported?(_1) }
+      end
+
+      def runtime_data_grid_column_supported?(column)
+        return false unless runtime_keys?(column, %w[name content] + DATA_GRID_COLUMN_KEYS) && column.key?('name')
+        return false if column.key?('content') && !runtime_widget_collection_supported?(column['content'])
+
+        path = column.fetch('association_path', [])
+        path.is_a?(Array) && path.all? do |step|
+          runtime_keys?(step, %w[association entity]) && %w[association entity].all? { step[_1].is_a?(String) }
         end
       end
 
@@ -2930,23 +2944,56 @@ module Mxrb
         padding = ' ' * indentation
         options = widget.fetch('options')
         arguments = [widget.fetch('name', '').inspect]
-        %w[entity selection page_size pageSize server_side sort toolbar
-           presentation columns_resizable columns_draggable columns_hidable].each do |name|
-          arguments << "#{name}: #{pretty_ruby_value(options.fetch(name), indentation + 2)}" if options.key?(name)
+        DATA_GRID_OPTION_KEYS.each do |name|
+          next unless options.key?(name)
+
+          value = options.fetch(name)
+          source = runtime_gallery_sort_expression(value) if name == 'sort'
+          arguments << "#{name}: #{source || pretty_ruby_value(value, indentation + 2)}"
         end
         lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
-        Array(options['columns']).each do |column|
-          column_arguments = [column.fetch('name').inspect]
-          %w[attribute caption filter sortable].each do |name|
-            column_arguments << "#{name}: #{pretty_ruby_value(column.fetch(name), indentation + 4)}" if
-              column.key?(name)
-          end
-          lines << runtime_widget_declaration('column', column_arguments, indentation + 2, false)
+        if widget.key?('header')
+          lines << "#{padding}  header do"
+          lines << runtime_widget_dsl_source(widget.fetch('header'), indentation + 4, generic_sink: true)
+          lines << "#{padding}  end"
         end
+        Array(options['columns']).each { lines.concat(runtime_data_grid_column_source(_1, indentation + 2)) }
         events = runtime_widget_event_source(widget, indentation + 2)
         lines << events unless events.empty?
         lines << "#{padding}end"
         lines.join("\n")
+      end
+
+      def runtime_data_grid_column_source(column, indentation)
+        arguments = [column.fetch('name').inspect]
+        DATA_GRID_COLUMN_KEYS.each do |name|
+          next unless column.key?(name)
+
+          value = column.fetch(name)
+          source = case name
+                   when 'association_path'
+                     steps = value.map { "[#{_1.fetch('association').inspect}, #{_1.fetch('entity').inspect}]" }
+                     "[#{steps.join(', ')}]"
+                   when 'filter' then runtime_grid_filter_expression(value)
+                   end
+          source ||= pretty_ruby_value(value, indentation + 2)
+          arguments << "#{name}: #{source}"
+        end
+        content = Array(column['content'])
+        return [runtime_widget_declaration('column', arguments, indentation, false)] unless column.key?('content')
+
+        [runtime_widget_declaration('column', arguments, indentation, true),
+         *([runtime_widget_dsl_source(content, indentation + 2, generic_sink: true)] unless content.empty?),
+         "#{' ' * indentation}end"]
+      end
+
+      # A column filter as grid_filter(type, operator:); other shapes keep their literal.
+      def runtime_grid_filter_expression(filter)
+        return unless runtime_keys?(filter, %w[type operator]) && filter['type'].is_a?(String)
+        return "grid_filter(#{filter.fetch('type').to_sym.inspect})" unless filter.key?('operator')
+        return unless filter['operator'].is_a?(String)
+
+        "grid_filter(#{filter.fetch('type').to_sym.inspect}, operator: #{filter.fetch('operator').to_sym.inspect})"
       end
 
       def runtime_keys?(value, allowed)
@@ -3768,13 +3815,20 @@ module Mxrb
             name?: string;
             attribute?: string;
             caption?: string;
+            association_path?: Array<{ association: string; entity: string }>;
+            dynamic_text?: string;
+            parameters?: string[];
+            content?: WidgetDefinition[];
             filter?: string | {
-              type?: 'text' | 'number' | 'date' | 'boolean' | 'enum';
+              type?: 'text' | 'number' | 'date' | 'boolean' | 'enum' | 'drop_down';
               operator?: string;
               options?: Array<RuntimeScalar | { value: RuntimeScalar; caption?: string }>;
             };
             sortable?: boolean;
-            width?: number;
+            hidable?: boolean | 'hidden';
+            width?: number | 'auto_fit' | 'manual';
+            size?: number;
+            alignment?: string;
           }
 
           export interface DataViewSource {
@@ -3824,6 +3878,8 @@ module Mxrb
             parameters?: string[];
             read_only?: boolean;
             sort?: Array<{ attribute: string; direction?: string }>;
+            xpath?: string;
+            on_click_trigger?: 'single' | 'double';
             source?: DataViewSource;
             style?: string;
             tabs?: WidgetTab[];
@@ -3848,6 +3904,7 @@ module Mxrb
             footer?: WidgetDefinition[];
             regions?: Record<string, WidgetDefinition[]>;
             slots?: WidgetSlot[];
+            header?: WidgetDefinition[];
           }
 
           export interface ValueType {

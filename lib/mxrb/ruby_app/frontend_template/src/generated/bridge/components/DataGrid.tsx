@@ -1,7 +1,8 @@
 import { decimal, type DecimalValue, isDecimal, numericCompare, numericText } from '../decimal';
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import type {
   ApiRequest,
+  ApplicationSchema,
   EntityCollectionResponse,
   EntityRecord,
   RuntimeValue,
@@ -9,7 +10,17 @@ import type {
   WidgetDefinition,
 } from '../../types';
 import type { ErrorHandler, SelectRecord } from '../contracts';
-import { classes, displayValue, entityCollectionPath, recordValue, sortRecords } from '../value';
+import { attributeDefinition, enumerationDefinition } from '../schemaLookup';
+import {
+  classes,
+  displayValue,
+  entityCollectionPath,
+  expressionValue,
+  isEntityRecord,
+  memberName,
+  recordValue,
+  sortRecords,
+} from '../value';
 import { NativeDataGrid } from './NativeDataGrid';
 
 interface DataGridProps {
@@ -22,6 +33,13 @@ interface DataGridProps {
   onRowAction: (record: EntityRecord) => unknown;
   onSelectRecord: SelectRecord;
   onSelectRecords?: (records: EntityRecord[]) => void;
+  schema?: ApplicationSchema | null;
+  // Renders widgets with a row as their context, or the grid's own context.
+  renderWidgets?: (
+    widgets: WidgetDefinition[],
+    record: EntityRecord | null,
+    key: string,
+  ) => ReactNode;
 }
 
 type FilterType = 'text' | 'number' | 'date' | 'boolean' | 'enum';
@@ -40,12 +58,38 @@ const defaultOperator: Record<FilterType, string> = {
   enum: 'equals',
 };
 
-const filterConfig = (column: WidgetColumn): FilterConfig | null => {
+// A Data grid 2 drop-down filter lists the values of a boolean or enumeration
+// attribute; over an association it has no attribute values to offer.
+const dropDownFilter = (
+  column: WidgetColumn,
+  entity: string,
+  schema: ApplicationSchema | null | undefined,
+): Pick<FilterConfig, 'type' | 'options'> | null => {
+  if (column.association_path?.length) return null;
+  const attribute = attributeDefinition(schema, entity, column.attribute || column.name || '');
+  if (attribute?.type === 'boolean') return { type: 'boolean', options: [] };
+  const enumeration = attribute?.enumeration && enumerationDefinition(schema, attribute.enumeration);
+  if (!enumeration) return null;
+  return {
+    type: 'enum',
+    options: enumeration.values.map((value) => ({ value: value.name, caption: value.caption })),
+  };
+};
+
+const filterConfig = (
+  column: WidgetColumn,
+  entity = '',
+  schema?: ApplicationSchema | null,
+): FilterConfig | null => {
   if (!column.filter) return null;
   const source =
     typeof column.filter === 'object'
       ? column.filter
       : { type: column.filter, operator: undefined, options: undefined };
+  if (String(source.type).toLowerCase() === 'drop_down') {
+    const resolved = dropDownFilter(column, entity, schema);
+    return resolved && { ...resolved, operator: 'equals' };
+  }
   const candidate = String(source.type || 'text').toLowerCase();
   const type: FilterType = ['text', 'number', 'date', 'boolean', 'enum'].includes(candidate)
     ? (candidate as FilterType)
@@ -135,6 +179,44 @@ export const matchesGridFilter = (
   return compare(left, right) === 0;
 };
 
+// The value a column shows: its attribute, read over its association path
+// (a list when a step is a reference set).
+export const columnValue = (
+  record: EntityRecord,
+  column: WidgetColumn,
+): RuntimeValue | undefined => {
+  const attribute = column.attribute || column.name;
+  if (!column.association_path?.length) return recordValue(record, attribute);
+  let objects: EntityRecord[] = [record];
+  column.association_path.forEach((step) => {
+    objects = objects.flatMap((object) => {
+      const value = recordValue(object, step.association);
+      return (Array.isArray(value) ? value : [value]).filter(isEntityRecord);
+    });
+  });
+  const values = objects.map((object) => object.attributes[memberName(attribute)] ?? null);
+  return values.length === 1 ? values[0] : values;
+};
+
+const dynamicText = (column: WidgetColumn, record: EntityRecord): string =>
+  (column.parameters || []).reduce<string>(
+    (text, parameter, index) =>
+      text.replaceAll(`{${index + 1}}`, String(displayValue(expressionValue(parameter, record)))),
+    column.dynamic_text || '',
+  );
+
+const withXPath = (path: string, xpath: string | undefined, context: EntityRecord | null) => {
+  if (!xpath) return path;
+  const [base, query = ''] = path.split('?', 2);
+  const parameters = new URLSearchParams(query);
+  parameters.set('xpath', xpath);
+  if (context && xpath.includes('$currentObject')) {
+    parameters.set('xpath_context_type', context.type);
+    parameters.set('xpath_context_id', context.id);
+  }
+  return `${base}?${parameters}`;
+};
+
 const activeFilter = (value: string, config: FilterConfig): boolean =>
   ['empty', 'not_empty'].includes(config.operator) || value.trim() !== '';
 
@@ -156,14 +238,15 @@ const serverCollectionPath = (
 
 const FilterInput = ({
   column,
+  config,
   value,
   onChange,
 }: {
   column: WidgetColumn;
+  config: FilterConfig | null;
   value: string;
   onChange: (value: string) => void;
 }) => {
-  const config = filterConfig(column);
   if (!config) return null;
   const label = column.caption || column.name || column.attribute || 'column';
   const update = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -225,8 +308,11 @@ export function DataGrid({
   onRowAction,
   onSelectRecord,
   onSelectRecords,
+  schema,
+  renderWidgets,
 }: DataGridProps) {
   const options = widget.options || {};
+  const configOf = (column: WidgetColumn) => filterConfig(column, options.entity, schema);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNumber, setPageNumber] = useState(0);
@@ -254,7 +340,7 @@ export function DataGrid({
   const columns = options.columns || [];
   const serverSide = options.server_side === true;
   const filterSpecs = columns.flatMap((column) => {
-    const config = filterConfig(column);
+    const config = configOf(column);
     const key = column.name || column.attribute || '';
     const value = filters[key] || '';
     return config && activeFilter(value, config)
@@ -268,7 +354,11 @@ export function DataGrid({
         ]
       : [];
   });
-  const basePath = entityCollectionPath(options.entity || '', options.association, pageContext);
+  const basePath = withXPath(
+    entityCollectionPath(options.entity || '', options.association, pageContext),
+    options.xpath,
+    pageContext,
+  );
   const collectionPath = serverSide
     ? serverCollectionPath(basePath, filterSpecs, sorting, pageNumber, pageSize)
     : basePath;
@@ -333,21 +423,20 @@ export function DataGrid({
         ? records
         : records.filter((record) =>
             columns.every((column) => {
-              const config = filterConfig(column);
+              const config = filterConfig(column, options.entity, schema);
               if (!config) return true;
               const key = column.name || column.attribute || '';
               const query = filters[key] || '';
+              const value = columnValue(record, column);
               return (
                 !activeFilter(query, config) ||
-                matchesGridFilter(
-                  recordValue(record, column.attribute || column.name),
-                  query,
-                  config,
+                (Array.isArray(value) ? value : [value]).some((item) =>
+                  matchesGridFilter(item, query, config),
                 )
               );
             }),
           ),
-    [columns, filters, records, serverSide],
+    [columns, filters, records, serverSide, options.entity, schema],
   );
   const orderedRecords = useMemo(
     () => (serverSide ? filteredRecords : sortRecords(filteredRecords, sorting)),
@@ -379,9 +468,21 @@ export function DataGrid({
         records={visible}
         sorting={sorting}
         sort={toggleSort}
+        header={
+          widget.header?.length && renderWidgets
+            ? renderWidgets(widget.header, null, `${widget.name}-header`)
+            : undefined
+        }
+        cell={(record, column) => {
+          if (column.content && renderWidgets)
+            return renderWidgets(column.content, record, `${record.id}-${column.name}`);
+          if (column.dynamic_text !== undefined) return dynamicText(column, record);
+          return displayValue(columnValue(record, column));
+        }}
         filter={(column) => (
           <FilterInput
             column={column}
+            config={configOf(column)}
             value={filters[column.name || column.attribute || ''] || ''}
             onChange={(value) => {
               setFilters((current) => ({
@@ -403,8 +504,9 @@ export function DataGrid({
             setSelected(record);
             onSelectRecord(record);
           }
-          onRowAction(record);
         }}
+        activate={onRowAction}
+        clickTrigger={options.on_click_trigger === 'double' ? 'double' : 'single'}
         page={pageNumber}
         pageSize={pageSize}
         total={rowCount}
@@ -494,6 +596,7 @@ export function DataGrid({
                   <th key={key}>
                     <FilterInput
                       column={column}
+                      config={configOf(column)}
                       value={filters[key] || ''}
                       onChange={(value) => {
                         setFilters((current) => ({ ...current, [key]: value }));

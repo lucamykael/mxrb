@@ -897,6 +897,20 @@ objeto do Data View indicado em `source:`. Fontes desconhecidas continuam
 bloqueadas. Com isso, a exportação Ruby de uma cópia do projeto privado SPC passa
 a auditoria do código público e o round-trip idêntico.
 
+A Data grid 2 é exportada pela chamada tipada `data_grid`, com `xpath:` da fonte
+de dados, `sort: [sort_by(...)]`, `on_click_trigger: "double"` e um bloco
+`header` com os widgets do cabeçalho (`filtersPlaceholder`). Cada `column` aceita
+`association_path: [[associação, entidade], ...]`, `dynamic_text:` com
+`parameters:`, `hidable:`, `width: "auto_fit"|"manual"`, `size:`, `alignment:` e
+um bloco com o conteúdo customizado, renderizado com a linha como contexto. Os
+filtros usam `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
+lista os valores de atributos booleanos ou de enumeração e não aparece sobre
+associações. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
+divide o espaço por `size`, `autoFit` segue o conteúdo e `manual` usa pixels. O
+runtime preenche `System.grantableRoles` a partir dos papéis gerenciáveis da
+segurança do projeto, e assim a XPath da Account_Overview do módulo
+Administration mostra as contas cujos papéis o usuário atual pode conceder.
+
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
 seu foco. Objetos vindos do servidor permanecem persistentes; falhas de gravação,

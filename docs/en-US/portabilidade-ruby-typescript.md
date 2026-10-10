@@ -722,6 +722,20 @@ marked values", with `(empty)` for no value, reading the object of the Data View
 named by `source:`. Unknown sources stay locked. A Ruby export of a copy of the
 private SPC project now passes the public-source audit and the identical round trip.
 
+Data grid 2 exports through the typed `data_grid` call, with the datasource
+`xpath:`, `sort: [sort_by(...)]`, `on_click_trigger: "double"` and a `header`
+block holding the header widgets (`filtersPlaceholder`). Each `column` accepts
+`association_path: [[association, entity], ...]`, `dynamic_text:` with
+`parameters:`, `hidable:`, `width: "auto_fit"|"manual"`, `size:`, `alignment:`
+and a block with the custom content, rendered with the row as its context.
+Filters use `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
+lists the values of boolean or enumeration attributes and is absent over
+associations. The UI writes `grid-template-columns` as the native widget does:
+`autoFill` shares the space by `size`, `autoFit` follows the content and `manual`
+is in pixels. The runtime fills `System.grantableRoles` from the manageable roles
+of the project security, so the XPath of the Administration module's
+Account_Overview lists the accounts whose roles the current user may grant.
+
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
 are reported. Named grid selection feeds `listen_to` views. Multi-step association

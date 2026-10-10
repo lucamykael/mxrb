@@ -762,6 +762,21 @@ und liest dazu das Objekt des in `source:` genannten Data Views. Unbekannte Quel
 bleiben gesperrt. Ein Ruby-Export einer Kopie des privaten SPC-Projekts besteht
 damit die Prüfung des öffentlichen Quellcodes und den identischen Round-Trip.
 
+Data Grid 2 wird über den typisierten Aufruf `data_grid` exportiert, mit der
+`xpath:` der Datenquelle, `sort: [sort_by(...)]`, `on_click_trigger: "double"` und
+einem `header`-Block mit den Kopfzeilen-Widgets (`filtersPlaceholder`). Jede
+`column` akzeptiert `association_path: [[Assoziation, Entität], ...]`,
+`dynamic_text:` mit `parameters:`, `hidable:`, `width: "auto_fit"|"manual"`,
+`size:`, `alignment:` und einen Block mit dem benutzerdefinierten Inhalt, der mit
+der Zeile als Kontext gerendert wird. Filter verwenden
+`grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)` listet die
+Werte boolescher oder Aufzählungsattribute auf und entfällt über Assoziationen.
+Die UI schreibt `grid-template-columns` wie das native Widget: `autoFill` teilt
+den Platz nach `size`, `autoFit` folgt dem Inhalt und `manual` ist in Pixeln. Die
+Runtime füllt `System.grantableRoles` aus den verwaltbaren Rollen der
+Projektsicherheit, sodass die XPath von Account_Overview im Modul Administration
+die Konten zeigt, deren Rollen der aktuelle Benutzer vergeben darf.
+
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
 Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die

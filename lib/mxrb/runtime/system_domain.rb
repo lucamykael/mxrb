@@ -99,16 +99,29 @@ module Mxrb
       end
 
       # Creates the UserRole object of every project user role at startup and keeps
-      # its name and description current; ModelGUID identifies the role.
+      # its name, description and grantable roles current; ModelGUID identifies the role.
       def synchronize_roles(store, roles)
         return if roles.empty?
 
         existing = store.retrieve(USER_ROLE)
-        roles.each do |role|
-          object = existing.find { _1.members['ModelGUID'] == role.fetch(:guid) } ||
-                   existing.find { _1.members['Name'] == role.fetch(:name) } || store.create(USER_ROLE)
-          update_role(store, object, role)
+        objects = roles.map do |role|
+          role_object(store, existing, role).tap { update_role(store, _1, role) }
         end
+        roles.zip(objects).each { |role, object| grant_roles(store, object, role, objects) }
+      end
+
+      def role_object(store, existing, role)
+        existing.find { _1.members['ModelGUID'] == role.fetch(:guid) } ||
+          existing.find { _1.members['Name'] == role.fetch(:name) } || store.create(USER_ROLE)
+      end
+
+      # System.grantableRoles: the user roles that a role manages.
+      def grant_roles(store, object, role, objects)
+        grantable = objects.select { role.fetch(:manageable, []).include?(_1.members['Name']) }
+        return if Array(object.members['grantableRoles']).map(&:id).sort == grantable.map(&:id).sort
+
+        object.members['grantableRoles'] = grantable
+        store.commit(object)
       end
 
       def update_role(store, object, role)

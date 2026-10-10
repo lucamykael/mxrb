@@ -934,21 +934,31 @@ module Mxrb
         }
       end
 
+      DATA_GRID2_FILTERS = {
+        "com.mendix.widget.web.datagridtextfilter.DatagridTextFilter" => "text",
+        "com.mendix.widget.web.datagridnumberfilter.DatagridNumberFilter" => "number",
+        "com.mendix.widget.web.datagriddatefilter.DatagridDateFilter" => "date",
+        "com.mendix.widget.web.datagriddropdownfilter.DatagridDropdownFilter" => "drop_down"
+      }.freeze
+      DATA_GRID2_OPERATORS = {
+        "contains" => "contains", "startsWith" => "starts_with", "endsWith" => "ends_with",
+        "equal" => "equals", "notEqual" => "not_equals", "greater" => "gt", "greaterEqual" => "gte",
+        "smaller" => "lt", "smallerEqual" => "lte", "between" => "between", "empty" => "empty",
+        "notEmpty" => "not_empty"
+      }.freeze
+
+      # Data grid 2 as the Runtime shows it: the datasource constraint and sort,
+      # header widgets, per-column filters, content and widths.
       def data_grid2_widget(widget)
         properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
         return data_grid_widget(widget) if properties.empty? && widget["DataSource"]
 
-        entity = properties.dig("datasource", "DataSource", "EntityRef", "Entity")
+        source = properties.dig("datasource", "DataSource") || {}
         selection = properties.dig('itemSelection', 'Selection').to_s
         column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
                       &.dig("ValueType", "ObjectType")
         columns = parse_array(properties.dig("columns", "Objects")).map do |object|
-          values = custom_property_map(object, column_type)
-          {
-            name: extract_text(values.dig("header", "TextTemplate")),
-            attribute: values.dig("attribute", "AttributeRef", "Attribute"),
-            caption: extract_text(values.dig("header", "TextTemplate"))
-          }.compact
+          data_grid2_column(custom_property_map(object, column_type))
         end
         property_events = {
           'onSelectionChange' => :on_change,
@@ -957,19 +967,75 @@ module Mxrb
           action = parse_action(properties.dig(property, 'Action'))
           action&.merge(event:)
         end
-        {
+        header = []
+        parse_widgets(parse_array(properties.dig("filtersPlaceholder", "Widgets")), header)
+        xpath = source["XPathConstraint"].to_s.strip
+        sort = parse_array(source.dig("SortBar", "SortItems")).filter_map do |item|
+          attribute = item.dig("AttributeRef", "Attribute")
+          direction = (item["SortOrder"] || item["SortDirection"]).to_s == "Descending" ? "Descending" : "Ascending"
+          { attribute:, direction: } if attribute
+        end
+        value = {
           type: :data_grid, name: widget["Name"],
           options: {
-            entity: entity, columns: columns,
+            entity: source.dig("EntityRef", "Entity"), columns: columns,
             presentation: 'datagrid2',
             page_size: properties.dig('pageSize', 'PrimitiveValue').to_i.nonzero? || 20,
             columns_resizable: properties.dig('columnsResizable', 'PrimitiveValue') != 'false',
             columns_draggable: properties.dig('columnsDraggable', 'PrimitiveValue') != 'false',
             columns_hidable: properties.dig('columnsHidable', 'PrimitiveValue') != 'false',
-            selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym)
+            selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym),
+            xpath: (xpath unless xpath.empty?), sort: (sort unless sort.empty?),
+            on_click_trigger: ('double' if properties.dig('onClickTrigger', 'PrimitiveValue') == 'double')
           }.compact,
           events: (grid_events(widget) + property_events).uniq
         }
+        value[:header] = header unless header.empty?
+        value
+      end
+
+      def data_grid2_column(values)
+        caption = extract_text(values.dig("header", "TextTemplate"))
+        reference = values.dig("attribute", "AttributeRef") || {}
+        column = { name: caption, attribute: reference["Attribute"], caption: caption }.compact
+        steps = parse_array(reference.dig("EntityRef", "Steps")).map do |step|
+          { association: step["Association"], entity: step["DestinationEntity"] }
+        end
+        column[:association_path] = steps unless steps.empty?
+        case values.dig("showContentAs", "PrimitiveValue")
+        when "dynamicText"
+          template = values.dig("dynamicText", "TextTemplate") || {}
+          column[:dynamic_text] = extract_text(template)
+          parameters = template_parameters("Content" => template)
+          column[:parameters] = parameters unless parameters.empty?
+        when "customContent"
+          content = []
+          parse_widgets(parse_array(values.dig("content", "Widgets")), content)
+          column[:content] = content
+        end
+        filter = data_grid2_filter(parse_array(values.dig("filter", "Widgets")).first)
+        column[:filter] = filter if filter
+        column[:sortable] = false if values.dig("sortable", "PrimitiveValue") == "false"
+        hidable = values.dig("hidable", "PrimitiveValue").to_s
+        column[:hidable] = hidable == "hidden" ? "hidden" : false unless ["", "yes"].include?(hidable)
+        width = values.dig("width", "PrimitiveValue").to_s
+        column[:width] = width == "autoFit" ? "auto_fit" : "manual" unless ["", "autoFill"].include?(width)
+        size = values.dig("size", "PrimitiveValue").to_i
+        column[:size] = size if size > 1
+        alignment = values.dig("alignment", "PrimitiveValue").to_s
+        column[:alignment] = alignment unless ["", "left"].include?(alignment)
+        column
+      end
+
+      def data_grid2_filter(widget)
+        return unless widget.is_a?(Hash)
+
+        type = DATA_GRID2_FILTERS[widget.dig("Type", "WidgetId").to_s]
+        return unless type
+
+        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
+        operator = DATA_GRID2_OPERATORS[properties.dig("defaultFilter", "PrimitiveValue").to_s]
+        operator ? { type:, operator: } : { type: }
       end
 
       def grid_events(widget)

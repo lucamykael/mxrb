@@ -551,7 +551,11 @@ function WidgetContent({
     onSelectRecord,
   };
   const label = caption(widget, options, activeRecord, variables);
-  const renderWidgets = (widgets: WidgetDefinition[] | undefined, region: string) =>
+  const renderWidgets = (
+    widgets: WidgetDefinition[] | undefined,
+    region: string,
+    record?: EntityRecord | null,
+  ) =>
     (widgets || []).map((child, index) => (
       <WidgetRenderer
         key={`${region}-${child.name}-${index}`}
@@ -560,7 +564,7 @@ function WidgetContent({
         invoke={invoke}
         invokeNanoflow={invokeNanoflow}
         navigate={navigate}
-        context={context}
+        context={record ?? context}
         pageContext={pageContext}
         revision={revision}
         schema={schema}
@@ -917,6 +921,8 @@ function WidgetContent({
               onSelectRecord(record);
             }}
             onRowAction={(record) => runEvent(change || click, record)}
+            schema={schema}
+            renderWidgets={(widgets, record, key) => renderWidgets(widgets, key, record)}
           />
         </div>
       );
