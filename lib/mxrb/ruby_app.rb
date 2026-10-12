@@ -1873,6 +1873,7 @@ module Mxrb
           synchronized_context = invocation_arguments.delete('__mxrb_context')
           bridge.interpreter.store.transaction do
             active_context = synchronize_context(synchronized_context, context:) if synchronized_context
+            implicit_context_argument(name, invocation_arguments, active_context, synchronized_context)
             result = call_service(name, invocation_arguments, context:)
             {
               result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:),
@@ -1883,6 +1884,21 @@ module Mxrb
           release_runtime_cache
         end
       end
+
+      # A page action without parameter mappings passes the object of its data
+      # view to the one unmapped parameter of a compatible entity.
+      def implicit_context_argument(name, arguments, object, reference)
+        return unless object.is_a?(Runtime::Native::ObjectValue)
+
+        service = manifest.modules.flat_map { _1.fetch('services', []) }.find { _1['name'] == name.to_s }
+        schema = bridge.interpreter.store.schema
+        candidates = Array(service&.fetch('parameters', nil)).select do |parameter|
+          entity = parameter['entity'].to_s
+          !arguments.key?(parameter['name']) && !entity.empty? && schema.assignable?(object.entity, entity)
+        end
+        arguments[candidates.first.fetch('name')] = reference if candidates.one?
+      end
+      private :implicit_context_argument
 
       def rest_routes
         @rest_routes ||= manifest.modules.flat_map do |mod|
@@ -2277,8 +2293,8 @@ module Mxrb
       private
 
       def runtime_schema_modules
-        RuntimeCatalog.new(manifest.modules,
-                           authoritative: manifest.data['runtime_model'] == 'ruby').modules.map do |mod|
+        modules = RuntimeCatalog.new(manifest.modules,
+                                     authoritative: manifest.data['runtime_model'] == 'ruby').modules.map do |mod|
           enumerations = mod.fetch('enumerations', []).map do |definition|
             implementation = Registry.fetch(:enumeration, definition.fetch('name'))
             next definition unless implementation
@@ -2296,6 +2312,24 @@ module Mxrb
           dtos = mod.fetch('dtos', []).map { runtime_model_definition(_1) }
           mod.except('constants').merge('enumerations' => enumerations, 'models' => models, 'dtos' => dtos)
         end
+        return modules if modules.any? { _1['name'] == 'System' }
+
+        modules + [system_schema_module]
+      end
+
+      # The Runtime-owned System entities and associations, without the hashed password.
+      def system_schema_module
+        models = Runtime::SystemDomain::ATTRIBUTES.map do |entity, attributes|
+          members = attributes.reject { _2 == :hashstring }.map do |name, type, default, unique|
+            { 'name' => name, 'mendix_name' => name, 'type' => type.to_s, 'default' => default, 'unique' => unique }
+          end
+          { 'name' => entity, 'persistable' => true, 'attributes' => members }
+        end
+        associations = Runtime::SystemDomain::ASSOCIATIONS.map do |qualified, from, to, type|
+          { 'name' => qualified.split('.').last, 'type' => type.to_s, 'from_entity' => from, 'to_entity' => to }
+        end
+        { 'name' => 'System', 'models' => models, 'dtos' => [], 'associations' => associations,
+          'enumerations' => [], 'pages' => [], 'services' => [] }
       end
 
       def runtime_model_definition(definition)

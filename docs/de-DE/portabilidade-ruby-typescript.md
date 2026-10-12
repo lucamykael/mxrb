@@ -777,6 +777,15 @@ Runtime füllt `System.grantableRoles` aus den verwaltbaren Rollen der
 Projektsicherheit, sodass die XPath von Account_Overview im Modul Administration
 die Konten zeigt, deren Rollen der aktuelle Benutzer vergeben darf.
 
+Das Client-Schema enthält die Entitäten und Assoziationen des System-Moduls
+(ohne das Passwort), und ein `reference_selector` über ein Reference Set wie
+`System.UserRoles` wird zu einer Mehrfachauswahl der Zielobjekte. Ein
+Microflow-Button ohne Parameterzuordnung übergibt das Objekt seines Data Views
+an den einzigen nicht zugeordneten Parameter einer kompatiblen Entität, wie
+Mendix es tut; so legt der Save-Button des Popups New Account im Modul
+Administration das Konto an. Ein Data View über eine Assoziation lässt seine
+Widgets und deren Entwürfe montiert, während er dasselbe Objekt neu lädt.
+
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
 Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die

@@ -220,6 +220,10 @@ export function DataView({
       : context || pageContext;
   const [record, setRecord] = useState<EntityRecord | null>(inheritedContext);
   const [loading, setLoading] = useState(false);
+  // The context the current record was loaded for: a refresh for the same
+  // context keeps the widgets (and their drafts) mounted.
+  const contextKey = `${inheritedContext?.type}/${inheritedContext?.id}`;
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const contextRef = useRef(inheritedContext);
   contextRef.current = inheritedContext;
@@ -230,9 +234,12 @@ export function DataView({
   useEffect(() => {
     let current = true;
     const activeContext = contextRef.current;
+    const activeKey = `${activeContext?.type}/${activeContext?.id}`;
     const accept = (value: unknown) => {
       const candidate = value as RuntimeValue;
-      if (current) setRecord(isEntityRecord(candidate) ? candidate : null);
+      if (!current) return;
+      setRecord(isEntityRecord(candidate) ? candidate : null);
+      setLoadedFor(activeKey);
     };
     const mappings = (): RuntimeVariables =>
       Object.fromEntries(
@@ -391,7 +398,7 @@ export function DataView({
         Could not resolve data view {widget.name}: {unsupported}
       </div>
     );
-  if (loading)
+  if (loading && loadedFor !== contextKey)
     return (
       <div className="mxrb-data-view mxrb-data-view--loading" aria-busy="true">
         Loading…

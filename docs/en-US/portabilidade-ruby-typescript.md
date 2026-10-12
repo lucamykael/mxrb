@@ -736,6 +736,15 @@ is in pixels. The runtime fills `System.grantableRoles` from the manageable role
 of the project security, so the XPath of the Administration module's
 Account_Overview lists the accounts whose roles the current user may grant.
 
+The client schema includes the System module's entities and associations
+(without the password), and a `reference_selector` over a reference set such as
+`System.UserRoles` becomes a multiple selection of the target objects. A
+microflow button without parameter mappings passes its Data View's object to the
+one unmapped parameter of a compatible entity, as Mendix does, so the Save
+button of the Administration module's New Account popup creates the account. An
+association Data View keeps its widgets and their drafts mounted while it
+reloads the same object.
+
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
 are reported. Named grid selection feeds `listen_to` views. Multi-step association

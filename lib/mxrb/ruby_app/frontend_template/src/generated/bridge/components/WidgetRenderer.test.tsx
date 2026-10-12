@@ -248,6 +248,48 @@ describe('Ruby data view editing', () => {
     expect(noContext).not.toHaveBeenCalled();
   });
 
+  it('keeps the fields and their drafts while an association view refreshes', async () => {
+    const associated: WidgetDefinition = {
+      ...view,
+      options: {
+        source: {
+          kind: 'association',
+          entity: 'App.Parent',
+          steps: [{ association: 'App.Item_Parent', entity: 'App.Parent' }],
+        },
+      },
+    };
+    const parent = { id: 'parent', type: 'App.Parent', attributes: { Name: 'Saved' } };
+    let refresh: (value: unknown) => void = () => {};
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ records: [parent] })
+      .mockReturnValueOnce(new Promise((resolve) => (refresh = resolve)))
+      .mockReturnValue(new Promise(() => {}));
+    const { rerender } = render(<WidgetRenderer {...props(associated)} request={request} />);
+    const input = await screen.findByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Draft');
+    rerender(<WidgetRenderer {...props(associated)} request={request} revision={1} />);
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    refresh({ records: [parent] });
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('textbox')).toBe(input);
+    expect(input).toHaveValue('Draft');
+
+    const other = { ...record, id: '2' };
+    rerender(
+      <WidgetRenderer
+        {...props(associated)}
+        request={request}
+        context={other}
+        pageContext={other}
+        revision={1}
+      />,
+    );
+    expect(await screen.findByText('Loading…')).toBeInTheDocument();
+  });
+
   it('updates conditional editability and prevents nested views from overriding a locked parent', () => {
     const input = props(view);
     const { rerender } = render(<WidgetRenderer {...input} />);

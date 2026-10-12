@@ -59,5 +59,22 @@ RSpec.describe 'Administration accounts in an exported application' do
     @application.call_service('Administration.ChangeMyPassword', { 'AccountPasswordData' => right }, context: player)
     expect(context('player', 'Changed#Pass2026').user).to eq(account.id)
   end
+
+  it 'saves the popup object through Save and lists the account for the administrator' do
+    store = @application.send(:bridge).store
+    admin = context('MxAdmin', 'Adm1n!Pass#2026')
+    account = store.create('Administration.Account')
+    account.members.merge!('Name' => 'player', 'FullName' => 'Player One',
+                           'UserRoles' => store.retrieve('System.UserRole').select { _1.members['Name'] == 'User' })
+    popup = JSON.parse(JSON.generate(@application.send(:serialize, password_data(store, account, '', password),
+                                                       context: admin)))
+    @application.invoke_service('Administration.SaveNewAccount', { '__mxrb_context' => popup }, context: admin)
+    expect(context('player', password).user_roles).to eq(['User'])
+
+    xpath = '[(System.UserRoles/System.UserRole/System.grantableRoles[reversed()]/System.UserRole/System.UserRoles = ' \
+            "'[%CurrentUser%]' or not(System.UserRoles/System.UserRole)) and Name != empty]"
+    listed = @application.records('Administration.Account', context: admin, xpath:)
+    expect(listed.map { _1.dig(:attributes, 'Name') }).to include('player')
+  end
 end
 # rubocop:enable Metrics/BlockLength

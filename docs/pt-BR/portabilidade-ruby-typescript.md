@@ -911,6 +911,14 @@ runtime preenche `System.grantableRoles` a partir dos papéis gerenciáveis da
 segurança do projeto, e assim a XPath da Account_Overview do módulo
 Administration mostra as contas cujos papéis o usuário atual pode conceder.
 
+O schema do cliente inclui as entidades e associações do módulo System (sem a
+senha), e um `reference_selector` sobre um reference set, como `System.UserRoles`,
+vira uma seleção múltipla dos objetos de destino. Um botão de microflow sem
+mapeamento de parâmetros passa o objeto do seu Data View ao único parâmetro não
+mapeado de entidade compatível, como o Mendix faz; assim o Save do popup New
+Account do módulo Administration cria a conta. Um Data View por associação
+mantém os widgets e seus rascunhos montados enquanto recarrega o mesmo objeto.
+
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
 seu foco. Objetos vindos do servidor permanecem persistentes; falhas de gravação,
