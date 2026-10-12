@@ -1,6 +1,7 @@
 import { useContext, useSyncExternalStore } from 'react';
 import type { ApplicationSchema, AttributeDefinition, EntityRecord, RuntimeValue } from '../types';
 import { isDecimal, numericText } from './decimal';
+import { attributeDefinition as schemaAttribute, enumerationDefinition, translated } from './schemaLookup';
 import {
   LocalVariables,
   PageParameters,
@@ -47,31 +48,11 @@ const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-const normalizedLocale = (value: string) => value.replaceAll('_', '-').toLowerCase();
-const translated = (text: string, translations: unknown, locale: string): string =>
-  (Object.entries(object(translations)).find(
-    ([language]) => normalizedLocale(language) === normalizedLocale(locale),
-  )?.[1] as string) ?? text;
-
-function attributeDefinition(
+const attributeDefinition = (
   schema: ApplicationSchema | undefined,
   record: EntityRecord,
   attribute: string,
-): AttributeDefinition | undefined {
-  const entities = (schema?.modules ?? []).flatMap((module) => [
-    ...(module.models ?? []),
-    ...(module.dtos ?? []),
-  ]);
-  let entity = entities.find((item) => item.name === record.type);
-  const seen = new Set<string>();
-  while (entity && !seen.has(entity.name)) {
-    seen.add(entity.name);
-    const member = entity.attributes?.find((item) => item.name === memberName(attribute));
-    if (member) return member;
-    const parent = entity.generalization?.target;
-    entity = entities.find((item) => item.name === parent);
-  }
-}
+): AttributeDefinition | undefined => schemaAttribute(schema, record.type, memberName(attribute));
 
 export function captionDate(
   value: string,
@@ -150,9 +131,7 @@ function formatted(
   if (type === 'datetime' || format.date_format || format.custom_date_format)
     return captionDate(String(value), format, locale, definition?.localize_date !== false);
   if (type === 'enumeration') {
-    const enumeration = environment.schema?.modules
-      .flatMap((module) => module.enumerations ?? [])
-      .find((item) => item.name === definition?.enumeration || item.id === definition?.enumeration);
+    const enumeration = enumerationDefinition(environment.schema, definition?.enumeration ?? '');
     const item = enumeration?.values.find((item) => item.name === value);
     return item ? translated(item.caption, item.caption_translations, locale) : String(value);
   }

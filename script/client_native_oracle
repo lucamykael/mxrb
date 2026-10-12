@@ -117,6 +117,7 @@ Dir.mktmpdir('mxrb-client-oracle-') do |work|
   results = lines.filter_map { _1['text'][/ORACLE ([A-Za-z0-9_]+)=(.*)\z/m, 0] }.to_h do |text|
     text.delete_prefix('ORACLE ').split('=', 2)
   end
+  names.each { results[_1] ||= '<no result>' }
   File.write(output, "#{JSON.pretty_generate(mode:, results:, failures:)}\n")
   puts "#{results.length} of #{names.length} client results written to #{output}"
 end

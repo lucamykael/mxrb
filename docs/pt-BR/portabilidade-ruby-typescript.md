@@ -40,6 +40,26 @@ lista vazia é vazia e a soma é 0. Mensagens de log agora substituem `{1}`. Ant
 Runtime do Linux, Chromium headless) e no app Ruby exportado: os 15 casos coincidem.
 [Evidência](../evidence/nanoflow-data-actions-2026-10-09.json).
 
+## Expressões em nanoflows
+
+O cliente Mendix avalia expressões de nanoflow em JavaScript, não em Java, e o
+avaliador TypeScript exportado segue essa semântica, medida no cliente 11.12.1:
+`trim` remove todos os brancos Unicode (inclusive NBSP), `toLowerCase('İ')` dá
+`i̇`, `substring(texto, início, tamanho)` nunca falha fora do intervalo,
+`find`/`findLast` são `indexOf`/`lastIndexOf`, `replaceAll`/`replaceFirst`/`isMatch`
+usam expressões regulares do JavaScript (`(?i)` é inválido, `isMatch` exige o texto
+inteiro) com substituição literal (`$1` não é interpretado), `urlEncode` é
+`encodeURIComponent` e `urlDecode` lê `+` como espaço. Argumentos vazios valem `''`,
+`'a' + empty` é `'a'` e números concatenados viram texto. Também são avaliados
+`getCaption`/`getKey` (com tradução pelo idioma da página), os tokens
+`[%CurrentDateTime%]` e `[%BeginOf…%]`/`[%EndOf…%]` de minuto, hora, dia, mês e ano
+(fim = início do período seguinte menos 1 ms, no fuso da sessão ou UTC), caminhos
+`$obj/Modulo.Assoc/Modulo.Entidade/Atributo` sobre os objetos associados que o
+servidor envia e igualdade de objetos pela identidade. Nas 1.146 expressões dos
+nanoflows do corpus e do SPC não resta função nem sintaxe sem suporte. Os 27 casos de
+`spec/fixtures/native_nanoflow_expressions` coincidem entre o cliente oficial e o app
+Ruby. [Evidência](../evidence/nanoflow-expressions-2026-10-09.json).
+
 ## Funções de expressão em microflows
 
 Diferentemente de XPath e OQL, comparações de texto em expressões (`=`, `<`) e
