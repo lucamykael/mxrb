@@ -350,10 +350,14 @@ describe('Data grid 2', () => {
     await user.click(within(choices).getByRole('option', { name: 'Starts with' }));
     expect(screen.queryByText('Bea')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Starts with' })).toHaveClass('startsWith');
+    const calendar = screen.getByRole('button', { name: 'Show calendar' });
+    expect(calendar).toHaveClass('btn-calendar');
+    await user.click(calendar);
     await user.click(screen.getByRole('button', { name: 'Equal' }));
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Between');
     await user.click(screen.getByRole('option', { name: 'Empty' }));
     expect(screen.getByLabelText('Filter Seen')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Show calendar' })).toBeDisabled();
     const flag = screen.getByRole('combobox', { name: 'Filter On' });
     expect(within(flag).getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Select',

@@ -322,6 +322,37 @@ describe('Ruby data view editing', () => {
     expect(screen.getByRole('tabpanel')).toHaveClass('tab-pane', 'active');
   });
 
+  it('adds theme design classes and shows icon-only sidebar toggles', () => {
+    const schema = {
+      modules: [],
+      presentation: {
+        'Atlas.Icons.menu': { kind: 'icon', path: '/assets/icons.woff', character: 59903 },
+      },
+    } as unknown as ApplicationSchema;
+    const toggle: WidgetDefinition = {
+      type: 'sidebar_toggle',
+      name: 'toggle',
+      options: {
+        caption: '',
+        tooltip: 'Toggle Menu',
+        icon: 'Atlas.Icons.menu',
+        design_class: 'btn-lg spacing-inner-top',
+      },
+    };
+    render(<WidgetRenderer {...props(toggle)} schema={schema} />);
+    const button = screen.getByRole('button', { name: 'Toggle Menu' });
+    expect(button).toHaveClass('btn-lg', 'spacing-inner-top');
+    expect(button).not.toHaveTextContent('Menu');
+    expect(button.querySelector('[data-icon-collection="Atlas.Icons.menu"]')).not.toBeNull();
+    const bar: WidgetDefinition = {
+      type: 'container',
+      name: 'bar',
+      options: { design_class: 'flex-row flex-nowrap' },
+    };
+    const { container } = render(<WidgetRenderer {...props(bar)} />);
+    expect(container.firstElementChild).toHaveClass('flex-row', 'flex-nowrap');
+  });
+
   it('renders layout grids with the Atlas grid classes', () => {
     const grid: WidgetDefinition = {
       type: 'layout_grid',

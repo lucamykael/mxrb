@@ -815,6 +815,13 @@ Language selector listet sie auf und wechselt die Seitensprache.
 Layout Grids werden mit den Atlas-Klassen gerendert (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), sodass das Projektthema das
 Layout übernimmt; ein Ersatzgrid ohne Spezifität deckt Themen ohne Atlas ab.
+Der Export löst die Design-Properties von Seiten, Snippets und Layouts mit den
+`design-properties.json` des Themas auf (Toggles, Optionen und Spacing) und
+speichert die Klassen in `.mxrb/design_classes.json`; die Anwendung fügt sie den
+ausgelieferten Widgets hinzu (`btn-lg`, `spacing-inner-top`, `flex-row`...), ohne
+die Ruby-Quellen zu ändern. Der Sidebar-Toggle zeigt sein Sammlungs-Icon,
+Datumsfilter von Data Grid 2 haben den Kalender-Button, und ein Bildbetrachter
+ohne Inhalt zeigt das Standardbild.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

@@ -771,6 +771,13 @@ widget lists them and switches the page language.
 Layout grids render with the Atlas classes (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), so the project theme lays them
 out; a zero-specificity fallback grid covers themes without Atlas.
+The export resolves the design properties of pages, snippets and layouts with the
+theme's `design-properties.json` files (toggles, options and spacing) and records
+the classes in `.mxrb/design_classes.json`; the application adds them to the
+widgets it serves (`btn-lg`, `spacing-inner-top`, `flex-row`...) without changing
+the Ruby sources. The sidebar toggle shows its collection icon, Data grid 2 date
+filters have the calendar button, and an image viewer without contents shows the
+default image.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

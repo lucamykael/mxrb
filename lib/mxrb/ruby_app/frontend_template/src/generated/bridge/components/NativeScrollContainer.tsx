@@ -10,12 +10,13 @@ import {
 import type { WidgetRuntimeProps } from '../contracts';
 import { classes, inlineStyle } from '../value';
 import { WidgetRenderer } from './WidgetRenderer';
+import { CollectionIcon } from './PresentationWidgets';
 import { PageLayoutContext } from './PageTitleContext';
 
 const Sidebar = createContext<{ open: boolean; id: string; toggle: () => void } | null>(null);
 export const LayoutState = createContext(new Map<string, { open: boolean; focused: boolean }>());
 
-export function SidebarToggle({ widget }: WidgetRuntimeProps) {
+export function SidebarToggle({ widget, schema }: WidgetRuntimeProps) {
   const sidebar = useContext(Sidebar);
   const options = widget.options || {};
   return (
@@ -27,9 +28,15 @@ export function SidebarToggle({ widget }: WidgetRuntimeProps) {
         'btn mx-button',
         `mx-name-${widget.name}`,
         options.class,
+    options.design_class as string | undefined,
         `btn-${String(options.button_style || 'default')}`,
       )}
       title={typeof options.tooltip === 'string' ? options.tooltip : undefined}
+      aria-label={
+        !options.caption && typeof options.tooltip === 'string' && options.tooltip
+          ? options.tooltip
+          : undefined
+      }
       aria-expanded={sidebar?.open}
       aria-controls={sidebar?.id}
       onClick={(event) => {
@@ -38,7 +45,11 @@ export function SidebarToggle({ widget }: WidgetRuntimeProps) {
       }}
       style={inlineStyle(options.style)}
     >
-      {String(options.caption || 'Menu')}
+      {typeof options.icon === 'string' && options.icon && (
+        <CollectionIcon name={options.icon} schema={schema} />
+      )}
+      {/* Only a toggle without an icon falls back to a text caption. */}
+      {String(options.caption ?? '') || (options.icon ? '' : 'Menu')}
     </button>
   );
 }
@@ -177,6 +188,7 @@ export function NativeScrollContainer(props: WidgetRuntimeProps) {
           fixed,
           `mx-name-${widget.name}`,
           options.class,
+    options.design_class as string | undefined,
           !vertical ? toggleClass : '',
           !vertical && open ? 'mx-scrollcontainer-open' : '',
         )}

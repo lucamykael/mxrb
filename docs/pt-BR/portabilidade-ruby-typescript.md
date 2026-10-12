@@ -947,6 +947,13 @@ Layout grids são renderizados com as classes do Atlas (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), de modo que o tema do projeto
 cuida do layout; um grid de reserva com especificidade zero cobre temas sem
 Atlas.
+A exportação resolve as design properties de páginas, snippets e layouts com os
+`design-properties.json` do tema (Toggle, opções e Spacing) e grava as classes em
+`.mxrb/design_classes.json`; a aplicação as acrescenta aos widgets que serve
+(`btn-lg`, `spacing-inner-top`, `flex-row`...), sem alterar as fontes Ruby. O botão
+de menu lateral mostra o ícone da coleção, o filtro de data da Data grid 2 tem o
+botão de calendário e um visualizador de imagem sem conteúdo mostra a imagem
+padrão.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

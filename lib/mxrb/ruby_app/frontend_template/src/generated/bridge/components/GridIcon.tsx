@@ -39,6 +39,12 @@ const icons = {
       'M24 6H22V26H24V6Z',
     ],
   },
+  calendar: {
+    viewBox: '0 0 16 16',
+    paths: [
+      'M5 1h1v2h4V1h1v2h3v12H2V3h3V1Zm-2 5v8h10V6H3Zm0-2v1h10V4H3Zm1 3h2v2H4V7Zm3 0h2v2H7V7Zm3 0h2v2h-2V7Zm-6 3h2v2H4v-2Zm3 0h2v2H7v-2Z',
+    ],
+  },
 } as const;
 export function GridIcon({ name }: { name: keyof typeof icons }) {
   const icon = icons[name];
@@ -51,7 +57,9 @@ export function GridIcon({ name }: { name: keyof typeof icons }) {
           ? 'svg-inline--fa fa-eye fa-w-18'
           : name === 'arrows-alt-v'
             ? 'svg-inline--fa fa-arrows-alt-v fa-w-8'
-            : `pagination-icon ${name}`
+            : name === 'calendar'
+              ? 'button-icon'
+              : `pagination-icon ${name}`
       }
       viewBox={icon.viewBox}
       fill={name === 'eye' || name === 'arrows-alt-v' ? undefined : 'currentColor'}
