@@ -5266,6 +5266,14 @@ module Mxrb
         expression = operation["Expression"]
         args << "with: :#{second}" unless second.empty?
         args << "expression: #{ruby(expression)}" unless expression.nil?
+        sortings = bson_items(operation.dig("Sortings", "Sortings"))
+        unless sortings.empty?
+          rendered = sortings.map do |sorting|
+            attribute = sorting["AttributePath"] || sorting.dig("AttributeRef", "Attribute")
+            "[#{ruby(attribute)}, :#{underscore(sorting["SortOrder"])}]"
+          end
+          args << "sort: [#{rendered.join(', ')}]"
+        end
         args << "as: :#{action['ResultVariableName']}"
         "#{pad}list_operation #{args.join(', ')}"
       when "Microflows$ChangeListAction"

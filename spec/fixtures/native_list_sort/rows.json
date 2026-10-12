@@ -1,0 +1,9 @@
+[
+  {"Name": "North", "Nick": "SELECT WHERE FROM", "Amount": "9007199254740993.125", "Other": "9007199254740993.125", "Active": true, "Rank": 3},
+  {"Name": "South", "Nick": "O'Brien", "Amount": "2.5", "Other": "3", "Active": false, "Rank": 1},
+  {"Name": "Empty", "Nick": null, "Amount": null, "Other": null, "Active": true, "Rank": null},
+  {"Name": "Zero", "Nick": "", "Amount": "0", "Other": null, "Active": false, "Rank": 1},
+  {"Name": "Negative", "Nick": "", "Amount": "-1.25", "Other": "1", "Active": false, "Rank": 2},
+  {"Name": "north", "Nick": "abc_def%", "Amount": "7", "Other": "7", "Active": true, "Rank": 3},
+  {"Name": "Nor", "Nick": "A", "Amount": "2.5", "Other": "2.5", "Active": true, "Rank": 2}
+]

@@ -36,9 +36,16 @@ usava collation numérica do navegador.
 
 As oito ordenações do fixture foram executadas no Runtime oficial com
 `script/oql_native_oracle` e coincidem com o interpretador Ruby, o grid do servidor
-e o `sortRecords` do frontend. A operação de lista `Sort` em memória não está
-coberta: o runtime ainda ignora suas chaves.
+e o `sortRecords` do frontend.
 [Evidência](../evidence/retrieve-sort-2026-10-09.json).
+
+A operação de lista `Sort` ordena em memória com outra regra, também medida no
+Runtime: `NULL` vem por último nas duas direções e, entre strings que diferem só
+por maiúsculas, a minúscula vem primeiro, como um collator Java. Antes, o runtime
+Ruby ignorava as chaves e a exportação as perdia; agora
+`list_operation :sort, :lista, sort: [[atributo, :ascending]], as: :ordenada`
+preserva as chaves em dois ciclos Ruby → MPR. Pontuação e acentos não estão
+certificados. [Evidência](../evidence/list-sort-2026-10-09.json).
 
 ## Datasets OQL e consultas tabulares
 

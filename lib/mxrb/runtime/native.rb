@@ -967,11 +967,11 @@ module Mxrb
           raise NativeRuntimeError, "unsupported native XPath constraint: #{xpath.inspect}"
         end
 
-        def sort_values(values, sortings)
+        def sort_values(values, sortings, memory: false)
           return values if sortings.empty?
 
           keys = sortings.map { [sort_attribute(_1), descending?(_1)] }
-          SortOrder.sort(values, keys) { |value, attribute| value.members[attribute] }
+          SortOrder.sort(values, keys, memory:) { |value, attribute| value.members[attribute] }
         end
 
         def sort_attribute(sorting)
@@ -1088,7 +1088,11 @@ module Mxrb
         def action_list_operations(action, variables)
           operation = action['NewOperation'] || {}
           list = Array(variables.fetch(operation['ListName'].to_s))
-          second = variables[operation['SecondListOrObjectName'].to_s]
+          second = if operation['$Type'] == 'Microflows$Sort'
+                     operation.dig('Sortings', 'Sortings')
+                   else
+                     variables[operation['SecondListOrObjectName'].to_s]
+                   end
           result = list_operation(operation['$Type'], list, second, operation['Expression'], variables)
           variables[action['ResultVariableName'].to_s] = result
         end
@@ -1338,7 +1342,7 @@ module Mxrb
           when 'tail' then list.drop(1)
           when 'find' then list.find { @expression.evaluate(expression, variables, node: _1) }
           when 'filter' then list.select { @expression.evaluate(expression, variables, node: _1) }
-          when 'sort' then sort_values(list, items(second))
+          when 'sort' then sort_values(list, items(second), memory: true)
           when 'union' then (list + Array(second)).uniq
           when 'intersect' then list & Array(second)
           when 'subtract' then list - Array(second)

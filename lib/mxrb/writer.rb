@@ -7042,6 +7042,12 @@ module Mxrb
         }
         operation["SecondListOrObjectName"] = activity[:second] if activity[:second]
         operation["Expression"] = activity[:expression] if activity[:expression]
+        if activity[:sortings]
+          operation["Sortings"] = {
+            "$ID" => SecureRandom.uuid, "$Type" => "Microflows$SortingsList",
+            "Sortings" => IO::BsonCodec.build_array(activity[:sortings].map { retrieve_sorting_doc(_1) }, marker: 2)
+          }
+        end
         { "$ID" => SecureRandom.uuid, "$Type" => "Microflows$ListOperationsAction",
           "ErrorHandlingType" => "Rollback",
           "NewOperation" => operation,
