@@ -52,7 +52,8 @@ module Mxrb
       end
 
       def validate_reference(projection, column, association)
-        unless !projection.aggregate && column.type == :identifier && association.type == :Reference &&
+        unless !projection.aggregate && !projection.expression && column.type == :identifier &&
+               association.type == :Reference &&
                @store.schema.assignable?(column.entity, association.to_entity)
           invalid!("unsupported view association #{association.name}")
         end

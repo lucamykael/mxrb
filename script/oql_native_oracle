@@ -44,9 +44,16 @@ def runtime_log(directory, java_home)
   ensure
     stop(thread)
   end
-  raise "Mendix Runtime did not start:\n#{log[-4000..]}" unless log.include?(STARTED)
+  raise "Mendix Runtime did not start:\n#{failure(log)}" unless log.include?(STARTED)
 
   log
+end
+
+# The runtime's ERROR lines and causes, or the end of the log when it has none.
+def failure(log)
+  lines = log.lines
+  errors = lines.each_index.select { lines[_1].match?(/ ERROR - |Exception:/) }
+  errors.empty? ? log[-4000..] : errors.flat_map { lines[_1, 3] }.uniq.first(40).join
 end
 
 def read_until_started(out)

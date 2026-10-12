@@ -3,6 +3,7 @@
 require 'bigdecimal'
 require 'strscan'
 require_relative 'oql_membership'
+require_relative 'oql_expression_grammar'
 
 module Mxrb
   module Runtime
@@ -11,20 +12,31 @@ module Mxrb
     # Strings compare, match and sort case-insensitively, as Mendix 11.12.1 does.
     # rubocop:disable Metrics/ClassLength
     class OqlPredicate
-      Operand = Data.define(:kind, :read, :literal)
-      TOKEN = %r{'(?:[^']|'')*'|[+-]?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.,*]}
+      include OqlExpressionGrammar
+
+      # type and scale refine :number operands for division, CAST and ROUND.
+      Operand = Data.define(:kind, :read, :literal, :type, :scale) do
+        def initialize(kind:, read:, literal:, type: nil, scale: 0) = super
+      end
+      TOKEN = %r{'(?:[^']|'')*'|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|!=|<=|>=|[=<>()/.,*+\-:%]}
       AGGREGATES = %w[COUNT SUM AVG MIN MAX].freeze
       COMPARISONS = %w[= != < <= > >=].freeze
+      CONTINUATIONS = (COMPARISONS + %w[+ - * : % IS LIKE IN NOT]).freeze
       KINDS = { integer: :number, long: :number, autonumber: :number, decimal: :number,
                 string: :string, enumeration: :string, boolean: :boolean, datetime: :datetime,
                 identifier: :identifier }.freeze
 
-      def initialize(text, scope, aggregate: nil, &resolve)
+      # A value expression (a projection) instead of a boolean predicate.
+      def self.value(text, scope, aggregate: nil, &) = new(text, scope, aggregate:, value: true, &).expression
+
+      attr_reader :expression
+
+      def initialize(text, scope, aggregate: nil, value: false, &resolve)
         @tokens = tokenize(text)
         @scope = scope
         @resolve = resolve
         @aggregate = aggregate
-        @expression = disjunction
+        @expression = value ? additive : disjunction
         error!('unexpected trailing tokens') unless @tokens.empty?
       end
 
@@ -70,12 +82,27 @@ module Mxrb
 
       def negation
         return invert(negation) if take('NOT')
-        return comparison unless take('(')
+        return comparison unless @tokens.first == '('
 
+        grouped_condition || comparison
+      end
+
+      # '(' opens either a grouped condition or a parenthesized value such as (a + 1) > 2.
+      def grouped_condition
+        saved = @tokens.dup
+        @tokens.shift
         result = disjunction
         expect(')')
-        result
+        return result if boolean_kind?(result) && !CONTINUATIONS.include?(@tokens.first.to_s.upcase)
+
+        @tokens = saved
+        nil
+      rescue NativeRuntimeError
+        @tokens = saved
+        nil
       end
+
+      def boolean_kind?(value) = %i[boolean null].include?(value.kind)
 
       def comparison
         left = operand
@@ -138,16 +165,11 @@ module Mxrb
         Operand.new(:boolean, OqlMembership.within(left.read, values.map { _1.read.call(nil) }, normalize), false)
       end
 
-      def operand
-        return aggregate_operand if AGGREGATES.include?(@tokens.first.to_s.upcase) && @tokens[1] == '('
-
-        token = @tokens.shift.to_s
-        literal_token(token) || column(token)
-      end
+      def operand = additive
 
       def literal_token(token)
         return literal(:string, token[1...-1].gsub("''", "'")) if token.start_with?("'")
-        return literal(:number, BigDecimal(token)) if token.match?(/\A[+-]?\d/)
+        return number_literal(token) if token.match?(/\A\d/)
         return literal(:null, nil) if token.casecmp?('NULL')
 
         literal(:boolean, token.casecmp?('TRUE')) if %w[TRUE FALSE].include?(token.upcase)
@@ -161,7 +183,7 @@ module Mxrb
         expect(')')
         error!('only COUNT accepts *') if reference == '*' && function != 'COUNT'
         type, reader = @aggregate.call(function, reference)
-        Operand.new(KINDS.fetch(type), reader, false)
+        Operand.new(KINDS.fetch(type), reader, false, type, type == :decimal ? 8 : 0)
       end
 
       def column(token)
@@ -171,7 +193,7 @@ module Mxrb
         type, reader = @resolve.call(token)
         kind = KINDS[type]
         error!("unsupported attribute type #{type}") unless kind
-        Operand.new(kind, reader, false)
+        Operand.new(kind, reader, false, type, type == :decimal ? 8 : 0)
       end
 
       def qualified_column(token)
@@ -183,7 +205,18 @@ module Mxrb
         token
       end
 
-      def literal(kind, value) = Operand.new(kind, ->(_row) { value }, true)
+      def literal(kind, value)
+        Operand.new(kind, ->(_row) { value }, true, { string: :string, boolean: :boolean }[kind])
+      end
+
+      def number_literal(token)
+        whole, fraction = token.split('.')
+        return Operand.new(:number, ->(_row) { BigDecimal(token) }, true, :decimal, fraction.length) if fraction
+
+        value = Integer(whole, 10)
+        type = OqlScalar::INTEGER_RANGE.cover?(value) ? :integer : :long
+        Operand.new(:number, ->(_row) { value }, true, type, 0)
+      end
 
       def boolean(value)
         error!('expected a boolean predicate') unless %i[boolean null].include?(value.kind)
@@ -250,7 +283,7 @@ module Mxrb
       end
 
       def error!(message)
-        raise NativeRuntimeError, "Unsupported OQL view WHERE: #{message}"
+        raise NativeRuntimeError, "Unsupported OQL expression: #{message}"
       end
     end
     # rubocop:enable Metrics/ClassLength
