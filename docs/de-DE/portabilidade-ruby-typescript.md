@@ -837,6 +837,9 @@ Assets in `frontend/src/generated/platform/widgets/widgets.css`, das vor dem
 Thema geladen wird (der Pfeil des Language selectors und die Stile des
 Datumsfilters stammen daher). Data Grid 2 zeigt den Pfeil der aktiven Sortierung,
 und der Datumsfilter folgt dem nativen Markup.
+Dynamische Klassen werden als Ausdrücke ausgewertet (`'sd-pb-' + toString(...)`
+wird zu `sd-pb-12`), und eine AutoNumber beginnt wie in Mendix bei ihrem
+Standardwert.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

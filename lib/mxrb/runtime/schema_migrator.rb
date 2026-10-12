@@ -669,13 +669,16 @@ module Mxrb
         end
       end
 
+      # An AutoNumber starts at its default value (1 unless the model sets one),
+      # as in Mendix, and never below the values already stored.
       def synchronize_sequence(entity, column)
         maximum = @database.get_first_value(
           "SELECT COALESCE(MAX(#{quote(column.sql_name)}), 0) FROM #{quote(entity.table)}"
         ).to_i
+        start = Integer(column.default.to_s, exception: false) || 1
         @database.execute(
           'INSERT OR IGNORE INTO mxrb_schema_sequences VALUES (?, ?, ?)',
-          [entity.storage_key, column.storage_key, maximum + 1]
+          [entity.storage_key, column.storage_key, [maximum + 1, start].max]
         )
       end
 

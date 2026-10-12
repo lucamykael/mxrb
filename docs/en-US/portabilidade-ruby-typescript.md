@@ -792,6 +792,8 @@ refers to, into `frontend/src/generated/platform/widgets/widgets.css`, loaded
 before the theme (the Language selector arrow and the date filter styles come
 from there). Data grid 2 shows the arrow of the active sort and its date filter
 follows the native markup.
+Dynamic classes are evaluated as expressions (`'sd-pb-' + toString(...)` becomes
+`sd-pb-12`), and an AutoNumber starts at its default value, as in Mendix.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

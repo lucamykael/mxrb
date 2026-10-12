@@ -469,6 +469,31 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     database.close
   end
 
+  it 'starts an AutoNumber at its default value and never below the stored values' do
+    counter = lambda do |default|
+      entity = schema_entity('Counter', [schema_attribute('Number', guid: 'counter-number', type: :autonumber,
+                                                                    default:)], id: 'counter', guid: 'counter')
+      Struct.new(:modules).new([Struct.new(:name, :entities, :associations).new('Store', [entity], [])])
+    end
+    sequence = ->(database) { database.get_first_value('SELECT next_value FROM mxrb_schema_sequences') }
+
+    database = SQLite3::Database.new(':memory:')
+    described_class.new(counter.call('2831'), database: database).migrate!
+    expect(sequence.call(database)).to eq(2831)
+    database.close
+
+    database = SQLite3::Database.new(':memory:')
+    described_class.new(counter.call(nil), database: database).migrate!
+    expect(sequence.call(database)).to eq(1)
+    table = database.get_first_value("SELECT table_name FROM mxrb_schema_entities WHERE logical_name = 'Store.Counter'")
+    column = database.get_first_value("SELECT column_name FROM mxrb_schema_attributes WHERE logical_name = 'Number'")
+    database.execute('DELETE FROM mxrb_schema_sequences')
+    database.execute("INSERT INTO #{table} (id, #{column}) VALUES (1, 5000)")
+    described_class.new(counter.call('2831'), database: database).migrate!
+    expect(sequence.call(database)).to eq(5001)
+    database.close
+  end
+
   it 'handles orphaned managed metadata defensively and formats every SQL default family' do
     database = SQLite3::Database.new(':memory:')
     migration_project = schema_project
