@@ -292,6 +292,15 @@ describe('Data grid 2', () => {
     expect(screen.getByText('Seen 2026-10-01')).toHaveClass('td', 'align-column-right');
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows[0]).toHaveTextContent('Bea');
+    const fullName = screen.getByRole('columnheader', { name: /Full name/ });
+    expect(fullName).toHaveAttribute('aria-sort', 'descending');
+    expect(fullName.querySelector('svg')).toHaveClass('fa-long-arrow-alt-down');
+    const sortFullName = within(fullName).getByRole('button', { name: 'sort Full name' });
+    await user.click(sortFullName);
+    expect(fullName.querySelector('svg')).toHaveClass('fa-arrows-alt-v');
+    await user.click(sortFullName);
+    expect(fullName.querySelector('svg')).toHaveClass('fa-long-arrow-alt-up');
+    await user.click(sortFullName);
     expect(screen.queryByRole('combobox', { name: 'Filter Roles' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Column selector' }));
@@ -355,7 +364,12 @@ describe('Data grid 2', () => {
     expect(screen.getByRole('button', { name: 'Starts with' })).toHaveClass('startsWith');
     const calendar = screen.getByRole('button', { name: 'Show calendar' });
     expect(calendar).toHaveClass('btn-calendar');
+    const date = screen.getByLabelText('Filter Seen') as HTMLInputElement;
+    expect(date.closest('.react-datepicker-wrapper')?.nextElementSibling).toBe(calendar);
+    const showPicker = vi.fn();
+    date.showPicker = showPicker;
     await user.click(calendar);
+    expect(showPicker).toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Equal' }));
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Between');
     await user.click(screen.getByRole('option', { name: 'Empty' }));

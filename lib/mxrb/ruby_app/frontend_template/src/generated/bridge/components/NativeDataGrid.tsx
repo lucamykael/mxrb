@@ -175,7 +175,17 @@ export function NativeDataGrid(props: Props) {
                         }}
                       >
                         <span>{label}</span>
-                        {column.sortable !== false && <GridIcon name="arrows-alt-v" />}
+                        {column.sortable !== false && (
+                          <GridIcon
+                            name={
+                              sortingOrder === 'ascending'
+                                ? 'long-arrow-alt-up'
+                                : sortingOrder === 'descending'
+                                  ? 'long-arrow-alt-down'
+                                  : 'arrows-alt-v'
+                            }
+                          />
+                        )}
                       </div>
                       <div className="filter">{filter(column)}</div>
                     </div>

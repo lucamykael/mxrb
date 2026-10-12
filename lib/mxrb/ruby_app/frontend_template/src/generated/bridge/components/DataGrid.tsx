@@ -354,21 +354,25 @@ const FilterInput = ({
       <div className="filter-container">
         <OperatorSelector config={config} onSelect={onOperator} />
         {config.type === 'date' ? (
-          <div className="date-filter-container">
-            {input}
+          <>
+            <div className="react-datepicker-wrapper">
+              <div className="react-datepicker__input-container">{input}</div>
+            </div>
             <button
               type="button"
               className="btn btn-default btn-calendar"
               aria-label="Show calendar"
               disabled={empty}
               onClick={(event) => {
-                const field = event.currentTarget.previousElementSibling as HTMLInputElement | null;
+                const field = event.currentTarget.parentElement?.querySelector<HTMLInputElement>(
+                  '.react-datepicker-wrapper input',
+                );
                 field?.showPicker?.();
               }}
             >
               <GridIcon name="calendar" />
             </button>
-          </div>
+          </>
         ) : (
           input
         )}

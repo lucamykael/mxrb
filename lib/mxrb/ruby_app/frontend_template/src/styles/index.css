@@ -176,6 +176,17 @@ select {
   cursor: pointer;
 }
 
+/* Data grid 2 date filters use the browser's date input, whose intrinsic
+   width would push the calendar button out; size it like the text input of
+   the original filter, which grows from its minimum width. */
+.filter-container .react-datepicker__input-container input[type='date'] {
+  width: 0;
+}
+
+:where(.filter-container .btn-calendar) {
+  flex-shrink: 0;
+}
+
 .data-grid tbody tr.is-selected {
   background: #dbeafe;
 }

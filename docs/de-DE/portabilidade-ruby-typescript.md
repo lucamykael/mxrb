@@ -831,6 +831,12 @@ dasselbe Attribut (etwa eine Aktionsspalte) behalten ihre eigene Identität.
 Zeilen und Spalten von Layout-Grids, die keine Namen haben, erhalten ihre
 Design-Properties über die Position (`grid/rows/0/columns/1`), etwa `cards` und
 `flex-row`.
+Wie MxBuild in `dist/widgets.css` sammelt der Export das eigene CSS der
+`.mpk`-Pakete der vom Projekt verwendeten Pluggable Widgets samt referenzierten
+Assets in `frontend/src/generated/platform/widgets/widgets.css`, das vor dem
+Thema geladen wird (der Pfeil des Language selectors und die Stile des
+Datumsfilters stammen daher). Data Grid 2 zeigt den Pfeil der aktiven Sortierung,
+und der Datumsfilter folgt dem nativen Markup.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

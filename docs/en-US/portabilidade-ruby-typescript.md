@@ -786,6 +786,12 @@ each edit kept in the browser, and Data grid 2 columns over the same attribute
 (such as an action column) keep their own identity.
 Layout grid rows and columns, which have no names, get their design properties by
 position (`grid/rows/0/columns/1`), such as `cards` and `flex-row`.
+As MxBuild does in `dist/widgets.css`, the export gathers the own CSS of the
+`.mpk` packages of the pluggable widgets the project uses, with the assets it
+refers to, into `frontend/src/generated/platform/widgets/widgets.css`, loaded
+before the theme (the Language selector arrow and the date filter styles come
+from there). Data grid 2 shows the arrow of the active sort and its date filter
+follows the native markup.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

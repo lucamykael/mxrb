@@ -962,6 +962,12 @@ mudam, não a cada edição mantida no navegador, e colunas da Data grid 2 sobre
 mesmo atributo (como a coluna de ações) mantêm identidades próprias.
 Linhas e colunas de layout grid, que não têm nome, recebem suas design properties
 pela posição (`grade/rows/0/columns/1`), como `cards` e `flex-row`.
+Como o MxBuild faz em `dist/widgets.css`, a exportação junta o CSS próprio dos
+pacotes `.mpk` dos widgets pluggable usados pelo projeto, com os assets que ele
+referencia, em `frontend/src/generated/platform/widgets/widgets.css`, carregado
+antes do tema (a seta do Language selector e os estilos do filtro de data vêm
+daí). A Data grid 2 mostra a seta da ordenação ativa e o filtro de data segue o
+markup nativo.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

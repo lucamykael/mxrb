@@ -5,6 +5,18 @@ const icons = {
       'M214.059 377.941H168V134.059h46.059c21.382 0 32.09-25.851 16.971-40.971L144.971 7.029c-9.373-9.373-24.568-9.373-33.941 0L24.971 93.088c-15.119 15.119-4.411 40.971 16.971 40.971H88v243.882H41.941c-21.382 0-32.09 25.851-16.971 40.971l86.059 86.059c9.373 9.373 24.568 9.373 33.941 0l86.059-86.059c15.12-15.119 4.412-40.971-16.97-40.971z',
     ],
   },
+  'long-arrow-alt-up': {
+    viewBox: '0 0 256 512',
+    paths: [
+      'M88 166.059V468c0 6.627 5.373 12 12 12h56c6.627 0 12-5.373 12-12V166.059h46.059c21.382 0 32.09-25.851 16.971-40.971l-86.059-86.059c-9.373-9.373-24.569-9.373-33.941 0l-86.059 86.059c-15.119 15.119-4.411 40.971 16.971 40.971H88z',
+    ],
+  },
+  'long-arrow-alt-down': {
+    viewBox: '0 0 256 512',
+    paths: [
+      'M168 345.941V44c0-6.627-5.373-12-12-12h-56c-6.627 0-12 5.373-12 12v301.941H41.941c-21.382 0-32.09 25.851-16.971 40.971l86.059 86.059c9.373 9.373 24.569 9.373 33.941 0l86.059-86.059c15.119-15.119 4.411-40.971-16.971-40.971H168z',
+    ],
+  },
   eye: {
     viewBox: '0 0 16 16',
     paths: [
@@ -40,12 +52,14 @@ const icons = {
     ],
   },
   calendar: {
-    viewBox: '0 0 16 16',
+    viewBox: '0 0 32 32',
     paths: [
-      'M5 1h1v2h4V1h1v2h3v12H2V3h3V1Zm-2 5v8h10V6H3Zm0-2v1h10V4H3Zm1 3h2v2H4V7Zm3 0h2v2H7V7Zm3 0h2v2h-2V7Zm-6 3h2v2H4v-2Zm3 0h2v2H7v-2Z',
+      'M27,5h-3V3h-4v2H12V3h-4v2h-3c-.55,0-1,.45-1,1V28c0,.55,.45,1,1,1H27c.55,0,1-.45,1-1V6c0-.55-.45-1-1-1ZM12,23h-4v-2h4v2Zm0-5h-4v-2h4v2Zm6,5h-4v-2h4v2Zm0-5h-4v-2h4v2Zm6,0h-4v-2h4v2Zm0-5H8v-2H24v2Z',
     ],
   },
 } as const;
+const fontAwesome = ['arrows-alt-v', 'long-arrow-alt-up', 'long-arrow-alt-down'];
+
 export function GridIcon({ name }: { name: keyof typeof icons }) {
   const icon = icons[name];
   return (
@@ -55,14 +69,14 @@ export function GridIcon({ name }: { name: keyof typeof icons }) {
       className={
         name === 'eye'
           ? 'svg-inline--fa fa-eye fa-w-18'
-          : name === 'arrows-alt-v'
-            ? 'svg-inline--fa fa-arrows-alt-v fa-w-8'
+          : fontAwesome.includes(name)
+            ? `svg-inline--fa fa-${name} fa-w-8`
             : name === 'calendar'
               ? 'button-icon'
               : `pagination-icon ${name}`
       }
       viewBox={icon.viewBox}
-      fill={name === 'eye' || name === 'arrows-alt-v' ? undefined : 'currentColor'}
+      fill={name === 'eye' || fontAwesome.includes(name) ? undefined : 'currentColor'}
     >
       {icon.paths.map((path, index) => (
         <path
