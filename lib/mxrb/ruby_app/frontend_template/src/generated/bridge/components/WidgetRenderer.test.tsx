@@ -285,6 +285,43 @@ describe('Ruby data view editing', () => {
     );
   });
 
+  it('renders Studio Pro text modes, link buttons and Atlas tab containers', async () => {
+    const title: WidgetDefinition = {
+      type: 'text',
+      name: 'title',
+      options: { caption: 'Accounts', render_mode: 'h2' },
+    };
+    const { unmount } = render(<WidgetRenderer {...props(title)} />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Accounts' })).toHaveClass('mx-text');
+    unmount();
+
+    const link: WidgetDefinition = {
+      type: 'button',
+      name: 'open',
+      options: { caption: 'Open', render_type: 'link' },
+      events: [{ event: 'on_click', kind: 'page', handler: 'App.Edit', arguments: {} }],
+    };
+    const input = props(link);
+    const second = render(<WidgetRenderer {...input} />);
+    const anchor = screen.getByRole('button', { name: 'Open' });
+    expect(anchor.tagName).toBe('A');
+    expect(anchor).toHaveClass('mx-link');
+    await userEvent.click(anchor);
+    await waitFor(() => expect(input.navigate).toHaveBeenCalled());
+    second.unmount();
+
+    const tabs: WidgetDefinition = {
+      type: 'tab_control',
+      name: 'tabs',
+      options: { tabs: [{ name: 'local', caption: 'Local Users', widgets: [] }] },
+    };
+    render(<WidgetRenderer {...props(tabs)} />);
+    const tab = screen.getByRole('tab', { name: 'Local Users' });
+    expect(tab.closest('ul')).toHaveClass('nav', 'nav-tabs', 'mx-tabcontainer-tabs');
+    expect(tab.closest('li')).toHaveClass('active');
+    expect(screen.getByRole('tabpanel')).toHaveClass('tab-pane', 'active');
+  });
+
   it('keeps the fields and their drafts while an association view refreshes', async () => {
     const associated: WidgetDefinition = {
       ...view,

@@ -154,11 +154,12 @@ module Mxrb
       end
 
       # visibility: shows the text for the values of an attribute, as input_condition.
+      # render_mode: h1..h6 or paragraph renders the text as that element.
       def text(name, caption: nil, parameters: [], class_name: nil, style: nil,
-               dynamic_class: nil, visible: nil, visibility: nil, &block)
+               dynamic_class: nil, visible: nil, visibility: nil, render_mode: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:, visibility:
+          class: class_name, style:, dynamic_class:, visible:, visibility:, render_mode: render_mode&.to_s
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:text, name, **options, &block)
@@ -433,11 +434,13 @@ module Mxrb
       end
 
       # icon: an icon collection image, such as "Atlas_Core.Atlas_Filled.pencil".
-      def button(name, caption: nil, parameters: [], class_name: nil, style: nil,
-                 dynamic_class: nil, visible: nil, visibility: nil, button_style: nil, icon: nil, &block)
+      # render_type: "link" renders the button as a link, as Studio Pro's Link render type.
+      def button(name, caption: nil, parameters: [], class_name: nil, style: nil, dynamic_class: nil,
+                 visible: nil, visibility: nil, button_style: nil, icon: nil, render_type: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:, visibility:, button_style:, icon:
+          class: class_name, style:, dynamic_class:, visible:, visibility:, button_style:, icon:,
+          render_type: render_type&.to_s
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:button, name, **options, &block)

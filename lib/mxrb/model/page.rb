@@ -286,6 +286,9 @@ module Mxrb
         if widget_type == :button && icon.is_a?(Hash) && icon["$Type"] == "Forms$IconCollectionIcon"
           result[:icon] = icon["Image"].to_s
         end
+        result[:render_type] = "link" if widget_type == :button && widget["RenderType"] == "Link"
+        mode = widget["RenderMode"].to_s
+        result[:render_mode] = mode.downcase if widget_type == :text && !["", "Text"].include?(mode)
         result
       end
 

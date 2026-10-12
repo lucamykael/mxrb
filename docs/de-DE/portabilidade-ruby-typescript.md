@@ -796,6 +796,10 @@ importieren ihre Beschriftung und die Sichtbarkeit nach Attributwerten
 (`text ..., visibility: input_condition(...)`), Buttons ihr Icon aus einer
 Icon-Sammlung (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); eine leere
 Beschriftung bleibt leer.
+Texte im Darstellungsmodus H1–H6 oder Absatz (`text ..., render_mode: :h2`) und
+Link-Buttons (`button ..., render_type: :link`) werden wie im Mendix-Client
+dargestellt; das Tab Control nutzt das Atlas-Tab-Markup, und Data Grid 2 zeigt
+boolesche Werte als Yes/No.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

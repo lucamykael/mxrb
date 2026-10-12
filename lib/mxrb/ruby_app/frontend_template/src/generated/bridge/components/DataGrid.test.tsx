@@ -307,6 +307,32 @@ describe('Data grid 2', () => {
     expect(onRowAction).toHaveBeenCalledWith(accounts[1]);
   });
 
+  it('shows boolean attributes as Yes and No', async () => {
+    const flags: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'flags',
+      options: {
+        entity: 'Admin.Account',
+        presentation: 'datagrid2',
+        columns: [{ name: 'Active', attribute: 'System.User.Active' }],
+      },
+    };
+    render(
+      <DataGrid
+        widget={flags}
+        request={vi.fn().mockResolvedValue({ records: accounts }) as unknown as ApiRequest}
+        pageContext={null}
+        revision={0}
+        onError={vi.fn()}
+        onMutation={vi.fn()}
+        onRowAction={vi.fn()}
+        onSelectRecord={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Yes')).toHaveClass('td');
+    expect(screen.getByText('No')).toHaveClass('td');
+  });
+
   it('reads a column over a reference or a reference set', () => {
     const column = {
       attribute: 'System.UserRole.Name',

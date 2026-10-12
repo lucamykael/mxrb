@@ -754,6 +754,9 @@ grid row. Labels import their caption and attribute-value visibility
 (`text ..., visibility: input_condition(...)`), and buttons import their icon
 collection image (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); an empty
 caption stays empty.
+Texts rendered as H1–H6 or paragraph (`text ..., render_mode: :h2`) and Link
+buttons (`button ..., render_type: :link`) render as in the Mendix client; the Tab
+Control uses the Atlas tab markup, and Data grid 2 shows booleans as Yes/No.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

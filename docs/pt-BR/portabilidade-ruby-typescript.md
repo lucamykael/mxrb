@@ -928,6 +928,10 @@ como a linha de um grid. Labels importam a legenda e a visibilidade por valor de
 atributo (`text ..., visibility: input_condition(...)`), e botões importam o
 ícone de coleção (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); uma
 legenda vazia continua vazia.
+Textos com modo de renderização H1–H6 ou parágrafo
+(`text ..., render_mode: :h2`) e botões do tipo Link (`button ..., render_type: :link`)
+são renderizados como no cliente Mendix; o Tab Control usa o markup de abas do
+Atlas, e a Data grid 2 mostra booleanos como Yes/No.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

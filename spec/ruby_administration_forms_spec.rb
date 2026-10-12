@@ -80,15 +80,22 @@ RSpec.describe 'Administration forms in the Ruby application' do # rubocop:disab
     expect(options).not_to have_key(:visibility)
     glyph = button.merge('Icon' => { '$Type' => 'Forms$GlyphIcon', 'Code' => 1 })
     expect(page.send(:widget_options, glyph, :button)).not_to have_key(:icon)
+    expect(page.send(:widget_options, button.merge('RenderType' => 'Link'), :button)).to include(render_type: 'link')
+    heading = { '$Type' => 'Forms$DynamicText', 'Name' => 'title', 'RenderMode' => 'H2' }
+    expect(page.send(:widget_options, heading, :text)).to include(render_mode: 'h2')
+    expect(page.send(:widget_options, heading.merge('RenderMode' => 'Text'), :text)).not_to have_key(:render_mode)
   end
 
   it 'declares and exports them with typed text and button calls' do
     builder = Mxrb::Dsl::WidgetSlotBuilder.new
     builder.instance_eval do
       text 'warning', caption: '', visibility: input_condition(attribute: 'A.B.C', conditions: [['true', false]])
-      button 'edit', caption: '', icon: 'Atlas_Core.Atlas_Filled.pencil'
+      button 'edit', caption: '', icon: 'Atlas_Core.Atlas_Filled.pencil', render_type: :link
+      text 'title', render_mode: :h2
     end
-    text, edit = builder.widgets
+    text, edit, title = builder.widgets
+    expect(edit.dig(:options, :render_type)).to eq('link')
+    expect(title.dig(:options, :render_mode)).to eq('h2')
     expect(text.dig(:options, :visibility))
       .to eq(attribute: 'A.B.C', conditions: [{ 'AttributeValue' => 'true', 'EditableVisible' => false }])
     expect(edit.dig(:options, :icon)).to eq('Atlas_Core.Atlas_Filled.pencil')

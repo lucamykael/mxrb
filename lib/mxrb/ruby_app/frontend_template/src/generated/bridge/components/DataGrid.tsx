@@ -477,7 +477,10 @@ export function DataGrid({
           if (column.content && renderWidgets)
             return renderWidgets(column.content, record, `${record.id}-${column.name}`);
           if (column.dynamic_text !== undefined) return dynamicText(column, record);
-          return displayValue(columnValue(record, column));
+          const value = columnValue(record, column);
+          // Data grid 2 shows booleans as the Mendix client formats them.
+          if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+          return displayValue(value);
         }}
         filter={(column) => (
           <FilterInput

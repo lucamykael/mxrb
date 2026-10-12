@@ -802,16 +802,22 @@ function WidgetContent({
         </div>
       );
     }
-    case 'text':
+    case 'text': {
+      // Studio Pro render modes: headings, paragraph or inline text.
+      const mode = String(options.render_mode || '');
+      const Tag = (
+        /^h[1-6]$/.test(mode) ? mode : mode === 'paragraph' ? 'p' : 'span'
+      ) as 'span';
       return (
-        <span
+        <Tag
           {...runtimeProps}
           className={classes('mx-text', className)}
           style={inlineStyle(options.style)}
         >
           {label}
-        </span>
+        </Tag>
       );
+    }
     case 'page_title':
       return (
         <h1 {...runtimeProps} className={className} style={inlineStyle(options.style)}>
@@ -819,6 +825,25 @@ function WidgetContent({
         </h1>
       );
     case 'button':
+      if (options.render_type === 'link')
+        return (
+          <a
+            {...runtimeProps}
+            href="#"
+            role="button"
+            className={classes(className, 'mx-link')}
+            aria-disabled={running || undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (!running || click?.settings?.disabled_during_execution === false) onClick?.();
+            }}
+          >
+            {typeof options.icon === 'string' && options.icon && (
+              <CollectionIcon name={options.icon} schema={schema} />
+            )}
+            {label}
+          </a>
+        );
       return (
         <button
           {...runtimeProps}
@@ -909,7 +934,7 @@ function WidgetContent({
       );
     case 'tab_control':
       return (
-        <div {...runtimeProps} className={className}>
+        <div {...runtimeProps} className={classes('mx-tabcontainer', className)}>
           <TabControl
             tabs={options.tabs || []}
             label={label}

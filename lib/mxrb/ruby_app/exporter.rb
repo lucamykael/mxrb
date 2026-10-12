@@ -2205,7 +2205,7 @@ module Mxrb
       }.freeze
       DSL_SINK_OPTIONS = {
         sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip],
-        button: %w[caption parameters class style dynamic_class visible visibility button_style icon],
+        button: %w[caption parameters class style dynamic_class visible visibility button_style icon render_type],
         check_box: %w[attribute caption class style dynamic_class visible],
         container: %w[class style dynamic_class visible],
         date_picker: %w[attribute caption class style dynamic_class visible],
@@ -2249,7 +2249,7 @@ module Mxrb
           image alternative_text width height width_unit height_unit responsive
           class style dynamic_class visible
         ],
-        text: %w[caption parameters class style dynamic_class visible visibility],
+        text: %w[caption parameters class style dynamic_class visible visibility render_mode],
         text_area: %w[attribute caption lines class style dynamic_class visible],
         text_box: %w[attribute caption class style dynamic_class visible]
       }.freeze
@@ -3879,6 +3879,8 @@ module Mxrb
             read_only?: boolean;
             sort?: Array<{ attribute: string; direction?: string }>;
             icon?: string;
+            render_mode?: string;
+            render_type?: string;
             xpath?: string;
             on_click_trigger?: 'single' | 'double';
             source?: DataViewSource;

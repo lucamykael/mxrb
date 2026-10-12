@@ -9,7 +9,7 @@ interface TabControlProps {
 
 export function TabControl({ tabs, label, renderPanel }: TabControlProps) {
   const id = useId();
-  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
+  const buttons = useRef<Array<HTMLAnchorElement | null>>([]);
   const [selected, setSelected] = useState(tabs[0]?.name);
   const [visited, setVisited] = useState<string[]>([]);
   const active = tabs.find((tab) => tab.name === selected)?.name || tabs[0]?.name;
@@ -23,20 +23,25 @@ export function TabControl({ tabs, label, renderPanel }: TabControlProps) {
 
   return (
     <>
-      <div role="tablist" aria-label={label}>
+      {/* The Atlas tab container markup of the Mendix client. */}
+      <ul className="nav nav-tabs mx-tabcontainer-tabs" role="tablist" aria-label={label}>
         {tabs.map((tab, index) => (
-          <button
-            key={tab.name}
+          <li key={tab.name} className={tab.name === active ? 'active' : undefined} role="presentation">
+          <a
             ref={(button) => {
               buttons.current[index] = button;
             }}
-            type="button"
+            href="#"
+            className={`mx-name-${tab.name}`}
             role="tab"
             id={`${id}-tab-${index}`}
             aria-controls={`${id}-panel-${index}`}
             aria-selected={tab.name === active}
             tabIndex={tab.name === active ? 0 : -1}
-            onClick={() => select(index)}
+            onClick={(event) => {
+              event.preventDefault();
+              select(index);
+            }}
             onKeyDown={(event) => {
               const next =
                 event.key === 'ArrowRight'
@@ -54,12 +59,15 @@ export function TabControl({ tabs, label, renderPanel }: TabControlProps) {
             }}
           >
             {tab.caption || tab.name}
-          </button>
+          </a>
+          </li>
         ))}
-      </div>
+      </ul>
+      <div className="tab-content mx-tabcontainer-content">
       {tabs.map((tab, index) => (
         <section
           key={tab.name}
+          className={`tab-pane mx-tabcontainer-pane${tab.name === active ? ' active' : ''}`}
           role="tabpanel"
           id={`${id}-panel-${index}`}
           aria-labelledby={`${id}-tab-${index}`}
@@ -70,6 +78,7 @@ export function TabControl({ tabs, label, renderPanel }: TabControlProps) {
           {tab.name === active || visited.includes(tab.name) ? renderPanel(tab) : null}
         </section>
       ))}
+      </div>
     </>
   );
 }
