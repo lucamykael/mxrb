@@ -92,6 +92,10 @@ o grafo do microflow no Runtime de modelo em Ruby, sem Java, `mx` ou `mxbuild`.
 O modo nativo cobre CRUD, variáveis, decisões, chamadas, agregações e logs em
 uma store transacional; Java, REST, UI e conectores ainda falham explicitamente
 e fazem rollback. Não há JUnit nem MDL. O MPR original nunca é alterado.
+Sem `--native`, o build usa o materializador do MXRB e o Runtime oficial. Fluxos
+com o mesmo nome em módulos diferentes (inclusive o `RunAll` gerado pelo teste)
+recebem IDs estáveis qualificados pelo módulo; antes, essa colisão impedia a
+inicialização do Mendix com `NoSuchElementException: ModelStartEvent`.
 Use `--json resultado.json` e/ou `--junit resultado.xml` para relatórios de CI.
 JUnit é apenas o formato XML de intercâmbio neste caso; o MXRB o grava
 diretamente em Ruby, sem instalar ou executar o framework Java JUnit.

@@ -2866,11 +2866,13 @@ module Mxrb
           mpr, module_id, candidates, page_doc(page, mod.fetch(:name), baseline:)
         )
       end
+      shared = shared_flow_names(mpr, mod.fetch(:name))
       mod.fetch(:microflows).each do |flow|
         unique_name = unique_flow_name?(mod.fetch(:microflows), flow)
         upsert_document(
           mpr, module_id, existing[flow.fetch(:name)],
-          microflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          microflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name,
+                                                qualified: shared.include?(flow.fetch(:name).to_s)),
           allow_name_fallback: unique_name
         )
       end
@@ -2878,7 +2880,8 @@ module Mxrb
         unique_name = unique_flow_name?(mod.fetch(:nanoflows, []), flow)
         upsert_document(
           mpr, module_id, existing[flow.fetch(:name)],
-          nanoflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          nanoflow_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name,
+                                               qualified: shared.include?(flow.fetch(:name).to_s)),
           allow_name_fallback: unique_name
         )
       end
@@ -2886,7 +2889,8 @@ module Mxrb
         unique_name = unique_flow_name?(mod.fetch(:rules, []), flow)
         upsert_document(
           mpr, module_id, existing[flow.fetch(:name)],
-          rule_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name),
+          rule_doc(flow, mod.fetch(:name), identity_by_unit_id: !unique_name,
+                                           qualified: shared.include?(flow.fetch(:name).to_s)),
           allow_name_fallback: unique_name
         )
       end
@@ -2918,6 +2922,32 @@ module Mxrb
 
     def unique_flow_name?(flows, flow)
       Array(flows).count { _1.fetch(:name).to_s == flow.fetch(:name).to_s } == 1
+    end
+
+    FLOW_DOCUMENT_TYPES = %w[Microflows$Microflow Microflows$Nanoflow Microflows$Rule].freeze
+
+    # Flow names that another module also uses. Their stable IDs include the module,
+    # because Mendix keys the object collections of every flow by these IDs.
+    def shared_flow_names(mpr, module_name)
+      @flow_modules ||= flow_modules(mpr)
+      @flow_modules.filter_map { |name, modules| name if (modules - [module_name]).any? }
+    end
+
+    def flow_modules(mpr)
+      result = Hash.new { |hash, key| hash[key] = [] }
+      root_id = mpr.root_unit.fetch("UnitID")
+      mpr.units_by_containment("Modules").select { _1["ContainerID"] == root_id }.each do |raw_module|
+        name = mpr.parse_contents(raw_module)["Name"].to_s
+        documents_by_name(mpr, raw_module.fetch("UnitID")).each do |document, raws|
+          result[document.to_s] |= [name] if raws.any? { FLOW_DOCUMENT_TYPES.include?(mpr.parse_contents(_1)["$Type"]) }
+        end
+      end
+      Array(@definition[:modules]).each do |mod|
+        %i[microflows nanoflows rules].flat_map { mod.fetch(_1, []) }.each do |flow|
+          result[flow.fetch(:name).to_s] |= [mod.fetch(:name).to_s]
+        end
+      end
+      result
     end
 
     def upsert_document(mpr, module_id, candidates, doc, allow_name_fallback: true)
@@ -6145,9 +6175,12 @@ module Mxrb
       end
     end
 
-    def microflow_doc(flow, module_name = nil, identity_by_unit_id: false)
+    def microflow_doc(flow, module_name = nil, identity_by_unit_id: false, qualified: false)
       flow_name = flow.fetch(:name)
-      identity = identity_by_unit_id ? flow.fetch(:unit_id) : flow_name
+      identity = if identity_by_unit_id then flow.fetch(:unit_id)
+                 elsif qualified && module_name then "#{module_name}.#{flow_name}"
+                 else flow_name
+                 end
       params = flow.fetch(:parameters).map do |param|
         parameter_id = param[:id].to_s.empty? ?
           stable_id(identity, "parameter", param.fetch(:name)) : param.fetch(:id)
@@ -7780,8 +7813,8 @@ module Mxrb
       end
     end
 
-    def nanoflow_doc(flow, module_name = nil, identity_by_unit_id: false)
-      doc = microflow_doc(flow, module_name, identity_by_unit_id:)
+    def nanoflow_doc(flow, module_name = nil, identity_by_unit_id: false, qualified: false)
+      doc = microflow_doc(flow, module_name, identity_by_unit_id:, qualified:)
       normalize_nanoflow_error_handling!(doc)
       doc.merge(
         "$Type" => "Microflows$Nanoflow",
@@ -7790,8 +7823,8 @@ module Mxrb
       ).compact
     end
 
-    def rule_doc(flow, module_name = nil, identity_by_unit_id: false)
-      doc = microflow_doc(flow, module_name, identity_by_unit_id:)
+    def rule_doc(flow, module_name = nil, identity_by_unit_id: false, qualified: false)
+      doc = microflow_doc(flow, module_name, identity_by_unit_id:, qualified:)
       doc.delete('AllowConcurrentExecution')
       doc.delete('AllowedModuleRoles')
       doc.merge(
