@@ -50,8 +50,8 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
           property('page-size', value(primitive: '20')),
           property('pagination', value(primitive: 'buttons')),
           property('caption', value(TextTemplate: {
-            'Template' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => 'More' }] }
-          })),
+                                      'Template' => { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => 'More' }] }
+                                    })),
           property('selection', value)
         ]
       }
@@ -71,11 +71,11 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
                      'EntityRef' => { 'Entity' => 'Demo.Item' },
                      'XPathConstraint' => '[Demo.Item_Parent = $Parent]')
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2, {
-        '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
-        'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
-      }]
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2, {
+                    '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
+                    'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
+                  }]
+                })
     compiler = described_class.new(source(page), 'Demo.Home', widget)
 
     expect(compiler).to be_supported
@@ -94,10 +94,10 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
 
   it 'compiles microflow list data and rejects unknown or incomplete sources' do
     flow = unit(module_name: 'Demo', document: {
-      'Name' => 'LoadItems', 'MicroflowReturnType' => {
-        '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item'
-      }
-    })
+                  'Name' => 'LoadItems', 'MicroflowReturnType' => {
+                    '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item'
+                  }
+                })
     widget = gallery('$Type' => 'Forms$MicroflowSource',
                      'MicroflowSettings' => { 'Microflow' => 'Demo.LoadItems' })
     compiler = described_class.new(source(flow), 'Demo.Home', widget)
@@ -114,9 +114,9 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
 
   it 'compiles a nanoflow list as a client-side data source without a Runtime operation' do
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
-      'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
-    })
+                  '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
+                  'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
+                })
     widget = gallery('$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'Demo.LoadItems')
     compiler = described_class.new(source(flow), 'Demo.Home', widget)
 
@@ -186,8 +186,8 @@ RSpec.describe Mxrb::Compiler::GalleryBundleCompiler do
                       'EntityRef' => { 'Entity' => 'Demo.Item' },
                       'XPathConstraint' => '[Parent = $Missing]')
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2]
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Parameters' => [2]
+                })
     expect(described_class.new(source(page), 'Demo.Home', missing)).not_to be_supported
     expect(described_class.new(source, 'Demo.Missing', missing)).not_to be_supported
   end

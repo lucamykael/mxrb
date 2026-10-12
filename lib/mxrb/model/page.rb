@@ -2,7 +2,7 @@
 
 require_relative '../caption'
 
-require_relative "unit"
+require_relative 'unit'
 require_relative '../forms/input_presentation'
 
 module Mxrb
@@ -18,21 +18,21 @@ module Mxrb
 
       def decode(doc)
         @raw_document        = doc
-        @storage_type        = doc["$Type"] || "Forms$Page"
-        @name                = doc["Name"] || doc["name"]
-        @documentation       = doc["Documentation"] || doc["documentation"] || ""
-        @url                 = doc["Url"] || doc["URL"] || doc["url"] || ""
-        @title               = extract_text(doc["Title"] || doc["title"])
+        @storage_type        = doc['$Type'] || 'Forms$Page'
+        @name                = doc['Name'] || doc['name']
+        @documentation       = doc['Documentation'] || doc['documentation'] || ''
+        @url                 = doc['Url'] || doc['URL'] || doc['url'] || ''
+        @title               = extract_text(doc['Title'] || doc['title'])
         @layout_id           = extract_layout(doc)
-        @popup_width         = doc["PopupWidth"] || 0
-        @popup_height        = doc["PopupHeight"] || 0
-        @popup_resizable     = doc["PopupResizable"] == true
-        @excluded            = doc["Excluded"] == true
-        @export_level        = doc["ExportLevel"] || "Hidden"
-        @appearance_class    = doc.dig("Appearance", "Class").to_s
-        @appearance_style    = doc.dig("Appearance", "Style").to_s
-        @allowed_module_roles = parse_array(doc["AllowedModuleRoles"] || doc["AllowedRoles"] || doc["allowedModuleRoles"])
-        @parameters          = parse_array(doc["Parameters"] || doc["parameters"])
+        @popup_width         = doc['PopupWidth'] || 0
+        @popup_height        = doc['PopupHeight'] || 0
+        @popup_resizable     = doc['PopupResizable'] == true
+        @excluded            = doc['Excluded'] == true
+        @export_level        = doc['ExportLevel'] || 'Hidden'
+        @appearance_class    = doc.dig('Appearance', 'Class').to_s
+        @appearance_style    = doc.dig('Appearance', 'Style').to_s
+        @allowed_module_roles = parse_array(doc['AllowedModuleRoles'] || doc['AllowedRoles'] || doc['allowedModuleRoles'])
+        @parameters          = parse_array(doc['Parameters'] || doc['parameters'])
         @widgets             = []
         roots = widget_roots(doc)
         parse_widgets(roots)
@@ -41,21 +41,21 @@ module Mxrb
 
       def to_bson
         {
-          "$ID"                => @id,
-          "$Type"              => @storage_type,
-          "Name"               => @name,
-          "Documentation"      => @documentation || "",
-          "Url"                => @url || "",
-          "Title"              => serialize_title,
-          "Layout"             => @layout_id,
-          "MarkAsUsed"         => false,
-          "Excluded"           => @excluded || false,
-          "AllowedModuleRoles" => IO::BsonCodec.build_array(@allowed_module_roles || [], marker: 1),
-          "Parameters"         => IO::BsonCodec.build_array(@parameters || []),
-          "PopupWidth"         => @popup_width || 0,
-          "PopupHeight"        => @popup_height || 0,
-          "PopupResizable"     => @popup_resizable || false,
-          "ExportLevel"        => @export_level || "Hidden",
+          '$ID' => @id,
+          '$Type' => @storage_type,
+          'Name' => @name,
+          'Documentation' => @documentation || '',
+          'Url' => @url || '',
+          'Title' => serialize_title,
+          'Layout' => @layout_id,
+          'MarkAsUsed' => false,
+          'Excluded' => @excluded || false,
+          'AllowedModuleRoles' => IO::BsonCodec.build_array(@allowed_module_roles || [], marker: 1),
+          'Parameters' => IO::BsonCodec.build_array(@parameters || []),
+          'PopupWidth' => @popup_width || 0,
+          'PopupHeight' => @popup_height || 0,
+          'PopupResizable' => @popup_resizable || false,
+          'ExportLevel' => @export_level || 'Hidden'
         }
       end
 
@@ -67,31 +67,32 @@ module Mxrb
 
       def extract_text(obj)
         return obj if obj.is_a?(String)
-        return "" unless obj.is_a?(Hash)
-        return extract_text(obj["Template"]) if obj["$Type"] == "Forms$ClientTemplate"
-        return extract_text(obj["Text"]) if obj["$Type"].to_s.end_with?("$TextTemplate")
+        return '' unless obj.is_a?(Hash)
+        return extract_text(obj['Template']) if obj['$Type'] == 'Forms$ClientTemplate'
+        return extract_text(obj['Text']) if obj['$Type'].to_s.end_with?('$TextTemplate')
 
-        translations = parse_array(obj["Translations"] || obj["Items"] || obj["translations"] || [])
+        translations = parse_array(obj['Translations'] || obj['Items'] || obj['translations'] || [])
         translation = translations.first
-        return "" unless translation.is_a?(Hash)
+        return '' unless translation.is_a?(Hash)
 
-        translation["Translation"] || translation["Text"] || translation["text"] || ""
+        translation['Translation'] || translation['Text'] || translation['text'] || ''
       end
 
       def extract_layout(doc)
-        return doc.dig("FormCall", "Form") if doc.dig("FormCall", "Form")
+        return doc.dig('FormCall', 'Form') if doc.dig('FormCall', 'Form')
 
-        IO::BsonCodec.extract_id(doc["Layout"] || doc["LayoutId"])
+        IO::BsonCodec.extract_id(doc['Layout'] || doc['LayoutId'])
       end
 
       def serialize_title
-        { "$ID" => SecureRandom.uuid, "$Type" => "Texts$Text", "Translations" => [1] }
+        { '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Text', 'Translations' => [1] }
       end
 
       def parse_widgets(items, target = @widgets)
         items.each do |widget|
           next unless widget.is_a?(Hash)
-          type = widget["$Type"]
+
+          type = widget['$Type']
           if %w[Forms$Placeholder Pages$Placeholder].include?(type)
             target << { type: :placeholder, name: widget['Name'].to_s,
                         options: { parameter: local_name(widget['Parameter'] || widget['Name']) }, events: [] }
@@ -101,7 +102,7 @@ module Mxrb
             target << data_view_widget(widget)
             next
           end
-          if type == "CustomWidgets$CustomWidget"
+          if type == 'CustomWidgets$CustomWidget'
             target << pluggable_widget(widget)
             next
           end
@@ -117,7 +118,7 @@ module Mxrb
             target << table_widget(widget)
             next
           end
-          if type == "Forms$LayoutGrid"
+          if type == 'Forms$LayoutGrid'
             target << layout_grid_widget(widget)
             next
           end
@@ -150,21 +151,21 @@ module Mxrb
             arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
               [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
             end
-            target << { type: :snippet, name: widget["Name"] || "snippet",
+            target << { type: :snippet, name: widget['Name'] || 'snippet',
                         options: appearance_options(widget).merge(snippet: snippet_ref, arguments:), events: [] }
             next
           end
           if %w[Pages$Container Forms$Container Forms$DivContainer].include?(type)
             children = []
-            parse_widgets(parse_array(widget["Widgets"]), children)
-            target << { type: :container, name: widget["Name"] || "container",
+            parse_widgets(parse_array(widget['Widgets']), children)
+            target << { type: :container, name: widget['Name'] || 'container',
                         options: container_options(widget), children: children,
                         events: container_events(widget) }
             next
           end
           if layout_container?(widget)
             parse_widgets(child_widgets(widget), target)
-            parse_form_call_arguments(widget["Arguments"], target)
+            parse_form_call_arguments(widget['Arguments'], target)
             next
           end
           unless supported_widget?(type)
@@ -173,11 +174,11 @@ module Mxrb
           end
 
           events = {
-            "OnChangeAction" => :on_change,
-            "OnEnterAction" => :on_enter,
-            "OnLeaveAction" => :on_leave,
-            "ClickAction" => :on_click,
-            "Action" => :on_click
+            'OnChangeAction' => :on_change,
+            'OnEnterAction' => :on_enter,
+            'OnLeaveAction' => :on_leave,
+            'ClickAction' => :on_click,
+            'Action' => :on_click
           }.filter_map do |property, event|
             action = parse_action(widget[property])
             action&.merge(event: event)
@@ -185,7 +186,7 @@ module Mxrb
           widget_type = widget_type(type)
           target << {
             type: widget_type,
-            name: widget["Name"],
+            name: widget['Name'],
             options: widget_options(widget, widget_type),
             events: events
           }
@@ -198,46 +199,46 @@ module Mxrb
 
       def widget_type(type)
         case type
-        when "Pages$ActionButton", "Forms$ActionButton", "Forms$GridActionButton"
+        when 'Pages$ActionButton', 'Forms$ActionButton', 'Forms$GridActionButton'
           :button
-        when "Pages$TextBox", "Forms$TextBox"
+        when 'Pages$TextBox', 'Forms$TextBox'
           :text_box
-        when "Pages$TextArea", "Forms$TextArea"
+        when 'Pages$TextArea', 'Forms$TextArea'
           :text_area
-        when "Pages$CheckBox", "Forms$CheckBox"
+        when 'Pages$CheckBox', 'Forms$CheckBox'
           :check_box
-        when "Pages$DatePicker", "Forms$DatePicker"
+        when 'Pages$DatePicker', 'Forms$DatePicker'
           :date_picker
-        when "Pages$ReferenceSelector", "Forms$ReferenceSelector"
+        when 'Pages$ReferenceSelector', 'Forms$ReferenceSelector'
           :reference_selector
-        when "Pages$DynamicText", "Forms$DynamicText", "Pages$Label", "Forms$Label"
+        when 'Pages$DynamicText', 'Forms$DynamicText', 'Pages$Label', 'Forms$Label'
           :text
-        when "Pages$DropDownWidget", "Forms$DropDownWidget", "Forms$DropDown"
+        when 'Pages$DropDownWidget', 'Forms$DropDownWidget', 'Forms$DropDown'
           :drop_down
-        when "Forms$RadioButtonGroup"
+        when 'Forms$RadioButtonGroup'
           :radio_button_group
-        when "Forms$StaticImageViewer"
+        when 'Forms$StaticImageViewer'
           :static_image
-        when "Forms$SidebarToggleButton", "Pages$SidebarToggleButton"
+        when 'Forms$SidebarToggleButton', 'Pages$SidebarToggleButton'
           :sidebar_toggle
-        when "Forms$Title"
+        when 'Forms$Title'
           :page_title
-        when "Forms$FileManager"
+        when 'Forms$FileManager'
           :file_manager
-        when "Forms$ReferenceSetSelector", "Pages$ReferenceSetSelector",
-             "Pages$InputReferenceSetSelector", "Forms$InputReferenceSetSelector"
+        when 'Forms$ReferenceSetSelector', 'Pages$ReferenceSetSelector',
+             'Pages$InputReferenceSetSelector', 'Forms$InputReferenceSetSelector'
           :reference_set_selector
-        when "Forms$NavigationList"
+        when 'Forms$NavigationList'
           :navigation_list
-        when "Forms$ScrollContainer"
+        when 'Forms$ScrollContainer'
           :scroll_container
-        when "Forms$ImageViewer", "Forms$DynamicImageViewer", "Pages$DynamicImageViewer"
+        when 'Forms$ImageViewer', 'Forms$DynamicImageViewer', 'Pages$DynamicImageViewer'
           :image_viewer
-        when "Forms$ImageUploader"
+        when 'Forms$ImageUploader'
           :image_uploader
-        when "Forms$MenuBar"
+        when 'Forms$MenuBar'
           :menu_bar
-        when "Forms$NavigationTree"
+        when 'Forms$NavigationTree'
           :navigation_tree
         end
       end
@@ -267,8 +268,8 @@ module Mxrb
         ).compact
         parameters = template_parameters(widget)
         options[:parameters] = parameters unless parameters.empty?
-        options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
-        options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
+        options[:lines] = widget['NumberOfLines'] if widget_type == :text_area && widget['NumberOfLines']
+        options[:horizontal] = widget['RenderHorizontal'] == true if widget_type == :radio_button_group
         options[:button_style] = widget['ButtonStyle'].downcase if widget_type == :button && widget['ButtonStyle']
         options.merge!(text_button_options(widget, widget_type)) if %i[text button].include?(widget_type)
         options.merge!(input_options(widget)) if %i[
@@ -281,17 +282,17 @@ module Mxrb
       # shows them.
       def text_button_options(widget, widget_type)
         result = {}
-        visibility = widget["ConditionalVisibilitySettings"]
-        if visibility.is_a?(Hash) && !visibility["Attribute"].to_s.empty?
+        visibility = widget['ConditionalVisibilitySettings']
+        if visibility.is_a?(Hash) && !visibility['Attribute'].to_s.empty?
           result[:visibility] = parse_data_view_condition(visibility)
         end
-        icon = widget["Icon"]
-        if widget_type == :button && icon.is_a?(Hash) && icon["$Type"] == "Forms$IconCollectionIcon"
-          result[:icon] = icon["Image"].to_s
+        icon = widget['Icon']
+        if widget_type == :button && icon.is_a?(Hash) && icon['$Type'] == 'Forms$IconCollectionIcon'
+          result[:icon] = icon['Image'].to_s
         end
-        result[:render_type] = "link" if widget_type == :button && widget["RenderType"] == "Link"
-        mode = widget["RenderMode"].to_s
-        result[:render_mode] = mode.downcase if widget_type == :text && !["", "Text"].include?(mode)
+        result[:render_type] = 'link' if widget_type == :button && widget['RenderType'] == 'Link'
+        mode = widget['RenderMode'].to_s
+        result[:render_mode] = mode.downcase if widget_type == :text && !['', 'Text'].include?(mode)
         result
       end
 
@@ -299,7 +300,7 @@ module Mxrb
       # public Ruby options now, consumed directly by the Ruby web runtime.
       def input_options(widget)
         result = {}
-        source = parse_page_variable(widget["SourceVariable"])
+        source = parse_page_variable(widget['SourceVariable'])
         result[:source_variable] = source if source
         { 'Editable' => :editable, 'ReadOnlyStyle' => :read_only_style }.each do |native, key|
           result[key] = data_view_editability(widget[native]) if widget.key?(native)
@@ -425,12 +426,12 @@ module Mxrb
 
       def static_image_options(widget)
         appearance_options(widget).merge(
-          image: widget["Image"].to_s,
-          alternative_text: extract_text(widget["AlternativeText"]),
-          width: widget.fetch("Width", 0), height: widget.fetch("Height", 0),
-          width_unit: widget.fetch("WidthUnit", "Pixels").to_s.downcase.to_sym,
-          height_unit: widget.fetch("HeightUnit", "Pixels").to_s.downcase.to_sym,
-          responsive: widget.fetch("Responsive", true) == true
+          image: widget['Image'].to_s,
+          alternative_text: extract_text(widget['AlternativeText']),
+          width: widget.fetch('Width', 0), height: widget.fetch('Height', 0),
+          width_unit: widget.fetch('WidthUnit', 'Pixels').to_s.downcase.to_sym,
+          height_unit: widget.fetch('HeightUnit', 'Pixels').to_s.downcase.to_sym,
+          responsive: widget.fetch('Responsive', true) == true
         )
       end
 
@@ -439,81 +440,81 @@ module Mxrb
       end
 
       def appearance_options(widget)
-        class_name = widget.dig("Appearance", "Class") || widget["Class"]
-        style = widget.dig("Appearance", "Style") || widget["Style"]
-        dynamic = widget.dig("Appearance", "DynamicClasses")
-        visibility = widget.dig("ConditionalVisibilitySettings", "Expression")
+        class_name = widget.dig('Appearance', 'Class') || widget['Class']
+        style = widget.dig('Appearance', 'Style') || widget['Style']
+        dynamic = widget.dig('Appearance', 'DynamicClasses')
+        visibility = widget.dig('ConditionalVisibilitySettings', 'Expression')
         { class: class_name.to_s, style: style.to_s,
           dynamic_class: dynamic.to_s, visible: visibility.to_s }.reject { |_key, value| value.empty? }
       end
 
       def container_events(widget)
-        action = parse_action(widget["OnClickAction"] || widget["Action"])
+        action = parse_action(widget['OnClickAction'] || widget['Action'])
         action ? [action.merge(event: :on_click)] : []
       end
 
       def template_parameters(widget)
-        template = widget["Content"] || widget["CaptionTemplate"] || widget["LabelTemplate"]
-        parse_array(template.is_a?(Hash) ? template["Parameters"] : nil).filter_map do |parameter|
-          expression = parameter["Expression"].to_s
-          attribute = parameter.dig("AttributeRef", "Attribute").to_s.split('.').last.to_s
+        template = widget['Content'] || widget['CaptionTemplate'] || widget['LabelTemplate']
+        parse_array(template.is_a?(Hash) ? template['Parameters'] : nil).filter_map do |parameter|
+          expression = parameter['Expression'].to_s
+          attribute = parameter.dig('AttributeRef', 'Attribute').to_s.split('.').last.to_s
           expression = "$currentObject/#{attribute}" if expression.empty? && !attribute.empty?
           expression unless expression.empty?
         end
       end
 
       def attribute_path(widget)
-        widget["AttributePath"] || widget.dig("AttributeRef", "Attribute")
+        widget['AttributePath'] || widget.dig('AttributeRef', 'Attribute')
       end
 
       def widget_caption(widget, widget_type)
         if widget_type == :text
-          return extract_text(widget["Content"] || widget["Text"] || widget["LabelText"] || widget["Caption"])
+          return extract_text(widget['Content'] || widget['Text'] || widget['LabelText'] || widget['Caption'])
         end
 
         extract_text(
-          widget["Caption"] ||
-          widget["LabelText"] ||
-          widget["LabelTemplate"] ||
-          widget.dig("CaptionTemplate", "Template")
+          widget['Caption'] ||
+          widget['LabelText'] ||
+          widget['LabelTemplate'] ||
+          widget.dig('CaptionTemplate', 'Template')
         )
       end
 
       def data_grid_widget(widget)
-        columns = parse_array(widget["Columns"]).map do |column|
+        columns = parse_array(widget['Columns']).map do |column|
           {
-            name: column["Name"],
+            name: column['Name'],
             attribute: attribute_path(column),
-            caption: extract_text(column["Caption"])
+            caption: extract_text(column['Caption'])
           }.compact
         end
         options = { entity: grid_entity(widget), columns: columns }.compact
-        options[:search_bar] = parse_search_bar(widget["SearchBar"]) if widget["SearchBar"].is_a?(Hash)
-        options[:toolbar]    = parse_toolbar(widget["ToolBar"])       if widget["ToolBar"].is_a?(Hash)
+        options[:search_bar] = parse_search_bar(widget['SearchBar']) if widget['SearchBar'].is_a?(Hash)
+        options[:toolbar]    = parse_toolbar(widget['ToolBar']) if widget['ToolBar'].is_a?(Hash)
         options.compact!
-        { type: :data_grid, name: widget["Name"], options: options, events: grid_events(widget) }
+        { type: :data_grid, name: widget['Name'], options: options, events: grid_events(widget) }
       end
 
       def data_view_widget(widget)
         body = []
         footer = []
-        parse_widgets(parse_array(widget["Widgets"]), body)
-        parse_widgets(parse_array(widget["FooterWidgets"]), footer)
+        parse_widgets(parse_array(widget['Widgets']), body)
+        parse_widgets(parse_array(widget['FooterWidgets']), footer)
         appearance = appearance_options(widget)
         appearance.delete(:visible)
         options = appearance.merge(
-          source: parse_data_view_source(widget["DataSource"]),
+          source: parse_data_view_source(widget['DataSource']),
           editable: data_view_editability(
-            widget.fetch("Editability", widget.fetch("Editable", "Always"))
+            widget.fetch('Editability', widget.fetch('Editable', 'Always'))
           ),
-          read_only_style: data_view_enum(widget.fetch("ReadOnlyStyle", "Control")),
-          label_width: widget.fetch("LabelWidth", 0).to_i,
-          show_footer: widget.fetch("ShowFooter", true) == true,
-          no_entity_message: extract_text(widget["NoEntityMessage"]),
-          tab_index: widget.fetch("TabIndex", 0).to_i,
-          visibility: parse_data_view_condition(widget["ConditionalVisibilitySettings"]),
-          editability: parse_data_view_condition(widget["ConditionalEditabilitySettings"]),
-          design_properties: parse_array(widget.dig("Appearance", "DesignProperties")).map do |value|
+          read_only_style: data_view_enum(widget.fetch('ReadOnlyStyle', 'Control')),
+          label_width: widget.fetch('LabelWidth', 0).to_i,
+          show_footer: widget.fetch('ShowFooter', true) == true,
+          no_entity_message: extract_text(widget['NoEntityMessage']),
+          tab_index: widget.fetch('TabIndex', 0).to_i,
+          visibility: parse_data_view_condition(widget['ConditionalVisibilitySettings']),
+          editability: parse_data_view_condition(widget['ConditionalEditabilitySettings']),
+          design_properties: parse_array(widget.dig('Appearance', 'DesignProperties')).map do |value|
             design_property_spec(value)
           end,
           unknown_native: unknown_native_fields(
@@ -526,7 +527,7 @@ module Mxrb
         options.delete(:design_properties) if options[:design_properties].empty?
         options.delete(:unknown_native) if options[:unknown_native].empty?
         {
-          type: :data_view, name: widget["Name"] || "dataView",
+          type: :data_view, name: widget['Name'] || 'dataView',
           options:, body:, footer:, events: []
         }
       end
@@ -561,28 +562,28 @@ module Mxrb
       def parse_data_view_source(source)
         return { kind: :context } unless source.is_a?(Hash)
 
-        type = source["$Type"].to_s
+        type = source['$Type'].to_s
         common = {
-          force_full_objects: source["ForceFullObjects"] == true,
+          force_full_objects: source['ForceFullObjects'] == true,
           unknown_native: unknown_native_fields(source, data_view_source_keys(type))
         }
         semantic = case type
-                   when "Pages$NanoflowSource", "Forms$NanoflowSource"
+                   when 'Pages$NanoflowSource', 'Forms$NanoflowSource'
                      {
                        kind: :nanoflow,
-                       name: source_name(source["Nanoflow"] || source.dig("NanoflowSettings", "Nanoflow")),
-                       mappings: parse_data_view_mappings(source["ParameterMappings"])
+                       name: source_name(source['Nanoflow'] || source.dig('NanoflowSettings', 'Nanoflow')),
+                       mappings: parse_data_view_mappings(source['ParameterMappings'])
                      }
-                   when "Pages$MicroflowSource", "Forms$MicroflowSource"
-                     settings = source["MicroflowSettings"] || source
+                   when 'Pages$MicroflowSource', 'Forms$MicroflowSource'
+                     settings = source['MicroflowSettings'] || source
                      {
-                       kind: :microflow, name: source_name(settings["Microflow"] || source["Microflow"]),
-                       mappings: parse_data_view_mappings(settings["ParameterMappings"]),
+                       kind: :microflow, name: source_name(settings['Microflow'] || source['Microflow']),
+                       mappings: parse_data_view_mappings(settings['ParameterMappings']),
                        settings_native: data_view_microflow_settings(settings)
                      }
-                   when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
-                     { kind: :listen, target: source["ListenTarget"].to_s }
-                   when "Pages$DataViewSource", "Forms$DataViewSource", "Forms$ImageViewerSource", "Pages$ImageViewerSource"
+                   when 'Pages$ListenTargetSource', 'Forms$ListenTargetSource'
+                     { kind: :listen, target: source['ListenTarget'].to_s }
+                   when 'Pages$DataViewSource', 'Forms$DataViewSource', 'Forms$ImageViewerSource', 'Pages$ImageViewerSource'
                      parse_context_data_view_source(source)
                    else
                      { kind: :native, native_type: type }
@@ -596,13 +597,13 @@ module Mxrb
       def data_view_source_keys(type)
         common = %w[$ID $Type ForceFullObjects]
         case type
-        when "Pages$NanoflowSource", "Forms$NanoflowSource"
+        when 'Pages$NanoflowSource', 'Forms$NanoflowSource'
           common + %w[Nanoflow NanoflowSettings ParameterMappings]
-        when "Pages$MicroflowSource", "Forms$MicroflowSource"
+        when 'Pages$MicroflowSource', 'Forms$MicroflowSource'
           common + %w[Microflow MicroflowSettings]
-        when "Pages$ListenTargetSource", "Forms$ListenTargetSource"
+        when 'Pages$ListenTargetSource', 'Forms$ListenTargetSource'
           common + %w[ListenTarget]
-        when "Pages$DataViewSource", "Forms$DataViewSource", "Forms$ImageViewerSource", "Pages$ImageViewerSource"
+        when 'Pages$DataViewSource', 'Forms$DataViewSource', 'Forms$ImageViewerSource', 'Pages$ImageViewerSource'
           common + %w[EntityPath EntityRef PageParameter SourceVariable]
         else common
         end
@@ -611,29 +612,29 @@ module Mxrb
       def data_view_microflow_settings(settings)
         values = unknown_native_fields(settings, %w[Microflow ParameterMappings])
         defaults = {
-          "Asynchronous" => false, "ConfirmationInfo" => nil,
-          "FormValidations" => "All", "ProgressBar" => "None", "ProgressMessage" => nil
+          'Asynchronous' => false, 'ConfirmationInfo' => nil,
+          'FormValidations' => 'All', 'ProgressBar' => 'None', 'ProgressMessage' => nil
         }
         defaults.each { |key, value| values.delete(key) if values[key] == value }
-        values.delete("OutputMappings") if parse_array(values["OutputMappings"]).empty?
+        values.delete('OutputMappings') if parse_array(values['OutputMappings']).empty?
         values
       end
 
       def parse_context_data_view_source(source)
-        reference = source["EntityRef"] || {}
-        steps = parse_array(reference["Steps"]).map do |step|
+        reference = source['EntityRef'] || {}
+        steps = parse_array(reference['Steps']).map do |step|
           {
-            association: step["Association"].to_s,
-            entity: step["DestinationEntity"].to_s,
+            association: step['Association'].to_s,
+            entity: step['DestinationEntity'].to_s,
             unknown_native: unknown_native_fields(step, %w[$ID $Type Association DestinationEntity])
           }.reject { |_key, value| value.respond_to?(:empty?) && value.empty? }
         end
-        variable_source = source["SourceVariable"]
+        variable_source = source['SourceVariable']
         variable_source ||= { 'PageParameter' => source['PageParameter'] } if source.key?('PageParameter')
         variable = parse_page_variable(variable_source)
         if steps.empty?
           {
-            kind: :context, entity: reference["Entity"].to_s,
+            kind: :context, entity: reference['Entity'].to_s,
             variable:, entity_ref_native: unknown_native_fields(reference, %w[$ID $Type Entity])
           }
         else
@@ -653,8 +654,8 @@ module Mxrb
           [data_view_enum(key), value] unless value.empty?
         end.first
         {
-          kind: kind || :current, name:, sub_key: variable["SubKey"].to_s,
-          use_all_pages: variable["UseAllPages"] == true,
+          kind: kind || :current, name:, sub_key: variable['SubKey'].to_s,
+          use_all_pages: variable['UseAllPages'] == true,
           unknown_native: unknown_native_fields(
             variable,
             %w[$ID $Type LocalVariable PageParameter SnippetParameter SubKey UseAllPages Widget]
@@ -667,9 +668,9 @@ module Mxrb
       def parse_data_view_mappings(mappings)
         parse_array(mappings).map do |mapping|
           {
-            parameter: mapping["Parameter"].to_s,
-            expression: mapping["Expression"].to_s,
-            variable: parse_page_variable(mapping["Variable"]),
+            parameter: mapping['Parameter'].to_s,
+            expression: mapping['Expression'].to_s,
+            variable: parse_page_variable(mapping['Variable']),
             unknown_native: unknown_native_fields(
               mapping, %w[$ID $Type Parameter Expression Variable]
             )
@@ -683,12 +684,12 @@ module Mxrb
         return unless condition.is_a?(Hash)
 
         {
-          expression: condition["Expression"].to_s,
-          attribute: condition["Attribute"].to_s,
-          conditions: parse_array(condition["Conditions"]),
-          roles: parse_array(condition["ModuleRoles"]).map(&:to_s),
-          ignore_security: condition["IgnoreSecurity"] == true,
-          source_variable: parse_page_variable(condition["SourceVariable"]),
+          expression: condition['Expression'].to_s,
+          attribute: condition['Attribute'].to_s,
+          conditions: parse_array(condition['Conditions']),
+          roles: parse_array(condition['ModuleRoles']).map(&:to_s),
+          ignore_security: condition['IgnoreSecurity'] == true,
+          source_variable: parse_page_variable(condition['SourceVariable']),
           unknown_native: unknown_native_fields(
             condition,
             %w[$ID $Type Attribute Conditions Expression IgnoreSecurity ModuleRoles SourceVariable]
@@ -718,31 +719,31 @@ module Mxrb
       end
 
       def pluggable_widget(widget)
-        widget_id = widget.dig("Type", "WidgetId").to_s
+        widget_id = widget.dig('Type', 'WidgetId').to_s
         return native_widget(widget) if widget_id.empty?
 
         case widget_id
-        when "com.mendix.widget.web.datagrid.Datagrid" then data_grid2_widget(widget)
-        when "com.mendix.widget.web.combobox.Combobox"  then combo_box_widget(widget)
-        when "com.mendix.widget.web.gallery.Gallery"    then gallery_widget(widget)
+        when 'com.mendix.widget.web.datagrid.Datagrid' then data_grid2_widget(widget)
+        when 'com.mendix.widget.web.combobox.Combobox'  then combo_box_widget(widget)
+        when 'com.mendix.widget.web.gallery.Gallery'    then gallery_widget(widget)
         else generic_pluggable_widget(widget)
         end
       end
 
       def generic_pluggable_widget(widget)
-        object_type = widget.dig("Type", "ObjectType")
-        properties = pluggable_properties(widget["Object"], object_type)
+        object_type = widget.dig('Type', 'ObjectType')
+        properties = pluggable_properties(widget['Object'], object_type)
         slots = pluggable_widget_slots(properties)
         children = nested_pluggable_widgets(properties)
         properties = strip_pluggable_widgets(properties)
         options = appearance_options(widget).merge(
-          widget_id: widget.dig("Type", "WidgetId"),
-          widget_name: widget.dig("Type", "WidgetName"),
-          platform: widget.dig("Type", "SupportedPlatform"),
+          widget_id: widget.dig('Type', 'WidgetId'),
+          widget_name: widget.dig('Type', 'WidgetName'),
+          platform: widget.dig('Type', 'SupportedPlatform'),
           properties:
         ).compact
         value = {
-          type: :pluggable_widget, name: widget["Name"] || "widget",
+          type: :pluggable_widget, name: widget['Name'] || 'widget',
           options:, children:, events: pluggable_events(properties)
         }
         value[:slots] = slots unless slots.empty?
@@ -752,17 +753,17 @@ module Mxrb
       def pluggable_properties(object, object_type)
         return {} unless object.is_a?(Hash) && object_type.is_a?(Hash)
 
-        types = parse_array(object_type["PropertyTypes"])
-        types_by_id = types.to_h { [IO::BsonCodec.extract_id(_1["$ID"]), _1] }
-        parse_array(object["Properties"]).each_with_object({}) do |property, result|
-          type = types_by_id[IO::BsonCodec.extract_id(property["TypePointer"])]
+        types = parse_array(object_type['PropertyTypes'])
+        types_by_id = types.to_h { [IO::BsonCodec.extract_id(_1['$ID']), _1] }
+        parse_array(object['Properties']).each_with_object({}) do |property, result|
+          type = types_by_id[IO::BsonCodec.extract_id(property['TypePointer'])]
           next unless type
 
-          value_type = type["ValueType"]
-          projected = pluggable_value(property["Value"], value_type)
+          value_type = type['ValueType']
+          projected = pluggable_value(property['Value'], value_type)
           next if projected.nil? && !clearable_pluggable_value_type?(value_type)
 
-          result[type["PropertyKey"].to_s] = projected
+          result[type['PropertyKey'].to_s] = projected
         end
       end
 
@@ -812,48 +813,48 @@ module Mxrb
       def pluggable_value(value, value_type)
         return nil unless value.is_a?(Hash)
 
-        type = value_type.is_a?(Hash) ? value_type["Type"].to_s : ""
-        widgets = parse_array(value["Widgets"])
+        type = value_type.is_a?(Hash) ? value_type['Type'].to_s : ''
+        widgets = parse_array(value['Widgets'])
         unless widgets.empty?
           parsed = []
           parse_widgets(widgets, parsed)
           return { widgets: parsed }
         end
-        objects = parse_array(value["Objects"])
+        objects = parse_array(value['Objects'])
         unless objects.empty?
-          object_type = value_type.is_a?(Hash) ? value_type["ObjectType"] : nil
+          object_type = value_type.is_a?(Hash) ? value_type['ObjectType'] : nil
           return { objects: objects.map { pluggable_properties(_1, object_type) } }
         end
 
-        return pluggable_template(value["TextTemplate"]) if value["TextTemplate"].is_a?(Hash)
-        return value.dig("AttributeRef", "Attribute") if value["AttributeRef"].is_a?(Hash)
-        return value.dig("EntityRef", "Entity") if value["EntityRef"].is_a?(Hash)
-        return pluggable_data_source(value["DataSource"]) if value["DataSource"].is_a?(Hash)
-        return value["Expression"] unless value["Expression"].to_s.empty?
-        return value["Image"] unless value["Image"].to_s.empty?
-        return value["Form"] unless value["Form"].to_s.empty?
+        return pluggable_template(value['TextTemplate']) if value['TextTemplate'].is_a?(Hash)
+        return value.dig('AttributeRef', 'Attribute') if value['AttributeRef'].is_a?(Hash)
+        return value.dig('EntityRef', 'Entity') if value['EntityRef'].is_a?(Hash)
+        return pluggable_data_source(value['DataSource']) if value['DataSource'].is_a?(Hash)
+        return value['Expression'] unless value['Expression'].to_s.empty?
+        return value['Image'] unless value['Image'].to_s.empty?
+        return value['Form'] unless value['Form'].to_s.empty?
 
-        primitive = value["PrimitiveValue"]
-        return primitive == true || primitive.to_s.casecmp("true").zero? if type == "Boolean"
-        return primitive.to_i if type == "Integer"
+        primitive = value['PrimitiveValue']
+        return primitive == true || primitive.to_s.casecmp('true').zero? if type == 'Boolean'
+        return primitive.to_i if type == 'Integer'
         return primitive.to_f if %w[Decimal Number].include?(type)
         return primitive unless primitive.nil? || primitive.to_s.empty?
 
-        action = value["Action"]
-        return pluggable_action(action) if action.is_a?(Hash) && action["$Type"] != "Forms$NoAction"
-        return value["Selection"] unless value["Selection"].to_s.empty? || value["Selection"] == "None"
+        action = value['Action']
+        return pluggable_action(action) if action.is_a?(Hash) && action['$Type'] != 'Forms$NoAction'
+        return value['Selection'] unless value['Selection'].to_s.empty? || value['Selection'] == 'None'
 
         nil
       end
 
       def pluggable_data_source(source)
         {
-          data_source: source.dig("EntityRef", "Entity") || source["Entity"],
-          xpath: source["XPathConstraint"].to_s,
-          sort: parse_array(source.dig("SortBar", "SortItems")).map do |item|
+          data_source: source.dig('EntityRef', 'Entity') || source['Entity'],
+          xpath: source['XPathConstraint'].to_s,
+          sort: parse_array(source.dig('SortBar', 'SortItems')).map do |item|
             {
-              attribute: item.dig("AttributeRef", "Attribute"),
-              direction: (item["SortOrder"] || item["SortDirection"]).to_s
+              attribute: item.dig('AttributeRef', 'Attribute'),
+              direction: (item['SortOrder'] || item['SortDirection']).to_s
             }.compact
           end
         }.compact
@@ -864,32 +865,32 @@ module Mxrb
         return parsed.merge(kind: parsed.fetch(:kind).to_s) if parsed
 
         candidates = {
-          "nanoflow" => action["Nanoflow"],
-          "microflow" => action["Microflow"],
-          "page" => action["Form"]
+          'nanoflow' => action['Nanoflow'],
+          'microflow' => action['Microflow'],
+          'page' => action['Form']
         }
         kind, handler = candidates.find { |_candidate, value| !value.to_s.empty? }
-        kind ||= "action"
-        handler ||= action["$Type"]
+        kind ||= 'action'
+        handler ||= action['$Type']
         { kind:, handler: handler.to_s }
       end
 
       def nested_pluggable_widgets(value, found = [])
         case value
         when Hash
-          widgets = value[:widgets] || value["widgets"]
+          widgets = value[:widgets] || value['widgets']
           found.concat(Array(widgets)) if widgets
           value.each_value { nested_pluggable_widgets(_1, found) }
         when Array then value.each { nested_pluggable_widgets(_1, found) }
         end
-        found.uniq { [_1[:name] || _1["name"], _1[:type] || _1["type"]] }
+        found.uniq { [_1[:name] || _1['name'], _1[:type] || _1['type']] }
       end
 
       def pluggable_widget_slots(value, path = [], found = [])
         case value
         when Hash
           value.each do |key, child|
-            if key.to_s == "widgets"
+            if key.to_s == 'widgets'
               found << { path: path, widgets: Array(child) }
             else
               pluggable_widget_slots(child, path + [key], found)
@@ -905,7 +906,7 @@ module Mxrb
         case value
         when Hash
           value.each_with_object({}) do |(key, child), result|
-            next if key.to_s == "widgets"
+            next if key.to_s == 'widgets'
 
             result[key] = strip_pluggable_widgets(child)
           end
@@ -924,66 +925,66 @@ module Mxrb
       end
 
       def gallery_widget(widget)
-        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
-        source = properties.dig("datasource", "DataSource") || {}
+        properties = custom_property_map(widget['Object'], widget.dig('Type', 'ObjectType'))
+        source = properties.dig('datasource', 'DataSource') || {}
         children = []
-        parse_widgets(parse_array(properties.dig("content", "Widgets")), children)
-        sort = parse_array(source.dig("SortBar", "SortItems")).map do |item|
+        parse_widgets(parse_array(properties.dig('content', 'Widgets')), children)
+        sort = parse_array(source.dig('SortBar', 'SortItems')).map do |item|
           {
-            attribute: item.dig("AttributeRef", "Attribute"),
-            direction: item["SortDirection"].to_s
+            attribute: item.dig('AttributeRef', 'Attribute'),
+            direction: item['SortDirection'].to_s
           }.compact
         end
-        xpath = source["XPathConstraint"].to_s
+        xpath = source['XPathConstraint'].to_s
         options = appearance_options(widget).merge(
-          entity: source.dig("EntityRef", "Entity"), xpath: xpath,
+          entity: source.dig('EntityRef', 'Entity'), xpath: xpath,
           association: xpath[/\[([\w.]+)\s*=\s*\$\w+\]/, 1],
           context_variable: xpath[/\$([A-Za-z_]\w*)/, 1], sort: sort
         ).compact
         {
-          type: :gallery, name: widget["Name"], options: options,
+          type: :gallery, name: widget['Name'], options: options,
           children: children, events: []
         }
       end
 
       def native_widget(widget)
         deep = widget.reject { |key, _| %w[$ID $Type Name].include?(key.to_s) }
-        type_metadata = widget["Type"].is_a?(Hash) ? widget["Type"] : {}
-        widget_id = type_metadata["WidgetId"].to_s
-        platform = type_metadata["SupportedPlatform"].to_s
-        options = { native_type: widget["$Type"], deep_structure: deep }
+        type_metadata = widget['Type'].is_a?(Hash) ? widget['Type'] : {}
+        widget_id = type_metadata['WidgetId'].to_s
+        platform = type_metadata['SupportedPlatform'].to_s
+        options = { native_type: widget['$Type'], deep_structure: deep }
         options[:widget_id] = widget_id unless widget_id.empty?
         options[:platform] = platform unless platform.empty?
         {
-          type: :native_widget, name: widget["Name"] || "widget",
+          type: :native_widget, name: widget['Name'] || 'widget',
           options:, events: []
         }
       end
 
       DATA_GRID2_FILTERS = {
-        "com.mendix.widget.web.datagridtextfilter.DatagridTextFilter" => "text",
-        "com.mendix.widget.web.datagridnumberfilter.DatagridNumberFilter" => "number",
-        "com.mendix.widget.web.datagriddatefilter.DatagridDateFilter" => "date",
-        "com.mendix.widget.web.datagriddropdownfilter.DatagridDropdownFilter" => "drop_down"
+        'com.mendix.widget.web.datagridtextfilter.DatagridTextFilter' => 'text',
+        'com.mendix.widget.web.datagridnumberfilter.DatagridNumberFilter' => 'number',
+        'com.mendix.widget.web.datagriddatefilter.DatagridDateFilter' => 'date',
+        'com.mendix.widget.web.datagriddropdownfilter.DatagridDropdownFilter' => 'drop_down'
       }.freeze
       DATA_GRID2_OPERATORS = {
-        "contains" => "contains", "startsWith" => "starts_with", "endsWith" => "ends_with",
-        "equal" => "equals", "notEqual" => "not_equals", "greater" => "gt", "greaterEqual" => "gte",
-        "smaller" => "lt", "smallerEqual" => "lte", "between" => "between", "empty" => "empty",
-        "notEmpty" => "not_empty"
+        'contains' => 'contains', 'startsWith' => 'starts_with', 'endsWith' => 'ends_with',
+        'equal' => 'equals', 'notEqual' => 'not_equals', 'greater' => 'gt', 'greaterEqual' => 'gte',
+        'smaller' => 'lt', 'smallerEqual' => 'lte', 'between' => 'between', 'empty' => 'empty',
+        'notEmpty' => 'not_empty'
       }.freeze
 
       # Data grid 2 as the Runtime shows it: the datasource constraint and sort,
       # header widgets, per-column filters, content and widths.
       def data_grid2_widget(widget)
-        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
-        return data_grid_widget(widget) if properties.empty? && widget["DataSource"]
+        properties = custom_property_map(widget['Object'], widget.dig('Type', 'ObjectType'))
+        return data_grid_widget(widget) if properties.empty? && widget['DataSource']
 
-        source = properties.dig("datasource", "DataSource") || {}
+        source = properties.dig('datasource', 'DataSource') || {}
         selection = properties.dig('itemSelection', 'Selection').to_s
-        column_type = custom_property_type(widget.dig("Type", "ObjectType"), "columns")
-                      &.dig("ValueType", "ObjectType")
-        columns = parse_array(properties.dig("columns", "Objects")).map do |object|
+        column_type = custom_property_type(widget.dig('Type', 'ObjectType'), 'columns')
+                      &.dig('ValueType', 'ObjectType')
+        columns = parse_array(properties.dig('columns', 'Objects')).map do |object|
           data_grid2_column(custom_property_map(object, column_type))
         end
         property_events = {
@@ -994,17 +995,17 @@ module Mxrb
           action&.merge(event:)
         end
         header = []
-        parse_widgets(parse_array(properties.dig("filtersPlaceholder", "Widgets")), header)
-        xpath = source["XPathConstraint"].to_s.strip
-        sort = parse_array(source.dig("SortBar", "SortItems")).filter_map do |item|
-          attribute = item.dig("AttributeRef", "Attribute")
-          direction = (item["SortOrder"] || item["SortDirection"]).to_s == "Descending" ? "Descending" : "Ascending"
+        parse_widgets(parse_array(properties.dig('filtersPlaceholder', 'Widgets')), header)
+        xpath = source['XPathConstraint'].to_s.strip
+        sort = parse_array(source.dig('SortBar', 'SortItems')).filter_map do |item|
+          attribute = item.dig('AttributeRef', 'Attribute')
+          direction = (item['SortOrder'] || item['SortDirection']).to_s == 'Descending' ? 'Descending' : 'Ascending'
           { attribute:, direction: } if attribute
         end
         value = {
-          type: :data_grid, name: widget["Name"],
+          type: :data_grid, name: widget['Name'],
           options: {
-            entity: source.dig("EntityRef", "Entity"), columns: columns,
+            entity: source.dig('EntityRef', 'Entity'), columns: columns,
             presentation: 'datagrid2',
             page_size: properties.dig('pageSize', 'PrimitiveValue').to_i.nonzero? || 20,
             columns_resizable: properties.dig('columnsResizable', 'PrimitiveValue') != 'false',
@@ -1021,54 +1022,54 @@ module Mxrb
       end
 
       def data_grid2_column(values)
-        caption = extract_text(values.dig("header", "TextTemplate"))
-        reference = values.dig("attribute", "AttributeRef") || {}
-        column = { name: caption, attribute: reference["Attribute"], caption: caption }.compact
-        steps = parse_array(reference.dig("EntityRef", "Steps")).map do |step|
-          { association: step["Association"], entity: step["DestinationEntity"] }
+        caption = extract_text(values.dig('header', 'TextTemplate'))
+        reference = values.dig('attribute', 'AttributeRef') || {}
+        column = { name: caption, attribute: reference['Attribute'], caption: caption }.compact
+        steps = parse_array(reference.dig('EntityRef', 'Steps')).map do |step|
+          { association: step['Association'], entity: step['DestinationEntity'] }
         end
         column[:association_path] = steps unless steps.empty?
-        case values.dig("showContentAs", "PrimitiveValue")
-        when "dynamicText"
-          template = values.dig("dynamicText", "TextTemplate") || {}
+        case values.dig('showContentAs', 'PrimitiveValue')
+        when 'dynamicText'
+          template = values.dig('dynamicText', 'TextTemplate') || {}
           column[:dynamic_text] = extract_text(template)
-          parameters = template_parameters("Content" => template)
+          parameters = template_parameters('Content' => template)
           column[:parameters] = parameters unless parameters.empty?
-        when "customContent"
+        when 'customContent'
           content = []
-          parse_widgets(parse_array(values.dig("content", "Widgets")), content)
+          parse_widgets(parse_array(values.dig('content', 'Widgets')), content)
           column[:content] = content
         end
-        filter = data_grid2_filter(parse_array(values.dig("filter", "Widgets")).first)
+        filter = data_grid2_filter(parse_array(values.dig('filter', 'Widgets')).first)
         column[:filter] = filter if filter
-        column[:sortable] = false if values.dig("sortable", "PrimitiveValue") == "false"
-        hidable = values.dig("hidable", "PrimitiveValue").to_s
-        column[:hidable] = hidable == "hidden" ? "hidden" : false unless ["", "yes"].include?(hidable)
-        width = values.dig("width", "PrimitiveValue").to_s
-        column[:width] = width == "autoFit" ? "auto_fit" : "manual" unless ["", "autoFill"].include?(width)
-        size = values.dig("size", "PrimitiveValue").to_i
+        column[:sortable] = false if values.dig('sortable', 'PrimitiveValue') == 'false'
+        hidable = values.dig('hidable', 'PrimitiveValue').to_s
+        column[:hidable] = hidable == 'hidden' ? 'hidden' : false unless ['', 'yes'].include?(hidable)
+        width = values.dig('width', 'PrimitiveValue').to_s
+        column[:width] = width == 'autoFit' ? 'auto_fit' : 'manual' unless ['', 'autoFill'].include?(width)
+        size = values.dig('size', 'PrimitiveValue').to_i
         column[:size] = size if size > 1
-        alignment = values.dig("alignment", "PrimitiveValue").to_s
-        column[:alignment] = alignment unless ["", "left"].include?(alignment)
+        alignment = values.dig('alignment', 'PrimitiveValue').to_s
+        column[:alignment] = alignment unless ['', 'left'].include?(alignment)
         column
       end
 
       def data_grid2_filter(widget)
         return unless widget.is_a?(Hash)
 
-        type = DATA_GRID2_FILTERS[widget.dig("Type", "WidgetId").to_s]
+        type = DATA_GRID2_FILTERS[widget.dig('Type', 'WidgetId').to_s]
         return unless type
 
-        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
-        operator = DATA_GRID2_OPERATORS[properties.dig("defaultFilter", "PrimitiveValue").to_s]
+        properties = custom_property_map(widget['Object'], widget.dig('Type', 'ObjectType'))
+        operator = DATA_GRID2_OPERATORS[properties.dig('defaultFilter', 'PrimitiveValue').to_s]
         operator ? { type:, operator: } : { type: }
       end
 
       def grid_events(widget)
         {
-          "OnChangeAction" => :on_change,
-          "OnClickAction" => :on_click,
-          "Action" => :on_click
+          'OnChangeAction' => :on_change,
+          'OnClickAction' => :on_click,
+          'Action' => :on_click
         }.filter_map do |property, event|
           action = parse_action(widget[property])
           action&.merge(event: event)
@@ -1076,62 +1077,64 @@ module Mxrb
       end
 
       def combo_box_widget(widget)
-        properties = custom_property_map(widget["Object"], widget.dig("Type", "ObjectType"))
-        if properties.empty? && widget["AttributePath"]
-          reference = widget["SelectorType"] == "Reference"
+        properties = custom_property_map(widget['Object'], widget.dig('Type', 'ObjectType'))
+        if properties.empty? && widget['AttributePath']
+          reference = widget['SelectorType'] == 'Reference'
           options = {
-            attribute: widget["AttributePath"], caption: extract_text(widget["LabelText"]),
-            display_attribute: widget["DisplayAttribute"]
+            attribute: widget['AttributePath'], caption: extract_text(widget['LabelText']),
+            display_attribute: widget['DisplayAttribute']
           }.compact
           return {
             type: reference ? :reference_selector : :drop_down,
-            name: widget["Name"], options: options, events: grid_events(widget)
+            name: widget['Name'], options: options, events: grid_events(widget)
           }
         end
 
-        association = parse_array(properties.dig("attributeAssociation", "EntityRef", "Steps"))
-                      .first&.fetch("Association", nil)
-        reference = properties.dig("optionsSourceType", "PrimitiveValue") == "association"
+        association = parse_array(properties.dig('attributeAssociation', 'EntityRef', 'Steps'))
+                      .first&.fetch('Association', nil)
+        reference = properties.dig('optionsSourceType', 'PrimitiveValue') == 'association'
         attribute = if reference
-          association
-        else
-          properties.dig("attributeEnumeration", "AttributeRef", "Attribute")
-        end
+                      association
+                    else
+                      properties.dig('attributeEnumeration', 'AttributeRef', 'Attribute')
+                    end
         options = {
-          attribute: attribute, caption: extract_text(widget["LabelTemplate"])
+          attribute: attribute, caption: extract_text(widget['LabelTemplate'])
         }.compact
         if reference
           options[:display_attribute] = properties.dig(
-            "optionsSourceAssociationCaptionAttribute", "AttributeRef", "Attribute"
+            'optionsSourceAssociationCaptionAttribute', 'AttributeRef', 'Attribute'
           )
         end
         { type: reference ? :reference_selector : :drop_down,
-          name: widget["Name"], options: options.compact, events: grid_events(widget) }
+          name: widget['Name'], options: options.compact, events: grid_events(widget) }
       end
 
       def custom_property_map(object, object_type)
         return {} unless object.is_a?(Hash) && object_type.is_a?(Hash)
 
-        types = parse_array(object_type["PropertyTypes"]).to_h do |type|
-          [IO::BsonCodec.extract_id(type["$ID"]), type["PropertyKey"]]
+        types = parse_array(object_type['PropertyTypes']).to_h do |type|
+          [IO::BsonCodec.extract_id(type['$ID']), type['PropertyKey']]
         end
-        parse_array(object["Properties"]).to_h do |property|
-          [types[IO::BsonCodec.extract_id(property["TypePointer"])], property["Value"]]
+        parse_array(object['Properties']).to_h do |property|
+          [types[IO::BsonCodec.extract_id(property['TypePointer'])], property['Value']]
         end.compact
       end
 
       def custom_property_type(object_type, key)
-        parse_array(object_type && object_type["PropertyTypes"]).find { _1["PropertyKey"] == key }
+        parse_array(object_type && object_type['PropertyTypes']).find { _1['PropertyKey'] == key }
       end
 
       def parse_search_bar(sb)
         return nil unless sb.is_a?(Hash)
-        fields = parse_array(sb["SearchFields"]).filter_map do |sf|
-          attr_ref = sf.dig("AttributeRef", "Attribute") || sf["Attribute"] || sf["AttributePath"]
+
+        fields = parse_array(sb['SearchFields']).filter_map do |sf|
+          attr_ref = sf.dig('AttributeRef', 'Attribute') || sf['Attribute'] || sf['AttributePath']
           next unless attr_ref
+
           {
-            attribute: attr_ref.to_s.split("/").last,
-            caption: extract_text(sf["Label"] || sf["Caption"])
+            attribute: attr_ref.to_s.split('/').last,
+            caption: extract_text(sf['Label'] || sf['Caption'])
           }
         end
         fields.empty? ? nil : { fields: fields }
@@ -1139,61 +1142,63 @@ module Mxrb
 
       def parse_toolbar(tb)
         return nil unless tb.is_a?(Hash)
+
         type_map = {
-          "Pages$GridNewButton"              => :new,
-          "Forms$GridNewButton"              => :new,
-          "Pages$GridDeleteButton"           => :delete,
-          "Forms$GridDeleteButton"           => :delete,
-          "Pages$GridSearchButton"           => :search,
-          "Forms$GridSearchButton"           => :search,
-          "Pages$GridExportToExcelButton"    => :export,
-          "Forms$GridExportToExcelButton"    => :export
+          'Pages$GridNewButton' => :new,
+          'Forms$GridNewButton' => :new,
+          'Pages$GridDeleteButton' => :delete,
+          'Forms$GridDeleteButton' => :delete,
+          'Pages$GridSearchButton' => :search,
+          'Forms$GridSearchButton' => :search,
+          'Pages$GridExportToExcelButton' => :export,
+          'Forms$GridExportToExcelButton' => :export
         }
-        buttons = parse_array(tb["Buttons"]).filter_map do |btn|
-          t = type_map[btn["$Type"]]
+        buttons = parse_array(tb['Buttons']).filter_map do |btn|
+          t = type_map[btn['$Type']]
           next unless t
-          { type: t, caption: extract_text(btn["Caption"]) }
+
+          { type: t, caption: extract_text(btn['Caption']) }
         end
         buttons.empty? ? nil : { buttons: buttons }
       end
 
       def tab_control_widget(widget)
-        tabs = parse_array(widget["TabPages"]).map do |tab|
+        tabs = parse_array(widget['TabPages']).map do |tab|
           widgets = []
-          parse_widgets(parse_array(tab["Widgets"]), widgets)
+          parse_widgets(parse_array(tab['Widgets']), widgets)
           {
-            name: tab["Name"],
-            caption: extract_text(tab["Caption"]),
+            name: tab['Name'],
+            caption: extract_text(tab['Caption']),
             widgets: widgets
           }.compact
         end
         {
           type: :tab_control,
-          name: widget["Name"],
+          name: widget['Name'],
           options: { tabs: tabs },
           events: []
         }
       end
 
       def table_widget(widget)
-        columns = parse_array(widget["ColumnWidths"]).map do |column|
-          { width: column.fetch("Value", 0).to_i }
+        columns = parse_array(widget['ColumnWidths']).map do |column|
+          { width: column.fetch('Value', 0).to_i }
         end
-        cells_by_row = parse_array(widget["Cells"]).group_by do |cell|
-          cell.fetch("TopRowIndex", 0).to_i
+        cells_by_row = parse_array(widget['Cells']).group_by do |cell|
+          cell.fetch('TopRowIndex', 0).to_i
         end
-        rows = parse_array(widget["Rows"]).each_with_index.map do |row, row_index|
+        rows = parse_array(widget['Rows']).each_with_index.map do |row, row_index|
           sorted_cells = cells_by_row.fetch(row_index, []).sort_by do |cell|
-            cell.fetch("LeftColumnIndex", 0).to_i
+            cell.fetch('LeftColumnIndex', 0).to_i
           end
           cells = sorted_cells.map do |cell|
             widgets = []
-            parse_widgets(parse_array(cell["Widgets"]), widgets)
+            parse_widgets(parse_array(cell['Widgets']), widgets)
             {
-              column: cell.fetch("LeftColumnIndex", 0).to_i,
-              colspan: [cell.fetch("Width", 1).to_i, 1].max,
-              rowspan: [cell.fetch("Height", 1).to_i, 1].max,
-              header: cell["IsHeader"] == true,
+              column: cell.fetch('LeftColumnIndex', 0).to_i,
+              colspan: [cell.fetch('Width', 1).to_i, 1].max,
+              rowspan: [cell.fetch('Height', 1).to_i, 1].max,
+              header: cell['IsHeader'] == true,
               options: appearance_options(cell),
               widgets:
             }
@@ -1202,41 +1207,41 @@ module Mxrb
         end
         options = appearance_options(widget).merge(
           columns:, rows:,
-          width_unit: widget.fetch("WidthUnit", "Weight").to_s.downcase.to_sym,
-          tab_index: widget.fetch("TabIndex", 0).to_i
+          width_unit: widget.fetch('WidthUnit', 'Weight').to_s.downcase.to_sym,
+          tab_index: widget.fetch('TabIndex', 0).to_i
         )
-        { type: :table, name: widget["Name"] || "table", options:, events: [] }
+        { type: :table, name: widget['Name'] || 'table', options:, events: [] }
       end
 
       def layout_grid_widget(widget)
-        rows = parse_array(widget["Rows"]).map do |row|
-          columns = parse_array(row["Columns"]).map do |column|
+        rows = parse_array(widget['Rows']).map do |row|
+          columns = parse_array(row['Columns']).map do |column|
             children = []
-            parse_widgets(parse_array(column["Widgets"]), children)
+            parse_widgets(parse_array(column['Widgets']), children)
             {
               options: appearance_options(column).merge(
-                desktop: layout_grid_weight(column.fetch("Weight", -1)),
-                tablet: layout_grid_weight(column.fetch("TabletWeight", -1)),
-                phone: layout_grid_weight(column.fetch("PhoneWeight", -1)),
-                vertical_alignment: layout_grid_enum(column.fetch("VerticalAlignment", "None"))
+                desktop: layout_grid_weight(column.fetch('Weight', -1)),
+                tablet: layout_grid_weight(column.fetch('TabletWeight', -1)),
+                phone: layout_grid_weight(column.fetch('PhoneWeight', -1)),
+                vertical_alignment: layout_grid_enum(column.fetch('VerticalAlignment', 'None'))
               ),
               widgets: children
             }
           end
           {
             options: appearance_options(row).merge(
-              horizontal_alignment: layout_grid_enum(row.fetch("HorizontalAlignment", "None")),
-              vertical_alignment: layout_grid_enum(row.fetch("VerticalAlignment", "None")),
-              gutters: row.fetch("SpacingBetweenColumns", true) == true
+              horizontal_alignment: layout_grid_enum(row.fetch('HorizontalAlignment', 'None')),
+              vertical_alignment: layout_grid_enum(row.fetch('VerticalAlignment', 'None')),
+              gutters: row.fetch('SpacingBetweenColumns', true) == true
             ),
             columns:
           }
         end
         options = appearance_options(widget).merge(
-          width: widget.fetch("Width", "FullWidth").to_s == "FixedWidth" ? :fixed : :full,
-          tab_index: widget.fetch("TabIndex", 0).to_i, rows:
+          width: widget.fetch('Width', 'FullWidth').to_s == 'FixedWidth' ? :fixed : :full,
+          tab_index: widget.fetch('TabIndex', 0).to_i, rows:
         )
-        { type: :layout_grid, name: widget["Name"] || "layoutGrid", options:, events: [] }
+        { type: :layout_grid, name: widget['Name'] || 'layoutGrid', options:, events: [] }
       end
 
       def layout_grid_weight(value)
@@ -1248,13 +1253,13 @@ module Mxrb
       end
 
       def grid_entity(widget)
-        widget.dig("DataSource", "Entity") ||
-          widget.dig("DataSource", "EntityRef", "Entity")
+        widget.dig('DataSource', 'Entity') ||
+          widget.dig('DataSource', 'EntityRef', 'Entity')
       end
 
       def widget_roots(doc)
-        roots = parse_array(doc["Widgets"] || doc["widgets"])
-        roots.concat(form_call_widgets(doc["FormCall"]))
+        roots = parse_array(doc['Widgets'] || doc['widgets'])
+        roots.concat(form_call_widgets(doc['FormCall']))
         roots
       end
 
@@ -1262,16 +1267,16 @@ module Mxrb
         return unless roots.one?
 
         root = roots.first
-        return unless %w[Pages$DataView Forms$DataView].include?(root["$Type"])
+        return unless %w[Pages$DataView Forms$DataView].include?(root['$Type'])
 
-        source = parse_data_view_source(root["DataSource"])
+        source = parse_data_view_source(root['DataSource'])
         source unless source[:kind] == :native
       end
 
       def form_call_widgets(form_call)
         return [] unless form_call.is_a?(Hash)
 
-        parse_array(form_call["Arguments"]).flat_map do |argument|
+        parse_array(form_call['Arguments']).flat_map do |argument|
           child_widgets(argument)
         end
       end
@@ -1283,24 +1288,27 @@ module Mxrb
       end
 
       def layout_container?(widget)
-        child_widgets(widget).any? || widget.key?("Arguments")
+        child_widgets(widget).any? || widget.key?('Arguments')
       end
 
       def child_widgets(widget)
-        direct = parse_array(widget["Widgets"]) + parse_array(widget["FooterWidgets"])
-        tab_widgets = parse_array(widget["TabPages"]).flat_map { parse_array(_1["Widgets"]) }
-        row_columns = parse_array(widget["Rows"]).flat_map { parse_array(_1["Columns"]) }
-        column_widgets = row_columns.flat_map { parse_array(_1["Widgets"]) }
+        direct = parse_array(widget['Widgets']) + parse_array(widget['FooterWidgets'])
+        tab_widgets = parse_array(widget['TabPages']).flat_map { parse_array(_1['Widgets']) }
+        row_columns = parse_array(widget['Rows']).flat_map { parse_array(_1['Columns']) }
+        column_widgets = row_columns.flat_map { parse_array(_1['Widgets']) }
         direct + tab_widgets + column_widgets
       end
 
       def parse_source(source)
         return nil unless source.is_a?(Hash)
-        result = if %w[Pages$NanoflowSource Forms$NanoflowSource].include?(source["$Type"])
-          { kind: :nanoflow, name: source_name(source["Nanoflow"] || source.dig("NanoflowSettings", "Nanoflow")) }
-        else
-          { kind: :microflow, name: source_name(source["Microflow"] || source.dig("MicroflowSettings", "Microflow")) }
-        end
+
+        result = if %w[Pages$NanoflowSource Forms$NanoflowSource].include?(source['$Type'])
+                   { kind: :nanoflow,
+                     name: source_name(source['Nanoflow'] || source.dig('NanoflowSettings', 'Nanoflow')) }
+                 else
+                   { kind: :microflow,
+                     name: source_name(source['Microflow'] || source.dig('MicroflowSettings', 'Microflow')) }
+                 end
         result[:name].to_s.empty? ? nil : result
       end
 
@@ -1357,7 +1365,7 @@ module Mxrb
         if action['Address']
           address = action['Address']
           options[:link] = { type: action.fetch('LinkType', 'Web'), value: address['Value'],
-                            attribute: address['IsDynamic'] ? address.dig('AttributeRef', 'Attribute') : nil }.compact
+                             attribute: address['IsDynamic'] ? address.dig('AttributeRef', 'Attribute') : nil }.compact
         end
         event[:settings] = options unless options.empty?
         event
@@ -1365,47 +1373,50 @@ module Mxrb
 
       def parse_action_base(action)
         return nil unless action.is_a?(Hash)
-        if %w[Pages$CallNanoflowClientAction Forms$CallNanoflowClientAction].include?(action["$Type"])
-          settings = action["NanoflowSettings"] || action
-          handler = local_name(action["Nanoflow"] || settings["Nanoflow"])
+
+        if %w[Pages$CallNanoflowClientAction Forms$CallNanoflowClientAction].include?(action['$Type'])
+          settings = action['NanoflowSettings'] || action
+          handler = local_name(action['Nanoflow'] || settings['Nanoflow'])
           return nil if handler.to_s.empty?
 
-          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
+          arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
+            [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
           end
           { kind: :nanoflow, handler: handler, arguments: arguments }
-        elsif %w[Pages$MicroflowClientAction Forms$MicroflowAction Forms$MicroflowClientAction].include?(action["$Type"])
-          settings = action["MicroflowSettings"] || action
-          handler = local_name(action["Microflow"] || settings["Microflow"])
+        elsif %w[Pages$MicroflowClientAction Forms$MicroflowAction
+                 Forms$MicroflowClientAction].include?(action['$Type'])
+          settings = action['MicroflowSettings'] || action
+          handler = local_name(action['Microflow'] || settings['Microflow'])
           return nil if handler.to_s.empty?
 
-          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
+          arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
+            [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
           end
           { kind: :microflow, handler: handler, arguments: arguments }
-        elsif %w[Pages$FormAction Forms$FormAction Pages$PageClientAction Forms$PageClientAction].include?(action["$Type"])
-          settings = action["FormSettings"] || action["PageSettings"] || action
-          handler = (settings["Form"] || settings["Page"]).to_s
+        elsif %w[Pages$FormAction Forms$FormAction Pages$PageClientAction
+                 Forms$PageClientAction].include?(action['$Type'])
+          settings = action['FormSettings'] || action['PageSettings'] || action
+          handler = (settings['Form'] || settings['Page']).to_s
           return nil if handler.empty?
 
-          arguments = parse_array(settings["ParameterMappings"]).to_h do |mapping|
-            [local_name(mapping["Parameter"]), parse_action_mapping_value(mapping)]
+          arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
+            [local_name(mapping['Parameter']), parse_action_mapping_value(mapping)]
           end
           { kind: :page, handler: handler, arguments: arguments }
-        elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "save_changes" }.tap do |event|
-            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+        elsif %w[Pages$SaveChangesClientAction Forms$SaveChangesClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'save_changes' }.tap do |event|
+            event[:close_page] = action['ClosePage'] if action.key?('ClosePage')
           end
-        elsif %w[Pages$CancelChangesClientAction Forms$CancelChangesClientAction].include?(action["$Type"])
-          { kind: :action, handler: "cancel_changes" }.tap do |event|
-            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+        elsif %w[Pages$CancelChangesClientAction Forms$CancelChangesClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'cancel_changes' }.tap do |event|
+            event[:close_page] = action['ClosePage'] if action.key?('ClosePage')
           end
-        elsif %w[Pages$DeleteClientAction Forms$DeleteClientAction].include?(action["$Type"])
-          { kind: :action, handler: "delete" }.tap do |event|
-            event[:close_page] = action["ClosePage"] if action.key?("ClosePage")
+        elsif %w[Pages$DeleteClientAction Forms$DeleteClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'delete' }.tap do |event|
+            event[:close_page] = action['ClosePage'] if action.key?('ClosePage')
           end
-        elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action["$Type"])
-          { kind: :action, handler: "close_page" }
+        elsif %w[Pages$ClosePageClientAction Forms$ClosePageClientAction].include?(action['$Type'])
+          { kind: :action, handler: 'close_page' }
         elsif %w[Pages$CreateObjectClientAction Forms$CreateObjectClientAction].include?(action['$Type'])
           settings = action['FormSettings'] || action['PageSettings'] || {}
           arguments = parse_array(settings['ParameterMappings']).to_h do |mapping|
@@ -1420,14 +1431,14 @@ module Mxrb
       end
 
       def parse_action_mapping_value(mapping)
-        expression = (mapping["Expression"] || mapping["Argument"]).to_s
+        expression = (mapping['Expression'] || mapping['Argument']).to_s
         return expression unless expression.empty?
 
-        parse_page_variable(mapping["Variable"]) || ""
+        parse_page_variable(mapping['Variable']) || ''
       end
 
       def local_name(name)
-        name.to_s.split(".").last
+        name.to_s.split('.').last
       end
     end
   end

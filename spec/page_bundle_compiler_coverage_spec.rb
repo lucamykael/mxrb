@@ -70,9 +70,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
     expect(@compiler.send(:render_widget, '$Type' => 'Forms$SidebarToggleButton', 'Name' => 'toggle'))
       .to include('$SidebarToggle')
     expect(@compiler.send(:render_widget, {
-      '$Type' => 'Forms$Header', 'Name' => 'header',
-      'LeftWidgets' => [2, text('left')], 'RightWidgets' => [2, text('right')]
-    })).to include('$Header', 'leftWidgets', 'rightWidgets')
+                            '$Type' => 'Forms$Header', 'Name' => 'header',
+                            'LeftWidgets' => [2, text('left')], 'RightWidgets' => [2, text('right')]
+                          })).to include('$Header', 'leftWidgets', 'rightWidgets')
 
     allow(@compiler).to receive(:menu_items).and_return([])
     %w[NavigationTree MenuBar SimpleMenuBar].each do |kind|
@@ -95,11 +95,13 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
       'Items' => [2, { 'Caption' => { 'Items' => [2, { 'Text' => 'Child' }] } }]
     }
     menu = Struct.new(:module_name, :document).new('Demo', {
-      'Name' => 'Main', 'ItemCollection' => { 'Items' => [2, item] }
-    })
+                                                     'Name' => 'Main', 'ItemCollection' => { 'Items' => [2, item] }
+                                                   })
     navigation = Struct.new(:document).new({
-      'Profiles' => [2, { 'Name' => 'Responsive', 'Menu' => { 'Items' => [2, item] } }]
-    })
+                                             'Profiles' => [2,
+                                                            { 'Name' => 'Responsive',
+                                                              'Menu' => { 'Items' => [2, item] } }]
+                                           })
     allow(@source).to receive(:units_of).and_call_original
     allow(@source).to receive(:units_of).with('Menus$MenuDocument').and_return([menu])
     allow(@source).to receive(:units_of).with('Navigation$NavigationDocument').and_return([navigation])
@@ -109,9 +111,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
     expect(@compiler.send(:menu_items, '$Type' => 'Forms$NavigationSource',
                                        'NavigationProfile' => 'Responsive')).to eq([item])
     expect(@compiler.send(:render_menu, {
-      '$Type' => 'Forms$MenuBar', 'Name' => 'resolvedMenu',
-      'MenuSource' => { '$Type' => 'Forms$MenuDocumentSource', 'Menu' => 'Demo.Main' }
-    }, 'MenuBar')).to include('$MenuBar', 'Parent')
+                            '$Type' => 'Forms$MenuBar', 'Name' => 'resolvedMenu',
+                            'MenuSource' => { '$Type' => 'Forms$MenuDocumentSource', 'Menu' => 'Demo.Main' }
+                          }, 'MenuBar')).to include('$MenuBar', 'Parent')
     compiled = @compiler.send(:compile_menu_item, item, { 'Name' => 'menu' }, [0])
     expect(compiled).to include(:action, :icon, :items)
     expect(@compiler.send(:menu_action_config, {})).to be_nil
@@ -230,8 +232,8 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
     expect(@compiler.send(:data_view_entity, 'DataSource' => listen_source.merge('ListenTarget' => 'missing')))
       .to eq('')
     expect(@compiler.send(:data_view_entity, 'DataSource' => {
-      'EntityRef' => { 'Entity' => 'Demo.Direct' }
-    })).to eq('Demo.Direct')
+                            'EntityRef' => { 'Entity' => 'Demo.Direct' }
+                          })).to eq('Demo.Direct')
   end
 
   it 'renders valid text areas, popup exports, and listen-object imports' do
@@ -308,13 +310,13 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'complete branch coverage' do
   it 'resolves missing and concrete domain attribute types' do
     mismatch = Struct.new(:module_name, :document).new('Other', {})
     domain = Struct.new(:module_name, :document).new('Demo', {
-      'Entities' => [2, {
-        'Name' => 'Item', 'Attributes' => [2,
-                                           { 'Name' => 'Untyped' },
-                                           { 'Name' => 'Title',
-                                             'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }]
-      }]
-    })
+                                                       'Entities' => [2, {
+                                                         'Name' => 'Item', 'Attributes' => [2,
+                                                                                            { 'Name' => 'Untyped' },
+                                                                                            { 'Name' => 'Title',
+                                                                                              'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }]
+                                                       }]
+                                                     })
     allow(@source).to receive(:units_of).with('DomainModels$DomainModel').and_return([mismatch, domain])
     expect(@compiler.send(:attribute_type, 'Other.Item', 'Missing')).to eq('String')
     expect(@compiler.send(:attribute_type, 'Demo.Item', 'Missing')).to eq('String')

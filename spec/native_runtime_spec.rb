@@ -297,11 +297,11 @@ RSpec.describe Mxrb::Runtime::Native do
     end.to raise_error(Mxrb::NativeRuntimeError, /unsupported retrieve source/)
     expect do
       @interpreter.send(:action_retrieve, {
-        'RetrieveSource' => {
-          '$Type' => 'Microflows$DatabaseRetrieveSource',
-          'NewSortings' => { 'Sortings' => [{ 'SortOrder' => 'Ascending' }] }
-        }
-      }, {})
+                          'RetrieveSource' => {
+                            '$Type' => 'Microflows$DatabaseRetrieveSource',
+                            'NewSortings' => { 'Sortings' => [{ 'SortOrder' => 'Ascending' }] }
+                          }
+                        }, {})
     end.to raise_error(Mxrb::NativeRuntimeError, /sorting/)
   end
 
@@ -313,18 +313,18 @@ RSpec.describe Mxrb::Runtime::Native do
       'Parameters' => [2, { 'Expression' => "'Ruby'" }]
     }
     @interpreter.send(:action_show_message, {
-      'Template' => text, 'Type' => 'Information', 'Blocking' => true
-    }, variables)
+                        'Template' => text, 'Type' => 'Information', 'Blocking' => true
+                      }, variables)
     @interpreter.send(:action_validation_feedback, {
-      'ValidationVariableName' => 'animal', 'Attribute' => 'Clinic.Animal.Name',
-      'FeedbackTemplate' => text
-    }, variables)
+                        'ValidationVariableName' => 'animal', 'Attribute' => 'Clinic.Animal.Name',
+                        'FeedbackTemplate' => text
+                      }, variables)
     @interpreter.send(:action_java_script_action_call, {
-      'JavaScriptAction' => 'Client.Copy', 'OutputVariableName' => 'client'
-    }, variables)
+                        'JavaScriptAction' => 'Client.Copy', 'OutputVariableName' => 'client'
+                      }, variables)
     @interpreter.send(:action_nanoflow_call, {
-      'NanoflowCall' => { 'Nanoflow' => 'Clinic.ClientFlow' }, 'OutputVariableName' => 'nano'
-    }, variables)
+                        'NanoflowCall' => { 'Nanoflow' => 'Clinic.ClientFlow' }, 'OutputVariableName' => 'nano'
+                      }, variables)
 
     expect(@interpreter.effects).to include(
       include(type: 'show_message', message: 'Hello Ruby', blocking: true),
@@ -360,21 +360,21 @@ RSpec.describe Mxrb::Runtime::Native do
     )
     rest_variables = {}
     interpreter.send(:action_rest_call, {
-      'HttpConfiguration' => {
-        'HttpMethod' => 'Get',
-        'CustomLocationTemplate' => { 'Text' => 'https://example.test/animals' },
-        'HttpHeaderEntries' => [2, { 'Key' => 'Accept', 'Value' => 'application/json' }]
-      },
-      'RequestHandling' => {},
-      'ResultHandling' => {
-        'Bind' => true, 'ResultVariableName' => 'remote',
-        'VariableType' => { 'Entity' => 'Clinic.Animal' }
-      }
-    }, rest_variables)
+                       'HttpConfiguration' => {
+                         'HttpMethod' => 'Get',
+                         'CustomLocationTemplate' => { 'Text' => 'https://example.test/animals' },
+                         'HttpHeaderEntries' => [2, { 'Key' => 'Accept', 'Value' => 'application/json' }]
+                       },
+                       'RequestHandling' => {},
+                       'ResultHandling' => {
+                         'Bind' => true, 'ResultVariableName' => 'remote',
+                         'VariableType' => { 'Entity' => 'Clinic.Animal' }
+                       }
+                     }, rest_variables)
     expect(rest_variables.fetch('remote').members).to include('Name' => 'Remote')
     interpreter.send(:action_app_service_call, {
-      'AppServiceAction' => 'Remote.Service', 'ResultVariableName' => 'service'
-    }, rest_variables)
+                       'AppServiceAction' => 'Remote.Service', 'ResultVariableName' => 'service'
+                     }, rest_variables)
     expect(rest_variables['service']).to eq('service-result')
     {
       action_call_web_service: ['WebServiceCall', 'Soap.Operation', 'soap', 'soap-result'],
@@ -387,8 +387,8 @@ RSpec.describe Mxrb::Runtime::Native do
       expect(rest_variables[result_name]).to eq(expected)
     end
     interpreter.send(:action_download_file, {
-      'FileDocumentVariableName' => 'remote', 'ShowFileInBrowser' => true
-    }, rest_variables)
+                       'FileDocumentVariableName' => 'remote', 'ShowFileInBrowser' => true
+                     }, rest_variables)
     interpreter.send(:action_show_home_page, {}, rest_variables)
     interpreter.send(:action_empty, {}, rest_variables)
     expect(interpreter.effects).to include(
@@ -603,9 +603,9 @@ RSpec.describe Mxrb::Runtime::Native do
     object.members['Name'] = 'dirty'
     @interpreter.send(:action_rollback, { 'RollbackVariableName' => 'animal' }, variables)
     @interpreter.send(:action_list_operations, {
-      'NewOperation' => { '$Type' => 'Microflows$Head', 'ListName' => 'items' },
-      'ResultVariableName' => 'head'
-    }, variables)
+                        'NewOperation' => { '$Type' => 'Microflows$Head', 'ListName' => 'items' },
+                        'ResultVariableName' => 'head'
+                      }, variables)
     expect(variables['head']).to eq(1)
     expect(@interpreter.send(:list_operation, 'Microflows$Find', [object], nil, 'true', variables)).to eq(object)
     expect(@interpreter.send(:list_operation, 'Microflows$Filter', [object], nil, 'true', variables)).to eq([object])
@@ -619,10 +619,10 @@ RSpec.describe Mxrb::Runtime::Native do
     )
     expect do
       rest.send(:action_rest_call, {
-        'HttpConfiguration' => {
-          'HttpMethod' => 'Get', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
-        }
-      }, {})
+                  'HttpConfiguration' => {
+                    'HttpMethod' => 'Get', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
+                  }
+                }, {})
     end.to raise_error(Mxrb::NativeRuntimeError, /HTTP 500/)
     expect do
       @interpreter.send(:invoke_adapter, :missing, 'x', {}, {}, result_name: '')
@@ -688,11 +688,11 @@ RSpec.describe Mxrb::Runtime::Native do
     )
     expect do
       invalid_json.send(:action_rest_call, {
-        'HttpConfiguration' => {
-          'HttpMethod' => 'Get', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
-        },
-        'ResultHandling' => { 'Bind' => true, 'ResultVariableName' => 'result' }
-      }, {})
+                          'HttpConfiguration' => {
+                            'HttpMethod' => 'Get', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
+                          },
+                          'ResultHandling' => { 'Bind' => true, 'ResultVariableName' => 'result' }
+                        }, {})
     end.to raise_error(Mxrb::NativeRuntimeError, /REST call failed/)
   end
 
@@ -725,16 +725,16 @@ RSpec.describe Mxrb::Runtime::Native do
       end
     )
     interpreter.send(:action_rest_call, {
-      'HttpConfiguration' => {
-        'HttpMethod' => 'Get',
-        'CustomLocationTemplate' => { 'Text' => 'https://example.test/private' },
-        'HttpHeaderEntries' => [],
-        'UseHttpAuthentication' => true,
-        'HttpAuthenticationUserName' => "'api-user'",
-        'HttpAuthenticationPassword' => '$Secret'
-      },
-      'RequestHandling' => {}, 'ResultHandling' => {}, 'ResultHandlingType' => 'String'
-    }, 'Secret' => 's3cret')
+                       'HttpConfiguration' => {
+                         'HttpMethod' => 'Get',
+                         'CustomLocationTemplate' => { 'Text' => 'https://example.test/private' },
+                         'HttpHeaderEntries' => [],
+                         'UseHttpAuthentication' => true,
+                         'HttpAuthenticationUserName' => "'api-user'",
+                         'HttpAuthenticationPassword' => '$Secret'
+                       },
+                       'RequestHandling' => {}, 'ResultHandling' => {}, 'ResultHandlingType' => 'String'
+                     }, 'Secret' => 's3cret')
 
     expect(request_arguments.fetch(2)).to include(
       'Authorization' => "Basic #{Base64.strict_encode64('api-user:s3cret')}"
@@ -930,9 +930,9 @@ RSpec.describe Mxrb::Runtime::Native do
 
     animal = @interpreter.store.create('Clinic.Animal')
     @interpreter.send(:action_validation_feedback, {
-      'ValidationVariableName' => 'animal', 'Association' => 'Clinic.Animal_Owner',
-      'FeedbackTemplate' => { 'Text' => 'Owner is required' }
-    }, 'animal' => animal)
+                        'ValidationVariableName' => 'animal', 'Association' => 'Clinic.Animal_Owner',
+                        'FeedbackTemplate' => { 'Text' => 'Owner is required' }
+                      }, 'animal' => animal)
     expect(@interpreter.effects.last).to include(member: 'Animal_Owner')
 
     response = Struct.new(:code, :body).new('200', '{"ok":true}')
@@ -945,17 +945,17 @@ RSpec.describe Mxrb::Runtime::Native do
     )
     variables = { 'payload' => { value: 1 } }
     rest.send(:action_rest_call, {
-      'HttpConfiguration' => {
-        'HttpMethod' => 'Post', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
-      },
-      'RequestHandling' => { 'MappingVariableName' => 'payload' },
-      'UseRequestTimeOut' => true, 'TimeOutExpression' => '2',
-      'ResultHandling' => { 'Bind' => false }
-    }, variables)
+                'HttpConfiguration' => {
+                  'HttpMethod' => 'Post', 'CustomLocationTemplate' => { 'Text' => 'https://example.test' }
+                },
+                'RequestHandling' => { 'MappingVariableName' => 'payload' },
+                'UseRequestTimeOut' => true, 'TimeOutExpression' => '2',
+                'ResultHandling' => { 'Bind' => false }
+              }, variables)
     expect(calls.last).to include('Post', 'https://example.test', {}, '{"value":1}', 2)
     rest.send(:bind_rest_result, {
-      'Bind' => true, 'ResultVariableName' => 'raw'
-    }, '{"ok":true}', variables)
+                'Bind' => true, 'ResultVariableName' => 'raw'
+              }, '{"ok":true}', variables)
     expect(variables['raw']).to eq('ok' => true)
 
     adapted = described_class::Interpreter.new(

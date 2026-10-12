@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-require "base64"
-require_relative "../native_fragment_store"
-require_relative "integration_documents"
-require_relative "code_actions"
-require_relative "workflows"
-require_relative "presentation_documents"
-require_relative "asset_documents"
-require_relative "artifact_documents"
-require_relative "project_documents"
-require_relative "flow_page_builder"
-require_relative "flow_text_builder"
-require_relative "flow_rest_builder"
-require_relative "widget_event_arguments"
+require 'digest'
+require 'json'
+require 'base64'
+require_relative '../native_fragment_store'
+require_relative 'integration_documents'
+require_relative 'code_actions'
+require_relative 'workflows'
+require_relative 'presentation_documents'
+require_relative 'asset_documents'
+require_relative 'artifact_documents'
+require_relative 'project_documents'
+require_relative 'flow_page_builder'
+require_relative 'flow_text_builder'
+require_relative 'flow_rest_builder'
+require_relative 'widget_event_arguments'
 require_relative '../forms/input_presentation'
 
 module Mxrb
@@ -75,7 +75,7 @@ module Mxrb
           missing_roles.empty?
         entity = user.fetch(:entity)
         errors << "demo user #{user[:name]} references missing user entity #{entity}" unless
-          entity == "System.User" || entities.include?(entity)
+          entity == 'System.User' || entities.include?(entity)
         errors
       end
 
@@ -505,7 +505,7 @@ module Mxrb
       end
 
       def native_widget(name, type:, deep_structure:)
-        raise ArgumentError, "deep_structure requires a Hash" unless deep_structure.is_a?(Hash)
+        raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
 
         _widget_list << {
           type: :native_widget, name: name.to_s,
@@ -597,6 +597,7 @@ module Mxrb
         define_method(event) do |microflow: nil, nanoflow: nil, page: nil, action: nil, pass: UNSET,
                                  close_page: UNSET, settings: UNSET, &block|
           raise ArgumentError, "#{event} accepts either pass: or an argument block" if block && !pass.equal?(UNSET)
+
           choices = { microflow:, nanoflow:, page:, action: }.compact
           raise ArgumentError, "#{event} requires exactly one handler" unless choices.one?
 
@@ -885,7 +886,7 @@ module Mxrb
         dynamic_class = default_value(dynamic_class, nil)
         visible = default_value(visible, nil)
         width_unit = width_unit.to_sym
-        raise ArgumentError, "table width_unit must be weight, percentage, or pixels" unless
+        raise ArgumentError, 'table width_unit must be weight, percentage, or pixels' unless
           WIDTH_UNITS.include?(width_unit)
 
         @name = name.to_s
@@ -921,7 +922,7 @@ module Mxrb
       private
 
       def validate_layout!
-        raise ArgumentError, "table requires at least one column" if @columns.empty?
+        raise ArgumentError, 'table requires at least one column' if @columns.empty?
 
         occupied = {}
         @rows.each_with_index do |row, row_index|
@@ -944,15 +945,15 @@ module Mxrb
       def validate_cell_bounds!(cell, row, column)
         right = column + cell.fetch(:colspan)
         bottom = row + cell.fetch(:rowspan)
-        raise ArgumentError, "table cell exceeds column count" if right > @columns.size
-        raise ArgumentError, "table cell rowspan exceeds row count" if bottom > @rows.size
+        raise ArgumentError, 'table cell exceeds column count' if right > @columns.size
+        raise ArgumentError, 'table cell rowspan exceeds row count' if bottom > @rows.size
       end
 
       def occupy_cell!(occupied, cell, row, column)
         coordinates = (row...(row + cell.fetch(:rowspan))).to_a.product(
           (column...(column + cell.fetch(:colspan))).to_a
         )
-        raise ArgumentError, "table cells cannot overlap" if coordinates.any? { occupied[_1] }
+        raise ArgumentError, 'table cells cannot overlap' if coordinates.any? { occupied[_1] }
 
         coordinates.each { occupied[_1] = true }
       end
@@ -966,7 +967,7 @@ module Mxrb
 
       def normalize_grid_width(value)
         width = value.to_s.downcase.delete_suffix('_width').to_sym
-        raise ArgumentError, "layout grid width must be :full or :fixed" unless GRID_WIDTHS.include?(width)
+        raise ArgumentError, 'layout grid width must be :full or :fixed' unless GRID_WIDTHS.include?(width)
 
         width
       end
@@ -989,9 +990,9 @@ module Mxrb
         return :auto if weight == -2
         return weight if (1..12).cover?(weight)
 
-        raise ArgumentError, "layout grid weight must be 1..12, :grow, or :auto"
+        raise ArgumentError, 'layout grid weight must be 1..12, :grow, or :auto'
       rescue ArgumentError, TypeError
-        raise ArgumentError, "layout grid weight must be 1..12, :grow, or :auto"
+        raise ArgumentError, 'layout grid weight must be 1..12, :grow, or :auto'
       end
     end
 
@@ -1247,7 +1248,7 @@ module Mxrb
 
       def to_h
         value = @width.to_i
-        raise ArgumentError, "table column width must be positive" unless value.positive?
+        raise ArgumentError, 'table column width must be positive' unless value.positive?
 
         { width: value }
       end
@@ -1302,9 +1303,9 @@ module Mxrb
       private
 
       def validate_dimensions!
-        raise ArgumentError, "table cell column cannot be negative" if @column&.negative?
-        raise ArgumentError, "table cell colspan must be positive" unless @colspan.positive?
-        raise ArgumentError, "table cell rowspan must be positive" unless @rowspan.positive?
+        raise ArgumentError, 'table cell column cannot be negative' if @column&.negative?
+        raise ArgumentError, 'table cell colspan must be positive' unless @colspan.positive?
+        raise ArgumentError, 'table cell rowspan must be positive' unless @rowspan.positive?
       end
 
       def _widget_list = @widgets
@@ -1329,19 +1330,19 @@ module Mxrb
         @buttons = []
       end
 
-      def new_button(caption: "New")
+      def new_button(caption: 'New')
         @buttons << { type: :new, caption: caption }
       end
 
-      def delete_button(caption: "Delete")
+      def delete_button(caption: 'Delete')
         @buttons << { type: :delete, caption: caption }
       end
 
-      def search_button(caption: "Search")
+      def search_button(caption: 'Search')
         @buttons << { type: :search, caption: caption }
       end
 
-      def export_button(caption: "Export")
+      def export_button(caption: 'Export')
         @buttons << { type: :export, caption: caption }
       end
 
@@ -1436,7 +1437,7 @@ module Mxrb
 
       def initialize(path)
         @path              = path
-        @mendix_version    = "10.18.0"
+        @mendix_version    = '10.18.0'
         @modules           = []
         @security          = nil
         @navigation        = nil
@@ -1507,7 +1508,7 @@ module Mxrb
       end
 
       def native_unit(unit_id, container_id:, containment:, deep_structure:, module_name: nil)
-        raise ArgumentError, "deep_structure requires a Hash" unless deep_structure.is_a?(Hash)
+        raise ArgumentError, 'deep_structure requires a Hash' unless deep_structure.is_a?(Hash)
 
         @native_unit_overrides << {
           unit_id: unit_id.to_s,
@@ -1837,7 +1838,7 @@ module Mxrb
         return {} if value.nil?
         return value.to_h.transform_keys(&:to_s).transform_values(&:to_s) if value.respond_to?(:to_h)
 
-        { "en_US" => value.to_s }
+        { 'en_US' => value.to_s }
       end
     end
 
@@ -1867,7 +1868,7 @@ module Mxrb
       private
 
       def normalize_caption(caption)
-        return { "en_US" => caption.to_s } unless caption.respond_to?(:to_h)
+        return { 'en_US' => caption.to_s } unless caption.respond_to?(:to_h)
 
         caption.to_h.transform_keys(&:to_s).transform_values(&:to_s)
       end
@@ -2017,9 +2018,9 @@ module Mxrb
       include PresentationValues
 
       CONSTANT_TYPES = {
-        string: "DataTypes$StringType", integer: "DataTypes$IntegerType",
-        boolean: "DataTypes$BooleanType", decimal: "DataTypes$DecimalType",
-        datetime: "DataTypes$DateTimeType"
+        string: 'DataTypes$StringType', integer: 'DataTypes$IntegerType',
+        boolean: 'DataTypes$BooleanType', decimal: 'DataTypes$DecimalType',
+        datetime: 'DataTypes$DateTimeType'
       }.freeze
 
       attr_reader :name
@@ -2053,8 +2054,8 @@ module Mxrb
 
     class ScheduledEventBuilder
       INTERVAL_UNITS = {
-        milliseconds: "Millisecond", seconds: "Second", minutes: "Minute",
-        hours: "Hour", days: "Day", weeks: "Week", months: "Month", years: "Year"
+        milliseconds: 'Millisecond', seconds: 'Second', minutes: 'Minute',
+        hours: 'Hour', days: 'Day', weeks: 'Week', months: 'Month', years: 'Year'
       }.freeze
 
       attr_reader :name
@@ -2191,7 +2192,7 @@ module Mxrb
         @menus << mb.to_h
       end
 
-      def module_role(name, id: nil, description: "")
+      def module_role(name, id: nil, description: '')
         @module_roles << { name: name.to_s, id: id.to_s, description: description.to_s }
       end
 
@@ -2226,7 +2227,7 @@ module Mxrb
         microflow(name, kind: :query, public: public, unit_id:, &block)
       end
 
-      def repository(name, implementation: nil, public: false, documentation: "")
+      def repository(name, implementation: nil, public: false, documentation: '')
         @repositories << {
           name: name.to_s, implementation: implementation&.to_s,
           public: public, documentation: documentation.to_s
@@ -2483,13 +2484,13 @@ module Mxrb
       def export_level(value) = (@export_level = value.to_s)
 
       def deep_structure(value)
-        raise ArgumentError, "deep_structure requires a Hash" unless value.is_a?(Hash)
+        raise ArgumentError, 'deep_structure requires a Hash' unless value.is_a?(Hash)
 
         @deep_structure = value
       end
 
       def form_structure(value)
-        raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
+        raise ArgumentError, 'form_structure requires a Hash' unless value.is_a?(Hash)
 
         @deep_structure = presentation_value_document(value)
       end
@@ -2510,7 +2511,7 @@ module Mxrb
         @items << child.to_h
       end
 
-      def items = @items
+      attr_reader :items
 
       def to_h
         {
@@ -2537,7 +2538,7 @@ module Mxrb
         @name         = name.to_s
         @attributes   = []
         @persistable  = true
-        @doc          = ""
+        @doc          = ''
         @associations = []
         @lifecycle    = nil
         @access_rules = nil
@@ -2605,9 +2606,10 @@ module Mxrb
         type = type.to_sym
         owner = owner.to_sym
         unless ASSOCIATION_TYPES.include?(type)
-          raise ArgumentError, "association type must be Reference or ReferenceSet"
+          raise ArgumentError, 'association type must be Reference or ReferenceSet'
         end
-        raise ArgumentError, "association owner must be Default or Both" unless ASSOCIATION_OWNERS.include?(owner)
+        raise ArgumentError, 'association owner must be Default or Both' unless ASSOCIATION_OWNERS.include?(owner)
+
         storage_format = normalize_association_storage_format(storage_format)
 
         @associations << {
@@ -2641,7 +2643,7 @@ module Mxrb
 
       # access_rule "Module.Role", create: true, delete: false, read: :all, write: [:Name]
       def access_rule(*roles, id: nil, documentation: '', create: false, delete: false,
-                      read: :none, write: :none, xpath: "", xpath_caption: nil,
+                      read: :none, write: :none, xpath: '', xpath_caption: nil,
                       default_rights: nil, members: nil)
         @access_rules ||= []
         @access_rules << {
@@ -2690,7 +2692,7 @@ module Mxrb
         format = value.to_sym
         return format if ASSOCIATION_STORAGE_FORMATS.include?(format)
 
-        raise ArgumentError, "association storage format must be Column or Table"
+        raise ArgumentError, 'association storage format must be Column or Table'
       end
 
       def normalize_access(value)
@@ -2757,7 +2759,7 @@ module Mxrb
 
       def write_mode(mode)
         normalized = mode.to_sym
-        raise ArgumentError, "page write_mode must be :replace or :overlay" unless
+        raise ArgumentError, 'page write_mode must be :replace or :overlay' unless
           WRITE_MODES.include?(normalized)
 
         @write_mode = normalized
@@ -2766,18 +2768,18 @@ module Mxrb
       # Full, editable Mendix page payload for structures without a concise
       # typed DSL yet (layout grids, custom widgets, list views, etc.).
       def deep_structure(value)
-        raise ArgumentError, "deep_structure requires a Hash" unless value.is_a?(Hash)
+        raise ArgumentError, 'deep_structure requires a Hash' unless value.is_a?(Hash)
 
         @deep_structure = value
       end
 
       def form_structure(value = nil, mode: :replace, **keyword_value)
         unless keyword_value.empty?
-          raise ArgumentError, "form_structure accepts one structure" unless value.nil?
+          raise ArgumentError, 'form_structure accepts one structure' unless value.nil?
 
           value = keyword_value
         end
-        raise ArgumentError, "form_structure requires a Hash" unless value.is_a?(Hash)
+        raise ArgumentError, 'form_structure requires a Hash' unless value.is_a?(Hash)
 
         write_mode(mode)
         @deep_structure = presentation_value_document(value)
@@ -2826,7 +2828,8 @@ module Mxrb
 
       def data_source(query: nil, microflow: nil, nanoflow: nil)
         choices = { microflow: microflow || query, nanoflow: nanoflow }.compact
-        raise ArgumentError, "data_source requires exactly one target" unless choices.size == 1
+        raise ArgumentError, 'data_source requires exactly one target' unless choices.size == 1
+
         @data_source = { kind: choices.keys.first, name: choices.values.first.to_s }
       end
 
@@ -3012,6 +3015,7 @@ module Mxrb
           unless translations.equal?(UNSET) && parameters.equal?(UNSET)
             raise ArgumentError, 'show_message accepts either translations:/parameters: or a block'
           end
+
           builder = FlowTextBuilder.new.evaluate(&block)
           translations = builder.translations
           parameters = builder.parameters
@@ -3142,6 +3146,7 @@ module Mxrb
           unless translations.equal?(UNSET) && parameters.equal?(UNSET)
             raise ArgumentError, 'validation_feedback accepts either translations:/parameters: or a block'
           end
+
           builder = FlowTextBuilder.new.evaluate(&block)
           translations = builder.translations
           parameters = builder.parameters
@@ -3172,11 +3177,12 @@ module Mxrb
         unless REST_RESULT_HANDLING_TYPES.include?(handling)
           raise ArgumentError, "unsupported REST result handling #{result_handling.inspect}"
         end
-        raise ArgumentError, "string REST result handling requires as" if
+        raise ArgumentError, 'string REST result handling requires as' if
           handling == :string && as.to_s.empty?
         if handling == :string && (!result_entity.to_s.empty? || !result_mapping.to_s.empty?)
-          raise ArgumentError, "string REST result handling does not accept a result mapping or entity"
+          raise ArgumentError, 'string REST result handling does not accept a result mapping or entity'
         end
+
         mapping_set = !request_mapping.to_s.empty?
         variable_set = !request_variable.to_s.empty?
         if mapping_set != variable_set
@@ -3188,6 +3194,7 @@ module Mxrb
         if username.to_s.empty? != password.to_s.empty?
           raise ArgumentError, 'REST basic authentication requires both username and password'
         end
+
         request_proxy_type, proxy_configuration = _rest_proxy(proxy)
 
         if block
@@ -3228,7 +3235,7 @@ module Mxrb
         if block
           if Array(parameters).any? || Array(connection_parameters).any?
             raise ArgumentError,
-                  "database query mappings must use either keyword hashes or a block"
+                  'database query mappings must use either keyword hashes or a block'
           end
 
           mappings = DatabaseQueryArgumentsBuilder.new
@@ -3274,7 +3281,7 @@ module Mxrb
           raise ArgumentError, "unsupported export mapping content type #{content_type.inspect}"
         end
         if variable.to_s.empty? || mapping.to_s.empty? || as.to_s.empty?
-          raise ArgumentError, "export_xml requires variable, mapping, and as"
+          raise ArgumentError, 'export_xml requires variable, mapping, and as'
         end
 
         _acts << {
@@ -3297,7 +3304,7 @@ module Mxrb
       end
 
       def end_flow
-        _acts << { type: :return_event, expression: "" }
+        _acts << { type: :return_event, expression: '' }
       end
 
       def error_event
@@ -3309,7 +3316,7 @@ module Mxrb
       end
 
       def break_loop
-        raise ArgumentError, "break_loop is only valid inside a loop" unless _break_allowed?
+        raise ArgumentError, 'break_loop is only valid inside a loop' unless _break_allowed?
 
         _acts << { type: :break_event }
       end
@@ -3374,7 +3381,7 @@ module Mxrb
       def _validate_call_argument_notation!(pass, block)
         return unless block && pass && !pass.empty?
 
-        raise ArgumentError, "call arguments must use either pass: or a block"
+        raise ArgumentError, 'call arguments must use either pass: or a block'
       end
 
       def _block_call_argument_mappings(code_action, &block)
@@ -3401,6 +3408,7 @@ module Mxrb
 
       def _rest_proxy(proxy)
         return ['DefaultProxy', nil] if proxy.nil?
+
         if proxy.is_a?(String) || proxy.is_a?(Symbol)
           return ['DefaultProxy', nil] if proxy.to_sym == :default
           return ['NoProxy', nil] if %i[none no_proxy].include?(proxy.to_sym)
@@ -3454,7 +3462,7 @@ module Mxrb
         @public               = public
         @parameters           = []
         @return_type          = nil
-        @doc                  = ""
+        @doc                  = ''
         @calls                = []
         @repositories         = []
         @allowed_roles        = nil
@@ -3540,7 +3548,8 @@ module Mxrb
 
       def call(microflow: nil, nanoflow: nil)
         choices = { microflow: microflow, nanoflow: nanoflow }.compact
-        raise ArgumentError, "call requires exactly one target" unless choices.size == 1
+        raise ArgumentError, 'call requires exactly one target' unless choices.size == 1
+
         @calls << { kind: choices.keys.first, name: choices.values.first.to_s }
       end
 
@@ -3588,7 +3597,7 @@ module Mxrb
         when Array
           value.map { canonical_body_value(_1) }
         when Symbol
-          { "__symbol__" => value.to_s }
+          { '__symbol__' => value.to_s }
         else
           value
         end
@@ -3724,7 +3733,7 @@ module Mxrb
       end
 
       def otherwise(&block)
-        add_branch("", &block)
+        add_branch('', &block)
       end
 
       def to_h

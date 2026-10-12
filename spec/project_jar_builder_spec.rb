@@ -161,13 +161,13 @@ RSpec.describe Mxrb::Compiler::ProjectJarBuilder do
     expect(generator.send(:lower_camel, 'RunFlow')).to eq('runFlow')
 
     unit = Struct.new(:module_name, :document).new('Demo', {
-      'Name' => 'WithInput',
-      'ObjectCollection' => { 'Objects' => [2, {
-        '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Enabled',
-        'VariableType' => { '$Type' => 'DataTypes$BooleanType' }
-      }] },
-      'MicroflowReturnType' => { '$Type' => 'DataTypes$BooleanType' }
-    })
+                                                     'Name' => 'WithInput',
+                                                     'ObjectCollection' => { 'Objects' => [2, {
+                                                       '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Enabled',
+                                                       'VariableType' => { '$Type' => 'DataTypes$BooleanType' }
+                                                     }] },
+                                                     'MicroflowReturnType' => { '$Type' => 'DataTypes$BooleanType' }
+                                                   })
     expect(generator.send(:microflow_method, unit))
       .to include('boolean withInput(', 'java.lang.Boolean _enabled', '.withParam("Enabled", _enabled)')
   end

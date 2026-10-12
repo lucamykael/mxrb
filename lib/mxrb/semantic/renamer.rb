@@ -24,7 +24,7 @@ module Mxrb
       def affected_units = @documents.keys.freeze
 
       def apply!
-        raise ArgumentError, "rename plan was already applied" if @applied
+        raise ArgumentError, 'rename plan was already applied' if @applied
 
         @project.mpr.transaction do
           @documents.each { |unit_id, document| @project.mpr.update_unit(unit_id, document) }
@@ -55,16 +55,16 @@ module Mxrb
         @project.all_units.each do |raw|
           original = @project.parse_bson(raw)
           transformed = transform(
-            original, source:, target:, unit_id: raw.fetch("UnitID"),
-            target_unit: source.unit_id == raw.fetch("UnitID"), changes:
+            original, source:, target:, unit_id: raw.fetch('UnitID'),
+                      target_unit: source.unit_id == raw.fetch('UnitID'), changes:
           )
-          documents[raw.fetch("UnitID")] = transformed unless transformed.equal?(original)
+          documents[raw.fetch('UnitID')] = transformed unless transformed.equal?(original)
         end
         original_architecture = @project.architecture_definition
         architecture = if original_architecture
                          transform(
-                           original_architecture, source:, target:, unit_id: "architecture",
-                           target_unit: false, changes:
+                           original_architecture, source:, target:, unit_id: 'architecture',
+                                                  target_unit: false, changes:
                          )
                        end
 
@@ -82,30 +82,31 @@ module Mxrb
         matches = @project.semantic_index.find_all(name)
         raise KeyError, "unknown Mendix artifact #{name.inspect}" if matches.empty?
 
-        kinds = matches.map(&:kind).uniq.join(", ")
+        kinds = matches.map(&:kind).uniq.join(', ')
         raise ArgumentError, "ambiguous Mendix artifact #{name.inspect} (#{kinds})"
       end
 
       def qualified_target(source, value, cross_module: false)
         requested = value.to_s
-        raise ArgumentError, "new name cannot be empty" if requested.empty?
+        raise ArgumentError, 'new name cannot be empty' if requested.empty?
         unless requested.match?(/\A[A-Za-z_][A-Za-z0-9_.]*\z/)
           raise ArgumentError, "invalid Mendix name #{requested.inspect}"
         end
 
-        old_parts = source.qualified_name.split(".")
-        new_parts = requested.split(".")
+        old_parts = source.qualified_name.split('.')
+        new_parts = requested.split('.')
         target = if new_parts.one?
-                   (old_parts[0...-1] + new_parts).join(".")
+                   (old_parts[0...-1] + new_parts).join('.')
                  else
                    requested
                  end
-        unless target.split(".").length == old_parts.length
+        unless target.split('.').length == old_parts.length
           raise ArgumentError, "#{source.kind} rename must keep its qualification depth"
         end
-        if !cross_module && old_parts.length > 1 && target.split(".")[0...-1] != old_parts[0...-1]
+        if !cross_module && old_parts.length > 1 && target.split('.')[0...-1] != old_parts[0...-1]
           raise ArgumentError, "#{source.kind} rename cannot move the artifact to another container"
         end
+
         target
       end
 
@@ -125,12 +126,12 @@ module Mxrb
         when Hash
           transformed_hash(
             value, source:, target:, unit_id:, target_unit:, changes:, path:,
-            target_object:
+                   target_object:
           )
         when Array
           transformed_array(
             value, source:, target:, unit_id:, target_unit:, changes:, path:,
-            target_object:
+                   target_object:
           )
         when String
           transformed_string(
@@ -148,7 +149,7 @@ module Mxrb
       end
 
       def transformed_hash(value, **context)
-        object_id = IO::BsonCodec.extract_id(value["$ID"])
+        object_id = IO::BsonCodec.extract_id(value['$ID'])
         target_object = context.fetch(:target_unit) &&
                         object_id == artifact_object_id(context.fetch(:source))
         changed = false
@@ -167,7 +168,7 @@ module Mxrb
         result = value.each_with_index.map do |child, index|
           transformed = transform(
             child, **context, target_object: false,
-            path: context.fetch(:path) + [index]
+                              path: context.fetch(:path) + [index]
           )
           changed ||= !transformed.equal?(child)
           transformed
@@ -182,18 +183,18 @@ module Mxrb
         return replacement unless replacement == value
         return value unless target_object && declaration_field?(field)
 
-        value == source.name ? target.split(".").last : value
+        value == source.name ? target.split('.').last : value
       end
 
       def artifact_object_id(artifact)
-        artifact.id.sub(/\A(?:module|entity|attribute|association|unit):/, "")
+        artifact.id.sub(/\A(?:module|entity|attribute|association|unit):/, '')
       end
 
       def replace_qualified(value, source, target)
         pairs = [[source, target]]
-        if source.count(".") == 2
-          pairs << [source.sub(/\.[^.]+\z/, "/\\0").sub("/.", "/"),
-                    target.sub(/\.[^.]+\z/, "/\\0").sub("/.", "/")]
+        if source.count('.') == 2
+          pairs << [source.sub(/\.[^.]+\z/, '/\\0').sub('/.', '/'),
+                    target.sub(/\.[^.]+\z/, '/\\0').sub('/.', '/')]
         end
         pairs.reduce(value) do |current, (old_name, new_name)|
           current.gsub(

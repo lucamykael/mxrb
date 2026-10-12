@@ -76,9 +76,9 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget interaction bran
              { '$Type' => 'Forms$DropDownButtonItem', 'Caption' => text('Open'),
                'Action' => open_link('https://open.test') }]
     dropdown = @compiler.send(:render_drop_down_button, {
-      '$Type' => 'Forms$DropDownButton', 'Name' => 'more',
-      'Caption' => client_template('More'), 'Items' => items
-    })
+                                '$Type' => 'Forms$DropDownButton', 'Name' => 'more',
+                                'Caption' => client_template('More'), 'Items' => items
+                              })
     expect(dropdown).to include('None', 'Open', 'https://open.test')
 
     no_navigation = {
@@ -113,14 +113,14 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget interaction bran
       :@data_view_scopes, [{ scope: 'p.Demo.Home.item', entity: 'Demo.Item' }]
     )
     output = @compiler.send(:render_reference_set_selector, {
-      '$Type' => 'Forms$ReferenceSetSelector', 'Name' => 'owners',
-      'AttributeRef' => {
-        'Attribute' => 'Demo.Owner.Name',
-        'EntityRef' => { 'Steps' => encoded(
-          { 'Association' => 'Demo.Item_Owners', 'DestinationEntity' => 'Demo.Owner' }
-        ) }
-      }
-    })
+                              '$Type' => 'Forms$ReferenceSetSelector', 'Name' => 'owners',
+                              'AttributeRef' => {
+                                'Attribute' => 'Demo.Owner.Name',
+                                'EntityRef' => { 'Steps' => encoded(
+                                  { 'Association' => 'Demo.Item_Owners', 'DestinationEntity' => 'Demo.Owner' }
+                                ) }
+                              }
+                            })
 
     expect(output).to include('$MxrbReferenceSetSelector', 'AssociationProperty')
     expect(@compiler.send(:widget_imports)).to include('MxrbReferenceSetSelector.displayName')

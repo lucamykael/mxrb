@@ -72,7 +72,7 @@ module Mxrb
       end
 
       def platform_reference?(reference)
-        reference.qualified_name.start_with?("System.")
+        reference.qualified_name.start_with?('System.')
       end
 
       def call_cycles
@@ -195,7 +195,7 @@ module Mxrb
       end
 
       def external_reference?(reference)
-        target_module = reference.qualified_name.split(".").first
+        target_module = reference.qualified_name.split('.').first
         @index.artifacts.none? { _1.module_name == target_module }
       end
 
@@ -217,12 +217,12 @@ module Mxrb
       end
 
       def native_security_definition(security)
-        roles = IO::BsonCodec.parse_array(security&.fetch("UserRoles", nil))[:items]
+        roles = IO::BsonCodec.parse_array(security&.fetch('UserRoles', nil))[:items]
         {
           user_roles: roles.map do |role|
             {
-              name: role["Name"],
-              module_roles: IO::BsonCodec.parse_array(role["ModuleRoles"])[:items]
+              name: role['Name'],
+              module_roles: IO::BsonCodec.parse_array(role['ModuleRoles'])[:items]
             }
           end
         }
@@ -232,13 +232,13 @@ module Mxrb
         return nil unless @project.respond_to?(:all_units) && @project.respond_to?(:parse_bson)
 
         raw = @project.all_units.find do |unit|
-          @project.parse_bson(unit)["$Type"] == "Security$ProjectSecurity"
+          @project.parse_bson(unit)['$Type'] == 'Security$ProjectSecurity'
         end
         raw && @project.parse_bson(raw)
       end
 
       def strict_security?(security)
-        security && security["SecurityLevel"] == "CheckEverything"
+        security && security['SecurityLevel'] == 'CheckEverything'
       end
 
       def persistent_access_diagnostics(security)
@@ -286,7 +286,7 @@ module Mxrb
               Diagnostic.new(
                 :public_contract_without_documentation, :warning,
                 "public contract has no documentation: #{mod[:name]}.#{item[:name]}",
-                Array(artifact).freeze, { kind: collection.to_s.sub(/s\z/, "").to_sym }.freeze
+                Array(artifact).freeze, { kind: collection.to_s.sub(/s\z/, '').to_sym }.freeze
               )
             end
           end
@@ -427,7 +427,7 @@ module Mxrb
           foreground = values.fetch(pair[:foreground].to_s, pair[:foreground].to_s)
           background = values.fetch(pair[:background].to_s, pair[:background].to_s)
           ratio = @project.design_system.contrast_ratio(foreground, background)
-          required = pair[:level].to_s.downcase == "aaa" ? 7.0 : 4.5
+          required = pair[:level].to_s.downcase == 'aaa' ? 7.0 : 4.5
           next if ratio >= required
 
           Diagnostic.new(
@@ -463,8 +463,9 @@ module Mxrb
         rules.flat_map do |rule|
           diagnostics = Array(rule.call(@project, @index))
           unless diagnostics.all? { _1.is_a?(Diagnostic) }
-            raise ArgumentError, "custom semantic rules must return Mxrb::Semantic::Diagnostic"
+            raise ArgumentError, 'custom semantic rules must return Mxrb::Semantic::Diagnostic'
           end
+
           diagnostics
         end
       end

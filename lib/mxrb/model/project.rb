@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../io/mpr_file"
+require_relative '../io/mpr_file'
 
 module Mxrb
   module Model
@@ -22,7 +22,7 @@ module Mxrb
       # ── Artefacts ──────────────────────────────────────────────────────
 
       def modules
-        @modules ||= @mpr.units_by_containment("Modules").map { Module.new(_1, @mpr) }
+        @modules ||= @mpr.units_by_containment('Modules').map { Module.new(_1, @mpr) }
       end
 
       def entities    = modules.flat_map(&:entities)
@@ -31,12 +31,13 @@ module Mxrb
 
       def navigation
         @navigation ||= begin
-          raw = all_units.find { parse_bson(_1)["$Type"] == "Navigation$NavigationDocument" }
+          raw = all_units.find { parse_bson(_1)['$Type'] == 'Navigation$NavigationDocument' }
           Navigation.new(raw && parse_bson(raw))
         end
       end
 
       def design_system = (@design_system ||= DesignSystem.new(File.dirname(@mpr.path)))
+
       def plan_design_token_migration(replacements) =
         design_system.plan_literal_migration(replacements)
 
@@ -55,14 +56,17 @@ module Mxrb
 
       def oql_queries = (@oql_catalog ||= Oql::Catalog.new(self)).queries
       def oql? = !oql_queries.empty?
+
       def oql_sql_views(dialect: :postgresql)
         translator = Oql::Translator.new(dialect:)
         oql_queries.map { translator.translate(_1) }.freeze
       end
+
       def oql_analysis(dialect: :postgresql)
         analyzer = Oql::Analyzer.new(dialect:)
         oql_queries.map { analyzer.analyze(_1) }.freeze
       end
+
       def sql_to_oql(source, dialect: :postgresql)
         Oql::ReverseTranslator.new(dialect:, project: self).translate(source)
       end
@@ -70,41 +74,52 @@ module Mxrb
       # ── Semantic analysis ───────────────────────────────────────────────
 
       def semantic_index = (@semantic_index ||= Semantic::Index.new(self))
+
       def semantic_cache_info
         @mpr.index_cache_info(
           current_fingerprint: Semantic::Index.fingerprint(self)
         )
       end
+
       def warm_semantic_cache!
         semantic_index
         semantic_cache_info
       end
+
       def clear_semantic_cache!
         removed = @mpr.clear_index_cache!
         @semantic_index = nil
         removed
       end
+
       def find_artifact(name, kind: nil) = semantic_index.find(name, kind: kind)
       def search_artifacts(query, **filters) = semantic_index.search(query, **filters)
+
       def semantic_search_artifacts(query, **options) =
         semantic_index.semantic_search_artifacts(query, **options)
+
       def semantic_search_hits(query, **options) =
         semantic_index.semantic_search_hits(query, **options)
+
       def describe_artifact(name) = semantic_index.describe(name)
       def references_to(name) = semantic_index.references_to(name)
       def references_from(name) = semantic_index.references_from(name)
       def callers_of(name) = semantic_index.callers_of(name)
       def callees_of(name) = semantic_index.callees_of(name)
+
       def impact_of(name, transitive: true) =
         semantic_index.impact_of(name, transitive: transitive)
+
       def plan_rename(name, to:) = Semantic::Renamer.new(self).plan(name, to: to)
       def rename!(name, to:) = plan_rename(name, to: to).apply!
       def plan_remove(name) = Semantic::Remover.new(self).plan(name)
       def remove!(name) = plan_remove(name).apply!
       def plan_move(name, to:) = Semantic::Mover.new(self).plan(name, to: to)
       def move!(name, to:) = plan_move(name, to: to).apply!
+
       def plan_extract(name, as:, object_ids:) =
         Semantic::Extractor.new(self).plan(name, as: as, object_ids: object_ids)
+
       def extract!(name, as:, object_ids:) = plan_extract(name, as: as, object_ids: object_ids).apply!
       def plan_inline(name, calling:) = Semantic::Inliner.new(self).plan(name, calling: calling)
       def inline!(name, calling:) = plan_inline(name, calling: calling).apply!
@@ -115,28 +130,34 @@ module Mxrb
 
       def plan_add_attribute(entity, name:, type: :string, **opts) =
         Semantic::DomainMutator.new(self).plan_add_attribute(entity, name: name, type: type, **opts)
+
       def add_attribute!(entity, name:, type: :string, **opts) =
         plan_add_attribute(entity, name: name, type: type, **opts).apply!
 
       def plan_remove_attribute(attribute) =
         Semantic::DomainMutator.new(self).plan_remove_attribute(attribute)
+
       def remove_attribute!(attribute) = plan_remove_attribute(attribute).apply!
 
       def plan_change_attribute(attribute, **updates) =
         Semantic::DomainMutator.new(self).plan_change_attribute(attribute, **updates)
+
       def change_attribute!(attribute, **updates) = plan_change_attribute(attribute, **updates).apply!
 
       def plan_add_entity(mod, name:, **opts) =
         Semantic::DomainMutator.new(self).plan_add_entity(mod, name: name, **opts)
+
       def add_entity!(mod, name:, **opts) = plan_add_entity(mod, name: name, **opts).apply!
 
       def plan_remove_entity(entity) =
         Semantic::DomainMutator.new(self).plan_remove_entity(entity)
+
       def remove_entity!(entity) = plan_remove_entity(entity).apply!
 
       # ── Batch plan ──────────────────────────────────────────────────────────
 
       def batch_plan(plans) = Semantic::BatchPlan.new(project: self, plans: Array(plans))
+
       def evaluate(&block)
         Evaluation::Suite.new(self).tap { _1.instance_eval(&block) }.run
       end
@@ -157,14 +178,16 @@ module Mxrb
       # regenerated correctly. Idempotent — safe to call multiple times.
       def migrate_to!(version)
         v = version.to_s
-        raise ArgumentError, "version must be a non-empty string" if v.empty?
+        raise ArgumentError, 'version must be a non-empty string' if v.empty?
 
         definition = @mpr.architecture_definition
-        raise ArgumentError,
-              "no MXRB architecture definition found in this MPR — " \
-              "structural migration requires a project generated by MXRB" unless definition
+        unless definition
+          raise ArgumentError,
+                'no MXRB architecture definition found in this MPR — ' \
+                'structural migration requires a project generated by MXRB'
+        end
 
-        raise ArgumentError, "project is opened read-only; reopen with readonly: false" if @mpr.readonly?
+        raise ArgumentError, 'project is opened read-only; reopen with readonly: false' if @mpr.readonly?
 
         if v == StudioCompatibility::LossAudit::TARGET_VERSION && mendix_version != v
           losses = migration_losses(v)

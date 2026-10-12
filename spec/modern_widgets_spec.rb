@@ -153,10 +153,10 @@ RSpec.describe 'modern page widgets' do
       'PropertyTypes' => Mxrb::IO::BsonCodec.build_array(nested_types, marker: 2)
     }
     widget = schema_widget('example.Semantic', {
-      source: { type: 'DataSource' }, label: { type: 'Attribute' }, selected: { type: 'Selection' },
-      action: { type: 'Action' }, content: { type: 'Widgets' },
-      series: { type: 'Object', object_type: nested_object_type }
-    })
+                             source: { type: 'DataSource' }, label: { type: 'Attribute' }, selected: { type: 'Selection' },
+                             action: { type: 'Action' }, content: { type: 'Widgets' },
+                             series: { type: 'Object', object_type: nested_object_type }
+                           })
     options = {
       properties: {
         source: {
@@ -197,15 +197,15 @@ RSpec.describe 'modern page widgets' do
 
   it 'hydrates every semantic scalar and normalizes singular data and widget values' do
     widget = schema_widget('example.Semantics', {
-      expression: { type: 'Expression' }, text: { type: 'TextTemplate' },
-      association: { type: 'Association' }, source: { type: 'DataSource' },
-      content: { type: 'Widgets' }
-    })
+                             expression: { type: 'Expression' }, text: { type: 'TextTemplate' },
+                             association: { type: 'Association' }, source: { type: 'DataSource' },
+                             content: { type: 'Widgets' }
+                           })
     writer.send(:configure_pluggable_widget!, widget, properties: {
-      expression: { expression: '$currentObject/Name' }, text: { text: 'Hello' },
-      association: { association: 'Ui.Item_Owner' }, source: { data_source: 'Ui.Item' },
-      content: { widgets: { type: :text, name: 'OnlyChild', options: { caption: 'Child' }, events: [] } }
-    })
+                  expression: { expression: '$currentObject/Name' }, text: { text: 'Hello' },
+                  association: { association: 'Ui.Item_Owner' }, source: { data_source: 'Ui.Item' },
+                  content: { widgets: { type: :text, name: 'OnlyChild', options: { caption: 'Child' }, events: [] } }
+                })
     values = writer.send(:custom_widget_properties, widget)
 
     expect(values.dig('expression', 'Value', 'Expression')).to eq('$currentObject/Name')
@@ -299,8 +299,8 @@ RSpec.describe 'modern page widgets' do
       end, marker: 2)
     }
     widget = schema_widget('example.Objects', {
-      series: { type: 'Object', object_type: nested_object_type }
-    })
+                             series: { type: 'Object', object_type: nested_object_type }
+                           })
     configurations = [
       { name: 'First', amount: '1' }, { name: 'Second', amount: '2' }
     ]
@@ -424,17 +424,17 @@ RSpec.describe 'modern page widgets' do
     nested_object_type = {
       '$ID' => 'nested-object', '$Type' => 'CustomWidgets$WidgetObjectType',
       'PropertyTypes' => Mxrb::IO::BsonCodec.build_array([{
-        '$ID' => 'nested-property', '$Type' => 'CustomWidgets$WidgetPropertyType',
-        'PropertyKey' => 'name',
-        'ValueType' => {
-          '$ID' => 'nested-value', '$Type' => 'CustomWidgets$WidgetValueType',
-          'Type' => 'String', 'DefaultValue' => ''
-        }
-      }], marker: 2)
+                                                           '$ID' => 'nested-property', '$Type' => 'CustomWidgets$WidgetPropertyType',
+                                                           'PropertyKey' => 'name',
+                                                           'ValueType' => {
+                                                             '$ID' => 'nested-value', '$Type' => 'CustomWidgets$WidgetValueType',
+                                                             'Type' => 'String', 'DefaultValue' => ''
+                                                           }
+                                                         }], marker: 2)
     }
     widget = schema_widget('example.CorruptObjects', {
-      series: { type: 'Object', object_type: nested_object_type }
-    })
+                             series: { type: 'Object', object_type: nested_object_type }
+                           })
     configuration = { series: { objects: [{ name: 'First' }] } }
     writer.send(:configure_pluggable_widget!, widget, properties: configuration)
     object = writer.send(:array_items, writer.send(:custom_widget_properties, widget)
@@ -458,9 +458,9 @@ RSpec.describe 'modern page widgets' do
     empty = schema_widget('example.Empty', {}, name: 'Empty')
     other = schema_widget('example.Other', { source: { type: 'Enumeration' } }, name: 'Empty')
     generated = current_writer.send(:widget_doc, {
-      type: :pluggable_widget, name: 'Empty', events: [],
-      options: { widget_id: 'example.Empty', widget_name: 'Empty', properties: {} }
-    })
+                                      type: :pluggable_widget, name: 'Empty', events: [],
+                                      options: { widget_id: 'example.Empty', widget_name: 'Empty', properties: {} }
+                                    })
     expect(current_writer.send(:compatible_widget_baseline?, generated, nil)).to be(false)
     expect(current_writer.send(:compatible_widget_baseline?, generated, other)).to be(false)
     expect(current_writer.send(:compatible_widget_baseline?, generated, empty)).to be(false)
@@ -526,9 +526,9 @@ RSpec.describe 'modern page widgets' do
       name: 'Grid'
     )
     generated = writer.send(:pluggable_widget_doc, {
-      type: :data_grid, name: 'Grid', events: [],
-      options: { entity: 'Ui.Item', columns: [{ name: 'Name', attribute: 'Name' }] }
-    }, writer.send(:data_grid2_descriptor))
+                              type: :data_grid, name: 'Grid', events: [],
+                              options: { entity: 'Ui.Item', columns: [{ name: 'Name', attribute: 'Name' }] }
+                            }, writer.send(:data_grid2_descriptor))
 
     writer.send(:hydrate_pluggable_widgets!, { 'Widgets' => [generated] }, 'Widgets' => [baseline])
     properties = writer.send(:custom_widget_properties, generated)
@@ -563,13 +563,13 @@ RSpec.describe 'modern page widgets' do
       'PropertyTypes' => Mxrb::IO::BsonCodec.build_array([filter_type], marker: 2)
     }
     grid = schema_widget('grid', {
-      itemSelection: { type: 'Selection' }, filtersPlaceholder: { type: 'Widgets' },
-      columns: { type: 'Object', object_type: column_type }
-    })
+                           itemSelection: { type: 'Selection' }, filtersPlaceholder: { type: 'Widgets' },
+                           columns: { type: 'Object', object_type: column_type }
+                         })
     filter = { type: :text, name: 'Filter', options: { caption: 'Filter' }, events: [] }
     writer.send(:configure_data_grid2!, grid, selection: :Multi, filters: filter, columns: [{
-      name: 'Name', filter: [filter, filter]
-    }])
+                  name: 'Name', filter: [filter, filter]
+                }])
     values = writer.send(:custom_widget_properties, grid)
 
     expect(values.dig('itemSelection', 'Value', 'Selection')).to eq('Multi')
@@ -583,8 +583,8 @@ RSpec.describe 'modern page widgets' do
     expect(writer.send(:array_items, column_values.dig('filter', 'Value', 'Widgets')).length).to eq(2)
 
     event_grid = schema_widget('grid-events', {
-      itemSelection: { type: 'Selection' }, onSelectionChange: { type: 'Action' }
-    })
+                                 itemSelection: { type: 'Selection' }, onSelectionChange: { type: 'Action' }
+                               })
     event_properties = writer.send(:custom_widget_properties, event_grid)
     event_properties['itemSelection']['Value']['Selection'] = 'Single'
     event_properties['onSelectionChange']['Value']['Action'] = {
@@ -629,9 +629,9 @@ RSpec.describe 'modern page widgets' do
     allow(current_writer).to receive(:validate_official_data_grid2_contract!)
 
     generated = current_writer.send(:pluggable_widget_doc, {
-      type: :data_grid, name: 'Grid', options: {},
-      events: [{ event: :on_change, kind: :nanoflow, handler: 'Ui.Refresh' }]
-    }, current_writer.send(:data_grid2_descriptor))
+                                      type: :data_grid, name: 'Grid', options: {},
+                                      events: [{ event: :on_change, kind: :nanoflow, handler: 'Ui.Refresh' }]
+                                    }, current_writer.send(:data_grid2_descriptor))
     action = current_writer.send(:custom_widget_properties, generated)
                            .dig('onSelectionChange', 'Value', 'Action')
 
@@ -648,20 +648,20 @@ RSpec.describe 'modern page widgets' do
     descriptor = writer.send(:combo_box_descriptor)
     baseline = schema_widget(descriptor[:id], specs, name: 'Choice')
     enumeration = writer.send(:pluggable_widget_doc, {
-      type: :drop_down, name: 'Choice', events: [],
-      options: { attribute: 'Ui.Item.Status', caption: 'Status' }
-    }, descriptor)
+                                type: :drop_down, name: 'Choice', events: [],
+                                options: { attribute: 'Ui.Item.Status', caption: 'Status' }
+                              }, descriptor)
     writer.send(:hydrate_pluggable_widgets!, { 'Widgets' => [enumeration] }, 'Widgets' => [baseline])
     enum_values = writer.send(:custom_widget_properties, enumeration)
     expect(enum_values.dig('optionsSourceType', 'Value', 'PrimitiveValue')).to eq('enumeration')
     expect(Mxrb::Model::Page.allocate.send(:combo_box_widget, enumeration)[:type]).to eq(:drop_down)
 
     association = writer.send(:pluggable_widget_doc, {
-      type: :reference_selector, name: 'Choice', events: [],
-      options: {
-        attribute: 'Ui.Item_Owner', display_attribute: 'Ui.Owner.Name', caption: 'Owner'
-      }
-    }, descriptor)
+                                type: :reference_selector, name: 'Choice', events: [],
+                                options: {
+                                  attribute: 'Ui.Item_Owner', display_attribute: 'Ui.Owner.Name', caption: 'Owner'
+                                }
+                              }, descriptor)
     writer.send(:hydrate_pluggable_widgets!, { 'Widgets' => [association] }, 'Widgets' => [baseline])
     assoc_values = writer.send(:custom_widget_properties, association)
     expect(assoc_values.dig(
@@ -1017,15 +1017,15 @@ RSpec.describe 'modern page widgets' do
     expect(page.send(:strip_pluggable_widgets, nested)).to eq(section: [{}])
     expect(page.send(:strip_pluggable_widgets, 'value')).to eq('value')
     events = page.send(:pluggable_events, {
-      'onChange' => { kind: 'microflow', handler: 'M.Change' },
-      'onClick' => { kind: 'nanoflow', handler: 'M.Click' },
-      'ignored' => nil
-    })
+                         'onChange' => { kind: 'microflow', handler: 'M.Change' },
+                         'onClick' => { kind: 'nanoflow', handler: 'M.Click' },
+                         'ignored' => nil
+                       })
     expect(events).to contain_exactly(include(event: :on_change), include(event: :on_click))
     native = page.send(:native_widget, {
-      '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'Native',
-      'Type' => { 'WidgetId' => 'example.Native', 'SupportedPlatform' => 'Web' }
-    })
+                         '$Type' => 'CustomWidgets$CustomWidget', 'Name' => 'Native',
+                         'Type' => { 'WidgetId' => 'example.Native', 'SupportedPlatform' => 'Web' }
+                       })
     expect(native[:options]).to include(widget_id: 'example.Native', platform: 'Web')
   end
 
@@ -1039,8 +1039,8 @@ RSpec.describe 'modern page widgets' do
 
   it 'omits empty unsupported pluggable properties from the editable projection' do
     widget = schema_widget('example.UnsupportedNil', {
-      icon: { type: 'Icon' }, title: { type: 'String' }
-    })
+                             icon: { type: 'Icon' }, title: { type: 'String' }
+                           })
     properties = Mxrb::Model::Page.allocate.send(
       :pluggable_properties, widget['Object'], widget.dig('Type', 'ObjectType')
     )
@@ -1110,47 +1110,47 @@ RSpec.describe 'modern page widgets' do
     expect(page.send(:parse_search_bar, 'invalid')).to be_nil
     expect(page.send(:parse_search_bar, 'SearchFields' => [{ 'Name' => 'missing' }])).to be_nil
     search = page.send(:parse_search_bar, 'SearchFields' => [{
-      'AttributePath' => 'Ui.Item/Name', 'Caption' => 'Name'
-    }])
+                         'AttributePath' => 'Ui.Item/Name', 'Caption' => 'Name'
+                       }])
     expect(search.dig(:fields, 0, :attribute)).to eq('Name')
     expect(page.send(:parse_toolbar, 'invalid')).to be_nil
     expect(page.send(:parse_toolbar, 'Buttons' => [{ '$Type' => 'Unknown' }])).to be_nil
     toolbar = page.send(:parse_toolbar, 'Buttons' => [{
-      '$Type' => 'Forms$GridSearchButton', 'Caption' => 'Search'
-    }])
+                          '$Type' => 'Forms$GridSearchButton', 'Caption' => 'Search'
+                        }])
     expect(toolbar.dig(:buttons, 0, :type)).to eq(:search)
     expect(page.send(:parse_source, '$Type' => 'Forms$MicroflowSource')).to be_nil
   end
   it 'exports generic, native, reference and nested tab widget declarations' do
     exporter = Mxrb::Exporter.allocate
     pluggable = exporter.send(:render_widget, {
-      type: :pluggable_widget, name: 'Map', events: [],
-      options: {
-        widget_id: 'example.Map', widget_name: 'Map widget', properties: { zoom: 12 },
-        class: 'map'
-      }
-    }, 2).join("\n")
+                                type: :pluggable_widget, name: 'Map', events: [],
+                                options: {
+                                  widget_id: 'example.Map', widget_name: 'Map widget', properties: { zoom: 12 },
+                                  class: 'map'
+                                }
+                              }, 2).join("\n")
     minimal_pluggable = exporter.send(:render_widget, {
-      type: :pluggable_widget, name: 'Basic', events: [], options: { widget_id: 'example.Basic' }
-    }, 2).join("\n")
+                                        type: :pluggable_widget, name: 'Basic', events: [], options: { widget_id: 'example.Basic' }
+                                      }, 2).join("\n")
     native = exporter.send(:render_widget, {
-      type: 'native_widget', name: 'Raw', events: [],
-      options: { native_type: 'Vendor$Raw', deep_structure: { 'Mode' => '3d' } }
-    }, 2).join("\n")
+                             type: 'native_widget', name: 'Raw', events: [],
+                             options: { native_type: 'Vendor$Raw', deep_structure: { 'Mode' => '3d' } }
+                           }, 2).join("\n")
     reference = exporter.send(:render_widget, {
-      type: :reference_selector, name: 'Owner', events: [],
-      options: { display_attribute: 'Ui.Owner.Name' }
-    }, 2).join("\n")
+                                type: :reference_selector, name: 'Owner', events: [],
+                                options: { display_attribute: 'Ui.Owner.Name' }
+                              }, 2).join("\n")
     text_area = exporter.send(:render_widget, {
-      type: :text_area, name: 'Notes', events: [], options: { lines: 4 }
-    }, 2).join("\n")
+                                type: :text_area, name: 'Notes', events: [], options: { lines: 4 }
+                              }, 2).join("\n")
     tabs = exporter.send(:render_widget, {
-      type: :tab_control, name: 'Tabs', events: [],
-      options: { tabs: [
-        { name: 'Empty', caption: 'Empty' },
-        { name: 'Full', widgets: [{ type: :text, name: 'Help', options: {}, events: [] }] }
-      ] }
-    }, 2).join("\n")
+                           type: :tab_control, name: 'Tabs', events: [],
+                           options: { tabs: [
+                             { name: 'Empty', caption: 'Empty' },
+                             { name: 'Full', widgets: [{ type: :text, name: 'Help', options: {}, events: [] }] }
+                           ] }
+                         }, 2).join("\n")
     expect(pluggable).to include('pluggable_widget', 'widget_name:', 'properties:', 'class_name:')
     expect(minimal_pluggable).to eq('  pluggable_widget :Basic, widget_id: "example.Basic"')
     expect(native).to include('native_widget', 'deep_structure:')
@@ -1238,23 +1238,23 @@ RSpec.describe 'modern page widgets' do
       .to include('$Type' => 'Forms$DesignPropertyValue')
 
     direct = page.send(:parse_data_view_source, {
-      '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Entity' => 'App.Order' },
-      'PageParameter' => 'Order'
-    })
+                         '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Entity' => 'App.Order' },
+                         'PageParameter' => 'Order'
+                       })
     association = page.send(:parse_data_view_source, {
-      '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Steps' => [2, {
-        'Association' => 'App.Order_Customer', 'DestinationEntity' => 'App.Customer'
-      }] },
-      'SourceVariable' => { 'LocalVariable' => 'Current', 'UseAllPages' => true }
-    })
+                              '$Type' => 'Forms$DataViewSource', 'EntityRef' => { 'Steps' => [2, {
+                                'Association' => 'App.Order_Customer', 'DestinationEntity' => 'App.Customer'
+                              }] },
+                              'SourceVariable' => { 'LocalVariable' => 'Current', 'UseAllPages' => true }
+                            })
     expect(direct).to include(kind: :context, entity: 'App.Order', variable: include(kind: :page_parameter))
     expect(association).to include(
       kind: :association, entity: 'App.Customer', variable: include(kind: :local_variable, use_all_pages: true)
     )
 
     mappings = page.send(:parse_data_view_mappings, [2, {
-      'Parameter' => 'Order', 'Variable' => { 'Widget' => 'grid' }, 'Future' => false
-    }])
+                           'Parameter' => 'Order', 'Variable' => { 'Widget' => 'grid' }, 'Future' => false
+                         }])
     expect(mappings.first).to include(parameter: 'Order', variable: include(kind: :widget))
     expect(mappings.first.fetch(:unknown_native)).to eq('Future' => false)
 
@@ -1263,16 +1263,16 @@ RSpec.describe 'modern page widgets' do
 
     allow(page).to receive(:parse_widgets) { |_raw, target| target << { type: :text } }
     table = page.send(:table_widget, {
-      'Name' => 'matrix', 'ColumnWidths' => [2, { 'Value' => 100 }], 'Rows' => [2, {}],
-      'Cells' => [2, { 'TopRowIndex' => 0, 'LeftColumnIndex' => 1, 'Width' => 2,
-                       'Height' => 1, 'Widgets' => [2, {}] }]
-    })
+                        'Name' => 'matrix', 'ColumnWidths' => [2, { 'Value' => 100 }], 'Rows' => [2, {}],
+                        'Cells' => [2, { 'TopRowIndex' => 0, 'LeftColumnIndex' => 1, 'Width' => 2,
+                                         'Height' => 1, 'Widgets' => [2, {}] }]
+                      })
     expect(table.dig(:options, :rows, 0, :cells, 0)).to include(column: 1, colspan: 2)
     expect(table.dig(:options, :rows, 0, :cells, 0, :widgets)).to eq([{ type: :text }])
 
     expect(page.send(:parse_source, {
-      '$Type' => 'Forms$NanoflowSource', 'NanoflowSettings' => { 'Nanoflow' => 'App.Refresh' }
-    })).to eq(kind: :nanoflow, name: 'App.Refresh')
+                       '$Type' => 'Forms$NanoflowSource', 'NanoflowSettings' => { 'Nanoflow' => 'App.Refresh' }
+                     })).to eq(kind: :nanoflow, name: 'App.Refresh')
     expect(page.send(:parse_action_mapping_value, 'Variable' => { 'SnippetParameter' => 'Item' }))
       .to include(kind: :snippet_parameter, name: 'Item')
   end

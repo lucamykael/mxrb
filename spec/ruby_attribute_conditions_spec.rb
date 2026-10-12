@@ -52,8 +52,8 @@ RSpec.describe 'Ruby attribute-based widget conditions' do # rubocop:disable Met
                                                           'conditions' => conditions))
       .to eq('input_condition(attribute: "App.Item.Unlocked", conditions: [["true", true], ["(empty)", false]])')
     expect(exporter.send(:runtime_input_condition_source, 'expression' => 'true', 'source_variable' => {
-      'kind' => 'current'
-    }))
+                           'kind' => 'current'
+                         }))
       .to eq('input_condition("true", source: page_variable(nil, kind: :current))')
   end
 

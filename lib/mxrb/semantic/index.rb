@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-require_relative "vec_store"
+require 'digest'
+require 'json'
+require_relative 'vec_store'
 
 module Mxrb
   module Semantic
@@ -32,38 +32,38 @@ module Mxrb
       ].freeze
 
       FIELD_RELATIONS = {
-        "microflow" => :calls,
-        "nanoflow" => :calls,
-        "javaaction" => :calls,
-        "javascriptaction" => :calls,
-        "workflow" => :calls,
-        "form" => :opens,
-        "page" => :opens,
-        "layout" => :uses_layout,
-        "snippet" => :uses_snippet,
-        "entity" => :uses_entity,
-        "attribute" => :uses_attribute,
-        "association" => :uses_association,
-        "enumeration" => :uses_enumeration
+        'microflow' => :calls,
+        'nanoflow' => :calls,
+        'javaaction' => :calls,
+        'javascriptaction' => :calls,
+        'workflow' => :calls,
+        'form' => :opens,
+        'page' => :opens,
+        'layout' => :uses_layout,
+        'snippet' => :uses_snippet,
+        'entity' => :uses_entity,
+        'attribute' => :uses_attribute,
+        'association' => :uses_association,
+        'enumeration' => :uses_enumeration
       }.freeze
 
       CALL_KINDS = %i[microflow nanoflow java_action javascript_action workflow].freeze
       TOKEN = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){1,2}/
-      MEMBER_TOKEN = /[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\/[A-Za-z_][A-Za-z0-9_]*/
+      MEMBER_TOKEN = %r{[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*/[A-Za-z_][A-Za-z0-9_]*}
 
       attr_reader :artifacts, :references, :unresolved_references
 
       def self.fingerprint(project)
         rows = project.query(
-          "SELECT UnitID, ContainerID, ContainmentName, ContentsHash " \
-          "FROM Unit ORDER BY UnitID"
+          'SELECT UnitID, ContainerID, ContainmentName, ContentsHash ' \
+          'FROM Unit ORDER BY UnitID'
         )
         digest = Digest::SHA256.new
         digest << CACHE_VERSION.to_s
         rows.each do |row|
           row.each do |value|
             bytes = value.to_s.b
-            digest << [bytes.bytesize].pack("Q>") << bytes
+            digest << [bytes.bytesize].pack('Q>') << bytes
           end
         end
         digest.hexdigest
@@ -76,11 +76,11 @@ module Mxrb
         reset_state
         @fingerprint = compute_fingerprint
         json = @fingerprint && @project.mpr.read_index_cache(@fingerprint)
-        unless json && restore_from_cache(json)
-          reset_state
-          build
-          @project.mpr.write_index_cache(@fingerprint, serialize_to_cache) if @fingerprint
-        end
+        return if json && restore_from_cache(json)
+
+        reset_state
+        build
+        @project.mpr.write_index_cache(@fingerprint, serialize_to_cache) if @fingerprint
       end
 
       def find(name, kind: nil)
@@ -112,7 +112,7 @@ module Mxrb
 
       def semantic_search_hits(query, limit: 10, backend: :auto)
         size = Integer(limit)
-        raise ArgumentError, "semantic search limit must be positive" unless size.positive?
+        raise ArgumentError, 'semantic search limit must be positive' unless size.positive?
 
         embedder = semantic_embedder(backend)
         store = vec_store(embedder)
@@ -224,14 +224,14 @@ module Mxrb
             artifact = add_artifact(
               id: "entity:#{entity.id}", qualified_name: qualified, kind: :entity,
               module_name: mod.name, name: entity.name, unit_id: mod.domain_model&.id,
-              path: ["entities", entity.name], metadata: { model: entity }
+              path: ['entities', entity.name], metadata: { model: entity }
             )
             entity.attributes.each do |attribute|
               add_artifact(
                 id: "attribute:#{attribute.id}",
                 qualified_name: "#{qualified}.#{attribute.name}", kind: :attribute,
                 module_name: mod.name, name: attribute.name, unit_id: mod.domain_model&.id,
-                path: artifact.path + ["attributes", attribute.name],
+                path: artifact.path + ['attributes', attribute.name],
                 metadata: { model: attribute, entity: artifact }
               )
             end
@@ -244,7 +244,7 @@ module Mxrb
               id: "association:#{association.id}",
               qualified_name: "#{mod.name}.#{association.name}", kind: :association,
               module_name: mod.name, name: association.name, unit_id: mod.domain_model&.id,
-              path: ["associations", association.name],
+              path: ['associations', association.name],
               metadata: {
                 model: association,
                 from: qualified_entity_name(mod, from_entity),
@@ -258,12 +258,12 @@ module Mxrb
 
           domain_doc = @project.parse_bson(domain_raw)
           domain_entities(domain_doc).each do |entity_doc|
-            entity_id = Mxrb::IO::BsonCodec.extract_id(entity_doc["$ID"])
+            entity_id = Mxrb::IO::BsonCodec.extract_id(entity_doc['$ID'])
             source = @by_id["entity:#{entity_id}"]
             @documents << [source, entity_doc] if source
           end
           domain_associations(domain_doc).each do |association_doc|
-            association_id = Mxrb::IO::BsonCodec.extract_id(association_doc["$ID"])
+            association_id = Mxrb::IO::BsonCodec.extract_id(association_doc['$ID'])
             source = @by_id["association:#{association_id}"]
             @documents << [source, association_doc] if source
           end
@@ -272,22 +272,22 @@ module Mxrb
 
       def index_units
         units = @project.all_units
-        units_by_id = units.to_h { [_1["UnitID"], _1] }
+        units_by_id = units.to_h { [_1['UnitID'], _1] }
         module_by_id = @project.modules.to_h { [_1.id, _1.name] }
 
         units.each do |raw|
           doc = @project.parse_bson(raw)
-          type = doc["$Type"].to_s
+          type = doc['$Type'].to_s
           next if type.empty? || %w[Projects$Module Projects$ModuleImpl].include?(type) ||
-                  type.include?("DomainModel")
+                  type.include?('DomainModel')
 
-          name = doc["Name"] || doc["name"]
-          name = "Navigation" if name.to_s.empty? && type == "Navigation$NavigationDocument"
+          name = doc['Name'] || doc['name']
+          name = 'Navigation' if name.to_s.empty? && type == 'Navigation$NavigationDocument'
           next if name.to_s.empty?
 
           module_name = ancestor_module(raw, units_by_id, module_by_id)
-          qualified = if type == "Navigation$NavigationDocument"
-                        "Project.Navigation"
+          qualified = if type == 'Navigation$NavigationDocument'
+                        'Project.Navigation'
                       elsif module_name
                         "#{module_name}.#{name}"
                       else
@@ -296,12 +296,12 @@ module Mxrb
           artifact = add_artifact(
             id: "unit:#{raw['UnitID']}", qualified_name: qualified,
             kind: kind_for(type), module_name: module_name, name: name.to_s,
-            unit_id: raw["UnitID"], path: [], metadata: {
+            unit_id: raw['UnitID'], path: [], metadata: {
               bson_type: type,
-              documentation: (doc["Documentation"] || doc["documentation"]).to_s,
-              allowed_roles: semantic_array(doc["AllowedModuleRoles"] || doc["AllowedRoles"]),
-              excluded: doc["Excluded"] == true,
-              mark_as_used: doc["MarkAsUsed"] == true,
+              documentation: (doc['Documentation'] || doc['documentation']).to_s,
+              allowed_roles: semantic_array(doc['AllowedModuleRoles'] || doc['AllowedRoles']),
+              excluded: doc['Excluded'] == true,
+              mark_as_used: doc['MarkAsUsed'] == true,
               exposed: exposed_document?(doc)
             }.freeze
           )
@@ -387,9 +387,9 @@ module Mxrb
 
       def candidates_for(value, source)
         direct = [value]
-        direct << "#{source.module_name}.#{value}" if source.module_name && !value.include?(".")
+        direct << "#{source.module_name}.#{value}" if source.module_name && !value.include?('.')
         direct.concat(value.scan(TOKEN))
-        direct.concat(value.scan(MEMBER_TOKEN).map { _1.tr("/", ".") })
+        direct.concat(value.scan(MEMBER_TOKEN).map { _1.tr('/', '.') })
         direct.uniq
       end
 
@@ -411,11 +411,9 @@ module Mxrb
         return artifact if artifact
 
         matches = find_all(value)
-        if matches.empty?
-          raise KeyError, "unknown Mendix artifact #{value.inspect}"
-        end
+        raise KeyError, "unknown Mendix artifact #{value.inspect}" if matches.empty?
 
-        kinds = matches.map(&:kind).uniq.join(", ")
+        kinds = matches.map(&:kind).uniq.join(', ')
         raise ArgumentError, "ambiguous Mendix artifact #{value.inspect} (#{kinds})"
       end
 
@@ -427,24 +425,24 @@ module Mxrb
 
       def expected_kinds(field)
         case normalize_field(field)
-        when "microflow" then [:microflow]
-        when "nanoflow" then [:nanoflow]
-        when "javaaction" then [:java_action]
-        when "javascriptaction" then [:javascript_action]
-        when "workflow" then [:workflow]
-        when "form", "page" then %i[page layout snippet]
-        when "layout" then [:layout]
-        when "snippet" then [:snippet]
-        when "entity" then [:entity]
-        when "attribute" then [:attribute]
-        when "association" then [:association]
-        when "enumeration" then [:enumeration]
+        when 'microflow' then [:microflow]
+        when 'nanoflow' then [:nanoflow]
+        when 'javaaction' then [:java_action]
+        when 'javascriptaction' then [:javascript_action]
+        when 'workflow' then [:workflow]
+        when 'form', 'page' then %i[page layout snippet]
+        when 'layout' then [:layout]
+        when 'snippet' then [:snippet]
+        when 'entity' then [:entity]
+        when 'attribute' then [:attribute]
+        when 'association' then [:association]
+        when 'enumeration' then [:enumeration]
         else []
         end
       end
 
       def normalize_field(field)
-        field.to_s.gsub(/[^A-Za-z]/, "").downcase
+        field.to_s.gsub(/[^A-Za-z]/, '').downcase
       end
 
       def metadata_path?(path)
@@ -459,7 +457,7 @@ module Mxrb
         current = raw
         visited = Set.new
         loop do
-          container = current["ContainerID"]
+          container = current['ContainerID']
           return module_by_id[container] if module_by_id.key?(container)
           return nil if container.nil? || visited.include?(container)
 
@@ -470,20 +468,20 @@ module Mxrb
       end
 
       def kind_for(type)
-        suffix = type.split("$", 2).last.to_s
+        suffix = type.split('$', 2).last.to_s
         {
-          "Microflow" => :microflow,
-          "Nanoflow" => :nanoflow,
-          "Page" => :page,
-          "Layout" => :layout,
-          "Snippet" => :snippet,
-          "Enumeration" => :enumeration,
-          "Constant" => :constant,
-          "ScheduledEvent" => :scheduled_event,
-          "MenuDocument" => :menu,
-          "JavaAction" => :java_action,
-          "JavaScriptAction" => :javascript_action,
-          "Workflow" => :workflow
+          'Microflow' => :microflow,
+          'Nanoflow' => :nanoflow,
+          'Page' => :page,
+          'Layout' => :layout,
+          'Snippet' => :snippet,
+          'Enumeration' => :enumeration,
+          'Constant' => :constant,
+          'ScheduledEvent' => :scheduled_event,
+          'MenuDocument' => :menu,
+          'JavaAction' => :java_action,
+          'JavaScriptAction' => :javascript_action,
+          'Workflow' => :workflow
         }.fetch(suffix) do
           suffix.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase.to_sym
         end
@@ -500,12 +498,12 @@ module Mxrb
       end
 
       def domain_entities(doc)
-        Mxrb::IO::BsonCodec.parse_array(doc["entities"] || doc["Entities"])[:items]
+        Mxrb::IO::BsonCodec.parse_array(doc['entities'] || doc['Entities'])[:items]
       end
 
       def domain_associations(doc)
-        local = doc["associations"] || doc["Associations"]
-        cross = doc["crossAssociations"] || doc["CrossAssociations"]
+        local = doc['associations'] || doc['Associations']
+        cross = doc['crossAssociations'] || doc['CrossAssociations']
         Mxrb::IO::BsonCodec.parse_array(local)[:items] +
           Mxrb::IO::BsonCodec.parse_array(cross)[:items]
       end
@@ -543,25 +541,25 @@ module Mxrb
       def serialize_to_cache
         JSON.generate(
           version: CACHE_VERSION,
-          artifacts: @artifacts.map { |a|
+          artifacts: @artifacts.map do |a|
             { id: a.id, qualified_name: a.qualified_name, kind: a.kind.to_s,
               module_name: a.module_name, name: a.name, unit_id: a.unit_id, path: a.path,
               metadata: a.metadata.slice(*CACHE_METADATA_KEYS) }
-          },
-          references: @references.map { |r|
+          end,
+          references: @references.map do |r|
             { source_id: r.source.id, target_id: r.target.id,
               relation: r.relation.to_s, path: r.path, value: r.value }
-          },
-          unresolved: @unresolved_references.map { |u|
+          end,
+          unresolved: @unresolved_references.map do |u|
             { source_id: u.source.id, qualified_name: u.qualified_name,
               expected_kinds: u.expected_kinds.map(&:to_s), path: u.path, value: u.value }
-          }
+          end
         )
       end
 
       def restore_from_cache(json)
         data = JSON.parse(json, symbolize_names: true)
-        raise TypeError, "unsupported semantic index cache" unless data[:version] == CACHE_VERSION
+        raise TypeError, 'unsupported semantic index cache' unless data[:version] == CACHE_VERSION
 
         data.fetch(:artifacts).each do |a|
           artifact = Artifact.new(
@@ -578,14 +576,14 @@ module Mxrb
         data.fetch(:references).each do |r|
           source = @by_id[r[:source_id]]
           target = @by_id[r[:target_id]]
-          raise TypeError, "invalid cached reference" unless source && target
+          raise TypeError, 'invalid cached reference' unless source && target
 
           @references << Reference.new(source, target, r[:relation].to_sym,
                                        Array(r[:path]), r[:value])
         end
         data.fetch(:unresolved).each do |u|
           source = @by_id[u[:source_id]]
-          raise TypeError, "invalid cached unresolved reference" unless source
+          raise TypeError, 'invalid cached unresolved reference' unless source
 
           @unresolved_references << UnresolvedReference.new(
             source, u[:qualified_name],

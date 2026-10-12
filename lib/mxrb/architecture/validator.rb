@@ -41,11 +41,11 @@ module Mxrb
 
       def late_bound_page_nanoflow?(edge)
         from = @graph.nodes[edge.from]
-        from&.kind == :page && edge.to.include?("::nanoflow::")
+        from&.kind == :page && edge.to.include?('::nanoflow::')
       end
 
       def platform_owned_target?(target)
-        target.start_with?("System::")
+        target.start_with?('System::')
       end
 
       def validate_layers(errors)
@@ -57,11 +57,12 @@ module Mxrb
           if from.kind == :page && to.kind == :repository
             errors << "#{from.id} cannot access repository #{to.id} directly"
           end
-          if from.kind == :entity && edge.relation.to_s.start_with?("on_") && to.kind == :nanoflow
+          if from.kind == :entity && edge.relation.to_s.start_with?('on_') && to.kind == :nanoflow
             errors << "#{from.id} lifecycle cannot call client-side #{to.id}"
           end
           # Entity-to-entity associations are allowed cross-module in Mendix domain model
           next if edge.relation == :association && from.kind == :entity && to.kind == :entity
+
           if from.module_name != to.module_name && !to.metadata.fetch(:public, false)
             errors << "#{from.id} references internal artifact #{to.id} from another module"
           end
@@ -79,6 +80,7 @@ module Mxrb
 
         visit = lambda do |node|
           return if visited[node]
+
           if visiting[node]
             start = stack.index(node) || 0
             errors << "call cycle detected: #{(stack[start..] + [node]).join(' -> ')}"

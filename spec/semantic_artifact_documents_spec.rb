@@ -67,12 +67,12 @@ RSpec.describe 'semantic artifact documents' do
                              'ReturnValue' => '$Allowed', 'Size' => '20;20'
     )
     parameter = node('Microflows$MicroflowParameter', {
-      'DefaultValue' => '', 'Documentation' => '',
-      'HasVariableNameBeenChanged' => false,
-      'IsRequired' => true, 'Name' => 'Allowed',
-      'RelativeMiddlePoint' => '100;180', 'Size' => '30;30',
-      'VariableType' => node('DataTypes$BooleanType')
-    })
+                       'DefaultValue' => '', 'Documentation' => '',
+                       'HasVariableNameBeenChanged' => false,
+                       'IsRequired' => true, 'Name' => 'Allowed',
+                       'RelativeMiddlePoint' => '100;180', 'Size' => '30;30',
+                       'VariableType' => node('DataTypes$BooleanType')
+                     })
     {
       '$Type' => 'Microflows$Rule', 'ApplyEntityAccess' => false, 'Documentation' => '',
       'Excluded' => false, 'ExportLevel' => 'Hidden',

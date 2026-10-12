@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "fileutils"
+require 'fileutils'
 
 module Mxrb
   module Semantic
@@ -28,7 +28,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "batch plan was already applied" if @applied
+        raise ArgumentError, 'batch plan was already applied' if @applied
         return self if @plans.empty?
 
         backup_path = "#{@project.mpr.path}.mxrb_batch_backup"
@@ -37,14 +37,14 @@ module Mxrb
         begin
           @plans.each(&:apply!)
           @applied = true
-        rescue => error
+        rescue StandardError => e
           idx = @plans.index { !_1.applied? }.to_i + 1
           rollback_errors = rollback_applied_plans
           @project.mpr.restore_from!(backup_path)
           @project.refresh!
-          detail = rollback_errors.empty? ? "" : "; rollback failed: #{rollback_errors.join(', ')}"
+          detail = rollback_errors.empty? ? '' : "; rollback failed: #{rollback_errors.join(', ')}"
           raise BatchError,
-                "batch failed at plan #{idx} of #{@plans.size}: #{error.message}#{detail}"
+                "batch failed at plan #{idx} of #{@plans.size}: #{e.message}#{detail}"
         ensure
           @project.mpr.cleanup_backup!(backup_path) rescue nil
         end
@@ -59,8 +59,8 @@ module Mxrb
 
           plan.rollback!
           nil
-        rescue StandardError => error
-          "#{plan.class}: #{error.message}"
+        rescue StandardError => e
+          "#{plan.class}: #{e.message}"
         end
       end
     end

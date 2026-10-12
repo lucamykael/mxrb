@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "coverage_helper"
-require "mxrb"
+require_relative 'coverage_helper'
+require 'mxrb'
 
-local_environment = Mxrb::Environment.load(root: File.expand_path("..", __dir__))
+local_environment = Mxrb::Environment.load(root: File.expand_path('..', __dir__))
 %w[
   MXRB_FIXTURES_ROOT MXRB_BENCHMARK_MPR MXRB_CONNECTOR_FIXTURE MXRB_ACCEPTANCE_MPRS
 ].each do |key|

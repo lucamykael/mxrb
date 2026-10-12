@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require "sqlite3"
-require "securerandom"
-require "json"
-require "fileutils"
-require_relative "bson_codec"
-require_relative "mxunit_codec"
-require_relative "../studio_compatibility"
+require 'sqlite3'
+require 'securerandom'
+require 'json'
+require 'fileutils'
+require_relative 'bson_codec'
+require_relative 'mxunit_codec'
+require_relative '../studio_compatibility'
 
 module Mxrb
   module IO
@@ -50,8 +50,8 @@ module Mxrb
 
       def mendix_version
         @mendix_version ||= begin
-          row = @db.get_first_row("SELECT _ProductVersion FROM _MetaData LIMIT 1") rescue nil
-          row ||= @db.get_first_row("SELECT MendixVersion FROM _MetaData LIMIT 1") rescue nil
+          row = @db.get_first_row('SELECT _ProductVersion FROM _MetaData LIMIT 1') rescue nil
+          row ||= @db.get_first_row('SELECT MendixVersion FROM _MetaData LIMIT 1') rescue nil
           row&.first
         end
       end
@@ -62,11 +62,11 @@ module Mxrb
         # Try new-style column first, fall back to old-style
         begin
           @db.execute(
-            "UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?, _SchemaHash = ?",
+            'UPDATE _MetaData SET _ProductVersion = ?, _BuildVersion = ?, _SchemaHash = ?',
             [version_str, version_str, schema_hash]
           )
         rescue SQLite3::Exception
-          @db.execute("UPDATE _MetaData SET MendixVersion = ?", [version_str])
+          @db.execute('UPDATE _MetaData SET MendixVersion = ?', [version_str])
         end
         @mendix_version = version_str
       end
@@ -78,7 +78,7 @@ module Mxrb
           return nil unless root
 
           doc = parse_contents(root)
-          doc["Name"] || doc["name"] || File.basename(@path, ".mpr")
+          doc['Name'] || doc['name'] || File.basename(@path, '.mpr')
         end
       end
 
@@ -89,7 +89,7 @@ module Mxrb
         @root_unit ||= begin
           row = @db.get_first_row(
             "SELECT #{unit_select_columns} FROM Unit " \
-            "WHERE UnitID = ContainerID LIMIT 1"
+            'WHERE UnitID = ContainerID LIMIT 1'
           )
           row ? raw_to_hash(row) : nil
         end
@@ -99,7 +99,7 @@ module Mxrb
       def units_by_containment(name)
         @db.execute(
           "SELECT #{unit_select_columns} FROM Unit " \
-          "WHERE ContainmentName = ?",
+          'WHERE ContainmentName = ?',
           [name]
         ).map { raw_to_hash(_1) }
       end
@@ -109,7 +109,7 @@ module Mxrb
         blob = BsonCodec.uuid_to_blob(parent_uuid)
         @db.execute(
           "SELECT #{unit_select_columns} FROM Unit " \
-          "WHERE ContainerID = ? AND UnitID != ContainerID",
+          'WHERE ContainerID = ? AND UnitID != ContainerID',
           [blob]
         ).map { raw_to_hash(_1) }
       end
@@ -133,13 +133,14 @@ module Mxrb
 
       # Parse BSON from a raw unit hash.
       def parse_contents(raw_unit)
-        blob = raw_unit["Contents"]
+        blob = raw_unit['Contents']
         if (blob.nil? || blob.empty?) && @format_version == :v2
-          staged, bytes = staged_v2_content(raw_unit.fetch("UnitID"))
+          staged, bytes = staged_v2_content(raw_unit.fetch('UnitID'))
           return bytes ? BsonCodec.parse(bytes) : {} if staged
 
-          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch('UnitID'))
           return {} unless File.file?(unit_path)
+
           return MxunitCodec.read(unit_path)
         end
         return {} if blob.nil? || blob.empty?
@@ -148,12 +149,12 @@ module Mxrb
       end
 
       def content_bytes(raw_unit)
-        blob = raw_unit["Contents"]
+        blob = raw_unit['Contents']
         if (blob.nil? || blob.empty?) && @format_version == :v2
-          staged, bytes = staged_v2_content(raw_unit.fetch("UnitID"))
+          staged, bytes = staged_v2_content(raw_unit.fetch('UnitID'))
           return bytes if staged
 
-          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+          unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch('UnitID'))
           return nil unless File.file?(unit_path)
 
           return File.binread(unit_path)
@@ -164,20 +165,20 @@ module Mxrb
       def content_path(raw_unit)
         return nil unless @format_version == :v2
 
-        MxunitCodec.path_for(contents_dir, raw_unit.fetch("UnitID"))
+        MxunitCodec.path_for(contents_dir, raw_unit.fetch('UnitID'))
       end
 
       def content_files
         return [] unless @format_version == :v2 && File.directory?(contents_dir)
 
-        Dir.glob(File.join(contents_dir, "**", "*.mxunit")).sort
+        Dir.glob(File.join(contents_dir, '**', '*.mxunit')).sort
       end
 
       # Studio Pro 11 requires both the transaction marker table and a
       # filename sidecar for externally stored v2 unit contents.
       def ensure_v2_contract!
         return self unless @format_version == :v2
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         @db.execute('CREATE TABLE IF NOT EXISTS _Transaction (LastTransactionID TEXT)')
         if @db.get_first_value('SELECT LastTransactionID FROM _Transaction LIMIT 1').to_s.empty?
@@ -202,10 +203,10 @@ module Mxrb
       end
 
       def migrate_storage_format!(target)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         requested = target.to_sym
-        raise ArgumentError, "storage format must be v1 or v2" unless %i[v1 v2].include?(requested)
+        raise ArgumentError, 'storage format must be v1 or v2' unless %i[v1 v2].include?(requested)
         return self if requested == @format_version
 
         if (owner = foreign_contents_owner)
@@ -224,12 +225,12 @@ module Mxrb
 
       # Insert a new unit. Returns the assigned UUID.
       def insert_unit(container_uuid:, containment_name:, contents_doc:, unit_uuid: nil)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         contents_doc = compatible_document(contents_doc)
-        uuid = unit_uuid || BsonCodec.extract_id(contents_doc["$ID"] || contents_doc["\$ID"]) || SecureRandom.uuid
-        unless contents_doc.key?("$ID") || contents_doc.key?("\$ID")
-          contents_doc = { "$ID" => uuid }.merge(contents_doc)
+        uuid = unit_uuid || BsonCodec.extract_id(contents_doc['$ID'] || contents_doc["\$ID"]) || SecureRandom.uuid
+        unless contents_doc.key?('$ID') || contents_doc.key?("\$ID")
+          contents_doc = { '$ID' => uuid }.merge(contents_doc)
         end
         unit_blob    = BsonCodec.uuid_to_blob(uuid)
         parent_blob  = BsonCodec.uuid_to_blob(container_uuid)
@@ -240,13 +241,13 @@ module Mxrb
         values = [unit_blob, parent_blob, containment_name, 0, hash]
         if (conflicts = conflicts_column)
           columns << conflicts
-          values << ""
+          values << ''
         end
         if contents_column?
-          columns << "Contents"
+          columns << 'Contents'
           values << stored_bytes
         end
-        placeholders = (["?"] * columns.length).join(", ")
+        placeholders = (['?'] * columns.length).join(', ')
         @db.execute(
           "INSERT INTO Unit (#{columns.join(', ')}) VALUES (#{placeholders})",
           values
@@ -258,7 +259,7 @@ module Mxrb
 
       # Update an existing unit's contents. Recalculates ContentsHash automatically.
       def update_unit(uuid, contents_doc)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         contents_doc = compatible_document(contents_doc)
         blob       = BsonCodec.uuid_to_blob(uuid)
@@ -272,12 +273,12 @@ module Mxrb
 
         if contents_column?
           @db.execute(
-            "UPDATE Unit SET Contents = ?, ContentsHash = ? WHERE UnitID = ?",
+            'UPDATE Unit SET Contents = ?, ContentsHash = ? WHERE UnitID = ?',
             [@format_version == :v2 ? nil : bson_bytes, hash, blob]
           )
         else
           @db.execute(
-            "UPDATE Unit SET ContentsHash = ? WHERE UnitID = ?",
+            'UPDATE Unit SET ContentsHash = ? WHERE UnitID = ?',
             [hash, blob]
           )
         end
@@ -289,7 +290,7 @@ module Mxrb
       # Projects every unit only after higher-level writers have completed
       # integrity checks against the source schema (notably page overlays).
       def apply_studio_compatibility!
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         previous = @apply_studio_compatibility
         begin
@@ -306,7 +307,7 @@ module Mxrb
       # Repairs stale Unit.ContentsHash metadata without reserializing or
       # otherwise changing the BSON/mxunit payload. Returns an audit trail.
       def repair_content_hashes!
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         repairs = []
         transaction do
@@ -329,18 +330,19 @@ module Mxrb
       end
 
       def delete_unit(uuid)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
-        @db.execute("DELETE FROM Unit WHERE UnitID = ?", [BsonCodec.uuid_to_blob(uuid)])
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
+        @db.execute('DELETE FROM Unit WHERE UnitID = ?', [BsonCodec.uuid_to_blob(uuid)])
         removed = delete_v2_unit(uuid) if @format_version == :v2
         write_stats[:deleted] += 1
         removed
       end
 
       def relocate_unit(uuid, container_uuid:, containment_name:)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         @db.execute(
-          "UPDATE Unit SET ContainerID = ?, ContainmentName = ? WHERE UnitID = ?",
+          'UPDATE Unit SET ContainerID = ?, ContainmentName = ? WHERE UnitID = ?',
           [
             BsonCodec.uuid_to_blob(container_uuid),
             containment_name.to_s,
@@ -359,14 +361,14 @@ module Mxrb
       # Creates a consistent point-in-time backup using SQLite's VACUUM INTO.
       # Falls back to a WAL checkpoint + file copy on older SQLite versions.
       def backup!(dest_path)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         cleanup_backup!(dest_path)
         begin
           begin
-            @db.execute("VACUUM INTO ?", [dest_path])
+            @db.execute('VACUUM INTO ?', [dest_path])
           rescue SQLite3::Exception
-            @db.execute("PRAGMA wal_checkpoint(FULL)") rescue nil
+            @db.execute('PRAGMA wal_checkpoint(FULL)') rescue nil
             FileUtils.cp(@path, dest_path)
           end
           backup_v2_contents!(dest_path) if @format_version == :v2
@@ -379,7 +381,7 @@ module Mxrb
       # Restores the database from a backup file, replacing the current contents.
       # Closes and reopens the underlying SQLite connection.
       def restore_from!(backup_path)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         needs_snapshot = preflight_backup!(backup_path)
         @db.close
@@ -417,10 +419,10 @@ module Mxrb
 
       # Returns the cached index JSON if the fingerprint matches, nil otherwise.
       def read_index_cache(fingerprint)
-        return nil unless tables.include?("_MxrbIndexCache")
+        return nil unless tables.include?('_MxrbIndexCache')
 
         @db.get_first_value(
-          "SELECT IndexData FROM _MxrbIndexCache WHERE Fingerprint = ?", [fingerprint]
+          'SELECT IndexData FROM _MxrbIndexCache WHERE Fingerprint = ?', [fingerprint]
         )
       rescue SQLite3::Exception
         nil
@@ -437,12 +439,12 @@ module Mxrb
           )
         SQL
         @db.execute(
-          "INSERT INTO _MxrbIndexCache (Fingerprint, IndexData) VALUES (?, ?) " \
-          "ON CONFLICT(Fingerprint) DO UPDATE SET IndexData = excluded.IndexData",
+          'INSERT INTO _MxrbIndexCache (Fingerprint, IndexData) VALUES (?, ?) ' \
+          'ON CONFLICT(Fingerprint) DO UPDATE SET IndexData = excluded.IndexData',
           [fingerprint, json]
         )
         @db.execute(
-          "DELETE FROM _MxrbIndexCache WHERE Fingerprint <> ?", [fingerprint]
+          'DELETE FROM _MxrbIndexCache WHERE Fingerprint <> ?', [fingerprint]
         )
       rescue SQLite3::Exception
         nil
@@ -450,7 +452,7 @@ module Mxrb
 
       # Returns cache size and fingerprints without parsing the cached payload.
       def index_cache_info(current_fingerprint: nil)
-        unless tables.include?("_MxrbIndexCache")
+        unless tables.include?('_MxrbIndexCache')
           return {
             present: false, entries: 0, bytes: 0,
             fingerprints: [].freeze, current_fingerprint:,
@@ -459,7 +461,7 @@ module Mxrb
         end
 
         rows = @db.execute(
-          "SELECT Fingerprint, LENGTH(IndexData) FROM _MxrbIndexCache ORDER BY Fingerprint"
+          'SELECT Fingerprint, LENGTH(IndexData) FROM _MxrbIndexCache ORDER BY Fingerprint'
         )
         fingerprints = rows.map { _1[0].to_s }.freeze
         {
@@ -480,11 +482,11 @@ module Mxrb
 
       # Clears cached semantic data while preserving the cache table.
       def clear_index_cache!
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
-        return 0 unless tables.include?("_MxrbIndexCache")
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+        return 0 unless tables.include?('_MxrbIndexCache')
 
-        count = @db.get_first_value("SELECT COUNT(*) FROM _MxrbIndexCache").to_i
-        @db.execute("DELETE FROM _MxrbIndexCache")
+        count = @db.get_first_value('SELECT COUNT(*) FROM _MxrbIndexCache').to_i
+        @db.execute('DELETE FROM _MxrbIndexCache')
         count
       end
 
@@ -494,7 +496,7 @@ module Mxrb
       def load_vec_extension!
         return true if @vec_loaded
 
-        require "sqlite_vec"
+        require 'sqlite_vec'
         @db.enable_load_extension(true)
         begin
           SqliteVec.load(@db)
@@ -508,7 +510,7 @@ module Mxrb
         ensure_vector_write!
         identifier = vector_identifier(table)
         size = Integer(dimension)
-        raise ArgumentError, "vector dimension must be positive" unless size.positive?
+        raise ArgumentError, 'vector dimension must be positive' unless size.positive?
 
         @db.execute(<<~SQL)
           CREATE VIRTUAL TABLE IF NOT EXISTS #{identifier}
@@ -534,7 +536,7 @@ module Mxrb
         identifier = vector_identifier(table)
         @db.execute(
           "INSERT OR REPLACE INTO #{identifier} " \
-          "(ID, Backend, Dimension, Fingerprint) VALUES (1, ?, ?, ?)",
+          '(ID, Backend, Dimension, Fingerprint) VALUES (1, ?, ?, ?)',
           [backend, dimension, fingerprint]
         )
       end
@@ -567,7 +569,7 @@ module Mxrb
         identifier = vector_identifier(table)
         @db.execute(
           "SELECT artifact_id, distance FROM #{identifier} " \
-          "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+          'WHERE embedding MATCH ? ORDER BY distance LIMIT ?',
           [json_vec, Integer(limit)]
         ).map { { id: _1[0], distance: _1[1] } }
       end
@@ -588,13 +590,15 @@ module Mxrb
       # mxrb-only architecture metadata for concepts without a native Mendix
       # unit (ports/repositories) or bindings awaiting a concrete widget tree.
       def architecture_definition
-        return nil unless tables.include?("_MxrbArchitecture")
-        json = @db.get_first_value("SELECT Definition FROM _MxrbArchitecture WHERE ID = 1")
+        return nil unless tables.include?('_MxrbArchitecture')
+
+        json = @db.get_first_value('SELECT Definition FROM _MxrbArchitecture WHERE ID = 1')
         json && BsonCodec.restore_extended_json(JSON.parse(json, symbolize_names: true))
       end
 
       def write_architecture_definition(definition)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
         @db.execute(<<~SQL)
           CREATE TABLE IF NOT EXISTS _MxrbArchitecture (
             ID INTEGER PRIMARY KEY CHECK (ID = 1),
@@ -603,7 +607,7 @@ module Mxrb
           )
         SQL
         @db.execute(
-          "INSERT OR REPLACE INTO _MxrbArchitecture (ID, Version, Definition) VALUES (1, 1, ?)",
+          'INSERT OR REPLACE INTO _MxrbArchitecture (ID, Version, Definition) VALUES (1, 1, ?)',
           [JSON.generate(definition)]
         )
       end
@@ -612,10 +616,10 @@ module Mxrb
       # keep editing the native model while MXRB can later restore the exact
       # conventional application sources on a Ruby-mode export.
       def ruby_app_sources
-        return [] unless tables.include?("_MxrbRubySource")
+        return [] unless tables.include?('_MxrbRubySource')
 
-        has_mode = table_info("_MxrbRubySource").any? { (_1["name"] || _1[:name]) == "Mode" }
-        columns = has_mode ? "Path, Contents, Sha256, Mode" : "Path, Contents, Sha256"
+        has_mode = table_info('_MxrbRubySource').any? { (_1['name'] || _1[:name]) == 'Mode' }
+        columns = has_mode ? 'Path, Contents, Sha256, Mode' : 'Path, Contents, Sha256'
         @db.execute("SELECT #{columns} FROM _MxrbRubySource ORDER BY Path").map do |row|
           fallback = row[0].to_s.start_with?('bin/') ? 0o755 : 0o644
           { path: row[0], contents: row[1], sha256: row[2], mode: has_mode ? row[3] : fallback }
@@ -623,7 +627,7 @@ module Mxrb
       end
 
       def write_ruby_app_sources(files)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         @db.execute(<<~SQL)
           CREATE TABLE IF NOT EXISTS _MxrbRubySource (
@@ -633,13 +637,13 @@ module Mxrb
             Mode INTEGER NOT NULL DEFAULT 420
           )
         SQL
-        unless table_info("_MxrbRubySource").any? { (_1["name"] || _1[:name]) == "Mode" }
-          @db.execute("ALTER TABLE _MxrbRubySource ADD COLUMN Mode INTEGER NOT NULL DEFAULT 420")
+        unless table_info('_MxrbRubySource').any? { (_1['name'] || _1[:name]) == 'Mode' }
+          @db.execute('ALTER TABLE _MxrbRubySource ADD COLUMN Mode INTEGER NOT NULL DEFAULT 420')
         end
-        @db.execute("DELETE FROM _MxrbRubySource")
+        @db.execute('DELETE FROM _MxrbRubySource')
         files.each do |file|
           @db.execute(
-            "INSERT INTO _MxrbRubySource (Path, Contents, Sha256, Mode) VALUES (?, ?, ?, ?)",
+            'INSERT INTO _MxrbRubySource (Path, Contents, Sha256, Mode) VALUES (?, ?, ?, ?)',
             [
               file.fetch(:path), SQLite3::Blob.new(file.fetch(:contents)),
               file.fetch(:sha256), file.fetch(:mode, 0o644)
@@ -652,7 +656,7 @@ module Mxrb
       # connection fields. Keep their ER-editor anchors in an MXRB-only table
       # so the diagram remains editable without inventing unsupported BSON.
       def domain_diagram_anchors
-        return {} unless tables.include?("_MxrbDomainDiagramAssociation")
+        return {} unless tables.include?('_MxrbDomainDiagramAssociation')
 
         @db.execute(<<~SQL).to_h do |row|
           SELECT AssociationID, SourceAnchor, TargetAnchor
@@ -663,7 +667,8 @@ module Mxrb
       end
 
       def write_domain_diagram_anchors(layouts)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
         items = Array(layouts)
         return 0 if items.empty?
 
@@ -684,8 +689,8 @@ module Mxrb
           next false if current[id] == anchors
 
           @db.execute(
-            "INSERT OR REPLACE INTO _MxrbDomainDiagramAssociation " \
-            "(AssociationID, SourceAnchor, TargetAnchor) VALUES (?, ?, ?)",
+            'INSERT OR REPLACE INTO _MxrbDomainDiagramAssociation ' \
+            '(AssociationID, SourceAnchor, TargetAnchor) VALUES (?, ?, ?)',
             [id, anchors.fetch(:source_anchor), anchors.fetch(:target_anchor)]
           )
           true
@@ -693,7 +698,7 @@ module Mxrb
       end
 
       def legacy_unit_identity_mismatches
-        return [] unless tables.include?("_MxrbCompatibility")
+        return [] unless tables.include?('_MxrbCompatibility')
 
         @db.execute(<<~SQL).map do |row|
           SELECT UnitID, ContentID, UnitType
@@ -705,7 +710,7 @@ module Mxrb
       end
 
       def write_legacy_unit_identity_mismatches(mismatches)
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         @db.execute(<<~SQL)
           CREATE TABLE IF NOT EXISTS _MxrbCompatibility (
@@ -719,8 +724,8 @@ module Mxrb
         @db.execute("DELETE FROM _MxrbCompatibility WHERE Kind = 'legacy-unit-identity'")
         mismatches.each do |mismatch|
           @db.execute(
-            "INSERT INTO _MxrbCompatibility (Kind, UnitID, ContentID, UnitType) VALUES (?, ?, ?, ?)",
-            ["legacy-unit-identity", mismatch.fetch(:unit_id),
+            'INSERT INTO _MxrbCompatibility (Kind, UnitID, ContentID, UnitType) VALUES (?, ?, ?, ?)',
+            ['legacy-unit-identity', mismatch.fetch(:unit_id),
              mismatch.fetch(:content_id), mismatch.fetch(:type)]
           )
         end
@@ -839,7 +844,7 @@ module Mxrb
       end
 
       def ensure_vector_write!
-        raise ReadOnlyError, "Opened in read-only mode" if @readonly
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
       end
 
       def vector_identifier(value)
@@ -859,14 +864,14 @@ module Mxrb
 
       def validate!
         magic = File.binread(@path, 16) rescue nil
-        raise NotMprError, "#{@path}: not a valid SQLite file" unless magic&.start_with?("SQLite format 3")
-        raise NotMprError, "#{@path}: Unit table missing — not a valid .mpr file" unless tables.include?("Unit")
+        raise NotMprError, "#{@path}: not a valid SQLite file" unless magic&.start_with?('SQLite format 3')
+        raise NotMprError, "#{@path}: Unit table missing — not a valid .mpr file" unless tables.include?('Unit')
       end
 
       def preflight_backup!(backup_path)
         magic = File.binread(backup_path, 16) if File.file?(backup_path)
         raise NotMprError, "#{backup_path}: not a valid SQLite file" \
-          unless magic&.start_with?("SQLite format 3")
+          unless magic&.start_with?('SQLite format 3')
 
         backup_db = SQLite3::Database.new(
           backup_path,
@@ -878,7 +883,7 @@ module Mxrb
         raise NotMprError, "#{backup_path}: Unit table missing — not a valid .mpr file" \
           unless unit_table
 
-        contents_column = backup_db.execute("PRAGMA table_info(Unit)").any? { _1[1] == "Contents" }
+        contents_column = backup_db.execute('PRAGMA table_info(Unit)').any? { _1[1] == 'Contents' }
         snapshot_dir = backup_contents_dir(backup_path)
         needs_snapshot = !contents_column || File.directory?(snapshot_dir)
         if needs_snapshot && !File.directory?(snapshot_dir)
@@ -920,7 +925,7 @@ module Mxrb
       end
 
       def contents_dir
-        File.join(File.dirname(@path), "mprcontents")
+        File.join(File.dirname(@path), 'mprcontents')
       end
 
       def backup_contents_dir(path)
@@ -954,28 +959,28 @@ module Mxrb
 
       def relative_mxunit_paths(directory)
         prefix_length = directory.length + 1
-        Dir.glob(File.join(directory, "**", "*.mxunit")).sort.map do |path|
+        Dir.glob(File.join(directory, '**', '*.mxunit')).sort.map do |path|
           path[prefix_length..]
         end
       end
 
       def unit_columns
-        @unit_columns ||= table_info("Unit").map { _1["name"] || _1[:name] }
+        @unit_columns ||= table_info('Unit').map { _1['name'] || _1[:name] }
       end
 
       def contents_column?
-        unit_columns.include?("Contents")
+        unit_columns.include?('Contents')
       end
 
       def conflicts_column
-        return "ContentsConflicts" if unit_columns.include?("ContentsConflicts")
-        return "ContentsConflict" if unit_columns.include?("ContentsConflict")
+        return 'ContentsConflicts' if unit_columns.include?('ContentsConflicts')
+        return 'ContentsConflict' if unit_columns.include?('ContentsConflict')
 
         nil
       end
 
       def unit_select_columns
-        contents = contents_column? ? "Contents" : "NULL AS Contents"
+        contents = contents_column? ? 'Contents' : 'NULL AS Contents'
         "UnitID, ContainerID, ContainmentName, ContentsHash, #{contents}"
       end
 
@@ -1129,7 +1134,7 @@ module Mxrb
         return unless File.directory?(transaction_journal_dir)
         if @readonly
           raise IncompletePackageError,
-                "MPR has an interrupted file transaction; open writable to recover: " \
+                'MPR has an interrupted file transaction; open writable to recover: ' \
                 "#{transaction_journal_dir}"
         end
 
@@ -1173,8 +1178,8 @@ module Mxrb
         keys = %w[UnitID ContainerID ContainmentName ContentsHash Contents]
         h    = keys.zip(row).to_h
         # Convert blob UUIDs to strings for ergonomics
-        h["UnitID"]      = BsonCodec.blob_to_uuid(h["UnitID"])      if h["UnitID"]
-        h["ContainerID"] = BsonCodec.blob_to_uuid(h["ContainerID"]) if h["ContainerID"]
+        h['UnitID']      = BsonCodec.blob_to_uuid(h['UnitID'])      if h['UnitID']
+        h['ContainerID'] = BsonCodec.blob_to_uuid(h['ContainerID']) if h['ContainerID']
         h
       end
     end

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "bson"
-require "digest"
-require "base64"
+require 'bson'
+require 'digest'
+require 'base64'
 
 module Mxrb
   module IO
@@ -21,17 +21,17 @@ module Mxrb
         return nil unless blob.is_a?(String) && blob.bytesize == 16
 
         b = blob.bytes
-        p1 = b[0..3].reverse.map { "%02x" % _1 }.join
-        p2 = b[4..5].reverse.map { "%02x" % _1 }.join
-        p3 = b[6..7].reverse.map { "%02x" % _1 }.join
-        p4 = b[8..9].map  { "%02x" % _1 }.join
-        p5 = b[10..15].map { "%02x" % _1 }.join
+        p1 = b[0..3].reverse.map { '%02x' % _1 }.join
+        p2 = b[4..5].reverse.map { '%02x' % _1 }.join
+        p3 = b[6..7].reverse.map { '%02x' % _1 }.join
+        p4 = b[8..9].map { '%02x' % _1 }.join
+        p5 = b[10..15].map { '%02x' % _1 }.join
         "#{p1}-#{p2}-#{p3}-#{p4}-#{p5}"
       end
 
       # Convert a UUID string to a 16-byte MS-GUID blob.
       def self.uuid_to_blob(uuid)
-        hex   = uuid.delete("-")
+        hex   = uuid.delete('-')
         parts = hex.scan(/../).map { _1.to_i(16).chr(Encoding::BINARY) }
         (parts[0..3].reverse + parts[4..5].reverse + parts[6..7].reverse + parts[8..15]).join
       end
@@ -45,23 +45,24 @@ module Mxrb
       def self.extract_id(value)
         case value
         when String
-          value  # already a UUID string
+          value # already a UUID string
         when BSON::Binary
           blob_to_uuid(value.data)
         when Hash
           binary = extended_binary(value)
           return blob_to_uuid(binary.data) if binary
 
-          data = value["Data"] || value[:Data]
+          data = value['Data'] || value[:Data]
           return nil unless data
+
           blob_to_uuid(Base64.strict_decode64(data.to_s))
         end
       end
 
       BINARY_SUBTYPES = {
-        "00" => :generic, "01" => :function, "02" => :old_binary,
-        "03" => :uuid_old, "04" => :uuid, "05" => :md5,
-        "80" => :user
+        '00' => :generic, '01' => :function, '02' => :old_binary,
+        '03' => :uuid_old, '04' => :uuid, '05' => :md5,
+        '80' => :user
       }.freeze
 
       # Restores BSON values serialized through JSON's canonical extended form.
@@ -82,13 +83,13 @@ module Mxrb
       end
 
       def self.extended_binary(value)
-        payload = value["$binary"] || value[:$binary]
+        payload = value['$binary'] || value[:$binary]
         return unless payload.is_a?(Hash)
 
-        base64 = payload["base64"] || payload[:base64]
+        base64 = payload['base64'] || payload[:base64]
         return unless base64
 
-        subtype = payload["subType"] || payload[:subType] || "00"
+        subtype = payload['subType'] || payload[:subType] || '00'
         BSON::Binary.new(
           Base64.strict_decode64(base64.to_s.delete(" \t\r\n")),
           BINARY_SUBTYPES.fetch(subtype.to_s.downcase, :generic)
@@ -122,7 +123,7 @@ module Mxrb
 
         buf = BSON::ByteBuffer.new(bytes.b)
         BSON::Document.from_bson(buf).to_h
-      rescue => e
+      rescue StandardError => e
         raise SerializationError, "BSON parse error: #{e.message}"
       end
 
@@ -135,7 +136,7 @@ module Mxrb
         buf = BSON::ByteBuffer.new
         bson_doc.to_bson(buf)
         buf.get_bytes(buf.length)
-      rescue => e
+      rescue StandardError => e
         raise SerializationError, "BSON serialize error: #{e.message}"
       end
 
@@ -148,7 +149,7 @@ module Mxrb
 
       def self.storage_value(value, key = nil, int64_properties: false)
         if BINARY_UUID_KEYS.include?(key) &&
-            value.is_a?(String) && value.match?(UUID_PATTERN)
+           value.is_a?(String) && value.match?(UUID_PATTERN)
           return BSON::Binary.new(uuid_to_blob(value), :generic)
         end
 
@@ -196,15 +197,15 @@ module Mxrb
 
       # Map ContainmentName → expected $Type prefix for quick type detection.
       CONTAINMENT_TO_TYPE = {
-        "Modules"             => "Projects$Module",
-        "DomainModel"         => "DomainModels$DomainModel",
-        "Documents"           => nil,  # could be Page, Microflow, etc — read $Type
-        "Folders"             => "Projects$Folder",
-        "ModuleSecurity"      => "Security$ModuleSecurity",
-        "Settings"            => "Settings$ProjectSettings",
-        "Security"            => "Security$ProjectSecurity",
-        "NavigationDocuments" => "Navigation$NavigationDocument",
-        "SystemTexts"         => "Texts$SystemTextCollection",
+        'Modules' => 'Projects$Module',
+        'DomainModel' => 'DomainModels$DomainModel',
+        'Documents' => nil, # could be Page, Microflow, etc — read $Type
+        'Folders' => 'Projects$Folder',
+        'ModuleSecurity' => 'Security$ModuleSecurity',
+        'Settings' => 'Settings$ProjectSettings',
+        'Security' => 'Security$ProjectSecurity',
+        'NavigationDocuments' => 'Navigation$NavigationDocument',
+        'SystemTexts' => 'Texts$SystemTextCollection'
       }.freeze
     end
   end

@@ -42,9 +42,9 @@ RSpec.describe Mxrb::RubyApp::RegularExpression do
   def add_validation_reference(mpr, path)
     Mxrb::Writer.new(path, version: '11.12.1', modules: [])
                 .synchronize_ruby_entity_behaviors!(mpr, module_name: 'App', entities: [{
-                  name: 'Item', validation_rules: [{ attribute: 'Name', kind: 'DomainModels$RegExRuleInfo',
-                                                     rule_info: { 'RegExIdentifier' => 'App.Pattern' } }]
-                }])
+                                                      name: 'Item', validation_rules: [{ attribute: 'Name', kind: 'DomainModels$RegExRuleInfo',
+                                                                                         rule_info: { 'RegExIdentifier' => 'App.Pattern' } }]
+                                                    }])
   end
 
   def expressions(path)

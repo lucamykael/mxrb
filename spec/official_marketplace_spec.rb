@@ -174,9 +174,9 @@ RSpec.describe Mxrb::OfficialMarketplace do
   it 'imports MPK archives, writes a lock, and verifies installed contents' do
     Dir.mktmpdir do |dir|
       archive = zip_file(File.join(dir, 'CommunityCommons.mpk'), {
-        'CommunityCommons/module.xml' => '<module />',
-        'CommunityCommons/resources/readme.txt' => 'hello'
-      })
+                           'CommunityCommons/module.xml' => '<module />',
+                           'CommunityCommons/resources/readme.txt' => 'hello'
+                         })
       target = File.join(dir, 'project')
       result = described_class::Installer.new(target:).import(archive)
       expect(result.destination).to eq(File.join(target, 'modules', 'CommunityCommons'))

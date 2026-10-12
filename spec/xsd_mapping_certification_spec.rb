@@ -45,10 +45,10 @@ RSpec.describe 'XSD mapping certification' do
     expect(exporter.send(:semantic_xml_schema?, future_field)).to be(false)
 
     declaration = exporter.send(:integration_document_declaration, {
-      type: 'XmlSchemas$XmlSchema', name: 'Opaque', id: SecureRandom.uuid,
-      container_id: SecureRandom.uuid, containment: 'Documents',
-      doc: valid.merge('Future' => true)
-    })
+                                  type: 'XmlSchemas$XmlSchema', name: 'Opaque', id: SecureRandom.uuid,
+                                  container_id: SecureRandom.uuid, containment: 'Documents',
+                                  doc: valid.merge('Future' => true)
+                                })
     expect(declaration).to include('native_document :Opaque', 'deep_structure:')
   end
 
@@ -69,17 +69,17 @@ RSpec.describe 'XSD mapping certification' do
            )).to be(false)
     expect(exporter.send(:semantic_wsdl_entry?, 'bad')).to be(false)
     expect(exporter.send(:semantic_wsdl_entry?, {
-      '$Type' => 'WebServices$FutureEntryImpl'
-    })).to be(false)
+                           '$Type' => 'WebServices$FutureEntryImpl'
+                         })).to be(false)
     expect(exporter.send(:semantic_wsdl_schema_entry?, {
-      '$Type' => 'XmlSchemas$FutureContents'
-    })).to be(false)
+                           '$Type' => 'XmlSchemas$FutureContents'
+                         })).to be(false)
 
     declaration = exporter.send(:integration_document_declaration, {
-      type: 'WebServices$ImportedServiceImpl', name: 'OpaqueSoap', id: SecureRandom.uuid,
-      container_id: SecureRandom.uuid, containment: 'Documents',
-      doc: valid.merge('Future' => true)
-    })
+                                  type: 'WebServices$ImportedServiceImpl', name: 'OpaqueSoap', id: SecureRandom.uuid,
+                                  container_id: SecureRandom.uuid, containment: 'Documents',
+                                  doc: valid.merge('Future' => true)
+                                })
     expect(declaration).to include('native_document :OpaqueSoap', 'deep_structure:')
   end
 

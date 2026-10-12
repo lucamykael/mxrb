@@ -197,9 +197,9 @@ RSpec.describe 'Runtime microflow compilers' do
 
   it 'handles absent security and rejects unsupported roots and root fields' do
     runtime_schema = schema(fields: {
-      'Microflows$Rule' => %w[$ID $Type ModelerAllowedUserRoles Unknown],
-      'Other$Flow' => %w[$ID $Type]
-    }, existing: {})
+                              'Microflows$Rule' => %w[$ID $Type ModelerAllowedUserRoles Unknown],
+                              'Other$Flow' => %w[$ID $Type]
+                            }, existing: {})
     compiler = Mxrb::Compiler::MicroflowDocumentCompiler.new(source(nil), runtime_schema)
     rule = Mxrb::Compiler::SourceModel::Unit.new(
       id: id(1), container_id: id(1), containment: 'Documents', module_name: 'App',

@@ -113,9 +113,9 @@ RSpec.describe 'Workflow certification' do
     }
     expect(exporter.send(:semantic_workflow?, future)).to be(false)
     declaration = exporter.send(:integration_document_declaration, {
-      type: 'Workflows$Workflow', name: 'Approval', id: SecureRandom.uuid,
-      container_id: SecureRandom.uuid, containment: 'Documents', doc: future
-    })
+                                  type: 'Workflows$Workflow', name: 'Approval', id: SecureRandom.uuid,
+                                  container_id: SecureRandom.uuid, containment: 'Documents', doc: future
+                                })
     expect(declaration).to include('native_document :Approval', 'deep_structure:')
   end
 
@@ -398,8 +398,8 @@ RSpec.describe 'Workflow certification' do
 
     processes = [true, false].map do |interrupting|
       builder.send(:workflow_event_sub_process, {
-        name: 'Notice', interrupting:, activities: [{ type: :wait_timer, delay: '[%CurrentDateTime%]' }]
-      }, 0)
+                     name: 'Notice', interrupting:, activities: [{ type: :wait_timer, delay: '[%CurrentDateTime%]' }]
+                   }, 0)
     end
     expect(processes.map { exporter.send(:semantic_workflow_event_sub_process?, _1) }).to all(be(true))
     expect(processes.map { exporter.send(:workflow_event_sub_process_spec, _1).fetch(:interrupting) })
@@ -467,9 +467,9 @@ RSpec.describe 'Workflow certification' do
     )
 
     parameter = Mxrb::Writer.allocate.send(:page_parameter_doc, {
-      name: 'WorkflowUserTask', entity: 'System.WorkflowUserTask', required: true,
-      default_value: '', id: 'parameter-id', type_id: 'type-id'
-    })
+                                             name: 'WorkflowUserTask', entity: 'System.WorkflowUserTask', required: true,
+                                             default_value: '', id: 'parameter-id', type_id: 'type-id'
+                                           })
     expect(parameter).to include('$ID' => 'parameter-id')
     expect(parameter.fetch('ParameterType')).to include('$ID' => 'type-id')
   end

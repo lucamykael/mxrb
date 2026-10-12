@@ -106,11 +106,11 @@ RSpec.describe Mxrb::Compiler::LegacyCustomWidgetCompiler do
     expect(compiler_for(source, 'Object' => nil)).to be_supported
 
     unsupported = widget.merge('Object' => {
-      'Properties' => [2, { 'TypePointer' => bool_id, 'Value' => {} }]
-    })
+                                 'Properties' => [2, { 'TypePointer' => bool_id, 'Value' => {} }]
+                               })
     unsupported['Type'] = widget['Type'].merge('ObjectType' => {
-      'PropertyTypes' => [2, { '$ID' => bool_id, 'ValueType' => { 'Type' => 'Unsupported' } }]
-    })
+                                                 'PropertyTypes' => [2, { '$ID' => bool_id, 'ValueType' => { 'Type' => 'Unsupported' } }]
+                                               })
     expect(compiler_for(source, unsupported)).not_to be_supported
 
     image_id = SecureRandom.uuid
@@ -316,18 +316,18 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
 
   it 'covers list, data-view, snippet, and dynamic association edge contracts' do
     nested = unit('Forms$Snippet', 'Nested', {
-      'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
-                         'FormCall' => { 'Form' => 'Demo.Missing' } }]
-    })
+                    'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
+                                       'FormCall' => { 'Form' => 'Demo.Missing' } }]
+                  })
     cyclic = unit('Forms$Snippet', 'Cyclic', {
-      'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
-                         'FormCall' => { 'Form' => 'Demo.Cyclic' } }]
-    })
+                    'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
+                                       'FormCall' => { 'Form' => 'Demo.Cyclic' } }]
+                  })
     page = unit('Forms$Page', 'Page', {
-      'Widgets' => [2,
-                    { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Nested' } },
-                    { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Nested' } }]
-    })
+                  'Widgets' => [2,
+                                { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Nested' } },
+                                { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Nested' } }]
+                })
     source = source_with([page, nested, cyclic])
     builder = described_class.new(source, '/not-used')
     builder.instance_variable_set(:@widget_sequence, 0)
@@ -363,9 +363,9 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
     expect(related).to include(page.document, nested.document)
     expect(builder.send(:legacy_related_snippet_documents, cyclic, {})).to include(cyclic.document)
     missing_page = unit('Forms$Page', 'MissingSnippetPage', {
-      'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
-                         'FormCall' => { 'Form' => 'Demo.NotThere' } }]
-    })
+                          'Widgets' => [2, { '$Type' => 'Forms$SnippetCallWidget',
+                                             'FormCall' => { 'Form' => 'Demo.NotThere' } }]
+                        })
     missing_builder = builder_for([missing_page])
     expect(missing_builder.send(:legacy_related_documents, 'Demo.MissingSnippetPage'))
       .to eq([missing_page.document])
@@ -411,62 +411,62 @@ RSpec.describe Mxrb::Compiler::LegacyPageBuilder do
 
   it 'renders flow-backed list views and resolves every listened entity shape' do
     microflow = unit('Microflows$Microflow', 'Load', {
-      'MicroflowReturnType' => { 'Entity' => 'Demo.Result' }
-    })
+                       'MicroflowReturnType' => { 'Entity' => 'Demo.Result' }
+                     })
     nanoflow = unit('Microflows$Nanoflow', 'LoadClient', {
-      'MicroflowReturnType' => { 'Entity' => 'Demo.ClientResult' }
-    })
+                      'MicroflowReturnType' => { 'Entity' => 'Demo.ClientResult' }
+                    })
     builder = builder_for([microflow, nanoflow])
 
     list = builder.send(:list_view_source, {
-      'Name' => 'items', 'DataSource' => {
-        '$Type' => 'Forms$MicroflowSource',
-        'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
-      }
-    }, 'Demo.Page', 'Demo.Result')
+                          'Name' => 'items', 'DataSource' => {
+                            '$Type' => 'Forms$MicroflowSource',
+                            'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+                          }
+                        }, 'Demo.Page', 'Demo.Result')
     expect(list).to include('type' => 'microflow', 'microflow' => 'Demo.Load')
     expect(builder.send(:data_view_source, {
-      '$Type' => 'Forms$NanoflowSource',
-      'NanoflowSettings' => { 'Nanoflow' => 'Demo.LoadClient' }
-    }, 'Demo.ClientResult')).to include('type' => 'nanoflow', 'nanoflow' => 'Demo.LoadClient')
+                          '$Type' => 'Forms$NanoflowSource',
+                          'NanoflowSettings' => { 'Nanoflow' => 'Demo.LoadClient' }
+                        }, 'Demo.ClientResult')).to include('type' => 'nanoflow', 'nanoflow' => 'Demo.LoadClient')
 
     expect(builder.send(:listened_widget_entity, {
-      'DataSource' => { 'EntityPath' => 'Demo.Order/Demo.Line' }
-    })).to eq('Demo.Line')
+                          'DataSource' => { 'EntityPath' => 'Demo.Order/Demo.Line' }
+                        })).to eq('Demo.Line')
     expect(builder.send(:listened_widget_entity, {
-      'DataSource' => { 'EntityRef' => { 'Steps' => [2, { 'DestinationEntity' => 'Demo.Customer' }] } }
-    })).to eq('Demo.Customer')
+                          'DataSource' => { 'EntityRef' => { 'Steps' => [2, { 'DestinationEntity' => 'Demo.Customer' }] } }
+                        })).to eq('Demo.Customer')
     expect(builder.send(:listened_widget_entity, {
-      'DataSource' => { 'EntityRef' => { 'Entity' => 'Demo.Order' } }
-    })).to eq('Demo.Order')
+                          'DataSource' => { 'EntityRef' => { 'Entity' => 'Demo.Order' } }
+                        })).to eq('Demo.Order')
     expect(builder.send(:listened_widget_entity, {
-      'DataSource' => {
-        '$Type' => 'Forms$MicroflowSource',
-        'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
-      }
-    })).to eq('Demo.Result')
+                          'DataSource' => {
+                            '$Type' => 'Forms$MicroflowSource',
+                            'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+                          }
+                        })).to eq('Demo.Result')
   end
 
   it 'covers editor, media, action, and domain-model defensive contracts' do
     image = unit('Images$ImageCollection', 'Assets', {
-      'Images' => [2, { 'Name' => 'Logo', 'Image' => BSON::Binary.new("\x89PNG\r\n\x1A\nimage".b) }]
-    })
+                   'Images' => [2, { 'Name' => 'Logo', 'Image' => BSON::Binary.new("\x89PNG\r\n\x1A\nimage".b) }]
+                 })
     page = unit('Forms$Page', 'Target', { 'PopupResizable' => false })
     domain = unit('DomainModels$DomainModel', 'Domain', {
-      'Entities' => [2, {
-        'Name' => 'Item', 'Attributes' => [2,
-                                           { 'Name' => 'Name', 'NewType' => {
-                                             '$Type' => 'DomainModels$StringAttributeType', 'Length' => 40
-                                           } },
-                                           { 'Name' => 'When', 'NewType' => {
-                                             '$Type' => 'DomainModels$DateTimeAttributeType'
-                                           } },
-                                           { 'Name' => 'LegacyState', 'Type' => {
-                                             '$Type' => 'DomainModels$EnumerationAttributeType',
-                                             'Enumeration' => 'Demo.MissingEnumeration'
-                                           } }]
-      }]
-    })
+                    'Entities' => [2, {
+                      'Name' => 'Item', 'Attributes' => [2,
+                                                         { 'Name' => 'Name', 'NewType' => {
+                                                           '$Type' => 'DomainModels$StringAttributeType', 'Length' => 40
+                                                         } },
+                                                         { 'Name' => 'When', 'NewType' => {
+                                                           '$Type' => 'DomainModels$DateTimeAttributeType'
+                                                         } },
+                                                         { 'Name' => 'LegacyState', 'Type' => {
+                                                           '$Type' => 'DomainModels$EnumerationAttributeType',
+                                                           'Enumeration' => 'Demo.MissingEnumeration'
+                                                         } }]
+                    }]
+                  })
     source = source_with([image, page, domain])
     allow(source).to receive(:version).and_return('11.12.1')
     builder = described_class.new(source, '/not-used')

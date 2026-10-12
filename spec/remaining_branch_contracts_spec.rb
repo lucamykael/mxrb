@@ -39,13 +39,13 @@ RSpec.describe 'remaining defensive branch contracts' do
       .to raise_error(Mxrb::ValidationError, /duplicate private page identity/)
 
     manifest = double(modules: [{ 'pages' => [{
-      'id' => 'page-id', 'widgets' => [{
-        'type' => 'data_view', 'name' => 'Details',
-        'options' => { 'design_properties' => [{
-          'key' => 'Color', 'option' => 'Red', 'id' => 'old-id', 'value_id' => 'old-value'
-        }] }
-      }]
-    }] }])
+                        'id' => 'page-id', 'widgets' => [{
+                          'type' => 'data_view', 'name' => 'Details',
+                          'options' => { 'design_properties' => [{
+                            'key' => 'Color', 'option' => 'Red', 'id' => 'old-id', 'value_id' => 'old-value'
+                          }] }
+                        }]
+                      }] }])
     identity = Mxrb::RubyApp::PageDesignIdentity.new(manifest)
     untouched = [{ 'type' => 'data_view', 'name' => 'Details', 'options' => {} }]
     expect(identity.restore('missing', untouched)).to equal(untouched)
@@ -453,8 +453,8 @@ RSpec.describe 'remaining defensive branch contracts' do
     source = double(units_of: [], documents: [])
     builder = Mxrb::Compiler::LegacyPageBuilder.new(source, '/tmp/unused')
     expect(builder.send(:list_view_entity, 'DataSource' => {
-      'EntityRef' => { 'Entity' => 'App.Item', 'Steps' => [2] }
-    })).to eq('App.Item')
+                          'EntityRef' => { 'Entity' => 'App.Item', 'Steps' => [2] }
+                        })).to eq('App.Item')
     expect(builder.send(:data_view_editable?, 'Editability' => 'Never')).to be(false)
     expect(builder.send(:microflow_return_entity,
                         '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'App.Load')).to eq('')
@@ -476,10 +476,10 @@ RSpec.describe 'remaining defensive branch contracts' do
   it 'covers legacy list-view step and flow fallbacks' do
     builder = Mxrb::Compiler::LegacyPageBuilder.new(double(units_of: [], documents: []), '/tmp/unused')
     expect(builder.send(:list_view_entity, 'DataSource' => {
-      'EntityRef' => { 'Entity' => 'App.Direct', 'Steps' => [2, {
-        'DestinationEntity' => 'App.Step'
-      }] }
-    })).to eq('App.Step')
+                          'EntityRef' => { 'Entity' => 'App.Direct', 'Steps' => [2, {
+                            'DestinationEntity' => 'App.Step'
+                          }] }
+                        })).to eq('App.Step')
     allow(builder).to receive(:microflow_return_entity).and_return('App.FlowResult')
     expect(builder.send(:list_view_entity, 'DataSource' => {})).to eq('App.FlowResult')
   end
@@ -524,8 +524,8 @@ RSpec.describe 'remaining defensive branch contracts' do
     }
     mpr = double(root_unit: { 'UnitID' => 'root' }, children_of: [unit])
     project = double(mpr:, parse_bson: {
-      '$Type' => 'Security$ProjectSecurity', '$ID' => nil
-    })
+                       '$Type' => 'Security$ProjectSecurity', '$ID' => nil
+                     })
     expect(identity.send(:project_security_entries, project).first.fetch('id')).to eq('unit-id')
 
     mod = {

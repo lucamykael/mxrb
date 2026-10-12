@@ -112,8 +112,8 @@ module Mxrb
 
       def ref(current_module, kind, raw_name)
         text = raw_name.to_s
-        if text.include?(".")
-          module_name, name = text.split(".", 2)
+        if text.include?('.')
+          module_name, name = text.split('.', 2)
           id(module_name, kind, name)
         else
           id(current_module, kind, text)

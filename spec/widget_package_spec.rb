@@ -163,11 +163,11 @@ RSpec.describe Mxrb::WidgetPackage do
       writer = Mxrb::Writer.new(File.join(dir, 'project.mpr'), version: '11.12.1', modules: [])
       source = { data_source: 'App.Item' }
       widget = writer.send(:pluggable_widget_doc, {
-        type: :pluggable_widget, name: 'Chart', events: [],
-        options: { properties: { title: { text: 'Revenue' }, rows: { objects: [
-          { source: }, { source:, 'tooltip' => nil }, {}
-        ] } } }
-      }, id: 'example.Chart', name: 'Chart', studio_category: '', studio_pro_category: '')
+                             type: :pluggable_widget, name: 'Chart', events: [],
+                             options: { properties: { title: { text: 'Revenue' }, rows: { objects: [
+                               { source: }, { source:, 'tooltip' => nil }, {}
+                             ] } } }
+                           }, id: 'example.Chart', name: 'Chart', studio_category: '', studio_pro_category: '')
       properties = writer.send(:custom_widget_properties, widget)
       expect(properties.dig('title', 'Value', 'TextTemplate', 'Template', 'Items').last['Text']).to eq('Revenue')
       rows = array(properties.dig('rows', 'Value', 'Objects'))

@@ -276,10 +276,10 @@ RSpec.describe Mxrb::DomainDiagram do
       build_project(source)
       lifecycle = described_class::Lifecycle.new(source, state_root: File.join(dir, 'state'))
       lifecycle.send(:write_state, {
-        'version' => 1, 'source' => source, 'output' => source,
-        'host' => '127.0.0.1', 'port' => 4568, 'token' => 'private',
-        'state' => 'stopped', 'pid' => nil, 'managed_paths' => [source]
-      })
+                       'version' => 1, 'source' => source, 'output' => source,
+                       'host' => '127.0.0.1', 'port' => 4568, 'token' => 'private',
+                       'state' => 'stopped', 'pid' => nil, 'managed_paths' => [source]
+                     })
       allow(lifecycle).to receive(:running?).and_return(false)
 
       expect { lifecycle.destroy(confirm: true) }

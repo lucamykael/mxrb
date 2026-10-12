@@ -19,7 +19,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "move plan was already applied" if applied?
+        raise ArgumentError, 'move plan was already applied' if applied?
 
         unless empty?
           @project.mpr.transaction do
@@ -57,7 +57,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "cross-module move plan was already applied" if applied?
+        raise ArgumentError, 'cross-module move plan was already applied' if applied?
 
         @project.mpr.transaction do
           @rename_plan.documents.each do |unit_id, doc|
@@ -101,8 +101,8 @@ module Mxrb
             project: @project,
             source:,
             target:,
-            before_container: raw.fetch("ContainerID"),
-            containment_name: raw.fetch("ContainmentName")
+            before_container: raw.fetch('ContainerID'),
+            containment_name: raw.fetch('ContainmentName')
           )
         end
       end
@@ -117,8 +117,8 @@ module Mxrb
           source:,
           target:,
           rename_plan:,
-          before_container: raw.fetch("ContainerID"),
-          containment_name: raw.fetch("ContainmentName")
+          before_container: raw.fetch('ContainerID'),
+          containment_name: raw.fetch('ContainmentName')
         )
       end
 
@@ -145,7 +145,7 @@ module Mxrb
       def descendant_ids(unit_id)
         direct = @project.children_of(unit_id)
         direct.flat_map do |child|
-          [child.fetch("UnitID"), *descendant_ids(child.fetch("UnitID"))]
+          [child.fetch('UnitID'), *descendant_ids(child.fetch('UnitID'))]
         end
       end
     end

@@ -140,32 +140,32 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
       '$ReferenceSelector', 'AssociationProperty', 'ListAttributeProperty', 'Demo.Item_Owner'
     )
     rendered << compiler.send(:render_dynamic_image, {
-      '$Type' => 'Forms$DynamicImageViewer', 'Name' => 'photo',
-      'ClickAction' => { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
-                         'Address' => { 'IsDynamic' => false, 'Value' => 'https://image.test' } }
-    })
+                                '$Type' => 'Forms$DynamicImageViewer', 'Name' => 'photo',
+                                'ClickAction' => { '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+                                                   'Address' => { 'IsDynamic' => false, 'Value' => 'https://image.test' } }
+                              })
     expect(rendered.last).to include('$Image', 'WebDynamicImageProperty', 'https://image.test', 'onClick')
     rendered << compiler.send(:render_image_uploader, {
-      '$Type' => 'Forms$ImageUploader', 'Name' => 'upload', 'TabIndex' => 3,
-      'AllowedExtensions' => '.png,.jpg', 'MaxFileSize' => 12,
-      'ThumbnailSize' => { 'Width' => 160, 'Height' => 90 }
-    })
+                                '$Type' => 'Forms$ImageUploader', 'Name' => 'upload', 'TabIndex' => 3,
+                                'AllowedExtensions' => '.png,.jpg', 'MaxFileSize' => 12,
+                                'ThumbnailSize' => { 'Width' => 160, 'Height' => 90 }
+                              })
     expect(rendered.last).to include(
       '$FileManager', 'DynamicFileProperty', '"tabIndex": 3', '"extensions": ".png,.jpg"',
       '"maxFileSize": 12', '"thumbnailSizeWidth": 160', '"thumbnailSizeHeight": 90'
     )
     rendered << compiler.send(:render_tab_control, {
-      '$Type' => 'Forms$TabContainer', 'Name' => 'tabs',
-      'ActivePageAttributeRef' => { 'Attribute' => 'Demo.Item.ActiveTab' },
-      'ActivePageOnChangeAction' => {
-        '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
-        'Address' => { 'IsDynamic' => false, 'Value' => 'https://tab.test' }
-      },
-      'TabPages' => [2, {
-        '$Type' => 'Forms$TabPage', 'Name' => 'details', 'Caption' => text('Details'),
-        'Badge' => client_template('1'), 'Widgets' => [2]
-      }]
-    })
+                                '$Type' => 'Forms$TabContainer', 'Name' => 'tabs',
+                                'ActivePageAttributeRef' => { 'Attribute' => 'Demo.Item.ActiveTab' },
+                                'ActivePageOnChangeAction' => {
+                                  '$Type' => 'Forms$OpenLinkClientAction', 'LinkType' => 'Web',
+                                  'Address' => { 'IsDynamic' => false, 'Value' => 'https://tab.test' }
+                                },
+                                'TabPages' => [2, {
+                                  '$Type' => 'Forms$TabPage', 'Name' => 'details', 'Caption' => text('Details'),
+                                  'Badge' => client_template('1'), 'Widgets' => [2]
+                                }]
+                              })
     expect(rendered.last).to include(
       '$TabContainer', '"activeTab": AttributeProperty', '"onTabChange": ActionProperty',
       'https://tab.test', '"badge": TextProperty'
@@ -259,12 +259,12 @@ RSpec.describe Mxrb::Compiler::PageBundleCompiler, 'core widget catalog coverage
     expect(compiler.send(:autocomplete_value, 'AutocompletePurpose' => 'FutureAccountId')).to eq('future-account-id')
     expect(compiler.send(:react_style_property, '-webkit-user-select')).to eq('WebkitUserSelect')
     expect(compiler.send(:input_editability, {
-      'Editable' => 'Conditional',
-      'ConditionalEditabilitySettings' => { 'Expression' => '$currentObject/MayEdit' }
-    }, 'p.Demo.Home.item')).to eq(
-      expr: { type: 'variable', variable: 'currentObject', path: 'MayEdit' },
-      args: { currentObject: { widget: 'p.Demo.Home.item', source: 'object' } }
-    )
+                           'Editable' => 'Conditional',
+                           'ConditionalEditabilitySettings' => { 'Expression' => '$currentObject/MayEdit' }
+                         }, 'p.Demo.Home.item')).to eq(
+                           expr: { type: 'variable', variable: 'currentObject', path: 'MayEdit' },
+                           args: { currentObject: { widget: 'p.Demo.Home.item', source: 'object' } }
+                         )
   end
 
   it 'preserves the shared web button presentation contract on every action path' do

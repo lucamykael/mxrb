@@ -233,8 +233,8 @@ module MxrbFrontendBrowserAcceptance
       call('Console.enable')
       call('Network.enable')
       call('Emulation.setDeviceMetricsOverride', {
-        width:, height:, deviceScaleFactor: 1, mobile: false
-      })
+             width:, height:, deviceScaleFactor: 1, mobile: false
+           })
       @console_errors = []
       @console_event_index = 0
       @network_event_index = 0
@@ -729,8 +729,8 @@ module MxrbFrontendBrowserAcceptance
 
     def evaluate(expression)
       response = call('Runtime.evaluate', {
-        expression:, returnByValue: true, awaitPromise: true
-      })
+                        expression:, returnByValue: true, awaitPromise: true
+                      })
       raise Failure, "browser JavaScript failed: #{response.fetch('exceptionDetails').inspect}" if
         response['exceptionDetails']
 

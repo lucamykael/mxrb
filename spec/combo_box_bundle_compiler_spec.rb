@@ -41,10 +41,10 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
 
   def page
     Struct.new(:module_name, :document, keyword_init: true).new(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Edit', 'Parameters' => [2, {
-        'Name' => 'Order', 'ParameterType' => { 'Entity' => 'Demo.Order' }
-      }]
-    })
+                                                                  '$Type' => 'Forms$Page', 'Name' => 'Edit', 'Parameters' => [2, {
+                                                                    'Name' => 'Order', 'ParameterType' => { 'Entity' => 'Demo.Order' }
+                                                                  }]
+                                                                })
   end
 
   def source
@@ -75,8 +75,8 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
       property('caption-type', primitive: 'attribute'),
       property('association-caption', AttributeRef: { 'Attribute' => 'Demo.Location.Name' }),
       property('association', EntityRef: { 'Steps' => [2, {
-        'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
-      }] }),
+                 'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
+               }] }),
       property('association-source', DataSource: xpath('Demo.Location')),
       property('clearable', primitive: 'true'), property('empty', TextTemplate: nil)
     ]
@@ -139,8 +139,8 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
     )
     expect(compiler.send(:compile_primitive, 'Widgets', 'Widgets' => [2, {}])).to be_nil
     expect(compiler.send(:translated_text, 'Template' => {
-      'Items' => [3, { 'LanguageCode' => 'pt_BR', 'Text' => 'Curso' }]
-    })).to eq('Curso')
+                           'Items' => [3, { 'LanguageCode' => 'pt_BR', 'Text' => 'Curso' }]
+                         })).to eq('Curso')
     expect(compiler.send(:translated_text, nil)).to eq('')
   end
 
@@ -150,8 +150,8 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
       property('caption-type', primitive: 'attribute'),
       property('association-caption', AttributeRef: { 'Attribute' => 'Demo.Location.Name' }),
       property('association', EntityRef: { 'Steps' => [2, {
-        'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
-      }] }), property('association-source', DataSource: xpath('Demo.Location'))
+                 'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
+               }] }), property('association-source', DataSource: xpath('Demo.Location'))
     ]
     compiler = described_class.new(
       source, 'Demo.Edit', widget('location', properties), scope: 'p.Demo.Edit.editor', entity: 'Demo.Order'
@@ -231,8 +231,8 @@ RSpec.describe Mxrb::Compiler::ComboBoxBundleCompiler do
       property('caption-type', primitive: 'expression'),
       property('association-caption-expression', Expression: '$currentObject/Name'),
       property('association', EntityRef: { 'Steps' => [2, {
-        'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
-      }] }),
+                 'Association' => 'Demo.Order_Location', 'DestinationEntity' => 'Demo.Location'
+               }] }),
       property('association-source', DataSource: xpath('Demo.Location'))
     ]
     compiler = described_class.new(

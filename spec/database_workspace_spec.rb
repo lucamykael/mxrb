@@ -594,10 +594,10 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
         commands << command
         output = if command.last.start_with?('EXPLAIN')
                    JSON.generate([{ 'Plan' => {
-                     'Node Type' => 'Seq Scan', 'Schema' => 'public',
-                     'Relation Name' => 'shop$product', 'Plan Rows' => 2_000,
-                     'Total Cost' => 2_000
-                   } }])
+                                   'Node Type' => 'Seq Scan', 'Schema' => 'public',
+                                   'Relation Name' => 'shop$product', 'Plan Rows' => 2_000,
+                                   'Total Cost' => 2_000
+                                 } }])
                  elsif command.any? { _1.include?('FROM pg_indexes') }
                    "schemaname,tablename,indexname,indexdef\n" \
                      "public,shop$product,product_name_idx,CREATE INDEX product_name_idx\n"

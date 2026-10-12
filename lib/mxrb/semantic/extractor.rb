@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
-require "set"
+require 'securerandom'
 
 module Mxrb
   module Semantic
@@ -38,7 +37,7 @@ module Mxrb
       end
 
       def apply!
-        raise ArgumentError, "extraction plan was already applied" if applied?
+        raise ArgumentError, 'extraction plan was already applied' if applied?
 
         module_unit_id = find_module_unit_id
         @project.mpr.transaction do
@@ -60,16 +59,16 @@ module Mxrb
       end
 
       def insert_extracted_microflow!(module_unit_id)
-        local_name = @new_name.split(".", 2).last
+        local_name = @new_name.split('.', 2).last
         start_id = SecureRandom.uuid
         end_id   = SecureRandom.uuid
-        first_id = @entry_flow["DestinationPointer"]
-        last_id  = @exit_flow["OriginPointer"]
+        first_id = @entry_flow['DestinationPointer']
+        last_id  = @exit_flow['OriginPointer']
 
         objects = [
-          event_doc(start_id, "Microflows$StartEvent"),
+          event_doc(start_id, 'Microflows$StartEvent'),
           *@inner_objects,
-          event_doc(end_id, "Microflows$EndEvent")
+          event_doc(end_id, 'Microflows$EndEvent')
         ]
         flows = [
           simple_flow_doc(start_id, first_id),
@@ -78,25 +77,25 @@ module Mxrb
         ]
 
         doc = {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Microflows$Microflow",
-          "Name" => local_name,
-          "Documentation" => "",
-          "AllowConcurrentExecution" => true,
-          "MarkAsUsed" => false,
-          "Excluded" => false,
-          "MicroflowReturnType" => { "$ID" => SecureRandom.uuid, "$Type" => "DataTypes$VoidType" },
-          "AllowedModuleRoles" => IO::BsonCodec.build_array([]),
-          "ObjectCollection" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Microflows$MicroflowObjectCollection",
-            "Objects" => IO::BsonCodec.build_array(objects)
+          '$ID' => SecureRandom.uuid,
+          '$Type' => 'Microflows$Microflow',
+          'Name' => local_name,
+          'Documentation' => '',
+          'AllowConcurrentExecution' => true,
+          'MarkAsUsed' => false,
+          'Excluded' => false,
+          'MicroflowReturnType' => { '$ID' => SecureRandom.uuid, '$Type' => 'DataTypes$VoidType' },
+          'AllowedModuleRoles' => IO::BsonCodec.build_array([]),
+          'ObjectCollection' => {
+            '$ID' => SecureRandom.uuid,
+            '$Type' => 'Microflows$MicroflowObjectCollection',
+            'Objects' => IO::BsonCodec.build_array(objects)
           },
-          "Flows" => IO::BsonCodec.build_array(flows)
+          'Flows' => IO::BsonCodec.build_array(flows)
         }
         @project.mpr.insert_unit(
           container_uuid: module_unit_id,
-          containment_name: "Documents",
+          containment_name: 'Documents',
           contents_doc: doc
         )
       end
@@ -106,64 +105,64 @@ module Mxrb
         call_activity = call_activity_doc(call_id)
 
         removed_ids = @selected_ids
-        origin_id   = @entry_flow["OriginPointer"]
-        dest_id     = @exit_flow["DestinationPointer"]
+        origin_id   = @entry_flow['OriginPointer']
+        dest_id     = @exit_flow['DestinationPointer']
 
         # Rebuild objects: keep non-selected, add call activity
-        all_objects = normalize_all(parse_array(@source_doc["ObjectCollection"]["Objects"]))
-        kept_objects = all_objects.reject { removed_ids.include?(_1["$ID"]) }
+        all_objects = normalize_all(parse_array(@source_doc['ObjectCollection']['Objects']))
+        kept_objects = all_objects.reject { removed_ids.include?(_1['$ID']) }
         kept_objects << call_activity
 
         # Rebuild flows: drop entry/exit flows and inner flows, add two new ones
-        inner_flow_ids = @inner_flows.map { _1["$ID"] }.to_set
-        removed_flow_ids = inner_flow_ids + [@entry_flow["$ID"], @exit_flow["$ID"]].compact.to_set
-        all_flows = normalize_all(parse_array(@source_doc["Flows"]))
-        kept_flows = all_flows.reject { removed_flow_ids.include?(_1["$ID"]) }
+        inner_flow_ids = @inner_flows.map { _1['$ID'] }.to_set
+        removed_flow_ids = inner_flow_ids + [@entry_flow['$ID'], @exit_flow['$ID']].compact.to_set
+        all_flows = normalize_all(parse_array(@source_doc['Flows']))
+        kept_flows = all_flows.reject { removed_flow_ids.include?(_1['$ID']) }
         kept_flows << simple_flow_doc(origin_id, call_id)
         kept_flows << simple_flow_doc(call_id, dest_id)
 
         patched = @source_doc.merge(
-          "ObjectCollection" => @source_doc["ObjectCollection"].merge(
-            "Objects" => IO::BsonCodec.build_array(kept_objects)
+          'ObjectCollection' => @source_doc['ObjectCollection'].merge(
+            'Objects' => IO::BsonCodec.build_array(kept_objects)
           ),
-          "Flows" => IO::BsonCodec.build_array(kept_flows)
+          'Flows' => IO::BsonCodec.build_array(kept_flows)
         )
-        @project.mpr.update_unit(@source_raw.fetch("UnitID"), patched)
+        @project.mpr.update_unit(@source_raw.fetch('UnitID'), patched)
       end
 
       def event_doc(id, type)
-        { "$ID" => id, "$Type" => type, "RelativeMiddlePoint" => "0;0", "Size" => "20;20" }
+        { '$ID' => id, '$Type' => type, 'RelativeMiddlePoint' => '0;0', 'Size' => '20;20' }
       end
 
       def simple_flow_doc(from_id, to_id)
         {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Microflows$SequenceFlow",
-          "OriginPointer" => from_id,
-          "DestinationPointer" => to_id,
-          "IsErrorHandler" => false,
-          "OriginConnectionIndex" => 1,
-          "DestinationConnectionIndex" => 3
+          '$ID' => SecureRandom.uuid,
+          '$Type' => 'Microflows$SequenceFlow',
+          'OriginPointer' => from_id,
+          'DestinationPointer' => to_id,
+          'IsErrorHandler' => false,
+          'OriginConnectionIndex' => 1,
+          'DestinationConnectionIndex' => 3
         }
       end
 
       def call_activity_doc(id)
         {
-          "$ID" => id,
-          "$Type" => "Microflows$ActionActivity",
-          "RelativeMiddlePoint" => "0;0",
-          "Size" => "120;60",
-          "Action" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Microflows$MicroflowCallAction",
-            "ErrorHandlingType" => "Rollback",
-            "UseReturnVariable" => false,
-            "ResultVariableName" => "ReturnValue",
-            "MicroflowCall" => {
-              "$ID" => SecureRandom.uuid,
-              "$Type" => "Microflows$MicroflowCall",
-              "Microflow" => @new_name,
-              "ParameterMappings" => IO::BsonCodec.build_array([])
+          '$ID' => id,
+          '$Type' => 'Microflows$ActionActivity',
+          'RelativeMiddlePoint' => '0;0',
+          'Size' => '120;60',
+          'Action' => {
+            '$ID' => SecureRandom.uuid,
+            '$Type' => 'Microflows$MicroflowCallAction',
+            'ErrorHandlingType' => 'Rollback',
+            'UseReturnVariable' => false,
+            'ResultVariableName' => 'ReturnValue',
+            'MicroflowCall' => {
+              '$ID' => SecureRandom.uuid,
+              '$Type' => 'Microflows$MicroflowCall',
+              'Microflow' => @new_name,
+              'ParameterMappings' => IO::BsonCodec.build_array([])
             }
           }
         }
@@ -205,20 +204,20 @@ module Mxrb
         raise ArgumentError, "#{source.qualified_name} is not a microflow or nanoflow" \
           unless FLOW_KINDS.include?(source.kind)
 
-        source_module = source.qualified_name.split(".").first
-        new_module    = as.split(".").first
+        source_module = source.qualified_name.split('.').first
+        new_module    = as.split('.').first
         raise ArgumentError, "extracted microflow must be in the same module (#{source_module})" \
           unless new_module == source_module
 
         raise ArgumentError, "#{as.inspect} already exists" if @project.find_artifact(as)
-        raise ArgumentError, "object_ids cannot be empty" if object_ids.empty?
+        raise ArgumentError, 'object_ids cannot be empty' if object_ids.empty?
 
         raw = @project.raw_unit(source.unit_id)
         doc = @project.parse_bson(raw)
 
-        all_objects = parse_array(doc["ObjectCollection"]["Objects"]).map { normalize_ids(_1) }
-        all_flows   = parse_array(doc["Flows"]).map { normalize_ids(_1) }
-        by_id = all_objects.to_h { [_1["$ID"], _1] }
+        all_objects = parse_array(doc['ObjectCollection']['Objects']).map { normalize_ids(_1) }
+        all_flows   = parse_array(doc['Flows']).map { normalize_ids(_1) }
+        by_id = all_objects.to_h { [_1['$ID'], _1] }
 
         selected = Set.new(object_ids.map { IO::BsonCodec.extract_id(_1)&.to_s || _1.to_s })
         missing  = selected - by_id.keys.to_set
@@ -226,21 +225,21 @@ module Mxrb
 
         # Reject selection of start/end events — those belong to the frame
         all_objects.each do |obj|
-          if selected.include?(obj["$ID"]) && %w[
+          next unless selected.include?(obj['$ID']) && %w[
             Microflows$StartEvent Microflows$EndEvent
-          ].include?(obj["$Type"])
-            raise ArgumentError, "cannot include start/end event in extraction selection"
-          end
+          ].include?(obj['$Type'])
+
+          raise ArgumentError, 'cannot include start/end event in extraction selection'
         end
 
-        inner_flows  = all_flows.select do
-          selected.include?(_1["OriginPointer"]) && selected.include?(_1["DestinationPointer"])
+        inner_flows = all_flows.select do
+          selected.include?(_1['OriginPointer']) && selected.include?(_1['DestinationPointer'])
         end
-        entry_flows  = all_flows.select do
-          !selected.include?(_1["OriginPointer"]) && selected.include?(_1["DestinationPointer"])
+        entry_flows = all_flows.select do
+          !selected.include?(_1['OriginPointer']) && selected.include?(_1['DestinationPointer'])
         end
-        exit_flows   = all_flows.select do
-          selected.include?(_1["OriginPointer"]) && !selected.include?(_1["DestinationPointer"])
+        exit_flows = all_flows.select do
+          selected.include?(_1['OriginPointer']) && !selected.include?(_1['DestinationPointer'])
         end
 
         if entry_flows.size != 1 || exit_flows.size != 1
@@ -249,7 +248,7 @@ module Mxrb
                 "and one exit point (found #{exit_flows.size})"
         end
 
-        inner_objects = all_objects.select { selected.include?(_1["$ID"]) }
+        inner_objects = all_objects.select { selected.include?(_1['$ID']) }
 
         ExtractionPlan.new(
           project: @project,

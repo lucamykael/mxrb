@@ -422,22 +422,22 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(exporter.send(:scheduled_event_schedule_options, nil)).to eq(schedule: nil)
     expect(exporter.send(:semantic_consumed_odata_service?, 'Future' => true)).to be(false)
     expect(exporter.send(:semantic_consumed_odata_service?, {
-      'HttpConfiguration' => { '$Type' => 'Future' }
-    })).to be(false)
+                           'HttpConfiguration' => { '$Type' => 'Future' }
+                         })).to be(false)
     expect(exporter.send(:semantic_consumed_odata_service?, {
-      'HttpConfiguration' => { '$Type' => 'Microflows$HttpConfiguration', 'Future' => true }
-    })).to be(false)
+                           'HttpConfiguration' => { '$Type' => 'Microflows$HttpConfiguration', 'Future' => true }
+                         })).to be(false)
     expect(exporter.send(:semantic_consumed_odata_service?, {
-      'HttpConfiguration' => {
-        '$Type' => 'Microflows$HttpConfiguration', 'CustomLocationTemplate' => {}
-      }
-    })).to be(false)
+                           'HttpConfiguration' => {
+                             '$Type' => 'Microflows$HttpConfiguration', 'CustomLocationTemplate' => {}
+                           }
+                         })).to be(false)
     expect(exporter.send(:semantic_message_definition_collection?, 'Future' => true)).to be(false)
     expect(exporter.send(:semantic_entity_message_definition?, 'scalar')).to be(false)
     expect(exporter.send(:semantic_entity_message_definition?, '$Type' => 'Future')).to be(false)
     expect(exporter.send(:semantic_entity_message_definition?, {
-      '$Type' => 'MessageDefinitions$EntityMessageDefinition', 'Future' => true
-    })).to be(false)
+                           '$Type' => 'MessageDefinitions$EntityMessageDefinition', 'Future' => true
+                         })).to be(false)
     expect(exporter.send(:semantic_database_connection?, {})).to be(false)
     expect(exporter.send(:semantic_database_connection?, 'ConnectionInput' => {})).to be(false)
     expect(exporter.send(:database_query_semantic?, '$Type' => 'Future')).to be(false)
@@ -453,8 +453,8 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
   it 'covers code-action binary and information alternatives' do
     expect(exporter.send(:code_action_info_spec, 'scalar')).to be_nil
     expect(exporter.send(:code_action_info_spec, {
-      '$ID' => 'info-id', 'IconData' => nil
-    })).to include(icon: { data: '', subtype: :generic })
+                           '$ID' => 'info-id', 'IconData' => nil
+                         })).to include(icon: { data: '', subtype: :generic })
     expect { exporter.send(:code_action_binary_spec, 'invalid') }
       .to raise_error(KeyError, /unsupported code action binary/)
   end
@@ -482,12 +482,12 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(exporter.send(:rest_operation_parameter_signature, 'scalar')).to be_nil
     expect(exporter.send(:rest_operation_parameter_signature, '$Type' => 'Future')).to be_nil
     expect(exporter.send(:rest_operation_parameter_signature, {
-      '$Type' => 'Rest$RestOperationParameter', 'Type' => 'scalar'
-    })).to be_nil
+                           '$Type' => 'Rest$RestOperationParameter', 'Type' => 'scalar'
+                         })).to be_nil
     signature = exporter.send(:rest_parameter_type_signature, {
-      '$ID' => 'discarded', '$Type' => 'DataTypes$ObjectType',
-      'Entity' => { 'Name' => 'App.Item' }
-    })
+                                '$ID' => 'discarded', '$Type' => 'DataTypes$ObjectType',
+                                'Entity' => { 'Name' => 'App.Item' }
+                              })
     expect(signature).not_to have_key('$ID')
     expect(signature.fetch('Entity')).to eq('Name' => 'App.Item')
   end
@@ -562,9 +562,9 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       'ModuleRoles' => [2], 'ManageableRoles' => [2, 'User']
     }
     source = exporter.send(:security_source, {
-      'SecurityLevel' => 'Production', 'UserRoles' => [2, role],
-      'EnableDemoUsers' => false, 'EnableGuestAccess' => false
-    })
+                             'SecurityLevel' => 'Production', 'UserRoles' => [2, role],
+                             'EnableDemoUsers' => false, 'EnableGuestAccess' => false
+                           })
     expect(source).to include('description:', 'check_security: false',
                               'manageable_roles:', 'manage_users_without_roles: true')
 
@@ -578,8 +578,8 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     }.each { |name, value| entity.define_singleton_method(name) { value } }
     allow(exporter).to receive(:oql_view_entity?).with(entity).and_return(true)
     entity_source = exporter.send(:entity_source, entity, double(name: 'App'), [], {
-      lifecycle: [{ event: :before_commit, handler: 'App.Validate' }]
-    })
+                                    lifecycle: [{ event: :before_commit, handler: 'App.Validate' }]
+                                  })
     expect(entity_source).to include('query: "SELECT 1"', 'include_offline: true', 'before_commit')
 
     index_attribute = double(id: 'attribute-id', name: 'Code')
@@ -603,13 +603,13 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
 
   it 'exports complete access-rule and public-page options' do
     access = exporter.send(:access_rule_source, {
-      roles: ['App.User'], id: 'rule-id', documentation: 'Restricted',
-      default_rights: 'None', members: [], xpath: '', xpath_caption: 'Visible records'
-    })
+                             roles: ['App.User'], id: 'rule-id', documentation: 'Restricted',
+                             default_rights: 'None', members: [], xpath: '', xpath_caption: 'Visible records'
+                           })
     expect(access).to include('id:', 'documentation:', 'xpath_caption:')
     expect(exporter.send(:access_rule_source, {
-      roles: ['App.User'], id: '', default_rights: 'None', members: [], xpath: ''
-    })).not_to include('id:')
+                           roles: ['App.User'], id: '', default_rights: 'None', members: [], xpath: ''
+                         })).not_to include('id:')
 
     page = double(
       name: 'Home', id: 'page-id', layout_id: nil, title: 'Home', popup_width: 0,
@@ -632,10 +632,10 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
       .to eq([[{ 'Name' => 'Root' }]])
     expect(exporter.send(:page_root_widget_slots, 'FormCall' => 'opaque')).to eq([])
     slots = exporter.send(:page_root_widget_slots, {
-      'FormCall' => { 'Arguments' => [2, 'opaque',
-                                      { 'Widgets' => [2, { 'Name' => 'Modern' }] },
-                                      { 'Widget' => { 'Name' => 'Legacy' } }] }
-    })
+                            'FormCall' => { 'Arguments' => [2, 'opaque',
+                                                            { 'Widgets' => [2, { 'Name' => 'Modern' }] },
+                                                            { 'Widget' => { 'Name' => 'Legacy' } }] }
+                          })
     expect(slots).to eq([[{ 'Name' => 'Modern' }], [{ 'Name' => 'Legacy' }]])
     page = double(raw_document: {})
     expect(exporter.send(:page_overlay_exportable?, page, [])).to be(false)
@@ -698,22 +698,22 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
 
   it 'renders sparse and decorated widget alternatives' do
     pluggable = exporter.send(:render_widget, {
-      type: :pluggable_widget, name: 'Widget', options: {
-        widget_id: 'vendor.Widget', platform: :Native
-      }, events: []
-    }, 0)
+                                type: :pluggable_widget, name: 'Widget', options: {
+                                  widget_id: 'vendor.Widget', platform: :Native
+                                }, events: []
+                              }, 0)
     expect(pluggable.join).to include('platform: :Native')
     expect(exporter.send(:render_widget, {
-      type: :file_manager, name: 'Files', options: {}, events: []
-    }, 0).join).to include('file_manager')
+                           type: :file_manager, name: 'Files', options: {}, events: []
+                         }, 0).join).to include('file_manager')
     expect(exporter.send(:render_widget, {
-      type: :file_manager, name: 'Files', options: { editable: :always }, events: []
-    }, 0).join).to include('editable: :always')
+                           type: :file_manager, name: 'Files', options: { editable: :always }, events: []
+                         }, 0).join).to include('editable: :always')
     table = exporter.send(:render_table_widget, {
-      name: 'Table', options: { rows: [
-        { options: { class: 'highlight' }, cells: [] }, { options: {}, cells: [] }
-      ] }
-    }, 0)
+                            name: 'Table', options: { rows: [
+                              { options: { class: 'highlight' }, cells: [] }, { options: {}, cells: [] }
+                            ] }
+                          }, 0)
     expect(table.join).to include('class_name: "highlight"')
   end
 
@@ -731,17 +731,17 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     ]
     expect(exporter.send(:editable_flow_body?, objects, flows, nested: false)).to be(false)
     download = exporter.send(:action_dsl_line, {
-      'Action' => {
-        '$Type' => 'Microflows$DownloadFileAction', 'FileDocumentVariableName' => 'File',
-        'ShowFileInBrowser' => false, 'ErrorHandlingType' => 'Rollback'
-      }
-    }, 0)
+                               'Action' => {
+                                 '$Type' => 'Microflows$DownloadFileAction', 'FileDocumentVariableName' => 'File',
+                                 'ShowFileInBrowser' => false, 'ErrorHandlingType' => 'Rollback'
+                               }
+                             }, 0)
     expect(download).to eq('download_file :File')
     expect(exporter.send(:database_query_line, '', 'Query' => nil)).to include('nil')
     xml = exporter.send(:export_xml_line, '', {
-      'OutputMethod' => {}, 'ResultHandling' => { 'ContentType' => 'Xml' },
-      'ErrorHandlingType' => 'Rollback'
-    })
+                          'OutputMethod' => {}, 'ResultHandling' => { 'ContentType' => 'Xml' },
+                          'ErrorHandlingType' => 'Rollback'
+                        })
     expect(xml).not_to include('content_type:', 'error:')
   end
 
@@ -788,16 +788,16 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(exporter.send(:semantic_rest_service?, rest_doc)).to be(false)
     expect(exporter.send(:semantic_rest_operation_parameters?, { 'Parameters' => [2] }, nil)).to be(true)
     expect(exporter.send(:semantic_rest_operation_parameters?, {
-      'Parameters' => [2, { '$Type' => 'Rest$RestOperationParameter' }]
-    }, nil)).to be(false)
+                           'Parameters' => [2, { '$Type' => 'Rest$RestOperationParameter' }]
+                         }, nil)).to be(false)
 
     invalid_flow = double(name: 'Run', parameters: ['scalar'])
     mod = double(name: 'App', microflows: [invalid_flow])
     expect(exporter.send(:inferred_rest_operation_parameters,
                          { 'Microflow' => 'Run', 'Path' => '/' }, mod)).to be_nil
     valid_flow = double(name: 'Run', parameters: [{
-      'Name' => 'id', 'Type' => { '$Type' => 'DataTypes$StringType' }
-    }])
+                          'Name' => 'id', 'Type' => { '$Type' => 'DataTypes$StringType' }
+                        }])
     mod = double(name: 'App', microflows: [valid_flow])
     expect(exporter.send(:inferred_rest_operation_parameters,
                          { 'Microflow' => 'App.Run', 'Path' => '/{id}' }, mod).first)
@@ -858,6 +858,10 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     text = { type: :text, name: 'Title', options: { parameters: ['$name'] }, events: [] }
     expect(exporter.send(:render_widget, data_grid, 0).first).to include('selection: :single')
     expect(exporter.send(:render_widget, text, 0).first).to include('parameters:')
+    tags = { type: :reference_set_selector, name: 'Tags',
+             options: { association_path: [{ association: 'App.Item_Tag', entity: 'App.Tag' }] } }
+    expect(exporter.send(:render_legacy_semantic_widget, tags, 0).first)
+      .to include('association_path: association_path(["App.Item_Tag", "App.Tag"])')
     expect do
       exporter.send(:render_legacy_semantic_widget,
                     { type: :static_image, name: 'Opaque', options: {} }, 0)

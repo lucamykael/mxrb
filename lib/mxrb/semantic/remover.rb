@@ -17,7 +17,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "removal plan was already applied" if applied?
+        raise ArgumentError, 'removal plan was already applied' if applied?
         unless safe?
           raise ArgumentError,
                 "cannot remove #{artifact.qualified_name}: " \

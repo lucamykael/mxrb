@@ -27,8 +27,8 @@ module Mxrb
         root = toolchain_root(version)
         Plan.new(
           version, java, root,
-          File.join(root, "modeler", "mx"),
-          File.join(root, "modeler", "mxbuild"),
+          File.join(root, 'modeler', 'mx'),
+          File.join(root, 'modeler', 'mxbuild'),
           "zulu#{java}-ca-jdk-headless",
           "zulu#{java}-ca-jre-headless",
           "mxrb/mendix-builder:java#{java}",
@@ -47,33 +47,33 @@ module Mxrb
       def configured_java(project)
         project.all_units.each do |raw|
           doc = project.parse_bson(raw)
-          next unless doc["$Type"] == "Settings$ProjectSettings"
+          next unless doc['$Type'] == 'Settings$ProjectSettings'
 
-          settings = IO::BsonCodec.parse_array(doc["Settings"])[:items]
-          model = settings.find { _1["$Type"] == "Settings$ModelSettings" }
-          value = model && model["JavaMajorVersion"].to_s
+          settings = IO::BsonCodec.parse_array(doc['Settings'])[:items]
+          model = settings.find { _1['$Type'] == 'Settings$ModelSettings' }
+          value = model && model['JavaMajorVersion'].to_s
           return value if value&.match?(/\A\d+\z/)
         end
         nil
       end
 
       def fallback_java(version)
-        major, minor, patch = version.to_s.split(".").map(&:to_i)
-        return "7" if major <= 5
-        return "8" if major <= 7
-        return "11" if major == 8
-        return "11" if major == 9 && ([minor, patch] <=> [18, 16]).negative?
-        return "17" if major == 9
-        return "21" if major >= 11 || (major == 10 && minor >= 21)
-        return "17" if major == 10 && (minor > 6 || (minor == 6 && patch >= 7))
+        major, minor, patch = version.to_s.split('.').map(&:to_i)
+        return '7' if major <= 5
+        return '8' if major <= 7
+        return '11' if major == 8
+        return '11' if major == 9 && ([minor, patch] <=> [18, 16]).negative?
+        return '17' if major == 9
+        return '21' if major >= 11 || (major == 10 && minor >= 21)
+        return '17' if major == 10 && (minor > 6 || (minor == 6 && patch >= 7))
 
-        "11"
+        '11'
       end
 
       def toolchain_root(version)
         candidates = [
           @mendix_home && File.join(@mendix_home, version),
-          File.join(Dir.home, ".local", "share", "mendix", version)
+          File.join(Dir.home, '.local', 'share', 'mendix', version)
         ].compact
         candidates.find { File.directory?(_1) } || candidates.first
       end

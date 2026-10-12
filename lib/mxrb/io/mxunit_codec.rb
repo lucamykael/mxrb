@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "fileutils"
-require_relative "bson_codec"
+require 'fileutils'
+require_relative 'bson_codec'
 
 module Mxrb
   module IO
@@ -14,7 +14,7 @@ module Mxrb
       class UnsupportedFormat < SerializationError; end
 
       def self.path_for(contents_dir, uuid)
-        hex = uuid.delete("-").downcase
+        hex = uuid.delete('-').downcase
         File.join(contents_dir, hex[0, 2], hex[2, 2], "#{uuid.downcase}.mxunit")
       end
 

@@ -21,11 +21,12 @@ RSpec.describe Mxrb::Compiler::CompatibilityAnalyzer do
 
   it 'reports page widgets, actions, and nanoflow activities in the React pipeline' do
     page = unit('Forms$Page', 'Home', 'FormCall' => { 'Arguments' => [2, {
-      'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2,
-                                                      { '$Type' => 'Forms$UnknownWidget', 'Name' => 'group' },
-                                                      { '$Type' => 'Forms$ActionButton', 'Name' => 'delete',
-                                                        'Action' => { '$Type' => 'Forms$DeleteClientAction' } }]
-    }] })
+                  'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2,
+                                                                  { '$Type' => 'Forms$UnknownWidget',
+                                                                    'Name' => 'group' },
+                                                                  { '$Type' => 'Forms$ActionButton', 'Name' => 'delete',
+                                                                    'Action' => { '$Type' => 'Forms$DeleteClientAction' } }]
+                }] })
     nanoflow = unit('Microflows$Nanoflow', 'ClientFlow',
                     'ObjectCollection' => { 'Objects' => [2,
                                                           { '$ID' => 'start', '$Type' => 'Microflows$StartEvent' },
@@ -65,11 +66,11 @@ RSpec.describe Mxrb::Compiler::CompatibilityAnalyzer do
 
   it 'accepts a supported project whose pages use the compiled subset' do
     page = unit('Forms$Page', 'Home', 'FormCall' => { 'Arguments' => [2, {
-      'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2, {
-        '$Type' => 'Forms$DynamicText', 'Name' => 'caption',
-        'Content' => { 'Template' => { 'Items' => [2] } }
-      }]
-    }] })
+                  'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2, {
+                    '$Type' => 'Forms$DynamicText', 'Name' => 'caption',
+                    'Content' => { 'Template' => { 'Items' => [2] } }
+                  }]
+                }] })
     model = source(version: '11.12.1', units: [page])
     report = described_class.new('/tmp/App.mpr', source: model).analyze
 

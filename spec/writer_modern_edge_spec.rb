@@ -378,14 +378,14 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
   it 'covers legacy navigation and singular page decisions without donor references' do
     legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
     navigation = legacy.send(:legacy_navigation_doc, {}, profiles: [{
-      name: 'Responsive', home_page: nil, home_microflow: nil,
-      role_homes: { 'User' => 'App.Home' }, role_home_details: [],
-      app_title: 'Plain title', items: [], kind: nil
-    }])
+                               name: 'Responsive', home_page: nil, home_microflow: nil,
+                               role_homes: { 'User' => 'App.Home' }, role_home_details: [],
+                               app_title: 'Plain title', items: [], kind: nil
+                             }])
     page = legacy.send(:page_doc, {
-      name: 'Home', layout: 'App.Shell', title: 'Home', widgets: [], events: [],
-      allowed_roles: nil, popup: false, data_source: nil
-    })
+                         name: 'Home', layout: 'App.Shell', title: 'Home', widgets: [], events: [],
+                         allowed_roles: nil, popup: false, data_source: nil
+                       })
 
     expect(navigation).to have_key('DesktopProfile')
     expect(navigation.dig('DesktopProfile', 'ApplicationTitle')).to eq('Plain title')

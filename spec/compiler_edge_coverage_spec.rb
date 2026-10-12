@@ -258,9 +258,9 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
       def named(_name) = { 'ParentPointer' => 'parent', 'ChildPointer' => 'child', 'Type' => 'Reference' }
       def counterpart_id(_id) = nil
     end.new({
-      'Microflows$ActionActivity' => %w[$ID $Type Caption],
-      'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type]
-    })
+              'Microflows$ActionActivity' => %w[$ID $Type Caption],
+              'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type]
+            })
     compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema)
     compiler.prepare('$Type' => 'Microflows$Microflow', 'Objects' => [
                        2, { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty',

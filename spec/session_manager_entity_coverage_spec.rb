@@ -172,8 +172,8 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
               'PassEventObject' => false, 'RaiseErrorOnFalse' => true)
     )
     expect(described_class.send(:parse_lifecycle, {
-      'Moment' => 'After', 'Event' => 'Delete', 'Microflow' => 'Sales.Legacy'
-    })).to include(event: :after_delete, handler: 'Sales.Legacy')
+                                  'Moment' => 'After', 'Event' => 'Delete', 'Microflow' => 'Sales.Legacy'
+                                })).to include(event: :after_delete, handler: 'Sales.Legacy')
   end
 
   it 'covers OQL source variants, system flag spellings, and serialization defaults' do
@@ -186,8 +186,8 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
     expect(entity).not_to be_oql_view
 
     lower = described_class.send(:parse_system_members, {
-      'hasOwner' => true, 'hasCreatedDate' => true, 'hasChangedDate' => true, 'hasChangedBy' => true
-    })
+                                   'hasOwner' => true, 'hasCreatedDate' => true, 'hasChangedDate' => true, 'hasChangedBy' => true
+                                 })
     expect(lower.values).to all(be(true))
     expect(described_class.send(:parse_system_members, 'invalid')).to eq({})
 
@@ -205,9 +205,9 @@ RSpec.describe Mxrb::Model::Entity, 'complete BSON lifecycle and domain metadata
     expect(entity.inspect).to include('New', 'persistable=false')
 
     plain = described_class.from_bson({
-      '$ID' => 'plain', 'Name' => 'Plain', 'Generalization' => 'invalid',
-      'Location' => { x: 7 }, 'Attributes' => [3], 'AccessRules' => [3]
-    }, nil, nil)
+                                        '$ID' => 'plain', 'Name' => 'Plain', 'Generalization' => 'invalid',
+                                        'Location' => { x: 7 }, 'Attributes' => [3], 'AccessRules' => [3]
+                                      }, nil, nil)
     expect(plain).to have_attributes(persistable: true, location: { x: 7, y: 0 })
     expect(plain.generalization_target).to be_nil
     expect(described_class.send(:parse_location, nil)).to eq(x: 0, y: 0)

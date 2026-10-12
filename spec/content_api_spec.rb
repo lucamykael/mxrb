@@ -221,14 +221,14 @@ RSpec.describe Mxrb::OfficialMarketplace::SecurityAuditor do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, '.mxrb'))
       File.write(File.join(dir, '.mxrb', 'marketplace.lock.json'), JSON.generate('packages' => {
-        'Safe' => { 'source' => 'mendix', 'content_id' => 1, 'version_id' => 'safe',
-                    'version' => '1.0.0' },
-        'Unsafe' => { 'source' => 'mendix', 'content_id' => 2, 'version_id' => 'unsafe',
-                      'version' => '1.0.0' },
-        'Missing' => { 'source' => 'mendix', 'content_id' => 3, 'version_id' => 'missing',
-                       'version' => '1.0.0' },
-        'GitHub' => { 'source' => 'github' }
-      }))
+                                                                                   'Safe' => { 'source' => 'mendix', 'content_id' => 1, 'version_id' => 'safe',
+                                                                                               'version' => '1.0.0' },
+                                                                                   'Unsafe' => { 'source' => 'mendix', 'content_id' => 2, 'version_id' => 'unsafe',
+                                                                                                 'version' => '1.0.0' },
+                                                                                   'Missing' => { 'source' => 'mendix', 'content_id' => 3, 'version_id' => 'missing',
+                                                                                                  'version' => '1.0.0' },
+                                                                                   'GitHub' => { 'source' => 'github' }
+                                                                                 }))
       api = instance_double(Mxrb::OfficialMarketplace::ContentApi)
       allow(api).to receive(:versions) do |id, **|
         next [] if id == 3

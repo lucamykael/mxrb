@@ -108,20 +108,22 @@ module Mxrb
         )
         {
           filterAssociation: raw_property('ListAssociationProperty', {
-            type: filter_boolean(filter, 'multiSelect') ? 'ReferenceSet' : 'Reference',
-            entity: :undefined, path: '', attribute: association, endpointEntity: endpoint,
-            selectableObjectsId: selectable_id, filterable: true, dataSourceId: data_source_id
-          }),
+                                            type: filter_boolean(filter, 'multiSelect') ? 'ReferenceSet' : 'Reference',
+                                            entity: :undefined, path: '', attribute: association, endpointEntity: endpoint,
+                                            selectableObjectsId: selectable_id, filterable: true, dataSourceId: data_source_id
+                                          }),
           filterAssociationOptions: raw_property('DatabaseObjectListProperty', {
-            dataSourceId: selectable_id, entity: endpoint, operationId: operation_id,
-            sort: [[caption, 'asc']]
-          }),
+                                                   dataSourceId: selectable_id, entity: endpoint, operationId: operation_id,
+                                                   sort: [[caption, 'asc']]
+                                                 }),
           filterAssociationOptionLabel: raw_property('ListExpressionProperty', {
-            expression: {
-              expr: { type: 'variable', variable: 'currentObject', path: caption },
-              args: { currentObject: { widget: widget_key, source: 'object' } }
-            }, dataSourceId: selectable_id
-          })
+                                                       expression: {
+                                                         expr: { type: 'variable', variable: 'currentObject',
+                                                                 path: caption },
+                                                         args: { currentObject: { widget: widget_key,
+                                                                                  source: 'object' } }
+                                                       }, dataSourceId: selectable_id
+                                                     })
         }
       end
 
