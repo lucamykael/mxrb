@@ -88,6 +88,7 @@ module Mxrb
           write_support_files
           copy_round_trip_metadata
           write_design_classes(project)
+          @widget_ids = WidgetStyles.widget_ids(project)
           copy_frontend_theme
           restore_embedded_sources(embedded_sources)
           refresh_native_frontend_sources(project, modules, embedded_sources)
@@ -3261,6 +3262,7 @@ module Mxrb
           copy_frontend_web_assets(source, File.join(root, directory))
         end
         copy_frontend_public_theme_assets(root)
+        WidgetStyles.write(@mendix_sidecar, File.join(root, 'widgets'), @widget_ids || [])
         fallback_scss = File.join(root, 'theme', 'web', 'main.scss')
         write(relative(fallback_scss), '') unless File.file?(fallback_scss)
         fallback_css = File.join(root, 'theme-cache', 'web', 'theme.compiled.css')
