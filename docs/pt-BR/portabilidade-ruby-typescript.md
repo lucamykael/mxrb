@@ -954,6 +954,9 @@ A exportação resolve as design properties de páginas, snippets e layouts com 
 de menu lateral mostra o ícone da coleção, o filtro de data da Data grid 2 tem o
 botão de calendário e um visualizador de imagem sem conteúdo mostra a imagem
 padrão.
+Para um usuário autenticado, o Language selector grava o idioma escolhido em
+`System.User_Language` (`POST /api/session/language`) e o recupera de
+`/api/session`, como o cliente Mendix.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

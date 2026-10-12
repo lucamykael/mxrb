@@ -34,6 +34,17 @@ export function LanguageSelector({ properties, schema, request, label }: Props) 
   const [languages, setLanguages] = useState<EntityRecord[]>([]);
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState(() => stored() || schema?.languages?.default || '');
+  const [signedIn, setSignedIn] = useState(false);
+  // A signed-in user's language comes from the server (System.User_Language).
+  useEffect(() => {
+    if (!request) return;
+    request<{ user?: string | null; language?: string | null }>('/api/session')
+      .then((session) => {
+        setSignedIn(Boolean(session?.user));
+        if (session?.language) setCode(session.language);
+      })
+      .catch(() => setSignedIn(false));
+  }, [request]);
   useEffect(() => {
     if (!request) return;
     request<EntityCollectionResponse>(`/api/entities/${encodeURIComponent(entity)}`)
@@ -93,6 +104,11 @@ export function LanguageSelector({ properties, schema, request, label }: Props) 
                   }
                   setCode(value);
                   setOpen(false);
+                  if (signedIn && request)
+                    void request('/api/session/language', {
+                      method: 'POST',
+                      body: JSON.stringify({ code: value }),
+                    }).catch(() => undefined);
                 }}
               >
                 {text(language)}

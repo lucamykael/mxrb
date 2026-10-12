@@ -99,5 +99,22 @@ RSpec.describe 'Administration accounts in an exported application' do
     expect { @application.invoke_service('Administration.SaveNewAccount', { '__mxrb_changes' => 'x' }) }
       .to raise_error(ArgumentError, /staged changes/)
   end
+
+  it 'keeps the language a signed-in user chooses' do
+    store = @application.send(:bridge).store
+    account = store.create('Administration.Account')
+    account.members.merge!('Name' => 'player', 'FullName' => 'Player One',
+                           'UserRoles' => store.retrieve('System.UserRole').select { _1.members['Name'] == 'User' })
+    @application.call_service('Administration.SaveNewAccount',
+                              { 'AccountPasswordData' => password_data(store, account, '', password) },
+                              context: context('MxAdmin', 'Adm1n!Pass#2026'))
+    player = context('player', password)
+    expect(@application.user_language(player)).to be_nil
+    expect(@application.change_language('en_US', context: player)).to eq('en_US')
+    expect(@application.user_language(context('player', password))).to eq('en_US')
+    expect { @application.change_language('xx_XX', context: player) }.to raise_error(ArgumentError, /unknown language/)
+    expect { @application.change_language('en_US', context: nil) }.to raise_error(ArgumentError, /signed-in user/)
+    expect(@application.user_language(nil)).to be_nil
+  end
 end
 # rubocop:enable Metrics/BlockLength
