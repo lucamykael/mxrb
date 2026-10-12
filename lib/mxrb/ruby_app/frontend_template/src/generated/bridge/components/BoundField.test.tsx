@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { useLayoutEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
+import { DataRevision } from '../PageEdits';
 import { BoundField } from './BoundField';
 import { ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 
@@ -85,6 +86,31 @@ describe('editable exported fields', () => {
       }),
     );
   });
+  it('reloads reference options for server data changes, not for local edits', async () => {
+    const input = props();
+    input.request.mockResolvedValue({ records: [] });
+    const widget: WidgetDefinition = {
+      name: 'owner',
+      type: 'reference_selector',
+      options: { attribute: 'Files.Owner', display_attribute: 'Files.Person.Name' },
+    };
+    const schema = {
+      modules: [{ associations: [{ name: 'Owner', from_entity: 'Files.Document', to_entity: 'Files.Person' }] }],
+    } as unknown as ApplicationSchema;
+    const field = (data: number, revision: number) => (
+      <DataRevision.Provider value={data}>
+        <BoundField {...input} schema={schema} widget={widget} revision={revision} />
+      </DataRevision.Provider>
+    );
+    const view = render(field(1, 1));
+    await waitFor(() => expect(input.request).toHaveBeenCalledTimes(1));
+    view.rerender(field(1, 2));
+    view.rerender(field(1, 3));
+    expect(input.request).toHaveBeenCalledTimes(1);
+    view.rerender(field(2, 4));
+    await waitFor(() => expect(input.request).toHaveBeenCalledTimes(2));
+  });
+
   it('saves decimal edits without passing through a JavaScript number', async () => {
     const input = props();
     const amount = '9007199254740993.12345678';

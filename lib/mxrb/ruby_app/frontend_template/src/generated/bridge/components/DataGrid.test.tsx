@@ -256,6 +256,7 @@ describe('Data grid 2', () => {
   };
 
   it('lays out, fills and filters the columns as Data grid 2 does', async () => {
+    const consoleError = vi.spyOn(console, 'error');
     const request = vi.fn().mockResolvedValue({ records: accounts });
     const onRowAction = vi.fn();
     const user = userEvent.setup();
@@ -305,6 +306,8 @@ describe('Data grid 2', () => {
     expect(onRowAction).not.toHaveBeenCalled();
     await user.dblClick(screen.getByText('Bea'));
     expect(onRowAction).toHaveBeenCalledWith(accounts[1]);
+    expect(consoleError.mock.calls.flat().map(String).join('\n')).not.toContain('same key');
+    consoleError.mockRestore();
   });
 
   it('lets the user choose a filter operator as Data grid 2 does', async () => {

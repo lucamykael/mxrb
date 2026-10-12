@@ -39,7 +39,16 @@ export function NativeDataGrid(props: Props) {
     total,
     setPage,
   } = props;
-  const key = (column: WidgetColumn) => column.attribute || column.name || '';
+  // Columns over the same attribute (such as an action column) keep their own
+  // identity for hiding, ordering and sizing.
+  const keys = new Map<WidgetColumn, string>();
+  columns.forEach((column) => {
+    const base = column.attribute || column.name || '';
+    let candidate = base;
+    for (let copy = 2; [...keys.values()].includes(candidate); copy += 1) candidate = `${base}#${copy}`;
+    keys.set(column, candidate);
+  });
+  const key = (column: WidgetColumn) => keys.get(column) ?? column.attribute ?? column.name ?? '';
   const [hidden, setHidden] = useState<string[]>(() =>
     columns.filter((column) => column.hidable === 'hidden').map(key),
   );

@@ -1,6 +1,6 @@
 import { decimal } from '../decimal';
 import { useContext, useEffect, useId, useRef, useState } from 'react';
-import { ClientActions } from '../PageEdits';
+import { ClientActions, DataRevision } from '../PageEdits';
 import { LocalVariables, PageParameterBindings, SnippetParameterBindings } from '../PageVariables';
 import { editable, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
 import type {
@@ -51,6 +51,8 @@ export function BoundField({
 }: BoundFieldProps) {
   const fieldId = useId();
   const actions = useContext(ClientActions);
+  // Option lists follow server data only, not each edit kept in the browser.
+  const dataRevision = useContext(DataRevision) ?? revision;
   const options = widget.options || {};
   const locals = useContext(LocalVariables);
   const widgetObjects = useContext(WidgetObjectScope);
@@ -161,7 +163,7 @@ export function BoundField({
     request<EntityCollectionResponse>(`/api/entities/${encodeURIComponent(referenceEntity)}`)
       .then((payload) => setReferences(payload.records || []))
       .catch(onError);
-  }, [kind, referenceEntity, revision, request, onError]);
+  }, [kind, referenceEntity, dataRevision, request, onError]);
 
   const disabled =
     !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles, widgetObjects);

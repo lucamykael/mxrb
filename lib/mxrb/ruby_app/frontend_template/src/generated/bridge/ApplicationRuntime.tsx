@@ -5,7 +5,7 @@ import { registerExpressionSchema } from './schemaLookup';
 import { registerClientConstants } from './expression';
 import { registerObjectStorageSchema } from './objectStorage';
 import { invokeAsync } from './AsyncInvocation';
-import { ClientActions, PageEdits, hasPageEdits } from './PageEdits';
+import { ClientActions, DataRevision, PageEdits, hasPageEdits } from './PageEdits';
 import { PageDataSource, pageSourceWidget } from './PageDataSource';
 import {
   PageParameters,
@@ -101,6 +101,7 @@ export function ApplicationRuntime({
     };
   }, []);
   const [revision, setRevision] = useState(0);
+  const [localRevisions, setLocalRevisions] = useState(0);
   const [session, setSession] = useState<Session | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
   const [edits, setEdits] = useState(() => {
@@ -390,6 +391,7 @@ export function ApplicationRuntime({
       if (edits.deferred) {
         const updated = edits.stage(record, changes);
         setRevision((value) => value + 1);
+        setLocalRevisions((value) => value + 1);
         return Promise.resolve(updated);
       }
       if (record.transient) {
@@ -401,6 +403,7 @@ export function ApplicationRuntime({
           current?.id === updated.id && current.type === updated.type ? updated : current,
         );
         setRevision((value) => value + 1);
+        setLocalRevisions((value) => value + 1);
         setError(null);
         return Promise.resolve(updated);
       }
@@ -779,6 +782,7 @@ export function ApplicationRuntime({
           context={pageContext}
           schema={schema}
         >
+          <DataRevision.Provider value={revision - localRevisions}>
           <ClientActions.Provider
             value={{
               edits,
@@ -808,6 +812,7 @@ export function ApplicationRuntime({
               </LayoutState.Provider>
             </PageRuntimeContext.Provider>
           </ClientActions.Provider>
+          </DataRevision.Provider>
         </VariableEnvironment>
       </PageParameters.Provider>
     </div>
