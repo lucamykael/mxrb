@@ -81,6 +81,16 @@ nicht konvertierbarer Text und ungeprüfte Datumsteile. Alle 78 Abfragen liefen 
 `script/oql_native_oracle` auf dem offiziellen MxBuild und Runtime und stimmen mit
 Ruby überein. [Nachweis](../evidence/oql-expressions-2026-10-09.json).
 
+## Retrieves mit XPath
+
+Wie in Mendix 11.12.1 beachten XPath-Zeichenfolgenvergleiche (`=`, `!=`, `<`, `>=`)
+sowie `contains`, `starts-with` und `ends-with` die Groß-/Kleinschreibung nicht.
+Zuvor unterschied der Ruby-Runtime sie, sodass `[Name = 'NORTH']` `North` nicht
+fand. Die 44 Fixture-Fälle mit `empty`, `not()`, Booleans, Dezimalwerten, Vorrang von
+`and`/`or`, verketteten Prädikaten, `string-length` und Datumsfunktionen liefen mit
+`script/oql_native_oracle` auf dem offiziellen Runtime und stimmen mit Ruby überein.
+[Nachweis](../evidence/xpath-retrieve-2026-10-09.json).
+
 ## Sortierung von Retrieves und Grids
 
 Sortierte Datenbank-Retrieves, serverseitig sortierte DataGrids und

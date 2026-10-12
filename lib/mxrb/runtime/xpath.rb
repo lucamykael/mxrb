@@ -188,7 +188,10 @@ module Mxrb
         end
       end
 
+      # Mendix 11.12.1 compares XPath strings without regard to case.
       def comparison_operands(left, right, left_parameter, right_parameter)
+        return [left.downcase, right.downcase] if left.is_a?(String) && right.is_a?(String)
+
         if right_parameter && left.is_a?(Integer) && right.is_a?(BigDecimal)
           right = right.truncate
         elsif left_parameter && !right_parameter && right.is_a?(Integer) && left.is_a?(BigDecimal)

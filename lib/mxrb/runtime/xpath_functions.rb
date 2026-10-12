@@ -65,7 +65,7 @@ module Mxrb
         argument = rest.first
         raise ArgumentError, 'XPath string comparison requires a string' unless argument.is_a?(String)
 
-        value.public_send(STRINGS.fetch(name), argument)
+        value.downcase.public_send(STRINGS.fetch(name), argument.downcase)
       end
 
       def extract_date(name, value, zone)
