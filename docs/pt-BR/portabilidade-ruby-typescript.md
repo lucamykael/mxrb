@@ -960,6 +960,8 @@ Para um usuário autenticado, o Language selector grava o idioma escolhido em
 Seletores de referência recarregam as opções só quando os dados do servidor
 mudam, não a cada edição mantida no navegador, e colunas da Data grid 2 sobre o
 mesmo atributo (como a coluna de ações) mantêm identidades próprias.
+Linhas e colunas de layout grid, que não têm nome, recebem suas design properties
+pela posição (`grade/rows/0/columns/1`), como `cards` e `flex-row`.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

@@ -85,6 +85,33 @@ RSpec.describe Mxrb::RubyApp::DesignClasses do # rubocop:disable Metrics/BlockLe
     expect(described_class.apply(page, nil)).to equal(page)
   end
 
+  it 'records and applies the classes of layout grid rows and columns by position' do
+    lg_definitions = definitions.merge(
+      'LayoutGridRow' => [{ 'name' => 'Cards style', 'type' => 'Toggle', 'class' => 'row-cards' }],
+      'LayoutGridColumn' => [{ 'name' => 'Flex container', 'type' => 'ToggleButtonGroup',
+                               'options' => [{ 'name' => 'Row', 'class' => 'flexcontainer flex-row' }] }]
+    )
+    appearance = ->(*values) { { 'DesignProperties' => [3, *values] } }
+    grid = { '$Type' => 'Forms$LayoutGrid', 'Name' => 'grid',
+             'Rows' => [2, { 'Appearance' => appearance.call(value('Cards style')),
+                             'Columns' => [2, { 'Appearance' => appearance.call },
+                                           { 'Appearance' => appearance.call(value('Flex container', 'Row')) }] },
+                        { 'Columns' => [2] }] }
+    expect(described_class.widget_classes(grid, lg_definitions))
+      .to eq('grid/rows/0' => 'row-cards', 'grid/rows/0/columns/1' => 'flexcontainer flex-row')
+
+    served = { 'type' => 'layout_grid', 'name' => 'grid',
+               'options' => { 'rows' => [{ 'options' => {}, 'columns' => [{ 'widgets' => [] }, { 'options' => {} }] },
+                                         { 'columns' => [] }] } }
+    applied = described_class.apply(served, 'grid/rows/0' => 'row-cards', 'grid/rows/0/columns/1' => 'flex-row')
+    rows = applied.dig('options', 'rows')
+    expect(rows[0]['options']).to eq('design_class' => 'row-cards')
+    expect(rows[0]['columns']).to eq([{ 'widgets' => [] }, { 'options' => { 'design_class' => 'flex-row' } }])
+    expect(rows[1]).to eq('columns' => [])
+    expect(described_class.apply({ 'type' => 'layout_grid', 'name' => 'bare' }, 'other' => 'x'))
+      .to eq('type' => 'layout_grid', 'name' => 'bare', 'options' => { 'rows' => [] })
+  end
+
   it 'serves the presentation resources with their recorded classes' do
     application = Mxrb::RubyApp::Application.allocate
     layout = { kind: 'snippet', widgets: [{ type: 'container', name: 'bar' }] }

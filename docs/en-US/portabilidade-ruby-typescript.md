@@ -784,6 +784,8 @@ For a signed-in user, the Language selector stores the chosen language in
 Reference selectors reload their options only when server data changes, not for
 each edit kept in the browser, and Data grid 2 columns over the same attribute
 (such as an action column) keep their own identity.
+Layout grid rows and columns, which have no names, get their design properties by
+position (`grid/rows/0/columns/1`), such as `cards` and `flex-row`.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

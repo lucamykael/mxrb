@@ -360,9 +360,17 @@ describe('Ruby data view editing', () => {
       options: {
         rows: [
           {
-            options: { horizontal_alignment: 'end', vertical_alignment: 'center', gutters: false },
+            options: {
+              horizontal_alignment: 'end',
+              vertical_alignment: 'center',
+              gutters: false,
+              design_class: 'row-cards',
+            },
             columns: [
-              { options: { desktop: 'auto', vertical_alignment: 'center' }, widgets: [] },
+              {
+                options: { desktop: 'auto', vertical_alignment: 'center', design_class: 'flex-row' },
+                widgets: [],
+              },
               { options: { desktop: 6, tablet: 12, phone: 'grow' }, widgets: [] },
               { options: {}, widgets: [] },
             ],
@@ -374,9 +382,9 @@ describe('Ruby data view editing', () => {
     const root = container.firstElementChild!;
     expect(root).toHaveClass('mx-layoutgrid', 'mx-layoutgrid-fluid', 'container-fluid');
     const row = root.querySelector('.row')!;
-    expect(row).toHaveClass('justify-content-end', 'align-items-center', 'no-gutters');
+    expect(row).toHaveClass('justify-content-end', 'align-items-center', 'no-gutters', 'row-cards');
     const [auto, half, grow] = Array.from(row.children);
-    expect(auto).toHaveClass('col-lg-auto', 'col-md-auto', 'col-auto', 'align-self-center');
+    expect(auto).toHaveClass('col-lg-auto', 'col-md-auto', 'col-auto', 'align-self-center', 'flex-row');
     expect(half).toHaveClass('col-lg-6', 'col-md-12', 'col');
     expect(grow).toHaveClass('col-lg', 'col-md', 'col');
     const fixed = render(

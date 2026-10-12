@@ -828,6 +828,9 @@ Für angemeldete Benutzer speichert der Language selector die gewählte Sprache 
 Referenzauswahlen laden ihre Optionen nur neu, wenn sich Serverdaten ändern,
 nicht bei jeder im Browser gehaltenen Änderung, und Data-Grid-2-Spalten über
 dasselbe Attribut (etwa eine Aktionsspalte) behalten ihre eigene Identität.
+Zeilen und Spalten von Layout-Grids, die keine Namen haben, erhalten ihre
+Design-Properties über die Position (`grid/rows/0/columns/1`), etwa `cards` und
+`flex-row`.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

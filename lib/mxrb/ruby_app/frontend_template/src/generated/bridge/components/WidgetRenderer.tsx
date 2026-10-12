@@ -781,6 +781,7 @@ function WidgetContent({
                     `align-items-${alignmentSuffix(row.options?.vertical_alignment)}`,
                   row.options?.gutters === false && 'no-gutters',
                   row.options?.class,
+                  row.options?.design_class as string | undefined,
                   dynamicClass(row.options?.dynamic_class, activeRecord),
                 )}
                 style={inlineStyle(row.options?.style)}
@@ -793,6 +794,7 @@ function WidgetContent({
                         layoutColumnClasses(column.options || {}),
                         'mxrb-layout-grid__column',
                         column.options?.class,
+                        column.options?.design_class as string | undefined,
                         dynamicClass(column.options?.dynamic_class, activeRecord),
                       )}
                       style={inlineStyle(column.options?.style)}

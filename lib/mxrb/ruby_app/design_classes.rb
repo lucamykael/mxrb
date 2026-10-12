@@ -67,11 +67,28 @@ module Mxrb
       end
 
       def record_widget(widget, definitions, found)
-        values = Array(IO::BsonCodec.parse_array(widget.dig('Appearance', 'DesignProperties'))[:items])
-        return unless widget['Name'].is_a?(String) && !values.empty?
+        name = widget['Name']
+        return unless name.is_a?(String)
 
-        classes = resolve(type_name(widget), values, definitions)
-        found[widget['Name']] = classes unless classes.empty?
+        record(found, name, type_name(widget), widget, definitions)
+        record_layout_grid(name, widget, definitions, found) if widget['$Type'] == 'Forms$LayoutGrid'
+      end
+
+      # Layout grid rows and columns have no names; they are recorded by
+      # position as "grid/rows/0" and "grid/rows/0/columns/1".
+      def record_layout_grid(name, grid, definitions, found)
+        IO::BsonCodec.parse_array(grid['Rows'])[:items].each_with_index do |row, row_index|
+          record(found, "#{name}/rows/#{row_index}", 'LayoutGridRow', row, definitions)
+          IO::BsonCodec.parse_array(row['Columns'])[:items].each_with_index do |column, column_index|
+            record(found, "#{name}/rows/#{row_index}/columns/#{column_index}", 'LayoutGridColumn', column, definitions)
+          end
+        end
+      end
+
+      def record(found, key, type, element, definitions)
+        values = Array(IO::BsonCodec.parse_array(element.dig('Appearance', 'DesignProperties'))[:items])
+        classes = values.empty? ? '' : resolve(type, values, definitions)
+        found[key] = classes unless classes.empty?
       end
 
       def type_name(widget)
@@ -109,22 +126,50 @@ module Mxrb
         entry&.dig(side, 'class')
       end
 
-      # Adds the recorded classes to the widgets of a served document.
-      def apply(document, widgets)
-        return document if widgets.nil? || widgets.empty?
+      def apply(document, widgets) = Served.apply(document, widgets)
 
-        case document
-        when Hash then apply_widget(document.transform_values { apply(_1, widgets) }, widgets)
-        when Array then document.map { apply(_1, widgets) }
-        else document
+      # Adds the recorded classes to the widgets of served documents.
+      module Served
+        module_function
+
+        def apply(document, widgets)
+          return document if widgets.nil? || widgets.empty?
+
+          case document
+          when Hash then apply_widget(document.transform_values { apply(_1, widgets) }, widgets)
+          when Array then document.map { apply(_1, widgets) }
+          else document
+          end
         end
-      end
 
-      def apply_widget(node, widgets)
-        name = node['name']
-        return node unless node.key?('type') && name.is_a?(String) && widgets.key?(name)
+        def apply_widget(node, widgets)
+          name = node['name']
+          return node unless node.key?('type') && name.is_a?(String)
 
-        node.merge('options' => (node['options'] || {}).merge('design_class' => widgets.fetch(name)))
+          node = with_class(node, widgets[name])
+          node['type'] == 'layout_grid' ? apply_layout_grid(node, name, widgets) : node
+        end
+
+        def apply_layout_grid(grid, name, widgets)
+          options = grid['options'] || {}
+          rows = Array(options['rows']).each_with_index.map do |row, index|
+            apply_row(row, "#{name}/rows/#{index}", widgets)
+          end
+          grid.merge('options' => options.merge('rows' => rows))
+        end
+
+        def apply_row(row, key, widgets)
+          columns = Array(row['columns']).each_with_index.map do |column, index|
+            with_class(column, widgets["#{key}/columns/#{index}"])
+          end
+          with_class(row.merge('columns' => columns), widgets[key])
+        end
+
+        def with_class(node, classes)
+          return node unless classes
+
+          node.merge('options' => (node['options'] || {}).merge('design_class' => classes))
+        end
       end
     end
   end
