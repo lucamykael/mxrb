@@ -840,6 +840,11 @@ und der Datumsfilter folgt dem nativen Markup.
 Dynamische Klassen werden als Ausdrücke ausgewertet (`'sd-pb-' + toString(...)`
 wird zu `sd-pb-12`), und eine AutoNumber beginnt wie in Mendix bei ihrem
 Standardwert.
+Beim Öffnen einer Seite erhält das erste fokussierbare Element den Fokus, wie es
+das Autofocus der Seite erlaubt (Always; DesktopOnly, außer auf Touch-Geräten;
+Never), sofern der Benutzer nicht schon etwas fokussiert hat. Die
+Design-Property-Klassen eines Layouts gehen an die eingebetteten Layout-Widgets,
+die der Seite an ihre eigenen, auch bei gleichen Widget-Namen.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

@@ -794,6 +794,11 @@ from there). Data grid 2 shows the arrow of the active sort and its date filter
 follows the native markup.
 Dynamic classes are evaluated as expressions (`'sd-pb-' + toString(...)` becomes
 `sd-pb-12`), and an AutoNumber starts at its default value, as in Mendix.
+When a page opens, the focus moves to its first focusable element as the page's
+Autofocus allows (Always; DesktopOnly, except on touch devices; Never), unless
+the user has already focused something. A layout's design property classes go to
+the layout widgets embedded in the page, and the page's to its own, even when
+widget names repeat.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

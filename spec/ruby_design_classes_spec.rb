@@ -129,19 +129,29 @@ RSpec.describe Mxrb::RubyApp::DesignClasses do # rubocop:disable Metrics/BlockLe
     end
   end
 
-  it 'adds the recorded classes to a served page' do
+  it 'adds the classes of a page and of its layout each to their own widgets' do
+    Mxrb::RubyApp::Presentation.layout('App.Shell') do
+      container('bar') { placeholder 'Main', parameter: 'Main' }
+    end
+    page = Mxrb::RubyApp::Page::WidgetTree.new
+    page.layout('App.Shell', layout: 'App.Shell') { region('Main') { container 'bar' } }
     application = Mxrb::RubyApp::Application.allocate
     implementation = double('page', mendix_name: 'App.Home', mendix_id: 'home', title: 'Home', appearance_class: '',
-                                    appearance_style: '', data_source: nil, presentation_contract: nil)
+                                    appearance_style: '', data_source: nil, presentation_contract: nil,
+                                    widgets: page.widgets, native_definition: nil)
+    allow(Mxrb::RubyApp::Registry).to receive(:fetch).and_call_original
     allow(Mxrb::RubyApp::Registry).to receive(:fetch).with(:page, 'App.Home').and_return(implementation)
     allow(application).to receive(:authorize_document!)
-    allow(Mxrb::RubyApp::Presentation).to receive(:page)
-      .and_return(widgets: [{ type: 'button', name: 'save', options: {} }])
-    application.instance_variable_set(:@design_classes, 'App.Home' => { 'save' => 'btn-lg' })
-    expect(application.page('App.Home').dig('widgets', 0, 'options')).to eq('design_class' => 'btn-lg')
+    application.instance_variable_set(:@design_classes, 'App.Home' => { 'bar' => 'page-bar' },
+                                                        'App.Shell' => { 'bar' => 'flex-row' })
+    shell = application.page('App.Home')[:widgets].first
+    expect(shell.dig('options', 'design_class')).to eq('flex-row')
+    expect(shell.dig('children', 0, 'options', 'design_class')).to eq('page-bar')
     application.instance_variable_set(:@design_classes, {})
-    expect(application.page('App.Home')[:widgets]).to eq([{ type: 'button', name: 'save', options: {} }])
+    expect(application.page('App.Home')[:widgets].first.to_h['options'].to_h).not_to have_key('design_class')
     expect(Mxrb::RubyApp::Application.allocate.send(:design_classes)).to eq({})
+  ensure
+    Mxrb::RubyApp::Registry.reset!
   end
 
   it 'imports the icon of sidebar toggle buttons' do

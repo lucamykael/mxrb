@@ -68,8 +68,11 @@ module Mxrb
 
       # Native Ruby pages bind their content to the same Main layout slot as
       # the MPR writer. Exported pages already contain explicit layout calls.
-      def self.page(implementation)
-        widgets = Array(implementation.widgets)
+      # +classes+ gives the design property classes recorded for a document;
+      # each document's classes go to its own widgets, since widget names
+      # repeat between a page and its layouts.
+      def self.page(implementation, classes: nil)
+        widgets = with_classes(Array(implementation.widgets), classes, implementation.mendix_name)
         name = implementation.native_definition&.dig(:layout)
         if name && Registry.fetch(:presentation, name)&.fetch(:kind) == 'layout'
           widgets = [{ 'type' => 'layout', 'options' => { 'layout' => name },
@@ -77,50 +80,56 @@ module Mxrb
         else
           name = widgets.find { _1['type'] == 'layout' }&.dig('options', 'layout')
         end
-        { layout: name, widgets: compose(widgets) }
+        { layout: name, widgets: compose(widgets, classes:) }
+      end
+
+      def self.with_classes(widgets, classes, document)
+        recorded = classes&.call(document.to_s)
+        recorded ? DesignClasses.apply(JSON.parse(JSON.generate(widgets)), recorded) : widgets
       end
 
       # Resolve reusable layout slots at request time so edits to shared Ruby
       # resources affect every page, including after a restart without an MPR.
-      def self.compose(value, slots: {}, stack: [])
+      def self.compose(value, slots: {}, stack: [], classes: nil)
         case value
-        when Array then compose_array(value, slots, stack)
-        when Hash then compose_node(value, slots, stack)
+        when Array then compose_array(value, slots, stack, classes)
+        when Hash then compose_node(value, slots, stack, classes)
         else value
         end
       end
 
-      def self.compose_array(value, slots, stack)
+      def self.compose_array(value, slots, stack, classes)
         value.flat_map do |child|
-          result = compose(child, slots:, stack:)
+          result = compose(child, slots:, stack:, classes:)
           expansion = child.is_a?(Hash) && %w[layout placeholder].include?((child['type'] || child[:type]).to_s)
           expansion ? result : [result]
         end
       end
 
-      def self.compose_node(value, slots, stack)
+      def self.compose_node(value, slots, stack, classes)
         node = value.transform_keys(&:to_s)
         case node['type'].to_s
-        when 'layout' then compose_layout(node, slots, stack)
+        when 'layout' then compose_layout(node, slots, stack, classes)
         when 'placeholder'
           name = node.fetch('options', {}).transform_keys(&:to_s).fetch('parameter', node['name']).to_s.split('.').last
           slots.fetch(name, [])
-        else value.transform_values { compose(_1, slots:, stack:) }
+        else value.transform_values { compose(_1, slots:, stack:, classes:) }
         end
       end
 
-      def self.compose_layout(node, slots, stack)
+      def self.compose_layout(node, slots, stack, classes)
         name = node.fetch('options').transform_keys(&:to_s).fetch('layout')
         raise ArgumentError, "recursive layout #{name}" if stack.include?(name) || stack.length >= 32
 
         layout = Registry.fetch(:presentation, name)
         raise ArgumentError, "missing layout #{name}" unless layout && layout[:kind] == 'layout'
 
-        arguments = compose(node.fetch('regions', {}), slots:, stack:)
-        compose(layout.fetch(:widgets), slots: arguments, stack: [*stack, name])
+        arguments = compose(node.fetch('regions', {}), slots:, stack:, classes:)
+        widgets = with_classes(layout.fetch(:widgets), classes, name)
+        compose(widgets, slots: arguments, stack: [*stack, name], classes:)
       end
 
-      private_class_method :compose_array, :compose_node, :compose_layout
+      private_class_method :compose_array, :compose_node, :compose_layout, :with_classes
     end
   end
 end

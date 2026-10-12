@@ -2294,15 +2294,14 @@ module Mxrb
 
         authorize_document!(:page, name, :read, context)
 
-        page = {
+        {
           name: implementation.mendix_name, id: implementation.mendix_id,
           title: implementation.title,
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
-        }.merge(Presentation.page(implementation)).merge(implementation.presentation_contract || {})
-        widgets = design_classes[implementation.mendix_name.to_s]
-        widgets ? DesignClasses.apply(JSON.parse(JSON.generate(page)), widgets) : page
+        }.merge(Presentation.page(implementation, classes: design_classes.method(:[])))
+          .merge(implementation.presentation_contract || {})
       end
 
       # Theme design property classes per document, recorded by the export.

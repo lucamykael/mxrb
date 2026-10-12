@@ -970,6 +970,11 @@ daí). A Data grid 2 mostra a seta da ordenação ativa e o filtro de data segue
 markup nativo.
 Classes dinâmicas são avaliadas como expressões (`'sd-pb-' + toString(...)` vira
 `sd-pb-12`), e um AutoNumber começa no seu valor padrão, como no Mendix.
+Ao abrir uma página, o foco vai para o primeiro elemento focável conforme o
+Autofocus da página (Always; DesktopOnly, fora de dispositivos de toque; Never),
+salvo se o usuário já focou algo. As classes de design properties de um layout
+vão para os widgets do layout embutidos na página, e as da página para os dela,
+mesmo quando os nomes se repetem.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
