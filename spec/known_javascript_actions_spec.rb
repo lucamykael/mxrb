@@ -50,6 +50,13 @@ RSpec.describe Mxrb::RubyApp::KnownJavaScriptActions do
     end
   end
 
+  it 'has a TypeScript handler for every verified Feedback action' do
+    bridge = File.read(File.expand_path('../lib/mxrb/ruby_app/frontend_template/src/generated/bridge/' \
+                                        'feedbackStorage.ts', __dir__))
+    names = described_class::SOURCES.keys - ['JS_PopulateFeedbackMetadata']
+    expect(names.reject { bridge.include?("#{_1}:") }).to eq([])
+  end
+
   it 'emits only source-verified registrations and normalizes Windows newlines' do
     Dir.mktmpdir do |root|
       directory = File.join(root, 'javascriptsource', 'feedbackmodule', 'actions')

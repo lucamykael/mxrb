@@ -337,6 +337,21 @@ Ordnungsvergleiche verlangen Zahlen, Zeichenfolgen oder Datumswerte; Parameter b
 Die Matrix umfasst 30 Filter und 125 Browserschritte ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-view-filters-2026-10-07.json).
 
+## Bildupload im Feedback
+
+`JS_UploadAndConvertToFileBlobURL`, `JS_RevokeUploadedFileFromMemory` und
+`JS_Recalculate_MendixModal_Error_PopUp_Zindex` des Feedback-Moduls haben
+TypeScript-Adapter, die über den SHA-256 der Quelle ausgewählt werden. Der Upload öffnet
+ein verborgenes Dateifeld und liefert die `blob:`-URL oder die Texte des Moduls
+(`uploadCancelled`, `fileTypeNotAccepted`, `fileSizeNotAccepted`, `fileNotConverted`).
+Wie im Original ist jeder akzeptierte Typ ein regulärer Ausdruck für den MIME-Typ, und
+die Grenze in MB ist die erste signifikante Ziffer des Werts plus 0,1 (`25` erlaubt
+2,1 MB). Das Widerrufen gibt die URL frei oder schlägt ohne URL fehl; die
+`z-index`-Korrektur wirkt nach 500 ms, der Warnungsselektor des Moduls ohne Punkt bleibt
+wirkungslos. Ein Differenztest führte Originalquelle (mit big.js) und Adapter in 294
+Szenarien ohne Unterschied aus.
+[Nachweis](../evidence/feedback-file-actions-2026-10-10.json).
+
 ## Feedback-Metadaten im Browser
 
 Die verifizierten Versionen von `JS_PopulateFeedbackMetadata` und `JS_isStrictMode`

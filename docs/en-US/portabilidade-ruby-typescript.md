@@ -319,6 +319,20 @@ Joins and aggregates use the relational grammar described above.
 The matrix covers 30 filters and 125 browser steps with MPR access prohibited.
 [Evidence](../evidence/oql-view-filters-2026-10-07.json).
 
+## Feedback image upload
+
+The Feedback module's `JS_UploadAndConvertToFileBlobURL`,
+`JS_RevokeUploadedFileFromMemory` and `JS_Recalculate_MendixModal_Error_PopUp_Zindex`
+have TypeScript adapters selected by the SHA-256 of their source. Upload opens a hidden
+file input and returns the `blob:` URL or the module's texts (`uploadCancelled`,
+`fileTypeNotAccepted`, `fileSizeNotAccepted`, `fileNotConverted`). As in the original,
+each accepted type is a regular expression tested against the MIME type, and the limit
+in MB is the first significant digit of the given value plus 0.1 (`25` allows 2.1 MB).
+Revocation releases the URL or fails without one; the `z-index` fix applies 500 ms later
+and the module's warning selector, missing its dot, still has no effect. A differential
+test ran the original source (with big.js) and the adapter on 294 scenarios with no
+difference. [Evidence](../evidence/feedback-file-actions-2026-10-10.json).
+
 ## Feedback browser metadata
 
 The verified `JS_PopulateFeedbackMetadata` and `JS_isStrictMode` versions used by

@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-10",
+  "scope": "Feedback module image upload JavaScript actions in the exported TypeScript client",
+  "sources": {
+    "JS_UploadAndConvertToFileBlobURL": "d8f245699ae0f2e2ad443c43bb9038ba82f0c9f2ce480f384c9a8c4df43d51f8",
+    "JS_RevokeUploadedFileFromMemory": "99a113e34c9803c059762d6533bc0516c26bc960612ee002bf47e0ddd80ac294",
+    "JS_Recalculate_MendixModal_Error_PopUp_Zindex": "9b447afb3344dcc200b342ed7d0c22b0772008bced983054650a622ea0996514",
+    "copies_with_same_hash": 5
+  },
+  "differential": {
+    "method": "the original module sources (with big.js and a stub of mx-api/ui) and the TypeScript adapter driven by the same jsdom file input events",
+    "upload_scenarios": 294,
+    "revoke_scenarios": 4,
+    "mismatches": 0,
+    "dimensions": {
+      "sizes": [
+        "5",
+        "25",
+        "0.25",
+        "0.001",
+        "10",
+        "1",
+        "99"
+      ],
+      "accepted_types": [
+        null,
+        "",
+        "image/png",
+        "image/png,image/jpeg",
+        "image/.*",
+        "text/plain"
+      ],
+      "files": [
+        "cancel",
+        "0.05MB png",
+        "1.05MB jpeg",
+        "2.05MB text",
+        "5.05MB png",
+        "9.5MB gif",
+        "0.5MB untyped"
+      ]
+    }
+  },
+  "semantics": [
+    "accepted types are regular expressions tested against the MIME type; an empty list accepts everything",
+    "the size limit in MB is the first digit of the big.js coefficient (maxSize.c[0]) plus 0.1",
+    "a cancelled dialog resolves uploadCancelled and leaves the hidden input in the page",
+    "revoking without a URL fails with 'Image was not removed from browser memory'",
+    "message dialogs get z-index 90 and the underlay 80 after 500 ms; the module's mx-dialog-warning selector lacks its dot"
+  ],
+  "limitations": [
+    "the native Mendix client was not driven through a real file chooser; equivalence comes from executing the original source"
+  ]
+}

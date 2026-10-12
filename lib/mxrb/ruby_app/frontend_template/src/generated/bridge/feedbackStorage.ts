@@ -5,6 +5,11 @@ import { readStorageObject } from './objectRestore';
 import { feedbackStrictMode, feedbackMetadataAction } from './feedbackMetadata';
 import type { FeedbackMetadataVariant } from './feedbackMetadata';
 import { feedbackScreenshot, feedbackAnnotate } from './feedbackCapture';
+import {
+  recalculateModalErrorZindex,
+  revokeUploadedFileFromMemory,
+  uploadAndConvertToFileBlobURL,
+} from './feedbackFiles';
 
 const required = (parameters: NanoflowParameters, name: string, label = name): string => {
   const value = parameters[name];
@@ -67,6 +72,9 @@ const handlers: Record<string, JavaScriptAction> = {
   JS_GetSingleStringLocalStorageObjectItem: readString,
   JS_GetShowEmailBooleanLocalStorageObjectItem: readShowEmail,
   JS_SetSingleLocalStorageObjectItem: writeImage,
+  JS_UploadAndConvertToFileBlobURL: uploadAndConvertToFileBlobURL,
+  JS_RevokeUploadedFileFromMemory: revokeUploadedFileFromMemory,
+  JS_Recalculate_MendixModal_Error_PopUp_Zindex: recalculateModalErrorZindex,
 };
 
 export const feedbackStorageActions = (
