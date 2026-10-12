@@ -58,7 +58,10 @@ export function useWidgetEvent(props: WidgetRuntimeProps) {
     if (closeCount > 0) await actions?.close?.(closeCount);
     if (event.kind === 'page') {
       const candidate = Object.values(parameters)[0];
-      const targetContext = isEntityRecord(candidate) ? candidate : pageContext || context || null;
+      // Without mapped arguments the page receives the object the event acts on.
+      const targetContext = isEntityRecord(candidate)
+        ? candidate
+        : eventContext || pageContext || context || null;
       return navigate(handler, targetContext, {
         arguments: parameters,
         ...(event.settings?.title ? { title: event.settings.title } : {}),

@@ -786,6 +786,17 @@ Mendix es tut; so legt der Save-Button des Popups New Account im Modul
 Administration das Konto an. Ein Data View über eine Assoziation lässt seine
 Widgets und deren Entwürfe montiert, während er dasselbe Objekt neu lädt.
 
+Auf einer Seite mit Save/Cancel übergibt ein Microflow-Aufruf die bearbeiteten
+Objekte (ohne Commit), wie der Mendix-Client; über eine Assoziation erneut
+erreichte Entwürfe behalten ihr Token, und die Änderung wirkt auf dieselbe
+Instanz, die der Microflow speichert. Nach einem Microflow in einem Popup lädt
+die darunterliegende Seite neu. Eine Seitenaktion ohne zugeordnete Argumente
+erhält das Objekt, auf das das Ereignis wirkt, etwa eine Grid-Zeile. Labels
+importieren ihre Beschriftung und die Sichtbarkeit nach Attributwerten
+(`text ..., visibility: input_condition(...)`), Buttons ihr Icon aus einer
+Icon-Sammlung (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); eine leere
+Beschriftung bleibt leer.
+
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
 Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die

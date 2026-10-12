@@ -153,11 +153,12 @@ module Mxrb
         )
       end
 
+      # visibility: shows the text for the values of an attribute, as input_condition.
       def text(name, caption: nil, parameters: [], class_name: nil, style: nil,
-               dynamic_class: nil, visible: nil, &block)
+               dynamic_class: nil, visible: nil, visibility: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:
+          class: class_name, style:, dynamic_class:, visible:, visibility:
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:text, name, **options, &block)
@@ -431,11 +432,12 @@ module Mxrb
         )
       end
 
+      # icon: an icon collection image, such as "Atlas_Core.Atlas_Filled.pencil".
       def button(name, caption: nil, parameters: [], class_name: nil, style: nil,
-                 dynamic_class: nil, visible: nil, button_style: nil, &block)
+                 dynamic_class: nil, visible: nil, visibility: nil, button_style: nil, icon: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:, button_style:
+          class: class_name, style:, dynamic_class:, visible:, visibility:, button_style:, icon:
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:button, name, **options, &block)

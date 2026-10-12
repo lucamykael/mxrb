@@ -919,6 +919,16 @@ mapeado de entidade compatível, como o Mendix faz; assim o Save do popup New
 Account do módulo Administration cria a conta. Um Data View por associação
 mantém os widgets e seus rascunhos montados enquanto recarrega o mesmo objeto.
 
+Numa página com Save/Cancel, uma chamada de microflow leva os objetos editados
+(sem commit), como o cliente do Mendix; rascunhos alcançados de novo por uma
+associação mantêm o token, e a mudança é aplicada à mesma instância que o
+microflow grava. Depois de um microflow num popup, a página de baixo recarrega.
+Uma ação de página sem argumentos mapeados recebe o objeto em que o evento age,
+como a linha de um grid. Labels importam a legenda e a visibilidade por valor de
+atributo (`text ..., visibility: input_condition(...)`), e botões importam o
+ícone de coleção (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); uma
+legenda vazia continua vazia.
+
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
 seu foco. Objetos vindos do servidor permanecem persistentes; falhas de gravação,

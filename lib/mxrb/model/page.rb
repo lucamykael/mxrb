@@ -267,10 +267,26 @@ module Mxrb
         options[:lines] = widget["NumberOfLines"] if widget_type == :text_area && widget["NumberOfLines"]
         options[:horizontal] = widget["RenderHorizontal"] == true if widget_type == :radio_button_group
         options[:button_style] = widget['ButtonStyle'].downcase if widget_type == :button && widget['ButtonStyle']
+        options.merge!(text_button_options(widget, widget_type)) if %i[text button].include?(widget_type)
         options.merge!(input_options(widget)) if %i[
           text_box text_area check_box date_picker drop_down reference_selector radio_button_group
         ].include?(widget_type)
         options
+      end
+
+      # Visibility by attribute values and the icon of a button, as the Runtime
+      # shows them.
+      def text_button_options(widget, widget_type)
+        result = {}
+        visibility = widget["ConditionalVisibilitySettings"]
+        if visibility.is_a?(Hash) && !visibility["Attribute"].to_s.empty?
+          result[:visibility] = parse_data_view_condition(visibility)
+        end
+        icon = widget["Icon"]
+        if widget_type == :button && icon.is_a?(Hash) && icon["$Type"] == "Forms$IconCollectionIcon"
+          result[:icon] = icon["Image"].to_s
+        end
+        result
       end
 
       # These values used to survive only in the native baseline. They are
@@ -443,7 +459,9 @@ module Mxrb
       end
 
       def widget_caption(widget, widget_type)
-        return extract_text(widget["Content"] || widget["Text"] || widget["LabelText"]) if widget_type == :text
+        if widget_type == :text
+          return extract_text(widget["Content"] || widget["Text"] || widget["LabelText"] || widget["Caption"])
+        end
 
         extract_text(
           widget["Caption"] ||

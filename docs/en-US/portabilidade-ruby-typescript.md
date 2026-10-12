@@ -745,6 +745,16 @@ button of the Administration module's New Account popup creates the account. An
 association Data View keeps its widgets and their drafts mounted while it
 reloads the same object.
 
+On a page with Save/Cancel, a microflow call carries the edited objects
+(uncommitted), as the Mendix client does; drafts reached again through an
+association keep their token, and the change applies to the same instance the
+microflow commits. After a microflow in a popup, the page beneath reloads. A page
+action without mapped arguments receives the object the event acts on, such as a
+grid row. Labels import their caption and attribute-value visibility
+(`text ..., visibility: input_condition(...)`), and buttons import their icon
+collection image (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); an empty
+caption stays empty.
+
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
 are reported. Named grid selection feeds `listen_to` views. Multi-step association

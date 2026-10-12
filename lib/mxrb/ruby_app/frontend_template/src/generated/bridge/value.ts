@@ -89,7 +89,8 @@ export const caption = (
   context: EntityRecord | null,
   variables: RuntimeVariables = {},
 ): string => {
-  let value = options.caption || widget.caption || widget.name;
+  // An explicitly empty caption (an icon-only button, a label) stays empty.
+  let value = options.caption ?? widget.caption ?? widget.name;
   (options.parameters || []).forEach((parameter, index) => {
     value = value.replaceAll(
       `{${index + 1}}`,

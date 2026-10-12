@@ -16,7 +16,12 @@ import { PageParameters, LocalVariables } from '../PageVariables';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
 import { TabControl } from './TabControl';
-import { SharedPresentation, ScrollContainer, ReferenceSetSelector } from './PresentationWidgets';
+import {
+  CollectionIcon,
+  SharedPresentation,
+  ScrollContainer,
+  ReferenceSetSelector,
+} from './PresentationWidgets';
 import { FileWidget } from './FileWidget';
 import { PageTitleContext } from './PageTitleContext';
 import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
@@ -827,6 +832,9 @@ function WidgetContent({
           disabled={running && click?.settings?.disabled_during_execution !== false}
           aria-busy={running || undefined}
         >
+          {typeof options.icon === 'string' && options.icon && (
+            <CollectionIcon name={options.icon} schema={schema} />
+          )}
           {label}
         </button>
       );

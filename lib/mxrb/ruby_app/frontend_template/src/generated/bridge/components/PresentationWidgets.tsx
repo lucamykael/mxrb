@@ -544,7 +544,13 @@ export function ReferenceSetSelector(
   );
 }
 
-function CollectionIcon({ name, schema }: { name: string; schema: WidgetRuntimeProps['schema'] }) {
+export function CollectionIcon({
+  name,
+  schema,
+}: {
+  name: string;
+  schema: WidgetRuntimeProps['schema'];
+}) {
   const resource = schema.presentation?.[name];
   if (resource?.kind !== 'icon' || !resource.path || resource.character === undefined)
     return <span role="img" aria-label={`Missing icon: ${name}`} />;

@@ -17,6 +17,7 @@ module Mxrb
       def initialize(store)
         @store = store
         @database = store.database
+        @registered = {}
         @database.execute(<<~SQL)
           CREATE TABLE IF NOT EXISTS mxrb_client_drafts (
             token TEXT PRIMARY KEY, owner TEXT NOT NULL, entity TEXT NOT NULL,
@@ -29,6 +30,7 @@ module Mxrb
       def capture(value, owner:, seen: {})
         return seen[value.id] if seen.key?(value.id)
 
+        @registered.clear
         token = register(value, owner)
         seen[value.id] = token
         payload = JSON.generate(codec.encode(value.members, owner, seen))
@@ -49,9 +51,22 @@ module Mxrb
       end
 
       def delete(value)
+        @registered.clear
         @database.execute('DELETE FROM mxrb_client_drafts WHERE entity = ? AND object_id = ?',
                           [value.entity, value.id])
       end
+
+      # Whether the object is a live draft of this principal, such as an
+      # uncommitted object reached again through a later request.
+      def registered?(value, owner:)
+        @registered[owner] ||= @database.execute(
+          'SELECT entity, object_id FROM mxrb_client_drafts WHERE owner = ? AND expires_at > ?',
+          [owner, Time.now.to_f]
+        ).to_set { [_1['entity'], _1['object_id']] }
+        @registered.fetch(owner).include?([value.entity, value.id])
+      end
+
+      def release! = @registered.clear
 
       private
 

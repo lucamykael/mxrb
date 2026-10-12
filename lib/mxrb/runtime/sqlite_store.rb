@@ -157,6 +157,7 @@ module Mxrb
       end
 
       def release_cache!
+        @client_drafts.release!
         @resumed_drafts.each_key do |id|
           @staged_new.delete(id)
           @identity.delete(id)
@@ -167,6 +168,9 @@ module Mxrb
         @persisted = {}
         self
       end
+
+      # Whether the entity lives only in memory (a non-persistable entity).
+      def transient_entity?(entity) = transient?(entity)
 
       def draft?(value)
         @staged_new[value.id].equal?(value) || @detached_new[value.id].equal?(value)

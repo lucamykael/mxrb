@@ -2154,7 +2154,7 @@ module Mxrb
                            runtime_grid_columns_expression(value)
                          elsif type == :gallery && key.to_s == 'sort'
                            runtime_gallery_sort_expression(value)
-                         elsif key.to_s == 'editability'
+                         elsif %w[editability visibility].include?(key.to_s)
                            runtime_input_condition_source(value)
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
@@ -2205,7 +2205,7 @@ module Mxrb
       }.freeze
       DSL_SINK_OPTIONS = {
         sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip],
-        button: %w[caption parameters class style dynamic_class visible button_style],
+        button: %w[caption parameters class style dynamic_class visible visibility button_style icon],
         check_box: %w[attribute caption class style dynamic_class visible],
         container: %w[class style dynamic_class visible],
         date_picker: %w[attribute caption class style dynamic_class visible],
@@ -2249,7 +2249,7 @@ module Mxrb
           image alternative_text width height width_unit height_unit responsive
           class style dynamic_class visible
         ],
-        text: %w[caption parameters class style dynamic_class visible],
+        text: %w[caption parameters class style dynamic_class visible visibility],
         text_area: %w[attribute caption lines class style dynamic_class visible],
         text_box: %w[attribute caption class style dynamic_class visible]
       }.freeze
@@ -3878,6 +3878,7 @@ module Mxrb
             parameters?: string[];
             read_only?: boolean;
             sort?: Array<{ attribute: string; direction?: string }>;
+            icon?: string;
             xpath?: string;
             on_click_trigger?: 'single' | 'double';
             source?: DataViewSource;

@@ -1871,8 +1871,13 @@ module Mxrb
           bridge.interpreter.clear_effects!
           invocation_arguments = arguments.to_h.dup
           synchronized_context = invocation_arguments.delete('__mxrb_context')
+          staged = invocation_arguments.delete('__mxrb_changes') || []
+          raise ArgumentError, 'staged changes must be a list of objects' unless
+            staged.is_a?(Array) && staged.all?(Hash)
+
           bridge.interpreter.store.transaction do
             active_context = synchronize_context(synchronized_context, context:) if synchronized_context
+            staged.each { synchronize_context(_1, context:) }
             implicit_context_argument(name, invocation_arguments, active_context, synchronized_context)
             result = call_service(name, invocation_arguments, context:)
             {
@@ -1884,6 +1889,31 @@ module Mxrb
           release_runtime_cache
         end
       end
+
+      # Uncommitted objects the context reaches (through non-persistent objects)
+      # are the instances the call works on: a staged change to one of them
+      # resumes that instance, not a copy from its draft snapshot.
+      def stage_reachable_drafts(root, context:)
+        store = bridge.interpreter.store
+        return unless store.respond_to?(:resume_draft)
+
+        owner = draft_owner(context)
+        pending = [root]
+        seen = {}
+        until pending.empty?
+          value = pending.pop
+          next unless value.is_a?(Runtime::Native::ObjectValue) && !seen[[value.entity, value.id]]
+
+          seen[[value.entity, value.id]] = true
+          if store.find(value.entity, value.id).nil? && store.client_drafts.registered?(value, owner:)
+            store.resume_draft(value)
+          elsif !value.equal?(root) && !store.transient_entity?(value.entity)
+            next
+          end
+          value.members.each_value { pending.concat(Array(_1)) }
+        end
+      end
+      private :stage_reachable_drafts
 
       # A page action without parameter mappings passes the object of its data
       # view to the one unmapped parameter of a compatible entity.
@@ -2683,8 +2713,10 @@ module Mxrb
           end
           result = { id: value.id, type: value.entity, attributes: serialize(members, branch, context:) }
           store = bridge.interpreter.store
-          if store.respond_to?(:draft?) && store.draft?(value)
-            token = store.client_drafts.capture(value, owner: draft_owner(context))
+          owner = draft_owner(context)
+          if store.respond_to?(:draft?) &&
+             (store.draft?(value) || store.client_drafts.registered?(value, owner:))
+            token = store.client_drafts.capture(value, owner:)
             result.merge!(new_record: true, draft_token: token)
           end
           result
@@ -2743,6 +2775,7 @@ module Mxrb
         object = deserialize(value, context:)
         return object unless object.is_a?(Runtime::Native::ObjectValue) && value.is_a?(Hash)
 
+        stage_reachable_drafts(object, context:)
         changes = value.fetch('attributes', {}).filter_map do |member, member_value|
           resolved = deserialize(member_value, context:)
           [member.to_s, resolved] unless context_values_equal?(object.members[member.to_s], resolved)
@@ -2790,7 +2823,7 @@ module Mxrb
       end
 
       def draft_owner(context)
-        context&.user ? "user:#{context.user}" : 'anonymous'
+        context.respond_to?(:user) && context.user ? "user:#{context.user}" : 'anonymous'
       end
     end
 

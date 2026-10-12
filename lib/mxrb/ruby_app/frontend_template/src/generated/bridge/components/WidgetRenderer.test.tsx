@@ -248,6 +248,43 @@ describe('Ruby data view editing', () => {
     expect(noContext).not.toHaveBeenCalled();
   });
 
+  it('shows an icon-only button and opens a page for the grid row acted on', async () => {
+    const schema = {
+      modules: [],
+      presentation: {
+        'Atlas.Icons.pencil': { kind: 'icon', path: '/assets/icons.woff', character: 59903 },
+      },
+    } as unknown as ApplicationSchema;
+    const edit: WidgetDefinition = {
+      type: 'button',
+      name: 'editButton',
+      options: { caption: '', icon: 'Atlas.Icons.pencil' },
+    };
+    render(<WidgetRenderer {...props(edit)} schema={schema} />);
+    const button = screen.getByRole('button');
+    expect(button).not.toHaveTextContent('editButton');
+    expect(button.querySelector('[data-icon-collection="Atlas.Icons.pencil"]')).not.toBeNull();
+
+    const row = { id: 'row', type: 'App.Item', attributes: { Name: 'Row' } };
+    const grid: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'grid',
+      options: {
+        entity: 'App.Item',
+        presentation: 'datagrid2',
+        columns: [{ name: 'Name', attribute: 'Name' }],
+      },
+      events: [{ event: 'on_click', kind: 'page', handler: 'App.Edit', arguments: {} }],
+    };
+    const input = props(grid);
+    const request = vi.fn().mockResolvedValue({ records: [row] });
+    render(<WidgetRenderer {...input} request={request} />);
+    await userEvent.click(await screen.findByText('Row'));
+    await waitFor(() =>
+      expect(input.navigate).toHaveBeenCalledWith('App.Edit', row, expect.anything()),
+    );
+  });
+
   it('keeps the fields and their drafts while an association view refreshes', async () => {
     const associated: WidgetDefinition = {
       ...view,

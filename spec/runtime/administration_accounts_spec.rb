@@ -76,5 +76,28 @@ RSpec.describe 'Administration accounts in an exported application' do
     listed = @application.records('Administration.Account', context: admin, xpath:)
     expect(listed.map { _1.dig(:attributes, 'Name') }).to include('player')
   end
+
+  it 'creates the account the New Account popup edited, as its requests do' do
+    json = ->(value) { JSON.parse(JSON.generate(value)) }
+    opened = json.call(@application.invoke_service('Administration.NewAccount', {}))
+    popup = opened.dig('effects', 0, 'arguments').values.first
+    account = json.call(@application.record_page(
+                          'Administration.Account', association: 'Administration.AccountPasswordData_Account',
+                                                    context_type: popup.fetch('type'), context_id: popup.fetch('id')
+                        )).dig('records', 0)
+    expect(account).to include('new_record' => true, 'draft_token' => be_a(String))
+    roles = json.call(@application.records('System.UserRole')).select { _1.dig('attributes', 'Name') == 'User' }
+    change = account.slice('id', 'type', 'new_record', 'draft_token')
+                    .merge('attributes' => { 'FullName' => 'Player One', 'Name' => 'player', 'UserRoles' => roles })
+    context = popup.merge('attributes' => popup.fetch('attributes').merge('NewPassword' => password,
+                                                                          'ConfirmPassword' => password))
+    @application.invoke_service('Administration.SaveNewAccount',
+                                { '__mxrb_context' => context, '__mxrb_changes' => [change] })
+    saved = json.call(@application.records('Administration.Account'))
+    expect(saved.map { _1.dig('attributes', 'Name') }).to eq(['player'])
+    expect(context('player', password).user_roles).to eq(['User'])
+    expect { @application.invoke_service('Administration.SaveNewAccount', { '__mxrb_changes' => 'x' }) }
+      .to raise_error(ArgumentError, /staged changes/)
+  end
 end
 # rubocop:enable Metrics/BlockLength
