@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "cgi"
-require "json"
+require 'cgi'
+require 'json'
 
 module Mxrb
   module Functional
@@ -12,7 +12,7 @@ module Mxrb
       :expected_return, :counts, :setup, :cleanup
     ) do
       class << self
-        alias data_new new
+        alias_method :data_new, :new
 
         def new(name, target, arguments, timeout, expected_return = nil,
                 counts = [].freeze, setup = nil, cleanup = nil)
@@ -48,16 +48,16 @@ module Mxrb
                     before: nil, after: nil)
         label = name.to_s.strip
         target = call.to_s.strip
-        raise ArgumentError, "functional test name cannot be empty" if label.empty?
+        raise ArgumentError, 'functional test name cannot be empty' if label.empty?
         unless target.match?(/\A[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\z/)
-          raise ArgumentError, "microflow call must be a qualified Mendix name"
+          raise ArgumentError, 'microflow call must be a qualified Mendix name'
         end
-        raise ArgumentError, "functional test timeout must be positive" unless timeout.to_f.positive?
+        raise ArgumentError, 'functional test timeout must be positive' unless timeout.to_f.positive?
 
         arguments = pass.to_h.transform_keys(&:to_s).transform_values(&:to_s).freeze
         expectations = expect.to_h
-        expected_return = expectations[:return] || expectations["return"]
-        counts = normalize_counts(expectations[:count] || expectations["count"])
+        expected_return = expectations[:return] || expectations['return']
+        counts = normalize_counts(expectations[:count] || expectations['count'])
         @tests << TestCase.new(
           label, target, arguments, timeout.to_f, expected_return&.to_s,
           counts, normalize_hook(before), normalize_hook(after)
@@ -80,12 +80,13 @@ module Mxrb
         return unless value
 
         options = value.is_a?(Hash) ? value : { call: value }
-        target = (options[:call] || options["call"]).to_s
+        target = (options[:call] || options['call']).to_s
         unless target.match?(/\A[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\z/)
-          raise ArgumentError, "functional hook must call a qualified microflow"
+          raise ArgumentError, 'functional hook must call a qualified microflow'
         end
-        arguments = (options[:pass] || options["pass"] || {}).to_h
-          .transform_keys(&:to_s).transform_values(&:to_s).freeze
+
+        arguments = (options[:pass] || options['pass'] || {}).to_h
+                    .transform_keys(&:to_s).transform_values(&:to_s).freeze
         Hook.new(target, arguments)
       end
 
@@ -93,16 +94,16 @@ module Mxrb
         values = value.is_a?(Array) ? value : [value]
         values.compact.map do |item|
           options = item.to_h
-          entity = (options[:entity] || options["entity"]).to_s
-          equals = options.key?(:equals) ? options[:equals] : options["equals"]
+          entity = (options[:entity] || options['entity']).to_s
+          equals = options.key?(:equals) ? options[:equals] : options['equals']
           unless entity.match?(/\A[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\z/)
-            raise ArgumentError, "count expectation requires a qualified entity"
+            raise ArgumentError, 'count expectation requires a qualified entity'
           end
-          raise ArgumentError, "count expectation requires a non-negative integer" unless
+          raise ArgumentError, 'count expectation requires a non-negative integer' unless
             equals.is_a?(Integer) && equals >= 0
 
           CountExpectation.new(
-            entity, (options[:xpath] || options["xpath"])&.to_s, equals
+            entity, (options[:xpath] || options['xpath'])&.to_s, equals
           )
         end.freeze
       end
@@ -110,9 +111,9 @@ module Mxrb
 
     # Adds an isolated after-startup runner to a writable disposable MPR copy.
     class Instrumenter
-      MODULE_NAME = "MxrbTests"
-      RUNNER_NAME = "RunAll"
-      LOG_NODE = "'MXRB_TEST'".freeze
+      MODULE_NAME = 'MxrbTests'
+      RUNNER_NAME = 'RunAll'
+      LOG_NODE = "'MXRB_TEST'"
 
       def initialize(path, definition)
         @path = File.expand_path(path)
@@ -120,7 +121,7 @@ module Mxrb
       end
 
       def instrument!
-        raise FunctionalTestError, "functional test suite is empty" if @definition.empty?
+        raise FunctionalTestError, 'functional test suite is empty' if @definition.empty?
 
         version = validate_targets!
         mod = build_module
@@ -158,14 +159,17 @@ module Mxrb
         raise FunctionalTestError, "microflow #{target} not found" unless artifact
 
         doc = project.parse_bson(project.raw_unit(artifact.unit_id))
-        collection = doc["MicroflowParameterCollection"] || doc["Parameters"] || {}
-        parameter_docs = collection.is_a?(Hash) ?
-          IO::BsonCodec.parse_array(collection["Parameters"])[:items] : []
+        collection = doc['MicroflowParameterCollection'] || doc['Parameters'] || {}
+        parameter_docs = if collection.is_a?(Hash)
+                           IO::BsonCodec.parse_array(collection['Parameters'])[:items]
+                         else
+                           []
+                         end
         parameter_docs += IO::BsonCodec.parse_array(
-          doc.dig("ObjectCollection", "Objects")
-        )[:items].select { _1["$Type"] == "Microflows$MicroflowParameter" }
+          doc.dig('ObjectCollection', 'Objects')
+        )[:items].select { _1['$Type'] == 'Microflows$MicroflowParameter' }
         parameters = parameter_docs.filter_map do |parameter|
-          parameter["Name"] || parameter["name"] if parameter.is_a?(Hash)
+          parameter['Name'] || parameter['name'] if parameter.is_a?(Hash)
         end
         unknown = arguments.keys - parameters
         missing = parameters - arguments.keys
@@ -189,7 +193,7 @@ module Mxrb
             emit_hook.call(self, test.setup)
             call_microflow(
               test.target, pass: test.arguments,
-              as: (test.expected_return ? :mxrb_actual : nil)
+                           as: (test.expected_return ? :mxrb_actual : nil)
             )
             conditions = []
             conditions << "$mxrb_actual = #{test.expected_return}" if test.expected_return
@@ -202,14 +206,14 @@ module Mxrb
             end
             if conditions.empty?
               emit_hook.call(self, test.cleanup)
-              return_value "true"
+              return_value 'true'
             else
               emit_hook.call(self, test.cleanup)
               return_value "(#{conditions.join(' and ')})"
             end
             rescue_all do
               emit_hook.call(self, test.cleanup)
-              return_value "false"
+              return_value 'false'
             end
           end
         end
@@ -227,26 +231,26 @@ module Mxrb
               end
             end
           end
-          log_message "[MXRB_TEST] DONE", node: LOG_NODE
-          return_value "true"
+          log_message '[MXRB_TEST] DONE', node: LOG_NODE
+          return_value 'true'
         end
         mod
       end
 
-      def wrapper_name(index) = format("Test_%03d", index + 1)
+      def wrapper_name(index) = format('Test_%03d', index + 1)
 
       def select_after_startup!
         mpr = IO::MprFile.open(@path)
-        raw = mpr.all_units.find { mpr.parse_contents(_1)["$Type"] == "Settings$ProjectSettings" }
-        raise FunctionalTestError, "project settings unit not found" unless raw
+        raw = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'Settings$ProjectSettings' }
+        raise FunctionalTestError, 'project settings unit not found' unless raw
 
         doc = mpr.parse_contents(raw)
-        settings = IO::BsonCodec.parse_array(doc["Settings"])[:items]
-        model_settings = settings.find { _1["$Type"] == "Settings$ModelSettings" }
-        raise FunctionalTestError, "model settings part not found" unless model_settings
+        settings = IO::BsonCodec.parse_array(doc['Settings'])[:items]
+        model_settings = settings.find { _1['$Type'] == 'Settings$ModelSettings' }
+        raise FunctionalTestError, 'model settings part not found' unless model_settings
 
-        model_settings["AfterStartupMicroflow"] = runner
-        mpr.update_unit(raw.fetch("UnitID"), doc)
+        model_settings['AfterStartupMicroflow'] = runner
+        mpr.update_unit(raw.fetch('UnitID'), doc)
       ensure
         mpr&.close
       end
@@ -260,10 +264,10 @@ module Mxrb
           match = line.strip.match(PATTERN)
           next unless match
 
-          passed = match[1] == "PASS"
-          TestResult.new(match[2], passed, passed ? "passed" : "microflow failed")
+          passed = match[1] == 'PASS'
+          TestResult.new(match[2], passed, passed ? 'passed' : 'microflow failed')
         end
-        Result.new(tests.freeze, text.include?("[MXRB_TEST] DONE"))
+        Result.new(tests.freeze, text.include?('[MXRB_TEST] DONE'))
       end
     end
 

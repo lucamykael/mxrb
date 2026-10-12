@@ -126,13 +126,13 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
     existing = { '$ID' => unit.document['$ID'], '$Type' => unit.document['$Type'] }
     compiler = Mxrb::Compiler::NavigationDocumentCompiler.new(schema.new(existing))
     document = unit.document.merge('Profiles' => [{
-      '$ID' => '33333333-3333-4333-8333-333333333333',
-      '$Type' => 'Navigation$NavigationProfile', 'Name' => 'Offline',
-      'Kind' => 'Offline', 'OfflineEntityConfigs' => [], 'HomePage' => nil,
-      'HomeItems' => [], 'AppTitle' => nil, 'LoginPageSettings' => nil,
-      'ProgressiveWebAppSettings' => nil, 'NotFoundHomepage' => nil,
-      'ThrowPartialSyncError' => false, 'AppIcon' => 'offline.svg'
-    }])
+                                     '$ID' => '33333333-3333-4333-8333-333333333333',
+                                     '$Type' => 'Navigation$NavigationProfile', 'Name' => 'Offline',
+                                     'Kind' => 'Offline', 'OfflineEntityConfigs' => [], 'HomePage' => nil,
+                                     'HomeItems' => [], 'AppTitle' => nil, 'LoginPageSettings' => nil,
+                                     'ProgressiveWebAppSettings' => nil, 'NotFoundHomepage' => nil,
+                                     'ThrowPartialSyncError' => false, 'AppIcon' => 'offline.svg'
+                                   }])
     navigation = compiler.compile(unit.with(document:))
     expect(navigation.dig('Profiles', 0)).to include(
       'IsOffline' => true, 'HomePage' => nil, 'LoginPageSettings' => nil,

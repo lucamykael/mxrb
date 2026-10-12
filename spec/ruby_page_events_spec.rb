@@ -82,9 +82,9 @@ RSpec.describe 'typed runtime page events' do
       arguments.argument('Item', arguments.page_variable('Item'))
     end
     expect(builder.to_h.fetch(:events)).to eq([{
-      event: :on_click, kind: :microflow, handler: 'App.Open',
-      arguments: { 'Item' => { kind: :page_parameter, name: 'Item' } }
-    }])
+                                                event: :on_click, kind: :microflow, handler: 'App.Open',
+                                                arguments: { 'Item' => { kind: :page_parameter, name: 'Item' } }
+                                              }])
   end
 
   it 'preserves the established empty-mapping omission in existing native-widget sinks' do

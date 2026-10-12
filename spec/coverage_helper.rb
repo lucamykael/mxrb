@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-return unless ENV["MXRB_COVERAGE"] == "1"
+return unless ENV['MXRB_COVERAGE'] == '1'
 
-require "coverage"
-require "fileutils"
-require "json"
+require 'coverage'
+require 'fileutils'
+require 'json'
 
 Coverage.start(lines: true, branches: true)
 
@@ -12,8 +12,8 @@ module MxrbCoverage
   module_function
 
   def report
-    root = File.expand_path("..", __dir__)
-    library = File.join(root, "lib") + "/"
+    root = File.expand_path('..', __dir__)
+    library = File.join(root, 'lib') + '/'
     measured = Coverage.result(stop: false, clear: false).select do |path, _|
       path.start_with?(library)
     end
@@ -36,24 +36,28 @@ module MxrbCoverage
         [path.delete_prefix(library), details]
       end
     }
-    directory = File.join(root, "coverage")
+    directory = File.join(root, 'coverage')
     FileUtils.mkdir_p(directory)
-    File.write(File.join(directory, "coverage.json"), JSON.pretty_generate(payload))
+    File.write(File.join(directory, 'coverage.json'), JSON.pretty_generate(payload))
 
     warn format(
-      "MXRB coverage: lines %.2f%% (%d/%d), branches %.2f%% (%d/%d)",
+      'MXRB coverage: lines %.2f%% (%d/%d), branches %.2f%% (%d/%d)',
       payload[:lines][:percent], payload[:lines][:covered], payload[:lines][:total],
       payload[:branches][:percent], payload[:branches][:covered], payload[:branches][:total]
     )
 
     minimums = {
-      lines: ENV.fetch("MXRB_LINE_COVERAGE_MIN", ENV.fetch("MXRB_COVERAGE_MIN", "100")).to_f,
-      branches: ENV.fetch("MXRB_BRANCH_COVERAGE_MIN", ENV.fetch("MXRB_COVERAGE_MIN", "100")).to_f
+      lines: ENV.fetch('MXRB_LINE_COVERAGE_MIN', ENV.fetch('MXRB_COVERAGE_MIN', '100')).to_f,
+      branches: ENV.fetch('MXRB_BRANCH_COVERAGE_MIN', ENV.fetch('MXRB_COVERAGE_MIN', '100')).to_f
     }
     failures = %i[lines branches].filter_map do |metric_name|
-      percent = payload.fetch(metric_name).fetch(:percent)
+      metric = payload.fetch(metric_name)
       minimum = minimums.fetch(metric_name)
-      "#{metric_name} coverage #{percent}% is below #{minimum}%" if percent < minimum
+      # The rounded percentage reads 100.00 with a few misses in a large total.
+      below = minimum >= 100 ? metric[:covered] < metric[:total] : metric[:percent] < minimum
+      next unless below
+
+      "#{metric_name} coverage #{metric[:percent]}% (#{metric[:covered]}/#{metric[:total]}) is below #{minimum}%"
     end
     return if failures.empty?
 
@@ -61,7 +65,7 @@ module MxrbCoverage
       lines = details[:missed_lines]
       "#{path}:#{lines.join(',')}" unless lines.empty?
     end
-    raise [failures.join("; "), "missed lines: #{missed.join('; ')}"].join("; ")
+    raise [failures.join('; '), "missed lines: #{missed.join('; ')}"].join('; ')
   end
 
   def metric(counts)

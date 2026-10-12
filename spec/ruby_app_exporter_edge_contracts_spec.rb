@@ -196,8 +196,8 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
       exporter.instance_variable_set(:@mendix_sidecar, dir)
       expect(exporter.send(:read_rest_response_metadata)).to eq([])
       exporter.instance_variable_set(:@embedded_identities, {
-        %w[record id] => { 'path' => 'app/models/item.rb' }
-      })
+                                       %w[record id] => { 'path' => 'app/models/item.rb' }
+                                     })
       exporter.instance_variable_set(:@embedded_source_paths, nil)
       expect(exporter.send(:embedded_identity, :record, :id)).to be_nil
       exporter.instance_variable_set(:@output_dir, dir)
@@ -238,18 +238,18 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     expect(exporter.send(:oql_view_manifest, empty_entity, mod)).to include('source' => 'Missing')
     expect(exporter.send(:generalization_manifest, empty_entity)).to eq('target' => 'System.User')
     manifest = exporter.send(:validation_rule_manifest, {
-      '$ID' => nil, 'Attribute' => 'App.Item.Name', 'RuleInfo' => 'scalar', 'Message' => 'scalar'
-    })
+                               '$ID' => nil, 'Attribute' => 'App.Item.Name', 'RuleInfo' => 'scalar', 'Message' => 'scalar'
+                             })
     expect(manifest).to include('rule_info' => {}, 'translations' => [])
     source = exporter.send(:validation_rule_source, {
-      'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => {}, 'translations' => []
-    })
+                             'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => {}, 'translations' => []
+                           })
     expect(source).to include('kind: "Future"')
     expect(source).not_to include('rule_info:')
     expect(exporter.send(:validation_rule_source, {
-      'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => { 'Future' => true },
-      'translations' => []
-    })).to include('rule_info:')
+                           'attribute' => 'Name', 'kind' => 'Future', 'rule_info' => { 'Future' => true },
+                           'translations' => []
+                         })).to include('rule_info:')
   end
 
   it 'rejects multiple nanoflow errors and covers unused result alternatives' do
@@ -260,17 +260,17 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
                     ])
     end.to raise_error(Mxrb::SerializationError, /multiple error-handler paths/)
     nanoflow = exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$NanoflowCallAction', 'UseReturnVariable' => false,
-      'NanoflowCall' => { 'Nanoflow' => 'App.Run', 'ParameterMappings' => [2] }
-    })
+                               '$Type' => 'Microflows$NanoflowCallAction', 'UseReturnVariable' => false,
+                               'NanoflowCall' => { 'Nanoflow' => 'App.Run', 'ParameterMappings' => [2] }
+                             })
     javascript = exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$JavaScriptActionCallAction', 'UseReturnVariable' => false,
-      'JavaScriptAction' => 'App.Run', 'ParameterMappings' => [2]
-    })
+                                 '$Type' => 'Microflows$JavaScriptActionCallAction', 'UseReturnVariable' => false,
+                                 'JavaScriptAction' => 'App.Run', 'ParameterMappings' => [2]
+                               })
     feedback = exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$ValidationFeedbackAction', 'Attribute' => 'App.Item.Name',
-      'ValidationVariableName' => 'Item', 'FeedbackTemplate' => {}
-    })
+                               '$Type' => 'Microflows$ValidationFeedbackAction', 'Attribute' => 'App.Item.Name',
+                               'ValidationVariableName' => 'Item', 'FeedbackTemplate' => {}
+                             })
     expect(nanoflow.fetch('result_variable')).to eq('')
     expect(javascript.fetch('result_variable')).to eq('')
     expect(feedback.fetch('member')).to eq('Name')
@@ -278,10 +278,10 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
 
   it 'omits empty widget regions and slot roles and clears empty security collections' do
     manifest = exporter.send(:widget_manifest, {
-      type: :container, name: :Empty,
-      body: [{ type: :text, name: :Body, options: {} }], regions: 'scalar',
-      slots: [{ path: [:content], widgets: [] }]
-    })
+                               type: :container, name: :Empty,
+                               body: [{ type: :text, name: :Body, options: {} }], regions: 'scalar',
+                               slots: [{ path: [:content], widgets: [] }]
+                             })
     expect(manifest.fetch('body').first.fetch('name')).to eq('Body')
     expect(manifest.fetch('slots').first).not_to have_key('role')
     security = {
@@ -307,8 +307,8 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     expect(exporter.send(:runtime_dsl_sink_typed?, :container, {}, 'body' => [])).to be(false)
     expect(exporter.send(:runtime_data_view_options_supported?, {})).to be(false)
     expect(exporter.send(:runtime_data_view_supported?, {}, {
-      'type' => 'data_view', 'name' => 'Details', 'options' => {}, 'events' => [], 'body' => []
-    })).to be(false)
+                           'type' => 'data_view', 'name' => 'Details', 'options' => {}, 'events' => [], 'body' => []
+                         })).to be(false)
     expect(exporter.send(:runtime_data_view_condition_source, 'visible_when', {}, 0))
       .to eq('visible_when')
     data_view = {
@@ -328,14 +328,14 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
                            { 'cells' => [{}] }
                          ])).to be(true)
     expect(exporter.send(:runtime_table_source, {
-      'name' => 'Table', 'options' => { 'columns' => [], 'rows' => [] }
-    }, 0)).to start_with('table "Table" do')
+                           'name' => 'Table', 'options' => { 'columns' => [], 'rows' => [] }
+                         }, 0)).to start_with('table "Table" do')
     expect(exporter.send(:runtime_table_cell_source,
                          { 'rowspan' => 2, 'widgets' => [] }, 2, 0).first)
       .to include('rowspan: 2')
     expect(exporter.send(:runtime_layout_grid_source, {
-      'name' => 'Grid', 'options' => { 'rows' => [] }
-    }, 0)).to start_with('layout_grid "Grid" do')
+                           'name' => 'Grid', 'options' => { 'rows' => [] }
+                         }, 0)).to start_with('layout_grid "Grid" do')
   end
 
   it 'returns when a frontend logo already exists and rejects id-less flow suffixes' do

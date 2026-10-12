@@ -40,18 +40,18 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
           2,
           property('enabled', 'PrimitiveValue' => 'true'),
           property('options', 'DataSource' => {
-            '$Type' => 'CustomWidgets$CustomWidgetXPathSource',
-            'EntityRef' => { 'Entity' => 'System.Language' },
-            'SortBar' => { 'SortItems' => [2, {
-              'AttributeRef' => { 'Attribute' => 'System.Language.Description' },
-              'SortOrder' => 'Ascending'
-            }] }
-          }),
+                     '$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                     'EntityRef' => { 'Entity' => 'System.Language' },
+                     'SortBar' => { 'SortItems' => [2, {
+                       'AttributeRef' => { 'Attribute' => 'System.Language.Description' },
+                       'SortOrder' => 'Ascending'
+                     }] }
+                   }),
           property('caption', 'TextTemplate' => {
-            'Template' => { 'Items' => [3, {
-              'LanguageCode' => 'en_US', 'Text' => 'Choose language'
-            }] }
-          }),
+                     'Template' => { 'Items' => [3, {
+                       'LanguageCode' => 'en_US', 'Text' => 'Choose language'
+                     }] }
+                   }),
           property('action', 'Action' => { '$Type' => 'Forms$SignOutClientAction' }),
           property('content', 'Widgets' => [3, { '$Type' => 'Forms$DynamicText' }]),
           property('footer', 'Widgets' => [3, { '$Type' => 'Forms$Text' }])
@@ -187,8 +187,8 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       expect(compiler.send(:compile_property, ['DataSource', { 'DataSource' => { '$Type' => 'Bad' } }]))
         .to eq(:undefined)
       expect(compiler.send(:compile_property, ['Action', {
-        'Action' => { '$Type' => 'Forms$NoAction' }
-      }])).to eq(:undefined)
+                             'Action' => { '$Type' => 'Forms$NoAction' }
+                           }])).to eq(:undefined)
       expect(compiler.send(:compile_widgets, 'Widgets' => [2])).to eq([])
       expect(compiler.send(:compile_widgets, 'Widgets' => [2, {}])).to eq('rendered-1')
 
@@ -226,15 +226,15 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
       expect(compiler.send(:attribute_property, 'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }))
         .to include('AttributeProperty')
       expect(compiler.send(:supported_property?, ['Attribute', {
-        'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
-      }])).to be(true)
+                             'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
+                           }])).to be(true)
       expect(compiler.send(:compile_property, ['Attribute', {
-        'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
-      }])).to include('$raw' => include('AttributeProperty'))
+                             'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
+                           }])).to include('$raw' => include('AttributeProperty'))
       compiler.instance_variable_set(:@scope, nil)
       expect(compiler.send(:compile_property, ['Attribute', {
-        'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
-      }])).to eq(:undefined)
+                             'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
+                           }])).to eq(:undefined)
       expect(compiler.send(:attribute_property, 'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' })).to be_nil
       expect(compiler.send(:attribute_property, 'AttributeRef' => { 'Attribute' => 'Name' })).to be_nil
       compiler.instance_variable_set(:@scope, 'scope')
@@ -256,15 +256,15 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
         expect(compiler.instance_variable_get(:@list_data_source)).to eq('DataSourceProperty' => 'items')
       end
       expect(compiler.send(:database_list_property, 'DataSource' => {
-        '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'EntityRef' => { 'Entity' => 'Bad' }
-      })).to be_nil
+                             '$Type' => 'CustomWidgets$CustomWidgetXPathSource', 'EntityRef' => { 'Entity' => 'Bad' }
+                           })).to be_nil
       compiler.instance_variable_set(:@list_data_source, xpath)
       bound = { 'DataSourceProperty' => 'items' }
       expect(compiler.send(:expression_property, 'Expression', { 'Expression' => '$Item' }, bound))
         .to include('ListExpressionProperty', 'dataSourceId')
       expect(compiler.send(:attribute_property, {
-        'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
-      }, bound)).to include('ListAttributeProperty', 'dataSourceId')
+                             'AttributeRef' => { 'Attribute' => 'Demo.Item.Name' }
+                           }, bound)).to include('ListAttributeProperty', 'dataSourceId')
       expect(compiler.send(:compile_widgets, { 'Widgets' => [2, {}] }, bound).fetch('$raw'))
         .to include('TemplatedWidgetProperty', 'dataSourceId')
       expect(compiler.send(:expression_property, 'Expression', 'Expression' => 'bad +')).to be_nil
@@ -283,19 +283,19 @@ RSpec.describe Mxrb::Compiler::GenericWidgetBundleCompiler do
 
       expect(compiler.send(:enumeration_name, 'Missing.Entity.Member')).to be_nil
       enumeration_domain = Struct.new(:module_name, :document).new('Demo', {
-        'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [2, {
-          'Name' => 'State', 'NewType' => { 'Enumeration' => 'Demo.State' }
-        }, { 'Name' => 'Name', 'NewType' => {} }] }]
-      })
+                                                                     'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [2, {
+                                                                       'Name' => 'State', 'NewType' => { 'Enumeration' => 'Demo.State' }
+                                                                     }, { 'Name' => 'Name', 'NewType' => {} }] }]
+                                                                   })
       allow(source).to receive(:units_of).with('DomainModels$DomainModel').and_return([enumeration_domain])
       expect(compiler.send(:enumeration_name, 'Demo.Item.State')).to eq('Demo.State')
       expect(compiler.send(:enumeration_name, 'Demo.Item.Name')).to be_nil
       expect(compiler.send(:template_parameter, 'AttributeRef' => {
-        'Attribute' => 'Demo.Item.State'
-      })).to include(type: 'function', name: 'getCaption')
+                             'Attribute' => 'Demo.Item.State'
+                           })).to include(type: 'function', name: 'getCaption')
       expect(compiler.send(:template_parameter, 'AttributeRef' => {
-        'Attribute' => 'Demo.Item.Name'
-      })).to include(type: 'variable')
+                             'Attribute' => 'Demo.Item.Name'
+                           })).to include(type: 'variable')
       expect(compiler.send(:format_expression, '{1} suffix', [{ type: 'literal', value: 'x' }]))
         .to include(type: 'function')
       expect(compiler.send(:translated_text, nil)).to eq('')

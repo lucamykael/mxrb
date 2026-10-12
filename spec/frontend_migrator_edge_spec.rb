@@ -293,8 +293,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
     expect(counts[:design_properties]).to eq(0)
 
     migrator.instance_variable_set(:@spacing_mappings, 'Old::M' => {
-      key: 'Spacing', child: 'margin-top', option: 'M'
-    })
+                                     key: 'Spacing', child: 'margin-top', option: 'M'
+                                   })
     existing = migrator.send(:compound_design_property, 'Spacing')
     existing['Value']['Properties'] = array([
                                               migrator.send(:option_design_property, 'margin-top', 'L')

@@ -13,6 +13,7 @@ module Mxrb
       def errors = failures.select { _1.severity == :error }
       def warnings = failures.select { _1.severity == :warning }
       def passed? = errors.empty?
+
       def score
         return 100.0 if checks.empty?
 
@@ -30,9 +31,9 @@ module Mxrb
       end
 
       def check(name, severity: :error, &block)
-        raise ArgumentError, "evaluation check requires a block" unless block
+        raise ArgumentError, 'evaluation check requires a block' unless block
         unless %i[error warning].include?(severity.to_sym)
-          raise ArgumentError, "evaluation severity must be :error or :warning"
+          raise ArgumentError, 'evaluation severity must be :error or :warning'
         end
 
         @checks << Check.new(name.to_s, severity.to_sym, block)
@@ -60,16 +61,16 @@ module Mxrb
       end
 
       def no_call_cycles(severity: :error)
-        check("model has no call cycles", severity:) do
+        check('model has no call cycles', severity:) do
           cycles = project.analyze.call_cycles
-          cycles.empty? ? true : "#{cycles.size} call cycle(s) found"
+          cycles.empty? || "#{cycles.size} call cycle(s) found"
         end
       end
 
       def no_missing_internal_references(severity: :error)
-        check("model has no missing internal references", severity:) do
+        check('model has no missing internal references', severity:) do
           missing = project.analyze.errors.select { _1.rule == :unresolved_reference }
-          missing.empty? ? true : "#{missing.size} internal reference(s) missing"
+          missing.empty? || "#{missing.size} internal reference(s) missing"
         end
       end
 
@@ -94,7 +95,7 @@ module Mxrb
           dependency = project.analyze.module_dependencies.find do
             _1.from == from.to_s && _1.to == to.to_s
           end
-          dependency ? true : "required module dependency not found"
+          dependency ? true : 'required module dependency not found'
         end
       end
 
@@ -112,7 +113,7 @@ module Mxrb
       def execute(check)
         value = check.block.call(project)
         passed = value == true
-        message = passed ? "passed" : failure_message(value)
+        message = passed ? 'passed' : failure_message(value)
         CheckResult.new(check.name, check.severity, passed, message, {}.freeze)
       rescue StandardError => e
         CheckResult.new(

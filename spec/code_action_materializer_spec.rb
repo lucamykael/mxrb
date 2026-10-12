@@ -105,9 +105,9 @@ RSpec.describe Mxrb::Compiler::CodeActionMaterializer do
     )
     expect { compiler.compile(unit) }.to raise_error(Mxrb::CompilationError, /unsupported code action/)
     java = unit.with(module_name: nil, document: {
-      '$ID' => 'test', '$Type' => 'JavaActions$JavaAction', 'Name' => 'Orphan',
-      'Parameters' => [], 'JavaReturnType' => nil
-    })
+                       '$ID' => 'test', '$Type' => 'JavaActions$JavaAction', 'Name' => 'Orphan',
+                       'Parameters' => [], 'JavaReturnType' => nil
+                     })
     expect { compiler.compile(java) }.to raise_error(Mxrb::CompilationError, /outside a module/)
   end
 end

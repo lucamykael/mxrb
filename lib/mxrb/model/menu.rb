@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "unit"
+require_relative 'unit'
 
 module Mxrb
   module Model
@@ -11,12 +11,12 @@ module Mxrb
 
       def decode(doc)
         @raw_document = doc
-        @name = doc["Name"]
+        @name = doc['Name']
         @documentation = doc['Documentation'].to_s
         @excluded = doc['Excluded'] == true
         @export_level = doc.fetch('ExportLevel', 'Hidden').to_s
-        collection = doc["ItemCollection"] || {}
-        @items = parse_array(collection["Items"]).map { menu_item(_1) }
+        collection = doc['ItemCollection'] || {}
+        @items = parse_array(collection['Items']).map { menu_item(_1) }
       end
 
       def excluded? = @excluded
@@ -30,22 +30,22 @@ module Mxrb
       private
 
       def menu_item(doc)
-        caption, translations, locale = extract_text(doc["Caption"])
+        caption, translations, locale = extract_text(doc['Caption'])
         action = doc['Action'].is_a?(Hash) ? doc['Action'] : {}
         {
-          name: doc["Name"],
+          name: doc['Name'],
           caption:, caption_translations: translations, caption_locale: locale,
-          page: action.dig("FormSettings", "Form"),
+          page: action.dig('FormSettings', 'Form'),
           microflow: action.dig('MicroflowSettings', 'Microflow'),
           icon: menu_icon(doc['Icon']),
-          items: parse_array(doc["Items"]).map { menu_item(_1) }
+          items: parse_array(doc['Items']).map { menu_item(_1) }
         }.compact
       end
 
       def extract_text(obj)
         return ['', {}, nil] unless obj.is_a?(Hash)
 
-        translations = parse_array(obj["Items"] || obj["Translations"])
+        translations = parse_array(obj['Items'] || obj['Translations'])
                        .select { _1.is_a?(Hash) }
                        .to_h { [_1['LanguageCode'].to_s, (_1['Text'] || _1['Translation']).to_s] }
         locale = translations.key?('en_US') ? 'en_US' : translations.keys.first

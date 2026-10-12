@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
-require "digest"
-require "fileutils"
-require "json"
-require "net/http"
-require "open3"
-require "pathname"
-require "tmpdir"
-require "uri"
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'net/http'
+require 'open3'
+require 'tmpdir'
+require 'uri'
 
 module Mxrb
   module Marketplace
@@ -15,7 +14,7 @@ module Mxrb
     Installation = Data.define(:entry, :module_name, :destination, :digest)
 
     class Catalog
-      DEFAULT_PATH = File.expand_path("../../marketplace/catalog.json", __dir__)
+      DEFAULT_PATH = File.expand_path('../../marketplace/catalog.json', __dir__)
 
       def initialize(source = nil)
         @source = source || DEFAULT_PATH
@@ -24,11 +23,11 @@ module Mxrb
       def entries
         @entries ||= begin
           payload = JSON.parse(read_source)
-          Array(payload.fetch("modules")).map do |item|
+          Array(payload.fetch('modules')).map do |item|
             Entry.new(
-              item.fetch("name"), item.fetch("version"),
-              item.fetch("description", ""), item.fetch("source"),
-              item["ref"]
+              item.fetch('name'), item.fetch('version'),
+              item.fetch('description', ''), item.fetch('source'),
+              item['ref']
             )
           end.freeze
         rescue JSON::ParserError, KeyError => e
@@ -60,10 +59,12 @@ module Mxrb
       def read_source
         uri = URI.parse(@source.to_s)
         return File.read(@source) unless uri.is_a?(URI::HTTP)
-        raise MarketplaceError, "marketplace catalogs must use HTTPS" unless uri.is_a?(URI::HTTPS)
+        raise MarketplaceError, 'marketplace catalogs must use HTTPS' unless uri.is_a?(URI::HTTPS)
 
         response = Net::HTTP.get_response(uri)
-        raise MarketplaceError, "catalog request failed with HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+        unless response.is_a?(Net::HTTPSuccess)
+          raise MarketplaceError, "catalog request failed with HTTP #{response.code}"
+        end
 
         response.body
       rescue URI::InvalidURIError, Errno::ENOENT => e
@@ -72,7 +73,7 @@ module Mxrb
     end
 
     class Installer
-      MANIFEST = "mxrb-module.json"
+      MANIFEST = 'mxrb-module.json'
 
       def initialize(target:, catalog: Catalog.new)
         @target = File.expand_path(target)
@@ -96,7 +97,7 @@ module Mxrb
       def remove(identifier)
         module_name = resolve_installed_module_name(identifier)
         validate_no_dependents!(module_name)
-        destination = File.join(@target, "modules", module_name)
+        destination = File.join(@target, 'modules', module_name)
         FileUtils.rm_rf(destination) if File.exist?(destination)
         remove_from_lock(module_name)
         module_name
@@ -106,11 +107,11 @@ module Mxrb
 
       def install_package(identifier, version:, replace:, installed_module_name: nil)
         entry, source = resolve(identifier, version: version)
-        Dir.mktmpdir("mxrb-module-") do |workspace|
+        Dir.mktmpdir('mxrb-module-') do |workspace|
           package = materialize(source, entry, workspace)
           manifest = load_manifest(package)
-          module_name = valid_name(manifest.fetch("module_name"))
-          destination = File.join(@target, "modules", module_name)
+          module_name = valid_name(manifest.fetch('module_name'))
+          destination = File.join(@target, 'modules', module_name)
           if installed_module_name && module_name != installed_module_name
             raise MarketplaceError,
                   "module update cannot change its name from #{installed_module_name.inspect} to #{module_name.inspect}"
@@ -119,19 +120,23 @@ module Mxrb
             raise MarketplaceError, "module destination already exists: #{destination}"
           end
 
-          manifest_name = manifest["name"].to_s
-          canonical_entry = manifest_name.empty? ? entry : Entry.new(
-            manifest_name, entry.version, entry.description, entry.source, entry.ref
-          )
+          manifest_name = manifest['name'].to_s
+          canonical_entry = if manifest_name.empty?
+                              entry
+                            else
+                              Entry.new(
+                                manifest_name, entry.version, entry.description, entry.source, entry.ref
+                              )
+                            end
           validate_mendix_version!(manifest)
           validate_dependencies!(manifest)
           files = package_files(package, manifest)
-          staging = File.join(@target, ".mxrb", "staging", "#{module_name}-#{Process.pid}")
+          staging = File.join(@target, '.mxrb', 'staging', "#{module_name}-#{Process.pid}")
           backup = nil
           FileUtils.mkdir_p(staging)
           files.each { copy_entry(package, staging, _1) }
           if replace && File.exist?(destination)
-            backup = File.join(@target, ".mxrb", "backup", "#{module_name}-#{Process.pid}")
+            backup = File.join(@target, '.mxrb', 'backup', "#{module_name}-#{Process.pid}")
             FileUtils.mkdir_p(File.dirname(backup))
             FileUtils.mv(destination, backup)
           end
@@ -162,12 +167,12 @@ module Mxrb
       end
 
       def resolve_installed_module_name(identifier)
-        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
-        raise MarketplaceError, "no modules are installed (lock file missing)" unless File.file?(lock_path)
+        lock_path = File.join(@target, '.mxrb', 'modules.lock.json')
+        raise MarketplaceError, 'no modules are installed (lock file missing)' unless File.file?(lock_path)
 
         lock = JSON.parse(File.read(lock_path))
-        locked = lock.fetch("modules", {})
-        entry = locked.find { |_name, info| info["package"] == identifier.to_s }
+        locked = lock.fetch('modules', {})
+        entry = locked.find { |_name, info| info['package'] == identifier.to_s }
         unless entry
           candidates = locked.select { |name, _| name.downcase == identifier.to_s.downcase }
           entry = candidates.first
@@ -178,11 +183,11 @@ module Mxrb
       end
 
       def remove_from_lock(module_name)
-        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        lock_path = File.join(@target, '.mxrb', 'modules.lock.json')
         return unless File.file?(lock_path)
 
         lock = JSON.parse(File.read(lock_path))
-        lock.fetch("modules", {}).delete(module_name)
+        lock.fetch('modules', {}).delete(module_name)
         temporary = "#{lock_path}.tmp-#{Process.pid}"
         File.write(temporary, JSON.pretty_generate(lock) << "\n")
         File.rename(temporary, lock_path)
@@ -191,16 +196,16 @@ module Mxrb
       end
 
       def local_entry(path)
-        Entry.new(File.basename(path), "local", "Local MXRB module", path, nil)
+        Entry.new(File.basename(path), 'local', 'Local MXRB module', path, nil)
       end
 
       def materialize(source, entry, workspace)
-        return builtin_path(source) if source.start_with?("builtin:")
+        return builtin_path(source) if source.start_with?('builtin:')
         return File.expand_path(source) if File.directory?(source)
 
-        destination = File.join(workspace, "repository")
-        command = ["git", "clone", "--depth", "1"]
-        command += ["--branch", entry.ref] if entry.ref
+        destination = File.join(workspace, 'repository')
+        command = ['git', 'clone', '--depth', '1']
+        command += ['--branch', entry.ref] if entry.ref
         command += [source, destination]
         output, status = Open3.capture2e(*command)
         raise MarketplaceError, "could not fetch #{entry.name}: #{output}" unless status.success?
@@ -209,10 +214,11 @@ module Mxrb
       end
 
       def builtin_path(source)
-        slug = source.delete_prefix("builtin:")
+        slug = source.delete_prefix('builtin:')
         unless slug.match?(/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/)
           raise MarketplaceError, "invalid built-in module slug #{slug.inspect}"
         end
+
         path = File.expand_path("../../marketplace/modules/#{slug}", __dir__)
         raise MarketplaceError, "built-in module #{slug.inspect} is unavailable" unless File.directory?(path)
 
@@ -227,20 +233,18 @@ module Mxrb
 
       def valid_name(value)
         name = value.to_s
-        unless name.match?(/\A[A-Za-z][A-Za-z0-9_]*\z/)
-          raise MarketplaceError, "invalid module name #{name.inspect}"
-        end
+        raise MarketplaceError, "invalid module name #{name.inspect}" unless name.match?(/\A[A-Za-z][A-Za-z0-9_]*\z/)
 
         name
       end
 
       def package_files(package, manifest)
-        files = Array(manifest["files"] || Dir.children(package) - [MANIFEST])
-        raise MarketplaceError, "module package has no files" if files.empty?
+        files = Array(manifest['files'] || Dir.children(package) - [MANIFEST])
+        raise MarketplaceError, 'module package has no files' if files.empty?
 
         files.each do |relative|
           path = Pathname.new(relative.to_s)
-          if path.absolute? || path.each_filename.any? { _1 == ".." }
+          if path.absolute? || path.each_filename.any? { _1 == '..' }
             raise MarketplaceError, "unsafe module path #{relative.inspect}"
           end
           raise MarketplaceError, "module file is missing: #{relative}" unless File.exist?(File.join(package, relative))
@@ -257,7 +261,7 @@ module Mxrb
 
       def tree_digest(path)
         digest = Digest::SHA256.new
-        Dir.glob(File.join(path, "**", "*"), File::FNM_DOTMATCH).sort.each do |file|
+        Dir.glob(File.join(path, '**', '*'), File::FNM_DOTMATCH).sort.each do |file|
           next unless File.file?(file)
 
           digest << file.delete_prefix("#{path}/") << "\0" << File.binread(file)
@@ -266,8 +270,8 @@ module Mxrb
       end
 
       def declared_dependencies(manifest)
-        Array(manifest["dependencies"]).map do |dep|
-          name = dep.is_a?(Hash) ? dep["name"].to_s : dep.to_s
+        Array(manifest['dependencies']).map do |dep|
+          name = dep.is_a?(Hash) ? dep['name'].to_s : dep.to_s
           name unless name.empty?
         end.compact
       end
@@ -276,12 +280,12 @@ module Mxrb
         deps = declared_dependencies(manifest)
         return if deps.empty?
 
-        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        lock_path = File.join(@target, '.mxrb', 'modules.lock.json')
         installed_packages = if File.file?(lock_path)
-          JSON.parse(File.read(lock_path)).fetch("modules", {}).values.map { _1["package"] }
-        else
-          []
-        end
+                               JSON.parse(File.read(lock_path)).fetch('modules', {}).values.map { _1['package'] }
+                             else
+                               []
+                             end
         missing = deps.reject { |dep| installed_packages.include?(dep) }
         return if missing.empty?
 
@@ -290,23 +294,23 @@ module Mxrb
       end
 
       def validate_mendix_version!(manifest)
-        required = manifest["mendix_version"].to_s.strip
+        required = manifest['mendix_version'].to_s.strip
         return if required.empty?
 
         project_version = detect_project_mendix_version
         return if project_version.nil?
 
-        unless mendix_version_compatible?(project_version, required)
-          raise MarketplaceError,
-                "module requires Mendix #{required}, but the project uses #{project_version}"
-        end
+        return if mendix_version_compatible?(project_version, required)
+
+        raise MarketplaceError,
+              "module requires Mendix #{required}, but the project uses #{project_version}"
       end
 
       def detect_project_mendix_version
-        mpr_files = Dir.glob(File.join(@target, "*.mpr"))
+        mpr_files = Dir.glob(File.join(@target, '*.mpr'))
         return nil if mpr_files.empty?
 
-        require_relative "../mxrb/io/mpr_file"
+        require_relative '../mxrb/io/mpr_file'
         mpr = IO::MprFile.open(mpr_files.first, readonly: true)
         mpr.mendix_version
       rescue StandardError
@@ -316,20 +320,20 @@ module Mxrb
       end
 
       def mendix_version_compatible?(project_version, required)
-        proj_parts = project_version.to_s.split(".").map(&:to_i)
+        proj_parts = project_version.to_s.split('.').map(&:to_i)
         req_str    = required.to_s.strip
 
         case req_str
         when /\A(\d+)\.x\z/
           proj_parts[0] == ::Regexp.last_match(1).to_i
         when /\A>=\s*(.+)\z/
-          version_gte?(proj_parts, ::Regexp.last_match(1).strip.split(".").map(&:to_i))
+          version_gte?(proj_parts, ::Regexp.last_match(1).strip.split('.').map(&:to_i))
         when /\A~>\s*(.+)\z/
-          base = ::Regexp.last_match(1).strip.split(".").map(&:to_i)
+          base = ::Regexp.last_match(1).strip.split('.').map(&:to_i)
           version_gte?(proj_parts, base) &&
             proj_parts[0, base.size - 1] == base[0, base.size - 1]
         else
-          project_version.start_with?(req_str.sub(/\.\*\z/, ""))
+          project_version.start_with?(req_str.sub(/\.\*\z/, ''))
         end
       end
 
@@ -344,15 +348,15 @@ module Mxrb
       end
 
       def validate_no_dependents!(module_name)
-        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        lock_path = File.join(@target, '.mxrb', 'modules.lock.json')
         return unless File.file?(lock_path)
 
         lock = JSON.parse(File.read(lock_path))
-        package_name = lock.dig("modules", module_name, "package")
+        package_name = lock.dig('modules', module_name, 'package')
         return unless package_name
 
-        dependents = lock.fetch("modules", {}).filter_map do |name, info|
-          name if name != module_name && Array(info["dependencies"]).include?(package_name)
+        dependents = lock.fetch('modules', {}).filter_map do |name, info|
+          name if name != module_name && Array(info['dependencies']).include?(package_name)
         end
         return if dependents.empty?
 
@@ -361,13 +365,13 @@ module Mxrb
       end
 
       def write_lock(entry, module_name, digest, dependencies: [])
-        lock_path = File.join(@target, ".mxrb", "modules.lock.json")
+        lock_path = File.join(@target, '.mxrb', 'modules.lock.json')
         FileUtils.mkdir_p(File.dirname(lock_path))
-        lock = File.file?(lock_path) ? JSON.parse(File.read(lock_path)) : { "modules" => {} }
-        lock["modules"][module_name] = {
-          "package" => entry.name, "version" => entry.version,
-          "source" => entry.source, "ref" => entry.ref, "sha256" => digest,
-          "dependencies" => dependencies.empty? ? nil : dependencies
+        lock = File.file?(lock_path) ? JSON.parse(File.read(lock_path)) : { 'modules' => {} }
+        lock['modules'][module_name] = {
+          'package' => entry.name, 'version' => entry.version,
+          'source' => entry.source, 'ref' => entry.ref, 'sha256' => digest,
+          'dependencies' => dependencies.empty? ? nil : dependencies
         }.compact
         temporary = "#{lock_path}.tmp-#{Process.pid}"
         File.write(temporary, JSON.pretty_generate(lock) << "\n")

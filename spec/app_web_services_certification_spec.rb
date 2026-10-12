@@ -120,8 +120,8 @@ RSpec.describe 'App Services and Web Services certification' do
       )
     else
       builder.published_web_service(:Api, versions: [{
-        operations: [{ name: 'Run', data_entity: {}, parameters: [{ data_entity: {} }] }]
-      }])
+                                      operations: [{ name: 'Run', data_entity: {}, parameters: [{ data_entity: {} }] }]
+                                    }])
     end
     builder.native_documents.fetch(0).fetch(:doc)
   end

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require "tmpdir"
+require 'spec_helper'
+require 'tmpdir'
 
-RSpec.describe "deterministic native payload fuzzing" do
+RSpec.describe 'deterministic native payload fuzzing' do
   def canonical(value, field = nil)
     case value
     when Hash
@@ -11,7 +11,7 @@ RSpec.describe "deterministic native payload fuzzing" do
     when Array
       value.map { canonical(_1) }
     when BSON::Binary
-      return Mxrb::IO::BsonCodec.extract_id(value) if field == "$ID"
+      return Mxrb::IO::BsonCodec.extract_id(value) if field == '$ID'
 
       [value.type, value.data]
     else
@@ -20,7 +20,10 @@ RSpec.describe "deterministic native payload fuzzing" do
   end
 
   def fuzz_value(random, depth = 0)
-    return [nil, true, false, random.rand(-100_000..100_000), "s#{random.rand(1_000_000)}"].sample(random:) if depth >= 3
+    if depth >= 3
+      return [nil, true, false, random.rand(-100_000..100_000),
+              "s#{random.rand(1_000_000)}"].sample(random:)
+    end
 
     case random.rand(7)
     when 0 then nil
@@ -37,14 +40,14 @@ RSpec.describe "deterministic native payload fuzzing" do
     end
   end
 
-  it "round-trips randomized nested BSON documents without type or value loss" do
+  it 'round-trips randomized nested BSON documents without type or value loss' do
     random = Random.new(0x4D_58_52_42)
     250.times do |index|
       document = {
-        "$ID" => SecureRandom.uuid,
-        "$Type" => "Fuzz$Document#{index % 9}",
-        "Name" => "Case#{index}",
-        "Payload" => fuzz_value(random)
+        '$ID' => SecureRandom.uuid,
+        '$Type' => "Fuzz$Document#{index % 9}",
+        'Name' => "Case#{index}",
+        'Payload' => fuzz_value(random)
       }
       bytes = Mxrb::IO::BsonCodec.serialize(document)
       expect(canonical(Mxrb::IO::BsonCodec.parse(bytes))).to eq(canonical(document))
@@ -53,20 +56,20 @@ RSpec.describe "deterministic native payload fuzzing" do
     end
   end
 
-  it "round-trips randomized mxunit payloads through atomic files" do
+  it 'round-trips randomized mxunit payloads through atomic files' do
     random = Random.new(0x56_32)
     Dir.mktmpdir do |directory|
       50.times do |index|
         document = {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "Fuzz$External#{index % 5}",
-          "Payload" => fuzz_value(random)
+          '$ID' => SecureRandom.uuid,
+          '$Type' => "Fuzz$External#{index % 5}",
+          'Payload' => fuzz_value(random)
         }
         path = File.join(directory, "#{index}.mxunit")
         Mxrb::IO::MxunitCodec.write_atomic(path, Mxrb::IO::MxunitCodec.serialize(document))
         expect(canonical(Mxrb::IO::MxunitCodec.read(path))).to eq(canonical(document))
       end
-      expect(Dir.glob(File.join(directory, "*.tmp-*"))).to be_empty
+      expect(Dir.glob(File.join(directory, '*.tmp-*'))).to be_empty
     end
   end
 end

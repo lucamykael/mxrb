@@ -195,10 +195,10 @@ RSpec.describe Mxrb::RubyApp::SecurityIdentity do
       begin
         writer.synchronize_ruby_module_security!(mpr, module_name: 'App', security: { roles: [{ name: 'User' }] })
         writer.synchronize_ruby_project_security!(mpr, security: {
-          admin_user_role: 'Manager', user_roles: [{ name: 'Manager', module_roles: ['App.User'] }],
-          demo_users: [{ name: 'manager', entity: 'App.Account', roles: ['Manager'], password: 'private-secret' }],
-          password_policy: { properties: { 'MinimumLength' => 10, 'RequireDigit' => false } }
-        })
+                                                    admin_user_role: 'Manager', user_roles: [{ name: 'Manager', module_roles: ['App.User'] }],
+                                                    demo_users: [{ name: 'manager', entity: 'App.Account', roles: ['Manager'], password: 'private-secret' }],
+                                                    password_policy: { properties: { 'MinimumLength' => 10, 'RequireDigit' => false } }
+                                                  })
       ensure
         mpr.close
       end

@@ -399,19 +399,21 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     expect(gallery.fetch(:children)).not_to be_empty
 
     microflow = page.send(:parse_action, {
-      '$Type' => 'Pages$MicroflowClientAction',
-      'MicroflowSettings' => {
-        'Microflow' => 'Sales.Ping',
-        'ParameterMappings' => [3, { 'Parameter' => 'Sales.Ping.Order', 'Expression' => '$Order' }]
-      }
-    })
+                            '$Type' => 'Pages$MicroflowClientAction',
+                            'MicroflowSettings' => {
+                              'Microflow' => 'Sales.Ping',
+                              'ParameterMappings' => [3,
+                                                      { 'Parameter' => 'Sales.Ping.Order', 'Expression' => '$Order' }]
+                            }
+                          })
     form = page.send(:parse_action, {
-      '$Type' => 'Pages$FormAction',
-      'FormSettings' => {
-        'Form' => 'Sales.Dashboard',
-        'ParameterMappings' => [3, { 'Parameter' => 'Sales.Dashboard.Order', 'Expression' => '$Order' }]
-      }
-    })
+                       '$Type' => 'Pages$FormAction',
+                       'FormSettings' => {
+                         'Form' => 'Sales.Dashboard',
+                         'ParameterMappings' => [3,
+                                                 { 'Parameter' => 'Sales.Dashboard.Order', 'Expression' => '$Order' }]
+                       }
+                     })
     expect(microflow).to include(kind: :microflow, handler: 'Ping', arguments: { 'Order' => '$Order' })
     expect(form).to include(kind: :page, handler: 'Sales.Dashboard', arguments: { 'Order' => '$Order' })
     expect(page.send(:parse_action, '$Type' => 'Pages$FormAction')).to be_nil
@@ -537,27 +539,27 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     exporter = Mxrb::RubyApp::Exporter.new('source.mpr', 'output', mendix_sidecar: 'sidecar')
     expect(exporter.send(:nanoflow_action, nil)).to eq({})
     expect(exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$CreateVariableAction', 'VariableName' => 'x', 'InitialValue' => '1'
-    })).to include('type' => 'CreateVariable', 'variable' => 'x', 'value' => '1')
+                           '$Type' => 'Microflows$CreateVariableAction', 'VariableName' => 'x', 'InitialValue' => '1'
+                         })).to include('type' => 'CreateVariable', 'variable' => 'x', 'value' => '1')
     expect(exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$ChangeVariableAction', 'ChangeVariableName' => 'x', 'Value' => '2'
-    })).to include('type' => 'ChangeVariable', 'variable' => 'x')
+                           '$Type' => 'Microflows$ChangeVariableAction', 'ChangeVariableName' => 'x', 'Value' => '2'
+                         })).to include('type' => 'ChangeVariable', 'variable' => 'x')
     expect(exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$ChangeAction', 'ChangeVariableName' => 'object',
-      'Items' => [{ 'Attribute' => 'Sales.Order.Number', 'Value' => "'1'" },
-                  { 'Association' => 'Sales.Order_Customer', 'Value' => '$Customer' }]
-    })['changes']).to contain_exactly(
-      { 'member' => 'Number', 'value' => "'1'" },
-      { 'member' => 'Order_Customer', 'value' => '$Customer' }
-    )
+                           '$Type' => 'Microflows$ChangeAction', 'ChangeVariableName' => 'object',
+                           'Items' => [{ 'Attribute' => 'Sales.Order.Number', 'Value' => "'1'" },
+                                       { 'Association' => 'Sales.Order_Customer', 'Value' => '$Customer' }]
+                         })['changes']).to contain_exactly(
+                           { 'member' => 'Number', 'value' => "'1'" },
+                           { 'member' => 'Order_Customer', 'value' => '$Customer' }
+                         )
     expect(exporter.send(:nanoflow_action, {
-      '$Type' => 'Microflows$LogMessageAction', 'MessageTemplate' => { 'Text' => 'hello' }
-    })).to include('message' => 'hello')
+                           '$Type' => 'Microflows$LogMessageAction', 'MessageTemplate' => { 'Text' => 'hello' }
+                         })).to include('message' => 'hello')
 
     object = exporter.send(:nanoflow_object, {
-      '$ID' => 'split', '$Type' => 'Microflows$ExclusiveSplit',
-      'SplitCondition' => { 'Expression' => '$x = 1' }
-    })
+                             '$ID' => 'split', '$Type' => 'Microflows$ExclusiveSplit',
+                             'SplitCondition' => { 'Expression' => '$x = 1' }
+                           })
     expect(object).to include('condition' => '$x = 1')
     expect(exporter.send(:nanoflow_object, 'not-a-hash')).to be_nil
     expect(exporter.send(:nanoflow_case, 'NewCaseValue' => { 'Value' => 'true' })).to eq('true')
@@ -1229,8 +1231,8 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     Dir.mktmpdir do |dir|
       manifest_path = File.join(dir, 'sources.json')
       File.write(manifest_path, JSON.generate(files: [{
-        path: 'file.rb', contents: Base64.strict_encode64('x'), sha256: 'wrong'
-      }]))
+                                                path: 'file.rb', contents: Base64.strict_encode64('x'), sha256: 'wrong'
+                                              }]))
       writer = Mxrb::Writer.new(
         File.join(dir, 'out.mpr'), version: '11.12.1', modules: [], ruby_app_sources_path: manifest_path
       )

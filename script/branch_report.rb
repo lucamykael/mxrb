@@ -3,17 +3,17 @@
 # Lists every uncovered branch per file and line.
 # Run: bundle exec ruby script/branch_report.rb
 
-ENV["MXRB_COVERAGE"] = "1"
-ENV["MXRB_COVERAGE_MIN"] = "0"
+ENV['MXRB_COVERAGE'] = '1'
+ENV['MXRB_COVERAGE_MIN'] = '0'
 
-require "rspec/core"
+require 'rspec/core'
 
 module MxrbCoverage
   module_function
 
   def branch_report
-    root = File.expand_path("..", __dir__)
-    library = File.join(root, "lib") + "/"
+    root = File.expand_path('..', __dir__)
+    library = File.join(root, 'lib') + '/'
     measured = Coverage.result(stop: false, clear: false).select do |path, _|
       path.start_with?(library)
     end
@@ -39,6 +39,6 @@ module MxrbCoverage
   end
 end
 
-status = RSpec::Core::Runner.run(["spec"])
+status = RSpec::Core::Runner.run(['spec'])
 MxrbCoverage.branch_report
 exit status

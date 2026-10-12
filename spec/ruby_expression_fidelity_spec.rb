@@ -29,8 +29,9 @@ RSpec.describe 'native expression source fidelity' do
     values = ['', 'nil', '001', '09', '1.00', '9999999999999999999999999999999999999999']
     members = values.map.with_index { |value, index| { 'Attribute' => "Field#{index}", 'Value' => value } }
     source = exporter.send(:action_dsl_line, { 'Action' => {
-      '$Type' => 'Microflows$ChangeObjectAction', 'Variable' => 'Item', 'Members' => [3, *members]
-    } }, 0)
+                             '$Type' => 'Microflows$ChangeObjectAction', 'Variable' => 'Item', 'Members' => [3,
+                                                                                                             *members]
+                           } }, 0)
     expect(Ripper.sexp(source)).not_to be_nil
     builder = Mxrb::Dsl::FlowBuilder.new(:Change, runtime: :server, kind: :microflow, public: false)
     builder.instance_eval(source, 'native_expression.rb')

@@ -67,9 +67,9 @@ RSpec.describe Mxrb::RubyApp::LegacyWidgetSourceMigration do
       exporter.instance_variable_set(:@output_dir, root)
 
       exporter.send(:restore_embedded_sources, [{
-        path: relative, contents: embedded,
-        sha256: Digest::SHA256.hexdigest(embedded), mode: 0o644
-      }])
+                      path: relative, contents: embedded,
+                      sha256: Digest::SHA256.hexdigest(embedded), mode: 0o644
+                    }])
 
       expect(File.read(target)).to eq('file_manager "files"')
     end

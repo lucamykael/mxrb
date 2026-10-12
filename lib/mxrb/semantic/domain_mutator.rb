@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
+require 'securerandom'
 
 module Mxrb
   module Semantic
@@ -10,41 +10,41 @@ module Mxrb
 
       def extract(entity_doc)
         IO::BsonCodec.parse_array(
-          entity_doc["validationRules"] || entity_doc["ValidationRules"]
+          entity_doc['validationRules'] || entity_doc['ValidationRules']
         )[:items]
       end
 
       def put(entity_doc, rules)
-        key = entity_doc.key?("validationRules") ? "validationRules" : "ValidationRules"
+        key = entity_doc.key?('validationRules') ? 'validationRules' : 'ValidationRules'
         entity_doc[key] = IO::BsonCodec.build_array(rules)
       end
 
       def for_attribute?(rule, attribute_name, kind = nil)
-        matches_attribute = rule["Attribute"].to_s.split(".").last == attribute_name.to_s
+        matches_attribute = rule['Attribute'].to_s.split('.').last == attribute_name.to_s
         return matches_attribute unless kind
 
-        rule_kind = rule.dig("RuleInfo", "$Type").to_s
+        rule_kind = rule.dig('RuleInfo', '$Type').to_s
         matches_attribute && rule_kind.end_with?("#{kind.to_s.capitalize}RuleInfo")
       end
 
       def build(module_name, entity_name, attribute_name, kind)
         {
-          "$ID" => SecureRandom.uuid,
-          "$Type" => "DomainModels$ValidationRule",
-          "Attribute" => "#{module_name}.#{entity_name}.#{attribute_name}",
-          "Message" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "Texts$Text",
-            "Items" => IO::BsonCodec.build_array([{
-              "$ID" => SecureRandom.uuid,
-              "$Type" => "Texts$Translation",
-              "LanguageCode" => "en_US",
-              "Text" => "#{attribute_name} #{kind == :required ? 'is required' : 'must be unique'}"
-            }])
+          '$ID' => SecureRandom.uuid,
+          '$Type' => 'DomainModels$ValidationRule',
+          'Attribute' => "#{module_name}.#{entity_name}.#{attribute_name}",
+          'Message' => {
+            '$ID' => SecureRandom.uuid,
+            '$Type' => 'Texts$Text',
+            'Items' => IO::BsonCodec.build_array([{
+                                                   '$ID' => SecureRandom.uuid,
+                                                   '$Type' => 'Texts$Translation',
+                                                   'LanguageCode' => 'en_US',
+                                                   'Text' => "#{attribute_name} #{kind == :required ? 'is required' : 'must be unique'}"
+                                                 }])
           },
-          "RuleInfo" => {
-            "$ID" => SecureRandom.uuid,
-            "$Type" => "DomainModels$#{kind.to_s.capitalize}RuleInfo"
+          'RuleInfo' => {
+            '$ID' => SecureRandom.uuid,
+            '$Type' => "DomainModels$#{kind.to_s.capitalize}RuleInfo"
           }
         }
       end
@@ -70,23 +70,23 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "plan was already applied" if @applied
+        raise ArgumentError, 'plan was already applied' if @applied
 
         @project.mpr.transaction do
           raw = @project.raw_unit(@domain_unit_id)
-          raise ArgumentError, "domain model unit not found" unless raw
+          raise ArgumentError, 'domain model unit not found' unless raw
 
           doc      = @project.parse_bson(raw)
           entities = DomainMutator.extract_entities(doc)
-          entity_doc = entities.find { IO::BsonCodec.extract_id(_1["$ID"] || _1["\$ID"]) == @entity_id }
+          entity_doc = entities.find { IO::BsonCodec.extract_id(_1['$ID'] || _1["\$ID"]) == @entity_id }
           raise ArgumentError, "entity #{@entity_name.inspect} not found in domain model" unless entity_doc
 
           attrs = DomainMutator.extract_attributes(entity_doc)
-          existing = attrs.map { (_1["name"] || _1["Name"]).to_s }
+          existing = attrs.map { (_1['name'] || _1['Name']).to_s }
           raise ArgumentError, "attribute #{@attribute_def[:name]} already exists on #{@entity_name}" \
             if existing.include?(@attribute_def[:name].to_s)
 
-          new_attr = Writer.new("", {}).build_domain_attribute_document(@attribute_def)
+          new_attr = Writer.new('', {}).build_domain_attribute_document(@attribute_def)
           DomainMutator.put_attributes(entity_doc, attrs + [new_attr])
           %i[required unique].each do |kind|
             next unless @attribute_def[kind] == true
@@ -129,7 +129,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "plan was already applied" if @applied
+        raise ArgumentError, 'plan was already applied' if @applied
         unless safe?
           raise ArgumentError,
                 "cannot remove #{@module_name}.#{@entity_name}/#{@attribute_name}: " \
@@ -138,16 +138,16 @@ module Mxrb
 
         @project.mpr.transaction do
           raw = @project.raw_unit(@domain_unit_id)
-          raise ArgumentError, "domain model unit not found" unless raw
+          raise ArgumentError, 'domain model unit not found' unless raw
 
           doc        = @project.parse_bson(raw)
           entities   = DomainMutator.extract_entities(doc)
-          entity_doc = entities.find { IO::BsonCodec.extract_id(_1["$ID"] || _1["\$ID"]) == @entity_id }
-          raise ArgumentError, "entity not found" unless entity_doc
+          entity_doc = entities.find { IO::BsonCodec.extract_id(_1['$ID'] || _1["\$ID"]) == @entity_id }
+          raise ArgumentError, 'entity not found' unless entity_doc
 
           attrs = DomainMutator.extract_attributes(entity_doc)
           before_size = attrs.size
-          attrs.reject! { (_1["name"] || _1["Name"]).to_s == @attribute_name }
+          attrs.reject! { (_1['name'] || _1['Name']).to_s == @attribute_name }
           raise ArgumentError, "attribute #{@attribute_name.inspect} not found on #{@entity_name}" \
             if attrs.size == before_size
 
@@ -180,7 +180,7 @@ module Mxrb
         @attribute_name = attribute_name
         @updates        = updates.freeze
         @applied        = false
-        desc = updates.map { |k, v| "#{k}: #{v}" }.join(", ")
+        desc = updates.map { |k, v| "#{k}: #{v}" }.join(', ')
         @changes = ["change #{module_name}.#{entity_name}/#{attribute_name} (#{desc})"].freeze
       end
 
@@ -188,19 +188,19 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "plan was already applied" if @applied
+        raise ArgumentError, 'plan was already applied' if @applied
 
         @project.mpr.transaction do
           raw = @project.raw_unit(@domain_unit_id)
-          raise ArgumentError, "domain model unit not found" unless raw
+          raise ArgumentError, 'domain model unit not found' unless raw
 
           doc        = @project.parse_bson(raw)
           entities   = DomainMutator.extract_entities(doc)
-          entity_doc = entities.find { IO::BsonCodec.extract_id(_1["$ID"] || _1["\$ID"]) == @entity_id }
-          raise ArgumentError, "entity not found" unless entity_doc
+          entity_doc = entities.find { IO::BsonCodec.extract_id(_1['$ID'] || _1["\$ID"]) == @entity_id }
+          raise ArgumentError, 'entity not found' unless entity_doc
 
           attrs    = DomainMutator.extract_attributes(entity_doc)
-          attr_doc = attrs.find { (_1["name"] || _1["Name"]).to_s == @attribute_name }
+          attr_doc = attrs.find { (_1['name'] || _1['Name']).to_s == @attribute_name }
           raise ArgumentError, "attribute #{@attribute_name.inspect} not found on #{@entity_name}" unless attr_doc
 
           attr_model = Model::Attribute.from_bson(attr_doc)
@@ -213,10 +213,10 @@ module Mxrb
             localize_date: @updates.fetch(:localize_date, attr_model.localize_date),
             enumeration: @updates.fetch(:enumeration, attr_model.enumeration)
           }
-          replacement = Writer.new("", {}).build_domain_attribute_document(
+          replacement = Writer.new('', {}).build_domain_attribute_document(
             attribute_def, previous: attr_doc
           )
-          new_attrs = attrs.map { (_1["name"] || _1["Name"]).to_s == @attribute_name ? replacement : _1 }
+          new_attrs = attrs.map { (_1['name'] || _1['Name']).to_s == @attribute_name ? replacement : _1 }
           DomainMutator.put_attributes(entity_doc, new_attrs)
           %i[required unique].each do |kind|
             next unless @updates.key?(kind)
@@ -255,29 +255,29 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "plan was already applied" if @applied
+        raise ArgumentError, 'plan was already applied' if @applied
 
         @project.mpr.transaction do
           raw = @project.raw_unit(@domain_unit_id)
-          raise ArgumentError, "domain model unit not found" unless raw
+          raise ArgumentError, 'domain model unit not found' unless raw
 
           doc      = @project.parse_bson(raw)
           entities = DomainMutator.extract_entities(doc)
-          existing_names = entities.map { (_1["name"] || _1["Name"]).to_s }
+          existing_names = entities.map { (_1['name'] || _1['Name']).to_s }
           raise ArgumentError, "entity #{@entity_def[:name]} already exists in #{@module_name}" \
             if existing_names.include?(@entity_def[:name].to_s)
 
           entities_key = DomainMutator.entities_key(doc)
           definition = {
             name: @entity_def[:name].to_s,
-            documentation: @entity_def.fetch(:documentation, "").to_s,
+            documentation: @entity_def.fetch(:documentation, '').to_s,
             persistable: !@entity_def[:non_persistent],
             attributes: Array(@entity_def[:attributes]),
             access_rules: nil,
             indexes: nil,
             lifecycle: nil
           }
-          entity_doc = Writer.new("", {}).build_domain_entity_document(
+          entity_doc = Writer.new('', {}).build_domain_entity_document(
             definition, module_name: @module_name, index: entities.size
           )
           doc[entities_key] = IO::BsonCodec.build_array(entities + [entity_doc])
@@ -310,7 +310,7 @@ module Mxrb
       def applied? = @applied
 
       def apply!
-        raise ArgumentError, "plan was already applied" if @applied
+        raise ArgumentError, 'plan was already applied' if @applied
         unless safe?
           raise ArgumentError,
                 "cannot remove #{@module_name}.#{@entity_name}: " \
@@ -319,12 +319,12 @@ module Mxrb
 
         @project.mpr.transaction do
           raw = @project.raw_unit(@domain_unit_id)
-          raise ArgumentError, "domain model unit not found" unless raw
+          raise ArgumentError, 'domain model unit not found' unless raw
 
           doc      = @project.parse_bson(raw)
           entities = DomainMutator.extract_entities(doc)
           before_size = entities.size
-          entities.reject! { IO::BsonCodec.extract_id(_1["$ID"] || _1["\$ID"]) == @entity_id }
+          entities.reject! { IO::BsonCodec.extract_id(_1['$ID'] || _1["\$ID"]) == @entity_id }
           raise ArgumentError, "entity #{@entity_name.inspect} not found" if entities.size == before_size
 
           entities_key = DomainMutator.entities_key(doc)
@@ -382,7 +382,7 @@ module Mxrb
           type:, default:, documentation:, required:, unique:, length:,
           localize_date:, enumeration:
         }.each { |key, value| updates[key] = value unless value.equal?(UNSET) }
-        raise ArgumentError, "plan_change_attribute: no changes specified" if updates.empty?
+        raise ArgumentError, 'plan_change_attribute: no changes specified' if updates.empty?
 
         ChangeAttributePlan.new(
           project: @project, module_name: mod_name, entity_name: entity_name,
@@ -415,19 +415,19 @@ module Mxrb
       # ── BSON helpers used by plans ──────────────────────────────────────────
 
       def self.extract_entities(doc)
-        IO::BsonCodec.parse_array(doc["entities"] || doc["Entities"])[:items]
+        IO::BsonCodec.parse_array(doc['entities'] || doc['Entities'])[:items]
       end
 
       def self.entities_key(doc)
-        doc.key?("entities") ? "entities" : "Entities"
+        doc.key?('entities') ? 'entities' : 'Entities'
       end
 
       def self.extract_attributes(entity_doc)
-        IO::BsonCodec.parse_array(entity_doc["attributes"] || entity_doc["Attributes"])[:items]
+        IO::BsonCodec.parse_array(entity_doc['attributes'] || entity_doc['Attributes'])[:items]
       end
 
       def self.put_attributes(entity_doc, attrs)
-        key = entity_doc.key?("attributes") ? "attributes" : "Attributes"
+        key = entity_doc.key?('attributes') ? 'attributes' : 'Attributes'
         entity_doc[key] = IO::BsonCodec.build_array(attrs)
       end
 
@@ -435,7 +435,7 @@ module Mxrb
         key      = entities_key(domain_doc)
         entities = IO::BsonCodec.parse_array(domain_doc[key])[:items]
         updated  = entities.map do |e|
-          IO::BsonCodec.extract_id(e["$ID"] || e["\$ID"]) == entity_id ? updated_entity_doc : e
+          IO::BsonCodec.extract_id(e['$ID'] || e["\$ID"]) == entity_id ? updated_entity_doc : e
         end
         domain_doc[key] = IO::BsonCodec.build_array(updated)
       end
@@ -453,7 +453,7 @@ module Mxrb
       end
 
       def resolve_entity(qname)
-        parts = qname.to_s.split(".", 2)
+        parts = qname.to_s.split('.', 2)
         raise ArgumentError, "expected ModuleName.EntityName, got #{qname.inspect}" unless parts.size == 2
 
         mod_name, entity_name = parts
@@ -470,7 +470,7 @@ module Mxrb
       end
 
       def resolve_attribute(qname)
-        entity_part, attr_name = qname.to_s.split("/", 2)
+        entity_part, attr_name = qname.to_s.split('/', 2)
         raise ArgumentError, "expected M.Entity/AttributeName, got #{qname.inspect}" unless attr_name
 
         [*resolve_entity(entity_part), attr_name]

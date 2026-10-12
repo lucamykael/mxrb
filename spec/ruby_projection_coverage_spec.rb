@@ -479,15 +479,15 @@ RSpec.describe 'complete Ruby projection contracts' do
       'EnableDemoUsers' => true, 'EnableGuestAccess' => false,
       'GuestUserRole' => '', 'SignInMicroflow' => 'App.SignIn',
       'UserRoles' => bson_array([{
-        '$ID' => id(2), '$Type' => 'Security$UserRole', 'Name' => 'Administrator',
-        'GUID' => BSON::Binary.new(Mxrb::IO::BsonCodec.uuid_to_blob(id(3))),
-        'ManageableRoles' => bson_array(['User']), 'ManageAllRoles' => true,
-        'ManageUsersWithoutRoles' => false, 'ModuleRoles' => bson_array(['System.Administrator'])
-      }]),
+                                  '$ID' => id(2), '$Type' => 'Security$UserRole', 'Name' => 'Administrator',
+                                  'GUID' => BSON::Binary.new(Mxrb::IO::BsonCodec.uuid_to_blob(id(3))),
+                                  'ManageableRoles' => bson_array(['User']), 'ManageAllRoles' => true,
+                                  'ManageUsersWithoutRoles' => false, 'ModuleRoles' => bson_array(['System.Administrator'])
+                                }]),
       'DemoUsers' => bson_array([{
-        '$ID' => id(4), '$Type' => 'Security$DemoUserImpl', 'UserName' => 'manager',
-        'Entity' => 'System.User', 'UserRoles' => bson_array(['Administrator'])
-      }]),
+                                  '$ID' => id(4), '$Type' => 'Security$DemoUserImpl', 'UserName' => 'manager',
+                                  'Entity' => 'System.User', 'UserRoles' => bson_array(['Administrator'])
+                                }]),
       'PasswordPolicySettings' => {
         '$ID' => id(5), '$Type' => 'Security$PasswordPolicySettings', 'MinimumLength' => 12
       }

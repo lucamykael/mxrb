@@ -128,22 +128,23 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
 
       expect(compiler.send(:reachable_nodes, nil, {}, {})).to eq([])
       expect(compiler.send(:reachable_nodes, id.call(2), {}, id.call(2)['$ID'] => [{
-        'DestinationPointer' => id.call(99)
-      }])).to eq([])
+                             'DestinationPointer' => id.call(99)
+                           }])).to eq([])
       expect(compiler.send(:compile_graph_node, node.merge('Action' => {
-        '$Type' => 'Microflows$CreateVariableAction', 'VariableName' => 'x'
-      }), [])).to contain_exactly(include(type: 'setVariable'))
+                                                             '$Type' => 'Microflows$CreateVariableAction', 'VariableName' => 'x'
+                                                           }), [])).to contain_exactly(include(type: 'setVariable'))
       expect(compiler.send(:compile_graph_node, node.merge('$Type' => 'Microflows$EndEvent'), []))
         .to contain_exactly(include(type: 'return'))
       expect(compiler.send(:compile_try_catch, node, [], [])).to be_nil
       normal = { 'DestinationPointer' => id.call(8) }
       error = { 'IsErrorHandler' => true, 'DestinationPointer' => id.call(9) }
       expect(compiler.send(:compile_try_catch, node.merge('Action' => {
-        '$Type' => 'Microflows$CreateObjectAction', 'Entity' => 'Demo.Item', 'VariableName' => 'Item'
-      }), [normal], [error])).to include(type: 'tryCatch', body: be_an(Array))
+                                                            '$Type' => 'Microflows$CreateObjectAction', 'Entity' => 'Demo.Item', 'VariableName' => 'Item'
+                                                          }), [normal], [error])).to include(type: 'tryCatch',
+                                                                                             body: be_an(Array))
       expect(compiler.send(:compile_try_catch, node.merge('Action' => {
-        '$Type' => 'Microflows$Unsupported'
-      }), [normal], [error])).to be_nil
+                                                            '$Type' => 'Microflows$Unsupported'
+                                                          }), [normal], [error])).to be_nil
 
       create = {
         '$Type' => 'Microflows$CreateObjectAction', 'Entity' => 'Demo.Item',
@@ -154,24 +155,24 @@ RSpec.describe Mxrb::Compiler::NanoflowProgramCompiler do
       }
       expect(compiler.send(:compile_create_object, create, node)).to include(include(type: 'commitObjects'))
       expect(compiler.send(:compile_node, node.merge('Action' => {
-        '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Item'
-      }))).to include(type: 'commitObjects')
+                                                       '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Item'
+                                                     }))).to include(type: 'commitObjects')
       expect(compiler.send(:change_instructions, { 'Items' => [2, {
-        '$Type' => 'Bad', 'Attribute' => '', 'Type' => 'Add'
-      }] }, 'Item', 'change')).to be_empty
+                             '$Type' => 'Bad', 'Attribute' => '', 'Type' => 'Add'
+                           }] }, 'Item', 'change')).to be_empty
       expect(compiler.send(:compile_microflow_call, { '$Type' => 'Call', 'MicroflowCall' => {} }, node)).to be_nil
       expect(compiler.send(:compile_javascript_call, {
-        '$Type' => 'JavaScript', 'JavaScriptAction' => 'Demo.Missing'
-      }, node)).to be_nil
+                             '$Type' => 'JavaScript', 'JavaScriptAction' => 'Demo.Missing'
+                           }, node)).to be_nil
 
       expect(compiler.send(:quoted_entity, 'Demo.Item')).to eq('"Demo.Item"')
       expect(compiler.send(:quoted_entity, '')).to be_nil
       expect(compiler.send(:javascript_parameter_kind, {
-        'ParameterType' => { 'Type' => { '$Type' => 'DataTypes$EntityType' } }
-      })).to eq('object')
+                             'ParameterType' => { 'Type' => { '$Type' => 'DataTypes$EntityType' } }
+                           })).to eq('object')
       expect(compiler.send(:javascript_parameter_kind, {
-        'ParameterType' => { 'Type' => { '$Type' => 'DataTypes$ListType' } }
-      })).to eq('list')
+                             'ParameterType' => { 'Type' => { '$Type' => 'DataTypes$ListType' } }
+                           })).to eq('list')
 
       no_case = { '$Type' => 'Microflows$NoCase' }
       expect(compiler.send(:compile_split, id.call(3).merge(

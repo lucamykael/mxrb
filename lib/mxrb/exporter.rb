@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-require "base64"
-require "fileutils"
-require "json"
-require "digest"
-require_relative "native_fragment_store"
-require_relative "forms/mpr_codec"
-require_relative "pluggable/schema_source_emitter"
-require_relative "settings/mpr_codec"
-require_relative "settings/source_emitter"
-require_relative "exporter/data_sources"
+require 'base64'
+require 'fileutils'
+require 'json'
+require 'digest'
+require_relative 'native_fragment_store'
+require_relative 'forms/mpr_codec'
+require_relative 'pluggable/schema_source_emitter'
+require_relative 'settings/mpr_codec'
+require_relative 'settings/source_emitter'
+require_relative 'exporter/data_sources'
 
 module Mxrb
   # Exports an MPR into an editable, layered Ruby source tree.
@@ -22,9 +22,9 @@ module Mxrb
     LAYERS = %w[domain application presentation infrastructure].freeze
     MODULE_PROGRESS_WEIGHT = 10
     MARKETPLACE_PROVENANCE = [
-      ".mxrb/marketplace.lock.json",
-      ".mxrb/marketplace",
-      ".mxrb/marketplace-originals"
+      '.mxrb/marketplace.lock.json',
+      '.mxrb/marketplace',
+      '.mxrb/marketplace-originals'
     ].freeze
     GLOBAL_EDITABLE_DOCUMENT_TYPES = %w[
       Settings$ProjectSettings Texts$SystemTextCollection
@@ -100,7 +100,7 @@ module Mxrb
       @mpr_path = File.expand_path(mpr_path)
       @output_dir = File.expand_path(output_dir)
       @mode = mode.to_sym
-      raise ArgumentError, "export mode must be mendix or ruby" unless MODES.include?(@mode)
+      raise ArgumentError, 'export mode must be mendix or ruby' unless MODES.include?(@mode)
     end
 
     def export!(parallel: true)
@@ -109,7 +109,7 @@ module Mxrb
       Progress.with("Exporting #{File.basename(@mpr_path)}") do |progress|
         FileUtils.mkdir_p(@output_dir)
         @native_fragment_store = NativeFragmentStore.new(
-          File.join(@output_dir, ".mxrb", "native_fragments")
+          File.join(@output_dir, '.mxrb', 'native_fragments')
         )
         Mxrb.open(@mpr_path) do |project|
           @architecture = project.architecture_definition
@@ -121,24 +121,24 @@ module Mxrb
           progress.update(
             current: 0,
             total: 4 + assets.size + (units.size * 2) + (modules.size * MODULE_PROGRESS_WEIGHT),
-            detail: "preparing Ruby project"
+            detail: 'preparing Ruby project'
           )
           export_app_structure
           export_pluggable_schemas
-          progress.advance(detail: "project structure")
+          progress.advance(detail: 'project structure')
           export_project_assets(assets, progress)
           export_native_units(project, units, progress)
           export_global_documents(project)
           ruby_sources = export_ruby_app_sources(project)
           export_security(project)
-          progress.advance(detail: "project security")
+          progress.advance(detail: 'project security')
           export_architecture_contracts(project)
-          progress.advance(detail: "navigation and design system")
+          progress.advance(detail: 'navigation and design system')
           export_semantic_metadata(modules)
           export_rest_metadata(modules)
           export_modules(modules, progress, parallel:)
           write_project(project, ruby_sources:)
-          progress.advance(detail: "project.rb")
+          progress.advance(detail: 'project.rb')
         end
       end
       @output_dir
@@ -147,13 +147,13 @@ module Mxrb
     private
 
     def export_ruby!(parallel:)
-      sidecar = File.join(@output_dir, ".mxrb", "mendix")
+      sidecar = File.join(@output_dir, '.mxrb', 'mendix')
       self.class.new(@mpr_path, sidecar, mode: :mendix).export!(parallel:)
       RubyApp::Exporter.new(@mpr_path, @output_dir, mendix_sidecar: sidecar).export!
     end
 
     def export_module(mod)
-      root = File.join(@output_dir, "modules", mod.name)
+      root = File.join(@output_dir, 'modules', mod.name)
       LAYERS.each { FileUtils.mkdir_p(File.join(root, _1)) }
 
       export_domain(root, mod)
@@ -167,7 +167,7 @@ module Mxrb
       export_nanoflows(root, mod)
       export_module_scaffolding(root)
       export_module_security(root, mod)
-      write(File.join(root, "module.rb"), module_source(mod))
+      write(File.join(root, 'module.rb'), module_source(mod))
     end
 
     def export_app_structure
@@ -175,7 +175,7 @@ module Mxrb
         app/security app/navigation app/navigation/responsive app/design_system
         app/settings app/texts
         theme resources themesource widgets javasource javascriptsource
-      ].each { write(File.join(@output_dir, _1, ".keep"), "") }
+      ].each { write(File.join(@output_dir, _1, '.keep'), '') }
     end
 
     def prepare_typed_forms(project, units, modules)
@@ -234,7 +234,7 @@ module Mxrb
         next [root] if File.file?(root) && !File.symlink?(root)
         next [] unless File.directory?(root) && !File.symlink?(root)
 
-        Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH)
+        Dir.glob(File.join(root, '**', '*'), File::FNM_DOTMATCH)
       end.select { File.file?(_1) && !File.symlink?(_1) }.sort
     end
 
@@ -246,57 +246,57 @@ module Mxrb
         FileUtils.mkdir_p(File.dirname(target))
         FileUtils.cp(source, target)
         result = {
-          "path" => relative,
-          "size" => File.size(source),
-          "sha256" => Digest::SHA256.file(source).hexdigest
+          'path' => relative,
+          'size' => File.size(source),
+          'sha256' => Digest::SHA256.file(source).hexdigest
         }
         progress.advance(detail: "asset #{relative}")
         result
       end
       write(
-        File.join(@output_dir, ".mxrb", "assets.json"),
-        JSON.pretty_generate("version" => 1, "files" => entries)
+        File.join(@output_dir, '.mxrb', 'assets.json'),
+        JSON.pretty_generate('version' => 1, 'files' => entries)
       )
     end
 
     def export_native_units(project, project_units, progress)
       units = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
-        type = doc["$Type"]
-        next if type.to_s.empty? || type == "Projects$Project"
+        type = doc['$Type']
+        next if type.to_s.empty? || type == 'Projects$Project'
 
         {
-          "unit_id" => unit["UnitID"],
-          "container_id" => unit["ContainerID"],
-          "module" => module_name_for(project, unit),
-          "containment" => unit["ContainmentName"],
-          "name" => doc["Name"] || doc["name"] || "",
-          "type" => type,
-          "contents" => Base64.strict_encode64(IO::BsonCodec.serialize(doc))
+          'unit_id' => unit['UnitID'],
+          'container_id' => unit['ContainerID'],
+          'module' => module_name_for(project, unit),
+          'containment' => unit['ContainmentName'],
+          'name' => doc['Name'] || doc['name'] || '',
+          'type' => type,
+          'contents' => Base64.strict_encode64(IO::BsonCodec.serialize(doc))
         }
       ensure
-        progress.advance(detail: "native baseline")
+        progress.advance(detail: 'native baseline')
       end
       write(
-        File.join(@output_dir, ".mxrb", "native_units.json"),
+        File.join(@output_dir, '.mxrb', 'native_units.json'),
         JSON.pretty_generate(
-          "format_version" => project.format_version.to_s,
-          "source_filename" => File.basename(@mpr_path),
-          "source_version" => project.mendix_version,
-          "units" => units
+          'format_version' => project.format_version.to_s,
+          'source_filename' => File.basename(@mpr_path),
+          'source_version' => project.mendix_version,
+          'units' => units
         )
       )
       source = project_units.filter_map do |unit|
         doc = project.parse_bson(unit)
-        next if doc["$Type"].to_s.empty? || doc["$Type"] == "Projects$Project"
-        next if editable_document_type?(doc["$Type"])
+        next if doc['$Type'].to_s.empty? || doc['$Type'] == 'Projects$Project'
+        next if editable_document_type?(doc['$Type'])
 
         native_unit_source(project, unit, doc)
       ensure
-        progress.advance(detail: "editable native units")
+        progress.advance(detail: 'editable native units')
       end
       write(
-        File.join(@output_dir, ".mxrb", "native_units.rb"),
+        File.join(@output_dir, '.mxrb', 'native_units.rb'),
         "# frozen_string_literal: true\n\n#{source.join("\n")}"
       )
     end
@@ -454,13 +454,13 @@ module Mxrb
       payload = files.map do |file|
         contents = file.fetch(:contents)
         {
-          "path" => file.fetch(:path), "sha256" => file.fetch(:sha256),
-          "contents" => Base64.strict_encode64(contents), "mode" => file.fetch(:mode, 0o644)
+          'path' => file.fetch(:path), 'sha256' => file.fetch(:sha256),
+          'contents' => Base64.strict_encode64(contents), 'mode' => file.fetch(:mode, 0o644)
         }
       end
       write(
-        File.join(@output_dir, ".mxrb", "ruby_sources.json"),
-        JSON.pretty_generate("version" => 1, "files" => payload)
+        File.join(@output_dir, '.mxrb', 'ruby_sources.json'),
+        JSON.pretty_generate('version' => 1, 'files' => payload)
       )
       true
     end
@@ -479,25 +479,26 @@ module Mxrb
 
     def native_unit_source(project, unit, doc)
       <<~RUBY
-        native_unit #{ruby(unit.fetch("UnitID"))},
-                    container_id: #{ruby(unit.fetch("ContainerID"))},
-                    containment: #{ruby(unit.fetch("ContainmentName"))},
+        native_unit #{ruby(unit.fetch('UnitID'))},
+                    container_id: #{ruby(unit.fetch('ContainerID'))},
+                    containment: #{ruby(unit.fetch('ContainmentName'))},
                     module_name: #{ruby(module_name_for(project, unit))},
                     deep_structure: #{native_fragment_ruby(doc)}
       RUBY
     end
 
     def module_name_for(project, unit)
-      container = unit["ContainerID"]
+      container = unit['ContainerID']
       project.modules.find { _1.id == container }&.name ||
         project.modules.find { |mod| native_descendant_of?(project, container, mod.id) }&.name
     end
 
     def native_descendant_of?(project, child_id, ancestor_id)
       current = project.raw_unit(child_id)
-      until current.nil? || current["UnitID"] == current["ContainerID"]
-        return true if current["ContainerID"] == ancestor_id
-        current = project.raw_unit(current["ContainerID"])
+      until current.nil? || current['UnitID'] == current['ContainerID']
+        return true if current['ContainerID'] == ancestor_id
+
+        current = project.raw_unit(current['ContainerID'])
       end
       false
     end
@@ -505,7 +506,7 @@ module Mxrb
     def export_security(project)
       doc = project_security_doc(project)
       source = doc ? security_source(doc) : "# frozen_string_literal: true\n"
-      write(File.join(@output_dir, "app", "security", "security.rb"), source)
+      write(File.join(@output_dir, 'app', 'security', 'security.rb'), source)
     end
 
     def export_architecture_contracts(project)
@@ -513,11 +514,11 @@ module Mxrb
       navigation ||= project.navigation.to_h if @architecture && !project.navigation.empty?
       design_system = @architecture&.fetch(:design_system, nil)
       write(
-        File.join(@output_dir, "app", "navigation", "navigation.rb"),
+        File.join(@output_dir, 'app', 'navigation', 'navigation.rb'),
         navigation_source(navigation)
       )
       write(
-        File.join(@output_dir, "app", "design_system", "design_system.rb"),
+        File.join(@output_dir, 'app', 'design_system', 'design_system.rb'),
         design_system_source(design_system)
       )
     end
@@ -534,9 +535,9 @@ module Mxrb
         infrastructure/mappings infrastructure/actions infrastructure/endpoints
         infrastructure/integrations
         security
-      ].each { write(File.join(root, _1, ".keep"), "") }
+      ].each { write(File.join(root, _1, '.keep'), '') }
 
-      security_path = File.join(root, "security", "security.rb")
+      security_path = File.join(root, 'security', 'security.rb')
       write(security_path, "# frozen_string_literal: true\n") unless File.exist?(security_path)
     end
 
@@ -545,16 +546,16 @@ module Mxrb
         args = [symbol(role.fetch(:name))]
         id = role.fetch(:id, '').to_s
         args << "id: #{ruby(id)}" unless id.empty?
-        description = role.fetch(:description, "")
+        description = role.fetch(:description, '')
         args << "description: #{ruby(description)}" unless description.empty?
         "module_role #{args.join(', ')}"
       end
-      source = (["# frozen_string_literal: true", ""] + roles).join("\n") + "\n"
-      write(File.join(root, "security", "security.rb"), source)
+      source = (['# frozen_string_literal: true', ''] + roles).join("\n") + "\n"
+      write(File.join(root, 'security', 'security.rb'), source)
     end
 
     def export_domain(root, mod)
-      domain = File.join(root, "domain")
+      domain = File.join(root, 'domain')
       associations = mod.associations.group_by(&:from_entity_id)
       architecture = architecture_module(mod.name)
       paths = {}
@@ -591,10 +592,10 @@ module Mxrb
         paths[rule.id] = relative
       end
       loads = paths.values.sort.map do |relative|
-        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(', ')
         %(evaluate File.join(__dir__, #{segments}))
       end
-      write(File.join(domain, "model.rb"), "#{loads.join("\n")}\n")
+      write(File.join(domain, 'model.rb'), "#{loads.join("\n")}\n")
     end
 
     def entity_domain_route(entity)
@@ -619,7 +620,7 @@ module Mxrb
 
     def export_microflows(root, mod)
       files = unique_filenames(mod.microflows)
-      by_layer = { "application" => [], "infrastructure" => [] }
+      by_layer = { 'application' => [], 'infrastructure' => [] }
       architecture = architecture_module(mod.name)
       mod.microflows.each do |flow|
         layer, category = flow_location(flow.name)
@@ -633,9 +634,9 @@ module Mxrb
       end
       repositories = architecture&.fetch(:repositories, []) || []
       unless repositories.empty?
-        relative = File.join("ports", "repositories.rb")
-        write(File.join(root, "application", relative), repositories_source(repositories))
-        by_layer["application"] << relative
+        relative = File.join('ports', 'repositories.rb')
+        write(File.join(root, 'application', relative), repositories_source(repositories))
+        by_layer['application'] << relative
       end
       by_layer.each do |layer, paths|
         write_path_aggregator(File.join(root, layer, "#{layer}.rb"), paths)
@@ -643,14 +644,14 @@ module Mxrb
     end
 
     def export_pages(root, mod)
-      presentation = File.join(root, "presentation")
-      documents = File.join(presentation, "pages")
+      presentation = File.join(root, 'presentation')
+      documents = File.join(presentation, 'pages')
       FileUtils.mkdir_p(documents)
       files = unique_filenames(mod.pages)
       architecture = architecture_module(mod.name)
       paths = []
       mod.pages.each do |page|
-        relative = File.join("pages", files.fetch(page.id))
+        relative = File.join('pages', files.fetch(page.id))
         metadata = artifact_metadata(
           mod.name, :page, page.name,
           architecture&.fetch(:pages, [])&.find { _1[:name] == page.name }
@@ -661,14 +662,14 @@ module Mxrb
         )
         paths << relative
       end
-      append_to_aggregator(File.join(presentation, "presentation.rb"), paths)
+      append_to_aggregator(File.join(presentation, 'presentation.rb'), paths)
     end
 
     def export_infrastructure_documents(root, mod)
       documents = mod.infrastructure_documents
       return if documents.empty?
 
-      infrastructure = File.join(root, "infrastructure")
+      infrastructure = File.join(root, 'infrastructure')
       used = {}
       paths = documents.map do |document|
         base = underscore(document.fetch(:name))
@@ -677,7 +678,7 @@ module Mxrb
         relative
       end
       append_to_aggregator(
-        File.join(infrastructure, "infrastructure.rb"), paths,
+        File.join(infrastructure, 'infrastructure.rb'), paths,
         managed_types: documents.map { _1.fetch(:type) }
       )
     end
@@ -761,15 +762,15 @@ module Mxrb
       end
 
       case document.fetch(:type)
-      when "JsonStructures$JsonStructure"
-        return json_structure_declaration(document) if doc.key?("JsonSnippet")
+      when 'JsonStructures$JsonStructure'
+        return json_structure_declaration(document) if doc.key?('JsonSnippet')
       when 'XmlSchemas$XmlSchema'
         return xml_schema_declaration(document) if semantic_xml_schema?(doc)
-      when "ImportMappings$ImportMapping"
-        return mapping_declaration(document, :import) if doc.key?("JsonStructure")
-      when "ExportMappings$ExportMapping"
-        return mapping_declaration(document, :export) if doc.key?("JsonStructure")
-      when "Rest$PublishedRestService"
+      when 'ImportMappings$ImportMapping'
+        return mapping_declaration(document, :import) if doc.key?('JsonStructure')
+      when 'ExportMappings$ExportMapping'
+        return mapping_declaration(document, :export) if doc.key?('JsonStructure')
+      when 'Rest$PublishedRestService'
         return published_rest_declaration(document, mod:) if semantic_rest_service?(doc, mod:)
       when 'ODataPublish$PublishedODataService2'
         return published_odata_service_declaration(document) if semantic_published_odata_service?(doc)
@@ -786,15 +787,15 @@ module Mxrb
       when 'MessageDefinitions$MessageDefinitionCollection'
         return message_definition_collection_declaration(document) \
           if semantic_message_definition_collection?(doc)
-      when "Enumerations$Enumeration"
+      when 'Enumerations$Enumeration'
         return enumeration_declaration(document) if semantic_enumeration?(doc)
-      when "Constants$Constant"
-        return constant_declaration(document) if doc["Type"].is_a?(Hash)
-      when "DomainModels$ViewEntitySourceDocument"
-        return oql_source_declaration(document) if doc.key?("Oql")
-      when "DatabaseConnector$DatabaseConnection"
+      when 'Constants$Constant'
+        return constant_declaration(document) if doc['Type'].is_a?(Hash)
+      when 'DomainModels$ViewEntitySourceDocument'
+        return oql_source_declaration(document) if doc.key?('Oql')
+      when 'DatabaseConnector$DatabaseConnection'
         return database_connection_declaration(document) if semantic_database_connection?(doc)
-      when "DataSets$DataSet"
+      when 'DataSets$DataSet'
         return dataset_declaration(document) if semantic_dataset?(doc)
       when 'Queues$Queue'
         return task_queue_declaration(document) if semantic_task_queue?(doc)
@@ -802,23 +803,23 @@ module Mxrb
         return scheduled_event_declaration(document) if semantic_scheduled_event?(doc)
       when 'RegularExpressions$RegularExpression'
         return regular_expression_declaration(document)
-      when "JavaActions$JavaAction"
+      when 'JavaActions$JavaAction'
         return code_action_declaration(document, :java) if semantic_code_action?(doc)
-      when "JavaScriptActions$JavaScriptAction"
+      when 'JavaScriptActions$JavaScriptAction'
         return code_action_declaration(document, :javascript) if semantic_code_action?(doc)
       when 'Workflows$Workflow'
         return workflow_declaration(document) if semantic_workflow?(doc)
-      when "Forms$Layout"
+      when 'Forms$Layout'
         return layout_document_declaration(document)
-      when "Forms$PageTemplate"
+      when 'Forms$PageTemplate'
         return page_template_document_declaration(document)
-      when "Forms$BuildingBlock"
+      when 'Forms$BuildingBlock'
         return building_block_document_declaration(document)
-      when "Forms$Snippet"
+      when 'Forms$Snippet'
         return snippet_document_declaration(document)
-      when "Images$ImageCollection"
+      when 'Images$ImageCollection'
         return image_collection_declaration(document)
-      when "CustomIcons$CustomIconCollection"
+      when 'CustomIcons$CustomIconCollection'
         return custom_icon_collection_declaration(document)
       end
       native_document_declaration(document)
@@ -884,9 +885,9 @@ module Mxrb
     def regular_expression_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:regular_expression, document, {
-        expression: doc.fetch('Expression', ''), documentation: doc.fetch('Documentation', ''),
-        excluded: doc['Excluded'] == true, export_level: doc.fetch('ExportLevel', 'Hidden')
-      })
+                             expression: doc.fetch('Expression', ''), documentation: doc.fetch('Documentation', ''),
+                             excluded: doc['Excluded'] == true, export_level: doc.fetch('ExportLevel', 'Hidden')
+                           })
     end
 
     XML_SCHEMA_FIELDS = %w[
@@ -917,11 +918,11 @@ module Mxrb
         }
       end
       semantic_call_source(:xml_schema, document, {
-        entries:, file_path: doc.fetch('FilePath', ''),
-        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        entries_marker: bson_marker(doc['SchemaContentss'], 2)
-      })
+                             entries:, file_path: doc.fetch('FilePath', ''),
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             entries_marker: bson_marker(doc['SchemaContentss'], 2)
+                           })
     end
 
     SCHEDULED_EVENT_FIELDS = %w[
@@ -1025,8 +1026,11 @@ module Mxrb
         details['$Type'] == 'Authentication$BasicAuthenticationDetails'
       return false unless details.key?('Scopes')
 
-      expected_grant = details['$Type'] == 'Authentication$OAuth20AuthCodeDetails' ?
-        'AuthorizationCode' : 'ClientCredentials'
+      expected_grant = if details['$Type'] == 'Authentication$OAuth20AuthCodeDetails'
+                         'AuthorizationCode'
+                       else
+                         'ClientCredentials'
+                       end
       return false unless details['GrantType'] == expected_grant
 
       authentication_string_fields?(details, fields - %w[$ID $Type Scopes]) &&
@@ -1401,8 +1405,11 @@ module Mxrb
       return false unless (entity.keys - PUBLISHED_ODATA_ENTITY_FIELDS).empty?
 
       bson_items(entity['ChildMembers']).all? do |member|
-        fields = member['$Type'] == 'ODataPublish$PublishedId' ?
-          PUBLISHED_ODATA_ID_FIELDS : PUBLISHED_ODATA_ATTRIBUTE_FIELDS
+        fields = if member['$Type'] == 'ODataPublish$PublishedId'
+                   PUBLISHED_ODATA_ID_FIELDS
+                 else
+                   PUBLISHED_ODATA_ATTRIBUTE_FIELDS
+                 end
         %w[ODataPublish$PublishedId ODataPublish$PublishedAttribute].include?(member['$Type']) &&
           (member.keys - fields).empty?
       end
@@ -1624,88 +1631,88 @@ module Mxrb
     def image_collection_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:image_collection, document, {
-        images: bson_items(doc['Images']).map do |image|
-          {
-            id: document_id(image), name: image.fetch('Name'),
-            format: image.fetch('ImageFormat', ''),
-            data: code_action_binary_spec(image.fetch('Image'))
-          }
-        end,
-        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        images_marker: bson_marker(doc['Images'], 2)
-      })
+                             images: bson_items(doc['Images']).map do |image|
+                               {
+                                 id: document_id(image), name: image.fetch('Name'),
+                                 format: image.fetch('ImageFormat', ''),
+                                 data: code_action_binary_spec(image.fetch('Image'))
+                               }
+                             end,
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             images_marker: bson_marker(doc['Images'], 2)
+                           })
     end
 
     def custom_icon_collection_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:custom_icon_collection, document, {
-        collection_class: doc.fetch('CollectionClass', ''), prefix: doc.fetch('Prefix', ''),
-        font: code_action_binary_spec(doc.fetch('FontData')),
-        icons: bson_items(doc['Icons']).map do |icon|
-          {
-            id: document_id(icon), name: icon.fetch('Name'),
-            character_code: icon.fetch('CharacterCode', 0),
-            tags: bson_items(icon['Tags']), tags_marker: bson_marker(icon['Tags'], 2)
-          }
-        end,
-        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        icons_marker: bson_marker(doc['Icons'], 2)
-      })
+                             collection_class: doc.fetch('CollectionClass', ''), prefix: doc.fetch('Prefix', ''),
+                             font: code_action_binary_spec(doc.fetch('FontData')),
+                             icons: bson_items(doc['Icons']).map do |icon|
+                               {
+                                 id: document_id(icon), name: icon.fetch('Name'),
+                                 character_code: icon.fetch('CharacterCode', 0),
+                                 tags: bson_items(icon['Tags']), tags_marker: bson_marker(icon['Tags'], 2)
+                               }
+                             end,
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             icons_marker: bson_marker(doc['Icons'], 2)
+                           })
     end
 
     def layout_document_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:layout_document, document, {
-        appearance: presentation_value_spec(doc['Appearance']),
-        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
-        content: presentation_value_spec(doc['Content']),
-        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden')
-      })
+                             appearance: presentation_value_spec(doc['Appearance']),
+                             canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+                             content: presentation_value_spec(doc['Content']),
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden')
+                           })
     end
 
     def page_template_document_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:page_template_document, document, {
-        appearance: presentation_value_spec(doc['Appearance']),
-        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
-        display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
-        documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        image: presentation_value_spec(doc['ImageData']),
-        layout_call: presentation_value_spec(doc['LayoutCall']),
-        template_category: doc.fetch('TemplateCategory', ''),
-        template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
-        template_type: presentation_value_spec(doc['TemplateType'])
-      })
+                             appearance: presentation_value_spec(doc['Appearance']),
+                             canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+                             display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
+                             documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             image: presentation_value_spec(doc['ImageData']),
+                             layout_call: presentation_value_spec(doc['LayoutCall']),
+                             template_category: doc.fetch('TemplateCategory', ''),
+                             template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
+                             template_type: presentation_value_spec(doc['TemplateType'])
+                           })
     end
 
     def building_block_document_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:building_block_document, document, {
-        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
-        display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
-        documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        image: presentation_value_spec(doc['ImageData']), platform: doc.fetch('Platform', ''),
-        template_category: doc.fetch('TemplateCategory', ''),
-        template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
-        widgets: presentation_value_spec(doc['Widgets'])
-      })
+                             canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+                             display_name: doc.fetch('DisplayName', ''), documentation: doc.fetch('Documentation', ''),
+                             documentation_url: doc.fetch('DocumentationUrl', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             image: presentation_value_spec(doc['ImageData']), platform: doc.fetch('Platform', ''),
+                             template_category: doc.fetch('TemplateCategory', ''),
+                             template_category_weight: doc.fetch('TemplateCategoryWeight', 0),
+                             widgets: presentation_value_spec(doc['Widgets'])
+                           })
     end
 
     def snippet_document_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:snippet_document, document, {
-        canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
-        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
-        export_level: doc.fetch('ExportLevel', 'Hidden'),
-        parameters: presentation_value_spec(doc['Parameters']),
-        snippet_type: doc.fetch('Type', ''), variables: presentation_value_spec(doc['Variables']),
-        widgets: presentation_value_spec(doc['Widgets'])
-      })
+                             canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             parameters: presentation_value_spec(doc['Parameters']),
+                             snippet_type: doc.fetch('Type', ''), variables: presentation_value_spec(doc['Variables']),
+                             widgets: presentation_value_spec(doc['Widgets'])
+                           })
     end
 
     def presentation_value_spec(value)
@@ -2082,8 +2089,11 @@ module Mxrb
     end
 
     def semantic_workflow_parameter_mappings?(value, kind)
-      type = kind == :microflow ?
-        'Workflows$MicroflowCallParameterMapping' : 'Workflows$WorkflowCallParameterMapping'
+      type = if kind == :microflow
+               'Workflows$MicroflowCallParameterMapping'
+             else
+               'Workflows$WorkflowCallParameterMapping'
+             end
       bson_items(value).all? do |mapping|
         mapping.is_a?(Hash) && mapping['$Type'] == type &&
           (mapping.keys - WORKFLOW_PARAMETER_MAPPING_FIELDS).empty? &&
@@ -2142,8 +2152,11 @@ module Mxrb
       return false unless semantic_workflow_boundary_flow?(event['Flow'], event['$Type'])
 
       recurrence = event['Recurrence']
-      event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent' ?
-        !event.key?('Recurrence') : semantic_workflow_recurrence?(recurrence)
+      if event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent'
+        !event.key?('Recurrence')
+      else
+        semantic_workflow_recurrence?(recurrence)
+      end
     end
 
     def semantic_workflow_boundary_flow?(flow, event_type)
@@ -2151,8 +2164,11 @@ module Mxrb
       return false unless (flow.keys - WORKFLOW_FLOW_FIELDS).empty?
 
       activities = bson_items(flow['Activities'])
-      ending_type = event_type == 'Workflows$InterruptingTimerBoundaryEvent' ?
-        'Workflows$EndWorkflowActivity' : 'Workflows$EndOfBoundaryEventPathActivity'
+      ending_type = if event_type == 'Workflows$InterruptingTimerBoundaryEvent'
+                      'Workflows$EndWorkflowActivity'
+                    else
+                      'Workflows$EndOfBoundaryEventPathActivity'
+                    end
       activities.one? && semantic_workflow_terminal?(activities.first, ending_type)
     end
 
@@ -2273,8 +2289,11 @@ module Mxrb
 
     def workflow_user_task_spec(activity)
       spec = {
-        type: activity['$Type'] == 'Workflows$MultiUserTaskActivity' ?
-          :multi_user_task : :user_task,
+        type: if activity['$Type'] == 'Workflows$MultiUserTaskActivity'
+                :multi_user_task
+              else
+                :user_task
+              end,
         id: document_id(activity),
         persistent_id: document_id_value(activity.fetch('PersistentId')),
         name: activity.fetch('Name', ''), caption: activity.fetch('Caption', ''),
@@ -2459,8 +2478,11 @@ module Mxrb
       ending = bson_items(flow.fetch('Activities')).first
       spec = {
         id: document_id(event), persistent_id: document_id_value(event.fetch('PersistentId')),
-        type: event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent' ?
-          :interrupting_timer : :non_interrupting_timer,
+        type: if event['$Type'] == 'Workflows$InterruptingTimerBoundaryEvent'
+                :interrupting_timer
+              else
+                :non_interrupting_timer
+              end,
         caption: event.fetch('Caption', ''),
         first_execution_time: event.fetch('FirstExecutionTime', ''),
         flow_id: document_id(flow), activities_marker: bson_marker(flow['Activities'], 2),
@@ -2492,9 +2514,9 @@ module Mxrb
       doc = document.fetch(:doc)
       options = {
         id: document_id(doc), unit_id: document.fetch(:id),
-        documentation: doc.fetch("Documentation", ""), excluded: doc["Excluded"] == true,
-        export_level: doc.fetch("ExportLevel", "Hidden"),
-        values_marker: bson_marker(doc["Values"], 3)
+        documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        values_marker: bson_marker(doc['Values'], 3)
       }
       remote_source = doc['RemoteSource']
       if remote_source.is_a?(Hash) &&
@@ -2509,15 +2531,15 @@ module Mxrb
       end
       lines = domain_call_lines(:enumeration, document.fetch(:name), options)
       lines[-1] = "#{lines[-1]} do"
-      bson_items(doc["Values"]).each do |value|
-        caption = value.fetch("Caption")
-        translations = bson_items(caption["Items"])
+      bson_items(doc['Values']).each do |value|
+        caption = value.fetch('Caption')
+        translations = bson_items(caption['Items'])
         value_options = {
           id: document_id(value), caption_id: document_id(caption),
-          captions: translations.to_h { [_1.fetch("LanguageCode"), _1.fetch("Text", "")] },
-          caption_ids: translations.to_h { [_1.fetch("LanguageCode"), document_id(_1)] },
-          image: value.fetch("Image", ""),
-          translations_marker: bson_marker(caption["Items"], 3)
+          captions: translations.to_h { [_1.fetch('LanguageCode'), _1.fetch('Text', '')] },
+          caption_ids: translations.to_h { [_1.fetch('LanguageCode'), document_id(_1)] },
+          image: value.fetch('Image', ''),
+          translations_marker: bson_marker(caption['Items'], 3)
         }
         remote_value = value['RemoteValue']
         if remote_value.is_a?(Hash) &&
@@ -2527,10 +2549,10 @@ module Mxrb
         else
           value_options[:remote_value] = remote_value
         end
-        value_options[:export_level] = value["ExportLevel"] if value.key?("ExportLevel")
-        lines.concat(domain_call_lines(:value, value.fetch("Name"), value_options, indent: 2))
+        value_options[:export_level] = value['ExportLevel'] if value.key?('ExportLevel')
+        lines.concat(domain_call_lines(:value, value.fetch('Name'), value_options, indent: 2))
       end
-      lines << "end"
+      lines << 'end'
       lines.join("\n")
     end
 
@@ -2539,134 +2561,134 @@ module Mxrb
       properties = doc.reject do |key, _value|
         %w[$ID $Type Name Documentation Excluded ExportLevel ExposedToClient Type DefaultValue].include?(key)
       end
-      type_properties = doc.fetch("Type").reject { |key, _value| %w[$ID $Type].include?(key) }
+      type_properties = doc.fetch('Type').reject { |key, _value| %w[$ID $Type].include?(key) }
       domain_call_lines(:constant, document.fetch(:name), {
-        type: data_type_spec(doc.fetch("Type")), value: doc.fetch("DefaultValue", ""),
-        id: document_id(doc), type_id: document_id(doc.fetch("Type")),
-        unit_id: document.fetch(:id), documentation: doc.fetch("Documentation", ""),
-        excluded: doc["Excluded"] == true, export_level: doc.fetch("ExportLevel", "Hidden"),
-        exposed_to_client: doc["ExposedToClient"] == true,
-        properties: presentation_value_spec(properties),
-        type_properties: presentation_value_spec(type_properties)
-      }).join("\n")
+                          type: data_type_spec(doc.fetch('Type')), value: doc.fetch('DefaultValue', ''),
+                          id: document_id(doc), type_id: document_id(doc.fetch('Type')),
+                          unit_id: document.fetch(:id), documentation: doc.fetch('Documentation', ''),
+                          excluded: doc['Excluded'] == true, export_level: doc.fetch('ExportLevel', 'Hidden'),
+                          exposed_to_client: doc['ExposedToClient'] == true,
+                          properties: presentation_value_spec(properties),
+                          type_properties: presentation_value_spec(type_properties)
+                        }).join("\n")
     end
 
     def oql_source_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:oql_source_document, document, {
-        query: doc.fetch("Oql", ""), documentation: doc.fetch("Documentation", ""),
-        excluded: doc["Excluded"] == true, export_level: doc.fetch("ExportLevel", "Hidden")
-      })
+                             query: doc.fetch('Oql', ''), documentation: doc.fetch('Documentation', ''),
+                             excluded: doc['Excluded'] == true, export_level: doc.fetch('ExportLevel', 'Hidden')
+                           })
     end
 
     def database_connection_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:database_connection, document, {
-        database_type: doc.fetch("DatabaseType", ""),
-        connection_string: doc.fetch("ConnectionString", ""),
-        username: doc.fetch("UserName", ""), password: doc.fetch("Password", ""),
-        connection: database_connection_parts_spec(doc.fetch("ConnectionInput")),
-        properties: bson_items(doc["AdditionalProperties"]).map { database_property_spec(_1) },
-        properties_marker: bson_marker(doc["AdditionalProperties"], 2),
-        queries: bson_items(doc["Queries"]).map { database_query_spec(_1) },
-        queries_marker: bson_marker(doc["Queries"], 3),
-        documentation: doc.fetch("Documentation", ""), excluded: doc["Excluded"] == true,
-        export_level: doc.fetch("ExportLevel", "Hidden")
-      })
+                             database_type: doc.fetch('DatabaseType', ''),
+                             connection_string: doc.fetch('ConnectionString', ''),
+                             username: doc.fetch('UserName', ''), password: doc.fetch('Password', ''),
+                             connection: database_connection_parts_spec(doc.fetch('ConnectionInput')),
+                             properties: bson_items(doc['AdditionalProperties']).map { database_property_spec(_1) },
+                             properties_marker: bson_marker(doc['AdditionalProperties'], 2),
+                             queries: bson_items(doc['Queries']).map { database_query_spec(_1) },
+                             queries_marker: bson_marker(doc['Queries'], 3),
+                             documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden')
+                           })
     end
 
     def database_connection_parts_spec(parts)
       {
-        id: document_id(parts), host: parts.fetch("Host", ""),
-        port: parts.fetch("Port", 0), database: parts.fetch("DatabaseName", "")
+        id: document_id(parts), host: parts.fetch('Host', ''),
+        port: parts.fetch('Port', 0), database: parts.fetch('DatabaseName', '')
       }
     end
 
     def database_property_spec(property)
-      value = property.fetch("Value")
+      value = property.fetch('Value')
       {
-        id: document_id(property), key: property.fetch("Key"),
-        value_id: document_id(value), value: value.fetch("Value", "")
+        id: document_id(property), key: property.fetch('Key'),
+        value_id: document_id(value), value: value.fetch('Value', '')
       }
     end
 
     def database_query_spec(query)
       {
-        id: document_id(query), name: query.fetch("Name"),
-        kind: { 1 => :select, 2 => :execute }.fetch(query.fetch("QueryType"), query.fetch("QueryType")),
-        query: query.fetch("Query", ""),
-        parameters: bson_items(query["Parameters"]).map { database_parameter_spec(_1) },
-        parameters_marker: bson_marker(query["Parameters"], 2),
-        tables: bson_items(query["TableMappings"]).map { database_table_spec(_1) },
-        tables_marker: bson_marker(query["TableMappings"], 2)
+        id: document_id(query), name: query.fetch('Name'),
+        kind: { 1 => :select, 2 => :execute }.fetch(query.fetch('QueryType'), query.fetch('QueryType')),
+        query: query.fetch('Query', ''),
+        parameters: bson_items(query['Parameters']).map { database_parameter_spec(_1) },
+        parameters_marker: bson_marker(query['Parameters'], 2),
+        tables: bson_items(query['TableMappings']).map { database_table_spec(_1) },
+        tables_marker: bson_marker(query['TableMappings'], 2)
       }
     end
 
     def database_parameter_spec(parameter)
       {
-        id: document_id(parameter), name: parameter.fetch("ParameterName"),
-        database_name: parameter.fetch("DatabaseParameterName", ""),
-        type: data_type_spec(parameter["DataType"]), type_id: document_id(parameter["DataType"]),
-        default: parameter.fetch("DefaultValue", ""),
-        empty_as_null: parameter["EmptyValueBecomesNull"] == true,
-        mode: underscore(parameter.fetch("Mode", "Unknown")).to_sym,
-        sql_type: database_sql_type_spec(parameter.fetch("SqlDataType")),
-        table_mapping: parameter["TableMapping"]
+        id: document_id(parameter), name: parameter.fetch('ParameterName'),
+        database_name: parameter.fetch('DatabaseParameterName', ''),
+        type: data_type_spec(parameter['DataType']), type_id: document_id(parameter['DataType']),
+        default: parameter.fetch('DefaultValue', ''),
+        empty_as_null: parameter['EmptyValueBecomesNull'] == true,
+        mode: underscore(parameter.fetch('Mode', 'Unknown')).to_sym,
+        sql_type: database_sql_type_spec(parameter.fetch('SqlDataType')),
+        table_mapping: parameter['TableMapping']
       }
     end
 
     def database_table_spec(table)
       {
-        id: document_id(table), entity: table.fetch("Entity", ""),
-        table: table.fetch("TableName", ""),
-        columns: bson_items(table["Columns"]).map { database_column_spec(_1) },
-        columns_marker: bson_marker(table["Columns"], 2)
+        id: document_id(table), entity: table.fetch('Entity', ''),
+        table: table.fetch('TableName', ''),
+        columns: bson_items(table['Columns']).map { database_column_spec(_1) },
+        columns_marker: bson_marker(table['Columns'], 2)
       }
     end
 
     def database_column_spec(column)
       {
-        id: document_id(column), attribute: column.fetch("Attribute", ""),
-        column: column.fetch("ColumnName", ""),
-        sql_type: database_sql_type_spec(column.fetch("SqlDataType"))
+        id: document_id(column), attribute: column.fetch('Attribute', ''),
+        column: column.fetch('ColumnName', ''),
+        sql_type: database_sql_type_spec(column.fetch('SqlDataType'))
       }
     end
 
     def database_sql_type_spec(sql_type)
-      limited = sql_type["$Type"] == "DatabaseConnector$LimitedLengthSqlDataType"
+      limited = sql_type['$Type'] == 'DatabaseConnector$LimitedLengthSqlDataType'
       spec = {
         id: document_id(sql_type), kind: limited ? :limited : :simple,
-        name: sql_type.fetch("DataTypeName", "")
+        name: sql_type.fetch('DataTypeName', '')
       }
-      spec[:length] = sql_type.fetch("Length") if limited
+      spec[:length] = sql_type.fetch('Length') if limited
       spec
     end
 
     def semantic_database_connection?(doc)
-      return false unless doc["ConnectionInput"].is_a?(Hash)
-      return false unless doc["ConnectionInput"]["$Type"] == "DatabaseConnector$ConnectionParts"
+      return false unless doc['ConnectionInput'].is_a?(Hash)
+      return false unless doc['ConnectionInput']['$Type'] == 'DatabaseConnector$ConnectionParts'
 
-      properties = bson_items(doc["AdditionalProperties"])
-      queries = bson_items(doc["Queries"])
+      properties = bson_items(doc['AdditionalProperties'])
+      queries = bson_items(doc['Queries'])
       properties.all? do |property|
-        property["$Type"] == "DatabaseConnector$AdditionalProperty" &&
-          property.dig("Value", "$Type") == "DatabaseConnector$ValueAsString"
+        property['$Type'] == 'DatabaseConnector$AdditionalProperty' &&
+          property.dig('Value', '$Type') == 'DatabaseConnector$ValueAsString'
       end && queries.all? { database_query_semantic?(_1) }
     end
 
     def database_query_semantic?(query)
-      return false unless query["$Type"] == "DatabaseConnector$DatabaseQuery"
+      return false unless query['$Type'] == 'DatabaseConnector$DatabaseQuery'
 
-      parameters = bson_items(query["Parameters"])
-      tables = bson_items(query["TableMappings"])
+      parameters = bson_items(query['Parameters'])
+      tables = bson_items(query['TableMappings'])
       parameters.all? do |parameter|
-        parameter["$Type"] == "DatabaseConnector$QueryParameter" &&
-          semantic_sql_type?(parameter["SqlDataType"])
+        parameter['$Type'] == 'DatabaseConnector$QueryParameter' &&
+          semantic_sql_type?(parameter['SqlDataType'])
       end && tables.all? do |table|
-        table["$Type"] == "DatabaseConnector$TableMapping" &&
-          bson_items(table["Columns"]).all? do |column|
-            column["$Type"] == "DatabaseConnector$ColumnMapping" &&
-              semantic_sql_type?(column["SqlDataType"])
+        table['$Type'] == 'DatabaseConnector$TableMapping' &&
+          bson_items(table['Columns']).all? do |column|
+            column['$Type'] == 'DatabaseConnector$ColumnMapping' &&
+              semantic_sql_type?(column['SqlDataType'])
           end
       end
     end
@@ -2674,28 +2696,28 @@ module Mxrb
     def semantic_sql_type?(sql_type)
       %w[
         DatabaseConnector$SimpleSqlDataType DatabaseConnector$LimitedLengthSqlDataType
-      ].include?(sql_type.to_h["$Type"])
+      ].include?(sql_type.to_h['$Type'])
     end
 
     def domain_call_lines(method, name, options, indent: 0)
-      pad = " " * indent
+      pad = ' ' * indent
       entries = options.to_a
       lines = ["#{pad}#{method} #{symbol(name)},"]
       entries.each_with_index do |(key, value), index|
-        comma = index == entries.size - 1 ? "" : ","
+        comma = index == entries.size - 1 ? '' : ','
         lines << "#{pad}            #{key}: #{native_ruby(value, indent + 12)}#{comma}"
       end
       lines
     end
 
     def semantic_enumeration?(doc)
-      return false unless doc.key?("Values")
+      return false unless doc.key?('Values')
 
-      bson_items(doc["Values"]).all? do |value|
-        caption = value["Caption"]
-        caption.is_a?(Hash) && bson_items(caption["Items"]).all? do |translation|
-          translation.is_a?(Hash) && translation["$Type"] == "Texts$Translation" &&
-            translation.key?("LanguageCode")
+      bson_items(doc['Values']).all? do |value|
+        caption = value['Caption']
+        caption.is_a?(Hash) && bson_items(caption['Items']).all? do |translation|
+          translation.is_a?(Hash) && translation['$Type'] == 'Texts$Translation' &&
+            translation.key?('LanguageCode')
         end
       end
     end
@@ -2709,39 +2731,39 @@ module Mxrb
     def json_structure_declaration(document)
       doc = document.fetch(:doc)
       semantic_call_source(:json_structure, document, {
-        snippet: doc.fetch("JsonSnippet", ""),
-        documentation: doc.fetch("Documentation", ""),
-        excluded: doc["Excluded"] == true,
-        export_level: doc.fetch("ExportLevel", "Hidden"),
-        elements: bson_items(doc["Elements"]).map { json_element_spec(_1) }
-      })
+                             snippet: doc.fetch('JsonSnippet', ''),
+                             documentation: doc.fetch('Documentation', ''),
+                             excluded: doc['Excluded'] == true,
+                             export_level: doc.fetch('ExportLevel', 'Hidden'),
+                             elements: bson_items(doc['Elements']).map { json_element_spec(_1) }
+                           })
     end
 
     def mapping_declaration(document, direction)
       doc = document.fetch(:doc)
       options = {
-        json_structure: doc.fetch("JsonStructure", ""),
-        documentation: doc.fetch("Documentation", ""),
-        excluded: doc["Excluded"] == true,
-        export_level: doc.fetch("ExportLevel", "Hidden"),
-        elements: bson_items(doc["Elements"]).map { mapping_element_spec(_1) },
-        message_definition: doc.fetch("MessageDefinition", ""),
-        message_definition2: doc.fetch("MessageDefinition2", ""),
-        operation_name: doc.fetch("OperationName", ""),
-        public_name: doc.fetch("PublicName", ""),
-        service_name: doc.fetch("ServiceName", ""),
-        wsdl_file: doc.fetch("WsdlFile", ""),
-        xml_schema: doc.fetch("XmlSchema", ""),
-        xsd_root_element_name: doc.fetch("XsdRootElementName", "")
+        json_structure: doc.fetch('JsonStructure', ''),
+        documentation: doc.fetch('Documentation', ''),
+        excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        elements: bson_items(doc['Elements']).map { mapping_element_spec(_1) },
+        message_definition: doc.fetch('MessageDefinition', ''),
+        message_definition2: doc.fetch('MessageDefinition2', ''),
+        operation_name: doc.fetch('OperationName', ''),
+        public_name: doc.fetch('PublicName', ''),
+        service_name: doc.fetch('ServiceName', ''),
+        wsdl_file: doc.fetch('WsdlFile', ''),
+        xml_schema: doc.fetch('XmlSchema', ''),
+        xsd_root_element_name: doc.fetch('XsdRootElementName', '')
       }
       if direction == :import
-        options[:parameter_type] = data_type_spec(doc["ParameterType"])
-        options[:parameter_type_id] = document_id(doc["ParameterType"])
-        options[:use_subtransactions] = doc["UseSubtransactionsForMicroflows"] == true
+        options[:parameter_type] = data_type_spec(doc['ParameterType'])
+        options[:parameter_type_id] = document_id(doc['ParameterType'])
+        options[:use_subtransactions] = doc['UseSubtransactionsForMicroflows'] == true
       else
-        options[:null_value] = doc.fetch("NullValueOption", "LeaveOutElement")
-        options[:header_parameter] = doc["IsHeaderParameter"] == true
-        options[:parameter_name] = doc.fetch("ParameterName", "")
+        options[:null_value] = doc.fetch('NullValueOption', 'LeaveOutElement')
+        options[:header_parameter] = doc['IsHeaderParameter'] == true
+        options[:parameter_name] = doc.fetch('ParameterName', '')
       end
       semantic_call_source("#{direction}_mapping", document, options)
     end
@@ -2750,18 +2772,18 @@ module Mxrb
       document ||= legacy_document
       doc = document.fetch(:doc)
       options = {
-        path: doc.fetch("Path", ""),
-        version: doc.fetch("Version", ""),
-        service_name: doc.fetch("ServiceName", document.fetch(:name)),
-        allowed_roles: bson_items(doc["AllowedRoles"]),
-        authentication_types: bson_items(doc["AuthenticationTypes"]).map { underscore(_1) },
-        authentication_microflow: doc.fetch("AuthenticationMicroflow", ""),
-        documentation: doc.fetch("Documentation", ""),
-        public_documentation: doc.fetch("PublicDocumentation", ""),
-        excluded: doc["Excluded"] == true,
-        export_level: doc.fetch("ExportLevel", "Hidden"),
-        enable_cors: doc["EnableCors"],
-        requires_authentication: doc["RequiresAuthentication"]
+        path: doc.fetch('Path', ''),
+        version: doc.fetch('Version', ''),
+        service_name: doc.fetch('ServiceName', document.fetch(:name)),
+        allowed_roles: bson_items(doc['AllowedRoles']),
+        authentication_types: bson_items(doc['AuthenticationTypes']).map { underscore(_1) },
+        authentication_microflow: doc.fetch('AuthenticationMicroflow', ''),
+        documentation: doc.fetch('Documentation', ''),
+        public_documentation: doc.fetch('PublicDocumentation', ''),
+        excluded: doc['Excluded'] == true,
+        export_level: doc.fetch('ExportLevel', 'Hidden'),
+        enable_cors: doc['EnableCors'],
+        requires_authentication: doc['RequiresAuthentication']
       }.reject { |key, _| %i[enable_cors requires_authentication].include?(key) && !doc.key?(camelize_key(key)) }
       identity = {
         unit_id: document.fetch(:id),
@@ -2770,10 +2792,10 @@ module Mxrb
       values = identity.merge(options)
       lines = ["published_rest_service #{symbol(document.fetch(:name))},"]
       values.each_with_index do |(key, value), index|
-        comma = index == values.size - 1 ? " do" : ","
+        comma = index == values.size - 1 ? ' do' : ','
         lines << "                       #{key}: #{native_ruby(value, 23)}#{comma}"
       end
-      resources = bson_items(doc["Resources"])
+      resources = bson_items(doc['Resources'])
       resources.each do |resource|
         spec = rest_resource_spec(resource)
         resource_options = []
@@ -2781,7 +2803,7 @@ module Mxrb
         unless spec.fetch(:documentation).empty?
           resource_options << "documentation: #{ruby(spec.fetch(:documentation))}"
         end
-        suffix = resource_options.empty? ? "" : ", #{resource_options.join(', ')}"
+        suffix = resource_options.empty? ? '' : ", #{resource_options.join(', ')}"
         lines << "  resource #{symbol(spec.fetch(:name))}#{suffix} do"
         used_names = Hash.new(0)
         native_operations = bson_items(resource['Operations'])
@@ -2812,12 +2834,12 @@ module Mxrb
             responses.each do |response|
               lines << "      response #{response.fetch(:status)}, description: #{ruby(response.fetch(:description))}"
             end
-            lines << "    end"
+            lines << '    end'
           end
         end
-        lines << "  end"
+        lines << '  end'
       end
-      lines << "end"
+      lines << 'end'
       lines.join("\n")
     end
 
@@ -2919,7 +2941,7 @@ module Mxrb
       lines = ["#{method} #{symbol(document.fetch(:name))},"]
       values.each_with_index do |(key, value), index|
         rendered = native_ruby(value, 16)
-        comma = index == values.size - 1 ? "" : ","
+        comma = index == values.size - 1 ? '' : ','
         lines << "                #{key}: #{rendered}#{comma}"
       end
       lines.join("\n")
@@ -2927,74 +2949,74 @@ module Mxrb
 
     def json_element_spec(element)
       {
-        id: document_id(element), kind: underscore(element["ElementType"]).to_sym,
-        name: element.fetch("ExposedName", ""), item_name: element.fetch("ExposedItemName", ""),
-        path: element.fetch("Path", ""), primitive: underscore(element["PrimitiveType"]).to_sym,
-        original: element.fetch("OriginalValue", ""), min_occurs: element.fetch("MinOccurs", 0),
-        max_occurs: element.fetch("MaxOccurs", 1), nillable: element["Nillable"] == true,
-        max_length: element.fetch("MaxLength", -1), total_digits: element.fetch("TotalDigits", -1),
-        fraction_digits: element.fetch("FractionDigits", -1),
-        default_type: element["IsDefaultType"] == true,
-        error: element.fetch("ErrorMessage", ""), warning: element.fetch("WarningMessage", ""),
-        children: bson_items(element["Children"]).map { json_element_spec(_1) }
+        id: document_id(element), kind: underscore(element['ElementType']).to_sym,
+        name: element.fetch('ExposedName', ''), item_name: element.fetch('ExposedItemName', ''),
+        path: element.fetch('Path', ''), primitive: underscore(element['PrimitiveType']).to_sym,
+        original: element.fetch('OriginalValue', ''), min_occurs: element.fetch('MinOccurs', 0),
+        max_occurs: element.fetch('MaxOccurs', 1), nillable: element['Nillable'] == true,
+        max_length: element.fetch('MaxLength', -1), total_digits: element.fetch('TotalDigits', -1),
+        fraction_digits: element.fetch('FractionDigits', -1),
+        default_type: element['IsDefaultType'] == true,
+        error: element.fetch('ErrorMessage', ''), warning: element.fetch('WarningMessage', ''),
+        children: bson_items(element['Children']).map { json_element_spec(_1) }
       }
     end
 
     def mapping_element_spec(element)
-      object = element["$Type"].to_s.include?("ObjectMappingElement")
+      object = element['$Type'].to_s.include?('ObjectMappingElement')
       common = {
         id: document_id(element), kind: object ? :object : :value,
-        element_type: element.fetch("ElementType", object ? "Object" : "Value"),
-        name: element.fetch("ExposedName", ""),
-        documentation: element.fetch("Documentation", ""),
-        json_path: element.fetch("JsonPath", ""), xml_path: element.fetch("XmlPath", ""),
-        min_occurs: element.fetch("MinOccurs", 0), max_occurs: element.fetch("MaxOccurs", 1),
-        nillable: element["Nillable"] == true,
-        children: bson_items(element["Children"]).map { mapping_element_spec(_1) }
+        element_type: element.fetch('ElementType', object ? 'Object' : 'Value'),
+        name: element.fetch('ExposedName', ''),
+        documentation: element.fetch('Documentation', ''),
+        json_path: element.fetch('JsonPath', ''), xml_path: element.fetch('XmlPath', ''),
+        min_occurs: element.fetch('MinOccurs', 0), max_occurs: element.fetch('MaxOccurs', 1),
+        nillable: element['Nillable'] == true,
+        children: bson_items(element['Children']).map { mapping_element_spec(_1) }
       }
       if object
         return common.merge(
-          association: element.fetch("Association", ""), entity: element.fetch("Entity", ""),
-          default_type: element["IsDefaultType"] == true,
-          object_handling: underscore(element.fetch("ObjectHandling", "Create")).to_sym,
-          backup_handling: underscore(element.fetch("ObjectHandlingBackup", "Create")).to_sym,
-          allow_override: element["ObjectHandlingBackupAllowOverride"] == true
+          association: element.fetch('Association', ''), entity: element.fetch('Entity', ''),
+          default_type: element['IsDefaultType'] == true,
+          object_handling: underscore(element.fetch('ObjectHandling', 'Create')).to_sym,
+          backup_handling: underscore(element.fetch('ObjectHandlingBackup', 'Create')).to_sym,
+          allow_override: element['ObjectHandlingBackupAllowOverride'] == true
         )
       end
 
       common.merge(
-        attribute: element.fetch("Attribute", ""), converter: element.fetch("Converter", ""),
-        type: data_type_spec(element["Type"]), type_id: document_id(element["Type"]),
-        primitive: underscore(element.fetch("XmlPrimitiveType", "Unknown")).to_sym,
-        fraction_digits: element.fetch("FractionDigits", -1),
-        max_length: element.fetch("MaxLength", -1), total_digits: element.fetch("TotalDigits", -1),
-        content: element["IsContent"] == true, key: element["IsKey"] == true,
-        xml_attribute: element["IsXmlAttribute"] == true,
-        original: element.fetch("OriginalValue", "")
+        attribute: element.fetch('Attribute', ''), converter: element.fetch('Converter', ''),
+        type: data_type_spec(element['Type']), type_id: document_id(element['Type']),
+        primitive: underscore(element.fetch('XmlPrimitiveType', 'Unknown')).to_sym,
+        fraction_digits: element.fetch('FractionDigits', -1),
+        max_length: element.fetch('MaxLength', -1), total_digits: element.fetch('TotalDigits', -1),
+        content: element['IsContent'] == true, key: element['IsKey'] == true,
+        xml_attribute: element['IsXmlAttribute'] == true,
+        original: element.fetch('OriginalValue', '')
       )
     end
 
     def rest_resource_spec(resource)
       {
-        id: document_id(resource), name: resource.fetch("Name"),
-        documentation: resource.fetch("Documentation", ""),
-        operations: bson_items(resource["Operations"]).map { rest_operation_spec(_1) }
+        id: document_id(resource), name: resource.fetch('Name'),
+        documentation: resource.fetch('Documentation', ''),
+        operations: bson_items(resource['Operations']).map { rest_operation_spec(_1) }
       }
     end
 
     def rest_operation_spec(operation)
       {
-        id: document_id(operation), method: underscore(operation.fetch("HttpMethod", "Get")).to_sym,
-        path: operation.fetch("Path", ""), microflow: operation.fetch("Microflow", ""),
-        import_mapping: operation.fetch("ImportMapping", ""),
-        export_mapping: operation.fetch("ExportMapping", ""),
-        commit: underscore(operation.fetch("Commit", "No")).to_sym,
-        object_handling: underscore(operation.fetch("ObjectHandlingBackup", "Create")).to_sym,
-        deprecated: operation["Deprecated"] == true,
-        documentation: operation.fetch("Documentation", ""),
-        summary: operation.fetch("Summary", ""),
-        success_status: operation["SuccessStatusCode"],
-        parameters: bson_items(operation["Parameters"]).map { rest_operation_parameter_spec(_1) }
+        id: document_id(operation), method: underscore(operation.fetch('HttpMethod', 'Get')).to_sym,
+        path: operation.fetch('Path', ''), microflow: operation.fetch('Microflow', ''),
+        import_mapping: operation.fetch('ImportMapping', ''),
+        export_mapping: operation.fetch('ExportMapping', ''),
+        commit: underscore(operation.fetch('Commit', 'No')).to_sym,
+        object_handling: underscore(operation.fetch('ObjectHandlingBackup', 'Create')).to_sym,
+        deprecated: operation['Deprecated'] == true,
+        documentation: operation.fetch('Documentation', ''),
+        summary: operation.fetch('Summary', ''),
+        success_status: operation['SuccessStatusCode'],
+        parameters: bson_items(operation['Parameters']).map { rest_operation_parameter_spec(_1) }
       }
     end
 
@@ -3083,14 +3105,14 @@ module Mxrb
     end
 
     def semantic_rest_service?(doc, mod: nil) # rubocop:disable Lint/UnusedMethodArgument
-      return false unless doc.key?("Resources") && doc.key?("Path")
-      return false unless bson_items(doc["Parameters"]).empty?
+      return false unless doc.key?('Resources') && doc.key?('Path')
+      return false unless bson_items(doc['Parameters']).empty?
 
       true
     end
 
     def semantic_rest_operation_parameters?(operation, mod)
-      actual = bson_items(operation["Parameters"])
+      actual = bson_items(operation['Parameters'])
       return true if actual.empty?
 
       expected = inferred_rest_operation_parameters(operation, mod)
@@ -3104,21 +3126,21 @@ module Mxrb
     def inferred_rest_operation_parameters(operation, mod)
       return unless mod
 
-      reference = operation["Microflow"].to_s
+      reference = operation['Microflow'].to_s
       flow = mod.microflows.find { _1.name.to_s == reference.split('.').last }
       return unless flow
 
       qualified_flow = reference.include?('.') ? reference : "#{mod.name}.#{reference}"
-      path_parameters = operation.fetch("Path", '').to_s.scan(/\{([^}]+)\}/).flatten
+      path_parameters = operation.fetch('Path', '').to_s.scan(/\{([^}]+)\}/).flatten
       return unless flow.parameters.all? do |parameter|
-        name = parameter["Name"] || parameter["name"]
-        type = parameter["VariableType"] || parameter["Type"] || parameter["type"]
+        name = parameter['Name'] || parameter['name']
+        type = parameter['VariableType'] || parameter['Type'] || parameter['type']
         name && type.is_a?(Hash)
       end
 
       flow.parameters.map do |parameter|
-        name = parameter["Name"] || parameter["name"]
-        type = parameter["VariableType"] || parameter["Type"] || parameter["type"]
+        name = parameter['Name'] || parameter['name']
+        type = parameter['VariableType'] || parameter['Type'] || parameter['type']
         {
           name: name.to_s,
           description: '',
@@ -3132,15 +3154,15 @@ module Mxrb
     def rest_operation_parameter_signature(parameter)
       allowed = %w[$ID $Type Description MicroflowParameter Name ParameterType Type]
       return unless parameter.is_a?(Hash) && (parameter.keys - allowed).empty?
-      return unless parameter["$Type"] == "Rest$RestOperationParameter"
-      return unless parameter["Type"].is_a?(Hash)
+      return unless parameter['$Type'] == 'Rest$RestOperationParameter'
+      return unless parameter['Type'].is_a?(Hash)
 
       {
-        name: parameter["Name"].to_s,
-        description: parameter.fetch("Description", '').to_s,
-        microflow_parameter: parameter["MicroflowParameter"].to_s,
-        parameter_type: parameter["ParameterType"].to_s,
-        type: rest_parameter_type_signature(parameter["Type"])
+        name: parameter['Name'].to_s,
+        description: parameter.fetch('Description', '').to_s,
+        microflow_parameter: parameter['MicroflowParameter'].to_s,
+        parameter_type: parameter['ParameterType'].to_s,
+        type: rest_parameter_type_signature(parameter['Type'])
       }
     end
 
@@ -3153,16 +3175,16 @@ module Mxrb
     end
 
     def data_type_spec(type_doc)
-      type = type_doc.to_h.fetch("$Type", "DataTypes$UnknownType")
-      underscore(type.delete_prefix("DataTypes$").delete_suffix("Type")).to_sym
+      type = type_doc.to_h.fetch('$Type', 'DataTypes$UnknownType')
+      underscore(type.delete_prefix('DataTypes$').delete_suffix('Type')).to_sym
     end
 
     def document_id(document)
-      IO::BsonCodec.extract_id(document.to_h["$ID"]).to_s
+      IO::BsonCodec.extract_id(document.to_h['$ID']).to_s
     end
 
     def camelize_key(key)
-      key.to_s.split("_").map!(&:capitalize).join
+      key.to_s.split('_').map!(&:capitalize).join
     end
 
     def native_document_declaration(document)
@@ -3183,7 +3205,7 @@ module Mxrb
         "manage_native_documents #{ruby(type)}\n"
       end
       additions = relative_paths.sort.map do |relative|
-        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(', ')
         "evaluate File.join(__dir__, #{segments})\n"
       end
       write(path, (existing + management + additions).uniq.join)
@@ -3193,11 +3215,11 @@ module Mxrb
       menus = mod.menus
       return if menus.empty?
 
-      presentation = File.join(root, "presentation")
+      presentation = File.join(root, 'presentation')
       files = unique_filenames(menus)
       paths = []
       menus.each do |menu|
-        relative = File.join("menus", files.fetch(menu.id))
+        relative = File.join('menus', files.fetch(menu.id))
         write(File.join(presentation, relative), menu_source(menu))
         paths << relative
       end
@@ -3210,12 +3232,13 @@ module Mxrb
     def export_nanoflows(root, mod)
       flows = mod.nanoflows
       return if flows.empty?
-      presentation = File.join(root, "presentation")
+
+      presentation = File.join(root, 'presentation')
       files = unique_filenames(flows)
       paths = []
       architecture = architecture_module(mod.name)
       flows.each do |flow|
-        relative = File.join("client_actions", files.fetch(flow.id))
+        relative = File.join('client_actions', files.fetch(flow.id))
         metadata = flow_metadata(
           mod.name, :nanoflow, flow.name,
           architecture&.fetch(:nanoflows, [])&.find { _1[:name] == flow.name }
@@ -3223,17 +3246,17 @@ module Mxrb
         write(File.join(presentation, relative), nanoflow_source(flow, metadata))
         paths << relative
       end
-      existing = File.read(File.join(presentation, "presentation.rb")).lines
+      existing = File.read(File.join(presentation, 'presentation.rb')).lines
       additions = paths.sort.map do |relative|
-        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(', ')
         "evaluate File.join(__dir__, #{segments})\n"
       end
-      write(File.join(presentation, "presentation.rb"), (existing + additions).join)
+      write(File.join(presentation, 'presentation.rb'), (existing + additions).join)
     end
 
     def write_path_aggregator(path, relative_paths)
       loads = relative_paths.sort.map do |relative|
-        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(", ")
+        segments = relative.split(File::SEPARATOR).map { ruby(_1) }.join(', ')
         %(evaluate File.join(__dir__, #{segments}))
       end
       write(path, "#{loads.join("\n")}\n")
@@ -3256,31 +3279,31 @@ module Mxrb
       end.join("\n")
 
       source = <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        require "mxrb" unless defined?(Mxrb::Dsl)
+          require "mxrb" unless defined?(Mxrb::Dsl)
 
-        output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
+          output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
 
-        Mxrb.define(output) do
-          mendix_version #{ruby(project.mendix_version || "10.18.0")}
-          mendix_project_id #{ruby(project.mpr.root_unit.fetch("UnitID"))}
-          native_units File.join(__dir__, ".mxrb", "native_units.json")
-          semantic_metadata File.join(__dir__, ".mxrb", "semantic_metadata.json")
-          native_fragments File.join(__dir__, ".mxrb", "native_fragments")
-          project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
-      #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
-          evaluate File.join(__dir__, ".mxrb", "widget_types.rb")
-          evaluate File.join(__dir__, ".mxrb", "native_units.rb")
-          evaluate File.join(__dir__, "app", "security", "security.rb")
-          evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
-          evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
-          evaluate File.join(__dir__, "app", "settings", "settings.rb")
-          evaluate File.join(__dir__, "app", "texts", "system_texts.rb")
-      #{module_loads}
-        end
+          Mxrb.define(output) do
+            mendix_version #{ruby(project.mendix_version || '10.18.0')}
+            mendix_project_id #{ruby(project.mpr.root_unit.fetch('UnitID'))}
+            native_units File.join(__dir__, ".mxrb", "native_units.json")
+            semantic_metadata File.join(__dir__, ".mxrb", "semantic_metadata.json")
+            native_fragments File.join(__dir__, ".mxrb", "native_fragments")
+            project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
+        #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
+            evaluate File.join(__dir__, ".mxrb", "widget_types.rb")
+            evaluate File.join(__dir__, ".mxrb", "native_units.rb")
+            evaluate File.join(__dir__, "app", "security", "security.rb")
+            evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
+            evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
+            evaluate File.join(__dir__, "app", "settings", "settings.rb")
+            evaluate File.join(__dir__, "app", "texts", "system_texts.rb")
+        #{module_loads}
+          end
       RUBY
-      write(File.join(@output_dir, "project.rb"), source)
+      write(File.join(@output_dir, 'project.rb'), source)
     end
 
     def module_source(mod)
@@ -3298,55 +3321,55 @@ module Mxrb
     end
 
     def project_security_doc(project)
-      raw = project.all_units.find { |unit| project.parse_bson(unit)["$Type"] == "Security$ProjectSecurity" }
+      raw = project.all_units.find { |unit| project.parse_bson(unit)['$Type'] == 'Security$ProjectSecurity' }
       raw && project.parse_bson(raw)
     end
 
     def security_source(doc)
-      level = doc["SecurityLevel"]
-      roles = IO::BsonCodec.parse_array(doc["UserRoles"]).fetch(:items).map do |role|
-        module_roles = IO::BsonCodec.parse_array(role["ModuleRoles"]).fetch(:items)
-        args = [symbol(role.fetch("Name"))]
-        manageable = IO::BsonCodec.parse_array(role["ManageableRoles"]).fetch(:items)
+      level = doc['SecurityLevel']
+      roles = IO::BsonCodec.parse_array(doc['UserRoles']).fetch(:items).map do |role|
+        module_roles = IO::BsonCodec.parse_array(role['ModuleRoles']).fetch(:items)
+        args = [symbol(role.fetch('Name'))]
+        manageable = IO::BsonCodec.parse_array(role['ManageableRoles']).fetch(:items)
         args << "description: #{ruby(role['Description'].to_s)}" unless role['Description'].to_s.empty?
-        args << "check_security: false" unless role["CheckSecurity"] == true
+        args << 'check_security: false' unless role['CheckSecurity'] == true
         args << "manageable_roles: #{ruby(manageable)}" unless manageable.empty?
         # An explicit empty list is semantically different from a Ruby-first
         # declaration, where the DSL supplies the conventional System role.
         args << "module_roles: #{ruby(module_roles)}"
         args << 'exact_module_roles: true'
-        args << "admin: true" if role["ManageAllRoles"] == true
-        args << "manage_users_without_roles: true" if role["ManageUsersWithoutRoles"] == true
+        args << 'admin: true' if role['ManageAllRoles'] == true
+        args << 'manage_users_without_roles: true' if role['ManageUsersWithoutRoles'] == true
         "  user_role #{args.join(', ')}"
       end
       options = []
-      options << "  check_security #{doc.fetch("CheckSecurity", true) == true}"
-      options << "  strict_page_url_check #{doc.fetch("StrictPageUrlCheck", true) == true}"
-      options << "  admin_user #{ruby(doc.fetch("AdminUserName", "MxAdmin"))}"
-      options << "  admin_user_role #{ruby(doc["AdminUserRole"])}" unless doc["AdminUserRole"].to_s.empty?
-      options << "  demo_users #{doc["EnableDemoUsers"] == true}"
-      demo_users = doc["DemoUsers"] || IO::BsonCodec.build_array([])
+      options << "  check_security #{doc.fetch('CheckSecurity', true) == true}"
+      options << "  strict_page_url_check #{doc.fetch('StrictPageUrlCheck', true) == true}"
+      options << "  admin_user #{ruby(doc.fetch('AdminUserName', 'MxAdmin'))}"
+      options << "  admin_user_role #{ruby(doc['AdminUserRole'])}" unless doc['AdminUserRole'].to_s.empty?
+      options << "  demo_users #{doc['EnableDemoUsers'] == true}"
+      demo_users = doc['DemoUsers'] || IO::BsonCodec.build_array([])
       IO::BsonCodec.parse_array(demo_users).fetch(:items).each do |user|
-        assigned_roles = IO::BsonCodec.parse_array(user["UserRoles"]).fetch(:items)
-        options << "  demo_user #{ruby(user["UserName"])}, entity: #{ruby(user["Entity"])}, " \
-                   "roles: #{ruby(assigned_roles)}, password: #{ruby(user["Password"])}"
+        assigned_roles = IO::BsonCodec.parse_array(user['UserRoles']).fetch(:items)
+        options << "  demo_user #{ruby(user['UserName'])}, entity: #{ruby(user['Entity'])}, " \
+                   "roles: #{ruby(assigned_roles)}, password: #{ruby(user['Password'])}"
       end
-      guest = "  guest_access #{doc["EnableGuestAccess"] == true}"
-      guest += ", role: #{ruby(doc["GuestUserRole"])}" unless doc["GuestUserRole"].to_s.empty?
+      guest = "  guest_access #{doc['EnableGuestAccess'] == true}"
+      guest += ", role: #{ruby(doc['GuestUserRole'])}" unless doc['GuestUserRole'].to_s.empty?
       options << guest
-      options << "  strict_mode #{doc.fetch("StrictMode", false) == true}"
-      options.concat(project_access_source(doc, "FileDocumentAccess", "file_document_access_rule",
-                                           "clear_file_document_access_rules!"))
-      options.concat(project_access_source(doc, "ImageAccess", "image_access_rule",
-                                           "clear_image_access_rules!"))
-      options << "  sign_in_microflow #{ruby(doc["SignInMicroflow"])}" unless doc["SignInMicroflow"].to_s.empty?
-      password = doc["PasswordPolicySettings"]
+      options << "  strict_mode #{doc.fetch('StrictMode', false) == true}"
+      options.concat(project_access_source(doc, 'FileDocumentAccess', 'file_document_access_rule',
+                                           'clear_file_document_access_rules!'))
+      options.concat(project_access_source(doc, 'ImageAccess', 'image_access_rule',
+                                           'clear_image_access_rules!'))
+      options << "  sign_in_microflow #{ruby(doc['SignInMicroflow'])}" unless doc['SignInMicroflow'].to_s.empty?
+      password = doc['PasswordPolicySettings']
       if password.is_a?(Hash)
         known = {
-          "MinimumLength" => :minimum_length,
-          "RequireDigit" => :require_digit,
-          "RequireMixedCase" => :require_mixed_case,
-          "RequireSymbol" => :require_symbol
+          'MinimumLength' => :minimum_length,
+          'RequireDigit' => :require_digit,
+          'RequireMixedCase' => :require_mixed_case,
+          'RequireSymbol' => :require_symbol
         }
         policy = password.each_with_object({}) do |(key, value), result|
           next if %w[$ID $Type].include?(key)
@@ -3360,13 +3383,13 @@ module Mxrb
         options << "  password_policy(#{arguments.join(', ')})"
       end
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        security do
-          security_level #{ruby(level)}
-      #{roles.join("\n")}
-      #{options.join("\n")}
-        end
+          security do
+            security_level #{ruby(level)}
+        #{roles.join("\n")}
+        #{options.join("\n")}
+          end
       RUBY
     end
 
@@ -3374,9 +3397,9 @@ module Mxrb
       container = document[native_key]
       return [] unless container.is_a?(Hash)
 
-      native_rules = IO::BsonCodec.parse_array(container["AccessRules"]).fetch(:items)
+      native_rules = IO::BsonCodec.parse_array(container['AccessRules']).fetch(:items)
       rules = native_rules.filter_map do |rule|
-        next unless rule.is_a?(Hash) && rule["$Type"] == "DomainModels$AccessRule"
+        next unless rule.is_a?(Hash) && rule['$Type'] == 'DomainModels$AccessRule'
 
         access_rule_source(Model::Entity.parse_access_rule(rule))&.sub(
           /\A  access_rule/, "  #{declaration}"
@@ -3392,11 +3415,11 @@ module Mxrb
 
       profiles = navigation.fetch(:profiles, []).flat_map { navigation_profile_source(_1) }
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        navigation do
-      #{profiles.join("\n")}
-        end
+          navigation do
+        #{profiles.join("\n")}
+          end
       RUBY
     end
 
@@ -3409,13 +3432,11 @@ module Mxrb
         profile.fetch(:sign_in_title, {}).empty?
       args << "sign_in_location: #{ruby(profile[:sign_in_location])}" if profile[:sign_in_location]
       args << "not_found_page: #{ruby(profile[:not_found_page])}" if profile[:not_found_page]
-      if profile[:not_found_microflow]
-        args << "not_found_microflow: #{ruby(profile[:not_found_microflow])}"
-      end
+      args << "not_found_microflow: #{ruby(profile[:not_found_microflow])}" if profile[:not_found_microflow]
       args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
       role_homes = profile.fetch(:role_homes, {})
       args << "role_homes: #{ruby(role_homes)}" if role_homes.is_a?(Hash) && !role_homes.empty?
-      args << "offline: true" if profile[:offline]
+      args << 'offline: true' if profile[:offline]
       args << "enabled: #{ruby(profile[:enabled])}" unless profile[:enabled].nil?
       args << "offline_enabled: #{ruby(profile[:offline_enabled])}" unless
         profile[:offline_enabled].nil?
@@ -3427,7 +3448,7 @@ module Mxrb
       body = navigation_profile_body(profile, role_homes)
       return ["  profile #{args.join(', ')}"] if body.empty?
 
-      ["  profile #{args.join(', ')} do", *body, "  end"]
+      ["  profile #{args.join(', ')} do", *body, '  end']
     end
 
     def navigation_profile_body(profile, role_homes)
@@ -3439,11 +3460,11 @@ module Mxrb
         options = []
         options << "page: #{ruby(home[:page])}" if home[:page]
         options << "microflow: #{ruby(home[:microflow])}" if home[:microflow]
-        suffix = options.empty? ? "" : ", #{options.join(', ')}"
+        suffix = options.empty? ? '' : ", #{options.join(', ')}"
         "    home_for #{ruby(home.fetch(:role))}#{suffix}"
       end
       items = profile.fetch(:items, []).flat_map { navigation_item_source(_1, 4) }
-      extensions = if profile.fetch(:name).to_s == "Responsive"
+      extensions = if profile.fetch(:name).to_s == 'Responsive'
                      ['    evaluate_dir File.join(__dir__, "responsive")']
                    else
                      []
@@ -3471,27 +3492,27 @@ module Mxrb
           token_args << "value: #{ruby(token[:value])}" unless token[:value].nil?
           lines << "    #{token.fetch(:kind)} #{token_args.join(', ')}"
         end
-        lines << "  end"
+        lines << '  end'
       end
       design_system.fetch(:contrast_pairs, []).each do |pair|
         lines << "  contrast foreground: #{ruby(pair.fetch(:foreground))}, " \
                  "background: #{ruby(pair.fetch(:background))}, level: #{symbol(pair.fetch(:level))}"
       end
-      lines << "  forbid_literal_colors" if design_system[:forbid_literal_colors]
+      lines << '  forbid_literal_colors' if design_system[:forbid_literal_colors]
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        design_system do
-      #{lines.join("\n")}
-        end
+          design_system do
+        #{lines.join("\n")}
+          end
       RUBY
     end
 
     def navigation_item_source(item, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       caption = item.fetch(:caption)
-      primary = caption["en_US"] || caption[:en_US] || caption.values.first || ""
-      translations = caption.reject { |locale, _| locale.to_s == "en_US" }
+      primary = caption['en_US'] || caption[:en_US] || caption.values.first || ''
+      translations = caption.reject { |locale, _| locale.to_s == 'en_US' }
       args = [ruby(primary)]
       args << "page: #{ruby(item[:page])}" if item[:page]
       args << "microflow: #{ruby(item[:microflow])}" if item[:microflow]
@@ -3508,7 +3529,7 @@ module Mxrb
     def entity_source(entity, mod, associations, metadata = nil)
       attrs = entity.attributes.map do |attr|
         options = []
-        options << "default: #{ruby(attr.default_value)}" unless attr.default_value.nil? || attr.default_value == ""
+        options << "default: #{ruby(attr.default_value)}" unless attr.default_value.nil? || attr.default_value == ''
         options << "documentation: #{ruby(attr.documentation)}" unless attr.documentation.to_s.empty?
         options << "length: #{attr.length}" unless attr.length.nil?
         options << "localize_date: #{attr.localize_date}" unless attr.localize_date.nil?
@@ -3525,27 +3546,29 @@ module Mxrb
         # ReferenceSet does not encode ownership in the cardinality name.
         # `Both` makes the association navigable from either entity and must
         # therefore remain explicit in clean Ruby source.
-        if assoc.association_type == :ReferenceSet && assoc.owner == :Both
-          options << 'owner: :Both'
-        end
+        options << 'owner: :Both' if assoc.association_type == :ReferenceSet && assoc.owner == :Both
         options << "name: #{ruby(assoc.name)}"
         documentation = assoc.respond_to?(:documentation) ? assoc.documentation : nil
         options << "documentation: #{ruby(documentation)}" unless documentation.to_s.empty?
         inferred_storage = assoc.association_type == :ReferenceSet ? :Table : :Column
         storage_format = assoc.respond_to?(:storage_format) ? assoc.storage_format : nil
-        if storage_format && storage_format != inferred_storage
-          options << "storage_format: #{symbol(storage_format)}"
-        end
-        parent_delete = assoc.respond_to?(:parent_delete_behavior) ?
-          assoc.parent_delete_behavior : :NoAction
-        child_delete = assoc.respond_to?(:child_delete_behavior) ?
-          assoc.child_delete_behavior : :NoAction
+        options << "storage_format: #{symbol(storage_format)}" if storage_format && storage_format != inferred_storage
+        parent_delete = if assoc.respond_to?(:parent_delete_behavior)
+                          assoc.parent_delete_behavior
+                        else
+                          :NoAction
+                        end
+        child_delete = if assoc.respond_to?(:child_delete_behavior)
+                         assoc.child_delete_behavior
+                       else
+                         :NoAction
+                       end
         options << "parent_delete: #{symbol(parent_delete)}" unless parent_delete == :NoAction
         options << "child_delete: #{symbol(child_delete)}" unless child_delete == :NoAction
         "  association #{ruby(qualified_target)}, #{options.join(', ')}"
       end
       flags = []
-      flags << "  non_persistent!" unless entity.persistable
+      flags << '  non_persistent!' unless entity.persistable
       if oql_view_entity?(entity)
         options = []
         options << "source: #{ruby(entity.oql_source_document)}" if entity.oql_source_document
@@ -3610,11 +3633,11 @@ module Mxrb
       # collection. Keep the collection opaque unless every rule is editable.
       access_lines = [] unless access_lines.size == access_rules.size
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        entity #{symbol(entity.name)} do
-      #{(attrs + assocs + flags + access_lines).join("\n")}
-        end
+          entity #{symbol(entity.name)} do
+        #{(attrs + assocs + flags + access_lines).join("\n")}
+          end
       RUBY
     end
 
@@ -3645,20 +3668,22 @@ module Mxrb
     def access_rule_source(rule)
       role_list = rule.fetch(:roles).reject { _1.to_s.empty? }
       return nil if role_list.empty?
-      roles = role_list.map { ruby(_1) }.join(", ")
+
+      roles = role_list.map { ruby(_1) }.join(', ')
       opts = []
       opts << "id: #{ruby(rule.fetch(:id))}" unless rule.fetch(:id, '').to_s.empty?
       documentation = rule.fetch(:documentation, '').to_s
       opts << "documentation: #{ruby(documentation)}" unless documentation.empty?
-      opts << "create: true" if rule[:create]
-      opts << "delete: true" if rule[:delete]
-      read_val  = reconstruct_access(rule.fetch(:default_rights, "None"), rule.fetch(:members, []), "ReadOnly",  "ReadWrite")
-      write_val = reconstruct_access(rule.fetch(:default_rights, "None"), rule.fetch(:members, []), "ReadWrite", nil)
+      opts << 'create: true' if rule[:create]
+      opts << 'delete: true' if rule[:delete]
+      read_val = reconstruct_access(rule.fetch(:default_rights, 'None'), rule.fetch(:members, []), 'ReadOnly',
+                                    'ReadWrite')
+      write_val = reconstruct_access(rule.fetch(:default_rights, 'None'), rule.fetch(:members, []), 'ReadWrite', nil)
       opts << "read: #{format_access(read_val)}"   unless read_val  == :none
       opts << "write: #{format_access(write_val)}" unless write_val == :none
       opts << "default_rights: #{ruby(rule.fetch(:default_rights, 'None'))}"
       opts << "members: #{native_ruby(rule.fetch(:members, []))}"
-      xpath = rule.fetch(:xpath, "")
+      xpath = rule.fetch(:xpath, '')
       opts << "xpath: #{ruby(xpath)}" unless xpath.empty?
       xpath_caption = rule.fetch(:xpath_caption, nil)
       opts << "xpath_caption: #{ruby(xpath_caption)}" unless xpath_caption.nil?
@@ -3666,21 +3691,23 @@ module Mxrb
     end
 
     def reconstruct_access(default_rights, members, primary_rights, secondary_rights)
-      if default_rights == "ReadWrite"
-        return :all if primary_rights == "ReadWrite"
-        return :all if primary_rights == "ReadOnly"
+      if default_rights == 'ReadWrite'
+        return :all if primary_rights == 'ReadWrite'
+        return :all if primary_rights == 'ReadOnly'
       end
-      if default_rights == "ReadOnly"
-        return :all if primary_rights == "ReadOnly"
+      if default_rights == 'ReadOnly'
+        return :all if primary_rights == 'ReadOnly'
+
         explicit = members.select { _1[:rights] == primary_rights }.map { _1[:name] }
         return explicit unless explicit.empty?
+
         return :none
       end
       # default_rights == "None"
-      explicit = members.select { |m|
+      explicit = members.select do |m|
         m[:rights] == primary_rights ||
           (secondary_rights && m[:rights] == secondary_rights)
-      }.map { _1[:name] }
+      end.map { _1[:name] }
       explicit.empty? ? :none : explicit
     end
 
@@ -3693,7 +3720,7 @@ module Mxrb
     end
 
     def unique_entity_filenames(entities, route: nil)
-      suffix = route == "dtos" ? "_dto" : nil
+      suffix = route == 'dtos' ? '_dto' : nil
       unique_filenames(entities, suffix:)
     end
 
@@ -3717,8 +3744,8 @@ module Mxrb
       value.to_s
            .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
            .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-           .tr(" -", "__")
-           .gsub(/[^a-zA-Z0-9_]/, "")
+           .tr(' -', '__')
+           .gsub(/[^a-zA-Z0-9_]/, '')
            .downcase
     end
 
@@ -3736,12 +3763,16 @@ module Mxrb
                     end
       body << "  #{return_type}" if return_type
       body << "  documentation #{ruby(flow.documentation)}" unless flow.documentation.to_s.empty?
-      body << "  allow_concurrent_execution false" unless flow.allow_concurrent_execution
+      body << '  allow_concurrent_execution false' unless flow.allow_concurrent_execution
       apply_entity_access = flow.respond_to?(:apply_entity_access) && flow.apply_entity_access
-      body << "  apply_entity_access" if apply_entity_access
-      body << "  mark_as_used" if flow.mark_as_used
-      body << "  excluded" if flow.excluded
-      body << "  allowed_roles #{flow.allowed_module_roles.map { symbol(_1) }.join(', ')}" unless flow.allowed_module_roles.empty?
+      body << '  apply_entity_access' if apply_entity_access
+      body << '  mark_as_used' if flow.mark_as_used
+      body << '  excluded' if flow.excluded
+      unless flow.allowed_module_roles.empty?
+        body << "  allowed_roles #{flow.allowed_module_roles.map do
+          symbol(_1)
+        end.join(', ')}"
+      end
       metadata&.fetch(:calls, [])&.each do |call|
         body << "  call #{call.fetch(:kind)}: #{symbol(call.fetch(:name))}"
       end
@@ -3752,20 +3783,20 @@ module Mxrb
       flows = Array(flow.flows)
       if editable_flow_body?(objects, flows)
         dsl_lines = body_dsl_lines(objects, flows, 2)
-        body << "  annotations_authoritative" if flow_objects_contain_annotation?(objects)
+        body << '  annotations_authoritative' if flow_objects_contain_annotation?(objects)
         body.concat(dsl_lines)
         if internal_metadata && (fingerprint = flow_body_fingerprint(dsl_lines, flow))
           body << "  body_fingerprint #{ruby(fingerprint)}"
         end
       elsif objects.any?
-        body << "  # Native body baseline retained: this graph shape has no typed DSL mapping yet"
+        body << '  # Native body baseline retained: this graph shape has no typed DSL mapping yet'
       end
       arguments = [symbol(flow.name)]
       if declaration == :rule
         arguments << "unit_id: #{ruby(flow.id)}"
         arguments << "export_level: #{ruby(flow.export_level)}"
       elsif metadata&.fetch(:public, false)
-        arguments << "public: true"
+        arguments << 'public: true'
       end
       [
         '# frozen_string_literal: true', '',
@@ -3780,8 +3811,8 @@ module Mxrb
     end
 
     def flow_parameter_source(parameter)
-      name = parameter["Name"] || parameter["name"]
-      type = parameter["VariableType"] || parameter["Type"] || parameter["type"]
+      name = parameter['Name'] || parameter['name']
+      type = parameter['VariableType'] || parameter['Type'] || parameter['type']
       return unless name && type
 
       type_source = if type.is_a?(Hash)
@@ -3834,7 +3865,7 @@ module Mxrb
       repositories.map do |repository|
         options = []
         options << "implementation: #{symbol(repository[:implementation])}" if repository[:implementation]
-        options << "public: true" if repository[:public]
+        options << 'public: true' if repository[:public]
         options << "documentation: #{ruby(repository[:documentation])}" unless repository[:documentation].to_s.empty?
         "repository #{symbol(repository.fetch(:name))}#{options.empty? ? '' : ", #{options.join(', ')}"}"
       end.join("\n") + "\n"
@@ -3848,8 +3879,12 @@ module Mxrb
       body = []
       body << "  layout #{ruby(page.layout_id)}" if page.layout_id
       body << "  title #{ruby(page.title)}"
-      body << "  popup!" if page.popup_width.to_i.positive? || page.popup_height.to_i.positive?
-      body << "  allowed_roles #{page.allowed_module_roles.map { symbol(_1) }.join(', ')}" unless page.allowed_module_roles.empty?
+      body << '  popup!' if page.popup_width.to_i.positive? || page.popup_height.to_i.positive?
+      unless page.allowed_module_roles.empty?
+        body << "  allowed_roles #{page.allowed_module_roles.map do
+          symbol(_1)
+        end.join(', ')}"
+      end
       widgets = metadata ? metadata.fetch(:widgets, []) : page.widgets
       source = metadata&.dig(:data_source) || page.data_source
       if source && %i[microflow nanoflow].include?(source.fetch(:kind).to_sym)
@@ -3880,9 +3915,7 @@ module Mxrb
         args = []
         args << "target: #{symbol(event[:target])}" if event[:target]
         args << "#{event.fetch(:kind)}: #{symbol(event.fetch(:handler))}"
-        unless event.fetch(:arguments, {}).empty?
-          args << "pass: #{native_ruby(event.fetch(:arguments), 2)}"
-        end
+        args << "pass: #{native_ruby(event.fetch(:arguments), 2)}" unless event.fetch(:arguments, {}).empty?
         body << "  #{event.fetch(:event)} #{args.join(', ')}"
       end
       widgets.each do |widget|
@@ -3890,13 +3923,13 @@ module Mxrb
         body.concat(rendered)
       end
       declaration = [symbol(page.name), "unit_id: #{ruby(page.id)}"]
-      declaration << "public: true" if metadata&.fetch(:public, false)
+      declaration << 'public: true' if metadata&.fetch(:public, false)
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        page #{declaration.join(', ')} do
-      #{body.join("\n")}
-        end
+          page #{declaration.join(', ')} do
+        #{body.join("\n")}
+          end
       RUBY
     end
 
@@ -3923,7 +3956,7 @@ module Mxrb
     end
 
     OVERLAY_WIDGET_TYPES = {
-      table: "Forms$Table", layout_grid: "Forms$LayoutGrid", data_view: "Forms$DataView"
+      table: 'Forms$Table', layout_grid: 'Forms$LayoutGrid', data_view: 'Forms$DataView'
     }.freeze
 
     def page_overlay_exportable?(page, widgets)
@@ -3939,8 +3972,8 @@ module Mxrb
 
       candidates.all? do |widget, type|
         native_roots.one? do |native|
-          native.is_a?(Hash) && native["$Type"] == type &&
-            native["Name"].to_s == widget.fetch(:name).to_s
+          native.is_a?(Hash) && native['$Type'] == type &&
+            native['Name'].to_s == widget.fetch(:name).to_s
         end
       end
     end
@@ -3957,15 +3990,15 @@ module Mxrb
       return [] unless document.is_a?(Hash)
 
       slots = []
-      slots << bson_items(document["Widgets"]) if document.key?("Widgets")
-      form_call = document["FormCall"]
+      slots << bson_items(document['Widgets']) if document.key?('Widgets')
+      form_call = document['FormCall']
       return slots unless form_call.is_a?(Hash)
 
-      bson_items(form_call["Arguments"]).each do |argument|
+      bson_items(form_call['Arguments']).each do |argument|
         next unless argument.is_a?(Hash)
 
-        slots << bson_items(argument["Widgets"]) if argument.key?("Widgets")
-        slots << [argument["Widget"]].compact if argument.key?("Widget")
+        slots << bson_items(argument['Widgets']) if argument.key?('Widgets')
+        slots << [argument['Widget']].compact if argument.key?('Widget')
       end
       slots
     end
@@ -3978,19 +4011,19 @@ module Mxrb
       when Time
         "Time.at(#{value.to_i}, #{value.nsec}, :nanosecond).utc"
       when Hash
-        return "{}" if value.empty?
+        return '{}' if value.empty?
 
-        pad = " " * indent
-        child_pad = " " * (indent + 2)
+        pad = ' ' * indent
+        child_pad = ' ' * (indent + 2)
         entries = value.map do |key, item|
           "#{child_pad}#{ruby(key)} => #{native_ruby(item, indent + 2)}"
         end
         "{\n#{entries.join(",\n")}\n#{pad}}"
       when Array
-        return "[]" if value.empty?
+        return '[]' if value.empty?
 
-        pad = " " * indent
-        child_pad = " " * (indent + 2)
+        pad = ' ' * indent
+        child_pad = ' ' * (indent + 2)
         entries = value.map { "#{child_pad}#{native_ruby(_1, indent + 2)}" }
         "[\n#{entries.join(",\n")}\n#{pad}]"
       else
@@ -4053,7 +4086,7 @@ module Mxrb
       when Hash
         value.each do |key, child|
           found << child.to_s if key.to_s.match?(/(?:url|uri|endpoint|host)\z/i) &&
-                                child.is_a?(String) && child.bytesize.between?(1, 512)
+                                 child.is_a?(String) && child.bytesize.between?(1, 512)
           native_fragment_hints(child, found)
         end
       when Array
@@ -4081,23 +4114,21 @@ module Mxrb
       return opaque_menu_source(menu) unless menu.semantic?
 
       body = menu.items.flat_map { menu_item_source(_1, 2) }
-      if menu.raw_document.is_a?(Hash)
-        body.unshift("  baseline_menu unit_id: #{ruby(menu.id)}")
-      end
+      body.unshift("  baseline_menu unit_id: #{ruby(menu.id)}") if menu.raw_document.is_a?(Hash)
       body.unshift("  export_level #{symbol(menu.export_level)}") unless menu.export_level.empty?
       body.unshift('  excluded') if menu.excluded?
       body.unshift("  documentation #{ruby(menu.documentation)}") unless menu.documentation.empty?
       <<~RUBY
-        # frozen_string_literal: true
+          # frozen_string_literal: true
 
-        menu #{symbol(menu.name)} do
-      #{body.join("\n")}
-        end
+          menu #{symbol(menu.name)} do
+        #{body.join("\n")}
+          end
       RUBY
     end
 
     def menu_item_source(item, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       translations = item.fetch(:caption_translations, {})
       primary_locale = item[:caption_locale]
       args = if !translations.empty? && primary_locale != 'en_US'
@@ -4130,8 +4161,8 @@ module Mxrb
     end
 
     def render_widget(widget, indent)
-      pad       = " " * indent
-      child_pad = " " * (indent + 2)
+      pad       = ' ' * indent
+      child_pad = ' ' * (indent + 2)
       # Architecture metadata is serialized through JSON inside generated MPRs,
       # so a second export can surface widget type values as strings.
       type      = widget.fetch(:type).to_sym
@@ -4189,7 +4220,7 @@ module Mxrb
         args << "height: #{options[:height]}" if options[:height].to_i.positive?
         args << "width_unit: #{symbol(options[:width_unit])}" if options[:width_unit]
         args << "height_unit: #{symbol(options[:height_unit])}" if options[:height_unit]
-        args << "responsive: false" if options[:responsive] == false
+        args << 'responsive: false' if options[:responsive] == false
         append_appearance_ruby_args(args, options)
         events = widget.fetch(:events, []).map { render_widget_event(_1, indent + 2) }
         return ["#{pad}static_image #{args.join(', ')}"] if events.empty?
@@ -4205,14 +4236,13 @@ module Mxrb
         )
         args = [symbol(widget.fetch(:name))]
         append_appearance_ruby_args(args, options)
-        if children_lines.empty?
-          return ["#{pad}container #{args.join(', ')}"]
-        else
-          lines = ["#{pad}container #{args.join(', ')} do"]
-          lines.concat(children_lines)
-          lines << "#{pad}end"
-          return lines
-        end
+        return ["#{pad}container #{args.join(', ')}"] if children_lines.empty?
+
+        lines = ["#{pad}container #{args.join(', ')} do"]
+        lines.concat(children_lines)
+        lines << "#{pad}end"
+        return lines
+
       end
 
       args = [symbol(widget.fetch(:name))]
@@ -4242,7 +4272,7 @@ module Mxrb
       end
       args << "button_style: #{symbol(options[:button_style])}" if type == :button && options[:button_style]
       args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
-      args << "horizontal: true" if type == :radio_button_group && options[:horizontal]
+      args << 'horizontal: true' if type == :radio_button_group && options[:horizontal]
       if type == :reference_selector && options[:display_attribute]
         args << "display_attribute: #{ruby(options[:display_attribute])}"
       end
@@ -4282,14 +4312,15 @@ module Mxrb
         tb_lines = ["#{child_pad}toolbar do"]
         Array(tb[:buttons]).each do |btn|
           btn_method = case btn[:type].to_sym
-          when :new    then "new_button"
-          when :delete then "delete_button"
-          when :search then "search_button"
-          when :export then "export_button"
-          end
+                       when :new    then 'new_button'
+                       when :delete then 'delete_button'
+                       when :search then 'search_button'
+                       when :export then 'export_button'
+                       end
           next unless btn_method
+
           tb_arg = btn[:caption] ? "caption: #{ruby(btn[:caption])}" : nil
-          tb_lines << "#{child_pad}  #{btn_method}#{tb_arg ? "(#{tb_arg})" : ""}"
+          tb_lines << "#{child_pad}  #{btn_method}#{tb_arg ? "(#{tb_arg})" : ''}"
         end
         tb_lines << "#{child_pad}end"
         widget_body.concat(tb_lines)
@@ -4359,7 +4390,9 @@ module Mxrb
         next unless options.key?(field)
 
         value = if field == :association_path
-                  steps = options.fetch(field).map { [ruby(_1.fetch(:association)), ruby(_1.fetch(:entity))].join(', ') }
+                  steps = options.fetch(field).map do
+                    [ruby(_1.fetch(:association)), ruby(_1.fetch(:entity))].join(', ')
+                  end
                   "association_path(#{steps.map { "[#{_1}]" }.join(', ')})"
                 else
                   symbol_fields.include?(field) ? symbol(options[field]) : native_ruby(options[field])
@@ -4395,8 +4428,8 @@ module Mxrb
     end
 
     def render_data_view_widget(widget, indent)
-      pad = " " * indent
-      child_pad = " " * (indent + 2)
+      pad = ' ' * indent
+      child_pad = ' ' * (indent + 2)
       options = widget.fetch(:options, {})
       args = [symbol(widget.fetch(:name)), "from: #{data_view_source_ruby(options.fetch(:source))}"]
       args << "editable: #{symbol(options[:editable])}" if options.fetch(:editable, :always).to_sym != :always
@@ -4404,10 +4437,8 @@ module Mxrb
         args << "read_only_style: #{symbol(options[:read_only_style])}"
       end
       args << "label_width: #{options[:label_width]}" if options[:label_width].to_i != 0
-      args << "show_footer: false" if options[:show_footer] == false
-      unless options[:no_entity_message].to_s.empty?
-        args << "no_entity_message: #{ruby(options[:no_entity_message])}"
-      end
+      args << 'show_footer: false' if options[:show_footer] == false
+      args << "no_entity_message: #{ruby(options[:no_entity_message])}" unless options[:no_entity_message].to_s.empty?
       args << "tab_index: #{options[:tab_index]}" if options[:tab_index].to_i != 0
       append_appearance_ruby_args(args, options)
       body = Array(widget[:body]).flat_map { render_widget(_1, indent + 4) }
@@ -4444,8 +4475,8 @@ module Mxrb
     end
 
     def render_table_widget(widget, indent)
-      pad = " " * indent
-      child_pad = " " * (indent + 2)
+      pad = ' ' * indent
+      child_pad = ' ' * (indent + 2)
       options = widget.fetch(:options, {})
       args = [symbol(widget.fetch(:name))]
       args << "width_unit: #{symbol(options[:width_unit])}" if
@@ -4467,7 +4498,7 @@ module Mxrb
           cell_args << "column: #{column}" unless column == cursor
           cell_args << "colspan: #{cell[:colspan]}" if cell[:colspan].to_i > 1
           cell_args << "rowspan: #{cell[:rowspan]}" if cell[:rowspan].to_i > 1
-          cell_args << "header: true" if cell[:header] == true
+          cell_args << 'header: true' if cell[:header] == true
           append_appearance_ruby_args(cell_args, cell.fetch(:options, {}))
           widgets = Array(cell[:widgets])
           declaration = "#{child_pad}  cell#{cell_args.empty? ? '' : " #{cell_args.join(', ')}"}"
@@ -4486,7 +4517,7 @@ module Mxrb
     end
 
     def render_layout_grid_widget(widget, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       options = widget.fetch(:options, {})
       args = [symbol(widget.fetch(:name))]
       args << "width: #{symbol(options[:width])}" if options.fetch(:width, :full).to_sym != :full
@@ -4498,14 +4529,14 @@ module Mxrb
     end
 
     def render_layout_grid_row(row, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       options = row.fetch(:options, {})
       args = []
       args << "horizontal_alignment: #{symbol(options[:horizontal_alignment])}" if
         options.fetch(:horizontal_alignment, :none).to_sym != :none
       args << "vertical_alignment: #{symbol(options[:vertical_alignment])}" if
         options.fetch(:vertical_alignment, :none).to_sym != :none
-      args << "gutters: false" if options[:gutters] == false
+      args << 'gutters: false' if options[:gutters] == false
       append_appearance_ruby_args(args, options)
       declaration = "#{pad}row#{args.empty? ? '' : " #{args.join(', ')}"}"
       columns = Array(row[:columns])
@@ -4516,13 +4547,13 @@ module Mxrb
     end
 
     def render_layout_grid_column(column, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       options = column.fetch(:options, {})
       args = %i[desktop tablet phone].filter_map do |viewport|
         value = options.fetch(viewport, :grow)
-        next if value.to_s == "grow"
+        next if value.to_s == 'grow'
 
-        rendered = value.to_s == "auto" ? symbol(value) : Integer(value)
+        rendered = value.to_s == 'auto' ? symbol(value) : Integer(value)
         "#{viewport}: #{rendered}"
       end
       alignment = options.fetch(:vertical_alignment, :none)
@@ -4547,45 +4578,48 @@ module Mxrb
     def editable_flow_body?(objects, flows, nested: false)
       return nested if objects.empty?
       return false unless nested || editable_annotation_endpoints?(objects, flows)
+
       local_flows = flows_for_objects(flows, objects)
       unless nested
-        return false unless objects.count { _1["$Type"] == "Microflows$StartEvent" } == 1
-        return false unless objects.any? { _1["$Type"] == "Microflows$EndEvent" }
+        return false unless objects.count { _1['$Type'] == 'Microflows$StartEvent' } == 1
+        return false unless objects.any? { _1['$Type'] == 'Microflows$EndEvent' }
       end
       connected_objects = objects.reject do |object|
-        %w[Microflows$Annotation Microflows$MicroflowParameter].include?(object["$Type"])
+        %w[Microflows$Annotation Microflows$MicroflowParameter].include?(object['$Type'])
       end
       return false if connected_objects.size > 1 && local_flows.empty?
-      return false unless objects.all? { EDITABLE_FLOW_OBJECT_TYPES.include?(_1["$Type"]) }
-      return false if !nested && objects.any? { _1["$Type"] == "Microflows$BreakEvent" }
+      return false unless objects.all? { EDITABLE_FLOW_OBJECT_TYPES.include?(_1['$Type']) }
+      return false if !nested && objects.any? { _1['$Type'] == 'Microflows$BreakEvent' }
       return false unless local_flows.all? do
-        %w[Microflows$SequenceFlow Microflows$AnnotationFlow].include?(_1["$Type"])
+        %w[Microflows$SequenceFlow Microflows$AnnotationFlow].include?(_1['$Type'])
       end
-      sequence_flows = local_flows.select { _1["$Type"] == "Microflows$SequenceFlow" }
-      return false if sequence_flows.select { _1["IsErrorHandler"] == true }
-                           .group_by { _1["OriginPointer"] }.any? { |_origin, items| items.size > 1 }
 
-      by_id = objects.to_h { [_1["$ID"], _1] }
+      sequence_flows = local_flows.select { _1['$Type'] == 'Microflows$SequenceFlow' }
+      return false if sequence_flows.select { _1['IsErrorHandler'] == true }
+                                    .group_by { _1['OriginPointer'] }.any? { |_origin, items| items.size > 1 }
+
+      by_id = objects.to_h { [_1['$ID'], _1] }
 
       objects.all? do |object|
-        case object["$Type"]
-        when "Microflows$ActionActivity"
-          editable_action?(object["Action"] || {})
-        when "Microflows$ExclusiveSplit"
+        case object['$Type']
+        when 'Microflows$ActionActivity'
+          editable_action?(object['Action'] || {})
+        when 'Microflows$ExclusiveSplit'
           decision_shape_editable?(object, sequence_flows, by_id)
-        when "Microflows$InheritanceSplit"
-          branches = sequence_flows.select { _1["OriginPointer"] == object["$ID"] }
-          !object["SplitVariableName"].to_s.empty? &&
+        when 'Microflows$InheritanceSplit'
+          branches = sequence_flows.select { _1['OriginPointer'] == object['$ID'] }
+          !object['SplitVariableName'].to_s.empty? &&
             branches.size >= 2 &&
-            branches.all? { by_id.key?(_1["DestinationPointer"]) }
-        when "Microflows$LoopedActivity"
-          collection = object["ObjectCollection"] || {}
-          inner_objects = bson_items(collection["Objects"])
+            branches.all? { by_id.key?(_1['DestinationPointer']) }
+        when 'Microflows$LoopedActivity'
+          collection = object['ObjectCollection'] || {}
+          inner_objects = bson_items(collection['Objects'])
           source = loop_source(object)
           return false unless %w[
             Microflows$WhileLoopCondition Microflows$IterableList
             Microflows$IteratorList
-          ].include?(source["$Type"])
+          ].include?(source['$Type'])
+
           editable_flow_body?(
             inner_objects, flows, nested: true
           )
@@ -4604,44 +4638,44 @@ module Mxrb
     end
 
     def editable_action?(action)
-      return false unless EDITABLE_ACTION_TYPES.include?(action["$Type"])
+      return false unless EDITABLE_ACTION_TYPES.include?(action['$Type'])
 
-      case action["$Type"]
-      when "Microflows$ChangeObjectAction"
-        action.fetch("Commit", "No") == "No" && action.fetch("RefreshInClient", false) == false
-      when "Microflows$CreateChangeAction", "Microflows$ChangeAction"
-        %w[No Yes YesWithoutEvents].include?(action.fetch("Commit", "No")) &&
-          [true, false].include?(action.fetch("RefreshInClient", false))
-      when "Microflows$RetrieveAction"
-        source = action["RetrieveSource"] || {}
-        case source["$Type"]
-        when "Microflows$DatabaseRetrieveSource"
-          range_type = source.dig("Range", "$Type")
+      case action['$Type']
+      when 'Microflows$ChangeObjectAction'
+        action.fetch('Commit', 'No') == 'No' && action.fetch('RefreshInClient', false) == false
+      when 'Microflows$CreateChangeAction', 'Microflows$ChangeAction'
+        %w[No Yes YesWithoutEvents].include?(action.fetch('Commit', 'No')) &&
+          [true, false].include?(action.fetch('RefreshInClient', false))
+      when 'Microflows$RetrieveAction'
+        source = action['RetrieveSource'] || {}
+        case source['$Type']
+        when 'Microflows$DatabaseRetrieveSource'
+          range_type = source.dig('Range', '$Type')
           %w[Microflows$ConstantRange Microflows$CustomRange].include?(range_type) &&
-            bson_items(source.dig("NewSortings", "Sortings") || source["SortItems"]).all? do |sorting|
-              !(sorting["AttributePath"] || sorting.dig("AttributeRef", "Attribute")).to_s.empty?
+            bson_items(source.dig('NewSortings', 'Sortings') || source['SortItems']).all? do |sorting|
+              !(sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')).to_s.empty?
             end
-        when "Microflows$AssociationRetrieveSource"
-          !source["AssociationId"].to_s.empty? && !source["StartVariableName"].to_s.empty?
+        when 'Microflows$AssociationRetrieveSource'
+          !source['AssociationId'].to_s.empty? && !source['StartVariableName'].to_s.empty?
         else
           false
         end
-      when "Microflows$ShowMessageAction"
-        bson_items(action.dig("Template", "Parameters")).all? { _1["Expression"] }
-      when "Microflows$LogMessageAction"
-        bson_items(action.dig("MessageTemplate", "Parameters")).all? { _1["Expression"] }
-      when "Microflows$ShowFormAction"
-        settings = action["FormSettings"] || {}
-        title = settings["FormTitle"] || settings["TitleOverride"]
+      when 'Microflows$ShowMessageAction'
+        bson_items(action.dig('Template', 'Parameters')).all? { _1['Expression'] }
+      when 'Microflows$LogMessageAction'
+        bson_items(action.dig('MessageTemplate', 'Parameters')).all? { _1['Expression'] }
+      when 'Microflows$ShowFormAction'
+        settings = action['FormSettings'] || {}
+        title = settings['FormTitle'] || settings['TitleOverride']
         title_supported = title.nil? ||
-          (title.is_a?(Hash) && bson_items(title["Parameters"]).empty?)
-        title_supported && bson_items(settings["ParameterMappings"]).all? do |mapping|
-          mapping["Parameter"] && mapping["Argument"]
+                          (title.is_a?(Hash) && bson_items(title['Parameters']).empty?)
+        title_supported && bson_items(settings['ParameterMappings']).all? do |mapping|
+          mapping['Parameter'] && mapping['Argument']
         end
-      when "Microflows$JavaActionCallAction"
-        !action["JavaAction"].to_s.empty? && bson_items(action["ParameterMappings"]).all? do |mapping|
-          value = mapping["Value"] || {}
-          mapping["Parameter"] && %w[
+      when 'Microflows$JavaActionCallAction'
+        !action['JavaAction'].to_s.empty? && bson_items(action['ParameterMappings']).all? do |mapping|
+          value = mapping['Value'] || {}
+          mapping['Parameter'] && %w[
             Microflows$BasicJavaActionParameterValue
             Microflows$BasicCodeActionParameterValue
             Microflows$EntityTypeCodeActionParameterValue
@@ -4650,196 +4684,199 @@ module Mxrb
             Microflows$MicroflowParameterValue
             Microflows$ImportMappingJavaActionParameterValue
             Microflows$ExportMappingJavaActionParameterValue
-          ].include?(value["$Type"])
+          ].include?(value['$Type'])
         end
-      when "Microflows$JavaScriptActionCallAction"
-        !action["JavaScriptAction"].to_s.empty? && bson_items(action["ParameterMappings"]).all? do |mapping|
-          value = mapping["ParameterValue"] || {}
-          mapping["Parameter"] && %w[
+      when 'Microflows$JavaScriptActionCallAction'
+        !action['JavaScriptAction'].to_s.empty? && bson_items(action['ParameterMappings']).all? do |mapping|
+          value = mapping['ParameterValue'] || {}
+          mapping['Parameter'] && %w[
             Microflows$BasicCodeActionParameterValue
             Microflows$EntityTypeCodeActionParameterValue
-          ].include?(value["$Type"])
+          ].include?(value['$Type'])
         end
-      when "Microflows$NanoflowCallAction"
-        !action.dig("NanoflowCall", "Nanoflow").to_s.empty? &&
-          bson_items(action.dig("NanoflowCall", "ParameterMappings")).all? do |mapping|
-          mapping["Parameter"] && mapping["Argument"]
+      when 'Microflows$NanoflowCallAction'
+        !action.dig('NanoflowCall', 'Nanoflow').to_s.empty? &&
+          bson_items(action.dig('NanoflowCall', 'ParameterMappings')).all? do |mapping|
+            mapping['Parameter'] && mapping['Argument']
+          end
+      when 'Microflows$AppServiceCallAction'
+        !action['AppServiceAction'].to_s.empty? && bson_items(action['ParameterMappings']).all? do |mapping|
+          mapping['Parameter'] && mapping['Argument']
         end
-      when "Microflows$AppServiceCallAction"
-        !action["AppServiceAction"].to_s.empty? && bson_items(action["ParameterMappings"]).all? do |mapping|
-          mapping["Parameter"] && mapping["Argument"]
+      when 'Microflows$ValidationFeedbackAction'
+        bson_items(action.dig('FeedbackTemplate', 'Parameters')).all? do |parameter|
+          parameter['Expression']
         end
-      when "Microflows$ValidationFeedbackAction"
-        bson_items(action.dig("FeedbackTemplate", "Parameters")).all? do |parameter|
-          parameter["Expression"]
-        end
-      when "Microflows$RestCallAction"
-        http = action["HttpConfiguration"] || {}
-        request = action["RequestHandling"] || {}
-        request_supported = case request["$Type"]
-                            when "Microflows$MappingRequestHandling"
-                              mapping_id = request["MappingId"].to_s
-                              mapping_variable = request["MappingVariableName"].to_s
+      when 'Microflows$RestCallAction'
+        http = action['HttpConfiguration'] || {}
+        request = action['RequestHandling'] || {}
+        request_supported = case request['$Type']
+                            when 'Microflows$MappingRequestHandling'
+                              mapping_id = request['MappingId'].to_s
+                              mapping_variable = request['MappingVariableName'].to_s
                               !mapping_id.empty? && !mapping_variable.empty?
-                            when "Microflows$CustomRequestHandling"
-                              template = request["Template"] || {}
-                              bson_items(template["Parameters"]).all? { _1["Expression"] }
+                            when 'Microflows$CustomRequestHandling'
+                              template = request['Template'] || {}
+                              bson_items(template['Parameters']).all? { _1['Expression'] }
                             else
                               false
                             end
-        result = action["ResultHandling"] || {}
-        result_mapping = result["ImportMappingCall"] || {}
-        result_supported = case action["ResultHandlingType"]
-                           when "Mapping"
-                             !result_mapping["ReturnValueMapping"].to_s.empty? &&
-                               result_mapping.dig("Range", "$Type") ==
-                                 "Microflows$ConstantRange"
-                           when "HttpResponse"
-                             result["Bind"] == true &&
-                               result["ImportMappingCall"].nil? &&
-                               !result["ResultVariableName"].to_s.empty? &&
-                               !result.dig("VariableType", "Entity").to_s.empty?
-                           when "String"
-                             result["Bind"] == true &&
-                               result["ImportMappingCall"].nil? &&
-                               !result["ResultVariableName"].to_s.empty? &&
-                               result.dig("VariableType", "$Type") == "DataTypes$StringType"
+        result = action['ResultHandling'] || {}
+        result_mapping = result['ImportMappingCall'] || {}
+        result_supported = case action['ResultHandlingType']
+                           when 'Mapping'
+                             !result_mapping['ReturnValueMapping'].to_s.empty? &&
+                             result_mapping.dig('Range', '$Type') ==
+                             'Microflows$ConstantRange'
+                           when 'HttpResponse'
+                             result['Bind'] == true &&
+                             result['ImportMappingCall'].nil? &&
+                             !result['ResultVariableName'].to_s.empty? &&
+                             !result.dig('VariableType', 'Entity').to_s.empty?
+                           when 'String'
+                             result['Bind'] == true &&
+                             result['ImportMappingCall'].nil? &&
+                             !result['ResultVariableName'].to_s.empty? &&
+                             result.dig('VariableType', '$Type') == 'DataTypes$StringType'
                            else
                              false
                            end
-        !http["HttpMethod"].to_s.empty? &&
-          bson_items(http["HttpHeaderEntries"]).all? { _1["Key"] && _1["Value"] } &&
-          bson_items(http.dig("CustomLocationTemplate", "Parameters")).all? {
-            _1["Expression"]
-          } &&
+        !http['HttpMethod'].to_s.empty? &&
+          bson_items(http['HttpHeaderEntries']).all? { _1['Key'] && _1['Value'] } &&
+          bson_items(http.dig('CustomLocationTemplate', 'Parameters')).all? do
+            _1['Expression']
+          end &&
           request_supported && result_supported
-      when "DatabaseConnector$ExecuteDatabaseQueryAction"
-        (!action["Query"].to_s.empty? || !action["DynamicQuery"].to_s.empty?) &&
-          bson_items(action["ParameterMappings"]).all? { |mapping|
-            mapping["ParameterName"] && mapping["Value"]
-          } &&
-          bson_items(action["ConnectionParameterMappings"]).all? { |mapping|
-            mapping["ParameterName"] && mapping["Value"]
-          }
-      when "Microflows$ImportXmlAction"
-        result = action["ResultHandling"] || {}
-        mapping = result["ImportMappingCall"] || {}
-        !action["XmlDocumentVariableName"].to_s.empty? &&
-          result["Bind"] == true && !result["ResultVariableName"].to_s.empty? &&
-          !result.dig("VariableType", "Entity").to_s.empty? &&
-          !mapping["ReturnValueMapping"].to_s.empty? &&
-          mapping.dig("Range", "$Type") == "Microflows$ConstantRange"
-      when "Microflows$ExportXmlAction"
-        output = action["OutputMethod"] || {}
-        handling = action["ResultHandling"] || {}
-        output["$Type"] == "ExportXmlAction$StringExport" &&
-          !output["OutputVariableName"].to_s.empty? &&
-          handling["$Type"] == "Microflows$MappingRequestHandling" &&
-          %w[Xml Json].include?(handling["ContentType"]) &&
-          !handling["MappingId"].to_s.empty? &&
-          !handling["MappingVariableName"].to_s.empty? &&
-          [true, false].include?(action["IsValidationRequired"])
-      when "Microflows$DownloadFileAction"
-        !action["FileDocumentVariableName"].to_s.empty?
+      when 'DatabaseConnector$ExecuteDatabaseQueryAction'
+        (!action['Query'].to_s.empty? || !action['DynamicQuery'].to_s.empty?) &&
+          bson_items(action['ParameterMappings']).all? do |mapping|
+            mapping['ParameterName'] && mapping['Value']
+          end &&
+          bson_items(action['ConnectionParameterMappings']).all? do |mapping|
+            mapping['ParameterName'] && mapping['Value']
+          end
+      when 'Microflows$ImportXmlAction'
+        result = action['ResultHandling'] || {}
+        mapping = result['ImportMappingCall'] || {}
+        !action['XmlDocumentVariableName'].to_s.empty? &&
+          result['Bind'] == true && !result['ResultVariableName'].to_s.empty? &&
+          !result.dig('VariableType', 'Entity').to_s.empty? &&
+          !mapping['ReturnValueMapping'].to_s.empty? &&
+          mapping.dig('Range', '$Type') == 'Microflows$ConstantRange'
+      when 'Microflows$ExportXmlAction'
+        output = action['OutputMethod'] || {}
+        handling = action['ResultHandling'] || {}
+        output['$Type'] == 'ExportXmlAction$StringExport' &&
+          !output['OutputVariableName'].to_s.empty? &&
+          handling['$Type'] == 'Microflows$MappingRequestHandling' &&
+          %w[Xml Json].include?(handling['ContentType']) &&
+          !handling['MappingId'].to_s.empty? &&
+          !handling['MappingVariableName'].to_s.empty? &&
+          [true, false].include?(action['IsValidationRequired'])
+      when 'Microflows$DownloadFileAction'
+        !action['FileDocumentVariableName'].to_s.empty?
       else
         true
       end
     end
 
     def decision_shape_editable?(object, flows, by_id)
-      condition = object["SplitCondition"] || {}
-      condition_supported = !condition["Expression"].to_s.empty? ||
-        (condition["$Type"] == "Microflows$RuleSplitCondition" &&
-         !condition.dig("RuleCall", "Microflow").to_s.empty? &&
-         bson_items(condition.dig("RuleCall", "ParameterMappings")).all? {
-           _1["Parameter"] && _1["Argument"]
-         })
+      condition = object['SplitCondition'] || {}
+      condition_supported = !condition['Expression'].to_s.empty? ||
+                            (condition['$Type'] == 'Microflows$RuleSplitCondition' &&
+                             !condition.dig('RuleCall', 'Microflow').to_s.empty? &&
+                             bson_items(condition.dig('RuleCall', 'ParameterMappings')).all? do
+                               _1['Parameter'] && _1['Argument']
+                             end)
       return false unless condition_supported
 
-      branches = flows.reject { _1["IsErrorHandler"] == true }
-                      .select { _1["OriginPointer"] == object["$ID"] }
-      branches.size >= 2 && branches.all? { by_id.key?(_1["DestinationPointer"]) }
+      branches = flows.reject { _1['IsErrorHandler'] == true }
+                      .select { _1['OriginPointer'] == object['$ID'] }
+      branches.size >= 2 && branches.all? { by_id.key?(_1['DestinationPointer']) }
     end
 
     def body_dsl_lines(objects, flows, indent = 2, nested: false, endpoint_refs: nil,
                        emitted_refs: nil)
       return [] if objects.empty?
-      by_id   = objects.to_h { |o| [o["$ID"], o] }
+
+      by_id   = objects.to_h { |o| [o['$ID'], o] }
       fwd_map = {}
       err_map = {}
       flows.each do |f|
-        next unless f["$Type"] == "Microflows$SequenceFlow"
+        next unless f['$Type'] == 'Microflows$SequenceFlow'
 
-        from     = f["OriginPointer"]
-        to       = f["DestinationPointer"]
+        from     = f['OriginPointer']
+        to       = f['DestinationPointer']
         case_val = flow_case_value(f)
-        if f["IsErrorHandler"] == true
+        if f['IsErrorHandler'] == true
           err_map[from] = to
         else
           fwd_map[from] ||= []
           fwd_map[from] << { to: to, case_val: case_val }
         end
       end
-      start = objects.find { |o| o["$Type"] == "Microflows$StartEvent" }
+      start = objects.find { |o| o['$Type'] == 'Microflows$StartEvent' }
       if nested && !start
-        destinations = flows.to_h { [_1["DestinationPointer"], true] }
-        start = objects.find { !destinations.key?(_1["$ID"]) }
+        destinations = flows.to_h { [_1['DestinationPointer'], true] }
+        start = objects.find { !destinations.key?(_1['$ID']) }
       end
       return [] unless start
+
       endpoint_refs ||= annotation_flow_endpoint_refs(objects, flows)
       emitted_refs ||= {}
       lines = annotation_dsl_lines(objects, indent, endpoint_refs, emitted_refs)
       linearize_flow(
-        start["$ID"], fwd_map, err_map, by_id, flows, {}, lines, indent, nil,
+        start['$ID'], fwd_map, err_map, by_id, flows, {}, lines, indent, nil,
         endpoint_refs, emitted_refs
       )
       if !nested && (endpoint_refs.values - emitted_refs.keys).any?
         raise SerializationError, 'annotation flow references a node outside the exported graph'
       end
+
       lines.concat(annotation_flow_dsl_lines(flows, endpoint_refs, indent)) unless nested
       lines
     end
 
     def annotation_dsl_lines(objects, indent, endpoint_refs = {}, emitted_refs = {})
-      pad = " " * indent
+      pad = ' ' * indent
       objects.flat_map do |object|
-        next [] unless object["$Type"] == "Microflows$Annotation"
+        next [] unless object['$Type'] == 'Microflows$Annotation'
 
         declaration = "#{pad}annotation #{ruby(object['Caption'].to_s)}, " \
           "position: #{ruby(object['RelativeMiddlePoint'].to_s)}, " \
           "size: #{ruby(object['Size'].to_s)}"
-        reference = endpoint_refs[object["$ID"]]
+        reference = endpoint_refs[object['$ID']]
         emitted_refs[reference] = true if reference
         [declaration, ("#{pad}as_node #{ruby(reference)}" if reference)].compact
       end
     end
 
     def annotation_flow_endpoint_refs(objects, flows)
-      annotation_flows = Array(flows).select { _1["$Type"] == "Microflows$AnnotationFlow" }
+      annotation_flows = Array(flows).select { _1['$Type'] == 'Microflows$AnnotationFlow' }
       return {} if annotation_flows.empty?
 
       all_objects = nested_flow_objects(objects)
-      by_id = all_objects.to_h { [_1["$ID"], _1] }
+      by_id = all_objects.to_h { [_1['$ID'], _1] }
       counters = Hash.new(0)
       references = all_objects.to_h do |object|
         prefix = {
-          "Microflows$Annotation" => "annotation",
-          "Microflows$ActionActivity" => "activity",
-          "Microflows$ExclusiveSplit" => "decision",
-          "Microflows$InheritanceSplit" => "type_decision",
-          "Microflows$LoopedActivity" => "loop",
-          "Microflows$EndEvent" => "return",
-          "Microflows$ErrorEvent" => "error",
-          "Microflows$ContinueEvent" => "continue",
-          "Microflows$BreakEvent" => "break"
-        }[object["$Type"]]
-        next [object["$ID"], nil] unless prefix
+          'Microflows$Annotation' => 'annotation',
+          'Microflows$ActionActivity' => 'activity',
+          'Microflows$ExclusiveSplit' => 'decision',
+          'Microflows$InheritanceSplit' => 'type_decision',
+          'Microflows$LoopedActivity' => 'loop',
+          'Microflows$EndEvent' => 'return',
+          'Microflows$ErrorEvent' => 'error',
+          'Microflows$ContinueEvent' => 'continue',
+          'Microflows$BreakEvent' => 'break'
+        }[object['$Type']]
+        next [object['$ID'], nil] unless prefix
 
         counters[prefix] += 1
-        [object["$ID"], "#{prefix}_#{counters[prefix]}"]
+        [object['$ID'], "#{prefix}_#{counters[prefix]}"]
       end
       endpoint_ids = annotation_flows.flat_map do |flow|
-        [flow["OriginPointer"], flow["DestinationPointer"]]
+        [flow['OriginPointer'], flow['DestinationPointer']]
       end.uniq
       endpoint_ids.to_h do |id|
         object = by_id[id]
@@ -4856,22 +4893,22 @@ module Mxrb
 
     def nested_flow_objects(objects)
       Array(objects).flat_map do |object|
-        nested = bson_items(object.dig("ObjectCollection", "Objects"))
+        nested = bson_items(object.dig('ObjectCollection', 'Objects'))
         [object, *nested_flow_objects(nested)]
       end
     end
 
     def annotation_flow_dsl_lines(flows, endpoint_refs, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       Array(flows).filter_map do |flow|
-        next unless flow["$Type"] == "Microflows$AnnotationFlow"
+        next unless flow['$Type'] == 'Microflows$AnnotationFlow'
 
-        from = endpoint_refs.fetch(flow["OriginPointer"])
-        to = endpoint_refs.fetch(flow["DestinationPointer"])
-        line = flow["Line"] || {}
-        origin_vector = line["OriginControlVector"] || flow["OriginBezierVector"] || "0;0"
-        destination_vector = line["DestinationControlVector"] ||
-          flow["DestinationBezierVector"] || "0;-30"
+        from = endpoint_refs.fetch(flow['OriginPointer'])
+        to = endpoint_refs.fetch(flow['DestinationPointer'])
+        line = flow['Line'] || {}
+        origin_vector = line['OriginControlVector'] || flow['OriginBezierVector'] || '0;0'
+        destination_vector = line['DestinationControlVector'] ||
+                             flow['DestinationBezierVector'] || '0;-30'
         "#{pad}annotation_flow from: #{ruby(from)}, to: #{ruby(to)}, " \
           "origin_index: #{flow.fetch('OriginConnectionIndex', 1)}, " \
           "destination_index: #{flow.fetch('DestinationConnectionIndex', 0)}, " \
@@ -4882,15 +4919,15 @@ module Mxrb
 
     def flow_objects_contain_annotation?(objects)
       Array(objects).any? do |object|
-        object["$Type"] == "Microflows$Annotation" ||
+        object['$Type'] == 'Microflows$Annotation' ||
           flow_objects_contain_annotation?(
-            bson_items(object.dig("ObjectCollection", "Objects"))
+            bson_items(object.dig('ObjectCollection', 'Objects'))
           )
       end
     end
 
     def decision_declaration_lines(condition, indent)
-      pad = " " * indent
+      pad = ' ' * indent
       return ["#{pad}decision #{ruby(condition['Expression'].to_s)} do"] \
         unless condition['$Type'] == 'Microflows$RuleSplitCondition'
 
@@ -4903,10 +4940,10 @@ module Mxrb
     end
 
     def flow_case_value(flow)
-      case_doc = bson_items(flow["CaseValues"]).first || flow["NewCaseValue"]
-      value = case_doc&.dig("Value")
-      return true if value == "true"
-      return false if value == "false"
+      case_doc = bson_items(flow['CaseValues']).first || flow['NewCaseValue']
+      value = case_doc&.dig('Value')
+      return true if value == 'true'
+      return false if value == 'false'
 
       value
     end
@@ -4915,15 +4952,16 @@ module Mxrb
                        endpoint_refs = {}, emitted_refs = {})
       while cursor && cursor != stop_at
         break if seen[cursor]
+
         seen[cursor] = true
         obj = by_id[cursor]
         break unless obj
 
-        case obj["$Type"]
-        when "Microflows$StartEvent"
+        case obj['$Type']
+        when 'Microflows$StartEvent'
           cursor = (fwd[cursor] || []).first&.dig(:to)
 
-        when "Microflows$ActionActivity"
+        when 'Microflows$ActionActivity'
           line = action_dsl_line(obj, indent)
           lines << line if line
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs) if line
@@ -4941,9 +4979,9 @@ module Mxrb
           end
           cursor = next_id
 
-        when "Microflows$ExclusiveSplit"
-          condition_doc = obj["SplitCondition"] || {}
-          nexts      = fwd[cursor] || []
+        when 'Microflows$ExclusiveSplit'
+          condition_doc = obj['SplitCondition'] || {}
+          nexts = fwd[cursor] || []
           merge_id = find_common_merge_node(nexts.map { _1[:to] }, fwd, by_id)
           lines.concat(decision_declaration_lines(condition_doc, indent))
           nexts.each do |edge|
@@ -4960,13 +4998,13 @@ module Mxrb
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = merge_id
 
-        when "Microflows$ExclusiveMerge"
+        when 'Microflows$ExclusiveMerge'
           cursor = (fwd[cursor] || []).first&.dig(:to)
 
-        when "Microflows$InheritanceSplit"
+        when 'Microflows$InheritanceSplit'
           nexts = fwd[cursor] || []
           merge_id = find_common_merge_node(nexts.map { _1[:to] }, fwd, by_id)
-          lines << "#{' ' * indent}type_decision :#{obj["SplitVariableName"]} do"
+          lines << "#{' ' * indent}type_decision :#{obj['SplitVariableName']} do"
           nexts.each do |edge|
             branch_lines = []
             linearize_flow(
@@ -4985,12 +5023,12 @@ module Mxrb
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = merge_id
 
-        when "Microflows$LoopedActivity"
+        when 'Microflows$LoopedActivity'
           loop_src = loop_source(obj)
-          variable  = (loop_src["ListVariableName"] || loop_src["Variable"]).to_s
-          iterator  = (loop_src["VariableName"] || loop_src["IteratorVariable"]).to_s
-          inner_col = obj["ObjectCollection"] || {}
-          inner_objects = bson_items(inner_col["Objects"])
+          variable  = (loop_src['ListVariableName'] || loop_src['Variable']).to_s
+          iterator  = (loop_src['VariableName'] || loop_src['IteratorVariable']).to_s
+          inner_col = obj['ObjectCollection'] || {}
+          inner_objects = bson_items(inner_col['Objects'])
           inner_lines = body_dsl_lines(
             inner_objects,
             graph_flows,
@@ -4999,10 +5037,10 @@ module Mxrb
             endpoint_refs: endpoint_refs,
             emitted_refs: emitted_refs
           )
-          if loop_src["$Type"] == "Microflows$WhileLoopCondition"
-            lines << "#{' ' * indent}while_loop #{ruby(loop_src["WhileExpression"])} do"
+          if loop_src['$Type'] == 'Microflows$WhileLoopCondition'
+            lines << "#{' ' * indent}while_loop #{ruby(loop_src['WhileExpression'])} do"
           else
-            as_clause = (iterator != variable && !iterator.empty?) ? ", as: :#{iterator}" : ""
+            as_clause = iterator != variable && !iterator.empty? ? ", as: :#{iterator}" : ''
             lines << "#{' ' * indent}loop_over :#{variable}#{as_clause} do"
           end
           lines.concat(inner_lines)
@@ -5010,18 +5048,16 @@ module Mxrb
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           cursor = (fwd[cursor] || []).first&.dig(:to)
 
-        when "Microflows$EndEvent"
-          ret = obj["ReturnValue"].to_s.strip
-          unless ret.empty?
-            if (match = ret.match(/\A\$([A-Za-z_][A-Za-z0-9_]*)\z/))
-              lines << "#{' ' * indent}return_value :#{match[1]}"
-            else
-              lines << "#{' ' * indent}return_value #{ruby(ret)}"
-            end
-          else
+        when 'Microflows$EndEvent'
+          ret = obj['ReturnValue'].to_s.strip
+          if ret.empty?
             lines << "#{' ' * indent}end_flow" if indent > 2
+          elsif (match = ret.match(/\A\$([A-Za-z_][A-Za-z0-9_]*)\z/))
+            lines << "#{' ' * indent}return_value :#{match[1]}"
+          else
+            lines << "#{' ' * indent}return_value #{ruby(ret)}"
           end
-          if indent == 2 && (reference = endpoint_refs[obj["$ID"]])
+          if indent == 2 && (reference = endpoint_refs[obj['$ID']])
             emitted_refs[reference] = true
             lines << "#{' ' * indent}return_node #{ruby(reference)}"
           else
@@ -5029,17 +5065,17 @@ module Mxrb
           end
           break
 
-        when "Microflows$ErrorEvent"
+        when 'Microflows$ErrorEvent'
           lines << "#{' ' * indent}error_event"
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
 
-        when "Microflows$ContinueEvent"
+        when 'Microflows$ContinueEvent'
           lines << "#{' ' * indent}continue_loop"
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
 
-        when "Microflows$BreakEvent"
+        when 'Microflows$BreakEvent'
           lines << "#{' ' * indent}break_loop"
           append_flow_node_reference(lines, obj, indent, endpoint_refs, emitted_refs)
           break
@@ -5051,7 +5087,7 @@ module Mxrb
     end
 
     def append_flow_node_reference(lines, object, indent, endpoint_refs, emitted_refs)
-      reference = endpoint_refs[object["$ID"]]
+      reference = endpoint_refs[object['$ID']]
       return unless reference && !emitted_refs[reference]
 
       emitted_refs[reference] = true
@@ -5059,19 +5095,19 @@ module Mxrb
     end
 
     def flows_for_objects(flows, objects)
-      ids = objects.to_h { [_1["$ID"], true] }
+      ids = objects.to_h { [_1['$ID'], true] }
       flows.select do |flow|
-        ids.key?(flow["OriginPointer"]) && ids.key?(flow["DestinationPointer"])
+        ids.key?(flow['OriginPointer']) && ids.key?(flow['DestinationPointer'])
       end
     end
 
     def loop_source(object)
-      object["LoopSource"] || object["LoopObject"] || begin
-        if object["ListVariableName"] || object["IteratorVariableName"]
+      object['LoopSource'] || object['LoopObject'] || begin
+        if object['ListVariableName'] || object['IteratorVariableName']
           {
-            "$Type" => "Microflows$IterableList",
-            "ListVariableName" => object["ListVariableName"],
-            "VariableName" => object["IteratorVariableName"]
+            '$Type' => 'Microflows$IterableList',
+            'ListVariableName' => object['ListVariableName'],
+            'VariableName' => object['IteratorVariableName']
           }
         else
           {}
@@ -5098,222 +5134,224 @@ module Mxrb
       queue   = [start_id].compact
       while (id = queue.shift)
         next if visited[id]
+
         visited[id] = true
         obj = by_id[id]
         next unless obj
-        result << id if obj["$Type"] == "Microflows$ExclusiveMerge"
+
+        result << id if obj['$Type'] == 'Microflows$ExclusiveMerge'
         (fwd[id] || []).each { |e| queue << e[:to] }
       end
       result
     end
 
     def action_dsl_line(obj, indent)
-      action = obj["Action"] || {}
-      pad    = " " * indent
-      case action["$Type"]
-      when "Microflows$CreateObjectAction", "Microflows$CreateChangeAction"
-        legacy = action["$Type"] == "Microflows$CreateChangeAction"
-        members = member_specs(action[legacy ? "Items" : "Members"])
-        variable = legacy ? action["VariableName"] : action["OutputVariableName"]
-        commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
-        commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
-        refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
-        command = "#{pad}create_object #{ruby(action["Entity"])}, as: :#{variable}#{commit_a}#{refresh_a}"
+      action = obj['Action'] || {}
+      pad    = ' ' * indent
+      case action['$Type']
+      when 'Microflows$CreateObjectAction', 'Microflows$CreateChangeAction'
+        legacy = action['$Type'] == 'Microflows$CreateChangeAction'
+        members = member_specs(action[legacy ? 'Items' : 'Members'])
+        variable = legacy ? action['VariableName'] : action['OutputVariableName']
+        commit_a = action['Commit'] == 'Yes' ? ', commit: true' : ''
+        commit_a = ', commit: true, with_events: false' if action['Commit'] == 'YesWithoutEvents'
+        refresh_a = action['RefreshInClient'] == true ? ', refresh: true' : ''
+        command = "#{pad}create_object #{ruby(action['Entity'])}, as: :#{variable}#{commit_a}#{refresh_a}"
         members.empty? ? command : member_block(command, members, indent)
-      when "Microflows$ChangeObjectAction", "Microflows$ChangeAction"
-        legacy = action["$Type"] == "Microflows$ChangeAction"
-        members = member_specs(action[legacy ? "Items" : "Members"])
-        variable = legacy ? action["ChangeVariableName"] : action["Variable"]
-        commit_a = action["Commit"] == "Yes" ? ", commit: true" : ""
-        commit_a = ", commit: true, with_events: false" if action["Commit"] == "YesWithoutEvents"
-        refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
+      when 'Microflows$ChangeObjectAction', 'Microflows$ChangeAction'
+        legacy = action['$Type'] == 'Microflows$ChangeAction'
+        members = member_specs(action[legacy ? 'Items' : 'Members'])
+        variable = legacy ? action['ChangeVariableName'] : action['Variable']
+        commit_a = action['Commit'] == 'Yes' ? ', commit: true' : ''
+        commit_a = ', commit: true, with_events: false' if action['Commit'] == 'YesWithoutEvents'
+        refresh_a = action['RefreshInClient'] == true ? ', refresh: true' : ''
         command = "#{pad}change_object :#{variable}#{commit_a}#{refresh_a}"
         members.empty? ? command : member_block(command, members, indent)
-      when "Microflows$RetrieveAction"
-        src      = action["RetrieveSource"] || {}
-        variable = action["ResultVariableName"] || action["ResultListName"]
-        if src["$Type"] == "Microflows$AssociationRetrieveSource"
-          "#{pad}retrieve_association :#{src["StartVariableName"]}, " \
-            "association: #{ruby(src["AssociationId"])}, as: :#{variable}"
+      when 'Microflows$RetrieveAction'
+        src      = action['RetrieveSource'] || {}
+        variable = action['ResultVariableName'] || action['ResultListName']
+        if src['$Type'] == 'Microflows$AssociationRetrieveSource'
+          "#{pad}retrieve_association :#{src['StartVariableName']}, " \
+            "association: #{ruby(src['AssociationId'])}, as: :#{variable}"
         else
-          xpath = (src["XpathConstraint"] || src["XPath"]).to_s
-          args = [ruby(src["Entity"]), "as: :#{variable}"]
+          xpath = (src['XpathConstraint'] || src['XPath']).to_s
+          args = [ruby(src['Entity']), "as: :#{variable}"]
           args << "xpath: #{ruby(xpath)}" unless xpath.empty?
-          range = src["Range"] || {}
-          if range["$Type"] == "Microflows$CustomRange"
-            limit = range["LimitExpression"].to_s
+          range = src['Range'] || {}
+          if range['$Type'] == 'Microflows$CustomRange'
+            limit = range['LimitExpression'].to_s
             args << "limit: #{ruby(limit)}" unless limit.empty?
-          elsif range["SingleObject"] == true
-            args << "single: true"
+          elsif range['SingleObject'] == true
+            args << 'single: true'
           end
-          sortings = bson_items(src.dig("NewSortings", "Sortings") || src["SortItems"])
+          sortings = bson_items(src.dig('NewSortings', 'Sortings') || src['SortItems'])
           unless sortings.empty?
             rendered = sortings.map do |sorting|
-              attribute = sorting["AttributePath"] ||
-                sorting.dig("AttributeRef", "Attribute")
-              "[#{ruby(attribute)}, :#{underscore(sorting["SortOrder"])}]"
+              attribute = sorting['AttributePath'] ||
+                          sorting.dig('AttributeRef', 'Attribute')
+              "[#{ruby(attribute)}, :#{underscore(sorting['SortOrder'])}]"
             end
             args << "sort: [#{rendered.join(', ')}]"
           end
           "#{pad}retrieve_objects #{args.join(', ')}"
         end
-      when "Microflows$CommitObjectsAction", "Microflows$CommitAction"
-        legacy = action["$Type"] == "Microflows$CommitAction"
-        variable = legacy ? action["CommitVariableName"] : action["Variable"]
-        with_events = legacy ? action.fetch("WithEvents", true) : action["CommitWithoutEvents"] != true
-        events_a = with_events ? "" : ", with_events: false"
-        refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
+      when 'Microflows$CommitObjectsAction', 'Microflows$CommitAction'
+        legacy = action['$Type'] == 'Microflows$CommitAction'
+        variable = legacy ? action['CommitVariableName'] : action['Variable']
+        with_events = legacy ? action.fetch('WithEvents', true) : action['CommitWithoutEvents'] != true
+        events_a = with_events ? '' : ', with_events: false'
+        refresh_a = action['RefreshInClient'] == true ? ', refresh: true' : ''
         "#{pad}commit :#{variable}#{events_a}#{refresh_a}"
-      when "Microflows$DeleteAction"
-        variable = action["DeleteVariableName"] || action["DeleteVariable"]
-        refresh_a = action["RefreshInClient"] == true ? ", refresh: true" : ""
+      when 'Microflows$DeleteAction'
+        variable = action['DeleteVariableName'] || action['DeleteVariable']
+        refresh_a = action['RefreshInClient'] == true ? ', refresh: true' : ''
         "#{pad}delete :#{variable}#{refresh_a}"
-      when "Microflows$MicroflowCallAction"
-        call    = action["MicroflowCall"] || {}
-        out     = if action["UseReturnVariable"] == true
-          (action["ResultVariableName"] || action["OutputVariableName"]).to_s
-        else
-          ""
-        end
-        as_a    = out.empty? ? "" : ", as: :#{out}"
-        stored_result = (action["ResultVariableName"] || action["OutputVariableName"]).to_s
+      when 'Microflows$MicroflowCallAction'
+        call    = action['MicroflowCall'] || {}
+        out     = if action['UseReturnVariable'] == true
+                    (action['ResultVariableName'] || action['OutputVariableName']).to_s
+                  else
+                    ''
+                  end
+        as_a = out.empty? ? '' : ", as: :#{out}"
+        stored_result = (action['ResultVariableName'] || action['OutputVariableName']).to_s
         result_a = if out.empty? && !stored_result.empty?
-          ", result_name: #{symbol(stored_result)}, use_return: false"
-        elsif action["UseReturnVariable"] == true && out.empty?
-          ", use_return: true"
-        else
-          ""
-        end
-        params = bson_items(call["ParameterMappings"]).map { [_1["Parameter"], _1["Argument"]] }
+                     ", result_name: #{symbol(stored_result)}, use_return: false"
+                   elsif action['UseReturnVariable'] == true && out.empty?
+                     ', use_return: true'
+                   else
+                     ''
+                   end
+        params = bson_items(call['ParameterMappings']).map { [_1['Parameter'], _1['Argument']] }
         call_with_arguments_line(
-          pad, "call_microflow", "#{ruby(call["Microflow"])}#{as_a}#{result_a}", params
+          pad, 'call_microflow', "#{ruby(call['Microflow'])}#{as_a}#{result_a}", params
         )
-      when "Microflows$CreateVariableAction"
-        type = action.dig("VariableType", "$Type").to_s
-        type = type.delete_prefix("DataTypes$").delete_suffix("Type")
-        value = action["InitialValue"]
-        value_a = value.nil? || value.to_s.empty? ? "" : ", value: #{ruby_val(value)}"
-        type_a = type.empty? ? "" : ", type: #{symbol(type)}"
-        "#{pad}create_variable :#{action["VariableName"]}#{type_a}#{value_a}"
-      when "Microflows$ChangeVariableAction"
-        "#{pad}change_variable :#{action["ChangeVariableName"]}, to: #{ruby_val(action["Value"])}"
-      when "Microflows$ShowMessageAction"
+      when 'Microflows$CreateVariableAction'
+        type = action.dig('VariableType', '$Type').to_s
+        type = type.delete_prefix('DataTypes$').delete_suffix('Type')
+        value = action['InitialValue']
+        value_a = value.nil? || value.to_s.empty? ? '' : ", value: #{ruby_val(value)}"
+        type_a = type.empty? ? '' : ", type: #{symbol(type)}"
+        "#{pad}create_variable :#{action['VariableName']}#{type_a}#{value_a}"
+      when 'Microflows$ChangeVariableAction'
+        "#{pad}change_variable :#{action['ChangeVariableName']}, to: #{ruby_val(action['Value'])}"
+      when 'Microflows$ShowMessageAction'
         flow_text_action_line(action, indent, validation: false)
-      when "Microflows$LogMessageAction"
-        template = action["MessageTemplate"] || {}
-        parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
-        level_a = action["Level"].to_s.empty? ? "" : ", level: :#{underscore(action["Level"])}"
-        node_a = action["Node"].to_s.empty? ? "" : ", node: #{ruby(action["Node"])}"
-        stack_a = action["IncludeLatestStackTrace"] == true ? ", include_stack: true" : ""
-        parameters_a = parameters.empty? ? "" : ", parameters: #{ruby(parameters)}"
-        "#{pad}log_message #{ruby(template["Text"].to_s)}#{level_a}#{node_a}#{stack_a}#{parameters_a}"
-      when "Microflows$ShowFormAction"
+      when 'Microflows$LogMessageAction'
+        template = action['MessageTemplate'] || {}
+        parameters = bson_items(template['Parameters']).map { _1['Expression'] }
+        level_a = action['Level'].to_s.empty? ? '' : ", level: :#{underscore(action['Level'])}"
+        node_a = action['Node'].to_s.empty? ? '' : ", node: #{ruby(action['Node'])}"
+        stack_a = action['IncludeLatestStackTrace'] == true ? ', include_stack: true' : ''
+        parameters_a = parameters.empty? ? '' : ", parameters: #{ruby(parameters)}"
+        "#{pad}log_message #{ruby(template['Text'].to_s)}#{level_a}#{node_a}#{stack_a}#{parameters_a}"
+      when 'Microflows$ShowFormAction'
         show_page_action_line(action, indent)
-      when "Microflows$ShowHomePageAction"
+      when 'Microflows$ShowHomePageAction'
         "#{pad}show_home_page"
-      when "Microflows$CloseFormAction"
-        count = action["NumberOfPagesToClose"].to_s
+      when 'Microflows$CloseFormAction'
+        count = action['NumberOfPagesToClose'].to_s
         count.empty? ? "#{pad}close_page" : "#{pad}close_page count: #{count.to_i}"
-      when "Microflows$JavaActionCallAction"
+      when 'Microflows$JavaActionCallAction'
         call_action_line(
-          pad, "call_java", action["JavaAction"], action["ResultVariableName"],
-          bson_items(action["ParameterMappings"]).map {
-            [_1["Parameter"], code_action_parameter_value(_1["Value"])]
-          },
-          action["UseReturnVariable"]
+          pad, 'call_java', action['JavaAction'], action['ResultVariableName'],
+          bson_items(action['ParameterMappings']).map do
+            [_1['Parameter'], code_action_parameter_value(_1['Value'])]
+          end,
+          action['UseReturnVariable']
         )
-      when "Microflows$JavaScriptActionCallAction"
+      when 'Microflows$JavaScriptActionCallAction'
         call_action_line(
-          pad, "call_javascript", action["JavaScriptAction"], action["OutputVariableName"],
-          bson_items(action["ParameterMappings"]).map {
-            [_1["Parameter"], code_action_parameter_value(_1["ParameterValue"])]
-          },
-          action["UseReturnVariable"]
+          pad, 'call_javascript', action['JavaScriptAction'], action['OutputVariableName'],
+          bson_items(action['ParameterMappings']).map do
+            [_1['Parameter'], code_action_parameter_value(_1['ParameterValue'])]
+          end,
+          action['UseReturnVariable']
         )
-      when "Microflows$NanoflowCallAction"
-        call = action["NanoflowCall"] || {}
+      when 'Microflows$NanoflowCallAction'
+        call = action['NanoflowCall'] || {}
         call_action_line(
-          pad, "call_nanoflow", call["Nanoflow"], action["OutputVariableName"],
-          bson_items(call["ParameterMappings"]).map { [_1["Parameter"], _1["Argument"]] },
-          action["UseReturnVariable"]
+          pad, 'call_nanoflow', call['Nanoflow'], action['OutputVariableName'],
+          bson_items(call['ParameterMappings']).map { [_1['Parameter'], _1['Argument']] },
+          action['UseReturnVariable']
         )
-      when "Microflows$AppServiceCallAction"
+      when 'Microflows$AppServiceCallAction'
         call_action_line(
-          pad, "call_app_service", action["AppServiceAction"], action["ResultVariableName"],
-          bson_items(action["ParameterMappings"]).map { [_1["Parameter"], _1["Argument"]] },
-          action["UseReturnVariable"]
+          pad, 'call_app_service', action['AppServiceAction'], action['ResultVariableName'],
+          bson_items(action['ParameterMappings']).map { [_1['Parameter'], _1['Argument']] },
+          action['UseReturnVariable']
         )
-      when "Microflows$AggregateAction"
+      when 'Microflows$AggregateAction'
         args = [
-          ":#{action["AggregateVariableName"]}",
-          "function: :#{underscore(action["AggregateFunction"])}",
-          "as: :#{action["VariableName"]}"
+          ":#{action['AggregateVariableName']}",
+          "function: :#{underscore(action['AggregateFunction'])}",
+          "as: :#{action['VariableName']}"
         ]
-        args << "attribute: #{ruby(action["Attribute"])}" unless action["Attribute"].to_s.empty?
+        args << "attribute: #{ruby(action['Attribute'])}" unless action['Attribute'].to_s.empty?
         "#{pad}aggregate #{args.join(', ')}"
-      when "Microflows$RollbackAction"
-        refresh = action["RefreshInClient"] == true ? ", refresh: true" : ""
-        "#{pad}rollback :#{action["RollbackVariableName"]}#{refresh}"
-      when "Microflows$CastAction"
-        "#{pad}cast :#{action["VariableName"]}"
-      when "Microflows$CreateListAction"
-        "#{pad}create_list #{ruby(action["Entity"])}, as: :#{action["VariableName"]}"
-      when "Microflows$ListOperationsAction"
-        operation = action["NewOperation"] || {}
-        op = operation["$Type"].to_s.delete_prefix("Microflows$")
+      when 'Microflows$RollbackAction'
+        refresh = action['RefreshInClient'] == true ? ', refresh: true' : ''
+        "#{pad}rollback :#{action['RollbackVariableName']}#{refresh}"
+      when 'Microflows$CastAction'
+        "#{pad}cast :#{action['VariableName']}"
+      when 'Microflows$CreateListAction'
+        "#{pad}create_list #{ruby(action['Entity'])}, as: :#{action['VariableName']}"
+      when 'Microflows$ListOperationsAction'
+        operation = action['NewOperation'] || {}
+        op = operation['$Type'].to_s.delete_prefix('Microflows$')
         args = [":#{underscore(op)}", ":#{operation['ListName']}"]
-        second = operation["SecondListOrObjectName"].to_s
-        expression = operation["Expression"]
+        second = operation['SecondListOrObjectName'].to_s
+        expression = operation['Expression']
         args << "with: :#{second}" unless second.empty?
         args << "expression: #{ruby(expression)}" unless expression.nil?
-        sortings = bson_items(operation.dig("Sortings", "Sortings"))
+        sortings = bson_items(operation.dig('Sortings', 'Sortings'))
         unless sortings.empty?
           rendered = sortings.map do |sorting|
-            attribute = sorting["AttributePath"] || sorting.dig("AttributeRef", "Attribute")
-            "[#{ruby(attribute)}, :#{underscore(sorting["SortOrder"])}]"
+            attribute = sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')
+            "[#{ruby(attribute)}, :#{underscore(sorting['SortOrder'])}]"
           end
           args << "sort: [#{rendered.join(', ')}]"
         end
         args << "as: :#{action['ResultVariableName']}"
         "#{pad}list_operation #{args.join(', ')}"
-      when "Microflows$ChangeListAction"
-        "#{pad}change_list :#{action["ChangeVariableName"]}, " \
-          "action: :#{underscore(action["Type"])}, value: #{ruby_val(action["Value"])}"
-      when "Microflows$ValidationFeedbackAction"
+      when 'Microflows$ChangeListAction'
+        "#{pad}change_list :#{action['ChangeVariableName']}, " \
+          "action: :#{underscore(action['Type'])}, value: #{ruby_val(action['Value'])}"
+      when 'Microflows$ValidationFeedbackAction'
         flow_text_action_line(action, indent, validation: true)
-      when "Microflows$RestCallAction"
+      when 'Microflows$RestCallAction'
         rest_call_line(pad, action)
-      when "DatabaseConnector$ExecuteDatabaseQueryAction"
+      when 'DatabaseConnector$ExecuteDatabaseQueryAction'
         database_query_line(pad, action)
-      when "Microflows$ImportXmlAction"
+      when 'Microflows$ImportXmlAction'
         import_xml_line(pad, action)
-      when "Microflows$ExportXmlAction"
+      when 'Microflows$ExportXmlAction'
         export_xml_line(pad, action)
-      when "Microflows$DownloadFileAction"
+      when 'Microflows$DownloadFileAction'
         args = [":#{action['FileDocumentVariableName']}"]
-        args << "show_in_browser: true" if action["ShowFileInBrowser"] == true
-        error = underscore(action["ErrorHandlingType"])
-        args << "error: :#{error}" unless error == "rollback"
+        args << 'show_in_browser: true' if action['ShowFileInBrowser'] == true
+        error = underscore(action['ErrorHandlingType'])
+        args << "error: :#{error}" unless error == 'rollback'
         "#{pad}download_file #{args.join(', ')}"
       end
     end
 
     def database_query_line(pad, action)
       args = []
-      query = action["Query"].to_s
+      query = action['Query'].to_s
       args << ruby(query.empty? ? nil : query)
-      dynamic_query = action["DynamicQuery"].to_s
+      dynamic_query = action['DynamicQuery'].to_s
       args << "dynamic_query: #{ruby_val(dynamic_query)}" unless dynamic_query.empty?
-      output = action["OutputVariableName"].to_s
+      output = action['OutputVariableName'].to_s
       args << "as: :#{output}" unless output.empty?
-      parameters = bson_items(action["ParameterMappings"]).map do |mapping|
-        [mapping["ParameterName"], mapping["Value"]]
+      parameters = bson_items(action['ParameterMappings']).map do |mapping|
+        [mapping['ParameterName'], mapping['Value']]
       end
-      connection_parameters = bson_items(action["ConnectionParameterMappings"]).map do |mapping|
-        [mapping["ParameterName"], mapping["Value"]]
+      connection_parameters = bson_items(action['ConnectionParameterMappings']).map do |mapping|
+        [mapping['ParameterName'], mapping['Value']]
       end
-      error = underscore(action["ErrorHandlingType"])
-      args << "error: :#{error}" unless error == "rollback"
+      error = underscore(action['ErrorHandlingType'])
+      args << "error: :#{error}" unless error == 'rollback'
       declaration = "#{pad}execute_database_query #{args.join(', ')}"
       return declaration if parameters.empty? && connection_parameters.empty?
 
@@ -5329,105 +5367,102 @@ module Mxrb
     end
 
     def import_xml_line(pad, action)
-      result = action["ResultHandling"] || {}
-      mapping = result["ImportMappingCall"] || {}
-      range = mapping["Range"] || {}
+      result = action['ResultHandling'] || {}
+      mapping = result['ImportMappingCall'] || {}
+      range = mapping['Range'] || {}
       args = [":#{action['XmlDocumentVariableName']}"]
       args << "mapping: #{ruby(mapping['ReturnValueMapping'])}"
       args << "as: :#{result['ResultVariableName']}"
       args << "result_entity: #{ruby(result.dig('VariableType', 'Entity'))}"
-      args << "validate: true" if action["IsValidationRequired"] == true
-      content_type = underscore(mapping["ContentType"])
-      args << "content_type: :#{content_type}" unless content_type == "xml"
-      commit = underscore(mapping["Commit"])
-      args << "commit: :#{commit}" unless commit == "yes_without_events"
-      args << "force_single: true" if mapping["ForceSingleOccurrence"] == true
-      args << "single: true" if range["SingleObject"] == true
-      handling = underscore(mapping["ObjectHandlingBackup"])
-      args << "object_handling: :#{handling}" unless handling == "create"
-      parameter = mapping["ParameterVariableName"].to_s
+      args << 'validate: true' if action['IsValidationRequired'] == true
+      content_type = underscore(mapping['ContentType'])
+      args << "content_type: :#{content_type}" unless content_type == 'xml'
+      commit = underscore(mapping['Commit'])
+      args << "commit: :#{commit}" unless commit == 'yes_without_events'
+      args << 'force_single: true' if mapping['ForceSingleOccurrence'] == true
+      args << 'single: true' if range['SingleObject'] == true
+      handling = underscore(mapping['ObjectHandlingBackup'])
+      args << "object_handling: :#{handling}" unless handling == 'create'
+      parameter = mapping['ParameterVariableName'].to_s
       args << "parameter_variable: :#{parameter}" unless parameter.empty?
-      error = underscore(action["ErrorHandlingType"])
-      args << "error: :#{error}" unless error == "rollback"
+      error = underscore(action['ErrorHandlingType'])
+      args << "error: :#{error}" unless error == 'rollback'
       "#{pad}import_xml #{args.join(', ')}"
     end
 
     def export_xml_line(pad, action)
-      output = action["OutputMethod"] || {}
-      handling = action["ResultHandling"] || {}
+      output = action['OutputMethod'] || {}
+      handling = action['ResultHandling'] || {}
       args = [":#{handling['MappingVariableName']}"]
       args << "mapping: #{ruby(handling['MappingId'])}"
       args << "as: :#{output['OutputVariableName']}"
-      content_type = underscore(handling["ContentType"])
-      args << "content_type: :#{content_type}" unless content_type == "xml"
-      args << "validate: true" if action["IsValidationRequired"] == true
-      error = underscore(action["ErrorHandlingType"])
-      args << "error: :#{error}" unless error == "rollback"
+      content_type = underscore(handling['ContentType'])
+      args << "content_type: :#{content_type}" unless content_type == 'xml'
+      args << 'validate: true' if action['IsValidationRequired'] == true
+      error = underscore(action['ErrorHandlingType'])
+      args << "error: :#{error}" unless error == 'rollback'
       "#{pad}export_xml #{args.join(', ')}"
     end
 
     def rest_call_line(pad, action)
-      http = action["HttpConfiguration"] || {}
-      location = http["CustomLocationTemplate"] || {}
+      http = action['HttpConfiguration'] || {}
+      location = http['CustomLocationTemplate'] || {}
       headers = Dsl::FlowRestBuilder.new
-      bson_items(http["HttpHeaderEntries"]).each { headers.header(_1.fetch('Key'), _1.fetch('Value')) }
+      bson_items(http['HttpHeaderEntries']).each { headers.header(_1.fetch('Key'), _1.fetch('Value')) }
       headers = headers.headers
-      request = action["RequestHandling"] || {}
-      result = action["ResultHandling"] || {}
-      import_call = result["ImportMappingCall"] || {}
+      request = action['RequestHandling'] || {}
+      result = action['ResultHandling'] || {}
+      import_call = result['ImportMappingCall'] || {}
       args = [
-        "method: :#{underscore(http["HttpMethod"])}",
-        "location: #{ruby(location["Text"].to_s)}"
+        "method: :#{underscore(http['HttpMethod'])}",
+        "location: #{ruby(location['Text'].to_s)}"
       ]
-      parameters = bson_items(location["Parameters"]).map { _1["Expression"] }
+      parameters = bson_items(location['Parameters']).map { _1['Expression'] }
       args << "location_parameters: #{ruby(parameters)}" unless parameters.empty?
-      if http["UseHttpAuthentication"] == true
-        username = http["HttpAuthenticationUserName"].to_s
-        password = http["HttpAuthenticationPassword"].to_s
+      if http['UseHttpAuthentication'] == true
+        username = http['HttpAuthenticationUserName'].to_s
+        password = http['HttpAuthenticationPassword'].to_s
         if username.empty? || password.empty?
           raise SerializationError, 'REST basic authentication requires both username and password'
         end
+
         args << "username: #{ruby(username)}"
         args << "password: #{ruby(password)}"
       end
       client_certificate = http['ClientCertificate'].to_s
       args << "client_certificate: #{ruby(client_certificate)}" unless client_certificate.empty?
       rest_proxy_source_option(action, args)
-      if request["$Type"] == "Microflows$CustomRequestHandling"
-        template = request["Template"] || {}
+      if request['$Type'] == 'Microflows$CustomRequestHandling'
+        template = request['Template'] || {}
         args << "request_body: #{ruby(template['Text'].to_s)}"
-        request_parameters = bson_items(template["Parameters"]).map { _1["Expression"] }
-        unless request_parameters.empty?
-          args << "request_parameters: #{ruby(request_parameters)}"
-        end
+        request_parameters = bson_items(template['Parameters']).map { _1['Expression'] }
+        args << "request_parameters: #{ruby(request_parameters)}" unless request_parameters.empty?
       else
-        mapping_id = request["MappingId"].to_s
-        mapping_variable = request["MappingVariableName"].to_s
+        mapping_id = request['MappingId'].to_s
+        mapping_variable = request['MappingVariableName'].to_s
         args << "request_mapping: #{ruby(mapping_id)}" unless mapping_id.empty?
         args << "request_variable: :#{mapping_variable}" unless mapping_variable.empty?
       end
-      args << "result_mapping: #{ruby(import_call["ReturnValueMapping"])}" if import_call["ReturnValueMapping"]
-      if action["ResultHandlingType"] == "HttpResponse"
-        args << "result_handling: :http_response"
-      elsif action["ResultHandlingType"] == "String"
-        args << "result_handling: :string"
+      args << "result_mapping: #{ruby(import_call['ReturnValueMapping'])}" if import_call['ReturnValueMapping']
+      if action['ResultHandlingType'] == 'HttpResponse'
+        args << 'result_handling: :http_response'
+      elsif action['ResultHandlingType'] == 'String'
+        args << 'result_handling: :string'
       end
-      args << "as: :#{result["ResultVariableName"]}" unless result["ResultVariableName"].to_s.empty?
-      args << "result_entity: #{ruby(result.dig("VariableType", "Entity"))}" if result.dig("VariableType", "Entity")
-      args << "timeout: #{ruby(action["TimeOutExpression"])}" if action["UseRequestTimeOut"] == true
-      args << "commit: :#{underscore(import_call["Commit"])}" unless import_call["Commit"].to_s.empty?
-      content_type = underscore(import_call["ContentType"])
-      args << "result_content_type: :#{content_type}" unless content_type.empty? || content_type == "json"
-      args << "force_single: true" if import_call["ForceSingleOccurrence"] == true
-      args << "single: true" if import_call.dig("Range", "SingleObject") == true
-      object_handling = underscore(import_call["ObjectHandlingBackup"])
-      unless object_handling.empty? || object_handling == "create"
-        args << "object_handling: :#{object_handling}"
-      end
-      parameter = import_call["ParameterVariableName"].to_s
+      args << "as: :#{result['ResultVariableName']}" unless result['ResultVariableName'].to_s.empty?
+      args << "result_entity: #{ruby(result.dig('VariableType', 'Entity'))}" if result.dig('VariableType', 'Entity')
+      args << "timeout: #{ruby(action['TimeOutExpression'])}" if action['UseRequestTimeOut'] == true
+      args << "commit: :#{underscore(import_call['Commit'])}" unless import_call['Commit'].to_s.empty?
+      content_type = underscore(import_call['ContentType'])
+      args << "result_content_type: :#{content_type}" unless content_type.empty? || content_type == 'json'
+      args << 'force_single: true' if import_call['ForceSingleOccurrence'] == true
+      args << 'single: true' if import_call.dig('Range', 'SingleObject') == true
+      object_handling = underscore(import_call['ObjectHandlingBackup'])
+      args << "object_handling: :#{object_handling}" unless object_handling.empty? || object_handling == 'create'
+      parameter = import_call['ParameterVariableName'].to_s
       args << "parameter_variable: :#{parameter}" unless parameter.empty?
-      args << "error_result: :#{underscore(action["ErrorResultHandlingType"])}"
-      args << "error: :#{underscore(action["ErrorHandlingType"])}"
+      args << "error_result: :#{underscore(action['ErrorResultHandlingType'])}"
+      args << "error: :#{underscore(action['ErrorHandlingType'])}"
       command = "#{pad}call_rest #{args.join(', ')}"
       return command if headers.empty?
 
@@ -5461,12 +5496,13 @@ module Mxrb
         if proxy['UsernameExpression'].to_s.empty? != proxy['PasswordExpression'].to_s.empty?
           raise SerializationError, 'REST proxy authentication requires both username and password'
         end
+
         args << "proxy: #{ruby({
-          id: document_id(proxy), host: proxy['HostExpression'].to_s,
-          port: proxy['PortExpression'].to_s, username: proxy['UsernameExpression'].to_s,
-          password: proxy['PasswordExpression'].to_s,
-          use: proxy.fetch('UseConfigurationExpression', 'true').to_s
-        })}"
+                                 id: document_id(proxy), host: proxy['HostExpression'].to_s,
+                                 port: proxy['PortExpression'].to_s, username: proxy['UsernameExpression'].to_s,
+                                 password: proxy['PasswordExpression'].to_s,
+                                 use: proxy.fetch('UseConfigurationExpression', 'true').to_s
+                               })}"
       else
         raise SerializationError, "unsupported REST proxy type #{proxy_type.inspect}"
       end
@@ -5478,9 +5514,9 @@ module Mxrb
         args << "as: :#{output}"
       elsif !output.to_s.empty?
         args << "result_name: #{symbol(output)}"
-        args << "use_return: false"
+        args << 'use_return: false'
       elsif use_return == true
-        args << "use_return: true"
+        args << 'use_return: true'
       end
       call_with_arguments_line(pad, method, args.join(', '), mappings)
     end
@@ -5493,7 +5529,7 @@ module Mxrb
       mappings.each do |parameter, value|
         kind = value[:kind] || value['kind'] if value.is_a?(Hash)
         mapped_value = value[:value] || value['value'] if kind
-        helper = kind ? "#{kind}_argument" : "argument"
+        helper = kind ? "#{kind}_argument" : 'argument'
         mapped_value = value unless kind
         lines << "#{pad}  #{helper} #{ruby(parameter)}, #{ruby_val(mapped_value)}"
       end
@@ -5503,52 +5539,53 @@ module Mxrb
 
     def code_action_parameter_value(value)
       value ||= {}
-      type = value["$Type"].to_s
-      return value["Argument"] if type.include?("$Basic")
+      type = value['$Type'].to_s
+      return value['Argument'] if type.include?('$Basic')
 
       field, kind = case type
-      when /EntityTypeCodeActionParameterValue/ then ["Entity", :entity_type]
-      when /EntityType/     then ["Entity", :entity]
-      when /Microflow(?:Java)?/ then ["Microflow", :microflow]
-      when /ImportMapping/  then ["ImportMapping", :import_mapping]
-      when /ExportMapping/  then ["ExportMapping", :export_mapping]
-      else
-        [nil, :native]
-      end
+                    when /EntityTypeCodeActionParameterValue/ then ['Entity', :entity_type]
+                    when /EntityType/ then ['Entity', :entity]
+                    when /Microflow(?:Java)?/ then ['Microflow', :microflow]
+                    when /ImportMapping/ then ['ImportMapping', :import_mapping]
+                    when /ExportMapping/ then ['ExportMapping', :export_mapping]
+                    else
+                      [nil, :native]
+                    end
       { kind: kind, value: field ? value[field] : value }
     end
 
     def translated_text(text_doc)
-      return "" unless text_doc
+      return '' unless text_doc
 
-      translations = text_doc["Translations"] || text_doc["Items"]
-      bson_items(translations).first&.fetch("Text", "") || ""
+      translations = text_doc['Translations'] || text_doc['Items']
+      bson_items(translations).first&.fetch('Text', '') || ''
     end
 
     def translated_items(text_doc)
       return [] unless text_doc
 
-      bson_items(text_doc["Translations"] || text_doc["Items"])
+      bson_items(text_doc['Translations'] || text_doc['Items'])
     end
 
     def show_page_action_line(action, indent)
-      pad = " " * indent
-      settings = action["FormSettings"] || {}
-      args = [ruby(settings["Form"])]
-      variable = action["FormObjectVariable"].to_s
+      pad = ' ' * indent
+      settings = action['FormSettings'] || {}
+      args = [ruby(settings['Form'])]
+      variable = action['FormObjectVariable'].to_s
       args << "object: :#{variable}" unless variable.empty?
-      location = settings["Location"].to_s
+      location = settings['Location'].to_s
       args << "location: :#{underscore(location)}" unless location.empty?
-      close_pages = action["NumberOfPagesToClose"].to_s
+      close_pages = action['NumberOfPagesToClose'].to_s
       args << "close_pages: #{close_pages.to_i}" unless close_pages.empty?
-      title = settings["FormTitle"] || settings["TitleOverride"]
-      translations = translated_items(title&.fetch("Text", title)).map do |translation|
-        [translation["LanguageCode"].to_s, translation["Text"].to_s]
+      title = settings['FormTitle'] || settings['TitleOverride']
+      translations = translated_items(title&.fetch('Text', title)).map do |translation|
+        [translation['LanguageCode'].to_s, translation['Text'].to_s]
       end
       if translations.map(&:first).uniq.size != translations.size
         raise SerializationError, 'duplicate page title language cannot be represented by this declaration'
       end
-      mappings = bson_items(settings["ParameterMappings"])
+
+      mappings = bson_items(settings['ParameterMappings'])
       command = "#{pad}show_page #{args.join(', ')}"
       return command if mappings.empty? && title.nil?
 
@@ -5597,32 +5634,32 @@ module Mxrb
 
     def member_specs(members_bson)
       bson_items(members_bson).filter_map do |m|
-        attr = m["Attribute"].to_s
-        association = m["Association"].to_s
-        raw_value = m["Value"]
-        val = raw_value.is_a?(Hash) ? raw_value["Value"].to_s : raw_value.to_s
+        attr = m['Attribute'].to_s
+        association = m['Association'].to_s
+        raw_value = m['Value']
+        val = raw_value.is_a?(Hash) ? raw_value['Value'].to_s : raw_value.to_s
         next if attr.empty? && association.empty?
 
         {
           attribute: attr, association: association, value: val,
-          operation: m.fetch("Type", "Set")
+          operation: m.fetch('Type', 'Set')
         }
       end
     end
 
     def members_dsl(members)
-      members.map { "#{symbol(_1[:attribute])} => #{ruby_val(_1[:value])}" }.join(", ")
+      members.map { "#{symbol(_1[:attribute])} => #{ruby_val(_1[:value])}" }.join(', ')
     end
 
     def member_block(command, members, indent)
-      pad = " " * (indent + 2)
+      pad = ' ' * (indent + 2)
       lines = ["#{command} do"]
       members.each do |member|
         if member[:association].to_s.empty?
           lines << "#{pad}set #{symbol(member[:attribute])}, to: #{ruby_val(member[:value])}"
         else
           operation = underscore(member[:operation])
-          operation_a = operation == "set" ? "" : ", operation: :#{operation}"
+          operation_a = operation == 'set' ? '' : ", operation: :#{operation}"
           lines << "#{pad}set_association #{ruby(member[:association])}, " \
                    "to: #{ruby_val(member[:value])}#{operation_a}"
         end
@@ -5635,8 +5672,9 @@ module Mxrb
       # Native expressions are source text, not Ruby literals to interpret.
       # Leading zeros, decimal precision and words such as "nil" are data.
       return ruby(val) if val.is_a?(String)
-      return "nil" if val.nil? || val.to_s.empty?
+      return 'nil' if val.nil? || val.to_s.empty?
       return ruby(val) if val.is_a?(Hash) || val.is_a?(Array)
+
       s = val.to_s
       return s if s.match?(/\A-?\d+(?:\.\d+)?\z/) || %w[true false nil].include?(s)
 
@@ -5719,7 +5757,7 @@ module Mxrb
       return if reference.fetch(:kind).to_sym == :action
       return if reference[:name].to_s.empty?
 
-      target_module, target_name = reference.fetch(:name).to_s.split(".", 2)
+      target_module, target_name = reference.fetch(:name).to_s.split('.', 2)
       return if target_name.to_s.empty? || target_module == current_module
 
       public_artifacts[[target_module, reference.fetch(:kind).to_sym, target_name]] = true
@@ -5736,7 +5774,7 @@ module Mxrb
     end
 
     def reference(value)
-      value.to_s.include?(".") ? ruby(value.to_s) : symbol(value)
+      value.to_s.include?('.') ? ruby(value.to_s) : symbol(value)
     end
 
     def symbol(value)

@@ -94,8 +94,8 @@ RSpec.describe 'native page container rendering' do
     expect(compiler.send(:listen_object_property, { 'ListenTarget' => 'missing' }, { 'Name' => 'view' }))
       .to be_nil
     expect(compiler.send(:data_view_entity, {
-      'DataSource' => { '$Type' => 'Forms$ListenTargetSource', 'ListenTarget' => 'missing' }
-    })).to eq('')
+                           'DataSource' => { '$Type' => 'Forms$ListenTargetSource', 'ListenTarget' => 'missing' }
+                         })).to eq('')
     expect(compiler.send(:integer_or, nil, 7)).to eq(7)
     expect(compiler.send(:all_page_widgets, 'scalar')).to eq([])
 
@@ -109,9 +109,9 @@ RSpec.describe 'native page container rendering' do
       expect(compiler.send(:microflow_variable_scope, variable)).to eq(expected)
     end
     expect(compiler.send(:microflow_argument, {
-      'Parameter' => 'Demo.Action.Item', 'Expression' => '',
-      'Variable' => { 'SnippetParameter' => 'SnippetItem' }
-    })).to eq([:Item, { widget: 'p.Demo.Home.items', source: 'object' }])
+                           'Parameter' => 'Demo.Action.Item', 'Expression' => '',
+                           'Variable' => { 'SnippetParameter' => 'SnippetItem' }
+                         })).to eq([:Item, { widget: 'p.Demo.Home.items', source: 'object' }])
     expect(compiler.send(:microflow_variable_scope, nil)).to be_nil
     expect(compiler.send(:microflow_variable_scope, 'SnippetParameter' => 'Missing')).to be_nil
   end

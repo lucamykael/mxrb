@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "unit"
+require_relative 'unit'
 
 module Mxrb
   module Model
@@ -65,22 +65,22 @@ module Mxrb
                   :app_store_guid, :app_store_version, :export_level
 
       def decode(doc)
-        @name              = doc["Name"]
-        @sort_index        = doc["SortIndex"] || doc["NewSortIndex"]
-        @from_app_store    = doc["FromAppStore"] == true
-        @app_store_guid    = doc["AppStoreGuid"]
-        @app_store_version = doc["AppStoreVersion"]
-        @export_level      = doc["ExportLevel"] || "Hidden"
+        @name              = doc['Name']
+        @sort_index        = doc['SortIndex'] || doc['NewSortIndex']
+        @from_app_store    = doc['FromAppStore'] == true
+        @app_store_guid    = doc['AppStoreGuid']
+        @app_store_version = doc['AppStoreVersion']
+        @export_level      = doc['ExportLevel'] || 'Hidden'
       end
 
       def to_bson
         {
-          "$ID"          => @id,
-          "$Type"        => "Projects$Module",
-          "Name"         => @name,
-          "SortIndex"    => @sort_index || 0,
-          "FromAppStore" => @from_app_store || false,
-          "ExportLevel"  => @export_level || "Hidden",
+          '$ID' => @id,
+          '$Type' => 'Projects$Module',
+          'Name' => @name,
+          'SortIndex' => @sort_index || 0,
+          'FromAppStore' => @from_app_store || false,
+          'ExportLevel' => @export_level || 'Hidden'
         }
       end
 
@@ -88,12 +88,12 @@ module Mxrb
 
       def domain_model
         @domain_model ||= begin
-          raws = @mpr.units_by_containment("DomainModel").select { _1["ContainerID"] == @id }
+          raws = @mpr.units_by_containment('DomainModel').select { _1['ContainerID'] == @id }
           raws.empty? ? nil : DomainModel.new(raws.first, @mpr)
         end
       end
 
-      def entities    = domain_model&.entities    || []
+      def entities = domain_model&.entities || []
       def associations = domain_model&.associations || []
 
       def pages
@@ -104,13 +104,13 @@ module Mxrb
 
       def microflows
         @microflows ||= document_units
-                        .select { |u| u[:type] == "Microflows$Microflow" }
+                        .select { |u| u[:type] == 'Microflows$Microflow' }
                         .map { Microflow.new(_1[:raw], @mpr) }
       end
 
       def nanoflows
         @nanoflows ||= document_units
-                       .select { |u| u[:type] == "Microflows$Nanoflow" }
+                       .select { |u| u[:type] == 'Microflows$Nanoflow' }
                        .map { Microflow.new(_1[:raw], @mpr) }
       end
 
@@ -122,25 +122,25 @@ module Mxrb
 
       def menus
         @menus ||= document_units
-                   .select { |u| u[:type] == "Menus$MenuDocument" }
+                   .select { |u| u[:type] == 'Menus$MenuDocument' }
                    .map { Menu.new(_1[:raw], @mpr) }
       end
 
       def enumerations
         @enumerations ||= document_units
-                          .select { |u| u[:type] == "Enumerations$Enumeration" }
+                          .select { |u| u[:type] == 'Enumerations$Enumeration' }
                           .map { unit_to_doc(_1) }
       end
 
       def constants
         @constants ||= document_units
-                       .select { |u| u[:type] == "Constants$Constant" }
+                       .select { |u| u[:type] == 'Constants$Constant' }
                        .map { unit_to_doc(_1) }
       end
 
       def scheduled_events
         @scheduled_events ||= document_units
-                              .select { |u| u[:type] == "ScheduledEvents$ScheduledEvent" }
+                              .select { |u| u[:type] == 'ScheduledEvents$ScheduledEvent' }
                               .map { unit_to_doc(_1) }
       end
 
@@ -176,13 +176,13 @@ module Mxrb
 
       def module_roles
         @module_roles ||= begin
-          raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
+          raw = @mpr.children_of(@id).find { _1['ContainmentName'] == 'ModuleSecurity' }
           if raw
             doc = @mpr.parse_contents(raw)
-            parse_array(doc["ModuleRoles"]).map do |role|
+            parse_array(doc['ModuleRoles']).map do |role|
               {
-                id: IO::BsonCodec.extract_id(role["$ID"]),
-                name: role["Name"], description: role["Description"].to_s
+                id: IO::BsonCodec.extract_id(role['$ID']),
+                name: role['Name'], description: role['Description'].to_s
               }
             end
           else
@@ -192,11 +192,11 @@ module Mxrb
       end
 
       def module_security_id
-        raw = @mpr.children_of(@id).find { _1["ContainmentName"] == "ModuleSecurity" }
+        raw = @mpr.children_of(@id).find { _1['ContainmentName'] == 'ModuleSecurity' }
         return '' unless raw
 
         doc = @mpr.parse_contents(raw)
-        IO::BsonCodec.extract_id(doc["$ID"]) || raw.fetch("UnitID")
+        IO::BsonCodec.extract_id(doc['$ID']) || raw.fetch('UnitID')
       end
 
       def inspect
@@ -218,9 +218,9 @@ module Mxrb
           raw = unit.fetch(:raw)
           doc = @mpr.parse_contents(raw)
           {
-            id: raw.fetch("UnitID"), container_id: raw.fetch("ContainerID"),
-            containment: raw.fetch("ContainmentName"), type: unit.fetch(:type),
-            name: doc["Name"] || doc["name"] || raw.fetch("UnitID"), doc:, route:
+            id: raw.fetch('UnitID'), container_id: raw.fetch('ContainerID'),
+            containment: raw.fetch('ContainmentName'), type: unit.fetch(:type),
+            name: doc['Name'] || doc['name'] || raw.fetch('UnitID'), doc:, route:
           }
         end
       end
@@ -228,26 +228,24 @@ module Mxrb
       # Documents live in ContainmentName = "Documents" recursively under this module.
       # We do a simple two-pass: direct Documents children + Documents inside Folders.
       def document_units
-        @document_units ||= begin
-          collect_documents(@id).map do |raw|
-            doc  = @mpr.parse_contents(raw)
-            type = doc["$Type"]
-            { raw: raw, type: type }
-          end
+        @document_units ||= collect_documents(@id).map do |raw|
+          doc = @mpr.parse_contents(raw)
+          type = doc['$Type']
+          { raw: raw, type: type }
         end
       end
 
       def children_with_containment(name)
-        @mpr.units_by_containment(name).select { _1["ContainerID"] == @id }
+        @mpr.units_by_containment(name).select { _1['ContainerID'] == @id }
       end
 
       def collect_documents(parent_id)
         @mpr.children_of(parent_id).flat_map do |raw|
-          case raw["ContainmentName"]
-          when "Documents"
+          case raw['ContainmentName']
+          when 'Documents'
             [raw]
-          when "Folders"
-            collect_documents(raw.fetch("UnitID"))
+          when 'Folders'
+            collect_documents(raw.fetch('UnitID'))
           else
             []
           end

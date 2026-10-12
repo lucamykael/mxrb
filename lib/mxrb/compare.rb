@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "digest"
+require 'digest'
 
 module Mxrb
   module Compare
@@ -54,7 +54,7 @@ module Mxrb
       def design_asset_summary(project)
         root = File.dirname(project.mpr.path)
         Model::DesignSystem::ASSET_DIRECTORIES.flat_map do |directory|
-          Dir.glob(File.join(root, directory, "**", "*"))
+          Dir.glob(File.join(root, directory, '**', '*'))
         end.select { File.file?(_1) && !File.symlink?(_1) }.sort.to_h do |path|
           relative = Pathname.new(path).relative_path_from(Pathname.new(root)).to_s
           [relative, Digest::SHA256.file(path).hexdigest]
@@ -62,37 +62,37 @@ module Mxrb
       end
 
       def security_summary(project)
-        raw = project.all_units.find { project.parse_bson(_1)["$Type"] == "Security$ProjectSecurity" }
+        raw = project.all_units.find { project.parse_bson(_1)['$Type'] == 'Security$ProjectSecurity' }
         return nil unless raw
 
         doc = project.parse_bson(raw)
         {
-          security_level: doc["SecurityLevel"],
-          check_security: doc["CheckSecurity"],
-          admin_user_name: doc["AdminUserName"],
-          admin_password_sha256: Digest::SHA256.hexdigest(doc["AdminPassword"].to_s),
-          admin_user_role: doc["AdminUserRole"],
-          demo_users_enabled: doc["EnableDemoUsers"],
-          demo_users: IO::BsonCodec.parse_array(doc["DemoUsers"]).fetch(:items).map do |user|
+          security_level: doc['SecurityLevel'],
+          check_security: doc['CheckSecurity'],
+          admin_user_name: doc['AdminUserName'],
+          admin_password_sha256: Digest::SHA256.hexdigest(doc['AdminPassword'].to_s),
+          admin_user_role: doc['AdminUserRole'],
+          demo_users_enabled: doc['EnableDemoUsers'],
+          demo_users: IO::BsonCodec.parse_array(doc['DemoUsers']).fetch(:items).map do |user|
             {
-              name: user["UserName"], entity: user["Entity"],
-              roles: IO::BsonCodec.parse_array(user["UserRoles"]).fetch(:items).sort,
-              password_sha256: Digest::SHA256.hexdigest(user["Password"].to_s)
+              name: user['UserName'], entity: user['Entity'],
+              roles: IO::BsonCodec.parse_array(user['UserRoles']).fetch(:items).sort,
+              password_sha256: Digest::SHA256.hexdigest(user['Password'].to_s)
             }
           end.sort_by { _1[:name].to_s },
-          guest_access_enabled: doc["EnableGuestAccess"],
-          guest_user_role: doc["GuestUserRole"],
-          strict_mode: doc.fetch("StrictMode", false),
-          strict_page_url_check: doc.fetch("StrictPageUrlCheck", true),
-          file_document_access: project_access_summary(doc["FileDocumentAccess"]),
-          image_access: project_access_summary(doc["ImageAccess"]),
-          sign_in_microflow: doc["SignInMicroflow"],
-          password_policy: normalize_flow_value(doc["PasswordPolicySettings"], {}),
-          user_roles: IO::BsonCodec.parse_array(doc["UserRoles"]).fetch(:items).map do |role|
+          guest_access_enabled: doc['EnableGuestAccess'],
+          guest_user_role: doc['GuestUserRole'],
+          strict_mode: doc.fetch('StrictMode', false),
+          strict_page_url_check: doc.fetch('StrictPageUrlCheck', true),
+          file_document_access: project_access_summary(doc['FileDocumentAccess']),
+          image_access: project_access_summary(doc['ImageAccess']),
+          sign_in_microflow: doc['SignInMicroflow'],
+          password_policy: normalize_flow_value(doc['PasswordPolicySettings'], {}),
+          user_roles: IO::BsonCodec.parse_array(doc['UserRoles']).fetch(:items).map do |role|
             {
-              name: role["Name"],
-              admin: role["ManageAllRoles"] == true,
-              module_roles: IO::BsonCodec.parse_array(role["ModuleRoles"]).fetch(:items).sort
+              name: role['Name'],
+              admin: role['ManageAllRoles'] == true,
+              module_roles: IO::BsonCodec.parse_array(role['ModuleRoles']).fetch(:items).sort
             }
           end.sort_by { _1[:name].to_s }
         }
@@ -101,21 +101,21 @@ module Mxrb
       def project_access_summary(container)
         return [] unless container.is_a?(Hash)
 
-        IO::BsonCodec.parse_array(container["AccessRules"]).fetch(:items).map do |rule|
+        IO::BsonCodec.parse_array(container['AccessRules']).fetch(:items).map do |rule|
           normalize_hash(Model::Entity.parse_access_rule(rule))
         end
       end
 
       def unit_summary(project)
         project.all_units.map do |unit|
-          next if unit["UnitID"] == unit["ContainerID"]
+          next if unit['UnitID'] == unit['ContainerID']
 
           doc = project.parse_bson(unit)
           {
-            containment: unit["ContainmentName"].to_s,
+            containment: unit['ContainmentName'].to_s,
             container_root: false,
-            type: doc["$Type"].to_s,
-            name: doc["Name"] || doc["name"] || ""
+            type: doc['$Type'].to_s,
+            name: doc['Name'] || doc['name'] || ''
           }
         end.compact.sort_by { [_1[:containment], 1, _1[:type], _1[:name]] }
       end
@@ -204,12 +204,12 @@ module Mxrb
       def flow_summary(flow)
         ids = {}
         assign_flow_ids(flow.objects, flow.flows, ids)
-        objects = flow.objects.sort_by { ids.fetch(_1["$ID"], ids.size) }
+        objects = flow.objects.sort_by { ids.fetch(_1['$ID'], ids.size) }
         normalized_flows = flow.flows.map do |edge|
           {
-            origin: normalize_flow_value(edge["OriginPointer"], ids),
-            destination: normalize_flow_value(edge["DestinationPointer"], ids),
-            error_handler: edge["IsErrorHandler"] == true,
+            origin: normalize_flow_value(edge['OriginPointer'], ids),
+            destination: normalize_flow_value(edge['DestinationPointer'], ids),
+            error_handler: edge['IsErrorHandler'] == true,
             cases: normalized_case_values(edge, ids)
           }
         end.sort_by { [_1[:origin].to_s, _1[:destination].to_s, _1[:error_handler].to_s, _1[:cases].to_s] }
@@ -236,16 +236,14 @@ module Mxrb
               OriginBezierVector DestinationBezierVector
               OriginConnectionIndex DestinationConnectionIndex Line
             ].include?(key.to_s)
-            next if key.to_s.end_with?("Model") &&
-                    item.is_a?(Hash) && item["$Type"] == "Expressions$NoExpression"
+            next if key.to_s.end_with?('Model') &&
+                    item.is_a?(Hash) && item['$Type'] == 'Expressions$NoExpression'
 
             result[key.to_sym] = normalize_flow_value(item, ids)
           end
         when Array
           items = value
-          if items.all? { _1.is_a?(Hash) && ids.key?(_1["$ID"]) }
-            items = items.sort_by { ids.fetch(_1["$ID"]) }
-          end
+          items = items.sort_by { ids.fetch(_1['$ID']) } if items.all? { _1.is_a?(Hash) && ids.key?(_1['$ID']) }
           items.map { normalize_flow_value(_1, ids) }
         else
           value
@@ -253,51 +251,51 @@ module Mxrb
       end
 
       def assign_flow_ids(objects, flows, ids)
-        local_ids = objects.to_h { [_1["$ID"], true] }
+        local_ids = objects.to_h { [_1['$ID'], true] }
         local_flows = flows.select do |edge|
-          local_ids.key?(edge["OriginPointer"]) && local_ids.key?(edge["DestinationPointer"])
+          local_ids.key?(edge['OriginPointer']) && local_ids.key?(edge['DestinationPointer'])
         end
-        incoming = local_flows.group_by { _1["DestinationPointer"] }
-        outgoing = local_flows.group_by { _1["OriginPointer"] }
-        roots = objects.select { _1["$Type"] == "Microflows$StartEvent" }
-        roots += objects.reject { incoming.key?(_1["$ID"]) || roots.include?(_1) }
+        incoming = local_flows.group_by { _1['DestinationPointer'] }
+        outgoing = local_flows.group_by { _1['OriginPointer'] }
+        roots = objects.select { _1['$Type'] == 'Microflows$StartEvent' }
+        roots += objects.reject { incoming.key?(_1['$ID']) || roots.include?(_1) }
         queue = roots
         until queue.empty?
           object = queue.shift
-          next if ids.key?(object["$ID"])
+          next if ids.key?(object['$ID'])
 
-          ids[object["$ID"]] = ids.size
-          nested = object.dig("ObjectCollection", "Objects")
+          ids[object['$ID']] = ids.size
+          nested = object.dig('ObjectCollection', 'Objects')
           assign_flow_ids(array_payload(nested), flows, ids) if nested
-          edges = Array(outgoing[object["$ID"]]).sort_by do |edge|
-            [edge["IsErrorHandler"] == true ? 1 : 0, normalized_case_values(edge, ids).to_s]
+          edges = Array(outgoing[object['$ID']]).sort_by do |edge|
+            [edge['IsErrorHandler'] == true ? 1 : 0, normalized_case_values(edge, ids).to_s]
           end
           edges.each do |edge|
-            target = objects.find { _1["$ID"] == edge["DestinationPointer"] }
+            target = objects.find { _1['$ID'] == edge['DestinationPointer'] }
             queue << target
           end
         end
         objects.each do |object|
-          next if ids.key?(object["$ID"])
+          next if ids.key?(object['$ID'])
 
-          ids[object["$ID"]] = ids.size
-          nested = object.dig("ObjectCollection", "Objects")
+          ids[object['$ID']] = ids.size
+          nested = object.dig('ObjectCollection', 'Objects')
           assign_flow_ids(array_payload(nested), flows, ids) if nested
         end
       end
 
       def normalized_case_values(edge, ids)
-        values = if edge["CaseValues"]
-          array_payload(edge["CaseValues"])
-        elsif edge["NewCaseValue"]
-          [edge["NewCaseValue"]]
-        else
-          []
-        end
+        values = if edge['CaseValues']
+                   array_payload(edge['CaseValues'])
+                 elsif edge['NewCaseValue']
+                   [edge['NewCaseValue']]
+                 else
+                   []
+                 end
         values.filter_map do |value|
-          next if value["$Type"].to_s.end_with?("$NoCase")
+          next if value['$Type'].to_s.end_with?('$NoCase')
 
-          normalize_flow_value(value.reject { |key, _| key == "$ID" }, ids)
+          normalize_flow_value(value.reject { |key, _| key == '$ID' }, ids)
         end
       end
 
@@ -365,12 +363,12 @@ module Mxrb
 
         value.to_h do |key, item|
           normalized = if item.is_a?(Hash)
-            normalize_hash(item)
-          elsif item.is_a?(Array)
-            item.map { _1.is_a?(Hash) ? normalize_hash(_1) : _1 }
-          else
-            item
-          end
+                         normalize_hash(item)
+                       elsif item.is_a?(Array)
+                         item.map { _1.is_a?(Hash) ? normalize_hash(_1) : _1 }
+                       else
+                         item
+                       end
           [key.to_sym, normalized]
         end
       end
@@ -384,7 +382,7 @@ module Mxrb
       end
 
       def format_path(path)
-        path.map { _1.is_a?(Integer) ? "[#{_1}]" : _1 }.join(".")
+        path.map { _1.is_a?(Integer) ? "[#{_1}]" : _1 }.join('.')
       end
 
       def change_operation(left, right)

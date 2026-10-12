@@ -62,9 +62,9 @@ RSpec.describe Mxrb::Frontend::Migrator do
       widget = old_widget(dir, [%w[mode enumeration list]])
       array(widget.dig('Object', 'Properties')).first['Value']['TextTemplate'] = { 'stale' => true }
       unit_id = insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home',
-        'Widgets' => Mxrb::IO::BsonCodec.build_array([widget])
-      })
+                                  '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home',
+                                  'Widgets' => Mxrb::IO::BsonCodec.build_array([widget])
+                                })
 
       plan = described_class.plan(path)
       expect(plan).to be_safe
@@ -112,8 +112,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
       property = array(widget.dig('Object', 'Properties')).first
       property['Value']['PrimitiveValue'] = 'important'
       insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget
-      })
+                        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget
+                      })
 
       plan = described_class.plan(path)
       expect(plan).not_to be_safe
@@ -130,8 +130,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
       widget = old_widget(dir, [%w[required boolean false]])
       array(widget.dig('Object', 'Properties')).first['Value']['PrimitiveValue'] = 'true'
       unit_id = insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget
-      })
+                                  '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widget' => widget
+                                })
 
       plan = described_class.plan(path)
       expect(plan).to be_safe
@@ -226,8 +226,8 @@ RSpec.describe Mxrb::Frontend::Migrator do
         }
       end
       unit_id = insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Grid', 'Rows' => rows
-      })
+                                  '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Name' => 'Grid', 'Rows' => rows
+                                })
 
       plan = described_class.plan(path)
       expect(plan).to be_safe
@@ -283,16 +283,16 @@ RSpec.describe Mxrb::Frontend::Migrator do
                                                              ))
       appearance = {
         'DesignProperties' => Mxrb::IO::BsonCodec.build_array([{
-          '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DesignPropertyValue',
-          'Key' => 'Spacing bottom', 'Value' => {
-            '$ID' => SecureRandom.uuid, '$Type' => 'Forms$OptionDesignPropertyValue',
-            'Option' => 'Outer medium'
-          }
-        }])
+                                                                '$ID' => SecureRandom.uuid, '$Type' => 'Forms$DesignPropertyValue',
+                                                                'Key' => 'Spacing bottom', 'Value' => {
+                                                                  '$ID' => SecureRandom.uuid, '$Type' => 'Forms$OptionDesignPropertyValue',
+                                                                  'Option' => 'Outer medium'
+                                                                }
+                                                              }])
       }
       unit_id = insert_document(path, {
-        '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Appearance' => appearance
-      })
+                                  '$ID' => SecureRandom.uuid, '$Type' => 'Forms$Page', 'Appearance' => appearance
+                                })
 
       plan = described_class.plan(path)
       expect(plan).to be_safe

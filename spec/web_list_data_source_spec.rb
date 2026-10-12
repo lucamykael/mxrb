@@ -20,20 +20,20 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
     action = { '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction',
                'Query' => 'Demo.Database.SelectItems' }
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Microflow', 'Name' => 'LoadItems',
-      'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' },
-      'ObjectCollection' => { 'Objects' => [2, action] }
-    })
+                  '$Type' => 'Microflows$Microflow', 'Name' => 'LoadItems',
+                  'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' },
+                  'ObjectCollection' => { 'Objects' => [2, action] }
+                })
     connection = unit(module_name: 'Demo', document: {
-      '$Type' => 'DatabaseConnector$DatabaseConnection', 'Name' => 'Database',
-      'ConnectionString' => 'Demo.Source', 'UserName' => 'Demo.User', 'Password' => 'Demo.Password',
-      'Queries' => [2, { 'Name' => 'SelectItems', 'Query' => query,
-                         'TableMappings' => [2, { 'Entity' => 'Demo.Item' }] }]
-    })
+                        '$Type' => 'DatabaseConnector$DatabaseConnection', 'Name' => 'Database',
+                        'ConnectionString' => 'Demo.Source', 'UserName' => 'Demo.User', 'Password' => 'Demo.Password',
+                        'Queries' => [2, { 'Name' => 'SelectItems', 'Query' => query,
+                                           'TableMappings' => [2, { 'Entity' => 'Demo.Item' }] }]
+                      })
     constants = %w[Source User Password].map do |name|
       unit(module_name: 'Demo', document: {
-        '$Type' => 'Constants$Constant', 'Name' => name, 'DefaultValue' => connection_default
-      })
+             '$Type' => 'Constants$Constant', 'Name' => name, 'DefaultValue' => connection_default
+           })
     end
     [flow, connection, *constants]
   end
@@ -62,9 +62,9 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
 
   it 'resolves a nanoflow list independently from Runtime microflow operations' do
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
-      'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
-    })
+                  '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
+                  'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
+                })
     nano_widget = widget
     nano_widget['DataSource'] = {
       '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'Demo.LoadItems', 'ParameterMappings' => [2]
@@ -132,19 +132,19 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
 
   it 'resolves the grid and reference-set source variants used by core widgets' do
     grid = described_class.new(source([]), 'DataSource' => {
-      '$Type' => 'Forms$GridXPathSource',
-      'EntityRef' => { 'Entity' => 'Demo.GridItem' }, 'XPathConstraint' => '[Active]'
-    })
+                                 '$Type' => 'Forms$GridXPathSource',
+                                 'EntityRef' => { 'Entity' => 'Demo.GridItem' }, 'XPathConstraint' => '[Active]'
+                               })
     expect(grid).to be_xpath
     expect(grid.entity).to eq('Demo.GridItem')
     expect(grid.xpath_constraint).to eq('[Active]')
 
     reference_set = described_class.new(source([]), 'DataSource' => {
-      '$Type' => 'Forms$ReferenceSetSource',
-      'EntityRef' => { 'Steps' => [2, {
-        'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item'
-      }] }
-    })
+                                          '$Type' => 'Forms$ReferenceSetSource',
+                                          'EntityRef' => { 'Steps' => [2, {
+                                            'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item'
+                                          }] }
+                                        })
     expect(reference_set).to be_association
     expect(reference_set.entity).to eq('Demo.Item')
     expect(reference_set.association_path).to eq('Demo.Parent_Items/Demo.Item')
@@ -168,10 +168,10 @@ RSpec.describe Mxrb::Compiler::WebListDataSource do
 
     action = { '$Type' => 'DatabaseConnector$ExecuteDatabaseQueryAction' }
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Microflow', 'Name' => 'LoadItems',
-      'MicroflowReturnType' => { 'Entity' => 'Demo.Item' },
-      'Actions' => [action, action]
-    })
+                  '$Type' => 'Microflows$Microflow', 'Name' => 'LoadItems',
+                  'MicroflowReturnType' => { 'Entity' => 'Demo.Item' },
+                  'Actions' => [action, action]
+                })
     ambiguous = described_class.new(source([flow]), widget)
     expect(ambiguous).to be_microflow
     expect(ambiguous).not_to be_xpath

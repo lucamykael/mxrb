@@ -26,8 +26,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
 
   it 'writes deterministic XPath retrieve operations with a deduplicated attribute inventory' do
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [widget, widget(source: false)]
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [widget, widget(source: false)]
+                })
     source = instance_double(Mxrb::Compiler::SourceModel)
     allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
     allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
@@ -88,12 +88,12 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     constrained = widget
     constrained.dig('Object', 'DataSource')['XPathConstraint'] = '[Demo.Item_Parent = $Parent]'
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [constrained],
-      'Parameters' => [2, {
-        '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
-        'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
-      }]
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [constrained],
+                  'Parameters' => [2, {
+                    '$Type' => 'Forms$PageParameter', 'Name' => 'Parent',
+                    'ParameterType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Parent' }
+                  }]
+                })
     source = instance_double(Mxrb::Compiler::SourceModel)
     allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
     allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
@@ -128,14 +128,14 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       } }
     }
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [gallery]
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Widgets' => [gallery]
+                })
     source = instance_double(Mxrb::Compiler::SourceModel)
     flow = unit(module_name: 'Demo', document: {
-      'Name' => 'LoadItems', 'MicroflowReturnType' => {
-        '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item'
-      }
-    })
+                  'Name' => 'LoadItems', 'MicroflowReturnType' => {
+                    '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item'
+                  }
+                })
     allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
     allow(source).to receive(:units_of).with('Microflows$Microflow').and_return([flow])
     allow(source).to receive(:documents).with('Security$ProjectSecurity').and_return([])
@@ -159,9 +159,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     }
     page = unit(module_name: 'Demo', document: { 'Name' => 'Home', 'Widgets' => [gallery] })
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
-      'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
-    })
+                  '$Type' => 'Microflows$Nanoflow', 'Name' => 'LoadItems',
+                  'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'Demo.Item' }
+                })
     source = instance_double(Mxrb::Compiler::SourceModel)
     allow(source).to receive(:units_of) do |type|
       { 'Forms$Page' => [page], 'Microflows$Nanoflow' => [flow] }.fetch(type, [])
@@ -197,17 +197,17 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       'MicroflowSettings' => { 'Microflow' => 'Demo.Update', 'ParameterMappings' => [2] }
     }
     page = unit(module_name: 'Demo', document: {
-      'Name' => 'Edit', 'Widgets' => [
-        { '$Type' => 'Forms$ActionButton', 'Name' => 'save', 'Action' => action },
-        { '$Type' => 'Forms$DivContainer', 'Name' => 'card', 'OnClickAction' => action }
-      ]
-    })
+                  'Name' => 'Edit', 'Widgets' => [
+                    { '$Type' => 'Forms$ActionButton', 'Name' => 'save', 'Action' => action },
+                    { '$Type' => 'Forms$DivContainer', 'Name' => 'card', 'OnClickAction' => action }
+                  ]
+                })
     flow = unit(module_name: 'Demo', document: {
-      'Name' => 'Update', 'ObjectCollection' => { 'Objects' => [2, {
-        '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Item',
-        'VariableType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
-      }] }
-    })
+                  'Name' => 'Update', 'ObjectCollection' => { 'Objects' => [2, {
+                    '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Item',
+                    'VariableType' => { '$Type' => 'DataTypes$ObjectType', 'Entity' => 'Demo.Item' }
+                  }] }
+                })
     source = instance_double(Mxrb::Compiler::SourceModel)
     allow(source).to receive(:units_of).with('Forms$Page').and_return([page])
     allow(source).to receive(:units_of).with('Microflows$Microflow').and_return([flow])
@@ -242,8 +242,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
 
   it 'maps page module roles to the project user roles allowed by the Runtime' do
     page = unit(module_name: 'Demo', document: {
-      'Name' => 'Edit', 'AllowedModuleRoles' => [1, 'Demo.Editor']
-    })
+                  'Name' => 'Edit', 'AllowedModuleRoles' => [1, 'Demo.Editor']
+                })
     security = {
       'UserRoles' => [2,
                       { 'Name' => 'Administrator', 'ModuleRoles' => [1, 'Demo.Editor'] },
@@ -264,12 +264,12 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
       }
     }
     layout = unit(module_name: 'Atlas_Core', document: {
-      '$Type' => 'Forms$Layout', 'Name' => 'Atlas_TopBar', 'Widgets' => [data_view]
-    })
+                    '$Type' => 'Forms$Layout', 'Name' => 'Atlas_TopBar', 'Widgets' => [data_view]
+                  })
     flow = unit(module_name: 'Atlas_Core', document: {
-      '$Type' => 'Microflows$Microflow', 'Name' => 'DS_Account_CurrentUser',
-      'AllowedModuleRoles' => [1, 'Atlas_Core.User']
-    })
+                  '$Type' => 'Microflows$Microflow', 'Name' => 'DS_Account_CurrentUser',
+                  'AllowedModuleRoles' => [1, 'Atlas_Core.User']
+                })
     security = {
       'UserRoles' => [2,
                       { 'Name' => 'Administrator',
@@ -292,9 +292,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
 
   it 'limits page and nanoflow microflow operations to the microflow roles' do
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Microflow', 'Name' => 'SecureAction',
-      'AllowedModuleRoles' => [1, 'Demo.Executor']
-    })
+                  '$Type' => 'Microflows$Microflow', 'Name' => 'SecureAction',
+                  'AllowedModuleRoles' => [1, 'Demo.Executor']
+                })
     security = {
       'UserRoles' => [2,
                       { 'Name' => 'Administrator', 'ModuleRoles' => [1, 'Demo.Executor'] },
@@ -345,8 +345,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(compiler.send(:popup_layout_document?, 'Name' => 'PopupLayout')).to be(true)
     expect(compiler.send(:popup_layout_document?, 'Name' => 'Shell', 'CanvasWidth' => 600)).to be(true)
     expect(compiler.send(:popup_layout_document?, {
-      'Name' => 'Shell', 'CanvasWidth' => 900, 'Widget' => { '$Type' => 'Forms$Header' }
-    })).to be(false)
+                           'Name' => 'Shell', 'CanvasWidth' => 900, 'Widget' => { '$Type' => 'Forms$Header' }
+                         })).to be(false)
 
     expect(compiler.send(:resolved_menu_items, nil)).to eq([])
     expect(compiler.send(:resolved_menu_items, '$Type' => 'Unknown')).to eq([])
@@ -357,8 +357,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(compiler.send(:menu_microflow_operation, '$Type' => 'Forms$MicroflowAction',
                                                     'MicroflowSettings' => {})).to be_nil
     expect(compiler.send(:page_related_documents, {
-      'Widget' => { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => '' } }
-    })).to be_an(Array)
+                           'Widget' => { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => '' } }
+                         })).to be_an(Array)
 
     actions = {
       'Widgets' => [2,
@@ -372,8 +372,8 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(operations.map { _1['operationType'] }).to eq(%w[delete create])
     expect(compiler.send(:microflow_parameters, 'System.ShowHomePage')).to eq({})
     expect(compiler.send(:supported_microflow_parameter?, 'VariableType' => {
-      '$Type' => 'DataTypes$ObjectType', 'Entity' => ''
-    })).to be(false)
+                           '$Type' => 'DataTypes$ObjectType', 'Entity' => ''
+                         })).to be(false)
 
     data_view = { '$Type' => 'Forms$DataView', 'Name' => 'view', 'DataSource' => {
       '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => '' }
@@ -386,54 +386,54 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     expect(compiler.send(:entity_ref_path, nil)).to eq('')
     expect(compiler.send(:association_source_entity, 'Missing.Association/Demo.Item')).to be_nil
     expect(compiler.send(:document_scope_entity, 'Parameters' => [2, {
-      'ParameterType' => { 'ObjectType' => { 'Entity' => 'Demo.Legacy' } }
-    }])).to eq('Demo.Legacy')
+                           'ParameterType' => { 'ObjectType' => { 'Entity' => 'Demo.Legacy' } }
+                         }])).to eq('Demo.Legacy')
 
     expect(compiler.send(:widget_scope_entity, '$Type' => 'Forms$DataView', 'DataSource' => {
-      'EntityRef' => { 'Entity' => 'Demo.Item' }
-    })).to eq('Demo.Item')
+                           'EntityRef' => { 'Entity' => 'Demo.Item' }
+                         })).to eq('Demo.Item')
     expect(compiler.send(:microflow_return_entity, 'MicroflowSettings' => {
-      'Microflow' => 'Demo.Missing'
-    })).to be_nil
+                           'Microflow' => 'Demo.Missing'
+                         })).to be_nil
     expect(compiler.send(:nanoflow_operations)).to eq([])
 
     activity = { '$ID' => SecureRandom.uuid }
     expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
-      '$Type' => 'Microflows$MicroflowCallAction', 'MicroflowCall' => {}
-    }, {})).to be_nil
+                           '$Type' => 'Microflows$MicroflowCallAction', 'MicroflowCall' => {}
+                         }, {})).to be_nil
     expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
-      '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Item'
-    }, 'Item' => 'Demo.Item')).to include(
-      'operationType' => 'commit', 'parameters' => { 'Objects' => ['[Demo.Item]'] }
-    )
+                           '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Item'
+                         }, 'Item' => 'Demo.Item')).to include(
+                           'operationType' => 'commit', 'parameters' => { 'Objects' => ['[Demo.Item]'] }
+                         )
     expect(compiler.send(:nanoflow_server_operation, 'Demo.Client', activity, {
-      '$Type' => 'Microflows$CommitAction'
-    }, {})).to include('parameters' => { 'Objects' => ['AnyObjectList'] })
+                           '$Type' => 'Microflows$CommitAction'
+                         }, {})).to include('parameters' => { 'Objects' => ['AnyObjectList'] })
     expect(compiler.send(:commit_action?, '$Type' => 'Microflows$ChangeAction', 'Commit' => 'Yes'))
       .to be(true)
     expect(compiler.send(:commit_action?, '$Type' => 'Other')).to be(false)
 
     variables = compiler.send(:nanoflow_variable_entities, {
-      'Objects' => [2,
-                    { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty',
-                      'VariableType' => { 'Entity' => '' } },
-                    { '$Type' => 'Microflows$ActionActivity', 'Action' => {
-                      'OutputVariableName' => 'Created', 'Entity' => 'Demo.Item'
-                    } }]
-    })
+                                'Objects' => [2,
+                                              { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty',
+                                                'VariableType' => { 'Entity' => '' } },
+                                              { '$Type' => 'Microflows$ActionActivity', 'Action' => {
+                                                'OutputVariableName' => 'Created', 'Entity' => 'Demo.Item'
+                                              } }]
+                              })
     expect(variables).to eq('Created' => 'Demo.Item')
   end
 
   it 'materializes successful menu, microflow, and association operation records' do
     parent_id = SecureRandom.uuid
     flow = unit(module_name: 'Demo', document: {
-      '$Type' => 'Microflows$Microflow', 'Name' => 'Load',
-      'ObjectCollection' => { 'Objects' => [2] }
-    })
+                  '$Type' => 'Microflows$Microflow', 'Name' => 'Load',
+                  'ObjectCollection' => { 'Objects' => [2] }
+                })
     domain = unit(module_name: 'Demo', document: {
-      'Associations' => [2, { 'Name' => 'Parent_Items', 'ParentPointer' => parent_id }],
-      'Entities' => [2, { '$ID' => parent_id, 'Name' => 'Parent' }]
-    })
+                    'Associations' => [2, { 'Name' => 'Parent_Items', 'ParentPointer' => parent_id }],
+                    'Entities' => [2, { '$ID' => parent_id, 'Name' => 'Parent' }]
+                  })
     source = instance_double(Mxrb::Compiler::SourceModel, document_index: {})
     allow(source).to receive(:units_of) do |type|
       { 'Microflows$Microflow' => [flow], 'DomainModels$DomainModel' => [domain] }.fetch(type, [])
@@ -444,19 +444,19 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     widget = { 'Name' => 'items' }
 
     menu = compiler.send(:menu_microflow_operation, {
-      '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
-      'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
-    })
+                           '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
+                           'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+                         })
     expect(menu).to include('operationType' => 'callMicroflow')
     expect(compiler.send(:call_microflow_operation, 'Demo.Home', widget, [], 'Demo.Load'))
       .to include('operationType' => 'callMicroflow')
     expect(compiler.send(:retrieve_by_microflow_operation, 'Demo.Home', widget, [], 'Demo.Load'))
       .to include('operationType' => 'retrieveByMicroflow')
     expect(compiler.send(:data_view_operation, 'Demo.Home', {
-      '$Type' => 'Forms$DataView', 'Name' => 'view', 'DataSource' => {
-        '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
-      }
-    }, [])).to include('operationType' => 'retrieveByMicroflow')
+                           '$Type' => 'Forms$DataView', 'Name' => 'view', 'DataSource' => {
+                             '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+                           }
+                         }, [])).to include('operationType' => 'retrieveByMicroflow')
     path = 'Demo.Parent_Items/Demo.Item'
     expect(compiler.send(:association_source_entity, path)).to eq('Demo.Parent')
     operation = compiler.send(:association_retrieve_operation, 'Demo.Home', widget, [], path)
@@ -471,14 +471,14 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
     )
     allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_return(list_source)
     expect(compiler.send(:standard_data_source_operation, 'Demo.Home', {
-      '$Type' => 'Forms$ListView', 'Name' => 'list'
-    }, [], {})).to include('operationType' => 'retrieve')
+                           '$Type' => 'Forms$ListView', 'Name' => 'list'
+                         }, [], {})).to include('operationType' => 'retrieve')
     allow(Mxrb::Compiler::WebListDataSource).to receive(:new).and_call_original
     expect(compiler.send(:standard_data_source_operation, 'Demo.Home', {
-      '$Type' => 'Forms$ListView', 'Name' => 'flowList', 'DataSource' => {
-        '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
-      }
-    }, [], {})).to include('operationType' => 'retrieveByMicroflow')
+                           '$Type' => 'Forms$ListView', 'Name' => 'flowList', 'DataSource' => {
+                             '$Type' => 'Forms$MicroflowSource', 'MicroflowSettings' => { 'Microflow' => 'Demo.Load' }
+                           }
+                         }, [], {})).to include('operationType' => 'retrieveByMicroflow')
 
     nested = { 'AttributeRef' => { 'Attribute' => 'Demo.Item.Name', 'EntityRef' => {
       'Steps' => [2, { 'Association' => 'Demo.Parent_Items', 'DestinationEntity' => 'Demo.Item' }]
@@ -489,13 +489,13 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler do
 
     flow.document['MicroflowReturnType'] = { 'Entity' => 'Demo.Item' }
     expect(compiler.send(:microflow_return_entity, 'MicroflowSettings' => {
-      'Microflow' => 'Demo.Load'
-    })).to eq('Demo.Item')
+                           'Microflow' => 'Demo.Load'
+                         })).to eq('Demo.Item')
 
     menu_operations = compiler.send(:menu_item_operations, {
-      'Action' => { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
-                    'MicroflowSettings' => { 'Microflow' => 'Demo.Load' } }, 'Items' => [2]
-    })
+                                      'Action' => { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$MicroflowAction',
+                                                    'MicroflowSettings' => { 'Microflow' => 'Demo.Load' } }, 'Items' => [2]
+                                    })
     expect(menu_operations).to contain_exactly(include('operationType' => 'callMicroflow'))
 
     association_source = instance_double(
@@ -626,9 +626,9 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
         'Properties' => [
           2,
           property('datasource', value('source-value', DataSource: {
-            '$Type' => 'CustomWidgets$CustomWidgetXPathSource',
-            'EntityRef' => { 'Entity' => 'Demo.Item' }
-          })),
+                                         '$Type' => 'CustomWidgets$CustomWidgetXPathSource',
+                                         'EntityRef' => { 'Entity' => 'Demo.Item' }
+                                       })),
           property('columns', value('columns-value', Objects: [2, column])),
           property('refresh', value('refresh-value', primitive: '20')),
           property('enabled', value('enabled-value', primitive: 'false')),
@@ -644,10 +644,10 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
 
   def source(widget_schema = schema)
     domain = unit(module_name: 'Demo', document: {
-      'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [
-        2, { 'Name' => 'Name', 'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }
-      ] }]
-    })
+                    'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [
+                      2, { 'Name' => 'Name', 'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }
+                    ] }]
+                  })
     instance_double(Mxrb::Compiler::SourceModel, documents: [widget_schema]).tap do |model|
       allow(model).to receive(:units_of).and_return([])
       allow(model).to receive(:units_of).with('DomainModels$DomainModel').and_return([domain])
@@ -683,11 +683,11 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
   it 'generates the complete page module for a supported data grid' do
     model = source
     page = unit(module_name: 'Demo', document: {
-      '$Type' => 'Forms$Page', 'Name' => 'Home', 'Title' => text('Items')['Template'],
-      'FormCall' => { 'Arguments' => [
-        2, { 'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2, grid] }
-      ] }
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Home', 'Title' => text('Items')['Template'],
+                  'FormCall' => { 'Arguments' => [
+                    2, { 'Parameter' => 'Demo.Shell.Main', 'Widgets' => [2, grid] }
+                  ] }
+                })
     bundle = Mxrb::Compiler::PageBundleCompiler.new(model).compile(page)
     expect(bundle.unsupported_widgets).to be_empty
     expect(bundle.source).to include(
@@ -705,8 +705,8 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
     expect(plain.send(:css_class)).to eq('mx-name-plain')
     expect(compiler.send(:translated_text, nil)).to eq('')
     expect(compiler.send(:translated_text, 'Template' => {
-      'Items' => [3, { 'LanguageCode' => 'de_DE', 'Text' => 'Name' }]
-    })).to eq('Name')
+                           'Items' => [3, { 'LanguageCode' => 'de_DE', 'Text' => 'Name' }]
+                         })).to eq('Name')
     expect(compiler.send(:translated_text, 'Template' => { 'Items' => [3] })).to eq('')
     expect(compiler.send(:text_value, nil)).to eq('')
     expect(compiler.send(:attribute_type_name, nil)).to eq('String')
@@ -757,10 +757,10 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
     end
 
     date_domain = unit(module_name: 'Demo', document: {
-      'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [2, {
-        'Name' => 'CreatedAt', 'NewType' => { '$Type' => 'DomainModels$DateTimeAttributeType' }
-      }] }]
-    })
+                         'Entities' => [2, { 'Name' => 'Item', 'Attributes' => [2, {
+                           'Name' => 'CreatedAt', 'NewType' => { '$Type' => 'DomainModels$DateTimeAttributeType' }
+                         }] }]
+                       })
     allow(compiler.instance_variable_get(:@source)).to receive(:units_of)
       .with('DomainModels$DomainModel').and_return([date_domain])
 
@@ -777,11 +777,11 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
       'Properties' => [2,
                        property('show', value('show-value', primitive: 'dynamicText')),
                        property('attribute', value('attribute-value', AttributeRef: {
-                         'Attribute' => 'Demo.Item.CreatedAt'
-                       })),
+                                                     'Attribute' => 'Demo.Item.CreatedAt'
+                                                   })),
                        property('dynamic', value('dynamic-value', TextTemplate: {
-                         'Parameters' => [2, {}]
-                       }))]
+                                                   'Parameters' => [2, {}]
+                                                 }))]
     }
     expect(compiler.send(:compile_column, dynamic_column).fetch(:dynamicText).fetch('$raw'))
       .to include('_format')
@@ -819,15 +819,15 @@ RSpec.describe Mxrb::Compiler::DataGridBundleCompiler do
     expect(compiler.send(:association_filter, single_association_values).fetch(:filterAssociation).fetch('$raw'))
       .to include('"type": "Reference"')
     expect(compiler.send(:compile_column, {
-      'Properties' => [2,
-                       property('show', value('show-value', primitive: 'attribute')),
-                       property('attribute', association_values['attribute'].last),
-                       property('filter', single_association_values['filter'].last)]
-    })).to include(:filterAssociation, :filterAssociationOptions, :filterAssociationOptionLabel)
+                           'Properties' => [2,
+                                            property('show', value('show-value', primitive: 'attribute')),
+                                            property('attribute', association_values['attribute'].last),
+                                            property('filter', single_association_values['filter'].last)]
+                         })).to include(:filterAssociation, :filterAssociationOptions, :filterAssociationOptionLabel)
     expect(compiler.send(:filter_boolean, { 'Object' => nil }, 'multiSelect')).to be(false)
     expect(compiler.send(:filter_boolean, {
-      'Object' => { 'Properties' => [2, property('multi', nil)] }
-    }, 'multiSelect')).to be(false)
+                           'Object' => { 'Properties' => [2, property('multi', nil)] }
+                         }, 'multiSelect')).to be(false)
 
     custom = {
       'Properties' => [2,

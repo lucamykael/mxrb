@@ -6,22 +6,22 @@ module Mxrb
     # Reverse-engineered from Mendix 9/10 projects + mxcli source inspection.
     # Columns marked (?) are inferred / version-dependent.
     TABLES = {
-      "_MetaData" => {
-        desc: "Single-row table with project-level metadata",
-        columns: %w[MetaDataID MendixVersion ProjectID ProjectName],
+      '_MetaData' => {
+        desc: 'Single-row table with project-level metadata',
+        columns: %w[MetaDataID MendixVersion ProjectID ProjectName]
       },
-      "Unit" => {
-        desc: "Every Mendix artefact (module, entity, page, microflow…) is a Unit",
-        columns: %w[UnitID ContainerID ContainmentName UnitTypeID ContentsHash Contents],
+      'Unit' => {
+        desc: 'Every Mendix artefact (module, entity, page, microflow…) is a Unit',
+        columns: %w[UnitID ContainerID ContainmentName UnitTypeID ContentsHash Contents]
       },
-      "UnitType" => {
-        desc: "Lookup table: numeric ID → qualified type name",
-        columns: %w[UnitTypeID Name],
+      'UnitType' => {
+        desc: 'Lookup table: numeric ID → qualified type name',
+        columns: %w[UnitTypeID Name]
       },
-      "PreferredHash" => {
-        desc: "Stores preferred/last-known hash per unit for change detection",
-        columns: %w[UnitID Hash],
-      },
+      'PreferredHash' => {
+        desc: 'Stores preferred/last-known hash per unit for change detection',
+        columns: %w[UnitID Hash]
+      }
     }.freeze
 
     # Known UnitType names (qualified Mendix metamodel class names).

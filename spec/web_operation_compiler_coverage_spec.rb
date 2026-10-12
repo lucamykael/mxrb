@@ -21,9 +21,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler, 'complete operation paths' 
 
   def flow(name = 'Run')
     unit('Demo', {
-      '$Type' => 'Microflows$Microflow', 'Name' => name,
-      'ObjectCollection' => { 'Objects' => [2] }
-    })
+           '$Type' => 'Microflows$Microflow', 'Name' => name,
+           'ObjectCollection' => { 'Objects' => [2] }
+         })
   end
 
   it 'writes page and layout catalogs for a real SourceModel instance' do
@@ -44,9 +44,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler, 'complete operation paths' 
   it 'adds popup rollback and compiles Data Grid filter operations' do
     layout = unit('Demo', { '$Type' => 'Forms$Layout', 'Name' => 'DialogPopup' })
     page = unit('Demo', {
-      '$Type' => 'Forms$Page', 'Name' => 'Dialog',
-      'FormCall' => { 'Form' => 'Demo.DialogPopup' }
-    })
+                  '$Type' => 'Forms$Page', 'Name' => 'Dialog',
+                  'FormCall' => { 'Form' => 'Demo.DialogPopup' }
+                })
     source = source_model(units: { 'Forms$Layout' => [layout] })
     compiler = described_class.new(source)
     expect(compiler.send(:page_operations, page)).to contain_exactly(
@@ -112,17 +112,17 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler, 'complete operation paths' 
     child = { 'Action' => action }
     item = { 'Action' => { '$Type' => 'Forms$NoAction' }, 'Items' => [2, child] }
     menu = unit('Demo', {
-      '$Type' => 'Menus$MenuDocument', 'Name' => 'Main',
-      'ItemCollection' => { 'Items' => [2, item] }
-    })
+                  '$Type' => 'Menus$MenuDocument', 'Name' => 'Main',
+                  'ItemCollection' => { 'Items' => [2, item] }
+                })
     navigation = unit('System', {
-      '$Type' => 'Navigation$NavigationDocument',
-      'Profiles' => [2, { 'Name' => 'Responsive', 'Menu' => { 'Items' => [2, item] } }]
-    })
+                        '$Type' => 'Navigation$NavigationDocument',
+                        'Profiles' => [2, { 'Name' => 'Responsive', 'Menu' => { 'Items' => [2, item] } }]
+                      })
     source = source_model(units: {
-      'Menus$MenuDocument' => [menu], 'Navigation$NavigationDocument' => [navigation],
-      'Microflows$Microflow' => [flow]
-    })
+                            'Menus$MenuDocument' => [menu], 'Navigation$NavigationDocument' => [navigation],
+                            'Microflows$Microflow' => [flow]
+                          })
     compiler = described_class.new(source)
     document_source = { '$Type' => 'Forms$MenuDocumentSource', 'Menu' => 'Demo.Main' }
     navigation_source = { '$Type' => 'Forms$NavigationSource', 'NavigationProfile' => 'Responsive' }
@@ -139,9 +139,9 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler, 'complete operation paths' 
 
   it 'walks unique recursive snippets and inherits a typed delete scope' do
     snippet = unit('Demo', {
-      '$Type' => 'Forms$Snippet', 'Name' => 'Shared',
-      'Nested' => { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Shared' } }
-    })
+                     '$Type' => 'Forms$Snippet', 'Name' => 'Shared',
+                     'Nested' => { '$Type' => 'Forms$SnippetCallWidget', 'FormCall' => { 'Form' => 'Demo.Shared' } }
+                   })
     source = source_model(units: { 'Forms$Snippet' => [snippet] })
     compiler = described_class.new(source)
     page = {
@@ -190,40 +190,40 @@ RSpec.describe Mxrb::Compiler::WebOperationCompiler, 'complete operation paths' 
     )
     expect(compiler.send(:widget_scope_entity, data_view)).to eq('Demo.Child')
     expect(compiler.send(:data_view_operation, 'Demo.Home', {
-      '$Type' => 'Forms$DataView', 'Name' => 'empty', 'DataSource' => { 'EntityRef' => nil }
-    }, [])).to be_nil
+                           '$Type' => 'Forms$DataView', 'Name' => 'empty', 'DataSource' => { 'EntityRef' => nil }
+                         }, [])).to be_nil
   end
 
   it 'compiles nanoflow server calls and commit variants while ignoring client actions' do
     server_flow = flow('ServerAction')
     nanoflow = unit('Demo', {
-      '$Type' => 'Microflows$Nanoflow', 'Name' => 'ClientAction',
-      'ObjectCollection' => { 'Objects' => [
-        2,
-        { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Input',
-          'VariableType' => { 'Entity' => 'Demo.Item' } },
-        { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty', 'VariableType' => {} },
-        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'call', 'Action' => {
-          '$Type' => 'Microflows$MicroflowCallAction',
-          'MicroflowCall' => { 'Microflow' => 'Demo.ServerAction' }
-        } },
-        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'commit',
-          'Action' => { '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Input' } },
-        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'change', 'Action' => {
-          '$Type' => 'Microflows$ChangeAction', 'Commit' => 'Yes',
-          'ChangeVariableName' => 'Created'
-        } },
-        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'create', 'Action' => {
-          '$Type' => 'Microflows$CreateChangeAction', 'Commit' => 'Yes',
-          'VariableName' => 'Created', 'Entity' => 'Demo.Item'
-        } },
-        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'client',
-          'Action' => { '$Type' => 'Microflows$ShowMessageAction' } }
-      ] }
-    })
+                      '$Type' => 'Microflows$Nanoflow', 'Name' => 'ClientAction',
+                      'ObjectCollection' => { 'Objects' => [
+                        2,
+                        { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Input',
+                          'VariableType' => { 'Entity' => 'Demo.Item' } },
+                        { '$Type' => 'Microflows$MicroflowParameter', 'Name' => 'Empty', 'VariableType' => {} },
+                        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'call', 'Action' => {
+                          '$Type' => 'Microflows$MicroflowCallAction',
+                          'MicroflowCall' => { 'Microflow' => 'Demo.ServerAction' }
+                        } },
+                        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'commit',
+                          'Action' => { '$Type' => 'Microflows$CommitAction', 'CommitVariableName' => 'Input' } },
+                        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'change', 'Action' => {
+                          '$Type' => 'Microflows$ChangeAction', 'Commit' => 'Yes',
+                          'ChangeVariableName' => 'Created'
+                        } },
+                        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'create', 'Action' => {
+                          '$Type' => 'Microflows$CreateChangeAction', 'Commit' => 'Yes',
+                          'VariableName' => 'Created', 'Entity' => 'Demo.Item'
+                        } },
+                        { '$Type' => 'Microflows$ActionActivity', '$ID' => 'client',
+                          'Action' => { '$Type' => 'Microflows$ShowMessageAction' } }
+                      ] }
+                    })
     source = source_model(units: {
-      'Microflows$Nanoflow' => [nanoflow], 'Microflows$Microflow' => [server_flow]
-    })
+                            'Microflows$Nanoflow' => [nanoflow], 'Microflows$Microflow' => [server_flow]
+                          })
     operations = described_class.new(source).send(:nanoflow_operations)
     expect(operations.map { _1['operationType'] }).to eq(
       %w[callMicroflow commit commit commit]

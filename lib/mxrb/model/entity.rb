@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "attribute"
+require_relative 'attribute'
 
 module Mxrb
   module Model
@@ -14,23 +14,23 @@ module Mxrb
                     :native_type
 
       # Build from a BSON hash (embedded in DomainModel's "entities" array).
-      def self.from_bson(doc, _domain_model_id, mpr)
+      def self.from_bson(doc, _domain_model_id, _mpr)
         e                    = new
-        e.id                 = IO::BsonCodec.extract_id(doc["$ID"] || doc["\$ID"])
-        e.name               = doc["name"]  || doc["Name"]
-        e.qualified_name     = doc["$QualifiedName"] || doc["\$QualifiedName"]
-        e.documentation      = doc["documentation"] || doc["Documentation"] || ""
-        e.native_type        = doc["$Type"]
-        e.source             = doc["source"] || doc["Source"]
-        e.oql_query          = doc["oqlQuery"] || doc["OqlQuery"] || doc["OQLQuery"] ||
-                               (e.source["Oql"] if e.source.is_a?(Hash))
-        e.data_storage_guid  = doc["dataStorageGuid"] || doc["DataStorageGuid"]
-        e.export_level       = doc["exportLevel"] || doc["ExportLevel"] || "Hidden"
-        e.location           = parse_location(doc["location"] || doc["Location"])
+        e.id                 = IO::BsonCodec.extract_id(doc['$ID'] || doc["\$ID"])
+        e.name               = doc['name'] || doc['Name']
+        e.qualified_name     = doc['$QualifiedName'] || doc["\$QualifiedName"]
+        e.documentation      = doc['documentation'] || doc['Documentation'] || ''
+        e.native_type        = doc['$Type']
+        e.source             = doc['source'] || doc['Source']
+        e.oql_query          = doc['oqlQuery'] || doc['OqlQuery'] || doc['OQLQuery'] ||
+                               (e.source['Oql'] if e.source.is_a?(Hash))
+        e.data_storage_guid  = doc['dataStorageGuid'] || doc['DataStorageGuid']
+        e.export_level       = doc['exportLevel'] || doc['ExportLevel'] || 'Hidden'
+        e.location           = parse_location(doc['location'] || doc['Location'])
 
         # Persistable lives inside generalization.NoGeneralization.persistable
-        gen = doc["generalization"] || doc["Generalization"] ||
-              doc["maybeGeneralization"] || doc["MaybeGeneralization"]
+        gen = doc['generalization'] || doc['Generalization'] ||
+              doc['maybeGeneralization'] || doc['MaybeGeneralization']
         e.generalization = gen
         persistable = if gen.is_a?(Hash)
                         gen.fetch('persistable', gen.fetch('Persistable', true))
@@ -41,7 +41,7 @@ module Mxrb
         e.system_members = parse_system_members(gen)
 
         # Attributes (embedded array with marker)
-        attr_arr   = IO::BsonCodec.parse_array(doc["attributes"] || doc["Attributes"])[:items]
+        attr_arr = IO::BsonCodec.parse_array(doc['attributes'] || doc['Attributes'])[:items]
         e.instance_variable_set(:@attributes, attr_arr.map { Attribute.from_bson(_1) })
         rules = IO::BsonCodec.parse_array(doc['validationRules'] || doc['ValidationRules'])[:items]
         e.validation_rules = rules
@@ -50,9 +50,9 @@ module Mxrb
         e.indexes = normalize_indexes(raw_indexes, e.attributes, e.qualified_name)
 
         # Access rules (embedded array with marker 3)
-        rule_arr = IO::BsonCodec.parse_array(doc["accessRules"] || doc["AccessRules"])[:items]
+        rule_arr = IO::BsonCodec.parse_array(doc['accessRules'] || doc['AccessRules'])[:items]
         e.access_rules = rule_arr.map { parse_access_rule(_1) }
-        event_arr = IO::BsonCodec.parse_array(doc["eventHandlers"] || doc["EventHandlers"])[:items]
+        event_arr = IO::BsonCodec.parse_array(doc['eventHandlers'] || doc['EventHandlers'])[:items]
         e.lifecycle = event_arr.map { parse_lifecycle(_1) }
 
         e
@@ -81,23 +81,23 @@ module Mxrb
 
       def to_bson
         {
-          "$ID"             => @id,
-          "$Type"           => "DomainModels$EntityImpl",
-          "$QualifiedName"  => @qualified_name,
-          "name"            => @name,
-          "documentation"   => @documentation || "",
-          "dataStorageGuid" => @data_storage_guid || SecureRandom.uuid,
-          "location"        => serialize_location(@location),
-          "generalization"  => serialize_generalization,
-          "attributes"      => IO::BsonCodec.build_array(@attributes.map(&:to_bson)),
-          "validationRules" => IO::BsonCodec.build_array(@validation_rules.to_a),
-          "eventHandlers"   => IO::BsonCodec.build_array(@lifecycle.to_a.map { lifecycle_bson(_1) }),
-          "indexes"         => IO::BsonCodec.build_array([]),
-          "accessRules"     => IO::BsonCodec.build_array(@access_rules.to_a),
-          "source"          => nil,
-          "exportLevel"     => @export_level || "Hidden",
-          "image"           => "",
-          "imageData"       => "",
+          '$ID' => @id,
+          '$Type' => 'DomainModels$EntityImpl',
+          '$QualifiedName' => @qualified_name,
+          'name' => @name,
+          'documentation' => @documentation || '',
+          'dataStorageGuid' => @data_storage_guid || SecureRandom.uuid,
+          'location' => serialize_location(@location),
+          'generalization' => serialize_generalization,
+          'attributes' => IO::BsonCodec.build_array(@attributes.map(&:to_bson)),
+          'validationRules' => IO::BsonCodec.build_array(@validation_rules.to_a),
+          'eventHandlers' => IO::BsonCodec.build_array(@lifecycle.to_a.map { lifecycle_bson(_1) }),
+          'indexes' => IO::BsonCodec.build_array([]),
+          'accessRules' => IO::BsonCodec.build_array(@access_rules.to_a),
+          'source' => nil,
+          'exportLevel' => @export_level || 'Hidden',
+          'image' => '',
+          'imageData' => ''
         }
       end
 
@@ -151,39 +151,39 @@ module Mxrb
       end
 
       def self.parse_access_rule(doc)
-        roles = IO::BsonCodec.parse_array(doc["ModuleRoles"] || doc["AllowedModuleRoles"])[:items]
-        default_rights = doc["DefaultMemberAccessRights"] || "None"
-        member_items = IO::BsonCodec.parse_array(doc["MemberAccesses"])[:items]
+        roles = IO::BsonCodec.parse_array(doc['ModuleRoles'] || doc['AllowedModuleRoles'])[:items]
+        default_rights = doc['DefaultMemberAccessRights'] || 'None'
+        member_items = IO::BsonCodec.parse_array(doc['MemberAccesses'])[:items]
         members = member_items.map do |m|
-          association_ref = m["Association"].to_s
-          attr_ref = association_ref.empty? ? m["Attribute"] : association_ref
+          association_ref = m['Association'].to_s
+          attr_ref = association_ref.empty? ? m['Attribute'] : association_ref
           kind = association_ref.empty? ? :attribute : :association
-          { id: IO::BsonCodec.extract_id(m["$ID"]),
+          { id: IO::BsonCodec.extract_id(m['$ID']),
             name: attr_ref.to_s.split(%r{[/.]}).last, reference: attr_ref.to_s,
-            rights: m["AccessRights"] || "None", kind: kind }
+            rights: m['AccessRights'] || 'None', kind: kind }
         end
         {
-          id: IO::BsonCodec.extract_id(doc["$ID"]),
+          id: IO::BsonCodec.extract_id(doc['$ID']),
           roles: roles,
-          create: doc["AllowCreate"] == true,
-          delete: doc["AllowDelete"] == true,
-          documentation: doc["Documentation"].to_s,
+          create: doc['AllowCreate'] == true,
+          delete: doc['AllowDelete'] == true,
+          documentation: doc['Documentation'].to_s,
           default_rights: default_rights,
           members: members,
-          xpath: doc["XPathConstraint"] || "",
-          xpath_caption: doc["XPathConstraintCaption"]
+          xpath: doc['XPathConstraint'] || '',
+          xpath_caption: doc['XPathConstraintCaption']
         }
       end
 
       def self.parse_lifecycle(doc)
-        moment = doc["Moment"].to_s.downcase
-        event = (doc["Type"] || doc["Event"]).to_s.downcase
+        moment = doc['Moment'].to_s.downcase
+        event = (doc['Type'] || doc['Event']).to_s.downcase
         {
-          id: IO::BsonCodec.extract_id(doc["$ID"]),
-          event: [moment, event].reject(&:empty?).join("_").to_sym,
-          handler: doc["Microflow"].to_s,
-          pass_event_object: doc.fetch("PassEventObject", true) == true,
-          raise_error_on_false: doc.fetch("RaiseErrorOnFalse", true) == true
+          id: IO::BsonCodec.extract_id(doc['$ID']),
+          event: [moment, event].reject(&:empty?).join('_').to_sym,
+          handler: doc['Microflow'].to_s,
+          pass_event_object: doc.fetch('PassEventObject', true) == true,
+          raise_error_on_false: doc.fetch('RaiseErrorOnFalse', true) == true
         }.compact
       end
 
@@ -193,36 +193,38 @@ module Mxrb
           return { x: x, y: y }
         end
         return { x: 0, y: 0 } unless loc.is_a?(Hash)
-        { x: loc["x"] || loc[:x] || 0, y: loc["y"] || loc[:y] || 0 }
+
+        { x: loc['x'] || loc[:x] || 0, y: loc['y'] || loc[:y] || 0 }
       end
 
       def serialize_location(loc)
-        return { "x" => 0, "y" => 0 } unless loc
-        { "x" => loc[:x] || 0, "y" => loc[:y] || 0 }
+        return { 'x' => 0, 'y' => 0 } unless loc
+
+        { 'x' => loc[:x] || 0, 'y' => loc[:y] || 0 }
       end
 
       def serialize_generalization
         @generalization || {
-          "$ID"             => SecureRandom.uuid,
-          "$Type"           => "DomainModels$NoGeneralization",
-          "persistable"     => @persistable != false,
-          "hasChangedDate"  => false,
-          "hasCreatedDate"  => false,
-          "hasOwner"        => false,
-          "hasChangedBy"    => false,
+          '$ID' => SecureRandom.uuid,
+          '$Type' => 'DomainModels$NoGeneralization',
+          'persistable' => @persistable != false,
+          'hasChangedDate' => false,
+          'hasCreatedDate' => false,
+          'hasOwner' => false,
+          'hasChangedBy' => false
         }
       end
 
       def lifecycle_bson(callback)
-        moment, event = callback.fetch(:event).to_s.split("_", 2)
+        moment, event = callback.fetch(:event).to_s.split('_', 2)
         {
-          "$ID" => callback[:id].to_s.empty? ? SecureRandom.uuid : callback[:id].to_s,
-          "$Type" => "DomainModels$EventHandler",
-          "Type" => event.to_s.capitalize,
-          "Moment" => moment.to_s.capitalize,
-          "Microflow" => callback.fetch(:handler).to_s,
-          "PassEventObject" => callback.fetch(:pass_event_object, true) == true,
-          "RaiseErrorOnFalse" => callback.fetch(:raise_error_on_false, false) == true
+          '$ID' => callback[:id].to_s.empty? ? SecureRandom.uuid : callback[:id].to_s,
+          '$Type' => 'DomainModels$EventHandler',
+          'Type' => event.to_s.capitalize,
+          'Moment' => moment.to_s.capitalize,
+          'Microflow' => callback.fetch(:handler).to_s,
+          'PassEventObject' => callback.fetch(:pass_event_object, true) == true,
+          'RaiseErrorOnFalse' => callback.fetch(:raise_error_on_false, false) == true
         }
       end
     end

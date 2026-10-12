@@ -804,8 +804,8 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     value = Mxrb::IO::BsonCodec.parse_array(entity.fetch('Attributes')).fetch(:items).first.fetch('Value')
     expect(value).to include('Reference' => 'Code')
     security = writer.send(:ruby_project_security_doc, {
-      id: '', admin_user_role: '', user_roles: [], demo_users: [], password_policy: nil
-    }, {})
+                             id: '', admin_user_role: '', user_roles: [], demo_users: [], password_policy: nil
+                           }, {})
     expect(Mxrb::IO::BsonCodec.parse_array(security.fetch('UserRoles')).fetch(:items)).to be_empty
     expect(security).not_to have_key('PasswordPolicySettings')
   end
@@ -824,15 +824,15 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     expect(schedule.fetch('$ID')).to eq('schedule-id')
 
     role = writer.send(:user_role_doc, {
-      name: 'User', id: 'role-id', guid: '11111111-1111-4111-8111-111111111111',
-      admin: false, module_roles: []
-    })
+                         name: 'User', id: 'role-id', guid: '11111111-1111-4111-8111-111111111111',
+                         admin: false, module_roles: []
+                       })
     expect(role).to include('$ID' => 'role-id')
     expect(Mxrb::IO::BsonCodec.parse_array(role.fetch('ModuleRoles')).fetch(:items))
       .to include('System.User')
     user = writer.send(:demo_user_doc, {
-      name: 'demo', id: 'user-id', password: 'x', entity: 'System.User', roles: []
-    })
+                         name: 'demo', id: 'user-id', password: 'x', entity: 'System.User', roles: []
+                       })
     expect(user.fetch('$ID')).to eq('user-id')
     security = writer.send(:project_security_doc,
                            password_policy_id: 'policy-id', user_roles: [], demo_users: [])
@@ -847,13 +847,13 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     expect(typed.fetch('$ID')).to eq('stable')
 
     deep = writer.send(:page_doc, {
-      name: 'Deep', unit_id: nil, deep_structure: {}, public: true, widgets: []
-    })
+                         name: 'Deep', unit_id: nil, deep_structure: {}, public: true, widgets: []
+                       })
     expect(deep.fetch('ExportLevel')).to eq('Public')
     plain = writer.send(:page_doc, {
-      name: 'Plain', unit_id: nil, layout: 'App.Layout', title: 'Plain', public: true,
-      widgets: [], events: [], allowed_roles: nil, popup: false
-    })
+                          name: 'Plain', unit_id: nil, layout: 'App.Layout', title: 'Plain', public: true,
+                          widgets: [], events: [], allowed_roles: nil, popup: false
+                        })
     expect(plain.fetch('ExportLevel')).to eq('Public')
 
     expect(writer.send(:widget_doc,
@@ -893,17 +893,17 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     expect(doc.dig('Type', 'SupportedPlatform')).to eq('Native')
 
     mappings = writer.send(:client_parameter_mapping_docs, {
-      'App.Run.Input' => { kind: :widget, name: 'Grid' }, 'Other' => 'value'
-    }, handler: 'App.Run', kind: :page)
+                             'App.Run.Input' => { kind: :widget, name: 'Grid' }, 'Other' => 'value'
+                           }, handler: 'App.Run', kind: :page)
     items = Mxrb::IO::BsonCodec.parse_array(mappings).fetch(:items)
     expect(items.first).to include('Argument' => '', 'Parameter' => 'App.Run.Input')
     expect(items.last.fetch('Argument')).to eq('value')
 
     native_source = writer.send(:data_view_source_doc, {
-      kind: :native, native_type: 'Forms$FutureSource', unknown_native: {
-        '$ID' => 'discarded', '$Type' => 'Discarded', 'Future' => true
-      }
-    })
+                                  kind: :native, native_type: 'Forms$FutureSource', unknown_native: {
+                                    '$ID' => 'discarded', '$Type' => 'Discarded', 'Future' => true
+                                  }
+                                })
     expect(native_source).to include('$Type' => 'Forms$FutureSource', Future: true)
     expect(native_source.fetch('$ID')).not_to eq('discarded')
 
@@ -948,8 +948,8 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     previous = writer.send(:project_security_doc, admin_user_role: '', user_roles: [], demo_users: [])
     previous['UserRoles'] = Mxrb::IO::BsonCodec.build_array(['opaque'])
     security = writer.send(:ruby_project_security_doc, {
-      id: nil, admin_user_role: '', user_roles: [], demo_users: []
-    }, previous)
+                             id: nil, admin_user_role: '', user_roles: [], demo_users: []
+                           }, previous)
     expect(Mxrb::IO::BsonCodec.parse_array(security.fetch('UserRoles')).fetch(:items))
       .to eq(['opaque'])
     expect do
@@ -963,16 +963,16 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     overlay = instance_double(Mxrb::Writer::PageOverlay, apply: true)
     allow(Mxrb::Writer::PageOverlay).to receive(:new).and_return(overlay)
     writer.send(:verify_page_overlay_target!, {}, {
-      name: 'Home', deep_structure: { Mxrb::Writer::PageOverlay::METADATA_KEY => {} }, widgets: []
-    }, 'App')
+                  name: 'Home', deep_structure: { Mxrb::Writer::PageOverlay::METADATA_KEY => {} }, widgets: []
+                }, 'App')
     writer.send(:verify_page_overlay_target!, {}, { name: 'Home', widgets: [] }, 'App')
 
     allow(writer).to receive(:flow_return_entity).and_return(nil)
     expect(writer.send(:page_context_entity, {
-      data_source: nil, widgets: [{ type: :data_view, options: {
-        source: { kind: :context, entity: 'App.Direct' }
-      } }]
-    }, 'App')).to eq('App.Direct')
+                         data_source: nil, widgets: [{ type: :data_view, options: {
+                           source: { kind: :context, entity: 'App.Direct' }
+                         } }]
+                       }, 'App')).to eq('App.Direct')
     nested = [{ type: :container, options: {}, children: [{
       type: :data_view, options: { source: { kind: :context, entity: 'App.Nested' } }
     }] }]
@@ -1010,11 +1010,11 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     allow(writer).to receive(:relocate_root_document)
     allow(mpr).to receive(:update_unit)
     writer.send(:write_native_documents, mpr, 'module-id', {
-      native_documents: [{
-        type: 'Future$Document', name: 'Declared', containment: 'Documents',
-        doc: { '$Type' => 'Future$Document', 'Name' => 'Declared' }
-      }], managed_native_document_types: ['Future$Document']
-    })
+                  native_documents: [{
+                    type: 'Future$Document', name: 'Declared', containment: 'Documents',
+                    doc: { '$Type' => 'Future$Document', 'Name' => 'Declared' }
+                  }], managed_native_document_types: ['Future$Document']
+                })
     expect(mpr).not_to have_received(:delete_unit)
 
     stable = { 'UnitID' => 'stable-id' }
@@ -1025,18 +1025,18 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       '$ID' => 'semantic-doc', '$Type' => 'Future$Document', 'Name' => 'Kept'
     )
     expect(writer.send(:upsert_native_unit, mpr, 'module-id', {
-      'unit_id' => '', 'containment' => 'Documents',
-      'doc' => { '$Type' => 'Future$Document', 'Name' => 'Kept' }
-    })).to eq('semantic-id')
+                         'unit_id' => '', 'containment' => 'Documents',
+                         'doc' => { '$Type' => 'Future$Document', 'Name' => 'Kept' }
+                       })).to eq('semantic-id')
     allow(mpr).to receive(:unit).with('stable-id').and_return(stable)
     allow(mpr).to receive(:parse_contents).with(stable).and_return(
       '$Type' => 'Future$Document', 'Name' => 'Stable'
     )
     allow(mpr).to receive(:insert_unit).and_return('inserted')
     expect(writer.send(:upsert_native_unit, mpr, 'module-id', {
-      'unit_id' => 'stable-id', 'containment' => 'Documents',
-      'doc' => { '$Type' => 'Future$Document', 'Name' => 'Stable' }
-    })).to eq('stable-id')
+                         'unit_id' => 'stable-id', 'containment' => 'Documents',
+                         'doc' => { '$Type' => 'Future$Document', 'Name' => 'Stable' }
+                       })).to eq('stable-id')
   end
 
   it 'covers document lookup, native merges, OQL, access, association, and schedule alternatives' do
@@ -1069,8 +1069,8 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
     access = writer.send(:access_rule_doc, { roles: [], xpath_caption: nil }, 'App', 'Item')
     expect(access).not_to have_key('XPathConstraintCaption')
     expect(writer.send(:access_rule_doc, {
-      roles: [], xpath_caption: 'Visible records'
-    }, 'App', 'Item')).to include('XPathConstraintCaption' => 'Visible records')
+                         roles: [], xpath_caption: 'Visible records'
+                       }, 'App', 'Item')).to include('XPathConstraintCaption' => 'Visible records')
     association = writer.send(:association_doc, { name: 'App.Link', type: :Reference },
                               from_id: 'from', to_id: 'to', previous: nil, oql_view: true)
     expect(association.dig('Source', '$Type')).to eq('DomainModels$OqlViewAssociationSource')
@@ -1091,10 +1091,10 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
 
     allow(writer).to receive(:flow_return_entity).and_return(nil, 'App.FlowResult')
     expect(writer.send(:page_context_entity, {
-      data_source: nil, widgets: [{
-        type: :data_view, options: { source: { kind: :microflow, name: 'App.Load' } }
-      }]
-    }, 'App')).to eq('App.FlowResult')
+                         data_source: nil, widgets: [{
+                           type: :data_view, options: { source: { kind: :microflow, name: 'App.Load' } }
+                         }]
+                       }, 'App')).to eq('App.FlowResult')
   end
 end
 # rubocop:enable Metrics/BlockLength

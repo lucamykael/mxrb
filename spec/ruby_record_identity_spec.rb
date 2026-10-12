@@ -188,19 +188,23 @@ RSpec.describe Mxrb::RubyApp::RecordIdentity do
     writer = Mxrb::Writer.new(path, version: '11.12.1', modules: [])
     mpr = Mxrb::IO::MprFile.open(path)
     writer.synchronize_ruby_entity_structures!(mpr, module_name: 'App', entities: [{
-      name: 'Item', indexes: [{ members: [{ name: 'Name', ascending: true }], include_offline: true }]
-    }])
+                                                 name: 'Item', indexes: [{
+                                                   members: [{ name: 'Name', ascending: true }], include_offline: true
+                                                 }]
+                                               }])
     writer.synchronize_ruby_entity_behaviors!(mpr, module_name: 'App', entities: [{
-      name: 'Item', lifecycle: [{ event: :before_commit, handler: 'App.Validate' }],
-      validation_rules: [{ attribute: 'Name', kind: :required, translations: [
-        { language_code: 'pt_BR', text: 'Obrigatório' }, { language_code: 'en_US', text: 'Required' }
-      ] }]
-    }])
+                                                name: 'Item', lifecycle: [{ event: :before_commit, handler: 'App.Validate' }],
+                                                validation_rules: [{ attribute: 'Name', kind: :required, translations: [
+                                                  { language_code: 'pt_BR',
+                                                    text: 'Obrigatório' }, { language_code: 'en_US', text: 'Required' }
+                                                ] }]
+                                              }])
     writer.synchronize_ruby_entity_access!(mpr, module_name: 'App', entities: [{
-      name: 'Item', access_rules: [{ roles: ['App.User'], create: true, members: [
-        { name: 'Name', rights: :ReadOnly }, { name: 'Item_Owner', rights: :ReadWrite, kind: :association }
-      ] }]
-    }])
+                                             name: 'Item', access_rules: [{ roles: ['App.User'], create: true, members: [
+                                               { name: 'Name',
+                                                 rights: :ReadOnly }, { name: 'Item_Owner', rights: :ReadWrite, kind: :association }
+                                             ] }]
+                                           }])
   ensure
     mpr&.close
   end

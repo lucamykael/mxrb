@@ -221,28 +221,30 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
     expect { inventory.read(unknown) }.to raise_error(Mxrb::MarketplaceError, /exactly one clientModule/)
 
     no_widgets = archive_with_entries('no-widgets.mpk', {
-      'package.xml' => '<package><clientModule name="Widget" version="1.0.0"/></package>'
-    })
+                                        'package.xml' => '<package><clientModule name="Widget" version="1.0.0"/></package>'
+                                      })
     expect { inventory.read(no_widgets) }.to raise_error(Mxrb::MarketplaceError, /does not declare widgetFiles/)
 
     invalid_name = archive_with_entries('invalid-name.mpk', {
-      'package.xml' => client_package_xml(name: '123', version: '1', widgets: ['A.xml']),
-      'A.xml' => '<widget id="org.example.a.A"/>'
-    })
+                                          'package.xml' => client_package_xml(name: '123', version: '1',
+                                                                              widgets: ['A.xml']),
+                                          'A.xml' => '<widget id="org.example.a.A"/>'
+                                        })
     expect { inventory.read(invalid_name) }.to raise_error(Mxrb::MarketplaceError, /clientModule name/)
     invalid_version = archive_with_entries('invalid-version.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '', widgets: ['A.xml']),
-      'A.xml' => '<widget id="org.example.a.A"/>'
-    })
+                                             'package.xml' => client_package_xml(name: 'A', version: '',
+                                                                                 widgets: ['A.xml']),
+                                             'A.xml' => '<widget id="org.example.a.A"/>'
+                                           })
     expect { inventory.read(invalid_version) }.to raise_error(Mxrb::MarketplaceError, /clientModule version/)
     missing_definition = archive_with_entries('missing-definition.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['Missing.xml'])
-    })
+                                                'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['Missing.xml'])
+                                              })
     expect { inventory.read(missing_definition) }.to raise_error(Mxrb::MarketplaceError, /definition is missing/)
     non_xml = archive_with_entries('non-xml.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.js']),
-      'A.js' => 'x'
-    })
+                                     'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.js']),
+                                     'A.js' => 'x'
+                                   })
     expect { inventory.read(non_xml) }.to raise_error(Mxrb::MarketplaceError, /is not XML/)
     malformed = archive_with_entries('malformed.mpk', 'package.xml' => '<package')
     expect { inventory.read(malformed) }.to raise_error(Mxrb::MarketplaceError, /invalid Mendix widget package/)
@@ -251,10 +253,10 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
   it 'rejects duplicate, linked, non-widget, and divergent widget definitions' do
     inventory = Mxrb::OfficialMarketplace::WidgetPackageInventory
     duplicate = archive_with_entries('duplicate.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.xml']),
-      'A.xml' => '<widget id="org.example.a.A"/>',
-      'a.XML' => '<widget id="org.example.a.A"/>'
-    })
+                                       'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.xml']),
+                                       'A.xml' => '<widget id="org.example.a.A"/>',
+                                       'a.XML' => '<widget id="org.example.a.A"/>'
+                                     })
     expect { inventory.read(duplicate) }.to raise_error(Mxrb::MarketplaceError, /duplicate widget package path/)
 
     linked = double(name: 'linked.xml', directory?: false, symlink?: true)
@@ -264,21 +266,24 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
       .to raise_error(Mxrb::MarketplaceError, /symbolic link/)
 
     wrong_root = archive_with_entries('wrong-root.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.xml']),
-      'A.xml' => '<notWidget id="org.example.a.A"/>'
-    })
+                                        'package.xml' => client_package_xml(name: 'A', version: '1',
+                                                                            widgets: ['A.xml']),
+                                        'A.xml' => '<notWidget id="org.example.a.A"/>'
+                                      })
     expect { inventory.read(wrong_root) }.to raise_error(Mxrb::MarketplaceError, /invalid widget ID/)
     rootless_widget = archive_with_entries('rootless-widget.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: ['A.xml']),
-      'A.xml' => ''
-    })
+                                             'package.xml' => client_package_xml(name: 'A', version: '1',
+                                                                                 widgets: ['A.xml']),
+                                             'A.xml' => ''
+                                           })
     expect { inventory.read(rootless_widget) }.to raise_error(Mxrb::MarketplaceError, /invalid widget ID/)
 
     divergent = archive_with_entries('namespaces.mpk', {
-      'package.xml' => client_package_xml(name: 'A', version: '1', widgets: %w[A.xml B.xml]),
-      'A.xml' => '<widget id="org.example.a.A"/>',
-      'B.xml' => '<widget id="org.other.b.B"/>'
-    })
+                                       'package.xml' => client_package_xml(name: 'A', version: '1',
+                                                                           widgets: %w[A.xml B.xml]),
+                                       'A.xml' => '<widget id="org.example.a.A"/>',
+                                       'B.xml' => '<widget id="org.other.b.B"/>'
+                                     })
     expect { inventory.read(divergent) }.to raise_error(Mxrb::MarketplaceError, /do not share/)
     expect(inventory.send(:elements, nil, 'widget')).to eq([])
     expect { inventory.send(:safe_relative_path, "bad\0.xml") }
@@ -345,8 +350,8 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
       .to raise_error(Mxrb::MarketplaceError, /outside marketplace target/)
     expect(installer.send(:locked_asset_digest, { 'kind' => 'legacy' }, 'widgets/x.mpk')).to be_nil
     expect(installer.send(:locked_asset_digest, {
-      'kind' => 'widget', 'destination' => 'widgets/x.mpk', 'sha256' => 'digest'
-    }, 'widgets/x.mpk')).to eq('digest')
+                            'kind' => 'widget', 'destination' => 'widgets/x.mpk', 'sha256' => 'digest'
+                          }, 'widgets/x.mpk')).to eq('digest')
   ensure
     FileUtils.remove_entry(external) if external && File.directory?(external)
   end
@@ -489,8 +494,8 @@ RSpec.describe Mxrb::OfficialMarketplace::WidgetPackageInstaller do
         .to raise_error(Mxrb::MarketplaceError, /does not provide/)
     end
     expect(resolver.send(:collect_widget_ids, {
-      'WidgetId' => 'one.Widget', 'Nested' => [{ 'WidgetId' => 'two.Widget' }]
-    })).to contain_exactly('one.Widget', 'two.Widget')
+                           'WidgetId' => 'one.Widget', 'Nested' => [{ 'WidgetId' => 'two.Widget' }]
+                         })).to contain_exactly('one.Widget', 'two.Widget')
     expect(resolver.send(:collect_widget_ids, 'plain')).to eq([])
   end
 

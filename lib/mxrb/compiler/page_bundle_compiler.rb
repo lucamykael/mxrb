@@ -254,9 +254,9 @@ module Mxrb
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         props = button_runtime_props(widget, key)
         "React.createElement($SidebarToggle, #{js_props(props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: text_property(widget['Tooltip'])
-        })})"
+                                                          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                          tooltip: text_property(widget['Tooltip'])
+                                                        })})"
       end
 
       def render_header(widget)
@@ -460,8 +460,8 @@ module Mxrb
           content: array(widget['Widgets']).map { render_widget(_1) }
         )
         "React.createElement($Container, #{js_props(props, expressions: {
-          onClick: "ActionProperty(#{js_literal(action_config)})"
-        })})"
+                                                      onClick: "ActionProperty(#{js_literal(action_config)})"
+                                                    })})"
       end
 
       def container_action_config(widget, action)
@@ -498,8 +498,8 @@ module Mxrb
         )
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($GroupBox, #{js_props(props, expressions: {
-          header: "TextProperty({ value: #{JSON.generate(caption)} })"
-        })})"
+                                                     header: "TextProperty({ value: #{JSON.generate(caption)} })"
+                                                   })})"
       end
 
       def render_snippet_call(widget)
@@ -788,10 +788,12 @@ module Mxrb
         key = widget_key(widget)
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(nanoflow_button_props(widget, key), expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: text_property(widget['Tooltip']),
-          action: "ActionProperty(#{js_literal(client_action_config(widget, action))})"
-        })})"
+                                                         caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                         tooltip: text_property(widget['Tooltip']),
+                                                         action: "ActionProperty(#{js_literal(client_action_config(
+                                                                                                widget, action
+                                                                                              ))})"
+                                                       })})"
       end
 
       def client_action_config(widget, action)
@@ -1005,10 +1007,10 @@ module Mxrb
         key = widget_key(widget)
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(nanoflow_button_props(widget, key), expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: text_property(widget['Tooltip']),
-          action: "ActionProperty(#{js_literal(nanoflow_action_config(action))})"
-        })})"
+                                                         caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                         tooltip: text_property(widget['Tooltip']),
+                                                         action: "ActionProperty(#{js_literal(nanoflow_action_config(action))})"
+                                                       })})"
       end
 
       def button_runtime_props(widget, key)
@@ -1285,9 +1287,9 @@ module Mxrb
           key = widget_key(button)
           props = button_runtime_props(button, key)
           "React.createElement($ActionButton, #{js_props(props, expressions: {
-            caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-            tooltip: text_property(button['Tooltip']), action:
-          })})"
+                                                           caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                           tooltip: text_property(button['Tooltip']), action:
+                                                         })})"
         end
         return if buttons.empty?
 
@@ -1453,8 +1455,8 @@ module Mxrb
           thumbnailSizeHeight: positive_integer(widget.dig('ThumbnailSize', 'Height'), 100)
         )
         input = "React.createElement($FileManager, #{js_props(props, expressions: {
-          content: "DynamicFileProperty(#{js_literal(scope:, path: '', isEditable: true, allowUpload: true)})"
-        })})"
+                                                                content: "DynamicFileProperty(#{js_literal(scope:, path: '', isEditable: true, allowUpload: true)})"
+                                                              })})"
         render_form_group(
           widget, key, translated_text(widget.dig('LabelTemplate', 'Template')), input, 'mx-imageuploader'
         )
@@ -1810,8 +1812,8 @@ module Mxrb
           tabIndex: integer_or(widget['TabIndex'], 0)
         )
         "React.createElement($FileManager, #{js_props(props, expressions: {
-          content: "DynamicFileProperty(#{js_literal(config)})"
-        })})"
+                                                        content: "DynamicFileProperty(#{js_literal(config)})"
+                                                      })})"
       end
 
       def render_form_group(widget, key, caption, input, widget_class)
@@ -1822,9 +1824,9 @@ module Mxrb
           orientation: 'horizontal', labelFor: key
         }
         "React.createElement($FormGroup, #{js_props(group_props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          hasError: 'TextProperty({ value: false })'
-        })})"
+                                                      caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                      hasError: 'TextProperty({ value: false })'
+                                                    })})"
       end
 
       def render_date_picker(widget)
@@ -1883,8 +1885,8 @@ module Mxrb
         props = common_props(widget).merge('$widgetId': key, class: css_class(widget), id: key)
         caption = translated_text(widget['Caption'])
         "React.createElement($Label, #{js_props(props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })"
-        })})"
+                                                  caption: "TextProperty({ value: #{JSON.generate(caption)} })"
+                                                })})"
       end
 
       def render_tab_control(widget)
@@ -1999,9 +2001,9 @@ module Mxrb
         props = button_runtime_props(widget, key)
         caption = translated_text(widget.dig('CaptionTemplate', 'Template'))
         "React.createElement($ActionButton, #{js_props(props, expressions: {
-          caption: "TextProperty({ value: #{JSON.generate(caption)} })",
-          tooltip: text_property(widget['Tooltip']), action: "ActionProperty(#{js_literal(action_config)})"
-        })})"
+                                                         caption: "TextProperty({ value: #{JSON.generate(caption)} })",
+                                                         tooltip: text_property(widget['Tooltip']), action: "ActionProperty(#{js_literal(action_config)})"
+                                                       })})"
       end
 
       def button_style(widget)

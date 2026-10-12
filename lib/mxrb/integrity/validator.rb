@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "set"
-
 module Mxrb
   module Integrity
     Result = Struct.new(:errors, :warnings, keyword_init: true) do
@@ -21,10 +19,10 @@ module Mxrb
           @warnings = []
           @mpr = IO::MprFile.open(@path, readonly: true)
           validate_tables
-          progress.advance(detail: "MPR tables")
+          progress.advance(detail: 'MPR tables')
           validate_units
           validate_v2_files
-          progress.advance(detail: "v2 contents")
+          progress.advance(detail: 'v2 contents')
           Result.new(errors: @errors, warnings: @warnings)
         end
       rescue Error => e
@@ -37,12 +35,12 @@ module Mxrb
       private
 
       def validate_tables
-        require_table("Unit")
-        require_table("_MetaData")
-        require_unit_column("UnitID")
-        require_unit_column("ContainerID")
-        require_unit_column("ContainmentName")
-        require_unit_column("ContentsHash")
+        require_table('Unit')
+        require_table('_MetaData')
+        require_unit_column('UnitID')
+        require_unit_column('ContainerID')
+        require_unit_column('ContainmentName')
+        require_unit_column('ContentsHash')
       end
 
       def validate_units
@@ -53,25 +51,25 @@ module Mxrb
         @progress.update(total: @units.size + 3, detail: "#{@units.size} units")
         validate_root
         validate_unit_ids
-        @progress.advance(detail: "unit tree")
+        @progress.advance(detail: 'unit tree')
         validate_contents
       end
 
       def validate_root
-        roots = @units.select { _1["UnitID"] == _1["ContainerID"] }
+        roots = @units.select { _1['UnitID'] == _1['ContainerID'] }
         add_error("expected exactly one root unit, found #{roots.size}") unless roots.size == 1
       end
 
       def validate_unit_ids
-        ids = @units.map { _1["UnitID"] }
-        ids.each { add_error("blank UnitID") if _1.to_s.empty? }
+        ids = @units.map { _1['UnitID'] }
+        ids.each { add_error('blank UnitID') if _1.to_s.empty? }
         duplicates = ids.tally.select { |_id, count| count > 1 }.keys
         duplicates.each { add_error("duplicate UnitID #{_1}") }
 
         id_set = ids.to_set
         @units.each do |unit|
-          parent = unit["ContainerID"]
-          next if parent == unit["UnitID"]
+          parent = unit['ContainerID']
+          next if parent == unit['UnitID']
 
           add_error("unit #{unit['UnitID']} references missing container #{parent}") unless id_set.include?(parent)
         end
@@ -98,7 +96,7 @@ module Mxrb
       end
 
       def validate_hash(unit, bytes)
-        expected = unit["ContentsHash"].to_s
+        expected = unit['ContentsHash'].to_s
         actual = IO::BsonCodec.contents_hash(bytes)
         add_error("unit #{unit['UnitID']} ContentsHash mismatch") unless expected == actual
       end
@@ -111,19 +109,19 @@ module Mxrb
       end
 
       def validate_doc_identity(unit, doc)
-        type = doc["$Type"] || doc["\$Type"]
+        type = doc['$Type'] || doc["\$Type"]
         add_error("unit #{unit['UnitID']} missing $Type") if type.to_s.empty?
 
-        doc_id = IO::BsonCodec.extract_id(doc["$ID"] || doc["\$ID"])
+        doc_id = IO::BsonCodec.extract_id(doc['$ID'] || doc["\$ID"])
         if doc_id.to_s.empty?
           add_error("unit #{unit['UnitID']} missing $ID")
-        elsif doc_id != unit["UnitID"]
+        elsif doc_id != unit['UnitID']
           record_identity_mismatch(unit, doc_id, type)
         end
       end
 
       def record_identity_mismatch(unit, doc_id, type)
-        mismatch = [unit["UnitID"], doc_id, type]
+        mismatch = [unit['UnitID'], doc_id, type]
         if @legacy_identity_mismatches&.include?(mismatch)
           add_warning(
             "unit #{unit['UnitID']} preserves legacy content $ID mismatch #{doc_id}"
@@ -195,7 +193,7 @@ module Mxrb
       end
 
       def require_unit_column(name)
-        columns = @mpr.table_info("Unit").map { _1["name"] || _1[:name] }
+        columns = @mpr.table_info('Unit').map { _1['name'] || _1[:name] }
         add_error("missing Unit.#{name} column") unless columns.include?(name)
       end
 

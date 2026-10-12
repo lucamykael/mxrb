@@ -43,8 +43,8 @@ RSpec.describe 'Ruby application internal contracts' do
     synchronizer.instance_variable_set(
       :@manifest,
       double(modules: [{ 'constants' => [{
-        'name' => 'App.MissingOldName', 'id' => '22222222-2222-4222-8222-222222222222'
-      }] }])
+               'name' => 'App.MissingOldName', 'id' => '22222222-2222-4222-8222-222222222222'
+             }] }])
     )
     project = double(find_artifact: nil)
     expect(synchronizer.send(:validate_constant_renames!, project)).to be_nil

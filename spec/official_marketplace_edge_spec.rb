@@ -23,8 +23,8 @@ RSpec.describe Mxrb::OfficialMarketplace, 'edge contracts' do
       expect { described_class.lock(dir) }.to raise_error(Mxrb::MarketplaceError, /invalid/)
 
       File.write(lock_path, JSON.generate('packages' => {
-        'Missing' => { 'destination' => 'modules/Missing', 'sha256' => 'expected' }
-      }))
+                                            'Missing' => { 'destination' => 'modules/Missing', 'sha256' => 'expected' }
+                                          }))
       expect(described_class.verify(dir).dig('Missing', :actual)).to be_nil
 
       config = File.join(dir, 'xdg')

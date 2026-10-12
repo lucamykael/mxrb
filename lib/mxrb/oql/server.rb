@@ -55,13 +55,13 @@ module Mxrb
       def dispatch(request, response)
         if request.request_method != 'POST'
           return render(response, 405, ok: false, error: {
-            code: 'method_not_allowed', message: 'use POST /query'
-          })
+                          code: 'method_not_allowed', message: 'use POST /query'
+                        })
         end
         if request.body.to_s.bytesize > MAX_BODY_BYTES
           return render(response, 413, ok: false, error: {
-            code: 'request_too_large', message: 'request body exceeds 1 MiB'
-          })
+                          code: 'request_too_large', message: 'request body exceeds 1 MiB'
+                        })
         end
 
         payload = JSON.parse(request.body.to_s)
@@ -69,8 +69,8 @@ module Mxrb
         render(response, result[:ok] ? 200 : error_status(result), result)
       rescue JSON::ParserError => e
         render(response, 400, ok: false, error: {
-          code: 'invalid_json', message: e.message
-        })
+                 code: 'invalid_json', message: e.message
+               })
       end
       # rubocop:enable Metrics/MethodLength
 

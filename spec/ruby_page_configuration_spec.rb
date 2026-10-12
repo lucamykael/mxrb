@@ -29,8 +29,8 @@ RSpec.describe 'private Ruby page configuration' do
 
   def manifest(widgets, identifier = page_id)
     Mxrb::RubyApp::Manifest.new('/tmp/page-config', 'mode' => 'ruby', 'modules' => [{
-      'name' => 'App', 'pages' => [{ 'id' => identifier, 'widgets' => widgets }]
-    }])
+                                  'name' => 'App', 'pages' => [{ 'id' => identifier, 'widgets' => widgets }]
+                                }])
   end
 
   def emitted_widgets(widgets)

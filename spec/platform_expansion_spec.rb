@@ -149,8 +149,8 @@ RSpec.describe 'platform expansion services' do
         File.write(file, 'changed')
         entry = { 'path' => 'generated.rb', 'sha256' => Digest::SHA256.hexdigest('original') }
         File.write(registry_path, JSON.generate('scaffolds' => {
-          'changed' => { 'files' => [entry] }, 'missing' => { 'files' => [entry.merge('path' => 'gone.rb')] }
-        }))
+                                                  'changed' => { 'files' => [entry] }, 'missing' => { 'files' => [entry.merge('path' => 'gone.rb')] }
+                                                }))
         registry = described_class.new(dir)
         expect { registry.remove('changed') }.to raise_error(ArgumentError, /changed scaffold/)
         expect { registry.remove('missing') }.to raise_error(ArgumentError, /changed scaffold/)

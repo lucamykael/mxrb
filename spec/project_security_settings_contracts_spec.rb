@@ -29,8 +29,8 @@ RSpec.describe 'Project security settings contracts' do
       member 'Name', rights: :read_only
     end
     security.image_access_rule('System.Administrator', members: [{
-      name: 'PublicThumbnailPath', rights: :ReadOnly, kind: :association
-    }])
+                                 name: 'PublicThumbnailPath', rights: :ReadOnly, kind: :association
+                               }])
     expect(security.native_definition).to include(admin_password: 'private')
     expect(security.native_definition.dig(:file_document_access, 0, :source_identity)).to eq('rule_1')
 
@@ -38,8 +38,8 @@ RSpec.describe 'Project security settings contracts' do
       .to raise_error(ArgumentError, /at least one module role/)
     expect do
       security.file_document_access_rule('System.User', members: [{
-        name: 'Name', rights: :ReadOnly, kind: :unknown
-      }])
+                                           name: 'Name', rights: :ReadOnly, kind: :unknown
+                                         }])
     end.to raise_error(ArgumentError, /kind must be attribute or association/)
     expect { security.image_access_rule('System.User', default_rights: :unknown) }
       .to raise_error(ArgumentError, /access rights must be one of/)
@@ -56,10 +56,10 @@ RSpec.describe 'Project security settings contracts' do
 
   it 'resolves fresh nested identities and fails closed for missing or changed baselines' do
     fresh = declaration(file_document_access: [{
-      roles: ['System.User'], xpath: '', members: [{
-        name: 'Name', reference: '', rights: :ReadOnly, kind: :attribute
-      }]
-    }])
+                          roles: ['System.User'], xpath: '', members: [{
+                            name: 'Name', reference: '', rights: :ReadOnly, kind: :attribute
+                          }]
+                        }])
     expect(Mxrb::RubyApp::SecurityIdentity.new(manifest).project_security(fresh)
       .dig(:file_document_access, 0, :members, 0, :id)).to be_nil
 
@@ -81,8 +81,8 @@ RSpec.describe 'Project security settings contracts' do
     expect do
       Mxrb::RubyApp::SecurityIdentity.new(manifest(baseline)).project_security(
         declaration(file_document_access: [{
-          roles: ['System.Administrator'], xpath: '', members: []
-        }])
+                      roles: ['System.Administrator'], xpath: '', members: []
+                    }])
       )
     end.to raise_error(Mxrb::ValidationError, /clear the project access rules explicitly/)
   end
@@ -123,8 +123,8 @@ RSpec.describe 'Project security settings contracts' do
       '/tmp/source.mpr', '/tmp/exported', mendix_sidecar: '/tmp/sidecar'
     )
     expect(ruby_exporter.send(:project_access_container_manifest, {
-      'AccessRules' => [3, empty_role_rule]
-    })).to be_nil
+                                'AccessRules' => [3, empty_role_rule]
+                              })).to be_nil
 
     comparator = Mxrb::Compare::Comparator.new('/tmp/left.mpr', '/tmp/right.mpr')
     expect(comparator.send(:project_access_summary, nil)).to eq([])
