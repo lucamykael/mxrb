@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { evaluate } from './expression';
-import { parseDateTimeUTC } from './dateParsing';
+import { clientFunction } from './clientFunctions';
+
+const parseDateTimeUTC = (args: unknown[]) => clientFunction('parseDateTimeUTC', args);
 
 const cases = [
   {
@@ -167,22 +169,21 @@ describe('native UTC date parsing', () => {
     }
   });
   it('throws without a fallback and preserves an explicit empty fallback', () => {
-    expect(() => parseDateTimeUTC(['bad', 'yyyy-MM-dd'])).toThrow('Cannot parse');
+    expect(() => parseDateTimeUTC(['bad', 'yyyy-MM-dd'])).toThrow('Unparseable date: "bad"');
     expect(parseDateTimeUTC(['bad', 'yyyy-MM-dd', null])).toBeNull();
     expect(() => parseDateTimeUTC(['bad', 'yyyy-MM-dd', 42])).toThrow('date fallback');
   });
-  it('rejects unsupported patterns and invalid arguments explicitly', () => {
-    for (const pattern of ['yy-MM-dd', 'dd MMM yyyy', "yyyy-MM-dd'"])
-      expect(() => parseDateTimeUTC(['input', pattern, null])).toThrow();
-    for (const args of [[], ['date'], [null, 'yyyy'], ['2024', null], ['date', 'yyyy', null, null]])
-      expect(() => parseDateTimeUTC(args)).toThrow('requires');
+  it('rejects arguments that are not text', () => {
+    for (const args of [[], ['date'], [null, 'yyyy'], ['2024', null]])
+      expect(() => parseDateTimeUTC(args)).toThrow('expects a text and a pattern');
   });
   it('preserves literal quotes and validates calendar components', () => {
     expect(parseDateTimeUTC(["2024 o'clock 12", "yyyy 'o''clock' HH"])).toBe(
       '2024-01-01T12:00:00.000Z',
     );
     expect(parseDateTimeUTC(["2024'01", "yyyy''MM"])).toBe('2024-01-01T00:00:00.000Z');
-    for (const source of ['1799-01-01', '2024-00-01', '2024-01-00', '2024-02-30', '10000-01-01'])
+    expect(parseDateTimeUTC(['1799-01-01', 'yyyy-MM-dd'])).toBe('1799-01-01T00:00:00.000Z');
+    for (const source of ['2024-00-01', '2024-01-00', '2024-02-30', '10000-01-01'])
       expect(parseDateTimeUTC([source, 'yyyy-MM-dd', null])).toBeNull();
   });
 });

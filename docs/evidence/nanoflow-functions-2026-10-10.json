@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-10",
+  "scope": "Nanoflow date, parsing and number functions in the exported TypeScript client",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app, Mendix Runtime and headless Chromium via script/client_native_oracle",
+    "browser_time_zone": "America/New_York",
+    "language": "en_US",
+    "cases": 42,
+    "expected_errors": 9,
+    "status": "passed",
+    "results": {
+      "FormatPattern": "2024-03-05 14:07:09|Tue, 5 Mar 24 2:07 PM|Tuesday March 5, 2024 09:04 AM",
+      "FormatFields": "65 10 W Tue 2 F|14 2 14 2|24 0 0 12 AM",
+      "FormatMillis": "09.045 045 045",
+      "FormatQuoted": "at 14 o'clock",
+      "FormatShort": "3/5/24 3 03 Mar",
+      "FormatZone": "z|Z|X|XXX|z|Z",
+      "FormatEra": "AD 2024 2024",
+      "FormatDefault": "3/5/24, 2:07 PM",
+      "FormatUtc": "2024-03-05 19:07 z|3/5/24, 7:07 PM",
+      "FormatDate": "3/5/24|2:07 PM",
+      "ToStringDate": "3/5/2024, 2:07 PM",
+      "ParsePattern": "2024-03-05 19:07:00",
+      "ParseDst": "2024-03-10 07:30",
+      "ParseNames": "2024-03-05 19:07",
+      "ParseDefault": "2000-01-01 05:00",
+      "ParseInteger": "42|-7|5",
+      "Math": "5|2.5|1024|1.4142135623730950488|3|3|-3|-2|2",
+      "Random": "true",
+      "Between": "0.21052083333333333333|5.0525|303.15|18189|18189000|9.2268998015873015873",
+      "BetweenDst": "1.95833333333333333333|47",
+      "CalendarBetween": "2|4",
+      "WeekToken": "Sun 00:00:00.000|Sat 23:59:59.999|Sun 00:00:00.000",
+      "WeekYear": "1 01 2023 23 1 001 7 Sun Sunday|1 2025 24 2024 2024|1 2021 6",
+      "Hours": "12 12 0 00 12 12 12 12 PM PM|12 12 0 00 24 24 0 00 5 05 3 03",
+      "Widths": "005 005 005 0005|March 3 03 5 05 005 Tuesday",
+      "ParseLoose": "2024-03-05 05:00|2024-03-05 19:07|2024|1999|05:30|05.123",
+      "ParseYears": "1799|2000|0099",
+      "DayTokens": "true|true|true",
+      "ParseWeekday": "2024-03-05",
+      "ParseIntegerEdge": "1|1|1|1|9999999999|1|0|7",
+      "BetweenReverse": "0.21052083333333333333|2|1|7",
+      "MathEdge": "2.5|1.4142135623730951|0.5|2.35|1.01|2.5|2|3|1e+30|4|1200",
+      "ToStringNumbers": "1.5|2.5|0.33333333333333333333|0.20",
+      "FormatEmpty": "<no result>",
+      "ParseInvalid": "<no result>",
+      "ParseLenient": "<no result>",
+      "ParseIntegerBad": "<no result>",
+      "Letters": "<no result>",
+      "Literals": "<no result>",
+      "ParseTrailing": "<no result>",
+      "ParseHourOverflow": "<no result>",
+      "SqrtNegative": "<no result>"
+    },
+    "expected_failures": [
+      "[Client] An error occurred while executing an action of Probe.Home.FormatEmpty: Operator formatDateTime not supported in expression formatDateTime(, yyyy)",
+      "[Client] An error occurred while executing an action of Probe.Home.ParseInvalid: Unparseable date: \"bad\"",
+      "[Client] An error occurred while executing an action of Probe.Home.ParseLenient: Unparseable date: \"2024-02-30\"",
+      "[Client] An error occurred while executing an action of Probe.Home.ParseIntegerBad: Not parsable to Integer: 4.5",
+      "[Client] An error occurred while executing an action of Probe.Home.Letters: Format string contains an unescaped latin alphabet character `A`",
+      "[Client] An error occurred while executing an action of Probe.Home.Literals: Cannot read properties of null (reading 'map')",
+      "[Client] An error occurred while executing an action of Probe.Home.ParseTrailing: Unparseable date: \"2024-03-05x\"",
+      "[Client] An error occurred while executing an action of Probe.Home.ParseHourOverflow: Unparseable date: \"2024-03-05 25:00\"",
+      "[Client] An error occurred while executing an action of Probe.Home.SqrtNegative: Operator sqrt not supported in expression sqrt(-1)"
+    ]
+  },
+  "ruby": {
+    "exported_app_identical": true
+  },
+  "regressions": {
+    "native_nanoflow_expressions": {
+      "cases": 27,
+      "identical": true
+    },
+    "native_nanoflow_data": {
+      "cases": 15,
+      "identical": true
+    }
+  },
+  "native_semantics": [
+    "the client formats and parses with date-fns after rewriting the Java pattern: W, F, z, Z and X become literals, E/EE widen to EEE, S/SS to SSS, SSSS+ pads milliseconds, u is the ISO day of week",
+    "any other unknown Latin letter in a pattern is an error; an empty pattern is an error",
+    "formatDateTime without a pattern, formatDate and formatTime use the short style of the session language; toString of a date uses it with a four-digit year",
+    "parseDateTime is strict, tries the two-digit-year pattern first, fills missing fields from the current date and accepts years outside 1800-9999",
+    "daysBetween and the other *Between functions return the absolute distance as a decimal with 20 places; calendarMonthsBetween/calendarYearsBetween compare calendar components",
+    "division, sqrt and negative pow keep 20 decimal places (big.js), round uses the project rounding, numbers from 1e21 or below 1e-6 print exponentially",
+    "week tokens start on the session language first day; UTC week tokens always start on Sunday",
+    "formatDecimal, trimToWeeks and getDay are not available in nanoflows"
+  ],
+  "fixed": [
+    "TypeScript division of the client used 38 significant digits instead of 20 decimal places",
+    "nanoflow parseDateTimeUTC rejected years outside 1800-9999 and non-numeric patterns that the client accepts"
+  ],
+  "limitations": [
+    "only en_US was certified against the official client; other languages derive names and short styles from the browser Intl data",
+    "the Buddhist calendar of Thai is applied to formatting and to parsed years without certification"
+  ]
+}

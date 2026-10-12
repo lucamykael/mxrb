@@ -29,7 +29,7 @@ describe('decimal transport and expressions', () => {
     expect(evaluate('toString(9007199254740993.00000001 + 0.00000001)', null)).toBe(
       '9007199254740993.00000002',
     );
-    expect(evaluate('toString(3 : 7)', null)).toBe('0.42857142857142857142857142857142857143');
+    expect(evaluate('toString(3 : 7)', null)).toBe('0.42857142857142857143');
     expect(evaluate('ceil((3 : 7) * 7)', null)).toBe(4);
     expect(evaluate('round(-2.5)', null)).toBe(-3);
     expect(evaluate('round(88.725, 2)', null)).toEqual(decimal('88.73'));

@@ -3474,7 +3474,8 @@ module Mxrb
           },
           'dependencies' => {
             'react' => '^19.2.8', 'react-dom' => '^19.2.8',
-            'react-router-dom' => '^7.18.2', 'decimal.js' => '^10.6.0', 'plotly.js-dist-min' => '3.0.1',
+            'react-router-dom' => '^7.18.2', 'date-fns' => '^4.1.0', 'decimal.js' => '^10.6.0',
+            'plotly.js-dist-min' => '3.0.1',
             'js-base64' => '3.7.7'
           },
           'devDependencies' => {

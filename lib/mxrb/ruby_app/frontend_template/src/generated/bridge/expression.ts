@@ -7,10 +7,16 @@ import {
   isDecimalFunction,
   isNumeric,
   numericCompare,
-  numericText,
 } from './decimal';
 import { calendarFunction, isCalendarFunction } from './calendar';
-import { parseDateTimeUTC } from './dateParsing';
+import {
+  clientFunction,
+  clientNumberText,
+  clientToken,
+  isClientFunction,
+  isDateValue,
+} from './clientFunctions';
+import { defaultPattern, formatJavaPattern } from './dateFormatting';
 import { attributeDefinition, enumerationDefinition, expressionSchema, translated } from './schemaLookup';
 
 // Keep enum identity until comparison. Backend records can contain either the
@@ -97,6 +103,8 @@ function dateToken(token: string, timeZone?: string): string {
   const name = token.slice(2, -2);
   const now = new Date().toISOString();
   if (name === 'CurrentDateTime') return now;
+  const client = clientToken(name, new Date(now));
+  if (client) return client;
   const match = /^(BeginOf|EndOf)Current(\w+?)(UTC)?$/.exec(name);
   if (!match || !tokenUnits.includes(match[2])) throw new Error(`Unsupported token: ${token}`);
   const [, edge, unit, utc = ''] = match;
@@ -136,7 +144,7 @@ function boolean(value: Value): boolean {
 function concatenated(value: Value): string {
   if (empty(value)) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || isDecimal(value)) return numericText(value);
+  if (typeof value === 'number' || isDecimal(value)) return clientNumberText(value);
   throw new Error('Only text and numbers can be concatenated');
 }
 
@@ -293,14 +301,16 @@ export function evaluate(
       };
     if (token.startsWith('[%')) return () => dateToken(token, options.timeZone);
     if (token.startsWith('$')) return () => path(token);
-    if (
-      isCalendarFunction(token) ||
-      isDecimalFunction(token) ||
-      token.toLowerCase() === 'parsedatetimeutc'
-    ) {
+    if (isClientFunction(token)) {
       const arguments_ = callArguments();
-      if (token.toLowerCase() === 'parsedatetimeutc')
-        return () => parseDateTimeUTC(arguments_.map((argument) => argument()));
+      return () =>
+        clientFunction(
+          token,
+          arguments_.map((argument) => argument()),
+        ) as Value;
+    }
+    if (isCalendarFunction(token) || isDecimalFunction(token)) {
+      const arguments_ = callArguments();
       if (isDecimalFunction(token))
         return () =>
           decimalFunction(
@@ -332,11 +342,11 @@ export function evaluate(
       consume(')');
       return () => {
         const result = value();
-        return result instanceof EnumLiteral
-          ? result.member
-          : isDecimal(result)
-            ? numericText(result)
-            : String(result ?? '');
+        if (result instanceof EnumLiteral) return result.member;
+        if (typeof result === 'number' || isDecimal(result)) return clientNumberText(result);
+        if (isDateValue(result))
+          return formatJavaPattern(new Date(result), defaultPattern('datetime', true));
+        return String(result ?? '');
       };
     }
     if (/^\w+\.\w+\.\w+$/.test(token)) return () => new EnumLiteral(token);
