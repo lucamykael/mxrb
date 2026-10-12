@@ -897,6 +897,50 @@ objeto do Data View indicado em `source:`. Fontes desconhecidas continuam
 bloqueadas. Com isso, a exportação Ruby de uma cópia do projeto privado SPC passa
 a auditoria do código público e o round-trip idêntico.
 
+A Data grid 2 é exportada pela chamada tipada `data_grid`, com `xpath:` da fonte
+de dados, `sort: [sort_by(...)]`, `on_click_trigger: "double"` e um bloco
+`header` com os widgets do cabeçalho (`filtersPlaceholder`). Cada `column` aceita
+`association_path: [[associação, entidade], ...]`, `dynamic_text:` com
+`parameters:`, `hidable:`, `width: "auto_fit"|"manual"`, `size:`, `alignment:` e
+um bloco com o conteúdo customizado, renderizado com a linha como contexto. Os
+filtros usam `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
+lista os valores de atributos booleanos ou de enumeração e não aparece sobre
+associações. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
+divide o espaço por `size`, `autoFit` segue o conteúdo e `manual` usa pixels. O
+runtime preenche `System.grantableRoles` a partir dos papéis gerenciáveis da
+segurança do projeto, e assim a XPath da Account_Overview do módulo
+Administration mostra as contas cujos papéis o usuário atual pode conceder.
+
+O schema do cliente inclui as entidades e associações do módulo System (sem a
+senha), e um `reference_selector` sobre um reference set, como `System.UserRoles`,
+vira uma seleção múltipla dos objetos de destino. Um botão de microflow sem
+mapeamento de parâmetros passa o objeto do seu Data View ao único parâmetro não
+mapeado de entidade compatível, como o Mendix faz; assim o Save do popup New
+Account do módulo Administration cria a conta. Um Data View por associação
+mantém os widgets e seus rascunhos montados enquanto recarrega o mesmo objeto.
+
+Numa página com Save/Cancel, uma chamada de microflow leva os objetos editados
+(sem commit), como o cliente do Mendix; rascunhos alcançados de novo por uma
+associação mantêm o token, e a mudança é aplicada à mesma instância que o
+microflow grava. Depois de um microflow num popup, a página de baixo recarrega.
+Uma ação de página sem argumentos mapeados recebe o objeto em que o evento age,
+como a linha de um grid. Labels importam a legenda e a visibilidade por valor de
+atributo (`text ..., visibility: input_condition(...)`), e botões importam o
+ícone de coleção (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); uma
+legenda vazia continua vazia.
+Textos com modo de renderização H1–H6 ou parágrafo
+(`text ..., render_mode: :h2`) e botões do tipo Link (`button ..., render_type: :link`)
+são renderizados como no cliente Mendix; o Tab Control usa o markup de abas do
+Atlas, e a Data grid 2 mostra booleanos como Yes/No.
+`input_condition` aceita `roles:` e `ignore_security:` quando a condição também
+restringe papéis de módulo; a Data grid 2 em snippets usa a mesma chamada tipada
+das páginas; e nanoflows excluídos que citam elementos removidos do modelo (o
+Studio Pro não verifica documentos excluídos) geram um corpo vazio em vez de
+interromper a exportação. Com isso, cópias dos projetos privados QRQC e SPC e o
+Sudoku passam a auditoria do código público e o round-trip idêntico.
+Os filtros da Data grid 2 têm o seletor de operador do widget (Contains, Starts with,
+Greater than, Between, Empty...), e os filtros drop-down mostram Select/Yes/No.
+
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
 seu foco. Objetos vindos do servidor permanecem persistentes; falhas de gravação,

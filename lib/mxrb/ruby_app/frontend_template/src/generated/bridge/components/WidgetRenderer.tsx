@@ -16,7 +16,12 @@ import { PageParameters, LocalVariables } from '../PageVariables';
 import { DataGrid } from './DataGrid';
 import { BoundField } from './BoundField';
 import { TabControl } from './TabControl';
-import { SharedPresentation, ScrollContainer, ReferenceSetSelector } from './PresentationWidgets';
+import {
+  CollectionIcon,
+  SharedPresentation,
+  ScrollContainer,
+  ReferenceSetSelector,
+} from './PresentationWidgets';
 import { FileWidget } from './FileWidget';
 import { PageTitleContext } from './PageTitleContext';
 import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
@@ -220,6 +225,10 @@ export function DataView({
       : context || pageContext;
   const [record, setRecord] = useState<EntityRecord | null>(inheritedContext);
   const [loading, setLoading] = useState(false);
+  // The context the current record was loaded for: a refresh for the same
+  // context keeps the widgets (and their drafts) mounted.
+  const contextKey = `${inheritedContext?.type}/${inheritedContext?.id}`;
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
   const contextRef = useRef(inheritedContext);
   contextRef.current = inheritedContext;
@@ -230,9 +239,12 @@ export function DataView({
   useEffect(() => {
     let current = true;
     const activeContext = contextRef.current;
+    const activeKey = `${activeContext?.type}/${activeContext?.id}`;
     const accept = (value: unknown) => {
       const candidate = value as RuntimeValue;
-      if (current) setRecord(isEntityRecord(candidate) ? candidate : null);
+      if (!current) return;
+      setRecord(isEntityRecord(candidate) ? candidate : null);
+      setLoadedFor(activeKey);
     };
     const mappings = (): RuntimeVariables =>
       Object.fromEntries(
@@ -391,7 +403,7 @@ export function DataView({
         Could not resolve data view {widget.name}: {unsupported}
       </div>
     );
-  if (loading)
+  if (loading && loadedFor !== contextKey)
     return (
       <div className="mxrb-data-view mxrb-data-view--loading" aria-busy="true">
         Loading…
@@ -551,7 +563,11 @@ function WidgetContent({
     onSelectRecord,
   };
   const label = caption(widget, options, activeRecord, variables);
-  const renderWidgets = (widgets: WidgetDefinition[] | undefined, region: string) =>
+  const renderWidgets = (
+    widgets: WidgetDefinition[] | undefined,
+    region: string,
+    record?: EntityRecord | null,
+  ) =>
     (widgets || []).map((child, index) => (
       <WidgetRenderer
         key={`${region}-${child.name}-${index}`}
@@ -560,7 +576,7 @@ function WidgetContent({
         invoke={invoke}
         invokeNanoflow={invokeNanoflow}
         navigate={navigate}
-        context={context}
+        context={record ?? context}
         pageContext={pageContext}
         revision={revision}
         schema={schema}
@@ -786,16 +802,22 @@ function WidgetContent({
         </div>
       );
     }
-    case 'text':
+    case 'text': {
+      // Studio Pro render modes: headings, paragraph or inline text.
+      const mode = String(options.render_mode || '');
+      const Tag = (
+        /^h[1-6]$/.test(mode) ? mode : mode === 'paragraph' ? 'p' : 'span'
+      ) as 'span';
       return (
-        <span
+        <Tag
           {...runtimeProps}
           className={classes('mx-text', className)}
           style={inlineStyle(options.style)}
         >
           {label}
-        </span>
+        </Tag>
       );
+    }
     case 'page_title':
       return (
         <h1 {...runtimeProps} className={className} style={inlineStyle(options.style)}>
@@ -803,6 +825,25 @@ function WidgetContent({
         </h1>
       );
     case 'button':
+      if (options.render_type === 'link')
+        return (
+          <a
+            {...runtimeProps}
+            href="#"
+            role="button"
+            className={classes(className, 'mx-link')}
+            aria-disabled={running || undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (!running || click?.settings?.disabled_during_execution === false) onClick?.();
+            }}
+          >
+            {typeof options.icon === 'string' && options.icon && (
+              <CollectionIcon name={options.icon} schema={schema} />
+            )}
+            {label}
+          </a>
+        );
       return (
         <button
           {...runtimeProps}
@@ -816,6 +857,9 @@ function WidgetContent({
           disabled={running && click?.settings?.disabled_during_execution !== false}
           aria-busy={running || undefined}
         >
+          {typeof options.icon === 'string' && options.icon && (
+            <CollectionIcon name={options.icon} schema={schema} />
+          )}
           {label}
         </button>
       );
@@ -890,7 +934,7 @@ function WidgetContent({
       );
     case 'tab_control':
       return (
-        <div {...runtimeProps} className={className}>
+        <div {...runtimeProps} className={classes('mx-tabcontainer', className)}>
           <TabControl
             tabs={options.tabs || []}
             label={label}
@@ -917,6 +961,8 @@ function WidgetContent({
               onSelectRecord(record);
             }}
             onRowAction={(record) => runEvent(change || click, record)}
+            schema={schema}
+            renderWidgets={(widgets, record, key) => renderWidgets(widgets, key, record)}
           />
         </div>
       );

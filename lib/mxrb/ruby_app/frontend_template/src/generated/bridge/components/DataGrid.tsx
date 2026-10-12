@@ -1,7 +1,8 @@
 import { decimal, type DecimalValue, isDecimal, numericCompare, numericText } from '../decimal';
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import type {
   ApiRequest,
+  ApplicationSchema,
   EntityCollectionResponse,
   EntityRecord,
   RuntimeValue,
@@ -9,7 +10,17 @@ import type {
   WidgetDefinition,
 } from '../../types';
 import type { ErrorHandler, SelectRecord } from '../contracts';
-import { classes, displayValue, entityCollectionPath, recordValue, sortRecords } from '../value';
+import { attributeDefinition, enumerationDefinition } from '../schemaLookup';
+import {
+  classes,
+  displayValue,
+  entityCollectionPath,
+  expressionValue,
+  isEntityRecord,
+  memberName,
+  recordValue,
+  sortRecords,
+} from '../value';
 import { NativeDataGrid } from './NativeDataGrid';
 
 interface DataGridProps {
@@ -22,6 +33,13 @@ interface DataGridProps {
   onRowAction: (record: EntityRecord) => unknown;
   onSelectRecord: SelectRecord;
   onSelectRecords?: (records: EntityRecord[]) => void;
+  schema?: ApplicationSchema | null;
+  // Renders widgets with a row as their context, or the grid's own context.
+  renderWidgets?: (
+    widgets: WidgetDefinition[],
+    record: EntityRecord | null,
+    key: string,
+  ) => ReactNode;
 }
 
 type FilterType = 'text' | 'number' | 'date' | 'boolean' | 'enum';
@@ -40,12 +58,38 @@ const defaultOperator: Record<FilterType, string> = {
   enum: 'equals',
 };
 
-const filterConfig = (column: WidgetColumn): FilterConfig | null => {
+// A Data grid 2 drop-down filter lists the values of a boolean or enumeration
+// attribute; over an association it has no attribute values to offer.
+const dropDownFilter = (
+  column: WidgetColumn,
+  entity: string,
+  schema: ApplicationSchema | null | undefined,
+): Pick<FilterConfig, 'type' | 'options'> | null => {
+  if (column.association_path?.length) return null;
+  const attribute = attributeDefinition(schema, entity, column.attribute || column.name || '');
+  if (attribute?.type === 'boolean') return { type: 'boolean', options: [] };
+  const enumeration = attribute?.enumeration && enumerationDefinition(schema, attribute.enumeration);
+  if (!enumeration) return null;
+  return {
+    type: 'enum',
+    options: enumeration.values.map((value) => ({ value: value.name, caption: value.caption })),
+  };
+};
+
+const filterConfig = (
+  column: WidgetColumn,
+  entity = '',
+  schema?: ApplicationSchema | null,
+): FilterConfig | null => {
   if (!column.filter) return null;
   const source =
     typeof column.filter === 'object'
       ? column.filter
       : { type: column.filter, operator: undefined, options: undefined };
+  if (String(source.type).toLowerCase() === 'drop_down') {
+    const resolved = dropDownFilter(column, entity, schema);
+    return resolved && { ...resolved, operator: 'equals' };
+  }
   const candidate = String(source.type || 'text').toLowerCase();
   const type: FilterType = ['text', 'number', 'date', 'boolean', 'enum'].includes(candidate)
     ? (candidate as FilterType)
@@ -135,6 +179,44 @@ export const matchesGridFilter = (
   return compare(left, right) === 0;
 };
 
+// The value a column shows: its attribute, read over its association path
+// (a list when a step is a reference set).
+export const columnValue = (
+  record: EntityRecord,
+  column: WidgetColumn,
+): RuntimeValue | undefined => {
+  const attribute = column.attribute || column.name;
+  if (!column.association_path?.length) return recordValue(record, attribute);
+  let objects: EntityRecord[] = [record];
+  column.association_path.forEach((step) => {
+    objects = objects.flatMap((object) => {
+      const value = recordValue(object, step.association);
+      return (Array.isArray(value) ? value : [value]).filter(isEntityRecord);
+    });
+  });
+  const values = objects.map((object) => object.attributes[memberName(attribute)] ?? null);
+  return values.length === 1 ? values[0] : values;
+};
+
+const dynamicText = (column: WidgetColumn, record: EntityRecord): string =>
+  (column.parameters || []).reduce<string>(
+    (text, parameter, index) =>
+      text.replaceAll(`{${index + 1}}`, String(displayValue(expressionValue(parameter, record)))),
+    column.dynamic_text || '',
+  );
+
+const withXPath = (path: string, xpath: string | undefined, context: EntityRecord | null) => {
+  if (!xpath) return path;
+  const [base, query = ''] = path.split('?', 2);
+  const parameters = new URLSearchParams(query);
+  parameters.set('xpath', xpath);
+  if (context && xpath.includes('$currentObject')) {
+    parameters.set('xpath_context_type', context.type);
+    parameters.set('xpath_context_id', context.id);
+  }
+  return `${base}?${parameters}`;
+};
+
 const activeFilter = (value: string, config: FilterConfig): boolean =>
   ['empty', 'not_empty'].includes(config.operator) || value.trim() !== '';
 
@@ -154,20 +236,125 @@ const serverCollectionPath = (
   return `${path}?${parameters}`;
 };
 
+// The operators a Data grid 2 filter offers, with its icon class and caption.
+const FILTER_OPERATORS: Record<FilterType, string[]> = {
+  text: [
+    'contains',
+    'starts_with',
+    'ends_with',
+    'gt',
+    'gte',
+    'equals',
+    'not_equals',
+    'lt',
+    'lte',
+    'empty',
+    'not_empty',
+  ],
+  number: ['gt', 'gte', 'equals', 'not_equals', 'lt', 'lte', 'empty', 'not_empty'],
+  date: ['between', 'gt', 'gte', 'equals', 'not_equals', 'lt', 'lte', 'empty', 'not_empty'],
+  boolean: [],
+  enum: [],
+};
+const OPERATOR_LABELS: Record<string, [string, string]> = {
+  contains: ['contains', 'Contains'],
+  starts_with: ['startsWith', 'Starts with'],
+  ends_with: ['endsWith', 'Ends with'],
+  gt: ['greater', 'Greater than'],
+  gte: ['greaterEqual', 'Greater than or equal'],
+  equals: ['equal', 'Equal'],
+  not_equals: ['notEqual', 'Not equal'],
+  lt: ['smaller', 'Smaller than'],
+  lte: ['smallerEqual', 'Smaller than or equal'],
+  empty: ['empty', 'Empty'],
+  not_empty: ['notEmpty', 'Not empty'],
+  between: ['between', 'Between'],
+};
+
+const OperatorSelector = ({
+  config,
+  onSelect,
+}: {
+  config: FilterConfig;
+  onSelect: (operator: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [icon, caption] = OPERATOR_LABELS[config.operator] || [config.operator, config.operator];
+  return (
+    <div className="filter-selector">
+      <div className="filter-selector-content">
+        <button
+          type="button"
+          className={`btn btn-default filter-selector-button button-icon ${icon}`}
+          aria-label={caption}
+          title={caption}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        />
+        <ul
+          className={`filter-selectors ${open ? 'visible' : 'hidden'}`}
+          role="listbox"
+          aria-label="Select filter type"
+          hidden={!open}
+        >
+          {FILTER_OPERATORS[config.type].map((operator) => (
+            <li
+              key={operator}
+              role="option"
+              aria-selected={operator === config.operator}
+              className={`filter-listitem${operator === config.operator ? ' filter-selected' : ''}`}
+              onClick={() => {
+                onSelect(operator);
+                setOpen(false);
+              }}
+            >
+              <div className={`filter-icon ${OPERATOR_LABELS[operator][0]}`} aria-hidden="true" />
+              <div className="filter-label">{OPERATOR_LABELS[operator][1]}</div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
 const FilterInput = ({
   column,
+  config,
   value,
   onChange,
+  onOperator,
 }: {
   column: WidgetColumn;
+  config: FilterConfig | null;
   value: string;
   onChange: (value: string) => void;
+  // Data grid 2 filters let the user choose the operator.
+  onOperator?: (operator: string) => void;
 }) => {
-  const config = filterConfig(column);
   if (!config) return null;
   const label = column.caption || column.name || column.attribute || 'column';
   const update = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     onChange(event.target.value);
+  if (onOperator && FILTER_OPERATORS[config.type].length) {
+    const empty = ['empty', 'not_empty'].includes(config.operator);
+    return (
+      <div className="filter-container">
+        <OperatorSelector config={config} onSelect={onOperator} />
+        <input
+          className="form-control filter-input"
+          aria-label={`Filter ${label}`}
+          type={
+            config.operator !== 'between' && config.type !== 'text' ? config.type : 'search'
+          }
+          value={empty ? '' : value}
+          disabled={empty}
+          onChange={update}
+        />
+      </div>
+    );
+  }
   if (['empty', 'not_empty'].includes(config.operator)) {
     return (
       <span aria-label={`Filter ${label}`}>
@@ -175,19 +362,31 @@ const FilterInput = ({
       </span>
     );
   }
+  // Data grid 2 drop-down filters read like the widget: Select, Yes and No.
+  const native = Boolean(onOperator);
   if (config.type === 'boolean') {
     return (
-      <select aria-label={`Filter ${label}`} value={value} onChange={update}>
-        <option value="">Any</option>
-        <option value="true">True</option>
-        <option value="false">False</option>
+      <select
+        className={native ? 'form-control' : undefined}
+        aria-label={`Filter ${label}`}
+        value={value}
+        onChange={update}
+      >
+        <option value="">{native ? 'Select' : 'Any'}</option>
+        <option value="true">{native ? 'Yes' : 'True'}</option>
+        <option value="false">{native ? 'No' : 'False'}</option>
       </select>
     );
   }
   if (config.type === 'enum') {
     return (
-      <select aria-label={`Filter ${label}`} value={value} onChange={update}>
-        <option value="">Any</option>
+      <select
+        className={native ? 'form-control' : undefined}
+        aria-label={`Filter ${label}`}
+        value={value}
+        onChange={update}
+      >
+        <option value="">{native ? 'Select' : 'Any'}</option>
         {config.options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.caption}
@@ -225,8 +424,17 @@ export function DataGrid({
   onRowAction,
   onSelectRecord,
   onSelectRecords,
+  schema,
+  renderWidgets,
 }: DataGridProps) {
   const options = widget.options || {};
+  const [operators, setOperators] = useState<Record<string, string>>({});
+  const withOperator = (config: FilterConfig | null, column: WidgetColumn) => {
+    const chosen = operators[column.name || column.attribute || ''];
+    return config && chosen ? { ...config, operator: chosen } : config;
+  };
+  const configOf = (column: WidgetColumn) =>
+    withOperator(filterConfig(column, options.entity, schema), column);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNumber, setPageNumber] = useState(0);
@@ -254,7 +462,7 @@ export function DataGrid({
   const columns = options.columns || [];
   const serverSide = options.server_side === true;
   const filterSpecs = columns.flatMap((column) => {
-    const config = filterConfig(column);
+    const config = configOf(column);
     const key = column.name || column.attribute || '';
     const value = filters[key] || '';
     return config && activeFilter(value, config)
@@ -268,7 +476,11 @@ export function DataGrid({
         ]
       : [];
   });
-  const basePath = entityCollectionPath(options.entity || '', options.association, pageContext);
+  const basePath = withXPath(
+    entityCollectionPath(options.entity || '', options.association, pageContext),
+    options.xpath,
+    pageContext,
+  );
   const collectionPath = serverSide
     ? serverCollectionPath(basePath, filterSpecs, sorting, pageNumber, pageSize)
     : basePath;
@@ -333,21 +545,22 @@ export function DataGrid({
         ? records
         : records.filter((record) =>
             columns.every((column) => {
-              const config = filterConfig(column);
+              const base = filterConfig(column, options.entity, schema);
+              const chosen = operators[column.name || column.attribute || ''];
+              const config = base && chosen ? { ...base, operator: chosen } : base;
               if (!config) return true;
               const key = column.name || column.attribute || '';
               const query = filters[key] || '';
+              const value = columnValue(record, column);
               return (
                 !activeFilter(query, config) ||
-                matchesGridFilter(
-                  recordValue(record, column.attribute || column.name),
-                  query,
-                  config,
+                (Array.isArray(value) ? value : [value]).some((item) =>
+                  matchesGridFilter(item, query, config),
                 )
               );
             }),
           ),
-    [columns, filters, records, serverSide],
+    [columns, filters, records, serverSide, options.entity, schema, operators],
   );
   const orderedRecords = useMemo(
     () => (serverSide ? filteredRecords : sortRecords(filteredRecords, sorting)),
@@ -379,14 +592,36 @@ export function DataGrid({
         records={visible}
         sorting={sorting}
         sort={toggleSort}
+        header={
+          widget.header?.length && renderWidgets
+            ? renderWidgets(widget.header, null, `${widget.name}-header`)
+            : undefined
+        }
+        cell={(record, column) => {
+          if (column.content && renderWidgets)
+            return renderWidgets(column.content, record, `${record.id}-${column.name}`);
+          if (column.dynamic_text !== undefined) return dynamicText(column, record);
+          const value = columnValue(record, column);
+          // Data grid 2 shows booleans as the Mendix client formats them.
+          if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+          return displayValue(value);
+        }}
         filter={(column) => (
           <FilterInput
             column={column}
+            config={configOf(column)}
             value={filters[column.name || column.attribute || ''] || ''}
             onChange={(value) => {
               setFilters((current) => ({
                 ...current,
                 [column.name || column.attribute || '']: value,
+              }));
+              setPageNumber(0);
+            }}
+            onOperator={(operator) => {
+              setOperators((current) => ({
+                ...current,
+                [column.name || column.attribute || '']: operator,
               }));
               setPageNumber(0);
             }}
@@ -403,8 +638,9 @@ export function DataGrid({
             setSelected(record);
             onSelectRecord(record);
           }
-          onRowAction(record);
         }}
+        activate={onRowAction}
+        clickTrigger={options.on_click_trigger === 'double' ? 'double' : 'single'}
         page={pageNumber}
         pageSize={pageSize}
         total={rowCount}
@@ -494,6 +730,7 @@ export function DataGrid({
                   <th key={key}>
                     <FilterInput
                       column={column}
+                      config={configOf(column)}
                       value={filters[key] || ''}
                       onChange={(value) => {
                         setFilters((current) => ({ ...current, [key]: value }));

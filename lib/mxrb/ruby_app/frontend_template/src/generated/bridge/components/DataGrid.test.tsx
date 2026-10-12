@@ -1,8 +1,13 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { ApiRequest, EntityRecord, WidgetDefinition } from '../../types';
-import { DataGrid, matchesGridFilter } from './DataGrid';
+import type {
+  ApiRequest,
+  ApplicationSchema,
+  EntityRecord,
+  WidgetDefinition,
+} from '../../types';
+import { columnValue, DataGrid, matchesGridFilter } from './DataGrid';
 
 const records: EntityRecord[] = [
   { id: '1', type: 'App.Customer', attributes: { Name: 'Alice', City: 'Amsterdam' } },
@@ -165,5 +170,232 @@ describe('DataGrid', () => {
       expect(JSON.parse(latest.searchParams.get('sort') || '[]')).toEqual([]);
       expect(latest.searchParams.get('offset')).toBe('0');
     });
+  });
+});
+
+describe('Data grid 2', () => {
+  const role = (name: string): EntityRecord => ({
+    id: name,
+    type: 'System.UserRole',
+    attributes: { Name: name },
+  });
+  const accounts: EntityRecord[] = [
+    {
+      id: 'a',
+      type: 'Admin.Account',
+      attributes: {
+        FullName: 'Ada',
+        Active: true,
+        LastLogin: '2026-10-01',
+        UserRoles: [role('Administrator'), role('User')],
+      },
+    },
+    {
+      id: 'b',
+      type: 'Admin.Account',
+      attributes: { FullName: 'Bea', Active: false, LastLogin: null, UserRoles: [] },
+    },
+  ];
+  const schema = {
+    modules: [
+      {
+        models: [
+          {
+            name: 'Admin.Account',
+            attributes: [{ name: 'FullName', type: 'string' }],
+            generalization: { target: 'System.User' },
+          },
+          { name: 'System.User', attributes: [{ name: 'Active', type: 'boolean' }] },
+        ],
+      },
+    ],
+  } as unknown as ApplicationSchema;
+  const grid: WidgetDefinition = {
+    type: 'data_grid',
+    name: 'accounts',
+    options: {
+      entity: 'Admin.Account',
+      presentation: 'datagrid2',
+      xpath: "[Name != empty and Owner = $currentObject]",
+      on_click_trigger: 'double',
+      sort: [{ attribute: 'Admin.Account.FullName', direction: 'Descending' }],
+      columns: [
+        { name: 'Full name', attribute: 'Admin.Account.FullName', size: 2 },
+        {
+          name: 'Roles',
+          attribute: 'System.UserRole.Name',
+          association_path: [{ association: 'System.UserRoles', entity: 'System.UserRole' }],
+          filter: { type: 'drop_down' },
+          sortable: false,
+        },
+        {
+          name: 'Last login',
+          attribute: 'System.User.LastLogin',
+          dynamic_text: 'Seen {1}',
+          parameters: ['$currentObject/LastLogin'],
+          width: 'manual',
+          size: 120,
+          alignment: 'right',
+        },
+        {
+          name: 'Active',
+          attribute: 'System.User.Active',
+          filter: { type: 'drop_down' },
+          hidable: 'hidden',
+        },
+        {
+          name: 'Actions',
+          attribute: 'Admin.Account.FullName',
+          content: [{ type: 'text', name: 'edit', options: { caption: 'Edit' } }],
+          hidable: false,
+          width: 'auto_fit',
+        },
+      ],
+    },
+    header: [{ type: 'button', name: 'new', options: { caption: 'New local user' } }],
+  };
+
+  it('lays out, fills and filters the columns as Data grid 2 does', async () => {
+    const request = vi.fn().mockResolvedValue({ records: accounts });
+    const onRowAction = vi.fn();
+    const user = userEvent.setup();
+    const owner: EntityRecord = { id: 'o', type: 'Admin.Owner', attributes: {} };
+    render(
+      <DataGrid
+        widget={grid}
+        request={request as unknown as ApiRequest}
+        pageContext={owner}
+        revision={0}
+        onError={vi.fn()}
+        onMutation={vi.fn()}
+        onRowAction={onRowAction}
+        onSelectRecord={vi.fn()}
+        schema={schema}
+        renderWidgets={(widgets, record, key) => (
+          <span data-testid={key}>
+            {widgets.map((widget) => `${widget.options?.caption} ${record?.id ?? 'grid'}`)}
+          </span>
+        )}
+      />,
+    );
+
+    expect(await screen.findByText('Administrator, User')).toBeInTheDocument();
+    const url = new URL(String(request.mock.calls[0][0]), 'http://mxrb.test');
+    expect(url.searchParams.get('xpath')).toBe(grid.options?.xpath);
+    expect(url.searchParams.get('xpath_context_id')).toBe('o');
+    expect(screen.getByRole('grid')).toHaveStyle({
+      gridTemplateColumns: '2fr 1fr 120px minmax(auto, auto) 54px',
+    });
+    expect(screen.getByLabelText('Grid header')).toHaveTextContent('New local user grid');
+    expect(screen.getByTestId('a-Actions')).toHaveTextContent('Edit a');
+    expect(screen.getByText('Seen 2026-10-01')).toHaveClass('td', 'align-column-right');
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Bea');
+    expect(screen.queryByRole('combobox', { name: 'Filter Roles' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Column selector' }));
+    const chooser = screen.getByRole('group', { name: 'Visible columns' });
+    expect(within(chooser).queryByText('Actions')).not.toBeInTheDocument();
+    await user.click(within(chooser).getByRole('checkbox', { name: 'Active' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter Active' }), 'false');
+    expect(screen.queryByText('Ada')).not.toBeInTheDocument();
+    expect(screen.getByText('Bea')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Bea'));
+    expect(onRowAction).not.toHaveBeenCalled();
+    await user.dblClick(screen.getByText('Bea'));
+    expect(onRowAction).toHaveBeenCalledWith(accounts[1]);
+  });
+
+  it('lets the user choose a filter operator as Data grid 2 does', async () => {
+    const user = userEvent.setup();
+    const names: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'names',
+      options: {
+        entity: 'Admin.Account',
+        presentation: 'datagrid2',
+        columns: [
+          {
+            name: 'Full name',
+            attribute: 'Admin.Account.FullName',
+            filter: { type: 'text', operator: 'contains' },
+          },
+          { name: 'Seen', attribute: 'LastLogin', filter: { type: 'date', operator: 'equals' } },
+          { name: 'On', attribute: 'System.User.Active', filter: { type: 'drop_down' } },
+        ],
+      },
+    };
+    render(
+      <DataGrid
+        widget={names}
+        request={vi.fn().mockResolvedValue({ records: accounts }) as unknown as ApiRequest}
+        pageContext={null}
+        revision={0}
+        onError={vi.fn()}
+        onMutation={vi.fn()}
+        onRowAction={vi.fn()}
+        onSelectRecord={vi.fn()}
+        schema={schema}
+      />,
+    );
+    await screen.findByText('Ada');
+    const contains = screen.getAllByRole('button', { name: 'Contains' })[0];
+    expect(contains).toHaveClass('filter-selector-button', 'button-icon', 'contains');
+    await user.type(screen.getByRole('searchbox', { name: 'Filter Full name' }), 'a');
+    expect(screen.getByText('Bea')).toBeInTheDocument();
+    await user.click(contains);
+    const choices = screen.getByRole('listbox', { name: 'Select filter type' });
+    expect(within(choices).getAllByRole('option')).toHaveLength(11);
+    await user.click(within(choices).getByRole('option', { name: 'Starts with' }));
+    expect(screen.queryByText('Bea')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Starts with' })).toHaveClass('startsWith');
+    await user.click(screen.getByRole('button', { name: 'Equal' }));
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Between');
+    await user.click(screen.getByRole('option', { name: 'Empty' }));
+    expect(screen.getByLabelText('Filter Seen')).toBeDisabled();
+    const flag = screen.getByRole('combobox', { name: 'Filter On' });
+    expect(within(flag).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Select',
+      'Yes',
+      'No',
+    ]);
+  });
+
+  it('shows boolean attributes as Yes and No', async () => {
+    const flags: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'flags',
+      options: {
+        entity: 'Admin.Account',
+        presentation: 'datagrid2',
+        columns: [{ name: 'Active', attribute: 'System.User.Active' }],
+      },
+    };
+    render(
+      <DataGrid
+        widget={flags}
+        request={vi.fn().mockResolvedValue({ records: accounts }) as unknown as ApiRequest}
+        pageContext={null}
+        revision={0}
+        onError={vi.fn()}
+        onMutation={vi.fn()}
+        onRowAction={vi.fn()}
+        onSelectRecord={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Yes')).toHaveClass('td');
+    expect(screen.getByText('No')).toHaveClass('td');
+  });
+
+  it('reads a column over a reference or a reference set', () => {
+    const column = {
+      attribute: 'System.UserRole.Name',
+      association_path: [{ association: 'System.UserRoles', entity: 'System.UserRole' }],
+    };
+    expect(columnValue(accounts[0], column)).toEqual(['Administrator', 'User']);
+    expect(columnValue(accounts[1], column)).toEqual([]);
+    const single = { ...accounts[1], attributes: { UserRoles: role('User') } };
+    expect(columnValue(single, column)).toBe('User');
   });
 });

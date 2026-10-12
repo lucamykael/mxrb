@@ -248,6 +248,122 @@ describe('Ruby data view editing', () => {
     expect(noContext).not.toHaveBeenCalled();
   });
 
+  it('shows an icon-only button and opens a page for the grid row acted on', async () => {
+    const schema = {
+      modules: [],
+      presentation: {
+        'Atlas.Icons.pencil': { kind: 'icon', path: '/assets/icons.woff', character: 59903 },
+      },
+    } as unknown as ApplicationSchema;
+    const edit: WidgetDefinition = {
+      type: 'button',
+      name: 'editButton',
+      options: { caption: '', icon: 'Atlas.Icons.pencil' },
+    };
+    render(<WidgetRenderer {...props(edit)} schema={schema} />);
+    const button = screen.getByRole('button');
+    expect(button).not.toHaveTextContent('editButton');
+    expect(button.querySelector('[data-icon-collection="Atlas.Icons.pencil"]')).not.toBeNull();
+
+    const row = { id: 'row', type: 'App.Item', attributes: { Name: 'Row' } };
+    const grid: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'grid',
+      options: {
+        entity: 'App.Item',
+        presentation: 'datagrid2',
+        columns: [{ name: 'Name', attribute: 'Name' }],
+      },
+      events: [{ event: 'on_click', kind: 'page', handler: 'App.Edit', arguments: {} }],
+    };
+    const input = props(grid);
+    const request = vi.fn().mockResolvedValue({ records: [row] });
+    render(<WidgetRenderer {...input} request={request} />);
+    await userEvent.click(await screen.findByText('Row'));
+    await waitFor(() =>
+      expect(input.navigate).toHaveBeenCalledWith('App.Edit', row, expect.anything()),
+    );
+  });
+
+  it('renders Studio Pro text modes, link buttons and Atlas tab containers', async () => {
+    const title: WidgetDefinition = {
+      type: 'text',
+      name: 'title',
+      options: { caption: 'Accounts', render_mode: 'h2' },
+    };
+    const { unmount } = render(<WidgetRenderer {...props(title)} />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Accounts' })).toHaveClass('mx-text');
+    unmount();
+
+    const link: WidgetDefinition = {
+      type: 'button',
+      name: 'open',
+      options: { caption: 'Open', render_type: 'link' },
+      events: [{ event: 'on_click', kind: 'page', handler: 'App.Edit', arguments: {} }],
+    };
+    const input = props(link);
+    const second = render(<WidgetRenderer {...input} />);
+    const anchor = screen.getByRole('button', { name: 'Open' });
+    expect(anchor.tagName).toBe('A');
+    expect(anchor).toHaveClass('mx-link');
+    await userEvent.click(anchor);
+    await waitFor(() => expect(input.navigate).toHaveBeenCalled());
+    second.unmount();
+
+    const tabs: WidgetDefinition = {
+      type: 'tab_control',
+      name: 'tabs',
+      options: { tabs: [{ name: 'local', caption: 'Local Users', widgets: [] }] },
+    };
+    render(<WidgetRenderer {...props(tabs)} />);
+    const tab = screen.getByRole('tab', { name: 'Local Users' });
+    expect(tab.closest('ul')).toHaveClass('nav', 'nav-tabs', 'mx-tabcontainer-tabs');
+    expect(tab.closest('li')).toHaveClass('active');
+    expect(screen.getByRole('tabpanel')).toHaveClass('tab-pane', 'active');
+  });
+
+  it('keeps the fields and their drafts while an association view refreshes', async () => {
+    const associated: WidgetDefinition = {
+      ...view,
+      options: {
+        source: {
+          kind: 'association',
+          entity: 'App.Parent',
+          steps: [{ association: 'App.Item_Parent', entity: 'App.Parent' }],
+        },
+      },
+    };
+    const parent = { id: 'parent', type: 'App.Parent', attributes: { Name: 'Saved' } };
+    let refresh: (value: unknown) => void = () => {};
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ records: [parent] })
+      .mockReturnValueOnce(new Promise((resolve) => (refresh = resolve)))
+      .mockReturnValue(new Promise(() => {}));
+    const { rerender } = render(<WidgetRenderer {...props(associated)} request={request} />);
+    const input = await screen.findByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Draft');
+    rerender(<WidgetRenderer {...props(associated)} request={request} revision={1} />);
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    refresh({ records: [parent] });
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('textbox')).toBe(input);
+    expect(input).toHaveValue('Draft');
+
+    const other = { ...record, id: '2' };
+    rerender(
+      <WidgetRenderer
+        {...props(associated)}
+        request={request}
+        context={other}
+        pageContext={other}
+        revision={1}
+      />,
+    );
+    expect(await screen.findByText('Loading…')).toBeInTheDocument();
+  });
+
   it('updates conditional editability and prevents nested views from overriding a locked parent', () => {
     const input = props(view);
     const { rerender } = render(<WidgetRenderer {...input} />);

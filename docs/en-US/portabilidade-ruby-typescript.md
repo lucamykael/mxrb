@@ -722,6 +722,50 @@ marked values", with `(empty)` for no value, reading the object of the Data View
 named by `source:`. Unknown sources stay locked. A Ruby export of a copy of the
 private SPC project now passes the public-source audit and the identical round trip.
 
+Data grid 2 exports through the typed `data_grid` call, with the datasource
+`xpath:`, `sort: [sort_by(...)]`, `on_click_trigger: "double"` and a `header`
+block holding the header widgets (`filtersPlaceholder`). Each `column` accepts
+`association_path: [[association, entity], ...]`, `dynamic_text:` with
+`parameters:`, `hidable:`, `width: "auto_fit"|"manual"`, `size:`, `alignment:`
+and a block with the custom content, rendered with the row as its context.
+Filters use `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
+lists the values of boolean or enumeration attributes and is absent over
+associations. The UI writes `grid-template-columns` as the native widget does:
+`autoFill` shares the space by `size`, `autoFit` follows the content and `manual`
+is in pixels. The runtime fills `System.grantableRoles` from the manageable roles
+of the project security, so the XPath of the Administration module's
+Account_Overview lists the accounts whose roles the current user may grant.
+
+The client schema includes the System module's entities and associations
+(without the password), and a `reference_selector` over a reference set such as
+`System.UserRoles` becomes a multiple selection of the target objects. A
+microflow button without parameter mappings passes its Data View's object to the
+one unmapped parameter of a compatible entity, as Mendix does, so the Save
+button of the Administration module's New Account popup creates the account. An
+association Data View keeps its widgets and their drafts mounted while it
+reloads the same object.
+
+On a page with Save/Cancel, a microflow call carries the edited objects
+(uncommitted), as the Mendix client does; drafts reached again through an
+association keep their token, and the change applies to the same instance the
+microflow commits. After a microflow in a popup, the page beneath reloads. A page
+action without mapped arguments receives the object the event acts on, such as a
+grid row. Labels import their caption and attribute-value visibility
+(`text ..., visibility: input_condition(...)`), and buttons import their icon
+collection image (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); an empty
+caption stays empty.
+Texts rendered as H1–H6 or paragraph (`text ..., render_mode: :h2`) and Link
+buttons (`button ..., render_type: :link`) render as in the Mendix client; the Tab
+Control uses the Atlas tab markup, and Data grid 2 shows booleans as Yes/No.
+`input_condition` accepts `roles:` and `ignore_security:` when the condition also
+restricts module roles; Data grid 2 in snippets uses the same typed call as in
+pages; and excluded nanoflows that refer to removed model elements (Studio Pro
+does not check excluded documents) get an empty body instead of stopping the
+export. Copies of the private QRQC and SPC projects and Sudoku pass the
+public-source audit and the identical round trip.
+Data grid 2 filters offer the widget's operator selector (Contains, Starts with,
+Greater than, Between, Empty...), and drop-down filters read Select/Yes/No.
+
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
 are reported. Named grid selection feeds `listen_to` views. Multi-step association

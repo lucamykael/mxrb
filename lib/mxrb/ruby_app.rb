@@ -1616,6 +1616,18 @@ module Mxrb
           end
         end
 
+        # A data grid declared with a block (header, typed columns and events) is
+        # built as in pages; other declarations keep the generic widget form.
+        def data_grid(name = '', events: OPTION_UNSET, caption: OPTION_UNSET, **options, &block)
+          options[:class] = options.delete(:class_name) if options.key?(:class_name)
+          return widget(:data_grid, name, options:, events:, caption:, &block) unless
+            block && events.equal?(OPTION_UNSET) && caption.equal?(OPTION_UNSET)
+
+          builder = Dsl::WidgetBuilder.new(:data_grid, name, **options)
+          builder.instance_eval(&block)
+          append_structured(builder, declared_fields: false)
+        end
+
         def table(name = '', width_unit: :weight, tab_index: 0, class_name: nil, style: nil,
                   dynamic_class: nil, visible: nil, &block)
           builder = Dsl::TableBuilder.new(
@@ -1871,8 +1883,14 @@ module Mxrb
           bridge.interpreter.clear_effects!
           invocation_arguments = arguments.to_h.dup
           synchronized_context = invocation_arguments.delete('__mxrb_context')
+          staged = invocation_arguments.delete('__mxrb_changes') || []
+          raise ArgumentError, 'staged changes must be a list of objects' unless
+            staged.is_a?(Array) && staged.all?(Hash)
+
           bridge.interpreter.store.transaction do
             active_context = synchronize_context(synchronized_context, context:) if synchronized_context
+            staged.each { synchronize_context(_1, context:) }
+            implicit_context_argument(name, invocation_arguments, active_context, synchronized_context)
             result = call_service(name, invocation_arguments, context:)
             {
               result: serialize(result, context:), effects: serialize(bridge.interpreter.effects, context:),
@@ -1883,6 +1901,46 @@ module Mxrb
           release_runtime_cache
         end
       end
+
+      # Uncommitted objects the context reaches (through non-persistent objects)
+      # are the instances the call works on: a staged change to one of them
+      # resumes that instance, not a copy from its draft snapshot.
+      def stage_reachable_drafts(root, context:)
+        store = bridge.interpreter.store
+        return unless store.respond_to?(:resume_draft)
+
+        owner = draft_owner(context)
+        pending = [root]
+        seen = {}
+        until pending.empty?
+          value = pending.pop
+          next unless value.is_a?(Runtime::Native::ObjectValue) && !seen[[value.entity, value.id]]
+
+          seen[[value.entity, value.id]] = true
+          if store.find(value.entity, value.id).nil? && store.client_drafts.registered?(value, owner:)
+            store.resume_draft(value)
+          elsif !value.equal?(root) && !store.transient_entity?(value.entity)
+            next
+          end
+          value.members.each_value { pending.concat(Array(_1)) }
+        end
+      end
+      private :stage_reachable_drafts
+
+      # A page action without parameter mappings passes the object of its data
+      # view to the one unmapped parameter of a compatible entity.
+      def implicit_context_argument(name, arguments, object, reference)
+        return unless object.is_a?(Runtime::Native::ObjectValue)
+
+        service = manifest.modules.flat_map { _1.fetch('services', []) }.find { _1['name'] == name.to_s }
+        schema = bridge.interpreter.store.schema
+        candidates = Array(service&.fetch('parameters', nil)).select do |parameter|
+          entity = parameter['entity'].to_s
+          !arguments.key?(parameter['name']) && !entity.empty? && schema.assignable?(object.entity, entity)
+        end
+        arguments[candidates.first.fetch('name')] = reference if candidates.one?
+      end
+      private :implicit_context_argument
 
       def rest_routes
         @rest_routes ||= manifest.modules.flat_map do |mod|
@@ -2277,8 +2335,8 @@ module Mxrb
       private
 
       def runtime_schema_modules
-        RuntimeCatalog.new(manifest.modules,
-                           authoritative: manifest.data['runtime_model'] == 'ruby').modules.map do |mod|
+        modules = RuntimeCatalog.new(manifest.modules,
+                                     authoritative: manifest.data['runtime_model'] == 'ruby').modules.map do |mod|
           enumerations = mod.fetch('enumerations', []).map do |definition|
             implementation = Registry.fetch(:enumeration, definition.fetch('name'))
             next definition unless implementation
@@ -2296,6 +2354,24 @@ module Mxrb
           dtos = mod.fetch('dtos', []).map { runtime_model_definition(_1) }
           mod.except('constants').merge('enumerations' => enumerations, 'models' => models, 'dtos' => dtos)
         end
+        return modules if modules.any? { _1['name'] == 'System' }
+
+        modules + [system_schema_module]
+      end
+
+      # The Runtime-owned System entities and associations, without the hashed password.
+      def system_schema_module
+        models = Runtime::SystemDomain::ATTRIBUTES.map do |entity, attributes|
+          members = attributes.reject { _2 == :hashstring }.map do |name, type, default, unique|
+            { 'name' => name, 'mendix_name' => name, 'type' => type.to_s, 'default' => default, 'unique' => unique }
+          end
+          { 'name' => entity, 'persistable' => true, 'attributes' => members }
+        end
+        associations = Runtime::SystemDomain::ASSOCIATIONS.map do |qualified, from, to, type|
+          { 'name' => qualified.split('.').last, 'type' => type.to_s, 'from_entity' => from, 'to_entity' => to }
+        end
+        { 'name' => 'System', 'models' => models, 'dtos' => [], 'associations' => associations,
+          'enumerations' => [], 'pages' => [], 'services' => [] }
       end
 
       def runtime_model_definition(definition)
@@ -2649,8 +2725,10 @@ module Mxrb
           end
           result = { id: value.id, type: value.entity, attributes: serialize(members, branch, context:) }
           store = bridge.interpreter.store
-          if store.respond_to?(:draft?) && store.draft?(value)
-            token = store.client_drafts.capture(value, owner: draft_owner(context))
+          owner = draft_owner(context)
+          if store.respond_to?(:draft?) &&
+             (store.draft?(value) || store.client_drafts.registered?(value, owner:))
+            token = store.client_drafts.capture(value, owner:)
             result.merge!(new_record: true, draft_token: token)
           end
           result
@@ -2709,6 +2787,7 @@ module Mxrb
         object = deserialize(value, context:)
         return object unless object.is_a?(Runtime::Native::ObjectValue) && value.is_a?(Hash)
 
+        stage_reachable_drafts(object, context:)
         changes = value.fetch('attributes', {}).filter_map do |member, member_value|
           resolved = deserialize(member_value, context:)
           [member.to_s, resolved] unless context_values_equal?(object.members[member.to_s], resolved)
@@ -2756,7 +2835,7 @@ module Mxrb
       end
 
       def draft_owner(context)
-        context&.user ? "user:#{context.user}" : 'anonymous'
+        context.respond_to?(:user) && context.user ? "user:#{context.user}" : 'anonymous'
       end
     end
 

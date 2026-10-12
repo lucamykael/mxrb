@@ -153,11 +153,13 @@ module Mxrb
         )
       end
 
+      # visibility: shows the text for the values of an attribute, as input_condition.
+      # render_mode: h1..h6 or paragraph renders the text as that element.
       def text(name, caption: nil, parameters: [], class_name: nil, style: nil,
-               dynamic_class: nil, visible: nil, &block)
+               dynamic_class: nil, visible: nil, visibility: nil, render_mode: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:
+          class: class_name, style:, dynamic_class:, visible:, visibility:, render_mode: render_mode&.to_s
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:text, name, **options, &block)
@@ -295,7 +297,7 @@ module Mxrb
 
       def data_grid(name, entity: nil, selection: nil, **runtime_options, &block)
         allowed = %i[page_size pageSize server_side sort toolbar presentation
-                     columns_resizable columns_draggable columns_hidable]
+                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger]
         unknown = runtime_options.keys - allowed
         raise ArgumentError, "unknown data grid options: #{unknown.join(', ')}" unless unknown.empty?
 
@@ -319,6 +321,12 @@ module Mxrb
 
       def sort_by(attribute, direction: 'Ascending')
         { attribute: attribute.to_s, direction: direction.to_s }
+      end
+
+      # A data grid column filter: text, number, date, drop_down, boolean or enum,
+      # optionally with its default operator (contains, equals, gt, between, ...).
+      def grid_filter(type, operator: nil)
+        { type: type.to_s, operator: operator&.to_s }.compact
       end
 
       def tab_control(name, &block)
@@ -425,11 +433,14 @@ module Mxrb
         )
       end
 
-      def button(name, caption: nil, parameters: [], class_name: nil, style: nil,
-                 dynamic_class: nil, visible: nil, button_style: nil, &block)
+      # icon: an icon collection image, such as "Atlas_Core.Atlas_Filled.pencil".
+      # render_type: "link" renders the button as a link, as Studio Pro's Link render type.
+      def button(name, caption: nil, parameters: [], class_name: nil, style: nil, dynamic_class: nil,
+                 visible: nil, visibility: nil, button_style: nil, icon: nil, render_type: nil, &block)
         options = {
           caption: caption || name.to_s, parameters: Array(parameters).map(&:to_s),
-          class: class_name, style:, dynamic_class:, visible:, button_style:
+          class: class_name, style:, dynamic_class:, visible:, visibility:, button_style:, icon:,
+          render_type: render_type&.to_s
         }.compact
         options.delete(:parameters) if options[:parameters].empty?
         _add_widget(:button, name, **options, &block)
@@ -445,12 +456,15 @@ module Mxrb
 
       # Conditional editability of an input: an expression, or the values of an
       # attribute of the source object (pairs of value and whether it matches).
-      def input_condition(expression = nil, attribute: nil, conditions: nil, source: nil)
-        return { expression: expression.to_s } if attribute.nil? && conditions.nil? && source.nil?
+      # roles: the module roles the widget is also restricted to.
+      def input_condition(expression = nil, attribute: nil, conditions: nil, source: nil, roles: nil,
+                          ignore_security: nil)
+        return { expression: expression.to_s } if [attribute, conditions, source, roles, ignore_security].all?(&:nil?)
 
         compact_data_view_source(
           expression: expression&.to_s, attribute: attribute&.to_s,
-          conditions: Dsl.attribute_conditions(conditions), source_variable: source
+          conditions: Dsl.attribute_conditions(conditions), source_variable: source,
+          roles: Array(roles).map(&:to_s), ignore_security: ignore_security == true
         )
       end
 
@@ -631,10 +645,24 @@ module Mxrb
         )
       end
 
-      def column(name, attribute: nil, caption: nil, filter: nil, sortable: nil)
-        @columns << {
-          name: name.to_s, attribute: attribute&.to_s, caption:, filter:, sortable:
+      # A data grid column. Data grid 2 columns may show the attribute over an
+      # association path, a dynamic text or the widgets of the block, per row.
+      def column(name, attribute: nil, caption: nil, association_path: nil, dynamic_text: nil,
+                 parameters: nil, filter: nil, sortable: nil, hidable: nil, width: nil, size: nil,
+                 alignment: nil, &block)
+        column = {
+          name: name.to_s, attribute: attribute&.to_s, caption:,
+          association_path: association_path && data_grid_association_path(association_path),
+          dynamic_text:, parameters:, filter:, sortable:, hidable:, width: width&.to_s, size:,
+          alignment: alignment&.to_s
         }.compact
+        column[:content] = widget_composite_content(&block) if block
+        @columns << column
+      end
+
+      # Widgets shown above a Data grid 2 (its filtersPlaceholder).
+      def header(&block)
+        @header = widget_composite_content(&block)
       end
 
       def filter(widget) = @filters << widget
@@ -665,10 +693,19 @@ module Mxrb
         options[:toolbar]    = @toolbar    if @toolbar
         options[:filters]    = @filters    unless @filters.empty?
         value = { type: @type, name: @name, options: options, events: @events }
+        value[:header] = @header if @header
         append_widget_composite(value, children: @children)
       end
 
       private
+
+      def data_grid_association_path(steps)
+        Array(steps).map do |step|
+          next { association: step.fetch(0).to_s, entity: step.fetch(1).to_s } if step.is_a?(Array)
+
+          step.to_h.transform_keys(&:to_sym).transform_values(&:to_s)
+        end
+      end
 
       def _widget_list = @children
     end

@@ -1,6 +1,5 @@
-import { useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { EntityRecord, WidgetColumn } from '../../types';
-import { displayValue, recordValue } from '../value';
 import { GridIcon } from './GridIcon';
 
 interface Props {
@@ -11,6 +10,10 @@ interface Props {
   filter: (column: WidgetColumn) => ReactNode;
   selected: (record: EntityRecord) => boolean;
   select: (record: EntityRecord) => void;
+  activate: (record: EntityRecord) => void;
+  clickTrigger: 'single' | 'double';
+  cell: (record: EntityRecord, column: WidgetColumn) => ReactNode;
+  header?: ReactNode;
   page: number;
   pageSize: number;
   total: number;
@@ -29,17 +32,21 @@ export function NativeDataGrid(props: Props) {
     filter,
     selected,
     select,
+    activate,
+    cell,
     page,
     pageSize,
     total,
     setPage,
   } = props;
-  const [hidden, setHidden] = useState<string[]>([]);
+  const key = (column: WidgetColumn) => column.attribute || column.name || '';
+  const [hidden, setHidden] = useState<string[]>(() =>
+    columns.filter((column) => column.hidable === 'hidden').map(key),
+  );
   const [order, setOrder] = useState<string[]>([]);
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [chooser, setChooser] = useState(false);
   const id = useId();
-  const key = (column: WidgetColumn) => column.attribute || column.name || '';
   const visible = columns
     .filter((column) => !hidden.includes(key(column)))
     .sort((left, right) => {
@@ -52,6 +59,20 @@ export function NativeDataGrid(props: Props) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const status = `${total ? page * pageSize + 1 : 0} to ${Math.min((page + 1) * pageSize, total)} of ${total}`;
   const columnSelector = props.hidable;
+  const hidableColumns = columns.filter((column) => column.hidable !== false);
+  const alignment = (column: WidgetColumn) => `align-column-${column.alignment || 'left'}`;
+  // Column widths as Data grid 2 writes them: autoFill shares the free space by
+  // size, autoFit follows the content and manual is a pixel width.
+  const track = (column: WidgetColumn) => {
+    if (widths[key(column)]) return `${widths[key(column)]}px`;
+    if (column.width === 'auto_fit') return 'minmax(auto, auto)';
+    if (column.width === 'manual') return `${column.size || 100}px`;
+    return `${column.size || 1}fr`;
+  };
+  const run = (record: EntityRecord) => {
+    select(record);
+    if (props.clickTrigger === 'single') activate(record);
+  };
   const button = (
     name: 'step-backward' | 'backward' | 'forward' | 'step-forward',
     label: string,
@@ -77,20 +98,20 @@ export function NativeDataGrid(props: Props) {
           <div className="widget-datagrid-tb-end" />
         </div>
       </div>
+      {props.header && (
+        <div className="widget-datagrid-header header-filters" aria-label="Grid header">
+          {props.header}
+        </div>
+      )}
       <div className="widget-datagrid-content">
         <div
           className="widget-datagrid-grid table"
           role="grid"
-          style={
-            {
-              '--widgets-grid-template-columns': [
-                ...visible.map((column) =>
-                  widths[key(column)] ? `${widths[key(column)]}px` : 'minmax(auto, 1fr)',
-                ),
-                ...(columnSelector ? ['54px'] : []),
-              ].join(' '),
-            } as CSSProperties
-          }
+          style={{
+            gridTemplateColumns: [...visible.map(track), ...(columnSelector ? ['54px'] : [])].join(
+              ' ',
+            ),
+          }}
         >
           <div className="widget-datagrid-grid-head" role="rowgroup">
             <div className="tr" role="row">
@@ -130,7 +151,7 @@ export function NativeDataGrid(props: Props) {
                       onDragStart={(event) => event.dataTransfer.setData('text/plain', name)}
                     >
                       <div
-                        className={`column-header ${column.sortable === false ? '' : 'clickable'} align-column-left`}
+                        className={`column-header ${column.sortable === false ? '' : 'clickable'} ${alignment(column)}`}
                         role={column.sortable === false ? undefined : 'button'}
                         tabIndex={column.sortable === false ? undefined : 0}
                         aria-label={`sort ${label}`}
@@ -215,12 +236,15 @@ export function NativeDataGrid(props: Props) {
                         role="group"
                         aria-label="Visible columns"
                       >
-                        {columns.map((column) => (
+                        {hidableColumns.map((column) => (
                           <label key={key(column)}>
                             <input
                               type="checkbox"
                               checked={!hidden.includes(key(column))}
-                              disabled={visible.length === 1 && !hidden.includes(key(column))}
+                              disabled={
+                                visible.filter((entry) => entry.hidable !== false).length === 1 &&
+                                !hidden.includes(key(column))
+                              }
                               onChange={(event) =>
                                 setHidden((values) =>
                                   event.target.checked
@@ -247,17 +271,21 @@ export function NativeDataGrid(props: Props) {
                 role="row"
                 aria-selected={selected(record)}
                 tabIndex={0}
-                onClick={() => select(record)}
+                onClick={() => run(record)}
+                onDoubleClick={() => {
+                  if (props.clickTrigger === 'double') activate(record);
+                }}
                 onKeyDown={(event) => {
                   if (['Enter', ' '].includes(event.key)) {
                     event.preventDefault();
                     select(record);
+                    activate(record);
                   }
                 }}
               >
                 {visible.map((column) => (
-                  <div key={key(column)} className="td" role="gridcell">
-                    {displayValue(recordValue(record, column.attribute || column.name))}
+                  <div key={key(column)} className={`td ${alignment(column)}`} role="gridcell">
+                    {cell(record, column)}
                   </div>
                 ))}
                 {columnSelector && <div className="td" role="gridcell" />}

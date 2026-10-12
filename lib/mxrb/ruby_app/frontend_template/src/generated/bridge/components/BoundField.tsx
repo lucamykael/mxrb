@@ -89,9 +89,17 @@ export function BoundField({
   const member = memberName(options.attribute || widget.name);
   const kind = widget.type;
   const value = recordValue(record, member);
-  const [draft, setDraft] = useState<string | number | boolean>(
-    kind === 'check_box' ? Boolean(value) : draftValue(value),
-  );
+  // A reference set's draft is the ids of its objects, comma-separated.
+  const draftOf = (current: RuntimeValue | undefined) =>
+    kind === 'check_box'
+      ? Boolean(current)
+      : Array.isArray(current)
+        ? current
+            .filter(isEntityRecord)
+            .map((item) => item.id)
+            .join(',')
+        : draftValue(current);
+  const [draft, setDraft] = useState<string | number | boolean>(draftOf(value));
   const [references, setReferences] = useState<EntityRecord[]>([]);
   const committed = useRef(draft);
   const recordKey = `${record?.type}/${record?.id}/${kind}/${member}`;
@@ -103,6 +111,7 @@ export function BoundField({
     (item) => item.name === options.attribute || memberName(item.name) === member,
   );
   const referenceEntity = options.entity || options.target_entity || association?.to_entity;
+  const referenceSet = kind === 'reference_selector' && association?.type === 'ReferenceSet';
   const entityDefinition = (schema.modules || [])
     .flatMap((module) => [...(module.models || []), ...(module.dtos || [])])
     .find((entity) => entity.name === record?.type);
@@ -134,7 +143,7 @@ export function BoundField({
       : candidate;
 
   useEffect(() => {
-    const next = kind === 'check_box' ? Boolean(value) : draftValue(value);
+    const next = draftOf(value);
     const previous = committed.current;
     const changedSource = sourceKey.current !== recordKey;
     sourceKey.current = recordKey;
@@ -167,7 +176,10 @@ export function BoundField({
           : attributeDefinition?.type.toLowerCase() === 'decimal'
             ? decimal(next)
             : Number(next);
-    if (kind === 'reference_selector') {
+    if (referenceSet) {
+      const ids = String(next).split(',').filter(Boolean);
+      normalized = references.filter((item) => ids.includes(item.id));
+    } else if (kind === 'reference_selector') {
       normalized = references.find((item) => item.id === next) || null;
     }
     const task = pending.current
@@ -199,7 +211,7 @@ export function BoundField({
   useEffect(() => {
     if (resetVersion.current === actions?.reset) return;
     resetVersion.current = actions?.reset;
-    const next = kind === 'check_box' ? Boolean(value) : draftValue(value);
+    const next = draftOf(value);
     committed.current = next;
     setDraft(next);
   }, [actions?.reset]);
@@ -342,6 +354,27 @@ export function BoundField({
         ? Object.values(configuredValue)
         : [];
     const choices: RuntimeValue[] = kind === 'reference_selector' ? references : configured;
+    if (referenceSet)
+      return (
+        <select
+          {...controlProps}
+          multiple
+          value={String(draft).split(',').filter(Boolean)}
+          onChange={(event) =>
+            changed(
+              Array.from(event.target.selectedOptions)
+                .map((option) => option.value)
+                .join(','),
+            )
+          }
+        >
+          {references.map((item) => (
+            <option key={item.id} value={item.id}>
+              {displayValue(recordValue(item, options.display_attribute) ?? item.id)}
+            </option>
+          ))}
+        </select>
+      );
     return (
       <select
         {...controlProps}

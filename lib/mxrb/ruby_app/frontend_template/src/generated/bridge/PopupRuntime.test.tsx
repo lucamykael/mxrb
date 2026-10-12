@@ -30,6 +30,12 @@ const home: PageDefinition = {
   widgets: [
     field,
     {
+      name: 'apply',
+      type: 'button',
+      options: { caption: 'Owner' },
+      events: [{ event: 'on_click', kind: 'page', handler: 'App.Owner', arguments: {} }],
+    },
+    {
       name: 'edit',
       type: 'button',
       options: { caption: 'Edit' },
@@ -72,6 +78,41 @@ const editor: PageDefinition = {
   ],
 };
 
+// A popup editing an object reached through an association, saved by a microflow.
+const ownerPopup: PageDefinition = {
+  name: 'App.Owner',
+  title: 'Owner',
+  popup: { mode: 'modal' },
+  parameters: [{ name: 'Item', type: { kind: 'object', entity: 'App.Item' } }],
+  widgets: [
+    {
+      name: 'owner',
+      type: 'data_view',
+      options: {
+        source: {
+          kind: 'association',
+          entity: 'App.Person',
+          steps: [{ association: 'App.Item_Person', entity: 'App.Person' }],
+        },
+      },
+      body: [{ name: 'person', type: 'text_box', options: { attribute: 'Name', caption: 'Person' } }],
+    },
+    {
+      name: 'apply',
+      type: 'button',
+      options: { caption: 'Apply' },
+      events: [{ event: 'on_click', kind: 'microflow', handler: 'App.Apply' }],
+    },
+  ],
+};
+const person = {
+  id: 'p',
+  type: 'App.Person',
+  attributes: { Name: 'Before' },
+  new_record: true,
+  draft_token: 'token',
+};
+
 function setup() {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation(async (path, options) => {
@@ -79,10 +120,14 @@ function setup() {
     if (path === '/api/schema')
       return {
         project: { name: 'App' },
-        modules: [{ name: 'App', models: [{ name: 'App.Item' }], pages: [home, editor] }],
+        modules: [{ name: 'App', models: [{ name: 'App.Item' }], pages: [home, editor, ownerPopup] }],
       } as never;
     if (path === '/api/pages/App.Home') return home as never;
     if (path === '/api/pages/App.Editor') return editor as never;
+    if (path === '/api/pages/App.Owner') return ownerPopup as never;
+    if (path.startsWith('/api/entities/App.Person?')) return { records: [person] } as never;
+    if (path === '/api/microflows/App.Apply')
+      return { result: null, effects: [{ type: 'close_page', count: 1 }] } as never;
     if (path === '/api/microflows/App.Load') return { result: record } as never;
     if (path === '/api/entities/App.Item/1') return record as never;
     if (path === '/api/records/commit')
@@ -141,5 +186,37 @@ describe('popup page lifetime', () => {
       }),
     });
     expect(background.isConnected).toBe(true);
+  });
+
+  it('sends the objects a popup edited with its microflow and refreshes the page beneath', async () => {
+    const user = setup();
+    await screen.findByRole('textbox', { name: 'Name' });
+    await user.click(screen.getByRole('button', { name: 'Owner' }));
+    const popup = await screen.findByRole('dialog', { name: 'Owner' });
+    const input = await within(popup).findByRole('textbox', { name: 'Person' });
+    await user.clear(input);
+    await user.type(input, 'After');
+    const reloads = vi
+      .mocked(api)
+      .mock.calls.filter(([path]) => path === '/api/entities/App.Item/1').length;
+    await user.click(within(popup).getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const call = vi.mocked(api).mock.calls.find(([path]) => path === '/api/microflows/App.Apply');
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.__mxrb_changes).toEqual([
+      {
+        type: 'App.Person',
+        id: 'p',
+        attributes: { Name: 'After' },
+        new_record: true,
+        draft_token: 'token',
+      },
+    ]);
+    expect(body.__mxrb_context).toMatchObject({ type: 'App.Item', id: '1' });
+    await waitFor(() =>
+      expect(
+        vi.mocked(api).mock.calls.filter(([path]) => path === '/api/entities/App.Item/1').length,
+      ).toBeGreaterThan(reloads),
+    );
   });
 });

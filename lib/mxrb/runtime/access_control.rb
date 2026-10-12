@@ -82,12 +82,15 @@ module Mxrb
         document_allowed?(:page, page, context:)
       end
 
+      # Without security the Runtime checks no access at all, also for the
+      # System entities that the project model does not declare.
       def entity_allowed?(entity, action:, context:, member: nil, record: nil)
+        return true unless security_enabled?
+
         entity = resolve(:entity, entity)
         return false unless entity
 
         ctx = normalized_context(context)
-        return true unless security_enabled?
         return true if admin?(ctx)
 
         rules = applicable_rules(entity, ctx, record:)
@@ -155,9 +158,12 @@ module Mxrb
       def password_policy = PasswordPolicy.from_security(value(@security, 'PasswordPolicySettings'))
 
       def user_role_definitions
-        parse_array(value(@security, 'UserRoles')).map do |role|
+        roles = parse_array(value(@security, 'UserRoles'))
+        names = roles.map { value(_1, 'Name').to_s }
+        roles.map do |role|
+          manageable = value(role, 'ManageAllRoles') == true ? names : parse_array(value(role, 'ManageableRoles'))
           { name: value(role, 'Name').to_s, guid: IO::BsonCodec.extract_id(value(role, 'GUID')).to_s,
-            description: value(role, 'Description').to_s }
+            description: value(role, 'Description').to_s, manageable: manageable.map(&:to_s) }
         end
       end
 

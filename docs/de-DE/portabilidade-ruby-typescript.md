@@ -762,6 +762,54 @@ und liest dazu das Objekt des in `source:` genannten Data Views. Unbekannte Quel
 bleiben gesperrt. Ein Ruby-Export einer Kopie des privaten SPC-Projekts besteht
 damit die Prüfung des öffentlichen Quellcodes und den identischen Round-Trip.
 
+Data Grid 2 wird über den typisierten Aufruf `data_grid` exportiert, mit der
+`xpath:` der Datenquelle, `sort: [sort_by(...)]`, `on_click_trigger: "double"` und
+einem `header`-Block mit den Kopfzeilen-Widgets (`filtersPlaceholder`). Jede
+`column` akzeptiert `association_path: [[Assoziation, Entität], ...]`,
+`dynamic_text:` mit `parameters:`, `hidable:`, `width: "auto_fit"|"manual"`,
+`size:`, `alignment:` und einen Block mit dem benutzerdefinierten Inhalt, der mit
+der Zeile als Kontext gerendert wird. Filter verwenden
+`grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)` listet die
+Werte boolescher oder Aufzählungsattribute auf und entfällt über Assoziationen.
+Die UI schreibt `grid-template-columns` wie das native Widget: `autoFill` teilt
+den Platz nach `size`, `autoFit` folgt dem Inhalt und `manual` ist in Pixeln. Die
+Runtime füllt `System.grantableRoles` aus den verwaltbaren Rollen der
+Projektsicherheit, sodass die XPath von Account_Overview im Modul Administration
+die Konten zeigt, deren Rollen der aktuelle Benutzer vergeben darf.
+
+Das Client-Schema enthält die Entitäten und Assoziationen des System-Moduls
+(ohne das Passwort), und ein `reference_selector` über ein Reference Set wie
+`System.UserRoles` wird zu einer Mehrfachauswahl der Zielobjekte. Ein
+Microflow-Button ohne Parameterzuordnung übergibt das Objekt seines Data Views
+an den einzigen nicht zugeordneten Parameter einer kompatiblen Entität, wie
+Mendix es tut; so legt der Save-Button des Popups New Account im Modul
+Administration das Konto an. Ein Data View über eine Assoziation lässt seine
+Widgets und deren Entwürfe montiert, während er dasselbe Objekt neu lädt.
+
+Auf einer Seite mit Save/Cancel übergibt ein Microflow-Aufruf die bearbeiteten
+Objekte (ohne Commit), wie der Mendix-Client; über eine Assoziation erneut
+erreichte Entwürfe behalten ihr Token, und die Änderung wirkt auf dieselbe
+Instanz, die der Microflow speichert. Nach einem Microflow in einem Popup lädt
+die darunterliegende Seite neu. Eine Seitenaktion ohne zugeordnete Argumente
+erhält das Objekt, auf das das Ereignis wirkt, etwa eine Grid-Zeile. Labels
+importieren ihre Beschriftung und die Sichtbarkeit nach Attributwerten
+(`text ..., visibility: input_condition(...)`), Buttons ihr Icon aus einer
+Icon-Sammlung (`button ..., icon: "Atlas_Core.Atlas_Filled.pencil"`); eine leere
+Beschriftung bleibt leer.
+Texte im Darstellungsmodus H1–H6 oder Absatz (`text ..., render_mode: :h2`) und
+Link-Buttons (`button ..., render_type: :link`) werden wie im Mendix-Client
+dargestellt; das Tab Control nutzt das Atlas-Tab-Markup, und Data Grid 2 zeigt
+boolesche Werte als Yes/No.
+`input_condition` akzeptiert `roles:` und `ignore_security:`, wenn die Bedingung
+zusätzlich Modulrollen einschränkt; Data Grid 2 in Snippets nutzt denselben
+typisierten Aufruf wie in Seiten; ausgeschlossene Nanoflows, die entfernte
+Modellelemente referenzieren (Studio Pro prüft ausgeschlossene Dokumente nicht),
+erhalten einen leeren Rumpf, statt den Export abzubrechen. Kopien der privaten
+Projekte QRQC und SPC sowie Sudoku bestehen die Prüfung des öffentlichen
+Quellcodes und den identischen Round-Trip.
+Die Filter von Data Grid 2 bieten die Operatorauswahl des Widgets (Contains, Starts
+with, Greater than, Between, Empty...), Dropdown-Filter zeigen Select/Yes/No.
+
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
 Schreibfehler einschließlich 404 bleiben sichtbar. `listen_to` verwendet die

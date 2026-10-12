@@ -430,14 +430,23 @@ export function ApplicationRuntime({
   const invoke: InvokeHandler = (name, parameters = {}, contextOverride = null, options = {}) => {
     setBusy(true);
     const activeContext = contextOverride || pageContext;
-    const submitted = activeContext
-      ? edits.changes.get(`${activeContext.type}/${activeContext.id}`)
-      : undefined;
-    const argumentsValue = {
-      ...parameters,
-      ...(activeContext ? { __mxrb_context: activeContext } : {}),
-    };
+    const contextKey = activeContext ? `${activeContext.type}/${activeContext.id}` : '';
+    let submitted: RuntimeVariables | undefined;
+    // The objects a page with Save/Cancel has edited travel with the call, as
+    // the Mendix client sends its changed objects; they are not committed.
+    let staged = new Map<string, RuntimeVariables>();
     const execute = async (): Promise<InvocationResult> => {
+      if (edits.deferred) await edits.flush();
+      submitted = contextKey ? edits.changes.get(contextKey) : undefined;
+      staged = new Map([...edits.changes].filter(([id]) => id !== contextKey));
+      const changes = edits.deferred
+        ? edits.pending().filter((record) => `${record.type}/${record.id}` !== contextKey)
+        : [];
+      const argumentsValue = {
+        ...parameters,
+        ...(activeContext ? { __mxrb_context: edits.resolve(activeContext) } : {}),
+        ...(changes.length ? { __mxrb_changes: changes } : {}),
+      };
       if (!options.asynchronous)
         return request<InvocationResult>(`/api/microflows/${encodeURIComponent(name)}`, {
           method: 'POST',
@@ -453,7 +462,10 @@ export function ApplicationRuntime({
     };
     return execute()
       .then(async (payload) => {
+        if (edits.deferred && staged.size) edits.accept([], staged);
         setRevision((value) => value + 1);
+        // The pages under a popup show data its microflow may have changed.
+        workspace?.changed();
         const updatesPage =
           activeContext?.id === pageContext?.id && activeContext?.type === pageContext?.type;
         if (payload.context) {

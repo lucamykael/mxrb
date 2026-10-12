@@ -35,6 +35,56 @@ const props = () => ({
 });
 
 describe('editable exported fields', () => {
+  it('selects the objects of a reference set', async () => {
+    const roles: EntityRecord[] = ['Administrator', 'User', 'Guest'].map((name) => ({
+      id: name,
+      type: 'System.UserRole',
+      attributes: { Name: name },
+    }));
+    const input = props();
+    input.request.mockResolvedValue({ records: roles });
+    render(
+      <BoundField
+        {...input}
+        record={{ ...record, attributes: { UserRoles: [roles[0]] } }}
+        schema={
+          {
+            modules: [
+              {
+                associations: [
+                  {
+                    name: 'UserRoles',
+                    type: 'ReferenceSet',
+                    from_entity: 'System.User',
+                    to_entity: 'System.UserRole',
+                  },
+                ],
+              },
+            ],
+          } as unknown as ApplicationSchema
+        }
+        widget={{
+          name: 'roles',
+          type: 'reference_selector',
+          options: {
+            attribute: 'System.UserRoles',
+            display_attribute: 'System.UserRole.Name',
+            aria_label: 'Roles',
+          },
+        }}
+      />,
+    );
+    const list = await screen.findByRole('listbox', { name: 'Roles' });
+    expect(input.request).toHaveBeenCalledWith('/api/entities/System.UserRole');
+    await screen.findByRole('option', { name: 'Guest' });
+    expect(screen.getByRole('option', { name: 'Administrator' })).toHaveProperty('selected', true);
+    await userEvent.selectOptions(list, ['Administrator', 'Guest']);
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenLastCalledWith(expect.anything(), {
+        UserRoles: [roles[0], roles[2]],
+      }),
+    );
+  });
   it('saves decimal edits without passing through a JavaScript number', async () => {
     const input = props();
     const amount = '9007199254740993.12345678';
