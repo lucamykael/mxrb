@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import type { PopupDefinition } from '../../types';
+import { autofocusEnabled, focusWhenReady } from './autofocus';
 
 export function Popup({
   title,
@@ -28,18 +29,20 @@ export function Popup({
       left: `${Math.max(0, (window.innerWidth - element.offsetWidth) / 2)}px`,
       top: `${Math.max(0, (window.innerHeight - element.offsetHeight) * 0.35)}px`,
     });
-    if (['disabled', 'off'].includes(autofocus?.toLowerCase() || '')) element.focus();
-    else if (
-      !['desktop', 'desktoponly'].includes(autofocus?.toLowerCase() || '') ||
-      window.matchMedia('(pointer: fine)').matches
-    ) {
-      element
-        .querySelector<HTMLElement>(
-          'input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+    // The dialog holds the focus until its first field renders.
+    element.focus();
+    const stopFocus = autofocusEnabled(autofocus)
+      ? focusWhenReady(
+          element,
+          (container) =>
+            container.querySelector<HTMLElement>(
+              'input:not([disabled]), textarea:not([disabled]), select:not([disabled])',
+            ),
+          () => document.activeElement === element,
         )
-        ?.focus();
-    }
+      : () => undefined;
     return () => {
+      stopFocus();
       element.close();
       if (previous?.isConnected) previous.focus();
     };

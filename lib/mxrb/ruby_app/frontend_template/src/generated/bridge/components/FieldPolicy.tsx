@@ -5,6 +5,9 @@ import { conditionValue, isEntityRecord, memberName, recordValue } from '../valu
 // A nested view may further restrict editing, never unlock its parent.
 export const ReadOnlyContext = createContext(false);
 export const ReadOnlyStyleContext = createContext<'control' | 'text'>('control');
+// A data view's label width (out of 12) lays its fields out horizontally;
+// 0 keeps labels above them.
+export const LabelWidthContext = createContext(0);
 
 export function editable(
   options: WidgetOptions,
