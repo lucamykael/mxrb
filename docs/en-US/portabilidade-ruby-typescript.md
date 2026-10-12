@@ -36,9 +36,25 @@ accepted only for UTC; unknown letters are rejected. Previously the Ruby runtime
 mapped a few patterns to `strftime` and ignored `SSS`, `h`, `a` and quotes.
 
 All 55 cases ran on the official Runtime through `script/oql_native_oracle` and match
-the Ruby interpreter. Parsing text (local `parseDateTime`, month names and `yy`) and
-TypeScript nanoflows, which format on the client, remain separate work.
+the Ruby interpreter. TypeScript nanoflows, which format on the client, remain
+separate work.
 [Evidence](../evidence/date-formatting-2026-10-09.json).
+
+## Microflow date parsing
+
+`parseDateTimeUTC` and `parseDateTime` in microflows follow the strict `en_US`
+`SimpleDateFormat`: month and day names in any case (`MMM` also accepts the full
+name), two-digit `yy` within 80 years before and 20 years after today, `h`/`K`/`k`
+with `a`, `D` (day of year), `w` (US week), `G`, and the zones `Z`, `X` and `z`
+(`UTC`, `GMT`, `EST` and UTC's long name). Missing fields default to 1970-01-01; a
+valid prefix is accepted; contradicting weekdays, out-of-range hours, unknown names,
+year 0 and extra blanks before names reject the text. `parseDateTime` reads the wall
+time in the session time zone (UTC in system context).
+
+Mendix uses the Julian calendar before 1582-10-15; MXRB rejects those dates
+explicitly instead of shifting them. The remaining 80 cases ran on the official
+Runtime through `script/oql_native_oracle` and match Ruby. TypeScript nanoflows keep
+the numeric subset below. [Evidence](../evidence/date-parsing-2026-10-09.json).
 
 ## OQL expressions
 
@@ -219,7 +235,8 @@ AsyncStorage and offline use are not certified.
 `parseDateTimeUTC(text, pattern[, fallback])` runs in Ruby microflows and
 TypeScript nanoflows without MPR access. It supports numeric year, month, day,
 hour, minute, second and millisecond fields, quoted literals and adjacent fields.
-Years are limited to 1800–9999. Invalid input uses the optional date/empty fallback
+In nanoflows, years are limited to 1800–9999; microflows follow Microflow date
+parsing. Invalid input uses the optional date/empty fallback
 or raises an error; unsupported patterns always fail explicitly.
 
 Twenty cases were checked in both execution paths in Mendix 11.12.1, using the
@@ -227,8 +244,8 @@ source and rebuilt project. Both reject invalid calendar/time components.
 Microflows accept a parsed prefix and support numeric offsets; nanoflows reject
 trailing text and the tested offset patterns. Time-only input uses 1970-01-01 in
 microflows and today's UTC date in nanoflows. These observed differences are
-preserved. Localized names, two-digit years and local-time `parseDateTime` are
-outside this scope.
+preserved. Names, two-digit years and local `parseDateTime` apply to microflows
+only.
 
 The Ruby suite passed 2,345 examples with 100% line and branch coverage; the
 frontend passed 190 tests and 81 browser steps without MPR access.

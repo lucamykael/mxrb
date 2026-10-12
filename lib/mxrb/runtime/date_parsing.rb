@@ -2,26 +2,30 @@
 
 require 'date'
 require 'strscan'
+require_relative 'date_parse_fields'
 
 module Mxrb
   module Runtime
-    # Numeric UTC patterns verified against Mendix 11.12.1. Its microflow parser
-    # rejects invalid components but accepts a successfully parsed input prefix.
+    # Java SimpleDateFormat parsing (strict, en_US) as Mendix 11.12.1 parses
+    # microflow dates. A successfully parsed prefix is accepted; components out
+    # of range, a contradicting weekday and an unknown name reject the text.
+    # Numeric fields skip leading blanks; a field followed by another numeric
+    # field reads exactly its pattern width. Missing fields default to
+    # 1970-01-01 00:00 in the time zone of the call.
     module DateParsing
-      FIELDS = { 'y' => 0, 'M' => 1, 'd' => 2, 'H' => 3, 'm' => 4, 's' => 5, 'S' => 6 }.freeze
-      PATTERNS = %w[yyyy M MM d dd H HH m mm s ss S SS SSS X XX XXX Z].freeze
-      ZONES = { 'X' => 'Z|[+-]\\d{2}', 'XX' => 'Z|[+-]\\d{4}',
-                'XXX' => 'Z|[+-]\\d{2}:\\d{2}', 'Z' => '[+-]\\d{4}' }.freeze
+      LETTERS = 'GyMLdDEuahHkKmsSzZXw'
+      # Java switches to the Julian calendar before this date; Ruby times are Gregorian.
+      REFORM = Time.utc(1582, 10, 15)
 
       module_function
 
-      def invoke(arguments)
+      # parseDateTimeUTC(text, pattern[, fallback]), or parseDateTime in zone when given.
+      def invoke(arguments, zone: nil, now: Time.now.utc)
         unless (2..3).cover?(arguments.length) && arguments.first(2).all?(String)
-          raise ArgumentError, 'parseDateTimeUTC requires a date string, pattern and optional date fallback'
+          raise ArgumentError, 'parseDateTime requires a date string, pattern and optional date fallback'
         end
 
-        tokens = tokenize(arguments[1])
-        value = parse(arguments[0], tokens)
+        value = parse(arguments[0], tokenize(arguments[1]), zone, now)
         return value if value
         return fallback(arguments[2]) if arguments.length == 3
 
@@ -47,8 +51,7 @@ module Mxrb
 
         field = scanner.scan(/([A-Za-z])\1*/)
         return [:literal, scanner.getch] unless field
-
-        raise ArgumentError, "unsupported date pattern: #{field}" unless PATTERNS.include?(field)
+        raise ArgumentError, "unsupported date pattern: #{field}" unless LETTERS.include?(field[0])
 
         [:field, field]
       end
@@ -63,69 +66,36 @@ module Mxrb
         raise ArgumentError, 'unterminated date pattern literal'
       end
 
-      def parse(text, tokens)
-        match = compiled_pattern(tokens).match(text)
-        return unless match&.end(0).to_i.positive?
+      def parse(text, tokens, zone, now)
+        values = read(text, tokens) or return
+        fields = DateParseFields.new(values, now)
+        time = fields.resolve(zone)
+        raise ArgumentError, 'dates before the 1582 calendar reform are not supported' if time && time < REFORM
 
-        fields = tokens.filter_map { |kind, value| value if kind == :field }
-        normalize(*components(fields, match.captures))
+        time
       rescue RangeError
         nil
       end
 
-      def compiled_pattern(tokens)
-        source = tokens.each_with_index.map { |entry, index| token_pattern(entry, tokens[index + 1]) }.join
-        Regexp.new("\\A#{source}")
-      end
+      # The field values of the longest matching prefix, or nil.
+      def read(text, tokens)
+        scanner = StringScanner.new(text)
+        values = tokens.each_with_index.map do |(kind, value), index|
+          next(scanner.scan(Regexp.new(Regexp.escape(value))) ? nil : (return nil)) if kind == :literal
 
-      def token_pattern(entry, following)
-        kind, value = entry
-        return Regexp.escape(value) if kind == :literal
-        return "(#{ZONES.fetch(value)})" if ZONES.key?(value)
-
-        adjacent = following&.first == :field && FIELDS.key?(following.last[0])
-        "[ \\t]*(-?\\d#{adjacent ? "{#{value.length}}" : '+'})"
-      end
-
-      def components(fields, values)
-        parts = [1970, 1, 1, 0, 0, 0, 0]
-        offset = 0
-        fields.zip(values).each do |field, value|
-          if ZONES.key?(field)
-            offset = zone_offset(value)
-          else
-            parts[FIELDS.fetch(field[0])] = Integer(value, 10)
-          end
+          read_field(scanner, value, tokens[index + 1]) || (return nil)
         end
-        [parts, offset]
+        scanner.pos.positive? ? values.compact : nil
       end
 
-      def zone_offset(text)
-        return 0 if text == 'Z'
-
-        digits = text.delete(':')
-        hours = digits[1, 2].to_i
-        minutes = digits[3, 2].to_i
-        raise RangeError, 'invalid date offset' unless hours <= 23 && minutes <= 59
-
-        (digits.start_with?('-') ? -1 : 1) * (hours * 3600 + minutes * 60)
+      def read_field(scanner, field, following)
+        matcher = DateParseMatchers.matcher(field, adjacent: numeric_field?(following))
+        text = scanner.scan(matcher) or return
+        [field, text.strip]
       end
 
-      def normalize(parts, offset)
-        validate_parts!(parts)
-        Time.utc(*parts.first(6)) + Rational(parts[6], 1000) - offset
-      end
-
-      def validate_parts!(parts)
-        year, month, day, hour, minute, second, milliseconds = parts
-        ranges = [[hour, 23], [minute, 59], [second, 59], [milliseconds, 999]]
-        unless (1800..9999).cover?(year) && (1..12).cover?(month) && day.positive? &&
-               Date.valid_date?(year, month, day) &&
-               ranges.all? { |value, maximum| (0..maximum).cover?(value) }
-          raise RangeError, 'invalid parsed date components'
-        end
-
-        parts
+      def numeric_field?(token)
+        token&.first == :field && DateParseMatchers.numeric?(token.last)
       end
     end
   end

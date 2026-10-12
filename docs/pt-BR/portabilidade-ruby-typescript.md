@@ -36,9 +36,25 @@ formas locais usam o fuso da sessão, que é UTC no contexto do sistema. Nomes d
 Ruby trocava poucos padrões por `strftime` e ignorava `SSS`, `h`, `a` e aspas.
 
 Os 55 casos foram executados no Runtime oficial com `script/oql_native_oracle` e
-coincidem com o interpretador Ruby. A interpretação de textos (`parseDateTime`
-local, nomes de mês e `yy`) e os nanoflows TypeScript, que formatam no cliente,
-continuam em frentes separadas. [Evidência](../evidence/date-formatting-2026-10-09.json).
+coincidem com o interpretador Ruby. Os nanoflows TypeScript, que formatam no cliente, continuam em
+frente separada. [Evidência](../evidence/date-formatting-2026-10-09.json).
+
+## Interpretação de datas em microflows
+
+`parseDateTimeUTC` e `parseDateTime` em microflows seguem o `SimpleDateFormat` estrito
+em `en_US`: nomes de mês e de dia em qualquer caixa (`MMM` aceita também o nome
+completo), `yy` com dois dígitos na janela de 80 anos antes a 20 depois da data atual,
+`h`/`K`/`k` com `a`, `D` (dia do ano), `w` (semana dos EUA), `G`, e fusos `Z`, `X` e
+`z` (`UTC`, `GMT`, `EST` e o nome longo de UTC). Campos ausentes usam 1970-01-01;
+um prefixo válido é aceito; dias da semana contraditórios, horas fora do intervalo,
+nomes desconhecidos, o ano 0 e espaços extras antes de nomes rejeitam o texto.
+`parseDateTime` lê o horário no fuso da sessão (UTC no contexto do sistema).
+
+O Mendix usa o calendário juliano antes de 15/10/1582; o MXRB rejeita
+explicitamente essas datas em vez de deslocá-las. Os 80 casos restantes foram
+executados no Runtime oficial com `script/oql_native_oracle` e coincidem com o Ruby.
+Nanoflows TypeScript continuam com o subconjunto numérico abaixo.
+[Evidência](../evidence/date-parsing-2026-10-09.json).
 
 ## Expressões OQL
 
@@ -219,7 +235,8 @@ AsyncStorage e uso offline não estão certificados.
 `parseDateTimeUTC(texto, formato[, alternativa])` funciona em microflows Ruby e
 nanoflows TypeScript sem acesso ao MPR. Aceita campos numéricos de ano, mês, dia,
 hora, minuto, segundo e milissegundo, literais entre aspas e campos adjacentes.
-Os anos ficam limitados a 1800–9999. Uma entrada inválida retorna a alternativa
+Em nanoflows, os anos ficam limitados a 1800–9999; microflows seguem a seção
+Interpretação de datas em microflows. Uma entrada inválida retorna a alternativa
 opcional de data/vazio ou gera erro; formatos não suportados sempre geram erro.
 
 Vinte casos foram comparados nos dois modos de execução do Mendix 11.12.1, com
@@ -227,8 +244,8 @@ o projeto original e o reconstruído. Ambos rejeitam componentes inválidos.
 Microflows aceitam um prefixo válido e deslocamentos numéricos de fuso; nanoflows
 rejeitam texto excedente e os formatos de deslocamento testados. Entradas contendo
 somente horário usam 1970-01-01 em microflows e a data UTC atual em nanoflows.
-Essas diferenças observadas foram preservadas. Nomes localizados, anos com dois
-dígitos e `parseDateTime` em horário local ficam fora deste escopo.
+Essas diferenças observadas foram preservadas. Nomes, anos com dois dígitos e
+`parseDateTime` local valem apenas em microflows.
 
 A suíte Ruby passou nos 2.345 exemplos, com 100% de cobertura de linhas e
 ramificações; o frontend passou em 190 testes e 81 passos no navegador sem MPR.

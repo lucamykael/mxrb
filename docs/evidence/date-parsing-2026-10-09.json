@@ -1,0 +1,273 @@
+{
+  "date": "2026-10-09",
+  "scope": "Microflow parseDateTimeUTC and parseDateTime with SimpleDateFormat patterns",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "f76840c6b12fa01828f539c0d0ac274193ab0715a1c974ba0ef1bd35fc007079",
+    "cases": 80,
+    "status": "passed",
+    "results": {
+      "UMonShort": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LMonShort": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMonLower": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LMonLower": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMonFullForShort": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LMonFullForShort": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMonFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LMonFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMonShortForFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LMonShortForFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMonBad": [
+        "<invalid>"
+      ],
+      "LMonBad": [
+        "<invalid>"
+      ],
+      "UYY24": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LYY24": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UYY45": [
+        "2045-03-10 00:00:00.000"
+      ],
+      "LYY45": [
+        "2045-03-10 00:00:00.000"
+      ],
+      "UYY46": [
+        "2046-03-10 00:00:00.000"
+      ],
+      "LYY46": [
+        "2046-03-10 00:00:00.000"
+      ],
+      "UYY99": [
+        "1999-03-10 00:00:00.000"
+      ],
+      "LYY99": [
+        "1999-03-10 00:00:00.000"
+      ],
+      "UYYFour": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LYYFour": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UPM": [
+        "1970-01-01 19:05:00.000"
+      ],
+      "LPM": [
+        "1970-01-01 19:05:00.000"
+      ],
+      "UAM12": [
+        "1970-01-01 00:00:00.000"
+      ],
+      "LAM12": [
+        "1970-01-01 00:00:00.000"
+      ],
+      "UPM12": [
+        "1970-01-01 12:30:00.000"
+      ],
+      "LPM12": [
+        "1970-01-01 12:30:00.000"
+      ],
+      "UampmLower": [
+        "1970-01-01 19:05:00.000"
+      ],
+      "LampmLower": [
+        "1970-01-01 19:05:00.000"
+      ],
+      "UK0": [
+        "1970-01-01 00:15:00.000"
+      ],
+      "LK0": [
+        "1970-01-01 00:15:00.000"
+      ],
+      "Uk24": [
+        "1970-01-01 00:00:00.000"
+      ],
+      "Lk24": [
+        "1970-01-01 00:00:00.000"
+      ],
+      "UWeekday": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LWeekday": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UWeekdayWrong": [
+        "<invalid>"
+      ],
+      "LWeekdayWrong": [
+        "<invalid>"
+      ],
+      "UWeekdayFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LWeekdayFull": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UFeb30": [
+        "<invalid>"
+      ],
+      "LFeb30": [
+        "<invalid>"
+      ],
+      "UHour25": [
+        "<invalid>"
+      ],
+      "LHour25": [
+        "<invalid>"
+      ],
+      "UQuoted": [
+        "2024-03-10 07:05:00.000"
+      ],
+      "LQuoted": [
+        "2024-03-10 07:05:00.000"
+      ],
+      "UDayOfYear": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LDayOfYear": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "USpaces": [
+        "<invalid>"
+      ],
+      "LSpaces": [
+        "<invalid>"
+      ],
+      "UTrailing": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LTrailing": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UEra": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LEra": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UMillis": [
+        "1970-01-01 07:05:09.045"
+      ],
+      "LMillis": [
+        "1970-01-01 07:05:09.045"
+      ],
+      "UZoneOffset": [
+        "2024-03-10 10:05:00.000"
+      ],
+      "LZoneOffset": [
+        "2024-03-10 10:05:00.000"
+      ],
+      "UZoneName": [
+        "2024-03-10 07:05:00.000"
+      ],
+      "LZoneName": [
+        "2024-03-10 07:05:00.000"
+      ],
+      "UWeek": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "LWeek": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "UY1799": [
+        "1799-05-01 00:00:00.000 AD"
+      ],
+      "UY0": [
+        "<invalid>"
+      ],
+      "UY10000": [
+        "10000-05-01 00:00:00.000 AD"
+      ],
+      "UY9999": [
+        "9999-12-31 00:00:00.000 AD"
+      ],
+      "UZoneGMT": [
+        "2024-03-10 07:05:00.000 AD"
+      ],
+      "UZoneEST": [
+        "2024-03-10 12:05:00.000 AD"
+      ],
+      "UZoneLong": [
+        "2024-03-10 07:05:00.000 AD"
+      ],
+      "UMonthNum3": [
+        "<invalid>"
+      ],
+      "UHour12Bad": [
+        "<invalid>"
+      ],
+      "UADlower": [
+        "2024-03-10 00:00:00.000 AD"
+      ],
+      "UNoAmPm": [
+        "1970-01-01 07:05:00.000 AD"
+      ],
+      "UKpm": [
+        "1970-01-01 23:15:00.000 AD"
+      ],
+      "UDOY366": [
+        "2024-12-31 00:00:00.000 AD"
+      ],
+      "UDOY367": [
+        "<invalid>"
+      ],
+      "UWeekNoDay": [
+        "2024-03-10 00:00:00.000 AD"
+      ],
+      "UDayNameOnly": [
+        "1970-01-04 00:00:00.000 AD"
+      ],
+      "UWeekDay": [
+        "2024-03-13 00:00:00.000"
+      ],
+      "UWeekSat": [
+        "2024-01-06 00:00:00.000"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "strict en_US SimpleDateFormat; a valid prefix is accepted",
+    "MMM and MMMM accept short and full names in any case",
+    "yy with exactly two digits resolves within 80 years before and 20 years after now; other digit counts are literal years",
+    "12 AM is midnight; h accepts 1-12 and K 0-11; k 24 is midnight",
+    "a contradicting weekday, Feb 30, hour 25, year 0, an unknown name and a double blank before a name reject the text",
+    "missing fields default to 1970-01-01; a weekday alone resolves to its first occurrence in January 1970",
+    "w resolves to the Sunday of the US week",
+    "parseDateTime reads the session time zone, UTC in system context; z accepts UTC, GMT, EST and UTC's long name"
+  ],
+  "deliberate_divergence": "Mendix (Java GregorianCalendar) uses the Julian calendar before 1582-10-15; MXRB raises an error for those dates instead of returning a shifted instant",
+  "limitations": [
+    "TypeScript nanoflows keep the numeric parseDateTimeUTC subset",
+    "zone names other than UTC, GMT and EST are rejected",
+    "nonexistent or repeated local times around DST changes are not certified"
+  ]
+}
