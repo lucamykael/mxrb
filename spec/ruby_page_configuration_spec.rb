@@ -284,13 +284,13 @@ RSpec.describe 'private Ruby page configuration' do
     )
   end
 
-  it 'emits typed grid columns without changing legacy data_grid block semantics' do
+  it 'emits typed grid columns as a data grid block' do
     columns = [{ 'name' => 'Name', 'attribute' => 'App.Item.Name', 'caption' => 'Name' }]
     grid = { 'type' => 'data_grid', 'name' => 'items', 'options' => {
       'columns' => columns, 'entity' => 'App.Item', 'selection' => 'single'
     } }
     source, actual = emitted_widgets([grid])
-    expect(source).to include('grid_column(', 'entity: "App.Item"', 'selection: "single"')
+    expect(source).to include('column "Name"', 'entity: "App.Item"', 'selection: "single"')
     expect(source).not_to include('"name" =>')
     expect(actual).to eq([grid])
   end
@@ -314,8 +314,8 @@ RSpec.describe 'private Ruby page configuration' do
 
     source, actual = emitted_widgets([grid])
     expect(source).to include(
-      'server_side: true', 'page_size: 25', '"direction" => "Descending"',
-      'filter: {"type" => "number", "operator" => "gte"}', 'sortable: true'
+      'server_side: true', 'page_size: 25', 'sort_by("Score", direction: "Descending")',
+      'filter: grid_filter(:number, operator: :gte)', 'sortable: true'
     )
     expect(actual).to eq([grid])
   end

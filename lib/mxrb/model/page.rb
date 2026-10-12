@@ -378,9 +378,11 @@ module Mxrb
 
       def image_viewer_options(widget)
         source = widget['DataSource'].is_a?(Hash) ? widget.fetch('DataSource') : {}
+        parsed = source.empty? ? nil : parse_data_view_source(source)
         appearance_options(widget).merge(
-          entity: source.dig('EntityRef', 'Entity') || source['EntityPath'],
-          source: source.empty? ? nil : parse_data_view_source(source),
+          # Over an association the entity is the destination of its last step.
+          entity: source.dig('EntityRef', 'Entity') || source['EntityPath'] || parsed&.dig(:entity),
+          source: parsed,
           alternative_text: extract_text(widget['AlternativeText']),
           default_image: widget.fetch('DefaultImage', '').to_s,
           force_full_objects: source['ForceFullObjects'] == true,

@@ -932,6 +932,12 @@ Textos com modo de renderização H1–H6 ou parágrafo
 (`text ..., render_mode: :h2`) e botões do tipo Link (`button ..., render_type: :link`)
 são renderizados como no cliente Mendix; o Tab Control usa o markup de abas do
 Atlas, e a Data grid 2 mostra booleanos como Yes/No.
+`input_condition` aceita `roles:` e `ignore_security:` quando a condição também
+restringe papéis de módulo; a Data grid 2 em snippets usa a mesma chamada tipada
+das páginas; e nanoflows excluídos que citam elementos removidos do modelo (o
+Studio Pro não verifica documentos excluídos) geram um corpo vazio em vez de
+interromper a exportação. Com isso, cópias dos projetos privados QRQC e SPC e o
+Sudoku passam a auditoria do código público e o round-trip idêntico.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

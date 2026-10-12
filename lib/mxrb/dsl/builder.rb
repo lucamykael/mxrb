@@ -456,12 +456,15 @@ module Mxrb
 
       # Conditional editability of an input: an expression, or the values of an
       # attribute of the source object (pairs of value and whether it matches).
-      def input_condition(expression = nil, attribute: nil, conditions: nil, source: nil)
-        return { expression: expression.to_s } if attribute.nil? && conditions.nil? && source.nil?
+      # roles: the module roles the widget is also restricted to.
+      def input_condition(expression = nil, attribute: nil, conditions: nil, source: nil, roles: nil,
+                          ignore_security: nil)
+        return { expression: expression.to_s } if [attribute, conditions, source, roles, ignore_security].all?(&:nil?)
 
         compact_data_view_source(
           expression: expression&.to_s, attribute: attribute&.to_s,
-          conditions: Dsl.attribute_conditions(conditions), source_variable: source
+          conditions: Dsl.attribute_conditions(conditions), source_variable: source,
+          roles: Array(roles).map(&:to_s), ignore_security: ignore_security == true
         )
       end
 

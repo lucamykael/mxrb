@@ -757,6 +757,12 @@ caption stays empty.
 Texts rendered as H1–H6 or paragraph (`text ..., render_mode: :h2`) and Link
 buttons (`button ..., render_type: :link`) render as in the Mendix client; the Tab
 Control uses the Atlas tab markup, and Data grid 2 shows booleans as Yes/No.
+`input_condition` accepts `roles:` and `ignore_security:` when the condition also
+restricts module roles; Data grid 2 in snippets uses the same typed call as in
+pages; and excluded nanoflows that refer to removed model elements (Studio Pro
+does not check excluded documents) get an empty body instead of stopping the
+export. Copies of the private QRQC and SPC projects and Sudoku pass the
+public-source audit and the identical round trip.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

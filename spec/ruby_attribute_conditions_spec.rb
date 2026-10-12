@@ -61,7 +61,9 @@ RSpec.describe 'Ruby attribute-based widget conditions' do # rubocop:disable Met
     exporter = Mxrb::RubyApp::Exporter.allocate
     conditions = [{ 'AttributeValue' => 'true', 'EditableVisible' => true },
                   { 'AttributeValue' => '(empty)', 'EditableVisible' => false }]
-    [nil, {}, { 'roles' => ['App.User'] }, { 'expression' => 1 },
+    expect(exporter.send(:runtime_input_condition_source, { 'roles' => ['App.User'] }))
+      .to eq('input_condition(roles: ["App.User"])')
+    [nil, {}, { 'roles' => [1] }, { 'expression' => 1 },
      { 'attribute' => 'A.B.C', 'conditions' => [{ 'AttributeValue' => 'x' }] },
      { 'attribute' => 'A.B.C', 'conditions' => [{ '$Type' => 'Other', 'AttributeValue' => 'x',
                                                   'EditableVisible' => true }] },

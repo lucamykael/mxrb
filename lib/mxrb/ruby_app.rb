@@ -1616,6 +1616,18 @@ module Mxrb
           end
         end
 
+        # A data grid declared with a block (header, typed columns and events) is
+        # built as in pages; other declarations keep the generic widget form.
+        def data_grid(name = '', events: OPTION_UNSET, caption: OPTION_UNSET, **options, &block)
+          options[:class] = options.delete(:class_name) if options.key?(:class_name)
+          return widget(:data_grid, name, options:, events:, caption:, &block) unless
+            block && events.equal?(OPTION_UNSET) && caption.equal?(OPTION_UNSET)
+
+          builder = Dsl::WidgetBuilder.new(:data_grid, name, **options)
+          builder.instance_eval(&block)
+          append_structured(builder, declared_fields: false)
+        end
+
         def table(name = '', width_unit: :weight, tab_index: 0, class_name: nil, style: nil,
                   dynamic_class: nil, visible: nil, &block)
           builder = Dsl::TableBuilder.new(

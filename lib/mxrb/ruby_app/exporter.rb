@@ -809,7 +809,15 @@ module Mxrb
       end
 
       def nanoflow_typescript(flow, qualified)
-        plan = nanoflow_plan(flow, qualified)
+        plan = begin
+          nanoflow_plan(flow, qualified)
+        rescue SerializationError
+          raise unless flow.excluded
+
+          # Studio Pro does not check excluded documents, which may refer to
+          # removed model elements; the application never calls them.
+          { 'objects' => [], 'flows' => [], 'parameters' => [] }
+        end
         parameters = nanoflow_parameter_type(flow.parameters)
         result_type = nanoflow_result_type(flow.respond_to?(:return_type) ? flow.return_type : nil)
         start = plan.fetch('objects').find { _1['type'] == 'StartEvent' }
@@ -2109,9 +2117,7 @@ module Mxrb
 
           return runtime_layout_grid_source(widget, indentation)
         end
-        if generic_sink && runtime_data_grid_supported?(type, options, widget)
-          return runtime_data_grid_source(widget, indentation)
-        end
+        return runtime_data_grid_source(widget, indentation) if runtime_data_grid_supported?(type, options, widget)
 
         typed = if generic_sink
                   runtime_dsl_sink_typed?(type, options, widget)
@@ -2869,8 +2875,10 @@ module Mxrb
       # optionally read from another widget's object. nil keeps the generic form.
       def runtime_input_condition_source(condition)
         return unless condition.is_a?(Hash) && condition.any? &&
-                      (condition.keys - %w[expression attribute conditions source_variable]).empty?
+                      (condition.keys - %w[expression attribute conditions source_variable roles
+                                           ignore_security]).empty?
         return unless %w[expression attribute].all? { !condition.key?(_1) || condition[_1].is_a?(String) }
+        return unless Array(condition['roles']).all?(String) && [nil, true].include?(condition['ignore_security'])
 
         arguments = []
         arguments << condition.fetch('expression').inspect if condition.key?('expression')
@@ -2889,6 +2897,8 @@ module Mxrb
 
           arguments << "source: #{source}"
         end
+        arguments << "roles: #{condition.fetch('roles').inspect}" if condition.key?('roles')
+        arguments << 'ignore_security: true' if condition['ignore_security'] == true
         "input_condition(#{arguments.join(', ')})"
       end
 

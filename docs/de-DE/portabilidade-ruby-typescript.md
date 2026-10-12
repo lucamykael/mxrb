@@ -800,6 +800,13 @@ Texte im Darstellungsmodus H1–H6 oder Absatz (`text ..., render_mode: :h2`) un
 Link-Buttons (`button ..., render_type: :link`) werden wie im Mendix-Client
 dargestellt; das Tab Control nutzt das Atlas-Tab-Markup, und Data Grid 2 zeigt
 boolesche Werte als Yes/No.
+`input_condition` akzeptiert `roles:` und `ignore_security:`, wenn die Bedingung
+zusätzlich Modulrollen einschränkt; Data Grid 2 in Snippets nutzt denselben
+typisierten Aufruf wie in Seiten; ausgeschlossene Nanoflows, die entfernte
+Modellelemente referenzieren (Studio Pro prüft ausgeschlossene Dokumente nicht),
+erhalten einen leeren Rumpf, statt den Export abzubrechen. Kopien der privaten
+Projekte QRQC und SPC sowie Sudoku bestehen die Prüfung des öffentlichen
+Quellcodes und den identischen Round-Trip.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;
