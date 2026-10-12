@@ -812,6 +812,9 @@ with, Greater than, Between, Empty...), Dropdown-Filter zeigen Select/Yes/No.
 Die Runtime legt pro Projektsprache eine `System.Language` mit der
 Mendix-Beschreibung an (`en_US` ist "English, United States"), und das Widget
 Language selector listet sie auf und wechselt die Seitensprache.
+Layout Grids werden mit den Atlas-Klassen gerendert (`mx-layoutgrid`, `row`,
+`col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), sodass das Projektthema das
+Layout übernimmt; ein Ersatzgrid ohne Spezifität deckt Themen ohne Atlas ab.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

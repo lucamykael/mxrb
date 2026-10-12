@@ -4,7 +4,6 @@ import {
   useId,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { useWidgetEvent } from '../useWidgetEvent';
@@ -90,30 +89,28 @@ const tableColumnWidth = (
   return totalWeight > 0 ? `${(value / totalWeight) * 100}%` : undefined;
 };
 
-const gridAlignment = (alignment: unknown) =>
-  alignment === 'center'
-    ? 'center'
-    : alignment === 'start'
-      ? 'flex-start'
-      : alignment === 'end'
-        ? 'flex-end'
-        : undefined;
-
-const layoutColumnStyle = (options: WidgetOptions): CSSProperties => {
-  const flex = (width: unknown) => {
-    if (width === 'auto') return '0 0 auto';
+// The Atlas (Bootstrap) layout grid classes the Mendix client renders.
+const layoutColumnClasses = (options: WidgetOptions): string => {
+  const column = (prefix: string, width: unknown) => {
+    if (width === 'auto') return `${prefix}-auto`;
     const columns = Number(width);
     return Number.isFinite(columns) && columns > 0 && columns <= 12
-      ? `0 0 ${(columns / 12) * 100}%`
-      : '1 1 0';
+      ? `${prefix}-${columns}`
+      : prefix;
   };
-  return {
-    alignSelf: gridAlignment(options.vertical_alignment),
-    '--mxrb-desktop-flex': flex(options.desktop),
-    '--mxrb-tablet-flex': flex(options.tablet ?? options.desktop),
-    '--mxrb-phone-flex': flex(options.phone ?? options.tablet ?? options.desktop),
-  } as CSSProperties;
+  const tablet = options.tablet ?? options.desktop;
+  const phone = options.phone ?? tablet;
+  const alignment = alignmentSuffix(options.vertical_alignment);
+  return classes(
+    column('col-lg', options.desktop),
+    column('col-md', tablet),
+    column('col', phone),
+    alignment && `align-self-${alignment}`,
+  );
 };
+
+const alignmentSuffix = (alignment: unknown) =>
+  ['start', 'center', 'end'].includes(String(alignment)) ? String(alignment) : undefined;
 
 function Gallery({
   widget,
@@ -754,7 +751,14 @@ function WidgetContent({
       return (
         <div
           {...runtimeProps}
-          className={classes(className, 'mxrb-layout-grid')}
+          className={classes(
+            className,
+            'mx-layoutgrid',
+            options.width === 'fixed'
+              ? 'mx-layoutgrid-fixed container'
+              : 'mx-layoutgrid-fluid container-fluid',
+            'mxrb-layout-grid',
+          )}
           style={inlineStyle(options.style)}
         >
           {rows.map((row, rowIndex) =>
@@ -762,32 +766,29 @@ function WidgetContent({
               <div
                 key={rowIndex}
                 className={classes(
+                  'row',
                   'mxrb-layout-grid__row',
+                  alignmentSuffix(row.options?.horizontal_alignment) &&
+                    `justify-content-${alignmentSuffix(row.options?.horizontal_alignment)}`,
+                  alignmentSuffix(row.options?.vertical_alignment) &&
+                    `align-items-${alignmentSuffix(row.options?.vertical_alignment)}`,
+                  row.options?.gutters === false && 'no-gutters',
                   row.options?.class,
                   dynamicClass(row.options?.dynamic_class, activeRecord),
                 )}
-                style={{
-                  ...inlineStyle(row.options?.style),
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  justifyContent: gridAlignment(row.options?.horizontal_alignment),
-                  alignItems: gridAlignment(row.options?.vertical_alignment),
-                  gap: row.options?.gutters === false ? 0 : undefined,
-                }}
+                style={inlineStyle(row.options?.style)}
               >
                 {(row.columns || []).map((column, columnIndex) =>
                   !isVisible(column.options?.visible, activeRecord) ? null : (
                     <div
                       key={columnIndex}
                       className={classes(
+                        layoutColumnClasses(column.options || {}),
                         'mxrb-layout-grid__column',
                         column.options?.class,
                         dynamicClass(column.options?.dynamic_class, activeRecord),
                       )}
-                      style={{
-                        ...inlineStyle(column.options?.style),
-                        ...layoutColumnStyle(column.options || {}),
-                      }}
+                      style={inlineStyle(column.options?.style)}
                       data-desktop-width={String(column.options?.desktop ?? 'grow')}
                       data-tablet-width={String(column.options?.tablet ?? 'grow')}
                       data-phone-width={String(column.options?.phone ?? 'grow')}

@@ -768,6 +768,9 @@ Greater than, Between, Empty...), and drop-down filters read Select/Yes/No.
 The runtime creates a `System.Language` per project language with the Mendix
 description (`en_US` is "English, United States"), and the Language selector
 widget lists them and switches the page language.
+Layout grids render with the Atlas classes (`mx-layoutgrid`, `row`,
+`col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), so the project theme lays them
+out; a zero-specificity fallback grid covers themes without Atlas.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
