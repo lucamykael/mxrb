@@ -822,6 +822,9 @@ ausgelieferten Widgets hinzu (`btn-lg`, `spacing-inner-top`, `flex-row`...), ohn
 die Ruby-Quellen zu ändern. Der Sidebar-Toggle zeigt sein Sammlungs-Icon,
 Datumsfilter von Data Grid 2 haben den Kalender-Button, und ein Bildbetrachter
 ohne Inhalt zeigt das Standardbild.
+Für angemeldete Benutzer speichert der Language selector die gewählte Sprache in
+`System.User_Language` (`POST /api/session/language`) und liest sie aus
+`/api/session`, wie der Mendix-Client.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

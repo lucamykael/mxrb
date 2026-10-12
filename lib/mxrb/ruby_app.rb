@@ -2319,6 +2319,36 @@ module Mxrb
         end
       end
 
+      # The language code of the signed-in user (System.User_Language), if any.
+      def user_language(context)
+        user = session_user(context)
+        language = user&.members&.fetch('User_Language', nil)
+        language.respond_to?(:members) ? language.members['Code'] : nil
+      end
+
+      # The Language selector changes the language of the signed-in user, as the
+      # Mendix client does; the platform sets it regardless of entity access.
+      def change_language(code, context:)
+        runtime_synchronize do
+          user = session_user(context)
+          raise ArgumentError, 'changing the language requires a signed-in user' unless user
+
+          store = bridge.interpreter.store
+          language = store.retrieve(Runtime::Languages::LANGUAGE).find { _1.members['Code'] == code.to_s }
+          raise ArgumentError, "unknown language #{code}" unless language
+
+          user.members['User_Language'] = language
+          store.commit(user)
+          code.to_s
+        end
+      end
+
+      def session_user(context)
+        id = context&.user
+        id && bridge.interpreter.store.find(Runtime::SystemDomain::USER, id.to_s)
+      end
+      private :session_user
+
       def async_invocations
         @async_invocations_mutex.synchronize { @async_invocations ||= AsyncInvocations.new(self) }
       end
@@ -3556,8 +3586,12 @@ module Mxrb
           return render_json(
             response, 200,
             user: context.user, roles: context.user_roles, module_roles: context.module_roles,
-            csrf: sessions.csrf_token(authorization)
+            language: application.user_language(context), csrf: sessions.csrf_token(authorization)
           )
+        end
+        if method == 'POST' && path == '/api/session/language'
+          code = application.change_language(request_json(request)['code'], context:)
+          return render_json(response, 200, language: code)
         end
         if method == 'POST' && path == '/api/logout'
           logged_out = sessions.logout(authorization)

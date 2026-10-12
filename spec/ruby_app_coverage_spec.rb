@@ -243,7 +243,8 @@ RSpec.describe 'Ruby application defensive coverage' do
       record_page: { records: [], total: 0 }, record: nil,
       create_record: {}, update_record: nil, delete_record: false, rest_routes: [],
       reload_if_changed!: false,
-      reload_status: { enabled: false, state: 'ready', error: nil }
+      reload_status: { enabled: false, state: 'ready', error: nil },
+      user_language: 'en_US', change_language: 'pt_BR'
     )
     server = bare_server(application: app, sessions: sessions)
     dispatch = lambda do |path, method = 'GET', body = '', query = {}, headers = {}|
@@ -251,7 +252,10 @@ RSpec.describe 'Ruby application defensive coverage' do
     end
     expect(dispatch.call('/api/health').status).to eq(200)
     expect(dispatch.call('/api/login', 'POST', '{}').status).to eq(200)
-    expect(dispatch.call('/api/session').status).to eq(200)
+    expect(JSON.parse(dispatch.call('/api/session').body)).to include('language' => 'en_US')
+    language = dispatch.call('/api/session/language', 'POST', JSON.generate(code: 'pt_BR'))
+    expect(JSON.parse(language.body)).to eq('language' => 'pt_BR')
+    expect(app).to have_received(:change_language).with('pt_BR', context:)
     expect(dispatch.call('/api/logout', 'POST').status).to eq(200)
     expect(dispatch.call('/api/schema').status).to eq(200)
     expect(dispatch.call('/api/navigation').status).to eq(200)

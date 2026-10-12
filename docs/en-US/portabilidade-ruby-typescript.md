@@ -778,6 +778,9 @@ widgets it serves (`btn-lg`, `spacing-inner-top`, `flex-row`...) without changin
 the Ruby sources. The sidebar toggle shows its collection icon, Data grid 2 date
 filters have the calendar button, and an image viewer without contents shows the
 default image.
+For a signed-in user, the Language selector stores the chosen language in
+`System.User_Language` (`POST /api/session/language`) and reads it back from
+`/api/session`, as the Mendix client does.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

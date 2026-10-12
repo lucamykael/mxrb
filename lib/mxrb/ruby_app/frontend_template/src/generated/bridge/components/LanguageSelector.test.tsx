@@ -61,6 +61,35 @@ describe('Language selector', () => {
     expect(trigger).toHaveTextContent('Portuguese, Brazil');
   });
 
+  it('starts from the signed-in user language and saves the choice for the user', async () => {
+    const request = vi.fn(async (path: string) => {
+      if (path === '/api/session') return { user: 'u1', language: 'pt_BR' };
+      if (path === '/api/session/language') return { language: 'en_US' };
+      return {
+        records: [
+          language('pt_BR', 'Portuguese, Brazil'),
+          language('en_US', 'English, United States'),
+        ],
+      };
+    });
+    const user = userEvent.setup();
+    render(
+      <LanguageSelector
+        properties={properties}
+        schema={schema}
+        request={request as unknown as ApiRequest}
+        label="Language selector"
+      />,
+    );
+    expect(await screen.findByText('Portuguese, Brazil')).toHaveClass('current-language-text');
+    await user.click(screen.getByRole('combobox', { name: 'Language selector' }));
+    await user.click(screen.getByRole('option', { name: 'English, United States' }));
+    expect(request).toHaveBeenCalledWith('/api/session/language', {
+      method: 'POST',
+      body: JSON.stringify({ code: 'en_US' }),
+    });
+  });
+
   it('hides a single language when asked to', async () => {
     const request = vi.fn().mockResolvedValue({ records: [language('en_US', 'English')] });
     const { container } = render(
