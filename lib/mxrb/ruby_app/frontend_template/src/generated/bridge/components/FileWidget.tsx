@@ -3,6 +3,7 @@ import type { WidgetRuntimeProps } from '../contracts';
 import { editable, ReadOnlyContext } from './FieldPolicy';
 import { presentationFrame } from './PresentationWidgets';
 import { DataView } from './WidgetRenderer';
+import { WidgetObjectScope } from './VariableScope';
 
 const encodedFile = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -31,6 +32,7 @@ function FileContentWidget(props: WidgetRuntimeProps) {
   const options = widget.options || {};
   const record = context || pageContext;
   const inheritedReadOnly = useContext(ReadOnlyContext);
+  const widgetObjects = useContext(WidgetObjectScope);
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
   const [name, setName] = useState('Download file');
@@ -44,7 +46,7 @@ function FileContentWidget(props: WidgetRuntimeProps) {
   }, [path, revision]);
   const isImage = widget.type !== 'file_manager';
   const viewer = widget.type === 'image_viewer';
-  const disabled = !record || busy || inheritedReadOnly || !editable(options, record, props.schema.module_roles);
+  const disabled = !record || busy || inheritedReadOnly || !editable(options, record, props.schema.module_roles, widgetObjects);
   const mode = String(options.mode || 'both').toLowerCase();
   const extensions = String(options.allowed_extensions || '')
     .split(/[;,\s]+/)

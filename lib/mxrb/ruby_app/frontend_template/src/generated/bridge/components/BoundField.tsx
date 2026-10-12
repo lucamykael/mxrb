@@ -20,6 +20,7 @@ import {
   memberName,
   recordValue,
 } from '../value';
+import { WidgetObjectScope } from './VariableScope';
 
 interface BoundFieldProps {
   id?: string;
@@ -52,6 +53,7 @@ export function BoundField({
   const actions = useContext(ClientActions);
   const options = widget.options || {};
   const locals = useContext(LocalVariables);
+  const widgetObjects = useContext(WidgetObjectScope);
   const pageBindings = useContext(PageParameterBindings);
   const snippetBindings = useContext(SnippetParameterBindings);
   const source = options.source_variable as { kind?: string; name?: string } | undefined;
@@ -153,7 +155,7 @@ export function BoundField({
   }, [kind, referenceEntity, revision, request, onError]);
 
   const disabled =
-    !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles);
+    !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles, widgetObjects);
   const persist = async (next: string | number | boolean): Promise<EntityRecord | null> => {
     if (disabled || !record) return null;
     setDraft(next);

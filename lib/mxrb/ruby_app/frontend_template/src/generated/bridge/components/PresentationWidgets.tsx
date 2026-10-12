@@ -15,7 +15,7 @@ import { NativeScrollContainer } from './NativeScrollContainer';
 import { PageNameContext, NavigationSelection } from './PageTitleContext';
 import { ClientActions } from '../PageEdits';
 import { useWidgetEvent } from '../useWidgetEvent';
-import { VariableScope } from './VariableScope';
+import { VariableScope, WidgetObjectScope } from './VariableScope';
 import {
   PageParameters,
   LocalVariables,
@@ -417,6 +417,7 @@ export function ReferenceSetSelector(
   const record = context || pageContext;
   const options = widget.options || {};
   const readOnly = useContext(ReadOnlyContext);
+  const widgetObjects = useContext(WidgetObjectScope);
   const [choices, setChoices] = useState<EntityRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [current, setCurrent] = useState(record);
@@ -432,7 +433,7 @@ export function ReferenceSetSelector(
     !record ||
     !current ||
     readOnly ||
-    !editable(options, record, props.schema.module_roles) ||
+    !editable(options, record, props.schema.module_roles, widgetObjects) ||
     !association ||
     !target ||
     unsupported ||

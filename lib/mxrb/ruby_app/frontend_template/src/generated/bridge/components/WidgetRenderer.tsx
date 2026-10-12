@@ -382,7 +382,7 @@ export function DataView({
 
   if (
     options.visibility &&
-    !matchesCondition(options.visibility, resolvedRecord, schema.module_roles)
+    !matchesCondition(options.visibility, resolvedRecord, schema.module_roles, widgetObjects)
   )
     return null;
   if (unsupported)
@@ -413,7 +413,10 @@ export function DataView({
   return (
     <WidgetObjectScope.Provider value={{ ...widgetObjects, [widget.name]: resolvedRecord }}>
       <ReadOnlyContext.Provider
-        value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles)}
+        value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles, {
+          ...widgetObjects,
+          [widget.name]: resolvedRecord,
+        })}
       >
         <ReadOnlyStyleContext.Provider
           value={
@@ -478,13 +481,14 @@ function WidgetContent({
   const pageContext = actions ? actions.edits.resolve(suppliedPageContext) : suppliedPageContext;
   const selections = useSelections();
   const variables = useContext(VariableScope);
+  const widgetObjects = useContext(WidgetObjectScope);
   const pageTitle = useContext(PageTitleContext);
   const options = widget.options || {};
   if (!isVisible(options.visible, context || pageContext)) return null;
   if (
     widget.type !== 'data_view' &&
     options.visibility &&
-    !matchesCondition(options.visibility, context || pageContext, schema.module_roles)
+    !matchesCondition(options.visibility, context || pageContext, schema.module_roles, widgetObjects)
   )
     return null;
   const className = classes(
