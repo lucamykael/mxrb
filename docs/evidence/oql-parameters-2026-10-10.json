@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-10",
+  "scope": "OQL $parameters, multi-step association paths and enumeration keys through the Marketplace OQL module actions",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle; OQL module sources from MXRB_OQL_MODULE_SOURCE",
+    "package_sha256": "f2f5c18f12271c82f775d194512d35f12a71ccef6239345a5c4af311e1471bbd",
+    "cases": 15,
+    "status": "passed",
+    "results": {
+      "BuildingStatus": "Alpha|Hall|1|2.5|North;Beta|<null>|2|1|North;#",
+      "BuildingDraft": "gamma|<null>|3|7.25|North;#",
+      "BuildingEmpty": "#",
+      "Typed": "nova|<null>|3|9|<null>;#",
+      "TypedNoRows": "#",
+      "TextBoolean": "Alpha|<null>|1|<null>|<null>;#",
+      "TextNull": "gamma|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#",
+      "Paged": "Beta|<null>|2|<null>|<null>;Delta|<null>|1|<null>|<null>;#",
+      "PagedAll": "Beta|<null>|<null>|<null>|<null>;Alpha|<null>|<null>|<null>|<null>;#",
+      "Path": "Alpha|Hall|<null>|<null>|<null>;Beta|<null>|<null>|<null>|<null>;gamma|<null>|<null>|<null>|<null>;nova|Hall|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#",
+      "InnerPath": "Alpha|Hall|<null>|<null>|<null>;nova|Hall|<null>|<null>|<null>;#",
+      "Preserved": "Alpha|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#Alpha|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#",
+      "EnumParameter": "Delta|<null>|<null>|<null>|<null>;#",
+      "Count": "3",
+      "CountAmount": "2"
+    }
+  },
+  "ruby": {
+    "exported_app_mpr_prohibited_identical": true
+  },
+  "real_project": {
+    "project": "JEMScc-SPC (private, original hash unchanged)",
+    "datasets_compiled_and_run": 9,
+    "with_parameters": 4
+  },
+  "native_semantics": [
+    "the module keeps parameters per thread until ExecuteOQLStatement or CountRowsOQLStatement runs; preserveParameters keeps them",
+    "an empty parameter in = behaves as IS NULL, like the NULL literal; text parameters compare and LIKE case-insensitively",
+    "amount and offset page after ORDER BY; amount 0 is unlimited",
+    "multi-step association paths join every entity on the way; LEFT keeps rows with any missing step",
+    "enumeration attributes read as their keys",
+    "ordered comparisons accept dates"
+  ],
+  "limitations": [
+    "multi-step paths with RIGHT or FULL joins are rejected",
+    "an unset parameter is an error in Ruby; the native behavior was not exercised"
+  ]
+}

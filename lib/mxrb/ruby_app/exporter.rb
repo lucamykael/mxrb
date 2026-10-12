@@ -3437,6 +3437,7 @@ module Mxrb
           # :import_mapping, :export_mapping, and :document.
           #{KnownJavaActions.registrations(File.dirname(@mpr_path))}
           #{KnownOqlActions.registrations(File.dirname(@mpr_path))}
+          #{KnownOqlModuleActions.registrations(File.dirname(@mpr_path))}
         RUBY
       end
 

@@ -8,6 +8,7 @@ require_relative 'schema_migrator'
 require_relative 'client_drafts'
 require_relative 'oql_views'
 require_relative 'oql_datasets'
+require_relative 'oql_module_query'
 
 module Mxrb
   module Runtime
@@ -60,7 +61,14 @@ module Mxrb
         hooks.each { |event, callbacks| Array(callbacks).each { on(event, &_1) } }
       end
 
-      def query_oql(text) = oql_queries.query(text).rows
+      def query_oql(text, parameters: nil) = oql_queries.query(text, parameters:).rows
+
+      # ExecuteOQLStatement and CountRowsOQLStatement of the Marketplace OQL module.
+      def oql_module_objects(statement, entity, **options)
+        OqlModuleQuery.new(oql_queries, self).objects(statement, entity, **options)
+      end
+
+      def oql_module_count(statement, **options) = OqlModuleQuery.new(oql_queries, self).count(statement, **options)
       def query_dataset(name) = query_oql(oql_queries.dataset_query(name))
       def oql_objects(text, entity) = oql_queries.objects(text, entity)
       def dataset_objects(name, entity) = oql_objects(oql_queries.dataset_query(name), entity)

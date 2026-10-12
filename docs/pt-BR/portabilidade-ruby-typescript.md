@@ -206,8 +206,8 @@ As ações criam objetos distintos, sem commit, copiam atributos compatíveis e
 ignoram colunas desconhecidas, como as implementações Java verificadas. A leitura
 usa valores salvos e valida nomes, tipos e sintaxe antes de consultar as linhas.
 Criação, remoção, renomeação e edição de metadados de datasets pela DSL ainda são
-rejeitadas. Parâmetros, fontes sem OQL, `SELECT *` e joins com fontes derivadas continuam
-fora deste subconjunto; subconsultas estão descritas adiante. Cada projeção requer alias explícito.
+rejeitadas. Nessas duas ações, fontes sem OQL, `SELECT *` e joins com fontes derivadas continuam
+fora deste subconjunto e parâmetros ficam com o módulo OQL (adiante); subconsultas estão descritas adiante. Cada projeção requer alias explícito.
 
 A matriz contém 18 consultas, executadas pelas duas ações, incluindo as duas
 consultas reais de `QueryApiBlogPost`. O navegador Ruby executa sem acesso ao MPR.
@@ -216,7 +216,7 @@ consultas reais de `QueryApiBlogPost`. O navegador Ruby executa sem acesso ao MP
 ## Views OQL relacionais
 
 O runtime Ruby aceita joins `INNER`, `LEFT`, `RIGHT` e `FULL` entre entidades
-persistentes, com predicado `ON` ou um salto de associação por join. `GROUP BY`,
+persistentes, com predicado `ON` ou um caminho de associação (também com vários saltos, em `INNER` e `LEFT`). `GROUP BY`,
 `COUNT(*)`, `COUNT(coluna)`, `SUM`, `AVG`, `MIN` e `MAX` preservam duplicatas,
 grupos nulos, decimais exatos e datas. IDs das entidades ligadas podem projetar
 associações de referência compatíveis. A leitura usa valores salvos; os IDs dos
@@ -256,6 +256,26 @@ Os 30 casos de `spec/fixtures/native_oql_subqueries` coincidem entre o Runtime
 oficial (`script/oql_native_oracle`), o interpretador Ruby e o app Ruby exportado
 com acesso ao MPR proibido. [Evidência](../evidence/oql-subqueries-2026-10-10.json).
 
+## Parâmetros OQL e o módulo OQL do Marketplace
+
+`OQL.ExecuteOQLStatement`, `OQL.CountRowsOQLStatement` e as ações `OQL.Add…Parameter`
+do módulo OQL do Marketplace têm adaptadores selecionados pelo SHA-256 da fonte de
+cada ação e de `oql/implementation/OQL.java`; o MXRB não distribui esse código. Como
+no módulo, os parâmetros ficam por thread até a execução, que os descarta salvo com
+`preserveParameters`. A instrução pode ser o nome de um dataset ou OQL, com `$Nome`
+de texto, inteiro, decimal, booleano, data ou objeto (comparado pelo ID); `amount` e
+`offset` paginam depois do `ORDER BY`. Cada coluna preenche o atributo de mesmo nome
+ou, para IDs, a associação própria `Módulo.Coluna`; colunas sem destino geram erro.
+Um parâmetro vazio em `=` age como `IS NULL`, como o literal `NULL`; parâmetro não
+informado gera erro. Atributos enum são lidos pela chave, também em filtros.
+
+Joins aceitam caminhos com vários saltos (`p/M.A_B/M.B/M.B_C/M.C AS c`) em `INNER` e
+`LEFT`, e comparações de ordem aceitam datas. Os nove datasets do SPC, quatro deles
+com parâmetros, compilam e executam no Ruby. Os 15 casos de
+`spec/fixtures/native_oql_parameters` (com as fontes do módulo copiadas de
+`MXRB_OQL_MODULE_SOURCE`) coincidem entre o Runtime oficial e o app Ruby exportado com
+acesso ao MPR proibido. [Evidência](../evidence/oql-parameters-2026-10-10.json).
+
 ## Captura e anotação do Feedback Web
 
 `JS_ToggleFeedbackScreenshotWidget` e `JS_ToggleFeedbackAnnotateWidget` têm
@@ -291,8 +311,8 @@ O comportamento de nulos foi comparado com Mendix 11.12.1: igualdade com o liter
 registros nulos. Comparações entre colunas preservam o resultado desconhecido.
 Os filtros leem valores salvos, refletem commits/exclusões e validam todos os
 atributos e tipos antes da leitura, mesmo sem registros. O texto nunca é executado
-como SQL. Ordenações comparativas exigem números ou strings; parâmetros
-permanecem pendentes. Joins e agregações usam a gramática relacional acima.
+como SQL. Ordenações comparativas exigem números, strings ou datas; parâmetros
+estão na seção do módulo OQL. Joins e agregações usam a gramática relacional acima.
 
 A matriz cobre 30 filtros e 125 passos de navegador com MPR proibido.
 [Evidência](../evidence/oql-view-filters-2026-10-07.json).

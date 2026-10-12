@@ -1,0 +1,17 @@
+[
+  {"name":"BuildingStatus","statement":"Views.ByBuilding","parameters":[["object","BuildingID","$north"],["string","Status","'Active'"]],"expected":"Alpha|Hall|1|2.5|North;Beta|<null>|2|1|North;#"},
+  {"name":"BuildingDraft","statement":"Views.ByBuilding","parameters":[["object","BuildingID","$north"],["string","Status","'Draft'"]],"expected":"gamma|<null>|3|7.25|North;#"},
+  {"name":"BuildingEmpty","statement":"Views.ByBuilding","parameters":[["object","BuildingID","empty"],["string","Status","'Active'"]],"expected":"#"},
+  {"name":"Typed","statement":"Views.Typed","parameters":[["integer","MinRank","2"],["decimal","MinAmount","1.5"],["datetime","After","dateTimeUTC(2024, 1, 1)"],["string","Prefix","'n%'"]],"expected":"nova|<null>|3|9|<null>;#"},
+  {"name":"TypedNoRows","statement":"Views.Typed","parameters":[["integer","MinRank","9"],["decimal","MinAmount","1.5"],["datetime","After","dateTimeUTC(2024, 1, 1)"],["string","Prefix","'%'"]],"expected":"#"},
+  {"name":"TextBoolean","statement":"SELECT p.Name AS Name, p.Rank AS Rank FROM Views.Program AS p WHERE p.Flag = $Flag AND p.Rank < $Limit ORDER BY p.Name","parameters":[["boolean","Flag","true"],["integer","Limit","3"]],"expected":"Alpha|<null>|1|<null>|<null>;#"},
+  {"name":"TextNull","statement":"SELECT p.Name AS Name FROM Views.Program AS p WHERE p.Amount = $Missing OR p.Name = $Name","parameters":[["decimal","Missing","empty"],["string","Name","'Gamma'"]],"expected":"gamma|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#"},
+  {"name":"Paged","statement":"SELECT p.Name AS Name, p.Rank AS Rank FROM Views.Program AS p ORDER BY p.Name","amount":2,"offset":1,"parameters":[],"expected":"Beta|<null>|2|<null>|<null>;Delta|<null>|1|<null>|<null>;#"},
+  {"name":"PagedAll","statement":"SELECT p.Name AS Name FROM Views.Program AS p ORDER BY p.Name DESC","amount":0,"offset":3,"parameters":[],"expected":"Beta|<null>|<null>|<null>|<null>;Alpha|<null>|<null>|<null>|<null>;#"},
+  {"name":"Path","statement":"SELECT p.Name AS Name, ar.Name AS AreaName FROM Views.Program AS p LEFT JOIN p/Views.Program_Asset/Views.Asset/Views.Asset_Area/Views.Area AS ar","parameters":[],"expected":"Alpha|Hall|<null>|<null>|<null>;Beta|<null>|<null>|<null>|<null>;gamma|<null>|<null>|<null>|<null>;nova|Hall|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#"},
+  {"name":"InnerPath","statement":"SELECT p.Name AS Name, ar.Name AS AreaName FROM Views.Program AS p INNER JOIN p/Views.Program_Asset/Views.Asset/Views.Asset_Area/Views.Area AS ar","parameters":[],"expected":"Alpha|Hall|<null>|<null>|<null>;nova|Hall|<null>|<null>|<null>;#"},
+  {"name":"Preserved","statement":"SELECT p.Name AS Name FROM Views.Program AS p WHERE p.Rank = $Rank","preserve":true,"repeat":true,"parameters":[["integer","Rank","1"]],"expected":"Alpha|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#Alpha|<null>|<null>|<null>|<null>;Delta|<null>|<null>|<null>|<null>;#"},
+  {"name":"EnumParameter","statement":"SELECT p.Name AS Name FROM Views.Program AS p WHERE p.Status = $Status","parameters":[["string","Status","'Retired'"]],"expected":"Delta|<null>|<null>|<null>|<null>;#"},
+  {"name":"Count","count":true,"statement":"SELECT p.Name AS Name FROM Views.Program AS p WHERE p.Rank >= $Rank","amount":0,"parameters":[["integer","Rank","2"]],"expected":"3"},
+  {"name":"CountAmount","count":true,"statement":"SELECT p.Name AS Name FROM Views.Program AS p","amount":2,"parameters":[],"expected":"2"}
+]

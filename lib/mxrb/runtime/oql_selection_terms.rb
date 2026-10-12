@@ -8,7 +8,7 @@ module Mxrb
 
       def having_predicate(text)
         aggregate = method(:having_aggregate)
-        OqlPredicate.new(text, @relations.scopes, aggregate:, subquery: @relations.subquery) do
+        OqlPredicate.new(text, @relations.scopes, aggregate:, **@relations.expression_options) do
           @relations.outer?(_1) ? @relations.term(_1) : having_column(_1)
         end
       end
@@ -29,7 +29,7 @@ module Mxrb
       # A computed projection reads its group; ungrouped rows form one-row groups.
       def computed_term(text)
         aggregate = @query.grouped? ? method(:having_aggregate) : nil
-        OqlPredicate.value(text, @relations.scopes, aggregate:, subquery: @relations.subquery) do |reference|
+        OqlPredicate.value(text, @relations.scopes, aggregate:, **@relations.expression_options) do |reference|
           next @relations.term(reference) if @relations.outer?(reference)
 
           column = @relations.column(reference)

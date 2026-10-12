@@ -83,7 +83,7 @@ module Mxrb
         attribute = definition.columns.find { _1.name == column }
         raise NativeRuntimeError, "Unknown OQL view source attribute: #{column}" unless attribute
 
-        ->(row) { @decoder.call(row[attribute.sql_name], attribute.type) }
+        ->(row) { OqlRelations.value(@decoder.call(row[attribute.sql_name], attribute.type), attribute.type) }
       end
     end
   end
