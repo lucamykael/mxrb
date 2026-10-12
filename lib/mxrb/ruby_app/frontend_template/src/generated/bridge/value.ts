@@ -63,8 +63,24 @@ export const isVisible = (
   context: EntityRecord | null,
 ): boolean => (typeof source === 'boolean' ? source : !source || conditionValue(source, context));
 
+// A dynamic class is an expression ('sd-pb-' + toString($currentObject/Bucket));
+// its value is the class list. Syntax the evaluator does not support keeps
+// the textual reading below.
 export const dynamicClass = (source: string | undefined, context: EntityRecord | null): string => {
-  let text = source || '';
+  if (!source) return '';
+  try {
+    const value = evaluate(source, context);
+    if (typeof value === 'string' || typeof value === 'number') {
+      return String(value).replace(/\s+/g, ' ').trim();
+    }
+  } catch {
+    // Unsupported syntax: read the classes from the expression text.
+  }
+  return textualClass(source, context);
+};
+
+const textualClass = (source: string, context: EntityRecord | null): string => {
+  let text = source;
   text = text.replace(
     /\(?if\s+(.+?)\s+then\s+'([^']*)'\s+else\s+'([^']*)'\)?/g,
     (_match: string, condition: string, yes: string, no: string) =>

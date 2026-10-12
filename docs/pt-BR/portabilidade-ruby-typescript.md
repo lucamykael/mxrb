@@ -968,6 +968,8 @@ referencia, em `frontend/src/generated/platform/widgets/widgets.css`, carregado
 antes do tema (a seta do Language selector e os estilos do filtro de data vêm
 daí). A Data grid 2 mostra a seta da ordenação ativa e o filtro de data segue o
 markup nativo.
+Classes dinâmicas são avaliadas como expressões (`'sd-pb-' + toString(...)` vira
+`sd-pb-12`), e um AutoNumber começa no seu valor padrão, como no Mendix.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
