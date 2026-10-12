@@ -14,6 +14,7 @@ require_relative 'date_parsing'
 require_relative 'decimal_values'
 require_relative 'sort_order'
 require_relative 'date_formatting'
+require_relative 'expression_functions'
 
 module Mxrb
   module Runtime
@@ -245,7 +246,6 @@ module Mxrb
           when 'urlencode' then URI::RFC2396_PARSER.escape(arguments.fetch(0).to_s, /[^A-Za-z0-9\-._~]/)
           when 'urldecode' then URI.decode_www_form_component(arguments.fetch(0).to_s)
           when 'tostring' then mendix_string(arguments.fetch(0))
-          when 'parseinteger' then Integer(arguments.fetch(0))
           when 'parsedecimal' then parse_decimal(arguments)
           when 'round' then @decimal.round(*arguments)
           when 'floor' then DecimalValues.parse(arguments.fetch(0)).floor
@@ -256,6 +256,7 @@ module Mxrb
           when 'find' then string_find(*arguments)
           when 'findlast' then string_find_last(*arguments)
           when *DATE_FORMATS then format_date(name.downcase, arguments)
+          when *ExpressionFunctions::NAMES then ExpressionFunctions.invoke(name.downcase, arguments, @decimal)
           when 'contains' then arguments.fetch(0).to_s.include?(arguments.fetch(1).to_s)
           when 'startswith' then arguments.fetch(0).to_s.start_with?(arguments.fetch(1).to_s)
           when 'endswith' then arguments.fetch(0).to_s.end_with?(arguments.fetch(1).to_s)
@@ -482,6 +483,7 @@ module Mxrb
             first = evaluate(left)
             second = evaluate(right)
             return COMPARISONS.fetch(operator).call(first, second) if COMPARISONS.key?(operator)
+            return concatenate(first, second) if operator == '+' && (first.is_a?(String) || second.is_a?(String))
             return first + second if operator == '+'
             return first - second if operator == '-'
             return first * second if operator == '*'
@@ -490,6 +492,15 @@ module Mxrb
             raise ArgumentError, 'division by zero' if second.zero?
 
             operator == 'mod' ? first.remainder(second) : @expression.divide(first, second)
+          end
+
+          # Mendix joins text with numbers as toString shows them, and nothing else.
+          def concatenate(first, second)
+            unless [first, second].all? { _1.is_a?(String) || _1.is_a?(Numeric) }
+              raise ArgumentError, 'text can only be joined with text or numbers'
+            end
+
+            [first, second].map { _1.is_a?(String) ? _1 : @expression.invoke('toString', [_1]) }.join
           end
 
           def accept_word(word)
@@ -1534,7 +1545,8 @@ module Mxrb
         def render_template(template, variables)
           text = template&.dig('Text').to_s
           items(template&.dig('Parameters')).each_with_index do |parameter, index|
-            text = text.gsub("{#{index + 1}}", @expression.evaluate(parameter['Expression'], variables).to_s)
+            value = @expression.evaluate(parameter['Expression'], variables).to_s
+            text = text.gsub("{#{index + 1}}") { value }
           end
           text
         end
@@ -1549,7 +1561,8 @@ module Mxrb
                    text_doc.to_s
                  end
           items(template&.dig('Parameters')).each_with_index do |parameter, index|
-            text = text.gsub("{#{index + 1}}", @expression.evaluate(parameter['Expression'], variables).to_s)
+            value = @expression.evaluate(parameter['Expression'], variables).to_s
+            text = text.gsub("{#{index + 1}}") { value }
           end
           text
         end
