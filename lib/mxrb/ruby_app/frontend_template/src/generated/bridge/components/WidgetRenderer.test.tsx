@@ -322,6 +322,38 @@ describe('Ruby data view editing', () => {
     expect(screen.getByRole('tabpanel')).toHaveClass('tab-pane', 'active');
   });
 
+  it('renders layout grids with the Atlas grid classes', () => {
+    const grid: WidgetDefinition = {
+      type: 'layout_grid',
+      name: 'grid',
+      options: {
+        rows: [
+          {
+            options: { horizontal_alignment: 'end', vertical_alignment: 'center', gutters: false },
+            columns: [
+              { options: { desktop: 'auto', vertical_alignment: 'center' }, widgets: [] },
+              { options: { desktop: 6, tablet: 12, phone: 'grow' }, widgets: [] },
+              { options: {}, widgets: [] },
+            ],
+          },
+        ],
+      },
+    };
+    const { container } = render(<WidgetRenderer {...props(grid)} />);
+    const root = container.firstElementChild!;
+    expect(root).toHaveClass('mx-layoutgrid', 'mx-layoutgrid-fluid', 'container-fluid');
+    const row = root.querySelector('.row')!;
+    expect(row).toHaveClass('justify-content-end', 'align-items-center', 'no-gutters');
+    const [auto, half, grow] = Array.from(row.children);
+    expect(auto).toHaveClass('col-lg-auto', 'col-md-auto', 'col-auto', 'align-self-center');
+    expect(half).toHaveClass('col-lg-6', 'col-md-12', 'col');
+    expect(grow).toHaveClass('col-lg', 'col-md', 'col');
+    const fixed = render(
+      <WidgetRenderer {...props({ ...grid, options: { ...grid.options, width: 'fixed' } })} />,
+    );
+    expect(fixed.container.firstElementChild).toHaveClass('mx-layoutgrid-fixed', 'container');
+  });
+
   it('keeps the fields and their drafts while an association view refreshes', async () => {
     const associated: WidgetDefinition = {
       ...view,

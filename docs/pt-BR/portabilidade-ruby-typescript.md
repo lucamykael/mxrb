@@ -943,6 +943,10 @@ Greater than, Between, Empty...), e os filtros drop-down mostram Select/Yes/No.
 O runtime cria um `System.Language` por idioma do projeto, com a descrição do
 Mendix (`en_US` é "English, United States"), e o widget Language selector lista
 esses idiomas e troca o idioma da página.
+Layout grids são renderizados com as classes do Atlas (`mx-layoutgrid`, `row`,
+`col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), de modo que o tema do projeto
+cuida do layout; um grid de reserva com especificidade zero cobre temas sem
+Atlas.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
