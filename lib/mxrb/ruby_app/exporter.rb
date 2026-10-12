@@ -3331,6 +3331,7 @@ module Mxrb
           'format_version' => 1, 'mode' => 'ruby',
           'project' => { 'name' => project.name, 'mendix_version' => project.mendix_version },
           'decimal' => Runtime::DecimalContext.settings(project),
+          'languages' => Runtime::Languages.settings(project),
           'security' => @security_manifest,
           'navigation' => runtime_value(project.navigation.to_h),
           'source' => {
@@ -4027,6 +4028,7 @@ module Mxrb
             module_roles?: string[];
             presentation?: Record<string, PresentationResource>;
             project: { name: string; mendix_version: string };
+            languages?: { default?: string; codes?: string[] };
             navigation?: { profiles?: NavigationProfile[] };
             modules: RuntimeModule[];
           }

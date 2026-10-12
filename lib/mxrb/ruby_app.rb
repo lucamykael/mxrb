@@ -1852,6 +1852,7 @@ module Mxrb
       def schema(context: nil)
         result = {
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
+          languages: manifest.data.fetch('languages', {}),
           navigation: manifest.data.fetch('navigation', {}),
           presentation: Registry.all(:presentation),
           modules: runtime_schema_modules, coverage: manifest.coverage,
@@ -2862,6 +2863,7 @@ module Mxrb
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
+        Runtime::Languages.synchronize(@store, Runtime::Languages.settings(@project))
         if administrator_password
           Runtime::SystemDomain.ensure_administrator(@store, password: administrator_password,
                                                              **@access_control.administrator)

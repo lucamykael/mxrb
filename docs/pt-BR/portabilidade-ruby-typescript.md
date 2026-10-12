@@ -940,6 +940,9 @@ interromper a exportação. Com isso, cópias dos projetos privados QRQC e SPC e
 Sudoku passam a auditoria do código público e o round-trip idêntico.
 Os filtros da Data grid 2 têm o seletor de operador do widget (Contains, Starts with,
 Greater than, Between, Empty...), e os filtros drop-down mostram Select/Yes/No.
+O runtime cria um `System.Language` por idioma do projeto, com a descrição do
+Mendix (`en_US` é "English, United States"), e o widget Language selector lista
+esses idiomas e troca o idioma da página.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem
