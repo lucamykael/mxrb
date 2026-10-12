@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'json'
 require 'sqlite3'
 require_relative 'decimal_values'
+
+require_relative 'system_domain'
 
 module Mxrb
   module Runtime
@@ -102,19 +105,27 @@ module Mxrb
 
       def self.derive_records(records)
         implementations = records.to_h.values.uniq
-        entities = implementations.filter_map { record_entity_schema(_1) }
-        associations = implementations.flat_map { record_association_schemas(_1) }
+        entities = with_system_entities(implementations.filter_map { record_entity_schema(_1) })
+        associations = with_system_associations(implementations.flat_map { record_association_schemas(_1) })
         inheritance = implementations.to_h { [_1.mendix_name, _1.runtime_ancestors] }
         RuntimeSchema.new(entities.freeze, associations.freeze, inheritance.freeze)
+      end
+
+      # The Runtime's System users, roles, languages and time zones (see SystemDomain).
+      def self.with_system_entities(entities) = entities + SystemDomain.entity_schemas(entities.map(&:name))
+
+      def self.with_system_associations(associations)
+        associations + SystemDomain.association_schemas(associations.map(&:qualified_name))
       end
 
       def self.derive_overlay(project, records)
         native = derive(project)
         ruby = derive_records(records)
-        authoritative = records.to_h.values.map { _1.mendix_name.to_s }.uniq
+        authoritative = (records.to_h.values.map { _1.mendix_name.to_s } + ruby.entities.map(&:name)).uniq
         entities = native.entities.reject { authoritative.include?(_1.name) } + ruby.entities
+        replaced = ruby.associations.map(&:qualified_name)
         associations = native.associations.reject do |association|
-          authoritative.include?(association.from_entity)
+          authoritative.include?(association.from_entity) || replaced.include?(association.qualified_name)
         end + ruby.associations
         RuntimeSchema.new(entities.freeze, associations.freeze, ruby.inheritance)
       end
@@ -186,7 +197,7 @@ module Mxrb
             )
           end
         end
-        RuntimeSchema.new(entities.freeze, associations.freeze)
+        RuntimeSchema.new(with_system_entities(entities).freeze, with_system_associations(associations).freeze)
       end
 
       def self.entity_schema(mod, entity)
@@ -624,14 +635,9 @@ module Mxrb
       end
 
       def delete_missing_keys(table, column, keys)
-        if keys.empty?
-          @database.execute("DELETE FROM #{quote(table)}")
-          return
-        end
-
-        placeholders = Array.new(keys.size, '?').join(', ')
         @database.execute(
-          "DELETE FROM #{quote(table)} WHERE #{quote(column)} NOT IN (#{placeholders})", keys
+          "DELETE FROM #{quote(table)} WHERE #{quote(column)} NOT IN (SELECT value FROM json_each(?))",
+          [JSON.generate(keys)]
         )
       end
 

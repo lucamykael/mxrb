@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-10",
+  "scope": "Persisted System users, user roles, HashedString and System.VerifyPassword (phase 1)",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "status": "passed",
+    "results": {
+      "VerifyAliceRight": "true",
+      "VerifyAliceWrong": "false",
+      "VerifyAliceUpper": "true",
+      "VerifyNobody": "false",
+      "VerifyAliceEmpty": "false",
+      "VerifyBobInactive": "true",
+      "VerifyCarolBlocked": "true",
+      "VerifyAdmin": "false",
+      "VerifyDaveAccount": "true",
+      "VerifyWebService": "true",
+      "Roles": "Administrator:0b6a8c1e-2f3d-4e5a-9b7c-1d2e3f4a5b6c:Runs everything,Member:7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f:",
+      "Users": "alice|true|false|0|0;bob|false|false|0|0;carol|true|true|0|0;dave|true|false|0|0;erin|true|false|0|0;",
+      "Accounts": "1"
+    }
+  },
+  "ruby": {
+    "exported_app_mpr_prohibited_identical": true
+  },
+  "native_semantics": [
+    "System.VerifyPassword ignores user name case and the Active, Blocked and WebServiceUser flags",
+    "an empty or wrong password or an unknown user gives false",
+    "the portable Runtime seeds one System.UserRole per project user role (ModelGUID is the role GUID) and creates no administrator at startup",
+    "System.User defaults: Active true, Blocked false, FailedLogins 0; specializations such as an Account are users",
+    "length of a list in a microflow expression is its item count"
+  ],
+  "limitations": [],
+  "password_policy": {
+    "fixture": "spec/fixtures/native_password_policy",
+    "policy": {
+      "MinimumLength": 8,
+      "RequireDigit": true,
+      "RequireMixedCase": true,
+      "RequireSymbol": true
+    },
+    "native_results": [
+      {
+        "step": "Initial",
+        "users": "base;"
+      },
+      {
+        "step": "GET:CreateShort",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateNoDigit",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateNoUpper",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateNoLower",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateNoSymbol",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateValid",
+        "status": 200
+      },
+      {
+        "step": "GET:CreateEmpty",
+        "status": 403
+      },
+      {
+        "step": "GET:CreateSpaces",
+        "status": 200
+      },
+      {
+        "step": "GET:ChangeWeak",
+        "status": 403
+      },
+      {
+        "step": "GET:ChangeOther",
+        "status": 200
+      },
+      {
+        "step": "GET:AccountWeak",
+        "status": 403
+      }
+    ],
+    "ruby_identical": true,
+    "semantics": [
+      "violations are rejected on commit (anonymous REST answers 403); the Runtime raises a validation error on Password",
+      "symbols are the fixed set `~!@#$%^&*()-_=+[{]}\\|;:'\"<,>./?; a space is not a symbol",
+      "changing another attribute of a user does not reapply the policy; specializations such as Account are checked",
+      "messages: 'Password does not meet password policy criteria:' followed by '\\n - ' and each failed criterion"
+    ]
+  }
+}

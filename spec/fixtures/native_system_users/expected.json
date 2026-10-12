@@ -1,0 +1,15 @@
+{
+  "VerifyAliceRight": "true",
+  "VerifyAliceWrong": "false",
+  "VerifyAliceUpper": "true",
+  "VerifyNobody": "false",
+  "VerifyAliceEmpty": "false",
+  "VerifyBobInactive": "true",
+  "VerifyCarolBlocked": "true",
+  "VerifyAdmin": "false",
+  "VerifyDaveAccount": "true",
+  "VerifyWebService": "true",
+  "Roles": "Administrator:0b6a8c1e-2f3d-4e5a-9b7c-1d2e3f4a5b6c:Runs everything,Member:7c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f:",
+  "Users": "alice|true|false|0|0;bob|false|false|0|0;carol|true|true|0|0;dave|true|false|0|0;erin|true|false|0|0;",
+  "Accounts": "1"
+}

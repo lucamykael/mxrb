@@ -64,7 +64,12 @@ module Mxrb
         'StorageItemExists' =>
           'f87e5b1da5009611020462b1652c1add271334c7d864e2a492079552dfba58e7',
         'ClearLocalStorage' =>
-          '6d40ff267ad85c52173500c81fd49fabd0a1413d024e2bcc7ebc8d843f424bca'
+          '6d40ff267ad85c52173500c81fd49fabd0a1413d024e2bcc7ebc8d843f424bca',
+        'SignIn' => %w[
+          1d4098cc6c5084632b16d56c7b35a33bd36b2931e3aa6cd0fd6cb609ee7e3808
+          43f283dc9452e421b24b1081a3930cbfa1ba2c715046955ee736e17d0f19895b
+          2c4128b496b918feaf8b374e9d343378d24d2558f5da2fd4beaa810d50ec31a9
+        ].freeze
       }.freeze
 
       module_function

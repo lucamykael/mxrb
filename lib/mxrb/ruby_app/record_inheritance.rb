@@ -37,7 +37,7 @@ module Mxrb
           if parent
             Array(parent.attributes)
           else
-            (name == 'System.FileDocument' ? FILE_ATTRIBUTES : [])
+            name == 'System.FileDocument' ? FILE_ATTRIBUTES : Runtime::SystemDomain.record_attributes(name)
           end
         end
         (inherited + Array(attributes)).reverse.uniq { _1.fetch(:mendix_name) }.reverse

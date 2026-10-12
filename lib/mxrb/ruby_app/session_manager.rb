@@ -5,6 +5,7 @@ require 'json'
 require 'securerandom'
 require 'time'
 require_relative '../runtime/shared_store'
+require_relative '../runtime/system_sign_in'
 
 module Mxrb
   module RubyApp
@@ -17,10 +18,13 @@ module Mxrb
       attr_reader :ttl
 
       # rubocop:disable Metrics/ParameterLists
+      # directory returns the application store whose persisted System users sign in
+      # when a name is not configured in MXRB_USERS_JSON.
       def initialize(access_control, users: ENV['MXRB_USERS_JSON'],
                      tokens: ENV['MXRB_AUTH_TOKENS'], ttl: ENV.fetch('MXRB_SESSION_TTL', '3600'),
-                     clock: -> { Time.now.utc }, store: nil)
+                     clock: -> { Time.now.utc }, store: nil, directory: nil)
         @access_control = access_control
+        @directory = directory
         @users = parse_map(users, 'MXRB_USERS_JSON')
         @static_tokens = parse_map(tokens, 'MXRB_AUTH_TOKENS')
         @ttl = Integer(ttl)
@@ -55,7 +59,7 @@ module Mxrb
         csrf = SecureRandom.urlsafe_base64(32)
         expires_at = @clock.call + ttl
         profile = identity.slice('roles', 'user_roles', 'module_roles', 'attributes')
-                          .merge('user' => username.to_s, '_csrf' => csrf)
+                          .merge('user' => identity.fetch('user', username.to_s), '_csrf' => csrf)
         context = context_for(profile)
         @store.write_session(token:, identity: profile, expires_at:)
         { token:, csrf:, expires_at: expires_at.iso8601, user: context.user, roles: context.user_roles }
@@ -81,11 +85,19 @@ module Mxrb
 
       def authenticated_identity(username, password)
         identity = @users[username.to_s]
-        unless identity && password_matches?(identity, password)
-          raise AuthenticationError, 'invalid username or password'
-        end
+        return identity if identity && password_matches?(identity, password)
 
-        identity
+        system = !identity && @directory && system_identity(@directory.call, username, password)
+        raise AuthenticationError, 'invalid username or password' unless system
+
+        system
+      end
+
+      # A persisted System.User: the session user is its ID, its roles are the user roles.
+      def system_identity(store, username, password)
+        user = Runtime::SystemSignIn.authenticate(store, username, password, now: @clock.call)
+        roles = user && store.retrieve_association('UserRoles', user).map { _1.members['Name'] }
+        user && { 'user' => user.id, 'roles' => roles }
       end
 
       def context_for(raw)

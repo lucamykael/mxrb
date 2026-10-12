@@ -1,0 +1,13 @@
+[
+  ["GET:CreateShort", "rest/policy/cases/createshort", ""],
+  ["GET:CreateNoDigit", "rest/policy/cases/createnodigit", ""],
+  ["GET:CreateNoUpper", "rest/policy/cases/createnoupper", ""],
+  ["GET:CreateNoLower", "rest/policy/cases/createnolower", ""],
+  ["GET:CreateNoSymbol", "rest/policy/cases/createnosymbol", ""],
+  ["GET:CreateValid", "rest/policy/cases/createvalid", ""],
+  ["GET:CreateEmpty", "rest/policy/cases/createempty", ""],
+  ["GET:CreateSpaces", "rest/policy/cases/createspaces", ""],
+  ["GET:ChangeWeak", "rest/policy/cases/changeweak", ""],
+  ["GET:ChangeOther", "rest/policy/cases/changeother", ""],
+  ["GET:AccountWeak", "rest/policy/cases/accountweak", ""]
+]

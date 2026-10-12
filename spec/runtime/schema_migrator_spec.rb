@@ -7,6 +7,14 @@ require_relative '../../lib/mxrb/runtime/sqlite_store'
 
 # rubocop:disable Metrics/BlockLength, Metrics/ParameterLists
 RSpec.describe Mxrb::Runtime::SchemaMigrator do
+  # Every schema also holds the Runtime's System users, roles, languages and time zones.
+  let(:system_tables) { Mxrb::Runtime::SystemDomain::ATTRIBUTES.size + Mxrb::Runtime::SystemDomain::ASSOCIATIONS.size }
+  let(:system_attributes) { Mxrb::Runtime::SystemDomain::ATTRIBUTES.values.sum(&:size) }
+
+  def application(definitions)
+    definitions.reject { (_1.respond_to?(:qualified_name) ? _1.qualified_name : _1.name).start_with?('System.') }
+  end
+
   def schema_attribute(name, guid:, type: :string, unique: false, required: false, default: nil, id: guid)
     Mxrb::Model::Attribute.new.tap do |attribute|
       attribute.id = id
@@ -56,7 +64,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
       initial_project = schema_project
       initial = described_class.new(initial_project, database: path).migrate!
       repeated = described_class.new(initial_project, database: path).migrate!
-      expect(initial.created_tables.size).to eq(1)
+      expect(initial.created_tables.size).to eq(1 + system_tables)
       expect(repeated).to have_attributes(created_tables: [], added_columns: [], rebuilt_tables: [])
 
       store = Mxrb::Runtime::SQLiteStore.new(initial_project, path: path)
@@ -108,8 +116,8 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     second = Struct.new(:name, :entities, :associations).new('Remote', [target], [])
     derived = described_class.derive(Struct.new(:modules).new([first, second]))
 
-    expect(derived.entities.map(&:name)).to contain_exactly('Local.Source', 'Remote.Target')
-    expect(derived.associations.map(&:to_entity)).to contain_exactly('External.Target', 'Remote.Target')
+    expect(application(derived.entities).map(&:name)).to contain_exactly('Local.Source', 'Remote.Target')
+    expect(application(derived.associations).map(&:to_entity)).to contain_exactly('External.Target', 'Remote.Target')
     expect(derived.associations.first.storage_key).to eq('Local.Qualified')
   end
 
@@ -146,7 +154,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
 
     ruby_schema = described_class.derive_records(records)
     pet = ruby_schema.entity('Store.Pet')
-    expect(ruby_schema.entities.map(&:name)).to eq(%w[Store.Pet Store.Fallback])
+    expect(application(ruby_schema.entities).map(&:name)).to eq(%w[Store.Pet Store.Fallback])
     expect(pet.columns.map { [_1.name, _1.type, _1.required, _1.default] }).to eq(
       [['Name', :string, true, nil], ['Weight', :decimal, false, 1.5]]
     )
@@ -164,7 +172,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     owner = schema_entity('Owner', [], id: 'owner', guid: 'owner')
     native.modules.first.entities << owner
     overlay = described_class.derive_overlay(native, records)
-    expect(overlay.entities.map(&:name)).to contain_exactly(
+    expect(application(overlay.entities).map(&:name)).to contain_exactly(
       'Store.Pet', 'Store.Fallback', 'Store.Owner'
     )
     expect(overlay.entity('Store.Pet').columns.map(&:name)).to eq(%w[Name Weight])
@@ -373,7 +381,7 @@ RSpec.describe Mxrb::Runtime::SchemaMigrator do
     expect(columns).not_to include(weight_column)
     expect(database.get_first_value("SELECT \"#{name_column}\" FROM \"#{definition.table}\""))
       .to eq('kept')
-    expect(database.get_first_value('SELECT COUNT(*) FROM mxrb_schema_attributes')).to eq(1)
+    expect(database.get_first_value('SELECT COUNT(*) FROM mxrb_schema_attributes')).to eq(1 + system_attributes)
     database.close
   end
 

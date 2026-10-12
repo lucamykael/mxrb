@@ -1,0 +1,23 @@
+[
+  ["AliceRight", "alice", "Secret#1"],
+  ["AliceUpper", "ALICE", "Secret#1"],
+  ["AliceWrong1", "alice", "wrong"],
+  ["AliceRightAgain", "alice", "Secret#1"],
+  ["BobInactive", "bob", "Secret#1"],
+  ["CarolBlocked", "carol", "Secret#1"],
+  ["ErinWebService", "erin", "Secret#1"],
+  ["FrankNoRoles", "frank", "Secret#1"],
+  ["Nobody", "nobody", "Secret#1"],
+  ["BobWrong", "bob", "wrong"],
+  ["ErinWrong", "erin", "wrong"],
+  ["FrankWrong", "frank", "wrong"],
+  ["GinaWrong1", "gina", "x1"],
+  ["GinaWrong2", "gina", "x2"],
+  ["GinaWrong3", "gina", "x3"],
+  ["GinaRightAfterThree", "gina", "Secret#1"],
+  ["GinaWrong4", "gina", "x4"],
+  ["GinaRightBlocked", "gina", "Secret#1"],
+  ["Empty", "alice", ""],
+  ["Wait310", "", ""],
+  ["GinaAfterFiveMinutes", "gina", "Secret#1"]
+]

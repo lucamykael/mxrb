@@ -523,6 +523,7 @@ module Mxrb
           stored = serialize(value.members[column.name], column.type)
           values << stored
           value.members[column.name] = deserialize(stored, :decimal) if column.type == :decimal
+          value.members[column.name] = stored if column.type == :hashstring
         end
         definition.system_members.each do |name, (sql_name, _type)|
           fields << sql_name
@@ -694,6 +695,7 @@ module Mxrb
         return DecimalValues.text(@decimal.persist(value)) if type == :decimal
         return value.utc.iso8601(6) if type == :datetime && value.respond_to?(:utc)
         return value.iso8601 if type == :datetime && value.respond_to?(:iso8601)
+        return SystemDomain.hash_password(value) if type == :hashstring
 
         value
       end

@@ -29,3 +29,31 @@ describe('verified Nanoflow Commons actions', () => {
     expect(await actions['NanoflowCommons.GetPlatform']({})).toBe('Hybrid_mobile');
   });
 });
+
+describe('NanoflowCommons.SignIn', () => {
+  const signIn = nanoflowCommonsActions(['SignIn'])['NanoflowCommons.SignIn'];
+  afterEach(() => vi.useRealTimers());
+
+  it('answers 401 without a request for empty fields and returns the sign-in status', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 401 }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await signIn({ username: '', password: 'x' })).toBe(401);
+    expect(await signIn({ username: 'alice', password: null })).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await signIn({ username: 'alice', password: 'wrong' })).toBe(401);
+    expect(fetch).toHaveBeenCalledWith('/api/login', expect.objectContaining({ method: 'POST' }));
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ username: 'alice', password: 'wrong' });
+  });
+
+  it('reloads the application after a successful sign-in and reports offline as 0', async () => {
+    vi.useFakeTimers();
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{}', { status: 200 })));
+    expect(await signIn({ username: 'alice', password: 'Secret#1' })).toBe(200);
+    vi.runAllTimers();
+    expect(reload).toHaveBeenCalled();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('offline')));
+    expect(await signIn({ username: 'alice', password: 'Secret#1' })).toBe(0);
+  });
+});
