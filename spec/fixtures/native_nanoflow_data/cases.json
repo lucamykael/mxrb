@@ -1,0 +1,17 @@
+[
+  {"name": "RetrieveSorted", "expected": "alpha,Middle,North,south,"},
+  {"name": "RetrieveXPath", "expected": "North,"},
+  {"name": "RetrieveFirst", "expected": "Middle"},
+  {"name": "Aggregates", "expected": "4|8.25|2.75|3|-1.25"},
+  {"name": "ListOps", "expected": "alpha|3|south,North,Middle,alpha,|4|2|true"},
+  {"name": "Loops", "expected": "alpha,Middle,North,|3"},
+  {"name": "Association", "expected": "probe"},
+  {"name": "CommitDelete", "expected": "5|4"},
+  {"name": "Rollback", "expected": "alpha"},
+  {"name": "SortNull", "expected": "alpha,North,south,Middle,|south,North,alpha,Middle,"},
+  {"name": "AggEmpty", "expected": "0|0||<empty>"},
+  {"name": "FindExpr", "expected": "alpha|2"},
+  {"name": "VarXPath", "expected": "alpha,Middle,North,"},
+  {"name": "ObjectXPath", "expected": "4"},
+  {"name": "Limit", "expected": "south,North,"}
+]

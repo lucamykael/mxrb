@@ -24,6 +24,24 @@ Läufe stimmten überein und entsprachen Ruby bei Views, interpretierten Microfl
 und der exportierten Anwendung ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-predicates-2026-10-09.json).
 
+## Datenaktionen in Nanoflows
+
+Nach TypeScript exportierte Nanoflows führen Datenbank-`Retrieve` (XPath, Sortierung,
+erstes Objekt, `limit`/`offset`) und Assoziations-Retrieves, `Commit`, `Delete`,
+`Rollback`, Listenoperationen (`Head`, `Tail`, `Union`, `Intersect`, `Subtract`,
+`Contains`, `Sort`, `Find`/`Filter` nach Attribut oder Ausdruck), `Aggregate` und
+Schleifen (`for each`, `while`, `break`, `continue`) aus. Datenbank-Retrieves laufen auf
+dem Ruby-Server, der XPath, Reihenfolge und Zugriffsregeln anwendet; XPath-Variablen
+(`$minimum`, `$objekt`) werden als `xpath_variables` mit lesbar autorisierten Objekten
+übertragen. Wie im Client von Mendix 11.12.1 setzt das Listen-`Sort` leere Werte in
+beiden Richtungen ans Ende, der Durchschnitt einer leeren Liste ist leer und ihre Summe
+0. Log-Meldungen ersetzen jetzt `{1}`. Zuvor nutzten 49 der 183 Nanoflows aus Korpus
+und SPC eine dieser Aktionen und schlugen fehl.
+
+`script/client_native_oracle` führt dasselbe Fixture im offiziellen Client (MxBuild und
+Runtime unter Linux, Chromium headless) und in der exportierten Ruby-App aus: alle 15
+Fälle stimmen überein. [Nachweis](../evidence/nanoflow-data-actions-2026-10-09.json).
+
 ## Ausdrucksfunktionen in Microflows
 
 Anders als in XPath und OQL beachten Textvergleiche in Ausdrücken (`=`, `<`) sowie

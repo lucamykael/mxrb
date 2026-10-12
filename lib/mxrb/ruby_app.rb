@@ -1916,16 +1916,16 @@ module Mxrb
 
       def records(name, context: nil, association: nil, context_type: nil, context_id: nil,
                   filters: [], sort: [], offset: 0, limit: nil,
-                  xpath: nil, xpath_context_type: nil, xpath_context_id: nil)
+                  xpath: nil, xpath_context_type: nil, xpath_context_id: nil, xpath_variables: {})
         record_page(
           name, context:, association:, context_type:, context_id:, filters:, sort:, offset:, limit:,
-                xpath:, xpath_context_type:, xpath_context_id:
+                xpath:, xpath_context_type:, xpath_context_id:, xpath_variables:
         ).fetch(:records)
       end
 
       def record_page(name, context: nil, association: nil, context_type: nil, context_id: nil,
                       filters: [], sort: [], offset: 0, limit: nil,
-                      xpath: nil, xpath_context_type: nil, xpath_context_id: nil)
+                      xpath: nil, xpath_context_type: nil, xpath_context_id: nil, xpath_variables: {})
         runtime_synchronize do
           filter = [association, context_type, context_id]
           if filter.any? && !filter.all? { !_1.to_s.empty? }
@@ -1965,7 +1965,8 @@ module Mxrb
               authorize_entity!(current.entity, :read, context, record: current)
             end
             constraint = Runtime::XPath.new(xpath, store:, policy: context && access_control, context:)
-            values = constraint.filter(values, 'currentObject' => current)
+            variables = xpath_variable_values(xpath_variables, store, context)
+            values = constraint.filter(values, variables.merge('currentObject' => current))
           end
           values = values.select { grid_record_matches?(_1, filters) }
           values = grid_sort_records(values, sort)
@@ -1982,6 +1983,24 @@ module Mxrb
           release_runtime_cache
         end
       end
+
+      # Nanoflow XPath variables: objects as {type, id} (read-authorized), tagged decimals and scalars.
+      def xpath_variable_values(values, store, context)
+        raise ArgumentError, 'XPath variables must be an object' unless values.is_a?(Hash)
+
+        values.to_h do |name, value|
+          next [name.to_s, Runtime::DecimalValues.parse(value.fetch(Runtime::DecimalValues::TAG))] if
+            Runtime::DecimalValues.tagged?(value)
+          next [name.to_s, value] unless value.is_a?(Hash)
+
+          object = store.find(value['type'].to_s, value['id'].to_s)
+          raise ArgumentError, "XPath variable $#{name} object not found" unless object
+
+          authorize_entity!(object.entity, :read, context, record: object)
+          [name.to_s, object]
+        end
+      end
+      private :xpath_variable_values
 
       def record(name, id, context: nil)
         runtime_synchronize do
@@ -3508,6 +3527,7 @@ module Mxrb
             if query.key?('xpath')
               scope.merge!(xpath: query['xpath'], xpath_context_type: query['xpath_context_type'],
                            xpath_context_id: query['xpath_context_id'])
+              scope[:xpath_variables] = JSON.parse(query['xpath_variables']) if query.key?('xpath_variables')
             end
             page = if %w[filters sort offset limit].any? { query.key?(_1) }
                      application.record_page(

@@ -23,6 +23,23 @@ runs agreed, and matched Ruby for views, interpreted microflows and the exported
 application with MPR access prohibited.
 [Evidence](../evidence/oql-predicates-2026-10-09.json).
 
+## Nanoflow data actions
+
+Nanoflows exported to TypeScript execute database `Retrieve` (XPath, sorting, first
+object, `limit`/`offset`) and association retrieves, `Commit`, `Delete`, `Rollback`,
+list operations (`Head`, `Tail`, `Union`, `Intersect`, `Subtract`, `Contains`, `Sort`,
+`Find`/`Filter` by attribute or expression), `Aggregate` and loops (`for each`,
+`while`, `break`, `continue`). Database retrieves run on the Ruby server, which applies
+XPath, ordering and access rules; XPath variables (`$minimum`, `$object`) travel in
+`xpath_variables`, with read-authorized objects. As in the Mendix 11.12.1 client, list
+`Sort` places empty values last in both directions, the average of an empty list is
+empty and its sum is 0. Log messages now substitute `{1}`. Previously 49 of the 183
+nanoflows in the corpus and SPC used one of these actions and failed.
+
+`script/client_native_oracle` runs the same fixture in the official client (Linux
+MxBuild and Runtime, headless Chromium) and in the exported Ruby app: all 15 cases
+match. [Evidence](../evidence/nanoflow-data-actions-2026-10-09.json).
+
 ## Microflow expression functions
 
 Unlike XPath and OQL, text comparisons in expressions (`=`, `<`) and `contains`,

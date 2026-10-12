@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-09",
+  "scope": "Nanoflow data actions in the exported TypeScript runtime",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app, Mendix Runtime and headless Chromium via script/client_native_oracle",
+    "cases": 15,
+    "status": "passed",
+    "results": {
+      "RetrieveSorted": "alpha,Middle,North,south,",
+      "RetrieveXPath": "North,",
+      "RetrieveFirst": "Middle",
+      "Aggregates": "4|8.25|2.75|3|-1.25",
+      "ListOps": "alpha|3|south,North,Middle,alpha,|4|2|true",
+      "Loops": "alpha,Middle,North,|3",
+      "Association": "probe",
+      "CommitDelete": "5|4",
+      "Rollback": "alpha",
+      "SortNull": "alpha,North,south,Middle,|south,North,alpha,Middle,",
+      "AggEmpty": "0|0||<empty>",
+      "FindExpr": "alpha|2",
+      "VarXPath": "alpha,Middle,North,",
+      "ObjectXPath": "4",
+      "Limit": "south,North,"
+    }
+  },
+  "ruby": {
+    "exported_app_identical": true,
+    "frontend_tests": 219
+  },
+  "corpus_impact": "49 of 183 nanoflows in the public corpus and the SPC project used Retrieve, ListOperations, Rollback, Delete, Aggregate, Commit or loops",
+  "native_semantics": [
+    "database retrieves sort strings without case and place empty values first",
+    "the client list Sort places empty values last in both directions",
+    "Average of an empty list is empty, Sum is 0, Minimum/Maximum empty",
+    "Find and Filter by expression bind $currentObject"
+  ],
+  "fixed": [
+    "nanoflow log messages printed {1} instead of the parameter value"
+  ],
+  "limitations": [
+    "retrieves over associations of uncommitted objects and generalization-aware association direction are not covered",
+    "list Equals and reduce operations are rejected"
+  ]
+}
