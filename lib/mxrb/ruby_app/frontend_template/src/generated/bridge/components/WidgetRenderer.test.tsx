@@ -134,6 +134,45 @@ describe('Ruby data view editing', () => {
     expect(screen.getByRole('textbox')).toBeEnabled();
   });
 
+  it('lays out data view fields as its label width says, with native form markup', () => {
+    const active: WidgetDefinition = {
+      type: 'check_box',
+      name: 'ActiveBox',
+      options: { attribute: 'App.Item.Active', caption: 'Active' },
+    };
+    const horizontal: WidgetDefinition = {
+      ...view,
+      name: 'Form',
+      options: { source: { kind: 'context' }, label_width: 3 },
+      body: [field, active],
+      footer: [{ type: 'button', name: 'Save', options: { caption: 'Save' } }],
+    };
+    const { container, rerender } = render(<WidgetRenderer {...props(horizontal)} />);
+    const form = container.querySelector('.mx-dataview')!;
+    expect(form).toHaveClass('mx-name-Form', 'form-horizontal');
+    expect(form.querySelector('.mx-dataview-content')).toBeInTheDocument();
+    expect(form.querySelector('.mx-dataview-controls')).toHaveTextContent('Save');
+    const name = container.querySelector('.mx-name-Name')!;
+    expect(name).toHaveClass('form-group', 'mx-textbox');
+    expect(name).not.toHaveClass('no-columns');
+    expect(within(name as HTMLElement).getByText('Name')).toHaveClass('control-label', 'col-sm-3');
+    expect(name.querySelector('.col-sm-9 input')).toBe(screen.getByLabelText('Name'));
+    const check = container.querySelector('.mx-name-ActiveBox')!;
+    expect(check).toHaveClass('form-group', 'mx-checkbox');
+    expect(check.querySelector('.col-sm-9 input[type=checkbox]')).toBe(
+      screen.getByLabelText('Active'),
+    );
+
+    rerender(
+      <WidgetRenderer
+        {...props({ ...horizontal, options: { source: { kind: 'context' }, label_width: 0 } })}
+      />,
+    );
+    expect(container.querySelector('.mx-dataview')).toHaveClass('form-vertical');
+    expect(container.querySelector('.mx-name-Name')).toHaveClass('no-columns');
+    expect(container.querySelector('.mx-name-Name .col-sm-9')).not.toBeInTheDocument();
+  });
+
   it('applies data view visibility conditions and read-only text style', () => {
     const visible: WidgetDefinition = {
       ...view,

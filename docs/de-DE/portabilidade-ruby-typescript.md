@@ -845,6 +845,14 @@ das Autofocus der Seite erlaubt (Always; DesktopOnly, außer auf Touch-Geräten;
 Never), sofern der Benutzer nicht schon etwas fokussiert hat. Die
 Design-Property-Klassen eines Layouts gehen an die eingebetteten Layout-Widgets,
 die der Seite an ihre eigenen, auch bei gleichen Widget-Namen.
+Data Views folgen der Label-Breite des Modells: mit `label_width` über 0 sind
+ihre Felder horizontale `form-group`s (`control-label col-sm-N` und
+`col-sm-(12-N)`), mit 0 steht das Label darüber (`no-columns`). Die Data View
+verwendet das native Markup (`mx-dataview`, `form-horizontal`/`form-vertical`,
+`mx-dataview-content`, `mx-dataview-controls`), Checkboxen sind
+`form-group mx-checkbox`, und Reference-Set-Auswahlen sind die Combo Box mit
+Mehrfachauswahl. Popups fokussieren ihr erstes Feld, sobald die Daten geladen
+sind, und leere Dropdowns zeigen eine leere Option.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

@@ -1,5 +1,5 @@
 import { decimal } from '../decimal';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent as dispatchEvent } from '@testing-library/dom';
 import userEvent from '@testing-library/user-event';
 import { useLayoutEffect } from 'react';
@@ -75,16 +75,41 @@ describe('editable exported fields', () => {
         }}
       />,
     );
-    const list = await screen.findByRole('listbox', { name: 'Roles' });
+    const user = userEvent.setup();
+    const combobox = await screen.findByRole('combobox');
     expect(input.request).toHaveBeenCalledWith('/api/entities/System.UserRole');
-    await screen.findByRole('option', { name: 'Guest' });
-    expect(screen.getByRole('option', { name: 'Administrator' })).toHaveProperty('selected', true);
-    await userEvent.selectOptions(list, ['Administrator', 'Guest']);
+    await waitFor(() => expect(combobox.nextElementSibling).toHaveTextContent('Administrator'));
+    expect(combobox).toHaveAttribute('aria-expanded', 'false');
+    await user.click(combobox.closest('.widget-combobox-input-container')!);
+    expect(combobox).toHaveFocus();
+    expect(combobox).toHaveAttribute('aria-expanded', 'true');
+    const list = screen.getByRole('listbox');
+    expect(within(list).getByRole('option', { name: 'Administrator' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(within(list).getByRole('option', { name: 'Guest' }));
     await waitFor(() =>
       expect(input.saveRecord).toHaveBeenLastCalledWith(expect.anything(), {
         UserRoles: [roles[0], roles[2]],
       }),
     );
+    expect(combobox).toHaveFocus();
+    await user.keyboard('{ArrowUp}{Enter}');
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenLastCalledWith(expect.anything(), {
+        UserRoles: [roles[0], roles[1], roles[2]],
+      }),
+    );
+    await user.keyboard('{Escape}');
+    expect(combobox).toHaveAttribute('aria-expanded', 'false');
+    await user.click(screen.getByRole('button', { name: 'Clear selection' }));
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenLastCalledWith(expect.anything(), { UserRoles: [] }),
+    );
+    await user.click(combobox);
+    await user.click(document.body);
+    expect(combobox).toHaveAttribute('aria-expanded', 'false');
   });
   it('reloads reference options for server data changes, not for local edits', async () => {
     const input = props();

@@ -23,7 +23,13 @@ import {
 } from './PresentationWidgets';
 import { FileWidget } from './FileWidget';
 import { PageTitleContext } from './PageTitleContext';
-import { editable, matchesCondition, ReadOnlyContext, ReadOnlyStyleContext } from './FieldPolicy';
+import {
+  editable,
+  LabelWidthContext,
+  matchesCondition,
+  ReadOnlyContext,
+  ReadOnlyStyleContext,
+} from './FieldPolicy';
 import { useSelections } from './SelectionScope';
 import { MarketplaceWidget, type MarketplaceWidgetRegion } from '../marketplace';
 import type {
@@ -202,6 +208,7 @@ export function DataView({
   const pageSource = useContext(PageDataSource) === widget;
   const inheritedReadOnly = useContext(ReadOnlyContext);
   const inheritedReadOnlyStyle = useContext(ReadOnlyStyleContext);
+  const labelWidth = Math.max(0, Math.min(12, Number(options.label_width) || 0));
   const selections = useSelections();
   const variables = useContext(VariableScope);
   const widgetObjects = useContext(WidgetObjectScope);
@@ -434,27 +441,38 @@ export function DataView({
               : inheritedReadOnlyStyle
           }
         >
-          <section
-            className={classes(
-              'app-widget',
-              'mxrb-widget',
-              'mxrb-data-view',
-              options.class,
-              options.design_class as string | undefined,
-            )}
-            data-widget-name={widget.name}
-            data-widget-type={widget.type}
-            data-editability={String(options.editable || 'always')}
-          >
-            <div className="mxrb-data-view__body" data-widget-region="body">
-              {render(widget.body, 'body')}
-            </div>
-            {options.show_footer !== false && (widget.footer || []).length > 0 && (
-              <footer className="mxrb-data-view__footer" data-widget-region="footer">
-                {render(widget.footer, 'footer')}
-              </footer>
-            )}
-          </section>
+          <LabelWidthContext.Provider value={labelWidth}>
+            <section
+              className={classes(
+                'app-widget',
+                'mxrb-widget',
+                'mxrb-data-view',
+                'mx-dataview',
+                `mx-name-${widget.name}`,
+                labelWidth > 0 ? 'form-horizontal' : 'form-vertical',
+                options.class,
+                options.design_class as string | undefined,
+              )}
+              data-widget-name={widget.name}
+              data-widget-type={widget.type}
+              data-editability={String(options.editable || 'always')}
+            >
+              <div
+                className="mx-dataview-content mxrb-data-view__body"
+                data-widget-region="body"
+              >
+                {render(widget.body, 'body')}
+              </div>
+              {options.show_footer !== false && (widget.footer || []).length > 0 && (
+                <div
+                  className="mx-dataview-controls mxrb-data-view__footer"
+                  data-widget-region="footer"
+                >
+                  {render(widget.footer, 'footer')}
+                </div>
+              )}
+            </section>
+          </LabelWidthContext.Provider>
         </ReadOnlyStyleContext.Provider>
       </ReadOnlyContext.Provider>
     </WidgetObjectScope.Provider>
@@ -491,6 +509,7 @@ function WidgetContent({
 }: WidgetRuntimeProps & { execution: ReturnType<typeof useWidgetEvent> }) {
   const { runEvent, running } = execution;
   const fieldId = useId();
+  const labelWidth = useContext(LabelWidthContext);
   const actions = useContext(ClientActions);
   const context = actions ? actions.edits.resolve(suppliedContext) : suppliedContext;
   const pageContext = actions ? actions.edits.resolve(suppliedPageContext) : suppliedPageContext;
@@ -623,6 +642,26 @@ function WidgetContent({
       };
     }),
   ];
+
+  // An input with its label, laid out as the enclosing data view's label
+  // width says: beside it in Bootstrap columns, or above it.
+  const formGroup = (kind: string, control: ReactNode) => {
+    const horizontal = labelWidth > 0 && labelWidth < 12;
+    return (
+      <div
+        {...runtimeProps}
+        className={classes(className, kind, 'form-group', !horizontal && 'no-columns')}
+      >
+        <label
+          className={classes('control-label', horizontal && `col-sm-${labelWidth}`)}
+          htmlFor={fieldId}
+        >
+          {label}
+        </label>
+        {horizontal ? <div className={`col-sm-${12 - labelWidth}`}>{control}</div> : control}
+      </div>
+    );
+  };
 
   switch (widget.type) {
     case 'file_manager':
@@ -874,22 +913,21 @@ function WidgetContent({
         </button>
       );
     case 'check_box':
-      return (
-        <label {...runtimeProps} className={className}>
-          <BoundField
-            widget={widget}
-            record={activeRecord}
-            schema={schema}
-            request={request}
-            saveRecord={saveRecord}
-            revision={revision}
-            onChanged={onChanged}
-            onEntered={onEntered}
-            onLeft={onLeft}
-            onError={onError}
-          />
-          {label}
-        </label>
+      return formGroup(
+        'mx-checkbox',
+        <BoundField
+          id={fieldId}
+          widget={widget}
+          record={activeRecord}
+          schema={schema}
+          request={request}
+          saveRecord={saveRecord}
+          revision={revision}
+          onChanged={onChanged}
+          onEntered={onEntered}
+          onLeft={onLeft}
+          onError={onError}
+        />,
       );
     case 'radio_button_group':
       return (
@@ -915,32 +953,21 @@ function WidgetContent({
     case 'date_picker':
     case 'drop_down':
     case 'reference_selector':
-      return (
-        <div
-          {...runtimeProps}
-          className={classes(
-            className,
-            'form-group no-columns',
-            `mx-${widget.type === 'text_box' || widget.type === 'number_input' ? 'textbox' : widget.type.replaceAll('_', '')}`,
-          )}
-        >
-          <label className="control-label" htmlFor={fieldId}>
-            {label}
-          </label>
-          <BoundField
-            id={fieldId}
-            widget={widget}
-            record={activeRecord}
-            schema={schema}
-            request={request}
-            saveRecord={saveRecord}
-            revision={revision}
-            onChanged={onChanged}
-            onEntered={onEntered}
-            onLeft={onLeft}
-            onError={onError}
-          />
-        </div>
+      return formGroup(
+        `mx-${widget.type === 'text_box' || widget.type === 'number_input' ? 'textbox' : widget.type.replaceAll('_', '')}`,
+        <BoundField
+          id={fieldId}
+          widget={widget}
+          record={activeRecord}
+          schema={schema}
+          request={request}
+          saveRecord={saveRecord}
+          revision={revision}
+          onChanged={onChanged}
+          onEntered={onEntered}
+          onLeft={onLeft}
+          onError={onError}
+        />,
       );
     case 'tab_control':
       return (

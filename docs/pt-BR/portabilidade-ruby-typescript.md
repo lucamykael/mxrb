@@ -975,6 +975,13 @@ Autofocus da página (Always; DesktopOnly, fora de dispositivos de toque; Never)
 salvo se o usuário já focou algo. As classes de design properties de um layout
 vão para os widgets do layout embutidos na página, e as da página para os dela,
 mesmo quando os nomes se repetem.
+Data views seguem a largura de rótulo do modelo: com `label_width` maior que 0,
+os campos ficam em `form-group` horizontal (`control-label col-sm-N` e
+`col-sm-(12-N)`); com 0, rótulo acima (`no-columns`). A data view usa o markup
+nativo (`mx-dataview`, `form-horizontal`/`form-vertical`, `mx-dataview-content`,
+`mx-dataview-controls`), o checkbox é um `form-group mx-checkbox`, e seletores de
+reference set são o Combo box de multisseleção. Popups focam o primeiro campo
+depois que os dados carregam, e dropdowns vazios mostram uma opção em branco.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

@@ -395,9 +395,6 @@ select {
 :where(.mxrb-popup .mx-window-header .close) {
   float: right;
 }
-:where(.mxrb-popup .mx-window-body) {
-  padding: 1rem;
-}
 
 .mxrb-popup {
   position: fixed;

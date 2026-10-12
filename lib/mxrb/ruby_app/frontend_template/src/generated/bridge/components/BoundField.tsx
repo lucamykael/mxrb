@@ -21,6 +21,7 @@ import {
   recordValue,
 } from '../value';
 import { WidgetObjectScope } from './VariableScope';
+import { ReferenceSetCombobox } from './ReferenceSetCombobox';
 
 interface BoundFieldProps {
   id?: string;
@@ -358,24 +359,16 @@ export function BoundField({
     const choices: RuntimeValue[] = kind === 'reference_selector' ? references : configured;
     if (referenceSet)
       return (
-        <select
-          {...controlProps}
-          multiple
-          value={String(draft).split(',').filter(Boolean)}
-          onChange={(event) =>
-            changed(
-              Array.from(event.target.selectedOptions)
-                .map((option) => option.value)
-                .join(','),
-            )
-          }
-        >
-          {references.map((item) => (
-            <option key={item.id} value={item.id}>
-              {displayValue(recordValue(item, options.display_attribute) ?? item.id)}
-            </option>
-          ))}
-        </select>
+        <ReferenceSetCombobox
+          id={controlProps.id}
+          disabled={disabled}
+          selected={String(draft).split(',').filter(Boolean)}
+          options={references.map((item) => ({
+            id: item.id,
+            caption: String(displayValue(recordValue(item, options.display_attribute) ?? item.id)),
+          }))}
+          onChange={(ids) => changed(ids.join(','))}
+        />
       );
     return (
       <select
@@ -383,7 +376,7 @@ export function BoundField({
         value={String(draft)}
         onChange={(event) => changed(event.target.value)}
       >
-        <option value="">—</option>
+        <option value="" />
         {draft &&
         !choices.some(
           (item) => (choiceValue(item, 'id') || choiceValue(item, 'value') || item) === draft,

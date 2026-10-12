@@ -54,8 +54,11 @@ describe('PageOutlet', () => {
       />,
     );
     const start = await screen.findByRole('button', { name: 'Start' });
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(start === document.activeElement).toBe(focused);
+    if (focused) await waitFor(() => expect(start).toHaveFocus());
+    else {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(start).not.toHaveFocus();
+    }
     Reflect.deleteProperty(navigator, 'maxTouchPoints');
     vi.unstubAllGlobals();
   });
@@ -68,7 +71,7 @@ describe('PageOutlet', () => {
       <PageOutlet page={page} busy={false} Widget={Loaded as PageComponentProps['Widget']} />,
     );
     await screen.findByRole('button', { name: 'Start' });
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 300));
     expect(outside).toHaveFocus();
     outside.remove();
   });

@@ -799,6 +799,14 @@ Autofocus allows (Always; DesktopOnly, except on touch devices; Never), unless
 the user has already focused something. A layout's design property classes go to
 the layout widgets embedded in the page, and the page's to its own, even when
 widget names repeat.
+Data views follow the model's label width: with a `label_width` above 0 their
+fields are horizontal `form-group`s (`control-label col-sm-N` and
+`col-sm-(12-N)`); with 0 the label sits above (`no-columns`). The data view uses
+the native markup (`mx-dataview`, `form-horizontal`/`form-vertical`,
+`mx-dataview-content`, `mx-dataview-controls`), check boxes are
+`form-group mx-checkbox`, and reference set selectors are the multiple-selection
+Combo box. Popups focus their first field once data has loaded, and empty drop
+downs show a blank option.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
