@@ -236,21 +236,125 @@ const serverCollectionPath = (
   return `${path}?${parameters}`;
 };
 
+// The operators a Data grid 2 filter offers, with its icon class and caption.
+const FILTER_OPERATORS: Record<FilterType, string[]> = {
+  text: [
+    'contains',
+    'starts_with',
+    'ends_with',
+    'gt',
+    'gte',
+    'equals',
+    'not_equals',
+    'lt',
+    'lte',
+    'empty',
+    'not_empty',
+  ],
+  number: ['gt', 'gte', 'equals', 'not_equals', 'lt', 'lte', 'empty', 'not_empty'],
+  date: ['between', 'gt', 'gte', 'equals', 'not_equals', 'lt', 'lte', 'empty', 'not_empty'],
+  boolean: [],
+  enum: [],
+};
+const OPERATOR_LABELS: Record<string, [string, string]> = {
+  contains: ['contains', 'Contains'],
+  starts_with: ['startsWith', 'Starts with'],
+  ends_with: ['endsWith', 'Ends with'],
+  gt: ['greater', 'Greater than'],
+  gte: ['greaterEqual', 'Greater than or equal'],
+  equals: ['equal', 'Equal'],
+  not_equals: ['notEqual', 'Not equal'],
+  lt: ['smaller', 'Smaller than'],
+  lte: ['smallerEqual', 'Smaller than or equal'],
+  empty: ['empty', 'Empty'],
+  not_empty: ['notEmpty', 'Not empty'],
+  between: ['between', 'Between'],
+};
+
+const OperatorSelector = ({
+  config,
+  onSelect,
+}: {
+  config: FilterConfig;
+  onSelect: (operator: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [icon, caption] = OPERATOR_LABELS[config.operator] || [config.operator, config.operator];
+  return (
+    <div className="filter-selector">
+      <div className="filter-selector-content">
+        <button
+          type="button"
+          className={`btn btn-default filter-selector-button button-icon ${icon}`}
+          aria-label={caption}
+          title={caption}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        />
+        <ul
+          className={`filter-selectors ${open ? 'visible' : 'hidden'}`}
+          role="listbox"
+          aria-label="Select filter type"
+          hidden={!open}
+        >
+          {FILTER_OPERATORS[config.type].map((operator) => (
+            <li
+              key={operator}
+              role="option"
+              aria-selected={operator === config.operator}
+              className={`filter-listitem${operator === config.operator ? ' filter-selected' : ''}`}
+              onClick={() => {
+                onSelect(operator);
+                setOpen(false);
+              }}
+            >
+              <div className={`filter-icon ${OPERATOR_LABELS[operator][0]}`} aria-hidden="true" />
+              <div className="filter-label">{OPERATOR_LABELS[operator][1]}</div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+};
+
 const FilterInput = ({
   column,
   config,
   value,
   onChange,
+  onOperator,
 }: {
   column: WidgetColumn;
   config: FilterConfig | null;
   value: string;
   onChange: (value: string) => void;
+  // Data grid 2 filters let the user choose the operator.
+  onOperator?: (operator: string) => void;
 }) => {
   if (!config) return null;
   const label = column.caption || column.name || column.attribute || 'column';
   const update = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     onChange(event.target.value);
+  if (onOperator && FILTER_OPERATORS[config.type].length) {
+    const empty = ['empty', 'not_empty'].includes(config.operator);
+    return (
+      <div className="filter-container">
+        <OperatorSelector config={config} onSelect={onOperator} />
+        <input
+          className="form-control filter-input"
+          aria-label={`Filter ${label}`}
+          type={
+            config.operator !== 'between' && config.type !== 'text' ? config.type : 'search'
+          }
+          value={empty ? '' : value}
+          disabled={empty}
+          onChange={update}
+        />
+      </div>
+    );
+  }
   if (['empty', 'not_empty'].includes(config.operator)) {
     return (
       <span aria-label={`Filter ${label}`}>
@@ -258,19 +362,31 @@ const FilterInput = ({
       </span>
     );
   }
+  // Data grid 2 drop-down filters read like the widget: Select, Yes and No.
+  const native = Boolean(onOperator);
   if (config.type === 'boolean') {
     return (
-      <select aria-label={`Filter ${label}`} value={value} onChange={update}>
-        <option value="">Any</option>
-        <option value="true">True</option>
-        <option value="false">False</option>
+      <select
+        className={native ? 'form-control' : undefined}
+        aria-label={`Filter ${label}`}
+        value={value}
+        onChange={update}
+      >
+        <option value="">{native ? 'Select' : 'Any'}</option>
+        <option value="true">{native ? 'Yes' : 'True'}</option>
+        <option value="false">{native ? 'No' : 'False'}</option>
       </select>
     );
   }
   if (config.type === 'enum') {
     return (
-      <select aria-label={`Filter ${label}`} value={value} onChange={update}>
-        <option value="">Any</option>
+      <select
+        className={native ? 'form-control' : undefined}
+        aria-label={`Filter ${label}`}
+        value={value}
+        onChange={update}
+      >
+        <option value="">{native ? 'Select' : 'Any'}</option>
         {config.options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.caption}
@@ -312,7 +428,13 @@ export function DataGrid({
   renderWidgets,
 }: DataGridProps) {
   const options = widget.options || {};
-  const configOf = (column: WidgetColumn) => filterConfig(column, options.entity, schema);
+  const [operators, setOperators] = useState<Record<string, string>>({});
+  const withOperator = (config: FilterConfig | null, column: WidgetColumn) => {
+    const chosen = operators[column.name || column.attribute || ''];
+    return config && chosen ? { ...config, operator: chosen } : config;
+  };
+  const configOf = (column: WidgetColumn) =>
+    withOperator(filterConfig(column, options.entity, schema), column);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNumber, setPageNumber] = useState(0);
@@ -423,7 +545,9 @@ export function DataGrid({
         ? records
         : records.filter((record) =>
             columns.every((column) => {
-              const config = filterConfig(column, options.entity, schema);
+              const base = filterConfig(column, options.entity, schema);
+              const chosen = operators[column.name || column.attribute || ''];
+              const config = base && chosen ? { ...base, operator: chosen } : base;
               if (!config) return true;
               const key = column.name || column.attribute || '';
               const query = filters[key] || '';
@@ -436,7 +560,7 @@ export function DataGrid({
               );
             }),
           ),
-    [columns, filters, records, serverSide, options.entity, schema],
+    [columns, filters, records, serverSide, options.entity, schema, operators],
   );
   const orderedRecords = useMemo(
     () => (serverSide ? filteredRecords : sortRecords(filteredRecords, sorting)),
@@ -491,6 +615,13 @@ export function DataGrid({
               setFilters((current) => ({
                 ...current,
                 [column.name || column.attribute || '']: value,
+              }));
+              setPageNumber(0);
+            }}
+            onOperator={(operator) => {
+              setOperators((current) => ({
+                ...current,
+                [column.name || column.attribute || '']: operator,
               }));
               setPageNumber(0);
             }}

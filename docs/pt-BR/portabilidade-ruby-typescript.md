@@ -938,6 +938,8 @@ das páginas; e nanoflows excluídos que citam elementos removidos do modelo (o
 Studio Pro não verifica documentos excluídos) geram um corpo vazio em vez de
 interromper a exportação. Com isso, cópias dos projetos privados QRQC e SPC e o
 Sudoku passam a auditoria do código público e o round-trip idêntico.
+Os filtros da Data grid 2 têm o seletor de operador do widget (Contains, Starts with,
+Greater than, Between, Empty...), e os filtros drop-down mostram Select/Yes/No.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

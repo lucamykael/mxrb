@@ -763,6 +763,8 @@ pages; and excluded nanoflows that refer to removed model elements (Studio Pro
 does not check excluded documents) get an empty body instead of stopping the
 export. Copies of the private QRQC and SPC projects and Sudoku pass the
 public-source audit and the identical round trip.
+Data grid 2 filters offer the widget's operator selector (Contains, Starts with,
+Greater than, Between, Empty...), and drop-down filters read Select/Yes/No.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

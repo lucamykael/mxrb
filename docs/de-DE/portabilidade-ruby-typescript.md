@@ -807,6 +807,8 @@ Modellelemente referenzieren (Studio Pro prüft ausgeschlossene Dokumente nicht)
 erhalten einen leeren Rumpf, statt den Export abzubrechen. Kopien der privaten
 Projekte QRQC und SPC sowie Sudoku bestehen die Prüfung des öffentlichen
 Quellcodes und den identischen Round-Trip.
+Die Filter von Data Grid 2 bieten die Operatorauswahl des Widgets (Contains, Starts
+with, Greater than, Between, Empty...), Dropdown-Filter zeigen Select/Yes/No.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

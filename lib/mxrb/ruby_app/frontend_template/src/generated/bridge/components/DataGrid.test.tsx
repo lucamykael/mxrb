@@ -307,6 +307,61 @@ describe('Data grid 2', () => {
     expect(onRowAction).toHaveBeenCalledWith(accounts[1]);
   });
 
+  it('lets the user choose a filter operator as Data grid 2 does', async () => {
+    const user = userEvent.setup();
+    const names: WidgetDefinition = {
+      type: 'data_grid',
+      name: 'names',
+      options: {
+        entity: 'Admin.Account',
+        presentation: 'datagrid2',
+        columns: [
+          {
+            name: 'Full name',
+            attribute: 'Admin.Account.FullName',
+            filter: { type: 'text', operator: 'contains' },
+          },
+          { name: 'Seen', attribute: 'LastLogin', filter: { type: 'date', operator: 'equals' } },
+          { name: 'On', attribute: 'System.User.Active', filter: { type: 'drop_down' } },
+        ],
+      },
+    };
+    render(
+      <DataGrid
+        widget={names}
+        request={vi.fn().mockResolvedValue({ records: accounts }) as unknown as ApiRequest}
+        pageContext={null}
+        revision={0}
+        onError={vi.fn()}
+        onMutation={vi.fn()}
+        onRowAction={vi.fn()}
+        onSelectRecord={vi.fn()}
+        schema={schema}
+      />,
+    );
+    await screen.findByText('Ada');
+    const contains = screen.getAllByRole('button', { name: 'Contains' })[0];
+    expect(contains).toHaveClass('filter-selector-button', 'button-icon', 'contains');
+    await user.type(screen.getByRole('searchbox', { name: 'Filter Full name' }), 'a');
+    expect(screen.getByText('Bea')).toBeInTheDocument();
+    await user.click(contains);
+    const choices = screen.getByRole('listbox', { name: 'Select filter type' });
+    expect(within(choices).getAllByRole('option')).toHaveLength(11);
+    await user.click(within(choices).getByRole('option', { name: 'Starts with' }));
+    expect(screen.queryByText('Bea')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Starts with' })).toHaveClass('startsWith');
+    await user.click(screen.getByRole('button', { name: 'Equal' }));
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toContain('Between');
+    await user.click(screen.getByRole('option', { name: 'Empty' }));
+    expect(screen.getByLabelText('Filter Seen')).toBeDisabled();
+    const flag = screen.getByRole('combobox', { name: 'Filter On' });
+    expect(within(flag).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Select',
+      'Yes',
+      'No',
+    ]);
+  });
+
   it('shows boolean attributes as Yes and No', async () => {
     const flags: WidgetDefinition = {
       type: 'data_grid',
