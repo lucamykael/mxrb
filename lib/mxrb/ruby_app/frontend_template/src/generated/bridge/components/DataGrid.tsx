@@ -22,6 +22,7 @@ import {
   sortRecords,
 } from '../value';
 import { NativeDataGrid } from './NativeDataGrid';
+import { GridIcon } from './GridIcon';
 
 interface DataGridProps {
   widget: WidgetDefinition;
@@ -339,19 +340,38 @@ const FilterInput = ({
     onChange(event.target.value);
   if (onOperator && FILTER_OPERATORS[config.type].length) {
     const empty = ['empty', 'not_empty'].includes(config.operator);
+    const input = (
+      <input
+        className="form-control filter-input"
+        aria-label={`Filter ${label}`}
+        type={config.operator !== 'between' && config.type !== 'text' ? config.type : 'search'}
+        value={empty ? '' : value}
+        disabled={empty}
+        onChange={update}
+      />
+    );
     return (
       <div className="filter-container">
         <OperatorSelector config={config} onSelect={onOperator} />
-        <input
-          className="form-control filter-input"
-          aria-label={`Filter ${label}`}
-          type={
-            config.operator !== 'between' && config.type !== 'text' ? config.type : 'search'
-          }
-          value={empty ? '' : value}
-          disabled={empty}
-          onChange={update}
-        />
+        {config.type === 'date' ? (
+          <div className="date-filter-container">
+            {input}
+            <button
+              type="button"
+              className="btn btn-default btn-calendar"
+              aria-label="Show calendar"
+              disabled={empty}
+              onClick={(event) => {
+                const field = event.currentTarget.previousElementSibling as HTMLInputElement | null;
+                field?.showPicker?.();
+              }}
+            >
+              <GridIcon name="calendar" />
+            </button>
+          </div>
+        ) : (
+          input
+        )}
       </div>
     );
   }

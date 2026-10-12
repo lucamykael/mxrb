@@ -431,6 +431,17 @@ describe('Standalone presentation widgets', () => {
     },
   );
 
+  it('shows the default image for a file object without contents', () => {
+    const input = props({
+      type: 'image_viewer',
+      name: 'Preview',
+      options: { default_image: 'Files.Logo', show_as_thumbnail: true },
+    });
+    input.context = { ...record, attributes: { ...record.attributes, HasContents: false } };
+    render(<WidgetRenderer {...input} />);
+    expect(screen.getByRole('img')).toHaveAttribute('src', '/assets/logo.png');
+  });
+
   it('shows an image fallback and rejects oversize uploads without a request', async () => {
     const input = props({
       type: 'image_viewer',

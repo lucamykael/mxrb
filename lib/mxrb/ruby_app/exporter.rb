@@ -87,6 +87,7 @@ module Mxrb
           @module_manifests = modules
           write_support_files
           copy_round_trip_metadata
+          write_design_classes(project)
           copy_frontend_theme
           restore_embedded_sources(embedded_sources)
           refresh_native_frontend_sources(project, modules, embedded_sources)
@@ -269,6 +270,11 @@ module Mxrb
           FileUtils.mkdir_p(File.dirname(target))
           FileUtils.cp_r(source, target, remove_destination: true)
         end
+      end
+
+      def write_design_classes(project)
+        classes = DesignClasses.collect(project, File.dirname(@mpr_path))
+        write(DesignClasses::PATH, "#{JSON.pretty_generate(classes)}\n") unless classes.empty?
       end
 
       def copy_round_trip_metadata
@@ -2210,7 +2216,7 @@ module Mxrb
         layout_grid: %w[width tab_index class style dynamic_class visible rows]
       }.freeze
       DSL_SINK_OPTIONS = {
-        sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip],
+        sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip icon],
         button: %w[caption parameters class style dynamic_class visible visibility button_style icon render_type],
         check_box: %w[attribute caption class style dynamic_class visible],
         container: %w[class style dynamic_class visible],

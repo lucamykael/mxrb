@@ -8,6 +8,7 @@ require 'monitor'
 require 'uri'
 require_relative 'native_fragment_store'
 require_relative 'ruby_app/session_manager'
+require_relative 'ruby_app/design_classes'
 require_relative 'ruby_app/source_identity'
 require_relative 'ruby_app/domain_rule_builders'
 require_relative 'ruby_app/security_builders'
@@ -1854,7 +1855,7 @@ module Mxrb
           mode: 'ruby', environment: environment.name, project: manifest.data.fetch('project'),
           languages: manifest.data.fetch('languages', {}),
           navigation: manifest.data.fetch('navigation', {}),
-          presentation: Registry.all(:presentation),
+          presentation: design_classed_presentation,
           modules: runtime_schema_modules, coverage: manifest.coverage,
           constants: Registry.all(:constant).values.select { _1.exposed_to_client && !_1.excluded }
                              .to_h { [_1.mendix_name, _1.client_value] },
@@ -2292,13 +2293,30 @@ module Mxrb
 
         authorize_document!(:page, name, :read, context)
 
-        {
+        page = {
           name: implementation.mendix_name, id: implementation.mendix_id,
           title: implementation.title,
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
         }.merge(Presentation.page(implementation)).merge(implementation.presentation_contract || {})
+        widgets = design_classes[implementation.mendix_name.to_s]
+        widgets ? DesignClasses.apply(JSON.parse(JSON.generate(page)), widgets) : page
+      end
+
+      # Theme design property classes per document, recorded by the export.
+      def design_classes
+        @design_classes ||= begin
+          path = root && File.join(root, DesignClasses::PATH)
+          path && File.file?(path) ? JSON.parse(File.read(path)) : {}
+        end
+      end
+
+      def design_classed_presentation
+        Registry.all(:presentation).to_h do |name, resource|
+          widgets = design_classes[name.to_s]
+          [name, widgets ? DesignClasses.apply(JSON.parse(JSON.generate(resource)), widgets) : resource]
+        end
       end
 
       def async_invocations

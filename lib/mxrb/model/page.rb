@@ -244,9 +244,12 @@ module Mxrb
 
       def widget_options(widget, widget_type)
         if widget_type == :sidebar_toggle
-          return appearance_options(widget).merge(caption: extract_text(widget['CaptionTemplate']),
-                                                  button_style: widget.fetch('ButtonStyle', 'Default').downcase,
-                                                  tooltip: extract_text(widget['Tooltip']))
+          icon = widget['Icon']
+          return appearance_options(widget).merge(
+            caption: extract_text(widget['CaptionTemplate']),
+            button_style: widget.fetch('ButtonStyle', 'Default').downcase, tooltip: extract_text(widget['Tooltip']),
+            icon: (icon['Image'].to_s if icon.is_a?(Hash) && icon['$Type'] == 'Forms$IconCollectionIcon')
+          ).compact
         end
         return appearance_options(widget) if widget_type == :page_title
         return static_image_options(widget) if widget_type == :static_image

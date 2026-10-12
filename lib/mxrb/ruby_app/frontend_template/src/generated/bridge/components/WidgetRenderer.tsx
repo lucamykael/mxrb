@@ -147,7 +147,7 @@ function Gallery({
   ]);
   return (
     <div
-      className={classes('gallery', 'mxrb-widget', 'mxrb-gallery', options.class)}
+      className={classes('gallery', 'mxrb-widget', 'mxrb-gallery', options.class, options.design_class as string | undefined)}
       data-widget-name={widget.name}
       data-widget-type={widget.type}
     >
@@ -435,7 +435,13 @@ export function DataView({
           }
         >
           <section
-            className={classes('app-widget', 'mxrb-widget', 'mxrb-data-view', options.class)}
+            className={classes(
+              'app-widget',
+              'mxrb-widget',
+              'mxrb-data-view',
+              options.class,
+              options.design_class as string | undefined,
+            )}
             data-widget-name={widget.name}
             data-widget-type={widget.type}
             data-editability={String(options.editable || 'always')}
@@ -507,6 +513,7 @@ function WidgetContent({
     `mxrb-${widget.type}`,
     `mx-name-${widget.name}`,
     options.class,
+    options.design_class as string | undefined,
     dynamicClass(options.dynamic_class, context || pageContext),
   );
   const runtimeProps = {

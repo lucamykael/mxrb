@@ -61,7 +61,10 @@ function FileContentWidget(props: WidgetRuntimeProps) {
   const thumbnail = options.show_as_thumbnail
     ? `&thumbnail_width=${Number(options.thumbnail_width || 100)}&thumbnail_height=${Number(options.thumbnail_height || 75)}`
     : '';
-  const image = !record || missing ? defaultImage : `${path}?v=${revision}-${version}${thumbnail}`;
+  // A file object without contents shows the default image, as in the Mendix client.
+  const empty = record?.attributes?.HasContents === false;
+  const image =
+    !record || missing || empty ? defaultImage : `${path}?v=${revision}-${version}${thumbnail}`;
   return (
     <div {...presentationFrame(props)} aria-busy={busy}>
       {isImage && image && (

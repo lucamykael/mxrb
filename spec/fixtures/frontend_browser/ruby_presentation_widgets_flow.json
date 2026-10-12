@@ -60,7 +60,7 @@
           }
         },
         {
-          "wait_for_selector": "[data-widget-name=Preview] img[src*=thumbnail_width]"
+          "wait_for_selector": "[data-widget-name=Preview] img[src^='/assets/images/']"
         },
         {
           "click_selector": "[data-widget-name=Tags] input[type=checkbox]"
