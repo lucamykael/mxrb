@@ -1,0 +1,206 @@
+{
+  "date": "2026-10-09",
+  "scope": "Microflow date formatting: formatDateTime, formatDateTimeUTC, formatDate, formatTime and toString",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "127e3a812015f6f4d3e94181f3771e9a5b60628dc1396f5c9b92b69164ec49f7",
+    "cases": 55,
+    "status": "passed",
+    "results": {
+      "U00": [
+        "2024-03-10 07:05:09.045|1999-12-31 23:59:59.999|2000-01-02 00:30:00.500"
+      ],
+      "U01": [
+        "24|99|00"
+      ],
+      "U02": [
+        "2024|1999|2000"
+      ],
+      "U03": [
+        "2024|1999|2000"
+      ],
+      "U04": [
+        "2024|2000|2000"
+      ],
+      "U05": [
+        "3|12|1"
+      ],
+      "U06": [
+        "03|12|01"
+      ],
+      "U07": [
+        "Mar|Dec|Jan"
+      ],
+      "U08": [
+        "March|December|January"
+      ],
+      "U09": [
+        "March|December|January"
+      ],
+      "U10": [
+        "3|12|1"
+      ],
+      "U11": [
+        "March|December|January"
+      ],
+      "U12": [
+        "10|31|2"
+      ],
+      "U13": [
+        "10|31|02"
+      ],
+      "U14": [
+        "70|365|2"
+      ],
+      "U15": [
+        "070|365|002"
+      ],
+      "U16": [
+        "Sun|Fri|Sun"
+      ],
+      "U17": [
+        "Sun|Fri|Sun"
+      ],
+      "U18": [
+        "Sunday|Friday|Sunday"
+      ],
+      "U19": [
+        "Sunday|Friday|Sunday"
+      ],
+      "U20": [
+        "7|5|7"
+      ],
+      "U21": [
+        "AM|PM|AM"
+      ],
+      "U22": [
+        "7|11|12"
+      ],
+      "U23": [
+        "07|11|12"
+      ],
+      "U24": [
+        "7|23|0"
+      ],
+      "U25": [
+        "7|23|24"
+      ],
+      "U26": [
+        "07|23|24"
+      ],
+      "U27": [
+        "7|11|0"
+      ],
+      "U28": [
+        "5|59|30"
+      ],
+      "U29": [
+        "9|59|0"
+      ],
+      "U30": [
+        "45|999|500"
+      ],
+      "U31": [
+        "45|999|500"
+      ],
+      "U32": [
+        "0045|0999|0500"
+      ],
+      "U33": [
+        "UTC|UTC|UTC"
+      ],
+      "U34": [
+        "Coordinated Universal Time|Coordinated Universal Time|Coordinated Universal Time"
+      ],
+      "U35": [
+        "+0000|+0000|+0000"
+      ],
+      "U36": [
+        "Z|Z|Z"
+      ],
+      "U37": [
+        "Z|Z|Z"
+      ],
+      "U38": [
+        "Z|Z|Z"
+      ],
+      "U39": [
+        "11|1|2"
+      ],
+      "U40": [
+        "11|01|02"
+      ],
+      "U41": [
+        "3|5|2"
+      ],
+      "U42": [
+        "2|5|1"
+      ],
+      "U43": [
+        "AD|AD|AD"
+      ],
+      "U44": [
+        "at 07 o'clock|at 23 o'clock|at 00 o'clock"
+      ],
+      "U45": [
+        "'|'|'"
+      ],
+      "U46": [
+        "Sun",
+        " 10 Mar 2024|Fri",
+        " 31 Dec 1999|Sun",
+        " 2 Jan 2000"
+      ],
+      "U47": [
+        "10/03/24 07:05 AM|31/12/99 11:59 PM|02/01/00 12:30 AM"
+      ],
+      "L00": [
+        "2024-03-10 07:05:09.045 UTC|1999-12-31 23:59:59.999 UTC"
+      ],
+      "L01": [
+        "07|23"
+      ],
+      "L02": [
+        "UTC +0000|UTC +0000"
+      ],
+      "FmtDefault": [
+        "3/10/24",
+        " 7:05 AM|3/10/24",
+        " 7:05 AM"
+      ],
+      "FmtDate": [
+        "3/10/24|12/31/99"
+      ],
+      "FmtTime": [
+        "7:05 AM|11:59 PM"
+      ],
+      "ToString": [
+        "3/10/24",
+        " 7:05 AM"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "Java SimpleDateFormat with the en_US locale",
+    "S counts milliseconds and pads to the letter count",
+    "Y and w use US weeks: they start on Sunday and week 1 holds January 1st",
+    "default forms are the JDK 21 CLDR short formats with U+202F before AM/PM",
+    "local forms use the session time zone; system context (after-startup) is UTC",
+    "toString of a date equals formatDateTime without a pattern"
+  ],
+  "fixed": [
+    "the Ruby runtime mapped only yyyy, MMM, EEE, MM, dd, HH, mm and ss to strftime and printed other letters, including SSS, h and a, literally",
+    "formatDate, formatTime and formatDateTime without a pattern were unsupported",
+    "toString of a date returned Ruby's Time#to_s"
+  ],
+  "limitations": [
+    "zone names are verified only for UTC",
+    "TypeScript nanoflows do not implement date formatting; the Mendix client formats with the browser locale and time zone",
+    "parseDateTime in the session zone, month names and two-digit years are not covered"
+  ]
+}

@@ -13,6 +13,7 @@ require_relative 'calendar_functions'
 require_relative 'date_parsing'
 require_relative 'decimal_values'
 require_relative 'sort_order'
+require_relative 'date_formatting'
 
 module Mxrb
   module Runtime
@@ -253,8 +254,7 @@ module Mxrb
           when 'substring' then substring(*arguments)
           when 'find' then string_find(*arguments)
           when 'findlast' then string_find_last(*arguments)
-          when 'formatdatetime' then format_datetime(*arguments)
-          when 'formatdatetimeutc' then format_datetime(arguments.fetch(0).getutc, arguments.fetch(1))
+          when *DATE_FORMATS then format_date(name.downcase, arguments)
           when 'contains' then arguments.fetch(0).to_s.include?(arguments.fetch(1).to_s)
           when 'startswith' then arguments.fetch(0).to_s.start_with?(arguments.fetch(1).to_s)
           when 'endswith' then arguments.fetch(0).to_s.end_with?(arguments.fetch(1).to_s)
@@ -262,7 +262,17 @@ module Mxrb
           end
         end
 
+        DATE_FORMATS = %w[formatdatetime formatdatetimeutc formatdate formattime].freeze
+
         def divide(left, right) = @decimal.divide(left, right)
+
+        def format_date(name, arguments)
+          raise ArgumentError, "#{name} requires a date" if arguments.empty?
+
+          zone = @calendar.zone(name.end_with?('utc'))
+          time = zone.to_local(@calendar.instant(arguments[0]))
+          DateFormatting.invoke(name, time, arguments.drop(1), zone.identifier)
+        end
 
         private
 
@@ -313,14 +323,9 @@ module Mxrb
           return 'true' if value == true
           return 'false' if value == false
 
-          value.is_a?(BigDecimal) ? DecimalValues.text(value) : value.to_s
-        end
+          return format_date('formatdatetime', [value]) if value.is_a?(Time) || value.is_a?(DateTime)
 
-        def format_datetime(value, pattern)
-          format = pattern.to_s.gsub('yyyy', '%Y').gsub('MMM', '%b').gsub('EEE', '%a')
-                          .gsub('MM', '%m').gsub('dd', '%d').gsub('HH', '%H')
-                          .gsub('mm', '%M').gsub('ss', '%S')
-          value.strftime(format)
+          value.is_a?(BigDecimal) ? DecimalValues.text(value) : value.to_s
         end
 
         # Recursive-descent parser for the expression subset used by native

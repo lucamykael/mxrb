@@ -23,6 +23,23 @@ runs agreed, and matched Ruby for views, interpreted microflows and the exported
 application with MPR access prohibited.
 [Evidence](../evidence/oql-predicates-2026-10-09.json).
 
+## Microflow date formatting
+
+`formatDateTime`, `formatDateTimeUTC`, `formatDate`, `formatTime` and `toString` of
+dates follow Java's `SimpleDateFormat` for `en_US`, as Mendix 11.12.1 does: the
+letters `G y Y M L d D E u a h H k K m s S z Z X w W F`, quoted text and `''`.
+`S` counts milliseconds (`S` → `45`), `Y` and `w` use weeks starting on Sunday and
+`MMMM`/`EEEE` use full names. The forms without a pattern use the JDK 21 short
+formats (`3/10/24, 7:05 AM`), with a narrow no-break space before AM/PM. Local forms
+use the session time zone, which is UTC in system context. Zone names (`z`) are
+accepted only for UTC; unknown letters are rejected. Previously the Ruby runtime
+mapped a few patterns to `strftime` and ignored `SSS`, `h`, `a` and quotes.
+
+All 55 cases ran on the official Runtime through `script/oql_native_oracle` and match
+the Ruby interpreter. Parsing text (local `parseDateTime`, month names and `yy`) and
+TypeScript nanoflows, which format on the client, remain separate work.
+[Evidence](../evidence/date-formatting-2026-10-09.json).
+
 ## OQL expressions
 
 Projections, `WHERE`, `HAVING` and dataset `ORDER BY` accept arithmetic (`+`, `-`,
@@ -107,9 +124,8 @@ The bounded relational grammar starts with `SELECT` and requires projection
 aliases. Chained views and parameters remain unsupported;
 `LIKE`, `IN`, `DISTINCT` and `HAVING` are described above. Native view
 queries [do not allow `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
-sorting belongs to their consumer. The tested `formatDateTimeUTC` explicit date
-pattern also works when rendering aggregate results; locale and default formats
-are outside this increment.
+sorting belongs to their consumer. Date formatting is described under Microflow
+date formatting.
 
 All 22 result sets matched original Mendix, Ruby round-trip Mendix, and the Ruby
 browser with MPR access prohibited. Two native builds/runtimes and 197 browser
@@ -410,8 +426,8 @@ day; elapsed hours and smaller units differ from calendar days across DST.
 
 Local tests cover New York, Lord Howe and Apia transitions. The native compatibility
 matrix adds 16 UTC cases in both source and round-trip projects; local tests alone
-do not establish native equivalence. Localized parsing/formatting and date differences
-remain separate contracts.
+do not establish native equivalence. Formatting is described under Microflow date
+formatting; parsing localized text remains a separate contract.
 
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).

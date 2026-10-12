@@ -24,6 +24,25 @@ Läufe stimmten überein und entsprachen Ruby bei Views, interpretierten Microfl
 und der exportierten Anwendung ohne MPR-Zugriff.
 [Nachweis](../evidence/oql-predicates-2026-10-09.json).
 
+## Datumsformatierung in Microflows
+
+`formatDateTime`, `formatDateTimeUTC`, `formatDate`, `formatTime` und `toString` für
+Datumswerte folgen Javas `SimpleDateFormat` für `en_US`, wie Mendix 11.12.1: die
+Buchstaben `G y Y M L d D E u a h H k K m s S z Z X w W F`, Text in Anführungszeichen
+und `''`. `S` zählt Millisekunden (`S` → `45`), `Y` und `w` nutzen am Sonntag
+beginnende Wochen, `MMMM`/`EEEE` volle Namen. Formen ohne Muster nutzen die kurzen
+Formate von JDK 21 (`3/10/24, 7:05 AM`) mit schmalem geschütztem Leerzeichen vor
+AM/PM. Lokale Formen nutzen die Zeitzone der Sitzung, im Systemkontext UTC.
+Zeitzonennamen (`z`) sind nur für UTC erlaubt; unbekannte Buchstaben werden
+abgelehnt. Zuvor übersetzte der Ruby-Runtime wenige Muster in `strftime` und
+ignorierte `SSS`, `h`, `a` und Anführungszeichen.
+
+Alle 55 Fälle liefen mit `script/oql_native_oracle` auf dem offiziellen Runtime und
+stimmen mit dem Ruby-Interpreter überein. Das Einlesen von Text (lokales
+`parseDateTime`, Monatsnamen und `yy`) und TypeScript-Nanoflows, die im Client
+formatieren, bleiben eigene Arbeitsbereiche.
+[Nachweis](../evidence/date-formatting-2026-10-09.json).
+
 ## OQL-Ausdrücke
 
 Projektionen, `WHERE`, `HAVING` und `ORDER BY` von Datasets akzeptieren Arithmetik
@@ -115,8 +134,8 @@ Verkettete Views und Parameter bleiben offen;
 `LIKE`, `IN`, `DISTINCT` und `HAVING` sind oben beschrieben. Native Views
 [erlauben kein `ORDER BY`](https://docs.mendix.com/refguide/use-view-entities/);
 die Sortierung erfolgt beim Verbraucher. Das geprüfte explizite Datumsmuster von
-`formatDateTimeUTC` funktioniert auch für Aggregatergebnisse; lokalisierte und
-Standardformate sind nicht Teil dieser Erweiterung.
+`formatDateTimeUTC` funktioniert auch für Aggregatergebnisse; siehe
+Datumsformatierung in Microflows.
 
 Alle 22 Ergebnismengen stimmen zwischen originalem Mendix, dem Ruby-Roundtrip
 in Mendix und dem Ruby-Browser ohne MPR-Zugriff überein. Zwei native Builds und
@@ -431,7 +450,8 @@ Einheiten sind Zeitdauern, Kalendertage behalten die lokale Uhrzeit bei DST-Wech
 
 Lokale Tests prüfen New York, Lord Howe und Apia. Die native Matrix ergänzt 16
 UTC-Fälle für Original und Round-trip. Lokale Tests allein belegen keine native
-Gleichwertigkeit. Lokalisierte Datumsformate und Datumsdifferenzen bleiben separate Verträge.
+Gleichwertigkeit. Die Formatierung beschreibt Datumsformatierung in Microflows; das
+Einlesen lokalisierter Texte bleibt ein separater Vertrag.
 
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
