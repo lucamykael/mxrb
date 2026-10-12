@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { MarketplaceControl, MarketplaceImage } from './components/MarketplaceControls';
 import { MarketplaceChart } from './components/MarketplaceChart';
 import { MarketplacePlotly } from './components/MarketplacePlotly';
+import { LanguageSelector } from './components/LanguageSelector';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   ApiRequest,
@@ -296,13 +297,12 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   }
   if (id.includes('languageselector'))
     return (
-      <label>
-        {label}
-        <select defaultValue="pt-BR">
-          <option value="pt-BR">Português</option>
-          <option value="en-US">English</option>
-        </select>
-      </label>
+      <LanguageSelector
+        properties={properties}
+        schema={props.schema}
+        request={props.request}
+        label={name}
+      />
     );
   if (id.includes('popupmenu'))
     return (

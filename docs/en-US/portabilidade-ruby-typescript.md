@@ -765,6 +765,9 @@ export. Copies of the private QRQC and SPC projects and Sudoku pass the
 public-source audit and the identical round trip.
 Data grid 2 filters offer the widget's operator selector (Contains, Starts with,
 Greater than, Between, Empty...), and drop-down filters read Select/Yes/No.
+The runtime creates a `System.Language` per project language with the Mendix
+description (`en_US` is "English, United States"), and the Language selector
+widget lists them and switches the page language.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,

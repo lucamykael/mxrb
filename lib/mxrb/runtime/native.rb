@@ -17,6 +17,7 @@ require_relative 'date_formatting'
 require_relative 'expression_functions'
 
 require_relative 'system_domain'
+require_relative 'languages'
 
 module Mxrb
   module Runtime
