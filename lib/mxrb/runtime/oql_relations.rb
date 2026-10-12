@@ -8,14 +8,21 @@ module Mxrb
         def read(row) = row.dig(scope, name)
       end
 
-      def initialize(query, store, decoder:, tables: {})
+      # outer resolves the enclosing query's references inside a subquery, sources supplies
+      # view entities as tables and subquery compiles nested SELECTs (see OqlSubquery).
+      def initialize(query, store, decoder:, tables: {}, **context)
         @query = query
         @store = store
         @decoder = decoder
-        @tables = tables
+        @tables = tables.dup
+        @outer, @sources, @subquery = context.values_at(:outer, :sources, :subquery)
+        @outer_scopes = context.fetch(:outer_scopes, [])
         @definitions = {}
+        @records = {}
         @joins = query.sources.map { compile_join(_1) }
       end
+
+      attr_reader :subquery
 
       def column(reference)
         scope, name = resolve_scope(reference)
@@ -28,13 +35,23 @@ module Mxrb
         Column.new(scope, name, attribute.type, definition.name)
       end
 
-      def scopes = @definitions.keys
+      def scopes = @definitions.keys + @outer_scopes
 
       def predicate(text)
-        OqlPredicate.new(text, scopes) do |reference|
-          value = column(reference)
-          [value.type, value.method(:read)]
-        end
+        OqlPredicate.new(text, scopes, subquery: @subquery) { term(_1) }
+      end
+
+      # [type, reader] of a column, or of the enclosing query's column inside a subquery.
+      def term(reference)
+        return @outer.call(reference) if outer?(reference)
+
+        value = column(reference)
+        [value.type, value.method(:read)]
+      end
+
+      def outer?(reference)
+        scope = reference.split('.', 2).first
+        @outer && reference.include?('.') && !@definitions.key?(scope) && @outer_scopes.include?(scope)
       end
 
       def rows
@@ -53,10 +70,16 @@ module Mxrb
       end
 
       def compile_join(source)
+        register_view(source.entity)
         @definitions[source.scope] = @tables[source.entity]&.definition || @store.schema.entity(source.entity)
         condition = source.condition && predicate(source.condition)
         links = source.association && association(source)
         [source, condition, links]
+      end
+
+      def register_view(entity)
+        view = @sources&.call(entity) unless @tables.key?(entity)
+        @tables[entity] = view if view
       end
 
       def resolve_scope(reference)
@@ -69,7 +92,12 @@ module Mxrb
         [matches.keys.first, name]
       end
 
+      # Read once per compiled query, so correlated subqueries do not rescan durable rows.
       def records(source)
+        @records[source.entity] ||= read_records(source)
+      end
+
+      def read_records(source)
         return @tables.fetch(source.entity).rows if @tables.key?(source.entity)
 
         @store.schema.concrete_entities(source.entity).flat_map do |definition|

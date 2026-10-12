@@ -1,0 +1,196 @@
+{
+  "date": "2026-10-10",
+  "scope": "OQL subqueries (IN, NOT IN, EXISTS, value), UNION [ALL] and views over views in Ruby retrieval and tabular queries",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "package_sha256": "73a1d79ecf6236ec2b545f6e7453b6e327199b8274b69856e20d77da82b74432",
+    "cases": 30,
+    "status": "passed",
+    "results": {
+      "InSubquery": [
+        "North",
+        "South",
+        "north"
+      ],
+      "NotInSubquery": [],
+      "NotInNonNull": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "Zero"
+      ],
+      "InFiltered": [
+        "North",
+        "north"
+      ],
+      "InEmpty": [],
+      "NotInEmpty": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "InNumbers": [
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "Exists": [
+        "North",
+        "South",
+        "north"
+      ],
+      "NotExists": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "Zero"
+      ],
+      "ExistsSelf": [
+        "Negative",
+        "Nor",
+        "South",
+        "Zero"
+      ],
+      "ExistsUncorrelated": [
+        "Empty",
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "ExistsAnd": [
+        "North",
+        "north"
+      ],
+      "ScalarAverage": [
+        "North",
+        "north"
+      ],
+      "ScalarCorrelated": [
+        "Nor",
+        "North",
+        "South"
+      ],
+      "ScalarEmpty": [],
+      "ScalarCount": [
+        "Empty|0",
+        "Negative|0",
+        "North|2",
+        "Nor|0",
+        "South|1",
+        "Zero|0",
+        "north|2"
+      ],
+      "ScalarSum": [
+        "Empty|<null>",
+        "Negative|<null>",
+        "North|5",
+        "Nor|<null>",
+        "South|2",
+        "Zero|<null>",
+        "north|5"
+      ],
+      "ScalarLimit": [
+        "North",
+        "north"
+      ],
+      "ScalarGrouped": [
+        "Negative",
+        "Nor"
+      ],
+      "NestedSubquery": [
+        "North",
+        "north"
+      ],
+      "HavingCorrelated": [
+        "Negative",
+        "Nor",
+        "North",
+        "South",
+        "Zero",
+        "north"
+      ],
+      "ComputedCorrelated": [
+        "South"
+      ],
+      "ScalarNoRow": [
+        "South",
+        "Zero"
+      ],
+      "Union": [
+        "Ghost",
+        "North",
+        "South",
+        "Zero"
+      ],
+      "UnionDuplicates": [
+        "<null>",
+        "East",
+        "North",
+        "West"
+      ],
+      "UnionAll": [
+        "<null>",
+        "East",
+        "East",
+        "Ghost",
+        "North",
+        "North",
+        "South",
+        "West",
+        "north"
+      ],
+      "Chained": [
+        "Negative",
+        "Nor",
+        "North",
+        "north"
+      ],
+      "ChainedJoin": [
+        "North|1",
+        "North|4",
+        "South|2",
+        "north|1",
+        "north|4"
+      ],
+      "ChainedGroup": [
+        "East|3",
+        "North|1",
+        "West|2"
+      ],
+      "ChainedTwice": [
+        "Negative",
+        "Nor",
+        "North",
+        "north"
+      ]
+    }
+  },
+  "ruby": {
+    "store_identical": true,
+    "interpreter_identical": true,
+    "exported_app_mpr_prohibited_identical": true
+  },
+  "native_semantics": [
+    "value subqueries require an aggregate function as their column or LIMIT 1 (mx check CE0174); a grouped aggregate fails at run time with several rows",
+    "NOT IN over candidates containing NULL selects nothing; IN, EXISTS and joins compare text case-insensitively",
+    "subqueries may be correlated, nested and used in HAVING and projections; with LIMIT they may order by unprojected source columns",
+    "UNION removes duplicates ignoring case and keeps the first spelling; UNION ALL keeps all rows; columns take the first part names",
+    "views may read other views in FROM and joins, in chains",
+    "ANY, ALL, BETWEEN and SELECT * are rejected by Mendix; Count is a reserved word"
+  ],
+  "limitations": [
+    "dataset parameters and UNION in tabular datasets remain unsupported",
+    "a view that reads itself is rejected instead of looping"
+  ]
+}

@@ -37,8 +37,11 @@ module Mxrb
       def each(&)
         return enum_for(:each) unless block_given?
 
-        results.each(&)
+        results.each { |identity, values, _group| yield identity, values }
       end
+
+      # [identity, values, source rows] of every result, for ordering by source columns.
+      def entries = results
 
       private
 
@@ -65,7 +68,7 @@ module Mxrb
         rows.select! { @filter.call(_1) } if @filter
         groups = partitions(rows)
         groups = groups.select { |_identity, group| @having.call(group) } if @having
-        projected = groups.map { |identity, group| [identity, values(group)] }
+        projected = groups.map { |identity, group| [identity, values(group), group] }
         @query.distinct? ? distinct(projected) : projected
       end
 
@@ -73,7 +76,7 @@ module Mxrb
 
       def distinct(results)
         results.group_by { |_identity, values| values.values.map { _1.is_a?(String) ? _1.downcase : _1 } }
-               .map { |key, group| [[:distinct, key], group.first.last] }
+               .map { |key, group| [[:distinct, key], *group.first.drop(1)] }
       end
 
       def group_key(column, value) = value.is_a?(String) && column.type == :string ? value.downcase : value

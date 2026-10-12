@@ -39,7 +39,7 @@ module Mxrb
       def primary
         return call_operand if @tokens[1] == '(' && callable?(@tokens.first.to_s.upcase)
         return case_expression if take('CASE')
-        return parenthesized if take('(')
+        return group_or_subquery if @tokens.first == '('
 
         token = @tokens.shift.to_s
         literal_token(token) || column(token)
@@ -50,6 +50,13 @@ module Mxrb
       def call_operand
         word = @tokens.first.to_s.upcase
         OqlPredicate::AGGREGATES.include?(word) ? aggregate_operand : function(word)
+      end
+
+      def group_or_subquery
+        return scalar_subquery if subquery_ahead?
+
+        @tokens.shift
+        parenthesized
       end
 
       def parenthesized

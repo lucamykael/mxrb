@@ -1,0 +1,18 @@
+{
+  "Location": [
+    {"Name": "North", "Region": "East", "Amount": "9.5", "Rank": 3},
+    {"Name": "South", "Region": "West", "Amount": "2.5", "Rank": 1},
+    {"Name": "Empty", "Region": null, "Amount": null, "Rank": null},
+    {"Name": "Zero", "Region": "east", "Amount": "0", "Rank": 1},
+    {"Name": "Negative", "Region": "West", "Amount": "-1.25", "Rank": 2},
+    {"Name": "north", "Region": "East", "Amount": "7", "Rank": 3},
+    {"Name": "Nor", "Region": "North", "Amount": "2.5", "Rank": 2}
+  ],
+  "Visit": [
+    {"Place": "North", "Total": 4},
+    {"Place": "north", "Total": 1},
+    {"Place": "South", "Total": 2},
+    {"Place": "Ghost", "Total": 9},
+    {"Place": null, "Total": 3}
+  ]
+}
