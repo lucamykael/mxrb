@@ -115,6 +115,10 @@ export function hasPageEdits(page: unknown, schema: ApplicationSchema): boolean 
   return visit(page);
 }
 
+// The revision of server data: it does not move for edits staged or kept in
+// the browser, so option lists need not reload while a form is edited.
+export const DataRevision = createContext<number | null>(null);
+
 export const ClientActions = createContext<{
   edits: PageEdits;
   reset: number;

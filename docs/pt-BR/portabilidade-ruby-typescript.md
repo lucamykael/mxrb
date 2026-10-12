@@ -957,6 +957,9 @@ padrão.
 Para um usuário autenticado, o Language selector grava o idioma escolhido em
 `System.User_Language` (`POST /api/session/language`) e o recupera de
 `/api/session`, como o cliente Mendix.
+Seletores de referência recarregam as opções só quando os dados do servidor
+mudam, não a cada edição mantida no navegador, e colunas da Data grid 2 sobre o
+mesmo atributo (como a coluna de ações) mantêm identidades próprias.
 
 Eventos de foco, alteração e saída recebem o objeto atualizado; alteração e
 saída aguardam a gravação. Respostas da API não remontam o campo nem removem

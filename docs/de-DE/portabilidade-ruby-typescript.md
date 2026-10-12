@@ -825,6 +825,9 @@ ohne Inhalt zeigt das Standardbild.
 Für angemeldete Benutzer speichert der Language selector die gewählte Sprache in
 `System.User_Language` (`POST /api/session/language`) und liest sie aus
 `/api/session`, wie der Mendix-Client.
+Referenzauswahlen laden ihre Optionen nur neu, wenn sich Serverdaten ändern,
+nicht bei jeder im Browser gehaltenen Änderung, und Data-Grid-2-Spalten über
+dasselbe Attribut (etwa eine Aktionsspalte) behalten ihre eigene Identität.
 
 Fokus-, Änderungs- und Austrittsaktionen erhalten den Fokus und warten bei Bedarf
 auf Schreiboperationen. Serverobjekte werden nicht mehr implizit transient;

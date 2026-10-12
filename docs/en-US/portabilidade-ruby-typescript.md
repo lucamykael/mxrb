@@ -781,6 +781,9 @@ default image.
 For a signed-in user, the Language selector stores the chosen language in
 `System.User_Language` (`POST /api/session/language`) and reads it back from
 `/api/session`, as the Mendix client does.
+Reference selectors reload their options only when server data changes, not for
+each edit kept in the browser, and Data grid 2 columns over the same attribute
+(such as an action column) keep their own identity.
 
 Focus/change/leave actions preserve input focus and wait for writes where needed.
 Server objects are no longer implicitly transient; failed writes, including 404,
