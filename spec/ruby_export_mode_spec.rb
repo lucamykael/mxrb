@@ -38,7 +38,7 @@ RSpec.describe 'Ruby application export mode' do
         end
         if runtime_metadata
           microflow(:Cleanup)
-          scheduled_event :Cleanup, microflow: 'Sales.Cleanup', interval: 5, unit: :minutes
+          scheduled_event :CleanupSchedule, microflow: 'Sales.Cleanup', interval: 5, unit: :minutes
         end
         nanoflow(:ClientPing) { return_value 'true' }
         page :Dashboard do
@@ -230,7 +230,7 @@ RSpec.describe 'Ruby application export mode' do
         include('name' => 'Status', 'type' => 'enum', 'enumeration' => 'Sales.OrderStatus')
       )
       expect(sales.fetch('scheduled_events')).to include(
-        include('name' => 'Sales.Cleanup', 'microflow' => 'Sales.Cleanup')
+        include('name' => 'Sales.CleanupSchedule', 'microflow' => 'Sales.Cleanup')
       )
       expect(order).to include(
         'system_members', 'access_rules', 'lifecycle'
