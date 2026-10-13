@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'json'
 
-# Shapes found in the private QRQC and SPC projects, which their public Ruby
+# Shapes found in private real projects, which their public Ruby
 # projection must express with typed calls.
 RSpec.describe 'Ruby projection of private project shapes' do # rubocop:disable Metrics/BlockLength
   let(:exporter) { Mxrb::RubyApp::Exporter.allocate }

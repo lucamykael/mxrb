@@ -34,7 +34,7 @@ XPath, ordering and access rules; XPath variables (`$minimum`, `$object`) travel
 `xpath_variables`, with read-authorized objects. As in the Mendix 11.12.1 client, list
 `Sort` places empty values last in both directions, the average of an empty list is
 empty and its sum is 0. Log messages now substitute `{1}`. Previously 49 of the 183
-nanoflows in the corpus and SPC used one of these actions and failed.
+nanoflows in the corpus of real projects used one of these actions and failed.
 
 `script/client_native_oracle` runs the same fixture in the official client (Linux
 MxBuild and Runtime, headless Chromium) and in the exported Ruby app: all 15 cases
@@ -56,7 +56,7 @@ and concatenated numbers become text. The evaluator also handles `getCaption`/`g
 the next period's start minus 1 ms, in the session time zone or UTC),
 `$obj/Module.Assoc/Module.Entity/Attribute` paths over the associated objects the
 server sends, and object equality by identity. No unsupported function or syntax
-remains in the 1,146 expressions of the corpus and SPC nanoflows. The 27 cases of
+remains in the 1,146 nanoflow expressions of the corpus of real projects. The 27 cases of
 `spec/fixtures/native_nanoflow_expressions` match between the official client and the
 Ruby app. [Evidence](../evidence/nanoflow-expressions-2026-10-09.json).
 
@@ -271,8 +271,8 @@ like the `NULL` literal; an unset parameter is an error. Enumeration attributes 
 as their keys, also in filters.
 
 Joins accept multi-step association paths (`p/M.A_B/M.B/M.B_C/M.C AS c`) for `INNER`
-and `LEFT`, and ordered comparisons accept dates. The nine SPC datasets, four of them
-with parameters, compile and run in Ruby. The 15 cases of
+and `LEFT`, and ordered comparisons accept dates. The datasets of a private real project,
+including those with parameters, compile and run in Ruby. The 15 cases of
 `spec/fixtures/native_oql_parameters` (module sources copied from
 `MXRB_OQL_MODULE_SOURCE`) match between the official Runtime and the exported Ruby
 app with MPR access prohibited. [Evidence](../evidence/oql-parameters-2026-10-10.json).
@@ -719,8 +719,8 @@ Attribute-value conditions (Boolean or enumeration) are exported as
 `editable_when`/`visible_when` with the same pairs, without model identifiers. As
 MxBuild 11.12.1 compiles them, the UI evaluates "the attribute equals one of the
 marked values", with `(empty)` for no value, reading the object of the Data View
-named by `source:`. Unknown sources stay locked. A Ruby export of a copy of the
-private SPC project now passes the public-source audit and the identical round trip.
+named by `source:`. Unknown sources stay locked. A Ruby export of a copy of a
+private real project now passes the public-source audit and the identical round trip.
 
 Data grid 2 exports through the typed `data_grid` call, with the datasource
 `xpath:`, `sort: [sort_by(...)]`, `on_click_trigger: "double"` and a `header`
@@ -761,7 +761,7 @@ Control uses the Atlas tab markup, and Data grid 2 shows booleans as Yes/No.
 restricts module roles; Data grid 2 in snippets uses the same typed call as in
 pages; and excluded nanoflows that refer to removed model elements (Studio Pro
 does not check excluded documents) get an empty body instead of stopping the
-export. Copies of the private QRQC and SPC projects and Sudoku pass the
+export. Copies of private real projects and Sudoku pass the
 public-source audit and the identical round trip.
 Data grid 2 filters offer the widget's operator selector (Contains, Starts with,
 Greater than, Between, Empty...), and drop-down filters read Select/Yes/No.
