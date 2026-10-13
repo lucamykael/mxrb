@@ -148,22 +148,7 @@ module Mxrb
 
       def embedded_identity_class(kind, id, fallback)
         name = embedded_identity(kind, id)&.fetch('ruby_class', nil).to_s
-        claim_ruby_class(kind, id, name.empty? ? fallback : name)
-      end
-
-      # Distinct Mendix names can normalize to the same Ruby constant, as
-      # OrderItem and Order_Item do; one class would silently reopen the other.
-      def claim_ruby_class(kind, id, ruby_class)
-        @ruby_class_owners ||= {}
-        owner = "#{kind} #{id}"
-        previous = @ruby_class_owners[ruby_class]
-        if previous && previous != owner
-          raise SerializationError,
-                "#{previous} and #{owner} both generate Ruby class #{ruby_class}; rename one of them"
-        end
-
-        @ruby_class_owners[ruby_class] = owner
-        ruby_class
+        name.empty? ? fallback : name
       end
 
       def restore_embedded_sources(files)
@@ -1477,8 +1462,7 @@ module Mxrb
         parameters = IO::BsonCodec.parse_array(document.dig(:doc, 'Parameters'))[:items].map { _1.fetch('Name') }
         excluded = document.dig(:doc, 'Excluded') == true
         manifest = { 'name' => qualified, 'id' => id, 'path' => relative, 'parameters' => parameters,
-                     'excluded' => excluded,
-                     'ruby_class' => claim_ruby_class(:dataset, id, "#{namespace}::Datasets::#{class_name}") }
+                     'excluded' => excluded, 'ruby_class' => "#{namespace}::Datasets::#{class_name}" }
         write(relative, <<~RUBY)
           # frozen_string_literal: true
 

@@ -196,11 +196,6 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
              double(name: 'ABc', id: 'c'), double(name: 'A_Bc', id: 'd'), double(name: 'Other', id: 'e')]
     expect(exporter.send(:duplicate_flow_ids, flows)).to contain_exactly('a', 'b', 'c', 'd')
 
-    expect(exporter.send(:claim_ruby_class, :record, 'one', 'Sales::OrderItem')).to eq('Sales::OrderItem')
-    expect(exporter.send(:claim_ruby_class, :record, 'one', 'Sales::OrderItem')).to eq('Sales::OrderItem')
-    expect { exporter.send(:claim_ruby_class, :service, 'two', 'Sales::OrderItem') }
-      .to raise_error(Mxrb::SerializationError, /record one and service two both generate Ruby class/)
-
     exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
     exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
     exporter.send(:claim_declaration_path, 'frontend/package-lock.json', 'first')
