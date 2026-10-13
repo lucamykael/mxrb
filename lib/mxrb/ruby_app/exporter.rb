@@ -1322,7 +1322,8 @@ module Mxrb
                       appearance_class: page.appearance_class,
                       appearance_style: page.appearance_style,
                       allowed_roles: page.allowed_module_roles,
-                      data_source: page.data_source, presentation: contract)
+                      data_source: page.data_source, presentation: contract,
+                      excluded: page.raw_document['Excluded'] == true)
         )
         add_coverage(page.id, qualified, 'page', relative, 'native_projection_source_preserved')
         manifest = {
@@ -2075,7 +2076,8 @@ module Mxrb
       end
 
       def page_source(namespace, class_name, qualified, id, title, widgets,
-                      appearance_class:, appearance_style:, data_source:, allowed_roles: [], presentation: {})
+                      appearance_class:, appearance_style:, data_source:, allowed_roles: [], presentation: {},
+                      excluded: false)
         widget_source = PluggableProperties.with_page(id) { runtime_widget_dsl_source(widgets, 6) }
         data_source_expression = PageDataSources.configuration_expression(data_source) || data_source.inspect
         <<~RUBY
@@ -2083,7 +2085,7 @@ module Mxrb
 
           module #{namespace}
             class #{class_name} < Mxrb::RubyApp::Page
-              mendix_name #{qualified.inspect}
+              mendix_name #{qualified.inspect}#{"\n    excluded" if excluded}
               configure(
                 title: #{title.inspect},
                 allowed_roles: #{allowed_roles.map(&:to_s).inspect},
