@@ -771,11 +771,15 @@ widget lists them and switches the page language.
 Layout grids render with the Atlas classes (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), so the project theme lays them
 out; a zero-specificity fallback grid covers themes without Atlas.
-The export resolves the design properties of pages, snippets and layouts with the
-theme's `design-properties.json` files (toggles, options and spacing) and records
-the classes in `.mxrb/design_classes.json`; the application adds them to the
-widgets it serves (`btn-lg`, `spacing-inner-top`, `flex-row`...) without changing
-the Ruby sources. The sidebar toggle shows its collection icon, Data grid 2 date
+Widgets and layout grid rows and columns declare their design properties in
+Ruby, as `design: design_values(Size: "Large", Spacing:
+design_sides("margin-left": "S"))`. A toggle is `true`, an option is its name,
+and spacing lists sides and options. Data views keep their typed
+`design_properties`. The application resolves the current declarations with the
+exported theme's `design-properties.json` files whenever it serves a document
+(`btn-lg`, `spacing-inner-top`, `flex-row`...). Editing, removing or moving a
+declaration changes the served classes. `.mxrb/design_classes.json` keeps only
+the classes of typed native fragments that have no declaration. The sidebar toggle shows its collection icon, Data grid 2 date
 filters have the calendar button, and an image viewer without contents shows the
 default image.
 For a signed-in user, the Language selector stores the chosen language in
@@ -784,8 +788,9 @@ For a signed-in user, the Language selector stores the chosen language in
 Reference selectors reload their options only when server data changes, not for
 each edit kept in the browser, and Data grid 2 columns over the same attribute
 (such as an action column) keep their own identity.
-Layout grid rows and columns, which have no names, get their design properties by
-position (`grid/rows/0/columns/1`), such as `cards` and `flex-row`.
+Layout grid rows and columns, which have no names, carry their declaration with
+them, so reordering them in Ruby keeps `cards` and `flex-row` on the right
+elements.
 As MxBuild does in `dist/widgets.css`, the export gathers the own CSS of the
 `.mpk` packages of the pluggable widgets the project uses, with the assets it
 refers to, into `frontend/src/generated/platform/widgets/widgets.css`, loaded

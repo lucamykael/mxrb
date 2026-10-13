@@ -10,6 +10,7 @@ require_relative 'workflows'
 require_relative 'presentation_documents'
 require_relative 'asset_documents'
 require_relative 'artifact_documents'
+require_relative 'widget_design'
 require_relative 'project_documents'
 require_relative 'flow_page_builder'
 require_relative 'flow_text_builder'
@@ -3803,5 +3804,22 @@ module Mxrb
     end
 
     MicroflowBuilder = FlowBuilder
+
+    class LayoutGridBuilder
+      private
+
+      def design_rows = @rows
+    end
+
+    class LayoutGridRowBuilder
+      private
+
+      def design_columns = @columns
+    end
+
+    WidgetDesign.wrap(WidgetDsl, WidgetDsl.public_instance_methods(false), list: :_widget_list)
+    [WidgetDsl, LayoutGridBuilder, LayoutGridRowBuilder].each { _1.include(WidgetDesign::Helpers) }
+    WidgetDesign.wrap(LayoutGridBuilder, %i[row], list: :design_rows)
+    WidgetDesign.wrap(LayoutGridRowBuilder, %i[column], list: :design_columns)
   end
 end
