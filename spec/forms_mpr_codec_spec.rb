@@ -548,4 +548,16 @@ RSpec.describe Mxrb::Forms::MprCodec do # rubocop:disable Metrics/BlockLength
     codec.send(:add_expression_companion, document, conditional_expression, 'Expression')
     expect(document.dig('ExpressionModel', '$Type')).to eq('Expressions$NoExpression')
   end
+
+  it 'stores expression models beside conditional expressions only before Mendix 10' do
+    conditional_expression = Struct.new(:declared_by).new('ConditionalSettings')
+    companions = %w[9.24.0 10.24.18 11.12.1].to_h do |version|
+      document = {}
+      described_class.new(mendix_version: version)
+                     .send(:add_expression_companion, document, conditional_expression, 'Expression')
+      [version, document.key?('ExpressionModel')]
+    end
+
+    expect(companions).to eq('9.24.0' => true, '10.24.18' => false, '11.12.1' => false)
+  end
 end
