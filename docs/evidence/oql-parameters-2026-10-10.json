@@ -29,9 +29,9 @@
     "exported_app_mpr_prohibited_identical": true
   },
   "real_project": {
-    "project": "JEMScc-SPC (private, original hash unchanged)",
-    "datasets_compiled_and_run": 9,
-    "with_parameters": 4
+    "project": "private real project (original hash unchanged)",
+    "all_datasets_compiled_and_run": true,
+    "including_datasets_with_parameters": true
   },
   "native_semantics": [
     "the module keeps parameters per thread until ExecuteOQLStatement or CountRowsOQLStatement runs; preserveParameters keeps them",

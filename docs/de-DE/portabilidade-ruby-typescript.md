@@ -35,8 +35,8 @@ dem Ruby-Server, der XPath, Reihenfolge und Zugriffsregeln anwendet; XPath-Varia
 (`$minimum`, `$objekt`) werden als `xpath_variables` mit lesbar autorisierten Objekten
 übertragen. Wie im Client von Mendix 11.12.1 setzt das Listen-`Sort` leere Werte in
 beiden Richtungen ans Ende, der Durchschnitt einer leeren Liste ist leer und ihre Summe
-0. Log-Meldungen ersetzen jetzt `{1}`. Zuvor nutzten 49 der 183 Nanoflows aus Korpus
-und SPC eine dieser Aktionen und schlugen fehl.
+0. Log-Meldungen ersetzen jetzt `{1}`. Zuvor nutzten 49 der 183 Nanoflows aus dem Korpus
+realer Projekte eine dieser Aktionen und schlugen fehl.
 
 `script/client_native_oracle` führt dasselbe Fixture im offiziellen Client (MxBuild und
 Runtime unter Linux, Chromium headless) und in der exportierten Ruby-App aus: alle 15
@@ -58,7 +58,7 @@ das Token `[%CurrentDateTime%]` und die Tokens `[%BeginOf…%]`/`[%EndOf…%]` f
 Stunde, Tag, Monat und Jahr (das Ende ist der Beginn des nächsten Zeitraums minus 1 ms,
 in der Zeitzone der Sitzung oder UTC), Pfade `$obj/Modul.Assoz/Modul.Entität/Attribut`
 über die vom Server mitgesendeten zugeordneten Objekte sowie Objektgleichheit nach
-Identität. In den 1.146 Ausdrücken der Nanoflows aus Korpus und SPC bleibt keine
+Identität. In den 1.146 Ausdrücken der Nanoflows aus dem Korpus realer Projekte bleibt keine
 Funktion und keine Syntax ohne Unterstützung. Die 27 Fälle von
 `spec/fixtures/native_nanoflow_expressions` stimmen zwischen offiziellem Client und
 Ruby-App überein. [Nachweis](../evidence/nanoflow-expressions-2026-10-09.json).
@@ -288,8 +288,8 @@ Literal `NULL`; ein nicht gesetzter Parameter ist ein Fehler. Enum-Attribute wer
 über ihren Schlüssel gelesen, auch in Filtern.
 
 Joins akzeptieren mehrstufige Assoziationspfade (`p/M.A_B/M.B/M.B_C/M.C AS c`) bei
-`INNER` und `LEFT`; Ordnungsvergleiche akzeptieren Datumswerte. Die neun SPC-Datasets,
-vier davon mit Parametern, werden in Ruby kompiliert und ausgeführt. Die 15 Fälle von
+`INNER` und `LEFT`; Ordnungsvergleiche akzeptieren Datumswerte. Die Datasets eines privaten
+realen Projekts, auch die mit Parametern, werden in Ruby kompiliert und ausgeführt. Die 15 Fälle von
 `spec/fixtures/native_oql_parameters` (Modulquellen aus `MXRB_OQL_MODULE_SOURCE`)
 stimmen zwischen offiziellem Runtime und exportierter Ruby-App mit gesperrtem
 MPR-Zugriff überein. [Nachweis](../evidence/oql-parameters-2026-10-10.json).
@@ -759,7 +759,7 @@ Bedingungen auf Attributwerte (Boolean oder Enumeration) werden als
 Modellkennungen. Wie MxBuild 11.12.1 sie kompiliert, prüft die UI, ob das Attribut
 einem der markierten Werte entspricht, wobei `(empty)` für einen leeren Wert steht,
 und liest dazu das Objekt des in `source:` genannten Data Views. Unbekannte Quellen
-bleiben gesperrt. Ein Ruby-Export einer Kopie des privaten SPC-Projekts besteht
+bleiben gesperrt. Ein Ruby-Export einer Kopie eines privaten realen Projekts besteht
 damit die Prüfung des öffentlichen Quellcodes und den identischen Round-Trip.
 
 Data Grid 2 wird über den typisierten Aufruf `data_grid` exportiert, mit der
@@ -804,8 +804,8 @@ boolesche Werte als Yes/No.
 zusätzlich Modulrollen einschränkt; Data Grid 2 in Snippets nutzt denselben
 typisierten Aufruf wie in Seiten; ausgeschlossene Nanoflows, die entfernte
 Modellelemente referenzieren (Studio Pro prüft ausgeschlossene Dokumente nicht),
-erhalten einen leeren Rumpf, statt den Export abzubrechen. Kopien der privaten
-Projekte QRQC und SPC sowie Sudoku bestehen die Prüfung des öffentlichen
+erhalten einen leeren Rumpf, statt den Export abzubrechen. Kopien privater
+realer Projekte sowie Sudoku bestehen die Prüfung des öffentlichen
 Quellcodes und den identischen Round-Trip.
 Die Filter von Data Grid 2 bieten die Operatorauswahl des Widgets (Contains, Starts
 with, Greater than, Between, Empty...), Dropdown-Filter zeigen Select/Yes/No.
