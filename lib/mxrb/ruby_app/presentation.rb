@@ -71,7 +71,7 @@ module Mxrb
       # +classes+ gives the design property classes recorded for a document;
       # each document's classes go to its own widgets, since widget names
       # repeat between a page and its layouts.
-      def self.page(implementation, classes: nil)
+      def self.page(implementation, classes: nil, definitions: {})
         widgets = with_classes(Array(implementation.widgets), classes, implementation.mendix_name)
         name = implementation.native_definition&.dig(:layout)
         if name && Registry.fetch(:presentation, name)&.fetch(:kind) == 'layout'
@@ -80,7 +80,7 @@ module Mxrb
         else
           name = widgets.find { _1['type'] == 'layout' }&.dig('options', 'layout')
         end
-        { layout: name, widgets: compose(widgets, classes:) }
+        { layout: name, widgets: DesignDeclarations.resolve(compose(widgets, classes:), definitions) }
       end
 
       def self.with_classes(widgets, classes, document)

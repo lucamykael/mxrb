@@ -947,10 +947,15 @@ Layout grids são renderizados com as classes do Atlas (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), de modo que o tema do projeto
 cuida do layout; um grid de reserva com especificidade zero cobre temas sem
 Atlas.
-A exportação resolve as design properties de páginas, snippets e layouts com os
-`design-properties.json` do tema (Toggle, opções e Spacing) e grava as classes em
-`.mxrb/design_classes.json`; a aplicação as acrescenta aos widgets que serve
-(`btn-lg`, `spacing-inner-top`, `flex-row`...), sem alterar as fontes Ruby. O botão
+As design properties de widgets, linhas e colunas de layout grid são declaradas
+no Ruby, como `design: design_values(Size: "Large", Spacing:
+design_sides("margin-left": "S"))`: Toggle é `true`, opção é o nome e Spacing
+lista lados e opções. Data views mantêm suas `design_properties` tipadas. A
+aplicação resolve as declarações atuais com os `design-properties.json` do tema
+exportado ao servir cada documento (`btn-lg`, `spacing-inner-top`,
+`flex-row`...). Alterar, apagar ou mover uma declaração muda as classes
+servidas. `.mxrb/design_classes.json` guarda apenas as classes de fragmentos
+nativos tipados sem declaração. O botão
 de menu lateral mostra o ícone da coleção, o filtro de data da Data grid 2 tem o
 botão de calendário e um visualizador de imagem sem conteúdo mostra a imagem
 padrão.
@@ -960,8 +965,8 @@ Para um usuário autenticado, o Language selector grava o idioma escolhido em
 Seletores de referência recarregam as opções só quando os dados do servidor
 mudam, não a cada edição mantida no navegador, e colunas da Data grid 2 sobre o
 mesmo atributo (como a coluna de ações) mantêm identidades próprias.
-Linhas e colunas de layout grid, que não têm nome, recebem suas design properties
-pela posição (`grade/rows/0/columns/1`), como `cards` e `flex-row`.
+Linhas e colunas de layout grid, que não têm nome, levam a declaração consigo, então
+reordená-las no Ruby mantém `cards` e `flex-row` nos elementos certos.
 Como o MxBuild faz em `dist/widgets.css`, a exportação junta o CSS próprio dos
 pacotes `.mpk` dos widgets pluggable usados pelo projeto, com os assets que ele
 referencia, em `frontend/src/generated/platform/widgets/widgets.css`, carregado
