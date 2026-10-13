@@ -1739,6 +1739,11 @@ module Mxrb
           Registry.register(:page, @mendix_name, self)
         end
 
+        # An excluded page stays in the project but does not exist at runtime,
+        # as Studio Pro excludes it from the app.
+        def excluded = (@excluded = true)
+        def excluded? = @excluded == true
+
         def configure(title:, widgets: nil, appearance_class: '', appearance_style: '', data_source: nil,
                       allowed_roles: nil, presentation: {},
                       &block)
@@ -2293,7 +2298,7 @@ module Mxrb
 
       def page(name, context: nil)
         implementation = Registry.fetch(:page, name.to_s)
-        return unless implementation
+        return if implementation.nil? || implementation.excluded?
 
         authorize_document!(:page, name, :read, context)
 
