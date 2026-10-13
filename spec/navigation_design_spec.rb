@@ -633,5 +633,48 @@ RSpec.describe 'native navigation and design systems' do
       end
     end
   end
+
+  it 'exports editable navigation of projects without architecture metadata' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'studio.mpr')
+      define_native_project(path)
+      Mxrb.open(path, readonly: false) { _1.query('DROP TABLE _MxrbArchitecture') }
+      exported = File.join(dir, 'ruby')
+      rebuilt = File.join(dir, 'rebuilt', 'studio.mpr')
+
+      Mxrb::Exporter.new(path, exported).export!
+      source = File.read(File.join(exported, 'app', 'navigation', 'navigation.rb'))
+      expect(source).to start_with("# frozen_string_literal: true\n\nnavigation do\n  profile ")
+      expect(source).to end_with("\nend\n")
+      expect(source).to include('home_for "User", microflow: "App.Dashboard"', 'item "Home"')
+
+      File.write(
+        File.join(exported, 'app', 'navigation', 'navigation.rb'),
+        source.sub('item "Home"', 'item "Start"')
+      )
+      begin
+        ENV['MXRB_OUTPUT_PATH'] = rebuilt
+        load File.join(exported, 'project.rb')
+      ensure
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+      Mxrb.open(rebuilt) do |project|
+        expect(project.navigation.profiles.fetch(0).menu_items.dig(0, :caption))
+          .to eq('en_US' => 'Start')
+      end
+    end
+  end
+
+  it 'writes navigation and design system sources without stray indentation' do
+    exporter = Mxrb::Exporter.new('unused.mpr', Dir.mktmpdir)
+
+    expect(exporter.send(:navigation_source, profiles: [])).to eq(
+      "# frozen_string_literal: true\n\nnavigation do\n\nend\n"
+    )
+    design = exporter.send(:design_system_source, tokens: [{ kind: :color, name: :brand, value: '#fff' }])
+    expect(design).to eq(
+      "# frozen_string_literal: true\n\ndesign_system do\n  color :brand, value: \"#fff\"\nend\n"
+    )
+  end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength
