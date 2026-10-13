@@ -3424,6 +3424,8 @@ module Mxrb
     end
 
     def navigation_profile_source(profile)
+      return native_navigation_profile_source(profile) if profile[:kind].to_s == 'Native'
+
       args = [symbol(profile.fetch(:name))]
       args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
       args << "home_microflow: #{ruby(profile[:home_microflow])}" if profile[:home_microflow]
@@ -3446,6 +3448,34 @@ module Mxrb
       args << "kind: #{ruby(profile[:kind])}" unless profile[:kind].to_s.empty?
       args << "app_icon: #{ruby(profile[:app_icon])}" if profile[:app_icon]
       body = navigation_profile_body(profile, role_homes)
+      return ["  profile #{args.join(', ')}"] if body.empty?
+
+      ["  profile #{args.join(', ')} do", *body, '  end']
+    end
+
+    def native_navigation_profile_source(profile)
+      args = [symbol(profile.fetch(:name)), 'kind: "Native"']
+      args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
+      args << "home_nanoflow: #{ruby(profile[:home_nanoflow])}" if profile[:home_nanoflow]
+      unless profile[:throw_partial_sync_error].nil?
+        args << "throw_partial_sync_error: #{ruby(profile[:throw_partial_sync_error])}"
+      end
+      args << "settings: #{ruby(profile[:settings])}" unless profile.fetch(:settings, {}).empty?
+      role_homes = profile.fetch(:role_homes, [])
+      details = role_homes.is_a?(Array) ? role_homes : role_homes.map { |role, page| { role:, page: } }
+      homes = (details + profile.fetch(:role_home_details, [])).map do |home|
+        options = %i[page nanoflow].filter_map { "#{_1}: #{ruby(home[_1])}" if home[_1] }
+        ["    home_for #{ruby(home.fetch(:role))}", *options].join(', ')
+      end
+      items = profile.fetch(:bottom_bar, []).map do |item|
+        caption = item.fetch(:caption)
+        item_args = [ruby(caption['en_US'] || caption.values.first || ''), "page: #{ruby(item.fetch(:page))}"]
+        item_args << "icon: #{ruby(item[:icon])}" if item[:icon]
+        translations = caption.reject { |locale, _| locale.to_s == 'en_US' }
+        item_args << "translations: #{ruby(translations)}" unless translations.empty?
+        "    bottom_bar_item #{item_args.join(', ')}"
+      end
+      body = homes + items
       return ["  profile #{args.join(', ')}"] if body.empty?
 
       ["  profile #{args.join(', ')} do", *body, '  end']

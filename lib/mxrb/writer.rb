@@ -2527,7 +2527,12 @@ module Mxrb
     def modern_navigation_doc(existing, navigation)
       existing_profiles = array_items(existing['Profiles']).to_h { [_1['Name'].to_s, _1] }
       profiles = navigation.fetch(:profiles, []).map do |profile|
-        navigation_profile_doc(profile, previous: existing_profiles[profile.fetch(:name).to_s])
+        previous = existing_profiles[profile.fetch(:name).to_s]
+        if profile[:kind].to_s == 'Native' || previous&.fetch('$Type', nil) == Model::NativeNavigationProfile::TYPE
+          native_navigation_profile_doc(profile, previous:)
+        else
+          navigation_profile_doc(profile, previous:)
+        end
       end
       existing.merge(
         '$ID' => existing['$ID'] || SecureRandom.uuid,
@@ -2591,6 +2596,62 @@ module Mxrb
         '$ID' => previous['$ID'] || SecureRandom.uuid,
         '$Type' => previous['$Type'] || 'Navigation$NavigationProfile'
       }.merge(previous).merge(editable)
+    end
+
+    NATIVE_PROFILE_DEFAULTS = {
+      'ApplyScreenTransition' => false, 'EncryptionDbEnabled' => false,
+      'LocalFileEncryptionEnabled' => false, 'LoggingEnabled' => false,
+      'NativeNavigationEnabled' => false, 'NetworkTimeoutMs' => 60_000, 'OtaEnabled' => false,
+      'PopupNavigationTransition' => 'SystemDefault', 'ScreenNavigationTransition' => 'SystemDefault',
+      'SessionCookieEncryptionEnabled' => false, 'ThrowPartialSyncError' => true
+    }.freeze
+
+    # Native profiles keep their own home page, role homes and bottom bar;
+    # the web HomePage, HomeItems and Menu fields do not exist on them.
+    def native_navigation_profile_doc(profile, previous: nil)
+      previous ||= {}
+      settings = profile.fetch(:settings, {}).to_h do |key, value|
+        [Model::NativeNavigationProfile::SETTINGS.fetch(key.to_sym), value]
+      end
+      role_homes = profile.fetch(:role_homes, {}).map { |role, page| { role: role.to_s, page: page.to_s } } +
+                   profile.fetch(:role_home_details, [])
+      editable = {
+        'Name' => profile.fetch(:name).to_s,
+        'NativeHomePage' => native_home_doc(profile, previous: previous['NativeHomePage']),
+        'RoleBasedNativeHomePages' => navigation_array(role_homes, previous['RoleBasedNativeHomePages']) do |home, prior|
+          native_home_doc(home, previous: prior, type: 'Navigation$RoleBasedNativeHomePage')
+        end,
+        'BottomBarItems' => navigation_array(profile.fetch(:bottom_bar, []), previous['BottomBarItems']) do |item, prior|
+          bottom_bar_item_doc(item, previous: prior)
+        end
+      }
+      unless profile[:throw_partial_sync_error].nil?
+        editable['ThrowPartialSyncError'] = profile[:throw_partial_sync_error]
+      end
+      defaults = previous.empty? ? NATIVE_PROFILE_DEFAULTS.merge('OfflineEntityConfigs' => [3]) : {}
+      { '$ID' => previous['$ID'] || SecureRandom.uuid, '$Type' => Model::NativeNavigationProfile::TYPE }
+        .merge(defaults).merge(previous).merge(settings).merge(editable)
+    end
+
+    def native_home_doc(home, previous: nil, type: 'Navigation$NativeHomePage')
+      previous ||= {}
+      document = {
+        '$ID' => previous['$ID'] || SecureRandom.uuid, '$Type' => previous['$Type'] || type,
+        'HomePageNanoflow' => (home[:home_nanoflow] || home[:nanoflow]).to_s,
+        'HomePagePage' => (home[:home_page] || home[:page]).to_s
+      }
+      document['UserRole'] = home.fetch(:role).to_s if type == 'Navigation$RoleBasedNativeHomePage'
+      document
+    end
+
+    def bottom_bar_item_doc(item, previous: nil)
+      previous ||= {}
+      {
+        '$ID' => previous['$ID'] || SecureRandom.uuid, '$Type' => 'NativePages$BottomBarItem',
+        'Caption' => translated_text_doc(normalize_navigation_caption(item.fetch(:caption)), previous: previous['Caption']),
+        'Icon' => glyph_icon_doc(item[:icon], previous: previous['Icon']),
+        'Page' => item.fetch(:page).to_s
+      }
     end
 
     def navigation_home_doc(page, microflow, previous: nil)
@@ -3120,6 +3181,11 @@ module Mxrb
       profile = ruby_navigation_profile(document, declaration.fetch(:profile).to_s)
       raise ValidationError, "Mendix navigation profile #{declaration.fetch(:profile)} does not exist" unless profile
 
+      if profile['$Type'] == Model::NativeNavigationProfile::TYPE
+        synchronize_native_navigation_item!(profile, declaration)
+        return mpr.update_unit(raw.fetch('UnitID'), document)
+      end
+
       menu = profile['Menu'] || profile['MenuItemCollection']
       raise ValidationError, "navigation profile #{declaration.fetch(:profile)} has no menu" unless menu
 
@@ -3139,6 +3205,22 @@ module Mxrb
       menu['Items'] = IO::BsonCodec.build_array(items, marker: parsed.fetch(:marker))
       profile['HomePage'] = navigation_home_doc(declaration.fetch(:page), nil) if declaration[:home]
       mpr.update_unit(raw.fetch('UnitID'), document)
+    end
+
+    def synchronize_native_navigation_item!(profile, declaration)
+      parsed = IO::BsonCodec.parse_array(profile['BottomBarItems'])
+      items = parsed.fetch(:items)
+      page = declaration.fetch(:page).to_s
+      index = items.index { _1['Page'].to_s == page }
+      generated = bottom_bar_item_doc(
+        { caption: declaration.fetch(:caption), page:, icon: declaration[:icon] },
+        previous: index && items[index]
+      )
+      index ? items[index] = items[index].merge(generated) : items << generated
+      profile['BottomBarItems'] = IO::BsonCodec.build_array(items, marker: parsed.fetch(:marker) || 2)
+      return unless declaration[:home]
+
+      profile['NativeHomePage'] = native_home_doc({ page: }, previous: profile['NativeHomePage'])
     end
 
     def ruby_navigation_profile(document, name)

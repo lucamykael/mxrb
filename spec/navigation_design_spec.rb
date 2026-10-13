@@ -386,7 +386,7 @@ RSpec.describe 'native navigation and design systems' do
   it 'covers the complete optional navigation and theme DSL surface' do
     navigation = Mxrb::Dsl::NavigationBuilder.new
     navigation.profile(
-      :Native, home_microflow: :App_Dashboard, kind: :Native,
+      :Native, home_microflow: :App_Dashboard, kind: :Phone,
                app_title: { pt_BR: 'Aplicativo' }, enabled: false,
                offline_enabled: true, throw_partial_sync_error: false,
                sign_in_title: { pt_BR: 'Entrar' }, sign_in_location: :Popup,
@@ -403,7 +403,7 @@ RSpec.describe 'native navigation and design systems' do
     navigation.profile(:Simple, home_page: 'App.Home') { item 'Direct' }
     profile = navigation.to_h.fetch(:profiles).first
     expect(profile).to include(
-      home_page: nil, home_microflow: 'App_Dashboard', kind: 'Native',
+      home_page: nil, home_microflow: 'App_Dashboard', kind: 'Phone',
       app_title: { 'pt_BR' => 'Aplicativo' }, enabled: false,
       offline_enabled: true, throw_partial_sync_error: false,
       sign_in_title: { 'pt_BR' => 'Entrar', 'en_US' => 'Sign in' },
@@ -430,11 +430,11 @@ RSpec.describe 'native navigation and design systems' do
       profiles: [{
         name: 'Native', home_page: nil, home_microflow: 'App.Dashboard',
         role_homes: [{ role: 'User', page: 'App.Home' }, { role: 'Guest' }],
-        kind: 'Native', app_title: {}, items: []
+        kind: 'Phone', app_title: {}, items: []
       }]
     )
     expect(source).to include(
-      'home_microflow: "App.Dashboard"', 'kind: "Native"',
+      'home_microflow: "App.Dashboard"', 'kind: "Phone"',
       'home_for "User", page: "App.Home"'
     )
     design_source = exporter.send(
