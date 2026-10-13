@@ -52,7 +52,8 @@ bundle exec mxrb run .
 ```
 
 Der Befehl erzeugt direkt die konventionelle Anwendung mit `app/models`,
-`app/dtos`, `app/services`, `app/pages` und React + Vite. Eine reversible
+`app/dtos`, `app/services`, `app/pages` und React + Vite (`app/services` ist die
+im [Architekturstandard](architectural-standard.md) erklärte Ausnahme). Eine reversible
 Mendix-Basis bleibt unter `.mxrb` isoliert und bestimmt nicht die bearbeitbare
 Quellstruktur. Das aktuelle Projekt wird so als MPR materialisiert:
 

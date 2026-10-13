@@ -46,3 +46,22 @@ besitzen einen typisierten Ruby-Vertrag. Workflows, Integrationen,
 veröffentlichte APIs und Widgets ohne kompakte API bleiben über tiefes Ruby
 und das native Baseline bearbeitbar, benötigen aber noch spezifische
 typisierte DSLs.
+
+## Geltungsbereich: Mendix-DSL-Export und ausführbare Ruby-Anwendung
+
+Dieser Standard gilt für den Mendix-DSL-Export (`mxrb export`, Standardmodus),
+dessen Ausgabe die architektonische Darstellung des Projekts ist. Die
+ausführbare Ruby-Anwendung (`--mode ruby`, `mxrb init --mode ruby`) ist eine
+erklärte Ausnahme für Flows. Sie folgt der Konvention von Ruby-Anwendungen und
+schreibt Microflows, Nanoflows mit Ruby-Körper und Regeln nach
+`app/services/<Modul>/`, eine Datei pro Mendix-Dokument.
+
+Die Ausnahme besteht, weil in diesem Modus jede Service-Klasse die ausführbare
+Projektion eines Dokuments ist und dessen Identität trägt (`mendix_name` und
+Unit-ID). Eine Datei pro Dokument an einem vorhersehbaren Ort hält die
+Änderungen des Entwicklers bytegenau im Round-trip und gleicht Identitäten ab,
+ohne die Architektur zu befragen. Die Klassifizierung nach Verantwortung (Use
+Case, Abfrage, Validierung, Job, Integration, Endpoint) bleibt für die in der
+DSL beschriebene Architektur verpflichtend. In der ausführbaren Anwendung
+drückt sie sich im Code aus, den der Entwickler unter `app/` außerhalb von
+`app/services` schreibt und den `mxrb` unverändert bewahrt.

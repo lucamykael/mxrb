@@ -52,7 +52,8 @@ bundle exec mxrb run .
 ```
 
 Esse comando cria diretamente a aplicação convencional com `app/models`,
-`app/dtos`, `app/services`, `app/pages` e React + Vite. Um baseline Mendix
+`app/dtos`, `app/services`, `app/pages` e React + Vite (`app/services` é a
+exceção declarada na seção 13 do [padrão arquitetural](architectural-standard.md)). Um baseline Mendix
 reversível fica isolado em `.mxrb`; ele não determina a organização do código
 que será editado. Para materializar o projeto atual em um MPR:
 
