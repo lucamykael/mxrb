@@ -511,7 +511,7 @@ module Mxrb
 
     def export_architecture_contracts(project)
       navigation = @architecture&.fetch(:navigation, nil)
-      navigation ||= project.navigation.to_h if @architecture && !project.navigation.empty?
+      navigation ||= project.navigation.to_h unless project.navigation.empty?
       design_system = @architecture&.fetch(:design_system, nil)
       write(
         File.join(@output_dir, 'app', 'navigation', 'navigation.rb'),
@@ -3414,13 +3414,7 @@ module Mxrb
       return "# frozen_string_literal: true\n" unless navigation
 
       profiles = navigation.fetch(:profiles, []).flat_map { navigation_profile_source(_1) }
-      <<~RUBY
-          # frozen_string_literal: true
-
-          navigation do
-        #{profiles.join("\n")}
-          end
-      RUBY
+      "# frozen_string_literal: true\n\nnavigation do\n#{profiles.join("\n")}\nend\n"
     end
 
     def navigation_profile_source(profile)
@@ -3529,13 +3523,7 @@ module Mxrb
                  "background: #{ruby(pair.fetch(:background))}, level: #{symbol(pair.fetch(:level))}"
       end
       lines << '  forbid_literal_colors' if design_system[:forbid_literal_colors]
-      <<~RUBY
-          # frozen_string_literal: true
-
-          design_system do
-        #{lines.join("\n")}
-          end
-      RUBY
+      "# frozen_string_literal: true\n\ndesign_system do\n#{lines.join("\n")}\nend\n"
     end
 
     def navigation_item_source(item, indent)
