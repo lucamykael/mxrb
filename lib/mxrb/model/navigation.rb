@@ -186,6 +186,12 @@ module Mxrb
         apply_screen_transition: 'ApplyScreenTransition', network_timeout_ms: 'NetworkTimeoutMs',
         native_navigation_enabled: 'NativeNavigationEnabled'
       }.freeze
+      SETTING_DEFAULTS = {
+        ota_enabled: false, logging_enabled: false, encryption_db_enabled: false,
+        local_file_encryption_enabled: false, session_cookie_encryption_enabled: false,
+        screen_navigation_transition: 'SystemDefault', popup_navigation_transition: 'SystemDefault',
+        apply_screen_transition: false, network_timeout_ms: 60_000, native_navigation_enabled: false
+      }.freeze
 
       attr_reader :raw_document
 

@@ -139,7 +139,10 @@ module Mxrb
           return bytes ? BsonCodec.parse(bytes) : {} if staged
 
           unit_path = MxunitCodec.path_for(contents_dir, raw_unit.fetch('UnitID'))
-          return {} unless File.file?(unit_path)
+          unless File.file?(unit_path)
+            raise IncompletePackageError,
+                  "#{@path}: unit #{raw_unit.fetch('UnitID')} has no contents file #{unit_path}"
+          end
 
           return MxunitCodec.read(unit_path)
         end

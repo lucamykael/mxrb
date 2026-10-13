@@ -56,6 +56,29 @@ RSpec.describe 'MXRB CLI discovery and releases' do
     expect(cli('--comands').first).to eq(commands)
   end
 
+  it 'reports an incomplete MPR package on export without a backtrace' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'project.mpr')
+      manifest = File.join(dir, 'native_units.json')
+      File.write(manifest, JSON.generate('format_version' => 'v2', 'units' => []))
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        native_units manifest
+        self.module(:App) { entity(:Item) { string :Name } }
+      end
+      mpr = Mxrb::IO::MprFile.open(path, readonly: true)
+      uuid = mpr.units_by_containment('Modules').first.fetch('UnitID')
+      mpr.close
+      FileUtils.rm_f(Mxrb::IO::MxunitCodec.path_for(File.join(dir, 'mprcontents'), uuid))
+
+      stdout, stderr, status = cli('export', path, File.join(dir, 'ruby'))
+      expect(status).not_to be_success
+      expect(stdout).to be_empty
+      expect(stderr).to start_with("[mxrb] error: #{path}: unit #{uuid} has no contents file")
+      expect(stderr).not_to include('.rb:')
+    end
+  end
+
   it 'keeps domain-model as a hidden compatibility alias for diagram-er help' do
     stdout, stderr, status = cli('domain-model', '--help')
     expect(status).to be_success
