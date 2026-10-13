@@ -29,6 +29,12 @@ inalteradas.
 `shopping_cart`. Também é possível informar diretamente um código Glyphicons
 inteiro válido do Mendix; nomes desconhecidos falham durante a geração.
 
+A exportação DSL sempre gera `app/navigation/navigation.rb` quando o projeto
+tem documento de navegação, inclusive projetos criados no Studio Pro sem
+metadados de arquitetura do MXRB. Editar esse arquivo e carregar `project.rb`
+reconstrói o documento nativo de navegação; perfis não alterados são
+reconstruídos de forma idêntica.
+
 ## Perfis nativos (mobile)
 
 Um perfil `Navigation$NativeNavigationProfile` é lido como `kind: "Native"`.

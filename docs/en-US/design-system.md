@@ -53,6 +53,12 @@ targets, and `throw_partial_sync_error`. Updates retain profile and nested
 native identities. PWA and offline configuration variants not represented by
 the DSL remain opaque and unchanged.
 
+The DSL export always writes `app/navigation/navigation.rb` when the project
+has a navigation document, including projects created in Studio Pro without
+MXRB architecture metadata. Editing that file and loading `project.rb`
+rebuilds the native navigation document; unchanged profiles rebuild
+identically.
+
 ## Native mobile profiles
 
 A `Navigation$NativeNavigationProfile` is read with `kind: "Native"`. It has

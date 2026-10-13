@@ -23,6 +23,12 @@ Login-Position, Not-found-Seiten oder -Microflows sowie
 bei. Noch nicht dargestellte PWA- und Offline-Konfigurationen bleiben opak und
 unverändert.
 
+Der DSL-Export schreibt `app/navigation/navigation.rb` immer, wenn das Projekt
+ein Navigationsdokument hat, auch bei in Studio Pro erstellten Projekten ohne
+MXRB-Architekturmetadaten. Wird diese Datei bearbeitet und `project.rb`
+geladen, entsteht das native Navigationsdokument neu; unveränderte Profile
+werden identisch wiederhergestellt.
+
 ## Native Mobile-Profile
 
 Ein `Navigation$NativeNavigationProfile` wird mit `kind: "Native"` gelesen.
