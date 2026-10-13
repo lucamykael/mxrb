@@ -108,7 +108,12 @@ export function ReferenceSetCombobox({
             }}
           >
             <span className="widget-combobox-icon-container">
-              <svg width="14" height="14" viewBox="0 0 32 32" className="widget-combobox-clear-button-icon">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 32 32"
+                className="widget-combobox-clear-button-icon"
+              >
                 <path
                   stroke="currentColor"
                   strokeLinecap="round"
@@ -159,7 +164,13 @@ export function ReferenceSetCombobox({
                 }}
               >
                 <span className="widget-combobox-icon-container">
-                  <input tabIndex={-1} role="presentation" type="checkbox" checked={chosen} readOnly />
+                  <input
+                    tabIndex={-1}
+                    role="presentation"
+                    type="checkbox"
+                    checked={chosen}
+                    readOnly
+                  />
                 </span>
                 <span className="widget-combobox-caption-text">{option.caption}</span>
               </li>

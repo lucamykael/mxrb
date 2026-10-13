@@ -23,7 +23,14 @@ export function editable(
   return matchesCondition(options.editability, record, moduleRoles, widgetObjects);
 }
 
-const CONDITION_KEYS = ['expression', 'roles', 'ignore_security', 'attribute', 'conditions', 'source_variable'];
+const CONDITION_KEYS = [
+  'expression',
+  'roles',
+  'ignore_security',
+  'attribute',
+  'conditions',
+  'source_variable',
+];
 
 // The object a condition reads: the surrounding object, or a named data widget's.
 function conditionSubject(
@@ -50,10 +57,14 @@ function matchesAttributeValues(
 ): boolean {
   if (typeof attribute !== 'string' || !attribute || !Array.isArray(conditions)) return false;
   const value = recordValue(subject, attribute);
-  const text = value === null || value === undefined || value === '' ? null : memberName(String(value));
+  const text =
+    value === null || value === undefined || value === '' ? null : memberName(String(value));
   return conditions.some((condition) => {
     if (!condition || typeof condition !== 'object') return false;
-    const { AttributeValue: expected, EditableVisible: matches } = condition as Record<string, unknown>;
+    const { AttributeValue: expected, EditableVisible: matches } = condition as Record<
+      string,
+      unknown
+    >;
     if (matches !== true || typeof expected !== 'string') return false;
     return expected === '(empty)' ? text === null : text === expected;
   });
@@ -71,8 +82,13 @@ export function matchesCondition(
   if (Object.keys(rule).some((key) => !CONDITION_KEYS.includes(key))) return false;
   if (rule.ignore_security !== undefined && typeof rule.ignore_security !== 'boolean') return false;
   if (rule.roles !== undefined) {
-    if (!Array.isArray(rule.roles) || rule.roles.some((role) => typeof role !== 'string')) return false;
-    if (rule.roles.length && !rule.ignore_security && !rule.roles.some((role) => moduleRoles.includes(role)))
+    if (!Array.isArray(rule.roles) || rule.roles.some((role) => typeof role !== 'string'))
+      return false;
+    if (
+      rule.roles.length &&
+      !rule.ignore_security &&
+      !rule.roles.some((role) => moduleRoles.includes(role))
+    )
       return false;
   }
   const subject = conditionSubject(rule.source_variable, record, widgetObjects);

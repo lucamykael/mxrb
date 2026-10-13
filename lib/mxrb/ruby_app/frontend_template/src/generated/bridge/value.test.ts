@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { conditionValue, dynamicClass, expressionValue, isEntityRecord } from './value';
 import type { EntityRecord } from '../types';
 
@@ -24,7 +24,21 @@ describe('application value expressions', () => {
       'old pet',
     );
     expect(dynamicClass(undefined, animal)).toBe('');
-    // Syntax the evaluator rejects keeps the textual reading.
-    expect(dynamicClass("'tag-' + $currentObject/Name ;", animal)).toBe('tag- Luna ;');
+    expect(dynamicClass('empty', animal)).toBe('');
+    expect(dynamicClass(' card  card-wide ', animal)).toBe('card card-wide');
+  });
+
+  it('reports invalid dynamic classes once instead of reinterpreting them', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(dynamicClass("'tag-' + $currentObject/Name ;", animal)).toBe('');
+      expect(dynamicClass("'tag-' + $currentObject/Name ;", animal)).toBe('');
+      expect(dynamicClass('$currentObject/Age > 3', animal)).toBe('');
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls[0][0]).toContain('is not a valid expression');
+      expect(warn.mock.calls[1][0]).toContain('evaluates to boolean, not to text');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

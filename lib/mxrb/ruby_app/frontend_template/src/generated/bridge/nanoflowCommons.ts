@@ -28,7 +28,8 @@ const handlers: Record<string, JavaScriptAction> = {
   Base64Decode: async ({ base64 }) => Base64.decode(base64 as string),
   GetGuid: async ({ EntityObject }) => {
     if (!EntityObject) throw new Error("Input parameter 'Entity object' is required.");
-    if (!isEntityRecord(EntityObject)) throw new TypeError('Entity object must be an application record');
+    if (!isEntityRecord(EntityObject))
+      throw new TypeError('Entity object must be an application record');
     return EntityObject.id;
   },
   GetPlatform: async () => {
@@ -38,16 +39,19 @@ const handlers: Record<string, JavaScriptAction> = {
   },
   FindObjectWithGUID: async ({ list, objectGUID }) => {
     if (!Array.isArray(list)) throw new TypeError('Object list must be an array');
-    return list.find(record => {
-      if (!isEntityRecord(record)) throw new TypeError('Object list must contain application records');
+    return list.find((record) => {
+      if (!isEntityRecord(record))
+        throw new TypeError('Object list must contain application records');
       return record.id === objectGUID;
     });
   },
 };
 
 export const nanoflowCommonsActions = (names: string[]): Record<string, JavaScriptAction> =>
-  Object.fromEntries(names.map(name => {
-    const action = handlers[name];
-    if (!action) throw new Error(`Unknown Nanoflow Commons action: ${name}`);
-    return [`NanoflowCommons.${name}`, action];
-  }));
+  Object.fromEntries(
+    names.map((name) => {
+      const action = handlers[name];
+      if (!action) throw new Error(`Unknown Nanoflow Commons action: ${name}`);
+      return [`NanoflowCommons.${name}`, action];
+    }),
+  );

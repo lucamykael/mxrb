@@ -77,6 +77,28 @@ RSpec.describe 'typed project contracts' do
     end
   end
 
+  it 'keeps declared demo users disabled when demo users are switched off' do
+    Dir.mktmpdir do |dir|
+      source = File.join(dir, 'demo.mpr')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module(:App) { module_role :User }
+        security do
+          user_role :User, module_roles: ['App.User']
+          demo_users false
+          demo_user 'manager', entity: 'System.User', roles: ['User'], password: 'MxrbDemo123'
+        end
+      end
+
+      mpr = Mxrb::IO::MprFile.open(source, readonly: true)
+      security = mpr.all_units.map { mpr.parse_contents(_1) }
+                    .find { _1['$Type'] == 'Security$ProjectSecurity' }
+      expect(security['EnableDemoUsers']).to be false
+      expect(Mxrb::IO::BsonCodec.parse_array(security['DemoUsers']).fetch(:items).size).to eq(1)
+      mpr.close
+    end
+  end
+
   it 'writes, validates, and exports individual demo users' do
     Dir.mktmpdir do |dir|
       source = File.join(dir, 'demo.mpr')

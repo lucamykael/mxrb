@@ -32,9 +32,7 @@ function Loaded({ children }: { children?: React.ReactNode }) {
 
 describe('PageOutlet', () => {
   it('focuses the first focusable element once the page renders it', async () => {
-    render(
-      <PageOutlet page={page} busy={false} Widget={Loaded as PageComponentProps['Widget']} />,
-    );
+    render(<PageOutlet page={page} busy={false} Widget={Loaded as PageComponentProps['Widget']} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Start' })).toHaveFocus());
   });
 
@@ -67,9 +65,7 @@ describe('PageOutlet', () => {
     const outside = document.createElement('input');
     document.body.append(outside);
     outside.focus();
-    render(
-      <PageOutlet page={page} busy={false} Widget={Loaded as PageComponentProps['Widget']} />,
-    );
+    render(<PageOutlet page={page} busy={false} Widget={Loaded as PageComponentProps['Widget']} />);
     await screen.findByRole('button', { name: 'Start' });
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(outside).toHaveFocus();

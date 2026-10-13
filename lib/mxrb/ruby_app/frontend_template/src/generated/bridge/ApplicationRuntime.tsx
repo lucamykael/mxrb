@@ -784,35 +784,35 @@ export function ApplicationRuntime({
           schema={schema}
         >
           <DataRevision.Provider value={revision - localRevisions}>
-          <ClientActions.Provider
-            value={{
-              edits,
-              reset: editReset,
-              run: runClientAction,
-              close: closePage,
-              confirm: (settings) =>
-                settings
-                  ? new Promise((resolve) => setConfirmation({ settings, resolve }))
-                  : Promise.resolve(true),
-            }}
-          >
-            <PageRuntimeContext.Provider value={pageRuntime}>
-              <LayoutState.Provider value={layoutState.current}>
-                <NavigationSelection.Provider value={navigationSelection.current}>
-                  <SelectionScope key={page.name}>
-                    <PageDataSource.Provider value={pageSourceWidget(page)}>
-                      <PageOutlet
-                        key={page.name}
-                        page={page}
-                        busy={busy}
-                        Widget={RuntimePageWidget}
-                      />
-                    </PageDataSource.Provider>
-                  </SelectionScope>
-                </NavigationSelection.Provider>
-              </LayoutState.Provider>
-            </PageRuntimeContext.Provider>
-          </ClientActions.Provider>
+            <ClientActions.Provider
+              value={{
+                edits,
+                reset: editReset,
+                run: runClientAction,
+                close: closePage,
+                confirm: (settings) =>
+                  settings
+                    ? new Promise((resolve) => setConfirmation({ settings, resolve }))
+                    : Promise.resolve(true),
+              }}
+            >
+              <PageRuntimeContext.Provider value={pageRuntime}>
+                <LayoutState.Provider value={layoutState.current}>
+                  <NavigationSelection.Provider value={navigationSelection.current}>
+                    <SelectionScope key={page.name}>
+                      <PageDataSource.Provider value={pageSourceWidget(page)}>
+                        <PageOutlet
+                          key={page.name}
+                          page={page}
+                          busy={busy}
+                          Widget={RuntimePageWidget}
+                        />
+                      </PageDataSource.Provider>
+                    </SelectionScope>
+                  </NavigationSelection.Provider>
+                </LayoutState.Provider>
+              </PageRuntimeContext.Provider>
+            </ClientActions.Provider>
           </DataRevision.Provider>
         </VariableEnvironment>
       </PageParameters.Provider>

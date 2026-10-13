@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ApiRequest, ApplicationSchema, EntityCollectionResponse, EntityRecord } from '../../types';
+import type {
+  ApiRequest,
+  ApplicationSchema,
+  EntityCollectionResponse,
+  EntityRecord,
+} from '../../types';
 import { expressionValue, sortRecords } from '../value';
 
 const STORAGE_KEY = 'mxrb.language';
@@ -87,7 +92,10 @@ export function LanguageSelector({ properties, schema, request, label }: Props) 
         </span>
       </div>
       {open && (
-        <div className={`popupmenu-menu popupmenu-position-${properties.position || 'bottom'}`} role="listbox">
+        <div
+          className={`popupmenu-menu popupmenu-position-${properties.position || 'bottom'}`}
+          role="listbox"
+        >
           {languages.map((language) => {
             const value = String(language.attributes.Code || '');
             return (

@@ -28,7 +28,7 @@ export function SidebarToggle({ widget, schema }: WidgetRuntimeProps) {
         'btn mx-button',
         `mx-name-${widget.name}`,
         options.class,
-    options.design_class as string | undefined,
+        options.design_class as string | undefined,
         `btn-${String(options.button_style || 'default')}`,
       )}
       title={typeof options.tooltip === 'string' ? options.tooltip : undefined}
@@ -188,7 +188,7 @@ export function NativeScrollContainer(props: WidgetRuntimeProps) {
           fixed,
           `mx-name-${widget.name}`,
           options.class,
-    options.design_class as string | undefined,
+          options.design_class as string | undefined,
           !vertical ? toggleClass : '',
           !vertical && open ? 'mx-scrollcontainer-open' : '',
         )}

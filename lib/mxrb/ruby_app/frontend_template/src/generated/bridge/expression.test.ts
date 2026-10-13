@@ -13,13 +13,19 @@ const record: EntityRecord = {
 describe('presentation expressions', () => {
   afterEach(() => registerClientConstants({}));
   it('resolves exposed constants with typed values and replaces stale registrations', () => {
-    const values = { 'App.Key': 'storage-key', 'App.Enabled': false, 'App.Amount': decimal('9007199254740993.125') };
+    const values = {
+      'App.Key': 'storage-key',
+      'App.Enabled': false,
+      'App.Amount': decimal('9007199254740993.125'),
+    };
     registerClientConstants(values);
     values['App.Key'] = 'changed outside runtime';
     expect(evaluate("@App.Key + ':value'", null)).toBe('storage-key:value');
     expect(evaluateCondition('not(@App.Enabled)', null)).toBe(true);
     expect(evaluate('@App.Amount + 0.125', null)).toEqual(decimal('9007199254740993.25'));
-    expect(() => evaluate('@App.Private', null)).toThrow('Client constant is unavailable: App.Private');
+    expect(() => evaluate('@App.Private', null)).toThrow(
+      'Client constant is unavailable: App.Private',
+    );
     expect(evaluate("'@App.Private'", null)).toBe('@App.Private');
     registerClientConstants({});
     expect(() => evaluate('@App.Key', null)).toThrow('Client constant is unavailable');

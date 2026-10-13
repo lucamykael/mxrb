@@ -63,40 +63,37 @@ export const isVisible = (
   context: EntityRecord | null,
 ): boolean => (typeof source === 'boolean' ? source : !source || conditionValue(source, context));
 
-// A dynamic class is an expression ('sd-pb-' + toString($currentObject/Bucket));
-// its value is the class list. Syntax the evaluator does not support keeps
-// the textual reading below.
-export const dynamicClass = (source: string | undefined, context: EntityRecord | null): string => {
-  if (!source) return '';
-  try {
-    const value = evaluate(source, context);
-    if (typeof value === 'string' || typeof value === 'number') {
-      return String(value).replace(/\s+/g, ' ').trim();
-    }
-  } catch {
-    // Unsupported syntax: read the classes from the expression text.
+// A dynamic class is an expression ('sd-pb-' + toString($currentObject/Bucket))
+// whose text or number value is the class list; an empty value adds no class.
+// A plain class list without quotes is the one legacy form read as written.
+// Any other source, or a value of another type, adds no class and is reported
+// once, so an invalid expression is never silently reinterpreted.
+const LEGACY_CLASS_LIST = /^-?[A-Za-z_][\w-]*(\s+-?[A-Za-z_][\w-]*)*$/;
+const reportedDynamicClasses = new Set<string>();
+
+const reportDynamicClass = (source: string, reason: string): string => {
+  if (!reportedDynamicClasses.has(source)) {
+    reportedDynamicClasses.add(source);
+    console.warn(`Dynamic class ${JSON.stringify(source)} ${reason}; no class was applied.`);
   }
-  return textualClass(source, context);
+  return '';
 };
 
-const textualClass = (source: string, context: EntityRecord | null): string => {
-  let text = source;
-  text = text.replace(
-    /\(?if\s+(.+?)\s+then\s+'([^']*)'\s+else\s+'([^']*)'\)?/g,
-    (_match: string, condition: string, yes: string, no: string) =>
-      conditionValue(condition, context) ? yes : no,
-  );
-  text = text.replace(
-    /toString\(\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)\)/g,
-    (_match: string, member: string) => numericText(attributes(context)[memberName(member)]),
-  );
-  text = text.replace(/\$[A-Za-z_]\w*\/([A-Za-z_][\w.]*)/g, (_match: string, member: string) =>
-    numericText(attributes(context)[memberName(member)]),
-  );
-  return text
-    .replace(/[+()']/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+export const dynamicClass = (source: string | undefined, context: EntityRecord | null): string => {
+  if (!source) return '';
+  let value: RuntimeValue | undefined;
+  try {
+    value = evaluate(source, context);
+  } catch (failure) {
+    if (LEGACY_CLASS_LIST.test(source.trim())) return source.replace(/\s+/g, ' ').trim();
+    const reason = failure instanceof Error ? failure.message : String(failure);
+    return reportDynamicClass(source, `is not a valid expression (${reason})`);
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).replace(/\s+/g, ' ').trim();
+  }
+  if (value === null || value === undefined) return '';
+  return reportDynamicClass(source, `evaluates to ${typeof value}, not to text`);
 };
 
 export const caption = (
@@ -252,7 +249,8 @@ export const compareSortValues = (
   if (left == null || right == null) return left == null ? (right == null ? 0 : -1) : 1;
   let result: number;
   if (isNumeric(left) && isNumeric(right)) result = numericCompare(left, right);
-  else if (typeof left === 'boolean' && typeof right === 'boolean') result = Number(left) - Number(right);
+  else if (typeof left === 'boolean' && typeof right === 'boolean')
+    result = Number(left) - Number(right);
   else {
     const a = numericText(left).toLowerCase();
     const b = numericText(right).toLowerCase();
