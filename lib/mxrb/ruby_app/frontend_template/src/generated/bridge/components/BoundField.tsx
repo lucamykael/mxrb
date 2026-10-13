@@ -167,7 +167,10 @@ export function BoundField({
   }, [kind, referenceEntity, dataRevision, request, onError]);
 
   const disabled =
-    !record?.id || !member || inheritedReadOnly || !editable(options, record, schema.module_roles, widgetObjects);
+    !record?.id ||
+    !member ||
+    inheritedReadOnly ||
+    !editable(options, record, schema.module_roles, widgetObjects);
   const persist = async (next: string | number | boolean): Promise<EntityRecord | null> => {
     if (disabled || !record) return null;
     setDraft(next);

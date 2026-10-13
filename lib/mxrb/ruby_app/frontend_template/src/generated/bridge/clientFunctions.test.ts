@@ -32,7 +32,9 @@ describe('client date formatting', () => {
     );
     expect(value(`formatDateTime(${day}, 'D w W E u F')`)).toBe('65 10 W Tue 2 F');
     expect(value(`formatDateTime(${day}, 'uu')`)).toBe('02');
-    expect(value(`formatDateTime(dateTime(2024, 3, 5, 0, 30, 0), 'k K H h a')`)).toBe('24 0 0 12 AM');
+    expect(value(`formatDateTime(dateTime(2024, 3, 5, 0, 30, 0), 'k K H h a')`)).toBe(
+      '24 0 0 12 AM',
+    );
     expect(value(`formatDateTime(addMilliseconds(${day}, 5), 'S SS SSS SSSS')`)).toBe(
       '005 005 005 0005',
     );
@@ -66,7 +68,9 @@ describe('client date formatting', () => {
     expect(defaultPattern('datetime')).toBe('dd.MM.yy, HH:mm');
     expect(defaultPattern('date', true)).toBe('dd.MM.yyyy');
     const date = new Date(2024, 2, 5, 14, 7, 9);
-    expect(formatJavaPattern(date, 'EEEE d. MMMM yyyy G a')).toBe('Dienstag 5. März 2024 n. Chr. PM');
+    expect(formatJavaPattern(date, 'EEEE d. MMMM yyyy G a')).toBe(
+      'Dienstag 5. März 2024 n. Chr. PM',
+    );
     expect(formatJavaPattern(date, 'LLLL MMM EEE aaaaa')).toBe('März März Di. PM');
     expect(parseJavaPattern('dienstag, 5. märz 2024', 'EEEE, d. MMMM yyyy')?.getMonth()).toBe(2);
     expect(parseJavaPattern('5 März 2024 n. Chr.', 'd MMM yyyy G')?.getDate()).toBe(5);
@@ -89,9 +93,14 @@ describe('client date formatting', () => {
 
 describe('client date parsing', () => {
   it('parses with date-fns and the two-digit-year and space fallbacks', () => {
-    const utc = (source: string) => value(`formatDateTimeUTC(${source}, 'yyyy-MM-dd HH:mm:ss.SSS')`);
-    expect(utc("parseDateTime('2024-03-05 14:07', 'yyyy-MM-dd HH:mm')")).toBe('2024-03-05 19:07:00.000');
-    expect(utc("parseDateTime('2024-03-10 02:30', 'yyyy-MM-dd HH:mm')")).toBe('2024-03-10 07:30:00.000');
+    const utc = (source: string) =>
+      value(`formatDateTimeUTC(${source}, 'yyyy-MM-dd HH:mm:ss.SSS')`);
+    expect(utc("parseDateTime('2024-03-05 14:07', 'yyyy-MM-dd HH:mm')")).toBe(
+      '2024-03-05 19:07:00.000',
+    );
+    expect(utc("parseDateTime('2024-03-10 02:30', 'yyyy-MM-dd HH:mm')")).toBe(
+      '2024-03-10 07:30:00.000',
+    );
     expect(utc("parseDateTime('tue, 5 MAR 2024 2:07 pm', 'EEE, d MMM yyyy h:mm a')")).toBe(
       '2024-03-05 19:07:00.000',
     );
@@ -131,16 +140,24 @@ describe('client numeric functions', () => {
     expect(() => value('sqrt(-1)')).toThrow('Operator sqrt not supported');
     const random = value('random()');
     expect(new Decimal((random as { __mxrb_decimal: string }).__mxrb_decimal).lt(1)).toBe(true);
-    expect(value("toString(0.0000001) + '|' + toString(1 : 3)")).toBe('1e-7|0.33333333333333333333');
+    expect(value("toString(0.0000001) + '|' + toString(1 : 3)")).toBe(
+      '1e-7|0.33333333333333333333',
+    );
     expect(clientNumberText(decimal('2.50'))).toBe('2.5');
   });
 
   it('rounds quotients to 20 places exactly', () => {
     expect(quotient(new Decimal(1), new Decimal('3e20')).toFixed()).toBe('0');
     expect(quotient(new Decimal(5), new Decimal('1e21')).toFixed()).toBe('0.00000000000000000001');
-    expect(quotient(new Decimal(-5), new Decimal('1e21')).toFixed()).toBe('-0.00000000000000000001');
-    expect(quotient(new Decimal(3), new Decimal('-2e20')).toFixed()).toBe('-0.00000000000000000002');
-    expect(quotient(new Decimal('2.5'), new Decimal('1e20')).toFixed()).toBe('0.00000000000000000003');
+    expect(quotient(new Decimal(-5), new Decimal('1e21')).toFixed()).toBe(
+      '-0.00000000000000000001',
+    );
+    expect(quotient(new Decimal(3), new Decimal('-2e20')).toFixed()).toBe(
+      '-0.00000000000000000002',
+    );
+    expect(quotient(new Decimal('2.5'), new Decimal('1e20')).toFixed()).toBe(
+      '0.00000000000000000003',
+    );
     expect(() => quotient(new Decimal(1), new Decimal(0))).toThrow('Division by zero');
   });
 
@@ -150,7 +167,9 @@ describe('client numeric functions', () => {
     expect(value(`toString(minutesBetween(${morning}, ${day}))`)).toBe('303.15');
     expect(value(`toString(secondsBetween(${morning}, ${day}))`)).toBe('18189');
     expect(value(`toString(millisecondsBetween(${morning}, ${day}))`)).toBe('18189000');
-    expect(value(`toString(weeksBetween(dateTime(2024, 1, 1), ${day}))`)).toBe('9.2268998015873015873');
+    expect(value(`toString(weeksBetween(dateTime(2024, 1, 1), ${day}))`)).toBe(
+      '9.2268998015873015873',
+    );
     expect(value('toString(hoursBetween(dateTime(2024, 3, 9), dateTime(2024, 3, 11)))')).toBe('47');
     expect(value(`calendarMonthsBetween(${day}, dateTime(2024, 1, 31))`)).toBe(2);
     expect(value(`calendarYearsBetween(dateTime(2020, 6, 1), ${day})`)).toBe(4);

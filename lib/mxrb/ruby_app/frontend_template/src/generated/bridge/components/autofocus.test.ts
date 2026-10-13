@@ -54,7 +54,11 @@ describe('autofocus', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.append(container);
-    const moved = focusWhenReady(container, (root) => root.querySelector('input'), () => false);
+    const moved = focusWhenReady(
+      container,
+      (root) => root.querySelector('input'),
+      () => false,
+    );
     container.append(field('name'));
     await vi.advanceTimersByTimeAsync(200);
     expect(document.activeElement).toBe(document.body);
@@ -62,7 +66,11 @@ describe('autofocus', () => {
 
     const empty = document.createElement('div');
     document.body.append(empty);
-    focusWhenReady(empty, (root) => root.querySelector('input'), () => true);
+    focusWhenReady(
+      empty,
+      (root) => root.querySelector('input'),
+      () => true,
+    );
     await vi.advanceTimersByTimeAsync(10_500);
     empty.append(field('late'));
     await vi.advanceTimersByTimeAsync(200);

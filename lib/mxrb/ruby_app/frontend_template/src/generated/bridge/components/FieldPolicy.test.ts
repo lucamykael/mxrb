@@ -13,7 +13,10 @@ const values = (...pairs: [string, boolean][]) =>
 
 describe('attribute-based conditions', () => {
   it('match when the attribute equals one of the matching values', () => {
-    const rule = { attribute: 'App.Item.Unlocked', conditions: values(['true', true], ['false', false]) };
+    const rule = {
+      attribute: 'App.Item.Unlocked',
+      conditions: values(['true', true], ['false', false]),
+    };
     expect(matchesCondition(rule, item({ Unlocked: true }))).toBe(true);
     expect(matchesCondition(rule, item({ Unlocked: false }))).toBe(false);
     expect(matchesCondition(rule, null)).toBe(false);
@@ -42,13 +45,16 @@ describe('attribute-based conditions', () => {
     expect(
       matchesCondition({ ...rule, source_variable: { kind: 'current' } }, item({ Unlocked: true })),
     ).toBe(true);
-    expect(matchesCondition({ ...rule, source_variable: { kind: 'page_parameter', name: 'P' } }, null)).toBe(
-      false,
-    );
+    expect(
+      matchesCondition({ ...rule, source_variable: { kind: 'page_parameter', name: 'P' } }, null),
+    ).toBe(false);
     expect(matchesCondition({ ...rule, source_variable: 'Details' }, null)).toBe(false);
     expect(
       matchesCondition(
-        { expression: '$currentObject/Unlocked', source_variable: { kind: 'widget', name: 'Details' } },
+        {
+          expression: '$currentObject/Unlocked',
+          source_variable: { kind: 'widget', name: 'Details' },
+        },
         null,
         [],
         objects,
@@ -58,17 +64,31 @@ describe('attribute-based conditions', () => {
 
   it('rejects malformed values and still requires the module roles', () => {
     const subject = item({ Unlocked: true });
-    expect(matchesCondition({ attribute: '', conditions: values(['true', true]) }, subject)).toBe(false);
-    expect(matchesCondition({ attribute: 'App.Item.Unlocked', conditions: 'true' }, subject)).toBe(false);
+    expect(matchesCondition({ attribute: '', conditions: values(['true', true]) }, subject)).toBe(
+      false,
+    );
+    expect(matchesCondition({ attribute: 'App.Item.Unlocked', conditions: 'true' }, subject)).toBe(
+      false,
+    );
     expect(
-      matchesCondition({ attribute: 'App.Item.Unlocked', conditions: [null, { AttributeValue: 1 }] }, subject),
+      matchesCondition(
+        { attribute: 'App.Item.Unlocked', conditions: [null, { AttributeValue: 1 }] },
+        subject,
+      ),
     ).toBe(false);
-    const roles = { attribute: 'App.Item.Unlocked', conditions: values(['true', true]), roles: ['App.Admin'] };
+    const roles = {
+      attribute: 'App.Item.Unlocked',
+      conditions: values(['true', true]),
+      roles: ['App.Admin'],
+    };
     expect(matchesCondition(roles, subject, ['App.User'])).toBe(false);
     expect(matchesCondition(roles, subject, ['App.Admin'])).toBe(true);
     expect(
       editable(
-        { editable: 'conditional', editability: { attribute: 'App.Item.Unlocked', conditions: values(['true', true]) } },
+        {
+          editable: 'conditional',
+          editability: { attribute: 'App.Item.Unlocked', conditions: values(['true', true]) },
+        },
         subject,
       ),
     ).toBe(true);

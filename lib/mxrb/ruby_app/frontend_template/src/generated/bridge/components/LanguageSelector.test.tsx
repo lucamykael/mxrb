@@ -33,7 +33,10 @@ beforeEach(() => {
 describe('Language selector', () => {
   it('shows the current language and switches the page language', async () => {
     const request = vi.fn().mockResolvedValue({
-      records: [language('pt_BR', 'Portuguese, Brazil'), language('en_US', 'English, United States')],
+      records: [
+        language('pt_BR', 'Portuguese, Brazil'),
+        language('en_US', 'English, United States'),
+      ],
     });
     const user = userEvent.setup();
     render(

@@ -249,7 +249,8 @@ export const compareSortValues = (
   if (left == null || right == null) return left == null ? (right == null ? 0 : -1) : 1;
   let result: number;
   if (isNumeric(left) && isNumeric(right)) result = numericCompare(left, right);
-  else if (typeof left === 'boolean' && typeof right === 'boolean') result = Number(left) - Number(right);
+  else if (typeof left === 'boolean' && typeof right === 'boolean')
+    result = Number(left) - Number(right);
   else {
     const a = numericText(left).toLowerCase();
     const b = numericText(right).toLowerCase();

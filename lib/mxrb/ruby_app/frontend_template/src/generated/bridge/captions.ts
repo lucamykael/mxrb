@@ -1,7 +1,11 @@
 import { useContext, useSyncExternalStore } from 'react';
 import type { ApplicationSchema, AttributeDefinition, EntityRecord, RuntimeValue } from '../types';
 import { isDecimal, numericText } from './decimal';
-import { attributeDefinition as schemaAttribute, enumerationDefinition, translated } from './schemaLookup';
+import {
+  attributeDefinition as schemaAttribute,
+  enumerationDefinition,
+  translated,
+} from './schemaLookup';
 import {
   LocalVariables,
   PageParameters,
@@ -135,7 +139,11 @@ function formatted(
     const item = enumeration?.values.find((item) => item.name === value);
     return item ? translated(item.caption, item.caption_translations, locale) : String(value);
   }
-  if (isDecimal(value) || typeof value === 'number' || ['decimal', 'integer', 'long'].includes(type ?? '')) {
+  if (
+    isDecimal(value) ||
+    typeof value === 'number' ||
+    ['decimal', 'integer', 'long'].includes(type ?? '')
+  ) {
     const precision = Number(
       format.decimal_precision ?? (type === 'integer' || type === 'long' ? 0 : 2),
     );

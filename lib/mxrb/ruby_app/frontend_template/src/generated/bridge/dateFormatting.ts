@@ -117,7 +117,12 @@ function sessionLocale(tag: string): Locale {
   const formatting = names(tag, { day: 'numeric', month: 'long' }, 'month', months);
   const formattingShort = names(tag, { day: 'numeric', month: 'short' }, 'month', months);
   const weekdays = names(tag, { weekday: 'long', day: 'numeric', month: 'long' }, 'weekday', days);
-  const shortWeekdays = names(tag, { weekday: 'short', day: 'numeric', month: 'long' }, 'weekday', days);
+  const shortWeekdays = names(
+    tag,
+    { weekday: 'short', day: 'numeric', month: 'long' },
+    'weekday',
+    days,
+  );
   const eras = names(tag, { era: 'short', year: 'numeric' }, 'era', [
     new Date(Date.UTC(-1, 0, 1)),
     sample(0),
@@ -164,9 +169,7 @@ function sessionLocale(tag: string): Locale {
           options?.width as Width | undefined,
         ),
       day: (text, options) =>
-        (options?.width === 'wide' || !options?.width ? dayMatchers.wide : dayMatchers.other)(
-          text,
-        ),
+        (options?.width === 'wide' || !options?.width ? dayMatchers.wide : dayMatchers.other)(text),
       dayPeriod: (text) => {
         const result = matcher(periods)(text);
         return result && { ...result, value: result.value ? 'pm' : 'am' };
