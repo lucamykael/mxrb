@@ -69,7 +69,8 @@ bundle exec mxrb run .
 ```
 
 This creates the conventional application directly with `app/models`,
-`app/dtos`, `app/services`, `app/pages`, and React + Vite. A reversible Mendix
+`app/dtos`, `app/services`, `app/pages`, and React + Vite (`app/services` is the
+exception declared in section 13 of the [architectural standard](architectural-standard.md)). A reversible Mendix
 baseline is isolated under `.mxrb`; it does not dictate the editable source
 layout. Materialize the current project as an MPR with:
 

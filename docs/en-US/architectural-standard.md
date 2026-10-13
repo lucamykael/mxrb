@@ -25,7 +25,8 @@ Large presentation areas use vertical feature slices.
 - `uses_repository`, `calls`, lifecycle and data-source declarations feed the
   semantic dependency graph.
 
-A microflow is classified by responsibility, not by being a microflow.
+A microflow is classified by responsibility, not by being a microflow. The
+executable Ruby application is the exception declared in section 13.
 
 ## 4. Allowed dependencies
 
@@ -87,3 +88,22 @@ manifest; design-system tokens and policies have a typed Ruby contract.
 Workflows, integrations, published APIs, and widgets without a concise API
 remain editable through deep Ruby and the native baseline, but still need
 specific typed DSLs.
+
+## 13. Scope: Mendix DSL export and executable Ruby application
+
+This standard governs the Mendix DSL export (`mxrb export`, the default mode),
+whose output is the project's architectural representation. The executable Ruby
+application (`--mode ruby`, `mxrb init --mode ruby`) is a declared exception for
+flows. It follows the Ruby application convention and writes microflows,
+nanoflows with a Ruby body, and rules to `app/services/<module>/`, one file per
+Mendix document.
+
+The exception exists because, in that mode, each service class is the
+executable projection of one document and carries its identity (`mendix_name`
+and unit ID). One file per document in a predictable place keeps the
+developer's edits round-tripping byte for byte and reconciles identities
+without consulting the architecture. Classification by responsibility (use
+case, query, validation, job, integration, endpoint) remains mandatory for the
+architecture the DSL describes. In the executable application, it is expressed
+by the code the developer writes under `app/` outside `app/services`, which
+`mxrb` preserves untouched.
