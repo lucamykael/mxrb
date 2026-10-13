@@ -6,7 +6,11 @@ describe('widget declaration contract', () => {
     // @ts-expect-error 'buton' is not a widget type the runtime renders.
     const unknownType: WidgetDefinition = { type: 'buton', name: 'Save' };
     // @ts-expect-error 'captoin' is not a widget option.
-    const misspelled: WidgetDefinition = { type: 'button', name: 'Save', options: { captoin: 'Save' } };
+    const misspelled: WidgetDefinition = {
+      type: 'button',
+      name: 'Save',
+      options: { captoin: 'Save' },
+    };
     const declared: WidgetDefinition = {
       type: 'button',
       name: 'Save',
