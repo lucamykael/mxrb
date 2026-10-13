@@ -153,13 +153,14 @@ module Mxrb
       end
 
       # Adds stored designs to projected widgets as their design option. Data
-      # views already declare theirs as typed design_properties.
+      # views already declare theirs as typed design_properties, and native
+      # fragments keep theirs in the typed fragment.
       def inject(widgets, designs)
         return widgets if designs.empty?
 
         Walk.map(widgets) do |node, key, _type|
           design = designs[key]
-          next node unless design && !Typed.properties(node)
+          next node unless design && !Typed.properties(node) && node['type'] != 'native_widget'
 
           node.merge('options' => (node['options'] || {}).merge('design' => design))
         end

@@ -55,9 +55,10 @@ RSpec.describe 'design properties declared in Ruby' do
       { 'type' => 'layout_grid', 'name' => 'grid', 'options' => {
         'rows' => [{ 'columns' => [{ 'widgets' => [] }, { 'options' => {} }] }]
       } },
-      { 'type' => 'layout_grid', 'name' => 'bare' }
+      { 'type' => 'layout_grid', 'name' => 'bare' },
+      { 'type' => 'native_widget', 'name' => 'fragment', 'options' => { 'native_type' => 'Forms$Header' } }
     ]
-    injected = Mxrb::RubyApp::DesignDeclarations.inject(projected, designs)
+    injected = Mxrb::RubyApp::DesignDeclarations.inject(projected, designs.merge('fragment' => { 'Size' => 'Large' }))
 
     expect(injected[0]).to eq('type' => 'button', 'name' => 'save', 'options' => { 'design' => { 'Size' => 'Large' } })
     expect(injected[1..2]).to eq([{ 'name' => 'not a widget' }, 'raw'])
@@ -65,6 +66,7 @@ RSpec.describe 'design properties declared in Ruby' do
     expect(row['options']).to eq('design' => { 'Cards style' => true })
     expect(row['columns']).to eq([{ 'widgets' => [] }, { 'options' => { 'design' => { 'Centered' => true } } }])
     expect(injected[4]).to eq('type' => 'layout_grid', 'name' => 'bare', 'options' => { 'rows' => [] })
+    expect(injected[5]).to eq(projected[5])
     expect(Mxrb::RubyApp::DesignDeclarations.inject(projected, {})).to equal(projected)
   end
 
