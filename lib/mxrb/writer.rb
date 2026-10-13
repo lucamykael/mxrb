@@ -2230,7 +2230,7 @@ module Mxrb
         # normalize the document boundary before matching or writing it.
         typed_forms = document[:forms_model]
         doc = if typed_forms
-                Forms::MprCodec.new.encode(typed_forms).merge('Name' => document.fetch(:name).to_s)
+                forms_codec.encode(typed_forms).merge('Name' => document.fetch(:name).to_s)
               else
                 stringify_keys(document.fetch(:doc))
               end
@@ -2245,8 +2245,8 @@ module Mxrb
         if existing
           current = mpr.parse_contents(existing)
           if typed_forms
-            doc = Forms::MprCodec.new.encode(typed_forms, baseline: current)
-                                 .merge('Name' => document.fetch(:name).to_s)
+            doc = forms_codec.encode(typed_forms, baseline: current)
+                             .merge('Name' => document.fetch(:name).to_s)
           end
           base = typed_forms ? doc : current.merge(doc)
           preserved = base.merge(
@@ -4558,7 +4558,7 @@ module Mxrb
 
     def page_doc(page, module_name = nil, baseline: nil)
       if page[:forms_model]
-        document = Forms::MprCodec.new.encode(page.fetch(:forms_model), baseline:)
+        document = forms_codec.encode(page.fetch(:forms_model), baseline:)
         unit_id = page[:unit_id].to_s
         document['$ID'] = unit_id.empty? ? document.fetch('$ID') : unit_id
         document['Name'] = page.fetch(:name).to_s
@@ -7780,6 +7780,10 @@ module Mxrb
         },
         'ValidationVariableName' => activity[:variable]
       }
+    end
+
+    def forms_codec
+      Forms::MprCodec.new(mendix_version: @definition[:version])
     end
 
     def no_expression_doc
