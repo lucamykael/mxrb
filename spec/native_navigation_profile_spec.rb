@@ -88,6 +88,42 @@ RSpec.describe 'native mobile navigation profiles' do
     end
   end
 
+  it 'exports only changed native settings and restores omitted ones to their defaults' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'app.mpr')
+      exported = File.join(dir, 'ruby')
+      rebuilt = File.join(dir, 'rebuilt', 'app.mpr')
+      define_native_profile_project(path)
+      Mxrb.open(path, readonly: false) { _1.query('DROP TABLE _MxrbArchitecture') }
+
+      Mxrb::Exporter.new(path, exported).export!
+      navigation = File.join(exported, 'app', 'navigation', 'navigation.rb')
+      source = File.read(navigation)
+      expect(source).to include('settings: {ota_enabled: true, network_timeout_ms: 30000}')
+      expect(source).not_to include('logging_enabled', 'screen_navigation_transition')
+
+      File.write(navigation, source.sub('ota_enabled: true, ', ''))
+      begin
+        ENV['MXRB_OUTPUT_PATH'] = rebuilt
+        load File.join(exported, 'project.rb')
+      ensure
+        ENV.delete('MXRB_OUTPUT_PATH')
+      end
+      expect(native_profile_document(rebuilt)).to include('OtaEnabled' => false, 'NetworkTimeoutMs' => 30_000)
+    end
+
+    writer = Mxrb::Writer.new('unused.mpr', version: '11.12.1', modules: [])
+    existing = writer.send(:modern_navigation_doc, {}, profiles: [
+                             { name: 'NativePhone', kind: 'Native', settings: { logging_enabled: true } }
+                           ])
+    previous = Mxrb::IO::BsonCodec.parse_array(existing['Profiles']).fetch(:items).first
+    previous.delete('NativeNavigationEnabled')
+    updated = writer.send(:modern_navigation_doc, existing, profiles: [{ name: 'NativePhone', kind: 'Native' }])
+    native = Mxrb::IO::BsonCodec.parse_array(updated['Profiles']).fetch(:items).first
+    expect(native).to include('LoggingEnabled' => false)
+    expect(native).not_to have_key('NativeNavigationEnabled')
+  end
+
   it 'adds and promotes Ruby page declarations in a native bottom bar' do
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'app.mpr')

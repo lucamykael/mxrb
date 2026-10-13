@@ -3454,7 +3454,10 @@ module Mxrb
       unless profile[:throw_partial_sync_error].nil?
         args << "throw_partial_sync_error: #{ruby(profile[:throw_partial_sync_error])}"
       end
-      args << "settings: #{ruby(profile[:settings])}" unless profile.fetch(:settings, {}).empty?
+      settings = profile.fetch(:settings, {}).reject do |key, value|
+        Model::NativeNavigationProfile::SETTING_DEFAULTS[key] == value
+      end
+      args << "settings: #{ruby(settings)}" unless settings.empty?
       role_homes = profile.fetch(:role_homes, [])
       details = role_homes.is_a?(Array) ? role_homes : role_homes.map { |role, page| { role:, page: } }
       homes = (details + profile.fetch(:role_home_details, [])).map do |home|

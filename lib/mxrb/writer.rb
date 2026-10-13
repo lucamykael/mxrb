@@ -9,6 +9,7 @@ require 'json'
 require 'securerandom'
 require 'sqlite3'
 require 'time'
+require_relative 'model/navigation'
 require_relative 'writer/page_overlay'
 require_relative 'writer/data_sources'
 require_relative 'forms/mpr_codec'
@@ -2598,13 +2599,10 @@ module Mxrb
       }.merge(previous).merge(editable)
     end
 
-    NATIVE_PROFILE_DEFAULTS = {
-      'ApplyScreenTransition' => false, 'EncryptionDbEnabled' => false,
-      'LocalFileEncryptionEnabled' => false, 'LoggingEnabled' => false,
-      'NativeNavigationEnabled' => false, 'NetworkTimeoutMs' => 60_000, 'OtaEnabled' => false,
-      'PopupNavigationTransition' => 'SystemDefault', 'ScreenNavigationTransition' => 'SystemDefault',
-      'SessionCookieEncryptionEnabled' => false, 'ThrowPartialSyncError' => true
-    }.freeze
+    NATIVE_SETTING_DEFAULTS = Model::NativeNavigationProfile::SETTING_DEFAULTS.to_h do |key, value|
+      [Model::NativeNavigationProfile::SETTINGS.fetch(key), value]
+    end.freeze
+    NATIVE_PROFILE_DEFAULTS = NATIVE_SETTING_DEFAULTS.merge('ThrowPartialSyncError' => true).freeze
 
     # Native profiles keep their own home page, role homes and bottom bar;
     # the web HomePage, HomeItems and Menu fields do not exist on them.
@@ -2629,8 +2627,11 @@ module Mxrb
         editable['ThrowPartialSyncError'] = profile[:throw_partial_sync_error]
       end
       defaults = previous.empty? ? NATIVE_PROFILE_DEFAULTS.merge('OfflineEntityConfigs' => [3]) : {}
+      # A setting left out of the Ruby source returns to its default, but only
+      # where the document already has that field for its Mendix version.
+      omitted = NATIVE_SETTING_DEFAULTS.select { |field, _| previous.key?(field) }
       { '$ID' => previous['$ID'] || SecureRandom.uuid, '$Type' => Model::NativeNavigationProfile::TYPE }
-        .merge(defaults).merge(previous).merge(settings).merge(editable)
+        .merge(defaults).merge(previous).merge(omitted).merge(settings).merge(editable)
     end
 
     def native_home_doc(home, previous: nil, type: 'Navigation$NativeHomePage')
