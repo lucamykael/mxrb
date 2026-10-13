@@ -3,6 +3,4 @@ node_modules
 public
 src/generated/*
 !src/generated/bridge
-src/generated/bridge/*
-!src/generated/bridge/api.ts
-!src/generated/bridge/nanoflow.ts
+src/generated/bridge/vendor

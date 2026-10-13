@@ -29,6 +29,46 @@ inalteradas.
 `shopping_cart`. Também é possível informar diretamente um código Glyphicons
 inteiro válido do Mendix; nomes desconhecidos falham durante a geração.
 
+## Perfis nativos (mobile)
+
+Um perfil `Navigation$NativeNavigationProfile` é lido como `kind: "Native"`.
+Ele tem home page ou nanoflow nativos, home pages por papel, itens da bottom
+bar e as opções de OTA, logs, criptografia, transições, timeout de rede e
+navegação nativa. Ele não tem menu web, título nem página de login. O writer
+gera e mescla o documento nativo, nunca campos de perfil web.
+
+```ruby
+navigation do
+  profile :NativePhone, kind: "Native", home_page: "Field.Home",
+                        settings: { ota_enabled: true, network_timeout_ms: 30_000 } do
+    home_for :Inspector, page: "Field.Inspections", nanoflow: nil
+    bottom_bar_item "Home", page: "Field.Home", icon: { collection: "Atlas_Core.Atlas_Filled.home" }
+    bottom_bar_item "Inspections", page: "Field.Inspections", translations: { pt_BR: "Inspeções" }
+  end
+end
+```
+
+```ruby
+module Field
+  class TasksPage < Mxrb::RubyApp::Page
+    mendix_name "Field.Tasks"
+    native do
+      layout "Atlas_Core.NativePhone_Default"
+      title "Tasks"
+      text :Heading, caption: "Tasks"
+    end
+    navigation caption: "Tasks", profile: "NativePhone"
+  end
+end
+```
+
+No modo Ruby, `navigation profile: "NativePhone"` em uma página `native`
+acrescenta ou atualiza o item da bottom bar daquela página. Com `home: true`,
+ele também passa a ser a home nativa. Configurações desconhecidas falham na
+avaliação da DSL. A certificação usou uma cópia do Sudoku salva pelo Studio
+Pro 11.12.1 com perfil nativo: a página nativa e o item da bottom bar
+declarados em Ruby passaram em `mx check` e no Studio Pro com 0 erros.
+
 `project.design_system` inventaria propriedades CSS, variáveis Sass, temas e
 catálogos `design-properties.json`. O lint encontra tokens ausentes, cores
 literais e contratos de contraste abaixo do nível WCAG declarado.

@@ -114,6 +114,16 @@ im Round-trip bytegenau erhalten. Das Scaffold enthält striktes TypeScript,
 ESLint, Prettier, Vitest, React Testing Library und ein reproduzierbares
 npm-Lockfile.
 
+`src/generated/types.ts` typisiert den API-Vertrag genau. Ein Attribut einer
+Entität ist optional, weil es fehlt, wenn der Benutzer es nicht lesen darf, und
+nullable, weil ein leerer Wert `null` ist; Booleans sind nie leer. Der `type`
+eines Widgets ist einer der `WidgetType`-Werte, die die Runtime rendert, und
+seine Optionen sind die deklarierten `WidgetOptions`-Schlüssel, sodass eine
+falsch geschriebene Option oder ein unbekannter Typ beim Typecheck scheitert.
+Freie Daten stehen unter `options.extension`. Ein Widget außerhalb dieses
+Vertrags muss als `ExtensionWidgetDefinition` deklariert werden; der Generator
+tut das nur, wenn eine Seite es braucht.
+
 Nach der einmaligen Installation der Ruby- und Frontend-Abhängigkeiten startet
 ein einziger Befehl beide Prozesse:
 

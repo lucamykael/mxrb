@@ -17,7 +17,9 @@ beforeEach(() => {
   const data = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => { data.set(key, value); },
+    setItem: (key: string, value: string) => {
+      data.set(key, value);
+    },
     clear: () => data.clear(),
   });
 });
@@ -37,22 +39,32 @@ describe('verified Feedback storage actions', () => {
     expect(await runtime.callJavaScript(`FeedbackModule.${legacyName}`, expressions)).toBe('');
     for (const value of [null, '', false, 0, 'text', ['item'], { nested: true }]) {
       localStorage.setItem('feedback-test', JSON.stringify({ ShowEmail: value }));
-      expect(await runtime.callJavaScript(`FeedbackModule.${legacyName}`, expressions)).toEqual(value ?? '');
+      expect(await runtime.callJavaScript(`FeedbackModule.${legacyName}`, expressions)).toEqual(
+        value ?? '',
+      );
     }
     localStorage.setItem('feedback-test', 'invalid');
-    await expect(legacy({ LocalStorageKey: 'feedback-test', ObjectItemKey: 'ShowEmail' })).rejects.toThrow(SyntaxError);
+    await expect(
+      legacy({ LocalStorageKey: 'feedback-test', ObjectItemKey: 'ShowEmail' }),
+    ).rejects.toThrow(SyntaxError);
     await expect(legacy({})).rejects.toThrow("'localStorageKey' is required");
-    await expect(legacy({ LocalStorageKey: 'feedback-test' })).rejects.toThrow("'objectItemKey' is required");
+    await expect(legacy({ LocalStorageKey: 'feedback-test' })).rejects.toThrow(
+      "'objectItemKey' is required",
+    );
   });
   it('runs registered actions through the nanoflow expression and parameter bridge', async () => {
     registerJavaScriptActions(actions);
     const runtime = new NanoflowRuntime({}, { name: 'Feedback.Test', id: 'test', parameters: [] });
     await runtime.callJavaScript(`FeedbackModule.${writeName}`, {
-      localStorageKey: "'feedback-test'", imageDataB64: "'from nanoflow'",
+      localStorageKey: "'feedback-test'",
+      imageDataB64: "'from nanoflow'",
     });
-    expect(await runtime.callJavaScript(`FeedbackModule.${readName}`, {
-      LocalStorageKey: "'feedback-test'", ObjectItemKey: "'ImageB64'",
-    })).toBe('from nanoflow');
+    expect(
+      await runtime.callJavaScript(`FeedbackModule.${readName}`, {
+        LocalStorageKey: "'feedback-test'",
+        ObjectItemKey: "'ImageB64'",
+      }),
+    ).toBe('from nanoflow');
   });
   it('preserves values and the native boolean fallback', async () => {
     expect(await read(parameters)).toBeNull();
@@ -70,19 +82,26 @@ describe('verified Feedback storage actions', () => {
   it('writes an image without dropping stored attributes and exposes invalid primitive values', async () => {
     localStorage.setItem('feedback-test', '{"ShowEmail":false}');
     await write({ localStorageKey: 'feedback-test', imageDataB64: 'synthetic-image' });
-    expect(JSON.parse(localStorage.getItem('feedback-test')!)).toEqual({ ShowEmail: false, ImageB64: 'synthetic-image' });
+    expect(JSON.parse(localStorage.getItem('feedback-test')!)).toEqual({
+      ShowEmail: false,
+      ImageB64: 'synthetic-image',
+    });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     localStorage.setItem('feedback-test', 'invalid JSON');
     await write({ localStorageKey: 'feedback-test', imageDataB64: '' });
     expect(warn).toHaveBeenCalledOnce();
     expect(localStorage.getItem('feedback-test')).toBe('{"ImageB64":""}');
     localStorage.setItem('feedback-test', 'null');
-    await expect(write({ localStorageKey: 'feedback-test', imageDataB64: 'x' })).rejects.toThrow(TypeError);
+    await expect(write({ localStorageKey: 'feedback-test', imageDataB64: 'x' })).rejects.toThrow(
+      TypeError,
+    );
   });
 
   it('rejects missing parameters and unrecognized action names', async () => {
     await expect(read({})).rejects.toThrow("'localStorageKey' is required");
-    await expect(read({ LocalStorageKey: 'feedback-test' })).rejects.toThrow("'objectItemKey' is required");
+    await expect(read({ LocalStorageKey: 'feedback-test' })).rejects.toThrow(
+      "'objectItemKey' is required",
+    );
     await expect(show({})).rejects.toThrow("'localStorageKey' is required");
     await expect(write({})).rejects.toThrow("'localStorageKey' is required");
     expect(() => feedbackStorageActions(['Unknown'])).toThrow('Unknown Feedback storage action');

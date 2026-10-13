@@ -11,7 +11,11 @@ const row = (id: string, Name: string, Amount: number | null, Rank: number): Ent
   type: 'Probe.Row',
   attributes: { Name, Amount: Amount === null ? null : decimal(Amount), Rank },
 });
-const rows = () => [row('1', 'North', 2.5, 3), row('2', 'south', 7, 1), row('3', 'Middle', null, 2)];
+const rows = () => [
+  row('1', 'North', 2.5, 3),
+  row('2', 'south', 7, 1),
+  row('3', 'Middle', null, 2),
+];
 const runtime = () => new NanoflowRuntime({}, { name: 'Probe.Case', id: 'case', parameters: [] });
 const names = (value: unknown) => (value as EntityRecord[]).map((record) => record.attributes.Name);
 
@@ -90,7 +94,8 @@ describe('nanoflow data actions', () => {
     expect([...flow.loop({ kind: 'iterable', list: 'rows' })]).toHaveLength(3);
     flow.set('n', 0);
     let count = 0;
-    for (const _item of flow.loop({ kind: 'while', condition: '$n < 3' })) {
+    const iterations = flow.loop({ kind: 'while', condition: '$n < 3' })[Symbol.iterator]();
+    while (!iterations.next().done) {
       count += 1;
       flow.set('n', count);
     }
@@ -129,12 +134,22 @@ describe('nanoflow data actions', () => {
 
   it('retrieves over associations from either side', async () => {
     const flow = runtime();
-    const spec = { source: 'association', association: 'Probe.Row_Item', from: 'Probe.Row', to: 'Probe.Item', kind: 'Reference' };
+    const spec = {
+      source: 'association',
+      association: 'Probe.Row_Item',
+      from: 'Probe.Row',
+      to: 'Probe.Item',
+      kind: 'Reference',
+    };
     flow.set('row', rows()[0]);
     flow.set('item', { id: '9', type: 'Probe.Item', attributes: {} });
-    vi.mocked(api).mockResolvedValue({ records: [{ id: '9', type: 'Probe.Item', attributes: {} }] });
+    vi.mocked(api).mockResolvedValue({
+      records: [{ id: '9', type: 'Probe.Item', attributes: {} }],
+    });
     await flow.retrieve('owner', { ...spec, start: 'row' });
-    expect(vi.mocked(api).mock.calls[0][0]).toContain('/api/entities/Probe.Item?association=Probe.Row_Item');
+    expect(vi.mocked(api).mock.calls[0][0]).toContain(
+      '/api/entities/Probe.Item?association=Probe.Row_Item',
+    );
     expect((flow.variables.owner as EntityRecord).id).toBe('9');
     vi.mocked(api).mockResolvedValue({ records: rows() });
     await flow.retrieve('children', { ...spec, start: 'item' });
@@ -146,15 +161,21 @@ describe('nanoflow data actions', () => {
   it('commits new objects, deletes stored ones and rolls back changes', async () => {
     const flow = runtime();
     const created = flow.create('new', 'Probe.Row', { Name: "'zeta'" });
-    vi.mocked(api).mockResolvedValueOnce({ records: [{ id: '10', type: 'Probe.Row', attributes: { Name: 'zeta' } }] });
+    vi.mocked(api).mockResolvedValueOnce({
+      records: [{ id: '10', type: 'Probe.Row', attributes: { Name: 'zeta' } }],
+    });
     await flow.commit('new');
-    expect(JSON.parse(String(vi.mocked(api).mock.calls[0][1]?.body)).records[0].new_record).toBe(true);
+    expect(JSON.parse(String(vi.mocked(api).mock.calls[0][1]?.body)).records[0].new_record).toBe(
+      true,
+    );
     expect(created.id).toBe('10');
     expect('transient' in created).toBe(false);
     await flow.commit('missing');
     vi.mocked(api).mockResolvedValueOnce({ ok: true });
     await flow.delete('new');
-    expect(JSON.parse(String(vi.mocked(api).mock.calls[1][1]?.body))).toEqual({ records: [{ type: 'Probe.Row', id: '10' }] });
+    expect(JSON.parse(String(vi.mocked(api).mock.calls[1][1]?.body))).toEqual({
+      records: [{ type: 'Probe.Row', id: '10' }],
+    });
     flow.create('draft', 'Probe.Row', {});
     await flow.delete('draft');
     expect(vi.mocked(api)).toHaveBeenCalledTimes(2);
@@ -169,7 +190,10 @@ describe('nanoflow data actions', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     flow.log('value={1} {2}', ["'a'", '1 + 1']);
     flow.log('');
-    expect(info.mock.calls.map((call) => call[0])).toEqual(['[nanoflow] value=a 2', '[nanoflow] Probe.Case']);
+    expect(info.mock.calls.map((call) => call[0])).toEqual([
+      '[nanoflow] value=a 2',
+      '[nanoflow] Probe.Case',
+    ]);
     info.mockRestore();
   });
 });

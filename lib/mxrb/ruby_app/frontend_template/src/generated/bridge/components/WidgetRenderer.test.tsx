@@ -407,7 +407,11 @@ describe('Ruby data view editing', () => {
             },
             columns: [
               {
-                options: { desktop: 'auto', vertical_alignment: 'center', design_class: 'flex-row' },
+                options: {
+                  desktop: 'auto',
+                  vertical_alignment: 'center',
+                  design_class: 'flex-row',
+                },
                 widgets: [],
               },
               { options: { desktop: 6, tablet: 12, phone: 'grow' }, widgets: [] },
@@ -423,7 +427,13 @@ describe('Ruby data view editing', () => {
     const row = root.querySelector('.row')!;
     expect(row).toHaveClass('justify-content-end', 'align-items-center', 'no-gutters', 'row-cards');
     const [auto, half, grow] = Array.from(row.children);
-    expect(auto).toHaveClass('col-lg-auto', 'col-md-auto', 'col-auto', 'align-self-center', 'flex-row');
+    expect(auto).toHaveClass(
+      'col-lg-auto',
+      'col-md-auto',
+      'col-auto',
+      'align-self-center',
+      'flex-row',
+    );
     expect(half).toHaveClass('col-lg-6', 'col-md-12', 'col');
     expect(grow).toHaveClass('col-lg', 'col-md', 'col');
     const fixed = render(

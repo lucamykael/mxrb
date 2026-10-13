@@ -23,7 +23,11 @@ module Mxrb
         @profiles ||= begin
           modern = items(@raw_document['Profiles'])
           documents = modern.empty? ? legacy_profile_documents : modern
-          documents.map { NavigationProfile.new(_1) }.freeze
+          documents.map do |document|
+            next NativeNavigationProfile.new(document) if document['$Type'] == NativeNavigationProfile::TYPE
+
+            NavigationProfile.new(document)
+          end.freeze
         end
       end
 
@@ -165,6 +169,88 @@ module Mxrb
           icon: item.dig('Icon', 'Code'),
           items: items(item['Items']).map { navigation_item(_1) }
         }.compact
+      end
+    end
+
+    # Typed view of a native mobile profile: a native home page, role-based
+    # home pages and bottom bar items instead of a web menu.
+    class NativeNavigationProfile
+      TYPE = 'Navigation$NativeNavigationProfile'
+      SETTINGS = {
+        ota_enabled: 'OtaEnabled', logging_enabled: 'LoggingEnabled',
+        encryption_db_enabled: 'EncryptionDbEnabled',
+        local_file_encryption_enabled: 'LocalFileEncryptionEnabled',
+        session_cookie_encryption_enabled: 'SessionCookieEncryptionEnabled',
+        screen_navigation_transition: 'ScreenNavigationTransition',
+        popup_navigation_transition: 'PopupNavigationTransition',
+        apply_screen_transition: 'ApplyScreenTransition', network_timeout_ms: 'NetworkTimeoutMs',
+        native_navigation_enabled: 'NativeNavigationEnabled'
+      }.freeze
+
+      attr_reader :raw_document
+
+      def initialize(raw_document)
+        @raw_document = raw_document
+      end
+
+      def name = @raw_document['Name'].to_s
+      def kind = 'Native'
+      def home_page = reference(@raw_document.dig('NativeHomePage', 'HomePagePage'))
+      def home_nanoflow = reference(@raw_document.dig('NativeHomePage', 'HomePageNanoflow'))
+      def menu_items = []
+
+      def role_homes
+        items(@raw_document['RoleBasedNativeHomePages']).map do |home|
+          {
+            role: reference(home['UserRole']), page: reference(home['HomePagePage']),
+            nanoflow: reference(home['HomePageNanoflow'])
+          }.compact
+        end
+      end
+
+      def bottom_bar_items
+        items(@raw_document['BottomBarItems']).map do |item|
+          {
+            caption: caption_translations(item['Caption']), page: reference(item['Page']),
+            icon: icon(item['Icon'])
+          }.compact
+        end
+      end
+
+      def settings
+        SETTINGS.each_with_object({}) do |(key, field), values|
+          values[key] = @raw_document[field] if @raw_document.key?(field)
+        end
+      end
+
+      def to_h
+        {
+          name:, kind:, home_page:, home_nanoflow:, role_homes:,
+          throw_partial_sync_error: @raw_document['ThrowPartialSyncError'],
+          bottom_bar: bottom_bar_items, settings:
+        }
+      end
+
+      private
+
+      def items(value) = IO::BsonCodec.parse_array(value).fetch(:items)
+
+      def reference(value)
+        result = IO::BsonCodec.extract_id(value)
+        result.to_s.empty? ? nil : result
+      end
+
+      def caption_translations(text)
+        return {} unless text.is_a?(Hash)
+
+        items(text['Items']).to_h { [_1['LanguageCode'].to_s, _1['Text'].to_s] }
+      end
+
+      def icon(value)
+        return unless value.is_a?(Hash)
+        return { collection: value['Image'].to_s } if value['$Type'] == 'Forms$IconCollectionIcon'
+
+        value['Code']
       end
     end
   end

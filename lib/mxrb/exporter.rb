@@ -3424,6 +3424,8 @@ module Mxrb
     end
 
     def navigation_profile_source(profile)
+      return native_navigation_profile_source(profile) if profile[:kind].to_s == 'Native'
+
       args = [symbol(profile.fetch(:name))]
       args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
       args << "home_microflow: #{ruby(profile[:home_microflow])}" if profile[:home_microflow]
@@ -3446,6 +3448,34 @@ module Mxrb
       args << "kind: #{ruby(profile[:kind])}" unless profile[:kind].to_s.empty?
       args << "app_icon: #{ruby(profile[:app_icon])}" if profile[:app_icon]
       body = navigation_profile_body(profile, role_homes)
+      return ["  profile #{args.join(', ')}"] if body.empty?
+
+      ["  profile #{args.join(', ')} do", *body, '  end']
+    end
+
+    def native_navigation_profile_source(profile)
+      args = [symbol(profile.fetch(:name)), 'kind: "Native"']
+      args << "home_page: #{ruby(profile[:home_page])}" if profile[:home_page]
+      args << "home_nanoflow: #{ruby(profile[:home_nanoflow])}" if profile[:home_nanoflow]
+      unless profile[:throw_partial_sync_error].nil?
+        args << "throw_partial_sync_error: #{ruby(profile[:throw_partial_sync_error])}"
+      end
+      args << "settings: #{ruby(profile[:settings])}" unless profile.fetch(:settings, {}).empty?
+      role_homes = profile.fetch(:role_homes, [])
+      details = role_homes.is_a?(Array) ? role_homes : role_homes.map { |role, page| { role:, page: } }
+      homes = (details + profile.fetch(:role_home_details, [])).map do |home|
+        options = %i[page nanoflow].filter_map { "#{_1}: #{ruby(home[_1])}" if home[_1] }
+        ["    home_for #{ruby(home.fetch(:role))}", *options].join(', ')
+      end
+      items = profile.fetch(:bottom_bar, []).map do |item|
+        caption = item.fetch(:caption)
+        item_args = [ruby(caption['en_US'] || caption.values.first || ''), "page: #{ruby(item.fetch(:page))}"]
+        item_args << "icon: #{ruby(item[:icon])}" if item[:icon]
+        translations = caption.reject { |locale, _| locale.to_s == 'en_US' }
+        item_args << "translations: #{ruby(translations)}" unless translations.empty?
+        "    bottom_bar_item #{item_args.join(', ')}"
+      end
+      body = homes + items
       return ["  profile #{args.join(', ')}"] if body.empty?
 
       ["  profile #{args.join(', ')} do", *body, '  end']
@@ -4250,6 +4280,9 @@ module Mxrb
       args << "caption: #{ruby(options[:caption])}" if options.key?(:caption) && !options[:caption].nil?
       args << "entity: #{ruby(options[:entity])}" if options[:entity]
       args << "selection: #{symbol(options[:selection])}" if type == :data_grid && options.key?(:selection)
+      if type == :data_grid
+        DATA_GRID_OPTIONS.each { args << "#{_1}: #{native_ruby(options[_1])}" if options.key?(_1) }
+      end
       if %i[text_box number_input text_area check_box date_picker radio_button_group
             reference_selector drop_down].include?(type)
         append_appearance_ruby_args(args, options)
@@ -4269,8 +4302,12 @@ module Mxrb
       if %i[button text].include?(type)
         args << "parameters: #{native_ruby(options[:parameters])}" unless Array(options[:parameters]).empty?
         append_appearance_ruby_args(args, options)
+        args << "visibility: #{native_ruby(options[:visibility])}" if options[:visibility]
       end
+      args << "render_mode: #{ruby(options[:render_mode].to_s)}" if type == :text && options[:render_mode]
       args << "button_style: #{symbol(options[:button_style])}" if type == :button && options[:button_style]
+      args << "icon: #{ruby(options[:icon])}" if type == :button && options[:icon]
+      args << "render_type: #{ruby(options[:render_type].to_s)}" if type == :button && options[:render_type]
       args << "lines: #{options[:lines]}" if type == :text_area && options[:lines]
       args << 'horizontal: true' if type == :radio_button_group && options[:horizontal]
       if type == :reference_selector && options[:display_attribute]
@@ -4278,11 +4315,13 @@ module Mxrb
       end
 
       widget_body = []
+      if widget.key?(:header)
+        widget_body << "#{child_pad}header do"
+        widget_body.concat(Array(widget[:header]).flat_map { render_widget(_1, indent + 4) })
+        widget_body << "#{child_pad}end"
+      end
       Array(options[:columns]).each do |column|
-        column_args = [symbol(column.fetch(:name))]
-        column_args << "attribute: #{symbol(column[:attribute])}" if column[:attribute]
-        column_args << "caption: #{ruby(column[:caption])}" if column.key?(:caption) && !column[:caption].nil?
-        widget_body << "#{child_pad}column #{column_args.join(', ')}"
+        widget_body.concat(render_column(column, indent + 2))
       end
       Array(options[:tabs]).each do |tab|
         tab_args = [symbol(tab.fetch(:name))]
@@ -4378,11 +4417,12 @@ module Mxrb
                when :reference_set_selector
                  %i[selection number_of_rows selectable_xpath control_bar select_first show_empty_rows
                     paging tab_index width_unit association target_entity display_attribute association_path
-                    caption editable]
+                    association_steps caption editable]
                when :navigation_list
                  %i[tab_index]
                when :scroll_container
-                 %i[alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode]
+                 %i[alignment layout_mode hide_scrollbars scroll_behavior tab_index width width_mode
+                    native_layout region_options]
                end
       symbol_fields = %i[editable mode selection paging width_unit alignment layout_mode
                          scroll_behavior width_mode height_unit]
@@ -4401,9 +4441,37 @@ module Mxrb
       end
       append_appearance_ruby_args(args, options)
       events = widget.fetch(:events, []).map { render_widget_event(_1, indent + 2) }
-      return ["#{' ' * indent}#{type} #{args.join(', ')}"] if events.empty?
+      children = Array(widget[:children]).flat_map { render_widget(_1, indent + 2) }
+      body = events + children + render_widget_regions(widget.fetch(:regions, {}), indent + 2)
+      return ["#{' ' * indent}#{type} #{args.join(', ')}"] if body.empty?
 
-      ["#{' ' * indent}#{type} #{args.join(', ')} do", *events, "#{' ' * indent}end"]
+      ["#{' ' * indent}#{type} #{args.join(', ')} do", *body, "#{' ' * indent}end"]
+    end
+
+    DATA_GRID_OPTIONS = %i[page_size server_side sort presentation columns_resizable columns_draggable
+                           columns_hidable xpath on_click_trigger].freeze
+    COLUMN_OPTIONS = %i[association_path dynamic_text parameters filter sortable hidable width size
+                        alignment].freeze
+
+    def render_column(column, indent)
+      pad = ' ' * indent
+      args = [symbol(column.fetch(:name))]
+      args << "attribute: #{symbol(column[:attribute])}" if column[:attribute]
+      args << "caption: #{ruby(column[:caption])}" if column.key?(:caption) && !column[:caption].nil?
+      COLUMN_OPTIONS.each { args << "#{_1}: #{native_ruby(column[_1])}" if column.key?(_1) }
+      return ["#{pad}column #{args.join(', ')}"] unless column.key?(:content)
+
+      ["#{pad}column #{args.join(', ')} do", *Array(column[:content]).flat_map { render_widget(_1, indent + 2) },
+       "#{pad}end"]
+    end
+
+    def render_widget_regions(regions, indent)
+      regions.flat_map do |name, widgets|
+        declaration = "#{' ' * indent}region #{symbol(name)}"
+        next [declaration] if Array(widgets).empty?
+
+        ["#{declaration} do", *widgets.flat_map { render_widget(_1, indent + 2) }, "#{' ' * indent}end"]
+      end
     end
 
     def render_pluggable_slot(slot, indent)

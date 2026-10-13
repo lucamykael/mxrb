@@ -191,6 +191,59 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
       .to raise_error(Mxrb::SerializationError, /distinct explicit unit ids/)
   end
 
+  it 'keeps names that normalize to the same Ruby or TypeScript name apart' do
+    flows = [double(name: 'Order_Item', id: 'a'), double(name: 'OrderItem', id: 'b'),
+             double(name: 'ABc', id: 'c'), double(name: 'A_Bc', id: 'd'), double(name: 'Other', id: 'e')]
+    expect(exporter.send(:duplicate_flow_ids, flows)).to contain_exactly('a', 'b', 'c', 'd')
+
+    exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
+    exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
+    exporter.send(:claim_declaration_path, 'frontend/package-lock.json', 'first')
+    exporter.send(:claim_declaration_path, 'frontend/package-lock.json', 'second')
+    expect { exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'second') }
+      .to raise_error(Mxrb::SerializationError, %r{two declarations generate app/models/sales/order_item.rb})
+    exporter.instance_variable_set(:@embedded_source_paths, { 'app/models/sales/order_item.rb' => true })
+    expect(exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'second')).to be_nil
+
+    modules = [
+      double(name: 'A', entities: [double(name: 'BC')], pages: [], enumerations: []),
+      double(name: 'AB', entities: [], pages: [double(name: 'C')], enumerations: [{ 'Name' => '1st' }])
+    ]
+    exporter.instance_variable_set(:@project, double(modules:))
+    expect(%w[A.BC AB.C AB.1st Other].map { exporter.send(:typescript_identifier, _1) })
+      .to eq(%w[A$BC AB$C AB1st Other])
+    exporter.instance_variable_set(:@typescript_identifier_collisions, Set['9.x'])
+    expect(exporter.send(:typescript_identifier, '9.x')).to eq('Mx9$x')
+    expect(exporter.send(:typescript_identifier, '...')).to eq('MxrbType')
+  end
+
+  it 'declares widgets outside the TypeScript widget contract as explicit extensions' do
+    text = { 'type' => 'text', 'name' => 'Title', 'options' => { 'caption' => 'Title' } }
+    expect(exporter.send(:typescript_widget_contract?, text)).to be(true)
+    expect(exporter.send(:typescript_widget_contract?, 'raw')).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('type' => 'vendor_chart'))).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('extra' => true))).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('options' => { 'series' => 3 }))).to be(false)
+    nested = { 'type' => 'container', 'name' => 'Box',
+               'regions' => { 'Main' => [text] }, 'slots' => [{ 'widgets' => [text] }],
+               'options' => { 'tabs' => [{ 'widgets' => [text.merge('type' => 'vendor_chart')] }] } }
+    expect(exporter.send(:typescript_widget_contract?, nested)).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, nested.merge('options' => {}))).to be(true)
+
+    Dir.mktmpdir('mxrb-typescript-contract-') do |dir|
+      exporter.instance_variable_set(:@output_dir, dir)
+      exporter.instance_variable_set(:@page_entries, [])
+      manifest = { 'name' => 'Sales.Chart', 'title' => 'Chart',
+                   'widgets' => [text, text.merge('name' => 'Chart', 'type' => 'vendor_chart')] }
+      exporter.send(:export_frontend_page, manifest, 'sales', 'Chart')
+      source = File.read(File.join(dir, 'frontend/src/generated/pages/sales/chart.tsx'))
+      expect(source).to include(
+        'import type { ExtensionWidgetDefinition, PageComponentProps, PageDefinition, WidgetDefinition }',
+        '} satisfies WidgetDefinition;', '} satisfies ExtensionWidgetDefinition;'
+      )
+    end
+  end
+
   it 'covers absent sidecars, identities, and source files' do
     Dir.mktmpdir('mxrb-ruby-exporter-missing-') do |dir|
       exporter.instance_variable_set(:@mendix_sidecar, dir)

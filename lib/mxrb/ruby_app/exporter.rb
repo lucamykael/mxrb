@@ -273,10 +273,21 @@ module Mxrb
         end
       end
 
+      # Widgets whose design is declared in Ruby resolve it when served; the
+      # recorded classes cover only typed native fragments without declarations.
       def write_design_classes(project)
-        classes = DesignClasses.collect(project, File.dirname(@mpr_path))
+        classes = DesignClasses.collect(project, File.dirname(@mpr_path)).filter_map do |document, widgets|
+          remaining = widgets.except(*declared_designs.fetch(document, []))
+          [document, remaining] unless remaining.empty?
+        end.to_h
         write(DesignClasses::PATH, "#{JSON.pretty_generate(classes)}\n") unless classes.empty?
       end
+
+      def record_declared_designs(document, keys)
+        declared_designs[document] = declared_designs.fetch(document, []) + keys
+      end
+
+      def declared_designs = (@declared_designs ||= {})
 
       def copy_round_trip_metadata
         source = File.join(@mendix_sidecar, '.mxrb', 'semantic_metadata.json')
@@ -1311,7 +1322,7 @@ module Mxrb
         relative = embedded_identity_path(:page, page.id) ||
                    File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
         qualified = "#{mod.name}.#{page.name}"
-        widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document)
+        widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document, name: qualified)
         layouts = @project.modules.flat_map do |owner|
           owner.presentation_documents.map { ["#{owner.name}.#{_1[:name]}", _1[:doc]] }
         end.to_h
@@ -1351,8 +1362,11 @@ module Mxrb
         end
         widget_tree = compiled_widgets.map(&:first).join("\n")
         definition_source = frontend_page_definition_source(definition, compiled_widgets.map(&:last))
+        contracts = %w[WidgetDefinition ExtensionWidgetDefinition].select do |contract|
+          declarations.any? { _1.end_with?(" satisfies #{contract};") }
+        end
         write(relative, <<~TS)
-          import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
+          import type { #{(contracts + %w[PageComponentProps PageDefinition]).sort.join(', ')} } from '../../types';
 
           #{declarations.join("\n\n")}
 
@@ -1371,6 +1385,20 @@ module Mxrb
         }
       end
 
+      def typescript_widget_contract?(widget)
+        return false unless widget.is_a?(Hash) && TYPESCRIPT_WIDGET_TYPES.include?(widget['type'])
+        return false unless (widget.keys - TYPESCRIPT_WIDGET_KEYS).empty?
+        return false unless (widget.fetch('options', {}).keys - TYPESCRIPT_WIDGET_OPTIONS.keys).empty?
+
+        typescript_nested_widgets(widget).all? { typescript_widget_contract?(_1) }
+      end
+
+      def typescript_nested_widgets(widget)
+        %w[children body footer header].flat_map { Array(widget[_1]) } +
+          widget.fetch('regions', {}).values.flatten + Array(widget['slots']).flat_map { Array(_1['widgets']) } +
+          Array(widget.dig('options', 'tabs')).flat_map { Array(_1['widgets']) }
+      end
+
       def frontend_widget_jsx(widget, path, declarations, indent)
         identifier = "widget#{path.join('_')}"
         children = Array(widget['children'])
@@ -1382,7 +1410,8 @@ module Mxrb
         unless nested_widgets.empty?
           source = source.sub(/\n}\z/, ",\n  \"children\": [#{nested_widgets.map(&:last).join(', ')}]\n}")
         end
-        declarations << "const #{identifier} = #{source} satisfies WidgetDefinition;"
+        contract = typescript_widget_contract?(widget) ? 'WidgetDefinition' : 'ExtensionWidgetDefinition'
+        declarations << "const #{identifier} = #{source} satisfies #{contract};"
         padding = ' ' * indent
         return ["#{padding}<PageWidget widget={#{identifier}} index={#{path.last}} />", identifier] if children.empty?
 
@@ -2169,6 +2198,8 @@ module Mxrb
                            runtime_gallery_sort_expression(value)
                          elsif %w[editability visibility].include?(key.to_s)
                            runtime_input_condition_source(value)
+                         elsif key.to_s == 'design'
+                           runtime_design_expression(value)
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
@@ -2214,7 +2245,7 @@ module Mxrb
 
       STRUCTURED_OPTION_KEYS = {
         table: %w[width_unit tab_index class style dynamic_class visible columns rows],
-        layout_grid: %w[width tab_index class style dynamic_class visible rows]
+        layout_grid: %w[width tab_index class style dynamic_class visible rows design]
       }.freeze
       DSL_SINK_OPTIONS = {
         sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip icon],
@@ -2323,7 +2354,7 @@ module Mxrb
       def runtime_tab_control_supported?(options, widget)
         return false unless runtime_keys?(widget, %w[type name options events])
         return false unless widget['name'].is_a?(String) && widget.key?('options')
-        return false unless options.keys.map(&:to_s).sort == %w[tabs]
+        return false unless (options.keys.map(&:to_s) - %w[design]) == %w[tabs]
         return false unless Array(widget['events']).empty?
         return false unless options.fetch('tabs').is_a?(Array) && options.fetch('tabs').any?
 
@@ -2336,9 +2367,10 @@ module Mxrb
 
       def runtime_tab_control_source(widget, indentation)
         padding = ' ' * indentation
-        lines = [runtime_widget_declaration(
-          'tab_control', [widget.fetch('name', '').inspect], indentation, true
-        )]
+        arguments = [widget.fetch('name', '').inspect]
+        design = widget.fetch('options', {})['design']
+        arguments << "design: #{runtime_design_expression(design)}" if design
+        lines = [runtime_widget_declaration('tab_control', arguments, indentation, true)]
         widget.fetch('options', {}).fetch('tabs', []).each do |tab|
           arguments = [tab.fetch('name').inspect, "caption: #{tab.fetch('caption').inspect}"]
           widgets = tab.fetch('widgets')
@@ -2358,7 +2390,7 @@ module Mxrb
               radio_button_group reference_selector].include?(type)
           allowed += Forms::InputPresentation::OPTION_KEYS.map(&:to_s)
         end
-        return false unless allowed && (options.keys.map(&:to_s) - allowed).empty?
+        return false unless allowed && (options.keys.map(&:to_s) - allowed - %w[design]).empty?
         return false unless (DSL_SINK_REQUIRED_OPTIONS.fetch(type, []) - options.keys.map(&:to_s)).empty?
         return false if !DSL_SINK_BLOCK_METHODS.include?(type) && widget_block?(widget)
         return false unless runtime_dsl_sink_regions_supported?(type, widget)
@@ -2552,7 +2584,7 @@ module Mxrb
         options = row.fetch('options', {})
         return false unless runtime_keys?(
           options,
-          %w[horizontal_alignment vertical_alignment gutters class style dynamic_class visible]
+          %w[horizontal_alignment vertical_alignment gutters class style dynamic_class visible design]
         )
         return false unless %w[horizontal_alignment vertical_alignment].all? do |name|
           runtime_alignment?(options.fetch(name, 'none'))
@@ -2567,7 +2599,7 @@ module Mxrb
       def runtime_layout_grid_column_supported?(column)
         options = column.fetch('options', {})
         return false unless runtime_keys?(
-          options, %w[desktop tablet phone vertical_alignment class style dynamic_class]
+          options, %w[desktop tablet phone vertical_alignment class style dynamic_class design]
         )
         return false unless runtime_alignment?(options.fetch('vertical_alignment', 'none'))
         return false unless %w[desktop tablet phone].all? { runtime_grid_weight?(options.fetch(_1, 'grow')) }
@@ -2930,8 +2962,65 @@ module Mxrb
 
       DATA_GRID_OPTION_KEYS = %w[
         entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
-        columns_draggable columns_hidable xpath on_click_trigger
+        columns_draggable columns_hidable xpath on_click_trigger design
       ].freeze
+      # The widget types the runtime renders and the options it reads, with
+      # their TypeScript types. Generated declarations outside this contract
+      # use the explicit ExtensionWidgetDefinition.
+      TYPESCRIPT_WIDGET_TYPES = %w[
+        button check_box container data_grid data_view date_picker drop_down file_manager gallery
+        image_uploader image_viewer layout layout_grid menu_bar native_widget navigation_list
+        navigation_tree number_input page_title placeholder pluggable_widget radio_button_group
+        reference_selector reference_set_selector scroll_container sidebar_toggle snippet
+        static_image tab_control table text text_area text_box
+      ].freeze
+      TYPESCRIPT_WIDGET_OPTIONS = {
+        'alignment' => 'string', 'allowed_extensions' => 'string', 'alternative_text' => 'string',
+        'arguments' => 'Record<string, RuntimeValue>', 'aria_label' => 'string', 'aria_required' => 'boolean',
+        'association' => 'string', 'association_path' => 'Array<{ association?: string; entity?: string }>',
+        'association_steps' => 'number', 'attribute' => 'string', 'autocomplete' => 'string',
+        'button_style' => 'string', 'caption' => 'string', 'class' => 'string', 'columns' => 'WidgetColumn[]',
+        'columns_draggable' => 'boolean', 'columns_hidable' => 'boolean', 'columns_resizable' => 'boolean',
+        'context_variable' => 'string', 'control_bar' => 'boolean', 'default_image' => 'string',
+        'design' => 'Record<string, DesignValue>', 'design_class' => 'string',
+        'design_properties' => 'RuntimeValue[]', 'desktop' => 'number | string',
+        'display_attribute' => 'string', 'dynamic_class' => 'string',
+        'editability' => 'RuntimeValue', 'editable' => 'string | boolean', 'entity' => 'string',
+        'force_full_objects' => 'boolean', 'gutters' => 'boolean', 'height' => 'number',
+        'height_unit' => 'string', 'hide_scrollbars' => 'boolean', 'horizontal' => 'boolean',
+        'horizontal_alignment' => 'string', 'icon' => 'string', 'image' => 'string',
+        'items' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'label_width' => 'number',
+        'layout' => 'string', 'layout_mode' => 'string', 'lines' => 'number', 'locale' => 'string',
+        'max_file_size' => 'number',
+        'max_length' => 'number', 'menu' => 'string', 'mode' => 'string',
+        'native_fragment' => '{ digest: string }', 'native_layout' => 'boolean', 'native_type' => 'string',
+        'navigation_profile' => 'string', 'no_entity_message' => 'string', 'number_of_rows' => 'number',
+        'on_click_enlarge' => 'boolean', 'on_click_trigger' => "'single' | 'double'",
+        'options' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'pageSize' => 'number',
+        'page_size' => 'number', 'paging' => 'string', 'parameter' => 'string', 'parameters' => 'string[]',
+        'password' => 'boolean', 'phone' => 'number | string', 'placeholder' => 'string',
+        'platform' => 'string', 'presentation' => 'string',
+        'properties' => 'Record<string, unknown>', 'read_only' => 'boolean', 'read_only_style' => 'string',
+        'region_options' => 'Record<string, Record<string, RuntimeValue>>', 'render_mode' => 'string',
+        'render_type' => 'string', 'responsive' => 'boolean', 'rows' => 'RuntimeValue[]',
+        'scroll_behavior' => 'string', 'select_first' => 'boolean', 'selectable_xpath' => 'string',
+        'selection' => 'string', 'server_side' => 'boolean', 'show_as_thumbnail' => 'boolean',
+        'show_empty_rows' => 'boolean', 'show_file_in_browser' => 'boolean', 'show_footer' => 'boolean',
+        'snippet' => 'string', 'sort' => 'Array<{ attribute: string; direction?: string }>',
+        'source' => 'DataViewSource', 'source_variable' => 'RuntimeValue', 'style' => 'string',
+        'tab_index' => 'number', 'tablet' => 'number | string', 'tabs' => 'WidgetTab[]',
+        'target_entity' => 'string',
+        'thumbnail_height' => 'number', 'thumbnail_width' => 'number',
+        'toolbar' => '{ buttons?: Array<{ type: string }> }', 'tooltip' => 'string',
+        'values' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'vertical_alignment' => 'string',
+        'visibility' => 'RuntimeValue',
+        'visible' => 'string | boolean', 'widget_id' => 'string', 'widget_name' => 'string',
+        'width' => 'number | string', 'width_mode' => 'string', 'width_unit' => 'string', 'xpath' => 'string'
+      }.freeze
+      TYPESCRIPT_WIDGET_KEYS = %w[
+        type name caption options events children body footer regions slots header
+      ].freeze
+
       DATA_GRID_COLUMN_KEYS = %w[
         attribute caption association_path dynamic_text parameters filter sortable hidable width size alignment
       ].freeze
@@ -2966,6 +3055,7 @@ module Mxrb
 
           value = options.fetch(name)
           source = runtime_gallery_sort_expression(value) if name == 'sort'
+          source = runtime_design_expression(value) if name == 'design'
           arguments << "#{name}: #{source || pretty_ruby_value(value, indentation + 2)}"
         end
         lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
@@ -3137,6 +3227,7 @@ module Mxrb
           arguments << "#{name}: #{options.fetch(name).inspect}" unless options[name].to_s.empty?
         end
         arguments << "class_name: #{options.fetch('class').inspect}" unless options['class'].to_s.empty?
+        arguments << "design: #{runtime_design_expression(options.fetch('design'))}" if options.key?('design')
       end
 
       def runtime_keywords_safe?(options)
@@ -3165,6 +3256,16 @@ module Mxrb
           "#{padding}  #{argument}#{suffix}"
         end.join("\n")
         "#{padding}#{method_name}(\n#{invocation}\n#{padding})#{' do' if block}"
+      end
+
+      # design_values(Size: "Large", "Row gap": "M", Spacing: design_sides("margin-top": "M"))
+      def runtime_design_expression(design, helper: 'design_values')
+        pairs = design.map do |property, value|
+          source = value.is_a?(Hash) ? runtime_design_expression(value, helper: 'design_sides') : value.inspect
+          key = property.to_s.match?(/\A[A-Za-z_]\w*\z/) ? property.to_s : property.to_s.inspect
+          "#{key}: #{source}"
+        end
+        "#{helper}(#{pairs.join(', ')})"
       end
 
       def pretty_ruby_value(value, continuation_indent)
@@ -3405,9 +3506,12 @@ module Mxrb
         constant
       end
 
+      # Flows whose names coincide after normalization to a file stem or a
+      # Ruby constant receive their unit identity as a disambiguating suffix.
       def duplicate_flow_ids(flows)
-        duplicate_groups = Array(flows).group_by { _1.name.to_s }
-                                       .select { |_name, group| group.size > 1 }
+        flows = Array(flows)
+        duplicate_groups = [flows.group_by { underscore(_1.name) }, flows.group_by { ruby_constant(_1.name) }]
+                           .flat_map(&:values).select { _1.size > 1 }.to_h { [_1.first.name.to_s, _1] }
         duplicate_groups.each do |name, group|
           ids = group.map { _1.id.to_s }
           if ids.any?(&:empty?) || ids.uniq.size != ids.size
@@ -3456,8 +3560,28 @@ module Mxrb
 
       def write(relative_path, contents)
         path = File.join(@output_dir, relative_path)
+        claim_declaration_path(relative_path, contents)
         FileUtils.mkdir_p(File.dirname(path))
         File.write(path, contents)
+      end
+
+      DECLARATION_ROOTS = %w[app/ frontend/src/generated/pages/ frontend/src/generated/nanoflows/].freeze
+
+      # Declaration files are named from normalized Mendix names, so two
+      # documents may map to one path. Infrastructure files are rewritten
+      # freely, and files the developer wrote are restored from embedded sources.
+      def claim_declaration_path(relative_path, contents)
+        return unless DECLARATION_ROOTS.any? { relative_path.to_s.start_with?(_1) }
+        return if @embedded_source_paths&.key?(relative_path.to_s)
+
+        @declaration_contents ||= {}
+        previous = @declaration_contents[relative_path]
+        if previous && previous != contents
+          raise SerializationError,
+                "two declarations generate #{relative_path}; rename one whose name normalizes to the same file"
+        end
+
+        @declaration_contents[relative_path] = contents
       end
 
       def gemfile
@@ -3630,9 +3754,7 @@ module Mxrb
                 'node_modules',
                 'src/generated/*',
                 '!src/generated/bridge',
-                'src/generated/bridge/*',
-                '!src/generated/bridge/api.ts',
-                '!src/generated/bridge/nanoflow.ts',
+                'src/generated/bridge/vendor',
               ],
             },
             eslint.configs.recommended,
@@ -3763,10 +3885,12 @@ module Mxrb
         end
         entity_types = entities.flat_map do |entity|
           name = typescript_identifier(entity.fetch('name'))
+          # A member is absent when the user may not read it and null when it is
+          # empty; only booleans are never empty.
           attributes = entity.fetch('attributes', []).map do |attribute|
-            optional = attribute['required'] ? '' : '?'
             type = typescript_attribute_type(attribute, enumerations)
-            "  #{JSON.generate(attribute.fetch('name'))}#{optional}: #{type};"
+            type = "#{type} | null" unless type == 'boolean'
+            "  #{JSON.generate(attribute.fetch('name'))}?: #{type};"
           end
           [
             "export interface #{name}Attributes {\n#{attributes.join("\n")}\n}",
@@ -3877,46 +4001,18 @@ module Mxrb
             widgets: WidgetDefinition[];
           }
 
+          export type WidgetType =
+            #{TYPESCRIPT_WIDGET_TYPES.map { JSON.generate(_1) }.join(' | ')};
+
+          export type DesignValue = true | string | Record<string, string>;
+
           export interface WidgetOptions {
-            [key: string]: unknown;
-            association?: string;
-            attribute?: string;
-            caption?: string;
-            class?: string;
-            columns?: WidgetColumn[];
-            display_attribute?: string;
-            dynamic_class?: string;
-            entity?: string;
-            items?: RuntimeValue[] | Record<string, RuntimeValue>;
-            lines?: number;
-            native_type?: string;
-            options?: RuntimeValue[] | Record<string, RuntimeValue>;
-            pageSize?: number;
-            page_size?: number;
-            server_side?: boolean;
-            parameters?: string[];
-            read_only?: boolean;
-            sort?: Array<{ attribute: string; direction?: string }>;
-            icon?: string;
-            render_mode?: string;
-            render_type?: string;
-            xpath?: string;
-            on_click_trigger?: 'single' | 'double';
-            source?: DataViewSource;
-            style?: string;
-            tabs?: WidgetTab[];
-            target_entity?: string;
-            toolbar?: { buttons?: Array<{ type: string }> };
-            values?: RuntimeValue[] | Record<string, RuntimeValue>;
-            visible?: string | boolean;
-            platform?: string;
-            properties?: Record<string, unknown>;
-            widget_id?: string;
-            widget_name?: string;
+          #{TYPESCRIPT_WIDGET_OPTIONS.map { |key, type| "  #{key}?: #{type};" }.join("\n")}
+            extension?: Record<string, RuntimeValue>;
           }
 
           export interface WidgetDefinition<Name extends string = string> {
-            type: string;
+            type: WidgetType;
             name: Name;
             caption?: string;
             options?: WidgetOptions;
@@ -3928,6 +4024,24 @@ module Mxrb
             slots?: WidgetSlot[];
             header?: WidgetDefinition[];
           }
+
+          // An explicit escape for a declaration outside the widget contract: a
+          // type the renderer does not know or options it does not declare.
+          export interface ExtensionWidgetDefinition<Name extends string = string> {
+            type: string;
+            name: Name;
+            caption?: string;
+            options?: Record<string, unknown>;
+            events?: WidgetEvent[];
+            children?: AnyWidgetDefinition[];
+            body?: AnyWidgetDefinition[];
+            footer?: AnyWidgetDefinition[];
+            regions?: Record<string, AnyWidgetDefinition[]>;
+            slots?: Array<Omit<WidgetSlot, 'widgets'> & { widgets: AnyWidgetDefinition[] }>;
+            header?: AnyWidgetDefinition[];
+          }
+
+          export type AnyWidgetDefinition = WidgetDefinition | ExtensionWidgetDefinition;
 
           export interface ValueType {
             kind: string;
@@ -3968,7 +4082,7 @@ module Mxrb
             appearance_class?: string;
             appearance_style?: string;
             data_source?: { kind: 'microflow' | 'nanoflow' | string; name: string } | null;
-            widgets: WidgetDefinition<WidgetName>[];
+            widgets: Array<WidgetDefinition<WidgetName> | ExtensionWidgetDefinition<WidgetName>>;
           }
 
           export interface PageComponentProps {
@@ -3977,7 +4091,7 @@ module Mxrb
           }
 
           export interface PageWidgetProps {
-            widget: WidgetDefinition;
+            widget: AnyWidgetDefinition;
             index: number;
             children?: ReactNode;
           }
@@ -4195,12 +4309,36 @@ module Mxrb
         }.fetch(attribute['type'].to_s, 'string')
       end
 
+      # Qualified names such as A.BC and AB.C share one compact identifier;
+      # those keep their segments apart with $, which Mendix names never use.
       def typescript_identifier(value)
-        parts = value.to_s.split(/[^A-Za-z0-9]+/).reject(&:empty?)
-        identifier = parts.map { _1[0].to_s.upcase + _1[1..].to_s }.join
+        identifier = if typescript_identifier_collisions.include?(value.to_s)
+                       value.to_s.split('.').map { _1.gsub(/[^A-Za-z0-9_]/, '') }.join('$')
+                     else
+                       compact_typescript_identifier(value)
+                     end
         return 'MxrbType' if identifier.empty?
 
-        identifier.match?(/\A[A-Za-z_]/) ? identifier : "Mx#{identifier}"
+        identifier.match?(/\A[A-Za-z_$]/) ? identifier : "Mx#{identifier}"
+      end
+
+      def compact_typescript_identifier(value)
+        value.to_s.split(/[^A-Za-z0-9]+/).reject(&:empty?).map { _1[0].to_s.upcase + _1[1..].to_s }.join
+      end
+
+      def typescript_identifier_collisions
+        @typescript_identifier_collisions ||= typescript_qualified_names.uniq
+                                                                        .group_by { compact_typescript_identifier(_1) }
+                                                                        .values.select { _1.size > 1 }
+                                                                        .flatten.to_set
+      end
+
+      def typescript_qualified_names
+        Array(@project&.modules).flat_map do |mod|
+          names = mod.entities.map(&:name) + mod.pages.map(&:name) +
+                  mod.enumerations.map { _1['Name'].to_s }
+          names.map { "#{mod.name}.#{_1}" }
+        end
       end
 
       def readme
