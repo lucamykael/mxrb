@@ -273,10 +273,21 @@ module Mxrb
         end
       end
 
+      # Widgets whose design is declared in Ruby resolve it when served; the
+      # recorded classes cover only typed native fragments without declarations.
       def write_design_classes(project)
-        classes = DesignClasses.collect(project, File.dirname(@mpr_path))
+        classes = DesignClasses.collect(project, File.dirname(@mpr_path)).filter_map do |document, widgets|
+          remaining = widgets.except(*declared_designs.fetch(document, []))
+          [document, remaining] unless remaining.empty?
+        end.to_h
         write(DesignClasses::PATH, "#{JSON.pretty_generate(classes)}\n") unless classes.empty?
       end
+
+      def record_declared_designs(document, keys)
+        declared_designs[document] = declared_designs.fetch(document, []) + keys
+      end
+
+      def declared_designs = (@declared_designs ||= {})
 
       def copy_round_trip_metadata
         source = File.join(@mendix_sidecar, '.mxrb', 'semantic_metadata.json')
@@ -1311,7 +1322,7 @@ module Mxrb
         relative = embedded_identity_path(:page, page.id) ||
                    File.join('app', 'pages', root, "#{underscore(page.name)}_page.rb")
         qualified = "#{mod.name}.#{page.name}"
-        widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document)
+        widgets = PresentationExporter.new(self, @project).project_widgets(page.raw_document, name: qualified)
         layouts = @project.modules.flat_map do |owner|
           owner.presentation_documents.map { ["#{owner.name}.#{_1[:name]}", _1[:doc]] }
         end.to_h
@@ -2169,6 +2180,8 @@ module Mxrb
                            runtime_gallery_sort_expression(value)
                          elsif %w[editability visibility].include?(key.to_s)
                            runtime_input_condition_source(value)
+                         elsif key.to_s == 'design'
+                           runtime_design_expression(value)
                          end
             arguments << "#{keyword}: #{expression || pretty_ruby_value(value, indentation + 2)}"
           end
@@ -2214,7 +2227,7 @@ module Mxrb
 
       STRUCTURED_OPTION_KEYS = {
         table: %w[width_unit tab_index class style dynamic_class visible columns rows],
-        layout_grid: %w[width tab_index class style dynamic_class visible rows]
+        layout_grid: %w[width tab_index class style dynamic_class visible rows design]
       }.freeze
       DSL_SINK_OPTIONS = {
         sidebar_toggle: %w[caption class style dynamic_class visible button_style tooltip icon],
@@ -2323,7 +2336,7 @@ module Mxrb
       def runtime_tab_control_supported?(options, widget)
         return false unless runtime_keys?(widget, %w[type name options events])
         return false unless widget['name'].is_a?(String) && widget.key?('options')
-        return false unless options.keys.map(&:to_s).sort == %w[tabs]
+        return false unless (options.keys.map(&:to_s) - %w[design]) == %w[tabs]
         return false unless Array(widget['events']).empty?
         return false unless options.fetch('tabs').is_a?(Array) && options.fetch('tabs').any?
 
@@ -2336,9 +2349,10 @@ module Mxrb
 
       def runtime_tab_control_source(widget, indentation)
         padding = ' ' * indentation
-        lines = [runtime_widget_declaration(
-          'tab_control', [widget.fetch('name', '').inspect], indentation, true
-        )]
+        arguments = [widget.fetch('name', '').inspect]
+        design = widget.fetch('options', {})['design']
+        arguments << "design: #{runtime_design_expression(design)}" if design
+        lines = [runtime_widget_declaration('tab_control', arguments, indentation, true)]
         widget.fetch('options', {}).fetch('tabs', []).each do |tab|
           arguments = [tab.fetch('name').inspect, "caption: #{tab.fetch('caption').inspect}"]
           widgets = tab.fetch('widgets')
@@ -2358,7 +2372,7 @@ module Mxrb
               radio_button_group reference_selector].include?(type)
           allowed += Forms::InputPresentation::OPTION_KEYS.map(&:to_s)
         end
-        return false unless allowed && (options.keys.map(&:to_s) - allowed).empty?
+        return false unless allowed && (options.keys.map(&:to_s) - allowed - %w[design]).empty?
         return false unless (DSL_SINK_REQUIRED_OPTIONS.fetch(type, []) - options.keys.map(&:to_s)).empty?
         return false if !DSL_SINK_BLOCK_METHODS.include?(type) && widget_block?(widget)
         return false unless runtime_dsl_sink_regions_supported?(type, widget)
@@ -2552,7 +2566,7 @@ module Mxrb
         options = row.fetch('options', {})
         return false unless runtime_keys?(
           options,
-          %w[horizontal_alignment vertical_alignment gutters class style dynamic_class visible]
+          %w[horizontal_alignment vertical_alignment gutters class style dynamic_class visible design]
         )
         return false unless %w[horizontal_alignment vertical_alignment].all? do |name|
           runtime_alignment?(options.fetch(name, 'none'))
@@ -2567,7 +2581,7 @@ module Mxrb
       def runtime_layout_grid_column_supported?(column)
         options = column.fetch('options', {})
         return false unless runtime_keys?(
-          options, %w[desktop tablet phone vertical_alignment class style dynamic_class]
+          options, %w[desktop tablet phone vertical_alignment class style dynamic_class design]
         )
         return false unless runtime_alignment?(options.fetch('vertical_alignment', 'none'))
         return false unless %w[desktop tablet phone].all? { runtime_grid_weight?(options.fetch(_1, 'grow')) }
@@ -2930,7 +2944,7 @@ module Mxrb
 
       DATA_GRID_OPTION_KEYS = %w[
         entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
-        columns_draggable columns_hidable xpath on_click_trigger
+        columns_draggable columns_hidable xpath on_click_trigger design
       ].freeze
       DATA_GRID_COLUMN_KEYS = %w[
         attribute caption association_path dynamic_text parameters filter sortable hidable width size alignment
@@ -2966,6 +2980,7 @@ module Mxrb
 
           value = options.fetch(name)
           source = runtime_gallery_sort_expression(value) if name == 'sort'
+          source = runtime_design_expression(value) if name == 'design'
           arguments << "#{name}: #{source || pretty_ruby_value(value, indentation + 2)}"
         end
         lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]
@@ -3137,6 +3152,7 @@ module Mxrb
           arguments << "#{name}: #{options.fetch(name).inspect}" unless options[name].to_s.empty?
         end
         arguments << "class_name: #{options.fetch('class').inspect}" unless options['class'].to_s.empty?
+        arguments << "design: #{runtime_design_expression(options.fetch('design'))}" if options.key?('design')
       end
 
       def runtime_keywords_safe?(options)
@@ -3165,6 +3181,16 @@ module Mxrb
           "#{padding}  #{argument}#{suffix}"
         end.join("\n")
         "#{padding}#{method_name}(\n#{invocation}\n#{padding})#{' do' if block}"
+      end
+
+      # design_values(Size: "Large", "Row gap": "M", Spacing: design_sides("margin-top": "M"))
+      def runtime_design_expression(design, helper: 'design_values')
+        pairs = design.map do |property, value|
+          source = value.is_a?(Hash) ? runtime_design_expression(value, helper: 'design_sides') : value.inspect
+          key = property.to_s.match?(/\A[A-Za-z_]\w*\z/) ? property.to_s : property.to_s.inspect
+          "#{key}: #{source}"
+        end
+        "#{helper}(#{pairs.join(', ')})"
       end
 
       def pretty_ruby_value(value, continuation_indent)
