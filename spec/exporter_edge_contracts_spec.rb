@@ -717,6 +717,70 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     expect(table.join).to include('class_name: "highlight"')
   end
 
+  it 'renders the regions, items and association depth of semantic widgets' do
+    text = { type: :text, name: 'Title', options: { caption: 'Title' }, events: [] }
+    scroll = exporter.send(:render_widget, {
+                             type: :scroll_container, name: 'Scroll', options: {
+                               native_layout: true, region_options: { center: { size: 200 } }
+                             }, regions: { top: [], center: [text] }, events: []
+                           }, 0).join("\n")
+    list = exporter.send(:render_widget, {
+                           type: :navigation_list, name: 'Items', options: { tab_index: 0 },
+                           children: [text], events: []
+                         }, 0).join("\n")
+    selector = exporter.send(:render_widget, {
+                               type: :reference_set_selector, name: 'Tags',
+                               options: { association_steps: 0, association_path: [] }, events: []
+                             }, 0).join
+
+    expect(scroll).to include('native_layout: true', 'region_options: {', 'region :top', 'region :center do',
+                              'text :Title')
+    expect(list).to include('navigation_list :Items, tab_index: 0 do', 'text :Title')
+    expect(selector).to include('association_steps: 0')
+  end
+
+  it 'renders the header, runtime options and column details of data grids' do
+    button = { type: :button, name: 'New', options: { caption: 'New' }, events: [] }
+    text = { type: :text, name: 'Cell', options: { caption: 'Cell' }, events: [] }
+    grid = exporter.send(:render_widget, {
+                           type: :data_grid, name: 'Grid', header: [button], events: [],
+                           options: {
+                             entity: 'App.Item', page_size: 20, presentation: :datagrid2,
+                             on_click_trigger: :double, columns: [
+                               { name: 'Name', attribute: 'App.Item.Name', caption: 'Name',
+                                 filter: { type: 'text', operator: 'contains' }, width: 'auto_fit',
+                                 alignment: 'right' },
+                               { name: 'Owner', association_path: [{ association: 'App.Item_Owner',
+                                                                     entity: 'App.Owner' }],
+                                 content: [text] }
+                             ]
+                           }
+                         }, 0).join("\n")
+
+    expect(grid).to include('page_size: 20', 'presentation: :datagrid2', 'on_click_trigger: :double',
+                            'header do', 'button :New', 'filter: {', 'width: "auto_fit"',
+                            'alignment: "right"', 'association_path: [', 'App.Item_Owner', 'column :Owner',
+                            'text :Cell')
+  end
+
+  it 'renders the visibility and presentation of texts and buttons' do
+    visibility = { attribute: 'App.Item.Active', conditions: [] }
+    text = exporter.send(:render_widget, {
+                           type: :text, name: 'Title', options: {
+                             caption: 'Title', visibility:, render_mode: :h2
+                           }, events: []
+                         }, 0).join
+    button = exporter.send(:render_widget, {
+                             type: :button, name: 'Open', options: {
+                               caption: 'Open', visibility:, icon: 'Atlas_Core.Atlas.pencil',
+                               render_type: :link
+                             }, events: []
+                           }, 0).join
+
+    expect(text).to include('visibility: {', 'render_mode: "h2"')
+    expect(button).to include('visibility: {', 'icon: "Atlas_Core.Atlas.pencil"', 'render_type: "link"')
+  end
+
   it 'rejects top-level break flows and renders default action alternatives' do
     objects = [
       { '$ID' => 'start', '$Type' => 'Microflows$StartEvent' },
