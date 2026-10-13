@@ -28,7 +28,7 @@
     "exported_app_identical": true,
     "frontend_tests": 219
   },
-  "corpus_impact": "49 of 183 nanoflows in the public corpus and the SPC project used Retrieve, ListOperations, Rollback, Delete, Aggregate, Commit or loops",
+  "corpus_impact": "49 of 183 nanoflows in the corpus of public and private real projects used Retrieve, ListOperations, Rollback, Delete, Aggregate, Commit or loops",
   "native_semantics": [
     "database retrieves sort strings without case and place empty values first",
     "the client list Sort places empty values last in both directions",

@@ -34,7 +34,7 @@ XPath, ordem e regras de acesso; variáveis do XPath (`$minimo`, `$objeto`) segu
 `xpath_variables`, com leitura autorizada dos objetos. Como no cliente Mendix
 11.12.1, o `Sort` de lista põe vazios por último nas duas direções, a média de uma
 lista vazia é vazia e a soma é 0. Mensagens de log agora substituem `{1}`. Antes,
-49 dos 183 nanoflows do corpus e do SPC usavam alguma dessas ações e falhavam.
+49 dos 183 nanoflows do corpus de projetos reais usavam alguma dessas ações e falhavam.
 
 `script/client_native_oracle` executa o mesmo fixture no cliente oficial (MxBuild e
 Runtime do Linux, Chromium headless) e no app Ruby exportado: os 15 casos coincidem.
@@ -56,7 +56,7 @@ inteiro) com substituição literal (`$1` não é interpretado), `urlEncode` é
 (fim = início do período seguinte menos 1 ms, no fuso da sessão ou UTC), caminhos
 `$obj/Modulo.Assoc/Modulo.Entidade/Atributo` sobre os objetos associados que o
 servidor envia e igualdade de objetos pela identidade. Nas 1.146 expressões dos
-nanoflows do corpus e do SPC não resta função nem sintaxe sem suporte. Os 27 casos de
+nanoflows do corpus de projetos reais não resta função nem sintaxe sem suporte. Os 27 casos de
 `spec/fixtures/native_nanoflow_expressions` coincidem entre o cliente oficial e o app
 Ruby. [Evidência](../evidence/nanoflow-expressions-2026-10-09.json).
 
@@ -270,8 +270,8 @@ Um parâmetro vazio em `=` age como `IS NULL`, como o literal `NULL`; parâmetro
 informado gera erro. Atributos enum são lidos pela chave, também em filtros.
 
 Joins aceitam caminhos com vários saltos (`p/M.A_B/M.B/M.B_C/M.C AS c`) em `INNER` e
-`LEFT`, e comparações de ordem aceitam datas. Os nove datasets do SPC, quatro deles
-com parâmetros, compilam e executam no Ruby. Os 15 casos de
+`LEFT`, e comparações de ordem aceitam datas. Os datasets de um projeto real privado,
+inclusive os com parâmetros, compilam e executam no Ruby. Os 15 casos de
 `spec/fixtures/native_oql_parameters` (com as fontes do módulo copiadas de
 `MXRB_OQL_MODULE_SOURCE`) coincidem entre o Runtime oficial e o app Ruby exportado com
 acesso ao MPR proibido. [Evidência](../evidence/oql-parameters-2026-10-10.json).
@@ -894,7 +894,7 @@ Condições por valor de atributo (booleano ou enumeração) são exportadas com
 Como o MxBuild 11.12.1 compila essas condições, a UI as avalia como "o atributo
 é igual a um dos valores marcados", com `(empty)` para valor vazio, lendo o
 objeto do Data View indicado em `source:`. Fontes desconhecidas continuam
-bloqueadas. Com isso, a exportação Ruby de uma cópia do projeto privado SPC passa
+bloqueadas. Com isso, a exportação Ruby de uma cópia de um projeto real privado passa
 a auditoria do código público e o round-trip idêntico.
 
 A Data grid 2 é exportada pela chamada tipada `data_grid`, com `xpath:` da fonte
@@ -936,7 +936,7 @@ Atlas, e a Data grid 2 mostra booleanos como Yes/No.
 restringe papéis de módulo; a Data grid 2 em snippets usa a mesma chamada tipada
 das páginas; e nanoflows excluídos que citam elementos removidos do modelo (o
 Studio Pro não verifica documentos excluídos) geram um corpo vazio em vez de
-interromper a exportação. Com isso, cópias dos projetos privados QRQC e SPC e o
+interromper a exportação. Com isso, cópias de projetos reais privados e o
 Sudoku passam a auditoria do código público e o round-trip idêntico.
 Os filtros da Data grid 2 têm o seletor de operador do widget (Contains, Starts with,
 Greater than, Between, Empty...), e os filtros drop-down mostram Select/Yes/No.

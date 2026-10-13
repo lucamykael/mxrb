@@ -43,7 +43,7 @@
   "ruby": {
     "exported_app_identical": true
   },
-  "corpus_impact": "38 of 1146 nanoflow expressions in the public corpus and the SPC project used unsupported functions, tokens or association paths; none remain",
+  "corpus_impact": "38 of 1146 nanoflow expressions in the corpus of public and private real projects used unsupported functions, tokens or association paths; none remain",
   "native_semantics": [
     "string functions follow JavaScript: trim removes Unicode blanks, substring(text, start, length) never fails, find/findLast are indexOf/lastIndexOf",
     "regular expressions use JavaScript syntax; (?i) is invalid; isMatch matches the whole text; replacements are literal",
