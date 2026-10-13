@@ -23,6 +23,49 @@ Login-Position, Not-found-Seiten oder -Microflows sowie
 bei. Noch nicht dargestellte PWA- und Offline-Konfigurationen bleiben opak und
 unverändert.
 
+## Native Mobile-Profile
+
+Ein `Navigation$NativeNavigationProfile` wird mit `kind: "Native"` gelesen.
+Es hat eine native Startseite oder einen Nanoflow, rollenspezifische
+Startseiten und Einträge der unteren Navigationsleiste. Dazu kommen die
+Einstellungen für OTA, Logging, Verschlüsselung, Übergänge, Netzwerk-Timeout
+und native Navigation. Ein Webmenü, ein Titel und eine Login-Seite fehlen.
+Der Writer erzeugt und führt das native Dokument zusammen, nie die Felder
+eines Webprofils.
+
+```ruby
+navigation do
+  profile :NativePhone, kind: "Native", home_page: "Field.Home",
+                        settings: { ota_enabled: true, network_timeout_ms: 30_000 } do
+    home_for :Inspector, page: "Field.Inspections", nanoflow: nil
+    bottom_bar_item "Home", page: "Field.Home", icon: { collection: "Atlas_Core.Atlas_Filled.home" }
+    bottom_bar_item "Inspections", page: "Field.Inspections", translations: { pt_BR: "Inspeções" }
+  end
+end
+```
+
+```ruby
+module Field
+  class TasksPage < Mxrb::RubyApp::Page
+    mendix_name "Field.Tasks"
+    native do
+      layout "Atlas_Core.NativePhone_Default"
+      title "Tasks"
+      text :Heading, caption: "Tasks"
+    end
+    navigation caption: "Tasks", profile: "NativePhone"
+  end
+end
+```
+
+Im Ruby-Modus ergänzt oder aktualisiert `navigation profile: "NativePhone"`
+auf einer `native`-Seite deren Eintrag in der unteren Navigationsleiste. Mit
+`home: true` wird die Seite außerdem zur nativen Startseite. Unbekannte
+Einstellungen scheitern beim Auswerten der DSL. Zertifiziert wurde mit einer
+Sudoku-Kopie, die Studio Pro 11.12.1 mit nativem Profil gespeichert hat. Die
+in Ruby deklarierte native Seite und ihr Eintrag bestanden `mx check` und
+Studio Pro mit 0 Fehlern.
+
 `project.design_system` inventarisiert CSS-Eigenschaften, Sass-Variablen,
 Themes und `design-properties.json`-Kataloge. Lint findet fehlende Tokens,
 literale Farben und Kontrastverträge unterhalb des deklarierten WCAG-Niveaus.
