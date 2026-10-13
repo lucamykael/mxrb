@@ -3405,9 +3405,12 @@ module Mxrb
         constant
       end
 
+      # Flows whose names coincide after normalization to a file stem or a
+      # Ruby constant receive their unit identity as a disambiguating suffix.
       def duplicate_flow_ids(flows)
-        duplicate_groups = Array(flows).group_by { _1.name.to_s }
-                                       .select { |_name, group| group.size > 1 }
+        flows = Array(flows)
+        duplicate_groups = [flows.group_by { underscore(_1.name) }, flows.group_by { ruby_constant(_1.name) }]
+                           .flat_map(&:values).select { _1.size > 1 }.to_h { [_1.first.name.to_s, _1] }
         duplicate_groups.each do |name, group|
           ids = group.map { _1.id.to_s }
           if ids.any?(&:empty?) || ids.uniq.size != ids.size
@@ -3456,8 +3459,28 @@ module Mxrb
 
       def write(relative_path, contents)
         path = File.join(@output_dir, relative_path)
+        claim_declaration_path(relative_path, contents)
         FileUtils.mkdir_p(File.dirname(path))
         File.write(path, contents)
+      end
+
+      DECLARATION_ROOTS = %w[app/ frontend/src/generated/pages/ frontend/src/generated/nanoflows/].freeze
+
+      # Declaration files are named from normalized Mendix names, so two
+      # documents may map to one path. Infrastructure files are rewritten
+      # freely, and files the developer wrote are restored from embedded sources.
+      def claim_declaration_path(relative_path, contents)
+        return unless DECLARATION_ROOTS.any? { relative_path.to_s.start_with?(_1) }
+        return if @embedded_source_paths&.key?(relative_path.to_s)
+
+        @declaration_contents ||= {}
+        previous = @declaration_contents[relative_path]
+        if previous && previous != contents
+          raise SerializationError,
+                "two declarations generate #{relative_path}; rename one whose name normalizes to the same file"
+        end
+
+        @declaration_contents[relative_path] = contents
       end
 
       def gemfile
@@ -4195,12 +4218,36 @@ module Mxrb
         }.fetch(attribute['type'].to_s, 'string')
       end
 
+      # Qualified names such as A.BC and AB.C share one compact identifier;
+      # those keep their segments apart with $, which Mendix names never use.
       def typescript_identifier(value)
-        parts = value.to_s.split(/[^A-Za-z0-9]+/).reject(&:empty?)
-        identifier = parts.map { _1[0].to_s.upcase + _1[1..].to_s }.join
+        identifier = if typescript_identifier_collisions.include?(value.to_s)
+                       value.to_s.split('.').map { _1.gsub(/[^A-Za-z0-9_]/, '') }.join('$')
+                     else
+                       compact_typescript_identifier(value)
+                     end
         return 'MxrbType' if identifier.empty?
 
-        identifier.match?(/\A[A-Za-z_]/) ? identifier : "Mx#{identifier}"
+        identifier.match?(/\A[A-Za-z_$]/) ? identifier : "Mx#{identifier}"
+      end
+
+      def compact_typescript_identifier(value)
+        value.to_s.split(/[^A-Za-z0-9]+/).reject(&:empty?).map { _1[0].to_s.upcase + _1[1..].to_s }.join
+      end
+
+      def typescript_identifier_collisions
+        @typescript_identifier_collisions ||= typescript_qualified_names.uniq
+                                                                        .group_by { compact_typescript_identifier(_1) }
+                                                                        .values.select { _1.size > 1 }
+                                                                        .flatten.to_set
+      end
+
+      def typescript_qualified_names
+        Array(@project&.modules).flat_map do |mod|
+          names = mod.entities.map(&:name) + mod.pages.map(&:name) +
+                  mod.enumerations.map { _1['Name'].to_s }
+          names.map { "#{mod.name}.#{_1}" }
+        end
       end
 
       def readme

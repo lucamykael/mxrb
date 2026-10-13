@@ -191,6 +191,32 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
       .to raise_error(Mxrb::SerializationError, /distinct explicit unit ids/)
   end
 
+  it 'keeps names that normalize to the same Ruby or TypeScript name apart' do
+    flows = [double(name: 'Order_Item', id: 'a'), double(name: 'OrderItem', id: 'b'),
+             double(name: 'ABc', id: 'c'), double(name: 'A_Bc', id: 'd'), double(name: 'Other', id: 'e')]
+    expect(exporter.send(:duplicate_flow_ids, flows)).to contain_exactly('a', 'b', 'c', 'd')
+
+    exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
+    exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'first')
+    exporter.send(:claim_declaration_path, 'frontend/package-lock.json', 'first')
+    exporter.send(:claim_declaration_path, 'frontend/package-lock.json', 'second')
+    expect { exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'second') }
+      .to raise_error(Mxrb::SerializationError, %r{two declarations generate app/models/sales/order_item.rb})
+    exporter.instance_variable_set(:@embedded_source_paths, { 'app/models/sales/order_item.rb' => true })
+    expect(exporter.send(:claim_declaration_path, 'app/models/sales/order_item.rb', 'second')).to be_nil
+
+    modules = [
+      double(name: 'A', entities: [double(name: 'BC')], pages: [], enumerations: []),
+      double(name: 'AB', entities: [], pages: [double(name: 'C')], enumerations: [{ 'Name' => '1st' }])
+    ]
+    exporter.instance_variable_set(:@project, double(modules:))
+    expect(%w[A.BC AB.C AB.1st Other].map { exporter.send(:typescript_identifier, _1) })
+      .to eq(%w[A$BC AB$C AB1st Other])
+    exporter.instance_variable_set(:@typescript_identifier_collisions, Set['9.x'])
+    expect(exporter.send(:typescript_identifier, '9.x')).to eq('Mx9$x')
+    expect(exporter.send(:typescript_identifier, '...')).to eq('MxrbType')
+  end
+
   it 'covers absent sidecars, identities, and source files' do
     Dir.mktmpdir('mxrb-ruby-exporter-missing-') do |dir|
       exporter.instance_variable_set(:@mendix_sidecar, dir)

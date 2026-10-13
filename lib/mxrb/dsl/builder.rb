@@ -1646,7 +1646,8 @@ module Mxrb
           name: user_name, id: id.to_s, entity: entity_name, roles: role_names, password: secret
         }
         @demo_users_declared = true
-        @demo_users_enabled = true
+        # Declaring a demo user enables demo users unless demo_users false said otherwise.
+        @demo_users_enabled = true if @demo_users_enabled.nil?
       end
 
       def evaluate(path)
