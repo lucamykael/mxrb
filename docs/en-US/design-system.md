@@ -53,6 +53,47 @@ targets, and `throw_partial_sync_error`. Updates retain profile and nested
 native identities. PWA and offline configuration variants not represented by
 the DSL remain opaque and unchanged.
 
+## Native mobile profiles
+
+A `Navigation$NativeNavigationProfile` is read with `kind: "Native"`. It has
+a native home page or nanoflow, role-based home pages and bottom bar items.
+It also carries the OTA, logging, encryption, transition, network-timeout and
+native-navigation settings. It has no web menu, title or sign-in page, and the
+writer generates and merges the native document rather than web profile
+fields.
+
+```ruby
+navigation do
+  profile :NativePhone, kind: "Native", home_page: "Field.Home",
+                        settings: { ota_enabled: true, network_timeout_ms: 30_000 } do
+    home_for :Inspector, page: "Field.Inspections", nanoflow: nil
+    bottom_bar_item "Home", page: "Field.Home", icon: { collection: "Atlas_Core.Atlas_Filled.home" }
+    bottom_bar_item "Inspections", page: "Field.Inspections", translations: { pt_BR: "Inspeções" }
+  end
+end
+```
+
+```ruby
+module Field
+  class TasksPage < Mxrb::RubyApp::Page
+    mendix_name "Field.Tasks"
+    native do
+      layout "Atlas_Core.NativePhone_Default"
+      title "Tasks"
+      text :Heading, caption: "Tasks"
+    end
+    navigation caption: "Tasks", profile: "NativePhone"
+  end
+end
+```
+
+In the Ruby mode, `navigation profile: "NativePhone"` on a `native` page adds
+or updates that page's bottom bar item. With `home: true`, the page also
+becomes the native home page. Unknown settings fail while the DSL is
+evaluated. For certification, a Sudoku copy saved with a native profile by
+Studio Pro 11.12.1 was used. The Ruby-declared native page and bottom bar item
+passed `mx check` and Studio Pro with 0 errors.
+
 ## Design tokens from real stylesheets
 
 `project.design_system` scans the project directory (`theme/`,

@@ -36,8 +36,10 @@ module Mxrb
       private_constant :COLLECTION_MARKERS
 
       def initialize(catalog: Catalog.for('11.12.1'), reference_decoder: nil,
-                     reference_encoder: nil, pluggable_catalog: Pluggable::Catalog.default)
+                     reference_encoder: nil, pluggable_catalog: Pluggable::Catalog.default,
+                     mendix_version: nil)
         @catalog = catalog
+        @mendix_version = mendix_version
         @reference_decoder = reference_decoder
         @reference_encoder = reference_encoder
         @pluggable_codec = Pluggable::MprCodec.new(forms_codec: self, catalog: pluggable_catalog)
@@ -791,8 +793,11 @@ module Mxrb
         COLLECTION_MARKERS.fetch([property.declared_by, property.name], 2)
       end
 
+      # Studio Pro 10 and later no longer store an expression model beside
+      # conditional and validation expressions; earlier versions always do.
       def add_expression_companion(document, property, storage)
         return unless storage == 'Expression' && %w[ConditionalSettings WidgetValidation].include?(property.declared_by)
+        return if @mendix_version && @mendix_version.to_s.split('.').first.to_i >= 10
 
         document['ExpressionModel'] = no_expression_document("$.#{storage}")
       end
