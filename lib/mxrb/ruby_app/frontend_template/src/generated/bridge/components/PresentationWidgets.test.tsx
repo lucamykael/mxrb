@@ -298,7 +298,7 @@ describe('Standalone presentation widgets', () => {
     await user.keyboard('{Enter}');
     expect(input.navigate).toHaveBeenCalledWith('Files.Home', record, { arguments: {} });
   });
-  it.each(['menu_bar', 'navigation_tree'])(
+  it.each(['menu_bar', 'navigation_tree'] as const)(
     'runs nested %s navigation and flow actions',
     async (type) => {
       const input = props({ type, name: 'Navigation', options: { menu: 'Files.Menu' } });
@@ -400,7 +400,7 @@ describe('Standalone presentation widgets', () => {
     expect(await screen.findByRole('checkbox')).toBeDisabled();
   });
 
-  it.each(['file_manager', 'image_uploader'])(
+  it.each(['file_manager', 'image_uploader'] as const)(
     'uploads %s content through the authenticated JSON client',
     async (type) => {
       const input = props({

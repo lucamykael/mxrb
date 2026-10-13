@@ -217,6 +217,33 @@ RSpec.describe Mxrb::RubyApp::Exporter, 'edge contracts' do
     expect(exporter.send(:typescript_identifier, '...')).to eq('MxrbType')
   end
 
+  it 'declares widgets outside the TypeScript widget contract as explicit extensions' do
+    text = { 'type' => 'text', 'name' => 'Title', 'options' => { 'caption' => 'Title' } }
+    expect(exporter.send(:typescript_widget_contract?, text)).to be(true)
+    expect(exporter.send(:typescript_widget_contract?, 'raw')).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('type' => 'vendor_chart'))).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('extra' => true))).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, text.merge('options' => { 'series' => 3 }))).to be(false)
+    nested = { 'type' => 'container', 'name' => 'Box',
+               'regions' => { 'Main' => [text] }, 'slots' => [{ 'widgets' => [text] }],
+               'options' => { 'tabs' => [{ 'widgets' => [text.merge('type' => 'vendor_chart')] }] } }
+    expect(exporter.send(:typescript_widget_contract?, nested)).to be(false)
+    expect(exporter.send(:typescript_widget_contract?, nested.merge('options' => {}))).to be(true)
+
+    Dir.mktmpdir('mxrb-typescript-contract-') do |dir|
+      exporter.instance_variable_set(:@output_dir, dir)
+      exporter.instance_variable_set(:@page_entries, [])
+      manifest = { 'name' => 'Sales.Chart', 'title' => 'Chart',
+                   'widgets' => [text, text.merge('name' => 'Chart', 'type' => 'vendor_chart')] }
+      exporter.send(:export_frontend_page, manifest, 'sales', 'Chart')
+      source = File.read(File.join(dir, 'frontend/src/generated/pages/sales/chart.tsx'))
+      expect(source).to include(
+        'import type { ExtensionWidgetDefinition, PageComponentProps, PageDefinition, WidgetDefinition }',
+        '} satisfies WidgetDefinition;', '} satisfies ExtensionWidgetDefinition;'
+      )
+    end
+  end
+
   it 'covers absent sidecars, identities, and source files' do
     Dir.mktmpdir('mxrb-ruby-exporter-missing-') do |dir|
       exporter.instance_variable_set(:@mendix_sidecar, dir)
