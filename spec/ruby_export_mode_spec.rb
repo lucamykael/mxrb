@@ -175,7 +175,9 @@ RSpec.describe 'Ruby application export mode' do
       expect(application_source.scan('const activeContext = contextOverride || pageContext;').size).to eq(2)
       types = File.read(File.join(root, 'frontend', 'src', 'generated', 'types.ts'))
       expect(types).to include(
-        'export interface SalesOrderAttributes', '"Number"?: string', '"Paid"?: boolean',
+        'export interface SalesOrderAttributes', '"Number"?: string | null;', '"Paid"?: boolean;',
+        'export type WidgetType =', '"button" | "check_box"', 'extension?: Record<string, RuntimeValue>;',
+        'export interface ExtensionWidgetDefinition', 'widget: AnyWidgetDefinition;',
         'export type SalesOrderStatus = "New" | "Done"', 'export interface EntityTypeMap',
         '"Sales.Order": SalesOrderRecord', 'export interface PageTypeMap',
         '"Sales.Dashboard": PageDefinition', 'export interface OpenPageEffect',

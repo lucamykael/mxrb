@@ -17,6 +17,7 @@ import {
 import { Popup } from './components/Popup';
 import { LayoutState } from './components/NativeScrollContainer';
 import { apiFailure, inlineStyle, isEntityRecord, recordValue } from './value';
+import { servedWidget } from './contracts';
 import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
 import { LoginForm } from '../../components/auth/LoginForm';
@@ -51,7 +52,7 @@ function RuntimePageWidget({ widget, children }: PageWidgetProps) {
   const runtime = useContext(PageRuntimeContext);
   if (!runtime) throw new Error('Page runtime context is missing');
   return (
-    <WidgetRenderer {...runtime} widget={widget}>
+    <WidgetRenderer {...runtime} widget={servedWidget(widget)}>
       {children}
     </WidgetRenderer>
   );

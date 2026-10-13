@@ -1351,8 +1351,11 @@ module Mxrb
         end
         widget_tree = compiled_widgets.map(&:first).join("\n")
         definition_source = frontend_page_definition_source(definition, compiled_widgets.map(&:last))
+        contracts = %w[WidgetDefinition ExtensionWidgetDefinition].select do |contract|
+          declarations.any? { _1.end_with?(" satisfies #{contract};") }
+        end
         write(relative, <<~TS)
-          import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
+          import type { #{(contracts + %w[PageComponentProps PageDefinition]).sort.join(', ')} } from '../../types';
 
           #{declarations.join("\n\n")}
 
@@ -1371,6 +1374,20 @@ module Mxrb
         }
       end
 
+      def typescript_widget_contract?(widget)
+        return false unless widget.is_a?(Hash) && TYPESCRIPT_WIDGET_TYPES.include?(widget['type'])
+        return false unless (widget.keys - TYPESCRIPT_WIDGET_KEYS).empty?
+        return false unless (widget.fetch('options', {}).keys - TYPESCRIPT_WIDGET_OPTIONS.keys).empty?
+
+        typescript_nested_widgets(widget).all? { typescript_widget_contract?(_1) }
+      end
+
+      def typescript_nested_widgets(widget)
+        %w[children body footer header].flat_map { Array(widget[_1]) } +
+          widget.fetch('regions', {}).values.flatten + Array(widget['slots']).flat_map { Array(_1['widgets']) } +
+          Array(widget.dig('options', 'tabs')).flat_map { Array(_1['widgets']) }
+      end
+
       def frontend_widget_jsx(widget, path, declarations, indent)
         identifier = "widget#{path.join('_')}"
         children = Array(widget['children'])
@@ -1382,7 +1399,8 @@ module Mxrb
         unless nested_widgets.empty?
           source = source.sub(/\n}\z/, ",\n  \"children\": [#{nested_widgets.map(&:last).join(', ')}]\n}")
         end
-        declarations << "const #{identifier} = #{source} satisfies WidgetDefinition;"
+        contract = typescript_widget_contract?(widget) ? 'WidgetDefinition' : 'ExtensionWidgetDefinition'
+        declarations << "const #{identifier} = #{source} satisfies #{contract};"
         padding = ' ' * indent
         return ["#{padding}<PageWidget widget={#{identifier}} index={#{path.last}} />", identifier] if children.empty?
 
@@ -2932,6 +2950,63 @@ module Mxrb
         entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
         columns_draggable columns_hidable xpath on_click_trigger
       ].freeze
+      # The widget types the runtime renders and the options it reads, with
+      # their TypeScript types. Generated declarations outside this contract
+      # use the explicit ExtensionWidgetDefinition.
+      TYPESCRIPT_WIDGET_TYPES = %w[
+        button check_box container data_grid data_view date_picker drop_down file_manager gallery
+        image_uploader image_viewer layout layout_grid menu_bar native_widget navigation_list
+        navigation_tree number_input page_title placeholder pluggable_widget radio_button_group
+        reference_selector reference_set_selector scroll_container sidebar_toggle snippet
+        static_image tab_control table text text_area text_box
+      ].freeze
+      TYPESCRIPT_WIDGET_OPTIONS = {
+        'alignment' => 'string', 'allowed_extensions' => 'string', 'alternative_text' => 'string',
+        'arguments' => 'Record<string, RuntimeValue>', 'aria_label' => 'string', 'aria_required' => 'boolean',
+        'association' => 'string', 'association_path' => 'Array<{ association?: string; entity?: string }>',
+        'association_steps' => 'number', 'attribute' => 'string', 'autocomplete' => 'string',
+        'button_style' => 'string', 'caption' => 'string', 'class' => 'string', 'columns' => 'WidgetColumn[]',
+        'columns_draggable' => 'boolean', 'columns_hidable' => 'boolean', 'columns_resizable' => 'boolean',
+        'context_variable' => 'string', 'control_bar' => 'boolean', 'default_image' => 'string',
+        'design' => 'Record<string, DesignValue>', 'design_class' => 'string',
+        'design_properties' => 'RuntimeValue[]', 'desktop' => 'number | string',
+        'display_attribute' => 'string', 'dynamic_class' => 'string',
+        'editability' => 'RuntimeValue', 'editable' => 'string | boolean', 'entity' => 'string',
+        'force_full_objects' => 'boolean', 'gutters' => 'boolean', 'height' => 'number',
+        'height_unit' => 'string', 'hide_scrollbars' => 'boolean', 'horizontal' => 'boolean',
+        'horizontal_alignment' => 'string', 'icon' => 'string', 'image' => 'string',
+        'items' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'label_width' => 'number',
+        'layout' => 'string', 'layout_mode' => 'string', 'lines' => 'number', 'locale' => 'string',
+        'max_file_size' => 'number',
+        'max_length' => 'number', 'menu' => 'string', 'mode' => 'string',
+        'native_fragment' => '{ digest: string }', 'native_layout' => 'boolean', 'native_type' => 'string',
+        'navigation_profile' => 'string', 'no_entity_message' => 'string', 'number_of_rows' => 'number',
+        'on_click_enlarge' => 'boolean', 'on_click_trigger' => "'single' | 'double'",
+        'options' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'pageSize' => 'number',
+        'page_size' => 'number', 'paging' => 'string', 'parameter' => 'string', 'parameters' => 'string[]',
+        'password' => 'boolean', 'phone' => 'number | string', 'placeholder' => 'string',
+        'platform' => 'string', 'presentation' => 'string',
+        'properties' => 'Record<string, unknown>', 'read_only' => 'boolean', 'read_only_style' => 'string',
+        'region_options' => 'Record<string, Record<string, RuntimeValue>>', 'render_mode' => 'string',
+        'render_type' => 'string', 'responsive' => 'boolean', 'rows' => 'RuntimeValue[]',
+        'scroll_behavior' => 'string', 'select_first' => 'boolean', 'selectable_xpath' => 'string',
+        'selection' => 'string', 'server_side' => 'boolean', 'show_as_thumbnail' => 'boolean',
+        'show_empty_rows' => 'boolean', 'show_file_in_browser' => 'boolean', 'show_footer' => 'boolean',
+        'snippet' => 'string', 'sort' => 'Array<{ attribute: string; direction?: string }>',
+        'source' => 'DataViewSource', 'source_variable' => 'RuntimeValue', 'style' => 'string',
+        'tab_index' => 'number', 'tablet' => 'number | string', 'tabs' => 'WidgetTab[]',
+        'target_entity' => 'string',
+        'thumbnail_height' => 'number', 'thumbnail_width' => 'number',
+        'toolbar' => '{ buttons?: Array<{ type: string }> }', 'tooltip' => 'string',
+        'values' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'vertical_alignment' => 'string',
+        'visibility' => 'RuntimeValue',
+        'visible' => 'string | boolean', 'widget_id' => 'string', 'widget_name' => 'string',
+        'width' => 'number | string', 'width_mode' => 'string', 'width_unit' => 'string', 'xpath' => 'string'
+      }.freeze
+      TYPESCRIPT_WIDGET_KEYS = %w[
+        type name caption options events children body footer regions slots header
+      ].freeze
+
       DATA_GRID_COLUMN_KEYS = %w[
         attribute caption association_path dynamic_text parameters filter sortable hidable width size alignment
       ].freeze
@@ -3763,10 +3838,12 @@ module Mxrb
         end
         entity_types = entities.flat_map do |entity|
           name = typescript_identifier(entity.fetch('name'))
+          # A member is absent when the user may not read it and null when it is
+          # empty; only booleans are never empty.
           attributes = entity.fetch('attributes', []).map do |attribute|
-            optional = attribute['required'] ? '' : '?'
             type = typescript_attribute_type(attribute, enumerations)
-            "  #{JSON.generate(attribute.fetch('name'))}#{optional}: #{type};"
+            type = "#{type} | null" unless type == 'boolean'
+            "  #{JSON.generate(attribute.fetch('name'))}?: #{type};"
           end
           [
             "export interface #{name}Attributes {\n#{attributes.join("\n")}\n}",
@@ -3877,46 +3954,18 @@ module Mxrb
             widgets: WidgetDefinition[];
           }
 
+          export type WidgetType =
+            #{TYPESCRIPT_WIDGET_TYPES.map { JSON.generate(_1) }.join(' | ')};
+
+          export type DesignValue = true | string | Record<string, string>;
+
           export interface WidgetOptions {
-            [key: string]: unknown;
-            association?: string;
-            attribute?: string;
-            caption?: string;
-            class?: string;
-            columns?: WidgetColumn[];
-            display_attribute?: string;
-            dynamic_class?: string;
-            entity?: string;
-            items?: RuntimeValue[] | Record<string, RuntimeValue>;
-            lines?: number;
-            native_type?: string;
-            options?: RuntimeValue[] | Record<string, RuntimeValue>;
-            pageSize?: number;
-            page_size?: number;
-            server_side?: boolean;
-            parameters?: string[];
-            read_only?: boolean;
-            sort?: Array<{ attribute: string; direction?: string }>;
-            icon?: string;
-            render_mode?: string;
-            render_type?: string;
-            xpath?: string;
-            on_click_trigger?: 'single' | 'double';
-            source?: DataViewSource;
-            style?: string;
-            tabs?: WidgetTab[];
-            target_entity?: string;
-            toolbar?: { buttons?: Array<{ type: string }> };
-            values?: RuntimeValue[] | Record<string, RuntimeValue>;
-            visible?: string | boolean;
-            platform?: string;
-            properties?: Record<string, unknown>;
-            widget_id?: string;
-            widget_name?: string;
+          #{TYPESCRIPT_WIDGET_OPTIONS.map { |key, type| "  #{key}?: #{type};" }.join("\n")}
+            extension?: Record<string, RuntimeValue>;
           }
 
           export interface WidgetDefinition<Name extends string = string> {
-            type: string;
+            type: WidgetType;
             name: Name;
             caption?: string;
             options?: WidgetOptions;
@@ -3928,6 +3977,24 @@ module Mxrb
             slots?: WidgetSlot[];
             header?: WidgetDefinition[];
           }
+
+          // An explicit escape for a declaration outside the widget contract: a
+          // type the renderer does not know or options it does not declare.
+          export interface ExtensionWidgetDefinition<Name extends string = string> {
+            type: string;
+            name: Name;
+            caption?: string;
+            options?: Record<string, unknown>;
+            events?: WidgetEvent[];
+            children?: AnyWidgetDefinition[];
+            body?: AnyWidgetDefinition[];
+            footer?: AnyWidgetDefinition[];
+            regions?: Record<string, AnyWidgetDefinition[]>;
+            slots?: Array<Omit<WidgetSlot, 'widgets'> & { widgets: AnyWidgetDefinition[] }>;
+            header?: AnyWidgetDefinition[];
+          }
+
+          export type AnyWidgetDefinition = WidgetDefinition | ExtensionWidgetDefinition;
 
           export interface ValueType {
             kind: string;
@@ -3968,7 +4035,7 @@ module Mxrb
             appearance_class?: string;
             appearance_style?: string;
             data_source?: { kind: 'microflow' | 'nanoflow' | string; name: string } | null;
-            widgets: WidgetDefinition<WidgetName>[];
+            widgets: Array<WidgetDefinition<WidgetName> | ExtensionWidgetDefinition<WidgetName>>;
           }
 
           export interface PageComponentProps {
@@ -3977,7 +4044,7 @@ module Mxrb
           }
 
           export interface PageWidgetProps {
-            widget: WidgetDefinition;
+            widget: AnyWidgetDefinition;
             index: number;
             children?: ReactNode;
           }

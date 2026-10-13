@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { WidgetRenderer } from './WidgetRenderer';
 import { PageOutlet } from './PageOutlet';
 import { ReadOnlyContext } from './FieldPolicy';
-import type { WidgetRuntimeProps } from '../contracts';
+import { servedWidget, type WidgetRuntimeProps } from '../contracts';
 import type {
   ApplicationSchema,
   EntityRecord,
@@ -212,7 +212,7 @@ describe('Ruby core widgets', () => {
 
   it('uses the loaded page title, including inside nested widgets, and updates after source changes', () => {
     function Widget({ widget }: PageWidgetProps) {
-      return <WidgetRenderer {...props(widget)} />;
+      return <WidgetRenderer {...props(servedWidget(widget))} />;
     }
     const page = {
       name: 'App.Home',

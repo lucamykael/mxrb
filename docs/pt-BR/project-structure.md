@@ -109,6 +109,15 @@ em Ruby puro. A aplicação React editável usa componentes, hooks, features,
 layouts, rotas, serviços e estilos convencionais. A tradução necessária para o
 modelo portátil fica isolada em `src/generated`: páginas, fluxos, tipos e bridge.
 
+`src/generated/types.ts` tipa o contrato da API com precisão. Um atributo de
+entidade é opcional porque fica ausente quando o usuário não pode lê-lo, e é
+anulável porque um valor vazio é `null`; booleanos nunca ficam vazios. O `type`
+de um widget é um dos valores de `WidgetType` que o runtime renderiza, e as
+opções são as chaves declaradas de `WidgetOptions`, então uma opção digitada
+errado ou um tipo desconhecido falham no typecheck. Dados livres ficam em
+`options.extension`. Um widget fora desse contrato precisa ser declarado como
+`ExtensionWidgetDefinition`; o gerador faz isso apenas quando uma página exige.
+
 O desenvolvedor não edita `src/generated`. O MXRB regenera somente essa pasta;
 todo arquivo em `app`, `components`, `core`, `features`, `hooks`, `layouts` e
 `styles` é código da aplicação, incorporado ao MPR com checksum e restaurado
