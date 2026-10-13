@@ -95,7 +95,9 @@ const ownerPopup: PageDefinition = {
           steps: [{ association: 'App.Item_Person', entity: 'App.Person' }],
         },
       },
-      body: [{ name: 'person', type: 'text_box', options: { attribute: 'Name', caption: 'Person' } }],
+      body: [
+        { name: 'person', type: 'text_box', options: { attribute: 'Name', caption: 'Person' } },
+      ],
     },
     {
       name: 'apply',
@@ -120,7 +122,9 @@ function setup() {
     if (path === '/api/schema')
       return {
         project: { name: 'App' },
-        modules: [{ name: 'App', models: [{ name: 'App.Item' }], pages: [home, editor, ownerPopup] }],
+        modules: [
+          { name: 'App', models: [{ name: 'App.Item' }], pages: [home, editor, ownerPopup] },
+        ],
       } as never;
     if (path === '/api/pages/App.Home') return home as never;
     if (path === '/api/pages/App.Editor') return editor as never;

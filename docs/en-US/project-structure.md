@@ -69,7 +69,8 @@ bundle exec mxrb run .
 ```
 
 This creates the conventional application directly with `app/models`,
-`app/dtos`, `app/services`, `app/pages`, and React + Vite. A reversible Mendix
+`app/dtos`, `app/services`, `app/pages`, and React + Vite (`app/services` is the
+exception declared in section 13 of the [architectural standard](architectural-standard.md)). A reversible Mendix
 baseline is isolated under `.mxrb`; it does not dictate the editable source
 layout. Materialize the current project as an MPR with:
 
@@ -127,6 +128,15 @@ Only `src/generated` is owned by MXRB; application code under `app`,
 `components`, `core`, `features`, `hooks`, `layouts`, and `styles` survives
 round-trips byte-for-byte. The scaffold includes strict TypeScript, ESLint,
 Prettier, Vitest, React Testing Library, and a reproducible npm lockfile.
+
+`src/generated/types.ts` types the API contract precisely. An entity attribute
+is optional because it is absent when the user may not read it, and it is
+nullable because an empty value is `null`; booleans are never empty. A widget's
+`type` is one of the `WidgetType` values the runtime renders, and its options are
+the declared `WidgetOptions` keys, so a misspelled option or an unknown type
+fails the typecheck. Free data goes under `options.extension`. A widget outside
+that contract must be declared as an `ExtensionWidgetDefinition`; the generator
+does so only when a page needs it.
 
 Install the Ruby and frontend dependencies once, then start both processes with
 one command:

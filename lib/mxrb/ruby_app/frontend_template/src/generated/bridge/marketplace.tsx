@@ -197,7 +197,8 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   const content = renderRegions(regions, children);
 
   if (id.endsWith('.image')) return <MarketplaceImage {...props} />;
-  if (id.includes('customchart')) return <MarketplacePlotly {...props}>{content}</MarketplacePlotly>;
+  if (id.includes('customchart'))
+    return <MarketplacePlotly {...props}>{content}</MarketplacePlotly>;
   if (/(progressbar|progresscircle|rangeslider|slider|rating|colorpicker|togglebuttons)\./.test(id))
     return <MarketplaceControl {...props} />;
 

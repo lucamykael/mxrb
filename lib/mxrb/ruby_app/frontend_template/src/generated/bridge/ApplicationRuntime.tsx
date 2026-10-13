@@ -17,6 +17,7 @@ import {
 import { Popup } from './components/Popup';
 import { LayoutState } from './components/NativeScrollContainer';
 import { apiFailure, inlineStyle, isEntityRecord, recordValue } from './value';
+import { servedWidget } from './contracts';
 import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
 import { LoginForm } from '../../components/auth/LoginForm';
@@ -51,7 +52,7 @@ function RuntimePageWidget({ widget, children }: PageWidgetProps) {
   const runtime = useContext(PageRuntimeContext);
   if (!runtime) throw new Error('Page runtime context is missing');
   return (
-    <WidgetRenderer {...runtime} widget={widget}>
+    <WidgetRenderer {...runtime} widget={servedWidget(widget)}>
       {children}
     </WidgetRenderer>
   );
@@ -783,35 +784,35 @@ export function ApplicationRuntime({
           schema={schema}
         >
           <DataRevision.Provider value={revision - localRevisions}>
-          <ClientActions.Provider
-            value={{
-              edits,
-              reset: editReset,
-              run: runClientAction,
-              close: closePage,
-              confirm: (settings) =>
-                settings
-                  ? new Promise((resolve) => setConfirmation({ settings, resolve }))
-                  : Promise.resolve(true),
-            }}
-          >
-            <PageRuntimeContext.Provider value={pageRuntime}>
-              <LayoutState.Provider value={layoutState.current}>
-                <NavigationSelection.Provider value={navigationSelection.current}>
-                  <SelectionScope key={page.name}>
-                    <PageDataSource.Provider value={pageSourceWidget(page)}>
-                      <PageOutlet
-                        key={page.name}
-                        page={page}
-                        busy={busy}
-                        Widget={RuntimePageWidget}
-                      />
-                    </PageDataSource.Provider>
-                  </SelectionScope>
-                </NavigationSelection.Provider>
-              </LayoutState.Provider>
-            </PageRuntimeContext.Provider>
-          </ClientActions.Provider>
+            <ClientActions.Provider
+              value={{
+                edits,
+                reset: editReset,
+                run: runClientAction,
+                close: closePage,
+                confirm: (settings) =>
+                  settings
+                    ? new Promise((resolve) => setConfirmation({ settings, resolve }))
+                    : Promise.resolve(true),
+              }}
+            >
+              <PageRuntimeContext.Provider value={pageRuntime}>
+                <LayoutState.Provider value={layoutState.current}>
+                  <NavigationSelection.Provider value={navigationSelection.current}>
+                    <SelectionScope key={page.name}>
+                      <PageDataSource.Provider value={pageSourceWidget(page)}>
+                        <PageOutlet
+                          key={page.name}
+                          page={page}
+                          busy={busy}
+                          Widget={RuntimePageWidget}
+                        />
+                      </PageDataSource.Provider>
+                    </SelectionScope>
+                  </NavigationSelection.Provider>
+                </LayoutState.Provider>
+              </PageRuntimeContext.Provider>
+            </ClientActions.Provider>
           </DataRevision.Provider>
         </VariableEnvironment>
       </PageParameters.Provider>

@@ -815,11 +815,16 @@ Language selector listet sie auf und wechselt die Seitensprache.
 Layout Grids werden mit den Atlas-Klassen gerendert (`mx-layoutgrid`, `row`,
 `col-lg-*`/`col-md-*`/`col-*`, `align-self-*`), sodass das Projektthema das
 Layout übernimmt; ein Ersatzgrid ohne Spezifität deckt Themen ohne Atlas ab.
-Der Export löst die Design-Properties von Seiten, Snippets und Layouts mit den
-`design-properties.json` des Themas auf (Toggles, Optionen und Spacing) und
-speichert die Klassen in `.mxrb/design_classes.json`; die Anwendung fügt sie den
-ausgelieferten Widgets hinzu (`btn-lg`, `spacing-inner-top`, `flex-row`...), ohne
-die Ruby-Quellen zu ändern. Der Sidebar-Toggle zeigt sein Sammlungs-Icon,
+Widgets sowie Zeilen und Spalten von Layout-Grids deklarieren ihre
+Design-Properties in Ruby, etwa `design: design_values(Size: "Large", Spacing:
+design_sides("margin-left": "S"))`. Ein Toggle ist `true`, eine Option ihr Name,
+und Spacing listet Seiten und Optionen. Data Views behalten ihre typisierten
+`design_properties`. Die Anwendung löst die aktuellen Deklarationen beim
+Ausliefern jedes Dokuments mit den `design-properties.json` des exportierten
+Themas auf (`btn-lg`, `spacing-inner-top`, `flex-row`...). Wer eine Deklaration
+ändert, entfernt oder verschiebt, ändert die ausgelieferten Klassen.
+`.mxrb/design_classes.json` enthält nur noch die Klassen typisierter nativer
+Fragmente ohne Deklaration. Der Sidebar-Toggle zeigt sein Sammlungs-Icon,
 Datumsfilter von Data Grid 2 haben den Kalender-Button, und ein Bildbetrachter
 ohne Inhalt zeigt das Standardbild.
 Für angemeldete Benutzer speichert der Language selector die gewählte Sprache in
@@ -828,9 +833,9 @@ Für angemeldete Benutzer speichert der Language selector die gewählte Sprache 
 Referenzauswahlen laden ihre Optionen nur neu, wenn sich Serverdaten ändern,
 nicht bei jeder im Browser gehaltenen Änderung, und Data-Grid-2-Spalten über
 dasselbe Attribut (etwa eine Aktionsspalte) behalten ihre eigene Identität.
-Zeilen und Spalten von Layout-Grids, die keine Namen haben, erhalten ihre
-Design-Properties über die Position (`grid/rows/0/columns/1`), etwa `cards` und
-`flex-row`.
+Zeilen und Spalten von Layout-Grids, die keine Namen haben, tragen ihre
+Deklaration mit sich; werden sie in Ruby umsortiert, bleiben `cards` und
+`flex-row` an den richtigen Elementen.
 Wie MxBuild in `dist/widgets.css` sammelt der Export das eigene CSS der
 `.mpk`-Pakete der vom Projekt verwendeten Pluggable Widgets samt referenzierten
 Assets in `frontend/src/generated/platform/widgets/widgets.css`, das vor dem

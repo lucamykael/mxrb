@@ -17,7 +17,7 @@ module Mxrb
         @exporter.send(:with_presentation_fragments) { export_modules }
       end
 
-      def project_widgets(document) = PresentationProjection.new(@exporter).call(document)
+      def project_widgets(document, name:) = PresentationProjection.new(@exporter).call(document, name:)
 
       private
 
@@ -37,7 +37,7 @@ module Mxrb
           next unless entry[:type] == 'Forms$Layout'
 
           name = "#{mod.name}.#{entry[:name]}"
-          widgets = project_widgets(entry.fetch(:doc))
+          widgets = project_widgets(entry.fetch(:doc), name:)
           widgets = layout_appearance(widgets, entry.fetch(:doc))
           "Mxrb::RubyApp::Presentation.layout #{name.inspect} do\n" \
             "#{widget_source(name, entry.fetch(:doc), widgets)}\nend"

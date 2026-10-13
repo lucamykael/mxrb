@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import type { PageComponentProps, PageDefinition, WidgetDefinition } from '../../types';
+import type { AnyWidgetDefinition, PageComponentProps, PageDefinition } from '../../types';
 import { autofocusEnabled, focusWhenReady } from './autofocus';
 import { PageTitleContext, PageNameContext, PageLayoutContext } from './PageTitleContext';
 
@@ -39,7 +39,7 @@ function useInitialFocus(root: RefObject<HTMLElement | null>, mode: string | und
 export function PageOutlet({ page, busy, Widget }: PageOutletProps) {
   const root = useRef<HTMLElement>(null);
   useInitialFocus(root, page.autofocus);
-  const renderWidget = (widget: WidgetDefinition, index: number, path: string) => (
+  const renderWidget = (widget: AnyWidgetDefinition, index: number, path: string) => (
     <Widget key={`${path}-${widget.name || widget.type}`} widget={widget} index={index}>
       {(widget.children || []).map((child, childIndex) =>
         renderWidget(child, childIndex, `${path}-${childIndex}`),

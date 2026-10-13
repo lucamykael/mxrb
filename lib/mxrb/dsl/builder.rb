@@ -10,6 +10,7 @@ require_relative 'workflows'
 require_relative 'presentation_documents'
 require_relative 'asset_documents'
 require_relative 'artifact_documents'
+require_relative 'widget_design'
 require_relative 'project_documents'
 require_relative 'flow_page_builder'
 require_relative 'flow_text_builder'
@@ -1738,12 +1739,12 @@ module Mxrb
                   app_title: nil, app_icon: nil, enabled: nil, offline_enabled: nil,
                   throw_partial_sync_error: nil, sign_in_title: nil,
                   sign_in_location: nil, not_found_page: nil,
-                  not_found_microflow: nil, &block)
+                  not_found_microflow: nil, home_nanoflow: nil, settings: {}, &block)
         profile = NavigationProfileBuilder.new(
           name, home_page:, home_microflow:, sign_in_page:, menu:, role_homes:,
                 offline:, kind:, app_title:, app_icon:, enabled:, offline_enabled:,
                 throw_partial_sync_error:, sign_in_title:, sign_in_location:,
-                not_found_page:, not_found_microflow:
+                not_found_page:, not_found_microflow:, home_nanoflow:, settings:
         )
         profile.instance_eval(&block) if block
         @profiles << profile.to_h
@@ -1772,6 +1773,9 @@ module Mxrb
         @sign_in_location = optional_string(options, :sign_in_location)
         @not_found_page = optional_string(options, :not_found_page)
         @not_found_microflow = optional_string(options, :not_found_microflow)
+        @home_nanoflow = optional_string(options, :home_nanoflow)
+        @settings = native_settings(options.fetch(:settings, {}))
+        @bottom_bar = []
         @role_homes = options.fetch(:role_homes, {}).to_h.transform_keys(&:to_s)
                              .transform_values(&:to_s)
         @role_home_details = []
@@ -1786,9 +1790,17 @@ module Mxrb
         @sign_in_title[locale.to_s] = text.to_s
       end
 
-      def home_for(role, page: nil, microflow: nil)
+      def home_for(role, page: nil, microflow: nil, nanoflow: nil)
         @role_home_details << {
-          role: role.to_s, page: page&.to_s, microflow: microflow&.to_s
+          role: role.to_s, page: page&.to_s, microflow: microflow&.to_s, nanoflow: nanoflow&.to_s
+        }.compact
+      end
+
+      # A native profile's bottom bar entry; a page may appear only once.
+      def bottom_bar_item(caption, page:, icon: nil, translations: {})
+        @bottom_bar << {
+          caption: { 'en_US' => caption.to_s }.merge(normalize_translations(translations)),
+          page: page.to_s, icon:
         }.compact
       end
 
@@ -1820,11 +1832,19 @@ module Mxrb
           throw_partial_sync_error: @throw_partial_sync_error,
           sign_in_title: @sign_in_title, sign_in_location: @sign_in_location,
           not_found_page: @not_found_page, not_found_microflow: @not_found_microflow,
-          items: @items
+          items: @items, home_nanoflow: @home_nanoflow, settings: @settings, bottom_bar: @bottom_bar
         }
       end
 
       private
+
+      def native_settings(values)
+        settings = values.to_h.transform_keys(&:to_sym)
+        unknown = settings.keys - Model::NativeNavigationProfile::SETTINGS.keys
+        raise ArgumentError, "unknown native navigation settings: #{unknown.join(', ')}" unless unknown.empty?
+
+        settings
+      end
 
       def optional_string(options, key)
         options[key]&.to_s
@@ -3804,5 +3824,22 @@ module Mxrb
     end
 
     MicroflowBuilder = FlowBuilder
+
+    class LayoutGridBuilder
+      private
+
+      def design_rows = @rows
+    end
+
+    class LayoutGridRowBuilder
+      private
+
+      def design_columns = @columns
+    end
+
+    WidgetDesign.wrap(WidgetDsl, WidgetDsl.public_instance_methods(false), list: :_widget_list)
+    [WidgetDsl, LayoutGridBuilder, LayoutGridRowBuilder].each { _1.include(WidgetDesign::Helpers) }
+    WidgetDesign.wrap(LayoutGridBuilder, %i[row], list: :design_rows)
+    WidgetDesign.wrap(LayoutGridRowBuilder, %i[column], list: :design_columns)
   end
 end

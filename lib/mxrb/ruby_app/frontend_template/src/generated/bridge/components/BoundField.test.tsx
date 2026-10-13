@@ -120,7 +120,13 @@ describe('editable exported fields', () => {
       options: { attribute: 'Files.Owner', display_attribute: 'Files.Person.Name' },
     };
     const schema = {
-      modules: [{ associations: [{ name: 'Owner', from_entity: 'Files.Document', to_entity: 'Files.Person' }] }],
+      modules: [
+        {
+          associations: [
+            { name: 'Owner', from_entity: 'Files.Document', to_entity: 'Files.Person' },
+          ],
+        },
+      ],
     } as unknown as ApplicationSchema;
     const field = (data: number, revision: number) => (
       <DataRevision.Provider value={data}>

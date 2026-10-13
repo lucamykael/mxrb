@@ -128,7 +128,8 @@ classificados pela responsabilidade:
 | Operação técnica interna | `infrastructure/actions/` | `calculate_file_hash.rb` |
 
 Não existe uma pasta genérica `services/`, pois ela normalmente mistura casos
-de uso, domínio e infraestrutura.
+de uso, domínio e infraestrutura. A aplicação Ruby executável é a exceção
+declarada na seção 13.
 
 ### Nanoflows
 
@@ -531,3 +532,22 @@ um `Pages$DataView`.
 Bindings abstratos sem widget concreto continuam preservados no manifesto. Eles
 não devem ser apresentados como funcionalidade executável do app Mendix até
 serem associados a um elemento `Pages$...`.
+
+## 13. Escopo: exportação Mendix DSL e aplicação Ruby executável
+
+Esta norma vale para a exportação Mendix DSL (`mxrb export`, modo padrão), cuja
+saída é a representação arquitetural do projeto. A aplicação Ruby executável
+(`--mode ruby`, `mxrb init --mode ruby`) é uma exceção declarada para os fluxos.
+Ela segue a convenção de aplicações Ruby e grava microflows, nanoflows com
+corpo Ruby e regras em `app/services/<módulo>/`, um arquivo por documento
+Mendix.
+
+A exceção existe porque, nesse modo, cada classe de serviço é a projeção
+executável de um documento e carrega a identidade dele (`mendix_name` e unit
+ID). Manter um arquivo por documento em um local previsível garante o
+round-trip byte a byte das edições do desenvolvedor e a reconciliação de
+identidade sem consultar a arquitetura. A classificação por responsabilidade
+(use case, query, validação, job, integração, endpoint) continua obrigatória
+para a arquitetura descrita na DSL. Na aplicação executável, ela é expressa
+pelo código que o desenvolvedor escreve em `app/` fora de `app/services`, que
+o `mxrb` preserva intacto.

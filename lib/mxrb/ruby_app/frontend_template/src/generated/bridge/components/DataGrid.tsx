@@ -69,7 +69,8 @@ const dropDownFilter = (
   if (column.association_path?.length) return null;
   const attribute = attributeDefinition(schema, entity, column.attribute || column.name || '');
   if (attribute?.type === 'boolean') return { type: 'boolean', options: [] };
-  const enumeration = attribute?.enumeration && enumerationDefinition(schema, attribute.enumeration);
+  const enumeration =
+    attribute?.enumeration && enumerationDefinition(schema, attribute.enumeration);
   if (!enumeration) return null;
   return {
     type: 'enum',

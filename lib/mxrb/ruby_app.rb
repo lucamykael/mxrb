@@ -9,6 +9,7 @@ require 'uri'
 require_relative 'native_fragment_store'
 require_relative 'ruby_app/session_manager'
 require_relative 'ruby_app/design_classes'
+require_relative 'ruby_app/design_declarations'
 require_relative 'ruby_app/widget_styles'
 require_relative 'ruby_app/source_identity'
 require_relative 'ruby_app/domain_rule_builders'
@@ -1819,6 +1820,8 @@ module Mxrb
 
     # Loads generated Ruby classes and provides one shared in-memory backend.
     class Application
+      THEME_PLATFORM = %w[frontend src generated platform].freeze
+
       attr_reader :root, :manifest, :environment, :reload_status
 
       def initialize(root, environment: nil, process: ENV, reload: nil)
@@ -2305,7 +2308,8 @@ module Mxrb
           appearance_class: implementation.appearance_class,
           appearance_style: implementation.appearance_style,
           data_source: implementation.data_source
-        }.merge(Presentation.page(implementation, classes: design_classes.method(:[])))
+        }.merge(Presentation.page(implementation, classes: design_classes.method(:[]),
+                                                  definitions: design_definitions))
           .merge(implementation.presentation_contract || {})
       end
 
@@ -2317,10 +2321,16 @@ module Mxrb
         end
       end
 
+      # The theme design properties that declared widget designs resolve to.
+      def design_definitions
+        @design_definitions ||= root ? DesignClasses.definitions(File.join(root, *THEME_PLATFORM)) : {}
+      end
+
       def design_classed_presentation
         Registry.all(:presentation).to_h do |name, resource|
           widgets = design_classes[name.to_s]
-          [name, widgets ? DesignClasses.apply(JSON.parse(JSON.generate(resource)), widgets) : resource]
+          resource = DesignClasses.apply(JSON.parse(JSON.generate(resource)), widgets) if widgets
+          [name, DesignDeclarations.resolve(resource, design_definitions)]
         end
       end
 
@@ -4074,5 +4084,8 @@ module Mxrb
       end
     end
     # rubocop:enable Metrics
+
+    Dsl::WidgetDesign.wrap(Page::WidgetTree, Page::WidgetTree::WIDGET_METHODS + %i[widget], list: :widgets)
+    Page::WidgetTree.include(Dsl::WidgetDesign::Helpers)
   end
 end

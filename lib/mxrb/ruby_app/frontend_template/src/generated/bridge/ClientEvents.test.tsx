@@ -34,7 +34,7 @@ describe('client action execution', () => {
     const input = props();
     const field = {
       name: 'Draft',
-      type: 'text_box',
+      type: 'text_box' as const,
       options: { caption: 'Draft', source_variable: { kind: 'local_variable', name: 'Draft' } },
       events: [
         {

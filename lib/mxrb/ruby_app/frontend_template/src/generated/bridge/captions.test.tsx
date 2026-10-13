@@ -47,13 +47,24 @@ const schema: ApplicationSchema = {
 describe('structured chart captions', () => {
   it('preserves transported Decimal precision in formatted attributes and expressions', () => {
     const precise = { ...record, attributes: { Amount: decimal('9007199254740993.12345678') } };
-    expect(chartCaption({ text: '{1}', parameters: [{ attribute: 'Amount',
-      format: { decimal_precision: 8, group_digits: true } }] }, precise, { locale: 'en-US', schema }))
-      .toBe('9,007,199,254,740,993.12345678');
-    expect(chartCaption({ text: '{1}', parameters: ['$currentObject/Amount'] }, precise))
-      .toBe('9007199254740993.12345678');
-    expect(chartCaption({ text: '{1}', parameters: [{ expression: '$currentObject/Amount' }] }, precise))
-      .toBe('9007199254740993.12345678');
+    expect(
+      chartCaption(
+        {
+          text: '{1}',
+          parameters: [
+            { attribute: 'Amount', format: { decimal_precision: 8, group_digits: true } },
+          ],
+        },
+        precise,
+        { locale: 'en-US', schema },
+      ),
+    ).toBe('9,007,199,254,740,993.12345678');
+    expect(chartCaption({ text: '{1}', parameters: ['$currentObject/Amount'] }, precise)).toBe(
+      '9007199254740993.12345678',
+    );
+    expect(
+      chartCaption({ text: '{1}', parameters: [{ expression: '$currentObject/Amount' }] }, precise),
+    ).toBe('9007199254740993.12345678');
   });
 
   it('formats attributes with native precision and grouping in the selected translation', () => {

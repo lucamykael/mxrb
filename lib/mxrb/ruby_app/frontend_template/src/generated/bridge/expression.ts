@@ -17,7 +17,12 @@ import {
   isDateValue,
 } from './clientFunctions';
 import { defaultPattern, formatJavaPattern } from './dateFormatting';
-import { attributeDefinition, enumerationDefinition, expressionSchema, translated } from './schemaLookup';
+import {
+  attributeDefinition,
+  enumerationDefinition,
+  expressionSchema,
+  translated,
+} from './schemaLookup';
 
 // Keep enum identity until comparison. Backend records can contain either the
 // qualified literal or the bare member used by model defaults.
@@ -39,7 +44,11 @@ export const registerClientConstants = (values: Record<string, RuntimeValue>): v
 };
 type Expression = () => Value;
 const isRecord = (value: Value): value is EntityRecord =>
-  !!value && typeof value === 'object' && !Array.isArray(value) && 'attributes' in value && 'id' in value;
+  !!value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  'attributes' in value &&
+  'id' in value;
 const empty = (value: Value): boolean => value === null || value === undefined;
 
 // Nanoflows run in the Mendix client, so string functions follow JavaScript:
@@ -66,7 +75,11 @@ const stringFunctions: Record<string, [number, number, (values: Value[]) => Valu
   tolowercase: [1, 1, ([value]) => text(value).toLowerCase()],
   touppercase: [1, 1, ([value]) => text(value).toUpperCase()],
   length: [1, 1, ([value]) => text(value).length],
-  substring: [2, 3, (values) => substring(text(values[0]), index(values[1]), optionalIndex(values, 2))],
+  substring: [
+    2,
+    3,
+    (values) => substring(text(values[0]), index(values[1]), optionalIndex(values, 2)),
+  ],
   find: [2, 3, (values) => text(values[0]).indexOf(text(values[1]), optionalIndex(values, 2))],
   findlast: [
     2,
@@ -205,7 +218,7 @@ export function evaluate(
   let remaining = source.trim();
   while (remaining) {
     const match = remaining.match(
-      /^(?:'(?:[^']|'')*'|\[%[A-Za-z]+%\]|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)*|@[A-Za-z_]\w*\.[A-Za-z_]\w*|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:\-])/,
+      /^(?:'(?:[^']|'')*'|\[%[A-Za-z]+%\]|\$[A-Za-z_]\w*(?:\/[A-Za-z_][\w.]*)*|@[A-Za-z_]\w*\.[A-Za-z_]\w*|\d+(?:\.\d+)?|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*|!=|>=|<=|[()=<>+*,:-])/,
     );
     if (!match) throw new Error(`Unsupported expression syntax: ${remaining}`);
     tokens.push(match[0]);
@@ -254,7 +267,9 @@ export function evaluate(
         : undefined;
     if (!enumeration) return value;
     return new EnumLiteral(
-      (value as string).startsWith(`${enumeration}.`) ? (value as string) : `${enumeration}.${value}`,
+      (value as string).startsWith(`${enumeration}.`)
+        ? (value as string)
+        : `${enumeration}.${value}`,
     );
   };
   // getCaption and getKey of an enumeration literal or attribute.

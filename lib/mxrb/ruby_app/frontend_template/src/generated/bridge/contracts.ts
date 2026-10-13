@@ -7,7 +7,14 @@ import type {
   RuntimeVariables,
   WidgetDefinition,
   PageOpenOptions,
+  AnyWidgetDefinition,
 } from '../types';
+
+// The renderer reads every widget as served data: it renders the types it
+// knows and reports the rest, so an explicit extension declaration renders
+// through the same path as a contract one.
+export const servedWidget = (widget: AnyWidgetDefinition): WidgetDefinition =>
+  widget as WidgetDefinition;
 
 export type ErrorHandler = (failure: unknown) => void;
 export type SaveRecord = (

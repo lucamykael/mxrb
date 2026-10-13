@@ -6,8 +6,9 @@ module Mxrb
   module RubyApp
     # The classes Studio Pro design properties add to widgets, resolved from the
     # project theme's web design-properties.json files as the Mendix client does.
-    # The export records them per document and widget name; the application adds
-    # them to the widgets it serves, so the Ruby sources stay unchanged.
+    # Widgets declared in Ruby carry their design (see DesignDeclarations); the
+    # export records classes per document and widget name only for typed
+    # native fragments without such declarations.
     module DesignClasses
       PATH = File.join('.mxrb', 'design_classes.json')
       WIDGET_TYPES = {
