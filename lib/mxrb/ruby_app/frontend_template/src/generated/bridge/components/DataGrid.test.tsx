@@ -1,12 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  ApiRequest,
-  ApplicationSchema,
-  EntityRecord,
-  WidgetDefinition,
-} from '../../types';
+import type { ApiRequest, ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
 import { columnValue, DataGrid, matchesGridFilter } from './DataGrid';
 
 const records: EntityRecord[] = [
@@ -216,7 +211,7 @@ describe('Data grid 2', () => {
     options: {
       entity: 'Admin.Account',
       presentation: 'datagrid2',
-      xpath: "[Name != empty and Owner = $currentObject]",
+      xpath: '[Name != empty and Owner = $currentObject]',
       on_click_trigger: 'double',
       sort: [{ attribute: 'Admin.Account.FullName', direction: 'Descending' }],
       columns: [
@@ -376,11 +371,11 @@ describe('Data grid 2', () => {
     expect(screen.getByLabelText('Filter Seen')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Show calendar' })).toBeDisabled();
     const flag = screen.getByRole('combobox', { name: 'Filter On' });
-    expect(within(flag).getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Select',
-      'Yes',
-      'No',
-    ]);
+    expect(
+      within(flag)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Select', 'Yes', 'No']);
   });
 
   it('shows boolean attributes as Yes and No', async () => {

@@ -45,7 +45,8 @@ export function NativeDataGrid(props: Props) {
   columns.forEach((column) => {
     const base = column.attribute || column.name || '';
     let candidate = base;
-    for (let copy = 2; [...keys.values()].includes(candidate); copy += 1) candidate = `${base}#${copy}`;
+    for (let copy = 2; [...keys.values()].includes(candidate); copy += 1)
+      candidate = `${base}#${copy}`;
     keys.set(column, candidate);
   });
   const key = (column: WidgetColumn) => keys.get(column) ?? column.attribute ?? column.name ?? '';

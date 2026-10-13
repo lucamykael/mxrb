@@ -53,7 +53,7 @@ export function validateValue(
         valid = decimalNumber(value).isFinite();
         break;
       }
-    // Legacy numeric and textual callers remain supported.
+    // falls through: legacy numeric and textual callers remain supported.
     case 'float':
       valid =
         typeof value === 'number'

@@ -51,11 +51,19 @@ describe('Feedback image upload actions', () => {
   it('limits the size by the first significant digit plus 0.1 MB', async () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('');
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
-    expect(await upload(megabytes(2.05), 'image/png', decimal('25')).result).toBe('fileNotConverted');
-    expect(await upload(megabytes(2.2), 'image/png', decimal('25')).result).toBe('fileSizeNotAccepted');
+    expect(await upload(megabytes(2.05), 'image/png', decimal('25')).result).toBe(
+      'fileNotConverted',
+    );
+    expect(await upload(megabytes(2.2), 'image/png', decimal('25')).result).toBe(
+      'fileSizeNotAccepted',
+    );
     expect(await upload(megabytes(0.05), 'image/png', 0).result).toBe('fileNotConverted');
-    expect(await upload(megabytes(0.3), 'image/png', decimal('0.25')).result).toBe('fileNotConverted');
-    expect(await upload(megabytes(0.2), 'image/png', decimal('0.001')).result).toBe('fileNotConverted');
+    expect(await upload(megabytes(0.3), 'image/png', decimal('0.25')).result).toBe(
+      'fileNotConverted',
+    );
+    expect(await upload(megabytes(0.2), 'image/png', decimal('0.001')).result).toBe(
+      'fileNotConverted',
+    );
   });
 
   it('revokes blob URLs and raises message dialogs after half a second', async () => {

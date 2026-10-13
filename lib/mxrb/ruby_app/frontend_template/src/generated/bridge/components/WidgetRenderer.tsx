@@ -1,11 +1,4 @@
-import {
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useWidgetEvent } from '../useWidgetEvent';
 import { ClientActions } from '../PageEdits';
 import { PageDataSource } from '../PageDataSource';
@@ -153,7 +146,13 @@ function Gallery({
   ]);
   return (
     <div
-      className={classes('gallery', 'mxrb-widget', 'mxrb-gallery', options.class, options.design_class as string | undefined)}
+      className={classes(
+        'gallery',
+        'mxrb-widget',
+        'mxrb-gallery',
+        options.class,
+        options.design_class as string | undefined,
+      )}
       data-widget-name={widget.name}
       data-widget-type={widget.type}
     >
@@ -429,10 +428,13 @@ export function DataView({
   return (
     <WidgetObjectScope.Provider value={{ ...widgetObjects, [widget.name]: resolvedRecord }}>
       <ReadOnlyContext.Provider
-        value={inheritedReadOnly || !editable(options, resolvedRecord, schema.module_roles, {
-          ...widgetObjects,
-          [widget.name]: resolvedRecord,
-        })}
+        value={
+          inheritedReadOnly ||
+          !editable(options, resolvedRecord, schema.module_roles, {
+            ...widgetObjects,
+            [widget.name]: resolvedRecord,
+          })
+        }
       >
         <ReadOnlyStyleContext.Provider
           value={
@@ -457,10 +459,7 @@ export function DataView({
               data-widget-type={widget.type}
               data-editability={String(options.editable || 'always')}
             >
-              <div
-                className="mx-dataview-content mxrb-data-view__body"
-                data-widget-region="body"
-              >
+              <div className="mx-dataview-content mxrb-data-view__body" data-widget-region="body">
                 {render(widget.body, 'body')}
               </div>
               {options.show_footer !== false && (widget.footer || []).length > 0 && (
@@ -522,7 +521,12 @@ function WidgetContent({
   if (
     widget.type !== 'data_view' &&
     options.visibility &&
-    !matchesCondition(options.visibility, context || pageContext, schema.module_roles, widgetObjects)
+    !matchesCondition(
+      options.visibility,
+      context || pageContext,
+      schema.module_roles,
+      widgetObjects,
+    )
   )
     return null;
   const className = classes(
@@ -854,9 +858,7 @@ function WidgetContent({
     case 'text': {
       // Studio Pro render modes: headings, paragraph or inline text.
       const mode = String(options.render_mode || '');
-      const Tag = (
-        /^h[1-6]$/.test(mode) ? mode : mode === 'paragraph' ? 'p' : 'span'
-      ) as 'span';
+      const Tag = (/^h[1-6]$/.test(mode) ? mode : mode === 'paragraph' ? 'p' : 'span') as 'span';
       return (
         <Tag
           {...runtimeProps}
