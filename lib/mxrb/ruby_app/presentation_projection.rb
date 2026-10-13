@@ -8,7 +8,18 @@ module Mxrb
 
       def initialize(exporter) = (@exporter = exporter)
 
-      def call(document)
+      # +name+ identifies the document whose design declarations the projected
+      # widgets take over from the recorded design classes.
+      def call(document, name:)
+        designs = DesignDeclarations.declared(document)
+        projected = DesignDeclarations.inject(project(document), designs)
+        @exporter.send(:record_declared_designs, name, DesignDeclarations.injected_keys(projected, designs))
+        projected
+      end
+
+      private
+
+      def project(document)
         content = document['Content'] || document
         layout_call = content['LayoutCall'] || content['FormCall'] || {}
         name = layout_call['Layout'] || layout_call['Form']
@@ -17,8 +28,6 @@ module Mxrb
         [{ 'type' => 'layout', 'name' => name, 'options' => { 'layout' => name },
            'regions' => regions(layout_call) }]
       end
-
-      private
 
       def widgets(document)
         page = Model::Page.allocate

@@ -138,7 +138,7 @@ RSpec.describe Mxrb::RubyApp::DesignClasses do # rubocop:disable Metrics/BlockLe
     application = Mxrb::RubyApp::Application.allocate
     implementation = double('page', mendix_name: 'App.Home', mendix_id: 'home', title: 'Home', appearance_class: '',
                                     appearance_style: '', data_source: nil, presentation_contract: nil,
-                                    widgets: page.widgets, native_definition: nil)
+                                    widgets: page.widgets, native_definition: nil, excluded?: false)
     allow(Mxrb::RubyApp::Registry).to receive(:fetch).and_call_original
     allow(Mxrb::RubyApp::Registry).to receive(:fetch).with(:page, 'App.Home').and_return(implementation)
     allow(application).to receive(:authorize_document!)
