@@ -1048,7 +1048,7 @@ RSpec.describe 'MXRB defensive and compatibility paths' do
 
       mpr = Mxrb::IO::MprFile.open(path)
       raw = mpr.unit(uuid)
-      expect(mpr.parse_contents(raw)).to eq({})
+      expect { mpr.parse_contents(raw) }.to raise_error(Mxrb::IncompletePackageError, /has no contents file/)
       expect(mpr.content_bytes(raw)).to be_nil
       mpr.close
     end
@@ -1929,7 +1929,7 @@ RSpec.describe 'MXRB defensive and compatibility paths' do
       end
 
       mpr = Mxrb::IO::MprFile.open(path)
-      # line 129: v2 format + missing mxunit file → returns {}
+      # v2 format + missing mxunit file raises IncompletePackageError (see the v2 content paths case)
       # line 172: v2 format + stored_bytes is nil → insert without Contents
       # Simulate v2 format detection behavior via parse_contents on a unit with nil Contents
       unit = mpr.all_units.first

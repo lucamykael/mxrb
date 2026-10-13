@@ -56,6 +56,28 @@ RSpec.describe Mxrb::IO::MprFile do
     end
   end
 
+  it 'fails closed when a unit of an external-contents schema has no contents file' do
+    Dir.mktmpdir do |dir|
+      path = make_v2_project(dir)
+      mpr = described_class.open(path, readonly: true)
+      module_unit = mpr.units_by_containment('Modules').first
+      uuid = module_unit.fetch('UnitID')
+      mpr.close
+      FileUtils.rm_f(Mxrb::IO::MxunitCodec.path_for(File.join(dir, 'mprcontents'), uuid))
+
+      mpr = described_class.open(path, readonly: true)
+      expect { mpr.parse_contents(mpr.unit(uuid)) }
+        .to raise_error(Mxrb::IncompletePackageError, /unit #{uuid} has no contents file/)
+      expect(mpr.content_bytes(mpr.unit(uuid))).to be_nil
+      mpr.close
+      expect(Mxrb.validate(path).errors).to include("unit #{uuid} has no content bytes")
+      expect { Mxrb::Exporter.new(path, File.join(dir, 'ruby')).export! }
+        .to raise_error(Mxrb::IncompletePackageError, /unit #{uuid} has no contents file/)
+    ensure
+      mpr&.close
+    end
+  end
+
   it 'keeps inline projects independent of a neighboring split project and protects its contents' do
     Dir.mktmpdir do |dir|
       inline = File.join(dir, 'Inline.mpr')

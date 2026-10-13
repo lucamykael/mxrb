@@ -488,7 +488,11 @@ when 'export'
   abort 'Ruby stack presets require --mode ruby' if stack_flags.any? && mode != 'ruby'
   stack = stack_flags.first&.delete_prefix('--')
   abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
-  destination = Mxrb::Exporter.new(source, output, mode:).export!
+  begin
+    destination = Mxrb::Exporter.new(source, output, mode:).export!
+  rescue Mxrb::Error => e
+    abort "[mxrb] error: #{e.message}"
+  end
   Mxrb::RubyApp::Preset.apply!(destination, stack) if stack
   suffix = stack ? " with #{stack}" : ''
   puts "[mxrb] Exported #{mode} project#{suffix} to #{destination}"

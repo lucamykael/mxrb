@@ -2314,7 +2314,7 @@ RSpec.describe Mxrb do
       mpr.close
     end
 
-    it 'content_bytes returns nil for v2 unit with no mxunit file' do
+    it 'reports no content bytes and refuses to parse a v2 unit with no mxunit file' do
       contents_dir = File.join(File.dirname(@mpr_path), 'mprcontents')
       FileUtils.mkdir_p(contents_dir)
 
@@ -2329,7 +2329,7 @@ RSpec.describe Mxrb do
 
       FileUtils.rm_f(Mxrb::IO::MxunitCodec.path_for(contents_dir, mod_id))
       expect(mpr.content_bytes(raw)).to be_nil
-      expect(mpr.parse_contents(raw)).to eq({})
+      expect { mpr.parse_contents(raw) }.to raise_error(Mxrb::IncompletePackageError, /has no contents file/)
       mpr.close
     end
   end
