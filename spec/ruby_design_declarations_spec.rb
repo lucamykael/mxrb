@@ -177,7 +177,8 @@ RSpec.describe 'design properties declared in Ruby' do
       tree.button 'cancel', caption: 'Cancel', design: { Size: 'Large' }
       implementation = double('page', mendix_name: 'App.Home', mendix_id: 'home', title: 'Home',
                                       appearance_class: '', appearance_style: '', data_source: nil,
-                                      presentation_contract: nil, widgets: tree.widgets, native_definition: nil)
+                                      presentation_contract: nil, widgets: tree.widgets, native_definition: nil,
+                                      excluded?: false)
       application = Mxrb::RubyApp::Application.allocate
       application.instance_variable_set(:@root, root)
       application.instance_variable_set(:@design_classes, {})
