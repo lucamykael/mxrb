@@ -20,6 +20,7 @@ import {
   MarketplaceTabPageSelector,
 } from './components/MarketplaceInteractive';
 import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
+import { MarketplaceAutocomplete, MarketplaceTagSelector } from './components/MarketplaceSelection';
 import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
 import type { ComponentType, ReactNode } from 'react';
 import type {
@@ -294,6 +295,8 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   if (id.endsWith('dynamicenumpicker')) return <MarketplaceEnumPicker {...props} />;
   if (id.endsWith('advancedpagination')) return <MarketplacePagination {...props} />;
   if (id === 'json.widget.editor') return <MarketplaceJsonEditor {...props} />;
+  if (id.endsWith('tagselector')) return <MarketplaceTagSelector {...props} />;
+  if (id.endsWith('autocompletemultiselect')) return <MarketplaceAutocomplete {...props} />;
   if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
   return (
