@@ -21,6 +21,7 @@ require_relative 'system_domain'
 require_relative 'languages'
 require_relative 'time_zones'
 require_relative 'sort_path'
+require_relative 'decimal_parsing'
 
 module Mxrb
   module Runtime
@@ -264,7 +265,7 @@ module Mxrb
           when 'floor' then DecimalValues.parse(arguments.fetch(0)).floor
           when 'ceil' then DecimalValues.parse(arguments.fetch(0)).ceil
           when 'abs' then arguments.fetch(0).abs
-          when 'random' then Random.rand
+          when 'random' then BigDecimal(Random.rand.to_s)
           when 'substring' then substring(*arguments)
           when 'find' then string_find(*arguments)
           when 'findlast' then string_find_last(*arguments)
@@ -297,17 +298,28 @@ module Mxrb
 
         private
 
+        # parseDecimal(text), parseDecimal(text, default), parseDecimal(text, pattern)
+        # and parseDecimal(text, pattern, default).
         def parse_decimal(arguments)
-          raise ArgumentError, 'parseDecimal requires one or two arguments' unless (1..2).cover?(arguments.size)
-          if arguments.size == 2 && !arguments[1].nil? && !arguments[1].is_a?(Numeric)
+          raise ArgumentError, 'parseDecimal requires one to three arguments' unless (1..3).cover?(arguments.size)
+
+          text, *rest = arguments
+          pattern = rest.first.is_a?(String) ? rest.shift : nil
+          if rest.size > 1 || (rest.any? && !rest[0].nil? && !rest[0].is_a?(Numeric))
             raise ArgumentError, 'unsupported decimal format'
           end
 
-          DecimalValues.parse(arguments[0])
-        rescue ArgumentError
-          raise unless arguments.size == 2 && (arguments[1].nil? || arguments[1].is_a?(Numeric))
+          parsed = pattern ? DecimalParsing.parse(text, pattern) : plain_decimal(text, fallback: !rest.empty?)
+          return parsed if parsed
+          raise ArgumentError, "cannot parse #{text.inspect} with #{pattern.inspect}" if rest.empty?
 
-          arguments[1].nil? ? nil : DecimalValues.parse(arguments[1])
+          rest[0].nil? ? nil : DecimalValues.parse(rest[0])
+        end
+
+        def plain_decimal(text, fallback:)
+          DecimalValues.parse(text)
+        rescue ArgumentError
+          raise unless fallback
         end
 
         def unwrap(source)

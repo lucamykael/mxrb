@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { decimal, decimalNumber } from './decimal';
+import { decimal, decimalNumber, exactInteger } from './decimal';
 import { evaluate } from './expression';
 import { displayValue, draftValue, sortRecords } from './value';
 import { matchesGridFilter } from './components/DataGrid';
 import { NanoflowRuntime } from './nanoflow';
 
 describe('decimal transport and expressions', () => {
+  it('keeps integers beyond 2**53 - 1 exact as decimal text', () => {
+    expect(exactInteger('9007199254740991')).toBe(9007199254740991);
+    expect(exactInteger(' -9007199254740993 ')).toEqual(decimal('-9007199254740993'));
+    expect(exactInteger('12')).toBe(12);
+    expect(exactInteger(7)).toBe(7);
+    expect(exactInteger('1.5')).toBe(1.5);
+  });
+
   it('retains typed decimals through nanoflow parameters, arithmetic and results', () => {
     const runtime = new NanoflowRuntime(
       { Amount: decimal('0.1') },

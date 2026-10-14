@@ -38,6 +38,7 @@ Mxrb.define(ENV.fetch('MXRB_OUTPUT_PATH')) do
       microflow "Case#{name}" do
         order = [['Views.Location.Name', 'Ascending'], ['Views.Location.Amount', 'Ascending']]
         retrieve_objects 'Views.Location', as: :items, xpath: item.fetch('xpath'), sort: order
+        rescue_all { log_message "ORACLE #{name}=ERROR", node: "'ORACLE'" }
         create_variable :names, type: :String, value: "''"
         loop_over :items, as: :item do
           change_variable :names, to: "$names + $item/Name + ','"
