@@ -3403,6 +3403,10 @@ module Mxrb
 
     def configure_custom_widget_value!(property, configured, context_entity: nil, module_name: nil)
       value = property.fetch('Value')
+      kind = property.dig('ValueType', 'Type').to_s
+      return configure_flow_widget_value!(value, kind, configured) if %w[Microflow Nanoflow].include?(kind)
+      return configure_translatable_widget_value!(value, configured) if kind == 'TranslatableString'
+
       unless configured.is_a?(Hash)
         if configured.nil?
           clear_custom_widget_value!(property, value)
@@ -3437,6 +3441,30 @@ module Mxrb
           property, value, configured[:objects], context_entity:, module_name:
         )
       end
+      value
+    end
+
+    # Microflow and nanoflow properties store the qualified name ('' when cleared).
+    def configure_flow_widget_value!(value, kind, configured)
+      value[kind] = configured.to_s
+      value
+    end
+
+    # Translatable strings keep the existing text and translation ids per language.
+    def configure_translatable_widget_value!(value, configured)
+      translations = configured.is_a?(Hash) ? configured : { 'en_US' => configured.to_s }
+      translations = {} if configured.nil?
+      existing = value['TranslatableValue'].is_a?(Hash) ? value['TranslatableValue'] : nil
+      return value if existing.nil? && translations.empty?
+
+      items = array_items(existing&.fetch('Items', nil)).to_h { [_1['LanguageCode'].to_s, _1] }
+      value['TranslatableValue'] = {
+        '$ID' => existing&.fetch('$ID', nil) || SecureRandom.uuid, '$Type' => 'Texts$Text',
+        'Items' => IO::BsonCodec.build_array(translations.map do |language, text|
+          (items[language.to_s] || { '$ID' => SecureRandom.uuid, '$Type' => 'Texts$Translation' })
+            .merge('LanguageCode' => language.to_s, 'Text' => text.to_s)
+        end)
+      }
       value
     end
 

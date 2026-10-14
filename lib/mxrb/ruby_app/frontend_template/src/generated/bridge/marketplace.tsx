@@ -6,6 +6,12 @@ import { MarketplacePlotly } from './components/MarketplacePlotly';
 import { LanguageSelector } from './components/LanguageSelector';
 import marketplaceWidgets from './marketplaceWidgets.json';
 import { MarketplaceTimeline } from './components/MarketplaceTimeline';
+import {
+  MarketplaceCsvTable,
+  MarketplaceHtmlSnippet,
+  MarketplaceIFrame,
+  MarketplaceMicroflowTimer,
+} from './components/MarketplaceLegacy';
 import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
 import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
 import type { ComponentType, ReactNode } from 'react';
@@ -271,6 +277,11 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
       </video>
     );
   }
+  if (id.startsWith('htmlsnippet.widget.htmlsnippet')) return <MarketplaceHtmlSnippet {...props} />;
+  if (id === 'microflowtimer.widget.microflowtimer')
+    return <MarketplaceMicroflowTimer {...props} />;
+  if (id.endsWith('csvastable')) return <MarketplaceCsvTable {...props} />;
+  if (id.endsWith('iframecomponent')) return <MarketplaceIFrame {...props} />;
   if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
   return (

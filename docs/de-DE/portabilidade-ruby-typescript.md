@@ -917,7 +917,12 @@ Pluggable Widgets, die das generierte Frontend nur annähernd
 (`[WIDGET APPROXIMATE]`, mit dem Fehlenden) oder gar nicht (`[WIDGET UNSUPPORTED]`)
 rendert, samt Seiten, Snippets und Layouts; zur Laufzeit zeigt ein nicht
 unterstütztes Widget einen sichtbaren Platzhalter (`role="alert"`,
-`data-mxrb-unsupported`) statt leer zu bleiben.
+`data-mxrb-unsupported`) statt leer zu bleiben. Microflow- und Nanoflow-
+Eigenschaften werden als qualifizierte Namen projiziert, übersetzbare Texte als
+`translatable_text([["en_US", "…"], …])`; beim Zurückschreiben bleiben alle
+Sprachen und die IDs der Übersetzungen erhalten. Damit laufen HTML-Snippets
+(HTML oder JavaScript mit `this` als Element und `contextObj`), Microflow-Timer,
+CSV-Tabellen und IFrame-Komponenten in der Ruby-Anwendung.
 
 React/TypeScript, das in Mendix laufen soll, wird als offizielles Pluggable Widget
 gebaut:

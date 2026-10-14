@@ -869,6 +869,11 @@ the generated frontend renders only approximately (`[WIDGET APPROXIMATE]`, with
 what is missing) or not at all (`[WIDGET UNSUPPORTED]`), with the pages, snippets
 and layouts that use them; at runtime an unsupported widget shows a visible
 placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering empty.
+Microflow and nanoflow properties are projected as qualified names and
+translatable strings as `translatable_text([["en_US", "…"], …])`, keeping every
+language and the stored translation ids when written back; this lets HTML snippets
+(HTML, or JavaScript run with `this` as the element and `contextObj`), microflow
+timers, CSV tables and iframe components run in the Ruby application.
 
 Build React/TypeScript that must run inside Mendix as an official pluggable
 widget:

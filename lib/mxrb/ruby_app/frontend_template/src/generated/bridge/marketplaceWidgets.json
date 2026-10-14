@@ -111,6 +111,26 @@
       "support": "approximate",
       "note": "no camera access; renders a button",
       "examples": ["com.mendix.widget.web.barcodescanner.BarcodeScanner"]
+    },
+    {
+      "pattern": "^htmlsnippet\\.widget\\.htmlsnippet",
+      "support": "full",
+      "examples": ["HTMLSnippet.widget.HTMLSnippet", "HTMLSnippet.widget.HTMLSnippetContext"]
+    },
+    {
+      "pattern": "^microflowtimer\\.widget\\.microflowtimer$",
+      "support": "full",
+      "examples": ["MicroflowTimer.widget.MicroflowTimer"]
+    },
+    {
+      "pattern": "csvastable$",
+      "support": "full",
+      "examples": ["CSVasTable.widget.CSVasTable", "mendix.csvastable.CSVasTable"]
+    },
+    {
+      "pattern": "iframecomponent$",
+      "support": "full",
+      "examples": ["mendix.iframecomponent.IFrameComponent"]
     }
   ]
 }
