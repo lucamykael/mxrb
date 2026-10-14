@@ -3754,6 +3754,7 @@ module Mxrb
         properties.dig('filtersPlaceholder', 'Value')['Widgets'] =
           IO::BsonCodec.build_array(filters, marker: 2)
       end
+      configure_data_grid2_filter_list!(properties, options)
       return unless properties['columns'] && options[:columns]
 
       column_type = properties['columns'].dig('ValueType', 'ObjectType')
@@ -3854,6 +3855,18 @@ module Mxrb
         },
         'SourceVariable' => nil, 'XPathConstraint' => xpath.to_s
       }
+    end
+
+    # Attributes searched by the filter widgets in the filters placeholder.
+    def configure_data_grid2_filter_list!(properties, options)
+      return unless properties['filterList'] && options[:filter_attributes]
+
+      object_type = properties['filterList'].dig('ValueType', 'ObjectType')
+      objects = Array(options[:filter_attributes]).map do |attribute|
+        attribute = "#{options[:entity]}.#{attribute}" if options[:entity] && !attribute.to_s.include?('.')
+        custom_widget_object_doc(object_type, 'filter' => { 'AttributeRef' => attribute_ref_doc(attribute.to_s) })
+      end
+      properties['filterList']['Value']['Objects'] = IO::BsonCodec.build_array(objects, marker: 2)
     end
 
     def data_grid2_column_doc(object_type, column, entity: nil)

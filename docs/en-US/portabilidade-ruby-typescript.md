@@ -752,7 +752,11 @@ block holding the header widgets (`filtersPlaceholder`). Each `column` accepts
 and a block with the custom content, rendered with the row as its context.
 Filters use `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
 lists the values of boolean or enumeration attributes and is absent over
-associations. The UI writes `grid-template-columns` as the native widget does:
+associations. `filter_attributes: [...]` is the grid's filter list (`filterList`): a
+Text filter in the header searches the String attributes of that list, and a row
+shows when any of them matches the chosen operator (`defaultFilter`, a selector when
+`adjustable`) after the `delay`; `valueAttribute` and `onChange` run for each new
+value. The UI writes `grid-template-columns` as the native widget does:
 `autoFill` shares the space by `size`, `autoFit` follows the content and `manual`
 is in pixels. The runtime fills `System.grantableRoles` from the manageable roles
 of the project security, so the XPath of the Administration module's

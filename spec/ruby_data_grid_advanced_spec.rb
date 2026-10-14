@@ -40,6 +40,15 @@ RSpec.describe Mxrb::RubyApp::Application, 'advanced data-grid queries' do
 
     expect(page).to include(total: 1)
     expect(page.fetch(:records)).to contain_exactly(include(id: '3'))
+
+    search = lambda do |value|
+      any = %w[Name Status].map { { attribute: "App.Item.#{_1}", type: 'text', operator: 'contains', value: } }
+      app.record_page('App.Item', filters: [{ any: }]).fetch(:records).map { _1.fetch(:id) }
+    end
+    expect(search.call('ALP')).to eq(%w[1 3])
+    expect(search.call('done')).to eq(%w[2])
+    expect(search.call('zzz')).to eq([])
+    expect(app.record_page('App.Item', filters: [{ 'any' => [] }]).fetch(:records)).to eq([])
   end
 
   it 'implements text, numeric, date, boolean, empty, and comparison operators' do

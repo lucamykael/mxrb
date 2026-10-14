@@ -794,6 +794,10 @@ einem `header`-Block mit den Kopfzeilen-Widgets (`filtersPlaceholder`). Jede
 der Zeile als Kontext gerendert wird. Filter verwenden
 `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)` listet die
 Werte boolescher oder Aufzählungsattribute auf und entfällt über Assoziationen.
+`filter_attributes: [...]` ist die Filterliste des Grids (`filterList`): Ein Text filter
+in der Kopfzeile durchsucht deren String-Attribute, und eine Zeile erscheint, wenn
+eines davon mit dem gewählten Operator übereinstimmt (`defaultFilter`, Auswahl bei
+`adjustable`), nach dem `delay`; `valueAttribute` und `onChange` laufen bei jedem neuen Wert.
 Die UI schreibt `grid-template-columns` wie das native Widget: `autoFill` teilt
 den Platz nach `size`, `autoFit` folgt dem Inhalt und `manual` ist in Pixeln. Die
 Runtime füllt `System.grantableRoles` aus den verwaltbaren Rollen der

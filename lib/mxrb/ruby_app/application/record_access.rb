@@ -320,6 +320,9 @@ module Mxrb
         def grid_record_matches?(record, filters)
           Array(filters).all? do |raw|
             filter = raw.to_h.transform_keys(&:to_s)
+            # A placeholder filter over several attributes matches when any of them does.
+            next Array(filter['any']).any? { grid_record_matches?(record, [_1]) } if filter.key?('any')
+
             type = filter.fetch('type', 'text').to_s.downcase
             allowed = GRID_FILTER_OPERATORS[type] || raise(ArgumentError, "unsupported filter type #{type}")
             operator = filter.fetch('operator', GRID_DEFAULT_OPERATORS.fetch(type)).to_s.downcase

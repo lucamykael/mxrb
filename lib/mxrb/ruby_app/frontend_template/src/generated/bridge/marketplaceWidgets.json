@@ -166,6 +166,11 @@
       "pattern": "autocompletemultiselect$",
       "support": "full",
       "examples": ["itvisors.autocompletemultiselect.AutocompleteMultiselect"]
+    },
+    {
+      "pattern": "\\.datagridtextfilter$",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.datagridtextfilter.DatagridTextFilter"]
     }
   ]
 }

@@ -925,7 +925,11 @@ de dados, `sort: [sort_by(...)]`, `on_click_trigger: "double"` e um bloco
 um bloco com o conteúdo customizado, renderizado com a linha como contexto. Os
 filtros usam `grid_filter(:text, operator: :contains)`; `grid_filter(:drop_down)`
 lista os valores de atributos booleanos ou de enumeração e não aparece sobre
-associações. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
+associações. `filter_attributes: [...]` é a lista de filtros da grid (`filterList`):
+o Text filter colocado no cabeçalho busca nos atributos String dessa lista, e a linha
+aparece quando qualquer um deles casa, com o operador escolhido (`defaultFilter`,
+seletor se `adjustable`), depois do `delay`; `valueAttribute` e `onChange` rodam a
+cada valor novo. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
 divide o espaço por `size`, `autoFit` segue o conteúdo e `manual` usa pixels. O
 runtime preenche `System.grantableRoles` a partir dos papéis gerenciáveis da
 segurança do projeto, e assim a XPath da Account_Overview do módulo

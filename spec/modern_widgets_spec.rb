@@ -553,6 +553,25 @@ RSpec.describe 'modern page widgets' do
     expect(text_value.dig('TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
   end
 
+  it 'writes the attributes a Data Grid 2 filters placeholder searches' do
+    attribute_type = {
+      '$ID' => 'filter-attribute', 'PropertyKey' => 'filter',
+      'ValueType' => { '$ID' => 'filter-attribute-value', 'Type' => 'Attribute', 'DefaultValue' => '' }
+    }
+    list_type = {
+      '$ID' => 'filter-list-type', '$Type' => 'CustomWidgets$WidgetObjectType',
+      'PropertyTypes' => Mxrb::IO::BsonCodec.build_array([attribute_type], marker: 2)
+    }
+    grid = schema_widget('grid-search', { filterList: { type: 'Object', object_type: list_type } })
+    writer.send(:configure_data_grid2!, grid, entity: 'Ui.Item', filter_attributes: %w[Name Ui.Item.Code])
+    parsed = Mxrb::Model::Page.allocate.send(:data_grid2_widget, grid)
+
+    expect(parsed.dig(:options, :filter_attributes)).to eq(%w[Ui.Item.Name Ui.Item.Code])
+    writer.send(:configure_data_grid2!, grid, {})
+    expect(Mxrb::Model::Page.allocate.send(:data_grid2_widget, grid).dig(:options, :filter_attributes))
+      .to eq(%w[Ui.Item.Name Ui.Item.Code])
+  end
+
   it 'hydrates Data Grid 2 selection, filter slots, and multiple column filters' do
     filter_type = {
       '$ID' => 'filter', 'PropertyKey' => 'filter',
