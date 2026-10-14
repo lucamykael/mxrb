@@ -43,7 +43,7 @@ RSpec.describe Mxrb::Runtime::XPath, 'system variables' do
       'CurrentDay' => [Time.utc(2026, 10, 5), Time.utc(2026, 10, 6)],
       'Yesterday' => [Time.utc(2026, 10, 4), Time.utc(2026, 10, 5)],
       'Tomorrow' => [Time.utc(2026, 10, 6), Time.utc(2026, 10, 7)],
-      'CurrentWeek' => [Time.utc(2026, 10, 5), Time.utc(2026, 10, 12)],
+      'CurrentWeek' => [Time.utc(2026, 10, 4), Time.utc(2026, 10, 11)],
       'CurrentMonth' => [Time.utc(2026, 10, 1), Time.utc(2026, 11, 1)],
       'CurrentYear' => [Time.utc(2026), Time.utc(2027)]
     }
