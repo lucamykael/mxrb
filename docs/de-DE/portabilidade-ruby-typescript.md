@@ -952,7 +952,14 @@ mxui-Shims, ein von der Laufzeit beantwortetes `window.mx` (`mx.data.get`/`actio
 Datensätzen der Seite; geänderte Reference Sets werden wie jede andere Bearbeitung
 gespeichert. Entitätspfade und Einschränkungen dieser Widgets werden so projiziert,
 wie der Client sie übergibt (`Modul.Assoc/Modul.Entität` und der XPath), und
-unverändert zurückgeschrieben. Andernfalls zeigt ein nicht unterstütztes
+unverändert zurückgeschrieben. Die eigenen JavaScript-Aktionen des Projekts,
+die exportierte Nanoflows aufrufen, laufen ebenfalls aus `javascriptsource`, sofern
+kein verifizierter Adapter sie abdeckt: Argumente kommen so an, wie der Client sie
+übergibt (`MxObject`, `Big`, `Date`), `mx-global` installiert dasselbe
+`window.mx`, dessen Aufrufe für Aktualisierung, Fortschritt, Bestätigung,
+Meldungen und Abmeldung die laufende Anwendung erreichen, und Objektänderungen
+gelangen zurück in den Nanoflow. Aktionen, die Pakete außerhalb ihres eigenen
+`node_modules` importieren (React Native), bleiben nicht verfügbar. Andernfalls zeigt ein nicht unterstütztes
 Widget zur Laufzeit einen sichtbaren Platzhalter (`role="alert"`,
 `data-mxrb-unsupported`) statt leer zu bleiben. Microflow- und Nanoflow-
 Eigenschaften werden als qualifizierte Namen projiziert, übersetzbare Texte als

@@ -45,6 +45,7 @@ module Mxrb
         def write_generated_frontend_contract
           write_feedback_widget
           write_project_widgets
+          write_project_javascript_actions
           decimal_settings = JSON.generate(Runtime::DecimalContext.settings(@project))
           write(File.join('frontend', 'src', 'generated', 'decimalConfig.ts'),
                 "export default #{decimal_settings} as { rounding?: string };\n")
@@ -80,6 +81,34 @@ module Mxrb
             TS
           end
           write(File.join('frontend', 'src', 'generated', 'feedbackWidget.ts'), registration)
+        end
+
+        # The project's JavaScript actions the nanoflows call and no verified adapter
+        # covers run their own source: their actions directory is copied, with its
+        # node_modules only when an action imports a package the frontend lacks.
+        def write_project_javascript_actions
+          root = File.dirname(@mpr_path)
+          @project_javascript_actions = ProjectJavaScriptActions.find(
+            root, (@called_javascript_actions || []).to_a - adapted_javascript_actions(root)
+          )
+          vendor = File.join('frontend', 'src', 'generated', 'bridge', 'vendor', 'javascriptsource')
+          @project_javascript_actions.group_by(&:directory).each do |directory, actions|
+            target = File.join(vendor, File.basename(File.dirname(directory)), 'actions')
+            packages = actions.any? { _1.packages.any? }
+            Dir.glob('**/*', base: directory).each do |entry|
+              path = File.join(directory, entry)
+              next unless File.file?(path)
+              next if !packages && entry.start_with?('node_modules/')
+
+              write(File.join(target, entry), File.binread(path))
+            end
+          end
+        end
+
+        def adapted_javascript_actions(root)
+          KnownJavaScriptActions.matching(root).map { "FeedbackModule.#{_1}" } +
+            KnownJavaScriptActions.matching(root, sources: KnownJavaScriptActions::COMMONS_SOURCES,
+                                                  module_name: 'nanoflowcommons').map { "NanoflowCommons.#{_1}" }
         end
 
         # Widgets of the rendered pages the bridge does not render itself run their

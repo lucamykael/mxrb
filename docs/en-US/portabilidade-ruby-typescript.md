@@ -902,7 +902,13 @@ answered by the runtime (`mx.data.get`/`action`/`subscribe`, `mx.ui.action`,
 `mx.session`, `mx.parser`) and `MxObject` over the page's records, so reference
 sets it changes are saved like any other edit. Entity paths and constraints of
 these widgets are projected as the client passes them (`Module.Assoc/Module.Entity`
-and the XPath) and written back unchanged. Otherwise, at runtime an unsupported widget shows a
+and the XPath) and written back unchanged. The project's own JavaScript actions that exported
+nanoflows call run from their `javascriptsource` too, unless a verified adapter
+covers them: arguments arrive as the client passes them (`MxObject`, `Big`,
+`Date`), `mx-global` installs the same `window.mx`, whose refresh, progress,
+confirmation, message and sign-out calls reach the running application, and
+changes to objects return to the nanoflow. Actions that import packages missing
+from their own `node_modules` (React Native ones) stay unavailable. Otherwise, at runtime an unsupported widget shows a
 visible placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering
 empty.
 Microflow and nanoflow properties are projected as qualified names and

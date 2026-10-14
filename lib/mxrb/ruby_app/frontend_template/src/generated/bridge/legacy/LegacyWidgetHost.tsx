@@ -6,7 +6,7 @@ import { memberName } from '../value';
 import type { EntityRecord } from '../../types';
 import { AmdLoader, type ModuleSources } from './amd';
 import { dojoModules, kernel } from './dojo';
-import { createMx, mxForm, mxuiModules, MxStore, type MxEnvironment, type MxSession } from './mx';
+import { installMx, mxForm, mxuiModules, MxStore, type MxSave, type MxSession } from './mx';
 
 // A property of a legacy widget, as its package declares it.
 export interface LegacyPropertyDefinition {
@@ -91,21 +91,6 @@ interface LegacyWidgetPackage {
   definitions: LegacyPropertyDefinition[];
 }
 
-let installed: MxStore | null = null;
-
-// One store and window.mx for the page; each widget sees its own environment
-// through the store it was created with.
-function environmentStore(environment: MxEnvironment): MxStore {
-  const store = new MxStore(environment);
-  const global = globalThis as Record<string, unknown>;
-  if (!installed) {
-    global.mx = createMx(store);
-    global.logger = Object.assign(Object.create(console), { debug: () => undefined });
-    installed = store;
-  } else installed.environment = environment;
-  return installed;
-}
-
 // Runs a Dojo widget of the project's widget package in place of the widget.
 export function LegacyWidgetHost({
   props,
@@ -124,26 +109,23 @@ export function LegacyWidgetHost({
   const [error, setError] = useState('');
   const latest = useRef(props);
   latest.current = props;
+  // Changes to the context object are saved through the page, as any other edit.
+  const save = useRef<MxSave>(async (_record, member, value) => {
+    const result = await latest.current.onChange(member, value);
+    return result && typeof result === 'object' && 'id' in result ? (result as EntityRecord) : null;
+  }).current;
   const properties = JSON.stringify(props.widget.options?.properties ?? {});
 
   useEffect(() => {
     const host = container.current;
     if (!host || !session) return;
     let active = true;
-    const environment: MxEnvironment = {
+    const mxStore = installMx({
       schema: latest.current.schema,
       request: latest.current.request,
       session,
       locale,
-      save: async (record: EntityRecord, member: string, value) => {
-        const result = await latest.current.onChange(member, value);
-        return result && typeof result === 'object' && 'id' in result
-          ? (result as EntityRecord)
-          : null;
-      },
-      notify: (kind, message) => (kind === 'error' ? console.error : console.info)(message),
-    };
-    const mxStore = environmentStore(environment);
+    });
     store.current = mxStore;
     kernel.locale = locale;
     const loader = new AmdLoader(pkg.sources, { ...dojoModules(), ...mxuiModules(mxStore) });
@@ -161,7 +143,7 @@ export function LegacyWidgetHost({
         const instance = new Widget(
           {
             ...params,
-            ...mxForm(host, mxStore, () => latest.current.context),
+            ...mxForm(host, mxStore, () => latest.current.context, save),
             class: String(latest.current.widget.options?.class || ''),
           },
           node,
@@ -172,7 +154,7 @@ export function LegacyWidgetHost({
         instance.startup?.();
         const context = latest.current.context;
         shown.current = context?.id ?? null;
-        instance.update?.(context ? mxStore.remember(context, true) : null, () => undefined);
+        instance.update?.(context ? mxStore.remember(context, save) : null, () => undefined);
         setError('');
       })
       .catch((failure: unknown) => {
@@ -207,7 +189,7 @@ export function LegacyWidgetHost({
       return;
     }
     const known = mxStore.record(context.id);
-    const object = mxStore.remember(context, true);
+    const object = mxStore.remember(context, save);
     if (previous !== context.id) instance.update?.(object, () => undefined);
     else if (known && JSON.stringify(known) !== contextKey) mxStore.changed(context);
   }, [contextKey]);
