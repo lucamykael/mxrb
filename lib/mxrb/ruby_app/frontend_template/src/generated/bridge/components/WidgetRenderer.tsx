@@ -635,6 +635,8 @@ function WidgetContent({
       path: [name],
       role: name,
       content: renderWidgets(widgets, `marketplace-region-${name}`),
+      render: (record: EntityRecord) =>
+        renderWidgets(widgets, `marketplace-region-${name}-${record.id}`, record),
     })),
     ...(widget.slots || []).map((slot, index) => {
       const role =
@@ -646,6 +648,8 @@ function WidgetContent({
         path: slot.path,
         role,
         content: renderWidgets(slot.widgets, `marketplace-slot-${path}`),
+        render: (record: EntityRecord) =>
+          renderWidgets(slot.widgets, `marketplace-slot-${path}-${record.id}`, record),
       };
     }),
   ];

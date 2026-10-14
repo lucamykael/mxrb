@@ -40,7 +40,7 @@ module Mxrb
 
       def build_entries
         load_registry
-        @widgets = WidgetSupport.new.report.freeze
+        @widgets = WidgetSupport.new(root).report.freeze
         coverage_entries + frontend_application_entries
       ensure
         Registry.reset!
