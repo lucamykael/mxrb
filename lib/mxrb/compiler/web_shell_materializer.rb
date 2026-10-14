@@ -15,6 +15,10 @@ module Mxrb
       /x
       SELF_IMPORT = %r{import\*as\s+(?<binding>[A-Za-z_$][A-Za-z0-9_$]*)\s+from"\./(?<asset>[A-Za-z0-9_.-]+\.js)";
                         e\.C\(\k<binding>\),}x
+      # A wrapper-agnostic marker for the dev-mode page-cache guard. A successful
+      # DYNAMIC_PAGE_CACHE rewrite removes the `isDevModeEnabled?"":` prefix, so a
+      # surviving match means the client changed shape and pages would ship stale.
+      UNPATCHED_PAGE_CACHE = /getConfig\("isDevModeEnabled"\)\?"":`\?\$\{[^`]*getConfig\("cachebust"\)/
 
       def initialize(web, version:)
         @web = File.expand_path(web)
@@ -79,10 +83,20 @@ module Mxrb
         rendered = source.gsub(DYNAMIC_PAGE_CACHE) do
           %(`?#{cache_token}\${#{Regexp.last_match(1)}}`)
         end
+        ensure_page_cache_patched!(rendered)
         rendered.gsub(SELF_IMPORT) do |match|
           asset = Regexp.last_match(:asset)
           match.sub(%("./#{asset}"), %("./#{asset}?#{cache_token}"))
         end
+      end
+
+      def ensure_page_cache_patched!(rendered)
+        return unless rendered.match?(UNPATCHED_PAGE_CACHE)
+
+        raise CompilationError,
+              "web shell page-cache pattern drifted for Mendix #{@version}: the React client changed " \
+              'shape and generated pages would not be versioned; update ' \
+              'WebShellMaterializer::DYNAMIC_PAGE_CACHE for this client'
       end
 
       def render_html(path)

@@ -29,7 +29,11 @@ The React path generates entrypoint/page modules, expands `.mpk`, and invokes
 the version-owned Node/Rollup (10) or Node/Rspack (11) directly. Data Grid 2 compiles for the XPath datasource and attribute-column
 subset, including `operations.json`, datasource, and attribute types.
 Untranslated types or property combinations receive a DOM fallback and are
-recorded in `web/mxrb-pages.json`; VetClinic's manifest is empty.
+recorded in `web/mxrb-pages.json`; VetClinic's manifest is empty. Every build
+also prints them as a warning, and `MXRB_STRICT_PAGES=1` fails the build instead.
+Buttons that open a page pass its object parameters from their context (the
+list or data view of that entity, or the page parameter), and popup pages open
+as modals, as Studio Pro compiles them.
 
 The React compiler also materializes containers, text and headings, responsive
 grids/columns, and open/create buttons. Bootstrap injects

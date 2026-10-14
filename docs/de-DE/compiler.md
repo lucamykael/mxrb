@@ -31,7 +31,10 @@ Node/Rollup für 10 oder Node/Rspack für 11 auf. Data Grid 2 wird für den Teil
 und Attributspalten kompiliert, einschließlich `operations.json`, Datenquelle
 und Attributtypen. Noch nicht übersetzte Typen oder Eigenschaftskombinationen
 erhalten einen DOM-Fallback in `web/mxrb-pages.json`; das VetClinic-Manifest ist
-leer.
+leer. Jeder Build meldet sie zusätzlich als Warnung; `MXRB_STRICT_PAGES=1` lässt
+den Build stattdessen fehlschlagen. Buttons, die eine Seite öffnen, übergeben
+Objektparameter aus ihrem Kontext (Liste oder Data View dieser Entität bzw. den
+Seitenparameter), und Popup-Seiten öffnen modal, wie Studio Pro sie kompiliert.
 
 Der React-Compiler materialisiert außerdem Container, Texte und Überschriften,
 responsive Grids/Spalten sowie Buttons zum Öffnen und Erzeugen. Der Bootstrap

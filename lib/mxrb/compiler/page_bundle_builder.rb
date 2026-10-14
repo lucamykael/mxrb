@@ -8,9 +8,10 @@ module Mxrb
     # Writes one page entry module per source page and an auditable support manifest.
     # rubocop:disable Metrics
     class PageBundleBuilder
-      def initialize(source, web_root)
+      def initialize(source, web_root, strict: ENV['MXRB_STRICT_PAGES'] == '1')
         @source = source
         @web_root = web_root
+        @strict = strict
       end
 
       def build
@@ -22,6 +23,7 @@ module Mxrb
         bundles.each { write_bundle(destination, _1) }
         layout_bundles = build_layouts
         write_manifest(bundles)
+        report_unsupported(bundles + layout_bundles)
         bundles + layout_bundles
       end
 
@@ -44,6 +46,20 @@ module Mxrb
                          .map { PageBundleCompiler.new(@source).compile_layout(_1) }
         bundles.each { write_bundle(destination, _1) }
         bundles
+      end
+
+      # A page or layout that renders a widget or action inert is a hole in the
+      # client: warn on every build, and fail it in strict mode.
+      def report_unsupported(bundles)
+        gaps = bundles.reject { _1.unsupported_widgets.empty? }
+        return if gaps.empty?
+
+        detail = gaps.map { "  #{_1.qualified_name}: #{_1.unsupported_widgets.join(', ')}" }.join("\n")
+        message = "#{gaps.sum { _1.unsupported_widgets.length }} unsupported widget(s)/action(s) " \
+                  "rendered inert:\n#{detail}"
+        raise CompilationError, message if @strict
+
+        warn "[mxrb] WARNING: #{message}"
       end
 
       def write_manifest(bundles)
