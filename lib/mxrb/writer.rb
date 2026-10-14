@@ -7648,6 +7648,19 @@ module Mxrb
       end
     end
 
+    # "Mod.Assoc/Mod.Target" pairs before a sort attribute become entity reference steps.
+    def sort_entity_ref_doc(steps)
+      return nil if steps.empty?
+
+      {
+        '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$IndirectEntityRef',
+        'Steps' => IO::BsonCodec.build_array(steps.each_slice(2).map do |association, destination|
+          { '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$EntityRefStep',
+            'Association' => association.to_s, 'DestinationEntity' => destination.to_s }
+        end, marker: 2)
+      }
+    end
+
     def retrieve_sorting_doc(sorting)
       attribute, order = Array(sorting)
       major, minor = @definition.fetch(:version).to_s.split('.').map(&:to_i)
@@ -7657,11 +7670,12 @@ module Mxrb
         'SortOrder' => mendix_enum(order || 'Ascending')
       }
       if major > 7 || (major == 7 && minor >= 11)
+        *steps, member = attribute.to_s.split('/')
         doc['AttributeRef'] = {
           '$ID' => SecureRandom.uuid,
           '$Type' => 'DomainModels$AttributeRef',
-          'Attribute' => attribute.to_s,
-          'EntityRef' => nil
+          'Attribute' => steps.empty? ? member : "#{steps.last}.#{member.split('.').last}",
+          'EntityRef' => sort_entity_ref_doc(steps)
         }
       else
         doc['AttributePath'] = attribute.to_s

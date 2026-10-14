@@ -380,9 +380,10 @@ module Mxrb
               raise ArgumentError, "unsupported sort direction #{direction}"
             end
 
-            [grid_member_name(sorting.fetch('attribute')), %w[Descending desc].include?(direction)]
+            [Runtime::SortPath.parse(sorting.fetch('attribute')), %w[Descending desc].include?(direction)]
           end
-          Runtime::SortOrder.sort(records, keys) { |record, attribute| record.members[attribute] }
+          read = Runtime::SortPath.reader { bridge.interpreter.store }
+          Runtime::SortOrder.sort(records, keys) { |record, path| read.call(record, path) }
         end
 
         def grid_member_name(value)

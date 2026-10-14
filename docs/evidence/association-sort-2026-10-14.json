@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-14",
+  "scope": "Retrieve sorting over associations (one and two association steps, ascending and descending)",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "89cbaffc9af66f8f45a516b1b01a1951db005faa868ab85604100c8982eb7e7b",
+    "cases": 3,
+    "status": "passed",
+    "results": {
+      "RegionName": [
+        "Eli",
+        "Caio",
+        "Bea",
+        "Anna",
+        "Dora"
+      ],
+      "RegionDesc": [
+        "Eli",
+        "Anna",
+        "Dora",
+        "Bea",
+        "Caio"
+      ],
+      "CountryRank": [
+        "Eli",
+        "Anna",
+        "Dora",
+        "Bea",
+        "Caio"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "the sort value is read through the association path of the attribute reference",
+    "objects without the associated object sort first in both directions"
+  ],
+  "fixed": [
+    "sorting used only the last path segment and the writer dropped the association steps"
+  ]
+}
