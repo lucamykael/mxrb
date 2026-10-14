@@ -816,14 +816,46 @@ module Mxrb
         return unless present_identifier?(form)
         return unless parameter_mappings(action['FormSettings'] || {}).empty?
 
-        config = {
-          name: "#{form.tr('.', '/')}.page.xml", location: 'content',
-          allowedRoles: allowed_roles_for('Forms$Page', form)
-        }
+        target = page_unit(form)
+        arguments = implicit_page_arguments(target)
+        return unless arguments
+
+        location = target ? page_location(target) : 'content'
+        config = { name: "#{form.tr('.', '/')}.page.xml", location: }
+        config[:resizable] = target.document.fetch('PopupResizable', true) if location == 'modal'
+        config[:allowedRoles] = allowed_roles_for('Forms$Page', form)
         {
-          type: 'openPage', argMap: {}, config:,
+          type: 'openPage', argMap: arguments, config:,
           disabledDuringExecution: action.fetch('DisabledDuringExecution', true)
         }
+      end
+
+      # Studio Pro passes a target page's object parameters from the context of the
+      # button: the innermost list or data view of that entity (the page parameter
+      # a data view shows), otherwise the current page parameter. nil when a
+      # parameter has no such source.
+      def implicit_page_arguments(target)
+        parameters = array(target&.document&.fetch('Parameters', nil)).select do |parameter|
+          parameter.dig('ParameterType', '$Type') == 'DataTypes$ObjectType'
+        end
+        parameters.to_h do |parameter|
+          widget = implicit_argument_widget(parameter.dig('ParameterType', 'Entity').to_s)
+          return nil unless widget
+
+          [:"param$#{parameter['Name']}", { widget:, source: 'object' }]
+        end
+      end
+
+      def implicit_argument_widget(entity)
+        scope = (@list_scopes.reverse + @data_view_scopes.reverse).find do |candidate|
+          candidate.is_a?(Hash) && candidate[:entity].to_s == entity
+        end
+        # A data view showing a page parameter passes that parameter itself.
+        return "$#{scope[:page_parameter]}" if scope && present_identifier?(scope[:page_parameter])
+        return scope[:scope] if scope
+
+        parameter = array(@unit.document['Parameters']).find { object_parameter?(_1, entity) }
+        "$#{parameter['Name']}" if parameter
       end
 
       def sign_out_config(action)
@@ -1073,7 +1105,8 @@ module Mxrb
         return render_unsupported(widget) unless object
 
         @data_view_scopes << {
-          scope:, entity: data_view_entity(widget), label_width: positive_integer(widget['LabelWidth'], 3)
+          scope:, entity: data_view_entity(widget), label_width: positive_integer(widget['LabelWidth'], 3),
+          page_parameter: widget.dig('DataSource', 'SourceVariable', 'PageParameter').to_s
         }
         body = array(widget['Widgets']).map { render_widget(_1) }
         footer = array(widget['FooterWidgets']).map { render_widget(_1) }

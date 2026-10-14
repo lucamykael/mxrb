@@ -32,7 +32,10 @@ da versão 10 ou Node/Rspack da versão 11. O Data Grid 2 é compilado no subcon
 fonte XPath e colunas de atributo, incluindo `operations.json`, datasource e
 tipos dos atributos. Tipos ou combinações ainda não traduzidos recebem um
 fallback DOM e ficam registrados em `web/mxrb-pages.json`; o manifesto do
-VetClinic ficou vazio.
+VetClinic ficou vazio. Todo build também os mostra como aviso, e
+`MXRB_STRICT_PAGES=1` faz o build falhar. Botões que abrem uma página passam os
+parâmetros de objeto pelo contexto (a lista ou o data view daquela entidade, ou o
+parâmetro da página), e páginas popup abrem como modal, como o Studio Pro compila.
 
 O compilador React também materializa containers, textos e títulos, grids
 responsivos, colunas e botões de abertura/criação. O bootstrap injeta
