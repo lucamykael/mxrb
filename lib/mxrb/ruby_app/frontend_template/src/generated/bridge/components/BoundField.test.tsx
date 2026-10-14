@@ -171,6 +171,42 @@ describe('editable exported fields', () => {
     );
     expect(input.onError).not.toHaveBeenCalled();
   });
+  it('keeps Long edits beyond the exact JavaScript range as decimal text', async () => {
+    const input = props();
+    render(
+      <BoundField
+        {...input}
+        record={{ ...record, attributes: { Count: decimal('9007199254740993') } }}
+        schema={
+          {
+            modules: [
+              { models: [{ name: 'App.Item', attributes: [{ name: 'Count', type: 'long' }] }] },
+            ],
+          } as unknown as ApplicationSchema
+        }
+        widget={{
+          name: 'Count',
+          type: 'number_input',
+          options: { attribute: 'App.Item.Count', aria_label: 'Count' },
+        }}
+      />,
+    );
+    const field = screen.getByRole('textbox');
+    expect(field).toHaveValue('9007199254740993');
+    expect(field).toHaveAttribute('inputmode', 'numeric');
+    fireEvent.change(field, { target: { value: '9007199254740995' } });
+    fireEvent.blur(field);
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenCalledWith(expect.anything(), {
+        Count: decimal('9007199254740995'),
+      }),
+    );
+    fireEvent.change(field, { target: { value: '42' } });
+    fireEvent.blur(field);
+    await waitFor(() =>
+      expect(input.saveRecord).toHaveBeenLastCalledWith(expect.anything(), { Count: 42 }),
+    );
+  });
   it('does not overwrite an edit made before passive initialization effects run', async () => {
     function EarlyEdit() {
       useLayoutEffect(() => {

@@ -73,9 +73,10 @@ RSpec.describe Mxrb::Runtime::Native::Expression do
       'toString(9007199254740993.00000001 + 0.00000001)' => '9007199254740993.00000002',
       'floor(-1.2)' => -2, 'ceil(-1.2)' => -1, 'abs(-1.2)' => BigDecimal('1.2'),
       "parseDecimal('no', empty)" => nil, "parseDecimal('no', 1.25)" => BigDecimal('1.25'),
+      "parseDecimal('1', '#.0')" => BigDecimal('1'),
       'round(88.725, 2)' => BigDecimal('88.73'), '12.5 mod 2' => BigDecimal('0.5')
     }.each { |source, expected| expect(expression.evaluate(source, {})).to eq(expected) }
-    ["parseDecimal('NaN')", 'parseDecimal()', "parseDecimal('1', '#.0')", 'parseDecimal(1, 2, 3)'].each do |source|
+    ["parseDecimal('NaN')", 'parseDecimal()', "parseDecimal('x', '#.0')", 'parseDecimal(1, 2, 3)'].each do |source|
       expect { expression.evaluate(source, {}) }.to raise_error(Mxrb::NativeRuntimeError)
     end
   end

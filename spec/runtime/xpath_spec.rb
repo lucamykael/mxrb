@@ -109,7 +109,8 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect { filter("[#{'not ' * 33}true]") }.to raise_error(ArgumentError, /nesting/)
     expect { filter('[contains(Tags, \'Tag\')]') }.to raise_error(ArgumentError, /string attribute/)
     expect { filter('[contains(Name, Single)]') }.to raise_error(ArgumentError, /single value/)
-    expect { filter('[Single + 1 = 2]') }.to raise_error(ArgumentError, /single value/)
+    first.members['Tags'] = [tag, store.create('App.Tag')]
+    expect { filter('[Tags + 1 = 2]') }.to raise_error(ArgumentError, /single value/)
     expect { filter('[Rank div 0 = 2]') }.to raise_error(ArgumentError, /invalid XPath operand/)
   end
 
@@ -171,6 +172,11 @@ RSpec.describe Mxrb::Runtime::XPath do
     expect(filter('[string-length(Name) = 5][length(Name) = 5]')).to eq([first, second])
     expect(filter('[contains(Name, Name)]')).to eq([first, second])
     expect(filter('[Single = NULL]')).to eq([first, second])
+    # Arithmetic over an empty member is SQL NULL: never equal, not even to another NULL.
+    expect(filter('[Single + 1 = 2]')).to eq([])
+    expect(filter('[Single * 2 != 2]')).to eq([])
+    expect(filter('[(Single + 1) div 2 = Single - 1]')).to eq([])
+    expect(filter('[Rank * 2 = 4]')).to eq([first])
     first.members['Created'] = Time.utc(2021, 1, 3, 2, 4, 5)
     second.members['Created'] = nil
     parts = { 'year' => 2021, 'month' => 1, 'day' => 3, 'hours' => 2, 'minutes' => 4,

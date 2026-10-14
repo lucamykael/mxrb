@@ -1,4 +1,4 @@
-import { decimal } from '../decimal';
+import { decimal, exactInteger } from '../decimal';
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { ClientActions, DataRevision } from '../PageEdits';
 import { LocalVariables, PageParameterBindings, SnippetParameterBindings } from '../PageVariables';
@@ -181,7 +181,7 @@ export function BoundField({
           ? null
           : attributeDefinition?.type.toLowerCase() === 'decimal'
             ? decimal(next)
-            : Number(next);
+            : exactInteger(next);
     if (referenceSet) {
       const ids = String(next).split(',').filter(Boolean);
       normalized = references.filter((item) => ids.includes(item.id));
@@ -404,10 +404,11 @@ export function BoundField({
       </select>
     );
   }
-  // Native number-input steppers coerce through binary floats. Decimal input
-  // stays text, including when edited with the browser's keyboard controls.
+  // Native number-input steppers coerce through binary floats. Decimal and Long
+  // input stays text, including when edited with the browser's keyboard controls.
   const decimalInput =
-    kind === 'number_input' && attributeDefinition?.type.toLowerCase() === 'decimal';
+    kind === 'number_input' &&
+    ['decimal', 'long'].includes(attributeDefinition?.type.toLowerCase() ?? '');
   const inputType =
     kind === 'date_picker'
       ? 'date'
@@ -427,7 +428,13 @@ export function BoundField({
       {...controlProps}
       {...textProps}
       type={inputType}
-      inputMode={decimalInput ? 'decimal' : undefined}
+      inputMode={
+        decimalInput
+          ? attributeDefinition?.type.toLowerCase() === 'long'
+            ? 'numeric'
+            : 'decimal'
+          : undefined
+      }
       value={inputValue}
       onChange={(event) => setDraft(event.target.value)}
     />

@@ -635,21 +635,29 @@ Ruby verwendet `BigDecimal`, das Frontend `decimal.js`. Decimal-Literale,
 Arithmetik und Vergleiche vermeiden zwischenzeitliche `Float`-/`Number`-Konvertierungen.
 Die Division nutzt 38 signifikante Stellen entsprechend der installierten Runtime
 11.12.1. `round` berücksichtigt `HalfUp`/`HalfEven`; der Export übernimmt `DecimalScale`.
-Auch `floor`, `ceil`, `abs` und `parseDecimal` ohne Format arbeiten mit exakten Werten.
+Auch `floor`, `ceil`, `abs` und `parseDecimal` arbeiten mit exakten Werten.
+`parseDecimal` akzeptiert Muster und Standardwert (`parseDecimal(text, '#,##0.00', 0)`)
+und folgt Javas `DecimalFormat` für en_US: Das längste Präfix gewinnt, Text nach der
+Zahl wird ignoriert, `%` und `‰` teilen, und ohne lesbare Zahl gilt der Standardwert.
+`random()` liefert ein Decimal.
 
 Die interne API überträgt Decimal als `{"__mxrb_decimal":"9007199254740993.12345678"}`.
 TypeScript-Erweiterungen verwenden die Hilfsfunktionen aus `bridge/decimal`.
 Eingabefelder, Seitenparameter, Filter, Sortierung, Entwürfe und Nanoflows erhalten
 die Genauigkeit. Diagrammkoordinaten werden erst zur Darstellung in Gleitkommazahlen umgewandelt.
+Long-Werte über 2^53 − 1 nutzen dasselbe Tag und werden ohne Stellenverlust als Text bearbeitet.
 
 SQLite speichert kanonischen Decimal-Text. Beim Commit gelten Skalierung,
 Rundung und Wertebereich des Projekts. Vorhandene `REAL`-Spalten werden unter
 Erhalt der Zeilen migriert; bereits verlorene Stellen lassen sich nicht rekonstruieren.
 Externes SQL benötigt dezimale Vergleiche statt textueller SQLite-Sortierung.
 API-Clients müssen das Decimal-Tag zusammen mit dem neu generierten Frontend übernehmen.
-Lokalisierte Formatierung und Java-Formatmuster sind weiterhin nicht abgedeckt.
+Trennzeichen anderer Gebietsschemata sind weiterhin nicht abgedeckt. In XPath
+schneidet `div` zwischen Ganzzahlen ab, und Arithmetik über ein leeres Member ist
+`NULL`, das nie als wahr verglichen wird.
 
-[Decimal-Nachweise](../evidence/decimal-runtime-2026-10-06.json).
+[Decimal-Nachweise](../evidence/decimal-runtime-2026-10-06.json) und
+[Muster, random und XPath-Arithmetik](../evidence/decimal-edges-2026-10-14.json).
 
 ## Kalenderausdrücke
 

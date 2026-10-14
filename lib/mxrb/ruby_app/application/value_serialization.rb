@@ -44,6 +44,7 @@ module Mxrb
             end
             result
           when BigDecimal then Runtime::DecimalValues.encode(value)
+          when Integer then Runtime::DecimalValues.unsafe_integer?(value) ? Runtime::DecimalValues.encode(value) : value
           when Hash then value.to_h { [serialize(_1, seen, context:), serialize(_2, seen, context:)] }
           when Array then value.map { serialize(_1, seen, context:) }
           else value
@@ -54,7 +55,7 @@ module Mxrb
           value = keyword_value if value.nil? && !keyword_value.empty?
           value = value.transform_keys(&:to_s) if value.is_a?(Hash) && value.key?(:id) && value.key?(:type)
           if Runtime::DecimalValues.tagged?(value)
-            Runtime::DecimalValues.parse(value.fetch(Runtime::DecimalValues::TAG))
+            Runtime::DecimalValues.decode(value.fetch(Runtime::DecimalValues::TAG))
           elsif value.is_a?(Hash) && value['id'] && value['type']
             store = bridge.interpreter.store
             object = if value['draft_token']

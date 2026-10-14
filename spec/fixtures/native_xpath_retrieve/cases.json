@@ -42,5 +42,18 @@
   {"name": "MomentNotEmpty", "xpath": "[Moment != empty]", "expected": "Negative,Nor,north,North,South,Zero"},
   {"name": "StrLen", "xpath": "[string-length(Name) > 4]", "expected": "Empty,Negative,north,North,South"},
   {"name": "StrLenNick", "xpath": "[string-length(Nick) = 0]", "expected": "Negative,Zero"},
-  {"name": "YearUtc", "xpath": "[year-from-dateTime(Moment, 'UTC') = 1999]", "expected": "Negative"}
+  {"name": "YearUtc", "xpath": "[year-from-dateTime(Moment, 'UTC') = 1999]", "expected": "Negative"},
+  {"name": "ArithmeticDiv5by2", "xpath": "[Amount = 5 div 2]", "expected": ""},
+  {"name": "ArithmeticRankDiv5by2", "xpath": "[Rank = 5 div 2]", "expected": "Negative,Nor"},
+  {"name": "ArithmeticAbove7by3", "xpath": "[Amount > 7 div 3]", "expected": "Nor,north,North,South"},
+  {"name": "ArithmeticTen4", "xpath": "[Amount = 10 div 4]", "expected": ""},
+  {"name": "ArithmeticRank7by2", "xpath": "[Rank = 7 div 2]", "expected": "north,North"},
+  {"name": "ArithmeticBelowThird", "xpath": "[Amount < 1 div 3]", "expected": "Negative"},
+  {"name": "ArithmeticTimes2", "xpath": "[Amount * 2 = 5]", "expected": "Nor,South"},
+  {"name": "ArithmeticRankPlus", "xpath": "[Rank + 1 = 4]", "expected": "north,North"},
+  {"name": "ArithmeticDecDiv", "xpath": "[Amount = 2.5 div 1]", "expected": "Nor,South"},
+  {"name": "ArithmeticAttrDiv", "xpath": "[Amount = Other div 1]", "expected": "Nor,north,North"},
+  {"name": "ArithmeticRankMod", "xpath": "[Rank mod 2 = 1]", "expected": "north,North,South,Zero"},
+  {"name": "ArithmeticThirdTimes3", "xpath": "[Amount * 3 div 3 = 2.5]", "expected": "Nor,South"},
+  {"name": "ArithmeticRankDiv2Attr", "xpath": "[Rank div 2 = 1]", "expected": "Negative,Nor,north,North"}
 ]

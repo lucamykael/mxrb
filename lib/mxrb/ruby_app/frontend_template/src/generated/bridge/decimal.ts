@@ -1,5 +1,6 @@
 import Decimal from 'decimal.js';
 import decimalConfig from '../decimalConfig';
+import { parseDecimalPattern } from './decimalParsing';
 
 export type DecimalValue = { __mxrb_decimal: string };
 export const isDecimal = (value: unknown): value is DecimalValue =>
@@ -27,6 +28,12 @@ export function decimalNumber(value: unknown): Decimal {
 export const decimal = (value: unknown): DecimalValue => ({
   __mxrb_decimal: decimalNumber(value).toFixed(),
 });
+// JSON numbers are exact only up to 2**53 - 1; longer integers stay tagged text.
+export const exactInteger = (input: string | number | boolean): number | DecimalValue => {
+  const text = String(input).trim();
+  const number = Number(text);
+  return /^[+-]?\d+$/.test(text) && !Number.isSafeInteger(number) ? decimal(text) : number;
+};
 export const isNumeric = (value: unknown): value is number | DecimalValue =>
   isDecimal(value) || (typeof value === 'number' && Number.isFinite(value));
 export const numericCompare = (left: unknown, right: unknown): number =>
@@ -80,19 +87,29 @@ export function arithmetic(operator: string, left: unknown, right: unknown): num
 export const isDecimalFunction = (name: string): boolean =>
   ['parsedecimal', 'round', 'floor', 'ceil', 'abs'].includes(name.toLowerCase());
 
+// parseDecimal(text), (text, default), (text, pattern) and (text, pattern, default).
+function parseDecimal(args: unknown[]): DecimalValue | null {
+  if (args.length < 1 || args.length > 3)
+    throw new Error('parseDecimal requires one to three arguments');
+  const [text, ...rest] = args;
+  const pattern = typeof rest[0] === 'string' ? String(rest.shift()) : undefined;
+  if (rest.length > 1 || (rest.length === 1 && rest[0] !== null && !isNumeric(rest[0])))
+    throw new Error('unsupported decimal format');
+  let parsed: string | null = null;
+  try {
+    parsed =
+      pattern === undefined ? decimal(text).__mxrb_decimal : parseDecimalPattern(text, pattern);
+  } catch (error) {
+    if (rest.length === 0) throw error;
+  }
+  if (parsed !== null) return decimal(parsed);
+  if (rest.length === 0) throw new Error(`Cannot parse ${JSON.stringify(text)} as a decimal`);
+  return rest[0] === null ? null : decimal(rest[0]);
+}
+
 export function decimalFunction(name: string, args: unknown[]): number | DecimalValue | null {
   const operation = name.toLowerCase();
-  if (operation === 'parsedecimal') {
-    if (args.length < 1 || args.length > 2)
-      throw new Error('parseDecimal requires one or two arguments');
-    try {
-      return decimal(args[0]);
-    } catch (error) {
-      if (args.length === 2 && (args[1] === null || isNumeric(args[1])))
-        return args[1] === null ? null : decimal(args[1]);
-      throw error;
-    }
-  }
+  if (operation === 'parsedecimal') return parseDecimal(args);
   if (!isNumeric(args[0])) throw new Error('Expected a finite number');
   const value = decimalNumber(args[0]);
   if (operation === 'round') {

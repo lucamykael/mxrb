@@ -27,6 +27,17 @@ module Mxrb
 
       def encode(value) = { TAG => text(value) }
       def tagged?(value) = value.is_a?(Hash) && value.keys == [TAG]
+
+      # Browsers read JSON numbers as doubles, exact only up to 2**53 - 1, so longer
+      # integers travel as tagged text and come back as integers.
+      SAFE_INTEGER = (2**53) - 1
+      def unsafe_integer?(value) = value.is_a?(Integer) && value.abs > SAFE_INTEGER
+
+      def decode(text)
+        number = parse(text)
+        integral = number.frac.zero? && !text.to_s.match?(/[.eE]/)
+        integral && number.abs > SAFE_INTEGER ? number.to_i : number
+      end
     end
 
     # Mendix 11.12 uses a 38 digit MathContext and configurable storage scale.

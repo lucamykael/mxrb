@@ -27,6 +27,7 @@ module Mxrb
         changed_date: %w[changedDate __changed_at], changed_by: %w[changedBy __changed_by_id]
       }.freeze
       FILE_TABLES = %w[mxrb_file_contents mxrb_file_thumbnails].freeze
+      INTEGER_TYPES = %i[integer long autonumber].freeze
 
       attr_reader :database, :schema, :client_drafts
 
@@ -676,7 +677,7 @@ module Mxrb
       def cast_default(value, type)
         return nil if value.nil? || value == ''
         return value == true || value.to_s.casecmp?('true') if type == :boolean
-        return value.to_i if %i[integer long autonumber].include?(type)
+        return value.to_i if INTEGER_TYPES.include?(type)
         return value.to_f if type == :float
         return DecimalValues.parse(value) if type == :decimal
 
@@ -697,6 +698,7 @@ module Mxrb
         return nil if value.nil?
         return value ? 1 : 0 if type == :boolean
         return DecimalValues.text(@decimal.persist(value)) if type == :decimal
+        return value.to_i if INTEGER_TYPES.include?(type) && value.is_a?(BigDecimal) && value.frac.zero?
         return value.utc.iso8601(6) if type == :datetime && value.respond_to?(:utc)
         return value.iso8601 if type == :datetime && value.respond_to?(:iso8601)
         return SystemDomain.hash_password(value) if type == :hashstring

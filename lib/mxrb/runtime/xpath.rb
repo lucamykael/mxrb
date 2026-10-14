@@ -25,6 +25,9 @@ module Mxrb
         },
         'mod' => ->(left, right) { left.remainder(right) }
       }.freeze
+      # As in SQL, arithmetic over an empty member is NULL, and comparing NULL,
+      # unlike comparing a member with empty, is never true.
+      NULL = Object.new.freeze
       # System.owner and System.changedBy are stored as the user's ID on the record.
       SYSTEM_ASSOCIATIONS = { 'System.owner' => 'Owner', 'System.changedBy' => 'changedBy' }.freeze
       def initialize(source, store:, policy: nil, context: nil)
@@ -182,7 +185,11 @@ module Mxrb
 
       def compare(operator, left, right, left_parameter: false, right_parameter: false)
         arithmetic = ARITHMETIC[operator.to_s]
-        return arithmetic.call(scalar(left), scalar(right)) if arithmetic
+        if arithmetic
+          operands = [left, right].map { _1 == [] || _1.equal?(NULL) ? nil : scalar(_1) }
+          return operands.include?(nil) ? NULL : arithmetic.call(*operands)
+        end
+        return false if left.equal?(NULL) || right.equal?(NULL)
 
         left = [left] unless left.is_a?(Array)
         right = [right] unless right.is_a?(Array)
@@ -220,7 +227,7 @@ module Mxrb
       end
 
       def truthy?(value)
-        value.is_a?(Array) ? value.any? { truthy?(_1) } : value != false && !value.nil?
+        value.is_a?(Array) ? value.any? { truthy?(_1) } : value != false && !value.nil? && !value.equal?(NULL)
       end
 
       # AST construction validates the entire constraint even for empty tables.

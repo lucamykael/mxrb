@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-14",
+  "scope": "parseDecimal with Java DecimalFormat patterns and defaults, random(), and XPath arithmetic over empty members",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle (HSQLDB)",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "514441a8523a2325264bfbc2d813e1e86c2f1eb583cd146587c67b388a7afd45",
+    "decimal_parsing": {
+      "Grouped": "3241.98",
+      "Plain": "3241.98",
+      "OddGroups": "123.5",
+      "Percent": "0.125",
+      "Currency": "1234.5",
+      "MissingPrefixDefault": "7",
+      "TrailingText": "12",
+      "InvalidDefault": "5.05",
+      "ExtraDigits": "-1000.125",
+      "Exponent": "1500",
+      "NegativeSubpattern": "-5",
+      "LeadingSpaceDefault": "9",
+      "LocaleComma": "1",
+      "LongFraction": "0.1234567890123456789",
+      "EmptyDefault": "3",
+      "NoGroupingPattern": "1",
+      "EmptyPattern": "5.5",
+      "PerMille": "0.0125",
+      "TwoPoints": "1.2",
+      "PlusSign": "1",
+      "Big": "123456789012345678.987654321",
+      "QuotedLiteral": "5",
+      "EmptyDefaultValue": null,
+      "Integerish": "42",
+      "NoFormatDefault": "2.5",
+      "NoFormat": "3.45"
+    },
+    "random": {
+      "type": "Decimal from the shortest double representation",
+      "sample": "0.007836863248207315",
+      "range": "true"
+    },
+    "xpath_arithmetic": {
+      "ArithmeticDiv5by2": "[Amount = 5 div 2] -> (none)",
+      "ArithmeticRankDiv5by2": "[Rank = 5 div 2] -> Negative,Nor",
+      "ArithmeticAbove7by3": "[Amount > 7 div 3] -> Nor,north,North,South",
+      "ArithmeticTen4": "[Amount = 10 div 4] -> (none)",
+      "ArithmeticRank7by2": "[Rank = 7 div 2] -> north,North",
+      "ArithmeticBelowThird": "[Amount < 1 div 3] -> Negative",
+      "ArithmeticTimes2": "[Amount * 2 = 5] -> Nor,South",
+      "ArithmeticRankPlus": "[Rank + 1 = 4] -> north,North",
+      "ArithmeticDecDiv": "[Amount = 2.5 div 1] -> Nor,South",
+      "ArithmeticAttrDiv": "[Amount = Other div 1] -> Nor,north,North",
+      "ArithmeticRankMod": "[Rank mod 2 = 1] -> north,North,South,Zero",
+      "ArithmeticThirdTimes3": "[Amount * 3 div 3 = 2.5] -> Nor,South",
+      "ArithmeticRankDiv2Attr": "[Rank div 2 = 1] -> Negative,Nor,north,North"
+    },
+    "database_limit": "[Amount = 2 - -0.5] fails in HSQLDB with numeric value out of range and is not a case"
+  },
+  "native_semantics": [
+    "parse stops at the first character that does not belong to the number and ignores the rest",
+    "grouping separators are accepted anywhere only when the pattern groups",
+    "prefixes and suffixes must match; percent and per mille divide the value",
+    "a plus sign or leading space fails; the default is returned when given, otherwise the call fails",
+    "XPath integer division truncates; arithmetic over an empty member is NULL and never compares true"
+  ],
+  "fixed": [
+    "parseDecimal rejected a pattern argument and the three-argument form",
+    "random() returned a float",
+    "XPath arithmetic over an empty member raised an error",
+    "Long values beyond 2**53 - 1 lost precision in the browser"
+  ]
+}
