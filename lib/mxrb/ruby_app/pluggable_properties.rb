@@ -15,6 +15,8 @@ module Mxrb
       ActionValue = Data.define(:kind, :handler, :arguments)
       DataSourceValue = Data.define(:entity, :xpath, :sort)
       CaptionValue = Data.define(:text, :parameters, :translations, :fallback)
+      # A translatable string property: [[language code, text], ...] in stored order.
+      TranslatableValue = Data.define(:translations)
       ObjectValue = Data.define(:assignments)
       ObjectListValue = Data.define(:objects)
 
@@ -41,6 +43,7 @@ module Mxrb
         def action(**options) = @owner.action(**options)
         def data_source(**options) = @owner.data_source(**options)
         def caption(text, **options) = @owner.caption(text, **options)
+        def translatable_text(translations) = @owner.translatable_text(translations)
         def caption_parameter(**options) = @owner.caption_parameter(**options)
         def caption_format(**options) = @owner.caption_format(**options)
         def caption_variable(**options) = @owner.caption_variable(**options)
@@ -64,7 +67,7 @@ module Mxrb
         def build = ObjectListValue.new(@objects.dup.freeze)
       end
       SUPPORTED_KINDS = %w[String Boolean Integer Decimal Enumeration Selection Expression Attribute TextTemplate
-                           Image].freeze
+                           Image Microflow Nanoflow].freeze
       private_constant :SUPPORTED_KINDS
 
       attr_reader :schema
@@ -206,6 +209,15 @@ module Mxrb
         DataSourceValue.new(entity.freeze, xpath.to_s.freeze, order.freeze)
       end
 
+      def translatable_text(translations)
+        pairs = translations.is_a?(String) ? [['en_US', translations]] : Array(translations).to_a
+        unless pairs.all? { _1.is_a?(Array) && _1.size == 2 && _1.all?(String) }
+          raise ArgumentError, 'translatable text requires a String or [language, text] pairs'
+        end
+
+        TranslatableValue.new(pairs.map { |pair| pair.map { _1.dup.freeze }.freeze }.freeze)
+      end
+
       def caption(text, parameters: [], translations: {}, fallback: nil)
         raise ArgumentError, 'caption parameters must be an Array' unless parameters.is_a?(Array)
 
@@ -229,12 +241,15 @@ module Mxrb
 
       def set(identifier, value)
         property = schema.fetch_property(identifier)
+        value = translatable_text(value) if property.value_type.kind == 'TranslatableString' && text_input?(value)
         ensure_supported!(property, value)
         validate_semantic_input!(property, value)
         return apply_nil(property) if value.nil?
 
         apply_value(property, value)
       end
+
+      def text_input?(value) = value.is_a?(String) || value.is_a?(Hash)
 
       def apply_nil(property)
         remember(property)
@@ -276,13 +291,7 @@ module Mxrb
 
       def source_expression(identifier, indentation: 0)
         property = schema.fetch_property(identifier)
-        value = @semantic_values[property.key]
-        case value
-        when ActionValue then action_source(value)
-        when DataSourceValue then data_source_source(value)
-        when CaptionValue then caption_source(value)
-        when ObjectListValue then object_list_source(value, indentation)
-        end
+        semantic_source(@semantic_values[property.key], indentation)
       end
 
       private
@@ -304,6 +313,10 @@ module Mxrb
 
       def supported_value(key, value)
         property = schema.fetch_property(key)
+        # A projected translation map keeps its language codes as written.
+        return translatable_text(value.map { [_1.to_s, _2.to_s] }) if
+          property.value_type.kind == 'TranslatableString' && value.is_a?(Hash)
+
         supported_value_for_property(property, value)
       rescue KeyError, ArgumentError, TypeError
         value
@@ -388,14 +401,15 @@ module Mxrb
         when 'Action' then value.is_a?(ActionValue)
         when 'DataSource' then value.is_a?(DataSourceValue)
         when 'TextTemplate' then value.is_a?(CaptionValue)
+        when 'TranslatableString' then value.is_a?(TranslatableValue)
         when 'Object' then value.is_a?(ObjectListValue) && valid_object_list?(type, value)
         else false
         end
       end
 
       def semantic_value?(value)
-        value.is_a?(ActionValue) || value.is_a?(DataSourceValue) ||
-          value.is_a?(CaptionValue) || value.is_a?(ObjectListValue)
+        value.is_a?(ActionValue) || value.is_a?(DataSourceValue) || value.is_a?(CaptionValue) ||
+          value.is_a?(ObjectListValue) || value.is_a?(TranslatableValue)
       end
 
       def apply_semantic_value(property, value)
@@ -409,13 +423,17 @@ module Mxrb
         case value
         when ActionValue
           { action: { kind: value.kind, handler: value.handler, arguments: value.arguments.to_h } }
-        when DataSourceValue
-          sort = value.sort.map { |attribute, direction| { attribute:, direction: } }
-          { data_source: { entity: value.entity, xpath: value.xpath, sort: } }
+        when DataSourceValue then data_source_projection(value)
         when CaptionValue then caption_projection(value)
+        when TranslatableValue then value.translations.to_h
         when ObjectListValue
           { objects: value.objects.map { project_object_value(_1) } }
         end
+      end
+
+      def data_source_projection(value)
+        sort = value.sort.map { |attribute, direction| { attribute:, direction: } }
+        { data_source: { entity: value.entity, xpath: value.xpath, sort: } }
       end
 
       def caption_projection(value)
@@ -538,6 +556,7 @@ module Mxrb
         when ActionValue then action_source(value)
         when DataSourceValue then data_source_source(value)
         when CaptionValue then caption_source(value)
+        when TranslatableValue then "translatable_text(#{value.translations.inspect})"
         when ObjectListValue then object_list_source(value, indentation)
         end
       end
@@ -548,8 +567,17 @@ module Mxrb
         case property.value_type.kind
         when 'TextTemplate' then text_template(value)
         when 'Image' then image_reference(value)
+        when 'Microflow', 'Nanoflow' then document_reference(property.value_type.kind, value)
         else value.is_a?(String) ? value.dup : value
         end
+      end
+
+      # A microflow or nanoflow property is its qualified name.
+      def document_reference(kind, value)
+        value = value.target if value.is_a?(Pluggable::Reference) && value.kind == kind
+        raise TypeError, "#{kind.downcase} requires a qualified name" unless value.is_a?(String)
+
+        Pluggable.reference(kind, value.dup)
       end
 
       def image_reference(value)
@@ -615,7 +643,7 @@ module Mxrb
         when 'Expression' then value.source
         when 'Attribute' then project_attribute(value)
         when 'Decimal' then project_decimal(value)
-        when 'Image' then value.target
+        when 'Image', 'Microflow', 'Nanoflow' then value.target
         when 'TextTemplate' then project_text(value)
         else value
         end

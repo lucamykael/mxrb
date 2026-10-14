@@ -1063,7 +1063,12 @@ O relatório também lista os widgets plugáveis que o frontend gerado renderiza
 de forma aproximada (`[WIDGET APPROXIMATE]`, com o que falta) ou não renderiza
 (`[WIDGET UNSUPPORTED]`), com as páginas, snippets e layouts que os usam; em
 execução, um widget não suportado mostra um placeholder visível (`role="alert"`,
-`data-mxrb-unsupported`) em vez de ficar vazio.
+`data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
+nanoflow são projetadas como nomes qualificados e strings traduzíveis como
+`translatable_text([["en_US", "…"], …])`, preservando todos os idiomas e os ids das
+traduções ao gravar; com isso HTML snippets (HTML, ou JavaScript executado com
+`this` no elemento e `contextObj`), microflow timers, tabelas CSV e iframes rodam
+na aplicação Ruby.
 
 Entidades, atributos e validações `required`/`unique` declarados em Ruby voltam
 ao domínio Mendix. O contrato inclui documentação, valor padrão, tamanho de

@@ -807,6 +807,7 @@ module Mxrb
         value_type.is_a?(Hash) && %w[
           String Boolean Integer Decimal Number Enumeration Expression TextTemplate
           Attribute Association DataSource Action Widgets Object Selection
+          Microflow Nanoflow TranslatableString
         ].include?(value_type['Type'].to_s)
       end
 
@@ -833,6 +834,8 @@ module Mxrb
         return value['Expression'] unless value['Expression'].to_s.empty?
         return value['Image'] unless value['Image'].to_s.empty?
         return value['Form'] unless value['Form'].to_s.empty?
+        return value[type] if %w[Microflow Nanoflow].include?(type) && !value[type].to_s.empty?
+        return pluggable_translatable(value['TranslatableValue']) if type == 'TranslatableString'
 
         primitive = value['PrimitiveValue']
         return primitive == true || primitive.to_s.casecmp('true').zero? if type == 'Boolean'
@@ -845,6 +848,14 @@ module Mxrb
         return value['Selection'] unless value['Selection'].to_s.empty? || value['Selection'] == 'None'
 
         nil
+      end
+
+      # Language code => text, as stored; nil when the text has no translations.
+      def pluggable_translatable(text)
+        translations = parse_array(text.is_a?(Hash) ? text['Items'] : nil).to_h do |item|
+          [item['LanguageCode'].to_s, item['Text'].to_s]
+        end
+        translations.empty? ? nil : translations
       end
 
       def pluggable_data_source(source)
