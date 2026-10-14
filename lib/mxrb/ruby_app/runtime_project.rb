@@ -44,6 +44,7 @@ module Mxrb
       end
 
       def decimal_settings = @manifest.data.fetch('decimal', {})
+      def time_zone_settings = @manifest.data.fetch('time_zone', {})
       def language_settings = @manifest.data.fetch('languages', {})
       def oql_datasets = Registry.all(:dataset).values.map(&:definition)
 

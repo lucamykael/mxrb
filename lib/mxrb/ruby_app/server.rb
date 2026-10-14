@@ -60,12 +60,13 @@ module Mxrb
 
         authorization = request_authorization(request)
         validate_csrf!(request, authorization) if unsafe_request?(method) && cookie_authenticated?(request)
-        context = sessions.authenticate(authorization)
+        context = sessions.authenticate(authorization, client_time_zone: request['X-Mxrb-Time-Zone'])
         if method == 'GET' && path == '/api/session'
           return render_json(
             response, 200,
             user: context.user, roles: context.user_roles, module_roles: context.module_roles,
-            language: application.user_language(context), csrf: sessions.csrf_token(authorization)
+            language: application.user_language(context), csrf: sessions.csrf_token(authorization),
+            time_zone: context.attributes['time_zone']
           )
         end
         if method == 'POST' && path == '/api/session/language'

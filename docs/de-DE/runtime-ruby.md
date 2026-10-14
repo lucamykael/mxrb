@@ -141,6 +141,12 @@ Sommerzeitwechsel. Unbekannte Zonen führen zu einem Fehler statt unbemerkt auf
 UTC zurückzufallen; `UTC`, `local` und numerische Offsets werden ebenfalls
 unterstützt.
 
+Jede Anfrage läuft in der Zeitzone ihrer Sitzung: der `System.TimeZone` des
+Benutzers, falls gesetzt, sonst die IANA-Zone, die der Browser in
+`X-Mxrb-Time-Zone` sendet, sonst UTC; `/api/session` meldet sie. Die
+`System.TimeZone`-Objekte der Runtime entstehen beim Start, und neue Benutzer
+erhalten die Standardzeitzone des Projekts wie in Studio Pro.
+
 Sitzungen und Scheduler-Koordination verwenden standardmäßig die native
 SQLite-Datei `.mxrb/runtime/<Umgebung>-shared.sqlite3`, ohne externen Dienst.
 Mehrere Instanzen müssen mit `MXRB_SHARED_STORE_PATH` dieselbe Datei verwenden.

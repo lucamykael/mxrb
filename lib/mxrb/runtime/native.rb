@@ -19,6 +19,7 @@ require_relative 'expression_functions'
 
 require_relative 'system_domain'
 require_relative 'languages'
+require_relative 'time_zones'
 
 module Mxrb
   module Runtime

@@ -25,7 +25,7 @@ RSpec.describe Mxrb::RubyApp::SessionManager, 'credentials and profile edges' do
     manager = described_class.new(access_policy, users: nil, tokens: nil, ttl: 1)
     expect(manager.anonymous.user).to be_nil
     expect(manager.authenticate(nil).user_roles).to eq([])
-    expect(manager.authenticate('Basic credentials').attributes).to eq({})
+    expect(manager.authenticate('Basic credentials').attributes).to eq('time_zone' => 'UTC')
     expect(manager.logout(nil)).to be_nil
     expect(manager.logout('Bearer unknown')).to be(false)
     expect(manager.csrf_token(nil)).to be_nil
@@ -67,11 +67,11 @@ RSpec.describe Mxrb::RubyApp::SessionManager, 'credentials and profile edges' do
     plain = manager.login('plain', 'secret')
     expect(plain).to include(user: 'plain', roles: ['User'])
     expect(manager.authenticate("bearer #{plain[:token]}")).to have_attributes(
-      module_roles: ['Sales.Reader'], attributes: { 'locale' => 'pt_BR' }
+      module_roles: ['Sales.Reader'], attributes: { 'locale' => 'pt_BR', 'time_zone' => 'UTC' }
     )
     expect(manager.login('digest', 'hash-secret')[:roles]).to eq(['Administrator'])
     expect(manager.authenticate('Bearer profile-token')).to have_attributes(
-      user: 'service', user_roles: ['Service'], attributes: { 'source' => 'token' }
+      user: 'service', user_roles: ['Service'], attributes: { 'source' => 'token', 'time_zone' => 'UTC' }
     )
     expect(manager.authenticate('Bearer empty-profile').user).to be_nil
     expect { manager.login('short', 'x') }.to raise_error(Mxrb::RubyApp::AuthenticationError)

@@ -27,6 +27,9 @@ module Mxrb
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
         Runtime::Languages.synchronize(@store, Runtime::Languages.settings(@project))
+        Runtime::TimeZones.synchronize(@store)
+        default_zone = Runtime::TimeZones.valid(Runtime::TimeZones.settings(@project)['default'])
+        @store.on(:before_create) { |value| Runtime::TimeZones.assign_default(@store, value, default_zone) }
         if administrator_password
           Runtime::SystemDomain.ensure_administrator(@store, password: administrator_password,
                                                              **@access_control.administrator)

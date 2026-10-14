@@ -229,7 +229,7 @@ RSpec.describe 'Ruby application defensive coverage' do
   end
 
   it 'covers server routing, REST, errors, static assets, and Rack adaptation' do
-    context = double(user: 'ada', user_roles: ['User'], module_roles: ['M.User'])
+    context = double(user: 'ada', user_roles: ['User'], module_roles: ['M.User'], attributes: { 'time_zone' => 'UTC' })
     sessions = double
     allow(sessions).to receive_messages(
       authenticate: context, logout: true,
@@ -252,7 +252,7 @@ RSpec.describe 'Ruby application defensive coverage' do
     end
     expect(dispatch.call('/api/health').status).to eq(200)
     expect(dispatch.call('/api/login', 'POST', '{}').status).to eq(200)
-    expect(JSON.parse(dispatch.call('/api/session').body)).to include('language' => 'en_US')
+    expect(JSON.parse(dispatch.call('/api/session').body)).to include('language' => 'en_US', 'time_zone' => 'UTC')
     language = dispatch.call('/api/session/language', 'POST', JSON.generate(code: 'pt_BR'))
     expect(JSON.parse(language.body)).to eq('language' => 'pt_BR')
     expect(app).to have_received(:change_language).with('pt_BR', context:)

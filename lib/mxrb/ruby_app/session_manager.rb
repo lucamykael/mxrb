@@ -11,6 +11,11 @@ module Mxrb
   module RubyApp
     class AuthenticationError < StandardError; end
 
+    # The user's time zone when set, otherwise the browser's, otherwise UTC.
+    SessionTimeZone = Data.define(:user_time_zone) do
+      def call(user, client) = (user && user_time_zone&.call(user)) || Runtime::TimeZones.valid(client) || 'UTC'
+    end
+
     # Environment-backed identities and short-lived opaque sessions for the
     # standalone Ruby server. Production deployments can put the same adapter
     # behind their own Rack authentication and provide static bearer tokens.
@@ -22,8 +27,9 @@ module Mxrb
       # when a name is not configured in MXRB_USERS_JSON.
       def initialize(access_control, users: ENV['MXRB_USERS_JSON'],
                      tokens: ENV['MXRB_AUTH_TOKENS'], ttl: ENV.fetch('MXRB_SESSION_TTL', '3600'),
-                     clock: -> { Time.now.utc }, store: nil, directory: nil)
+                     clock: -> { Time.now.utc }, store: nil, directory: nil, user_time_zone: nil)
         @access_control = access_control
+        @time_zone = SessionTimeZone.new(user_time_zone)
         @directory = directory
         @users = parse_map(users, 'MXRB_USERS_JSON')
         @static_tokens = parse_map(tokens, 'MXRB_AUTH_TOKENS')
@@ -35,21 +41,22 @@ module Mxrb
       end
       # rubocop:enable Metrics/ParameterLists
 
-      def anonymous
-        @access_control.context
+      def anonymous(client_time_zone: nil)
+        @access_control.context(attributes: { 'time_zone' => @time_zone.call(nil, client_time_zone) })
       end
 
-      def authenticate(header)
+      # client_time_zone is the IANA zone the browser reports (X-Mxrb-Time-Zone).
+      def authenticate(header, client_time_zone: nil)
         token = bearer_token(header)
-        return anonymous unless token
+        return anonymous(client_time_zone:) unless token
 
         static = @static_tokens[token]
-        return context_for(static) if static
+        return context_for(static, client_time_zone) if static
 
         session = @store.read_session(token, now: @clock.call)
         raise AuthenticationError, 'invalid or expired bearer token' unless session
 
-        context_for(session.identity)
+        context_for(session.identity, client_time_zone)
       end
 
       def login(username, password)
@@ -100,11 +107,13 @@ module Mxrb
         user && { 'user' => user.id, 'roles' => roles }
       end
 
-      def context_for(raw)
+      def context_for(raw, client_time_zone = nil)
         value = raw.is_a?(Hash) ? raw : {}
+        attributes = value['attributes'] || {}
+        zone = attributes['time_zone'] || @time_zone.call(value['user'], client_time_zone)
         @access_control.context(
           user: value['user'], user_roles: value['roles'] || value['user_roles'],
-          module_roles: value['module_roles'], attributes: value['attributes'] || {}
+          module_roles: value['module_roles'], attributes: attributes.merge('time_zone' => zone)
         )
       end
 

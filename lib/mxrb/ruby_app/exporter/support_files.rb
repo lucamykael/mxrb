@@ -176,6 +176,7 @@ module Mxrb
             'format_version' => 1, 'mode' => 'ruby',
             'project' => { 'name' => project.name, 'mendix_version' => project.mendix_version },
             'decimal' => Runtime::DecimalContext.settings(project),
+            'time_zone' => Runtime::TimeZones.settings(project),
             'languages' => Runtime::Languages.settings(project),
             'security' => @security_manifest,
             'navigation' => runtime_value(project.navigation.to_h),

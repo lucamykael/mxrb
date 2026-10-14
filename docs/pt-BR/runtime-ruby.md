@@ -151,6 +151,12 @@ como `America/Boa_Vista`, usam `tzinfo`, inclusive nas transições de horário 
 verão. Zonas desconhecidas geram erro em vez de cair silenciosamente para UTC;
 `UTC`, `local` e offsets numéricos como `-04:00` também são aceitos.
 
+Cada requisição roda no fuso da sessão: o `System.TimeZone` do usuário, quando
+definido; senão a zona IANA que o navegador envia em `X-Mxrb-Time-Zone`; senão
+UTC. O `/api/session` informa o fuso. Os objetos `System.TimeZone` do runtime são
+criados na inicialização, e usuários novos recebem o fuso padrão do projeto, como
+no Studio Pro.
+
 Sessões e coordenação do scheduler usam por padrão o SQLite nativo compartilhado
 `.mxrb/runtime/<ambiente>-shared.sqlite3`, sem serviço externo. Múltiplas
 instâncias devem apontar `MXRB_SHARED_STORE_PATH` para o mesmo arquivo. Claims
