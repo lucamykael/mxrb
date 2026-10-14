@@ -52,7 +52,8 @@ module Mxrb
         raise ArgumentError, "#{name} accepts a date and an optional pattern" unless rest.length == (pattern ? 1 : 0)
         return format(time, pattern.to_s, zone:) if pattern
 
-        public_send({ 'formatdate' => :date, 'formattime' => :time }.fetch(name, :date_time), time, zone:)
+        public_send({ 'formatdate' => :date, 'formattime' => :time }.fetch(name.delete_suffix('utc'), :date_time),
+                    time, zone:)
       end
 
       def date(time, zone:) = format(time, DATE, zone:)

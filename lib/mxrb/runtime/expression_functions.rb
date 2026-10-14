@@ -62,7 +62,8 @@ module Mxrb
       end
 
       def extreme(name, arguments)
-        raise ArgumentError, "#{name} requires numbers" unless arguments.length >= 2 && arguments.all?(Numeric)
+        comparable = arguments.all?(Numeric) || arguments.all? { _1.is_a?(Time) }
+        raise ArgumentError, "#{name} requires numbers or dates" unless arguments.length >= 2 && comparable
 
         name == 'max' ? arguments.max : arguments.min
       end

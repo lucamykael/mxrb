@@ -44,6 +44,19 @@ module Mxrb
         value.to_time.getutc
       end
 
+      # The instant of a local wall-clock time; a gap resolves through its transition.
+      def resolve(wall, zone)
+        periods = zone.periods_for_local(wall)
+        return wall - periods.last.observed_utc_offset unless periods.empty?
+
+        # A gap can be thirty minutes or even an entire day. Use the actual
+        # transition, never assume all daylight-saving changes last one hour.
+        transition = gap_transition(wall, zone)
+        raise ArgumentError, 'cannot resolve local date' unless transition
+
+        wall - transition.previous_offset.observed_utc_offset
+      end
+
       private
 
       def shift_arguments(arguments, match)
@@ -115,18 +128,6 @@ module Mxrb
         length = %w[years months days hours minutes seconds].index(unit) + 1
         parts[length..] = [nil, 1, 1, 0, 0, 0].drop(length)
         resolve(Time.utc(*parts), zone)
-      end
-
-      def resolve(wall, zone)
-        periods = zone.periods_for_local(wall)
-        return wall - periods.last.observed_utc_offset unless periods.empty?
-
-        # A gap can be thirty minutes or even an entire day. Use the actual
-        # transition, never assume all daylight-saving changes last one hour.
-        transition = gap_transition(wall, zone)
-        raise ArgumentError, 'cannot resolve local date' unless transition
-
-        wall - transition.previous_offset.observed_utc_offset
       end
 
       def gap_transition(wall, zone)

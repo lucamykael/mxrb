@@ -663,6 +663,15 @@ Einlesen lokalisierter Texte bleibt ein separater Vertrag.
 
 [Calendar evidence](../evidence/calendar-expressions-2026-10-06.json).
 
+Microflows werten außerdem `millisecondsBetween` bis `weeksBetween` aus (Abstand
+unabhängig von der Reihenfolge: Millisekunden ganzzahlig, größere Einheiten als
+38-stellige Dezimalzahl), `calendarMonthsBetween`/`calendarYearsBetween` (vollständige
+Monate/Jahre), `beginOf`/`endOf` für Day, Week, Month und Year, `formatDateUTC`/
+`formatTimeUTC`, `max`/`min` über Datumswerte und die Tokens `[%BeginOf…%]`/`[%EndOf…%]`.
+Wochen beginnen am Sonntag, auch für XPath `[%BeginOfCurrentWeek%]`. Alle 80 Fälle
+stimmen mit der Mendix-11.12.1-Runtime überein.
+[Nachweis der Kalenderfunktionen](../evidence/calendar-functions-2026-10-14.json).
+
 ## Gestapelte Diagramme und Punktaktionen — 6. Oktober 2026
 
 Balken- und Säulendiagramme unterstützen `barmode: "stack"`. Die Basiswerte

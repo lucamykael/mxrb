@@ -10,6 +10,7 @@ require 'openssl'
 require 'uri'
 require_relative 'string_functions'
 require_relative 'calendar_functions'
+require_relative 'calendar_ranges'
 require_relative 'date_parsing'
 require_relative 'decimal_values'
 require_relative 'sort_order'
@@ -197,6 +198,7 @@ module Mxrb
           @token_cache = {}
           @decimal = decimal
           @calendar = CalendarFunctions.new(time_zone:)
+          @ranges = CalendarRanges.new(@calendar)
         end
 
         def evaluate(source, variables, node: nil)
@@ -243,6 +245,7 @@ module Mxrb
 
         def invoke(name, arguments)
           return @calendar.invoke(name.downcase, arguments) if @calendar.supported?(name.downcase)
+          return @ranges.invoke(name.downcase, arguments) if @ranges.supported?(name.downcase)
 
           case name.downcase
           when 'parsedatetimeutc' then DateParsing.invoke(arguments)
@@ -272,7 +275,13 @@ module Mxrb
           end
         end
 
-        DATE_FORMATS = %w[formatdatetime formatdatetimeutc formatdate formattime].freeze
+        # [%BeginOfCurrentDay%] and the other boundary tokens, in the session time zone.
+        def date_token(source)
+          XPathDates.new(SecurityContext.new(attributes: { 'time_zone' => @calendar.zone(false).identifier }))
+                    .resolve(source)
+        end
+
+        DATE_FORMATS = %w[formatdatetime formatdatetimeutc formatdate formatdateutc formattime formattimeutc].freeze
 
         def divide(left, right) = @decimal.divide(left, right)
 
@@ -430,6 +439,7 @@ module Mxrb
               consume(:datetime)
               return [:datetime]
             end
+            return [:date_token, consume(:date_token)] if @token == :date_token
             return [:variable, consume(:variable)] if @token == :variable
             return conditional if accept_word('if')
             return grouped if accept(:left_parenthesis)
@@ -475,6 +485,7 @@ module Mxrb
             case kind
             when :literal then value
             when :datetime then Time.now
+            when :date_token then @expression.date_token(value)
             when :variable then @expression.resolve_variable(value, @variables)
             when :identifier then @expression.resolve_identifier(value, @node)
             when :call then @expression.invoke(value, left.map { evaluate(_1) })
@@ -574,6 +585,7 @@ module Mxrb
           def next_token
             return [:eof, nil] if @scanner.eos?
             return [:datetime, nil] if @scanner.scan(/\[%CurrentDateTime%\]/i)
+            return [:date_token, @scanner.matched] if @scanner.scan(/\[%(?:Begin|End)Of[A-Za-z]+%\]/)
             return [:string, scan_string] if @scanner.peek(1) == "'"
             return [:number, number(@scanner.scan(/\d+(?:\.\d+)?/))] if @scanner.check(/\d/)
             return [:variable, @scanner.scan(%r{\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)?})] if @scanner.check(/\$/)

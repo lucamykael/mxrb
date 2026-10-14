@@ -1,0 +1,272 @@
+{
+  "date": "2026-10-14",
+  "scope": "Microflow calendar functions: *Between, calendar months/years, begin/end of day/week/month/year, UTC date/time formats, date max/min and boundary tokens",
+  "native": {
+    "mendix": "11.12.1",
+    "toolchain": "Linux MxBuild portable app and Mendix Runtime via script/oql_native_oracle",
+    "mxbuild": "BUILD SUCCEEDED",
+    "package_sha256": "cbb77556968eb9cfb3cf60f1e8c507e4ec84438354e18f5d724818b71ed34a39",
+    "cases": 80,
+    "status": "passed",
+    "results": {
+      "millisecondsBetweenBA": [
+        "763369509046"
+      ],
+      "millisecondsBetweenAB": [
+        "763369509046"
+      ],
+      "millisecondsBetweenCA": [
+        "846309045"
+      ],
+      "millisecondsBetweenDC": [
+        "762434999500"
+      ],
+      "secondsBetweenBA": [
+        "763369509.046"
+      ],
+      "secondsBetweenAB": [
+        "763369509.046"
+      ],
+      "secondsBetweenCA": [
+        "846309.045"
+      ],
+      "secondsBetweenDC": [
+        "762434999.5"
+      ],
+      "minutesBetweenBA": [
+        "12722825.150766666666666666666666666667"
+      ],
+      "minutesBetweenAB": [
+        "12722825.150766666666666666666666666667"
+      ],
+      "minutesBetweenCA": [
+        "14105.15075"
+      ],
+      "minutesBetweenDC": [
+        "12707249.991666666666666666666666666667"
+      ],
+      "hoursBetweenBA": [
+        "212047.08584611111111111111111111111111"
+      ],
+      "hoursBetweenAB": [
+        "212047.08584611111111111111111111111111"
+      ],
+      "hoursBetweenCA": [
+        "235.08584583333333333333333333333333333"
+      ],
+      "hoursBetweenDC": [
+        "211787.49986111111111111111111111111111"
+      ],
+      "daysBetweenBA": [
+        "8835.295243587962962962962962962962963"
+      ],
+      "daysBetweenAB": [
+        "8835.295243587962962962962962962962963"
+      ],
+      "daysBetweenCA": [
+        "9.7952435763888888888888888888888888889"
+      ],
+      "daysBetweenDC": [
+        "8824.4791608796296296296296296296296296"
+      ],
+      "weeksBetweenBA": [
+        "1262.1850347982804232804232804232804233"
+      ],
+      "weeksBetweenAB": [
+        "1262.1850347982804232804232804232804233"
+      ],
+      "weeksBetweenCA": [
+        "1.3993205109126984126984126984126984127"
+      ],
+      "weeksBetweenDC": [
+        "1260.6398801256613756613756613756613757"
+      ],
+      "calendarMonthsBetweenBA": [
+        "290"
+      ],
+      "calendarMonthsBetweenAB": [
+        "290"
+      ],
+      "calendarMonthsBetweenCA": [
+        "0"
+      ],
+      "calendarMonthsBetweenDC": [
+        "289"
+      ],
+      "calendarYearsBetweenBA": [
+        "24"
+      ],
+      "calendarYearsBetweenAB": [
+        "24"
+      ],
+      "calendarYearsBetweenCA": [
+        "0"
+      ],
+      "calendarYearsBetweenDC": [
+        "24"
+      ],
+      "beginOfDayA": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "beginOfDayC": [
+        "2024-02-29 00:00:00.000"
+      ],
+      "beginOfDayD": [
+        "2000-01-02 00:00:00.000"
+      ],
+      "endOfDayA": [
+        "2024-03-10 23:59:59.999"
+      ],
+      "endOfDayC": [
+        "2024-02-29 23:59:59.999"
+      ],
+      "endOfDayD": [
+        "2000-01-02 23:59:59.999"
+      ],
+      "beginOfWeekA": [
+        "2024-03-10 00:00:00.000"
+      ],
+      "beginOfWeekC": [
+        "2024-02-25 00:00:00.000"
+      ],
+      "beginOfWeekD": [
+        "2000-01-02 00:00:00.000"
+      ],
+      "endOfWeekA": [
+        "2024-03-16 23:59:59.999"
+      ],
+      "endOfWeekC": [
+        "2024-03-02 23:59:59.999"
+      ],
+      "endOfWeekD": [
+        "2000-01-08 23:59:59.999"
+      ],
+      "beginOfMonthA": [
+        "2024-03-01 00:00:00.000"
+      ],
+      "beginOfMonthC": [
+        "2024-02-01 00:00:00.000"
+      ],
+      "beginOfMonthD": [
+        "2000-01-01 00:00:00.000"
+      ],
+      "endOfMonthA": [
+        "2024-03-31 23:59:59.999"
+      ],
+      "endOfMonthC": [
+        "2024-02-29 23:59:59.999"
+      ],
+      "endOfMonthD": [
+        "2000-01-31 23:59:59.999"
+      ],
+      "beginOfYearA": [
+        "2024-01-01 00:00:00.000"
+      ],
+      "beginOfYearC": [
+        "2024-01-01 00:00:00.000"
+      ],
+      "beginOfYearD": [
+        "2000-01-01 00:00:00.000"
+      ],
+      "endOfYearA": [
+        "2024-12-31 23:59:59.999"
+      ],
+      "endOfYearC": [
+        "2024-12-31 23:59:59.999"
+      ],
+      "endOfYearD": [
+        "2000-12-31 23:59:59.999"
+      ],
+      "FormatDateUTC": [
+        "3/10/24"
+      ],
+      "FormatTimeUTC": [
+        "7:05 AM"
+      ],
+      "MaxDates": [
+        "2024-03-10 07:05:09.045"
+      ],
+      "MinDates": [
+        "1999-12-31 23:59:59.999"
+      ],
+      "TokenCurrentMinuteSpan": [
+        "true"
+      ],
+      "TokenCurrentHourSpan": [
+        "true"
+      ],
+      "TokenCurrentDayTime": [
+        "00:00:00.000"
+      ],
+      "TokenCurrentDaySpan": [
+        "true"
+      ],
+      "TokenYesterdayTime": [
+        "00:00:00.000"
+      ],
+      "TokenYesterdaySpan": [
+        "true"
+      ],
+      "TokenTomorrowTime": [
+        "00:00:00.000"
+      ],
+      "TokenTomorrowSpan": [
+        "true"
+      ],
+      "TokenCurrentWeekTime": [
+        "00:00:00.000"
+      ],
+      "TokenCurrentWeekSpan": [
+        "true"
+      ],
+      "TokenCurrentMonthTime": [
+        "00:00:00.000"
+      ],
+      "TokenCurrentMonthSpan": [
+        "true"
+      ],
+      "TokenCurrentYearTime": [
+        "00:00:00.000"
+      ],
+      "TokenCurrentYearSpan": [
+        "true"
+      ],
+      "TokenUTCDay": [
+        "00:00:00.000"
+      ],
+      "TokenDayOrder": [
+        "true"
+      ],
+      "TokenNowInDay": [
+        "true"
+      ],
+      "TokenWeekStartDay": [
+        "Sun"
+      ],
+      "TokenWeekEndDay": [
+        "Sat 23:59:59.999"
+      ],
+      "BeginOfWeekMatchesToken": [
+        "true"
+      ]
+    }
+  },
+  "ruby": {
+    "interpreter_identical": true
+  },
+  "native_semantics": [
+    "millisecondsBetween..weeksBetween return the distance regardless of argument order; milliseconds as a whole number, larger units as a 38-digit decimal",
+    "calendarMonthsBetween/calendarYearsBetween count complete months/years, comparing day and time of day",
+    "beginOfWeek/endOfWeek and [%BeginOfCurrentWeek%] start on Sunday (en_US)",
+    "formatDateUTC/formatTimeUTC use the short en_US forms (3/10/24, 7:05 AM) and accept no pattern",
+    "max/min accept dates",
+    "[%BeginOf…%]/[%EndOf…%] tokens are valid in microflow expressions"
+  ],
+  "fixed": [
+    "the *Between, calendarMonths/YearsBetween, begin/end of day/week/month/year and formatDateUTC/formatTimeUTC functions, date max/min and boundary tokens failed as unsupported in Ruby microflows",
+    "XPath [%BeginOfCurrentWeek%] started on Monday"
+  ],
+  "limitations": [
+    "the oracle runs in the system context (UTC); session time zones are validated separately"
+  ]
+}

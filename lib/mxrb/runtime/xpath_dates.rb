@@ -77,9 +77,10 @@ module Mxrb
         end
       end
 
+      # Weeks start on Sunday, as the Runtime resolves [%BeginOfCurrentWeek%] (en_US).
       def week_bounds(date)
-        monday = date - (date.cwday - 1)
-        [monday, monday + 7]
+        sunday = date - date.wday
+        [sunday, sunday + 7]
       end
 
       def month_bounds(date)
