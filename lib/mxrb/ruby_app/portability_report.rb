@@ -8,8 +8,7 @@ module Mxrb
       Entry = Data.define(:id, :name, :kind, :path, :status, :reason) do
         def to_h = { id:, name:, kind:, path:, status:, reason: }
       end
-
-      attr_reader :root, :entries
+      attr_reader :root, :entries, :widgets
 
       def initialize(root, manifest: Manifest.load(root))
         @root = File.expand_path(root)
@@ -33,7 +32,7 @@ module Mxrb
             preserved_native: 'kept unchanged in the reversible Mendix sidecar',
             runtime_only: 'requires the MXRB Ruby/TypeScript runtime'
           },
-          entries: entries.map(&:to_h)
+          entries: entries.map(&:to_h), widgets:
         }
       end
 
@@ -41,6 +40,7 @@ module Mxrb
 
       def build_entries
         load_registry
+        @widgets = WidgetSupport.new.report.freeze
         coverage_entries + frontend_application_entries
       ensure
         Registry.reset!

@@ -146,7 +146,7 @@ RSpec.describe 'Ruby application export mode' do
                                        root, 'frontend', 'src', 'generated', 'bridge', 'marketplace.tsx'
                                      ))
       expect(marketplace_source).to include(
-        'export function MarketplaceWidget', '<MarketplaceChart', "id.includes('slider')"
+        'export function MarketplaceWidget', '<MarketplaceChart', 'recognizedMarketplaceWidget'
       )
       expect(File.read(File.join(root, 'frontend', 'src', 'generated', 'bridge', 'components',
                                  'MarketplaceChart.tsx'))).to include('mxrb-marketplace-chart')

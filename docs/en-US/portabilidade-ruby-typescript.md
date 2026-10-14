@@ -864,7 +864,11 @@ The last command fails when runtime-only code remains. Ruby entities and their
 attribute constraints materialize in the domain model. Supported microflow and
 nanoflow graphs are exported with editable `native` blocks. Pages intended for
 Studio Pro must use `Page.native`; an application-owned React route remains
-React code and is reported honestly.
+React code and is reported honestly. The report also lists the pluggable widgets
+the generated frontend renders only approximately (`[WIDGET APPROXIMATE]`, with
+what is missing) or not at all (`[WIDGET UNSUPPORTED]`), with the pages, snippets
+and layouts that use them; at runtime an unsupported widget shows a visible
+placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering empty.
 
 Build React/TypeScript that must run inside Mendix as an official pluggable
 widget:
