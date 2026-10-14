@@ -46,6 +46,41 @@ export const entityCollectionPath = (
   return `${path}?${query}`;
 };
 
+const CURRENT_OBJECT = /\$currentObject\b|\[%CurrentObject%\]/i;
+
+const xpathVariable = (value: RuntimeValue | undefined) =>
+  isEntityRecord(value) ? { type: value.type, id: value.id } : value;
+
+// Adds a data source XPath constraint with what it refers to: the context object
+// for $currentObject or [%CurrentObject%], and page parameters such as $Customer.
+export const withXPath = (
+  path: string,
+  xpath: string | undefined,
+  context: EntityRecord | null,
+  variables: RuntimeVariables = {},
+): string => {
+  if (!xpath) return path;
+  const [base, query = ''] = path.split('?', 2);
+  const parameters = new URLSearchParams(query);
+  parameters.set('xpath', xpath);
+  if (context && CURRENT_OBJECT.test(xpath)) {
+    parameters.set('xpath_context_type', context.type);
+    parameters.set('xpath_context_id', context.id);
+  }
+  const names = [
+    ...new Set([...xpath.matchAll(/\$([A-Za-z_]\w*)/g)].map((match) => match[1])),
+  ].filter((name) => name.toLowerCase() !== 'currentobject' && name in variables);
+  if (names.length > 0) {
+    parameters.set(
+      'xpath_variables',
+      JSON.stringify(
+        Object.fromEntries(names.map((name) => [name, xpathVariable(variables[name])])),
+      ),
+    );
+  }
+  return `${base}?${parameters}`;
+};
+
 export const expressionValue = (
   source: string | undefined,
   context: EntityRecord | null,
