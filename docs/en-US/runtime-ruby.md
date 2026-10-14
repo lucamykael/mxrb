@@ -125,8 +125,10 @@ persistent entities remain in memory.
 
 The Ruby API provides login and bearer tokens, sessions, schema, navigation,
 pages, microflows, CRUD, and published REST. Page and microflow roles, entity
-access rules, member rights, and the safe XPath subset are enforced for every
-request. Credentials come from `MXRB_USERS_JSON` and `MXRB_AUTH_TOKENS` and
+access rules and member rights are enforced for every request. Access rule
+constraints use the same XPath engine as retrieves (associations, functions and
+quoted tokens such as `'[%CurrentUser%]'`); a constraint that cannot be evaluated
+denies access. Credentials come from `MXRB_USERS_JSON` and `MXRB_AUTH_TOKENS` and
 should be supplied by ignored local files or the deployment secret manager.
 
 Scheduled events use MXRB's stdlib scheduler with minute, hour, and day

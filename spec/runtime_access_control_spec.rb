@@ -86,7 +86,7 @@ RSpec.describe Mxrb::Runtime::AccessControl do
     context = policy.context(roles: ['User'], user: { id: 7 })
 
     expect(policy.entity_allowed?('Sales.Audit', action: :read, context:)).to be false
-    expect(policy.evaluate_xpath("[contains(Name, 'x')]", record: { Name: 'x' }, context:)).to be_nil
+    expect(policy.evaluate_xpath("[unsupported(Name, 'x')]", record: { Name: 'x' }, context:)).to be_nil
     expect do
       policy.authorize!('Sales.Audit', kind: :entity, action: :read, context:)
     end.to raise_error(Mxrb::Runtime::AuthorizationError, /not authorized/)
@@ -204,12 +204,13 @@ RSpec.describe Mxrb::Runtime::AccessControl do
     expect(policy.evaluate_xpath('Count <= 3', record:, context:)).to be true
     expect(policy.evaluate_xpath('Count = false()', record: { Count: false }, context:)).to be true
     expect(policy.evaluate_xpath('Ratio = 1.5', record:, context:)).to be true
-    expect(policy.evaluate_xpath('Nothing = null', record:, context:)).to be true
+    expect(policy.evaluate_xpath('Nothing = empty', record:, context:)).to be true
+    expect(policy.evaluate_xpath('Nothing = NULL', record:, context:)).to be true
     expect(policy.evaluate_xpath('Owner = [%CurrentUser%]', record:, context:)).to be true
     expect(policy.evaluate_xpath('Count = bare', record:, context:)).to be_nil
     expect(policy.evaluate_xpath('Count = $Missing', record:, context:)).to be_nil
     expect(policy.evaluate_xpath('Missing = 1 or true()', record:, context:)).to be_nil
-    expect(policy.evaluate_xpath('Name > 1', record:, context:)).to be false
+    expect(policy.evaluate_xpath('Name > 1', record:, context:)).to be_nil
 
     expect(policy.evaluate_xpath('Owner = $currentUser', record: { Owner: 'bob' },
                                                          context: { user: { name: 'bob' } })).to be true
@@ -231,7 +232,7 @@ RSpec.describe Mxrb::Runtime::AccessControl do
     expect(policy.evaluate_xpath('Count = 3', record: members_record, context: {})).to be true
     method_record = Object.new
     method_record.define_singleton_method(:count) { 3 }
-    expect(policy.evaluate_xpath('count = 3', record: method_record, context: {})).to be true
+    expect(policy.evaluate_xpath('count = 3', record: method_record, context: {})).to be_nil
 
     malformed_array = Object.new
     malformed_array.define_singleton_method(:empty?) { false }
@@ -239,12 +240,32 @@ RSpec.describe Mxrb::Runtime::AccessControl do
     expect(policy.send(:parse_array, malformed_array)).to eq([malformed_array])
     expect(policy.send(:value, Object.new, :missing)).to be_nil
     expect(policy.send(:value, {}, :missing)).to be_nil
+  end
 
-    fake_match = Object.new
-    fake_match.define_singleton_method(:[]) { |index| { 1 => 'Count', 2 => '?', 3 => '3' }[index] }
-    fake_expression = Object.new
-    fake_expression.define_singleton_method(:match) { |_pattern| fake_match }
-    expect(policy.send(:comparison, fake_expression, record, context)).to be_nil
+  it 'evaluates rules with the runtime XPath engine, including quoted tokens and associations' do
+    object = Mxrb::Runtime::Native::ObjectValue
+    customer = object.new(entity: 'Sales.Customer', id: 'c1', members: { 'Region' => 'North' })
+    order = object.new(entity: 'Sales.Order', id: 'o1', members: { 'Owner' => 'u1', 'Name' => 'and or' })
+    store = Object.new
+    store.define_singleton_method(:retrieve_association) do |name, record|
+      name == 'Sales.Order_Customer' && record.id == 'o1' ? [customer] : []
+    end
+    policy = described_class.new(project, store:)
+    context = policy.context(roles: ['User'], user: 'u1')
+
+    expect(policy.evaluate_xpath("[Owner = '[%CurrentUser%]']", record: order, context:)).to be true
+    expect(policy.evaluate_xpath("[Owner = '[%CurrentUser%]']", record: order,
+                                                                context: policy.context(user: 'u2'))).to be false
+    expect(policy.evaluate_xpath("[Sales.Order_Customer/Sales.Customer/Region = 'North']",
+                                 record: order, context:)).to be true
+    expect(policy.evaluate_xpath("[Sales.Order_Customer/Sales.Customer[Region = 'South']]",
+                                 record: order, context:)).to be false
+    expect(policy.evaluate_xpath("[Name = 'and or' and contains(Name, 'OR')]", record: order, context:)).to be true
+    expect(policy.evaluate_xpath("[System.owner = '[%CurrentUser%]']", record: { 'Owner' => 'u1' }, context:))
+      .to be true
+    expect(policy.entity_allowed?('Sales.Order', action: :read, context:, record: order)).to be true
+    expect(policy.entity_allowed?('Sales.Order', action: :read, context: policy.context(roles: ['User'], user: 'u2'),
+                                                 record: order)).to be false
   end
 end
 # rubocop:enable Lint/ConstantDefinitionInBlock, Metrics/BlockLength, Metrics/MethodLength

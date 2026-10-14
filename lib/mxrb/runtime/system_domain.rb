@@ -49,8 +49,8 @@ module Mxrb
                              SchemaMigrator::TYPE_MAP.fetch(type, 'TEXT'), type, default,
                              false, unique)
           end
-          EntitySchema.new(entity, entity, SchemaMigrator.physical_name('entity', entity),
-                           columns.freeze, {}.freeze)
+          EntitySchema.new(entity, entity, SchemaMigrator.physical_name('entity', entity), columns.freeze,
+                           SchemaMigrator.system_columns(SchemaMigrator::SYSTEM_ENTITY_MEMBERS[entity]))
         end
       end
 
