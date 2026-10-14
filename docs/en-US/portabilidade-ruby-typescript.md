@@ -895,7 +895,14 @@ the export copies it under `frontend/src/generated/bridge/vendor/widgets` and a
 generic host gives it the pluggable widget API (`EditableValue`, `ListValue` with
 filtering, sorting and paging, `ActionValue`, `DynamicValue`, linked attributes,
 expressions and widget regions, `Big` numbers, `mendix/filters/builders`); such a
-widget leaves the report. Otherwise, at runtime an unsupported widget shows a
+widget leaves the report. A Dojo widget (`mxui/widget/_WidgetBase`) of the
+project's packages runs the same way through a legacy host: a small AMD loader
+gives it its own scripts and templates, Dojo, dijit and mxui shims, a `window.mx`
+answered by the runtime (`mx.data.get`/`action`/`subscribe`, `mx.ui.action`,
+`mx.session`, `mx.parser`) and `MxObject` over the page's records, so reference
+sets it changes are saved like any other edit. Entity paths and constraints of
+these widgets are projected as the client passes them (`Module.Assoc/Module.Entity`
+and the XPath) and written back unchanged. Otherwise, at runtime an unsupported widget shows a
 visible placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering
 empty.
 Microflow and nanoflow properties are projected as qualified names and

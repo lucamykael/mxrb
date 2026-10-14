@@ -3406,6 +3406,8 @@ module Mxrb
       kind = property.dig('ValueType', 'Type').to_s
       return configure_flow_widget_value!(value, kind, configured) if %w[Microflow Nanoflow].include?(kind)
       return configure_translatable_widget_value!(value, configured) if kind == 'TranslatableString'
+      return configure_entity_widget_value!(value, configured) if kind == 'Entity' && configured.is_a?(String)
+      return value.merge!('XPathConstraint' => configured) if kind == 'EntityConstraint' && configured.is_a?(String)
 
       unless configured.is_a?(Hash)
         if configured.nil?
@@ -3447,6 +3449,33 @@ module Mxrb
     # Microflow and nanoflow properties store the qualified name ('' when cleared).
     def configure_flow_widget_value!(value, kind, configured)
       value[kind] = configured.to_s
+      value
+    end
+
+    # An entity property holds an entity or a path over associations
+    # ("Module.Association/Module.Entity[/...]"); an unchanged path keeps its document.
+    def configure_entity_widget_value!(value, path)
+      existing = value['EntityRef']
+      current = if existing.is_a?(Hash) && existing['$Type'] == 'DomainModels$IndirectEntityRef'
+                  array_items(existing['Steps']).flat_map { [_1['Association'], _1['DestinationEntity']] }.join('/')
+                else
+                  existing&.fetch('Entity', nil)
+                end
+      return value if current == path
+
+      steps = path.split('/')
+      value['EntityRef'] =
+        if steps.one?
+          { '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$DirectEntityRef', 'Entity' => path }
+        else
+          {
+            '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$IndirectEntityRef',
+            'Steps' => IO::BsonCodec.build_array(steps.each_slice(2).map do |association, destination|
+              { '$ID' => SecureRandom.uuid, '$Type' => 'DomainModels$EntityRefStep',
+                'Association' => association, 'DestinationEntity' => destination.to_s }
+            end, marker: 2)
+          }
+        end
       value
     end
 

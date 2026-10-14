@@ -847,6 +847,7 @@ module Mxrb
 
         return pluggable_template(value['TextTemplate']) if value['TextTemplate'].is_a?(Hash)
         return value.dig('AttributeRef', 'Attribute') if value['AttributeRef'].is_a?(Hash)
+        return pluggable_entity(value['EntityRef']) if value['EntityRef'].is_a?(Hash) && type == 'Entity'
         return value.dig('EntityRef', 'Entity') if value['EntityRef'].is_a?(Hash)
         return pluggable_data_source(value['DataSource']) if value['DataSource'].is_a?(Hash)
         return value['Expression'] unless value['Expression'].to_s.empty?
@@ -854,6 +855,7 @@ module Mxrb
         return value['Form'] unless value['Form'].to_s.empty?
         return value[type] if %w[Microflow Nanoflow].include?(type) && !value[type].to_s.empty?
         return pluggable_translatable(value['TranslatableValue']) if type == 'TranslatableString'
+        return value['XPathConstraint'] if type == 'EntityConstraint' && !value['XPathConstraint'].to_s.empty?
 
         primitive = value['PrimitiveValue']
         return primitive == true || primitive.to_s.casecmp('true').zero? if type == 'Boolean'
@@ -866,6 +868,15 @@ module Mxrb
         return value['Selection'] unless value['Selection'].to_s.empty? || value['Selection'] == 'None'
 
         nil
+      end
+
+      # An entity, or the path to it over associations as the Mendix client passes
+      # it to a widget: "Module.Association/Module.Entity[/...]".
+      def pluggable_entity(reference)
+        return reference['Entity'] unless reference['$Type'] == 'DomainModels$IndirectEntityRef'
+
+        steps = parse_array(reference['Steps']).flat_map { [_1['Association'], _1['DestinationEntity']] }
+        steps.empty? ? nil : steps.join('/')
       end
 
       # Language code => text, as stored; nil when the text has no translations.

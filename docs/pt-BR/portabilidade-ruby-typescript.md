@@ -1088,7 +1088,14 @@ projeto traz um (`<Nome>.mjs`): a exportação o copia para
 de widgets plugáveis (`EditableValue`, `ListValue` com filtro, ordenação e
 paginação, `ActionValue`, `DynamicValue`, atributos vinculados, expressões e regiões
 de widgets, números `Big`, `mendix/filters/builders`); esse widget sai do
-relatório. Fora isso, em execução, um widget não suportado mostra um placeholder
+relatório. Um widget Dojo (`mxui/widget/_WidgetBase`) dos pacotes do projeto
+roda do mesmo jeito por um host legado: um pequeno loader AMD entrega seus próprios
+scripts e templates, shims de Dojo, dijit e mxui, um `window.mx` respondido pelo
+runtime (`mx.data.get`/`action`/`subscribe`, `mx.ui.action`, `mx.session`,
+`mx.parser`) e `MxObject` sobre os registros da página, e os reference sets que ele
+altera são gravados como qualquer outra edição. Caminhos de entidade e restrições
+desses widgets são projetados como o client os entrega (`Modulo.Assoc/Modulo.Entidade`
+e o XPath) e voltam inalterados no round-trip. Fora isso, em execução, um widget não suportado mostra um placeholder
 visível (`role="alert"`, `data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
 nanoflow são projetadas como nomes qualificados e strings traduzíveis como
 `translatable_text([["en_US", "…"], …])`, preservando todos os idiomas e os ids das
