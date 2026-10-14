@@ -137,6 +137,11 @@ as `America/New_York` use `tzinfo`, including daylight-saving transitions.
 Unknown zones fail during scheduling instead of silently falling back to UTC;
 `UTC`, `local`, and numeric offsets such as `-04:00` are also supported.
 
+Each request runs in its session's time zone: the user's `System.TimeZone` when
+set, otherwise the IANA zone the browser sends in `X-Mxrb-Time-Zone`, otherwise
+UTC; `/api/session` reports it. The Runtime's `System.TimeZone` objects are created
+at startup, and new users get the project's default time zone, as in Studio Pro.
+
 Sessions and scheduler coordination default to the native shared SQLite file
 `.mxrb/runtime/<environment>-shared.sqlite3`, with no external service. Multiple
 instances must point `MXRB_SHARED_STORE_PATH` to the same file. Idempotent

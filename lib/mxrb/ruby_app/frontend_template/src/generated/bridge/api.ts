@@ -14,6 +14,8 @@ export const api = async <T = RuntimeValue | undefined>(
 ): Promise<T> => {
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
+  // The server runs sessions without a user time zone in the browser's zone.
+  headers.set('X-Mxrb-Time-Zone', Intl.DateTimeFormat().resolvedOptions().timeZone);
   if (csrfToken && !['GET', 'HEAD'].includes(options.method || 'GET')) {
     headers.set('X-CSRF-Token', csrfToken);
   }
