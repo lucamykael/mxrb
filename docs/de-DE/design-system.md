@@ -85,8 +85,9 @@ werden vor dem Schreiben aufgelöst; bestehender `main.scss`-Inhalt bleibt
 erhalten. Zyklen, ungültige Namen und strukturell unsichere CSS-Werte werden
 abgelehnt.
 
-Themes, Widgets, Ressourcen und Java-Quellen durchlaufen den Round-trip über
-`.mxrb/assets.json` mit SHA-256 und Traversal-Schutz.
+Themes, Widgets, Ressourcen, Java-Quellen, Assets der nativen App
+(`nativemobile/`) und der Datensnapshot (`data-snapshot.zip`) durchlaufen den
+Round-trip über `.mxrb/assets.json` mit SHA-256 und Traversal-Schutz.
 
 Literale Migrationen beginnen mit einer Vorschau. Apply lehnt Dateien ab, die
 sich seit der Vorschau geändert haben, und ersetzt jede Datei atomar.

@@ -46,6 +46,10 @@ module Mxrb
       '.mxrb/marketplace',
       '.mxrb/marketplace-originals'
     ].freeze
+    # Studio Pro project files outside the design system: native app assets
+    # (icons, splash screens, push configuration) and the data snapshot that
+    # MxBuild packages as sample data.
+    PROJECT_FILES = %w[nativemobile data-snapshot.zip].freeze
     GLOBAL_EDITABLE_DOCUMENT_TYPES = %w[
       Settings$ProjectSettings Texts$SystemTextCollection
     ].freeze
@@ -201,7 +205,7 @@ module Mxrb
 
     def project_asset_files
       source_root = File.dirname(@mpr_path)
-      (Model::DesignSystem::ASSET_DIRECTORIES + MARKETPLACE_PROVENANCE).flat_map do |directory|
+      (Model::DesignSystem::ASSET_DIRECTORIES + PROJECT_FILES + MARKETPLACE_PROVENANCE).flat_map do |directory|
         root = File.join(source_root, directory)
         next [root] if File.file?(root) && !File.symlink?(root)
         next [] unless File.directory?(root) && !File.symlink?(root)

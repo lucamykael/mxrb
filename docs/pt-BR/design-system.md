@@ -87,7 +87,8 @@ herança e override antes da escrita; conteúdo existente do `main.scss` é
 preservado. Ciclos, nomes inválidos e valores CSS estruturalmente inseguros são
 rejeitados.
 
-Themes, widgets, resources e fontes Java fazem round-trip por
+Themes, widgets, resources, fontes Java, assets do app nativo (`nativemobile/`)
+e o snapshot de dados (`data-snapshot.zip`) fazem round-trip por
 `.mxrb/assets.json`, com SHA-256 e validação contra traversal.
 
 Migrações de literais são preview-first:
