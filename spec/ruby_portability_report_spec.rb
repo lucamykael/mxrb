@@ -102,6 +102,10 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       File.write(registration, "registerFeedbackWidget(Feedback);\n")
       expect(described_class.new(root).widgets.map { _1[:widget_id] })
         .not_to include('SprintrFeedbackWidget.SprintrFeedback')
+      File.write(File.join(root, Mxrb::RubyApp::WidgetSupport::PROJECT_WIDGETS),
+                 "registerProjectWidget(\"com.mendix.widget.custom.Maps.Maps\", widget0, \"Maps\", []);\n")
+      expect(described_class.new(root).widgets.map { _1[:widget_id] })
+        .to eq(['com.mendix.widget.web.barcodescanner.BarcodeScanner'])
     end
   end
 

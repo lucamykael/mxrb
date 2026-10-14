@@ -937,8 +937,15 @@ Studio-Pro-Seiten müssen `Page.native` verwenden; eine eigene React-Route bleib
 React-Code und wird entsprechend ausgewiesen. Der Bericht listet außerdem die
 Pluggable Widgets, die das generierte Frontend nur annähernd
 (`[WIDGET APPROXIMATE]`, mit dem Fehlenden) oder gar nicht (`[WIDGET UNSUPPORTED]`)
-rendert, samt Seiten, Snippets und Layouts; zur Laufzeit zeigt ein nicht
-unterstütztes Widget einen sichtbaren Platzhalter (`role="alert"`,
+rendert, samt Seiten, Snippets und Layouts. Ein Web-Widget, das die Bridge nicht
+selbst rendert, läuft stattdessen mit seinem eigenen Build, wenn das
+`widgets/*.mpk` des Projekts einen enthält (`<Name>.mjs`): Der Export kopiert ihn
+nach `frontend/src/generated/bridge/vendor/widgets`, und ein generischer Host
+stellt ihm die Pluggable-Widget-API bereit (`EditableValue`, `ListValue` mit
+Filter, Sortierung und Seiten, `ActionValue`, `DynamicValue`, verknüpfte Attribute,
+Ausdrücke und Widget-Bereiche, `Big`-Zahlen, `mendix/filters/builders`); ein solches
+Widget verschwindet aus dem Bericht. Andernfalls zeigt ein nicht unterstütztes
+Widget zur Laufzeit einen sichtbaren Platzhalter (`role="alert"`,
 `data-mxrb-unsupported`) statt leer zu bleiben. Microflow- und Nanoflow-
 Eigenschaften werden als qualifizierte Namen projiziert, übersetzbare Texte als
 `translatable_text([["en_US", "…"], …])`; beim Zurückschreiben bleiben alle

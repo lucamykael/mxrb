@@ -9,6 +9,7 @@ module Mxrb
         private
 
         def widget_manifest(widget)
+          record_rendered_widget(widget)
           type = runtime_widget_type(widget)
           raw_options = widget.fetch(:options, {})
           options = runtime_widget_options(raw_options)
@@ -54,6 +55,7 @@ module Mxrb
 
           case value
           when Hash
+            record_rendered_widget(value)
             value.each_with_object({}) do |(key, child), result|
               next if key.to_s == 'deep_structure'
 
@@ -62,6 +64,16 @@ module Mxrb
           when Array then value.map { runtime_widget_options(_1) }
           else runtime_value(value)
           end
+        end
+
+        # The pluggable widget ids the rendered pages, snippets and layouts use,
+        # including those nested in the options of another widget.
+        def record_rendered_widget(widget)
+          return unless (widget[:type] || widget['type']).to_s == 'pluggable_widget'
+
+          options = widget[:options] || widget['options'] || {}
+          widget_id = options[:widget_id] || options['widget_id']
+          (@rendered_widget_ids ||= Set.new) << widget_id.to_s if widget_id
         end
 
         def runtime_native_widget_hash?(value)

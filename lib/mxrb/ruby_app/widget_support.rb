@@ -17,6 +17,9 @@ module Mxrb
                                                     'registerFeedbackWidget(']
       }.freeze
 
+      # The registrations of the project's own widget builds run by the pluggable host.
+      PROJECT_WIDGETS = 'frontend/src/generated/projectWidgets.ts'
+
       def initialize(root = nil) = @root = root
 
       def self.family(widget_id)
@@ -38,8 +41,8 @@ module Mxrb
       private
 
       def adapter_registered?(widget_id)
-        path, marker = ADAPTERS[widget_id]
-        return false unless path && @root
+        path, marker = ADAPTERS.fetch(widget_id) { [PROJECT_WIDGETS, "registerProjectWidget(#{widget_id.inspect}"] }
+        return false unless @root
 
         file = File.join(@root, path)
         File.file?(file) && File.read(file).include?(marker)

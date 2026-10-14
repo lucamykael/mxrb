@@ -889,8 +889,15 @@ Studio Pro must use `Page.native`; an application-owned React route remains
 React code and is reported honestly. The report also lists the pluggable widgets
 the generated frontend renders only approximately (`[WIDGET APPROXIMATE]`, with
 what is missing) or not at all (`[WIDGET UNSUPPORTED]`), with the pages, snippets
-and layouts that use them; at runtime an unsupported widget shows a visible
-placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering empty.
+and layouts that use them. A web widget the bridge does not render itself runs
+its own build instead when the project's `widgets/*.mpk` ships one (`<Name>.mjs`):
+the export copies it under `frontend/src/generated/bridge/vendor/widgets` and a
+generic host gives it the pluggable widget API (`EditableValue`, `ListValue` with
+filtering, sorting and paging, `ActionValue`, `DynamicValue`, linked attributes,
+expressions and widget regions, `Big` numbers, `mendix/filters/builders`); such a
+widget leaves the report. Otherwise, at runtime an unsupported widget shows a
+visible placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering
+empty.
 Microflow and nanoflow properties are projected as qualified names and
 translatable strings as `translatable_text([["en_US", "…"], …])`, keeping every
 language and the stored translation ids when written back; this lets HTML snippets
