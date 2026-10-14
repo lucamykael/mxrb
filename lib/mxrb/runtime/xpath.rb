@@ -25,6 +25,8 @@ module Mxrb
         },
         'mod' => ->(left, right) { left.remainder(right) }
       }.freeze
+      # System.owner and System.changedBy are stored as the user's ID on the record.
+      SYSTEM_ASSOCIATIONS = { 'System.owner' => 'Owner', 'System.changedBy' => 'changedBy' }.freeze
       def initialize(source, store:, policy: nil, context: nil)
         @store = store
         @policy = policy
@@ -149,6 +151,7 @@ module Mxrb
         end
         return [record] if entity_type?(record, name)
         return [name] if name.split('.').length == 3 && !entity_type?(record, name.rpartition('.').first)
+        return system_association(record, SYSTEM_ASSOCIATIONS.fetch(name)) if SYSTEM_ASSOCIATIONS.key?(name)
 
         member = name.split('.').last
         authorize_member(record, member)
@@ -162,6 +165,15 @@ module Mxrb
           return [value]
         end
         @store.retrieve_association(name, record).select { readable?(_1) }
+      end
+
+      def system_association(record, member)
+        id = record.members[member]
+        return [] if id.nil?
+
+        return [id] unless @store.respond_to?(:find)
+
+        [@store.find(SystemDomain::USER, id.to_s)].compact
       end
 
       def entity_type?(record, name)

@@ -43,6 +43,15 @@ module Mxrb
         (inherited + Array(attributes)).reverse.uniq { _1.fetch(:mendix_name) }.reverse
       end
 
+      # Only a root entity declares system members; specializations store the
+      # ones of their root, including System.User and System.FileDocument.
+      def runtime_system_members
+        root = runtime_ancestors.last
+        return system_members || {} unless root
+
+        Registry.fetch(:record, root)&.system_members || Runtime::SchemaMigrator::SYSTEM_ENTITY_MEMBERS.fetch(root, {})
+      end
+
       def runtime_file_policy
         ancestors = runtime_ancestors
         policy = ancestors.reverse.reduce({}) do |result, name|

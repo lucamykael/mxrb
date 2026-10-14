@@ -127,7 +127,10 @@ transaktionalen Rebuild. Nicht persistente Entitäten bleiben im Speicher.
 
 Die Ruby-API bietet Login und Bearer-Token, Sessions, Schema, Navigation,
 Seiten, Microflows, CRUD und Published REST. Rollen, Entitätsregeln,
-Member-Rechte und der sichere XPath-Teil werden für jede Anfrage geprüft.
+Member-Rechte werden für jede Anfrage geprüft. Constraints der Zugriffsregeln
+nutzen dieselbe XPath-Engine wie Retrieves (Assoziationen, Funktionen und Tokens
+in Anführungszeichen wie `'[%CurrentUser%]'`); eine nicht auswertbare Constraint
+verweigert den Zugriff.
 Zugangsdaten stammen aus `MXRB_USERS_JSON` und `MXRB_AUTH_TOKENS` und gehören in
 ignorierte lokale Dateien oder den Secret Manager des Deployments.
 

@@ -84,6 +84,11 @@ module Mxrb
         changed_date: %w[__changed_at TEXT],
         changed_by: %w[__changed_by_id TEXT]
       }.freeze
+      # Stored system members of the System entities that applications specialize
+      # (Mendix 11.12.1 System model); specializations inherit them from the root.
+      SYSTEM_ENTITY_MEMBERS = %w[System.User System.FileDocument System.Image].to_h do |name|
+        [name, { owner: true, created_date: true, changed_date: true, changed_by: true }.freeze]
+      end.freeze
       TYPE_MAP = {
         integer: 'INTEGER', long: 'INTEGER', autonumber: 'INTEGER', boolean: 'INTEGER',
         float: 'REAL', decimal: 'TEXT', binary: 'BLOB', datetime: 'TEXT', enum: 'TEXT',
@@ -147,11 +152,8 @@ module Mxrb
             attribute[:required] == true, attribute[:unique] == true || type == :autonumber
           )
         end
-        flags = record.system_members.to_h.each_with_object({}) do |(name, enabled), selected|
-          selected[name.to_sym] = SYSTEM_COLUMNS.fetch(name.to_sym) if enabled && SYSTEM_COLUMNS.key?(name.to_sym)
-        end
         EntitySchema.new(
-          qualified, key, physical_name('entity', key), columns.freeze, flags.freeze
+          qualified, key, physical_name('entity', key), columns.freeze, system_columns(record.runtime_system_members)
         )
       end
 
@@ -178,11 +180,12 @@ module Mxrb
       def self.derive(project)
         entities = []
         associations = []
+        lookup = project.modules.flat_map { |mod| mod.entities.map { [qualified_entity_name(mod, _1), _1] } }.to_h
         project.modules.each do |mod|
           by_id = mod.entities.to_h { [_1.id.to_s, qualified_entity_name(mod, _1)] }
           by_id.merge!(mod.entities.to_h { [qualified_entity_name(mod, _1), qualified_entity_name(mod, _1)] })
           mod.entities.select { _1.persistable != false && !_1.oql_view? }.each do |entity|
-            entities << entity_schema(mod, entity)
+            entities << entity_schema(mod, entity, lookup)
           end
           mod.associations.each do |association|
             from = by_id[association.from_entity_id.to_s] || association.from_entity_id.to_s
@@ -200,7 +203,7 @@ module Mxrb
         RuntimeSchema.new(with_system_entities(entities).freeze, with_system_associations(associations).freeze)
       end
 
-      def self.entity_schema(mod, entity)
+      def self.entity_schema(mod, entity, lookup = {})
         qualified = qualified_entity_name(mod, entity)
         key = entity.data_storage_guid.to_s
         key = entity.id.to_s if key.empty?
@@ -216,10 +219,27 @@ module Mxrb
             attribute.unique == true || type == :autonumber
           )
         end
-        flags = (entity.system_members || {}).to_h.each_with_object({}) do |(name, enabled), selected|
+        members = inherited_system_members(entity, lookup)
+        EntitySchema.new(qualified, key, physical_name('entity', key), columns.freeze, system_columns(members))
+      end
+
+      def self.system_columns(members)
+        members.to_h.each_with_object({}) do |(name, enabled), selected|
           selected[name.to_sym] = SYSTEM_COLUMNS.fetch(name.to_sym) if enabled && SYSTEM_COLUMNS.key?(name.to_sym)
-        end
-        EntitySchema.new(qualified, key, physical_name('entity', key), columns.freeze, flags.freeze)
+        end.freeze
+      end
+
+      # A specialization stores the system members of its root generalization.
+      def self.inherited_system_members(entity, lookup, seen = [])
+        generalization = entity.generalization
+        target = generalization['Generalization'] || generalization['generalization'] if generalization.is_a?(Hash)
+        return entity.system_members || {} if target.to_s.empty?
+        return SYSTEM_ENTITY_MEMBERS.fetch(target.to_s, {}) if target.to_s.start_with?('System.')
+
+        parent = lookup[target.to_s]
+        return {} if parent.nil? || seen.include?(target.to_s)
+
+        inherited_system_members(parent, lookup, seen + [target.to_s])
       end
 
       def self.qualified_entity_name(mod, entity)

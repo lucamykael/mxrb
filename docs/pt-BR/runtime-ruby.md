@@ -138,8 +138,10 @@ persistentes continuam somente em memória.
 
 A API Ruby oferece login e tokens bearer, sessão, schema, navigation, pages,
 microflows, CRUD e published REST. Regras de página/microflow, access rules de
-entidade, direitos por member e o subconjunto seguro de XPath são verificados em
-cada requisição. Credenciais vêm de `MXRB_USERS_JSON` e `MXRB_AUTH_TOKENS`; use
+entidade e direitos por member são verificados em cada requisição. As
+constraints das access rules usam o mesmo motor XPath dos retrieves (associações,
+funções e tokens entre aspas como `'[%CurrentUser%]'`); uma constraint que não
+pode ser avaliada nega o acesso. Credenciais vêm de `MXRB_USERS_JSON` e `MXRB_AUTH_TOKENS`; use
 arquivos locais ignorados pelo Git ou o secret manager do deployment.
 
 Scheduled events usam o scheduler stdlib do MXRB, com intervalos de minuto,

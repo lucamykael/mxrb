@@ -203,8 +203,13 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
       expect { Mxrb::Runtime::Clipboard.new(path: dir, runner: failing).copy('secret') }
         .to raise_error(Mxrb::ToolchainError, /clipboard command failed/)
 
-      File.write(executable, "#!/bin/sh\nexit 0\n")
+      File.write(executable, "#!/bin/sh\nwhile read -r _; do :; done\n")
       expect(Mxrb::Runtime::Clipboard.new(path: dir).copy('captured')).to eq('wl-copy')
+
+      # A command that exits without reading: the write fails with EPIPE and the
+      # exit status decides. The input exceeds the pipe buffer so this is certain.
+      File.write(executable, "#!/bin/sh\nexit 0\n")
+      expect(Mxrb::Runtime::Clipboard.new(path: dir).copy('x' * 1_048_576)).to eq('wl-copy')
 
       File.chmod(0o600, executable)
       expect { Mxrb::Runtime::Clipboard.new(path: dir).copy('secret') }

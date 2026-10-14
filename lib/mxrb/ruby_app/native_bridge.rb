@@ -21,7 +21,7 @@ module Mxrb
         store_options = { path: database, allow_destructive: }
         store_options.merge!(schema:, transient_entities: transient) if runtime_records
         @store = Runtime::SQLiteStore.new(@project, **store_options)
-        @access_control = Runtime::AccessControl.new(@project)
+        @access_control = Runtime::AccessControl.new(@project, store: @store)
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
         )

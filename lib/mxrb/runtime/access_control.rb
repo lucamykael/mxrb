@@ -44,10 +44,18 @@ module Mxrb
         'readonly' => :read,
         'readwrite' => :write
       }.freeze
+      # Records passed without a store (plain member hashes) have no associations.
+      DETACHED_STORE = Data.define do
+        def retrieve(_entity) = []
+        def retrieve_association(name, _record) = raise(ArgumentError, "unknown XPath member #{name}")
+        def retrieve_reverse_association(name, _record) = raise(ArgumentError, "unknown XPath member #{name}")
+      end.new
+
       attr_reader :project, :security_level
 
-      def initialize(project)
+      def initialize(project, store: nil)
         @project = project
+        @store = store
         @security = project_security
         @security_level = value(@security, 'SecurityLevel').to_s
         @role_map, @admin_roles = build_role_map
@@ -138,14 +146,24 @@ module Mxrb
         end
       end
 
-      # Evaluates the deliberately small, safe XPath subset understood by the
-      # runtime. nil means that the expression is unsupported.
+      # Evaluates an access rule constraint with the runtime XPath engine, the
+      # same one retrieves use. nil means the constraint could not be evaluated
+      # (unknown member, variable or function), which never grants access.
       def evaluate_xpath(expression, record:, context:)
         source = expression.to_s.strip
         return true if source.empty?
 
-        source = source[1...-1].strip if source.start_with?('[') && source.end_with?(']')
-        evaluate_boolean(source, record, normalized_context(context))
+        source = "[#{source}]" unless source.start_with?('[') && source.end_with?(']')
+        context = normalized_context(context)
+        user = user_identity(context.user)
+        rule_context = SecurityContext.new(user:, module_roles: context.module_roles,
+                                           attributes: context.attributes)
+        variables = context.variables.to_h { |key, item| [key.to_s, item] }
+        variables['currentUser'] = user
+        object = rule_object(record)
+        XPath.new(source, store: @store || DETACHED_STORE, context: rule_context).match?(object, variables)
+      rescue ArgumentError, KeyError, NoMethodError, AuthorizationError
+        nil
       end
 
       # The project user roles as the Runtime seeds them into System.UserRole.
@@ -302,75 +320,6 @@ module Mxrb
         end
       end
 
-      def evaluate_boolean(source, record, context)
-        expression = strip_parentheses(source.strip)
-        parts = split_logical(expression, 'or')
-        return combine(parts, record, context, :or) if parts.size > 1
-
-        parts = split_logical(expression, 'and')
-        return combine(parts, record, context, :and) if parts.size > 1
-
-        return true if expression.match?(/\Atrue\(\)\z/i)
-        return false if expression.match?(/\Afalse\(\)\z/i)
-
-        if (match = expression.match(/\Anot\s*\((.*)\)\z/im))
-          result = evaluate_boolean(match[1], record, context)
-          return result.nil? ? nil : !result
-        end
-
-        comparison(expression, record, context)
-      end
-
-      def combine(parts, record, context, operator)
-        values = parts.map { evaluate_boolean(_1, record, context) }
-        return values.any?(true) if operator == :or && values.none?(&:nil?)
-        return values.all?(true) if operator == :and && values.none?(&:nil?)
-
-        nil
-      end
-
-      def comparison(expression, record, context)
-        match = expression.match(/\A(.+?)\s*(>=|<=|!=|=|>|<)\s*(.+)\z/m)
-        return nil unless match
-
-        left = operand(match[1], record, context, record_side: true)
-        right = operand(match[3], record, context, record_side: false)
-        return nil if left.equal?(:unsupported) || right.equal?(:unsupported)
-
-        case match[2]
-        when '=' then left == right
-        when '!=' then left != right
-        when '>' then left && right && left > right
-        when '<' then left && right && left < right
-        when '>=' then left && right && left >= right
-        when '<=' then left && right && left <= right
-        end
-      rescue ArgumentError
-        false
-      end
-
-      def operand(source, record, context, record_side:)
-        token = source.strip
-        return token[1...-1].gsub("''", "'") if token.start_with?("'") && token.end_with?("'")
-        return true if token.match?(/\Atrue\(\)\z/i)
-        return false if token.match?(/\Afalse\(\)\z/i)
-        return nil if token.match?(/\A(empty|null)\z/i)
-        return DecimalValues.parse(token) if token.match?(/\A-?\d+\.\d+\z/)
-        return token.to_i if token.match?(/\A-?\d+\z/)
-        return user_identity(context.user) if token == '[%CurrentUser%]'
-        return variable(token.delete_prefix('$'), context) if token.start_with?('$')
-        return lookup(record, token) if record_side
-
-        :unsupported
-      end
-
-      def variable(name, context)
-        return user_identity(context.user) if name.match?(/\Acurrentuser\z/i)
-
-        found, result = lookup_with_presence(context.variables, name)
-        found ? result : :unsupported
-      end
-
       def user_identity(user)
         return nil if user.nil?
 
@@ -385,33 +334,12 @@ module Mxrb
         user
       end
 
-      def lookup(record, path)
-        found, result = lookup_with_presence(record, path)
-        found ? result : :unsupported
-      end
+      def rule_object(record)
+        return record if record.is_a?(Native::ObjectValue)
 
-      def lookup_with_presence(object, path)
-        object = object.members if object.respond_to?(:members)
-        candidates = [path, path.split(%r{[/.]}).last].uniq
-        candidates.each do |candidate|
-          if object.respond_to?(:key?)
-            return [true, object[candidate]] if object.key?(candidate)
-
-            symbol = candidate.to_sym
-            return [true, object[symbol]] if object.key?(symbol)
-          end
-          return [true, object.public_send(candidate)] if object.respond_to?(candidate)
-        end
-        [false, nil]
-      end
-
-      def split_logical(source, operator)
-        source.split(/\s+#{operator}\s+/i)
-      end
-
-      def strip_parentheses(source)
-        source = source[1...-1].strip while source.start_with?('(') && source.end_with?(')')
-        source
+        members = record.respond_to?(:members) ? record.members : record.to_h
+        members = members.to_h { |key, item| [key.to_s, item] }
+        Native::ObjectValue.new(entity: '', id: members['id'], members:)
       end
 
       def parse_array(raw)
