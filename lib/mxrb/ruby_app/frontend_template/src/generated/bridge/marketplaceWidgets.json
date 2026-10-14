@@ -1,0 +1,120 @@
+{
+  "description": "Pluggable widget ids the generated frontend renders (matched against the lowercased id). Shared by marketplace.tsx and Mxrb::RubyApp::PortabilityReport; any other id renders as a visible unsupported placeholder.",
+  "widgets": [
+    {
+      "pattern": "\\.image$",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.image.Image"]
+    },
+    {
+      "pattern": "customchart",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.customchart.CustomChart"]
+    },
+    {
+      "pattern": "(progressbar|progresscircle|rangeslider|slider|rating|colorpicker|togglebuttons)\\.",
+      "support": "full",
+      "examples": [
+        "com.mendix.widget.custom.progressbar.ProgressBar",
+        "com.mendix.widget.custom.progresscircle.ProgressCircle",
+        "com.mendix.widget.custom.slider.Slider",
+        "com.mendix.widget.custom.rangeslider.RangeSlider",
+        "com.mendix.widget.custom.starrating.StarRating",
+        "com.mendix.widget.web.colorpicker.ColorPicker"
+      ]
+    },
+    {
+      "pattern": "(area|bar|bubble|column|custom|heatmap|line|pie|time)chart|timeseries|heatmap",
+      "support": "full",
+      "examples": [
+        "com.mendix.widget.web.linechart.LineChart",
+        "com.mendix.widget.web.timeseries.TimeSeries"
+      ]
+    },
+    {
+      "pattern": "switch",
+      "support": "full",
+      "examples": ["com.mendix.widget.custom.switch.Switch"]
+    },
+    {
+      "pattern": "badgebutton",
+      "support": "approximate",
+      "note": "on-click action is not executed",
+      "examples": ["com.mendix.widget.custom.badgebutton.BadgeButton"]
+    },
+    {
+      "pattern": "badge",
+      "support": "full",
+      "examples": ["com.mendix.widget.custom.badge.Badge"]
+    },
+    {
+      "pattern": "accordion",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.accordion.Accordion"]
+    },
+    {
+      "pattern": "fieldset",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.fieldset.Fieldset"]
+    },
+    {
+      "pattern": "accessibilityhelper",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.accessibilityhelper.AccessibilityHelper"]
+    },
+    {
+      "pattern": "htmlelement",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.htmlelement.HTMLElement"]
+    },
+    {
+      "pattern": "languageselector",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.languageselector.LanguageSelector"]
+    },
+    {
+      "pattern": "popupmenu",
+      "support": "approximate",
+      "note": "menu items are not rendered",
+      "examples": ["com.mendix.widget.web.popupmenu.PopupMenu"]
+    },
+    {
+      "pattern": "timeline",
+      "support": "approximate",
+      "note": "the data source is not queried",
+      "examples": ["com.mendix.widget.web.timeline.Timeline"]
+    },
+    {
+      "pattern": "tooltip",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.tooltip.Tooltip"]
+    },
+    {
+      "pattern": "carousel",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.carousel.Carousel"]
+    },
+    {
+      "pattern": "safearea",
+      "support": "full",
+      "examples": ["com.mendix.widget.native.safeareaview.SafeAreaView"]
+    },
+    {
+      "pattern": "treenode|treeview",
+      "support": "approximate",
+      "note": "the data source is not queried",
+      "examples": ["com.mendix.widget.web.treenode.TreeNode"]
+    },
+    {
+      "pattern": "videoplayer",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.videoplayer.VideoPlayer"]
+    },
+    {
+      "pattern": "barcodescanner",
+      "support": "approximate",
+      "note": "no camera access; renders a button",
+      "examples": ["com.mendix.widget.web.barcodescanner.BarcodeScanner"]
+    }
+  ]
+}

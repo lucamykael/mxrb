@@ -1059,6 +1059,12 @@ bundle exec mxrb portability . --require-native
 depende do runtime MXRB. Isso impede usar “round-trip sem perda” como sinônimo
 incorreto de “todo o código virou documento Mendix”.
 
+O relatório também lista os widgets plugáveis que o frontend gerado renderiza só
+de forma aproximada (`[WIDGET APPROXIMATE]`, com o que falta) ou não renderiza
+(`[WIDGET UNSUPPORTED]`), com as páginas, snippets e layouts que os usam; em
+execução, um widget não suportado mostra um placeholder visível (`role="alert"`,
+`data-mxrb-unsupported`) em vez de ficar vazio.
+
 Entidades, atributos e validações `required`/`unique` declarados em Ruby voltam
 ao domínio Mendix. O contrato inclui documentação, valor padrão, tamanho de
 string, localização de data, referência de enumeração e associações locais ou

@@ -1,9 +1,10 @@
-import { decimal, isDecimal, numericText } from './decimal';
+import { decimal, isDecimal } from './decimal';
 import { useState } from 'react';
 import { MarketplaceControl, MarketplaceImage } from './components/MarketplaceControls';
 import { MarketplaceChart } from './components/MarketplaceChart';
 import { MarketplacePlotly } from './components/MarketplacePlotly';
 import { LanguageSelector } from './components/LanguageSelector';
+import marketplaceWidgets from './marketplaceWidgets.json';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   ApiRequest,
@@ -89,11 +90,6 @@ const findAttribute = (value: unknown): string | undefined => {
 };
 
 const memberName = (value: string | undefined): string => (value || '').split(/[./]/).pop() || '';
-
-const numericValue = (value: RuntimeValue | undefined, fallback = 0): number => {
-  const number = Number(isDecimal(value) ? numericText(value) : value);
-  return Number.isFinite(number) ? number : fallback;
-};
 
 const normalizedRole = (role: string): string => role.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
@@ -208,65 +204,6 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
     id.includes('heatmap')
   )
     return <MarketplaceChart {...props}>{content}</MarketplaceChart>;
-  if (id.includes('progresscircle') || id.includes('progressbar')) {
-    const value = numericValue(current ?? localValue, 50);
-    return (
-      <label>
-        {label}
-        <progress value={value} max={100}>
-          {value}%
-        </progress>
-      </label>
-    );
-  }
-  if (id.includes('rangeslider')) {
-    const start = Array.isArray(localValue)
-      ? numericValue(localValue[0])
-      : numericValue(localValue);
-    return (
-      <label>
-        {label}
-        <input
-          aria-label={`${label} minimum`}
-          type="range"
-          value={start}
-          onChange={(event) => update(Number(event.target.value))}
-        />
-      </label>
-    );
-  }
-  if (id.includes('slider')) {
-    return (
-      <label>
-        {label}
-        <input
-          aria-label={label}
-          type="range"
-          value={numericValue(current ?? localValue)}
-          onChange={(event) => update(Number(event.target.value))}
-        />
-      </label>
-    );
-  }
-  if (id.includes('starrating') || id.endsWith('.rating')) {
-    const rating = numericValue(current ?? localValue);
-    return (
-      <fieldset className="mxrb-marketplace-rating">
-        <legend>{label}</legend>
-        {[1, 2, 3, 4, 5].map((value) => (
-          <button
-            type="button"
-            key={value}
-            aria-label={`${value} stars`}
-            aria-pressed={value <= rating}
-            onClick={() => update(value)}
-          >
-            {value <= rating ? '★' : '☆'}
-          </button>
-        ))}
-      </fieldset>
-    );
-  }
   if (id.includes('switch')) {
     return (
       <label>
@@ -292,10 +229,6 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   if (id.includes('accessibilityhelper'))
     return <div aria-live="polite">{regionContent(regions, 'content', children)}</div>;
   if (id.includes('htmlelement')) return <article>{content || label}</article>;
-  if (id.endsWith('.image')) {
-    const source = firstText(properties, ['imageUrl', 'url'], '');
-    return source ? <img src={source} alt={label} /> : <span>{label}</span>;
-  }
   if (id.includes('languageselector'))
     return (
       <LanguageSelector
@@ -356,9 +289,21 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
   return (
-    <section className="mxrb-marketplace-generic" aria-label={name}>
+    <section
+      className="mxrb-marketplace-generic"
+      role="alert"
+      aria-label={name}
+      data-mxrb-unsupported={String(options.widget_id || options.native_type || widget.name)}
+    >
       <strong>{name}</strong>
+      <small>Unsupported widget {String(options.widget_id || options.native_type || '')}</small>
       {content}
     </section>
   );
 }
+
+// Every family the renderer above handles, shared with the Ruby portability report.
+export const recognizedMarketplaceWidget = (widgetId: string) =>
+  marketplaceWidgets.widgets.find((entry) =>
+    new RegExp(entry.pattern).test(widgetId.toLowerCase()),
+  );

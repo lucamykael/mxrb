@@ -211,6 +211,10 @@ when 'portability'
       puts "[#{entry.status.upcase}] #{entry.kind} #{entry.name}"
       puts "  #{entry.reason} (#{entry.path})"
     end
+    report.widgets.each do |widget|
+      detail = widget[:note] ? " (#{widget[:note]})" : ''
+      puts "[WIDGET #{widget[:support].upcase}] #{widget[:widget_id]}#{detail}: #{widget[:documents].join(', ')}"
+    end
     puts "[mxrb] native=#{report.summary.fetch('native')} " \
          "preserved=#{report.summary.fetch('preserved_native')} " \
          "runtime_only=#{report.summary.fetch('runtime_only')}"

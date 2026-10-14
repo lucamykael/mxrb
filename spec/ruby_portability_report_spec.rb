@@ -58,6 +58,44 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
     end
   end
 
+  it 'lists pluggable widgets the frontend renders approximately or not at all' do # rubocop:disable Metrics/BlockLength
+    Dir.mktmpdir('mxrb-portability-widgets-') do |root| # rubocop:disable Metrics/BlockLength
+      source = <<~RUBY
+        Mxrb::RubyApp::Presentation.layout('App.Shell') do
+          pluggable_widget('signature', widget_id: 'com.mendix.widget.custom.Maps.Maps')
+        end
+
+        class WidgetPage < Mxrb::RubyApp::Page
+          mendix_name 'App.WidgetPage'
+          configure(title: 'Widgets') do
+            pluggable_widget('chart', widget_id: 'com.mendix.widget.web.linechart.LineChart')
+            container('box') do
+              pluggable_widget('timeline', widget_id: 'com.mendix.widget.web.timeline.Timeline')
+              pluggable_widget('maps', widget_id: 'com.mendix.widget.custom.Maps.Maps')
+            end
+          end
+        end
+      RUBY
+      coverage = [{ id: '1', name: 'App.WidgetPage', kind: 'page', ruby_path: 'app/services/artifacts.rb',
+                    status: 'executable_bidirectional' }]
+      write_app(root, coverage:, source:)
+
+      report = described_class.new(root)
+
+      expect(report.widgets).to eq([
+                                     { widget_id: 'com.mendix.widget.custom.Maps.Maps', support: 'unsupported',
+                                       documents: ['App.Shell', 'App.WidgetPage'] },
+                                     { widget_id: 'com.mendix.widget.web.timeline.Timeline', support: 'approximate',
+                                       note: 'the data source is not queried', documents: ['App.WidgetPage'] }
+                                   ])
+      expect(report.to_h.fetch(:widgets)).to eq(report.widgets)
+      stdout, = Open3.capture3(RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'portability', root)
+      expect(stdout).to include('[WIDGET UNSUPPORTED] com.mendix.widget.custom.Maps.Maps: App.Shell, App.WidgetPage',
+                                '[WIDGET APPROXIMATE] com.mendix.widget.web.timeline.Timeline ' \
+                                '(the data source is not queried): App.WidgetPage')
+    end
+  end
+
   it 'provides a machine-readable CLI gate for Mendix-native portability' do
     Dir.mktmpdir('mxrb-portability-cli-') do |root|
       coverage = [{ id: '1', name: 'App.Customer', kind: 'model', ruby_path: 'app/models/customer.rb',
