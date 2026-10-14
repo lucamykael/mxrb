@@ -50,12 +50,19 @@ module Mxrb
         ::IO.pipe do |reader, writer|
           pid = Process.spawn({ 'PATH' => @path }, *command, in: reader, out: File::NULL, err: stderr)
           reader.close
-          writer.write(input)
-          writer.close
+          write_input(writer, input)
           _child, status = Process.wait2(pid)
           stderr.rewind
           ['', stderr.read, status]
         end
+      end
+
+      def write_input(writer, input)
+        writer.write(input)
+      rescue Errno::EPIPE
+        nil # the command stopped reading; its exit status decides the outcome
+      ensure
+        writer.close
       end
     end
   end
