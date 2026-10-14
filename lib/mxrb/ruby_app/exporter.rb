@@ -275,7 +275,8 @@ module Mxrb
       def copy_runtime_project_assets(runtime_directory)
         source_root = File.dirname(@mpr_path)
         destination_root = File.join(runtime_directory, 'project')
-        directories = Model::DesignSystem::ASSET_DIRECTORIES + Mxrb::Exporter::MARKETPLACE_PROVENANCE
+        directories = Model::DesignSystem::ASSET_DIRECTORIES + Mxrb::Exporter::PROJECT_FILES +
+                      Mxrb::Exporter::MARKETPLACE_PROVENANCE
         directories.each do |relative_path|
           source = File.join(source_root, relative_path)
           next unless File.exist?(source) && !File.symlink?(source)

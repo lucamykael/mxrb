@@ -93,6 +93,7 @@ RSpec.describe 'native navigation and design systems' do
       source_dir = File.join(dir, 'source')
       FileUtils.mkdir_p(File.join(source_dir, 'theme', 'web'))
       FileUtils.mkdir_p(File.join(source_dir, 'vendorlib'))
+      FileUtils.mkdir_p(File.join(source_dir, 'nativemobile', 'assets'))
       path = File.join(source_dir, 'app.mpr')
       define_native_project(path)
       File.write(
@@ -100,6 +101,8 @@ RSpec.describe 'native navigation and design systems' do
         ":root.theme-dark { --foreground: #fff; }\n"
       )
       File.binwrite(File.join(source_dir, 'vendorlib', 'driver.jar'), 'jar')
+      File.binwrite(File.join(source_dir, 'nativemobile', 'assets', 'icon.png'), 'png')
+      File.binwrite(File.join(source_dir, 'data-snapshot.zip'), 'zip')
       exported = File.join(dir, 'ruby')
       rebuilt = File.join(dir, 'rebuilt', 'app.mpr')
 
@@ -114,7 +117,9 @@ RSpec.describe 'native navigation and design systems' do
       manifest = JSON.parse(File.read(File.join(exported, '.mxrb', 'assets.json')))
       expect(manifest.fetch('files')).to include(
         include('path' => 'theme/web/_theme-dark.scss'),
-        include('path' => 'vendorlib/driver.jar')
+        include('path' => 'vendorlib/driver.jar'),
+        include('path' => 'nativemobile/assets/icon.png'),
+        include('path' => 'data-snapshot.zip')
       )
 
       begin
@@ -126,6 +131,14 @@ RSpec.describe 'native navigation and design systems' do
       expect(File.binread(File.join(File.dirname(rebuilt), 'theme', 'web', '_theme-dark.scss')))
         .to eq(File.binread(File.join(source_dir, 'theme', 'web', '_theme-dark.scss')))
       expect(File.binread(File.join(File.dirname(rebuilt), 'vendorlib', 'driver.jar'))).to eq('jar')
+      expect(File.binread(File.join(File.dirname(rebuilt), 'nativemobile', 'assets', 'icon.png'))).to eq('png')
+      expect(File.binread(File.join(File.dirname(rebuilt), 'data-snapshot.zip'))).to eq('zip')
+
+      ruby = File.join(dir, 'ruby-app')
+      Mxrb::Exporter.new(path, ruby, mode: :ruby).export!
+      runtime_project = File.join(ruby, '.mxrb', 'runtime', 'project')
+      expect(File.binread(File.join(runtime_project, 'nativemobile', 'assets', 'icon.png'))).to eq('png')
+      expect(File.binread(File.join(runtime_project, 'data-snapshot.zip'))).to eq('zip')
       expect(Mxrb.compare(path, rebuilt)).to be_identical
     end
   end

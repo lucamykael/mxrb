@@ -202,7 +202,8 @@ checked by `mxrb lint` against their configured WCAG level.
 
 ## Themes, resources and unknown structures
 
-Themes, images, widgets, resources and Java sources are copied through
+Themes, images, widgets, resources, Java sources, native app assets
+(`nativemobile/`) and the data snapshot (`data-snapshot.zip`) are copied through
 `.mxrb/assets.json`. Every entry has a relative path, size and SHA-256 digest;
 reconstruction rejects traversal, missing files and checksum mismatches.
 Unknown model units remain in the lossless native baseline.
