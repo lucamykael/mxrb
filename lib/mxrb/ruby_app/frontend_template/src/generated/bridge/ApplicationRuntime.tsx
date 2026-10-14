@@ -28,6 +28,7 @@ import { PageOutlet } from './components/PageOutlet';
 import { NavigationSelection } from './components/PageTitleContext';
 import { WidgetRenderer } from './components/WidgetRenderer';
 import { SelectionScope } from './components/SelectionScope';
+import { provideClientServices } from './clientServices';
 import { AppLayout } from '../../layouts/AppLayout';
 import type {
   ApiFailure,
@@ -376,6 +377,22 @@ export function ApplicationRuntime({
       navigate('/');
     }
   };
+
+  // Code written for the Mendix client (legacy widgets, JavaScript actions)
+  // refreshes data, shows progress, asks for confirmation and signs out here.
+  const latestLogout = useRef(logout);
+  latestLogout.current = logout;
+  useEffect(
+    () =>
+      provideClientServices({
+        refresh: () => setRevision((value) => value + 1),
+        confirm: (settings) => new Promise((resolve) => setConfirmation({ settings, resolve })),
+        progress: (visible) => setBusy(visible),
+        notify: (_kind, message) => setNotice(message),
+        logout: () => latestLogout.current(),
+      }),
+    [],
+  );
 
   const refreshPageContext = () => {
     if (!pageContext?.type || !pageContext.id || pageContext.new_record || pageContext.transient)

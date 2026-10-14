@@ -1095,7 +1095,14 @@ runtime (`mx.data.get`/`action`/`subscribe`, `mx.ui.action`, `mx.session`,
 `mx.parser`) e `MxObject` sobre os registros da página, e os reference sets que ele
 altera são gravados como qualquer outra edição. Caminhos de entidade e restrições
 desses widgets são projetados como o client os entrega (`Modulo.Assoc/Modulo.Entidade`
-e o XPath) e voltam inalterados no round-trip. Fora isso, em execução, um widget não suportado mostra um placeholder
+e o XPath) e voltam inalterados no round-trip. As JavaScript actions do próprio projeto que os
+nanoflows exportados chamam também rodam a partir do `javascriptsource`, salvo
+quando um adaptador verificado as cobre: os argumentos chegam como o client os
+entrega (`MxObject`, `Big`, `Date`), `mx-global` instala o mesmo `window.mx`, cujas
+chamadas de refresh, progresso, confirmação, mensagem e logout chegam à aplicação
+em execução, e as mudanças nos objetos voltam ao nanoflow. Actions que importam
+pacotes ausentes do próprio `node_modules` (as de React Native) seguem
+indisponíveis. Fora isso, em execução, um widget não suportado mostra um placeholder
 visível (`role="alert"`, `data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
 nanoflow são projetadas como nomes qualificados e strings traduzíveis como
 `translatable_text([["en_US", "…"], …])`, preservando todos os idiomas e os ids das

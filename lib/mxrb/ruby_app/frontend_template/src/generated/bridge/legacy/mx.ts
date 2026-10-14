@@ -11,6 +11,7 @@ import type {
   EntityRecord,
   RuntimeValue,
 } from '../../types';
+import { clientServices, type ClientServices } from '../clientServices';
 import { declare, domConstruct, lang } from './dojo';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,15 +25,20 @@ export interface MxSession {
   guest?: boolean;
 }
 
-export interface MxEnvironment {
+// Writes a member of a record a page owns (a widget's context object).
+export type MxSave = (
+  record: EntityRecord,
+  member: string,
+  value: RuntimeValue,
+) => Promise<EntityRecord | null>;
+
+// The services of the running application (refresh, progress, confirmations,
+// messages, sign-out) complete the environment of a widget or action.
+export interface MxEnvironment extends ClientServices {
   schema?: ApplicationSchema;
   request?: ApiRequest;
   session: MxSession;
   locale: string;
-  // Writes a member of a record the page owns (the widget's context object).
-  save(record: EntityRecord, member: string, value: RuntimeValue): Promise<EntityRecord | null>;
-  // Shows a message the widget raised through mx.ui.
-  notify?(kind: 'info' | 'warning' | 'error', message: string): void;
 }
 
 const isRecord = (value: unknown): value is EntityRecord =>
@@ -61,7 +67,7 @@ const MENDIX_TYPES: Record<string, string> = {
 
 export class MxStore {
   private readonly records = new Map<string, EntityRecord>();
-  private readonly owned = new Set<string>();
+  private readonly owners = new Map<string, MxSave>();
   private readonly listeners = new Set<{
     guid?: string;
     entity?: string;
@@ -71,9 +77,10 @@ export class MxStore {
 
   constructor(public environment: MxEnvironment) {}
 
-  remember(record: EntityRecord, owned = false): MxObject {
+  // A record and the objects embedded in it; `save` makes it one a page owns.
+  remember(record: EntityRecord, save?: MxSave): MxObject {
     this.records.set(record.id, record);
-    if (owned) this.owned.add(record.id);
+    if (save) this.owners.set(record.id, save);
     Object.values(record.attributes).forEach((value) => {
       if (isRecord(value)) this.records.set(value.id, value);
       else if (Array.isArray(value))
@@ -83,7 +90,7 @@ export class MxStore {
   }
 
   record = (guid: string) => this.records.get(String(guid));
-  isOwned = (guid: string) => this.owned.has(guid);
+  isOwned = (guid: string) => this.owners.has(guid);
 
   association(entity: string, name: string): AssociationDefinition | undefined {
     const member = memberName(name);
@@ -137,9 +144,10 @@ export class MxStore {
   async write(record: EntityRecord, member: string, value: RuntimeValue) {
     const next: EntityRecord = { ...record, attributes: { ...record.attributes, [member]: value } };
     this.records.set(record.id, next);
-    if (this.owned.has(record.id)) {
-      const saved = await this.environment.save(record, member, value);
-      if (saved) this.remember(saved, true);
+    const save = this.owners.get(record.id);
+    if (save) {
+      const saved = await save(record, member, value);
+      if (saved) this.remember(saved, save);
     }
     this.changed(this.records.get(record.id) ?? next, member);
   }
@@ -165,6 +173,8 @@ export class MxObject {
     );
   }
 
+  // The runtime record behind the object, with the changes made through it.
+  toRecord = (): EntityRecord => this.current;
   getGuid = () => this.current.id;
   getGUID = () => this.current.id;
   getEntity = () => this.current.type;
@@ -327,11 +337,14 @@ function formatValue(value: unknown, type = '', options: Record<string, unknown>
 }
 
 export function createMx(store: MxStore) {
-  const { environment } = store;
+  const env = (): MxEnvironment => ({ ...clientServices(), ...store.environment });
+  let progress = 0;
+  const shown = new Set<number>();
   const call = async (name: string, guids: string[] = []): Promise<unknown> => {
-    if (!environment.request) throw new Error(`Microflow ${name} cannot run here`);
+    const { request } = env();
+    if (!request) throw new Error(`Microflow ${name} cannot run here`);
     const start = guids.map((guid) => store.record(guid)).find(Boolean);
-    const payload = await environment.request<{ result?: unknown }>(
+    const payload = await request<{ result?: unknown }>(
       `/api/microflows/${encodeURIComponent(name)}`,
       {
         method: 'POST',
@@ -363,12 +376,12 @@ export function createMx(store: MxStore) {
         .filter(isRecord)
         .map((record) => new MxObject(record, store));
     const match = /^\/\/([\w.]+)(.*)$/.exec(String(options.xpath || ''));
-    if (!match || !environment.request)
-      throw new Error(`Unsupported retrieval ${String(options.xpath)}`);
+    const { request } = env();
+    if (!match || !request) throw new Error(`Unsupported retrieval ${String(options.xpath)}`);
     const sort = (options.filter?.sort ?? []) as Array<[string, string]>;
     const query = new URLSearchParams();
     if (match[2]) query.set('xpath', match[2]);
-    const response = await environment.request<{ records?: EntityRecord[] }>(
+    const response = await request<{ records?: EntityRecord[] }>(
       `/api/entities/${encodeURIComponent(match[1])}${query.size ? `?${query}` : ''}`,
     );
     const records = [...(response?.records ?? [])].sort((left, right) => {
@@ -383,7 +396,7 @@ export function createMx(store: MxStore) {
     return records.map((record) => store.remember(record));
   };
   const message = (kind: 'info' | 'warning' | 'error') => (text: string) =>
-    environment.notify?.(kind, String(text));
+    env().notify?.(kind, String(text));
   return {
     data: {
       get: (options: Record<string, Any>) => {
@@ -418,9 +431,12 @@ export function createMx(store: MxStore) {
           options.scope,
           new Error('Deleting objects from a legacy widget is not supported'),
         ),
+      // Refreshes the object or entity in the page, as after a change on the server.
       update: (options: Record<string, Any>) => {
         const record = options.guid && store.record(options.guid);
         if (record) store.changed(record);
+        env().refresh?.({ guid: options.guid, entity: options.entity });
+        options.callback?.call(options.scope);
       },
     },
     ui: {
@@ -429,19 +445,38 @@ export function createMx(store: MxStore) {
       info: message('info'),
       warning: message('warning'),
       error: message('error'),
-      confirmation: (options: Record<string, Any>) => options.handler?.call(options.scope),
-      showProgress: () => 0,
-      hideProgress: () => undefined,
+      confirmation: (options: Record<string, Any>) => {
+        const answer =
+          env().confirm?.({
+            question: String(options.content ?? ''),
+            proceed: options.proceed,
+            cancel: options.cancel,
+          }) ?? Promise.resolve(true);
+        void answer.then((confirmed) =>
+          (confirmed ? options.handler : options.onCancel)?.call(options.scope),
+        );
+      },
+      showProgress: () => {
+        progress += 1;
+        shown.add(progress);
+        env().progress?.(true);
+        return progress;
+      },
+      hideProgress: (id: number) => {
+        shown.delete(Number(id));
+        if (shown.size === 0) env().progress?.(false);
+      },
+      reload: () => window.location.reload(),
       getContentForm: () => ({ path: window.location.pathname, title: document.title }),
       openForm: () => undefined,
     },
     session: {
-      getUserId: () => environment.session.id ?? '',
-      getUserName: () => environment.session.username ?? '',
+      getUserId: () => env().session.id ?? '',
+      getUserName: () => env().session.username ?? '',
       getUserRoles: () =>
-        (environment.session.roles ?? []).map((name) => ({ getGuid: () => name, get: () => name })),
-      getUserRoleNames: () => environment.session.roles ?? [],
-      isGuest: () => Boolean(environment.session.guest || !environment.session.username),
+        (env().session.roles ?? []).map((name) => ({ getGuid: () => name, get: () => name })),
+      getUserRoleNames: () => env().session.roles ?? [],
+      isGuest: () => Boolean(env().session.guest || !env().session.username),
       sessionData: { user: { attributes: {} } },
     },
     parser: {
@@ -461,6 +496,7 @@ export function createMx(store: MxStore) {
       }),
     },
     logger: console,
+    logout: () => env().logout?.(),
     appUrl: `${window.location.origin}/`,
     baseUrl: `${window.location.origin}/xas/`,
     remoteUrl: `${window.location.origin}/`,
@@ -469,8 +505,27 @@ export function createMx(store: MxStore) {
   };
 }
 
+let installed: MxStore | null = null;
+
+// The one window.mx of the page, answered from the latest environment; a host
+// or action passes its own and the services of the running application stay.
+export function installMx(environment: MxEnvironment): MxStore {
+  const global = globalThis as Record<string, unknown>;
+  if (!installed) {
+    installed = new MxStore(environment);
+    global.mx = createMx(installed);
+    global.logger = Object.assign(Object.create(console), { debug: () => undefined });
+  } else installed.environment = { ...installed.environment, ...environment };
+  return installed;
+}
+
 // The form (page) a widget is placed on, as mxform; its context as mxcontext.
-export function mxForm(node: Element, store: MxStore, context: () => EntityRecord | null) {
+export function mxForm(
+  node: Element,
+  store: MxStore,
+  context: () => EntityRecord | null,
+  save: MxSave,
+) {
   const listeners: Array<{ remove(): void }> = [];
   return {
     mxform: {
@@ -489,7 +544,7 @@ export function mxForm(node: Element, store: MxStore, context: () => EntityRecor
     mxcontext: {
       getTrackObject: () => {
         const record = context();
-        return record ? store.remember(record, true) : null;
+        return record ? store.remember(record, save) : null;
       },
       getTrackId: () => context()?.id ?? '',
       getTrackEntity: () => context()?.type ?? '',

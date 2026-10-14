@@ -286,6 +286,7 @@ module Mxrb
                          "#{JSON.generate(action.fetch('arguments', {}))})"
             nanoflow_await_source(invocation, action['result_variable'])
           when 'JavaScriptActionCall'
+            (@called_javascript_actions ||= Set.new) << action['javascript_action'].to_s
             invocation = "runtime.callJavaScript(#{JSON.generate(action['javascript_action'].to_s)}, " \
                          "#{JSON.generate(action.fetch('arguments', {}))})"
             nanoflow_await_source(invocation, action['result_variable'])

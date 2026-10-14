@@ -207,12 +207,29 @@ module Mxrb
             export default defineConfig({
               plugins: [react()],
               resolve: {
-                alias: {
+                alias: [
                   // The pluggable widget API module that project widget builds import.
-                  'mendix/filters/builders': fileURLToPath(
-                    new URL('./src/generated/bridge/mendixFilters.ts', import.meta.url),
-                  ),
-                },
+                  {
+                    find: 'mendix/filters/builders',
+                    replacement: fileURLToPath(
+                      new URL('./src/generated/bridge/mendixFilters.ts', import.meta.url),
+                    ),
+                  },
+                  // The client global the project's JavaScript actions import.
+                  {
+                    find: 'mx-global',
+                    replacement: fileURLToPath(
+                      new URL('./src/generated/bridge/legacy/mxGlobal.ts', import.meta.url),
+                    ),
+                  },
+                  // Their React Native branches never run in the browser.
+                  {
+                    find: new RegExp('^(?:react-native(?:-[^/]+)?|@react-native-[^/]+/[^/]+)(?:/.*)?$'),
+                    replacement: fileURLToPath(
+                      new URL('./src/generated/bridge/legacy/nativeUnavailable.ts', import.meta.url),
+                    ),
+                  },
+                ],
               },
               build: {
                 // Mendix accepts legacy selectors that Lightning CSS rejects while minifying.
@@ -262,10 +279,11 @@ module Mxrb
           mappings = @nanoflow_entries.map do |entry|
             "  #{entry.fetch('name').inspect}: #{entry.fetch('import_name')}"
           end
+          project_actions = project_javascript_actions_source
           <<~TS
             import './feedbackWidget';
             import './projectWidgets';
-            import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';
+            import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';#{project_actions[:import]}
             import { feedbackStorageActions } from './bridge/feedbackStorage';
             import { nanoflowCommonsActions } from './bridge/nanoflowCommons';
             import type { RegisteredNanoflow } from './types';
@@ -277,13 +295,31 @@ module Mxrb
             };
 
             registerNanoflows(nanoflows);
-            registerJavaScriptActions({
+            registerJavaScriptActions({#{project_actions[:registration]}
               ...feedbackStorageActions(#{JSON.generate(javascript_actions)}#{feedback_options}),
               ...nanoflowCommonsActions(#{JSON.generate(commons)})
             });
 
             export default nanoflows;
           TS
+        end
+
+        # Verified adapters, spread after them, keep precedence over the project's actions.
+        def project_javascript_actions_source
+          actions = @project_javascript_actions || []
+          return { import: '', registration: '' } if actions.empty?
+
+          base = './bridge/vendor/javascriptsource/'
+          paths = actions.map { "#{File.basename(File.dirname(_1.directory))}/actions/#{_1.function}.js" }
+          definitions = actions.zip(paths).to_h do |action, path|
+            [action.name, { path:, function: action.function, parameters: action.parameters }]
+          end
+          sources = JSON.generate(paths.map { base + _1 })
+          {
+            import: "\nimport { projectJavaScriptActions } from './bridge/projectJavaScriptActions';",
+            registration: "\n  ...projectJavaScriptActions(import.meta.glob(#{sources}), " \
+                          "#{base.inspect}, #{JSON.generate(definitions)}),"
+          }
         end
 
         def frontend_pages

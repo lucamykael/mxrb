@@ -27,6 +27,7 @@ require_relative 'exporter/frontend_types'
 require_relative 'known_javascript_actions'
 require_relative 'known_feedback_widget'
 require_relative 'project_widget_bundle'
+require_relative 'project_javascript_actions'
 
 module Mxrb
   module RubyApp
@@ -92,6 +93,7 @@ module Mxrb
           @nanoflow_entries = []
           @page_entries = []
           @rendered_widget_ids = Set.new
+          @called_javascript_actions = Set.new
           modules = PluggableProperties.with_mpr(project.mpr) do |context|
             result = project.modules.map { export_module(_1) }
             PresentationExporter.new(self, project).export!

@@ -79,12 +79,14 @@ const environment = (extra: Partial<MxEnvironment> = {}): MxEnvironment => ({
   schema,
   session: { id: '7', username: 'ana', roles: ['User'] },
   locale: 'en-US',
-  save: vi.fn(async (record: EntityRecord, member: string, value: RuntimeValue) => ({
-    ...record,
-    attributes: { ...record.attributes, [member]: value },
-  })),
   ...extra,
 });
+
+const saver = () =>
+  vi.fn(async (record: EntityRecord, member: string, value: RuntimeValue) => ({
+    ...record,
+    attributes: { ...record.attributes, [member]: value },
+  }));
 
 describe('AMD loader', () => {
   it('loads package modules, templates, shims and relative dependencies once', async () => {
@@ -211,9 +213,9 @@ describe('dojo shims', () => {
 
 describe('mx and MxObject', () => {
   it('reads values as the Mendix client returns them and writes changes back', async () => {
-    const env = environment();
-    const store = new MxStore(env);
-    const object = store.remember(order(), true);
+    const save = saver();
+    const store = new MxStore(environment());
+    const object = store.remember(order(), save);
     expect(object.getGuid()).toBe('o1');
     expect(object.getEntity()).toBe('App.Order');
     expect(object.get('Total')).toEqual(new Big('12.5'));
@@ -235,8 +237,8 @@ describe('mx and MxObject', () => {
     store.subscribe({ guid: 'o1', callback: objectListener });
     store.remember(tag('t3', 'Green'));
     object.addReference('App.Order_Tag', 't3');
-    await waitFor(() => expect(env.save).toHaveBeenCalled());
-    expect(env.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'o1' }), 'Order_Tag', [
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'o1' }), 'Order_Tag', [
       tag('t1', 'Red'),
       tag('t3', 'Green'),
     ]);
@@ -264,7 +266,7 @@ describe('mx and MxObject', () => {
           : { records: [tag('t2', 'b'), tag('t1', 'a')] },
     );
     const store = new MxStore(environment({ request: request as unknown as ApiRequest }));
-    store.remember(order(), true);
+    store.remember(order(), saver());
     const mx = createMx(store) as Any;
     const result = await new Promise<Any>((resolve) =>
       mx.ui.action('App.DS_Tags', {
@@ -400,6 +402,52 @@ describe('legacy widget host', () => {
     await waitFor(() => expect(view.container.querySelector('span')?.textContent).toBe('none'));
     view.unmount();
     expect((window as Any).__destroyed).toBe(true);
+    unregister();
+  });
+
+  it('saves the changes of each widget through its own page context', async () => {
+    const source = `define(['dojo/_base/declare', 'mxui/widget/_WidgetBase'], function (declare, _WidgetBase) {
+        return declare('pkg.widget.Name', [_WidgetBase], {
+          update: function (obj, callback) {
+            this.domNode.onclick = function () { obj.set('Name', obj.getGuid() + '!'); };
+            callback();
+          }
+        });
+      });`;
+    const unregister = registerLegacyWidget(
+      'pkg.widget.Name',
+      { 'pkg/widget/Name.js': source },
+      '',
+      'pkg/widget/Name',
+      [],
+    );
+    const first = vi.fn(async () => null);
+    const second = vi.fn(async () => null);
+    const widget = (name: string) => ({
+      type: 'pluggable_widget' as const,
+      name,
+      options: { widget_id: 'pkg.widget.Name' },
+    });
+    const view = render(
+      <>
+        <MarketplaceWidget widget={widget('a')} context={order({ Name: 'a' })} onChange={first} />
+        <MarketplaceWidget
+          widget={widget('b')}
+          context={{ ...order({ Name: 'b' }), id: 'o2' }}
+          onChange={second}
+        />
+      </>,
+    );
+    await waitFor(() =>
+      expect(view.container.querySelectorAll('[id^=mxui_widget]')).toHaveLength(2),
+    );
+    const [nodeA, nodeB] = view.container.querySelectorAll<HTMLElement>('[id^=mxui_widget]');
+    act(() => nodeA.click());
+    act(() => nodeB.click());
+    await waitFor(() => expect(second).toHaveBeenCalledWith('Name', 'o2!'));
+    expect(first).toHaveBeenCalledWith('Name', 'o1!');
+    expect(first).toHaveBeenCalledTimes(1);
+    view.unmount();
     unregister();
   });
 
