@@ -136,6 +136,7 @@ module Mxrb
             'dependencies' => {
               'react' => '^19.2.8', 'react-dom' => '^19.2.8',
               'react-router-dom' => '^7.18.2', 'date-fns' => '^4.1.0', 'decimal.js' => '^10.6.0',
+              'big.js' => '^6.2.2',
               'plotly.js-dist-min' => '3.0.1',
               'js-base64' => '3.7.7'
             },
@@ -144,7 +145,7 @@ module Mxrb
               '@testing-library/jest-dom' => '^7.0.1',
               '@testing-library/react' => '^16.3.2',
               '@testing-library/user-event' => '^14.6.4',
-              '@types/node' => '^26.2.0', '@types/react' => '^19.2.18',
+              '@types/big.js' => '^6.2.2', '@types/node' => '^26.2.0', '@types/react' => '^19.2.18',
               '@types/react-dom' => '^19.2.4', '@vitejs/plugin-react' => '^6.0.5',
               'eslint' => '^10.8.1', 'eslint-plugin-react-hooks' => '^7.1.1',
               'globals' => '^17.11.0',
@@ -197,6 +198,7 @@ module Mxrb
 
         def vite_config
           <<~JS
+            import { fileURLToPath } from 'node:url';
             import { defineConfig } from 'vite';
             import react from '@vitejs/plugin-react';
 
@@ -204,6 +206,14 @@ module Mxrb
 
             export default defineConfig({
               plugins: [react()],
+              resolve: {
+                alias: {
+                  // The pluggable widget API module that project widget builds import.
+                  'mendix/filters/builders': fileURLToPath(
+                    new URL('./src/generated/bridge/mendixFilters.ts', import.meta.url),
+                  ),
+                },
+              },
               build: {
                 // Mendix accepts legacy selectors that Lightning CSS rejects while minifying.
                 cssMinify: false,
@@ -254,6 +264,7 @@ module Mxrb
           end
           <<~TS
             import './feedbackWidget';
+            import './projectWidgets';
             import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';
             import { feedbackStorageActions } from './bridge/feedbackStorage';
             import { nanoflowCommonsActions } from './bridge/nanoflowCommons';

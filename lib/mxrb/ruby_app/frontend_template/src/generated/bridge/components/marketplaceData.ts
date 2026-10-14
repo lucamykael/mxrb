@@ -23,12 +23,15 @@ export interface MarketplaceDataSource {
   source?: DataViewSource;
 }
 
-// A pluggable widget data source property:
-// { data_source: { entity, xpath, sort, source? } }.
+// A pluggable widget data source property, either nested as the Ruby pages
+// declare it, { data_source: { entity, xpath, sort, source? } }, or flat as the
+// page projection writes it, { data_source?: entity, xpath, sort, source? }.
 export function marketplaceDataSource(value: unknown): MarketplaceDataSource | undefined {
   const raw = object(value);
   const source =
-    typeof raw.data_source === 'string' ? { entity: raw.data_source } : object(raw.data_source);
+    typeof raw.data_source === 'string' || raw.data_source === undefined
+      ? { ...raw, entity: raw.data_source }
+      : object(raw.data_source);
   const entity = String(source.entity || '');
   const list = object(source.source);
   if (!entity && !list.kind) return undefined;

@@ -44,6 +44,7 @@ module Mxrb
 
         def write_generated_frontend_contract
           write_feedback_widget
+          write_project_widgets
           decimal_settings = JSON.generate(Runtime::DecimalContext.settings(@project))
           write(File.join('frontend', 'src', 'generated', 'decimalConfig.ts'),
                 "export default #{decimal_settings} as { rounding?: string };\n")
@@ -79,6 +80,38 @@ module Mxrb
             TS
           end
           write(File.join('frontend', 'src', 'generated', 'feedbackWidget.ts'), registration)
+        end
+
+        # Pluggable widgets of the rendered pages the bridge does not render itself
+        # run their own web build from the project's widgets/*.mpk through the
+        # pluggable host.
+        def write_project_widgets
+          bundles = (@rendered_widget_ids || []).sort.filter_map do |widget_id|
+            next if WidgetSupport::ADAPTERS.key?(widget_id)
+            next if WidgetSupport.family(widget_id)&.fetch('support') == 'full'
+
+            ProjectWidgetBundle.find(File.dirname(@mpr_path), widget_id)
+          end
+          registrations = bundles.each_with_index.map { |bundle, index| write_project_widget(bundle, index) }
+          header = "import { registerProjectWidget } from './bridge/pluggableHost';\n\n"
+          source = registrations.empty? ? "export {};\n" : "#{header}#{registrations.join("\n")}\n"
+          write(File.join('frontend', 'src', 'generated', 'projectWidgets.ts'), source)
+        end
+
+        def write_project_widget(bundle, index)
+          root = File.join('frontend', 'src', 'generated', 'bridge', 'vendor', 'widgets', bundle.widget_id)
+          bundle.files.each { |relative, contents| write(File.join(root, relative), contents) }
+          write(File.join(root, "#{bundle.name}.d.mts"), <<~TS)
+            import type { ComponentType } from 'react';
+            declare const Widget: ComponentType<Record<string, unknown>>;
+            export default Widget;
+            export { Widget as #{bundle.name} };
+          TS
+          path = "./bridge/vendor/widgets/#{bundle.widget_id}/#{bundle.name}"
+          style = bundle.files.key?("#{bundle.name}.css") ? "import '#{path}.css';\n" : ''
+          definition = JSON.generate(ProjectWidgetBundle.properties(bundle.definition.properties))
+          "#{style}import * as widget#{index} from '#{path}.mjs';\n" \
+            "registerProjectWidget(#{bundle.widget_id.inspect}, widget#{index}, #{bundle.name.inspect}, #{definition});"
         end
 
         def generated_frontend_pages

@@ -1081,9 +1081,15 @@ incorreto de “todo o código virou documento Mendix”.
 
 O relatório também lista os widgets plugáveis que o frontend gerado renderiza só
 de forma aproximada (`[WIDGET APPROXIMATE]`, com o que falta) ou não renderiza
-(`[WIDGET UNSUPPORTED]`), com as páginas, snippets e layouts que os usam; em
-execução, um widget não suportado mostra um placeholder visível (`role="alert"`,
-`data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
+(`[WIDGET UNSUPPORTED]`), com as páginas, snippets e layouts que os usam. Um widget
+web que o bridge não renderiza executa o próprio build quando o `widgets/*.mpk` do
+projeto traz um (`<Nome>.mjs`): a exportação o copia para
+`frontend/src/generated/bridge/vendor/widgets` e um host genérico lhe entrega a API
+de widgets plugáveis (`EditableValue`, `ListValue` com filtro, ordenação e
+paginação, `ActionValue`, `DynamicValue`, atributos vinculados, expressões e regiões
+de widgets, números `Big`, `mendix/filters/builders`); esse widget sai do
+relatório. Fora isso, em execução, um widget não suportado mostra um placeholder
+visível (`role="alert"`, `data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
 nanoflow são projetadas como nomes qualificados e strings traduzíveis como
 `translatable_text([["en_US", "…"], …])`, preservando todos os idiomas e os ids das
 traduções ao gravar; com isso HTML snippets (HTML, ou JavaScript executado com

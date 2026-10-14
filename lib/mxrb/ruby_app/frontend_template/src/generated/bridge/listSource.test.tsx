@@ -9,7 +9,7 @@ import type {
   WidgetDefinition,
 } from '../types';
 import { DataGrid } from './components/DataGrid';
-import { useMarketplaceRecords } from './components/marketplaceData';
+import { marketplaceDataSource, useMarketplaceRecords } from './components/marketplaceData';
 import { WidgetRenderer } from './components/WidgetRenderer';
 import { ListSourceNanoflows, loadListSource, sourceMappings, sourceStart } from './listSource';
 import { PageParameters } from './PageVariables';
@@ -237,5 +237,26 @@ describe('widgets over a microflow, nanoflow or association source', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.records.map((record) => record.id)).toEqual(['1', '2']);
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the flat data source the page projection writes', () => {
+    expect(marketplaceDataSource({ source: microflow })).toEqual({
+      entity: '',
+      xpath: '',
+      sort: [],
+      source: microflow,
+    });
+    expect(
+      marketplaceDataSource({
+        data_source: 'App.Item',
+        xpath: '[Name != empty]',
+        sort: [{ attribute: 'App.Item.Name', direction: 'Descending' }],
+      }),
+    ).toEqual({
+      entity: 'App.Item',
+      xpath: '[Name != empty]',
+      sort: [{ attribute: 'App.Item.Name', direction: 'Descending' }],
+    });
+    expect(marketplaceDataSource({})).toBeUndefined();
   });
 });
