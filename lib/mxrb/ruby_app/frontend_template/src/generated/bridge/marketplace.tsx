@@ -5,6 +5,9 @@ import { MarketplaceChart } from './components/MarketplaceChart';
 import { MarketplacePlotly } from './components/MarketplacePlotly';
 import { LanguageSelector } from './components/LanguageSelector';
 import marketplaceWidgets from './marketplaceWidgets.json';
+import { MarketplaceTimeline } from './components/MarketplaceTimeline';
+import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
+import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   ApiRequest,
@@ -19,6 +22,8 @@ export interface MarketplaceWidgetRegion {
   path: Array<string | number>;
   role: string;
   content: ReactNode;
+  // The region's widgets rendered for one object of the widget's data source.
+  render?(record: EntityRecord): ReactNode;
 }
 
 export interface MarketplaceWidgetProps {
@@ -216,7 +221,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
       </label>
     );
   }
-  if (id.includes('badgebutton')) return <button type="button">{label}</button>;
+  if (id.includes('badgebutton')) return <MarketplaceBadgeButton {...props} />;
   if (id.includes('badge')) return <output className="mxrb-marketplace-badge">{label}</output>;
   if (id.includes('accordion')) return accordion(label, regions, children);
   if (id.includes('fieldset'))
@@ -238,20 +243,8 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
         label={name}
       />
     );
-  if (id.includes('popupmenu'))
-    return (
-      <details>
-        <summary>{label}</summary>
-        {content || 'Menu'}
-      </details>
-    );
-  if (id.includes('timeline'))
-    return (
-      <ol className="mxrb-marketplace-timeline">
-        <li>{label}</li>
-        {content}
-      </ol>
-    );
+  if (id.includes('popupmenu')) return <MarketplacePopupMenu {...props} />;
+  if (id.includes('timeline')) return <MarketplaceTimeline {...props} />;
   if (id.includes('tooltip'))
     return (
       <span className="mxrb-marketplace-tooltip">
@@ -269,15 +262,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
         {regionContent(regions, 'content', children)}
       </div>
     );
-  if (id.includes('treenode') || id.includes('treeview'))
-    return (
-      <ul>
-        <li>
-          {label}
-          {content}
-        </li>
-      </ul>
-    );
+  if (id.includes('treenode') || id.includes('treeview')) return <MarketplaceTreeNode {...props} />;
   if (id.includes('videoplayer')) {
     const source = firstText(properties, ['videoUrl', 'videoURL', 'url'], '');
     return (

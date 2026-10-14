@@ -70,7 +70,8 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
           configure(title: 'Widgets') do
             pluggable_widget('chart', widget_id: 'com.mendix.widget.web.linechart.LineChart')
             container('box') do
-              pluggable_widget('timeline', widget_id: 'com.mendix.widget.web.timeline.Timeline')
+              pluggable_widget('scanner', widget_id: 'com.mendix.widget.web.barcodescanner.BarcodeScanner')
+              pluggable_widget('feedback', widget_id: 'SprintrFeedbackWidget.SprintrFeedback')
               pluggable_widget('maps', widget_id: 'com.mendix.widget.custom.Maps.Maps')
             end
           end
@@ -83,16 +84,24 @@ RSpec.describe Mxrb::RubyApp::PortabilityReport do # rubocop:disable Metrics/Blo
       report = described_class.new(root)
 
       expect(report.widgets).to eq([
+                                     { widget_id: 'SprintrFeedbackWidget.SprintrFeedback', support: 'unsupported',
+                                       documents: ['App.WidgetPage'] },
                                      { widget_id: 'com.mendix.widget.custom.Maps.Maps', support: 'unsupported',
                                        documents: ['App.Shell', 'App.WidgetPage'] },
-                                     { widget_id: 'com.mendix.widget.web.timeline.Timeline', support: 'approximate',
-                                       note: 'the data source is not queried', documents: ['App.WidgetPage'] }
+                                     { widget_id: 'com.mendix.widget.web.barcodescanner.BarcodeScanner',
+                                       support: 'approximate', note: 'no camera access; renders a button',
+                                       documents: ['App.WidgetPage'] }
                                    ])
       expect(report.to_h.fetch(:widgets)).to eq(report.widgets)
       stdout, = Open3.capture3(RbConfig.ruby, File.expand_path('../bin/mxrb', __dir__), 'portability', root)
       expect(stdout).to include('[WIDGET UNSUPPORTED] com.mendix.widget.custom.Maps.Maps: App.Shell, App.WidgetPage',
-                                '[WIDGET APPROXIMATE] com.mendix.widget.web.timeline.Timeline ' \
-                                '(the data source is not queried): App.WidgetPage')
+                                '[WIDGET APPROXIMATE] com.mendix.widget.web.barcodescanner.BarcodeScanner ' \
+                                '(no camera access; renders a button): App.WidgetPage')
+      registration = File.join(root, 'frontend', 'src', 'generated', 'feedbackWidget.ts')
+      FileUtils.mkdir_p(File.dirname(registration))
+      File.write(registration, "registerFeedbackWidget(Feedback);\n")
+      expect(described_class.new(root).widgets.map { _1[:widget_id] })
+        .not_to include('SprintrFeedbackWidget.SprintrFeedback')
     end
   end
 

@@ -38,8 +38,7 @@
     },
     {
       "pattern": "badgebutton",
-      "support": "approximate",
-      "note": "on-click action is not executed",
+      "support": "full",
       "examples": ["com.mendix.widget.custom.badgebutton.BadgeButton"]
     },
     {
@@ -74,14 +73,12 @@
     },
     {
       "pattern": "popupmenu",
-      "support": "approximate",
-      "note": "menu items are not rendered",
+      "support": "full",
       "examples": ["com.mendix.widget.web.popupmenu.PopupMenu"]
     },
     {
       "pattern": "timeline",
-      "support": "approximate",
-      "note": "the data source is not queried",
+      "support": "full",
       "examples": ["com.mendix.widget.web.timeline.Timeline"]
     },
     {
@@ -101,8 +98,7 @@
     },
     {
       "pattern": "treenode|treeview",
-      "support": "approximate",
-      "note": "the data source is not queried",
+      "support": "full",
       "examples": ["com.mendix.widget.web.treenode.TreeNode"]
     },
     {
