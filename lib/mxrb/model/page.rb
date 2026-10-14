@@ -1007,6 +1007,11 @@ module Mxrb
         end
         header = []
         parse_widgets(parse_array(properties.dig('filtersPlaceholder', 'Widgets')), header)
+        filter_type = custom_property_type(widget.dig('Type', 'ObjectType'), 'filterList')
+                      &.dig('ValueType', 'ObjectType')
+        filter_attributes = parse_array(properties.dig('filterList', 'Objects')).filter_map do |object|
+          custom_property_map(object, filter_type).dig('filter', 'AttributeRef', 'Attribute')
+        end
         xpath = source['XPathConstraint'].to_s.strip
         sort = parse_array(source.dig('SortBar', 'SortItems')).filter_map do |item|
           attribute = item.dig('AttributeRef', 'Attribute')
@@ -1024,6 +1029,7 @@ module Mxrb
             columns_hidable: properties.dig('columnsHidable', 'PrimitiveValue') != 'false',
             selection: (selection.empty? || selection == 'None' ? nil : selection.downcase.to_sym),
             xpath: (xpath unless xpath.empty?), sort: (sort unless sort.empty?),
+            filter_attributes: (filter_attributes unless filter_attributes.empty?),
             on_click_trigger: ('double' if properties.dig('onClickTrigger', 'PrimitiveValue') == 'double')
           }.compact,
           events: (grid_events(widget) + property_events).uniq

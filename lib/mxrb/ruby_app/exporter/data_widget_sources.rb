@@ -35,7 +35,7 @@ module Mxrb
 
         DATA_GRID_OPTION_KEYS = %w[
           entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
-          columns_draggable columns_hidable xpath on_click_trigger design
+          columns_draggable columns_hidable xpath on_click_trigger filter_attributes design
         ].freeze
 
         DATA_GRID_COLUMN_KEYS = %w[

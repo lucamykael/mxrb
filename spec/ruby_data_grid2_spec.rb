@@ -37,9 +37,10 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
     object_type('column', %w[header attribute showContentAs dynamicText content filter sortable hidable width
                              size alignment])
   end
+  let(:filter_list_type) { object_type('filterList', %w[filter]) }
   let(:grid_type) do
-    object_type('grid', %w[datasource columns pageSize itemSelection onClickTrigger filtersPlaceholder],
-                'columns' => column_type)
+    object_type('grid', %w[datasource columns pageSize itemSelection onClickTrigger filtersPlaceholder filterList],
+                'columns' => column_type, 'filterList' => filter_list_type)
   end
 
   def column(values)
@@ -90,8 +91,14 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
     Mxrb::Model::Page.allocate.send(
       :data_grid2_widget,
       raw_grid(columns, source:, 'onClickTrigger' => primitive('double'),
-                        'filtersPlaceholder' => { 'Widgets' => [2, placeholder('new')] })
+                        'filtersPlaceholder' => { 'Widgets' => [2, placeholder('new')] },
+                        'filterList' => { 'Objects' => [2, *filter_list] })
     )
+  end
+
+  let(:filter_list) do
+    %w[Admin.Account.FullName Admin.Account.Email].map { widget_object(filter_list_type, 'filter' => attribute(_1)) } +
+      [widget_object(filter_list_type, {})]
   end
 
   def stringify(value) = JSON.parse(JSON.generate(value))
@@ -100,7 +107,8 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
     options = model.fetch(:options)
     expect(options).to include(entity: 'Admin.Account', xpath: '[Name != empty]', on_click_trigger: 'double',
                                sort: [{ attribute: 'Admin.Account.FullName', direction: 'Descending' },
-                                      { attribute: 'Admin.Account.Email', direction: 'Ascending' }])
+                                      { attribute: 'Admin.Account.Email', direction: 'Ascending' }],
+                               filter_attributes: %w[Admin.Account.FullName Admin.Account.Email])
     expect(model.fetch(:header)).to eq([{ type: :placeholder, name: 'new', options: { parameter: 'new' }, events: [] }])
     full_name, roles, last_login, actions = options.fetch(:columns)
     expect(full_name).to eq(name: 'Full name', caption: 'Full name', attribute: 'Admin.Account.FullName',
@@ -115,7 +123,7 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
 
     grid = raw_grid([column('showContentAs' => primitive('dynamicText'))], 'onClickTrigger' => primitive('single'))
     plain = Mxrb::Model::Page.allocate.send(:data_grid2_widget, grid)
-    expect(plain.fetch(:options)).not_to include(:xpath, :sort, :on_click_trigger)
+    expect(plain.fetch(:options)).not_to include(:xpath, :sort, :on_click_trigger, :filter_attributes)
     expect(plain.dig(:options, :columns)).to eq([{ name: '', caption: '', dynamic_text: '' }])
     expect(plain).not_to have_key(:header)
   end

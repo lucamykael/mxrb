@@ -220,7 +220,7 @@ module Mxrb
 
       def data_grid(name, entity: nil, selection: nil, **runtime_options, &block)
         allowed = %i[page_size pageSize server_side sort toolbar presentation
-                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger]
+                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger filter_attributes]
         unknown = runtime_options.keys - allowed
         raise ArgumentError, "unknown data grid options: #{unknown.join(', ')}" unless unknown.empty?
 

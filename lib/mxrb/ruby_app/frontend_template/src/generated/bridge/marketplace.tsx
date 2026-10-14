@@ -21,6 +21,7 @@ import {
 } from './components/MarketplaceInteractive';
 import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
 import { MarketplaceAutocomplete, MarketplaceTagSelector } from './components/MarketplaceSelection';
+import { MarketplaceGridTextFilter } from './components/MarketplaceGridFilter';
 import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
 import type { ComponentType, ReactNode } from 'react';
 import type {
@@ -297,6 +298,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   if (id === 'json.widget.editor') return <MarketplaceJsonEditor {...props} />;
   if (id.endsWith('tagselector')) return <MarketplaceTagSelector {...props} />;
   if (id.endsWith('autocompletemultiselect')) return <MarketplaceAutocomplete {...props} />;
+  if (id.endsWith('.datagridtextfilter')) return <MarketplaceGridTextFilter {...props} />;
   if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
   return (

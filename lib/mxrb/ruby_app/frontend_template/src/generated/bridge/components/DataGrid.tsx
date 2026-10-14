@@ -1,5 +1,14 @@
 import { decimal, type DecimalValue, isDecimal, numericCompare, numericText } from '../decimal';
-import { useContext, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import type {
   ApiRequest,
   ApplicationSchema,
@@ -46,12 +55,20 @@ interface DataGridProps {
 }
 
 type FilterType = 'text' | 'number' | 'date' | 'boolean' | 'enum';
-type FilterConfig = {
+export type FilterConfig = {
   type: FilterType;
   operator: string;
   options: Array<{ value: string; caption: string }>;
 };
 type Sorting = { attribute: string; direction: 'Ascending' | 'Descending' };
+
+// A filter widget in the filters placeholder searches the grid's filter list:
+// a record matches when any of its string attributes does.
+export type PlaceholderFilter = { operator: string; value: string };
+export const DataGridFilters = createContext<{
+  attributes: string[];
+  setFilter: (id: string, filter: PlaceholderFilter | null) => void;
+} | null>(null);
 
 const defaultOperator: Record<FilterType, string> = {
   text: 'contains',
@@ -209,7 +226,9 @@ const dynamicText = (column: WidgetColumn, record: EntityRecord): string =>
     column.dynamic_text || '',
   );
 
-const activeFilter = (value: string, config: FilterConfig): boolean =>
+const textFilter = (operator: string): FilterConfig => ({ type: 'text', operator, options: [] });
+
+export const activeFilter = (value: string, config: FilterConfig): boolean =>
   ['empty', 'not_empty'].includes(config.operator) || value.trim() !== '';
 
 const serverCollectionPath = (
@@ -263,7 +282,7 @@ const OPERATOR_LABELS: Record<string, [string, string]> = {
   between: ['between', 'Between'],
 };
 
-const OperatorSelector = ({
+export const OperatorSelector = ({
   config,
   onSelect,
 }: {
@@ -460,6 +479,19 @@ export function DataGrid({
   const [selected, setSelected] = useState<EntityRecord | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [placeholderFilters, setPlaceholderFilters] = useState<Record<string, PlaceholderFilter>>(
+    {},
+  );
+  const setPlaceholderFilter = useCallback((id: string, filter: PlaceholderFilter | null) => {
+    setPlaceholderFilters((current) => {
+      const { [id]: previous, ...rest } = current;
+      if (!filter) return previous ? rest : current;
+      return previous?.operator === filter.operator && previous.value === filter.value
+        ? current
+        : { ...rest, [id]: filter };
+    });
+    setPageNumber(0);
+  }, []);
   const [sorting, setSorting] = useState<Sorting[]>(() =>
     (options.sort || []).map((item) => ({
       attribute: item.attribute,
@@ -477,6 +509,35 @@ export function DataGrid({
   const pageSize = Math.max(1, Number(options.page_size || options.pageSize || 20));
   const columns = options.columns || [];
   const serverSide = options.server_side === true;
+  const searchAttributes = useMemo(
+    () =>
+      (options.filter_attributes || []).filter((attribute) => {
+        const type = attributeDefinition(schema, options.entity || '', attribute)?.type;
+        return !type || type.toLowerCase() === 'string';
+      }),
+    [options.filter_attributes, options.entity, schema],
+  );
+  const searches = useMemo(
+    () =>
+      searchAttributes.length
+        ? Object.values(placeholderFilters).filter((filter) =>
+            activeFilter(filter.value, textFilter(filter.operator)),
+          )
+        : [],
+    [placeholderFilters, searchAttributes],
+  );
+  const searchSpecs = searches.map((filter) => ({
+    any: searchAttributes.map((attribute) => ({
+      attribute,
+      type: 'text',
+      operator: filter.operator,
+      value: filter.value,
+    })),
+  }));
+  const placeholderContext = useMemo(
+    () => ({ attributes: searchAttributes, setFilter: setPlaceholderFilter }),
+    [searchAttributes, setPlaceholderFilter],
+  );
   const filterSpecs = columns.flatMap((column) => {
     const config = configOf(column);
     const key = column.name || column.attribute || '';
@@ -499,7 +560,13 @@ export function DataGrid({
     pageParameters,
   );
   const collectionPath = serverSide
-    ? serverCollectionPath(basePath, filterSpecs, sorting, pageNumber, pageSize)
+    ? serverCollectionPath(
+        basePath,
+        [...filterSpecs, ...searchSpecs],
+        sorting,
+        pageNumber,
+        pageSize,
+      )
     : basePath;
 
   useEffect(() => {
@@ -560,24 +627,44 @@ export function DataGrid({
     () =>
       serverSide
         ? records
-        : records.filter((record) =>
-            columns.every((column) => {
-              const base = filterConfig(column, options.entity, schema);
-              const chosen = operators[column.name || column.attribute || ''];
-              const config = base && chosen ? { ...base, operator: chosen } : base;
-              if (!config) return true;
-              const key = column.name || column.attribute || '';
-              const query = filters[key] || '';
-              const value = columnValue(record, column);
-              return (
-                !activeFilter(query, config) ||
-                (Array.isArray(value) ? value : [value]).some((item) =>
-                  matchesGridFilter(item, query, config),
-                )
-              );
-            }),
+        : records.filter(
+            (record) =>
+              searches.every((filter) =>
+                searchAttributes.some((attribute) =>
+                  matchesGridFilter(
+                    recordValue(record, attribute),
+                    filter.value,
+                    textFilter(filter.operator),
+                  ),
+                ),
+              ) &&
+              columns.every((column) => {
+                const base = filterConfig(column, options.entity, schema);
+                const chosen = operators[column.name || column.attribute || ''];
+                const config = base && chosen ? { ...base, operator: chosen } : base;
+                if (!config) return true;
+                const key = column.name || column.attribute || '';
+                const query = filters[key] || '';
+                const value = columnValue(record, column);
+                return (
+                  !activeFilter(query, config) ||
+                  (Array.isArray(value) ? value : [value]).some((item) =>
+                    matchesGridFilter(item, query, config),
+                  )
+                );
+              }),
           ),
-    [columns, filters, records, serverSide, options.entity, schema, operators],
+    [
+      columns,
+      filters,
+      records,
+      serverSide,
+      options.entity,
+      schema,
+      operators,
+      searches,
+      searchAttributes,
+    ],
   );
   const orderedRecords = useMemo(
     () => (serverSide ? filteredRecords : sortRecords(filteredRecords, sorting)),
@@ -610,9 +697,11 @@ export function DataGrid({
         sorting={sorting}
         sort={toggleSort}
         header={
-          widget.header?.length && renderWidgets
-            ? renderWidgets(widget.header, null, `${widget.name}-header`)
-            : undefined
+          widget.header?.length && renderWidgets ? (
+            <DataGridFilters.Provider value={placeholderContext}>
+              {renderWidgets(widget.header, null, `${widget.name}-header`)}
+            </DataGridFilters.Provider>
+          ) : undefined
         }
         cell={(record, column) => {
           if (column.content && renderWidgets)
