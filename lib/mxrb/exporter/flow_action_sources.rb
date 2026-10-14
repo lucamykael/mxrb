@@ -53,9 +53,7 @@ module Mxrb
             sortings = bson_items(src.dig('NewSortings', 'Sortings') || src['SortItems'])
             unless sortings.empty?
               rendered = sortings.map do |sorting|
-                attribute = sorting['AttributePath'] ||
-                            sorting.dig('AttributeRef', 'Attribute')
-                "[#{ruby(attribute)}, :#{underscore(sorting['SortOrder'])}]"
+                "[#{ruby(sorting_path(sorting))}, :#{underscore(sorting['SortOrder'])}]"
               end
               args << "sort: [#{rendered.join(', ')}]"
             end
@@ -173,8 +171,7 @@ module Mxrb
           sortings = bson_items(operation.dig('Sortings', 'Sortings'))
           unless sortings.empty?
             rendered = sortings.map do |sorting|
-              attribute = sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')
-              "[#{ruby(attribute)}, :#{underscore(sorting['SortOrder'])}]"
+              "[#{ruby(sorting_path(sorting))}, :#{underscore(sorting['SortOrder'])}]"
             end
             args << "sort: [#{rendered.join(', ')}]"
           end
@@ -200,6 +197,18 @@ module Mxrb
           args << "error: :#{error}" unless error == 'rollback'
           "#{pad}download_file #{args.join(', ')}"
         end
+      end
+
+      # A sort attribute, with "Assoc/Destination/" steps when it goes through associations.
+      def sorting_path(sorting)
+        return sorting['AttributePath'] unless sorting['AttributePath'].to_s.empty?
+
+        reference = sorting['AttributeRef'] || {}
+        steps = bson_items(reference.dig('EntityRef', 'Steps'))
+        attribute = reference['Attribute'].to_s
+        return attribute if steps.empty?
+
+        (steps.flat_map { [_1['Association'], _1['DestinationEntity']] } << attribute.split('.').last).join('/')
       end
 
       def database_query_line(pad, action)

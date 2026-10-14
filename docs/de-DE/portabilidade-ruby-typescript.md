@@ -190,6 +190,12 @@ offiziellen Runtime und stimmen mit dem Ruby-Interpreter, dem serverseitigen Gri
 und `sortRecords` im Frontend überein.
 [Nachweis](../evidence/retrieve-sort-2026-10-09.json).
 
+Sortierungen über Assoziationen (`"Mod.Order_Customer/Mod.Customer/Name"`, ein oder
+mehrere Schritte) werden gelesen, als Entitätsreferenzschritte zurückgeschrieben und
+in Retrieves, Listensortierungen und Data Grids ausgewertet; Objekte ohne
+zugeordnetes Objekt stehen in beiden Richtungen zuerst, wie in der Runtime.
+[Nachweis der Assoziationssortierung](../evidence/association-sort-2026-10-14.json).
+
 Die Listenoperation `Sort` sortiert im Speicher nach einer anderen, ebenfalls am
 Runtime gemessenen Regel: `NULL` steht in beiden Richtungen am Ende, und bei
 Zeichenfolgen, die sich nur in der Schreibweise unterscheiden, kommt die

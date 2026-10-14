@@ -179,6 +179,12 @@ All eight fixture orders ran on the official Runtime through
 and the frontend `sortRecords`.
 [Evidence](../evidence/retrieve-sort-2026-10-09.json).
 
+Sorting through associations (`"Mod.Order_Customer/Mod.Customer/Name"`, one or more
+steps) is read, written back as entity reference steps and evaluated by retrieves,
+list sorts and data grids; objects without the associated object come first in both
+directions, as in the Runtime.
+[Association sort evidence](../evidence/association-sort-2026-10-14.json).
+
 The list `Sort` operation sorts in memory with a different rule, also measured on
 the Runtime: `NULL` sorts last in both directions and, among strings that differ
 only by case, lowercase comes first, like a Java collator. Previously the Ruby

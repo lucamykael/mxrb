@@ -20,6 +20,7 @@ require_relative 'expression_functions'
 require_relative 'system_domain'
 require_relative 'languages'
 require_relative 'time_zones'
+require_relative 'sort_path'
 
 module Mxrb
   module Runtime
@@ -1016,14 +1017,17 @@ module Mxrb
           return values if sortings.empty?
 
           keys = sortings.map { [sort_attribute(_1), descending?(_1)] }
-          SortOrder.sort(values, keys, memory:) { |value, attribute| value.members[attribute] }
+          read = SortPath.reader { @store }
+          SortOrder.sort(values, keys, memory:) { |value, path| read.call(value, path) }
         end
 
         def sort_attribute(sorting)
-          path = (sorting['AttributePath'] || sorting.dig('AttributeRef', 'Attribute')).to_s
-          raise NativeRuntimeError, 'native retrieve sorting requires an attribute' if path.empty?
+          return SortPath.parse(sorting['AttributePath']) unless sorting['AttributePath'].to_s.empty?
+          if sorting.dig('AttributeRef', 'Attribute').to_s.empty?
+            raise NativeRuntimeError, 'native retrieve sorting requires an attribute'
+          end
 
-          path.split(%r{[./]}).last
+          SortPath.from_reference(sorting['AttributeRef'])
         end
 
         def descending?(sorting)

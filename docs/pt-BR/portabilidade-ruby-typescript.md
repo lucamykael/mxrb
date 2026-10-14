@@ -179,6 +179,12 @@ As oito ordenações do fixture foram executadas no Runtime oficial com
 e o `sortRecords` do frontend.
 [Evidência](../evidence/retrieve-sort-2026-10-09.json).
 
+A ordenação por associação (`"Mod.Order_Customer/Mod.Customer/Name"`, com um ou mais
+passos) é lida, gravada de volta como passos de referência de entidade e avaliada em
+retrieves, ordenação de listas e data grids; objetos sem o objeto associado vêm
+primeiro nas duas direções, como no runtime.
+[Evidência da ordenação por associação](../evidence/association-sort-2026-10-14.json).
+
 A operação de lista `Sort` ordena em memória com outra regra, também medida no
 Runtime: `NULL` vem por último nas duas direções e, entre strings que diferem só
 por maiúsculas, a minúscula vem primeiro, como um collator Java. Antes, o runtime
