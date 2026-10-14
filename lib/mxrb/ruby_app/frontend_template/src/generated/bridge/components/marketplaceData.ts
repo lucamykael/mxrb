@@ -1,7 +1,13 @@
 import { useContext, useEffect, useState } from 'react';
-import type { EntityCollectionResponse, EntityRecord, WidgetEvent } from '../../types';
+import type {
+  DataViewSource,
+  EntityCollectionResponse,
+  EntityRecord,
+  WidgetEvent,
+} from '../../types';
 import type { MarketplaceWidgetProps } from '../marketplace';
 import { PageParameters } from '../PageVariables';
+import { useListSource } from '../listSource';
 import { sortRecords, withXPath } from '../value';
 
 type Properties = Record<string, unknown>;
@@ -13,22 +19,31 @@ export interface MarketplaceDataSource {
   entity: string;
   xpath: string;
   sort: Array<{ attribute: string; direction: string }>;
+  // A microflow, nanoflow or association source instead of an XPath query.
+  source?: DataViewSource;
 }
 
-// A pluggable widget data source property: { data_source: { entity, xpath, sort } }.
+// A pluggable widget data source property:
+// { data_source: { entity, xpath, sort, source? } }.
 export function marketplaceDataSource(value: unknown): MarketplaceDataSource | undefined {
   const raw = object(value);
   const source =
     typeof raw.data_source === 'string' ? { entity: raw.data_source } : object(raw.data_source);
   const entity = String(source.entity || '');
-  if (!entity) return undefined;
+  const list = object(source.source);
+  if (!entity && !list.kind) return undefined;
   const sort = Array.isArray(source.sort)
     ? source.sort.map((item) => ({
         attribute: String(object(item).attribute || ''),
         direction: String(object(item).direction || ''),
       }))
     : [];
-  return { entity, xpath: String(source.xpath || ''), sort };
+  return {
+    entity,
+    xpath: String(source.xpath || ''),
+    sort,
+    ...(list.kind ? { source: list as unknown as DataViewSource } : {}),
+  };
 }
 
 export interface MarketplaceRecords {
@@ -45,14 +60,22 @@ export function useMarketplaceRecords(
 ): MarketplaceRecords {
   const parameters = useContext(PageParameters);
   const source = marketplaceDataSource(value);
-  const path = source
-    ? withXPath(
-        `/api/entities/${encodeURIComponent(source.entity)}`,
-        source.xpath || undefined,
-        props.context,
-        parameters,
-      )
-    : '';
+  const listed = useListSource(
+    source?.source,
+    props.context,
+    props.context,
+    props.request,
+    props.revision,
+  );
+  const path =
+    source && !source.source
+      ? withXPath(
+          `/api/entities/${encodeURIComponent(source.entity)}`,
+          source.xpath || undefined,
+          props.context,
+          parameters,
+        )
+      : '';
   const sortKey = JSON.stringify(source?.sort || []);
   const [state, setState] = useState<MarketplaceRecords & { key: string }>({
     key: '',
@@ -83,6 +106,10 @@ export function useMarketplaceRecords(
       active = false;
     };
   }, [key, path, sortKey, props.request]);
+  if (source?.source)
+    return listed.loading
+      ? listed
+      : { ...listed, records: sortRecords(listed.records, source.sort) };
   return state.key === key ? state : { records: [], loading: true };
 }
 

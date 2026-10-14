@@ -756,7 +756,11 @@ associations. `filter_attributes: [...]` is the grid's filter list (`filterList`
 Text filter in the header searches the String attributes of that list, and a row
 shows when any of them matches the chosen operator (`defaultFilter`, a selector when
 `adjustable`) after the `delay`; `valueAttribute` and `onChange` run for each new
-value. The UI writes `grid-template-columns` as the native widget does:
+value. A microflow, nanoflow or association source becomes `source:`
+(`microflow_source(...)`, `nanoflow_source(...)` or `association(...)`, as for a Data View)
+on Data grid 2, Gallery and pluggable widgets' `data_source(source: ...)`; the browser
+loads the list once, with its parameter mappings, then filters, sorts and pages it
+locally. The UI writes `grid-template-columns` as the native widget does:
 `autoFill` shares the space by `size`, `autoFit` follows the content and `manual`
 is in pixels. The runtime fills `System.grantableRoles` from the manageable roles
 of the project security, so the XPath of the Administration module's

@@ -3737,7 +3737,9 @@ module Mxrb
       if properties['filterSectionTitle']
         properties.dig('filterSectionTitle', 'Value')['TextTemplate'] = empty_client_template_doc
       end
-      if options[:entity] && properties['datasource']
+      if options[:source] && properties['datasource']
+        properties['datasource']['Value']['DataSource'] = list_source_doc(options[:source])
+      elsif options[:entity] && properties['datasource']
         properties['datasource']['Value']['DataSource'] = custom_xpath_source_doc(options[:entity])
       end
       if options[:selection] && properties['itemSelection']

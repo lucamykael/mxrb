@@ -12,6 +12,7 @@ import {
 import type {
   ApiRequest,
   ApplicationSchema,
+  DataViewSource,
   EntityCollectionResponse,
   EntityRecord,
   RuntimeValue,
@@ -32,6 +33,7 @@ import {
   withXPath,
 } from '../value';
 import { PageParameters } from '../PageVariables';
+import { useListSource } from '../listSource';
 import { NativeDataGrid } from './NativeDataGrid';
 import { GridIcon } from './GridIcon';
 
@@ -39,6 +41,8 @@ interface DataGridProps {
   widget: WidgetDefinition;
   request: ApiRequest;
   pageContext: EntityRecord | null;
+  // The object an association source starts from, when not the page's.
+  context?: EntityRecord | null;
   revision: number;
   onError: ErrorHandler;
   onMutation: () => void;
@@ -460,16 +464,22 @@ export function DataGrid({
   onSelectRecords,
   schema,
   renderWidgets,
+  context,
 }: DataGridProps) {
   const options = widget.options || {};
   const pageParameters = useContext(PageParameters);
+  // A microflow, nanoflow or association source lists its objects once; the
+  // grid then filters, sorts and pages them in the browser.
+  const listSource = options.source as DataViewSource | undefined;
+  const listed = useListSource(listSource, context ?? pageContext, pageContext, request, revision);
+  const entity = options.entity || listed.records[0]?.type || '';
   const [operators, setOperators] = useState<Record<string, string>>({});
   const withOperator = (config: FilterConfig | null, column: WidgetColumn) => {
     const chosen = operators[column.name || column.attribute || ''];
     return config && chosen ? { ...config, operator: chosen } : config;
   };
   const configOf = (column: WidgetColumn) =>
-    withOperator(filterConfig(column, options.entity, schema), column);
+    withOperator(filterConfig(column, entity, schema), column);
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [pageNumber, setPageNumber] = useState(0);
@@ -508,14 +518,14 @@ export function DataGrid({
   };
   const pageSize = Math.max(1, Number(options.page_size || options.pageSize || 20));
   const columns = options.columns || [];
-  const serverSide = options.server_side === true;
+  const serverSide = options.server_side === true && !listSource;
   const searchAttributes = useMemo(
     () =>
       (options.filter_attributes || []).filter((attribute) => {
-        const type = attributeDefinition(schema, options.entity || '', attribute)?.type;
+        const type = attributeDefinition(schema, entity, attribute)?.type;
         return !type || type.toLowerCase() === 'string';
       }),
-    [options.filter_attributes, options.entity, schema],
+    [options.filter_attributes, entity, schema],
   );
   const searches = useMemo(
     () =>
@@ -570,7 +580,7 @@ export function DataGrid({
     : basePath;
 
   useEffect(() => {
-    if (!options.entity) return;
+    if (!options.entity || listSource) return;
     setLoading(true);
     request<EntityCollectionResponse>(collectionPath)
       .then((payload) => {
@@ -588,7 +598,21 @@ export function DataGrid({
       })
       .catch(onError)
       .finally(() => setLoading(false));
-  }, [collectionPath, options.entity, pageSize, reload, revision, request, onError, serverSide]);
+  }, [
+    collectionPath,
+    options.entity,
+    listSource,
+    pageSize,
+    reload,
+    revision,
+    request,
+    onError,
+    serverSide,
+  ]);
+  useEffect(() => {
+    if (listed.error) onError(new Error(listed.error));
+  }, [listed.error, onError]);
+  const sourceRecords = listSource ? listed.records : records;
 
   const mutate = <T,>(operation: Promise<T>): Promise<T> =>
     operation
@@ -627,7 +651,7 @@ export function DataGrid({
     () =>
       serverSide
         ? records
-        : records.filter(
+        : sourceRecords.filter(
             (record) =>
               searches.every((filter) =>
                 searchAttributes.some((attribute) =>
@@ -639,7 +663,7 @@ export function DataGrid({
                 ),
               ) &&
               columns.every((column) => {
-                const base = filterConfig(column, options.entity, schema);
+                const base = filterConfig(column, entity, schema);
                 const chosen = operators[column.name || column.attribute || ''];
                 const config = base && chosen ? { ...base, operator: chosen } : base;
                 if (!config) return true;
@@ -657,9 +681,9 @@ export function DataGrid({
     [
       columns,
       filters,
-      records,
+      sourceRecords,
       serverSide,
-      options.entity,
+      entity,
       schema,
       operators,
       searches,
@@ -762,7 +786,7 @@ export function DataGrid({
       className={classes(
         'data-grid mx-grid mx-datagrid',
         'mxrb-data-grid-runtime',
-        loading && 'is-loading',
+        (loading || (listSource && listed.loading)) && 'is-loading',
       )}
       data-entity={options.entity || ''}
       data-server-side={serverSide ? 'true' : 'false'}

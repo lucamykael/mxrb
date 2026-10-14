@@ -35,7 +35,7 @@ module Mxrb
 
         DATA_GRID_OPTION_KEYS = %w[
           entity selection page_size pageSize server_side sort toolbar presentation columns_resizable
-          columns_draggable columns_hidable xpath on_click_trigger filter_attributes design
+          columns_draggable columns_hidable xpath on_click_trigger filter_attributes source design
         ].freeze
 
         DATA_GRID_COLUMN_KEYS = %w[
@@ -377,6 +377,7 @@ module Mxrb
             value = options.fetch(name)
             source = runtime_gallery_sort_expression(value) if name == 'sort'
             source = runtime_design_expression(value) if name == 'design'
+            source = PageDataSources.source_expression(value) if name == 'source'
             arguments << "#{name}: #{source || pretty_ruby_value(value, indentation + 2)}"
           end
           lines = [runtime_widget_declaration('data_grid', arguments, indentation, true)]

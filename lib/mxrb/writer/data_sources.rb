@@ -98,6 +98,17 @@ module Mxrb
                      'ForceFullObjects' => source[:force_full_objects] == true).merge(fields)
       end
 
+      # A list widget's microflow, nanoflow or association source.
+      def list_source_doc(source)
+        doc = data_view_source_doc(source)
+        kind = symbolize_data_view_value(source).fetch(:kind).to_sym
+        unless %i[microflow nanoflow association].include?(kind)
+          raise ArgumentError, "unsupported list source #{kind.inspect}"
+        end
+
+        kind == :association ? doc.merge('$Type' => 'Forms$AssociationSource') : doc
+      end
+
       def data_view_source_fields(source)
         case source.fetch(:kind).to_sym
         when :context, :association then data_view_context_fields(source)

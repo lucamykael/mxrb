@@ -3,17 +3,23 @@
 require_relative '../pluggable/mpr_codec'
 require_relative 'pluggable_context'
 require_relative '../caption'
+require_relative 'page_data_sources'
 
 module Mxrb
   module RubyApp
     # Isolated bridge to the existing runtime projection, not a replacement
     # for the lossless Forms codec. A catalog is always application-scoped.
     class PluggableProperties # rubocop:disable Metrics/ClassLength
+      # microflow_source, nanoflow_source, association and page_variable for
+      # data sources that are not XPath queries.
+      include PageDataSources
+
       class UnsupportedProjection < StandardError; end
 
       CatalogLoad = Data.define(:catalog, :unsupported_widget_ids)
       ActionValue = Data.define(:kind, :handler, :arguments)
-      DataSourceValue = Data.define(:entity, :xpath, :sort)
+      # source: a microflow, nanoflow or association source (string keys), nil for XPath.
+      DataSourceValue = Data.define(:entity, :xpath, :sort, :source)
       CaptionValue = Data.define(:text, :parameters, :translations, :fallback)
       # A translatable string property: [[language code, text], ...] in stored order.
       TranslatableValue = Data.define(:translations)
@@ -201,12 +207,13 @@ module Mxrb
         ActionValue.new(kind.freeze, handler.freeze, pairs.freeze)
       end
 
-      def data_source(entity:, xpath: '', sort: [])
+      def data_source(entity: nil, xpath: '', sort: [], source: nil)
         entity = entity.to_s
-        raise ArgumentError, 'data source entity must not be empty' if entity.empty?
+        source = canonical_source(source)
+        raise ArgumentError, 'data source entity must not be empty' if entity.empty? && source.nil?
 
         order = canonical_sort(sort)
-        DataSourceValue.new(entity.freeze, xpath.to_s.freeze, order.freeze)
+        DataSourceValue.new(entity.freeze, xpath.to_s.freeze, order.freeze, source)
       end
 
       def translatable_text(translations)
@@ -349,8 +356,8 @@ module Mxrb
       end
 
       def supported_data_source_value(value)
-        data_source(entity: value.fetch(:data_source), xpath: value.fetch(:xpath, ''),
-                    sort: value.fetch(:sort, []))
+        data_source(entity: value[:data_source], xpath: value.fetch(:xpath, ''),
+                    sort: value.fetch(:sort, []), source: value[:source])
       end
 
       def supported_object_list_value(property, value)
@@ -433,7 +440,8 @@ module Mxrb
 
       def data_source_projection(value)
         sort = value.sort.map { |attribute, direction| { attribute:, direction: } }
-        { data_source: { entity: value.entity, xpath: value.xpath, sort: } }
+        source = value.source ? { source: value.source } : {}
+        { data_source: { entity: value.entity, xpath: value.xpath, sort:, **source } }
       end
 
       def caption_projection(value)
@@ -486,6 +494,22 @@ module Mxrb
         end
       end
 
+      def canonical_source(value)
+        return if value.nil?
+        raise ArgumentError, 'data source source must be a Hash' unless value.is_a?(Hash)
+
+        deep_freeze_strings(value)
+      end
+
+      def deep_freeze_strings(value)
+        case value
+        when Hash then value.to_h { |key, item| [key.to_s.freeze, deep_freeze_strings(item)] }.freeze
+        when Array then value.map { deep_freeze_strings(_1) }.freeze
+        when Symbol, String then value.to_s.freeze
+        else value
+        end
+      end
+
       def canonical_sort(value)
         Array(value).map { canonical_sort_item(_1) }
       end
@@ -507,7 +531,12 @@ module Mxrb
 
       def data_source_source(value)
         sort = value.sort.empty? ? '' : ", sort: #{value.sort.inspect}"
-        "data_source(entity: #{value.entity.inspect}, xpath: #{value.xpath.inspect}#{sort})"
+        entity = value.entity.empty? && value.source ? '' : "entity: #{value.entity.inspect}, "
+        "data_source(#{entity}xpath: #{value.xpath.inspect}#{sort}#{list_source_argument(value.source)})"
+      end
+
+      def list_source_argument(source)
+        source && ", source: #{PageDataSources.source_expression(source) || source.inspect}"
       end
 
       def caption_source(value)

@@ -173,6 +173,61 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
     expect(stringify(rebuilt.widgets.first)).to eq(empty)
   end
 
+  let(:microflow_source) do
+    { '$Type' => 'Forms$MicroflowSource', 'ForceFullObjects' => false,
+      'MicroflowSettings' => { 'Microflow' => 'App.DS_Items', 'ParameterMappings' => [2, {
+        'Parameter' => 'App.DS_Items.Owner', 'Expression' => '$currentObject'
+      }] } }
+  end
+  let(:association_source) do
+    { '$Type' => 'Forms$AssociationSource', 'ForceFullObjects' => true, 'SourceVariable' => nil,
+      'EntityRef' => { 'Steps' => [2, { 'Association' => 'Admin.Account_Item', 'DestinationEntity' => 'App.Item' }] } }
+  end
+
+  def source_grid(source)
+    name = column('header' => header('Name'), 'attribute' => attribute('App.Item.Name'))
+    Mxrb::Model::Page.allocate.send(:data_grid2_widget, raw_grid([name], 'datasource' => { 'DataSource' => source }))
+  end
+
+  it 'projects microflow, nanoflow and association list sources' do
+    page = Mxrb::Model::Page.allocate
+    expect(source_grid(microflow_source).fetch(:options)).to include(
+      source: { kind: :microflow, name: 'App.DS_Items',
+                mappings: [{ parameter: 'App.DS_Items.Owner', expression: '$currentObject' }] }
+    )
+    expect(source_grid(microflow_source).fetch(:options)).not_to have_key(:entity)
+    related = source_grid(association_source)
+    expect(related.dig(:options, :entity)).to eq('App.Item')
+    expect(related.dig(:options, :source)).to include(kind: :association, force_full_objects: true)
+    expect(page.send(:list_source, { '$Type' => 'Forms$NanoflowSource', 'Nanoflow' => 'App.NF' }))
+      .to eq(kind: :nanoflow, name: 'App.NF')
+    context_only = { '$Type' => 'Forms$AssociationSource', 'EntityRef' => { 'Entity' => 'App.X' } }
+    expect(page.send(:list_source, context_only)).to be_nil
+    expect(page.send(:list_source, nil)).to be_nil
+    expect(page.send(:pluggable_data_source, association_source)).to include(data_source: 'App.Item')
+    expect(page.send(:pluggable_data_source, microflow_source)).not_to have_key(:data_source)
+    gallery_type = object_type('gallery', %w[datasource content])
+    raw = widget_object(gallery_type, 'datasource' => { 'DataSource' => association_source })
+    gallery = page.send(:gallery_widget, 'Name' => 'items', 'Type' => { 'ObjectType' => gallery_type }, 'Object' => raw)
+    expect(gallery.fetch(:options)).to include(entity: 'App.Item', source: include(kind: :association))
+    bare = page.send(:gallery_widget, 'Name' => 'bare', 'Type' => { 'ObjectType' => gallery_type },
+                                      'Object' => widget_object(gallery_type, {}))
+    expect(bare.fetch(:options)).not_to include(:entity, :source)
+  end
+
+  it 'exports a list source as Ruby that evaluates to the same widget' do
+    widget = stringify(source_grid(microflow_source))
+    source = Mxrb::RubyApp::Exporter.allocate.send(:runtime_data_grid_source, widget, 0)
+    expect(source).to include(
+      'source: microflow_source("App.DS_Items", pass: [["App.DS_Items.Owner", "$currentObject"]])'
+    )
+    builder = Mxrb::Dsl::WidgetSlotBuilder.new
+    builder.instance_eval(source)
+    expect(stringify(builder.widgets.first)).to eq(widget)
+    builder.instance_eval { gallery 'g', source: association('App.Owner_Item', entity: 'App.Item') }
+    expect(builder.widgets.last.dig(:options, :source)).to include(kind: :association)
+  end
+
   it 'keeps data grids the typed DSL cannot express generic' do
     exporter = Mxrb::RubyApp::Exporter.allocate
     supported = lambda do |widget|

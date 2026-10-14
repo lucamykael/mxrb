@@ -15,7 +15,7 @@ module Mxrb
       }.freeze
 
       DATA_GRID_OPTIONS = %i[page_size server_side sort presentation columns_resizable columns_draggable
-                             columns_hidable xpath on_click_trigger filter_attributes].freeze
+                             columns_hidable xpath on_click_trigger filter_attributes source].freeze
 
       COLUMN_OPTIONS = %i[association_path dynamic_text parameters filter sortable hidable width size
                           alignment].freeze

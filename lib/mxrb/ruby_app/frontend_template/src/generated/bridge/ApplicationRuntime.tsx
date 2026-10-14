@@ -1,3 +1,4 @@
+import { ListSourceNanoflows } from './listSource';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
@@ -797,20 +798,22 @@ export function ApplicationRuntime({
               }}
             >
               <PageRuntimeContext.Provider value={pageRuntime}>
-                <LayoutState.Provider value={layoutState.current}>
-                  <NavigationSelection.Provider value={navigationSelection.current}>
-                    <SelectionScope key={page.name}>
-                      <PageDataSource.Provider value={pageSourceWidget(page)}>
-                        <PageOutlet
-                          key={page.name}
-                          page={page}
-                          busy={busy}
-                          Widget={RuntimePageWidget}
-                        />
-                      </PageDataSource.Provider>
-                    </SelectionScope>
-                  </NavigationSelection.Provider>
-                </LayoutState.Provider>
+                <ListSourceNanoflows.Provider value={invokeNanoflow}>
+                  <LayoutState.Provider value={layoutState.current}>
+                    <NavigationSelection.Provider value={navigationSelection.current}>
+                      <SelectionScope key={page.name}>
+                        <PageDataSource.Provider value={pageSourceWidget(page)}>
+                          <PageOutlet
+                            key={page.name}
+                            page={page}
+                            busy={busy}
+                            Widget={RuntimePageWidget}
+                          />
+                        </PageDataSource.Provider>
+                      </SelectionScope>
+                    </NavigationSelection.Provider>
+                  </LayoutState.Provider>
+                </ListSourceNanoflows.Provider>
               </PageRuntimeContext.Provider>
             </ClientActions.Provider>
           </DataRevision.Provider>

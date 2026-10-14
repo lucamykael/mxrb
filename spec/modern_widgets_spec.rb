@@ -553,6 +553,25 @@ RSpec.describe 'modern page widgets' do
     expect(text_value.dig('TextTemplate', '$Type')).to eq('Forms$ClientTemplate')
   end
 
+  it 'writes the microflow, nanoflow and association sources of a Data Grid 2' do
+    grid = schema_widget('grid-source', { datasource: { type: 'DataSource' } })
+    page = Mxrb::Model::Page.allocate
+    sources = [
+      { kind: :microflow, name: 'App.DS_Items', mappings: [{ parameter: 'App.DS_Items.Owner', expression: '$currentObject' }] },
+      { kind: :nanoflow, name: 'App.NF_Items' },
+      { kind: :association, entity: 'App.Item', steps: [{ association: 'App.Owner_Item', entity: 'App.Item' }] }
+    ]
+    written = sources.map do |source|
+      writer.send(:configure_data_grid2!, grid, entity: 'App.Ignored', source:)
+      doc = writer.send(:custom_widget_properties, grid).dig('datasource', 'Value', 'DataSource')
+      [doc['$Type'], page.send(:list_source, doc)]
+    end
+    expect(written.map(&:first)).to eq(%w[Forms$MicroflowSource Forms$NanoflowSource Forms$AssociationSource])
+    expect(written.map(&:last)).to eq(sources)
+    expect { writer.send(:list_source_doc, { kind: :context, entity: 'App.Item' }) }
+      .to raise_error(ArgumentError, /unsupported list source :context/)
+  end
+
   it 'writes the attributes a Data Grid 2 filters placeholder searches' do
     attribute_type = {
       '$ID' => 'filter-attribute', 'PropertyKey' => 'filter',
