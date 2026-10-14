@@ -12,6 +12,13 @@ import {
   MarketplaceIFrame,
   MarketplaceMicroflowTimer,
 } from './components/MarketplaceLegacy';
+import {
+  MarketplaceEnumPicker,
+  MarketplaceEvents,
+  MarketplaceJsonEditor,
+  MarketplacePagination,
+  MarketplaceTabPageSelector,
+} from './components/MarketplaceInteractive';
 import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
 import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
 import type { ComponentType, ReactNode } from 'react';
@@ -282,6 +289,11 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
     return <MarketplaceMicroflowTimer {...props} />;
   if (id.endsWith('csvastable')) return <MarketplaceCsvTable {...props} />;
   if (id.endsWith('iframecomponent')) return <MarketplaceIFrame {...props} />;
+  if (id === 'com.mendix.widget.web.events.events') return <MarketplaceEvents {...props} />;
+  if (id.endsWith('tabpageselector')) return <MarketplaceTabPageSelector {...props} />;
+  if (id.endsWith('dynamicenumpicker')) return <MarketplaceEnumPicker {...props} />;
+  if (id.endsWith('advancedpagination')) return <MarketplacePagination {...props} />;
+  if (id === 'json.widget.editor') return <MarketplaceJsonEditor {...props} />;
   if (id.includes('barcodescanner')) return <button type="button">{label}</button>;
 
   return (

@@ -131,6 +131,31 @@
       "pattern": "iframecomponent$",
       "support": "full",
       "examples": ["mendix.iframecomponent.IFrameComponent"]
+    },
+    {
+      "pattern": "^com\\.mendix\\.widget\\.web\\.events\\.events$",
+      "support": "full",
+      "examples": ["com.mendix.widget.web.events.Events"]
+    },
+    {
+      "pattern": "tabpageselector$",
+      "support": "full",
+      "examples": ["mendix.tabpageselector.TabPageSelector"]
+    },
+    {
+      "pattern": "dynamicenumpicker$",
+      "support": "full",
+      "examples": ["itvisors.dynamicenumpicker.DynamicEnumPicker"]
+    },
+    {
+      "pattern": "advancedpagination$",
+      "support": "full",
+      "examples": ["mendix.advancedpagination.AdvancedPagination"]
+    },
+    {
+      "pattern": "^json\\.widget\\.editor$",
+      "support": "full",
+      "examples": ["JSON.widget.Editor"]
     }
   ]
 }
