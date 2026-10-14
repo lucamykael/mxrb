@@ -1,5 +1,5 @@
 import { decimal, type DecimalValue, isDecimal, numericCompare, numericText } from '../decimal';
-import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import type {
   ApiRequest,
   ApplicationSchema,
@@ -20,7 +20,9 @@ import {
   memberName,
   recordValue,
   sortRecords,
+  withXPath,
 } from '../value';
+import { PageParameters } from '../PageVariables';
 import { NativeDataGrid } from './NativeDataGrid';
 import { GridIcon } from './GridIcon';
 
@@ -206,18 +208,6 @@ const dynamicText = (column: WidgetColumn, record: EntityRecord): string =>
       text.replaceAll(`{${index + 1}}`, String(displayValue(expressionValue(parameter, record)))),
     column.dynamic_text || '',
   );
-
-const withXPath = (path: string, xpath: string | undefined, context: EntityRecord | null) => {
-  if (!xpath) return path;
-  const [base, query = ''] = path.split('?', 2);
-  const parameters = new URLSearchParams(query);
-  parameters.set('xpath', xpath);
-  if (context && xpath.includes('$currentObject')) {
-    parameters.set('xpath_context_type', context.type);
-    parameters.set('xpath_context_id', context.id);
-  }
-  return `${base}?${parameters}`;
-};
 
 const activeFilter = (value: string, config: FilterConfig): boolean =>
   ['empty', 'not_empty'].includes(config.operator) || value.trim() !== '';
@@ -453,6 +443,7 @@ export function DataGrid({
   renderWidgets,
 }: DataGridProps) {
   const options = widget.options || {};
+  const pageParameters = useContext(PageParameters);
   const [operators, setOperators] = useState<Record<string, string>>({});
   const withOperator = (config: FilterConfig | null, column: WidgetColumn) => {
     const chosen = operators[column.name || column.attribute || ''];
@@ -505,6 +496,7 @@ export function DataGrid({
     entityCollectionPath(options.entity || '', options.association, pageContext),
     options.xpath,
     pageContext,
+    pageParameters,
   );
   const collectionPath = serverSide
     ? serverCollectionPath(basePath, filterSpecs, sorting, pageNumber, pageSize)

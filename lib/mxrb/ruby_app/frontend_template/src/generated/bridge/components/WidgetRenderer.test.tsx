@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WidgetRenderer } from './WidgetRenderer';
 import { PageDataSource } from '../PageDataSource';
+import { PageParameters } from '../PageVariables';
 import { SelectionScope, useSelections } from './SelectionScope';
 import type { WidgetRuntimeProps } from '../contracts';
-import type { ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
+import type { ApiRequest, ApplicationSchema, EntityRecord, WidgetDefinition } from '../../types';
 
 const record: EntityRecord = {
   id: '1',
@@ -526,5 +527,48 @@ describe('Ruby data view editing', () => {
     );
     expect(screen.getByRole('textbox')).toHaveValue('After');
     expect(request).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Ruby gallery data source', () => {
+  it('requests the XPath constraint with the page parameters it refers to', async () => {
+    const owner: EntityRecord = { id: 'o1', type: 'App.Owner', attributes: {} };
+    const gallery: WidgetDefinition = {
+      type: 'gallery',
+      name: 'Items',
+      options: { entity: 'App.Item', xpath: '[App.Item_Owner = $Owner][Active = true()]' },
+      children: [],
+    };
+    const request = vi.fn().mockResolvedValue({ records: [] });
+    render(
+      <PageParameters.Provider value={{ Owner: owner }}>
+        <WidgetRenderer {...props(gallery)} request={request as unknown as ApiRequest} />
+      </PageParameters.Provider>,
+    );
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    const sent = new URLSearchParams(String(request.mock.calls[0][0]).split('?')[1]);
+    expect(sent.get('xpath')).toBe('[App.Item_Owner = $Owner][Active = true()]');
+    expect(JSON.parse(sent.get('xpath_variables') || '{}')).toEqual({
+      Owner: { type: 'App.Owner', id: 'o1' },
+    });
+  });
+
+  it('keeps an association-only constraint as the association filter', async () => {
+    const gallery: WidgetDefinition = {
+      type: 'gallery',
+      name: 'Items',
+      options: {
+        entity: 'App.Item',
+        association: 'App.Item_Owner',
+        xpath: '[App.Item_Owner = $Owner]',
+      },
+      children: [],
+    };
+    const request = vi.fn().mockResolvedValue({ records: [] });
+    render(<WidgetRenderer {...props(gallery)} request={request as unknown as ApiRequest} />);
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    const sent = new URLSearchParams(String(request.mock.calls[0][0]).split('?')[1]);
+    expect(sent.get('association')).toBe('App.Item_Owner');
+    expect(sent.has('xpath')).toBe(false);
   });
 });

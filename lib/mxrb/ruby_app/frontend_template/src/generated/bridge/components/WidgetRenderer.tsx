@@ -47,6 +47,7 @@ import {
   isVisible,
   memberName,
   sortRecords,
+  withXPath,
 } from '../value';
 
 type GalleryProps = Omit<WidgetRuntimeProps, 'context'>;
@@ -127,23 +128,25 @@ function Gallery({
   onSelectRecord,
 }: GalleryProps) {
   const options = widget.options || {};
+  const pageParameters = useContext(PageParameters);
   const [records, setRecords] = useState<EntityRecord[]>([]);
+  // A constraint that is only the association filter is already applied by the path.
+  const constraint =
+    options.association && options.xpath?.match(/^\[[\w.]+\s*=\s*\$\w+\]$/)
+      ? undefined
+      : options.xpath;
+  const path = withXPath(
+    entityCollectionPath(options.entity || '', options.association, pageContext),
+    constraint,
+    pageContext,
+    pageParameters,
+  );
   useEffect(() => {
     if (!options.entity) return;
-    request<EntityCollectionResponse>(
-      entityCollectionPath(options.entity, options.association, pageContext),
-    )
+    request<EntityCollectionResponse>(path)
       .then((payload) => setRecords(sortRecords(payload.records || [], options.sort || [])))
       .catch(onError);
-  }, [
-    options.entity,
-    options.association,
-    pageContext?.type,
-    pageContext?.id,
-    revision,
-    request,
-    onError,
-  ]);
+  }, [options.entity, path, revision, request, onError]);
   return (
     <div
       className={classes(
