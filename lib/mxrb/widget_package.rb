@@ -14,7 +14,11 @@ module Mxrb
       'integer' => 'Integer', 'datasource' => 'DataSource', 'action' => 'Action',
       'selection' => 'Selection', 'association' => 'Association', 'object' => 'Object',
       'string' => 'String', 'decimal' => 'Decimal', 'icon' => 'Icon',
-      'image' => 'Image', 'file' => 'File'
+      'image' => 'Image', 'file' => 'File',
+      # Types of the Dojo widgets the Mendix 9 client still runs.
+      'translatablestring' => 'TranslatableString', 'entity' => 'Entity',
+      'entityconstraint' => 'EntityConstraint', 'microflow' => 'Microflow',
+      'nanoflow' => 'Nanoflow', 'form' => 'Form'
     }.freeze
 
     Definition = Data.define(

@@ -944,7 +944,15 @@ nach `frontend/src/generated/bridge/vendor/widgets`, und ein generischer Host
 stellt ihm die Pluggable-Widget-API bereit (`EditableValue`, `ListValue` mit
 Filter, Sortierung und Seiten, `ActionValue`, `DynamicValue`, verknüpfte Attribute,
 Ausdrücke und Widget-Bereiche, `Big`-Zahlen, `mendix/filters/builders`); ein solches
-Widget verschwindet aus dem Bericht. Andernfalls zeigt ein nicht unterstütztes
+Widget verschwindet aus dem Bericht. Ein Dojo-Widget (`mxui/widget/_WidgetBase`)
+aus den Paketen des Projekts läuft ebenso über einen Legacy-Host: Ein kleiner
+AMD-Loader liefert ihm seine eigenen Skripte und Vorlagen, Dojo-, dijit- und
+mxui-Shims, ein von der Laufzeit beantwortetes `window.mx` (`mx.data.get`/`action`/
+`subscribe`, `mx.ui.action`, `mx.session`, `mx.parser`) und `MxObject` über den
+Datensätzen der Seite; geänderte Reference Sets werden wie jede andere Bearbeitung
+gespeichert. Entitätspfade und Einschränkungen dieser Widgets werden so projiziert,
+wie der Client sie übergibt (`Modul.Assoc/Modul.Entität` und der XPath), und
+unverändert zurückgeschrieben. Andernfalls zeigt ein nicht unterstütztes
 Widget zur Laufzeit einen sichtbaren Platzhalter (`role="alert"`,
 `data-mxrb-unsupported`) statt leer zu bleiben. Microflow- und Nanoflow-
 Eigenschaften werden als qualifizierte Namen projiziert, übersetzbare Texte als

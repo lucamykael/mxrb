@@ -128,6 +128,76 @@ RSpec.describe Mxrb::RubyApp::ProjectWidgetBundle do
     end
   end
 
+  def legacy_xml(id)
+    <<~XML
+      <widget id="#{id}" needsEntityContext="true" xmlns="http://www.mendix.com/widget/1.0/">
+        <name>Tags</name>
+        <properties>
+          <property key="caption" type="translatableString" required="false"><caption>Caption</caption></property>
+          <property key="reference" type="entity" isPath="yes" pathType="referenceSet"><caption>Tags</caption></property>
+          <property key="constraint" type="entityConstraint" entityProperty="reference"><caption>Constraint</caption></property>
+          <property key="source" type="microflow"><caption>Source</caption></property>
+        </properties>
+      </widget>
+    XML
+  end
+
+  it 'runs the Dojo widgets of the project packages through the legacy host' do
+    Dir.mktmpdir do |root|
+      widgets = File.join(root, 'widgets')
+      FileUtils.mkdir_p(widgets)
+      write_package(File.join(widgets, 'a-incomplete.mpk'), { 'Broken/Broken.xml' => legacy_xml('Broken.Broken') })
+      expect(described_class.find(root, 'Broken.Broken')).to be_nil
+      write_package(File.join(widgets, 'tags.mpk'), { 'Tags/Tags.xml' => legacy_xml('Tags.widget.Tags') },
+                    'Tags/widget/Tags.js' => 'define([], function () { return function () {}; });',
+                    'Tags/widget/templates/Tags.html' => '<div></div>',
+                    'Tags/widget/ui/Tags.css' => '.tags {}', 'Tags/widget/ui/check.png' => 'png',
+                    'Tags/lib/helper.js' => 'define([], {});', 'Other/Other.js' => 'define([], {});')
+      write_package(File.join(widgets, 'feedback.mpk'),
+                    { 'Feedback.xml' => legacy_xml('SprintrFeedbackWidget.SprintrFeedback') },
+                    'SprintrFeedbackWidget/SprintrFeedback.js' => 'define([], {});')
+
+      bundle = described_class.find(root, 'Tags.widget.Tags')
+      expect(bundle).to have_attributes(name: 'Tags', entry: 'Tags/widget/Tags', legacy: true)
+      expect(bundle.files.keys).to eq(%w[Tags/Tags.xml Tags/widget/Tags.js Tags/widget/templates/Tags.html
+                                         Tags/widget/ui/Tags.css Tags/widget/ui/check.png Tags/lib/helper.js])
+      expect(described_class.properties(bundle.definition.properties).map { _1.values_at(:key, :type) }).to eq(
+        [%w[caption TranslatableString], %w[reference Entity], %w[constraint EntityConstraint], %w[source Microflow]]
+      )
+
+      path = File.join(root, 'App.mpr')
+      Mxrb.define(path) do
+        self.module :App do
+          page :Tags do
+            pluggable_widget :Tags, widget_id: 'Tags.widget.Tags'
+            pluggable_widget :Feedback, widget_id: 'SprintrFeedbackWidget.SprintrFeedback'
+          end
+        end
+      end
+      target = File.join(root, 'ruby')
+      Mxrb::Exporter.new(path, target, mode: :ruby).export!
+      registrations = File.read(File.join(target, 'frontend', 'src', 'generated', 'projectWidgets.ts'))
+
+      expect(registrations).to start_with(
+        "import { registerLegacyWidget } from './bridge/legacy/LegacyWidgetHost';\n\n"
+      )
+      expect(registrations).not_to include('registerProjectWidget')
+      expect(registrations).to include(
+        "import './bridge/vendor/widgets/Tags.widget.Tags/Tags/widget/ui/Tags.css';",
+        "const sources1 = import.meta.glob<string>('./bridge/vendor/widgets/Tags.widget.Tags/**/*.{js,html}', " \
+        "{ query: '?raw', import: 'default', eager: true });",
+        'registerLegacyWidget("Tags.widget.Tags", sources1, "./bridge/vendor/widgets/Tags.widget.Tags/", ' \
+        '"Tags/widget/Tags", [{"key":"caption","type":"TranslatableString"',
+        'registerLegacyWidget("SprintrFeedbackWidget.SprintrFeedback", sources0'
+      )
+      vendor = File.join(target, 'frontend', 'src', 'generated', 'bridge', 'vendor', 'widgets', 'Tags.widget.Tags')
+      expect(File.read(File.join(vendor, 'Tags/widget/templates/Tags.html'))).to eq('<div></div>')
+      expect(File.read(File.join(target, 'frontend', 'public', 'widgets', 'Tags/widget/ui/check.png'))).to eq('png')
+      expect(File.exist?(File.join(target, 'frontend', 'public', 'widgets', 'Tags/widget/Tags.js'))).to be(false)
+      expect(Mxrb::RubyApp::WidgetSupport.new(target).send(:adapter_registered?, 'Tags.widget.Tags')).to be(true)
+    end
+  end
+
   it 'writes an empty registration module when no project widget runs in the host' do
     Dir.mktmpdir do |root|
       path = File.join(root, 'App.mpr')

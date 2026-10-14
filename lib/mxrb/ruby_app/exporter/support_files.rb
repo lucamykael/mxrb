@@ -82,19 +82,25 @@ module Mxrb
           write(File.join('frontend', 'src', 'generated', 'feedbackWidget.ts'), registration)
         end
 
-        # Pluggable widgets of the rendered pages the bridge does not render itself
-        # run their own web build from the project's widgets/*.mpk through the
-        # pluggable host.
+        # Widgets of the rendered pages the bridge does not render itself run their
+        # own web build from the project's widgets/*.mpk: a pluggable widget through
+        # the pluggable host, a Dojo widget through the legacy widget host. A verified
+        # adapter keeps precedence over a pluggable build.
         def write_project_widgets
           bundles = (@rendered_widget_ids || []).sort.filter_map do |widget_id|
-            next if WidgetSupport::ADAPTERS.key?(widget_id)
             next if WidgetSupport.family(widget_id)&.fetch('support') == 'full'
 
-            ProjectWidgetBundle.find(File.dirname(@mpr_path), widget_id)
+            bundle = ProjectWidgetBundle.find(File.dirname(@mpr_path), widget_id)
+            bundle unless bundle.nil? || (WidgetSupport::ADAPTERS.key?(widget_id) && !bundle.legacy)
           end
-          registrations = bundles.each_with_index.map { |bundle, index| write_project_widget(bundle, index) }
-          header = "import { registerProjectWidget } from './bridge/pluggableHost';\n\n"
-          source = registrations.empty? ? "export {};\n" : "#{header}#{registrations.join("\n")}\n"
+          registrations = bundles.each_with_index.map do |bundle, index|
+            bundle.legacy ? write_legacy_widget(bundle, index) : write_project_widget(bundle, index)
+          end
+          imports = []
+          imports << "import { registerProjectWidget } from './bridge/pluggableHost';" unless bundles.all?(&:legacy)
+          legacy = "import { registerLegacyWidget } from './bridge/legacy/LegacyWidgetHost';"
+          imports << legacy if bundles.any?(&:legacy)
+          source = registrations.empty? ? "export {};\n" : "#{imports.join("\n")}\n\n#{registrations.join("\n")}\n"
           write(File.join('frontend', 'src', 'generated', 'projectWidgets.ts'), source)
         end
 
@@ -112,6 +118,25 @@ module Mxrb
           definition = JSON.generate(ProjectWidgetBundle.properties(bundle.definition.properties))
           "#{style}import * as widget#{index} from '#{path}.mjs';\n" \
             "registerProjectWidget(#{bundle.widget_id.inspect}, widget#{index}, #{bundle.name.inspect}, #{definition});"
+        end
+
+        # A Dojo widget's scripts and templates load as text into the AMD loader;
+        # its stylesheets are imported, and its other files are also served under
+        # /widgets/, where the Mendix client serves them.
+        def write_legacy_widget(bundle, index)
+          root = File.join('frontend', 'src', 'generated', 'bridge', 'vendor', 'widgets', bundle.widget_id)
+          bundle.files.each do |relative, contents|
+            write(File.join(root, relative), contents)
+            write(File.join('frontend', 'public', 'widgets', relative), contents) unless
+              relative.match?(/\.(?:js|html|css|xml)\z/i)
+          end
+          path = "./bridge/vendor/widgets/#{bundle.widget_id}/"
+          styles = bundle.files.keys.grep(/\.css\z/i).sort.map { "import '#{path}#{_1}';\n" }.join
+          definition = JSON.generate(ProjectWidgetBundle.properties(bundle.definition.properties))
+          "#{styles}const sources#{index} = import.meta.glob<string>('#{path}**/*.{js,html}', " \
+            "{ query: '?raw', import: 'default', eager: true });\n" \
+            "registerLegacyWidget(#{bundle.widget_id.inspect}, sources#{index}, #{path.inspect}, " \
+            "#{bundle.entry.inspect}, #{definition});"
         end
 
         def generated_frontend_pages
