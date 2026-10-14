@@ -170,6 +170,35 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     )
   end
 
+  it 'projects microflow and association data sources and evaluates their emitted Ruby' do
+    mapped = { 'kind' => 'microflow', 'name' => 'App.DS_Items',
+               'mappings' => [{ 'parameter' => 'App.DS_Items.Owner',
+                                'variable' => { 'kind' => 'page_parameter', 'name' => 'Owner' } }] }
+    bridge = described_class.build(widget_id, catalog:) { set :source, data_source(source: mapped) }
+    expect(bridge.to_projection.fetch('source')).to eq(
+      data_source: { entity: '', xpath: '', sort: [], source: mapped }
+    )
+    expression = bridge.source_expression(:source)
+    expect(expression).to eq(
+      'data_source(xpath: "", source: microflow_source("App.DS_Items", pass: ' \
+      '[["App.DS_Items.Owner", page_variable("Owner", kind: :page_parameter)]]))'
+    )
+    rebuilt = described_class.build(widget_id, catalog:) { set :source, eval(expression) } # rubocop:disable Security/Eval
+    expect(rebuilt.to_projection).to eq(bridge.to_projection)
+
+    odd = { 'kind' => 'association', 'entity' => 'App.Item', 'steps' => [{ 'association' => 'App.Owner_Item' }],
+            'force_full_objects' => true }
+    properties = { 'source' => { data_source: 'App.Item', source: odd } }
+    subset = described_class.new(widget_id, catalog:).populate_supported_subset(properties)
+    expect(subset.source_expression(:source)).to eq(
+      "data_source(entity: \"App.Item\", xpath: \"\", source: #{odd.inspect})"
+    )
+    expect { described_class.build(widget_id, catalog:) { set :source, data_source } }
+      .to raise_error(ArgumentError, /entity must not be empty/)
+    expect { described_class.build(widget_id, catalog:) { set :source, data_source(source: 'App.X') } }
+      .to raise_error(ArgumentError, /must be a Hash/)
+  end
+
   it 'selects projected action, data-source, and typed object-list values' do
     context = instance_double(Mxrb::RubyApp::PluggableContext)
     allow(Mxrb::RubyApp::PluggableContext).to receive(:current).and_return(context)

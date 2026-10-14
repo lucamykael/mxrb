@@ -646,6 +646,24 @@ module Mxrb
         end
       end
 
+      # The source of a list widget that is not an XPath query: a microflow,
+      # nanoflow or association, in the shape of a Data View source.
+      def list_source(source)
+        return unless source.is_a?(Hash)
+
+        if %w[Forms$AssociationSource Pages$AssociationSource].include?(source['$Type'])
+          parsed = parse_context_data_view_source(source)
+          return unless parsed[:kind] == :association
+
+          parsed[:force_full_objects] = source['ForceFullObjects'] == true
+          return parsed.reject do |key, value|
+            value.nil? || (value.respond_to?(:empty?) && value.empty?) || (key == :force_full_objects && !value)
+          end
+        end
+        parsed = parse_data_view_source(source)
+        parsed if %i[microflow nanoflow].include?(parsed[:kind])
+      end
+
       def parse_page_variable(variable)
         return unless variable.is_a?(Hash)
 
@@ -859,6 +877,10 @@ module Mxrb
       end
 
       def pluggable_data_source(source)
+        if (list = list_source(source))
+          return { data_source: list[:entity], source: list }.compact
+        end
+
         {
           data_source: source.dig('EntityRef', 'Entity') || source['Entity'],
           xpath: source['XPathConstraint'].to_s,
@@ -947,8 +969,9 @@ module Mxrb
           }.compact
         end
         xpath = source['XPathConstraint'].to_s
+        list = list_source(source)
         options = appearance_options(widget).merge(
-          entity: source.dig('EntityRef', 'Entity'), xpath: xpath,
+          entity: source.dig('EntityRef', 'Entity') || list&.dig(:entity), xpath: xpath, source: list,
           association: xpath[/\[([\w.]+)\s*=\s*\$\w+\]/, 1],
           context_variable: xpath[/\$([A-Za-z_]\w*)/, 1], sort: sort
         ).compact
@@ -1013,6 +1036,7 @@ module Mxrb
           custom_property_map(object, filter_type).dig('filter', 'AttributeRef', 'Attribute')
         end
         xpath = source['XPathConstraint'].to_s.strip
+        list = list_source(source)
         sort = parse_array(source.dig('SortBar', 'SortItems')).filter_map do |item|
           attribute = item.dig('AttributeRef', 'Attribute')
           direction = (item['SortOrder'] || item['SortDirection']).to_s == 'Descending' ? 'Descending' : 'Ascending'
@@ -1021,7 +1045,7 @@ module Mxrb
         value = {
           type: :data_grid, name: widget['Name'],
           options: {
-            entity: source.dig('EntityRef', 'Entity'), columns: columns,
+            entity: source.dig('EntityRef', 'Entity') || list&.dig(:entity), source: list, columns: columns,
             presentation: 'datagrid2',
             page_size: properties.dig('pageSize', 'PrimitiveValue').to_i.nonzero? || 20,
             columns_resizable: properties.dig('columnsResizable', 'PrimitiveValue') != 'false',

@@ -24,6 +24,7 @@ import {
   ReadOnlyStyleContext,
 } from './FieldPolicy';
 import { useSelections } from './SelectionScope';
+import { sourceMappings, useListSource } from '../listSource';
 import { MarketplaceWidget, type MarketplaceWidgetRegion } from '../marketplace';
 import type {
   EntityCollectionResponse,
@@ -41,7 +42,6 @@ import {
   classes,
   dynamicClass,
   entityCollectionPath,
-  eventArguments,
   inlineStyle,
   isEntityRecord,
   isVisible,
@@ -50,7 +50,7 @@ import {
   withXPath,
 } from '../value';
 
-type GalleryProps = Omit<WidgetRuntimeProps, 'context'>;
+type GalleryProps = Omit<WidgetRuntimeProps, 'context'> & { context?: EntityRecord | null };
 
 interface StructuralNode {
   options?: WidgetOptions;
@@ -114,6 +114,7 @@ const alignmentSuffix = (alignment: unknown) =>
 
 function Gallery({
   widget,
+  context,
   moduleName,
   invoke,
   invokeNanoflow,
@@ -130,6 +131,11 @@ function Gallery({
   const options = widget.options || {};
   const pageParameters = useContext(PageParameters);
   const [records, setRecords] = useState<EntityRecord[]>([]);
+  const listSource = options.source as DataViewSource | undefined;
+  const listed = useListSource(listSource, context ?? pageContext, pageContext, request, revision);
+  useEffect(() => {
+    if (listed.error) onError(new Error(listed.error));
+  }, [listed.error, onError]);
   // A constraint that is only the association filter is already applied by the path.
   const constraint =
     options.association && options.xpath?.match(/^\[[\w.]+\s*=\s*\$\w+\]$/)
@@ -142,11 +148,12 @@ function Gallery({
     pageParameters,
   );
   useEffect(() => {
-    if (!options.entity) return;
+    if (!options.entity || listSource) return;
     request<EntityCollectionResponse>(path)
       .then((payload) => setRecords(sortRecords(payload.records || [], options.sort || [])))
       .catch(onError);
-  }, [options.entity, path, revision, request, onError]);
+  }, [options.entity, listSource, path, revision, request, onError]);
+  const items = listSource ? sortRecords(listed.records, options.sort || []) : records;
   return (
     <div
       className={classes(
@@ -160,7 +167,7 @@ function Gallery({
       data-widget-type={widget.type}
     >
       <div className="gallery__items mxrb-gallery-items gallery-items">
-        {records.map((record) => (
+        {items.map((record) => (
           <div className="gallery__item mxrb-gallery-item gallery-item" key={record.id}>
             {(widget.children || []).map((child, index) => (
               <WidgetRenderer
@@ -253,36 +260,13 @@ export function DataView({
       setLoadedFor(activeKey);
     };
     const mappings = (): RuntimeVariables =>
-      Object.fromEntries(
-        (source?.mappings || []).map((entry) => {
-          const mapping = entry as Record<string, unknown>;
-          const parameter =
-            String(mapping.parameter || '')
-              .split('.')
-              .pop() || '';
-          return [
-            parameter,
-            eventArguments(
-              {
-                event: 'source',
-                kind: 'source',
-                handler: '',
-                arguments: {
-                  value: (mapping.variable || String(mapping.expression || '')) as RuntimeValue,
-                },
-              },
-              activeContext,
-              {
-                pageParameter: pageContext,
-                pageParameters,
-                localVariables: localVariables.values,
-                snippetParameters: variables,
-                widgetValues: { ...selections.records, ...selections.lists },
-              },
-            ).value,
-          ];
-        }),
-      );
+      sourceMappings(source, activeContext, {
+        pageParameter: pageContext,
+        pageParameters,
+        localVariables: localVariables.values,
+        snippetParameters: variables,
+        widgetValues: { ...selections.records, ...selections.lists },
+      });
 
     setUnsupported(null);
     setLoading(false);
@@ -995,6 +979,7 @@ function WidgetContent({
             widget={widget}
             request={request}
             pageContext={pageContext}
+            context={activeRecord}
             revision={revision}
             onError={onError}
             onMutation={onMutation}
@@ -1016,6 +1001,7 @@ function WidgetContent({
       return (
         <Gallery
           widget={widget}
+          context={activeRecord}
           moduleName={moduleName}
           invoke={invoke}
           invokeNanoflow={invokeNanoflow}

@@ -798,6 +798,10 @@ Werte boolescher oder Aufzählungsattribute auf und entfällt über Assoziatione
 in der Kopfzeile durchsucht deren String-Attribute, und eine Zeile erscheint, wenn
 eines davon mit dem gewählten Operator übereinstimmt (`defaultFilter`, Auswahl bei
 `adjustable`), nach dem `delay`; `valueAttribute` und `onChange` laufen bei jedem neuen Wert.
+Eine Microflow-, Nanoflow- oder Assoziationsquelle wird zu `source:`
+(`microflow_source(...)`, `nanoflow_source(...)` oder `association(...)`, wie beim Data View)
+in Data Grid 2, Gallery und `data_source(source: ...)` von Pluggable Widgets; der Browser
+lädt die Liste einmal mit ihren Parameterzuordnungen und filtert, sortiert und blättert lokal.
 Die UI schreibt `grid-template-columns` wie das native Widget: `autoFill` teilt
 den Platz nach `size`, `autoFit` folgt dem Inhalt und `manual` ist in Pixeln. Die
 Runtime füllt `System.grantableRoles` aus den verwaltbaren Rollen der

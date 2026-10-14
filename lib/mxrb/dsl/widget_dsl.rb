@@ -220,7 +220,8 @@ module Mxrb
 
       def data_grid(name, entity: nil, selection: nil, **runtime_options, &block)
         allowed = %i[page_size pageSize server_side sort toolbar presentation
-                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger filter_attributes]
+                     columns_resizable columns_draggable columns_hidable xpath on_click_trigger filter_attributes
+                     source]
         unknown = runtime_options.keys - allowed
         raise ArgumentError, "unknown data grid options: #{unknown.join(', ')}" unless unknown.empty?
 
@@ -232,10 +233,10 @@ module Mxrb
       # deep_structure in exported projects. Accept the concise projection at
       # every widget nesting level so arbitrary native pages can be evaluated
       # and reconstructed from their lossless payload.
-      def gallery(name, entity: nil, xpath: nil, association: nil, context_variable: nil,
+      def gallery(name, entity: nil, xpath: nil, association: nil, context_variable: nil, source: nil,
                   sort: [], class_name: nil, style: nil, dynamic_class: nil, visible: nil, &block)
         options = {
-          entity:, xpath:, association:, context_variable:, sort:,
+          entity:, xpath:, association:, context_variable:, source:, sort:,
           class: class_name, style:, dynamic_class:, visible:
         }.compact
         options.delete(:sort) if options[:sort].empty?

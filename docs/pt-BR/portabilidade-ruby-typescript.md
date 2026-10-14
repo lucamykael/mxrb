@@ -929,7 +929,11 @@ associações. `filter_attributes: [...]` é a lista de filtros da grid (`filter
 o Text filter colocado no cabeçalho busca nos atributos String dessa lista, e a linha
 aparece quando qualquer um deles casa, com o operador escolhido (`defaultFilter`,
 seletor se `adjustable`), depois do `delay`; `valueAttribute` e `onChange` rodam a
-cada valor novo. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
+cada valor novo. Uma fonte de microflow, nanoflow ou associação vira `source:`
+(`microflow_source(...)`, `nanoflow_source(...)` ou `association(...)`, como no Data View)
+na Data grid 2, na Gallery e em `data_source(source: ...)` dos widgets pluggable; o
+navegador carrega a lista uma vez, com os mapeamentos de parâmetros, e filtra, ordena e
+pagina localmente. A UI grava `grid-template-columns` como o widget nativo: `autoFill`
 divide o espaço por `size`, `autoFit` segue o conteúdo e `manual` usa pixels. O
 runtime preenche `System.grantableRoles` a partir dos papéis gerenciáveis da
 segurança do projeto, e assim a XPath da Account_Overview do módulo
