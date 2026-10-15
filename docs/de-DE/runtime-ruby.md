@@ -277,6 +277,28 @@ Aufrufe, wenn es auf beiden Seiten gesetzt ist; `MXRB_JAVA_ACTIONS_TIMEOUT`
 `spec/fixtures/java_action_sidecar` kompiliert echte Actions und führt sie gegen
 die Ruby-Anwendung aus.
 
+`mxrb java-actions App.mpr app-ruby` bereitet den Sidecar einer exportierten
+Anwendung vor, ohne den Export zu ändern, der weiterhin keine Java-Datei enthält.
+Der Befehl schreibt nach `java-actions/` Dockerfile und Quellen des Sidecars, eine
+Kopie des `javasource` des Projekts (Quellen, die nicht UTF-8 sind, werden als
+ISO-8859-1 gelesen) mit den Proxies, die Studio Pro erzeugen würde und Projekte
+nicht versionieren, und die Jars aus `userlib`. Außerdem legt er, falls noch keine
+existiert, eine `docker-compose.yml` mit dem Dienst `java-actions` auf
+`127.0.0.1:7911` an. Das Verzeichnis wird bei jedem Lauf neu geschrieben und nicht
+in das MPR eingebettet:
+
+```sh
+mxrb java-actions App.mpr app-ruby
+cd app-ruby && docker compose up -d java-actions
+```
+
+Die URL gehört in das Umgebungsprofil der Anwendung:
+
+```sh
+# config/environments/development.env
+MXRB_JAVA_ACTIONS_URL=tcp://127.0.0.1:7911
+```
+
 ## Ruby → Mendix → Ruby-Zertifizierung
 
 Das reproduzierbare Zertifizierungsszenario befindet sich in

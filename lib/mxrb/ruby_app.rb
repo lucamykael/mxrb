@@ -53,7 +53,7 @@ module Mxrb
       'db/migrate/**/*', 'bin/**/*', '.rspec', 'config.ru',
       'Gemfile', 'Rakefile', 'README.md', '.gitignore', '.env.example', '.ruby-version'
     ].freeze
-    SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/ config/verified_adapters.rb].freeze
+    SOURCE_EXCLUSIONS = %w[frontend/node_modules/ frontend/dist/ config/verified_adapters.rb java-actions/].freeze
     ARTIFACT_DIRECTORIES = %w[
       constants enumerations models dtos controllers services pages presentation security
       scheduled_events regular_expressions datasets
