@@ -57,7 +57,9 @@ module Mxrb
 
       # Clauses of subqueries stay inside their parentheses.
       def clause_starts(tokens)
-        OqlNesting.top_level(tokens) { _1.type == :word && CLAUSES.include?(_1.text.upcase) }
+        OqlNesting.top_level(tokens) do |token, index|
+          token.type == :word && CLAUSES.include?(token.text.upcase) && !OqlNesting.qualified?(tokens, index)
+        end
       end
 
       def validate_clause_order(starts, names)
