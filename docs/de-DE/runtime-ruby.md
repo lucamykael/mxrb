@@ -97,6 +97,13 @@ exportierten Anwendung migriert MXRB automatisch eine umgebungsspezifische
 SQLite-Datenbank, öffnet den Microflow-Interpreter, registriert Lifecycle-Hooks,
 erzwingt die Sicherheit und startet Scheduled Events.
 
+Wie die Runtime führt der Server den After-Startup-Microflow der Model Settings
+einmal ohne Benutzer vor den Scheduled Events aus; liefert er nicht `true` oder
+schlägt fehl (etwa an einer Java-Action ohne Adapter), startet die Anwendung nicht.
+`MXRB_AFTER_STARTUP=skip` startet während einer Migration ohne ihn. Der
+Before-Shutdown-Microflow läuft beim Schließen der Anwendung; seine Fehler werden
+nur gemeldet.
+
 Profile liegen unter `config/environments/`, typischerweise als
 `development.env`, `qa.env`, `staging.env` und `production.env`. Die Priorität
 lautet Prozessumgebung, Profildatei, `.env.<Profil>`, dann `.env`. Die Auswahl

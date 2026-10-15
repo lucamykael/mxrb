@@ -61,6 +61,8 @@ module Mxrb
       end
 
       def close
+        run_before_shutdown if @bridge
+        @runtime_started = false
         @async_invocations&.close
         @async_invocations = nil
         @bridge&.close

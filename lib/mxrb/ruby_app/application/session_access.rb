@@ -50,7 +50,37 @@ module Mxrb
           bridge.start_scheduler
         end
 
+        # Starts the application as a Mendix Runtime does: the after-startup
+        # microflow runs once, without a user, and must return true before
+        # scheduled events start. MXRB_AFTER_STARTUP=skip leaves it out.
+        def start_runtime
+          runtime_synchronize { run_after_startup } unless @runtime_started
+          @runtime_started = true
+          start_scheduler
+        end
+
         private
+
+        def run_after_startup # rubocop:disable Metrics/AbcSize
+          name = Runtime::Lifecycle.settings(bridge.project)['after_startup']
+          return if name.nil? || environment['MXRB_AFTER_STARTUP'].to_s.casecmp?('skip')
+
+          result = bridge.interpreter.call(name)
+          raise StartupError, "after-startup microflow #{name} returned #{result.inspect}" unless result == true
+        rescue StartupError
+          raise
+        rescue StandardError => e
+          raise StartupError, "after-startup microflow #{name} failed: #{e.message} " \
+                              '(MXRB_AFTER_STARTUP=skip starts without it)'
+        end
+
+        # Errors before shutdown are reported but never keep the application running.
+        def run_before_shutdown
+          name = @runtime_started && Runtime::Lifecycle.settings(bridge.project)['before_shutdown']
+          bridge.interpreter.call(name) if name
+        rescue StandardError => e
+          warn "before-shutdown microflow #{name} failed: #{e.message}"
+        end
 
         def session_user(context)
           id = context&.user

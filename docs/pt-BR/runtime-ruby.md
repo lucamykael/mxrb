@@ -96,6 +96,12 @@ aplicação exportada, o MXRB migra automaticamente um banco SQLite por ambiente
 abre o interpretador de microflows, registra lifecycle hooks, aplica segurança e
 inicia os scheduled events.
 
+Como o Runtime, o servidor executa uma vez o microflow de after-startup das Model
+Settings, sem usuário, antes dos scheduled events; se ele não retornar `true` ou
+falhar (por exemplo, por uma Java action sem adapter), a aplicação não sobe.
+`MXRB_AFTER_STARTUP=skip` sobe sem ele durante uma migração. O microflow de
+before-shutdown roda ao fechar a aplicação, e suas falhas só são registradas.
+
 ```text
 config/environments/
 ├── development.env

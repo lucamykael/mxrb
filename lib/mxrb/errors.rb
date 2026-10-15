@@ -12,6 +12,7 @@ module Mxrb
   FunctionalTestError = Class.new(Error)
   ToolchainError      = Class.new(Error)
   CompilationError    = Class.new(Error)
+  StartupError        = Class.new(Error)
   TeamServerError     = Class.new(Error)
   NativeRuntimeError  = Class.new(Error)
   NotFoundError       = Class.new(Error)

@@ -588,7 +588,7 @@ RSpec.describe 'Ruby application internal contracts' do
     server.instance_variable_set(:@host, '127.0.0.1')
     server.instance_variable_set(:@port, 0)
     server.instance_variable_set(:@logger, Puma::LogWriter.null)
-    application = double(start_scheduler: nil, close: nil)
+    application = double(start_runtime: nil, close: nil)
     server.instance_variable_set(:@application, application)
     http = instance_double(Mxrb::Http::Server, shutdown: nil)
     puma = instance_double(Puma::Server)

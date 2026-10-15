@@ -266,6 +266,7 @@ module Mxrb
             'decimal' => Runtime::DecimalContext.settings(project),
             'time_zone' => Runtime::TimeZones.settings(project),
             'languages' => Runtime::Languages.settings(project),
+            'lifecycle' => Runtime::Lifecycle.settings(project),
             'security' => @security_manifest,
             'navigation' => runtime_value(project.navigation.to_h),
             'source' => {

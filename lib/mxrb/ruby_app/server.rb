@@ -22,7 +22,7 @@ module Mxrb
 
       def start
         @server = Http::Server.new(host:, port:, logger: @logger) { dispatch(_1, _2) }
-        application.start_scheduler
+        application.start_runtime
         @server.start { yield(_1) if block_given? }
       ensure
         application.close
