@@ -11,7 +11,7 @@ RSpec.describe Mxrb::RubyApp::Application, 'advanced data-grid queries' do
   def application(records)
     store = instance_double(Mxrb::Runtime::Native::Store)
     allow(store).to receive(:retrieve).with('App.Item').and_return(records)
-    interpreter = double(store:)
+    interpreter = double(store:, calculated_members: {})
     described_class.allocate.tap do |app|
       app.instance_variable_set(:@bridge, double(interpreter:))
     end

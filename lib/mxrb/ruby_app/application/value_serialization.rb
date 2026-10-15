@@ -26,7 +26,8 @@ module Mxrb
             return { id: value.id, type: value.entity } if seen[key]
 
             branch = seen.merge(key => true)
-            members = value.members.except(*hashed_members(value.entity))
+            members = value.members.merge(bridge.interpreter.calculated_members(value, context:))
+                           .except(*hashed_members(value.entity))
             if context
               members = members.select do |member, _member_value|
                 access_control.member_allowed?(

@@ -59,9 +59,11 @@ module Mxrb
 
         def file_upload_policy = @file_policy || {}
 
-        def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil,
+        # calculated: names the microflow that computes the attribute each time it is
+        # read, passed the object unless pass_entity: false.
+        def attribute(name, type:, mendix_name:, required: false, unique: false, default: nil, # rubocop:disable Metrics/ParameterLists
                       documentation: '', length: nil, localize_date: ATTRIBUTE_OPTION_UNSET,
-                      enumeration: nil)
+                      enumeration: nil, calculated: nil, pass_entity: true)
           @attributes ||= []
           declaration = {
             name: name.to_sym, type: type.to_sym,
@@ -71,6 +73,7 @@ module Mxrb
             enumeration: enumeration
           }
           declaration[:localize_date] = localize_date unless localize_date.equal?(ATTRIBUTE_OPTION_UNSET)
+          declaration.merge!(calculated: calculated.to_s, pass_entity: pass_entity != false) if calculated
           @attributes << declaration
           attr_accessor name
         end

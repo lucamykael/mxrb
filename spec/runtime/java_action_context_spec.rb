@@ -7,7 +7,7 @@ require 'sqlite3'
 ContextModule = Struct.new(:name, :entities, :constants, :associations)
 ContextAssociation = Struct.new(:name, :association_type)
 ContextEntity = Struct.new(:name, :attributes, :generalization_target)
-ContextAttribute = Struct.new(:name, :type, :raw_value_doc)
+ContextAttribute = Struct.new(:name, :type, :calculated)
 PlainEntity = Struct.new(:name, :attributes)
 
 # rubocop:disable Metrics/BlockLength
@@ -15,10 +15,10 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
   let(:store) { Mxrb::Runtime::Native::Store.new }
   let(:interpreter) { instance_double(Mxrb::Runtime::Native::Interpreter) }
   let(:project) do
-    calculated = { '$Type' => 'DomainModels$CalculatedValue' }
+    calculated = 'Mod.CalcTotal'
     entities = [
       ContextEntity.new('Base', [ContextAttribute.new('Code', :string, nil)], 'System.User'),
-      ContextEntity.new('Item', [ContextAttribute.new('Name', :string, {}),
+      ContextEntity.new('Item', [ContextAttribute.new('Name', :string, nil),
                                  ContextAttribute.new('Total', :decimal, calculated)], 'Mod.Base'),
       ContextEntity.new('Loop', [], 'Mod.Loop'),
       ContextEntity.new('Upload', [], 'System.FileDocument'),

@@ -28,6 +28,18 @@ written to the MPR are `default:`, `documentation:`, and `enumeration:` for enum
 attributes. Declare the enumeration separately with `enumeration`; use `enum`
 for an entity attribute.
 
+A calculated attribute names the microflow that computes it:
+
+```ruby
+string :FullName, calculated: "VetClinic.CalcFullName"
+string :Today, calculated: "VetClinic.CalcToday", pass_entity: false
+```
+
+As on the Mendix 11.12.1 Runtime, the value is not stored: the microflow runs
+each time an expression reads the attribute and when the object is sent to the
+client, not when the object is created, changed, committed or retrieved. It gets
+the object as its parameter unless `pass_entity: false`.
+
 ## Associations
 
 ```ruby

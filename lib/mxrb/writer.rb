@@ -4412,6 +4412,8 @@ module Mxrb
                     current.delete('DefaultValue')
                     current.delete('defaultValue')
                     current
+                  elsif attr[:calculated]
+                    calculated_value_doc(previous_value, attr)
                   elsif previous_value && !attr.key?(:default) &&
                         previous_value['$Type'] != 'DomainModels$OqlViewValue'
                     previous_value
@@ -4436,6 +4438,18 @@ module Mxrb
       doc[type_key] = type_doc
       doc[value_key] = value_doc
       doc
+    end
+
+    # A calculated attribute: the microflow that computes it, passed the object
+    # unless pass_entity is false.
+    def calculated_value_doc(previous_value, attr)
+      calculated = previous_value.is_a?(Hash) && previous_value['$Type'] == 'DomainModels$CalculatedValue'
+      {
+        '$ID' => (calculated && previous_value['$ID']) || SecureRandom.uuid,
+        '$Type' => 'DomainModels$CalculatedValue',
+        'Microflow' => attr.fetch(:calculated).to_s,
+        'PassEntity' => attr.fetch(:pass_entity, true) == true
+      }
     end
 
     def attribute_default_expression(attr)

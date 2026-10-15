@@ -37,6 +37,12 @@ module Mxrb
         @constants = constants || Constants.new(project, environment:)
       end
 
+      # IMendixObject.getValue: a calculated attribute runs its microflow.
+      def value(object, name)
+        value = @interpreter.calculated_value(object, name, context: @security_context)
+        value.equal?(Native::Expression::STORED) ? object.members[name] : value
+      end
+
       # The value of a constant (Core.getConfiguration().getConstantValue).
       def constant(name) = @constants.value(name)
 
@@ -207,10 +213,7 @@ module Mxrb
         SystemDomain::ATTRIBUTES.fetch(name).map { |attribute, type,| [attribute, type, false] }
       end
 
-      def calculated?(attribute)
-        value = attribute.respond_to?(:raw_value_doc) && attribute.raw_value_doc
-        value.is_a?(Hash) && value['$Type'] == 'DomainModels$CalculatedValue'
-      end
+      def calculated?(attribute) = attribute.respond_to?(:calculated) && !attribute.calculated.nil?
 
       def current_user
         id = @security_context.respond_to?(:user) && @security_context.user

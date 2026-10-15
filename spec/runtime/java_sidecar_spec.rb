@@ -10,6 +10,7 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
   let(:context) do
     instance_double(Mxrb::Runtime::JavaActionContext, store:).tap do |context|
       allow(context).to receive(:member_kind) { |_entity, name| kinds[name] }
+      allow(context).to receive(:value) { |object, name| object.members[name] }
     end
   end
 

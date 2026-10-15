@@ -139,6 +139,8 @@ module Mxrb
           value['localize_date'] = localize_date unless localize_date.nil?
           enumeration = native_identifier(attribute.respond_to?(:enumeration) ? attribute.enumeration : nil)
           value['enumeration'] = enumeration unless enumeration.empty?
+          calculated = optional_attribute_value(attribute, :calculated)
+          value.merge!('calculated' => calculated, 'pass_entity' => attribute.pass_entity) if calculated
           value
         end
 

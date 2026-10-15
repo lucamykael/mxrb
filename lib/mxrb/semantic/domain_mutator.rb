@@ -211,7 +211,9 @@ module Mxrb
             documentation: @updates.fetch(:documentation, attr_model.documentation),
             length: @updates.fetch(:length, attr_model.length),
             localize_date: @updates.fetch(:localize_date, attr_model.localize_date),
-            enumeration: @updates.fetch(:enumeration, attr_model.enumeration)
+            enumeration: @updates.fetch(:enumeration, attr_model.enumeration),
+            calculated: @updates.fetch(:calculated, attr_model.calculated),
+            pass_entity: @updates.fetch(:pass_entity, attr_model.pass_entity)
           }
           replacement = Writer.new('', {}).build_domain_attribute_document(
             attribute_def, previous: attr_doc
@@ -348,7 +350,7 @@ module Mxrb
 
       def plan_add_attribute(entity_qname, name:, type: :string, default: nil, documentation: nil,
                              required: false, unique: false, length: nil, localize_date: nil,
-                             enumeration: nil)
+                             enumeration: nil, calculated: nil, pass_entity: true)
         mod_name, entity_name, dm_id, entity_id = resolve_entity(entity_qname)
         AddAttributePlan.new(
           project: @project, module_name: mod_name, entity_name: entity_name,
@@ -356,7 +358,7 @@ module Mxrb
           attribute_def: {
             name: name.to_s, type: type, default: default,
             documentation: documentation.to_s, required: required == true,
-            unique: unique == true, length:, localize_date:, enumeration:
+            unique: unique == true, length:, localize_date:, enumeration:, calculated:, pass_entity:
           }
         )
       end
@@ -375,12 +377,13 @@ module Mxrb
 
       def plan_change_attribute(attribute_qname, type: UNSET, default: UNSET,
                                 documentation: UNSET, required: UNSET, unique: UNSET,
-                                length: UNSET, localize_date: UNSET, enumeration: UNSET)
+                                length: UNSET, localize_date: UNSET, enumeration: UNSET,
+                                calculated: UNSET, pass_entity: UNSET)
         mod_name, entity_name, dm_id, entity_id, attr_name = resolve_attribute(attribute_qname)
         updates = {}
         {
           type:, default:, documentation:, required:, unique:, length:,
-          localize_date:, enumeration:
+          localize_date:, enumeration:, calculated:, pass_entity:
         }.each { |key, value| updates[key] = value unless value.equal?(UNSET) }
         raise ArgumentError, 'plan_change_attribute: no changes specified' if updates.empty?
 

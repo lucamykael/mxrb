@@ -183,7 +183,7 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(profile[:items]).to contain_exactly(items: [include(page: 'allowed')])
 
     store = double
-    interpreter = double(store: store)
+    interpreter = double(store: store, calculated_members: {})
     bridge = double(interpreter: interpreter)
     app.instance_variable_set(:@bridge, bridge)
     allow(store).to receive(:create) do |entity|
