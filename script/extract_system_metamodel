@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Keeps the System module of a metamodel the native_metamodel oracle fixture dumped
+# from a Mendix Runtime (mxrb-metamodel.json in the Runtime's temporary directory):
+#
+#   MXRB_ORACLE_MENDIX_VERSION=10.24.0.73019 \
+#     script/oql_native_oracle spec/fixtures/native_metamodel out.json ~/.local/share/mendix/10.24.0.73019
+#   script/extract_system_metamodel /tmp/mxrb-metamodel.json 10.24.0
+require 'json'
+
+dump, version = ARGV
+abort 'Usage: script/extract_system_metamodel DUMP.json VERSION' unless dump && version
+metamodel = JSON.parse(File.read(dump))
+system = {
+  'mendix_version' => version,
+  'objects' => metamodel.fetch('objects').select { _1.fetch('module') == 'System' },
+  'associations' => metamodel.fetch('associations').select do
+    _1.fetch('name').start_with?('System.') && _1.fetch('parent').start_with?('System.')
+  end,
+  'microflows' => metamodel.fetch('microflows').select { _1.fetch('name').start_with?('System.') }
+}
+output = File.expand_path("../lib/mxrb/runtime/system_metamodel_#{version}.json", __dir__)
+File.write(output, "#{JSON.pretty_generate(system)}\n")
+puts "System module of Mendix #{version}: #{system.fetch('objects').length} objects written to #{output}"

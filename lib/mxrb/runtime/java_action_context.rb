@@ -170,7 +170,7 @@ module Mxrb
 
       # A member of a System entity, or of one of its System generalizations.
       def system_member_kind(entity, name)
-        objects = Native.system_metamodel.fetch('objects').to_h { [_1.fetch('name'), _1] }
+        objects = SystemMetamodel.for(@project.mendix_version).fetch('objects').to_h { [_1.fetch('name'), _1] }
         return nil unless objects.key?(entity)
 
         entities = [entity, *objects.fetch(entity).fetch('supers')]
@@ -181,7 +181,7 @@ module Mxrb
       end
 
       def system_association_kind(entities, name)
-        association = Native.system_metamodel.fetch('associations').find do
+        association = SystemMetamodel.for(@project.mendix_version).fetch('associations').find do
           entities.include?(_1.fetch('parent')) && _1.fetch('name').split('.').last == name
         end
         association && (association.fetch('type') == 'REFERENCESET' ? :reference_set : :reference)

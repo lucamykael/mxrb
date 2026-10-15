@@ -213,8 +213,12 @@ keinen Adapter. Beim Start folgen `UnitTesting.IsEnabled`, `Initialize`,
 `UnitTesting.Enabled`, und `OIDC.DeleteExpiredAuthAttempts` (3.3.1) löscht abgelaufene
 Versuche. `MxModelReflection.SyncObjects` (6.2.0 und 8.0.2) portiert den Builder des
 Moduls auf das Metamodell der Anwendung, das wiedergibt, was die 11.12.1-Runtime meldet
-(`spec/fixtures/native_metamodel`); das System-Modul stammt aus dieser Runtime, auch bei
-Projekten anderer Versionen.
+(`spec/fixtures/native_metamodel`). Das System-Modul ist je Runtime-Version
+aufgezeichnet (10.24.0 und 11.12.1, die sich in Workflow-Entitäten, Assoziationen und
+Enumerationswerten unterscheiden); ein Projekt erhält die neueste Aufzeichnung, die
+nicht neuer als seine eigene Version ist. `MXRB_ORACLE_MENDIX_VERSION` führt die Fixture
+auf einer anderen Runtime aus, von mxrb gebaut, wenn deren MxBuild kein portables Paket
+kennt, und `script/extract_system_metamodel` übernimmt ihr System-Modul.
 
 Ein Adapter, der den aufrufenden Microflow braucht, verwendet `with_context: true`
 und erhält `context:` mit Store, Log, anderen Microflows (auch als anderer

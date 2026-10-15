@@ -205,8 +205,12 @@ Java code; `{AES2}` fails as on a freshly started 11.12.1 Runtime, which lacks t
 and `OIDC.DeleteExpiredAuthAttempts` (3.3.1) deletes expired attempts.
 `MxModelReflection.SyncObjects` (6.2.0 and 8.0.2) ports the module's builder over the
 application's metamodel, which reproduces what the 11.12.1 Runtime reports
-(`spec/fixtures/native_metamodel`); the System module comes from that Runtime, also
-for projects of other versions.
+(`spec/fixtures/native_metamodel`). The System module is recorded per Runtime version
+(10.24.0 and 11.12.1, which differ in workflow entities, associations and enumeration
+values), and a project gets the newest recording not newer than its own version.
+`MXRB_ORACLE_MENDIX_VERSION` runs the fixture on another Runtime, built by mxrb when
+that MxBuild has no portable package, and `script/extract_system_metamodel` keeps its
+System module.
 
 An adapter that needs the calling microflow uses `with_context: true` and
 receives `context:`, with the store, the log, other microflows (also as another

@@ -4,6 +4,7 @@
 # Runs an OQL oracle fixture on the official Mendix toolchain installed for Linux:
 # the fixture is built by MxBuild as a portable app, its Views.RunAll after-startup
 # microflow executes on the Mendix Runtime and the logged results are written as JSON.
+# MxBuild before Mendix 11 has no portable package, which mxrb's own build then makes.
 #
 #   script/oql_native_oracle spec/fixtures/native_oql_predicates results.json [MENDIX_HOME]
 
@@ -33,6 +34,15 @@ def after_startup!(path, microflow)
   mpr.update_unit(raw.fetch('UnitID'), doc)
 ensure
   mpr&.close
+end
+
+def native_package!(project, mendix_home, java_home, package)
+  deployment = File.join(File.dirname(project), 'deployment')
+  Mxrb::Compiler::DeploymentMaterializer.new(project, deployment:, mendix_home:).materialize
+  Mxrb::Compiler::ProjectJarBuilder.new(project, deployment:, mendix_home:, java_home:).build
+  Mxrb::Compiler::WebBundleBuilder.new(project, deployment:, mendix_home:).build
+  result = Mxrb::Compiler::PortablePackager.new(project, deployment:, mendix_home:).pack(output: package, force: true)
+  "MXRB native build, sha256 #{result.sha256}\n"
 end
 
 def runtime_log(directory, java_home)
@@ -89,8 +99,12 @@ Dir.mktmpdir('mxrb-oql-oracle-') do |work|
   after_startup!(project, 'Views.RunAll')
   plan = Mxrb::Runtime::Toolchain.new(project, mendix_home:).plan
   package = File.join(work, 'app.zip')
-  build = run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java_home}",
-               "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", "--output=#{package}", project)
+  build = if Gem::Version.new(plan.mendix_version) < Gem::Version.new('11')
+            native_package!(project, plan.toolchain_path, java_home, package)
+          else
+            run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java_home}",
+                 "--java-exe-path=#{File.join(java_home, 'bin', 'java')}", "--output=#{package}", project)
+          end
   runtime = File.join(work, 'runtime')
   run!('unzip', '-q', package, '-d', runtime)
   log = runtime_log(runtime, java_home)

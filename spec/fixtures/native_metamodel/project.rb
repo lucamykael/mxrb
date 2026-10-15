@@ -3,7 +3,8 @@
 # What MxModelReflection reads from a Mendix 11.12.1 Runtime: the meta objects with
 # their primitives, enumerations and generalizations, the associations, the
 # microflows with their parameter and return types, and the languages. DumpMetamodel
-# writes them as JSON to the Runtime's temporary directory.
+# writes them as JSON to the Runtime's temporary directory. MXRB_ORACLE_MENDIX_VERSION
+# records another Runtime, whose System module script/extract_system_metamodel keeps.
 
 require 'mxrb'
 require 'fileutils'
@@ -12,7 +13,7 @@ output_path = ENV.fetch('MXRB_OUTPUT_PATH')
 
 # rubocop:disable Metrics/BlockLength
 Mxrb.define(output_path) do
-  mendix_version '11.12.1'
+  mendix_version ENV.fetch('MXRB_ORACLE_MENDIX_VERSION', '11.12.1')
   self.module :Other do
     entity(:Thing) { string :Label }
   end
