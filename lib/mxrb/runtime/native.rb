@@ -22,6 +22,7 @@ require_relative 'languages'
 require_relative 'time_zones'
 require_relative 'sort_path'
 require_relative 'decimal_parsing'
+require_relative 'java_action_context'
 
 module Mxrb
   module Runtime
@@ -36,6 +37,10 @@ module Mxrb
       StoreJavaAction = Data.define(:handler) do
         def bind(store) = ->(arguments) { handler.call(arguments, store:) }
       end
+
+      # Explicit opt-in for adapters that act on the calling microflow's runtime:
+      # its store, log, transaction and other flows, through a JavaActionContext.
+      ContextJavaAction = Data.define(:handler)
 
       # Transactional in-memory persistence used by the Ruby model Runtime.
       class Store
@@ -121,13 +126,25 @@ module Mxrb
         end
 
         def transaction
-          state = snapshot
+          (@transaction_states ||= []).push(snapshot)
           result = yield
           discard_uncommitted
           result
         rescue StandardError
-          restore(state)
+          state = @transaction_states.last
+          state == :autocommit ? discard_uncommitted : restore(state)
           raise
+        ensure
+          @transaction_states.pop
+        end
+
+        # IContext.endTransaction: the work committed so far stays, and so does what
+        # is committed afterwards, as in the Runtime's autocommit after the end.
+        def end_transaction
+          return false if @transaction_states.to_a.empty? || @transaction_states.last == :autocommit
+
+          @transaction_states[-1] = :autocommit
+          true
         end
 
         def commit(value, events: true)
@@ -136,14 +153,29 @@ module Mxrb
             run_hooks(creating ? :before_create : :before_update, object) if events
             run_hooks(:before_commit, object) if events
             @committed[record_key(object)] = object.members.dup
+            @touched&.delete(record_key(object))
             run_hooks(:after_commit, object) if events
             run_hooks(creating ? :after_create : :after_update, object) if events
           end
           value
         end
 
+        # Marks members set by a change, which IMendixObject.isChanged reports
+        # until the next commit even when the value is set back.
+        def touch(object) = (@touched ||= {})[record_key(object)] = true
+
+        # IMendixObject.isChanged: set since the last commit, or members that differ
+        # from the last commit (the defaults for an object never committed).
+        def changed?(object)
+          return true if @touched&.key?(record_key(object))
+
+          baseline = @committed.fetch(record_key(object)) { @defaults.fetch(object.entity, {}) }
+          object.members.compact != baseline.compact
+        end
+
         def rollback(value)
           Array(value).each do |object|
+            @touched&.delete(record_key(object))
             persisted = @committed[record_key(object)]
             if persisted
               object.members.replace(persisted.dup)
@@ -718,6 +750,15 @@ module Mxrb
           filter_by_xpath(store.retrieve(entity.to_s), xpath.to_s, {}).size
         end
 
+        # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
+        # running transaction unless a sub-microflow called with custom error
+        # handling holds a savepoint; afterwards the call continues in autocommit.
+        def end_transaction
+          return false if @transaction_ended || @open_savepoints.to_i.positive? || !store.respond_to?(:end_transaction)
+
+          (store.end_transaction == true).tap { @transaction_ended = true if _1 }
+        end
+
         private
 
         def execute_call(name, arguments = nil, context: nil, **keyword_arguments)
@@ -727,6 +768,7 @@ module Mxrb
           previous_apply_entity_access = @apply_entity_access
           root_call = @call_depth.zero?
           @effects = [] if root_call
+          @transaction_ended = false if root_call
           @call_depth += 1
           flow = @flows[name]
           raise NativeRuntimeError, "flow #{name} not found" unless flow
@@ -747,6 +789,17 @@ module Mxrb
           @security_context = previous_context
           @apply_entity_access = previous_apply_entity_access
           @call_depth -= 1
+        end
+
+        # A sub-microflow call with custom error handling runs under a savepoint
+        # while the transaction is open (see end_transaction).
+        def with_savepoint(action, error_edge)
+          savepoint = error_edge && !@transaction_ended && action['$Type'] == 'Microflows$MicroflowCallAction' &&
+                      CUSTOM_ERROR_HANDLING.include?(action['ErrorHandlingType'])
+          @open_savepoints = @open_savepoints.to_i + 1 if savepoint
+          yield
+        ensure
+          @open_savepoints -= 1 if savepoint
         end
 
         # $currentUser is the signed-in System.User (or a specialization such as an Account).
@@ -833,7 +886,9 @@ module Mxrb
                  current.dig('Action', 'ErrorHandlingType') == 'Rollback'
                 action_snapshot = store.snapshot
               end
-              execute_action(current['Action'], variables) if type == 'Microflows$ActionActivity'
+              if type == 'Microflows$ActionActivity'
+                with_savepoint(current['Action'], error_edge) { execute_action(current['Action'], variables) }
+              end
               execute_loop(current, outgoing, variables, label:) if type == 'Microflows$LoopedActivity'
               edge = select_edge(current, edges.reject { _1['IsErrorHandler'] == true }, variables)
             rescue StandardError => e
@@ -843,7 +898,7 @@ module Mxrb
               if action_snapshot && current.dig('Action', 'ErrorHandlingType') == 'Rollback'
                 store.restore(action_snapshot)
               end
-              variables['latestError'] = e
+              variables['latestError'] = error_object(e)
             end
             return [:complete, nil] unless edge || root
             raise NativeRuntimeError, "#{label} stops at #{type}" unless edge
@@ -1158,6 +1213,8 @@ module Mxrb
           variables[action['ResultVariableName'].to_s] = result
         end
 
+        CUSTOM_ERROR_HANDLING = %w[Custom CustomWithoutRollBack].freeze
+
         # Java actions the Runtime itself provides; an explicitly registered adapter still wins.
         PLATFORM_JAVA_ACTIONS = {
           'System.VerifyPassword' => lambda { |store, arguments|
@@ -1177,7 +1234,12 @@ module Mxrb
                   'Mxrb::RubyApp::Registry.register_java_custom_action'
           end
 
-          result = adapter.call(java_action_arguments(name, action, variables).freeze)
+          arguments = java_action_arguments(name, action, variables).freeze
+          result = if adapter.is_a?(ContextJavaAction)
+                     adapter.handler.call(arguments, context: java_action_context)
+                   else
+                     adapter.call(arguments)
+                   end
           result_name = (action['ResultVariableName'] || action['OutputVariableName']).to_s
           use_return = action.key?('UseReturnVariable') ? action['UseReturnVariable'] == true : !result_name.empty?
           variables[result_name] = result if use_return && !result_name.empty?
@@ -1188,6 +1250,19 @@ module Mxrb
         alias action_basic_code action_java_action_call
         alias action_entity_type_java action_java_action_call
         alias action_microflow_java action_java_action_call
+
+        def java_action_context
+          JavaActionContext.new(interpreter: self, store: @store, log: @log, project: @project, flows: @flows.keys,
+                                security_context: @security_context, policy: @policy)
+        end
+
+        # $latestError: a System.Error object whose members describe the caught error.
+        def error_object(error)
+          type = error.respond_to?(:java_class) ? error.java_class : error.class.name
+          ObjectValue.new(entity: 'System.Error', id: SecureRandom.uuid,
+                          members: { 'ErrorType' => type, 'Message' => error.message,
+                                     'Stacktrace' => Array(error.backtrace).join("\n") })
+        end
 
         def java_action_arguments(name, action, variables)
           parameter_names = java_action_parameter_names(name)
@@ -1583,9 +1658,13 @@ module Mxrb
             authorize_entity!(object.entity, :write, member: name, record: object)
             object.members[name] = @expression.evaluate(item['Value'], variables)
           end
+          store.touch(object) if !items(values).empty? && store.respond_to?(:touch)
         end
 
-        def enforce_entity_access? = @apply_entity_access && @policy && @security_context
+        def enforce_entity_access?
+          @apply_entity_access && @policy && @security_context &&
+            !(@security_context.respond_to?(:attributes) && @security_context.attributes['sudo'] == true)
+        end
 
         def authorize_entity!(entity, action, member: nil, record: nil)
           return true unless enforce_entity_access?

@@ -291,7 +291,10 @@ die ID verglichen); `amount` und `offset` blättern nach `ORDER BY`. Jede Spalte
 das gleichnamige Attribut oder, bei IDs, die eigene Assoziation `Modul.Spalte`; Spalten
 ohne Ziel sind Fehler. Ein leerer Parameter in `=` wirkt wie `IS NULL`, wie das
 Literal `NULL`; ein nicht gesetzter Parameter ist ein Fehler. Enum-Attribute werden
-über ihren Schlüssel gelesen, auch in Filtern.
+über ihren Schlüssel gelesen, auch in Filtern. Geprüft sind die Releases 4.1.2 und
+2.10.0; letztere akzeptiert nur OQL (keine Dataset-Namen), bildet auch die reservierten
+Spalten `….ID` und `submetaobjectname` ab, sucht Assoziationen nur über den Namen ohne
+Modul und scheitert mit `NullPointerException` statt `RuntimeException`.
 
 Joins akzeptieren mehrstufige Assoziationspfade (`p/M.A_B/M.B/M.B_C/M.C AS c`) bei
 `INNER` und `LEFT`; Ordnungsvergleiche akzeptieren Datumswerte. Die Datasets eines privaten

@@ -19,6 +19,7 @@ module Mxrb
           write('project.rb', project_source)
           write(File.join('config', 'application.rb'), application_source)
           write(File.join('config', 'adapters.rb'), adapters_source)
+          write(File.join('config', RubyApp::VERIFIED_ADAPTERS), verified_adapters_source)
           write(File.join('bin', 'server'), server_source)
           File.chmod(0o755, File.join(@output_dir, 'bin', 'server'))
           write(File.join('frontend', 'package.json'), frontend_package)

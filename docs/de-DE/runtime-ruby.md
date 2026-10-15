@@ -179,6 +179,44 @@ Klassenerkennung noch JAR-Ausführung oder JVM-Fallback. REST, App Services, SOA
 Mappings und Dokumenterzeugung verwenden weiterhin typbezogene Ruby-Adapter.
 Im Browser bleibt JavaScript/React; Backend und APIs laufen ohne Java Runtime.
 
+### Verifizierte Actions und der Microflow-Kontext
+
+Actions von Marketplace-Modulen, deren Quellen MXRB geprüft hat, erhalten
+fertige Ruby-Adapter. Der Export vergleicht den SHA-256 jeder Action und der
+Hilfsklassen, die sie aufruft, mit den geprüften Releases und schreibt die
+Registrierungen nach `config/verified_adapters.rb`. Diese Datei wird bei jedem
+Export neu erzeugt und nicht in das MPR eingebettet, sodass ein Round Trip später
+geprüfte Actions übernimmt. Sie wird vor `config/adapters.rb` geladen; eine
+Registrierung dort ersetzt die verifizierte gleichen Namens.
+
+CommunityCommons hat 19 geprüfte Actions in den Releases 9.0.1 und 11.5.1,
+einschließlich ihrer Unterschiede: `Base64Encode`, `EndTransaction`,
+`GetApplicationUrl`, `GetModelVersion`, `GetRuntimeVersion`, `Hash`,
+`RandomHash`, `RandomString`, `RandomStrongPassword`, `StringFromFile`,
+`StringLeftPad`, `StringSplit`, `StringTrim`, `ThrowException`,
+`TimeMeasureStart`, `TimeMeasureEnd`, `copyAttributes`,
+`executeUnverifiedMicroflowAsUser_2` und `objectHasChanged`.
+
+Ein Adapter, der den aufrufenden Microflow braucht, verwendet `with_context: true`
+und erhält `context:` mit Store, Log, anderen Microflows (auch als anderer
+Benutzer oder im Sudo-Kontext), dem Transaktionsende, dem Änderungszustand von
+Objekten, Dateiinhalten und der Anwendungs-URL (`MXRB_APPLICATION_ROOT_URL`,
+sonst die Adresse des Ruby-Servers). Java-Exceptions sind
+`Mxrb::Runtime::JavaActionError` mit dem Namen der Java-Klasse. Gemessen auf der
+11.12.1-Runtime und von der Ruby-App reproduziert
+(`spec/fixtures/native_java_action_runtime`):
+
+- `$latestError/ErrorType` ist der qualifizierte Java-Klassenname,
+  `$latestError/Message` die Exception-Meldung;
+- `isChanged` markiert ein Objekt, sobald ein Member gesetzt wird, auch auf den
+  bisherigen Wert, bis zum nächsten Commit; ein neues Objekt ohne gesetzte Werte
+  ist unverändert;
+- `IContext.endTransaction` bestätigt die Transaktion, außer in einem
+  Sub-Microflow, der mit benutzerdefinierter Fehlerbehandlung aufgerufen wird und
+  dessen Savepoint sie offen hält; danach wird jeder Commit sofort wirksam;
+- `Core.getModelVersion` ist außerhalb eines Deployments `unversioned`
+  (`MXRB_MODEL_VERSION` setzt einen anderen Wert).
+
 ## Ruby → Mendix → Ruby-Zertifizierung
 
 Das reproduzierbare Zertifizierungsszenario befindet sich in
