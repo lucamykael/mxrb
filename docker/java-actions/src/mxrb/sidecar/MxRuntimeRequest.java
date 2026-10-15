@@ -70,6 +70,15 @@ public final class MxRuntimeRequest implements IMxRuntimeRequest, HttpServletReq
 	}
 
 	@Override
+	public javax.servlet.http.Cookie[] getCookies() {
+		if (cookies.isEmpty()) {
+			return null;
+		}
+		return cookies.entrySet().stream().map(cookie -> new javax.servlet.http.Cookie(cookie.getKey(), cookie.getValue()))
+				.toArray(javax.servlet.http.Cookie[]::new);
+	}
+
+	@Override
 	public String getCookie(String name) {
 		return cookies.get(name);
 	}

@@ -26,6 +26,7 @@ require_relative 'sort_path'
 require_relative 'decimal_parsing'
 require_relative 'java_action_context'
 require_relative 'java_sidecar'
+require_relative 'java_http_exchange'
 
 module Mxrb
   module Runtime
@@ -879,6 +880,16 @@ module Mxrb
           end
         end
 
+        # Runs a published REST operation for an HTTP request, which its Java actions
+        # see through IContext.getRuntimeRequest (a JavaSidecar::HttpExchange).
+        def with_http_exchange(exchange)
+          previous = @http_exchange
+          @http_exchange = exchange
+          yield
+        ensure
+          @http_exchange = previous
+        end
+
         # A callback of work a Java action left running, in a transaction of its own
         # with a system context.
         def java_attach(ticket)
@@ -1471,7 +1482,8 @@ module Mxrb
         def sidecar_action(name)
           order = java_action_parameter_names(name).values
           ContextJavaAction.new(lambda { |arguments, context:|
-            @java_sidecar.invoke(name, (order | arguments.keys).map { [_1, arguments[_1]] }, context:)
+            parameters = (order | arguments.keys).map { [_1, arguments[_1]] }
+            @java_sidecar.invoke(name, parameters, context:, http: @http_exchange)
           })
         end
 

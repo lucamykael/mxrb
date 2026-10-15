@@ -305,8 +305,13 @@ Mendix-Jar. Die API umfasst:
 Generierte Proxies haben auch `load(context, xpath)`, wie die von Studio Pro. Das
 von Mendix als `com.mendix.thirdparty.org.json` gebündelte `org.json`
 (`JSONObject`, `JSONArray`, `JSONException`) hat eine eigene Implementierung im
-Sidecar, und `IContext.getRuntimeRequest`/`getRuntimeResponse` sind leer, da die
-Ruby-Anwendung die HTTP-Anfrage nicht an Actions weitergibt.
+Sidecar. In einer Action, die eine Published-REST-Operation ausführt, ist
+`IContext.getRuntimeRequest` die HTTP-Anfrage der Operation (Header, Cookies über
+`getCookies`, Root-URL), und Header und Cookies, die in `getRuntimeResponse`
+geschrieben werden, gehen mit der Antwort der Operation hinaus, wie das
+Nonce-Cookie des OIDC-Moduls; sonst sind beide leer. Das Image enthält außerdem die
+Netty-HTTP-Bibliotheken, die die Mendix-Runtime Java-Code bereitstellt
+(4.1.135.Final, von Maven Central geladen und per Prüfsumme verifiziert).
 
 Arbeit, die eine Action nach ihrer Rückkehr weiterlaufen lässt, etwa ein Listener
 für MQTT-Nachrichten, der einen Microflow aufruft, läuft ebenfalls über die

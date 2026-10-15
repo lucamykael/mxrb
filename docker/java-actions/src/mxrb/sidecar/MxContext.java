@@ -33,6 +33,17 @@ public final class MxContext implements IContext {
 		return session;
 	}
 
+	/** The HTTP request of the published REST operation the action runs for, if any. */
+	@Override
+	public java.util.Optional<com.mendix.m2ee.api.IMxRuntimeRequest> getRuntimeRequest() {
+		return java.util.Optional.ofNullable(bridge.runtimeRequest());
+	}
+
+	@Override
+	public java.util.Optional<com.mendix.m2ee.api.IMxRuntimeResponse> getRuntimeResponse() {
+		return java.util.Optional.ofNullable(bridge.runtimeResponse());
+	}
+
 	@Override
 	public boolean isSudo() {
 		return sudo;

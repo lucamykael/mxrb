@@ -64,7 +64,8 @@ module Mxrb
           end
         end
 
-        # With http: (the request's uri:, content: and headers:), the operation gets the
+        # With http: (the request's uri:, content: and headers:, and as java: the request
+        # its Java actions get), the operation gets the
         # System.HttpRequest and System.HttpResponse its microflow asks for and answers
         # with a RestResponse, as Mendix 11.12.1 does: the response starts with the
         # operation's success status, and a returned value is the body before its content.
@@ -78,8 +79,11 @@ module Mxrb
             messages = http_messages(service, http, Integer(route.fetch('success_status', 200)))
             messages.select! { |name, _message| accepts_argument?(route.fetch('microflow'), name) }
             arguments.merge!(messages.transform_values(&:last))
-            result = invoke_service(route.fetch('microflow'), arguments, context:).fetch(:result)
-            rest_response(result, messages.values.find { _1.first == 'System.HttpResponse' }&.last)
+            exchange = Runtime::JavaSidecar::HttpExchange.new(http.fetch(:java))
+            result = bridge.interpreter.with_http_exchange(exchange) do
+              invoke_service(route.fetch('microflow'), arguments, context:).fetch(:result)
+            end
+            rest_response(result, messages.values.find { _1.first == 'System.HttpResponse' }&.last, exchange)
           ensure
             discard_http_messages(messages.values.map(&:last))
           end
@@ -192,13 +196,14 @@ module Mxrb
           end
         end
 
-        def rest_response(result, response)
-          return RestResponse.new(result:, status: nil, headers: [], content: nil) unless response
+        # The response the microflow set, with the headers and cookies its Java actions added.
+        def rest_response(result, response, exchange)
+          return RestResponse.new(result:, status: nil, headers: exchange.headers, content: nil) unless response
 
           headers = bridge.interpreter.store.retrieve_association('HttpHeaders', response).map do |header|
             [header.members['Key'].to_s, header.members['Value'].to_s]
           end
-          RestResponse.new(result:, status: response.members['StatusCode'], headers:,
+          RestResponse.new(result:, status: response.members['StatusCode'], headers: headers + exchange.headers,
                            content: response.members['Content'])
         end
 

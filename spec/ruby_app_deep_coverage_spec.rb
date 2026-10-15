@@ -872,7 +872,8 @@ RSpec.describe 'Ruby application internal contracts' do
     expect(res.headers).not_to have_key('Access-Control-Allow-Origin')
     expect(application).to have_received(:invoke_rest).with(
       route, path_parameters: { 'id' => 'x' }, query: {}, body: {}, context: nil,
-             http: { uri: 'http://app/rest/x', content: '{}', headers: [] }
+             http: { uri: 'http://app/rest/x', content: '{}', headers: [],
+                     java: include('method' => 'POST', 'path' => '/rest/x') }
     )
     expect(res.body).to eq('ok')
     expect(server.send(:rest_route, 'POST', '/not-rest')).to be_nil

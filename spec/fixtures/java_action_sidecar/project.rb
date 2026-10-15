@@ -76,6 +76,15 @@ Mxrb.define(output_path) do
       create_object 'Views.Tag', as: :remembered, set: { Label: '$Value' }, commit: true
     end
     java_action :Gaps, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
+    java_action :Nonce, parameters: [], return_type: { kind: :string }
+    microflow :ReadNonce do
+      return_type :String
+      call_java 'Views.Nonce', as: :nonce
+      return_value '$nonce'
+    end
+    published_rest_service :NonceApi, path: 'rest/nonce/v1', version: '1.0', requires_authentication: false do
+      resource(:nonce) { get :read, path: 'read', microflow: 'Views.ReadNonce' }
+    end
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -152,6 +161,8 @@ Mxrb.define(output_path) do
       log_message 'ORACLE json={1}', node: oracle, parameters: ['$json']
       call_java 'Views.Gaps', as: :gaps, pass: { 'Views.Gaps.order' => '$order' }
       log_message 'ORACLE gaps={1}', node: oracle, parameters: ['$gaps']
+      call_java 'Views.Nonce', as: :outside
+      log_message 'ORACLE nonce_outside={1}', node: oracle, parameters: ['$outside']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -362,6 +373,24 @@ actions = {
         + Core.authenticate(c, admin, "wrong") + " " + Core.getLanguage(c).getCode() + " "
         + Core.getConfiguration().getXASId() + " " + Core.getConfiguration().getRuntimePath().isAbsolute() + " "
         + tags.isBoth();
+  BODY
+  'Nonce' => ['String', nil, <<~BODY],
+    java.util.Optional<com.mendix.m2ee.api.IMxRuntimeRequest> request = getContext().getRuntimeRequest();
+    if (request.isEmpty()) {
+      return "none " + getContext().getRuntimeResponse().isPresent();
+    }
+    javax.servlet.http.Cookie[] cookies = request.get().getHttpServletRequest().getCookies();
+    String nonce = cookies == null ? "no cookies" : java.util.Arrays.stream(cookies)
+        .filter(cookie -> cookie.getName().equals("nonce")).findFirst()
+        .map(javax.servlet.http.Cookie::getValue).orElse("missing");
+    javax.servlet.http.HttpServletResponse response = getContext().getRuntimeResponse().get().getHttpServletResponse();
+    response.addHeader("Set-Cookie", "nonce=next; Path=/; HttpOnly");
+    javax.servlet.http.Cookie seen = new javax.servlet.http.Cookie("seen", "1");
+    seen.setPath("/");
+    seen.setMaxAge(60);
+    response.addCookie(seen);
+    return nonce + " " + request.get().getHeader("X-Probe") + " "
+        + request.get().getHttpServletRequest().getRequestURI();
   BODY
   'Register' => ['Boolean', nil, <<~BODY],
     Core.addRequestHandler("/hello/", new views.Hello());

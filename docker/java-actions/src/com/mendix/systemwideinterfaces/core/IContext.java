@@ -11,7 +11,7 @@ public interface IContext {
 	void endTransaction();
 	void rollbackTransaction();
 
-	/** The HTTP request of the action's context; the Ruby application does not hand it over. */
+	/** The HTTP request the action's context serves, when it serves one. */
 	default java.util.Optional<com.mendix.m2ee.api.IMxRuntimeRequest> getRuntimeRequest() {
 		return java.util.Optional.empty();
 	}

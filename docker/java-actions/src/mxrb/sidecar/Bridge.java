@@ -32,6 +32,9 @@ public final class Bridge {
 	private long next = 1;
 	/** Whether the invocation answered; later callbacks, such as a listener's, run as background work. */
 	private boolean finished;
+	/** The HTTP request a published REST operation runs for, and the response it answers with. */
+	private MxRuntimeRequest runtimeRequest;
+	private MxRuntimeResponse runtimeResponse;
 
 	public Bridge(BufferedReader in, Writer out) {
 		this.in = in;
@@ -75,8 +78,16 @@ public final class Bridge {
 					List<Object> entry = (List<Object>) pair;
 					arguments.add(new Object[] { entry.get(0), decode(entry.get(1)) });
 				}
+				Map<String, Object> http = (Map<String, Object>) decode(params.get("http"));
+				if (http != null) {
+					runtimeRequest = new MxRuntimeRequest(http, "", null);
+					runtimeResponse = new MxRuntimeResponse();
+				}
 				Object result = invoker.invoke(new MxContext(this, false), (String) params.get("action"), arguments);
 				answer.put("result", encode(result));
+				if (runtimeResponse != null) {
+					answer.put("response", encode(runtimeResponse.result()));
+				}
 			}
 		} catch (Throwable error) {
 			Map<String, Object> details = new LinkedHashMap<>();
@@ -106,6 +117,14 @@ public final class Bridge {
 		answer.put("id", 0L);
 		answer.put("result", null);
 		send(answer);
+	}
+
+	MxRuntimeRequest runtimeRequest() {
+		return runtimeRequest;
+	}
+
+	MxRuntimeResponse runtimeResponse() {
+		return runtimeResponse;
 	}
 
 	/** A message that needs no answer, such as asking for an attach connection. */
