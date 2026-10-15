@@ -262,8 +262,13 @@ Gleichheit aller Datenbanken und nativen Funktionen.
 Persistente und transiente Callbacks erreichen Untertypen. Geerbte Validierungen
 prüfen Pflichtwerte, Eindeutigkeit über Untertyptabellen, Gleichheit, inklusive
 Intervalle und UTF-16-Länge beim Commit mit Events. Fehler rollen Transaktionen
-zurück und liefern strukturiertes HTTP-422-Feedback. JVM-Regulärausdrücke brauchen
-einen expliziten `regular_expression`-Adapter; unbekannte Regeln werden abgelehnt.
+zurück und liefern strukturiertes HTTP-422-Feedback. Reguläre Ausdrücke passen wie
+Javas `Pattern` (`Runtime::JavaRegex`): die Syntax wird umgeschrieben, wo Java und
+Ruby denselben Text verschieden lesen (`.`, `^`, `$`, `\h`, `\v`, `\Q...\E`,
+`\x{...}` und die ASCII-POSIX-Klassen), und ein Konstrukt ohne treue Entsprechung
+schlägt fehl, statt anders zu passen; ein registrierter
+`regular_expression`-Adapter entscheidet weiterhin an seiner Stelle. Unbekannte
+Regeln werden abgelehnt.
 Eine Matrix aus 21 Fällen stimmt mit der nativen Runtime überein
 ([Evidenz](../evidence/validation-parity-2026-10-05.json)). Gleichheit verwendet
 `Value` im nativen Speicher. Datumsgrenzen ohne Uhrzeit sind geprüft; eine von

@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Records what java.util.regex reports for spec/fixtures/java_regex/cases.json:
+# Pattern.matches for each pattern and input, and String.replaceAll with a
+# literal replacement, as Mendix's isMatch and replaceAll use them.
+#   script/java_regex_oracle   (needs java on the PATH)
+
+require 'json'
+require 'open3'
+require 'tmpdir'
+
+root = File.expand_path('..', __dir__)
+cases_path = File.join(root, 'spec/fixtures/java_regex/cases.json')
+cases = JSON.parse(File.read(cases_path))
+
+# Code points, since Java reads \u escapes before it reads string literals.
+def java_string(text)
+  points = text.codepoints
+  "new String(new int[] {#{points.join(', ')}}, 0, #{points.length})"
+end
+
+checks = cases.each_with_index.map do |(pattern, input), index|
+  <<~JAVA
+    try {
+      java.util.regex.Pattern p = java.util.regex.Pattern.compile(#{java_string(pattern)});
+      String in = #{java_string(input)};
+      out.append(#{index}).append('\\t').append(p.matcher(in).matches()).append('\\t')
+         .append(java.util.Base64.getEncoder().encodeToString(p.matcher(in).replaceAll(java.util.regex.Matcher.quoteReplacement("#")).getBytes(java.nio.charset.StandardCharsets.UTF_8))).append('\\n');
+    } catch (Exception e) {
+      out.append(#{index}).append("\\terror\\t").append('\\n');
+    }
+  JAVA
+end
+
+source = <<~JAVA
+  public class Oracle {
+    public static void main(String[] args) {
+      StringBuilder out = new StringBuilder();
+      #{checks.join}
+      System.out.print(out);
+    }
+  }
+JAVA
+
+Dir.mktmpdir do |directory|
+  path = File.join(directory, 'Oracle.java')
+  File.write(path, source)
+  output, status = Open3.capture2('java', path)
+  abort 'java failed' unless status.success?
+
+  expected = output.lines.to_h do |line|
+    index, matches, replaced = line.chomp.split("\t", 3)
+    value = matches == 'error' ? 'error' : [matches == 'true', replaced.to_s.unpack1('m0').force_encoding('UTF-8')]
+    [index, value]
+  end
+  File.write(File.join(root, 'spec/fixtures/java_regex/expected.json'), "#{JSON.pretty_generate(expected)}\n")
+end

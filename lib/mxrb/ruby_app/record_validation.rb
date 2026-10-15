@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'bigdecimal'
+require_relative '../runtime/java_regex'
 
 module Mxrb
   module RubyApp
@@ -14,8 +15,9 @@ module Mxrb
       end
     end
 
-    # Commit-time validation for the standalone Ruby runtime. JVM-only regular
-    # expressions require an explicit adapter rather than a different regex engine.
+    # Commit-time validation for the standalone Ruby runtime. Regular expressions
+    # match as Java's Pattern does (Runtime::JavaRegex), unless a
+    # regular_expression adapter is registered.
     class RecordValidation
       def initialize(records, store)
         @records = records
@@ -162,9 +164,11 @@ module Mxrb
         raise ValidationError, "unknown regular expression #{name}" unless expression
 
         adapter = Registry.adapters[:regular_expression]
-        raise ValidationError, 'regular_expression adapter is required for JVM validation expressions' unless adapter
+        return adapter.call(expression: expression.expression, value: @value.to_s) == true if adapter
 
-        adapter.call(expression: expression.expression, value: @value.to_s) == true
+        Runtime::JavaRegex.matches?(expression.expression, @value.to_s)
+      rescue ArgumentError => e
+        raise ValidationError, "regular expression #{name}: #{e.message}"
       end
     end
   end

@@ -247,8 +247,12 @@ tests. This does not establish universal database or native-function parity.
 Persistent and transient callbacks reach subtypes. Inherited validation rules
 now enforce required values, uniqueness across subtype tables, equality,
 inclusive ranges and UTF-16 length at commits with events. Rejected transactions
-roll back and HTTP returns structured 422 feedback. JVM regular expressions need
-an explicit `regular_expression` adapter; unsupported rules fail explicitly.
+roll back and HTTP returns structured 422 feedback. Regular expressions match as
+Java's `Pattern` does (`Runtime::JavaRegex`): the syntax is rewritten where Java
+and Ruby read the same text differently (`.`, `^`, `$`, `\h`, `\v`, `\Q...\E`,
+`\x{...}` and the ASCII POSIX classes), and a construct with no faithful
+equivalent fails instead of matching otherwise; a registered `regular_expression`
+adapter still decides instead. Unsupported rules fail explicitly.
 A 21-case matrix matched native Runtime: see the
 [parity evidence](../evidence/validation-parity-2026-10-05.json). Equality uses
 `Value` in native storage. Date-only bounds were certified; Runtime 11.12.1

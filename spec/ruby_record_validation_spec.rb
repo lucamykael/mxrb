@@ -125,19 +125,25 @@ RSpec.describe 'Standalone record validation' do
     @store.commit(object(Name: 'OK', Amount: nil))
   end
 
-  it 'requires an explicit adapter for JVM regular expressions and rejects missing definitions' do
+  it 'matches regular expressions as Java does unless an adapter decides, and rejects missing definitions' do
     rule('Name', 'DomainModels$RegExRuleInfo', RegExIdentifier: 'Rules.Pattern')
     value = object(Name: 'OK')
     expect { @store.commit(value) }.to raise_error(Mxrb::ValidationError, /unknown regular expression/)
-    Class.new(Mxrb::RubyApp::RegularExpression) do
+    pattern = Class.new(Mxrb::RubyApp::RegularExpression) do
       mendix_name 'Rules.Pattern'
       expression '[A-Z]+'
     end
-    expect { @store.commit(value) }.to raise_error(Mxrb::ValidationError, /adapter is required/)
+    @store.commit(value)
+    expect { @store.commit(object(Name: "OK\n")) }.to raise_error(Mxrb::RubyApp::RecordValidationError)
+    pattern.expression '\\p{javaLowerCase}'
+    expect { @store.commit(object(Name: 'OK')) }
+      .to raise_error(Mxrb::ValidationError, /Rules.Pattern: Java property/)
+    pattern.expression '[A-Z]+'
     Mxrb::RubyApp::Registry.register_adapter(:regular_expression) do |expression:, value:|
       expect(expression).to eq('[A-Z]+')
       value == 'OK'
     end
+    value = object(Name: 'OK')
     @store.commit(value)
     value.members['Name'] = 'bad'
     expect { @store.commit(value) }.to raise_error(Mxrb::RubyApp::RecordValidationError)
