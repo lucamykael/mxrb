@@ -192,7 +192,7 @@ module Mxrb
         # an empty reference set an empty list, as the generated proxies expect.
         def callback_get(params)
           object, name = member!(params)
-          typed(object, name, object.members[name])
+          typed(object, name, @context.value(object, name))
         end
 
         def callback_set(params)

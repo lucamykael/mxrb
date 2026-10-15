@@ -16,6 +16,8 @@ module Mxrb
           options << "enumeration: #{ruby(attr.enumeration)}" unless attr.enumeration.to_s.empty?
           options << 'required: true' if attr.required
           options << 'unique: true' if attr.unique
+          options << "calculated: #{ruby(attr.calculated)}" if attr.calculated
+          options << 'pass_entity: false' if attr.calculated && attr.pass_entity == false
           "  #{attr.type || :string} #{symbol(attr.name)}#{options.empty? ? '' : ", #{options.join(', ')}"}"
         end
         assocs = associations.map do |assoc|

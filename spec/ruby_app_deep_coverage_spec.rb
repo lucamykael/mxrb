@@ -417,7 +417,7 @@ RSpec.describe 'Ruby application internal contracts' do
 
     app = Mxrb::RubyApp::Application.allocate
     store = double
-    interpreter = double(store:, effects: [{ type: 'effect' }])
+    interpreter = double(store:, effects: [{ type: 'effect' }], calculated_members: {})
     allow(interpreter).to receive_messages(clear_effects!: nil, call: 'native')
     project = double(modules: [])
     bridge = double(interpreter:, project:)

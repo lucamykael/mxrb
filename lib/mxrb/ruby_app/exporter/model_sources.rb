@@ -8,6 +8,13 @@ module Mxrb
       module ModelSources
         private
 
+        def calculated_attribute(attribute)
+          return '' unless attribute['calculated']
+
+          pass = attribute['pass_entity'] == false ? ', pass_entity: false' : ''
+          ", calculated: #{attribute['calculated'].inspect}#{pass}"
+        end
+
         def entity_source(namespace, class_name, qualified, _id, attributes, associations = [],
                           dto:, persistable:,
                           access_rules: [], indexes: [], system_members: nil,
@@ -24,7 +31,7 @@ module Mxrb
               "unique: #{attribute.fetch('unique')}, default: #{attribute.fetch('default').inspect}, " \
               "documentation: #{attribute.fetch('documentation').inspect}, " \
               "length: #{attribute['length'].inspect}#{localize_date}, " \
-              "enumeration: #{attribute['enumeration'].inspect}"
+              "enumeration: #{attribute['enumeration'].inspect}#{calculated_attribute(attribute)}"
           end
           association_declarations = associations.map do |association|
             "    association #{association.fetch('to_entity').inspect}, " \

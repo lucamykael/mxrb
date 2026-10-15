@@ -30,6 +30,18 @@ também aceitam `length:`; `enum` exige `enumeration:`. A enumeração é declar
 separadamente com `enumeration`; um atributo de enum usa `enum`, não
 `enumeration`.
 
+Um atributo calculado declara o microflow que o calcula:
+
+```ruby
+string :FullName, calculated: "VetClinic.CalcFullName"
+string :Today, calculated: "VetClinic.CalcToday", pass_entity: false
+```
+
+Como no Runtime Mendix 11.12.1, o valor não é guardado: o microflow roda a cada
+leitura do atributo numa expressão e quando o objeto é enviado ao cliente, e
+não ao criar, alterar, commitar ou recuperar o objeto. Ele recebe o objeto no
+seu parâmetro, a menos que `pass_entity: false`.
+
 ```ruby
 enumeration :AnimalSpecies do
   value :Dog, caption: "Dog"

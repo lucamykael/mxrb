@@ -28,6 +28,18 @@ werden `default:`, `documentation:` und bei Enum-Attributen `enumeration:` in
 das MPR geschrieben. Die Enumeration selbst wird mit `enumeration` deklariert,
 das Attribut mit `enum`.
 
+Ein berechnetes Attribut nennt den Microflow, der es berechnet:
+
+```ruby
+string :FullName, calculated: "VetClinic.CalcFullName"
+string :Today, calculated: "VetClinic.CalcToday", pass_entity: false
+```
+
+Wie in der Mendix-11.12.1-Runtime wird der Wert nicht gespeichert: Der Microflow
+läuft bei jedem Lesen des Attributs in einem Ausdruck und wenn das Objekt an den
+Client geht, nicht beim Anlegen, Ändern, Committen oder Abrufen des Objekts. Er
+erhält das Objekt als Parameter, außer bei `pass_entity: false`.
+
 ## Assoziationen
 
 ```ruby

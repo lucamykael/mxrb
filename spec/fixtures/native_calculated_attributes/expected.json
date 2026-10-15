@@ -1,0 +1,46 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "50594e0babd71e84186cb57fef24bd8c416ec1c99ca3c9760ed13098a355e29c",
+  "results": {
+    "full_after_create": [
+      "Ada Lovelace"
+    ],
+    "calls_after_create": [
+      "1"
+    ],
+    "full_read_again": [
+      "Ada Lovelace"
+    ],
+    "calls_after_read": [
+      "2"
+    ],
+    "full_after_change": [
+      "Grace Lovelace"
+    ],
+    "calls_after_change": [
+      "3"
+    ],
+    "full_after_commit": [
+      "Grace Lovelace"
+    ],
+    "calls_after_commit": [
+      "4"
+    ],
+    "full_after_retrieve": [
+      "Grace Lovelace"
+    ],
+    "calls_after_retrieve": [
+      "5"
+    ],
+    "calls_before_list": [
+      "5"
+    ],
+    "calls_after_list": [
+      "5"
+    ],
+    "fixed": [
+      "fixed"
+    ]
+  }
+}

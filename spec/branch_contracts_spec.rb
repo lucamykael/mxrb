@@ -8,7 +8,8 @@ RSpec.describe 'remaining branch contracts' do
   it 'exports every optional entity, attribute, association, and index option' do
     attribute = double(
       name: 'Status', type: nil, default_value: '', documentation: '', length: nil,
-      localize_date: false, enumeration: 'App.Status', required: false, unique: true
+      localize_date: false, enumeration: 'App.Status', required: false, unique: true,
+      calculated: 'App.CalcStatus', pass_entity: false
     )
     association = double(
       to_entity_id: 'App.Target', association_type: :ReferenceSet, owner: :Both,
@@ -30,6 +31,7 @@ RSpec.describe 'remaining branch contracts' do
     )
     expect(source).to include(
       'string :Status', 'localize_date: false', 'enumeration: "App.Status"',
+      'calculated: "App.CalcStatus"', 'pass_entity: false',
       'unique: true', 'cardinality: :many_to_many', 'owner: :Both', 'documentation: "docs"',
       'parent_delete: :DeleteMeAndReferences', 'ascending: [false]',
       'include_offline: true'

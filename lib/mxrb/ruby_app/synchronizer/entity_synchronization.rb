@@ -137,7 +137,8 @@ module Mxrb
               default: attribute[:default], required: attribute.fetch(:required, false),
               unique: attribute.fetch(:unique, false), documentation: attribute[:documentation],
               length: attribute[:length], localize_date: attribute[:localize_date],
-              enumeration: attribute[:enumeration]
+              enumeration: attribute[:enumeration], calculated: attribute[:calculated],
+              pass_entity: attribute.fetch(:pass_entity, true)
             }
           end
           project.plan_add_entity(
@@ -175,7 +176,8 @@ module Mxrb
                            default: declaration[:default], required: declaration.fetch(:required, false),
                            unique: declaration.fetch(:unique, false),
                            documentation: declaration[:documentation], length: declaration[:length],
-                           localize_date: declaration[:localize_date], enumeration: declaration[:enumeration]
+                           localize_date: declaration[:localize_date], enumeration: declaration[:enumeration],
+                           calculated: declaration[:calculated], pass_entity: declaration.fetch(:pass_entity, true)
             ).apply!
           end
           (declared.keys & existing.keys).each do |name|
@@ -220,6 +222,12 @@ module Mxrb
             updates[:enumeration] = declaration[:enumeration] \
               if existing_enumeration.to_s != declaration[:enumeration].to_s
           end
+          declared_calculated = declaration[:calculated]&.to_s
+          existing_calculated = attribute.calculated if attribute.respond_to?(:calculated)
+          updates[:calculated] = declared_calculated if existing_calculated != declared_calculated
+          declared_pass = declared_calculated && declaration.fetch(:pass_entity, true) != false
+          existing_pass = attribute.pass_entity if attribute.respond_to?(:pass_entity)
+          updates[:pass_entity] = declared_pass if declared_calculated && existing_pass != declared_pass
           return if updates.empty?
 
           project.plan_change_attribute("#{entity_name}/#{attribute.name}", **updates).apply!

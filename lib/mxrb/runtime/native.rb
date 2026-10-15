@@ -280,11 +280,17 @@ module Mxrb
       class Expression
         include StringFunctions
 
+        # The value of a member that is not calculated, which calculated: answers then.
+        STORED = Object.new.freeze
+
         # associations: ->(object, association) { related objects } reaches the
-        # side of a reference that the object does not own; constants: ->(name) { value }.
-        def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil, constants: nil)
+        # side of a reference that the object does not own; constants: ->(name) { value };
+        # calculated: ->(object, member) { value or STORED } computes calculated attributes.
+        def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil, constants: nil,
+                       calculated: nil)
           @token_cache = {}
           @associations = associations
+          @calculated = calculated
           @constants = constants
           @decimal = decimal
           @calendar = CalendarFunctions.new(time_zone:)
@@ -332,6 +338,10 @@ module Mxrb
 
         def member_value(object, member)
           name = member.split('.').last
+          if @calculated
+            value = @calculated.call(object, name)
+            return value unless value.equal?(STORED)
+          end
           return object.members[name] if object.members.key?(name) || !member.include?('.')
 
           related(object, member)
@@ -785,7 +795,7 @@ module Mxrb
           }, constants: ->(name) { constants.value(name) }, time_zone: lambda {
             attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
             attributes.fetch('time_zone', 'UTC')
-          })
+          }, calculated: ->(object, member) { calculated_value(object, member) })
           @log = []
           @effects = []
           @call_depth = 0
@@ -880,6 +890,31 @@ module Mxrb
           end
         end
 
+        # The calculated attributes of an object as the client gets them, computed
+        # for the user the object is sent to; the effects of the request so far are kept.
+        def calculated_members(object, context: nil)
+          names = calculated_attributes.fetch(object.entity, {}).keys
+          return {} if names.empty?
+
+          previous = @effects
+          names.to_h { [_1, calculated_value(object, _1, context:)] }
+        ensure
+          @effects = previous + @effects if previous && !previous.equal?(@effects)
+        end
+
+        # A calculated attribute, computed by its microflow each time an expression
+        # reads it, as Mendix 11.12.1 does: not when the object is created, changed,
+        # committed or retrieved. The microflow gets the object unless pass_entity is false.
+        def calculated_value(object, member, context: nil)
+          microflow, pass_entity = calculated_attributes.dig(object.entity, member)
+          return Expression::STORED unless microflow
+
+          flow = @flows.fetch(microflow) do
+            raise NativeRuntimeError, "calculated attribute #{object.entity}.#{member} needs microflow #{microflow}"
+          end
+          call(microflow, pass_entity ? { flow.parameters.first.fetch('Name') => object } : {}, context:)
+        end
+
         # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
         # innermost transaction unless a savepoint of a sub-microflow called with
         # custom error handling is open above it; afterwards commits are immediate.
@@ -892,6 +927,27 @@ module Mxrb
         end
 
         private
+
+        # Each entity's calculated attributes, its generalizations' included, as
+        # name => [microflow, pass_entity].
+        def calculated_attributes
+          @calculated_attributes ||= begin
+            entities = @project.modules.flat_map { |mod| mod.entities.map { ["#{mod.name}.#{_1.name}", _1] } }.to_h
+            entities.to_h do |name, entity|
+              chain = []
+              while entity && !chain.include?(entity)
+                chain << entity
+                entity = entities[entity.generalization_target.to_s]
+              end
+              [name, chain.flat_map(&:attributes).filter_map { calculated_attribute(_1) }.to_h]
+            end
+          end
+        end
+
+        def calculated_attribute(attribute)
+          microflow = attribute.calculated
+          [attribute.name, [microflow, attribute.pass_entity]] if microflow
+        end
 
         def java_root(context)
           previous = @security_context

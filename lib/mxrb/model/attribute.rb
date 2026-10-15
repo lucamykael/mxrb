@@ -72,6 +72,21 @@ module Mxrb
         }
       end
 
+      # The microflow that computes a calculated attribute, or nil for a stored one.
+      def calculated
+        value = raw_value_doc
+        return unless value.is_a?(Hash) && value['$Type'] == 'DomainModels$CalculatedValue'
+
+        (value['Microflow'] || value['microflow']).to_s
+      end
+
+      # Whether the calculating microflow receives the object.
+      def pass_entity
+        return if calculated.nil?
+
+        raw_value_doc.fetch('PassEntity') { raw_value_doc['passEntity'] } != false
+      end
+
       def inspect
         "#<Mxrb::Attribute name=#{@name.inspect} type=#{@type}>"
       end
