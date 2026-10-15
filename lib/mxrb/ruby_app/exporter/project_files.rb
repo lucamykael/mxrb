@@ -103,8 +103,8 @@ module Mxrb
         # never embedded in it, so a round trip picks up newly audited actions.
         def verified_adapters_source
           directory = File.dirname(@mpr_path)
-          registrations = [KnownJavaActions, KnownOqlActions, KnownOqlModuleActions, KnownCommunityCommonsActions]
-                          .map { _1.registrations(directory) }.reject(&:empty?)
+          registrations = [KnownJavaActions, KnownOqlActions, KnownOqlModuleActions, KnownCommunityCommonsActions,
+                           KnownEncryptionActions].map { _1.registrations(directory) }.reject(&:empty?)
           <<~RUBY
             # frozen_string_literal: true
 
