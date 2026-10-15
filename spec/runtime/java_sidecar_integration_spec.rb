@@ -133,10 +133,42 @@ RSpec.describe 'Java action sidecar' do
     ENV['MXRB_SECURE_COOKIES'] = previous
   end
 
-  it 'needs the sidecar for request handlers' do
+  it 'serves background work through the configured sidecar while the runtime runs' do
+    sidecar = Class.new do
+      attr_reader :calls
+
+      def initialize = @calls = []
+
+      def listen(running:)
+        yield 'ticket'
+        sleep 0.01 while running.call
+      end
+
+      def attach(ticket, context:)
+        @calls << [ticket, context.class]
+        raise 'background failure' if ticket == 'broken'
+      end
+    end.new
+    allow(Mxrb::Runtime::JavaSidecar).to receive(:configured).and_return(sidecar)
+    export
+    open_application
+    @application.start_runtime
+    @application.start_java_listener
+    deadline = Time.now + 5
+    sleep 0.01 until sidecar.calls.any? || Time.now > deadline
+    expect(sidecar.calls).to eq([['ticket', Mxrb::Runtime::JavaActionContext]])
+    expect { @application.send(:attach_java_work, 'broken') }.to output(/background failure/).to_stderr
+    @application.stop_java_listener
+    @application.stop_java_listener
+  end
+
+  it 'needs the sidecar for request handlers and background work' do
     Mxrb.open(@source) do |project|
-      expect { Mxrb::Runtime::Native::Interpreter.new(project).java_request('x', {}) }
+      interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
+      expect { interpreter.java_request('x', {}) }
         .to raise_error(Mxrb::NativeRuntimeError, 'request handlers need the Java actions sidecar')
+      expect { interpreter.java_attach('x') }
+        .to raise_error(Mxrb::NativeRuntimeError, 'background work needs the Java actions sidecar')
     end
   end
 
@@ -147,17 +179,18 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 24, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 25, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 27 sources, left out 1')
+    expect(output).to include('compiled 28 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
     open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
+    @application.start_runtime
     expect(@application.call_service('Views.RunAll')).to be(true)
 
     log = @application.send(:bridge).interpreter.log
@@ -192,6 +225,12 @@ RSpec.describe 'Java action sidecar' do
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')
+    remembered = lambda do
+      @application.send(:bridge).store.retrieve('Views.Tag').map { _1.members['Label'] }.include?('from the background')
+    end
+    deadline = Time.now + 10
+    sleep 0.05 until remembered.call || Time.now > deadline
+    expect(remembered.call).to be(true)
 
     first = dispatch('GET', '/hello/world', query: { 'q' => '1' })
     expect(first.status).to eq(200)

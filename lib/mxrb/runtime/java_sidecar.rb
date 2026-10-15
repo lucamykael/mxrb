@@ -65,7 +65,39 @@ module Mxrb
                  'handler' => handler.to_s, 'request' => codec.encode(http), 'session' => codec.encode(session))
       end
 
+      # Keeps a connection on which the sidecar asks for a connection of its own
+      # for each callback of work a Java action left running (an MQTT listener,
+      # say), and yields each ticket. It reconnects while running holds.
+      def listen(running:, retry_after: 1)
+        while running.call
+          begin
+            listening(running) { yield _1 }
+          rescue NativeRuntimeError, JSON::ParserError
+            sleep(retry_after)
+          end
+        end
+      end
+
+      # Serves one callback of background work on the connection asked for.
+      def attach(ticket, context:)
+        exchange('attach', Session.new(context, @services), 'ticket' => ticket.to_s)
+      end
+
       private
+
+      def listening(running)
+        connect do |socket|
+          params = @token ? { 'token' => @token } : {}
+          write(socket, 'id' => 0, 'method' => 'listen', 'params' => params)
+          while running.call
+            next unless socket.wait_readable(0.5)
+
+            line = socket.gets or raise NativeRuntimeError, 'the Java action sidecar closed the listen connection'
+            message = JSON.parse(line)
+            yield message.dig('params', 'ticket').to_s if message['method'] == 'attach'
+          end
+        end
+      end
 
       def exchange(method, session, params)
         connect do |socket|

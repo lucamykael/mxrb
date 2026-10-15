@@ -306,6 +306,36 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       .to raise_error(Mxrb::NativeRuntimeError, /did not answer/)
   end
 
+  it 'listens for background work and serves each callback on a connection of its own' do
+    tickets = []
+    pause = ->(_client) { sleep 0.7 }
+    steps = [JSON.generate('id' => 0, 'method' => 'attach', 'params' => { 'ticket' => 't1' }),
+             JSON.generate('id' => 0, 'method' => 'ping'), pause,
+             JSON.generate('id' => 0, 'method' => 'attach', 'params' => { 'ticket' => 't2' })]
+    received = sidecar(steps) do |url|
+      described_class.new(url, token: 'secret').listen(running: -> { tickets.size < 2 }) { tickets << _1 }
+    end
+    expect(tickets).to eq(%w[t1 t2])
+    expect(received.first).to eq('id' => 0, 'method' => 'listen', 'params' => { 'token' => 'secret' })
+  end
+
+  it 'reconnects to listen' do
+    tickets = %w[t1 t2]
+    calls = 0
+    sidecar([JSON.generate('id' => 0, 'method' => 'attach', 'params' => { 'ticket' => 't3' })]) do |url|
+      described_class.new(url).listen(running: -> { (calls += 1) < 6 }, retry_after: 0) { tickets << _1 }
+    end
+    expect(tickets).to eq(%w[t1 t2 t3])
+  end
+
+  it 'attaches background work' do
+    steps = [callback(1, 'constant', 'name' => 'Mod.C'), { 'id' => 0, 'result' => nil }]
+    allow(context).to receive(:constant).and_return('c')
+    received = sidecar(steps) { described_class.new(_1).attach('t4', context:) }
+    expect(received.first).to eq('id' => 0, 'method' => 'attach', 'params' => { 'ticket' => 't4' })
+    expect(received.last).to eq('id' => 1, 'result' => 'c')
+  end
+
   it 'raises the exception a Java action throws with its class' do
     steps = [{ 'id' => 0, 'error' => { 'type' => 'java.lang.IllegalStateException', 'message' => 'bad' } }]
     expect { sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) } }

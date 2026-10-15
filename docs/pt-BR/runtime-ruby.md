@@ -294,6 +294,13 @@ Os proxies gerados também têm `load(context, xpath)`, como os do Studio Pro. O
 `IContext.getRuntimeRequest`/`getRuntimeResponse` ficam vazios, porque o app Ruby
 não repassa a requisição HTTP às ações.
 
+Trabalho que uma ação deixa rodando depois de retornar, como um listener de
+mensagens MQTT que chama um microflow, também passa pelo app Ruby: ao iniciar o
+runtime, ele abre uma conexão de escuta com o sidecar, e a cada callback desse
+trabalho o sidecar pede por ela uma conexão própria, atendida numa transação nova
+com contexto de sistema. A conexão parte sempre do app Ruby, que não precisa
+aceitar conexões do container. Os objetos que um callback devolve valem só nele.
+
 Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
 registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse
 motivo. As legendas de enumeração seguem as traduções do app Ruby; os proxies que o
@@ -315,7 +322,7 @@ definido nos dois lados, autentica as chamadas; `MXRB_JAVA_ACTIONS_TIMEOUT`
 mudar a exportação, que continua sem nenhum arquivo Java. O comando grava em
 `java-actions/` o Dockerfile e as fontes do sidecar, uma cópia do `javasource` do
 projeto (fontes que não são UTF-8 são lidas como ISO-8859-1) com os proxies que o
-Studio Pro geraria e não são versionados, e os jars do `userlib`. Também cria um
+Studio Pro geraria e não são versionados, e os jars do `userlib` e do `vendorlib`. Também cria um
 `docker-compose.yml`, se ainda não existir, com o serviço `java-actions` em
 `127.0.0.1:7911`. O diretório é refeito a cada execução e não é embutido no MPR:
 

@@ -7,7 +7,7 @@ module Mxrb
     # Writes the opt-in sidecar for a project's own Java actions next to its
     # exported Ruby application: java-actions/ holds the image (the sidecar's
     # sources and Dockerfile), the project's javasource with the proxies Studio
-    # Pro would generate, and its userlib jars; docker-compose.yml starts it.
+    # Pro would generate, and its userlib and vendorlib jars; docker-compose.yml starts it.
     # The Ruby application uses it once MXRB_JAVA_ACTIONS_URL points at it.
     class JavaActionsPackage
       DIRECTORY = 'java-actions'
@@ -95,9 +95,12 @@ module Mxrb
         File.write(File.join(target, 'captions.tsv'), rows.join)
       end
 
+      # The project's jars, and those Studio Pro 10 and later keeps for modules in
+      # vendorlib, which the image puts on the class path together.
       def copy_libraries(target)
         FileUtils.mkdir_p(target)
-        libraries = files(File.join(@project, 'userlib'), '.jar')
+        libraries = files(File.join(@project, 'userlib'), '.jar') +
+                    files(File.join(@project, 'vendorlib'), '.jar').map { ["vendorlib/#{_1}", _2] }
         libraries.each do |relative, path|
           FileUtils.mkdir_p(File.dirname(File.join(target, relative)))
           FileUtils.cp(path, File.join(target, relative))

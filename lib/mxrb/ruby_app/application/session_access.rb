@@ -54,6 +54,7 @@ module Mxrb
         # microflow runs once, without a user, and must return true before
         # scheduled events start. MXRB_AFTER_STARTUP=skip leaves it out.
         def start_runtime
+          start_java_listener
           runtime_synchronize { run_after_startup } unless @runtime_started
           @runtime_started = true
           start_scheduler
