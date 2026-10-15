@@ -25,7 +25,8 @@ module Mxrb
         @access_control = Runtime::AccessControl.new(@project, store: @store)
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:,
-                    constants: Runtime::Constants.new(@project, environment:)
+                    constants: Runtime::Constants.new(@project, environment:),
+                    java_sidecar: Runtime::JavaSidecar.configured(environment)
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
         Runtime::Languages.synchronize(@store, Runtime::Languages.settings(@project))

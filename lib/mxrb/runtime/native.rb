@@ -25,6 +25,7 @@ require_relative 'constants'
 require_relative 'sort_path'
 require_relative 'decimal_parsing'
 require_relative 'java_action_context'
+require_relative 'java_sidecar'
 
 module Mxrb
   module Runtime
@@ -765,8 +766,9 @@ module Mxrb
         attr_reader :store, :log, :effects
 
         def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
-                       service_dispatch: nil, constants: nil)
+                       service_dispatch: nil, constants: nil, java_sidecar: nil)
           @project = project
+          @java_sidecar = java_sidecar
           @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
           @constants = constants ||= Constants.new(project)
           @expression = Expression.new(decimal: @decimal, associations: lambda { |object, association|
@@ -832,6 +834,16 @@ module Mxrb
         # constraint. Used by the functional Executor's count expectations.
         def count(entity, xpath = nil)
           filter_by_xpath(store.retrieve(entity.to_s), xpath.to_s, {}).size
+        end
+
+        # A retrieve a Java action makes through Core: an XPath constraint with
+        # variables, sortings as [path, descending], an offset and an amount (0 or less: all).
+        def retrieve_xpath(entity, xpath, variables = {}, offset: 0, amount: -1, sort: [])
+          values = readable(entity.to_s, filter_by_xpath(store.retrieve(entity.to_s), xpath.to_s, variables))
+          keys = sort.map { |path, descending| [SortPath.parse(path), descending] }
+          read = SortPath.reader { @store }
+          values = SortOrder.sort(values, keys) { |value, path| read.call(value, path) }.drop(offset)
+          amount.positive? ? values.first(amount) : values
         end
 
         # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
@@ -1141,8 +1153,7 @@ module Mxrb
           end
 
           entity = source['Entity'].to_s
-          values = filter_by_xpath(store.retrieve(entity), source['XpathConstraint'].to_s, variables)
-          values = @policy.filter_readable(entity, values, context: @security_context) if enforce_entity_access?
+          values = readable(entity, filter_by_xpath(store.retrieve(entity), source['XpathConstraint'].to_s, variables))
           values = sort_values(values, items(source.dig('NewSortings', 'Sortings')))
           range = source['Range'] || {}
           limit = @expression.evaluate(range['LimitExpression'], variables)
@@ -1167,6 +1178,10 @@ module Mxrb
           definition = @associations[source['AssociationId'].to_s]
           values = values.first if definition&.fetch(:type) == :Reference && definition[:from] == start.entity
           variables[action['ResultVariableName'].to_s] = values
+        end
+
+        def readable(entity, values)
+          enforce_entity_access? ? @policy.filter_readable(entity, values, context: @security_context) : values
         end
 
         def filter_by_xpath(values, xpath, variables)
@@ -1324,6 +1339,7 @@ module Mxrb
           adapter = @java_custom_actions[name]
           platform = PLATFORM_JAVA_ACTIONS[name]
           adapter ||= platform && ->(arguments) { platform.call(@store, arguments) }
+          adapter ||= @java_sidecar && sidecar_action(name)
           unless adapter
             raise NativeRuntimeError,
                   "Java Custom Action #{name.empty? ? '(missing name)' : name} is not registered; " \
@@ -1347,6 +1363,15 @@ module Mxrb
         alias action_basic_code action_java_action_call
         alias action_entity_type_java action_java_action_call
         alias action_microflow_java action_java_action_call
+
+        # A project's own Java action, run by the opt-in sidecar with its
+        # parameters in the order the action declares them.
+        def sidecar_action(name)
+          order = java_action_parameter_names(name).values
+          ContextJavaAction.new(lambda { |arguments, context:|
+            @java_sidecar.invoke(name, (order | arguments.keys).map { [_1, arguments[_1]] }, context:)
+          })
+        end
 
         def java_action_context
           JavaActionContext.new(interpreter: self, store: @store, log: @log, project: @project, flows: @flows.keys,

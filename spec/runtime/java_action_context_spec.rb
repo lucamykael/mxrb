@@ -4,7 +4,8 @@ require 'spec_helper'
 require 'sqlite3'
 
 # Model shapes the context reads: native entities with a generalization, Ruby ones without.
-ContextModule = Struct.new(:name, :entities, :constants)
+ContextModule = Struct.new(:name, :entities, :constants, :associations)
+ContextAssociation = Struct.new(:name, :association_type)
 ContextEntity = Struct.new(:name, :attributes, :generalization_target)
 ContextAttribute = Struct.new(:name, :type, :raw_value_doc)
 PlainEntity = Struct.new(:name, :attributes)
@@ -21,11 +22,13 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
                                  ContextAttribute.new('Total', :decimal, calculated)], 'Mod.Base'),
       ContextEntity.new('Loop', [], 'Mod.Loop'),
       ContextEntity.new('Upload', [], 'System.FileDocument'),
-      ContextEntity.new('Lone', [ContextAttribute.new('Name', :string, nil)], nil)
+      ContextEntity.new('Lone', [ContextAttribute.new('Name', :string, nil),
+                                 ContextAttribute.new('Count', :integer, nil)], nil)
     ]
+    associations = [ContextAssociation.new('Item_Base', :Reference), ContextAssociation.new('Item_Lone', :ReferenceSet)]
     Struct.new(:modules, :mendix_version).new(
-      [ContextModule.new('Mod', entities),
-       ContextModule.new('Ruby', [PlainEntity.new('Row', [ContextAttribute.new('A', :integer)])])],
+      [ContextModule.new('Mod', entities, [], associations),
+       ContextModule.new('Ruby', [PlainEntity.new('Row', [ContextAttribute.new('A', :integer)])], [], [])],
       '11.12.1'
     )
   end
@@ -119,7 +122,7 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
     expect(context.attributes('Mod.Item').first(2)).to eq([['Name', :string, false], ['Password', :hashstring, false]])
     expect(context.attributes('Mod.Item').last(3))
       .to eq([['Code', :string, false], ['Name', :string, false], ['Total', :decimal, true]])
-    expect(context.attributes('Mod.Lone')).to eq([['Name', :string, false]])
+    expect(context.attributes('Mod.Lone')).to eq([['Name', :string, false], ['Count', :integer, false]])
     expect(context.attributes('Mod.Loop')).to eq([])
     expect(context.attributes('Ruby.Row')).to eq([['A', :integer, false]])
     expect { context.attributes('Mod.Missing') }.to raise_error(Mxrb::NativeRuntimeError, 'unknown entity Mod.Missing')
@@ -132,6 +135,32 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
     with_resolver = described_class.new(interpreter:, store:, log: lines, project:, flows: [], constants: resolver)
     expect(with_resolver.constant('Mod.Flag')).to be(true)
     expect { context.constant('Mod.Flag') }.to raise_error(Mxrb::NativeRuntimeError, 'unknown constant @Mod.Flag')
+  end
+
+  it 'tells the members of an entity and its generalizations apart' do
+    expect(context.member_kind('Mod.Item', 'Name')).to eq(:attribute)
+    expect(context.member_kind('Mod.Item', 'Code')).to eq(:attribute)
+    expect(context.member_kind('Mod.Item', 'Password')).to eq(:attribute)
+    expect(context.member_kind('System.User', 'Name')).to eq(:attribute)
+    expect(context.member_kind('Mod.Lone', 'Count')).to eq(:integer)
+    expect(context.member_kind('Mod.Item', 'Item_Base')).to eq(:reference)
+    expect(context.member_kind('Mod.Item', 'Item_Lone')).to eq(:reference_set)
+    expect(context.member_kind('Mod.Lone', 'Code')).to be_nil
+    expect(context.member_kind('Mod.Missing', 'Name')).to be_nil
+  end
+
+  it 'retrieves by XPath through the interpreter and reads the session user' do
+    found = [store.create('Mod.Item')]
+    expect(interpreter).to receive(:retrieve_xpath)
+      .with('Mod.Item', '[Name = $name]', { 'name' => 'a' }, offset: 1, amount: 2, sort: [['Name', true]])
+      .and_return(found)
+    expect(context.retrieve(" //Mod.Item[Name = $name]\n", { 'name' => 'a' }, offset: 1, amount: 2,
+                                                                              sort: [['Name', true]])).to eq(found)
+    expect { context.retrieve('Mod.Item') }.to raise_error(ArgumentError, 'unsupported XPath query "Mod.Item"')
+
+    ann = user('ann')
+    expect(context.user).to be_nil
+    expect(context(security_context: Mxrb::Runtime::SecurityContext.new(user: ann.id)).user).to eq(ann)
   end
 
   it 'gives Java exceptions their class and an empty message for null' do

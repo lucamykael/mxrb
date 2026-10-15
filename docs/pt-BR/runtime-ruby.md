@@ -171,8 +171,8 @@ são atômicos; um claim inacabado pode ser retomado após a expiração. O leas
 padrão é de 300 segundos e pode ser alterado com `MXRB_SCHEDULER_LEASE_TTL`.
 Use `:memory:`, `memory` ou `local` para ativar explicitamente o modo por processo.
 
-Java Custom Actions não iniciam uma JVM. Cada ação permitida deve ter um adapter
-Ruby explícito, registrado pelo nome qualificado em `config/adapters.rb`:
+Por padrão, Java Custom Actions não iniciam uma JVM. Cada ação permitida deve ter
+um adapter Ruby explícito, registrado pelo nome qualificado em `config/adapters.rb`:
 
 ```ruby
 Mxrb::RubyApp::Registry.register_java_custom_action('Pedidos.CalcularTotal') do |arguments|
@@ -188,8 +188,8 @@ avaliados no contexto do microflow; referências de entidade, microflow e
 mappings são entregues como nomes qualificados. O retorno alimenta a variável
 de resultado apenas quando `UseReturnVariable` está ativo (ou no formato legado
 que declara somente `ResultVariableName`). Uma ação sem registro falha fechado
-com seu nome e a instrução de registro; não há descoberta de classes, execução
-de JAR nem fallback para a JVM. REST, app services, SOAP, mappings e geração de
+com seu nome e a instrução de registro; sem o sidecar opcional descrito adiante,
+não há descoberta de classes, execução de JAR nem fallback para a JVM. REST, app services, SOAP, mappings e geração de
 documentos continuam usando os adapters Ruby por tipo. O frontend permanece
 JavaScript/React no navegador, servido pelo backend Ruby sem Runtime Java.
 
@@ -245,6 +245,36 @@ classe Java. Medido no Runtime 11.12.1 e reproduzido pelo app Ruby
   transação no segundo caso; uma Java action que falha mantém seus commits, e
   depois do fim da transação a chamada tratada roda numa transação própria
   (`spec/fixtures/native_error_handling_transactions`).
+
+### Sidecar opcional para o Java do projeto
+
+Os adapters Ruby ficam restritos aos módulos do Marketplace auditados acima. O
+Java próprio do projeto, e o de módulos ainda não auditados, pode rodar no sidecar
+de `docker/java-actions`, um processo Java separado (um container) que só é usado
+quando `MXRB_JAVA_ACTIONS_URL` aponta para ele (`tcp://host:porta`). Sem essa
+variável nada muda: a ação sem adapter falha fechado. A ordem de resolução é
+adapter de `config/adapters.rb`, adapter verificado, ação da plataforma, sidecar e,
+por fim, o erro.
+
+O sidecar compila o `javasource` e o `userlib` do projeto contra uma API própria
+com as partes de `com.mendix.*` que as ações usam: `IContext`, `IMendixObject`,
+`IMendixIdentifier`, `UserAction`/`CustomJavaAction`, `ILogNode`, e em `Core` os
+retrieves por XPath (`createXPathQuery`, `retrieveXPathQuery`, `retrieveByPath`,
+`retrieveId`), `instantiate`, `commit`, `delete`, `rollback`, `microflowCall`, a
+configuração, as constantes e as versões. Não há jar da Mendix no sidecar. Uma
+fonte que usa outra API não compila e fica de fora, com o primeiro erro registrado
+em `build-report.tsv`; chamar essa ação gera um erro que cita esse motivo.
+
+O app Ruby continua sendo o Runtime. Cada chamada abre uma conexão com mensagens
+JSON por linha. O Java recebe handles dos objetos do microflow e lê, altera, faz
+commit, consulta e chama microflows por callbacks, então a transação, os eventos,
+o acesso a entidades e o log ficam no Ruby. Um microflow chamado pelo Java pode
+chamar outra Java action, que roda numa conexão própria. Atributos Integer chegam
+como `java.lang.Integer`, reference sets vazios como lista vazia, e a exceção que a
+ação lança vira `$latestError` com a classe Java. `MXRB_JAVA_ACTIONS_TOKEN`, se
+definido nos dois lados, autentica as chamadas; `MXRB_JAVA_ACTIONS_TIMEOUT`
+(300 s por padrão) limita a espera por cada mensagem. O caso
+`spec/fixtures/java_action_sidecar` compila e roda ações reais contra o app Ruby.
 
 ## Certificação Ruby → Mendix → Ruby
 
