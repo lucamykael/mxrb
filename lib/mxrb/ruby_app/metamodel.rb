@@ -22,10 +22,9 @@ module Mxrb
       }.freeze
       FLOW_TYPES = DATA_TYPES.merge('Void' => 'Nothing').freeze
       # The values of each System enumeration, as the Runtime's System primitives list them.
-      SYSTEM_ENUMERATIONS = SYSTEM.fetch('objects').flat_map { _1.fetch('primitives') }.select { _1.key?('enum') }
-                                                                                       .to_h do
-        [_1.fetch('datatype').fetch('dsl').delete_prefix('#'),
-         _1.fetch('enum')]
+      SYSTEM_PRIMITIVES = SYSTEM.fetch('objects').flat_map { _1.fetch('primitives') }.freeze
+      SYSTEM_ENUMERATIONS = SYSTEM_PRIMITIVES.each_with_object({}) do |entry, all|
+        all[entry.fetch('datatype').fetch('dsl').delete_prefix('#')] = entry.fetch('enum') if entry.key?('enum')
       end.freeze
       SYSTEM_MEMBERS = { created_date: 'createdDate', changed_date: 'changedDate' }.freeze
       SYSTEM_ASSOCIATIONS = { owner: 'System.owner', changed_by: 'System.changedBy' }.freeze
