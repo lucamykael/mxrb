@@ -212,7 +212,14 @@ diferenças entre elas: `Base64Encode`, `EndTransaction`, `GetApplicationUrl`,
 Do Encryption, `EncryptString` e `DecryptString` (releases 8.0.2 e 10.0.2) cifram
 `{AES3}` com AES/GCM e decifram também o `{AES}` legado (AES/CBC), em formato
 compatível com o Java; `{AES2}` falha como num Runtime 11.12.1 recém-iniciado, que
-não tem o cipher `AES/GCM/PKCS5PADDING`. As ações PGP não têm adapter.
+não tem o cipher `AES/GCM/PKCS5PADDING`. As ações PGP não têm adapter. No startup,
+`UnitTesting.IsEnabled`, `Initialize`, `IsInitialized` e
+`RegisterModelUpdateSubscriber` (10.0.4) seguem a constante `UnitTesting.Enabled`, e
+`OIDC.DeleteExpiredAuthAttempts` (3.3.1) apaga as tentativas vencidas.
+`MxModelReflection.SyncObjects` (6.2.0 e 8.0.2) porta o builder do módulo sobre o
+metamodelo da aplicação, que reproduz o que o Runtime 11.12.1 informa
+(`spec/fixtures/native_metamodel`); o módulo System vem desse Runtime, inclusive em
+projetos de outras versões.
 
 Um adapter que precisa do microflow chamador usa `with_context: true` e recebe
 `context:`, com o store, o log, outros microflows (também como outro usuário ou em
