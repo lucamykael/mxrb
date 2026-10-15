@@ -1,0 +1,10 @@
+[
+  { "name": "echo", "method": "GET", "path": "rest/probe/v1/probe/echo/42?q=hi", "headers": { "X-Probe": "one" } },
+  { "name": "redirect", "method": "GET", "path": "rest/probe/v1/probe/redirect" },
+  { "name": "both", "method": "GET", "path": "rest/probe/v1/probe/both" },
+  { "name": "defaults", "method": "GET", "path": "rest/probe/v1/probe/defaults" },
+  { "name": "created", "method": "GET", "path": "rest/probe/v1/probe/created" },
+  { "name": "status_only", "method": "GET", "path": "rest/probe/v1/probe/status-only" },
+  { "name": "body", "method": "POST", "path": "rest/probe/v1/probe/body", "headers": { "Content-Type": "text/plain" }, "body": "hello" },
+  { "name": "plain", "method": "GET", "path": "rest/probe/v1/probe/plain" }
+]

@@ -845,6 +845,9 @@ module Mxrb
 
         def clear_effects! = @effects.clear
 
+        # The URL the application is reached at, as Core.getConfiguration reports it.
+        def application_root_url = java_action_context.application_root_url
+
         # Counts stored objects of an entity, optionally narrowed by an XPath
         # constraint. Used by the functional Executor's count expectations.
         def count(entity, xpath = nil)
@@ -1708,6 +1711,8 @@ module Mxrb
           when 'tail' then list.drop(1)
           when 'find' then list.find { @expression.evaluate(expression, variables, node: _1) }
           when 'filter' then list.select { @expression.evaluate(expression, variables, node: _1) }
+          when 'findbyexpression' then list.find { current_object?(expression, variables, _1) }
+          when 'filterbyexpression' then list.select { current_object?(expression, variables, _1) }
           when 'sort' then sort_values(list, items(second), memory: true)
           when 'union' then (list + Array(second)).uniq
           when 'intersect' then list & Array(second)
@@ -1715,6 +1720,11 @@ module Mxrb
           when 'contains' then list.include?(second)
           else raise NativeRuntimeError, "unsupported list operation #{type}"
           end
+        end
+
+        # Whether an expression over $currentObject holds for one object of a list.
+        def current_object?(expression, variables, object)
+          @expression.evaluate(expression, variables.merge('currentObject' => object)) == true
         end
 
         def client_action(kind, name, document, variables, result_name:)

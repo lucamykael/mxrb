@@ -137,6 +137,16 @@ quoted tokens such as `'[%CurrentUser%]'`); a constraint that cannot be evaluate
 denies access. Credentials come from `MXRB_USERS_JSON` and `MXRB_AUTH_TOKENS` and
 should be supplied by ignored local files or the deployment secret manager.
 
+A published REST operation is served at the service path, resource name and
+operation path. Its microflow may take `System.HttpRequest` (URI, content, version
+and its `System.HttpHeaders`) and `System.HttpResponse`, as on the Mendix 11.12.1
+Runtime (`spec/fixtures/native_rest_http`, recorded with
+`script/rest_native_oracle`). The response starts with the operation's success
+status, and the status and headers the microflow sets are the response's (several
+`Set-Cookie` headers stay separate). A returned value is the body ahead of the
+response content: text as it is, anything else as JSON. The reason phrase is
+ignored.
+
 Scheduled events use MXRB's stdlib scheduler with minute, hour, and day
 intervals, overlap protection, and supervised shutdown. IANA time zones such
 as `America/New_York` use `tzinfo`, including daylight-saving transitions.

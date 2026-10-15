@@ -65,7 +65,7 @@ RSpec.describe 'Ruby mode published REST services' do
     end.fetch('UnitID')
     operation = {
       '$ID' => SecureRandom.uuid, '$Type' => 'Rest$PublishedRestServiceOperation',
-      'HttpMethod' => 'Get', 'Path' => 'products/{TenantID}',
+      'HttpMethod' => 'Get', 'Path' => '{TenantID}',
       'Microflow' => 'PublicAPI.ListProducts', 'SuccessStatusCode' => '200 OK'
     }
     post_operation = {
@@ -75,7 +75,7 @@ RSpec.describe 'Ruby mode published REST services' do
     }
     resource = {
       '$ID' => SecureRandom.uuid, '$Type' => 'Rest$PublishedRestServiceResource',
-      'Name' => 'Products',
+      'Name' => 'products',
       'Operations' => Mxrb::IO::BsonCodec.build_array([operation, post_operation], marker: 2)
     }
     mpr.insert_unit(
@@ -110,7 +110,7 @@ RSpec.describe 'Ruby mode published REST services' do
         'microflow' => 'PublicAPI.ListProducts', 'success_status' => 200
       )
       expect(operations.find { _1.fetch('method') == 'POST' }).to include(
-        'path' => '/rest/catalog/v1/echo', 'microflow' => 'PublicAPI.EchoRequest',
+        'path' => '/rest/catalog/v1/products/echo', 'microflow' => 'PublicAPI.EchoRequest',
         'success_status' => 201
       )
       %w[request_envelope_dto.rb parameter_dto.rb credential_dto.rb].each do |filename|
@@ -173,7 +173,7 @@ RSpec.describe 'Ruby mode published REST services' do
       def [](name) = headers[name]
     end
     request = request_class.new(
-      '/rest/catalog/v1/echo', 'POST', JSON.generate('TotalCount' => 2), {}, {}
+      '/rest/catalog/v1/products/echo', 'POST', JSON.generate('TotalCount' => 2), {}, {}
     )
     response = Mxrb::Http::Response.new
     server.send(:dispatch, request, response)

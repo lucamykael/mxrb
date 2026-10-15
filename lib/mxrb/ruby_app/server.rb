@@ -210,23 +210,17 @@ module Mxrb
           return render_json(response, 401, error('unauthorized', 'Authenticated session required')) \
             if route['requires_authentication'] && authorization.to_s.empty?
 
-          body = request.body.to_s.empty? ? nil : request_json(request)
           route_context = if !route['requires_authentication'] && authorization.to_s.empty?
                             nil
                           else
                             context
                           end
-          result = application.invoke_rest(
-            route, path_parameters:, query: request.query.to_h, body:, context: route_context
+          reply = application.invoke_rest(
+            route, path_parameters:, query: request.query.to_h, body: rest_json(request), context: route_context,
+                   http: rest_http(request)
           )
           cors(response) if route['enable_cors']
-          status = Integer(route.fetch('success_status', 200))
-          if status == 204
-            response.status = status
-            response.body = ''
-            return
-          end
-          return render_json(response, status, result)
+          return render_rest(response, reply, Integer(route.fetch('success_status', 200)))
         end
 
         if method == 'OPTIONS' && application.rest_routes.any? { path_match(_1.fetch('path'), path) }
@@ -303,6 +297,36 @@ module Mxrb
 
         values = names.zip(match.captures.map { URI.decode_www_form_component(_1) }).to_h
         Struct.new(:named_captures).new(values)
+      end
+
+      # A REST body is JSON unless the request says it is something else, which the
+      # operation still reads as its System.HttpRequest content.
+      def rest_json(request)
+        type = request['Content-Type'].to_s
+        return nil if request.body.to_s.empty? || !(type.empty? || type.include?('json'))
+
+        request_json(request)
+      end
+
+      def rest_http(request)
+        query = URI.encode_www_form(request.query.to_h)
+        { uri: "#{application.application_root_url}#{request.path}#{"?#{query}" unless query.empty?}",
+          content: request.body.to_s, headers: request.headers.to_a }
+      end
+
+      # The returned value is the body: text as it is, anything else as JSON; without
+      # one, the content set on the HTTP response.
+      def render_rest(response, reply, success_status)
+        response.status = reply.status || success_status
+        reply.headers.group_by(&:first).each do |name, pairs|
+          values = pairs.map(&:last)
+          response[name] = values.one? ? values.first : values
+        end
+        return response.body = '' if response.status == 204
+        return response.body = reply.result if reply.result.is_a?(String)
+        return render_json(response, response.status, reply.result) unless reply.result.nil?
+
+        response.body = reply.content.to_s
       end
 
       def cors(response)

@@ -8,11 +8,18 @@ module Mxrb
     # Case-insensitive HTTP header collection used by the internal request API.
     class Headers
       def initialize(values = {})
-        @values = values.to_h { |name, value| [name.to_s.downcase, value.to_s] }
+        @names = {}
+        @values = values.to_h do |name, value|
+          @names[name.to_s.downcase] = name.to_s
+          [name.to_s.downcase, value.to_s]
+        end
       end
 
       def [](name) = @values[name.to_s.downcase]
       def to_h = @values.dup
+
+      # The headers with the names as they were given.
+      def to_a = @values.map { |key, value| [@names.fetch(key), value] }
     end
 
     Request = Data.define(:path, :request_method, :body, :query, :headers) do
@@ -97,7 +104,7 @@ module Mxrb
 
       def request_headers(environment)
         environment.each_with_object({}) do |(name, value), headers|
-          next unless name.start_with?('HTTP_')
+          next unless name.start_with?('HTTP_') || %w[CONTENT_TYPE CONTENT_LENGTH].include?(name)
 
           header = name.delete_prefix('HTTP_').split('_').map(&:capitalize).join('-')
           headers[header] = value

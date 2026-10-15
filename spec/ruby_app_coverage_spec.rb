@@ -308,7 +308,9 @@ RSpec.describe 'Ruby application defensive coverage' do
               'success_status' => 204, 'enable_cors' => true, 'requires_authentication' => true }
     allow(app).to receive(:rest_routes).and_return([route])
     expect(dispatch.call('/rest/a', 'POST').status).to eq(401)
-    allow(app).to receive(:invoke_rest).and_return(nil)
+    reply = Mxrb::RubyApp::Application::ServiceInvocation::RestResponse.new(result: nil, status: nil, headers: [],
+                                                                            content: nil)
+    allow(app).to receive_messages(invoke_rest: reply, application_root_url: 'http://app')
     rest = dispatch.call('/rest/a', 'POST', '', {}, 'Authorization' => 'Bearer t')
     expect(rest.status).to eq(204)
     expect(rest['Access-Control-Allow-Origin']).to eq('*')

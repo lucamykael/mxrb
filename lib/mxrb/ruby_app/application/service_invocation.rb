@@ -6,6 +6,10 @@ module Mxrb
       # rubocop:disable Metrics
       # Calls microflow services, REST operations and native actions.
       module ServiceInvocation
+        # What a published REST operation answers: its returned value, and the status,
+        # headers and content it set on its System.HttpResponse.
+        RestResponse = Data.define(:result, :status, :headers, :content)
+
         def call_service(name, arguments = {}, synchronized_context: nil, context: nil)
           runtime_synchronize do
             implementation = Registry.fetch(:service, name.to_s)
@@ -60,11 +64,28 @@ module Mxrb
           end
         end
 
-        def invoke_rest(route, path_parameters: {}, query: {}, body: nil, context: nil)
+        # With http: (the request's uri:, content: and headers:), the operation gets the
+        # System.HttpRequest and System.HttpResponse its microflow asks for and answers
+        # with a RestResponse, as Mendix 11.12.1 does: the response starts with the
+        # operation's success status, and a returned value is the body before its content.
+        def invoke_rest(route, path_parameters: {}, query: {}, body: nil, context: nil, http: nil)
           service = service_manifest(route.fetch('microflow'))
           arguments = request_arguments(service, path_parameters, query, body, context:)
-          invoke_service(route.fetch('microflow'), arguments, context:).fetch(:result)
+          return invoke_service(route.fetch('microflow'), arguments, context:).fetch(:result) unless http
+
+          runtime_synchronize do
+            messages = {}
+            messages = http_messages(service, http, Integer(route.fetch('success_status', 200)))
+            messages.select! { |name, _message| accepts_argument?(route.fetch('microflow'), name) }
+            arguments.merge!(messages.transform_values(&:last))
+            result = invoke_service(route.fetch('microflow'), arguments, context:).fetch(:result)
+            rest_response(result, messages.values.find { _1.first == 'System.HttpResponse' }&.last)
+          ensure
+            discard_http_messages(messages.values.map(&:last))
+          end
         end
+
+        def application_root_url = bridge.interpreter.application_root_url.delete_suffix('/')
 
         def native_call(name, arguments = {}, context: nil)
           runtime_synchronize do
@@ -149,6 +170,58 @@ module Mxrb
         def request_value(values, name)
           key = values.keys.find { _1.casecmp?(name.to_s) }
           [!key.nil?, key && values[key]]
+        end
+
+        # The HTTP messages of the operation's microflow parameters, by parameter name.
+        def http_messages(service, http, status)
+          store = bridge.interpreter.store
+          service.fetch('parameters', []).select { rest_context_parameter?(_1) }.to_h do |parameter|
+            entity = parameter.fetch('entity')
+            message = store.create(entity)
+            message.members.merge!('HttpVersion' => 'HTTP/1.1')
+            if entity == 'System.HttpRequest'
+              message.members.merge!('Uri' => http.fetch(:uri), 'Content' => http.fetch(:content))
+              http.fetch(:headers).each do |key, value|
+                store.create('System.HttpHeader').members.merge!('Key' => key, 'Value' => value,
+                                                                 'HttpHeaders' => message)
+              end
+            else
+              message.members['StatusCode'] = status
+            end
+            [parameter.fetch('name'), [entity, message]]
+          end
+        end
+
+        def rest_response(result, response)
+          return RestResponse.new(result:, status: nil, headers: [], content: nil) unless response
+
+          headers = bridge.interpreter.store.retrieve_association('HttpHeaders', response).map do |header|
+            [header.members['Key'].to_s, header.members['Value'].to_s]
+          end
+          RestResponse.new(result:, status: response.members['StatusCode'], headers:,
+                           content: response.members['Content'])
+        end
+
+        # A controller action gets only the HTTP messages it declares; a microflow all.
+        def accepts_argument?(name, argument)
+          definition = Registry.fetch(:service, name.to_s)&.controller_definition
+          return true unless definition
+
+          controller = definition.fetch(:controller)
+          controller = Registry.fetch(:controller, controller.to_s) unless controller.is_a?(Class)
+          return true unless controller
+
+          controller.instance_method(definition.fetch(:action)).parameters.any? do |kind, parameter|
+            kind == :keyrest || (%i[key keyreq].include?(kind) && parameter.to_s == argument)
+          end
+        end
+
+        # The messages live as long as the request, as the Runtime's do.
+        def discard_http_messages(messages)
+          store = bridge.interpreter.store
+          Array(messages).each do |message|
+            store.delete(store.retrieve_association('HttpHeaders', message) + [message], events: false)
+          end
         end
 
         def rest_context_parameter?(parameter)

@@ -151,7 +151,7 @@ RSpec.describe 'Ruby application internal contracts' do
       operation = { 'Microflow' => 'Run', 'HttpMethod' => 'get', 'Path' => '/{id}',
                     'SuccessStatusCode' => 'Created' }
       expect(exp.send(:rest_operation_manifest, mod, { 'Path' => '/api/' }, { 'Name' => 'One' }, operation))
-        .to include('microflow' => 'Sales.Run', 'path' => '/api/{id}', 'success_status' => 201)
+        .to include('microflow' => 'Sales.Run', 'path' => '/api/One/{id}', 'success_status' => 201)
       operation['Microflow'] = 'Other.Run'
       expect(exp.send(:rest_operation_manifest, mod, { 'Path' => '' }, { 'Name' => 'One' }, operation))
         .to include('microflow' => 'Other.Run')
@@ -863,13 +863,18 @@ RSpec.describe 'Ruby application internal contracts' do
 
     route = { 'method' => 'POST', 'path' => '/rest/{id}', 'microflow' => 'M.Run',
               'success_status' => 200, 'enable_cors' => false, 'requires_authentication' => false }
-    allow(application).to receive_messages(rest_routes: [route], invoke_rest: 'ok')
+    reply = Mxrb::RubyApp::Application::ServiceInvocation::RestResponse.new(result: 'ok', status: nil, headers: [],
+                                                                            content: nil)
+    allow(application).to receive_messages(rest_routes: [route], invoke_rest: reply,
+                                           application_root_url: 'http://app')
     res = response_class.new
     server.send(:dispatch, request_class.new('/rest/x', 'POST', '{}', {}, {}), res)
     expect(res.headers).not_to have_key('Access-Control-Allow-Origin')
     expect(application).to have_received(:invoke_rest).with(
-      route, path_parameters: { 'id' => 'x' }, query: {}, body: {}, context: nil
+      route, path_parameters: { 'id' => 'x' }, query: {}, body: {}, context: nil,
+             http: { uri: 'http://app/rest/x', content: '{}', headers: [] }
     )
+    expect(res.body).to eq('ok')
     expect(server.send(:rest_route, 'POST', '/not-rest')).to be_nil
 
     adapter = Mxrb::RubyApp::RackAdapter.new('.')
