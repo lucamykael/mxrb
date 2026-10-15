@@ -276,7 +276,11 @@ jar. The API covers:
   `Core.executeAsync` (the sidecar runs the microflow before it answers) and
   transactions the action starts, nested in the calling microflow's.
 
-Generated proxies also have `load(context, xpath)`, as Studio Pro's do.
+Generated proxies also have `load(context, xpath)`, as Studio Pro's do. The
+`org.json` Mendix bundles as `com.mendix.thirdparty.org.json` (`JSONObject`,
+`JSONArray`, `JSONException`) has the sidecar's own implementation, and
+`IContext.getRuntimeRequest`/`getRuntimeResponse` are empty, since the Ruby
+application does not hand the HTTP request to actions.
 
 A source that uses another API does not compile and is left out, with its first
 error in `build-report.tsv`; calling that action raises an error that quotes the

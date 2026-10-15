@@ -12,6 +12,11 @@ public abstract class UserAction<R> {
 		return context;
 	}
 
+	/** The context the action runs in, as newer Studio Pro versions name it. */
+	public IContext context() {
+		return context;
+	}
+
 	public R execute() throws Exception {
 		return executeAction();
 	}

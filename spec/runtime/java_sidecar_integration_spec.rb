@@ -147,13 +147,13 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 23, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 24, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 26 sources, left out 1')
+    expect(output).to include('compiled 27 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
@@ -187,7 +187,8 @@ RSpec.describe 'Java action sidecar' do
       'captions' => 'Aberto|Open|Closed|Fechado||11|[2, 4]',
       'microflows' => 'true [Value] String String Integer true null',
       'store' => 'hello note.txt 5 3 10 4',
-      'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer'
+      'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer',
+      'json' => '{"name":"Ada","count":4,"sum":3.5,"missing":null,"ok":true,"list":["a",1]}|fallback|true|false|true'
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')

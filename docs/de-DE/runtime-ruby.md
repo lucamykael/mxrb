@@ -288,7 +288,11 @@ Mendix-Jar. Die API umfasst:
   er antwortet) und von der Action gestartete Transaktionen, verschachtelt in die
   des aufrufenden Microflows.
 
-Generierte Proxies haben auch `load(context, xpath)`, wie die von Studio Pro.
+Generierte Proxies haben auch `load(context, xpath)`, wie die von Studio Pro. Das
+von Mendix als `com.mendix.thirdparty.org.json` gebündelte `org.json`
+(`JSONObject`, `JSONArray`, `JSONException`) hat eine eigene Implementierung im
+Sidecar, und `IContext.getRuntimeRequest`/`getRuntimeResponse` sind leer, da die
+Ruby-Anwendung die HTTP-Anfrage nicht an Actions weitergibt.
 
 Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
 ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen

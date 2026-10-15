@@ -69,6 +69,7 @@ Mxrb.define(output_path) do
     java_action :Store, parameters: [], return_type: { kind: :string }
     java_action :Oql, parameters: [], return_type: { kind: :string }
     java_action :Register, parameters: [], return_type: { kind: :boolean }
+    java_action :Json, parameters: [], return_type: { kind: :string }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -140,6 +141,8 @@ Mxrb.define(output_path) do
       call_java 'Views.Oql', as: :oql
       log_message 'ORACLE oql={1}', node: oracle, parameters: ['$oql']
       call_java 'Views.Register', as: :registered
+      call_java 'Views.Json', as: :json
+      log_message 'ORACLE json={1}', node: oracle, parameters: ['$json']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -304,6 +307,20 @@ actions = {
         + " " + Core.retrieveXPathQueryAggregate(context, "COUNT(//Views.Order)")
         + " " + Core.retrieveXPathQueryAggregate(context, "SUM(//Views.Order/Quantity)")
         + " " + Core.retrieveXPathQueryAggregate(context, "max(//Views.Order[Quantity < 6]/Quantity)");
+  BODY
+  'Json' => ['String', nil, <<~BODY],
+    com.mendix.thirdparty.org.json.JSONObject input = new com.mendix.thirdparty.org.json.JSONObject(
+        "{\\"name\\": \\"Ada\\", \\"tags\\": [1, 2.5, \\"x\\", null], \\"nested\\": {\\"ok\\": true}}");
+    com.mendix.thirdparty.org.json.JSONArray tags = input.getJSONArray("tags");
+    com.mendix.thirdparty.org.json.JSONObject out = new com.mendix.thirdparty.org.json.JSONObject();
+    out.put("name", input.getString("name"));
+    out.put("count", tags.length());
+    out.put("sum", tags.getInt(0) + tags.getDouble(1));
+    out.put("missing", com.mendix.thirdparty.org.json.JSONObject.NULL);
+    out.put("ok", input.getJSONObject("nested").getBoolean("ok"));
+    out.put("list", List.of("a", 1));
+    return out + "|" + input.optString("none", "fallback") + "|" + tags.isNull(3) + "|"
+        + getContext().getRuntimeRequest().isPresent() + "|" + (context() == getContext());
   BODY
   'Register' => ['Boolean', nil, <<~BODY],
     Core.addRequestHandler("/hello/", new views.Hello());
