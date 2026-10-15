@@ -24,4 +24,6 @@ public interface XPathBasicQuery {
 	XPathBasicQuery setVariable(String name, String value);
 	XPathBasicQuery setVariable(String name, Date value);
 	List<IMendixObject> execute(IContext context);
+	Long executeAggregateLong(IContext context);
+	Double executeAggregateDouble(IContext context);
 }

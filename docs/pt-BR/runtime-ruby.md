@@ -299,7 +299,18 @@ mensagens MQTT que chama um microflow, também passa pelo app Ruby: ao iniciar o
 runtime, ele abre uma conexão de escuta com o sidecar, e a cada callback desse
 trabalho o sidecar pede por ela uma conexão própria, atendida numa transação nova
 com contexto de sistema. A conexão parte sempre do app Ruby, que não precisa
-aceitar conexões do container. Os objetos que um callback devolve valem só nele.
+aceitar conexões do container. Isso vale também para o contexto que a ação guarda
+para depois, como faz o listener do MqttConnector. Os objetos que um callback
+devolve valem só nele, e um objeto de uma invocação encerrada não pode ser
+repassado.
+
+Também há agregados em `XPathQuery` (`executeAggregateLong`/`Double`, com as
+variáveis da consulta; valores vazios ficam de fora, como no SQL), `Core.authenticate`,
+`Core.getLanguage`, o administrador do projeto em `Configuration`, e
+`Core.metrics()` e assinantes de log, que existem mas não registram nada, porque
+o log e as métricas ficam no app Ruby. Tipos internos do Runtime que só são
+importados (`ICore`, `DataStorage`, `Http`, `Integration`) existem vazios; o
+código que os usa não compila.
 
 Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
 registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse

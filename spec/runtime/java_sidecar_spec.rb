@@ -263,7 +263,9 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
                                        session: { 'id' => 's1', 'user' => customer, 'name' => 'ann',
                                                   'anonymous' => false })
     services = instance_double(Mxrb::RubyApp::SidecarServices, guest_login_enabled?: true,
-                                                               guest_session: { 'id' => 'g1', 'anonymous' => true })
+                                                               guest_session: { 'id' => 'g1', 'anonymous' => true },
+                                                               project_security: { 'admin_user_name' => 'MxAdmin' })
+    allow(Mxrb::Runtime::SystemDomain).to receive(:verify_password).with(numbers, 'ann', 'secret').and_return(true)
     allow(services).to receive(:register_request_handler).and_return(['link'])
     steps = [
       callback(1, 'session'),
@@ -274,6 +276,8 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       callback(6, 'object_for_long', 'id' => 7),
       callback(7, 'object_for_long', 'id' => 8),
       callback(8, 'default_language'),
+      callback(9, 'project_security'),
+      callback(10, 'authenticate', 'user' => 'ann', 'password' => 'secret'),
       { 'id' => 0, 'result' => { 'status' => 303, 'body' => { '$binary' => 'aGk=' } } }
     ]
     result = nil
@@ -295,7 +299,7 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
     handle = { '$object' => 0, 'entity' => 'Mod.Customer', 'id' => customer.id }
     expect(answers).to eq([{ 'id' => 's1', 'user' => handle, 'name' => 'ann', 'anonymous' => false },
                            nil, { 'id' => 'g1', 'anonymous' => true }, true, 7, handle, nil,
-                           { 'code' => 'en_US', 'language' => nil }])
+                           { 'code' => 'en_US', 'language' => nil }, { 'admin_user_name' => 'MxAdmin' }, true])
     expect(services).to have_received(:register_request_handler).with('link')
 
     allow(context).to receive(:store).and_return(store)

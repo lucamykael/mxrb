@@ -287,8 +287,18 @@ messages that calls a microflow, also goes through the Ruby application: when th
 runtime starts, it opens a listen connection to the sidecar, and for each callback
 of that work the sidecar asks on it for a connection of its own, served in a new
 transaction with a system context. The Ruby application always opens the
-connection, so it needs to accept none from the container. The objects a callback
-returns are valid in that callback only.
+connection, so it needs to accept none from the container. This also holds for
+the context an action keeps for later, as the MqttConnector listener does. The
+objects a callback returns are valid in that callback only, and an object of a
+finished invocation cannot be passed on.
+
+There are also aggregates on `XPathQuery` (`executeAggregateLong`/`Double`, with
+the query's variables; empty values are left out, as SQL does),
+`Core.authenticate`, `Core.getLanguage`, the project's administrator on
+`Configuration`, and `Core.metrics()` and log subscribers, which exist but record
+nothing, since the log and metrics stay in the Ruby application. Internal Runtime
+types that code only imports (`ICore`, `DataStorage`, `Http`, `Integration`) exist
+empty; code that uses them does not compile.
 
 A source that uses another API does not compile and is left out, with its first
 error in `build-report.tsv`; calling that action raises an error that quotes the

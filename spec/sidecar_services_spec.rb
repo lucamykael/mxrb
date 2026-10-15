@@ -62,6 +62,7 @@ RSpec.describe Mxrb::RubyApp::SidecarServices do
     sessions = @application.session_manager
     guests = described_class.new(bridge.project, sessions: -> { sessions })
     expect(guests.guest_login_enabled?).to be(true)
+    expect(guests.project_security).to eq('admin_user_name' => 'MxAdmin', 'admin_user_role' => 'Administrator')
     session = guests.guest_session
     expect(session.fetch('id')).to match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
     expect(session.except('id')).to eq('user' => nil, 'name' => "Anonymous_#{session.fetch('id')}", 'anonymous' => true)
@@ -75,6 +76,7 @@ RSpec.describe Mxrb::RubyApp::SidecarServices do
     allow(Mxrb::RubyApp::Registry).to receive(:all).and_call_original
     allow(Mxrb::RubyApp::Registry).to receive(:all).with(:project_security).and_return({})
     expect(guests.guest_login_enabled?).to be(false)
+    expect(guests.project_security).to eq('admin_user_name' => '', 'admin_user_role' => '')
     expect { guests.guest_session }.to raise_error(Mxrb::NativeRuntimeError, 'guest access is disabled')
   end
 

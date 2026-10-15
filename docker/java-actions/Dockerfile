@@ -24,4 +24,4 @@ ENV MXRB_JAVA_ACTIONS_PORT=7911 \
     MXRB_JAVA_ACTIONS_REPORT=/sidecar/build-report.tsv \
     MXRB_JAVA_ACTIONS_CAPTIONS=/sidecar/captions.tsv
 EXPOSE 7911
-CMD ["java", "-cp", "api:classes:userlib/*", "mxrb.sidecar.Server"]
+CMD ["java", "-cp", "api:classes:userlib/*:userlib/vendorlib/*", "mxrb.sidecar.Server"]

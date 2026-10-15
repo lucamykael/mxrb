@@ -27,4 +27,9 @@ public interface ILogNode {
 	default void trace(Object message, Throwable error) { log(LogLevel.TRACE, message, error); }
 	default void trace(Object message) { log(LogLevel.TRACE, message, null); }
 	default void trace(Throwable error) { log(LogLevel.TRACE, null, error); }
+
+	/** The Ruby application keeps the log, so a subscriber in the sidecar receives no messages. */
+	default void subscribe(LogSubscriber subscriber, LogLevel level) { }
+	default void unsubscribe(LogSubscriber subscriber) { }
+	default void unsubscribe() { }
 }

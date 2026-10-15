@@ -99,7 +99,28 @@ public final class MxXPathQuery implements XPathQuery {
 				variables, "offset", (long) offset, "amount", (long) amount, "sort", sort);
 	}
 
-	private XPathQuery variable(String name, Object value) {
+	@Override
+	public Long executeAggregateLong(IContext context) {
+		BigDecimal result = aggregate(context);
+		return result == null ? null : result.setScale(0, java.math.RoundingMode.HALF_UP).longValue();
+	}
+
+	@Override
+	public Double executeAggregateDouble(IContext context) {
+		BigDecimal result = aggregate(context);
+		return result == null ? null : result.doubleValue();
+	}
+
+	/** The query's text is an aggregate, such as "COUNT(//Module.Entity[Name = $name])". */
+	private BigDecimal aggregate(IContext context) {
+		try {
+			return Aggregate.compute(context, xpath, variables);
+		} catch (com.mendix.core.CoreException e) {
+			throw new com.mendix.core.CoreRuntimeException(e);
+		}
+	}
+
+	XPathQuery variable(String name, Object value) {
 		variables.put(name.startsWith("$") ? name.substring(1) : name, value);
 		return this;
 	}

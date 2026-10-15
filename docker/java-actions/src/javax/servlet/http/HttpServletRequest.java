@@ -15,4 +15,5 @@ public interface HttpServletRequest {
 	String getRemoteAddr();
 	String getHeader(String name);
 	String getParameter(String name);
+	java.io.InputStream getInputStream() throws java.io.IOException;
 }
