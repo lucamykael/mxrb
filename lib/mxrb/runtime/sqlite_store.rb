@@ -28,6 +28,16 @@ module Mxrb
       }.freeze
       FILE_TABLES = %w[mxrb_file_contents mxrb_file_thumbnails].freeze
       INTEGER_TYPES = %i[integer long autonumber].freeze
+      # The Runtime's non-persistable HTTP messages a published REST operation gets,
+      # with the attributes each starts with; System.HttpHeaders links a header to one.
+      HTTP_MESSAGES = {
+        'System.HttpMessage' => { 'HttpVersion' => nil, 'Content' => nil },
+        'System.HttpRequest' => { 'HttpVersion' => nil, 'Content' => nil, 'Uri' => nil },
+        'System.HttpResponse' => {
+          'HttpVersion' => nil, 'Content' => nil, 'StatusCode' => nil, 'ReasonPhrase' => nil
+        },
+        'System.HttpHeader' => { 'Key' => nil, 'Value' => nil }
+      }.freeze
 
       attr_reader :database, :schema, :client_drafts
 
@@ -46,7 +56,9 @@ module Mxrb
           mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
         end
         modeled = Native.attribute_defaults(project)
-        transient_defaults = transient_names.to_h { |name| [name, defaults.fetch(name) { modeled.fetch(name, {}) }] }
+        transient_defaults = HTTP_MESSAGES.merge(
+          transient_names.to_h { |name| [name, defaults.fetch(name) { modeled.fetch(name, {}) }] }
+        )
         @transient_entities = transient_defaults.keys.freeze
         @transient = Native::Store.new(defaults: transient_defaults)
         @hooks = Hash.new { |values, event| values[event] = [] }

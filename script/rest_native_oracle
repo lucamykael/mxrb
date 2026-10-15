@@ -1,0 +1,96 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Calls the published REST operations of an oracle fixture on the official Mendix
+# Runtime and records each response: status, reason, the headers an application
+# sets and the body. FIXTURE_DIR/requests.json lists the calls as name, method,
+# path, headers and body. MxBuild before Mendix 11 has no portable package, which
+# mxrb's own build then makes. The application's root URL reads {root}.
+#
+#   script/rest_native_oracle spec/fixtures/native_rest_http expected.json [MENDIX_HOME]
+require 'fileutils'
+require 'json'
+require 'net/http'
+require 'open3'
+require 'socket'
+require 'tmpdir'
+require_relative '../lib/mxrb'
+
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+
+STARTED = 'Mendix Runtime successfully started'
+HEADERS = %w[content-type location set-cookie x-echo].freeze
+
+def run!(*command, env: {})
+  output, status = Open3.capture2e(env, *command)
+  raise "#{command.first} failed:\n#{output[-4000..] || output}" unless status.success?
+
+  output
+end
+
+def free_port = TCPServer.new('127.0.0.1', 0).then { |server| server.addr[1].tap { server.close } }
+
+def build(fixture, work, java, mendix_home)
+  project = File.join(work, 'project', 'Oracle.mpr')
+  FileUtils.mkdir_p(File.dirname(project))
+  run!(RbConfig.ruby, "-I#{File.expand_path('../lib', __dir__)}", File.join(File.expand_path(fixture), 'project.rb'),
+       env: { 'MXRB_OUTPUT_PATH' => project })
+  plan = Mxrb::Runtime::Toolchain.new(project, mendix_home:).plan
+  package = File.join(work, 'app.zip')
+  if Gem::Version.new(plan.mendix_version) < Gem::Version.new('11')
+    native_package!(project, plan.toolchain_path, java, package)
+  else
+    run!(plan.mxbuild_path, '--target=portable-app-package', "--java-home=#{java}",
+         "--java-exe-path=#{File.join(java, 'bin', 'java')}", "--output=#{package}", project)
+  end
+  run!('unzip', '-q', package, '-d', File.join(work, 'runtime'))
+  plan.mendix_version
+end
+
+def native_package!(project, mendix_home, java_home, package)
+  deployment = File.join(File.dirname(project), 'deployment')
+  Mxrb::Compiler::DeploymentMaterializer.new(project, deployment:, mendix_home:).materialize
+  Mxrb::Compiler::ProjectJarBuilder.new(project, deployment:, mendix_home:, java_home:).build
+  Mxrb::Compiler::WebBundleBuilder.new(project, deployment:, mendix_home:).build
+  Mxrb::Compiler::PortablePackager.new(project, deployment:, mendix_home:).pack(output: package, force: true)
+end
+
+# Starts the Runtime, yields its HTTP port once started and stops it afterwards.
+def serving(work, java)
+  port = free_port
+  log = File.join(work, 'runtime.log')
+  env = { 'JAVA_HOME' => java, 'M2EE_ADMIN_PASS' => 'mxrb-rest-oracle', 'RUNTIME_HTTP_PORT' => port.to_s,
+          'ADMIN_PORT' => free_port.to_s }
+  pid = Process.spawn(env, 'bin/start', 'etc/Default', chdir: File.join(work, 'runtime'), out: log, err: log,
+                                                       pgroup: true)
+  deadline = Time.now + 300
+  sleep 1 until File.read(log).include?(STARTED) || Time.now > deadline
+  raise "Mendix Runtime did not start:\n#{File.read(log)[-4000..]}" unless File.read(log).include?(STARTED)
+
+  yield port
+ensure
+  Process.kill('TERM', -pid) if pid
+  Process.wait(pid) if pid
+end
+
+def call(port, step)
+  request = Net::HTTPGenericRequest.new(step.fetch('method'), step.key?('body'), true, "/#{step.fetch('path')}")
+  step.fetch('headers', {}).each { |name, value| request[name] = value }
+  request.body = step['body'] if step.key?('body')
+  response = Net::HTTP.start('127.0.0.1', port) { _1.request(request) }
+  headers = HEADERS.to_h { [_1, response.get_fields(_1)] }.compact
+  { 'name' => step.fetch('name'), 'status' => response.code.to_i, 'reason' => response.message,
+    'headers' => headers, 'body' => response.body.to_s.gsub("http://127.0.0.1:#{port}", '{root}') }
+end
+
+fixture, output, mendix_home = ARGV
+abort 'Usage: script/rest_native_oracle FIXTURE_DIR OUTPUT.json [MENDIX_HOME]' unless fixture && output
+java = ENV.fetch('JAVA_HOME') { abort 'JAVA_HOME must point to the Java version Mendix requires' }
+steps = JSON.parse(File.read(File.join(fixture, 'requests.json')))
+Dir.mktmpdir('mxrb-rest-oracle-') do |work|
+  version = build(fixture, work, java, mendix_home)
+  results = serving(work, java) { |port| steps.map { call(port, _1) } }
+  File.write(output, "#{JSON.pretty_generate(mendix_version: version, results:)}\n")
+  puts "#{results.length} REST responses from Mendix #{version} written to #{output}"
+end
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength

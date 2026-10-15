@@ -141,6 +141,16 @@ verweigert den Zugriff.
 Zugangsdaten stammen aus `MXRB_USERS_JSON` und `MXRB_AUTH_TOKENS` und gehören in
 ignorierte lokale Dateien oder den Secret Manager des Deployments.
 
+Eine Published-REST-Operation antwortet unter dem Pfad des Dienstes, dem Namen der
+Ressource und dem Pfad der Operation. Ihr Microflow kann `System.HttpRequest`
+(URI, Inhalt, Version und seine `System.HttpHeaders`) und `System.HttpResponse`
+erhalten, wie in der Mendix-11.12.1-Runtime (`spec/fixtures/native_rest_http`,
+aufgezeichnet mit `script/rest_native_oracle`). Die Antwort beginnt mit dem
+Erfolgsstatus der Operation; Status und Header, die der Microflow setzt, gelten für
+die Antwort (mehrere `Set-Cookie` bleiben getrennt). Ein zurückgegebener Wert ist
+der Body vor dem Inhalt der Antwort: Text unverändert, alles andere als JSON. Die
+Reason Phrase wird ignoriert.
+
 Scheduled Events laufen im stdlib-basierten MXRB-Scheduler mit Minuten-,
 Stunden- und Tagesintervallen, Overlap-Schutz und kontrolliertem Shutdown.
 IANA-Zeitzonen wie `Europe/Berlin` verwenden `tzinfo` und berücksichtigen

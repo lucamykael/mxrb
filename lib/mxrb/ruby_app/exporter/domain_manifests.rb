@@ -262,11 +262,7 @@ module Mxrb
           encoded.lines.filter_map { _1.chomp[/\A-\s+(2\d{2}):/, 1] }.first
         end
 
-        def rest_runtime_resource_path(resource, operation)
-          has_parameters = IO::BsonCodec.parse_array(operation['Parameters'])[:items].any?
-          has_mapping = %w[ImportMapping ExportMapping].any? { !operation[_1].to_s.empty? }
-          return '' unless has_parameters || has_mapping
-
+        def rest_runtime_resource_path(resource, _operation)
           resource['Name'].to_s.sub(%r{\A/+}, '').sub(%r{/+\z}, '')
         end
 

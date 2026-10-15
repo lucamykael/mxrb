@@ -150,6 +150,16 @@ funções e tokens entre aspas como `'[%CurrentUser%]'`); uma constraint que nã
 pode ser avaliada nega o acesso. Credenciais vêm de `MXRB_USERS_JSON` e `MXRB_AUTH_TOKENS`; use
 arquivos locais ignorados pelo Git ou o secret manager do deployment.
 
+Uma operação de published REST responde no caminho do serviço, do nome do recurso
+e da operação. O microflow pode receber `System.HttpRequest` (URI, conteúdo,
+versão e seus `System.HttpHeaders`) e `System.HttpResponse`, como no Runtime
+Mendix 11.12.1 (`spec/fixtures/native_rest_http`, gravado com
+`script/rest_native_oracle`). A resposta começa com o status de sucesso da
+operação, e o status e os cabeçalhos que o microflow define são os da resposta
+(vários `Set-Cookie` continuam separados). Um valor retornado é o corpo antes do
+conteúdo da resposta: texto como está, o resto como JSON. A reason phrase é
+ignorada.
+
 Scheduled events usam o scheduler stdlib do MXRB, com intervalos de minuto,
 hora e dia, prevenção de overlap e encerramento supervisionado. Falhas ficam
 disponíveis no scheduler e não derrubam silenciosamente o servidor. Zonas IANA,

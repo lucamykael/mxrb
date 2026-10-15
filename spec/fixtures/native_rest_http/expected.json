@@ -1,0 +1,73 @@
+{
+  "mendix_version": "11.12.1",
+  "results": [
+    {
+      "name": "echo",
+      "status": 201,
+      "reason": "Created",
+      "headers": {
+        "x-echo": [
+          "yes"
+        ]
+      },
+      "body": "id=42;q=hi;uri={root}/rest/probe/v1/probe/echo/42?q=hi;version=HTTP/1.1;probe=X-Probe:one;content="
+    },
+    {
+      "name": "redirect",
+      "status": 302,
+      "reason": "Found",
+      "headers": {
+        "location": [
+          "/login?x=1"
+        ],
+        "set-cookie": [
+          "nonce=abc; Path=/; HttpOnly",
+          "other=1; Path=/"
+        ]
+      },
+      "body": ""
+    },
+    {
+      "name": "both",
+      "status": 202,
+      "reason": "Accepted",
+      "headers": {},
+      "body": "returned"
+    },
+    {
+      "name": "defaults",
+      "status": 200,
+      "reason": "OK",
+      "headers": {},
+      "body": "status=200;version=HTTP/1.1"
+    },
+    {
+      "name": "created",
+      "status": 201,
+      "reason": "Created",
+      "headers": {},
+      "body": "status=201"
+    },
+    {
+      "name": "status_only",
+      "status": 404,
+      "reason": "Not Found",
+      "headers": {},
+      "body": ""
+    },
+    {
+      "name": "body",
+      "status": 200,
+      "reason": "OK",
+      "headers": {},
+      "body": "hello|{root}/rest/probe/v1/probe/body"
+    },
+    {
+      "name": "plain",
+      "status": 200,
+      "reason": "OK",
+      "headers": {},
+      "body": "plain"
+    }
+  ]
+}
