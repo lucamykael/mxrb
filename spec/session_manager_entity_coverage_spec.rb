@@ -67,11 +67,13 @@ RSpec.describe Mxrb::RubyApp::SessionManager, 'credentials and profile edges' do
     plain = manager.login('plain', 'secret')
     expect(plain).to include(user: 'plain', roles: ['User'])
     expect(manager.authenticate("bearer #{plain[:token]}")).to have_attributes(
-      module_roles: ['Sales.Reader'], attributes: { 'locale' => 'pt_BR', 'time_zone' => 'UTC' }
+      module_roles: ['Sales.Reader'],
+      attributes: { 'locale' => 'pt_BR', 'time_zone' => 'UTC', 'session_id' => described_class.session_id(plain[:token]) }
     )
     expect(manager.login('digest', 'hash-secret')[:roles]).to eq(['Administrator'])
     expect(manager.authenticate('Bearer profile-token')).to have_attributes(
-      user: 'service', user_roles: ['Service'], attributes: { 'source' => 'token', 'time_zone' => 'UTC' }
+      user: 'service', user_roles: ['Service'],
+      attributes: { 'source' => 'token', 'time_zone' => 'UTC', 'session_id' => described_class.session_id('profile-token') }
     )
     expect(manager.authenticate('Bearer empty-profile').user).to be_nil
     expect { manager.login('short', 'x') }.to raise_error(Mxrb::RubyApp::AuthenticationError)

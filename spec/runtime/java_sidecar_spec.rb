@@ -68,11 +68,12 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       calls[:retrieve] << [arguments, options]
       [order]
     end
-    allow(context).to receive(:call_flow) do |*arguments|
-      calls[:flow] << arguments
+    allow(context).to receive(:call_flow) do |*arguments, **options|
+      calls[:flow] << [*arguments, options]
       'FLOW'
     end
-    allow(context).to receive_messages(constant: 'hi', end_transaction: true, changed?: false, user: nil,
+    allow(context).to receive_messages(constant: 'hi', end_transaction: true, changed?: false,
+                                       session: { 'id' => nil, 'user' => nil, 'name' => nil, 'anonymous' => false },
                                        application_root_url: 'http://app/', runtime_version: '11.12.1',
                                        model_version: 'unversioned')
     object = { '$object' => 0 }
@@ -92,13 +93,14 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       callback(13, 'retrieve', 'xpath' => '//Mod.Order', 'variables' => { 'q' => { '$decimal' => '1.5' } },
                                'offset' => 1, 'amount' => 2, 'sort' => [['Name', true], ['Quantity', false]]),
       callback(14, 'retrieve', 'xpath' => '//Mod.Order'),
-      callback(15, 'microflow', 'name' => 'Mod.Flow', 'arguments' => { 'When' => { '$datetime' => 0 } }),
+      callback(15, 'microflow', 'name' => 'Mod.Flow', 'arguments' => { 'When' => { '$datetime' => 0 } },
+                                'user' => 'bob', 'sudo' => true),
       callback(16, 'log', 'node' => 'Node', 'level' => 'INFO', 'message' => 'hello'),
       callback(17, 'log', 'node' => 'Node', 'level' => 'LOUD', 'message' => 'x'),
       callback(18, 'constant', 'name' => 'Mod.C'),
       callback(19, 'end_transaction'),
       callback(20, 'changed', 'object' => object),
-      callback(21, 'user'),
+      callback(21, 'session'),
       callback(22, 'application_root_url'),
       callback(23, 'runtime_version'),
       callback(24, 'model_version'),
@@ -139,7 +141,8 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
     expect(answers.values_at(9, 10, 11, 12)).to eq([nil, [], nil, nil])
     expect(answers[13]).to eq([{ '$object' => 0, 'entity' => 'Mod.Order', 'id' => order.id }])
     expect(answers.values_at(15, 16, 18, 19, 20, 21, 22, 23, 24))
-      .to eq(['FLOW', nil, 'hi', true, false, nil, 'http://app/', '11.12.1', 'unversioned'])
+      .to eq(['FLOW', nil, 'hi', true, false, { 'id' => nil, 'user' => nil, 'name' => nil, 'anonymous' => false },
+              'http://app/', '11.12.1', 'unversioned'])
     expect(answers[17]).to eq('type' => 'com.mendix.core.CoreException', 'message' => 'unknown log level LOUD')
     expect(answers[25]['message']).to eq('unknown Java action callback "unknown"')
     expect(answers[26]['message']).to eq('expected an object, got "nope"')
@@ -154,7 +157,7 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
                                       { offset: 1, amount: 2, sort: [['Name', true], ['Quantity', false]] }],
                                      [['//Mod.Order', {}], { offset: 0, amount: -1, sort: [] }]
                                    ])
-    expect(calls[:flow]).to eq([['Mod.Flow', { 'When' => Time.at(0).utc }]])
+    expect(calls[:flow]).to eq([['Mod.Flow', { 'When' => Time.at(0).utc }, { username: 'bob', sudo: true }]])
   end
 
   it 'reads members without change tracking and reads empty integers' do
@@ -250,6 +253,59 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
     expect(received.last['error']['message']).to eq('OQL needs the application database')
   end
 
+  it 'forwards requests to handlers and answers their session and number callbacks' do
+    customer = store.create('Mod.Customer')
+    numbers = Struct.new(:customer) do
+      def long_id(_object) = 7
+      def object_for_long(number) = number == 7 ? customer : nil
+    end.new(customer)
+    allow(context).to receive_messages(store: numbers, default_language: { 'code' => 'en_US', 'language' => nil },
+                                       session: { 'id' => 's1', 'user' => customer, 'name' => 'ann',
+                                                  'anonymous' => false })
+    services = instance_double(Mxrb::RubyApp::SidecarServices, guest_login_enabled?: true,
+                                                               guest_session: { 'id' => 'g1', 'anonymous' => true })
+    allow(services).to receive(:register_request_handler).and_return(['link'])
+    steps = [
+      callback(1, 'session'),
+      callback(2, 'request_handler', 'path' => 'link'),
+      callback(3, 'guest_session'),
+      callback(4, 'guest_login_enabled'),
+      callback(5, 'long_id', 'object' => { '$object' => 0 }),
+      callback(6, 'object_for_long', 'id' => 7),
+      callback(7, 'object_for_long', 'id' => 8),
+      callback(8, 'default_language'),
+      { 'id' => 0, 'result' => { 'status' => 303, 'body' => { '$binary' => 'aGk=' } } }
+    ]
+    result = nil
+    received = sidecar(steps) do |url|
+      result = described_class.new(url, services:).request(
+        'link', { 'method' => 'GET', 'path' => '/link/x', 'body' => "\xFF".b },
+        session: { 'id' => 's1', 'user' => customer }, context:
+      )
+    end
+
+    expect(result).to eq('status' => 303, 'body' => 'hi')
+    expect(received.first).to include('method' => 'request')
+    expect(received.first.fetch('params')).to eq(
+      'handler' => 'link',
+      'request' => { 'method' => 'GET', 'path' => '/link/x', 'body' => { '$binary' => '/w==' } },
+      'session' => { 'id' => 's1', 'user' => { '$object' => 0, 'entity' => 'Mod.Customer', 'id' => customer.id } }
+    )
+    answers = received.drop(1).map { _1['result'] }
+    handle = { '$object' => 0, 'entity' => 'Mod.Customer', 'id' => customer.id }
+    expect(answers).to eq([{ 'id' => 's1', 'user' => handle, 'name' => 'ann', 'anonymous' => false },
+                           nil, { 'id' => 'g1', 'anonymous' => true }, true, 7, handle, nil,
+                           { 'code' => 'en_US', 'language' => nil }])
+    expect(services).to have_received(:register_request_handler).with('link')
+
+    allow(context).to receive(:store).and_return(store)
+    steps = [callback(1, 'long_id', 'object' => { '$object' => 0 }), { 'id' => 0, 'result' => nil }]
+    received = sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [['c', customer]], context:) }
+    expect(received.last['error']['message']).to eq('numeric object ids need the application database')
+    expect { sidecar([]) { described_class.new(_1).request('x', {}, session: nil, context:) } }
+      .to raise_error(Mxrb::NativeRuntimeError, /did not answer/)
+  end
+
   it 'raises the exception a Java action throws with its class' do
     steps = [{ 'id' => 0, 'error' => { 'type' => 'java.lang.IllegalStateException', 'message' => 'bad' } }]
     expect { sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) } }
@@ -279,7 +335,7 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       expect { sidecar([line]) { described_class.new(_1).invoke('Mod.Action', [], context:) } }
         .to raise_error(Mxrb::NativeRuntimeError, 'Java action sidecar sent a malformed message')
     end
-    expect { sidecar([]) { described_class.new(_1).invoke('Mod.Action', [['thing', Object.new]], context:) } }
+    expect { described_class.new('tcp://127.0.0.1:1').invoke('Mod.Action', [['thing', Object.new]], context:) }
       .to raise_error(Mxrb::NativeRuntimeError, 'cannot pass Object to a Java action')
   end
 end

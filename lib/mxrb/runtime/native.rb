@@ -855,6 +855,14 @@ module Mxrb
           amount.positive? ? values.first(amount) : values
         end
 
+        # An HTTP request to a path a Java action registered with Core.addRequestHandler,
+        # handled by the sidecar in a transaction of its own, as the given session.
+        def java_request(handler, request, context: nil)
+          raise NativeRuntimeError, 'request handlers need the Java actions sidecar' unless @java_sidecar
+
+          (@call_monitor ||= Monitor.new).synchronize { forward_java_request(handler, request, context) }
+        end
+
         # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
         # innermost transaction unless a savepoint of a sub-microflow called with
         # custom error handling is open above it; afterwards commits are immediate.
@@ -867,6 +875,22 @@ module Mxrb
         end
 
         private
+
+        def forward_java_request(handler, request, context)
+          previous = @security_context
+          @security_context = context
+          @effects = []
+          @scopes = [:transaction]
+          @call_depth += 1
+          java = java_action_context
+          session = java.session
+          request = request.merge('root_url' => request['root_url'] || java.application_root_url)
+          session = nil unless session['id']
+          store.transaction { @java_sidecar.request(handler, request, session:, context: java) }
+        ensure
+          @call_depth -= 1
+          @security_context = previous
+        end
 
         def execute_call(name, arguments = nil, context: nil, **keyword_arguments)
           arguments = keyword_arguments if arguments.nil?

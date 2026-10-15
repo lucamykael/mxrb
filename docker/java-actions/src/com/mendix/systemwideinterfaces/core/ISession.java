@@ -1,7 +1,8 @@
 package com.mendix.systemwideinterfaces.core;
 
-/** The session of the calling user. */
+/** The session of the calling user, or a guest's. */
 public interface ISession {
+	java.util.UUID getId();
 	IUser getUser(IContext context);
 	String getUserName();
 	IMendixIdentifier getUserId();

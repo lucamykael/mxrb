@@ -19,7 +19,7 @@ module Mxrb
     # Environment-backed identities and short-lived opaque sessions for the
     # standalone Ruby server. Production deployments can put the same adapter
     # behind their own Rack authentication and provide static bearer tokens.
-    class SessionManager
+    class SessionManager # rubocop:disable Metrics/ClassLength
       attr_reader :ttl
 
       # rubocop:disable Metrics/ParameterLists
@@ -51,12 +51,30 @@ module Mxrb
         return anonymous(client_time_zone:) unless token
 
         static = @static_tokens[token]
-        return context_for(static, client_time_zone) if static
+        return context_for(static, client_time_zone, token) if static
 
         session = @store.read_session(token, now: @clock.call)
         raise AuthenticationError, 'invalid or expired bearer token' unless session
 
-        context_for(session.identity, client_time_zone)
+        context_for(session.identity, client_time_zone, token)
+      end
+
+      # A guest's session under the guest user role, as a request handler starts
+      # one; its token is its id, which the handler sets as the session cookie.
+      def guest(roles)
+        token = SecureRandom.uuid
+        identity = { 'roles' => Array(roles).map(&:to_s), 'attributes' => { 'anonymous' => true },
+                     '_csrf' => SecureRandom.urlsafe_base64(32) }
+        @store.write_session(token:, identity:, expires_at: @clock.call + ttl)
+        token
+      end
+
+      # The id of the session a token opens: the token itself when it is a UUID,
+      # as a guest's is, otherwise a UUID derived from it.
+      def self.session_id(token)
+        return token if token.match?(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
+
+        Digest::SHA256.hexdigest(token)[0, 32].unpack('a8a4a4a4a12').join('-')
       end
 
       def login(username, password)
@@ -107,9 +125,10 @@ module Mxrb
         user && { 'user' => user.id, 'roles' => roles }
       end
 
-      def context_for(raw, client_time_zone = nil)
+      def context_for(raw, client_time_zone = nil, token = nil)
         value = raw.is_a?(Hash) ? raw : {}
         attributes = value['attributes'] || {}
+        attributes = attributes.merge('session_id' => self.class.session_id(token)) if token
         zone = attributes['time_zone'] || @time_zone.call(value['user'], client_time_zone)
         @access_control.context(
           user: value['user'], user_roles: value['roles'] || value['user_roles'],

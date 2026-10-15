@@ -343,6 +343,98 @@ public final class Core {
 		storeFileDocumentContent(context, image, content);
 	}
 
+	/** Registers a handler for the requests to a path; the Ruby application's server forwards them. */
+	public static void addRequestHandler(String path, com.mendix.externalinterface.connector.RequestHandler handler) {
+		mxrb.sidecar.Handlers.register(path, handler);
+		Bridge.current().call("request_handler", "path", mxrb.sidecar.Handlers.key(path));
+	}
+
+	/** A new guest session, whose cookie a request handler sets on its response. */
+	@SuppressWarnings("unchecked")
+	public static com.mendix.systemwideinterfaces.core.ISession initializeGuestSession() {
+		Bridge bridge = Bridge.current();
+		return mxrb.sidecar.MxSession.of(bridge, (Map<String, Object>) bridge.call("guest_session"));
+	}
+
+	/** The Ruby application's sessions stay in its server; a Java action sees none of another user's. */
+	public static com.mendix.systemwideinterfaces.core.ISession getActiveSession(String userName) {
+		return null;
+	}
+
+	/**
+	 * A session for a user, whose contexts run microflows as that user, as
+	 * CommunityCommons executes a microflow as another user.
+	 */
+	public static com.mendix.systemwideinterfaces.core.ISession initializeSession(
+			com.mendix.systemwideinterfaces.core.IUser user, String currentSessionId) {
+		Map<String, Object> session = new java.util.LinkedHashMap<>();
+		session.put("id", java.util.UUID.randomUUID().toString());
+		session.put("user", user.getMendixObject());
+		session.put("name", user.getName());
+		session.put("anonymous", Boolean.FALSE);
+		return mxrb.sidecar.MxSession.of(Bridge.current(), session);
+	}
+
+	/** The cluster node id cookie a request handler may set; the Ruby application has one node. */
+	public static String getXASId() {
+		return "mxrb";
+	}
+
+	/** The object behind a number IMendixIdentifier.toLong gave. */
+	public static IMendixIdentifier createMendixIdentifier(long id) {
+		IMendixObject object = (IMendixObject) Bridge.current().call("object_for_long", "id", id);
+		return object == null ? null : object.getId();
+	}
+
+	public static IMendixIdentifier createMendixIdentifier(Long id) {
+		return id == null ? null : createMendixIdentifier(id.longValue());
+	}
+
+	/**
+	 * A microflow run for a Java action that would run it in the background: the
+	 * sidecar runs it before returning, in the calling transaction, and hands back
+	 * its finished result.
+	 */
+	public static <R> java.util.concurrent.Future<R> executeAsync(IContext context, String microflow,
+			boolean executeQueued, Map<String, Object> parameters) throws CoreException {
+		R result = microflowCall(microflow).withParams(parameters).execute(context);
+		return java.util.concurrent.CompletableFuture.completedFuture(result);
+	}
+
+	/**
+	 * The positional form: the arguments go to the microflow's parameters, which
+	 * works for a microflow of one parameter; others need the named form.
+	 */
+	public static <R> java.util.concurrent.Future<R> executeAsync(IContext context, String microflow,
+			boolean executeQueued, Object... arguments) throws CoreException {
+		Map<String, IDataType> parameters = getInputParameters(microflow);
+		if (parameters == null || parameters.size() != arguments.length || arguments.length > 1) {
+			throw new CoreException("pass the arguments of " + microflow + " by name");
+		}
+		Map<String, Object> named = new java.util.LinkedHashMap<>();
+		if (arguments.length == 1) {
+			named.put(parameters.keySet().iterator().next(), arguments[0]);
+		}
+		return executeAsync(context, microflow, executeQueued, named);
+	}
+
+	/** The project's default language. */
+	@SuppressWarnings("unchecked")
+	public static com.mendix.systemwideinterfaces.core.ILanguage getDefaultLanguage() {
+		Map<String, Object> language = (Map<String, Object>) Bridge.current().call("default_language");
+		return new com.mendix.systemwideinterfaces.core.ILanguage() {
+			@Override
+			public String getCode() {
+				return (String) language.get("code");
+			}
+
+			@Override
+			public IMendixObject getMendixObject() {
+				return (IMendixObject) language.get("language");
+			}
+		};
+	}
+
 	public static IContext createSystemContext() {
 		return new MxContext(Bridge.current(), true);
 	}

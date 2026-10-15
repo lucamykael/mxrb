@@ -1,19 +1,24 @@
 package mxrb.sidecar;
 
 import com.mendix.systemwideinterfaces.core.IContext;
-import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
 import com.mendix.systemwideinterfaces.core.ISession;
-import com.mendix.systemwideinterfaces.core.IUser;
 
 /** The calling microflow's context; its transaction stays in the Ruby application. */
 public final class MxContext implements IContext {
 	private final Bridge bridge;
 	private final boolean sudo;
+	private MxSession session;
+	private int transactions;
 
 	public MxContext(Bridge bridge, boolean sudo) {
+		this(bridge, sudo, null);
+	}
+
+	MxContext(Bridge bridge, boolean sudo, MxSession session) {
 		this.bridge = bridge;
 		this.sudo = sudo;
+		this.session = session;
 	}
 
 	public Bridge bridge() {
@@ -22,46 +27,10 @@ public final class MxContext implements IContext {
 
 	@Override
 	public ISession getSession() {
-		IContext context = this;
-		return new ISession() {
-			@Override
-			public IUser getUser(IContext ignored) {
-				IMendixObject user = getCurrentUserObject();
-				return user == null ? null : new IUser() {
-					@Override
-					public String getName() {
-						return user.getValue(context, "Name");
-					}
-
-					@Override
-					public IMendixObject getMendixObject() {
-						return user;
-					}
-				};
-			}
-
-			@Override
-			public String getUserName() {
-				IUser user = getUser(context);
-				return user == null ? null : user.getName();
-			}
-
-			@Override
-			public IMendixIdentifier getUserId() {
-				IMendixObject user = getCurrentUserObject();
-				return user == null ? null : user.getId();
-			}
-
-			@Override
-			public boolean isSystemSession() {
-				return getCurrentUserObject() == null;
-			}
-
-			@Override
-			public IContext createContext() {
-				return new MxContext(bridge, false);
-			}
-		};
+		if (session == null) {
+			session = MxSession.current(bridge);
+		}
+		return session;
 	}
 
 	@Override
@@ -76,31 +45,45 @@ public final class MxContext implements IContext {
 
 	@Override
 	public IContext createClone() {
-		return new MxContext(bridge, sudo);
+		return new MxContext(bridge, sudo, session);
 	}
 
 	@Override
 	public IContext createSudoClone() {
-		return new MxContext(bridge, true);
+		return new MxContext(bridge, true, session);
 	}
 
+	/** A transaction the action starts nests in the Ruby application's, which keeps the work. */
 	@Override
 	public void startTransaction() {
-		throw new UnsupportedOperationException("the Ruby application owns the transaction");
+		transactions++;
 	}
 
+	/** Ends a transaction this context started, or else the calling microflow's. */
 	@Override
 	public void endTransaction() {
-		bridge.call("end_transaction");
+		if (transactions > 0) {
+			transactions--;
+		} else {
+			bridge.call("end_transaction");
+		}
 	}
 
 	@Override
 	public void rollbackTransaction() {
-		throw new UnsupportedOperationException("the Ruby application owns the transaction");
+		if (transactions == 0) {
+			throw new UnsupportedOperationException("the Ruby application owns the transaction");
+		}
+		transactions--;
+	}
+
+	/** The user a microflow called with this context runs as, or null for the caller's. */
+	String userName() {
+		return session == null || session.getUserId() == null ? null : session.getUserName();
 	}
 
 	@Override
 	public IMendixObject getCurrentUserObject() {
-		return (IMendixObject) bridge.call("user");
+		return getSession().getUser(this) == null ? null : getSession().getUser(this).getMendixObject();
 	}
 }

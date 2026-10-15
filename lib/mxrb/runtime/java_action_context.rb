@@ -93,6 +93,24 @@ module Mxrb
         nil
       end
 
+      # IContext.getSession: its id, its System.User and that user's name, or a guest's
+      # (anonymous) session; without a session, the system's.
+      def session
+        attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
+        id = attributes['session_id']
+        user = current_user
+        anonymous = attributes['anonymous'] == true
+        name = user ? user.members['Name'] : ("Anonymous_#{id}" if anonymous)
+        { 'id' => id, 'user' => user, 'name' => name, 'anonymous' => anonymous }
+      end
+
+      # Core.getDefaultLanguage: the project's default language and its System.Language.
+      def default_language
+        code = Languages.settings(@project)['default'].to_s
+        code = 'en_US' if code.empty?
+        { 'code' => code, 'language' => @store.retrieve(Languages::LANGUAGE).find { _1.members['Code'] == code } }
+      end
+
       # The System.User of the calling session (IContext.getSession().getUser()).
       def user = current_user
 

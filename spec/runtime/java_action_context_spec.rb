@@ -156,6 +156,24 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
     expect(context.member_kind('Mod.Lone', 'owner')).to eq(:reference)
   end
 
+  it 'describes the session of the calling user, a guest or the system' do
+    expect(context.session).to eq('id' => nil, 'user' => nil, 'name' => nil, 'anonymous' => false)
+    guest = Mxrb::Runtime::SecurityContext.new(attributes: { 'session_id' => 's1', 'anonymous' => true })
+    expect(context(security_context: guest).session)
+      .to eq('id' => 's1', 'user' => nil, 'name' => 'Anonymous_s1', 'anonymous' => true)
+    ann = user('ann')
+    signed_in = Mxrb::Runtime::SecurityContext.new(user: ann.id, attributes: { 'session_id' => 's2' })
+    expect(context(security_context: signed_in).session)
+      .to eq('id' => 's2', 'user' => ann, 'name' => 'ann', 'anonymous' => false)
+  end
+
+  it 'reports the default language, en_US without language settings' do
+    expect(context.default_language).to eq('code' => 'en_US', 'language' => nil)
+    portuguese = store.create('System.Language').tap { _1.members['Code'] = 'pt_BR' }
+    project.define_singleton_method(:language_settings) { { 'default' => 'pt_BR' } }
+    expect(context.default_language).to eq('code' => 'pt_BR', 'language' => portuguese)
+  end
+
   it 'shows messages as the calling microflow would' do
     effects = []
     allow(interpreter).to receive(:effects).and_return(effects)

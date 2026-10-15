@@ -46,6 +46,48 @@ RSpec.describe Mxrb::RubyApp::SidecarServices do
     expect(services.caption('Views.Missing', 'Open', 'en_US')).to eq('')
   end
 
+  it 'registers request handler paths outside the API' do
+    expect(services.register_request_handler('/link/')).to eq(['link'])
+    services.register_request_handler('link/deep')
+    expect(services.request_handlers).to eq(%w[link link/deep])
+    expect(services.request_handler('/link/deep/x')).to eq('link/deep')
+    expect(services.request_handler('/link')).to eq('link')
+    expect(services.request_handler('/linked')).to be_nil
+    ['', '/', 'api', '/api/x/'].each do |path|
+      expect { services.register_request_handler(path) }.to raise_error(ArgumentError, /is reserved/)
+    end
+  end
+
+  it 'starts guest sessions with their own id when guests are let in' do
+    sessions = @application.session_manager
+    guests = described_class.new(bridge.project, sessions: -> { sessions })
+    expect(guests.guest_login_enabled?).to be(true)
+    session = guests.guest_session
+    expect(session.fetch('id')).to match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
+    expect(session.except('id')).to eq('user' => nil, 'name' => "Anonymous_#{session.fetch('id')}", 'anonymous' => true)
+    context = sessions.authenticate("Bearer #{session.fetch('id')}")
+    expect(context.attributes.values_at('session_id', 'anonymous')).to eq([session.fetch('id'), true])
+    expect(context.user_roles).to eq(['Guest'])
+    expect(sessions.csrf_token("Bearer #{session.fetch('id')}")).not_to be_empty
+    expect(Mxrb::RubyApp::SessionManager.session_id('abc'))
+      .to eq(Digest::SHA256.hexdigest('abc')[0, 32].unpack('a8a4a4a4a12').join('-'))
+
+    allow(Mxrb::RubyApp::Registry).to receive(:all).and_call_original
+    allow(Mxrb::RubyApp::Registry).to receive(:all).with(:project_security).and_return({})
+    expect(guests.guest_login_enabled?).to be(false)
+    expect { guests.guest_session }.to raise_error(Mxrb::NativeRuntimeError, 'guest access is disabled')
+  end
+
+  it 'keeps numbers for objects that turn back into them' do
+    store = bridge.store
+    customer = store.create('Views.Customer')
+    store.commit(customer)
+    number = store.long_id(customer)
+    expect(store.long_id(customer)).to eq(number)
+    expect(store.object_for_long(number)).to eq(customer)
+    expect(store.object_for_long(number + 1000)).to be_nil
+  end
+
   it 'stores file contents and tells committed objects from new ones' do
     store = bridge.store
     document = store.create('Views.Document')

@@ -1,7 +1,5 @@
 package mxrb.sidecar;
 
-import java.util.UUID;
-
 import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
 
@@ -18,14 +16,13 @@ public final class MxIdentifier implements IMendixIdentifier {
 		return object.getType();
 	}
 
-	/** A stable number for the object's UUID; the Ruby application has no numeric ids. */
+	/**
+	 * The number the Ruby application keeps for the object, which
+	 * Core.createMendixIdentifier turns back into it, as a stored id would.
+	 */
 	@Override
 	public long toLong() {
-		try {
-			return UUID.fromString(object.guid()).getMostSignificantBits() & Long.MAX_VALUE;
-		} catch (IllegalArgumentException e) {
-			return object.guid().hashCode() & Long.MAX_VALUE;
-		}
+		return (Long) object.bridge().call("long_id", "object", object);
 	}
 
 	@Override

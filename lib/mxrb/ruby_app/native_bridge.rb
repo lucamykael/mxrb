@@ -5,12 +5,12 @@ module Mxrb
     # rubocop:disable Metrics
     # Owns the source MPR and its pure-Ruby interpreter for one application.
     class NativeBridge
-      attr_reader :access_control, :interpreter, :project, :scheduler, :store
+      attr_reader :access_control, :interpreter, :project, :scheduler, :sidecar_services, :store
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
                      runtime_records: nil, runtime_project: nil, service_dispatch: nil, administrator_password: nil,
-                     environment: ENV)
+                     environment: ENV, sessions: nil)
         FileUtils.mkdir_p(File.dirname(database))
         @project = runtime_project || Model::Project.open(path)
         schema = if runtime_project
@@ -23,10 +23,11 @@ module Mxrb
         store_options.merge!(schema:, transient_entities: transient) if runtime_records
         @store = Runtime::SQLiteStore.new(@project, **store_options)
         @access_control = Runtime::AccessControl.new(@project, store: @store)
+        @sidecar_services = SidecarServices.new(@project, sessions:)
         @interpreter = Runtime::Native::Interpreter.new(
           @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:,
                     constants: Runtime::Constants.new(@project, environment:),
-                    java_sidecar: Runtime::JavaSidecar.configured(environment, services: SidecarServices.new(@project))
+                    java_sidecar: Runtime::JavaSidecar.configured(environment, services: @sidecar_services)
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
         Runtime::Languages.synchronize(@store, Runtime::Languages.settings(@project))

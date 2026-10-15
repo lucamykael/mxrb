@@ -59,8 +59,11 @@ module Mxrb
         end
 
         authorization = request_authorization(request)
-        validate_csrf!(request, authorization) if unsafe_request?(method) && cookie_authenticated?(request)
+        handler = application.java_request_handler(path)
+        validate_csrf!(request, authorization) if !handler && unsafe_request?(method) && cookie_authenticated?(request)
         context = sessions.authenticate(authorization, client_time_zone: request['X-Mxrb-Time-Zone'])
+        return forward_java_request(handler, request, response, context) if handler
+
         if method == 'GET' && path == '/api/session'
           return render_json(
             response, 200,
@@ -247,6 +250,36 @@ module Mxrb
         render_json(response, 422, error('validation_failed', e.message).merge(validation: e.errors))
       rescue NativeRuntimeError => e
         render_json(response, 422, error('runtime_error', e.message))
+      end
+
+      # A request handler of a Java action answers as it sets status, headers,
+      # cookies and body; it guards its own requests, so no CSRF token applies.
+      def forward_java_request(handler, request, response, context)
+        cookies = request['Cookie'].to_s.split(';').to_h do |pair|
+          name, value = pair.strip.split('=', 2)
+          [name, value.to_s]
+        end
+        result = application.handle_java_request(handler, {
+                                                   'method' => request.request_method, 'path' => request.path,
+                                                   'query' => URI.encode_www_form(request.query),
+                                                   'headers' => request.headers.to_h, 'cookies' => cookies,
+                                                   'body' => request.body.to_s, 'remote_addr' => '127.0.0.1'
+                                                 }, context:)
+        response.status = Integer(result.fetch('status'))
+        response['Content-Type'] = result['content_type'] if result['content_type']
+        result.fetch('headers').each { |name, value| response[name] = value }
+        set_cookies = result.fetch('cookies').map { java_cookie(_1) }
+        response['Set-Cookie'] = set_cookies unless set_cookies.empty?
+        response.body = result.fetch('body')
+      end
+
+      def java_cookie(cookie)
+        attributes = ["#{cookie.fetch('name')}=#{cookie.fetch('value')}", "Path=#{cookie.fetch('path') || '/'}",
+                      'SameSite=Lax']
+        attributes << "Max-Age=#{cookie['max_age']}" if cookie['max_age'].to_i >= 0
+        attributes << 'HttpOnly' if cookie['http_only']
+        attributes << 'Secure' if ENV['MXRB_SECURE_COOKIES'] == 'true'
+        attributes.join('; ')
       end
 
       def rest_route(method, path)
