@@ -14,8 +14,15 @@ module Mxrb
         depth = 0
         tokens.each_index.select do |index|
           depth += paren(tokens[index])
-          depth.zero? && yield(tokens[index])
+          depth.zero? && yield(tokens[index], index)
         end
+      end
+
+      # A keyword joined to a dot or a slash names an entity, an association or a
+      # member, as in Shop.Order or o/Shop.Group/Name, rather than starting a clause.
+      def qualified?(tokens, index)
+        neighbours = [index.positive? ? tokens[index - 1] : nil, tokens[index + 1]]
+        neighbours.compact.any? { %w[. /].include?(_1.text) }
       end
 
       # The tokens without any "( SELECT ... )".
