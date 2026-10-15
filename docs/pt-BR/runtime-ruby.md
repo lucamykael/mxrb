@@ -203,6 +203,10 @@ diferenças entre elas: `Base64Encode`, `EndTransaction`, `GetApplicationUrl`,
 `RandomStrongPassword`, `StringFromFile`, `StringLeftPad`, `StringSplit`,
 `StringTrim`, `ThrowException`, `TimeMeasureStart`, `TimeMeasureEnd`,
 `copyAttributes`, `executeUnverifiedMicroflowAsUser_2` e `objectHasChanged`.
+Do Encryption, `EncryptString` e `DecryptString` (releases 8.0.2 e 10.0.2) cifram
+`{AES3}` com AES/GCM e decifram também o `{AES}` legado (AES/CBC), em formato
+compatível com o Java; `{AES2}` falha como num Runtime 11.12.1 recém-iniciado, que
+não tem o cipher `AES/GCM/PKCS5PADDING`. As ações PGP não têm adapter.
 
 Um adapter que precisa do microflow chamador usa `with_context: true` e recebe
 `context:`, com o store, o log, outros microflows (também como outro usuário ou em

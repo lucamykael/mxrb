@@ -188,7 +188,11 @@ the differences between them: `Base64Encode`, `EndTransaction`,
 `RandomHash`, `RandomString`, `RandomStrongPassword`, `StringFromFile`,
 `StringLeftPad`, `StringSplit`, `StringTrim`, `ThrowException`,
 `TimeMeasureStart`, `TimeMeasureEnd`, `copyAttributes`,
-`executeUnverifiedMicroflowAsUser_2` and `objectHasChanged`.
+`executeUnverifiedMicroflowAsUser_2` and `objectHasChanged`. From Encryption,
+`EncryptString` and `DecryptString` (releases 8.0.2 and 10.0.2) encrypt `{AES3}`
+with AES/GCM and also decrypt legacy `{AES}` (AES/CBC), interchangeably with the
+Java code; `{AES2}` fails as on a freshly started 11.12.1 Runtime, which lacks the
+`AES/GCM/PKCS5PADDING` cipher. The PGP actions have no adapter.
 
 An adapter that needs the calling microflow uses `with_context: true` and
 receives `context:`, with the store, the log, other microflows (also as another
