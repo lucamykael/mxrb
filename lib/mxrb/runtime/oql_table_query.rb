@@ -54,7 +54,8 @@ module Mxrb
         starts = tokens.each_index.select do |index|
           token = tokens[index]
           depth = nesting(token, depth)
-          depth.zero? && token.type == :word && CLAUSES.include?(token.text.upcase)
+          depth.zero? && token.type == :word && CLAUSES.include?(token.text.upcase) &&
+            !OqlNesting.qualified?(tokens, index)
         end
         invalid!('unbalanced parentheses') unless depth.zero?
         starts
