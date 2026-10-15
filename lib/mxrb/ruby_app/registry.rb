@@ -119,7 +119,7 @@ module Mxrb
 
       def adapters = all(:adapter)
 
-      def register_java_custom_action(name, implementation = nil, with_store: false, &block)
+      def register_java_custom_action(name, implementation = nil, with_store: false, with_context: false, &block)
         qualified_name = name.to_s
         unless qualified_name.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
           raise ArgumentError, "Java Custom Action name must be qualified as Module.Action: #{name}"
@@ -128,7 +128,10 @@ module Mxrb
         callback = implementation || block
         raise ArgumentError, 'Java Custom Action adapter must respond to call' unless callback.respond_to?(:call)
 
+        raise ArgumentError, 'choose with_store or with_context, not both' if with_store && with_context
+
         callback = Runtime::Native::StoreJavaAction.new(callback) if with_store
+        callback = Runtime::Native::ContextJavaAction.new(callback) if with_context
 
         register(:java_custom_action, qualified_name, callback)
         callback

@@ -273,7 +273,10 @@ de texto, inteiro, decimal, booleano, data ou objeto (comparado pelo ID); `amoun
 `offset` paginam depois do `ORDER BY`. Cada coluna preenche o atributo de mesmo nome
 ou, para IDs, a associação própria `Módulo.Coluna`; colunas sem destino geram erro.
 Um parâmetro vazio em `=` age como `IS NULL`, como o literal `NULL`; parâmetro não
-informado gera erro. Atributos enum são lidos pela chave, também em filtros.
+informado gera erro. Atributos enum são lidos pela chave, também em filtros. As releases
+auditadas são a 4.1.2 e a 2.10.0; esta só aceita OQL (não nomes de dataset), mapeia
+também as colunas reservadas `….ID` e `submetaobjectname`, procura a associação só pelo
+nome sem módulo e falha com `NullPointerException` em vez de `RuntimeException`.
 
 Joins aceitam caminhos com vários saltos (`p/M.A_B/M.B/M.B_C/M.C AS c`) em `INNER` e
 `LEFT`, e comparações de ordem aceitam datas. Os datasets de um projeto real privado,

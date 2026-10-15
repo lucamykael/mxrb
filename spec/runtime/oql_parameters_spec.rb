@@ -28,12 +28,11 @@ RSpec.describe 'OQL parameters through the Marketplace OQL module' do
   def select_test_adapters
     source = "// explicitly selected test adapter\n"
     hash = Digest::SHA256.hexdigest(source)
-    files = Mxrb::RubyApp::KnownOqlModuleActions::SOURCES.keys.map { "actions/#{_1}.java" } +
-            ['implementation/OQL.java']
+    names = Mxrb::RubyApp::KnownOqlModuleActions::RELEASES.fetch('4.1.2').fetch(:actions).keys
+    files = names.map { "actions/#{_1}.java" } + ['implementation/OQL.java']
     files.each { write_source(File.join(@directory, 'javasource', 'oql', _1), source) }
-    sources = Mxrb::RubyApp::KnownOqlModuleActions::SOURCES.keys.to_h { [_1, hash] }
-    stub_const('Mxrb::RubyApp::KnownOqlModuleActions::SOURCES', sources)
-    stub_const('Mxrb::RubyApp::KnownOqlModuleActions::IMPLEMENTATION', hash)
+    stub_const('Mxrb::RubyApp::KnownOqlModuleActions::RELEASES',
+               '4.1.2' => { implementation: hash, actions: names.to_h { [_1, hash] } })
   end
 
   def write_source(path, source)
@@ -96,6 +95,32 @@ RSpec.describe 'OQL parameters through the Marketplace OQL module' do
       expect(@store.oql_module_count('SELECT p.Name AS Name FROM Views.Program AS p', parameters: {})).to eq(5)
     end
 
+    it 'maps rows like release 2.10.0: text only, every column, unqualified associations' do
+      legacy = ->(statement) { @store.oql_module_objects(statement, 'Views.Result', parameters: {}, release: '2.10.0') }
+      linked = 'SELECT p.Name AS Name, b.ID AS Result_Building FROM Views.Program AS p ' \
+               'JOIN p/Views.Program_Building/Views.Building AS b WHERE p.Rank = 1'
+      expect(legacy.call(linked).map { _1.members['Result_Building']&.id }).to eq([north.id])
+      expect { legacy.call('Views.ByBuilding') }.to raise_error(Mxrb::NativeRuntimeError)
+      expect { legacy.call('SELECT p.Name AS Name, p.Name AS submetaobjectname FROM Views.Program AS p') }
+        .to raise_error(Mxrb::Runtime::JavaActionError,
+                        'Could not find result attribute submetaobjectname in target object.')
+      nothing = 'SELECT p.Name AS Name, p.Amount AS Other FROM Views.Program AS p WHERE p.Amount IS NULL'
+      [[nil, 'java.lang.RuntimeException',
+        'Unable to map null value for column Other to any association or attribute.'],
+       ['2.10.0', 'java.lang.NullPointerException',
+        'Null value found Other was not found as association or attribute.']]
+        .each do |release, java_class, message|
+          options = { parameters: {}, release: }.compact
+          expect { @store.oql_module_objects(nothing, 'Views.Result', **options) }
+            .to raise_error(Mxrb::Runtime::JavaActionError) { |error| expect([error.java_class, error.message]).to eq([java_class, message]) }
+        end
+      # OQL aliases cannot hold a dot, but the module matches a qualified column exactly since 3.x.
+      current = Mxrb::Runtime::OqlModuleQuery.new(@store.send(:oql_queries), @store)
+      old = Mxrb::Runtime::OqlModuleQuery.new(@store.send(:oql_queries), @store, release: '2.10.0')
+      expect(current.send(:association, 'Views.Result', 'Views.Result_Building')&.name).to eq('Result_Building')
+      expect(old.send(:association, 'Views.Result', 'Views.Result_Building')).to be_nil
+    end
+
     it 'rejects unset parameters, unknown values and columns without a target' do
       {
         'SELECT p.Name AS Name FROM Views.Program AS p WHERE p.Rank = $Missing' => {},
@@ -125,11 +150,13 @@ RSpec.describe Mxrb::RubyApp::KnownOqlModuleActions do
       FileUtils.mkdir_p(File.join(root, 'actions'))
       File.write(File.join(root, 'implementation', 'OQL.java'), 'x')
       File.write(File.join(root, 'actions', 'AddStringParameter.java'), 'x')
-      stub_const("#{described_class}::IMPLEMENTATION", Digest::SHA256.hexdigest('x'))
-      stub_const("#{described_class}::SOURCES", 'AddStringParameter' => Digest::SHA256.hexdigest('x'),
-                                                'ExecuteOQLStatement' => Digest::SHA256.hexdigest('x'))
+      x = Digest::SHA256.hexdigest('x')
+      stub_const("#{described_class}::RELEASES",
+                 '4.1.2' => { implementation: 'other', actions: {} },
+                 '2.10.0' => { implementation: x, actions: { 'AddStringParameter' => x, 'ExecuteOQLStatement' => x } })
       expect(described_class.registrations(directory))
-        .to eq('Mxrb::RubyApp::KnownOqlModuleActions.register("AddStringParameter")')
+        .to eq('Mxrb::RubyApp::KnownOqlModuleActions.register("AddStringParameter", "2.10.0")')
+      expect { described_class.register('CountRowsOQLStatement', '2.10.0') }.to raise_error(KeyError, /not audited/)
     end
     described_class.add('name' => 'A', 'value' => nil)
     expect(described_class.parameters).to eq('A' => nil)

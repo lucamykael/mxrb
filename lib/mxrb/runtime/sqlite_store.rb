@@ -52,6 +52,7 @@ module Mxrb
         @identity = {}
         @persisted = {}
         @staged_new = {}
+        @touched = {}
         @detached_new = {}
         @resumed_drafts = {}
         @sequence_values = {}
@@ -65,8 +66,8 @@ module Mxrb
       def query_oql(text, parameters: nil) = oql_queries.query(text, parameters:).rows
 
       # ExecuteOQLStatement and CountRowsOQLStatement of the Marketplace OQL module.
-      def oql_module_objects(statement, entity, **options)
-        OqlModuleQuery.new(oql_queries, self).objects(statement, entity, **options)
+      def oql_module_objects(statement, entity, release: '4.1.2', **options)
+        OqlModuleQuery.new(oql_queries, self, release:).objects(statement, entity, **options)
       end
 
       def oql_module_count(statement, **options) = OqlModuleQuery.new(oql_queries, self).count(statement, **options)
@@ -272,8 +273,39 @@ module Mxrb
         transient, persistent = values.compact.partition { transient?(_1.entity) }
         @transient.commit(transient, events:) unless transient.empty?
         atomic { persistent.each { persist_update(_1, events:) } }
+        persistent.each { @touched.delete(_1.id) }
         finish_manual_transaction if value.nil? && @manual_transaction
         value
+      end
+
+      # IContext.endTransaction: commits the running unit of work; later commits autocommit.
+      def end_transaction
+        return false unless @manual_transaction
+
+        finish_manual_transaction
+        @autocommit = true
+      end
+
+      # Members set by a change; IMendixObject.isChanged reports them until the next commit.
+      def touch(value)
+        return @transient.touch(value) if transient?(value.entity)
+
+        @touched[value.id] = true
+      end
+
+      # IMendixObject.isChanged: set since the last commit, or members that differ from the
+      # persisted ones (the defaults for a new object).
+      def changed?(value)
+        return @transient.changed?(value) if transient?(value.entity)
+        return true if @touched.key?(value.id)
+
+        members = value.members
+        baseline = @persisted.fetch(value.id) do
+          definition = schema.entity(value.entity)
+          members = members.except(*definition.columns.select { _1.type == :autonumber }.map(&:name))
+          static_defaults(definition)
+        end
+        comparable_members(members).compact != comparable_members(baseline).compact
       end
 
       def begin_transaction
@@ -282,6 +314,7 @@ module Mxrb
         @manual_snapshot = transaction_snapshot
         database.execute('BEGIN IMMEDIATE')
         @manual_transaction = true
+        @autocommit = false
         self
       end
 
@@ -291,11 +324,13 @@ module Mxrb
 
         begin_transaction
         result = yield self
-        finish_manual_transaction
+        finish_manual_transaction if @manual_transaction
         detach_uncommitted
         result
       rescue Exception # rubocop:disable Lint/RescueException
-        rollback if owner && @manual_transaction
+        if owner && @manual_transaction then rollback
+        elsif owner && @autocommit then detach_uncommitted
+        end
         raise
       end
 
@@ -629,6 +664,7 @@ module Mxrb
         @identity.clear
         @persisted.clear
         @staged_new.clear
+        @touched.clear
       end
 
       def dirty_values
@@ -648,8 +684,15 @@ module Mxrb
           default = column.type == :autonumber ? next_autonumber(entity, column) : column.default
           [column.name, cast_default(default, column.type)]
         end
-        generated.merge(@defaults.fetch(entity.name, @defaults.fetch(entity.name.split('.').last, {})).dup)
+        generated.merge(default_overrides(entity))
       end
+
+      def static_defaults(entity)
+        entity.columns.reject { _1.type == :autonumber }
+              .to_h { [_1.name, cast_default(_1.default, _1.type)] }.merge(default_overrides(entity))
+      end
+
+      def default_overrides(entity) = @defaults.fetch(entity.name, @defaults.fetch(entity.name.split('.').last, {})).dup
 
       def next_autonumber(entity, column)
         key = [entity.storage_key, column.storage_key]
@@ -741,6 +784,7 @@ module Mxrb
         transient, persistent = Array(values).compact.partition { transient?(_1.entity) }
         @transient.rollback(transient) unless transient.empty?
         persistent.each do |value|
+          @touched.delete(value.id)
           if @staged_new.delete(value.id) || @detached_new.key?(value.id)
             @detached_new.delete(value.id)
             @client_drafts.delete(value)

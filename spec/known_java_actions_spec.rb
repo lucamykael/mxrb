@@ -68,12 +68,20 @@ RSpec.describe Mxrb::RubyApp::KnownJavaActions do
                  'ValidateEmail' => [Digest::SHA256.file(java).hexdigest])
       target = File.join(root, 'ruby')
       Mxrb::Exporter.new(source, target, mode: :ruby).export!
-      expect(File.read(File.join(target, 'config',
-                                 'adapters.rb'))).to include('KnownJavaActions.register("ValidateEmail")')
+      expect(File.read(File.join(target, 'config', 'verified_adapters.rb')))
+        .to include('KnownJavaActions.register("ValidateEmail")')
+      expect(File.read(File.join(target, 'config', 'adapters.rb'))).not_to include('KnownJavaActions')
+      expect(Mxrb::RubyApp.source_bundle(target).map { _1.fetch(:path) }).not_to include('config/verified_adapters.rb')
       allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR prohibited')
       application = Mxrb::RubyApp::Application.new(target)
       expect(application.call_service('FeedbackModule.Check', { 'Email' => 'ruby@example.com' })).to be(true)
       expect(application.call_service('FeedbackModule.Check', { 'Email' => 'invalid' })).to be(false)
+      application.close
+      File.write(File.join(target, 'config', 'adapters.rb'), <<~RUBY, mode: 'a')
+        Mxrb::RubyApp::Registry.register_java_custom_action('FeedbackModule.ValidateEmail') { |_| true }
+      RUBY
+      application = Mxrb::RubyApp::Application.new(target)
+      expect(application.call_service('FeedbackModule.Check', { 'Email' => 'invalid' })).to be(true)
     ensure
       application&.close
     end

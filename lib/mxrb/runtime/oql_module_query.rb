@@ -1,24 +1,30 @@
 # frozen_string_literal: true
 
 require_relative 'oql_datasets'
+require_relative 'java_action_context'
 
 module Mxrb
   module Runtime
     # ExecuteOQLStatement and CountRowsOQLStatement of the Marketplace OQL module:
-    # a dataset name or OQL text with $parameters, an amount and an offset. Each
-    # column fills an attribute of the same name or, for object IDs, an owned
-    # association named Module.Column; unknown columns are errors, as in the module.
+    # OQL text (and, since 3.x, a dataset name) with $parameters, an amount and an
+    # offset. Each column fills an attribute of the same name or, for object IDs, an
+    # owned association named Module.Column; unknown columns fail as in the module.
     class OqlModuleQuery
       RESERVED = /\A(.+\.ID|submetaobjectname)\z/
+      # 2.x maps every column, throws NullPointerException and matches associations
+      # by their unqualified name only.
+      LEGACY = '2.10.0'
 
-      def initialize(datasets, store)
+      def initialize(datasets, store, release: '4.1.2')
         @datasets = datasets
         @store = store
+        @legacy = release == LEGACY
       end
 
       def objects(statement, entity_name, parameters:, amount: nil, offset: nil)
         attributes = @datasets.entity(entity_name).attributes.map(&:name)
-        table = @datasets.query(@datasets.dataset_text(statement) || statement, parameters:)
+        text = @legacy ? statement : @datasets.dataset_text(statement) || statement
+        table = @datasets.query(text, parameters:)
         types = table.definition.columns.to_h { [_1.name, _1.type] }
         page(table.rows, amount, offset).map { |row| instantiate(entity_name, row, attributes, types) }
       end
@@ -37,7 +43,7 @@ module Mxrb
       def instantiate(entity_name, row, attributes, types)
         @store.create(entity_name).tap do |object|
           row.each do |column, value|
-            next if RESERVED.match?(column)
+            next if !@legacy && RESERVED.match?(column)
 
             if types[column] == :identifier && value then link(object, column, value)
             else assign(object, column, value, attributes)
@@ -51,19 +57,31 @@ module Mxrb
         return object.members[column] = value if attributes.include?(column)
         return if value.nil? && association(object.entity, column)
 
-        raise NativeRuntimeError, "Could not find result attribute #{column} in target object."
+        message = if !value.nil? then "Could not find result attribute #{column} in target object."
+                  elsif @legacy then "Null value found #{column} was not found as association or attribute."
+                  else "Unable to map null value for column #{column} to any association or attribute."
+                  end
+        module_error(message)
       end
 
       def link(object, column, id)
         association = association(object.entity, column)
-        raise NativeRuntimeError, "Could not find result association #{column} in target object." unless association
+        module_error("Could not find result association #{column} in target object.") unless association
 
         object.members[association.name] = @store.find(association.to_entity, id)
       end
 
       def association(entity, column)
-        pattern = /\A[^.]+\.#{Regexp.escape(column)}\z/
-        @store.schema.associations.find { _1.from_entity == entity && pattern.match?(_1.qualified_name.to_s) }
+        @store.schema.associations.find do |candidate|
+          name = candidate.qualified_name.to_s
+          next false unless candidate.from_entity == entity
+
+          @legacy || !column.include?('.') ? name.split('.', 2).last == column : name == column
+        end
+      end
+
+      def module_error(message)
+        raise JavaActionError.new(@legacy ? 'java.lang.NullPointerException' : 'java.lang.RuntimeException', message)
       end
     end
   end

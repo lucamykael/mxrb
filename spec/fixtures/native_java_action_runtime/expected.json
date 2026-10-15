@@ -1,0 +1,20 @@
+{
+  "mendix_version": "11.12.1",
+  "results": {
+    "new_set": "true",
+    "new_blank": "false",
+    "committed": "false",
+    "changed": "true",
+    "reverted": "true",
+    "same_value": "true",
+    "model_version": "unversioned",
+    "runtime_version": "11.12.1",
+    "checked_message": "checked failure",
+    "checked_type": "views.ProbeException",
+    "runtime_message": "runtime failure",
+    "runtime_type": "java.lang.RuntimeException",
+    "nested_durable": "1",
+    "root_before_end": "1",
+    "root_after_end": "1"
+  }
+}

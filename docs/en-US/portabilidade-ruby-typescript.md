@@ -274,7 +274,10 @@ parameters; `amount` and `offset` page after `ORDER BY`. Each column fills the
 attribute of the same name or, for IDs, the owned association `Module.Column`;
 columns without a target are errors. An empty parameter in `=` acts as `IS NULL`,
 like the `NULL` literal; an unset parameter is an error. Enumeration attributes read
-as their keys, also in filters.
+as their keys, also in filters. The audited releases are 4.1.2 and 2.10.0; the latter
+accepts only OQL (no dataset names), also maps the reserved `….ID` and
+`submetaobjectname` columns, looks associations up by their unqualified name only and
+fails with `NullPointerException` instead of `RuntimeException`.
 
 Joins accept multi-step association paths (`p/M.A_B/M.B/M.B_C/M.C AS c`) for `INNER`
 and `LEFT`, and ordered comparisons accept dates. The datasets of a private real project,
