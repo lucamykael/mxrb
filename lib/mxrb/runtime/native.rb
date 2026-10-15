@@ -61,6 +61,12 @@ module Mxrb
         end
       end
 
+      # What the Mendix 11.12.1 Runtime reports of its System module: entities,
+      # their attributes and supers, associations and microflows.
+      def self.system_metamodel
+        @system_metamodel ||= JSON.parse(File.read(File.join(__dir__, 'system_metamodel_11.12.1.json'))).freeze
+      end
+
       # Explicit opt-in for adapters that act on the calling microflow's runtime:
       # its store, log, transaction and other flows, through a JavaActionContext.
       ContextJavaAction = Data.define(:handler)
@@ -214,6 +220,9 @@ module Mxrb
           baseline = @committed.fetch(record_key(object)) { @defaults.fetch(object.entity, {}) }
           object.members.compact != baseline.compact
         end
+
+        # The members an object had at its last commit, or nil for one never committed.
+        def original(object) = @committed[record_key(object)]&.dup
 
         def rollback(value)
           Array(value).each do |object|

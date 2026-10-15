@@ -170,6 +170,48 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
     expect(order.members['Quantity']).to eq(4)
   end
 
+  it 'answers the Runtime services: originals, metamodel, captions, files and messages' do
+    order = store.create('Mod.Order')
+    order.members.merge!('Name' => 'a', 'Quantity' => 2, 'Tags' => nil)
+    allow(context).to receive(:file_content).with(order).and_return("\x00\xFFbytes".b)
+    allow(context).to receive(:show_message)
+    services = instance_double(Mxrb::RubyApp::SidecarServices, metamodel: { 'objects' => [], 'count' => 1 })
+    allow(services).to receive(:caption).with('Mod.Kind', 'Big', nil).and_return('Large')
+    allow(services).to receive(:store_file)
+    object = { '$object' => 0 }
+    steps = [
+      callback(1, 'original', 'object' => object),
+      ->(_client) { store.commit(order) },
+      callback(2, 'original', 'object' => object),
+      callback(3, 'metamodel'),
+      callback(4, 'caption', 'enumeration' => 'Mod.Kind', 'value' => 'Big', 'language' => nil),
+      callback(5, 'file', 'object' => object),
+      callback(6, 'store_file', 'object' => object, 'name' => 'a.txt', 'content' => { '$binary' => 'aGk=' }),
+      callback(7, 'message', 'type' => 'ERROR', 'message' => 'bad', 'blocking' => true),
+      { 'id' => 0, 'result' => { 'nested' => [{ '$binary' => 'AP8=' }] } }
+    ]
+    result = nil
+    received = sidecar(steps) do |url|
+      result = described_class.new(url, services:).invoke('Mod.Action', [['order', order], ['map', { 'a' => 1 }]],
+                                                          context:)
+    end
+
+    expect(result).to eq('nested' => ["\x00\xFF".b])
+    expect(received.first.dig('params', 'arguments').last).to eq(['map', { 'a' => 1 }])
+    answers = received.drop(1).map { _1['result'] }
+    expect(answers[0]).to be_nil
+    expect(answers[1]).to eq('Name' => 'a', 'Quantity' => { '$integer' => 2 }, 'Tags' => [])
+    expect(answers[2..]).to eq([{ 'objects' => [], 'count' => 1 }, 'Large',
+                                { '$binary' => Base64.strict_encode64("\x00\xFFbytes".b) }, nil, nil])
+    expect(services).to have_received(:store_file).with(store, order, 'a.txt', 'hi')
+    expect(context).to have_received(:show_message).with('ERROR', 'bad', blocking: true)
+
+    steps = [callback(1, 'metamodel'), { 'id' => 0, 'result' => nil }]
+    received = sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) }
+    expect(received.last['error']['message']).to eq('the application offers no Runtime services')
+    expect(described_class.configured({ 'MXRB_JAVA_ACTIONS_URL' => 'java:1' }, services:)).to be_a(described_class)
+  end
+
   it 'raises the exception a Java action throws with its class' do
     steps = [{ 'id' => 0, 'error' => { 'type' => 'java.lang.IllegalStateException', 'message' => 'bad' } }]
     expect { sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) } }
@@ -199,8 +241,8 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
       expect { sidecar([line]) { described_class.new(_1).invoke('Mod.Action', [], context:) } }
         .to raise_error(Mxrb::NativeRuntimeError, 'Java action sidecar sent a malformed message')
     end
-    expect { sidecar([]) { described_class.new(_1).invoke('Mod.Action', [['map', {}]], context:) } }
-      .to raise_error(Mxrb::NativeRuntimeError, 'cannot pass Hash to a Java action')
+    expect { sidecar([]) { described_class.new(_1).invoke('Mod.Action', [['thing', Object.new]], context:) } }
+      .to raise_error(Mxrb::NativeRuntimeError, 'cannot pass Object to a Java action')
   end
 end
 # rubocop:enable Metrics/BlockLength

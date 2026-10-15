@@ -26,6 +26,7 @@ public final class Server {
 		String token = System.getenv("MXRB_JAVA_ACTIONS_TOKEN");
 		Path report = Path.of(environment("MXRB_JAVA_ACTIONS_REPORT", "build-report.tsv"));
 		Invoker invoker = new Invoker(Server.class.getClassLoader(), Invoker.report(report));
+		Captions.load(Path.of(environment("MXRB_JAVA_ACTIONS_CAPTIONS", "captions.tsv")));
 		ExecutorService threads = Executors.newCachedThreadPool();
 		try (ServerSocket server = new ServerSocket(port)) {
 			System.out.println("mxrb Java actions listening on port " + server.getLocalPort());

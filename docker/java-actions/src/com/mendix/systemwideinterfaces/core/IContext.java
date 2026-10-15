@@ -10,5 +10,10 @@ public interface IContext {
 	void startTransaction();
 	void endTransaction();
 	void rollbackTransaction();
+
+	/** The name older Runtime versions gave rollbackTransaction. */
+	default void rollbackTransAction() {
+		rollbackTransaction();
+	}
 	IMendixObject getCurrentUserObject();
 }

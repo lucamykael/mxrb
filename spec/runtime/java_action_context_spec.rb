@@ -147,6 +147,21 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
     expect(context.member_kind('Mod.Item', 'Item_Lone')).to eq(:reference_set)
     expect(context.member_kind('Mod.Lone', 'Code')).to be_nil
     expect(context.member_kind('Mod.Missing', 'Name')).to be_nil
+    expect(context.member_kind('Mod.Item', 'FailedLogins')).to eq(:integer)
+    expect(context.member_kind('Mod.Item', 'UserRoles')).to eq(:reference_set)
+    expect(context.member_kind('Mod.Item', 'User_Language')).to eq(:reference)
+    expect(context.member_kind('Mod.Upload', 'Size')).to eq(:attribute)
+    expect(context.member_kind('Mod.Upload', 'Missing')).to be_nil
+    expect(context.member_kind('Mod.Lone', 'createdDate')).to eq(:attribute)
+    expect(context.member_kind('Mod.Lone', 'owner')).to eq(:reference)
+  end
+
+  it 'shows messages as the calling microflow would' do
+    effects = []
+    allow(interpreter).to receive(:effects).and_return(effects)
+    expect(context.show_message('WARNING', 'careful', blocking: true)).to be_nil
+    expect(effects).to eq([{ type: 'show_message', level: 'warning', blocking: true, message: 'careful' }])
+    expect { context.show_message('LOUD', 'x') }.to raise_error(ArgumentError, 'unknown message type "LOUD"')
   end
 
   it 'retrieves by XPath through the interpreter and reads the session user' do

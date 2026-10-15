@@ -16,6 +16,10 @@ module Mxrb
     # it: the parts of IContext and Core that audited Marketplace actions rely on.
     class JavaActionContext # rubocop:disable Metrics/ClassLength
       FILE_CONTENT = 'SELECT content FROM mxrb_file_contents WHERE entity = ? AND object_id = ?'
+      MESSAGE_LEVELS = { 'INFO' => 'information', 'WARNING' => 'warning', 'ERROR' => 'error' }.freeze
+      # The members an entity has when it stores who and when created and changed it.
+      SYSTEM_MEMBERS = { 'createdDate' => :attribute, 'changedDate' => :attribute,
+                         'owner' => :reference, 'changedBy' => :reference }.freeze
       LOG_LEVELS = %w[Trace Debug Info Warning Error Critical].freeze
 
       attr_reader :store, :security_context, :project
@@ -69,16 +73,24 @@ module Mxrb
       # What a member of an entity, or of its generalizations, is: :integer for
       # an Integer attribute, :attribute for another one, :reference or
       # :reference_set for an association; nil when the entity has no such member.
+      # Members of System entities are those the Mendix 11.12.1 Runtime reports.
       def member_kind(entity_name, name) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
         name = name.to_s
         chain, root = generalizations(entity_name)
-        return :attribute if SystemDomain::ATTRIBUTES.fetch(root, []).any? { _1.first == name }
-
         attribute = chain.flat_map(&:attributes).find { _1.name == name }
         return attribute.type == :integer ? :integer : :attribute if attribute
 
         association = @project.modules.flat_map(&:associations).find { _1.name == name }
-        association && (association.association_type.to_s == 'ReferenceSet' ? :reference_set : :reference)
+        return association.association_type.to_s == 'ReferenceSet' ? :reference_set : :reference if association
+
+        SYSTEM_MEMBERS.fetch(name) { system_member_kind(root, name) }
+      end
+
+      # A message the client shows, as a show-message activity of the calling microflow would.
+      def show_message(type, message, blocking: false)
+        level = MESSAGE_LEVELS.fetch(type.to_s) { raise ArgumentError, "unknown message type #{type.inspect}" }
+        @interpreter.effects << { type: 'show_message', level:, blocking:, message: message.to_s }
+        nil
       end
 
       # The System.User of the calling session (IContext.getSession().getUser()).
@@ -130,6 +142,25 @@ module Mxrb
           current = entity.respond_to?(:generalization_target) ? entity.generalization_target.to_s : ''
         end
         [chain, current]
+      end
+
+      # A member of a System entity, or of one of its System generalizations.
+      def system_member_kind(entity, name)
+        objects = Native.system_metamodel.fetch('objects').to_h { [_1.fetch('name'), _1] }
+        return nil unless objects.key?(entity)
+
+        entities = [entity, *objects.fetch(entity).fetch('supers')]
+        primitive = entities.flat_map { objects.fetch(_1).fetch('primitives') }.find { _1.fetch('name') == name }
+        return primitive.fetch('type') == 'Integer' ? :integer : :attribute if primitive
+
+        system_association_kind(entities, name)
+      end
+
+      def system_association_kind(entities, name)
+        association = Native.system_metamodel.fetch('associations').find do
+          entities.include?(_1.fetch('parent')) && _1.fetch('name').split('.').last == name
+        end
+        association && (association.fetch('type') == 'REFERENCESET' ? :reference_set : :reference)
       end
 
       def context_for(username, sudo) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength

@@ -37,8 +37,9 @@ RSpec.describe 'Java action sidecar' do
     [api, classes, report, output]
   end
 
-  def start_sidecar(api, classes, report)
-    environment = { 'MXRB_JAVA_ACTIONS_PORT' => '0', 'MXRB_JAVA_ACTIONS_REPORT' => report }
+  def start_sidecar(api, classes, report, captions)
+    environment = { 'MXRB_JAVA_ACTIONS_PORT' => '0', 'MXRB_JAVA_ACTIONS_REPORT' => report,
+                    'MXRB_JAVA_ACTIONS_CAPTIONS' => captions }
     stdin, stdout, @sidecar_process = Open3.popen2(environment, 'java', '-cp', [api, classes].join(':'),
                                                    'mxrb.sidecar.Server')
     stdin.close
@@ -109,16 +110,16 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 15, proxies: 3, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 20, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 17 sources, left out 1')
+    expect(output).to include('compiled 23 sources, left out 1')
     expect(File.read(report))
-      .to start_with("views.actions.Unsupported\tline 24: cannot find symbol symbol: method getXASId()")
-    port = start_sidecar(api, classes, report)
+      .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method getXASId\(\)/)
+    port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
     open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
     expect(@application.call_service('Views.RunAll')).to be(true)
 
@@ -139,8 +140,19 @@ RSpec.describe 'Java action sidecar' do
       'unsupported_type' => 'com.mendix.core.CoreRuntimeException',
       'rename' => 'second->renamed Views.Order',
       'renamed_quantity' => '6',
-      'accent' => 'ação'
+      'accent' => 'ação',
+      'inspect' => 'Views.Order Views true Name:String Quantity:Integer Status:Enum ' \
+                   'Views.Order_Customer>Views.Customer:REFERENCE Views.Order_Tag>Views.Tag:REFERENCESET | ' \
+                   'Name=MendixString Quantity=MendixInteger Status=MendixEnum ' \
+                   'Views.Order_Customer=MendixObjectReference Views.Order_Tag=MendixObjectReferenceSet | ' \
+                   'NORMAL false Views.Order System.FileDocument true true true',
+      'track' => 'filled->tracked CHANGED UNCHANGED NORMAL INSTANTIATED true changed=1',
+      'captions' => 'Aberto|Open|Closed|Fechado||11|[2, 4]',
+      'microflows' => 'true [Value] String String Integer true null',
+      'store' => 'hello note.txt 5 3 10 4'
     )
+    expect(@application.send(:bridge).interpreter.effects)
+      .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')
   end
 end
 # rubocop:enable Metrics/BlockLength

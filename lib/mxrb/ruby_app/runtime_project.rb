@@ -21,6 +21,7 @@ module Mxrb
         def name = implementation.mendix_name.split('.').last
         def id = implementation.mendix_id
         def qualified_name = implementation.mendix_name
+        def generalization_target = implementation.generalization&.fetch(:target).to_s
         def persistable = implementation.persistable
         def access_rules = Array(implementation.access_rules)
         def lifecycle = Array(implementation.native_lifecycle_definitions)
