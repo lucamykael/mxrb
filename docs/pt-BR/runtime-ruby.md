@@ -288,7 +288,11 @@ A API cobre:
   `Core.executeAsync` (o sidecar roda o microflow antes de responder) e
   transações iniciadas pela ação, aninhadas na do microflow chamador.
 
-Os proxies gerados também têm `load(context, xpath)`, como os do Studio Pro.
+Os proxies gerados também têm `load(context, xpath)`, como os do Studio Pro. O
+`org.json` que a Mendix embute como `com.mendix.thirdparty.org.json` (`JSONObject`,
+`JSONArray`, `JSONException`) tem implementação própria no sidecar, e
+`IContext.getRuntimeRequest`/`getRuntimeResponse` ficam vazios, porque o app Ruby
+não repassa a requisição HTTP às ações.
 
 Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
 registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse
