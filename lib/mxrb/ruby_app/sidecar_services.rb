@@ -77,7 +77,7 @@ module Mxrb
       def security = Registry.all(:project_security).values.first&.native_definition || {}
 
       def system_caption(enumeration, value)
-        values = Metamodel::SYSTEM_ENUMERATIONS.fetch(enumeration, [])
+        values = Runtime::SystemMetamodel.enumerations(@project.mendix_version).fetch(enumeration, [])
         values.find { _1.fetch('id') == value }&.fetch('caption').to_s
       end
     end

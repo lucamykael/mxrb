@@ -4,11 +4,10 @@ require 'json'
 
 module Mxrb
   module RubyApp
-    # What a Mendix 11.12.1 Runtime reports through Core.getMetaObjects,
+    # What a Mendix Runtime reports through Core.getMetaObjects,
     # Core.getMetaAssociations and its microflow API, for the application's records
-    # and services and the Runtime's own System module.
+    # and services and the Runtime's own System module, as recorded for the project's version.
     class Metamodel # rubocop:disable Metrics/ClassLength
-      SYSTEM = JSON.parse(File.read(File.join(__dir__, '..', 'runtime', 'system_metamodel_11.12.1.json'))).freeze
       PRIMITIVE_TYPES = {
         string: 'String', integer: 'Integer', long: 'Long', decimal: 'Decimal', boolean: 'Boolean',
         datetime: 'DateTime', date_time: 'DateTime', autonumber: 'AutoNumber', hashstring: 'HashString',
@@ -21,11 +20,6 @@ module Mxrb
         'HashString' => 'HashString', 'Binary' => 'Binary'
       }.freeze
       FLOW_TYPES = DATA_TYPES.merge('Void' => 'Nothing').freeze
-      # The values of each System enumeration, as the Runtime's System primitives list them.
-      SYSTEM_PRIMITIVES = SYSTEM.fetch('objects').flat_map { _1.fetch('primitives') }.freeze
-      SYSTEM_ENUMERATIONS = SYSTEM_PRIMITIVES.each_with_object({}) do |entry, all|
-        all[entry.fetch('datatype').fetch('dsl').delete_prefix('#')] = entry.fetch('enum') if entry.key?('enum')
-      end.freeze
       SYSTEM_MEMBERS = { created_date: 'createdDate', changed_date: 'changedDate' }.freeze
       SYSTEM_ASSOCIATIONS = { owner: 'System.owner', changed_by: 'System.changedBy' }.freeze
 
@@ -33,7 +27,8 @@ module Mxrb
         @project = project
         @language = language
         @records = Registry.all(:record).values.uniq.to_h { [_1.mendix_name, _1] }
-        @system = SYSTEM.fetch('objects').to_h { [_1.fetch('name'), _1] }
+        @system_metamodel = Runtime::SystemMetamodel.for(project.mendix_version)
+        @system = @system_metamodel.fetch('objects').to_h { [_1.fetch('name'), _1] }
       end
 
       def objects
@@ -48,7 +43,7 @@ module Mxrb
       def associations
         @associations ||= begin
           own = @records.values.flat_map { |record| record_associations(record) }
-          (SYSTEM.fetch('associations') + own).sort_by { "#{_1.fetch('name')}/#{_1.fetch('parent')}" }
+          (@system_metamodel.fetch('associations') + own).sort_by { "#{_1.fetch('name')}/#{_1.fetch('parent')}" }
         end
       end
 
@@ -57,7 +52,7 @@ module Mxrb
           own = @project.modules.flat_map do |mod|
             mod.microflows.map { |flow| microflow("#{mod.name}.#{flow.name}", flow) }
           end
-          (SYSTEM.fetch('microflows') + own).sort_by { _1.fetch('name') }
+          (@system_metamodel.fetch('microflows') + own).sort_by { _1.fetch('name') }
         end
       end
 
@@ -137,7 +132,7 @@ module Mxrb
       def enum_values(enumeration)
         implementation = Registry.fetch(:enumeration, enumeration)
         unless implementation
-          return SYSTEM_ENUMERATIONS.fetch(enumeration) do
+          return @system_metamodel.fetch('enumerations').fetch(enumeration) do
             raise NativeRuntimeError, "unknown enumeration #{enumeration}"
           end
         end

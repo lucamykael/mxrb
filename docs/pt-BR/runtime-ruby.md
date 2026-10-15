@@ -218,8 +218,12 @@ não tem o cipher `AES/GCM/PKCS5PADDING`. As ações PGP não têm adapter. No s
 `OIDC.DeleteExpiredAuthAttempts` (3.3.1) apaga as tentativas vencidas.
 `MxModelReflection.SyncObjects` (6.2.0 e 8.0.2) porta o builder do módulo sobre o
 metamodelo da aplicação, que reproduz o que o Runtime 11.12.1 informa
-(`spec/fixtures/native_metamodel`); o módulo System vem desse Runtime, inclusive em
-projetos de outras versões.
+(`spec/fixtures/native_metamodel`). O módulo System é gravado por versão do Runtime
+(10.24.0 e 11.12.1, que diferem em entidades de workflow, associações e valores de
+enumeração), e cada projeto recebe a gravação mais recente que não seja mais nova que
+a sua versão. `MXRB_ORACLE_MENDIX_VERSION` roda o fixture em outro Runtime, com o build
+do mxrb quando aquele MxBuild não gera pacote portável, e `script/extract_system_metamodel`
+guarda o módulo System dele.
 
 Um adapter que precisa do microflow chamador usa `with_context: true` e recebe
 `context:`, com o store, o log, outros microflows (também como outro usuário ou em
