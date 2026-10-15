@@ -81,6 +81,24 @@ module Mxrb
         oql_queries.query(oql_queries.dataset_text(statement) || statement, parameters:)
       end
 
+      JAVA_IDS = 'CREATE TABLE IF NOT EXISTS mxrb_java_ids (id INTEGER PRIMARY KEY AUTOINCREMENT, ' \
+                 'entity TEXT NOT NULL, object_id TEXT NOT NULL UNIQUE)'
+
+      # IMendixIdentifier.toLong: the number kept for an object, which a Java action
+      # may store and turn back into the object with Core.createMendixIdentifier.
+      def long_id(object)
+        database.execute(JAVA_IDS)
+        database.execute('INSERT OR IGNORE INTO mxrb_java_ids (entity, object_id) VALUES (?, ?)',
+                         [object.entity, object.id])
+        database.get_first_value('SELECT id FROM mxrb_java_ids WHERE object_id = ?', [object.id])
+      end
+
+      def object_for_long(number)
+        database.execute(JAVA_IDS)
+        row = database.get_first_row('SELECT entity, object_id FROM mxrb_java_ids WHERE id = ?', [number])
+        row && find(row.fetch('entity'), row.fetch('object_id'))
+      end
+
       # The object with an id, of whichever entity stores it, as an OQL ID column holds it.
       def locate(id)
         schema.entities.each do |entity|

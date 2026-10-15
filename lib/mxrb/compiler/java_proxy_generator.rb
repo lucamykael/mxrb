@@ -185,6 +185,9 @@ module Mxrb
         accessors = attributes(entity).map { attribute_methods(unit, _1) }.join("\n")
         accessors += associations_for(unit, entity).map { association_methods(unit, _1) }.join("\n")
         base_methods = local_parent ? '' : base_entity_methods
+        # As Studio Pro does: an entity with specializations lists them too.
+        specialized = @entities.values.any? { |_unit, other| generalization(other) == qualified }
+        listed = specialized ? "? extends #{java_name}" : java_name
         <<~JAVA
           // Generated natively by mxrb from the MPR model.
           package #{java_package(unit.module_name)}.proxies;
@@ -213,6 +216,12 @@ module Mxrb
             public static #{java_name} load(com.mendix.systemwideinterfaces.core.IContext context,
                 com.mendix.systemwideinterfaces.core.IMendixIdentifier id) throws com.mendix.core.CoreException {
               return initialize(context, com.mendix.core.Core.retrieveId(context, id));
+            }
+            public static java.util.List<#{listed}> load(com.mendix.systemwideinterfaces.core.IContext context,
+                java.lang.String xpathConstraint) throws com.mendix.core.CoreException {
+              return com.mendix.core.Core.createXPathQuery(String.format("//%1$s%2$s", entityName, xpathConstraint))
+                .execute(context).stream().map(object -> initialize(context, object))
+                .collect(java.util.stream.Collectors.toList());
             }
           #{accessors}
           #{base_methods}

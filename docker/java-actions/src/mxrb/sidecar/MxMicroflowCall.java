@@ -29,6 +29,8 @@ public final class MxMicroflowCall implements MicroflowCallBuilder {
 	@Override
 	@SuppressWarnings("unchecked")
 	public <R> R execute(IContext context) {
-		return (R) ((MxContext) context).bridge().call("microflow", "name", name, "arguments", parameters);
+		MxContext mx = (MxContext) context;
+		return (R) mx.bridge().call("microflow", "name", name, "arguments", parameters, "user", mx.userName(), "sudo",
+				mx.isSudo());
 	}
 }

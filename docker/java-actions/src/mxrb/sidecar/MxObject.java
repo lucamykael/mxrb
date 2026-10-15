@@ -42,6 +42,10 @@ public final class MxObject implements IMendixObject {
 		return handle;
 	}
 
+	Bridge bridge() {
+		return bridge;
+	}
+
 	String guid() {
 		return id;
 	}

@@ -52,21 +52,26 @@ public final class Bridge {
 	public void serve(Invoker invoker, String token) throws IOException {
 		Map<String, Object> message = read();
 		Map<String, Object> params = (Map<String, Object>) message.get("params");
-		if (!"invoke".equals(message.get("method")) || params == null) {
-			throw new IOException("the connection must start with an invoke message");
+		Object method = message.get("method");
+		if (!("invoke".equals(method) || "request".equals(method)) || params == null) {
+			throw new IOException("the connection must start with an invoke or a request message");
 		}
 		Map<String, Object> answer = new LinkedHashMap<>();
 		answer.put("id", 0L);
 		CURRENT.set(this);
 		try {
 			authorize(token, (String) params.get("token"));
-			List<Object[]> arguments = new ArrayList<>();
-			for (Object pair : (List<Object>) params.get("arguments")) {
-				List<Object> entry = (List<Object>) pair;
-				arguments.add(new Object[] { entry.get(0), decode(entry.get(1)) });
+			if ("request".equals(method)) {
+				answer.put("result", encode(handle(params)));
+			} else {
+				List<Object[]> arguments = new ArrayList<>();
+				for (Object pair : (List<Object>) params.get("arguments")) {
+					List<Object> entry = (List<Object>) pair;
+					arguments.add(new Object[] { entry.get(0), decode(entry.get(1)) });
+				}
+				Object result = invoker.invoke(new MxContext(this, false), (String) params.get("action"), arguments);
+				answer.put("result", encode(result));
 			}
-			Object result = invoker.invoke(new MxContext(this, false), (String) params.get("action"), arguments);
-			answer.put("result", encode(result));
 		} catch (Throwable error) {
 			Map<String, Object> details = new LinkedHashMap<>();
 			details.put("type", error instanceof RubyException ruby ? ruby.type() : error.getClass().getName());
@@ -76,6 +81,22 @@ public final class Bridge {
 			CURRENT.remove();
 		}
 		send(answer);
+	}
+
+	/** A request the Ruby application's server forwards to the handler registered for its path. */
+	@SuppressWarnings("unchecked")
+	private Map<String, Object> handle(Map<String, Object> params) throws Exception {
+		String path = (String) params.get("handler");
+		com.mendix.externalinterface.connector.RequestHandler handler = Handlers.find(path);
+		if (handler == null) {
+			throw new IllegalStateException("no request handler for " + path);
+		}
+		Map<String, Object> session = (Map<String, Object>) decode(params.get("session"));
+		MxRuntimeRequest request = new MxRuntimeRequest((Map<String, Object>) decode(params.get("request")), path,
+				session == null ? null : new MxSession(this, session));
+		MxRuntimeResponse response = new MxRuntimeResponse();
+		handler.doProcessRequest(request, response, request.handlerPath());
+		return response.result();
 	}
 
 	/** A callback to the Ruby application with its parameters as name, value pairs. */

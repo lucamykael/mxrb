@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'application/record_access'
+require_relative 'application/request_handlers'
 require_relative 'application/service_invocation'
 require_relative 'application/schema_security'
 require_relative 'application/session_access'
@@ -18,6 +19,7 @@ module Mxrb
       THEME_PLATFORM = %w[frontend src generated platform].freeze
 
       include RecordAccess
+      include RequestHandlers
       include ServiceInvocation
       include SchemaSecurity
       include SessionAccess
@@ -128,7 +130,7 @@ module Mxrb
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
           runtime_records: Registry.all(:record),
           administrator_password: environment['MXRB_ADMIN_PASSWORD'],
-          environment:,
+          environment:, sessions: -> { session_manager },
           service_dispatch: lambda { |name, arguments, context|
             deserialize(call_service(name, arguments, context:), context:)
           }

@@ -68,6 +68,7 @@ Mxrb.define(output_path) do
     java_action :Microflows, parameters: [], return_type: { kind: :string }
     java_action :Store, parameters: [], return_type: { kind: :string }
     java_action :Oql, parameters: [], return_type: { kind: :string }
+    java_action :Register, parameters: [], return_type: { kind: :boolean }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -138,12 +139,20 @@ Mxrb.define(output_path) do
       log_message 'ORACLE store={1}', node: oracle, parameters: ['$stored']
       call_java 'Views.Oql', as: :oql
       log_message 'ORACLE oql={1}', node: oracle, parameters: ['$oql']
+      call_java 'Views.Register', as: :registered
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
     end
   end
   navigation { profile :Responsive, home_page: 'Views.Home' }
+  security do
+    security_level 'Off'
+    user_role 'Administrator', admin: true
+    user_role 'Guest'
+    admin_user_role 'Administrator'
+    guest_access true, role: 'Guest'
+  end
 end
 # rubocop:enable Metrics/BlockLength
 
@@ -225,7 +234,7 @@ actions = {
     return true;
   BODY
   'Fail' => ['Boolean', 'String message', 'throw new IllegalStateException(message);'],
-  'Unsupported' => ['String', nil, 'return Core.getXASId();'],
+  'Unsupported' => ['String', nil, 'return Core.notInTheRuntimeApi();'],
   'Rename' => ['String', 'IMendixObject order', <<~BODY],
     views.proxies.Order proxy = views.proxies.Order.initialize(getContext(), order);
     String before = proxy.getName();
@@ -296,6 +305,10 @@ actions = {
         + " " + Core.retrieveXPathQueryAggregate(context, "SUM(//Views.Order/Quantity)")
         + " " + Core.retrieveXPathQueryAggregate(context, "max(//Views.Order[Quantity < 6]/Quantity)");
   BODY
+  'Register' => ['Boolean', nil, <<~BODY],
+    Core.addRequestHandler("/hello/", new views.Hello());
+    return true;
+  BODY
   'Oql' => ['String', nil, <<~BODY]
     IContext context = getContext();
     IOQLTextGetRequest request = Core.createOQLTextGetRequest();
@@ -346,6 +359,42 @@ FileUtils.mkdir_p(directory)
 actions.each do |name, (type, parameters, body)|
   File.write(File.join(directory, "#{name}.java"), java_source.call(name, type, parameters, "#{body.chomp}\n"))
 end
+File.write(File.join(File.dirname(directory), 'Hello.java'), <<~JAVA)
+  package views;
+
+  import com.mendix.core.Core;
+  import com.mendix.externalinterface.connector.RequestHandler;
+  import com.mendix.m2ee.api.IMxRuntimeRequest;
+  import com.mendix.m2ee.api.IMxRuntimeResponse;
+  import com.mendix.systemwideinterfaces.core.IContext;
+  import com.mendix.systemwideinterfaces.core.IMendixObject;
+  import com.mendix.systemwideinterfaces.core.ISession;
+
+  public class Hello extends RequestHandler
+  {
+  	@Override
+  	protected void processRequest(IMxRuntimeRequest request, IMxRuntimeResponse response, String path) throws Exception
+  	{
+  		ISession session = getSessionFromRequest(request);
+  		boolean fresh = session == null;
+  		if (fresh) {
+  			session = Core.initializeGuestSession();
+  			response.addCookie(getSessionCookieName(), session.getId().toString(), "/", "", -1, true);
+  		}
+  		IContext context = session.createContext();
+  		IMendixObject customer = Core.createXPathQuery("//Views.Customer").execute(context).get(0);
+  		long number = customer.getId().toLong();
+  		IMendixObject same = Core.createMendixIdentifier(number).getObject();
+  		response.setStatus(IMxRuntimeResponse.OK);
+  		response.setContentType("text/plain");
+  		response.addHeader("X-Path-Info", request.getHttpServletRequest().getPathInfo());
+  		response.getWriter().write(path + " q=" + request.getParameter("q") + " fresh=" + fresh
+  			+ " anonymous=" + session.getUser(context).isAnonymous() + " " + session.getUserName().equals("Anonymous_" + session.getId())
+  			+ " " + same.getValue(context, "Name") + " " + (number == customer.getId().toLong())
+  			+ " guests=" + Core.getConfiguration().getEnableGuestLogin() + " " + request.getHttpServletRequest().getServletPath());
+  	}
+  }
+JAVA
 # A helper saved as ISO-8859-1, as some projects keep their sources.
 words = "package views;\n\npublic final class Words {\n\tpublic static final String ACCENTED = \"ação\";\n}\n"
 File.binwrite(File.join(File.dirname(directory), 'Words.java'), words.encode(Encoding::ISO_8859_1))

@@ -51,7 +51,9 @@ RSpec.describe 'Distributed Ruby runtime coordination' do
       login = first.login('ada', 'secret')
       header = "Bearer #{login.fetch(:token)}"
       expect(second.authenticate(header)).to have_attributes(
-        user: 'ada', user_roles: ['User'], attributes: { 'locale' => 'pt_BR', 'time_zone' => 'UTC' }
+        user: 'ada', user_roles: ['User'],
+        attributes: { 'locale' => 'pt_BR', 'time_zone' => 'UTC',
+                      'session_id' => Mxrb::RubyApp::SessionManager.session_id(login.fetch(:token)) }
       )
       rows = first_store.database.execute('SELECT identity_json FROM mxrb_runtime_sessions')
       expect(rows.to_s).not_to include('secret')
