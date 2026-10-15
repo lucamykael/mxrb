@@ -294,6 +294,14 @@ von Mendix als `com.mendix.thirdparty.org.json` gebündelte `org.json`
 Sidecar, und `IContext.getRuntimeRequest`/`getRuntimeResponse` sind leer, da die
 Ruby-Anwendung die HTTP-Anfrage nicht an Actions weitergibt.
 
+Arbeit, die eine Action nach ihrer Rückkehr weiterlaufen lässt, etwa ein Listener
+für MQTT-Nachrichten, der einen Microflow aufruft, läuft ebenfalls über die
+Ruby-Anwendung: beim Start der Runtime öffnet sie eine Listen-Verbindung zum
+Sidecar, und für jeden Callback dieser Arbeit bittet der Sidecar darüber um eine
+eigene Verbindung, die in einer neuen Transaktion mit Systemkontext bedient wird.
+Die Verbindung geht immer von der Ruby-Anwendung aus, die also keine Verbindung
+aus dem Container annehmen muss. Die Objekte eines Callbacks gelten nur in ihm.
+
 Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
 ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen
 Fehler mit diesem Grund. Enumerationsbeschriftungen folgen den Übersetzungen der
@@ -319,7 +327,7 @@ Anwendung vor, ohne den Export zu ändern, der weiterhin keine Java-Datei enthä
 Der Befehl schreibt nach `java-actions/` Dockerfile und Quellen des Sidecars, eine
 Kopie des `javasource` des Projekts (Quellen, die nicht UTF-8 sind, werden als
 ISO-8859-1 gelesen) mit den Proxies, die Studio Pro erzeugen würde und Projekte
-nicht versionieren, und die Jars aus `userlib`. Außerdem legt er, falls noch keine
+nicht versionieren, und die Jars aus `userlib` und `vendorlib`. Außerdem legt er, falls noch keine
 existiert, eine `docker-compose.yml` mit dem Dienst `java-actions` auf
 `127.0.0.1:7911` an. Das Verzeichnis wird bei jedem Lauf neu geschrieben und nicht
 in das MPR eingebettet:

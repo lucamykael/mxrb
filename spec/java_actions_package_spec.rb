@@ -23,14 +23,17 @@ RSpec.describe Mxrb::RubyApp::JavaActionsPackage do
     FileUtils.mkdir_p(File.dirname(library))
     File.binwrite(library, 'jar')
     File.write(File.join(@directory, 'project', 'userlib', 'lib.jar.Module.RequiredLib'), '')
+    FileUtils.mkdir_p(File.join(@directory, 'project', 'vendorlib'))
+    File.binwrite(File.join(@directory, 'project', 'vendorlib', 'module.jar'), 'vendor')
     application = File.join(@directory, 'app')
     FileUtils.mkdir_p(File.join(application, 'java-actions', 'stale'))
 
     result = described_class.new(@source, application).write!
     package = File.join(application, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 24, proxies: 4, libraries: 1)
+    expect(result.to_h).to eq(directory: package, sources: 25, proxies: 4, libraries: 2)
     expect(File).not_to exist(File.join(package, 'stale'))
     expect(File.binread(File.join(package, 'userlib', 'vendor', 'lib.jar'))).to eq('jar')
+    expect(File.binread(File.join(package, 'userlib', 'vendorlib', 'module.jar'))).to eq('vendor')
     expect(File).to exist(File.join(package, 'src', 'mxrb', 'sidecar', 'Server.java'))
     expect(File).to exist(File.join(package, 'javasource', 'views', 'proxies', 'Order.java'))
     expect(File).not_to exist(File.join(package, 'javasource', 'system', 'UserActionsRegistrar.java'))

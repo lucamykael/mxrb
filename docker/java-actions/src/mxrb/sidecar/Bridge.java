@@ -23,6 +23,8 @@ import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
  */
 public final class Bridge {
 	private static final ThreadLocal<Bridge> CURRENT = new ThreadLocal<>();
+	/** The bridge of threads outside an invocation: each call attaches a connection of its own. */
+	private static final Bridge DETACHED = new Bridge(null, null);
 
 	private final BufferedReader in;
 	private final Writer out;
@@ -34,13 +36,10 @@ public final class Bridge {
 		this.out = out;
 	}
 
-	/** The bridge of the invocation running on this thread. */
+	/** The bridge of the invocation running on this thread, or, outside one, of background work. */
 	public static Bridge current() {
 		Bridge bridge = CURRENT.get();
-		if (bridge == null) {
-			throw new CoreRuntimeException("no action invocation is running on this thread");
-		}
-		return bridge;
+		return bridge == null ? DETACHED : bridge;
 	}
 
 	static Bridge peek() {
@@ -53,8 +52,13 @@ public final class Bridge {
 		Map<String, Object> message = read();
 		Map<String, Object> params = (Map<String, Object>) message.get("params");
 		Object method = message.get("method");
-		if (!("invoke".equals(method) || "request".equals(method)) || params == null) {
-			throw new IOException("the connection must start with an invoke or a request message");
+		if (!java.util.List.of("invoke", "request", "listen", "attach").contains(method) || params == null) {
+			throw new IOException("the connection must start with an invoke, request, listen or attach message");
+		}
+		if ("listen".equals(method) || "attach".equals(method)) {
+			authorize(token, (String) params.get("token"));
+			background((String) method, (String) params.get("ticket"));
+			return;
 		}
 		Map<String, Object> answer = new LinkedHashMap<>();
 		answer.put("id", 0L);
@@ -83,6 +87,42 @@ public final class Bridge {
 		send(answer);
 	}
 
+	private void background(String method, String ticket) throws IOException {
+		if ("listen".equals(method)) {
+			Background.listen(this);
+			return;
+		}
+		try {
+			Background.attach(this, ticket);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+		Map<String, Object> answer = new LinkedHashMap<>();
+		answer.put("id", 0L);
+		answer.put("result", null);
+		send(answer);
+	}
+
+	/** A message that needs no answer, such as asking for an attach connection. */
+	synchronized void notify(String method, Object... parameters) throws IOException {
+		Map<String, Object> params = new LinkedHashMap<>();
+		for (int i = 0; i < parameters.length; i += 2) {
+			params.put((String) parameters[i], parameters[i + 1]);
+		}
+		Map<String, Object> message = new LinkedHashMap<>();
+		message.put("id", 0L);
+		message.put("method", method);
+		message.put("params", params);
+		send(message);
+	}
+
+	/** Waits until the Ruby application closes a listen connection. */
+	void awaitClose() throws IOException {
+		while (in.readLine() != null) {
+			// the Ruby application sends nothing on a listen connection
+		}
+	}
+
 	/** A request the Ruby application's server forwards to the handler registered for its path. */
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> handle(Map<String, Object> params) throws Exception {
@@ -101,6 +141,9 @@ public final class Bridge {
 
 	/** A callback to the Ruby application with its parameters as name, value pairs. */
 	public synchronized Object call(String method, Object... parameters) {
+		if (this == DETACHED) {
+			return Background.call(method, parameters);
+		}
 		long id = next++;
 		Map<String, Object> params = new LinkedHashMap<>();
 		for (int i = 0; i < parameters.length; i += 2) {

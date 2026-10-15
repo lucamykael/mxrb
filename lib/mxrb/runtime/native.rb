@@ -772,7 +772,7 @@ module Mxrb
 
       # Executes the graph and core data activities directly from the MPR.
       class Interpreter
-        attr_reader :store, :log, :effects
+        attr_reader :store, :log, :effects, :java_sidecar
 
         def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
                        service_dispatch: nil, constants: nil, java_sidecar: nil)
@@ -860,7 +860,24 @@ module Mxrb
         def java_request(handler, request, context: nil)
           raise NativeRuntimeError, 'request handlers need the Java actions sidecar' unless @java_sidecar
 
-          (@call_monitor ||= Monitor.new).synchronize { forward_java_request(handler, request, context) }
+          (@call_monitor ||= Monitor.new).synchronize do
+            java_root(context) do |java|
+              session = java.session
+              session = nil unless session['id']
+              request = request.merge('root_url' => request['root_url'] || java.application_root_url)
+              @java_sidecar.request(handler, request, session:, context: java)
+            end
+          end
+        end
+
+        # A callback of work a Java action left running, in a transaction of its own
+        # with a system context.
+        def java_attach(ticket)
+          raise NativeRuntimeError, 'background work needs the Java actions sidecar' unless @java_sidecar
+
+          (@call_monitor ||= Monitor.new).synchronize do
+            java_root(nil) { |java| @java_sidecar.attach(ticket, context: java) }
+          end
         end
 
         # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
@@ -876,17 +893,14 @@ module Mxrb
 
         private
 
-        def forward_java_request(handler, request, context)
+        def java_root(context)
           previous = @security_context
           @security_context = context
           @effects = []
           @scopes = [:transaction]
           @call_depth += 1
           java = java_action_context
-          session = java.session
-          request = request.merge('root_url' => request['root_url'] || java.application_root_url)
-          session = nil unless session['id']
-          store.transaction { @java_sidecar.request(handler, request, session:, context: java) }
+          store.transaction { yield java }
         ensure
           @call_depth -= 1
           @security_context = previous
