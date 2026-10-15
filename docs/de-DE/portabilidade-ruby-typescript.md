@@ -101,6 +101,10 @@ Typ, `parseInteger` lehnt Leerzeichen und Brüche ab, und `formatDecimal` folgt 
 `DecimalFormat` und rundet die Hälfte auf (`'#,##0.00'`, `%`, `E0`, Präfixe). Text plus
 Zahl nutzt die Form von `toString` (`'x' + 1.0` ist `x1`); Text mit Boolean oder
 `empty` wird abgelehnt. Parameter von Meldungen und Logs bewahren `\` und `$`.
+Pfade wie `$Order/M.Order_Customer/M.Customer/Name` folgen Referenzen von beiden Seiten
+und sind leer, sobald eine Referenz auf dem Weg leer ist; ein Reference Set lässt sich
+nicht durchlaufen. `''` ist nicht `empty`, und ein String-Attribut ohne Standardwert
+beginnt `empty` (`spec/fixtures/native_empty_strings`, gemessen auf der 11.12.1-Runtime).
 
 Alle 95 Fälle liefen mit `script/oql_native_oracle` auf dem offiziellen Runtime und
 stimmen mit dem Ruby-Interpreter überein.

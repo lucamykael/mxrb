@@ -1,0 +1,14 @@
+{
+  "mendix_version": "11.12.1",
+  "results": {
+    "blank_eq_empty": "false",
+    "blank_ne_empty": "true",
+    "trimmed_ne_empty": "true",
+    "nothing_eq_blank": "false",
+    "literal_eq": "false",
+    "attr_eq_empty": "false",
+    "default_attr_eq_empty": "true",
+    "default_attr_eq_blank": "false",
+    "length_nothing": "0"
+  }
+}

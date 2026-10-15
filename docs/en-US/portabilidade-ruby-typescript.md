@@ -96,7 +96,11 @@ with doubles, `sqrt` with 38 significant digits, `max`/`min` keep the type,
 `parseInteger` rejects blanks and fractions, and `formatDecimal` follows Java's
 `DecimalFormat`, rounding half up (`'#,##0.00'`, `%`, `E0`, prefixes). Text plus a
 number uses the `toString` form (`'x' + 1.0` is `x1`); text with a boolean or `empty`
-is refused. Message and log parameters keep `\` and `$`.
+is refused. Message and log parameters keep `\` and `$`. Paths such as
+`$Order/M.Order_Customer/M.Customer/Name` follow references from either side and are
+empty once a reference on the way is empty; crossing a reference set fails. `''` is not
+`empty`, and a String attribute without a default value starts `empty`
+(`spec/fixtures/native_empty_strings`, measured on the 11.12.1 Runtime).
 
 All 95 cases ran on the official Runtime through `script/oql_native_oracle` and match
 the Ruby interpreter. [Evidence](../evidence/expression-functions-2026-10-09.json).
