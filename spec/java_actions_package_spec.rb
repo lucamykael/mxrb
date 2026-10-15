@@ -28,7 +28,7 @@ RSpec.describe Mxrb::RubyApp::JavaActionsPackage do
 
     result = described_class.new(@source, application).write!
     package = File.join(application, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 20, proxies: 4, libraries: 1)
+    expect(result.to_h).to eq(directory: package, sources: 21, proxies: 4, libraries: 1)
     expect(File).not_to exist(File.join(package, 'stale'))
     expect(File.binread(File.join(package, 'userlib', 'vendor', 'lib.jar'))).to eq('jar')
     expect(File).to exist(File.join(package, 'src', 'mxrb', 'sidecar', 'Server.java'))

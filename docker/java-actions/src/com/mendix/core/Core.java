@@ -17,6 +17,10 @@ import com.mendix.core.actionmanagement.MicroflowCallBuilder;
 import com.mendix.core.conf.Configuration;
 import com.mendix.datastorage.XPathQuery;
 import com.mendix.logging.ILogNode;
+import com.mendix.systemwideinterfaces.connectionbus.data.IDataTable;
+import com.mendix.systemwideinterfaces.connectionbus.requests.IRetrievalSchema;
+import com.mendix.systemwideinterfaces.connectionbus.requests.types.IGetRequest;
+import com.mendix.systemwideinterfaces.connectionbus.requests.types.IOQLTextGetRequest;
 import com.mendix.systemwideinterfaces.core.IContext;
 import com.mendix.systemwideinterfaces.core.IDataType;
 import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
@@ -27,7 +31,9 @@ import com.mendix.systemwideinterfaces.core.meta.IMetaObject;
 import mxrb.sidecar.Bridge;
 import mxrb.sidecar.Captions;
 import mxrb.sidecar.Metadata;
+import mxrb.sidecar.MxDataTable;
 import mxrb.sidecar.MxDataType;
+import mxrb.sidecar.MxOqlRequest;
 import mxrb.sidecar.MxContext;
 import mxrb.sidecar.MxLogNode;
 import mxrb.sidecar.MxMicroflowCall;
@@ -294,6 +300,47 @@ public final class Core {
 				return user;
 			}
 		};
+	}
+
+	public static IOQLTextGetRequest createOQLTextGetRequest() {
+		return new MxOqlRequest(null);
+	}
+
+	/** A request for a dataset's OQL, by the dataset's name. */
+	public static IOQLTextGetRequest createOQLTextGetRequestFromDataSet(String dataset) {
+		return new MxOqlRequest(dataset);
+	}
+
+	public static IRetrievalSchema createRetrievalSchema() {
+		return new MxOqlRequest.Range();
+	}
+
+	public static IDataTable retrieveOQLDataTable(IContext context, String query) throws CoreException {
+		return retrieveOQLDataTable(context, new MxOqlRequest(query));
+	}
+
+	public static IDataTable retrieveOQLDataTable(IContext context, String query, int amount, int offset)
+			throws CoreException {
+		MxOqlRequest request = new MxOqlRequest(query);
+		request.getRetrievalSchema().setAmount(amount);
+		request.getRetrievalSchema().setOffset(offset);
+		return retrieveOQLDataTable(context, request);
+	}
+
+	@SuppressWarnings("unchecked")
+	public static IDataTable retrieveOQLDataTable(IContext context, IGetRequest request) throws CoreException {
+		if (!(request instanceof MxOqlRequest oql)) {
+			throw new CoreException("unsupported request " + request.getClass().getName());
+		}
+		IRetrievalSchema range = oql.getRetrievalSchema();
+		return new MxDataTable((Map<String, Object>) bridge(context).call("oql", "query", oql.getQuery(), "parameters",
+				oql.values(), "offset", range.getOffset(), "amount", range.getAmount()));
+	}
+
+	/** An image's contents; the Ruby application makes its thumbnails itself. */
+	public static void storeImageDocumentContent(IContext context, IMendixObject image, InputStream content,
+			int thumbnailWidth, int thumbnailHeight) {
+		storeFileDocumentContent(context, image, content);
 	}
 
 	public static IContext createSystemContext() {

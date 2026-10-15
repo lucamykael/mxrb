@@ -111,7 +111,7 @@ module Mxrb
         CALLBACKS = %w[
           log get set member related instantiate commit delete rollback retrieve microflow
           constant end_transaction changed original user application_root_url runtime_version model_version
-          metamodel caption file store_file message
+          metamodel caption file store_file message oql
         ].freeze
         LOG_LEVELS = {
           'TRACE' => 'Trace', 'DEBUG' => 'Debug', 'INFO' => 'Info',
@@ -215,6 +215,18 @@ module Mxrb
           @context.show_message(params['type'].to_s, params['message'].to_s, blocking: params['blocking'] == true)
         end
 
+        # Core.retrieveOQLDataTable: OQL text or a dataset's name, with parameters,
+        # an offset and an amount (0 or less for all); an ID column holds the object.
+        def callback_oql(params) # rubocop:disable Metrics/AbcSize
+          store = @context.store
+          raise NativeRuntimeError, 'OQL needs the application database' unless store.respond_to?(:oql_table)
+
+          table = store.oql_table(params['query'].to_s, parameters: params['parameters'].to_h)
+          columns = table.definition.columns
+          { 'columns' => columns.map { [_1.name, _1.type.to_s] },
+            'rows' => page(table.rows, params).map { |row| columns.map { oql_value(_1.type, row[_1.name]) } } }
+        end
+
         def callback_file(params) = Codec::Binary.new(@context.file_content(object!(params['object'])))
 
         def callback_store_file(params)
@@ -241,6 +253,20 @@ module Mxrb
           raise ArgumentError, "#{object.entity} has no member #{name}" unless @context.member_kind(object.entity, name)
 
           [object, name]
+        end
+
+        def page(rows, params)
+          rows = rows.drop(Integer(params.fetch('offset', 0)))
+          amount = Integer(params.fetch('amount', -1))
+          amount.positive? ? rows.first(amount) : rows
+        end
+
+        def oql_value(type, value)
+          case type
+          when :integer then value.nil? ? nil : Codec::JavaInteger.new(value)
+          when :identifier then value.nil? ? nil : @context.store.locate(value)
+          else value
+          end
         end
 
         def typed(object, name, value)
