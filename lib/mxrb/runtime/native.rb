@@ -229,8 +229,11 @@ module Mxrb
       class Expression
         include StringFunctions
 
-        def initialize(time_zone: 'UTC', decimal: DecimalContext.new)
+        # associations: ->(object, association) { related objects } reaches the
+        # side of a reference that the object does not own.
+        def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil)
           @token_cache = {}
+          @associations = associations
           @decimal = decimal
           @calendar = CalendarFunctions.new(time_zone:)
           @ranges = CalendarRanges.new(@calendar)
@@ -246,16 +249,47 @@ module Mxrb
           raise NativeRuntimeError, "unsupported Mendix expression: #{source.inspect}"
         end
 
+        # $Variable/Attribute or a path of references, $Order/M.Order_Customer/M.Customer/Name,
+        # which is empty once a reference on the way is empty.
         def resolve_variable(text, variables)
-          name, member = text.delete_prefix('$').split('/', 2)
+          name, path = text.delete_prefix('$').split('/', 2)
           value = variables.fetch(name) do
             raise NativeRuntimeError, "unknown variable $#{name}"
           end
-          return value unless member
+          return value unless path
 
           raise NativeRuntimeError, "$#{name} is not an object" unless value.is_a?(ObjectValue)
 
-          value.members[member.split('.').last]
+          follow_path(value, path.split('/'))
+        end
+
+        def follow_path(object, segments)
+          member, entity, *rest = segments
+          return member_value(object, member) unless entity
+
+          target = reference(object, member)
+          rest.empty? || target.nil? ? target : follow_path(target, rest)
+        end
+
+        def member_value(object, member)
+          name = member.split('.').last
+          return object.members[name] if object.members.key?(name) || !member.include?('.')
+
+          related(object, member)
+        end
+
+        def reference(object, association)
+          name = association.split('.').last
+          value = object.members.key?(name) ? object.members[name] : related(object, association)
+          raise NativeRuntimeError, "an expression cannot follow the reference set #{association}" if value.is_a?(Array)
+
+          value
+        end
+
+        # The other side of a reference: one object, or the list when there are several.
+        def related(object, association)
+          values = Array(@associations&.call(object, association))
+          values.length > 1 ? values : values.first
         end
 
         def resolve_identifier(text, node)
@@ -634,7 +668,7 @@ module Mxrb
             return [:date_token, @scanner.matched] if @scanner.scan(/\[%(?:Begin|End)Of[A-Za-z]+%\]/)
             return [:string, scan_string] if @scanner.peek(1) == "'"
             return [:number, number(@scanner.scan(/\d+(?:\.\d+)?/))] if @scanner.check(/\d/)
-            return [:variable, @scanner.scan(%r{\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)?})] if @scanner.check(/\$/)
+            return [:variable, @scanner.scan(%r{\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)*})] if @scanner.check(/\$/)
             return [:identifier, @scanner.scan(/[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*/)] if @scanner.check(/[A-Za-z_]/)
             return [:operator, @scanner.scan(%r{!=|>=|<=|=|>|<|\+|-|\*|:|/})] if @scanner.check(%r{[!><=+*:/-]})
 
@@ -681,7 +715,9 @@ module Mxrb
                        service_dispatch: nil)
           @project = project
           @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
-          @expression = Expression.new(decimal: @decimal, time_zone: lambda {
+          @expression = Expression.new(decimal: @decimal, associations: lambda { |object, association|
+            @store.retrieve_association(association, object)
+          }, time_zone: lambda {
             attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
             attributes.fetch('time_zone', 'UTC')
           })
@@ -815,7 +851,7 @@ module Mxrb
           when :boolean then value.casecmp?('true')
           when :integer, :long, :autonumber then value.empty? ? nil : Integer(value)
           when :decimal then value.empty? ? nil : DecimalValues.parse(value)
-          when :string then value
+          when :string then value.empty? ? nil : value
           else value.empty? ? nil : value
           end
         end
