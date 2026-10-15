@@ -257,13 +257,28 @@ adapter de `config/adapters.rb`, adapter verificado, ação da plataforma, sidec
 por fim, o erro.
 
 O sidecar compila o `javasource` e o `userlib` do projeto contra uma API própria
-com as partes de `com.mendix.*` que as ações usam: `IContext`, `IMendixObject`,
-`IMendixIdentifier`, `UserAction`/`CustomJavaAction`, `ILogNode`, e em `Core` os
-retrieves por XPath (`createXPathQuery`, `retrieveXPathQuery`, `retrieveByPath`,
-`retrieveId`), `instantiate`, `commit`, `delete`, `rollback`, `microflowCall`, a
-configuração, as constantes e as versões. Não há jar da Mendix no sidecar. Uma
-fonte que usa outra API não compila e fica de fora, com o primeiro erro registrado
-em `build-report.tsv`; chamar essa ação gera um erro que cita esse motivo.
+com as partes de `com.mendix.*` que as ações usam. Não há jar da Mendix no sidecar.
+A API cobre:
+
+- `IContext`, `ISession`, `UserAction`/`CustomJavaAction`, `ILogNode` e
+  `FeedbackHelper`; a mensagem vira o show-message do microflow chamador;
+- `IMendixObject` e `IMendixIdentifier`, inclusive `getMembers`, os membros
+  `MendixString`, `MendixInteger`, `MendixEnum`, `MendixObjectReference` etc.,
+  `getState`, `isNew` e `getOriginalValue`, comparados com o último commit;
+- os metadados (`IMetaObject`, `IMetaPrimitive`, `IMetaAssociation`,
+  `IMetaEnumeration`, `IDataType`), vindos do metamodelo do app;
+- em `Core`: os retrieves por XPath (`createXPathQuery`, `retrieveXPathQuery`,
+  `retrieveXPathQueryAggregate`, `retrieveByPath`, `retrieveId`), `instantiate`,
+  `commit`, `delete`, `rollback`, `microflowCall`, a configuração, as constantes,
+  as versões (também `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
+  `getReturnType`, `createDataType`, `getInternationalizedString` e o conteúdo de
+  file documents (`getFileDocumentContent`, `storeFileDocumentContent`).
+
+Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
+registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse
+motivo. As legendas de enumeração seguem as traduções do app Ruby; os proxies que o
+Studio Pro gera usam o id do texto de cada legenda, e o pacote grava a relação entre
+esses ids e os valores em `captions.tsv`.
 
 O app Ruby continua sendo o Runtime. Cada chamada abre uma conexão com mensagens
 JSON por linha. O Java recebe handles dos objetos do microflow e lê, altera, faz

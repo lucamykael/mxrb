@@ -128,6 +128,9 @@ public final class Bridge {
 		if (value instanceof IMendixIdentifier id) {
 			return encode(id.getObject());
 		}
+		if (value instanceof byte[] bytes) {
+			return Map.of("$binary", java.util.Base64.getEncoder().encodeToString(bytes));
+		}
 		if (value instanceof Enum<?> constant) {
 			return constant.name();
 		}
@@ -159,6 +162,11 @@ public final class Bridge {
 			return value;
 		}
 		Map<String, Object> tagged = (Map<String, Object>) value;
+		if (tagged.isEmpty() || !tagged.keySet().iterator().next().startsWith("$")) {
+			Map<String, Object> decoded = new LinkedHashMap<>();
+			tagged.forEach((key, item) -> decoded.put(key, decode(item)));
+			return decoded;
+		}
 		if (tagged.containsKey("$integer")) {
 			return ((Long) tagged.get("$integer")).intValue();
 		}
@@ -167,6 +175,9 @@ public final class Bridge {
 		}
 		if (tagged.containsKey("$datetime")) {
 			return new Date((Long) tagged.get("$datetime"));
+		}
+		if (tagged.containsKey("$binary")) {
+			return java.util.Base64.getDecoder().decode((String) tagged.get("$binary"));
 		}
 		if (tagged.containsKey("$object")) {
 			long handle = (Long) tagged.get("$object");

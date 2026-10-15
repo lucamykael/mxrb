@@ -54,6 +54,15 @@ module Mxrb
         generated
       end
 
+      # The text id of every enumeration value's caption, as [id, enumeration, value]:
+      # the keys enumeration proxies pass to Core.getInternationalizedString.
+      def caption_keys
+        enumeration_units.flat_map do |unit|
+          enumeration = "#{unit.module_name}.#{document_name(unit.document)}"
+          array(unit.document['Values']).map { [caption_key(_1), enumeration, _1['Name']] }
+        end
+      end
+
       private
 
       def java_source_text
@@ -371,16 +380,30 @@ module Mxrb
         source_units + system_units
       end
 
+      # As Studio Pro generates it: each value carries its caption's text id.
       def write_enum(unit)
-        names = array(unit.document['Values']).map { _1['Name'] }
+        values = array(unit.document['Values']).map { "  #{_1['Name']}(\"#{caption_key(_1)}\")" }
         name = document_name(unit.document)
         source = <<~JAVA
           // Generated natively by mxrb from the MPR model.
           package #{java_package(unit.module_name)}.proxies;
-          public enum #{name} { #{names.join(', ')} }
+          public enum #{name} {
+          #{values.join(",\n")};
+            private final java.lang.String i18nCaptionKey;
+            private #{name}(java.lang.String i18nCaptionKey) { this.i18nCaptionKey = i18nCaptionKey; }
+            public java.lang.String getCaption(java.lang.String languageCode) {
+              java.lang.String caption = com.mendix.core.Core.getInternationalizedString(languageCode, i18nCaptionKey);
+              return caption.isEmpty() ? getCaption() : caption;
+            }
+            public java.lang.String getCaption() {
+              return com.mendix.core.Core.getInternationalizedString("en_US", i18nCaptionKey);
+            }
+          }
         JAVA
         write_missing(proxy_path(unit.module_name, "#{name}.java"), source)
       end
+
+      def caption_key(value) = IO::BsonCodec.extract_id(value.dig('Caption', '$ID')).to_s
 
       def document_name(document) = document['Name'] || document['UnqualifiedName']
 

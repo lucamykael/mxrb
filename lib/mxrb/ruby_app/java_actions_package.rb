@@ -64,8 +64,10 @@ module Mxrb
       def generate_proxies(target)
         proxies = -> { Dir.glob(File.join(target, 'javasource', '**', 'proxies', '**', '*.java')).size }
         before = proxies.call
-        Compiler::JavaProxyGenerator.new(@mpr_path, project_root: target).generate
+        generator = Compiler::JavaProxyGenerator.new(@mpr_path, project_root: target)
+        generator.generate
         FileUtils.rm_f(File.join(target, 'javasource', 'system', 'UserActionsRegistrar.java'))
+        write_captions(target, generator)
         proxies.call - before
       end
 
@@ -85,6 +87,12 @@ module Mxrb
       def utf8(contents)
         text = contents.dup.force_encoding(Encoding::UTF_8)
         text.valid_encoding? ? text : contents.force_encoding(Encoding::ISO_8859_1).encode(Encoding::UTF_8)
+      end
+
+      # The caption keys of enumeration values in proxies, generated or versioned.
+      def write_captions(target, generator)
+        rows = generator.caption_keys.reject { _1.first.empty? }.map { "#{_1.join("\t")}\n" }
+        File.write(File.join(target, 'captions.tsv'), rows.join)
       end
 
       def copy_libraries(target)

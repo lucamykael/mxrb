@@ -244,13 +244,28 @@ the adapter in `config/adapters.rb`, then the verified adapter, the platform
 action, the sidecar and, last, the error.
 
 The sidecar compiles the project's `javasource` and `userlib` against its own API
-with the parts of `com.mendix.*` that actions use: `IContext`, `IMendixObject`,
-`IMendixIdentifier`, `UserAction`/`CustomJavaAction`, `ILogNode`, and in `Core`
-the XPath retrieves (`createXPathQuery`, `retrieveXPathQuery`, `retrieveByPath`,
-`retrieveId`), `instantiate`, `commit`, `delete`, `rollback`, `microflowCall`, the
-configuration, constants and versions. The sidecar holds no Mendix jar. A source
-that uses another API does not compile and is left out, with its first error in
-`build-report.tsv`; calling that action raises an error that quotes the reason.
+with the parts of `com.mendix.*` that actions use. The sidecar holds no Mendix
+jar. The API covers:
+
+- `IContext`, `ISession`, `UserAction`/`CustomJavaAction`, `ILogNode` and
+  `FeedbackHelper`, whose message becomes the calling microflow's show-message;
+- `IMendixObject` and `IMendixIdentifier`, including `getMembers`, the
+  `MendixString`, `MendixInteger`, `MendixEnum`, `MendixObjectReference` and other
+  members, `getState`, `isNew` and `getOriginalValue`, compared with the last commit;
+- the metadata (`IMetaObject`, `IMetaPrimitive`, `IMetaAssociation`,
+  `IMetaEnumeration`, `IDataType`), from the application's metamodel;
+- in `Core`: the XPath retrieves (`createXPathQuery`, `retrieveXPathQuery`,
+  `retrieveXPathQueryAggregate`, `retrieveByPath`, `retrieveId`), `instantiate`,
+  `commit`, `delete`, `rollback`, `microflowCall`, the configuration, constants,
+  versions (also `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
+  `getReturnType`, `createDataType`, `getInternationalizedString` and file
+  document contents (`getFileDocumentContent`, `storeFileDocumentContent`).
+
+A source that uses another API does not compile and is left out, with its first
+error in `build-report.tsv`; calling that action raises an error that quotes the
+reason. Enumeration captions follow the Ruby application's translations; the
+proxies Studio Pro generates use the text id of each caption, and the package
+records which value each id captions in `captions.tsv`.
 
 The Ruby application remains the Runtime. Each call opens a connection carrying
 JSON messages, one per line. The Java side gets handles to the microflow's

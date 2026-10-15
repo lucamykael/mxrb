@@ -19,11 +19,21 @@ oracle = "'ORACLE'"
 Mxrb.define(output_path) do
   mendix_version '11.12.1'
   self.module :Views do
+    enumeration :Status do
+      value :Open, captions: { 'en_US' => 'Open', 'pt_BR' => 'Aberto' }
+      value :Closed, captions: { 'en_US' => 'Closed', 'pt_BR' => 'Fechado' }
+    end
     entity(:Customer) { string :Name }
+    entity(:Document) { generalizes 'System.FileDocument' }
+    entity(:Draft) do
+      non_persistent!
+      string :Note
+    end
     entity(:Tag) { string :Label }
     entity(:Order) do
       string :Name
       integer :Quantity
+      enum :Status, enumeration: 'Views.Status'
       association 'Views.Customer', name: :Order_Customer, cardinality: :many_to_one
       association 'Views.Tag', name: :Order_Tag, cardinality: :many_to_many
     end
@@ -48,6 +58,11 @@ Mxrb.define(output_path) do
     java_action :Unsupported, parameters: [], return_type: { kind: :string }
     java_action :Rename, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
     java_action :Accent, parameters: [], return_type: { kind: :string }
+    java_action :Inspect, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
+    java_action :Track, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
+    java_action :Captions, parameters: [], return_type: { kind: :string }
+    java_action :Microflows, parameters: [], return_type: { kind: :string }
+    java_action :Store, parameters: [], return_type: { kind: :string }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -106,6 +121,16 @@ Mxrb.define(output_path) do
       log_message 'ORACLE renamed_quantity={1}', node: oracle, parameters: ['toString($renamedOrder/Quantity)']
       call_java 'Views.Accent', as: :accent
       log_message 'ORACLE accent={1}', node: oracle, parameters: ['$accent']
+      call_java 'Views.Inspect', as: :inspected, pass: { 'Views.Inspect.order' => '$order' }
+      log_message 'ORACLE inspect={1}', node: oracle, parameters: ['$inspected']
+      call_java 'Views.Track', as: :tracked, pass: { 'Views.Track.order' => '$order' }
+      log_message 'ORACLE track={1}', node: oracle, parameters: ['$tracked']
+      call_java 'Views.Captions', as: :captions
+      log_message 'ORACLE captions={1}', node: oracle, parameters: ['$captions']
+      call_java 'Views.Microflows', as: :microflows
+      log_message 'ORACLE microflows={1}', node: oracle, parameters: ['$microflows']
+      call_java 'Views.Store', as: :stored
+      log_message 'ORACLE store={1}', node: oracle, parameters: ['$stored']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -119,8 +144,17 @@ imports = <<~JAVA
   import java.math.BigDecimal;
   import java.util.Date;
   import java.util.List;
+  import java.util.Map;
 
   import com.mendix.core.Core;
+  import com.mendix.core.conf.RuntimeVersion;
+  import com.mendix.utils.ListUtils;
+  import com.mendix.systemwideinterfaces.core.IDataType;
+  import com.mendix.systemwideinterfaces.core.IMendixObjectMember;
+  import com.mendix.systemwideinterfaces.core.meta.IMetaAssociation;
+  import com.mendix.systemwideinterfaces.core.meta.IMetaEnumValue;
+  import com.mendix.systemwideinterfaces.core.meta.IMetaObject;
+  import com.mendix.systemwideinterfaces.core.meta.IMetaPrimitive;
   import com.mendix.systemwideinterfaces.core.IContext;
   import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
   import com.mendix.systemwideinterfaces.core.IMendixObject;
@@ -189,7 +223,68 @@ actions = {
     proxy.commit();
     return before + "->" + proxy.getName() + " " + views.proxies.Order.entityName;
   BODY
-  'Accent' => ['String', nil, 'return views.Words.ACCENTED;']
+  'Accent' => ['String', nil, 'return views.Words.ACCENTED;'],
+  'Inspect' => ['String', 'IMendixObject order', <<~BODY],
+    IContext context = getContext();
+    IMetaObject meta = Core.getMetaObject("Views.Order");
+    StringBuilder out = new StringBuilder(meta.getName() + " " + meta.getModuleName() + " " + meta.isPersistable());
+    for (IMetaPrimitive primitive : meta.getMetaPrimitives()) {
+      out.append(" ").append(primitive.getName()).append(":").append(primitive.getType());
+    }
+    for (IMetaAssociation association : meta.getMetaAssociationsParent()) {
+      out.append(" ").append(association.getName()).append(">").append(association.getChild().getName())
+          .append(":").append(association.getType());
+    }
+    out.append(" |");
+    for (Map.Entry<String, ? extends IMendixObjectMember<?>> member : order.getMembers(context).entrySet()) {
+      out.append(" ").append(member.getKey()).append("=").append(member.getValue().getClass().getSimpleName());
+    }
+    IMetaObject document = Core.getMetaObject("Views.Document");
+    return out + " | " + order.getState() + " " + order.isNew() + " " + order.getMetaObject().getName()
+        + " " + document.getSuperName() + " " + document.isFileDocument() + " " + Core.isSubClassOf("System.FileDocument", "Views.Document")
+        + " " + Core.getMetaObject("System.FileDocument").getSubObjects().stream().anyMatch(sub -> sub.getName().equals("Views.Document"));
+  BODY
+  'Track' => ['String', 'IMendixObject order', <<~BODY],
+    IContext context = getContext();
+    order.setValue(context, "Name", "tracked");
+    IMendixObjectMember<?> name = order.getMember(context, "Name");
+    IMendixObject fresh = Core.instantiate(context, "Views.Order");
+    return name.getOriginalValue(context) + "->" + name.getValue(context) + " " + name.getState() + " "
+        + order.getMember(context, "Quantity").getState() + " " + order.getState() + " " + fresh.getState()
+        + " " + fresh.isNew() + " changed=" + order.getChangedMembers(context).size();
+  BODY
+  'Captions' => ['String', nil, <<~BODY],
+    IMetaEnumValue closed = Core.getMetaObject("Views.Order").getMetaPrimitive("Status").getEnumeration()
+        .getEnumValues().get("Closed");
+    return views.proxies.Status.Open.getCaption("pt_BR") + "|" + views.proxies.Status.Open.getCaption() + "|"
+        + views.proxies.Status.Closed.getCaption("de_DE") + "|"
+        + Core.getInternationalizedString("pt_BR", closed.getI18NCaptionKey()) + "|"
+        + Core.getInternationalizedString("en_US", "unknown-key") + "|"
+        + RuntimeVersion.getInstance().getMajorVersion() + "|" + ListUtils.map(List.of(1, 2), i -> i * 2);
+  BODY
+  'Microflows' => ['String', nil, <<~BODY],
+    Map<String, IDataType> parameters = Core.getInputParameters("Views.Upper");
+    IDataType value = parameters.get("Value");
+    return Core.getMicroflowNames().contains("Views.Upper") + " " + parameters.keySet() + " " + value.getType()
+        + " " + Core.getReturnType("Views.Upper").getDSLType() + " " + Core.createDataType("Views.Order", "Quantity").getType()
+        + " " + Core.createDataType("[Views.Order]").isList() + " " + Core.getInputParameters("Views.Missing");
+  BODY
+  'Store' => ['String', nil, <<~BODY]
+    IContext context = getContext();
+    IMendixObject document = Core.instantiate(context, "Views.Document");
+    Core.storeFileDocumentContent(context, document, "note.txt",
+        new java.io.ByteArrayInputStream("hello".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    Core.commit(context, document);
+    String content = new String(Core.getFileDocumentContent(context, document).readAllBytes(),
+        java.nio.charset.StandardCharsets.UTF_8);
+    com.mendix.webui.FeedbackHelper.addTextMessageFeedback(context,
+        com.mendix.systemwideinterfaces.core.IFeedback.MessageType.WARNING, "stored " + content, true);
+    com.mendix.webui.FeedbackHelper.addRefreshClass(context, "Views.Document");
+    return content + " " + document.getValue(context, "Name") + " " + document.getValue(context, "Size")
+        + " " + Core.retrieveXPathQueryAggregate(context, "COUNT(//Views.Order)")
+        + " " + Core.retrieveXPathQueryAggregate(context, "SUM(//Views.Order/Quantity)")
+        + " " + Core.retrieveXPathQueryAggregate(context, "max(//Views.Order[Quantity < 6]/Quantity)");
+  BODY
 }.freeze
 
 java_source = lambda do |name, type, parameters, body|
