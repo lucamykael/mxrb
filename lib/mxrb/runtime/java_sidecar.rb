@@ -50,15 +50,30 @@ module Mxrb
       # Runs a Java action with its parameters in model order and returns its result.
       def invoke(name, parameters, context:)
         session = Session.new(context, @services)
-        connect do |socket|
-          params = { 'action' => name.to_s, 'arguments' => parameters.map { [_1.to_s, session.encode(_2)] } }
-          params['token'] = @token if @token
-          write(socket, 'id' => 0, 'method' => 'invoke', 'params' => params)
-          serve(socket, session)
-        end
+        exchange('invoke', session,
+                 'action' => name.to_s, 'arguments' => parameters.map { [_1.to_s, session.encode(_2)] })
+      end
+
+      # Forwards an HTTP request to the handler Core.addRequestHandler registered for
+      # its path: method, path, query, headers, cookies, body, remote_addr and
+      # root_url, with the session of its cookie (nil without one). The handler's
+      # response comes back as status, content_type, headers, cookies and body.
+      def request(handler, http, session:, context:)
+        codec = Session.new(context, @services)
+        http = http.merge('body' => Codec::Binary.new(http.fetch('body', '').to_s.b))
+        exchange('request', codec,
+                 'handler' => handler.to_s, 'request' => codec.encode(http), 'session' => codec.encode(session))
       end
 
       private
+
+      def exchange(method, session, params)
+        connect do |socket|
+          params['token'] = @token if @token
+          write(socket, 'id' => 0, 'method' => method, 'params' => params)
+          serve(socket, session)
+        end
+      end
 
       def valid?(uri) = uri.scheme == 'tcp' && !uri.host.to_s.empty? && uri.port
 
@@ -110,8 +125,9 @@ module Mxrb
       class Session # rubocop:disable Metrics/ClassLength
         CALLBACKS = %w[
           log get set member related instantiate commit delete rollback retrieve microflow
-          constant end_transaction changed original user application_root_url runtime_version model_version
-          metamodel caption file store_file message oql
+          constant end_transaction changed original session application_root_url runtime_version model_version
+          metamodel caption file store_file message oql request_handler guest_session guest_login_enabled
+          long_id object_for_long default_language
         ].freeze
         LOG_LEVELS = {
           'TRACE' => 'Trace', 'DEBUG' => 'Debug', 'INFO' => 'Info',
@@ -188,7 +204,12 @@ module Mxrb
                             sort: Array(params['sort']).map { [_1.fetch(0).to_s, _1.fetch(1) == true] })
         end
 
-        def callback_microflow(params) = @context.call_flow(params['name'].to_s, params['arguments'].to_h)
+        # Core.microflowCall: as the user of the context's session, when it has another one.
+        def callback_microflow(params)
+          @context.call_flow(params['name'].to_s, params['arguments'].to_h, username: params['user'],
+                                                                            sudo: params['sudo'] == true)
+        end
+
         def callback_constant(params) = @context.constant(params['name'].to_s)
         def callback_end_transaction(_params) = @context.end_transaction
         def callback_changed(params) = @context.changed?(object!(params['object']))
@@ -199,7 +220,19 @@ module Mxrb
           @context.store.original(object)&.to_h { |name, value| [name, typed(object, name, value)] }
         end
 
-        def callback_user(_params) = @context.user
+        def callback_session(_params) = @context.session
+        def callback_default_language(_params) = @context.default_language
+
+        # Core.addRequestHandler: the application's server forwards the path's requests.
+        def callback_request_handler(params) = services.register_request_handler(params['path'].to_s) && nil
+
+        # Core.initializeGuestSession: a guest's session, which the handler's cookie carries.
+        def callback_guest_session(_params) = services.guest_session
+        def callback_guest_login_enabled(_params) = services.guest_login_enabled?
+
+        # IMendixIdentifier.toLong and Core.createMendixIdentifier: a number kept for an object.
+        def callback_long_id(params) = numbered_store.long_id(object!(params['object']))
+        def callback_object_for_long(params) = numbered_store.object_for_long(Integer(params['id']))
         def callback_application_root_url(_params) = @context.application_root_url
         def callback_runtime_version(_params) = @context.runtime_version
         def callback_model_version(_params) = @context.model_version
@@ -283,6 +316,13 @@ module Mxrb
         def events?(params) = params['events'] != false
 
         def services = @services || raise(NativeRuntimeError, 'the application offers no Runtime services')
+
+        def numbered_store
+          store = @context.store
+          return store if store.respond_to?(:long_id)
+
+          raise NativeRuntimeError, 'numeric object ids need the application database'
+        end
       end
 
       # The values of the protocol: JSON scalars and lists, decimals, dates and

@@ -263,7 +263,24 @@ jar. The API covers:
 - tabular OQL (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
   `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
   run by the Ruby application's OQL engine; an ID column holds the object's
-  identifier.
+  identifier;
+- request handlers: `Core.addRequestHandler` registers the path, and the Ruby
+  application's server forwards its requests (outside `/api`, without a CSRF
+  token) to the `RequestHandler`, with `IMxRuntimeRequest`/`IMxRuntimeResponse`
+  and the session of the `mxrb_session` cookie; `Core.initializeGuestSession` opens
+  a guest session when the project's security lets guests in, and its id is the
+  cookie's value;
+- `IMendixIdentifier.toLong` and `Core.createMendixIdentifier`, with the number
+  kept in the application's database; `Core.getDefaultLanguage`,
+  `Core.initializeSession` (microflows called with its contexts run as that user),
+  `Core.executeAsync` (the sidecar runs the microflow before it answers) and
+  transactions the action starts, nested in the calling microflow's.
+
+Generated proxies also have `load(context, xpath)`, as Studio Pro's do. The
+`org.json` Mendix bundles as `com.mendix.thirdparty.org.json` (`JSONObject`,
+`JSONArray`, `JSONException`) has the sidecar's own implementation, and
+`IContext.getRuntimeRequest`/`getRuntimeResponse` are empty, since the Ruby
+application does not hand the HTTP request to actions.
 
 A source that uses another API does not compile and is left out, with its first
 error in `build-report.tsv`; calling that action raises an error that quotes the

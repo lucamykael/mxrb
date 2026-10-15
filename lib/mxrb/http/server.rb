@@ -12,6 +12,7 @@ module Mxrb
       end
 
       def [](name) = @values[name.to_s.downcase]
+      def to_h = @values.dup
     end
 
     Request = Data.define(:path, :request_method, :body, :query, :headers) do

@@ -722,7 +722,7 @@ RSpec.describe 'Ruby application internal contracts' do
                             allow_destructive: true, coordinator:,
                             scheduler_lease_ttl: '300', runtime_records: {}, runtime_project: nil,
                             administrator_password: nil, environment: app.environment,
-                            service_dispatch: instance_of(Proc)
+                            sessions: instance_of(Proc), service_dispatch: instance_of(Proc)
       ).and_return(native_bridge)
       expect(app.send(:bridge)).to eq(native_bridge)
       app.close
@@ -849,7 +849,7 @@ RSpec.describe 'Ruby application internal contracts' do
     response_class = Mxrb::RubyApp::RackAdapter::Response
     context = double(user: nil, user_roles: [], module_roles: [])
     sessions = double(authenticate: context)
-    application = double(rest_routes: [], root: '/tmp/missing')
+    application = double(rest_routes: [], root: '/tmp/missing', java_request_handler: nil)
     allow(application).to receive_messages(
       schema: { project: {}, navigation: {}, modules: [] }, page: nil, records: [],
       record: nil, create_record: {}, update_record: nil, delete_record: false

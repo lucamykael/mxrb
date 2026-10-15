@@ -8,8 +8,14 @@ module Mxrb
     # the metamodel behind Core.getMetaObjects and the microflow API, enumeration
     # captions, and the contents a Java action stores in a file document.
     class SidecarServices
-      def initialize(project)
+      # The paths of the requests a Java action asked the server to forward.
+      attr_reader :request_handlers
+
+      # sessions gives the application's SessionManager, for guest sessions.
+      def initialize(project, sessions: nil)
         @project = project
+        @sessions = sessions
+        @request_handlers = []
       end
 
       def metamodel
@@ -35,7 +41,35 @@ module Mxrb
         store.touch(object)
       end
 
+      # Core.addRequestHandler; the server keeps /api to itself.
+      def register_request_handler(path)
+        key = path.to_s.gsub(%r{\A/+|/+\z}, '')
+        if key.empty? || key.match?(%r{\Aapi(/|\z)})
+          raise ArgumentError, "request handler path #{path.inspect} is reserved"
+        end
+
+        @request_handlers |= [key]
+      end
+
+      # The registered handler for a request path: the longest that prefixes it.
+      def request_handler(path)
+        @request_handlers.select { path == "/#{_1}" || path.start_with?("/#{_1}/") }.max_by(&:length)
+      end
+
+      # Core.initializeGuestSession: a session of the guest user role, when the
+      # application's security lets guests in.
+      def guest_session
+        raise NativeRuntimeError, 'guest access is disabled' unless guest_login_enabled?
+
+        token = @sessions.call.guest([security.fetch(:guest_user_role)])
+        { 'id' => token, 'user' => nil, 'name' => "Anonymous_#{token}", 'anonymous' => true }
+      end
+
+      def guest_login_enabled? = security[:guest_access_enabled] == true
+
       private
+
+      def security = Registry.all(:project_security).values.first&.native_definition || {}
 
       def system_caption(enumeration, value)
         values = Metamodel::SYSTEM_ENUMERATIONS.fetch(enumeration, [])

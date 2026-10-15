@@ -18,4 +18,14 @@ public interface Configuration {
 	default boolean isInDevelopment() {
 		return false;
 	}
+
+	/** The cookie of the Ruby application's sessions. */
+	default String getSessionIdCookieName() {
+		return "mxrb_session";
+	}
+
+	/** Whether the application's security lets guests in. */
+	default boolean getEnableGuestLogin() {
+		return Boolean.TRUE.equals(mxrb.sidecar.Bridge.current().call("guest_login_enabled"));
+	}
 }

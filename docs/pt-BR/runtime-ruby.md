@@ -276,7 +276,23 @@ A API cobre:
 - OQL tabular (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
   `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
   executado pelo motor OQL do app Ruby; uma coluna de ID traz o identificador do
-  objeto.
+  objeto;
+- request handlers: `Core.addRequestHandler` registra o caminho, e o servidor do
+  app Ruby encaminha as requisições dele (fora de `/api`, sem token CSRF) ao
+  `RequestHandler`, com `IMxRuntimeRequest`/`IMxRuntimeResponse` e a sessão do
+  cookie `mxrb_session`; `Core.initializeGuestSession` abre uma sessão de convidado
+  quando a segurança do projeto aceita convidados, e o id dela é o valor do cookie;
+- `IMendixIdentifier.toLong` e `Core.createMendixIdentifier`, com o número guardado
+  no banco do app; `Core.getDefaultLanguage`, `Core.initializeSession` (os
+  microflows chamados com o contexto dela rodam como aquele usuário),
+  `Core.executeAsync` (o sidecar roda o microflow antes de responder) e
+  transações iniciadas pela ação, aninhadas na do microflow chamador.
+
+Os proxies gerados também têm `load(context, xpath)`, como os do Studio Pro. O
+`org.json` que a Mendix embute como `com.mendix.thirdparty.org.json` (`JSONObject`,
+`JSONArray`, `JSONException`) tem implementação própria no sidecar, e
+`IContext.getRuntimeRequest`/`getRuntimeResponse` ficam vazios, porque o app Ruby
+não repassa a requisição HTTP às ações.
 
 Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
 registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse

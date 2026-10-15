@@ -274,7 +274,25 @@ Mendix-Jar. Die API umfasst:
 - tabellarisches OQL (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
   `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
   ausgeführt von der OQL-Engine der Ruby-Anwendung; eine ID-Spalte enthält den
-  Identifier des Objekts.
+  Identifier des Objekts;
+- Request Handler: `Core.addRequestHandler` registriert den Pfad, und der Server
+  der Ruby-Anwendung leitet dessen Anfragen (außerhalb von `/api`, ohne
+  CSRF-Token) an den `RequestHandler` weiter, mit
+  `IMxRuntimeRequest`/`IMxRuntimeResponse` und der Sitzung des Cookies
+  `mxrb_session`; `Core.initializeGuestSession` öffnet eine Gastsitzung, wenn die
+  Sicherheit des Projekts Gäste zulässt, und ihre ID ist der Wert des Cookies;
+- `IMendixIdentifier.toLong` und `Core.createMendixIdentifier`, mit der in der
+  Datenbank der Anwendung gespeicherten Nummer; `Core.getDefaultLanguage`,
+  `Core.initializeSession` (mit ihren Kontexten aufgerufene Microflows laufen als
+  dieser Benutzer), `Core.executeAsync` (der Sidecar führt den Microflow aus, bevor
+  er antwortet) und von der Action gestartete Transaktionen, verschachtelt in die
+  des aufrufenden Microflows.
+
+Generierte Proxies haben auch `load(context, xpath)`, wie die von Studio Pro. Das
+von Mendix als `com.mendix.thirdparty.org.json` gebündelte `org.json`
+(`JSONObject`, `JSONArray`, `JSONException`) hat eine eigene Implementierung im
+Sidecar, und `IContext.getRuntimeRequest`/`getRuntimeResponse` sind leer, da die
+Ruby-Anwendung die HTTP-Anfrage nicht an Actions weitergibt.
 
 Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
 ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen

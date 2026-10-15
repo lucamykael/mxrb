@@ -72,6 +72,15 @@ RSpec.describe 'Java action sidecar' do
     @application = Mxrb::RubyApp::Application.new(@target, process:)
   end
 
+  # The application's server, as it answers a request.
+  def dispatch(method, path, query: {}, cookie: nil)
+    server = Mxrb::RubyApp::Server.allocate
+    server.instance_variable_set(:@application, @application)
+    headers = Mxrb::Http::Headers.new(cookie ? { 'Cookie' => cookie } : {})
+    request = Mxrb::Http::Request.new(path:, request_method: method, body: '', query:, headers:)
+    Mxrb::Http::Response.new.tap { server.send(:dispatch, request, _1) }
+  end
+
   it 'hands the Java actions without a Ruby adapter to the configured sidecar' do
     sidecar = Class.new do
       attr_reader :calls
@@ -81,6 +90,12 @@ RSpec.describe 'Java action sidecar' do
       def invoke(name, parameters, context:)
         @calls << [name, parameters]
         context.retrieve('//Views.Order[Name = $name]', { 'name' => parameters.to_h['text'] }).size.to_s
+      end
+
+      def request(handler, request, session:, context:)
+        @calls << [handler, request.slice('method', 'path', 'query', 'cookies', 'root_url'), session, context.session]
+        { 'status' => 201, 'content_type' => nil, 'headers' => [%w[X-Handled yes]], 'body' => 'done',
+          'cookies' => [{ 'name' => 'c', 'value' => 'v', 'path' => nil, 'max_age' => 60, 'http_only' => false }] }
       end
     end.new
     allow(Mxrb::Runtime::JavaSidecar).to receive(:configured).and_return(sidecar)
@@ -101,6 +116,28 @@ RSpec.describe 'Java action sidecar' do
                                                  offset: 1, amount: 1, sort: [['Quantity', false]])))
       .to eq(%w[a5])
     expect(interpreter.retrieve_xpath('Views.Order', '', amount: 0).size).to eq(orders.size)
+
+    @application.send(:bridge).sidecar_services.register_request_handler('/fake/')
+    previous = ENV.fetch('MXRB_SECURE_COOKIES', nil)
+    ENV['MXRB_SECURE_COOKIES'] = 'true'
+    response = dispatch('POST', '/fake/x', query: { 'a' => '1' }, cookie: 'other=1; flag')
+    expect([response.status, response.body, response['X-Handled'], response['Content-Type']])
+      .to eq([201, 'done', 'yes', nil])
+    expect(response['Set-Cookie']).to eq(['c=v; Path=/; SameSite=Lax; Max-Age=60; Secure'])
+    handler, request, session, java = sidecar.calls.last
+    expect([handler, session, java['id']]).to eq(['fake', nil, nil])
+    expect(request.except('root_url')).to eq('method' => 'POST', 'path' => '/fake/x', 'query' => 'a=1',
+                                             'cookies' => { 'other' => '1', 'flag' => '' })
+    expect(request['root_url']).to start_with('http')
+  ensure
+    ENV['MXRB_SECURE_COOKIES'] = previous
+  end
+
+  it 'needs the sidecar for request handlers' do
+    Mxrb.open(@source) do |project|
+      expect { Mxrb::Runtime::Native::Interpreter.new(project).java_request('x', {}) }
+        .to raise_error(Mxrb::NativeRuntimeError, 'request handlers need the Java actions sidecar')
+    end
   end
 
   it 'runs the project Java actions against the Ruby application' do
@@ -110,15 +147,15 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 21, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 24, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 24 sources, left out 1')
+    expect(output).to include('compiled 27 sources, left out 1')
     expect(File.read(report))
-      .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method getXASId\(\)/)
+      .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
     open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
     expect(@application.call_service('Views.RunAll')).to be(true)
@@ -150,10 +187,26 @@ RSpec.describe 'Java action sidecar' do
       'captions' => 'Aberto|Open|Closed|Fechado||11|[2, 4]',
       'microflows' => 'true [Value] String String Integer true null',
       'store' => 'hello note.txt 5 3 10 4',
-      'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer'
+      'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer',
+      'json' => '{"name":"Ada","count":4,"sum":3.5,"missing":null,"ok":true,"list":["a",1]}|fallback|true|false|true'
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')
+
+    first = dispatch('GET', '/hello/world', query: { 'q' => '1' })
+    expect(first.status).to eq(200)
+    cookie = first['Set-Cookie'].first
+    token = cookie[/\Amxrb_session=([^;]+)/, 1]
+    expect(cookie).to include('Path=/', 'HttpOnly')
+    expect(cookie).not_to include('Max-Age')
+    expect(first['Content-Type']).to eq('text/plain')
+    expect(first['X-Path-Info']).to eq('/world')
+    expect(first.body).to eq('world q=1 fresh=true anonymous=true true Ada true guests=true /hello')
+    second = dispatch('POST', '/hello', cookie: "mxrb_session=#{token}")
+    expect(second.body).to start_with(' q=null fresh=false anonymous=true true Ada')
+    expect(second['Set-Cookie']).to be_nil
+    expect(dispatch('GET', '/api/session', cookie: "mxrb_session=#{token}").body).to include('"csrf":"')
+    expect(dispatch('GET', '/helloworld').status).to eq(404)
   end
 end
 # rubocop:enable Metrics/BlockLength

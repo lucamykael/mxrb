@@ -244,7 +244,7 @@ RSpec.describe 'Ruby application defensive coverage' do
       create_record: {}, update_record: nil, delete_record: false, rest_routes: [],
       reload_if_changed!: false,
       reload_status: { enabled: false, state: 'ready', error: nil },
-      user_language: 'en_US', change_language: 'pt_BR'
+      user_language: 'en_US', change_language: 'pt_BR', java_request_handler: nil
     )
     server = bare_server(application: app, sessions: sessions)
     dispatch = lambda do |path, method = 'GET', body = '', query = {}, headers = {}|
