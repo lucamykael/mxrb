@@ -405,13 +405,14 @@ module Mxrb
         _acts << { type: :break_event }
       end
 
-      def rescue_all(&block)
+      # rollback: true is Studio Pro's "Custom with rollback": the whole transaction
+      # rolls back before the error flow runs.
+      def rescue_all(rollback: false, &block)
         rescue_builder = RescueBuilder.new(allow_break: _break_allowed?)
         rescue_builder.instance_eval(&block) if block
-        _acts << {
-          type: :rescue_all,
-          activities: rescue_builder.activities
-        }
+        act = { type: :rescue_all, activities: rescue_builder.activities }
+        act[:rollback] = true if rollback == true
+        _acts << act
       end
 
       def decision(condition, &block)

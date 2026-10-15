@@ -6598,7 +6598,7 @@ module Mxrb
 
       main_items.each_with_index do |activity, i|
         is_last    = i == main_items.size - 1
-        error_type = rescue_block && is_last ? 'Custom' : 'None'
+        error_type = rescue_block && is_last ? rescue_error_type(rescue_block) : 'None'
         prev_id, x = process_activity(activity, prev_id, objects, flows, x, 100, error_type: error_type)
       end
 
@@ -6865,7 +6865,7 @@ module Mxrb
 
         if activity[:type].to_sym == :rescue_all
           build_rescue_branch(
-            previous, activity[:activities], objects, flows, x, y + 120
+            previous, activity[:activities], objects, flows, x, y + 120, rollback: activity[:rollback] == true
           )
           next
         end
@@ -6884,7 +6884,7 @@ module Mxrb
       { first: first, last: previous, terminal: terminal, case: case_value }
     end
 
-    def build_rescue_branch(origin_id, activities, objects, flows, x, y)
+    def build_rescue_branch(origin_id, activities, objects, flows, x, y, rollback: false)
       return unless origin_id
 
       annotations, activities = Array(activities).partition do |activity|
@@ -6893,7 +6893,9 @@ module Mxrb
       objects.concat(annotations.map { annotation_doc(_1) })
 
       origin = objects.find { _1['$ID'] == origin_id }
-      origin['Action']['ErrorHandlingType'] = custom_error_handling_type if origin&.dig('Action').is_a?(Hash)
+      if origin&.dig('Action').is_a?(Hash)
+        origin['Action']['ErrorHandlingType'] = rollback ? 'Custom' : custom_error_handling_type
+      end
       previous = nil
       activities.each do |activity|
         before = objects.size
@@ -7081,8 +7083,11 @@ module Mxrb
         'Caption' => 'Activity', 'Action' => action
       )
       action['ErrorHandlingType'] = custom_error_handling_type if error_type == 'Custom'
+      action['ErrorHandlingType'] = 'Custom' if error_type == 'CustomWithRollback'
       doc
     end
+
+    def rescue_error_type(rescue_block) = rescue_block[:rollback] ? 'CustomWithRollback' : 'Custom'
 
     def custom_error_handling_type
       major = @definition.fetch(:version).to_s.split('.').first.to_i

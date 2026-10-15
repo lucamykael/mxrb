@@ -286,6 +286,46 @@ module Mxrb
         @autocommit = true
       end
 
+      # Custom error handling: a savepoint inside the running transaction, or a
+      # transaction of its own when none runs (after IContext.endTransaction).
+      def savepoint
+        generation = @savepoint_generation.to_i
+        unless @manual_transaction
+          begin_transaction
+          return { transaction: true, generation: }
+        end
+
+        name = "mxrb_savepoint_#{@savepoint_count = @savepoint_count.to_i + 1}"
+        database.execute("SAVEPOINT #{name}")
+        { name:, state: transaction_snapshot, generation: }
+      end
+
+      def release_savepoint(token)
+        return unless current_savepoint?(token)
+        return finish_manual_transaction if token[:transaction] && @manual_transaction
+
+        database.execute("RELEASE #{token.fetch(:name)}") unless token[:transaction]
+      end
+
+      def rollback_savepoint(token)
+        return unless current_savepoint?(token)
+        return rollback if token[:transaction]
+
+        database.execute("ROLLBACK TO #{token.fetch(:name)}")
+        database.execute("RELEASE #{token.fetch(:name)}")
+        restore_transaction_snapshot(token.fetch(:state))
+      end
+
+      # Custom error handling: the running transaction rolls back and the error flow
+      # continues in a new one; savepoints taken before become void.
+      def restart_transaction
+        return unless @manual_transaction
+
+        rollback
+        @savepoint_generation = @savepoint_generation.to_i + 1
+        begin_transaction
+      end
+
       # Members set by a change; IMendixObject.isChanged reports them until the next commit.
       def touch(value)
         return @transient.touch(value) if transient?(value.entity)
@@ -307,6 +347,8 @@ module Mxrb
         end
         comparable_members(members).compact != comparable_members(baseline).compact
       end
+
+      def current_savepoint?(token) = token.fetch(:generation) == @savepoint_generation.to_i
 
       def begin_transaction
         raise SQLite3::SQLException, 'transaction already active' if @manual_transaction

@@ -138,6 +138,25 @@ module Mxrb
           @transaction_states.pop
         end
 
+        # A savepoint for custom error handling; a rollback of the whole transaction
+        # invalidates the savepoints taken before it.
+        def savepoint = { state: snapshot, generation: @savepoint_generation.to_i }
+        def release_savepoint(_token) = nil
+
+        def rollback_savepoint(token)
+          restore(token.fetch(:state)) if token.fetch(:generation) == @savepoint_generation.to_i
+        end
+
+        # Custom error handling: the running transaction rolls back and the error flow
+        # continues in a new one.
+        def restart_transaction
+          state = @transaction_states.to_a.last
+          return if state.nil? || state == :autocommit
+
+          restore(state)
+          @savepoint_generation = @savepoint_generation.to_i + 1
+        end
+
         # IContext.endTransaction: the work committed so far stays, and so does what
         # is committed afterwards, as in the Runtime's autocommit after the end.
         def end_transaction
@@ -787,12 +806,14 @@ module Mxrb
         end
 
         # IContext.endTransaction, as measured on Mendix 11.12.1: it commits the
-        # running transaction unless a sub-microflow called with custom error
-        # handling holds a savepoint; afterwards the call continues in autocommit.
+        # innermost transaction unless a savepoint of a sub-microflow called with
+        # custom error handling is open above it; afterwards commits are immediate.
         def end_transaction
-          return false if @transaction_ended || @open_savepoints.to_i.positive? || !store.respond_to?(:end_transaction)
+          return false unless @scopes&.last == :transaction && store.respond_to?(:end_transaction)
+          return false unless store.end_transaction == true
 
-          (store.end_transaction == true).tap { @transaction_ended = true if _1 }
+          @scopes[-1] = :ended
+          true
         end
 
         private
@@ -804,7 +825,7 @@ module Mxrb
           previous_apply_entity_access = @apply_entity_access
           root_call = @call_depth.zero?
           @effects = [] if root_call
-          @transaction_ended = false if root_call
+          @scopes = [:transaction] if root_call
           @call_depth += 1
           flow = @flows[name]
           raise NativeRuntimeError, "flow #{name} not found" unless flow
@@ -827,15 +848,36 @@ module Mxrb
           @call_depth -= 1
         end
 
-        # A sub-microflow call with custom error handling runs under a savepoint
-        # while the transaction is open (see end_transaction).
-        def with_savepoint(action, error_edge)
-          savepoint = error_edge && !@transaction_ended && action['$Type'] == 'Microflows$MicroflowCallAction' &&
-                      CUSTOM_ERROR_HANDLING.include?(action['ErrorHandlingType'])
-          @open_savepoints = @open_savepoints.to_i + 1 if savepoint
-          yield
-        ensure
-          @open_savepoints -= 1 if savepoint
+        # Custom error handling as measured on Mendix 11.12.1: a sub-microflow call runs
+        # under a savepoint, or in a transaction of its own once the running one ended.
+        # On an error CustomWithoutRollBack undoes that call, Custom the whole running
+        # transaction, and the error flow continues (in a new transaction after Custom).
+        def with_error_scope(action, error_edge)
+          handling = action['ErrorHandlingType']
+          return yield unless error_edge && CUSTOM_ERROR_HANDLING.include?(handling) && store.respond_to?(:savepoint)
+
+          scope = open_scope if action['$Type'] == 'Microflows$MicroflowCallAction'
+          result = yield
+          close_scope(scope, :release_savepoint)
+          result
+        rescue StandardError
+          close_scope(scope, :rollback_savepoint)
+          store.restart_transaction if handling == 'Custom'
+          raise
+        end
+
+        def open_scope
+          @scopes ||= []
+          kind = @scopes.include?(:transaction) ? :savepoint : :transaction
+          @scopes.push(kind)
+          store.savepoint
+        end
+
+        def close_scope(token, outcome)
+          return unless token
+
+          @scopes.pop
+          store.public_send(outcome, token)
         end
 
         # $currentUser is the signed-in System.User (or a specialization such as an Account).
@@ -923,7 +965,7 @@ module Mxrb
                 action_snapshot = store.snapshot
               end
               if type == 'Microflows$ActionActivity'
-                with_savepoint(current['Action'], error_edge) { execute_action(current['Action'], variables) }
+                with_error_scope(current['Action'], error_edge) { execute_action(current['Action'], variables) }
               end
               execute_loop(current, outgoing, variables, label:) if type == 'Microflows$LoopedActivity'
               edge = select_edge(current, edges.reject { _1['IsErrorHandler'] == true }, variables)

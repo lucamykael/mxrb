@@ -215,7 +215,14 @@ sonst die Adresse des Ruby-Servers). Java-Exceptions sind
   Sub-Microflow, der mit benutzerdefinierter Fehlerbehandlung aufgerufen wird und
   dessen Savepoint sie offen hält; danach wird jeder Commit sofort wirksam;
 - `Core.getModelVersion` ist außerhalb eines Deployments `unversioned`
-  (`MXRB_MODEL_VERSION` setzt einen anderen Wert).
+  (`MXRB_MODEL_VERSION` setzt einen anderen Wert);
+- bei benutzerdefinierter Fehlerbehandlung wird ein fehlgeschlagener
+  Sub-Microflow-Aufruf bis zu seinem Savepoint zurückgenommen (ohne Rollback) oder
+  nimmt die ganze Transaktion zurück (mit Rollback, `rescue_all(rollback: true)`),
+  und der Fehlerfluss läuft weiter, im zweiten Fall in einer neuen Transaktion;
+  eine fehlgeschlagene Java-Action behält ihre Commits, und nach dem Ende der
+  Transaktion läuft der behandelte Aufruf in einer eigenen Transaktion
+  (`spec/fixtures/native_error_handling_transactions`).
 
 ## Ruby → Mendix → Ruby-Zertifizierung
 
