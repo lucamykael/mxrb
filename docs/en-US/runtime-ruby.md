@@ -207,7 +207,13 @@ else the Ruby server address). Java exceptions are
   sub-microflow called with custom error handling, whose savepoint keeps it open;
   after it, every commit is immediate;
 - `Core.getModelVersion` is `unversioned` outside a deployment
-  (`MXRB_MODEL_VERSION` sets another value).
+  (`MXRB_MODEL_VERSION` sets another value);
+- with custom error handling, a failed sub-microflow call is undone to its
+  savepoint (without rollback) or undoes the whole transaction (with rollback,
+  `rescue_all(rollback: true)`), and the error flow continues, in a new
+  transaction in the latter case; a failed Java action keeps its commits, and
+  after the end of the transaction the handled call runs in a transaction of its
+  own (`spec/fixtures/native_error_handling_transactions`).
 
 ## Ruby → Mendix → Ruby certification
 

@@ -1,0 +1,23 @@
+{
+  "mendix_version": "11.12.1",
+  "results": {
+    "seen_A": "0",
+    "seen_X": "0",
+    "seen_B": "0",
+    "seen_H": "1",
+    "undo_caught": "1",
+    "seen_C": "1",
+    "seen_D": "0",
+    "java_caught": "1",
+    "seen_J": "1",
+    "durable_H_before_end": "0",
+    "durable_H": "1",
+    "durable_C": "1",
+    "durable_J": "1",
+    "durable_S": "1",
+    "late_caught": "1",
+    "seen_F": "0",
+    "durable_F": "0",
+    "durable_Z": "1"
+  }
+}

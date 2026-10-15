@@ -221,7 +221,13 @@ classe Java. Medido no Runtime 11.12.1 e reproduzido pelo app Ruby
   sub-microflow chamado com tratamento de erro customizado, cujo savepoint a
   mantém aberta; depois dele, cada commit é imediato;
 - `Core.getModelVersion` é `unversioned` fora de uma implantação
-  (`MXRB_MODEL_VERSION` define outro valor).
+  (`MXRB_MODEL_VERSION` define outro valor);
+- com tratamento de erro customizado, uma chamada de sub-microflow que falha é
+  desfeita até o savepoint (sem rollback) ou desfaz toda a transação (com
+  rollback, `rescue_all(rollback: true)`), e o fluxo de erro continua, numa nova
+  transação no segundo caso; uma Java action que falha mantém seus commits, e
+  depois do fim da transação a chamada tratada roda numa transação própria
+  (`spec/fixtures/native_error_handling_transactions`).
 
 ## Certificação Ruby → Mendix → Ruby
 

@@ -110,10 +110,12 @@ module Mxrb
         @repositories << name.to_s
       end
 
-      def rescue_all(&block)
+      def rescue_all(rollback: false, &block)
         rb = RescueBuilder.new(allow_break: false)
         rb.instance_eval(&block) if block
-        _acts << { type: :rescue_all, activities: rb.activities }
+        act = { type: :rescue_all, activities: rb.activities }
+        act[:rollback] = true if rollback == true
+        _acts << act
       end
 
       def return_value(var)

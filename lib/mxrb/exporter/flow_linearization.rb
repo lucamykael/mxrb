@@ -429,6 +429,11 @@ module Mxrb
         value
       end
 
+      # "Custom with rollback" keeps its rollback through the round trip.
+      def rescue_header(activity)
+        activity.dig('Action', 'ErrorHandlingType') == 'Custom' ? 'rescue_all(rollback: true) do' : 'rescue_all do'
+      end
+
       def linearize_flow(cursor, fwd, err, by_id, graph_flows, seen, lines, indent, stop_at,
                          endpoint_refs = {}, emitted_refs = {})
         while cursor && cursor != stop_at
@@ -454,7 +459,7 @@ module Mxrb
                 error_to, fwd, err, by_id, graph_flows,
                 seen.dup, rescue_lines, indent + 2, nil, endpoint_refs, emitted_refs
               )
-              lines << "#{' ' * indent}rescue_all do"
+              lines << "#{' ' * indent}#{rescue_header(obj)}"
               lines.concat(rescue_lines)
               lines << "#{' ' * indent}end"
             end
