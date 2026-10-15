@@ -9,7 +9,8 @@ module Mxrb
 
       def initialize(path, database:, record_hooks: {}, adapters: {}, java_custom_actions: {},
                      allow_destructive: false, coordinator: nil, scheduler_lease_ttl: 300,
-                     runtime_records: nil, runtime_project: nil, service_dispatch: nil, administrator_password: nil)
+                     runtime_records: nil, runtime_project: nil, service_dispatch: nil, administrator_password: nil,
+                     environment: ENV)
         FileUtils.mkdir_p(File.dirname(database))
         @project = runtime_project || Model::Project.open(path)
         schema = if runtime_project
@@ -23,7 +24,8 @@ module Mxrb
         @store = Runtime::SQLiteStore.new(@project, **store_options)
         @access_control = Runtime::AccessControl.new(@project, store: @store)
         @interpreter = Runtime::Native::Interpreter.new(
-          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:
+          @project, store: @store, policy: @access_control, adapters:, java_custom_actions:, service_dispatch:,
+                    constants: Runtime::Constants.new(@project, environment:)
         )
         Runtime::SystemDomain.synchronize_roles(@store, @access_control.user_role_definitions)
         Runtime::Languages.synchronize(@store, Runtime::Languages.settings(@project))

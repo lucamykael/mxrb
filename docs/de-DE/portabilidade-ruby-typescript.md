@@ -105,6 +105,11 @@ Pfade wie `$Order/M.Order_Customer/M.Customer/Name` folgen Referenzen von beiden
 und sind leer, sobald eine Referenz auf dem Weg leer ist; ein Reference Set lässt sich
 nicht durchlaufen. `''` ist nicht `empty`, und ein String-Attribut ohne Standardwert
 beginnt `empty` (`spec/fixtures/native_empty_strings`, gemessen auf der 11.12.1-Runtime).
+Im Backend nimmt `@Modul.Konstante` den Override `MX_<Modul>_<Konstante>` aus der
+Umgebung (auch aus `.env`-Profilen) wie ein Mendix-Deployment; sonst den in Ruby
+deklarierten Standardwert oder, bei privaten Standardwerten außerhalb des öffentlichen
+Ruby, den Wert im lokalen Sidecar `.mxrb/mendix`. Ohne Wert scheitert der Ausdruck und
+nennt die zu setzende Variable.
 
 Alle 95 Fälle liefen mit `script/oql_native_oracle` auf dem offiziellen Runtime und
 stimmen mit dem Ruby-Interpreter überein.

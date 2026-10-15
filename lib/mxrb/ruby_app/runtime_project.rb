@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'prism'
+
 module Mxrb
   module RubyApp
     # Runtime model assembled from the application's loaded Ruby definitions.
@@ -46,6 +48,18 @@ module Mxrb
       def decimal_settings = @manifest.data.fetch('decimal', {})
       def time_zone_settings = @manifest.data.fetch('time_zone', {})
       def lifecycle_settings = @manifest.data.fetch('lifecycle', {})
+
+      # A constant's type and default: the Ruby declaration's, or for a default kept
+      # out of the public source, the value in the local Mendix sidecar.
+      def constant_definition(name)
+        implementation = Registry.fetch(:constant, name.to_s)
+        return unless implementation
+
+        definition = implementation.native_definition
+        default = definition.fetch(:default_supplied) ? definition.fetch(:default_value) : sidecar_constant(name)
+        { type: definition.fetch(:type), default: }
+      end
+
       def language_settings = @manifest.data.fetch('languages', {})
       def oql_datasets = Registry.all(:dataset).values.map(&:definition)
 
@@ -55,6 +69,22 @@ module Mxrb
       def java_action_parameter_names(name) = @manifest.data.fetch('java_action_parameters', {}).fetch(name, {})
 
       private
+
+      def sidecar_constant(name) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+        module_name, constant = name.to_s.split('.', 2)
+        directory = File.join(@manifest.root, '.mxrb', 'mendix', 'modules', module_name, 'domain', 'constants')
+        Dir.glob(File.join(directory, '*.rb')).sort.each do |path|
+          call = Prism.parse(File.read(path)).value.statements.body.find do |node|
+            node in Prism::CallNode[name: :constant, arguments: Prism::ArgumentsNode[arguments: [Prism::SymbolNode, *]]]
+          end
+          next unless call && call.arguments.arguments.first.unescaped == constant
+
+          value = call.arguments.arguments.grep(Prism::KeywordHashNode).flat_map(&:elements)
+                      .find { _1.key in Prism::SymbolNode[unescaped: 'value'] }&.value
+          return value.is_a?(Prism::StringNode) ? value.unescaped : nil
+        end
+        nil
+      end
 
       def build_security
         security = Registry.all(:project_security).values.first
