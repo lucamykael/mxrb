@@ -212,6 +212,44 @@ RSpec.describe Mxrb::Runtime::JavaSidecar do
     expect(described_class.configured({ 'MXRB_JAVA_ACTIONS_URL' => 'java:1' }, services:)).to be_a(described_class)
   end
 
+  it 'runs OQL in the application database, with object IDs as objects' do
+    customer = store.create('Mod.Customer')
+    columns = { 'Name' => :string, 'Id' => :identifier, 'Count' => :integer }
+              .map { Mxrb::Runtime::OqlTable::Column.new(_1, _2) }
+    rows = [{ 'Name' => 'a', 'Id' => 'c1', 'Count' => 2 }, { 'Name' => 'b', 'Id' => nil, 'Count' => nil },
+            { 'Name' => 'c', 'Id' => 'gone', 'Count' => 1 }]
+    table = Struct.new(:definition, :rows).new(Struct.new(:columns).new(columns), rows)
+    database = Struct.new(:table, :customer, :queries) do
+      def oql_table(statement, parameters:)
+        queries << [statement, parameters]
+        table
+      end
+
+      def locate(id) = id == 'c1' ? customer : nil
+    end.new(table, customer, [])
+    allow(context).to receive(:store).and_return(database)
+    steps = [
+      callback(1, 'oql', 'query' => 'SELECT', 'parameters' => { 'p' => { '$decimal' => '1' } }, 'offset' => 1,
+                         'amount' => 1),
+      callback(2, 'oql', 'query' => 'Mod.Dataset'),
+      { 'id' => 0, 'result' => nil }
+    ]
+    received = sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) }
+    answers = received.drop(1).map { _1['result'] }
+    expect(answers[0]).to eq('columns' => [%w[Name string], %w[Id identifier], %w[Count integer]],
+                             'rows' => [['b', nil, nil]])
+    expect(answers[1]['rows'].map(&:first)).to eq(%w[a b c])
+    expect(answers[1]['rows'].first).to eq(['a', { '$object' => 0, 'entity' => 'Mod.Customer', 'id' => customer.id },
+                                            { '$integer' => 2 }])
+    expect(answers[1]['rows'].last).to eq(['c', nil, { '$integer' => 1 }])
+    expect(database.queries).to eq([['SELECT', { 'p' => BigDecimal('1') }], ['Mod.Dataset', {}]])
+
+    allow(context).to receive(:store).and_return(store)
+    steps = [callback(1, 'oql', 'query' => 'SELECT'), { 'id' => 0, 'result' => nil }]
+    received = sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) }
+    expect(received.last['error']['message']).to eq('OQL needs the application database')
+  end
+
   it 'raises the exception a Java action throws with its class' do
     steps = [{ 'id' => 0, 'error' => { 'type' => 'java.lang.IllegalStateException', 'message' => 'bad' } }]
     expect { sidecar(steps) { described_class.new(_1).invoke('Mod.Action', [], context:) } }

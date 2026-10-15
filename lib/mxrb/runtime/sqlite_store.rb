@@ -76,6 +76,20 @@ module Mxrb
       def oql_objects(text, entity) = oql_queries.objects(text, entity)
       def dataset_objects(name, entity) = oql_objects(oql_queries.dataset_query(name), entity)
 
+      # Core.retrieveOQLDataTable: a tabular OQL query, or the one of the dataset with that name.
+      def oql_table(statement, parameters: nil)
+        oql_queries.query(oql_queries.dataset_text(statement) || statement, parameters:)
+      end
+
+      # The object with an id, of whichever entity stores it, as an OQL ID column holds it.
+      def locate(id)
+        schema.entities.each do |entity|
+          found = find(entity.name, id)
+          return found if found
+        end
+        nil
+      end
+
       def oql_queries
         @oql_queries ||= OqlDatasets.new(@oql_project, self, decoder: method(:deserialize), decimal: @decimal)
       end

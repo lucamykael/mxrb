@@ -259,7 +259,11 @@ jar. The API covers:
   `commit`, `delete`, `rollback`, `microflowCall`, the configuration, constants,
   versions (also `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
   `getReturnType`, `createDataType`, `getInternationalizedString` and file
-  document contents (`getFileDocumentContent`, `storeFileDocumentContent`).
+  document contents (`getFileDocumentContent`, `storeFileDocumentContent`);
+- tabular OQL (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
+  `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
+  run by the Ruby application's OQL engine; an ID column holds the object's
+  identifier.
 
 A source that uses another API does not compile and is left out, with its first
 error in `build-report.tsv`; calling that action raises an error that quotes the

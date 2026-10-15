@@ -272,7 +272,11 @@ A API cobre:
   `commit`, `delete`, `rollback`, `microflowCall`, a configuração, as constantes,
   as versões (também `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
   `getReturnType`, `createDataType`, `getInternationalizedString` e o conteúdo de
-  file documents (`getFileDocumentContent`, `storeFileDocumentContent`).
+  file documents (`getFileDocumentContent`, `storeFileDocumentContent`);
+- OQL tabular (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
+  `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
+  executado pelo motor OQL do app Ruby; uma coluna de ID traz o identificador do
+  objeto.
 
 Uma fonte que usa outra API não compila e fica de fora, com o primeiro erro
 registrado em `build-report.tsv`; chamar essa ação gera um erro que cita esse

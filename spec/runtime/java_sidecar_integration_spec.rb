@@ -110,13 +110,13 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 20, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 21, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 23 sources, left out 1')
+    expect(output).to include('compiled 24 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method getXASId\(\)/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
@@ -149,7 +149,8 @@ RSpec.describe 'Java action sidecar' do
       'track' => 'filled->tracked CHANGED UNCHANGED NORMAL INSTANTIATED true changed=1',
       'captions' => 'Aberto|Open|Closed|Fechado||11|[2, 4]',
       'microflows' => 'true [Value] String String Integer true null',
-      'store' => 'hello note.txt 5 3 10 4'
+      'store' => 'hello note.txt 5 3 10 4',
+      'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer'
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')

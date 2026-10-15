@@ -38,6 +38,10 @@ Mxrb.define(output_path) do
       association 'Views.Tag', name: :Order_Tag, cardinality: :many_to_many
     end
     constant :Greeting, type: :string, value: 'hello from a constant'
+    dataset :CustomerNames do
+      parameter :Prefix, string
+      oql 'SELECT c.Name AS Name FROM Views.Customer AS c WHERE c.Name LIKE $Prefix'
+    end
     java_action :Echo, parameters: [
       { name: 'text', type: text },
       { name: 'count', type: { kind: :basic, type: { kind: :integer } } },
@@ -63,6 +67,7 @@ Mxrb.define(output_path) do
     java_action :Captions, parameters: [], return_type: { kind: :string }
     java_action :Microflows, parameters: [], return_type: { kind: :string }
     java_action :Store, parameters: [], return_type: { kind: :string }
+    java_action :Oql, parameters: [], return_type: { kind: :string }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -131,6 +136,8 @@ Mxrb.define(output_path) do
       log_message 'ORACLE microflows={1}', node: oracle, parameters: ['$microflows']
       call_java 'Views.Store', as: :stored
       log_message 'ORACLE store={1}', node: oracle, parameters: ['$stored']
+      call_java 'Views.Oql', as: :oql
+      log_message 'ORACLE oql={1}', node: oracle, parameters: ['$oql']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -149,6 +156,10 @@ imports = <<~JAVA
   import com.mendix.core.Core;
   import com.mendix.core.conf.RuntimeVersion;
   import com.mendix.utils.ListUtils;
+  import com.mendix.systemwideinterfaces.connectionbus.data.IDataRow;
+  import com.mendix.systemwideinterfaces.connectionbus.data.IDataTable;
+  import com.mendix.systemwideinterfaces.connectionbus.requests.IParameterMap;
+  import com.mendix.systemwideinterfaces.connectionbus.requests.types.IOQLTextGetRequest;
   import com.mendix.systemwideinterfaces.core.IDataType;
   import com.mendix.systemwideinterfaces.core.IMendixObjectMember;
   import com.mendix.systemwideinterfaces.core.meta.IMetaAssociation;
@@ -269,7 +280,7 @@ actions = {
         + " " + Core.getReturnType("Views.Upper").getDSLType() + " " + Core.createDataType("Views.Order", "Quantity").getType()
         + " " + Core.createDataType("[Views.Order]").isList() + " " + Core.getInputParameters("Views.Missing");
   BODY
-  'Store' => ['String', nil, <<~BODY]
+  'Store' => ['String', nil, <<~BODY],
     IContext context = getContext();
     IMendixObject document = Core.instantiate(context, "Views.Document");
     Core.storeFileDocumentContent(context, document, "note.txt",
@@ -284,6 +295,24 @@ actions = {
         + " " + Core.retrieveXPathQueryAggregate(context, "COUNT(//Views.Order)")
         + " " + Core.retrieveXPathQueryAggregate(context, "SUM(//Views.Order/Quantity)")
         + " " + Core.retrieveXPathQueryAggregate(context, "max(//Views.Order[Quantity < 6]/Quantity)");
+  BODY
+  'Oql' => ['String', nil, <<~BODY]
+    IContext context = getContext();
+    IOQLTextGetRequest request = Core.createOQLTextGetRequest();
+    request.setQuery("SELECT c.Name AS Name, c.ID AS Id FROM Views.Customer c WHERE c.Name = $name");
+    IParameterMap parameters = request.createParameterMap();
+    parameters.put("$name", "Ada");
+    request.setParameters(parameters);
+    IDataTable table = Core.retrieveOQLDataTable(context, request);
+    IDataRow row = table.getRows().get(0);
+    IMendixIdentifier id = row.getValue(context, "Id");
+    IDataTable counts = Core.retrieveOQLDataTable(context,
+        "SELECT t.Label AS Label, COUNT(t.ID) AS Uses FROM Views.Tag t GROUP BY t.Label", 1, 0);
+    IDataRow count = counts.iterator().next();
+    return table.getRowCount() + " " + table.getSchema().getColumnSchema(1).getName() + " " + row.getValue(context, 0)
+        + " " + id.getObjectType() + " " + Core.retrieveId(context, id).getValue(context, "Name") + " "
+        + count.getValue(context, "label") + "=" + count.getValue(context, counts.getSchema().getColumnSchema("Uses"))
+        + " " + count.getValue(context, 1).getClass().getSimpleName();
   BODY
 }.freeze
 

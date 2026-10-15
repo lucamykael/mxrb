@@ -270,7 +270,11 @@ Mendix-Jar. Die API umfasst:
   `commit`, `delete`, `rollback`, `microflowCall`, Konfiguration, Konstanten,
   Versionen (auch `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
   `getReturnType`, `createDataType`, `getInternationalizedString` und Inhalte von
-  File Documents (`getFileDocumentContent`, `storeFileDocumentContent`).
+  File Documents (`getFileDocumentContent`, `storeFileDocumentContent`);
+- tabellarisches OQL (`retrieveOQLDataTable`, `createOQLTextGetRequest`,
+  `createOQLTextGetRequestFromDataSet`, `IDataTable`, `IDataRow`, `IParameterMap`),
+  ausgeführt von der OQL-Engine der Ruby-Anwendung; eine ID-Spalte enthält den
+  Identifier des Objekts.
 
 Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
 ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen

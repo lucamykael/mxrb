@@ -63,6 +63,15 @@ RSpec.describe Mxrb::RubyApp::SidecarServices do
     store.commit(draft)
     expect(store.original(draft)).to eq(draft.members)
 
+    customer = store.create('Views.Customer').tap { _1.members['Name'] = 'Ada' }
+    store.commit(customer)
+    table = store.oql_table('SELECT c.Name AS Name, c.ID AS Id FROM Views.Customer c WHERE c.Name = $name',
+                            parameters: { 'name' => 'Ada' })
+    expect(table.rows).to eq([{ 'Name' => 'Ada', 'Id' => customer.id }])
+    expect(store.oql_table('Views.CustomerNames', parameters: { 'Prefix' => 'A%' }).rows).to eq([{ 'Name' => 'Ada' }])
+    expect(store.locate(customer.id)).to eq(customer)
+    expect(store.locate('missing')).to be_nil
+
     memory = Mxrb::Runtime::Native::Store.new
     item = memory.create('Views.Draft').tap { _1.members['Note'] = 'a' }
     expect(memory.original(item)).to be_nil
