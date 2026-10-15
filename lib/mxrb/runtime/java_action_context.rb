@@ -14,7 +14,7 @@ module Mxrb
 
     # What a context-bound Java action adapter may use of the microflow that calls
     # it: the parts of IContext and Core that audited Marketplace actions rely on.
-    class JavaActionContext
+    class JavaActionContext # rubocop:disable Metrics/ClassLength
       FILE_CONTENT = 'SELECT content FROM mxrb_file_contents WHERE entity = ? AND object_id = ?'
       LOG_LEVELS = %w[Trace Debug Info Warning Error Critical].freeze
 
@@ -57,6 +57,33 @@ module Mxrb
 
       def end_transaction = @interpreter.end_transaction
 
+      # Core.retrieveXPathQuery: "//Module.Entity[constraint]", narrowed and
+      # sorted as the calling microflow's retrieves are.
+      def retrieve(xpath, variables = {}, offset: 0, amount: -1, sort: [])
+        match = %r{\A//([A-Za-z_]\w*\.[A-Za-z_]\w*)(.*)\z}m.match(xpath.to_s.strip)
+        raise ArgumentError, "unsupported XPath query #{xpath.inspect}" unless match
+
+        @interpreter.retrieve_xpath(match[1], match[2], variables, offset:, amount:, sort:)
+      end
+
+      # What a member of an entity, or of its generalizations, is: :integer for
+      # an Integer attribute, :attribute for another one, :reference or
+      # :reference_set for an association; nil when the entity has no such member.
+      def member_kind(entity_name, name) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
+        name = name.to_s
+        chain, root = generalizations(entity_name)
+        return :attribute if SystemDomain::ATTRIBUTES.fetch(root, []).any? { _1.first == name }
+
+        attribute = chain.flat_map(&:attributes).find { _1.name == name }
+        return attribute.type == :integer ? :integer : :attribute if attribute
+
+        association = @project.modules.flat_map(&:associations).find { _1.name == name }
+        association && (association.association_type.to_s == 'ReferenceSet' ? :reference_set : :reference)
+      end
+
+      # The System.User of the calling session (IContext.getSession().getUser()).
+      def user = current_user
+
       def changed?(object) = @store.respond_to?(:changed?) ? @store.changed?(object) : true
 
       # Core.getFileDocumentContent: the stored bytes of a System.FileDocument.
@@ -78,18 +105,12 @@ module Mxrb
 
       # The primitive attributes of an entity and its generalizations as
       # [name, type, calculated] (IMetaObject.getMetaPrimitives).
-      def attributes(entity_name) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-        entities = @project.modules.flat_map { |mod| mod.entities.map { ["#{mod.name}.#{_1.name}", _1] } }.to_h
-        chain = []
-        current = entity_name.to_s
-        while (entity = entities[current]) && !chain.include?(current)
-          chain << current
-          current = entity.respond_to?(:generalization_target) ? entity.generalization_target.to_s : ''
-        end
+      def attributes(entity_name)
+        chain, root = generalizations(entity_name)
         raise NativeRuntimeError, "unknown entity #{entity_name}" if chain.empty?
 
-        inherited_system_attributes(current) + chain.reverse.flat_map do |name|
-          entities.fetch(name).attributes.map { [_1.name, _1.type, calculated?(_1)] }
+        inherited_system_attributes(root) + chain.reverse.flat_map do |entity|
+          entity.attributes.map { [_1.name, _1.type, calculated?(_1)] }
         end
       end
 
@@ -97,6 +118,19 @@ module Mxrb
       def model_version = @environment.fetch('MXRB_MODEL_VERSION', 'unversioned')
 
       private
+
+      # The entity and its generalizations, most specific first, and the first
+      # generalization outside the model (System.User, say) or ''.
+      def generalizations(entity_name)
+        entities = @project.modules.flat_map { |mod| mod.entities.map { ["#{mod.name}.#{_1.name}", _1] } }.to_h
+        chain = []
+        current = entity_name.to_s
+        while (entity = entities[current]) && !chain.include?(entity)
+          chain << entity
+          current = entity.respond_to?(:generalization_target) ? entity.generalization_target.to_s : ''
+        end
+        [chain, current]
+      end
 
       def context_for(username, sudo) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         name = username.to_s
