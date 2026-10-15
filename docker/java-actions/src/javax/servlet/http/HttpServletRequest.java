@@ -15,5 +15,7 @@ public interface HttpServletRequest {
 	String getRemoteAddr();
 	String getHeader(String name);
 	String getParameter(String name);
+	/** The request's cookies, or null when it has none. */
+	Cookie[] getCookies();
 	java.io.InputStream getInputStream() throws java.io.IOException;
 }

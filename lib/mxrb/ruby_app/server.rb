@@ -249,16 +249,7 @@ module Mxrb
       # A request handler of a Java action answers as it sets status, headers,
       # cookies and body; it guards its own requests, so no CSRF token applies.
       def forward_java_request(handler, request, response, context)
-        cookies = request['Cookie'].to_s.split(';').to_h do |pair|
-          name, value = pair.strip.split('=', 2)
-          [name, value.to_s]
-        end
-        result = application.handle_java_request(handler, {
-                                                   'method' => request.request_method, 'path' => request.path,
-                                                   'query' => URI.encode_www_form(request.query),
-                                                   'headers' => request.headers.to_h, 'cookies' => cookies,
-                                                   'body' => request.body.to_s, 'remote_addr' => '127.0.0.1'
-                                                 }, context:)
+        result = application.handle_java_request(handler, java_request(request), context:)
         response.status = Integer(result.fetch('status'))
         response['Content-Type'] = result['content_type'] if result['content_type']
         result.fetch('headers').each { |name, value| response[name] = value }
@@ -267,13 +258,17 @@ module Mxrb
         response.body = result.fetch('body')
       end
 
-      def java_cookie(cookie)
-        attributes = ["#{cookie.fetch('name')}=#{cookie.fetch('value')}", "Path=#{cookie.fetch('path') || '/'}",
-                      'SameSite=Lax']
-        attributes << "Max-Age=#{cookie['max_age']}" if cookie['max_age'].to_i >= 0
-        attributes << 'HttpOnly' if cookie['http_only']
-        attributes << 'Secure' if ENV['MXRB_SECURE_COOKIES'] == 'true'
-        attributes.join('; ')
+      def java_cookie(cookie) = Runtime::JavaSidecar.cookie_header(cookie)
+
+      # A request as a Java action's servlet API reads it.
+      def java_request(request)
+        cookies = request['Cookie'].to_s.split(';').to_h do |pair|
+          name, value = pair.strip.split('=', 2)
+          [name, value.to_s]
+        end
+        { 'method' => request.request_method, 'path' => request.path, 'query' => URI.encode_www_form(request.query),
+          'headers' => request.headers.to_h, 'cookies' => cookies, 'body' => request.body.to_s,
+          'remote_addr' => '127.0.0.1' }
       end
 
       def rest_route(method, path)
@@ -311,7 +306,7 @@ module Mxrb
       def rest_http(request)
         query = URI.encode_www_form(request.query.to_h)
         { uri: "#{application.application_root_url}#{request.path}#{"?#{query}" unless query.empty?}",
-          content: request.body.to_s, headers: request.headers.to_a }
+          content: request.body.to_s, headers: request.headers.to_a, java: java_request(request) }
       end
 
       # The returned value is the body: text as it is, anything else as JSON; without

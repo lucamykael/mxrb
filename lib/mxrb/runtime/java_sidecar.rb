@@ -18,7 +18,9 @@ module Mxrb
     #   -> {"id":0,"method":"invoke","params":{"action":..,"arguments":[..]}}
     #   <- {"id":n,"method":<callback>,"params":{..}}  -> {"id":n,"result":..}
     #   <- {"id":0,"result":..} or {"id":0,"error":{"type":..,"message":..}}
-    class JavaSidecar
+    # An action a published REST operation runs also gets the operation's HTTP
+    # request as "http", and its final message the response it wrote as "response".
+    class JavaSidecar # rubocop:disable Metrics/ClassLength
       URL = 'MXRB_JAVA_ACTIONS_URL'
       TOKEN = 'MXRB_JAVA_ACTIONS_TOKEN'
       TIMEOUT = 'MXRB_JAVA_ACTIONS_TIMEOUT'
@@ -47,11 +49,15 @@ module Mxrb
         @services = services
       end
 
-      # Runs a Java action with its parameters in model order and returns its result.
-      def invoke(name, parameters, context:)
+      # Runs a Java action with its parameters in model order and returns its result;
+      # http: is the HttpExchange of the REST operation it runs for.
+      def invoke(name, parameters, context:, http: nil)
         session = Session.new(context, @services)
-        exchange('invoke', session,
-                 'action' => name.to_s, 'arguments' => parameters.map { [_1.to_s, session.encode(_2)] })
+        params = { 'action' => name.to_s, 'arguments' => parameters.map { [_1.to_s, session.encode(_2)] } }
+        params['http'] = session.encode(invocation_request(http.request, context)) if http
+        exchange('invoke', session, params) do |message|
+          http.responses << session.decode(message['response']) if http && message['response']
+        end
       end
 
       # Forwards an HTTP request to the handler Core.addRequestHandler registered for
@@ -85,6 +91,11 @@ module Mxrb
 
       private
 
+      def invocation_request(http, context)
+        http.merge('body' => Codec::Binary.new(http.fetch('body', '').to_s.b),
+                   'root_url' => http['root_url'] || context.application_root_url)
+      end
+
       def listening(running)
         connect do |socket|
           params = @token ? { 'token' => @token } : {}
@@ -99,11 +110,11 @@ module Mxrb
         end
       end
 
-      def exchange(method, session, params)
+      def exchange(method, session, params, &finished)
         connect do |socket|
           params['token'] = @token if @token
           write(socket, 'id' => 0, 'method' => method, 'params' => params)
-          serve(socket, session)
+          serve(socket, session, &finished)
         end
       end
 
@@ -121,7 +132,10 @@ module Mxrb
       def serve(socket, session)
         loop do
           message = read(socket)
-          return finish(message, session) if message['id'].zero? && !message.key?('method')
+          if message['id'].zero? && !message.key?('method')
+            yield message if block_given?
+            return finish(message, session)
+          end
 
           write(socket, session.answer(message))
         end

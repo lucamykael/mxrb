@@ -96,6 +96,12 @@ public final class MxRuntimeResponse implements IMxRuntimeResponse, HttpServletR
 	}
 
 	@Override
+	public void addCookie(javax.servlet.http.Cookie cookie) {
+		addCookie(cookie.getName(), cookie.getValue(), cookie.getPath(), cookie.getDomain(), cookie.getMaxAge(),
+				cookie.isHttpOnly());
+	}
+
+	@Override
 	public HttpServletResponse getHttpServletResponse() {
 		return this;
 	}

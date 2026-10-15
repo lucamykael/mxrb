@@ -292,9 +292,13 @@ jar. The API covers:
 
 Generated proxies also have `load(context, xpath)`, as Studio Pro's do. The
 `org.json` Mendix bundles as `com.mendix.thirdparty.org.json` (`JSONObject`,
-`JSONArray`, `JSONException`) has the sidecar's own implementation, and
-`IContext.getRuntimeRequest`/`getRuntimeResponse` are empty, since the Ruby
-application does not hand the HTTP request to actions.
+`JSONArray`, `JSONException`) has the sidecar's own implementation. In an action a
+published REST operation runs, `IContext.getRuntimeRequest` is the operation's HTTP
+request (headers, cookies through `getCookies`, root URL) and the headers and
+cookies written to `getRuntimeResponse` go out with the operation's response, as
+the OIDC module's nonce cookie does; elsewhere both are empty. The image also has
+the Netty HTTP libraries the Mendix Runtime gives Java code (4.1.135.Final,
+downloaded from Maven Central and verified by checksum).
 
 Work an action leaves running after it returns, such as a listener of MQTT
 messages that calls a microflow, also goes through the Ruby application: when the

@@ -21,6 +21,7 @@ public interface HttpServletResponse {
 	void setStatus(int status);
 	void setHeader(String name, String value);
 	void addHeader(String name, String value);
+	void addCookie(Cookie cookie);
 	void setContentType(String type);
 	java.io.OutputStream getOutputStream() throws java.io.IOException;
 }

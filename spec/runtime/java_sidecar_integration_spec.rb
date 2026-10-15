@@ -73,10 +73,10 @@ RSpec.describe 'Java action sidecar' do
   end
 
   # The application's server, as it answers a request.
-  def dispatch(method, path, query: {}, cookie: nil)
+  def dispatch(method, path, query: {}, cookie: nil, headers: {})
     server = Mxrb::RubyApp::Server.allocate
     server.instance_variable_set(:@application, @application)
-    headers = Mxrb::Http::Headers.new(cookie ? { 'Cookie' => cookie } : {})
+    headers = Mxrb::Http::Headers.new(cookie ? headers.merge('Cookie' => cookie) : headers)
     request = Mxrb::Http::Request.new(path:, request_method: method, body: '', query:, headers:)
     Mxrb::Http::Response.new.tap { server.send(:dispatch, request, _1) }
   end
@@ -87,8 +87,8 @@ RSpec.describe 'Java action sidecar' do
 
       def initialize = @calls = []
 
-      def invoke(name, parameters, context:)
-        @calls << [name, parameters]
+      def invoke(name, parameters, context:, http: nil)
+        @calls << [name, parameters, http]
         context.retrieve('//Views.Order[Name = $name]', { 'name' => parameters.to_h['text'] }).size.to_s
       end
 
@@ -102,7 +102,7 @@ RSpec.describe 'Java action sidecar' do
     export
     open_application
     expect(@application.call_service('Views.Upper', { 'Value' => 'none' })).to eq('0')
-    expect(sidecar.calls).to eq([['Views.Shout', [%w[text none]]]])
+    expect(sidecar.calls).to eq([['Views.Shout', [%w[text none]], nil]])
 
     interpreter = @application.send(:bridge).interpreter
     store = interpreter.store
@@ -179,13 +179,13 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 26, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 27, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 29 sources, left out 1')
+    expect(output).to include('compiled 30 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
@@ -222,7 +222,8 @@ RSpec.describe 'Java action sidecar' do
       'store' => 'hello note.txt 5 3 10 4',
       'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer',
       'json' => '{"name":"Ada","count":4,"sum":3.5,"missing":null,"ok":true,"list":["a",1]}|fallback|true|false|true',
-      'gaps' => '1 5.0 MxAdmin Administrator true false en_US mxrb true false'
+      'gaps' => '1 5.0 MxAdmin Administrator true false en_US mxrb true false',
+      'nonce_outside' => 'none false'
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')
@@ -248,6 +249,11 @@ RSpec.describe 'Java action sidecar' do
     expect(second['Set-Cookie']).to be_nil
     expect(dispatch('GET', '/api/session', cookie: "mxrb_session=#{token}").body).to include('"csrf":"')
     expect(dispatch('GET', '/helloworld').status).to eq(404)
+
+    nonce = dispatch('GET', '/rest/nonce/v1/nonce/read', cookie: 'nonce=abc', headers: { 'X-Probe' => 'one' })
+    expect([nonce.status, nonce.body]).to eq([200, 'abc one /rest/nonce/v1/nonce/read'])
+    expect(nonce['Set-Cookie']).to eq(['nonce=next; Path=/; HttpOnly', 'seen=1; Path=/; SameSite=Lax; Max-Age=60'])
+    expect(dispatch('GET', '/rest/nonce/v1/nonce/read').body).to eq('no cookies null /rest/nonce/v1/nonce/read')
   end
 end
 # rubocop:enable Metrics/BlockLength
