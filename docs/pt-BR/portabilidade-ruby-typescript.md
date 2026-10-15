@@ -723,8 +723,11 @@ Callbacks persistentes e transitórios alcançam subtipos. Regras de validação
 herdadas agora verificam obrigatoriedade, unicidade entre tabelas de subtipos,
 igualdade, intervalos inclusivos e comprimento UTF-16 antes do commit com eventos.
 Falhas revertem a transação e retornam feedback estruturado HTTP 422. Expressões
-regulares JVM exigem um adapter `regular_expression` explícito; a sintaxe não é
-reinterpretada silenciosamente como Ruby Regexp. Regras desconhecidas falham
+regulares casam como o `Pattern` do Java (`Runtime::JavaRegex`): a sintaxe é
+traduzida onde Java e Ruby leem o mesmo texto de forma diferente (`.`, `^`, `$`,
+`\h`, `\v`, `\Q...\E`, `\x{...}` e as classes POSIX ASCII), e o que não tem
+equivalente fiel falha em vez de casar diferente; um adapter `regular_expression`
+registrado continua decidindo no lugar dele. Regras desconhecidas falham
 explicitamente. Uma matriz de 21 casos concordou com o Runtime nativo: veja a
 [evidência de paridade](../evidence/validation-parity-2026-10-05.json). A sintaxe
 de igualdade usa `Value` no armazenamento nativo; datas sem horário foram

@@ -2,6 +2,7 @@
 
 require 'bigdecimal'
 require_relative 'decimal_formatting'
+require_relative 'java_regex'
 
 module Mxrb
   module Runtime
@@ -24,7 +25,7 @@ module Mxrb
 
       def replaceall(arguments) = text(arguments, 3).then { |value, regex, by| value.gsub(pattern(regex)) { by } }
       def replacefirst(arguments) = text(arguments, 3).then { |value, regex, by| value.sub(pattern(regex)) { by } }
-      def ismatch(arguments) = text(arguments, 2).then { |value, regex| /\A(?:#{pattern(regex)})\z/.match?(value) }
+      def ismatch(arguments) = text(arguments, 2).then { |value, regex| JavaRegex.matches?(regex, value) }
       def formatdecimal(arguments) = DecimalFormatting.format(number(arguments, 2).first, arguments[1].to_s)
 
       def math(name, arguments, decimal)
@@ -55,11 +56,7 @@ module Mxrb
         arguments
       end
 
-      def pattern(source)
-        Regexp.new(source)
-      rescue RegexpError => e
-        raise ArgumentError, "invalid regular expression: #{e.message}"
-      end
+      def pattern(source) = JavaRegex.regexp(source)
 
       def extreme(name, arguments)
         comparable = arguments.all?(Numeric) || arguments.all? { _1.is_a?(Time) }
