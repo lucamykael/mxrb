@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'base64'
 require 'bigdecimal'
 require 'json'
 require 'socket'
@@ -24,17 +25,18 @@ module Mxrb
       DEFAULT_TIMEOUT = 300
 
       # The sidecar an environment enables; nil keeps Java actions without a
-      # Ruby adapter failing closed.
-      def self.configured(environment = ENV)
+      # Ruby adapter failing closed. The services answer what the Runtime API
+      # asks of the application: its metamodel, captions and file contents.
+      def self.configured(environment = ENV, services: nil)
         url = environment[URL].to_s
         return nil if url.empty?
 
-        new(url, token: environment[TOKEN], timeout: Float(environment.fetch(TIMEOUT, DEFAULT_TIMEOUT)))
+        new(url, token: environment[TOKEN], timeout: Float(environment.fetch(TIMEOUT, DEFAULT_TIMEOUT)), services:)
       end
 
       attr_reader :host, :port
 
-      def initialize(url, token: nil, timeout: DEFAULT_TIMEOUT)
+      def initialize(url, token: nil, timeout: DEFAULT_TIMEOUT, services: nil)
         uri = URI.parse(url.include?('://') ? url : "tcp://#{url}")
         raise ArgumentError, "#{URL} must be tcp://host:port, got #{url.inspect}" unless valid?(uri)
 
@@ -42,11 +44,12 @@ module Mxrb
         @port = uri.port
         @token = token.to_s.empty? ? nil : token.to_s
         @timeout = timeout
+        @services = services
       end
 
       # Runs a Java action with its parameters in model order and returns its result.
       def invoke(name, parameters, context:)
-        session = Session.new(context)
+        session = Session.new(context, @services)
         connect do |socket|
           params = { 'action' => name.to_s, 'arguments' => parameters.map { [_1.to_s, session.encode(_2)] } }
           params['token'] = @token if @token
@@ -104,18 +107,20 @@ module Mxrb
 
       # The objects one invocation has seen, by handle, and the callbacks the
       # Java side may make while it runs.
-      class Session
+      class Session # rubocop:disable Metrics/ClassLength
         CALLBACKS = %w[
           log get set member related instantiate commit delete rollback retrieve microflow
-          constant end_transaction changed user application_root_url runtime_version model_version
+          constant end_transaction changed original user application_root_url runtime_version model_version
+          metamodel caption file store_file message
         ].freeze
         LOG_LEVELS = {
           'TRACE' => 'Trace', 'DEBUG' => 'Debug', 'INFO' => 'Info',
           'WARNING' => 'Warning', 'ERROR' => 'Error', 'CRITICAL' => 'Critical'
         }.freeze
 
-        def initialize(context)
+        def initialize(context, services = nil)
           @context = context
+          @services = services
           @codec = Codec.new
         end
 
@@ -139,12 +144,7 @@ module Mxrb
         # an empty reference set an empty list, as the generated proxies expect.
         def callback_get(params)
           object, name = member!(params)
-          value = object.members[name]
-          case @context.member_kind(object.entity, name)
-          when :integer then value.nil? ? nil : Codec::JavaInteger.new(value)
-          when :reference_set then Array(value)
-          else value
-          end
+          typed(object, name, object.members[name])
         end
 
         def callback_set(params)
@@ -192,10 +192,35 @@ module Mxrb
         def callback_constant(params) = @context.constant(params['name'].to_s)
         def callback_end_transaction(_params) = @context.end_transaction
         def callback_changed(params) = @context.changed?(object!(params['object']))
+
+        # The members at the last commit, nil for an object never committed.
+        def callback_original(params)
+          object = object!(params['object'])
+          @context.store.original(object)&.to_h { |name, value| [name, typed(object, name, value)] }
+        end
+
         def callback_user(_params) = @context.user
         def callback_application_root_url(_params) = @context.application_root_url
         def callback_runtime_version(_params) = @context.runtime_version
         def callback_model_version(_params) = @context.model_version
+        def callback_metamodel(_params) = services.metamodel
+
+        # Core.getInternationalizedString of an enumeration value's caption.
+        def callback_caption(params)
+          services.caption(params['enumeration'].to_s, params['value'].to_s, params['language'])
+        end
+
+        # FeedbackHelper.addTextMessageFeedback: the calling microflow shows the message.
+        def callback_message(params)
+          @context.show_message(params['type'].to_s, params['message'].to_s, blocking: params['blocking'] == true)
+        end
+
+        def callback_file(params) = Codec::Binary.new(@context.file_content(object!(params['object'])))
+
+        def callback_store_file(params)
+          services.store_file(@context.store, object!(params['object']), params['name'].to_s, params['content'].to_s)
+          nil
+        end
 
         def encode(value) = @codec.encode(value)
         def decode(value) = @codec.decode(value)
@@ -218,10 +243,20 @@ module Mxrb
           [object, name]
         end
 
+        def typed(object, name, value)
+          case @context.member_kind(object.entity, name)
+          when :integer then value.nil? ? nil : Codec::JavaInteger.new(value)
+          when :reference_set then Array(value)
+          else value
+          end
+        end
+
         # Members are stored by their short name: "Name", or "Assoc" for "Module.Assoc".
         def member(name) = name.to_s.split(%r{[./]}).last.to_s
 
         def events?(params) = params['events'] != false
+
+        def services = @services || raise(NativeRuntimeError, 'the application offers no Runtime services')
       end
 
       # The values of the protocol: JSON scalars and lists, decimals, dates and
@@ -229,6 +264,8 @@ module Mxrb
       class Codec
         # A java.lang.Integer, which an Integer attribute's value is in Java.
         JavaInteger = Data.define(:value)
+        # Bytes, such as a file document's contents.
+        Binary = Data.define(:bytes)
 
         def initialize
           @objects = []
@@ -239,6 +276,8 @@ module Mxrb
           case value
           when nil, true, false, String, Integer then value
           when JavaInteger then { '$integer' => value.value }
+          when Binary then { '$binary' => Base64.strict_encode64(value.bytes) }
+          when Hash then value.to_h { [_1.to_s, encode(_2)] }
           when BigDecimal then { '$decimal' => value.to_s('F') }
           when Float then { '$decimal' => BigDecimal(value.to_s).to_s('F') }
           when Time then { '$datetime' => (value.to_r * 1000).floor }
@@ -263,10 +302,11 @@ module Mxrb
 
         def tagged?(value) = value.keys.first.to_s.start_with?('$')
 
-        def decode_tagged(value)
+        def decode_tagged(value) # rubocop:disable Metrics/AbcSize
           if value.key?('$decimal') then BigDecimal(value['$decimal'].to_s)
           elsif value.key?('$datetime') then Time.at(Rational(Integer(value['$datetime']), 1000)).utc
           elsif value.key?('$object') then object(value['$object'])
+          elsif value.key?('$binary') then Base64.strict_decode64(value['$binary'].to_s)
           else raise NativeRuntimeError, "Java action sent an unknown value #{value.keys.inspect}"
           end
         end

@@ -349,6 +349,14 @@ module Mxrb
         comparable_members(members).compact != comparable_members(baseline).compact
       end
 
+      # The members an object had at its last commit, or nil for one never
+      # committed (IMendixObject.isNew, IMendixObjectMember.getOriginalValue).
+      def original(value)
+        return @transient.original(value) if transient?(value.entity)
+
+        @persisted[value.id]&.dup
+      end
+
       def current_savepoint?(token) = token.fetch(:generation) == @savepoint_generation.to_i
 
       def begin_transaction

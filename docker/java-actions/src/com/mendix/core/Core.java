@@ -1,19 +1,33 @@
 package com.mendix.core;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.mendix.core.actionmanagement.MicroflowCallBuilder;
 import com.mendix.core.conf.Configuration;
 import com.mendix.datastorage.XPathQuery;
 import com.mendix.logging.ILogNode;
 import com.mendix.systemwideinterfaces.core.IContext;
+import com.mendix.systemwideinterfaces.core.IDataType;
 import com.mendix.systemwideinterfaces.core.IMendixIdentifier;
 import com.mendix.systemwideinterfaces.core.IMendixObject;
+import com.mendix.systemwideinterfaces.core.meta.IMetaAssociation;
+import com.mendix.systemwideinterfaces.core.meta.IMetaObject;
 
 import mxrb.sidecar.Bridge;
+import mxrb.sidecar.Captions;
+import mxrb.sidecar.Metadata;
+import mxrb.sidecar.MxDataType;
 import mxrb.sidecar.MxContext;
 import mxrb.sidecar.MxLogNode;
 import mxrb.sidecar.MxMicroflowCall;
@@ -21,6 +35,9 @@ import mxrb.sidecar.MxXPathQuery;
 
 /** The Runtime API of the Ruby application, reached through the invocation's bridge. */
 public final class Core {
+	private static final Pattern AGGREGATE = Pattern
+			.compile("(?is)\\s*(count|sum|avg|average|min|max)\\s*\\(\\s*(//.+?)\\s*\\)\\s*");
+
 	private Core() {
 	}
 
@@ -127,6 +144,158 @@ public final class Core {
 		return microflowCall(microflow).withParams(parameters).execute(context);
 	}
 
+	/** COUNT, SUM, AVG, MIN or MAX of an XPath query, such as "COUNT(//Module.Entity[...])" or "SUM(//Module.Entity/Total)". */
+	public static Long retrieveXPathQueryAggregate(IContext context, String aggregate) throws CoreException {
+		Matcher match = AGGREGATE.matcher(aggregate);
+		if (!match.matches()) {
+			throw new CoreException("unsupported XPath aggregate: " + aggregate);
+		}
+		String function = match.group(1).toLowerCase(java.util.Locale.ROOT);
+		String path = match.group(2);
+		if (function.equals("count")) {
+			return (long) retrieveXPathQuery(context, path).size();
+		}
+		int slash = path.lastIndexOf('/');
+		List<IMendixObject> objects = retrieveXPathQuery(context, path.substring(0, slash));
+		String attribute = path.substring(slash + 1);
+		java.math.BigDecimal result = null;
+		for (IMendixObject object : objects) {
+			Object value = object.getValue(context, attribute);
+			if (value == null) {
+				continue;
+			}
+			java.math.BigDecimal number = new java.math.BigDecimal(value.toString());
+			result = result == null ? number : switch (function) {
+			case "min" -> result.min(number);
+			case "max" -> result.max(number);
+			default -> result.add(number);
+			};
+		}
+		if (result == null) {
+			return function.equals("sum") ? 0L : null;
+		}
+		if (function.startsWith("av")) {
+			result = result.divide(java.math.BigDecimal.valueOf(objects.size()), java.math.RoundingMode.HALF_UP);
+		}
+		return result.longValue();
+	}
+
+	public static String getInternationalizedString(String languageCode, String key, Object... arguments) {
+		return format(Captions.caption(languageCode, key), arguments);
+	}
+
+	public static String getInternationalizedString(IContext context, String key, Object... arguments) {
+		return format(Captions.caption(null, key), arguments);
+	}
+
+	public static IMetaObject getMetaObject(String entity) {
+		return Metadata.get().object(entity);
+	}
+
+	public static Iterable<IMetaObject> getMetaObjects() {
+		return new ArrayList<>(Metadata.get().objects());
+	}
+
+	public static IMetaAssociation getMetaAssociation(String association) {
+		return Metadata.get().association(association);
+	}
+
+	public static Iterable<IMetaAssociation> getMetaAssociations() {
+		return new ArrayList<>(Metadata.get().associations());
+	}
+
+	public static List<String> getSubtypesOf(String entity) {
+		List<String> subtypes = new ArrayList<>();
+		IMetaObject object = getMetaObject(entity);
+		if (object != null) {
+			object.getSubObjects().forEach(sub -> subtypes.add(sub.getName()));
+		}
+		return subtypes;
+	}
+
+	public static Set<String> getMicroflowNames() {
+		return new LinkedHashSet<>(Metadata.get().microflowNames());
+	}
+
+	public static Map<String, IDataType> getInputParameters(String microflow) {
+		return Metadata.get().parameters(microflow);
+	}
+
+	public static IDataType getReturnType(String microflow) {
+		return Metadata.get().returnType(microflow);
+	}
+
+	public static IDataType createDataType(String type) {
+		return MxDataType.parse(Metadata.get(), type);
+	}
+
+	/** The type of an entity's attribute. */
+	public static IDataType createDataType(String entity, String attribute) {
+		IMetaObject object = getMetaObject(entity);
+		if (object == null || object.getMetaPrimitive(attribute) == null) {
+			throw new IllegalArgumentException("unknown attribute " + entity + "." + attribute);
+		}
+		return createDataType(object.getMetaPrimitive(attribute).getType().name());
+	}
+
+	public static boolean isSubClassOf(String superClass, String type) {
+		IMetaObject object = getMetaObject(type);
+		return object != null && object.isSubClassOf(superClass);
+	}
+
+	public static boolean isSubClassOf(IMetaObject superClass, IMetaObject type) {
+		return type.isSubClassOf(superClass);
+	}
+
+	/** The locale of the calling user; the Ruby application formats for en_US. */
+	public static java.util.Locale getLocale(IContext context) {
+		return java.util.Locale.US;
+	}
+
+	public static InputStream getFileDocumentContent(IContext context, IMendixObject file) {
+		return new ByteArrayInputStream((byte[]) bridge(context).call("file", "object", file));
+	}
+
+	public static void storeFileDocumentContent(IContext context, IMendixObject file, InputStream content) {
+		Object name = file.getValue(context, "Name");
+		storeFileDocumentContent(context, file, name == null ? "file" : name.toString(), content);
+	}
+
+	public static void storeFileDocumentContent(IContext context, IMendixObject file, String name,
+			InputStream content) {
+		try {
+			bridge(context).call("store_file", "object", file, "name", name, "content", content.readAllBytes());
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	/** An image's contents; the Ruby application serves thumbnails itself. */
+	public static InputStream getImage(IContext context, IMendixObject image, boolean thumbnail) {
+		return getFileDocumentContent(context, image);
+	}
+
+	/** The user with a name, or null. */
+	public static com.mendix.systemwideinterfaces.core.IUser getUser(IContext context, String name) throws CoreException {
+		List<IMendixObject> users = createXPathQuery("//System.User[Name = $name]").setVariable("name", name)
+				.setAmount(1).execute(context);
+		if (users.isEmpty()) {
+			return null;
+		}
+		IMendixObject user = users.get(0);
+		return new com.mendix.systemwideinterfaces.core.IUser() {
+			@Override
+			public String getName() {
+				return user.getValue(context, "Name");
+			}
+
+			@Override
+			public IMendixObject getMendixObject() {
+				return user;
+			}
+		};
+	}
+
 	public static IContext createSystemContext() {
 		return new MxContext(Bridge.current(), true);
 	}
@@ -152,6 +321,14 @@ public final class Core {
 
 	public static String getModelVersion() {
 		return (String) Bridge.current().call("model_version");
+	}
+
+	private static String format(String text, Object... arguments) {
+		String result = text;
+		for (int i = 0; arguments != null && i < arguments.length; i++) {
+			result = result.replace("{" + (i + 1) + "}", String.valueOf(arguments[i]));
+		}
+		return result;
 	}
 
 	private static Bridge bridge(IContext context) {

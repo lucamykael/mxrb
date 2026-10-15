@@ -255,14 +255,29 @@ geschlossen fehl. Actions werden in dieser Reihenfolge aufgelöst: Adapter aus
 der Fehler.
 
 Der Sidecar kompiliert `javasource` und `userlib` des Projekts gegen eine eigene
-API mit den Teilen von `com.mendix.*`, die Actions nutzen: `IContext`,
-`IMendixObject`, `IMendixIdentifier`, `UserAction`/`CustomJavaAction`, `ILogNode`
-und in `Core` die XPath-Abfragen (`createXPathQuery`, `retrieveXPathQuery`,
-`retrieveByPath`, `retrieveId`), `instantiate`, `commit`, `delete`, `rollback`,
-`microflowCall`, Konfiguration, Konstanten und Versionen. Der Sidecar enthält kein
-Mendix-Jar. Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt
-draußen, mit ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action
-meldet einen Fehler mit diesem Grund.
+API mit den Teilen von `com.mendix.*`, die Actions nutzen. Der Sidecar enthält kein
+Mendix-Jar. Die API umfasst:
+
+- `IContext`, `ISession`, `UserAction`/`CustomJavaAction`, `ILogNode` und
+  `FeedbackHelper`, dessen Meldung zum Show-Message des aufrufenden Microflows wird;
+- `IMendixObject` und `IMendixIdentifier`, einschließlich `getMembers`, der Member
+  `MendixString`, `MendixInteger`, `MendixEnum`, `MendixObjectReference` usw.,
+  `getState`, `isNew` und `getOriginalValue`, verglichen mit dem letzten Commit;
+- die Metadaten (`IMetaObject`, `IMetaPrimitive`, `IMetaAssociation`,
+  `IMetaEnumeration`, `IDataType`) aus dem Metamodell der Anwendung;
+- in `Core`: die XPath-Abfragen (`createXPathQuery`, `retrieveXPathQuery`,
+  `retrieveXPathQueryAggregate`, `retrieveByPath`, `retrieveId`), `instantiate`,
+  `commit`, `delete`, `rollback`, `microflowCall`, Konfiguration, Konstanten,
+  Versionen (auch `RuntimeVersion`), `getMetaObject(s)`, `getInputParameters`,
+  `getReturnType`, `createDataType`, `getInternationalizedString` und Inhalte von
+  File Documents (`getFileDocumentContent`, `storeFileDocumentContent`).
+
+Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
+ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen
+Fehler mit diesem Grund. Enumerationsbeschriftungen folgen den Übersetzungen der
+Ruby-Anwendung; die von Studio Pro erzeugten Proxies nutzen die Text-ID jeder
+Beschriftung, und das Paket hält in `captions.tsv` fest, welchen Wert jede ID
+beschriftet.
 
 Die Ruby-Anwendung bleibt die Runtime. Jeder Aufruf öffnet eine Verbindung mit
 JSON-Nachrichten, eine pro Zeile. Die Java-Seite erhält Handles auf die Objekte
