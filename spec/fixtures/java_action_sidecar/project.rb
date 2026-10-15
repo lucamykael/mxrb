@@ -75,6 +75,7 @@ Mxrb.define(output_path) do
       parameter :Value, type: :String
       create_object 'Views.Tag', as: :remembered, set: { Label: '$Value' }, commit: true
     end
+    java_action :Gaps, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -149,6 +150,8 @@ Mxrb.define(output_path) do
       call_java 'Views.Json', as: :json
       call_java 'Views.Background', as: :background
       log_message 'ORACLE json={1}', node: oracle, parameters: ['$json']
+      call_java 'Views.Gaps', as: :gaps, pass: { 'Views.Gaps.order' => '$order' }
+      log_message 'ORACLE gaps={1}', node: oracle, parameters: ['$gaps']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -157,6 +160,7 @@ Mxrb.define(output_path) do
   navigation { profile :Responsive, home_page: 'Views.Home' }
   security do
     security_level 'Off'
+    admin_user 'MxAdmin', password: 'Adm1n!pass'
     user_role 'Administrator', admin: true
     user_role 'Guest'
     admin_user_role 'Administrator'
@@ -329,10 +333,35 @@ actions = {
         + getContext().getRuntimeRequest().isPresent() + "|" + (context() == getContext());
   BODY
   'Background' => ['Boolean', nil, <<~BODY],
-    Thread worker = new Thread(() -> Core.microflowCall("Views.Remember").withParam("Value", "from the background")
-        .execute(Core.createSystemContext()));
+    IContext context = getContext();
+    Thread worker = new Thread(() -> {
+      try {
+        Thread.sleep(300);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      Core.microflowCall("Views.Remember").withParam("Value", "from a finished invocation").execute(context);
+      Core.microflowCall("Views.Remember").withParam("Value", "from the background")
+          .execute(Core.createSystemContext());
+    });
     worker.start();
     return true;
+  BODY
+  'Gaps' => ['String', 'IMendixObject order', <<~BODY],
+    IContext c = getContext();
+    long filled = Core.createXPathQuery("COUNT(//Views.Order[Name = $name])").setVariable("name", "renamed")
+        .executeAggregateLong(c);
+    Double average = Core.createXPathQuery("AVG(//Views.Order/Quantity)").executeAggregateDouble(c);
+    Core.metrics().createCounter("views.gaps").withTag("kind", "test").build().increment();
+    Core.getLogger("Gaps").subscribe(null, com.mendix.logging.LogLevel.INFO);
+    com.mendix.systemwideinterfaces.core.IUser admin = Core.getUser(c, "MxAdmin");
+    com.mendix.core.objectmanagement.member.MendixObjectReferenceSet tags =
+        (com.mendix.core.objectmanagement.member.MendixObjectReferenceSet) order.getMember(c, "Views.Order_Tag");
+    return filled + " " + average + " " + Core.getConfiguration().getAdminUserName() + " "
+        + Core.getConfiguration().getAdminUserRoleName() + " " + Core.authenticate(c, admin, "Adm1n!pass") + " "
+        + Core.authenticate(c, admin, "wrong") + " " + Core.getLanguage(c).getCode() + " "
+        + Core.getConfiguration().getXASId() + " " + Core.getConfiguration().getRuntimePath().isAbsolute() + " "
+        + tags.isBoth();
   BODY
   'Register' => ['Boolean', nil, <<~BODY],
     Core.addRequestHandler("/hello/", new views.Hello());

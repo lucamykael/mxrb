@@ -179,17 +179,17 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 25, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 26, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 28 sources, left out 1')
+    expect(output).to include('compiled 29 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
-    open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
+    open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}", 'MXRB_ADMIN_PASSWORD' => 'Adm1n!pass')
     @application.start_runtime
     expect(@application.call_service('Views.RunAll')).to be(true)
 
@@ -221,12 +221,14 @@ RSpec.describe 'Java action sidecar' do
       'microflows' => 'true [Value] String String Integer true null',
       'store' => 'hello note.txt 5 3 10 4',
       'oql' => '1 Id Ada Views.Customer Ada rush=1 Integer',
-      'json' => '{"name":"Ada","count":4,"sum":3.5,"missing":null,"ok":true,"list":["a",1]}|fallback|true|false|true'
+      'json' => '{"name":"Ada","count":4,"sum":3.5,"missing":null,"ok":true,"list":["a",1]}|fallback|true|false|true',
+      'gaps' => '1 5.0 MxAdmin Administrator true false en_US mxrb true false'
     )
     expect(@application.send(:bridge).interpreter.effects)
       .to include(type: 'show_message', level: 'warning', blocking: true, message: 'stored hello')
     remembered = lambda do
-      @application.send(:bridge).store.retrieve('Views.Tag').map { _1.members['Label'] }.include?('from the background')
+      labels = @application.send(:bridge).store.retrieve('Views.Tag').map { _1.members['Label'] }
+      (['from a finished invocation', 'from the background'] - labels).empty?
     end
     deadline = Time.now + 10
     sleep 0.05 until remembered.call || Time.now > deadline

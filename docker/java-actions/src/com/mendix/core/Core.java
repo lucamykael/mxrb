@@ -10,8 +10,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.mendix.core.actionmanagement.MicroflowCallBuilder;
 import com.mendix.core.conf.Configuration;
@@ -41,9 +39,6 @@ import mxrb.sidecar.MxXPathQuery;
 
 /** The Runtime API of the Ruby application, reached through the invocation's bridge. */
 public final class Core {
-	private static final Pattern AGGREGATE = Pattern
-			.compile("(?is)\\s*(count|sum|avg|average|min|max)\\s*\\(\\s*(//.+?)\\s*\\)\\s*");
-
 	private Core() {
 	}
 
@@ -152,38 +147,8 @@ public final class Core {
 
 	/** COUNT, SUM, AVG, MIN or MAX of an XPath query, such as "COUNT(//Module.Entity[...])" or "SUM(//Module.Entity/Total)". */
 	public static Long retrieveXPathQueryAggregate(IContext context, String aggregate) throws CoreException {
-		Matcher match = AGGREGATE.matcher(aggregate);
-		if (!match.matches()) {
-			throw new CoreException("unsupported XPath aggregate: " + aggregate);
-		}
-		String function = match.group(1).toLowerCase(java.util.Locale.ROOT);
-		String path = match.group(2);
-		if (function.equals("count")) {
-			return (long) retrieveXPathQuery(context, path).size();
-		}
-		int slash = path.lastIndexOf('/');
-		List<IMendixObject> objects = retrieveXPathQuery(context, path.substring(0, slash));
-		String attribute = path.substring(slash + 1);
-		java.math.BigDecimal result = null;
-		for (IMendixObject object : objects) {
-			Object value = object.getValue(context, attribute);
-			if (value == null) {
-				continue;
-			}
-			java.math.BigDecimal number = new java.math.BigDecimal(value.toString());
-			result = result == null ? number : switch (function) {
-			case "min" -> result.min(number);
-			case "max" -> result.max(number);
-			default -> result.add(number);
-			};
-		}
-		if (result == null) {
-			return function.equals("sum") ? 0L : null;
-		}
-		if (function.startsWith("av")) {
-			result = result.divide(java.math.BigDecimal.valueOf(objects.size()), java.math.RoundingMode.HALF_UP);
-		}
-		return result.longValue();
+		java.math.BigDecimal result = mxrb.sidecar.Aggregate.compute(context, aggregate, Map.of());
+		return result == null ? null : result.setScale(0, java.math.RoundingMode.HALF_UP).longValue();
 	}
 
 	public static String getInternationalizedString(String languageCode, String key, Object... arguments) {
@@ -433,6 +398,42 @@ public final class Core {
 				return (IMendixObject) language.get("language");
 			}
 		};
+	}
+
+	/** The Ruby application keeps the log, so a subscriber in the sidecar receives no messages. */
+	public static void registerLogSubscriber(com.mendix.logging.LogSubscriber subscriber) {
+	}
+
+	/** Whether a password is a user's, as signing in checks it. */
+	public static boolean authenticate(IContext context, com.mendix.systemwideinterfaces.core.IUser user,
+			String password) throws CoreException {
+		return Boolean.TRUE.equals(bridge(context).call("authenticate", "user", user.getName(), "password", password));
+	}
+
+	/** The language of the context's user (System.User_Language), else the project's default. */
+	public static com.mendix.systemwideinterfaces.core.ILanguage getLanguage(IContext context) {
+		IMendixObject user = context.getCurrentUserObject();
+		IMendixIdentifier language = user == null ? null : user.getValue(context, "System.User_Language");
+		if (language == null) {
+			return getDefaultLanguage();
+		}
+		IMendixObject object = language.getObject();
+		return new com.mendix.systemwideinterfaces.core.ILanguage() {
+			@Override
+			public String getCode() {
+				return object.getValue(context, "Code");
+			}
+
+			@Override
+			public IMendixObject getMendixObject() {
+				return object;
+			}
+		};
+	}
+
+	/** The application's metrics; the sidecar records none. */
+	public static com.mendix.metrics.Metrics metrics() {
+		return com.mendix.metrics.Metrics.none();
 	}
 
 	public static IContext createSystemContext() {

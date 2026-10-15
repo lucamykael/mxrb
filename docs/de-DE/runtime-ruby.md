@@ -300,7 +300,18 @@ Ruby-Anwendung: beim Start der Runtime öffnet sie eine Listen-Verbindung zum
 Sidecar, und für jeden Callback dieser Arbeit bittet der Sidecar darüber um eine
 eigene Verbindung, die in einer neuen Transaktion mit Systemkontext bedient wird.
 Die Verbindung geht immer von der Ruby-Anwendung aus, die also keine Verbindung
-aus dem Container annehmen muss. Die Objekte eines Callbacks gelten nur in ihm.
+aus dem Container annehmen muss. Das gilt auch für den Kontext, den eine Action für
+später aufbewahrt, wie es der Listener des MqttConnector tut. Die Objekte eines
+Callbacks gelten nur in ihm, und ein Objekt einer beendeten Invocation kann nicht
+weitergegeben werden.
+
+Außerdem gibt es Aggregate auf `XPathQuery` (`executeAggregateLong`/`Double`, mit
+den Variablen der Abfrage; leere Werte bleiben wie in SQL außen vor),
+`Core.authenticate`, `Core.getLanguage`, den Administrator des Projekts in
+`Configuration` sowie `Core.metrics()` und Log-Abonnenten, die es gibt, die aber
+nichts aufzeichnen, da Log und Metriken in der Ruby-Anwendung bleiben. Interne
+Runtime-Typen, die Code nur importiert (`ICore`, `DataStorage`, `Http`,
+`Integration`), existieren leer; Code, der sie benutzt, kompiliert nicht.
 
 Eine Quelle, die eine andere API nutzt, kompiliert nicht und bleibt draußen, mit
 ihrem ersten Fehler in `build-report.tsv`; der Aufruf dieser Action meldet einen

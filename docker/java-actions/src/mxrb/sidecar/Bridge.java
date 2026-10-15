@@ -30,6 +30,8 @@ public final class Bridge {
 	private final Writer out;
 	private final Map<Long, MxObject> objects = new HashMap<>();
 	private long next = 1;
+	/** Whether the invocation answered; later callbacks, such as a listener's, run as background work. */
+	private boolean finished;
 
 	public Bridge(BufferedReader in, Writer out) {
 		this.in = in;
@@ -84,7 +86,10 @@ public final class Bridge {
 		} finally {
 			CURRENT.remove();
 		}
-		send(answer);
+		synchronized (this) {
+			finished = true;
+			send(answer);
+		}
 	}
 
 	private void background(String method, String ticket) throws IOException {
@@ -141,7 +146,7 @@ public final class Bridge {
 
 	/** A callback to the Ruby application with its parameters as name, value pairs. */
 	public synchronized Object call(String method, Object... parameters) {
-		if (this == DETACHED) {
+		if (this == DETACHED || finished) {
 			return Background.call(method, parameters);
 		}
 		long id = next++;
@@ -187,6 +192,9 @@ public final class Bridge {
 			return Map.of("$datetime", date.getTime());
 		}
 		if (value instanceof MxObject object) {
+			if (object.bridge() != this) {
+				throw new CoreRuntimeException(object + " belongs to an earlier invocation and cannot be passed on");
+			}
 			return Map.of("$object", object.handle());
 		}
 		if (value instanceof IMendixIdentifier id) {

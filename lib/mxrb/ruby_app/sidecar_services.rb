@@ -67,6 +67,11 @@ module Mxrb
 
       def guest_login_enabled? = security[:guest_access_enabled] == true
 
+      # The administrator Configuration.getAdminUserName and getAdminUserRoleName report.
+      def project_security
+        { 'admin_user_name' => security[:admin_user_name].to_s, 'admin_user_role' => security[:admin_user_role].to_s }
+      end
+
       private
 
       def security = Registry.all(:project_security).values.first&.native_definition || {}

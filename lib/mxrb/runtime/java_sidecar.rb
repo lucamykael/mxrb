@@ -159,7 +159,7 @@ module Mxrb
           log get set member related instantiate commit delete rollback retrieve microflow
           constant end_transaction changed original session application_root_url runtime_version model_version
           metamodel caption file store_file message oql request_handler guest_session guest_login_enabled
-          long_id object_for_long default_language
+          long_id object_for_long default_language project_security authenticate
         ].freeze
         LOG_LEVELS = {
           'TRACE' => 'Trace', 'DEBUG' => 'Debug', 'INFO' => 'Info',
@@ -254,6 +254,12 @@ module Mxrb
 
         def callback_session(_params) = @context.session
         def callback_default_language(_params) = @context.default_language
+        def callback_project_security(_params) = services.project_security
+
+        # Core.authenticate: whether a password is the named user's, as signing in checks it.
+        def callback_authenticate(params)
+          SystemDomain.verify_password(@context.store, params['user'].to_s, params['password'].to_s)
+        end
 
         # Core.addRequestHandler: the application's server forwards the path's requests.
         def callback_request_handler(params) = services.register_request_handler(params['path'].to_s) && nil
