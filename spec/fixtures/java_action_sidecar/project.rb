@@ -46,6 +46,8 @@ Mxrb.define(output_path) do
     java_action :Log, parameters: [], return_type: { kind: :boolean }
     java_action :Fail, parameters: [{ name: 'message', type: text }], return_type: { kind: :boolean }
     java_action :Unsupported, parameters: [], return_type: { kind: :string }
+    java_action :Rename, parameters: [{ name: 'order', type: order }], return_type: { kind: :string }
+    java_action :Accent, parameters: [], return_type: { kind: :string }
     microflow :Upper do
       parameter :Value, type: :String
       return_type :String
@@ -98,6 +100,12 @@ Mxrb.define(output_path) do
       call_java 'Views.Greeting', as: :greeting
       log_message 'ORACLE greeting={1}', node: oracle, parameters: ['$greeting']
       call_java 'Views.Log', as: :logged
+      call_java 'Views.Rename', as: :renamed, pass: { 'Views.Rename.order' => '$second' }
+      log_message 'ORACLE rename={1}', node: oracle, parameters: ['$renamed']
+      retrieve_objects 'Views.Order', as: :renamedOrder, single: true, xpath: "[Name = 'renamed']"
+      log_message 'ORACLE renamed_quantity={1}', node: oracle, parameters: ['toString($renamedOrder/Quantity)']
+      call_java 'Views.Accent', as: :accent
+      log_message 'ORACLE accent={1}', node: oracle, parameters: ['$accent']
       call_microflow 'Views.CatchFail'
       call_microflow 'Views.CatchUnsupported'
       return_value 'true'
@@ -172,7 +180,16 @@ actions = {
     return true;
   BODY
   'Fail' => ['Boolean', 'String message', 'throw new IllegalStateException(message);'],
-  'Unsupported' => ['String', nil, 'return Core.getXASId();']
+  'Unsupported' => ['String', nil, 'return Core.getXASId();'],
+  'Rename' => ['String', 'IMendixObject order', <<~BODY],
+    views.proxies.Order proxy = views.proxies.Order.initialize(getContext(), order);
+    String before = proxy.getName();
+    proxy.setName("renamed");
+    proxy.setQuantity(proxy.getQuantity() + 1);
+    proxy.commit();
+    return before + "->" + proxy.getName() + " " + views.proxies.Order.entityName;
+  BODY
+  'Accent' => ['String', nil, 'return views.Words.ACCENTED;']
 }.freeze
 
 java_source = lambda do |name, type, parameters, body|
@@ -205,3 +222,6 @@ FileUtils.mkdir_p(directory)
 actions.each do |name, (type, parameters, body)|
   File.write(File.join(directory, "#{name}.java"), java_source.call(name, type, parameters, "#{body.chomp}\n"))
 end
+# A helper saved as ISO-8859-1, as some projects keep their sources.
+words = "package views;\n\npublic final class Words {\n\tpublic static final String ACCENTED = \"ação\";\n}\n"
+File.binwrite(File.join(File.dirname(directory), 'Words.java'), words.encode(Encoding::ISO_8859_1))

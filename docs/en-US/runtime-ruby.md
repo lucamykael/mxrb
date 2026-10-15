@@ -264,6 +264,27 @@ sides, authenticates calls; `MXRB_JAVA_ACTIONS_TIMEOUT` (300 s by default) bound
 the wait for each message. The `spec/fixtures/java_action_sidecar` case compiles
 and runs real actions against the Ruby application.
 
+`mxrb java-actions App.mpr app-ruby` prepares the sidecar of an exported
+application without changing the export, which still holds no Java file. The
+command writes to `java-actions/` the sidecar's Dockerfile and sources, a copy of
+the project's `javasource` (sources that are not UTF-8 are read as ISO-8859-1)
+with the proxies Studio Pro would generate and projects do not version, and the
+`userlib` jars. It also creates a `docker-compose.yml`, unless one exists, with
+the `java-actions` service on `127.0.0.1:7911`. The directory is rewritten on each
+run and is not embedded in the MPR:
+
+```sh
+mxrb java-actions App.mpr app-ruby
+cd app-ruby && docker compose up -d java-actions
+```
+
+Set the URL in the application's environment profile:
+
+```sh
+# config/environments/development.env
+MXRB_JAVA_ACTIONS_URL=tcp://127.0.0.1:7911
+```
+
 ## Ruby → Mendix → Ruby certification
 
 The reproducible certification scenario lives in

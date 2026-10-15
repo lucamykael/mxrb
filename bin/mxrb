@@ -501,6 +501,20 @@ when 'export'
   suffix = stack ? " with #{stack}" : ''
   puts "[mxrb] Exported #{mode} project#{suffix} to #{destination}"
 
+when 'java-actions'
+  usage = 'Usage: mxrb java-actions <file.mpr> <ruby-app-dir>'
+  source = ARGV.shift or abort usage
+  application = ARGV.shift or abort usage
+  abort "Unknown arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+  begin
+    result = Mxrb::RubyApp::JavaActionsPackage.new(source, application).write!
+  rescue Mxrb::Error, ArgumentError => e
+    abort "[mxrb] error: #{e.message}"
+  end
+  puts "[mxrb] Java actions sidecar in #{result.directory}: #{result.sources} sources, " \
+       "#{result.proxies} generated proxies, #{result.libraries} libraries"
+  puts '[mxrb] Start it with `docker compose up -d java-actions` and set MXRB_JAVA_ACTIONS_URL=tcp://127.0.0.1:7911'
+
 when 'diagram-er'
   lifecycle_action = %w[up down status destroy __serve].include?(ARGV.first) ? ARGV.shift : nil
   domain_usage = if lifecycle_action
@@ -2087,6 +2101,7 @@ else
                  [--apply] [--json]       Apply only a safe plan or emit structured output
       export     <file.mpr> <directory>   Convert an MPR to editable Ruby
                  --mode mendix|ruby       Mendix DSL (default) or executable Ruby app
+      java-actions <file.mpr> <app-dir>   Package own Java actions as an opt-in sidecar
       run        [directory]              Start Ruby API and React + Vite together
                  --host HOST --port PORT  Vite host/port (default 127.0.0.1:5173)
                  --api-port PORT           Ruby API port (default 9292)

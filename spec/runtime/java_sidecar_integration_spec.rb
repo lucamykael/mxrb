@@ -9,7 +9,6 @@ require 'tmpdir'
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'Java action sidecar' do
   let(:fixture) { 'spec/fixtures/java_action_sidecar' }
-  let(:sidecar) { File.expand_path('../../docker/java-actions/src', __dir__) }
 
   around do |example|
     Dir.mktmpdir do |directory|
@@ -27,15 +26,14 @@ RSpec.describe 'Java action sidecar' do
     end
   end
 
-  def build_sidecar
+  # As the image does: the sidecar's sources, then the packaged javasource with its proxies.
+  def build_sidecar(package)
     api = File.join(@directory, 'api')
-    sources = Dir.glob(File.join(sidecar, '**', '*.java'))
-    run!('javac', '-d', api, *sources)
+    run!('javac', '-d', api, *Dir.glob(File.join(package, 'src', '**', '*.java')))
     classes = File.join(@directory, 'classes')
     report = File.join(@directory, 'build-report.tsv')
-    javasource = File.join(File.dirname(@source), 'javasource')
-    output = run!('java', '-cp', api, 'mxrb.sidecar.Build', javasource, File.join(@directory, 'userlib'), classes,
-                  report)
+    output = run!('java', '-cp', api, 'mxrb.sidecar.Build', File.join(package, 'javasource'),
+                  File.join(package, 'userlib'), classes, report)
     [api, classes, report, output]
   end
 
@@ -63,11 +61,14 @@ RSpec.describe 'Java action sidecar' do
     output
   end
 
-  def export(process = {})
-    target = File.join(@directory, 'ruby')
-    Mxrb::Exporter.new(@source, target, mode: :ruby).export!
+  def export
+    @target = File.join(@directory, 'ruby')
+    Mxrb::Exporter.new(@source, @target, mode: :ruby).export!
+  end
+
+  def open_application(process = {})
     process = process.merge('MXRB_DATABASE_PATH' => File.join(@directory, 'runtime.sqlite3'))
-    @application = Mxrb::RubyApp::Application.new(target, process:)
+    @application = Mxrb::RubyApp::Application.new(@target, process:)
   end
 
   it 'hands the Java actions without a Ruby adapter to the configured sidecar' do
@@ -83,6 +84,7 @@ RSpec.describe 'Java action sidecar' do
     end.new
     allow(Mxrb::Runtime::JavaSidecar).to receive(:configured).and_return(sidecar)
     export
+    open_application
     expect(@application.call_service('Views.Upper', { 'Value' => 'none' })).to eq('0')
     expect(sidecar.calls).to eq([['Views.Shout', [%w[text none]]]])
 
@@ -103,13 +105,21 @@ RSpec.describe 'Java action sidecar' do
   it 'runs the project Java actions against the Ruby application' do
     skip 'javac is unavailable' unless system('javac', '-version', out: File::NULL, err: File::NULL)
 
-    api, classes, report, output = build_sidecar
-    expect(output).to include('compiled 11 sources, left out 1')
+    export
+    File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
+    result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
+    package = File.join(@target, 'java-actions')
+    expect(result.to_h).to eq(directory: package, sources: 15, proxies: 3, libraries: 0)
+    expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
+    expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
+    expect(File).to exist(File.join(package, 'Dockerfile'))
+
+    api, classes, report, output = build_sidecar(package)
+    expect(output).to include('compiled 17 sources, left out 1')
     expect(File.read(report))
       .to start_with("views.actions.Unsupported\tline 24: cannot find symbol symbol: method getXASId()")
     port = start_sidecar(api, classes, report)
-
-    export('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
+    open_application('MXRB_JAVA_ACTIONS_URL' => "tcp://127.0.0.1:#{port}")
     expect(@application.call_service('Views.RunAll')).to be(true)
 
     log = @application.send(:bridge).interpreter.log
@@ -126,7 +136,10 @@ RSpec.describe 'Java action sidecar' do
       'greeting' => 'hello from a constant',
       'fail_message' => 'checked failure',
       'fail_type' => 'java.lang.IllegalStateException',
-      'unsupported_type' => 'com.mendix.core.CoreRuntimeException'
+      'unsupported_type' => 'com.mendix.core.CoreRuntimeException',
+      'rename' => 'second->renamed Views.Order',
+      'renamed_quantity' => '6',
+      'accent' => 'ação'
     )
   end
 end
