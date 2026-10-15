@@ -21,6 +21,7 @@ require_relative 'system_domain'
 require_relative 'languages'
 require_relative 'time_zones'
 require_relative 'lifecycle'
+require_relative 'constants'
 require_relative 'sort_path'
 require_relative 'decimal_parsing'
 require_relative 'java_action_context'
@@ -250,10 +251,11 @@ module Mxrb
         include StringFunctions
 
         # associations: ->(object, association) { related objects } reaches the
-        # side of a reference that the object does not own.
-        def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil)
+        # side of a reference that the object does not own; constants: ->(name) { value }.
+        def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil, constants: nil)
           @token_cache = {}
           @associations = associations
+          @constants = constants
           @decimal = decimal
           @calendar = CalendarFunctions.new(time_zone:)
           @ranges = CalendarRanges.new(@calendar)
@@ -267,6 +269,12 @@ module Mxrb
           Parser.new(tokens, self, variables, node).parse
         rescue ArgumentError, TypeError, KeyError, EncodingError
           raise NativeRuntimeError, "unsupported Mendix expression: #{source.inspect}"
+        end
+
+        def constant(name)
+          raise NativeRuntimeError, "constant @#{name} is not available here" unless @constants
+
+          @constants.call(name)
         end
 
         # $Variable/Attribute or a path of references, $Order/M.Order_Customer/M.Customer/Name,
@@ -541,6 +549,7 @@ module Mxrb
             end
             return [:date_token, consume(:date_token)] if @token == :date_token
             return [:variable, consume(:variable)] if @token == :variable
+            return [:constant, consume(:constant)] if @token == :constant
             return conditional if accept_word('if')
             return grouped if accept(:left_parenthesis)
             return identifier if @token == :identifier
@@ -587,6 +596,7 @@ module Mxrb
             when :datetime then Time.now
             when :date_token then @expression.date_token(value)
             when :variable then @expression.resolve_variable(value, @variables)
+            when :constant then @expression.constant(value.delete_prefix('@'))
             when :identifier then @expression.resolve_identifier(value, @node)
             when :call then @expression.invoke(value, left.map { evaluate(_1) })
             when :unary then value == 'not' ? !truthy?(evaluate(left)) : -evaluate(left)
@@ -689,6 +699,7 @@ module Mxrb
             return [:string, scan_string] if @scanner.peek(1) == "'"
             return [:number, number(@scanner.scan(/\d+(?:\.\d+)?/))] if @scanner.check(/\d/)
             return [:variable, @scanner.scan(%r{\$[A-Za-z_]\w*(?:/[A-Za-z_][\w.]*)*})] if @scanner.check(/\$/)
+            return [:constant, @scanner.scan(/@[A-Za-z_]\w*\.[A-Za-z_]\w*/)] if @scanner.check(/@[A-Za-z_]/)
             return [:identifier, @scanner.scan(/[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*/)] if @scanner.check(/[A-Za-z_]/)
             return [:operator, @scanner.scan(%r{!=|>=|<=|=|>|<|\+|-|\*|:|/})] if @scanner.check(%r{[!><=+*:/-]})
 
@@ -732,12 +743,13 @@ module Mxrb
         attr_reader :store, :log, :effects
 
         def initialize(project, store: nil, adapters: {}, java_custom_actions: {}, http: nil, policy: nil,
-                       service_dispatch: nil)
+                       service_dispatch: nil, constants: nil)
           @project = project
           @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
+          constants ||= Constants.new(project)
           @expression = Expression.new(decimal: @decimal, associations: lambda { |object, association|
             @store.retrieve_association(association, object)
-          }, time_zone: lambda {
+          }, constants: ->(name) { constants.value(name) }, time_zone: lambda {
             attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
             attributes.fetch('time_zone', 'UTC')
           })

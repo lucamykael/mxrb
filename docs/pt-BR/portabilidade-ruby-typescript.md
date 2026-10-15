@@ -100,6 +100,10 @@ Caminhos como `$Pedido/M.Pedido_Cliente/M.Cliente/Nome` seguem referências pelo
 lados e ficam vazios quando uma referência no caminho está vazia; atravessar um reference
 set falha. `''` não é `empty`, e um atributo String sem valor padrão começa `empty`
 (`spec/fixtures/native_empty_strings`, medido no Runtime 11.12.1).
+No backend, `@Modulo.Constante` vale o override `MX_<Modulo>_<Constante>` do ambiente
+(também dos perfis `.env`), como num deployment Mendix; senão o padrão declarado em Ruby
+ou, para padrões privados fora do Ruby público, o valor do sidecar local
+`.mxrb/mendix`. Sem valor, a expressão falha indicando a variável a definir.
 
 Os 95 casos foram executados no Runtime oficial com `script/oql_native_oracle` e
 coincidem com o interpretador Ruby. [Evidência](../evidence/expression-functions-2026-10-09.json).

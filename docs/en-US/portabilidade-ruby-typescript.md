@@ -100,7 +100,11 @@ is refused. Message and log parameters keep `\` and `$`. Paths such as
 `$Order/M.Order_Customer/M.Customer/Name` follow references from either side and are
 empty once a reference on the way is empty; crossing a reference set fails. `''` is not
 `empty`, and a String attribute without a default value starts `empty`
-(`spec/fixtures/native_empty_strings`, measured on the 11.12.1 Runtime).
+(`spec/fixtures/native_empty_strings`, measured on the 11.12.1 Runtime). In the backend,
+`@Module.Constant` takes the `MX_<Module>_<Constant>` override from the environment
+(also from `.env` profiles), as a Mendix deployment does; else the default declared in
+Ruby or, for private defaults kept out of the public Ruby, the value in the local
+`.mxrb/mendix` sidecar. Without a value the expression fails naming the variable to set.
 
 All 95 cases ran on the official Runtime through `script/oql_native_oracle` and match
 the Ruby interpreter. [Evidence](../evidence/expression-functions-2026-10-09.json).

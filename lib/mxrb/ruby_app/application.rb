@@ -128,6 +128,7 @@ module Mxrb
           scheduler_lease_ttl: environment.fetch('MXRB_SCHEDULER_LEASE_TTL', '300'),
           runtime_records: Registry.all(:record),
           administrator_password: environment['MXRB_ADMIN_PASSWORD'],
+          environment:,
           service_dispatch: lambda { |name, arguments, context|
             deserialize(call_service(name, arguments, context:), context:)
           }
