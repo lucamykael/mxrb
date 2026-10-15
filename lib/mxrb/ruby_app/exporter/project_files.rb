@@ -104,7 +104,7 @@ module Mxrb
         def verified_adapters_source
           directory = File.dirname(@mpr_path)
           known = [KnownJavaActions, KnownOqlActions, KnownOqlModuleActions, KnownCommunityCommonsActions,
-                   KnownEncryptionActions, KnownStartupActions]
+                   KnownEncryptionActions, KnownStartupActions, KnownMxModelReflectionActions]
           registrations = known.map { _1.registrations(directory) }.reject(&:empty?)
           <<~RUBY
             # frozen_string_literal: true

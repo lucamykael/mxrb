@@ -207,7 +207,13 @@ verschlüsseln `EncryptString` und `DecryptString` (Releases 8.0.2 und 10.0.2)
 `{AES3}` mit AES/GCM und entschlüsseln auch das ältere `{AES}` (AES/CBC),
 austauschbar mit dem Java-Code; `{AES2}` scheitert wie auf einer frisch gestarteten
 11.12.1-Runtime, der die Cipher `AES/GCM/PKCS5PADDING` fehlt. Die PGP-Actions haben
-keinen Adapter.
+keinen Adapter. Beim Start folgen `UnitTesting.IsEnabled`, `Initialize`,
+`IsInitialized` und `RegisterModelUpdateSubscriber` (10.0.4) der Konstante
+`UnitTesting.Enabled`, und `OIDC.DeleteExpiredAuthAttempts` (3.3.1) löscht abgelaufene
+Versuche. `MxModelReflection.SyncObjects` (6.2.0 und 8.0.2) portiert den Builder des
+Moduls auf das Metamodell der Anwendung, das wiedergibt, was die 11.12.1-Runtime meldet
+(`spec/fixtures/native_metamodel`); das System-Modul stammt aus dieser Runtime, auch bei
+Projekten anderer Versionen.
 
 Ein Adapter, der den aufrufenden Microflow braucht, verwendet `with_context: true`
 und erhält `context:` mit Store, Log, anderen Microflows (auch als anderer

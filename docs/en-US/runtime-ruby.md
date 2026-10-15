@@ -198,7 +198,14 @@ the differences between them: `Base64Encode`, `EndTransaction`,
 `EncryptString` and `DecryptString` (releases 8.0.2 and 10.0.2) encrypt `{AES3}`
 with AES/GCM and also decrypt legacy `{AES}` (AES/CBC), interchangeably with the
 Java code; `{AES2}` fails as on a freshly started 11.12.1 Runtime, which lacks the
-`AES/GCM/PKCS5PADDING` cipher. The PGP actions have no adapter.
+`AES/GCM/PKCS5PADDING` cipher. The PGP actions have no adapter. At startup,
+`UnitTesting.IsEnabled`, `Initialize`, `IsInitialized` and
+`RegisterModelUpdateSubscriber` (10.0.4) follow the `UnitTesting.Enabled` constant,
+and `OIDC.DeleteExpiredAuthAttempts` (3.3.1) deletes expired attempts.
+`MxModelReflection.SyncObjects` (6.2.0 and 8.0.2) ports the module's builder over the
+application's metamodel, which reproduces what the 11.12.1 Runtime reports
+(`spec/fixtures/native_metamodel`); the System module comes from that Runtime, also
+for projects of other versions.
 
 An adapter that needs the calling microflow uses `with_context: true` and
 receives `context:`, with the store, the log, other microflows (also as another

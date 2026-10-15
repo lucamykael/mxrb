@@ -1,0 +1,6693 @@
+{
+  "objects": [
+    {
+      "name": "Other.Thing",
+      "module": "Other",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Label",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.AutoCommitEntry",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "SessionId",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ObjectId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.BackgroundJob",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "JobId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Result",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Successful",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.CdcSnapshotStore",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "entity",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "topic",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.ChangeHash",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ObjectId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Attribute",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Hash",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.ConsumedODataConfiguration",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ServiceUrl",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ProxyConfiguration",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.ProxyConfiguration",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "UseAppSettings",
+              "caption": "UseAppSettings"
+            },
+            {
+              "id": "Override",
+              "caption": "Override"
+            },
+            {
+              "id": "NoProxy",
+              "caption": "NoProxy"
+            }
+          ]
+        },
+        {
+          "name": "ProxyHost",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ProxyPort",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ProxyUsername",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ProxyPassword",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Error",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [
+        "System.SoapFault"
+      ],
+      "primitives": [
+        {
+          "name": "ErrorType",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Message",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Stacktrace",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.FileDocument",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [
+        "System.Image",
+        "System.PrivateFileDocument",
+        "System.SynchronizationErrorFile",
+        "System.Thumbnail",
+        "Views.Document"
+      ],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.HttpHeader",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Key",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Value",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.HttpMessage",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [
+        "System.HttpRequest",
+        "System.HttpResponse"
+      ],
+      "primitives": [
+        {
+          "name": "HttpVersion",
+          "type": "String",
+          "length": 10,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Content",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.HttpRequest",
+      "module": "System",
+      "persistable": false,
+      "supers": [
+        "System.HttpMessage"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "HttpVersion",
+          "type": "String",
+          "length": 10,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Content",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Uri",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.HttpResponse",
+      "module": "System",
+      "persistable": false,
+      "supers": [
+        "System.HttpMessage"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "HttpVersion",
+          "type": "String",
+          "length": 10,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Content",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StatusCode",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ReasonPhrase",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Image",
+      "module": "System",
+      "persistable": true,
+      "supers": [
+        "System.FileDocument"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "PublicThumbnailPath",
+          "type": "String",
+          "length": 500,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EnableCaching",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Language",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Code",
+          "type": "String",
+          "length": 20,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.ODataResponse",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Count",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.OfflineCreatedGuids",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Guid",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.OfflineSynchronizationHistory",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "SyncId",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Paging",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "PageNumber",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsSortable",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "SortAttribute",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "SortAscending",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasMoreData",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.PrivateFileDocument",
+      "module": "System",
+      "persistable": true,
+      "supers": [
+        "System.FileDocument"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.ProcessedQueueTask",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Sequence",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Status",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.QueueTaskStatus",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Idle",
+              "caption": "Idle"
+            },
+            {
+              "id": "Running",
+              "caption": "Running"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            },
+            {
+              "id": "Retrying",
+              "caption": "Retrying"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Incompatible",
+              "caption": "Incompatible"
+            }
+          ]
+        },
+        {
+          "name": "QueueId",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "QueueName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ContextType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.ContextType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "System",
+              "caption": "System"
+            },
+            {
+              "id": "User",
+              "caption": "User"
+            },
+            {
+              "id": "Anonymous",
+              "caption": "Anonymous"
+            },
+            {
+              "id": "ScheduledEvent",
+              "caption": "ScheduledEvent"
+            }
+          ]
+        },
+        {
+          "name": "ContextData",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "MicroflowName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "UserActionName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Arguments",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "XASId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ThreadId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Created",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartAt",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Started",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Finished",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Duration",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Retried",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ErrorMessage",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ScheduledEventName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.QueuedTask",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Sequence",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Status",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.QueueTaskStatus",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Idle",
+              "caption": "Idle"
+            },
+            {
+              "id": "Running",
+              "caption": "Running"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            },
+            {
+              "id": "Retrying",
+              "caption": "Retrying"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Incompatible",
+              "caption": "Incompatible"
+            }
+          ]
+        },
+        {
+          "name": "QueueId",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "QueueName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ContextType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.ContextType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "System",
+              "caption": "System"
+            },
+            {
+              "id": "User",
+              "caption": "User"
+            },
+            {
+              "id": "Anonymous",
+              "caption": "Anonymous"
+            },
+            {
+              "id": "ScheduledEvent",
+              "caption": "ScheduledEvent"
+            }
+          ]
+        },
+        {
+          "name": "ContextData",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "MicroflowName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "UserActionName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Arguments",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "XASId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ThreadId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Created",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartAt",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Started",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Retried",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Retry",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ScheduledEventName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.ScheduledEventInformation",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Status",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.EventStatus",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Running",
+              "caption": "Running"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Error",
+              "caption": "Error"
+            },
+            {
+              "id": "Stopped",
+              "caption": "Stopped"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System.Session",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "SessionId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "CSRFToken",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LastActive",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LongLived",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ReadOnlyHashKey",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LastActionExecution",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.SoapFault",
+      "module": "System",
+      "persistable": false,
+      "supers": [
+        "System.Error"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ErrorType",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Message",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Stacktrace",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Code",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Node",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Role",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Detail",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.SynchronizationError",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ObjectId",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ObjectType",
+          "type": "String",
+          "length": 1000,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ObjectContent",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.SynchronizationErrorFile",
+      "module": "System",
+      "persistable": true,
+      "supers": [
+        "System.FileDocument"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.TaskQueueToken",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "QueueName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "XASId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ValidUntil",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Thumbnail",
+      "module": "System",
+      "persistable": true,
+      "supers": [
+        "System.FileDocument"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.TimeZone",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Code",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "RawOffset",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.TokenInformation",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Token",
+          "type": "HashString",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "HashString",
+            "dsl": "HashString",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ExpiryDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "UserAgent",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.UnreferencedFile",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileKey",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.UnreferencedFileState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "New",
+              "caption": ""
+            },
+            {
+              "id": "Obsolete",
+              "caption": ""
+            },
+            {
+              "id": "Deleted",
+              "caption": ""
+            }
+          ]
+        },
+        {
+          "name": "TransactionId",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.User",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [
+        "Views.Account"
+      ],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Password",
+          "type": "HashString",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "HashString",
+            "dsl": "HashString",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LastLogin",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Blocked",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "BlockedSince",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Active",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "FailedLogins",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "WebServiceUser",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsAnonymous",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.UserReportInfo",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "UserType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.UserType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Internal",
+              "caption": "Internal"
+            },
+            {
+              "id": "External",
+              "caption": "External"
+            }
+          ]
+        },
+        {
+          "name": "Hash",
+          "type": "String",
+          "length": 64,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.UserRole",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 1000,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.Workflow",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DueDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "CanBeRestarted",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "CanBeContinued",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "CanApplyJumpTo",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Incompatible",
+              "caption": "Incompatible"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "PreviousState",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Incompatible",
+              "caption": "Incompatible"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "ObjectId",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ProcessingState",
+          "type": "String",
+          "length": 30,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowActivity",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Caption",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DetailsJson",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowActivityState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Started",
+              "caption": ""
+            },
+            {
+              "id": "Suspended",
+              "caption": ""
+            },
+            {
+              "id": "Finished",
+              "caption": ""
+            },
+            {
+              "id": "Replaced",
+              "caption": ""
+            },
+            {
+              "id": "Aborted",
+              "caption": ""
+            },
+            {
+              "id": "Failed",
+              "caption": ""
+            }
+          ]
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActionTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityHash",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsDerivedActivity",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "OutcomeModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowActivityDetails",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ActivityId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityCaption",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowActivityType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Start",
+              "caption": "Start"
+            },
+            {
+              "id": "End",
+              "caption": "End"
+            },
+            {
+              "id": "ExclusiveSplit",
+              "caption": "Decision"
+            },
+            {
+              "id": "ParallelSplit",
+              "caption": "Parallel Split"
+            },
+            {
+              "id": "ParallelSplitBranchStopper",
+              "caption": "End of Parallel Split Branch"
+            },
+            {
+              "id": "ParallelSplitMerge",
+              "caption": "Merge of Parallel Split"
+            },
+            {
+              "id": "UserTask",
+              "caption": "User Task"
+            },
+            {
+              "id": "CallMicroflow",
+              "caption": "Call Microflow"
+            },
+            {
+              "id": "CallWorkflow",
+              "caption": "Call Workflow"
+            },
+            {
+              "id": "JumpTo",
+              "caption": "Jump"
+            },
+            {
+              "id": "MultiInputUserTask",
+              "caption": "Multi-User Task"
+            },
+            {
+              "id": "Notification",
+              "caption": "Notification"
+            },
+            {
+              "id": "WaitForNotification",
+              "caption": "Wait for Notification"
+            },
+            {
+              "id": "WaitForTimer",
+              "caption": "Timer"
+            },
+            {
+              "id": "EndOfBoundaryEventPath",
+              "caption": "End of Boundary Event Path"
+            },
+            {
+              "id": "NonInterruptingTimerEvent",
+              "caption": "Non-Interrupting Timer Event"
+            },
+            {
+              "id": "InterruptingTimerEvent",
+              "caption": "Interrupting Timer Event"
+            },
+            {
+              "id": "NonInterruptingNotificationEventSubProcessStart",
+              "caption": "Non-Interrupting Notification Event Sub-Process Start"
+            },
+            {
+              "id": "AIAgentTask",
+              "caption": "AI Agent Task"
+            },
+            {
+              "id": "InterruptingNotificationEventSubProcessStart",
+              "caption": "Interrupting Notification Event Sub-Process Start"
+            },
+            {
+              "id": "NonInterruptingNotificationEvent",
+              "caption": "Non-Interrupting Notification Event"
+            },
+            {
+              "id": "InterruptingNotificationEvent",
+              "caption": "Interrupting Notification Event"
+            }
+          ]
+        },
+        {
+          "name": "ExistsInCurrentVersion",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowActivityRecord",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "SubProcessKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "PreviousActivityKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ActivityType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowActivityType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Start",
+              "caption": "Start"
+            },
+            {
+              "id": "End",
+              "caption": "End"
+            },
+            {
+              "id": "ExclusiveSplit",
+              "caption": "Decision"
+            },
+            {
+              "id": "ParallelSplit",
+              "caption": "Parallel Split"
+            },
+            {
+              "id": "ParallelSplitBranchStopper",
+              "caption": "End of Parallel Split Branch"
+            },
+            {
+              "id": "ParallelSplitMerge",
+              "caption": "Merge of Parallel Split"
+            },
+            {
+              "id": "UserTask",
+              "caption": "User Task"
+            },
+            {
+              "id": "CallMicroflow",
+              "caption": "Call Microflow"
+            },
+            {
+              "id": "CallWorkflow",
+              "caption": "Call Workflow"
+            },
+            {
+              "id": "JumpTo",
+              "caption": "Jump"
+            },
+            {
+              "id": "MultiInputUserTask",
+              "caption": "Multi-User Task"
+            },
+            {
+              "id": "Notification",
+              "caption": "Notification"
+            },
+            {
+              "id": "WaitForNotification",
+              "caption": "Wait for Notification"
+            },
+            {
+              "id": "WaitForTimer",
+              "caption": "Timer"
+            },
+            {
+              "id": "EndOfBoundaryEventPath",
+              "caption": "End of Boundary Event Path"
+            },
+            {
+              "id": "NonInterruptingTimerEvent",
+              "caption": "Non-Interrupting Timer Event"
+            },
+            {
+              "id": "InterruptingTimerEvent",
+              "caption": "Interrupting Timer Event"
+            },
+            {
+              "id": "NonInterruptingNotificationEventSubProcessStart",
+              "caption": "Non-Interrupting Notification Event Sub-Process Start"
+            },
+            {
+              "id": "AIAgentTask",
+              "caption": "AI Agent Task"
+            },
+            {
+              "id": "InterruptingNotificationEventSubProcessStart",
+              "caption": "Interrupting Notification Event Sub-Process Start"
+            },
+            {
+              "id": "NonInterruptingNotificationEvent",
+              "caption": "Non-Interrupting Notification Event"
+            },
+            {
+              "id": "InterruptingNotificationEvent",
+              "caption": "Interrupting Notification Event"
+            }
+          ]
+        },
+        {
+          "name": "Caption",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowActivityExecutionState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Created",
+              "caption": "Created"
+            },
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "MicroflowName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "TaskName",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "TaskDescription",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "TaskDueDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "TaskCompletionType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowUserTaskCompletionType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Single",
+              "caption": "Single"
+            },
+            {
+              "id": "Veto",
+              "caption": "Veto"
+            },
+            {
+              "id": "Consensus",
+              "caption": "Consensus"
+            },
+            {
+              "id": "Majority",
+              "caption": "Majority"
+            },
+            {
+              "id": "Threshold",
+              "caption": "Threshold"
+            },
+            {
+              "id": "Microflow",
+              "caption": "Custom"
+            }
+          ]
+        },
+        {
+          "name": "TaskRequiredUsers",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "TaskKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowActivityUserTaskOutcome",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Time",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowCurrentActivity",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Action",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowCurrentActivityAction",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "DoNothing",
+              "caption": "Do Nothing"
+            },
+            {
+              "id": "JumpTo",
+              "caption": "Jump To"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowDefinition",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Title",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsObsolete",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsLocked",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowEndedUserTask",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DueDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowUserTaskState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Created",
+              "caption": "Created"
+            },
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "CompletionType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowUserTaskCompletionType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Single",
+              "caption": "Single"
+            },
+            {
+              "id": "Veto",
+              "caption": "Veto"
+            },
+            {
+              "id": "Consensus",
+              "caption": "Consensus"
+            },
+            {
+              "id": "Majority",
+              "caption": "Majority"
+            },
+            {
+              "id": "Threshold",
+              "caption": "Threshold"
+            },
+            {
+              "id": "Microflow",
+              "caption": "Custom"
+            }
+          ]
+        },
+        {
+          "name": "UserTaskKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Error",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowEndedUserTaskOutcome",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Time",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowEvent",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "EventTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EventType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowEventType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "WorkflowCompleted",
+              "caption": "Workflow Completed"
+            },
+            {
+              "id": "WorkflowInitiated",
+              "caption": "Workflow Initiated"
+            },
+            {
+              "id": "WorkflowRestarted",
+              "caption": "Workflow Restarted"
+            },
+            {
+              "id": "WorkflowFailed",
+              "caption": "Workflow Failed"
+            },
+            {
+              "id": "WorkflowAborted",
+              "caption": "Workflow Aborted"
+            },
+            {
+              "id": "WorkflowPaused",
+              "caption": "Workflow Paused"
+            },
+            {
+              "id": "WorkflowUnpaused",
+              "caption": "Workflow Unpaused"
+            },
+            {
+              "id": "WorkflowRetried",
+              "caption": "Workflow Retried"
+            },
+            {
+              "id": "WorkflowUpdated",
+              "caption": "Workflow Updated"
+            },
+            {
+              "id": "WorkflowUpgraded",
+              "caption": "Workflow Upgraded"
+            },
+            {
+              "id": "WorkflowConflicted",
+              "caption": "Workflow Conflicted"
+            },
+            {
+              "id": "WorkflowResolved",
+              "caption": "Workflow Resolved"
+            },
+            {
+              "id": "WorkflowJumpToOptionApplied",
+              "caption": "Workflow Jump-To Option Applied"
+            },
+            {
+              "id": "StartEventExecuted",
+              "caption": "Start Event Executed"
+            },
+            {
+              "id": "EndEventExecuted",
+              "caption": "End Event Executed"
+            },
+            {
+              "id": "DecisionExecuted",
+              "caption": "Decision Executed"
+            },
+            {
+              "id": "JumpExecuted",
+              "caption": "Jump Executed"
+            },
+            {
+              "id": "ParallelSplitExecuted",
+              "caption": "Parallel Split Executed"
+            },
+            {
+              "id": "ParallelMergeExecuted",
+              "caption": "Parallel Merge Executed"
+            },
+            {
+              "id": "CallWorkflowStarted",
+              "caption": "Call Workflow Started"
+            },
+            {
+              "id": "CallWorkflowEnded",
+              "caption": "Call Workflow Ended"
+            },
+            {
+              "id": "CallMicroflowStarted",
+              "caption": "Call Microflow Started"
+            },
+            {
+              "id": "CallMicroflowEnded",
+              "caption": "Call Microflow Ended"
+            },
+            {
+              "id": "AIAgentTaskStarted",
+              "caption": "AI Agent Task Started"
+            },
+            {
+              "id": "AIAgentTaskEnded",
+              "caption": "AI Agent Task Ended"
+            },
+            {
+              "id": "NotificationStarted",
+              "caption": "Notification Started"
+            },
+            {
+              "id": "NotificationEnded",
+              "caption": "Notification Ended"
+            },
+            {
+              "id": "WaitForNotificationStarted",
+              "caption": "Wait for Notification Started"
+            },
+            {
+              "id": "WaitForNotificationEnded",
+              "caption": "Wait for Notification Ended"
+            },
+            {
+              "id": "WaitForTimerStarted",
+              "caption": "Timer Started"
+            },
+            {
+              "id": "WaitForTimerEnded",
+              "caption": "Timer Ended"
+            },
+            {
+              "id": "UserTaskStarted",
+              "caption": "User Task Started"
+            },
+            {
+              "id": "MultiUserTaskOutcomeSelected",
+              "caption": "Multi-User Task Outcome Selected"
+            },
+            {
+              "id": "UserTaskEnded",
+              "caption": "User Task Ended"
+            },
+            {
+              "id": "NonInterruptingTimerEventExecuted",
+              "caption": "Non-Interrupting Timer Event Executed"
+            },
+            {
+              "id": "InterruptingTimerEventExecuted",
+              "caption": "Interrupting Timer Event Executed"
+            },
+            {
+              "id": "NonInterruptingNotificationEventSubProcessStartExecuted",
+              "caption": "Non-Interrupting Notification Event Sub-Process Start Executed"
+            },
+            {
+              "id": "InterruptingNotificationEventSubProcessStartExecuted",
+              "caption": "Interrupting Notification Event Sub-Process Start Executed"
+            },
+            {
+              "id": "NonInterruptingNotificationEventExecuted",
+              "caption": "Non-Interrupting Notification Event Executed"
+            },
+            {
+              "id": "InterruptingNotificationEventExecuted",
+              "caption": "Interrupting Notification Event Executed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowGroup",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowJumpToDetails",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Error",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowRecord",
+      "module": "System",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "WorkflowKey",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Incompatible",
+              "caption": "Incompatible"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DueDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowSubProcess",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Caption",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowSubProcessState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            }
+          ]
+        },
+        {
+          "name": "Reason",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowSubProcessDefinition",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Caption",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsObsolete",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowUserTask",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Description",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "StartTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DueDate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "EndTime",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "State",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowUserTaskState",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Created",
+              "caption": "Created"
+            },
+            {
+              "id": "InProgress",
+              "caption": "In Progress"
+            },
+            {
+              "id": "Completed",
+              "caption": "Completed"
+            },
+            {
+              "id": "Paused",
+              "caption": "Paused"
+            },
+            {
+              "id": "Aborted",
+              "caption": "Aborted"
+            },
+            {
+              "id": "Failed",
+              "caption": "Failed"
+            }
+          ]
+        },
+        {
+          "name": "CompletionType",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#System.WorkflowUserTaskCompletionType",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Single",
+              "caption": "Single"
+            },
+            {
+              "id": "Veto",
+              "caption": "Veto"
+            },
+            {
+              "id": "Consensus",
+              "caption": "Consensus"
+            },
+            {
+              "id": "Majority",
+              "caption": "Majority"
+            },
+            {
+              "id": "Threshold",
+              "caption": "Threshold"
+            },
+            {
+              "id": "Microflow",
+              "caption": "Custom"
+            }
+          ]
+        },
+        {
+          "name": "ProcessingState",
+          "type": "String",
+          "length": 30,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Error",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowUserTaskDefinition",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsObsolete",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ModelGUID",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowUserTaskOutcome",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Outcome",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Time",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.WorkflowVersion",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "VersionHash",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "ModelJSON",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "System.XASInstance",
+      "module": "System",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "XASId",
+          "type": "String",
+          "length": 50,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LastUpdate",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "AllowedNumberOfConcurrentUsers",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "PartnerName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "CustomerName",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Account",
+      "module": "Views",
+      "persistable": true,
+      "supers": [
+        "System.User"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Password",
+          "type": "HashString",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "HashString",
+            "dsl": "HashString",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "LastLogin",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Blocked",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "BlockedSince",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Active",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "FailedLogins",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "WebServiceUser",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "IsAnonymous",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Nick",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Audited",
+      "module": "Views",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Note",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Base",
+      "module": "Views",
+      "persistable": true,
+      "supers": [],
+      "subs": [
+        "Views.Item",
+        "Views.Special"
+      ],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Code",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Document",
+      "module": "Views",
+      "persistable": true,
+      "supers": [
+        "System.FileDocument"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "FileID",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 400,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "DeleteAfterDownload",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Contents",
+          "type": "Binary",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Binary",
+            "dsl": "Binary",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "HasContents",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Size",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__FileName__",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "__UUID__",
+          "type": "String",
+          "length": 36,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "createdDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "changedDate",
+          "type": "DateTime",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Draft",
+      "module": "Views",
+      "persistable": false,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Note",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Item",
+      "module": "Views",
+      "persistable": true,
+      "supers": [
+        "Views.Base"
+      ],
+      "subs": [
+        "Views.Special"
+      ],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Code",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Price",
+          "type": "Decimal",
+          "length": 8,
+          "virtual": false,
+          "datatype": {
+            "type": "Decimal",
+            "dsl": "Decimal",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Count",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Big",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "When",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Flag",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Free",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Kind",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#Views.Kind",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Alpha",
+              "caption": "First kind"
+            },
+            {
+              "id": "Beta",
+              "caption": "Second kind"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Views.Special",
+      "module": "Views",
+      "persistable": true,
+      "supers": [
+        "Views.Base",
+        "Views.Item"
+      ],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Name",
+          "type": "String",
+          "length": 100,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Code",
+          "type": "AutoNumber",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "AutoNumber",
+            "dsl": "AutoNumber",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Price",
+          "type": "Decimal",
+          "length": 8,
+          "virtual": false,
+          "datatype": {
+            "type": "Decimal",
+            "dsl": "Decimal",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Count",
+          "type": "Integer",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Big",
+          "type": "Long",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "When",
+          "type": "DateTime",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Flag",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Free",
+          "type": "String",
+          "length": 0,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Kind",
+          "type": "Enum",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#Views.Kind",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          },
+          "enum": [
+            {
+              "id": "Alpha",
+              "caption": "First kind"
+            },
+            {
+              "id": "Beta",
+              "caption": "Second kind"
+            }
+          ]
+        },
+        {
+          "name": "Extra",
+          "type": "Boolean",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "Views.Tag",
+      "module": "Views",
+      "persistable": true,
+      "supers": [],
+      "subs": [],
+      "primitives": [
+        {
+          "name": "Label",
+          "type": "String",
+          "length": 200,
+          "virtual": false,
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ]
+    }
+  ],
+  "associations": [
+    {
+      "name": "System.BackgroundJob_Session",
+      "parent": "System.BackgroundJob",
+      "child": "System.Session",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.BackgroundJob_XASInstance",
+      "parent": "System.BackgroundJob",
+      "child": "System.XASInstance",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.ChangeHash_Session",
+      "parent": "System.ChangeHash",
+      "child": "System.Session",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.HttpHeader_ConsumedODataConfiguration",
+      "parent": "System.HttpHeader",
+      "child": "System.ConsumedODataConfiguration",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.HttpHeaders",
+      "parent": "System.HttpHeader",
+      "child": "System.HttpMessage",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.ScheduledEventInformation_XASInstance",
+      "parent": "System.ScheduledEventInformation",
+      "child": "System.XASInstance",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.Session_User",
+      "parent": "System.Session",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.SynchronizationErrorFile_SynchronizationError",
+      "parent": "System.SynchronizationErrorFile",
+      "child": "System.SynchronizationError",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.Thumbnail_Image",
+      "parent": "System.Thumbnail",
+      "child": "System.Image",
+      "type": "REFERENCE",
+      "owner": "BOTH"
+    },
+    {
+      "name": "System.TokenInformation_User",
+      "parent": "System.TokenInformation",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.UnreferencedFile_XASInstance",
+      "parent": "System.UnreferencedFile",
+      "child": "System.XASInstance",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.UserReportInfo_User",
+      "parent": "System.UserReportInfo",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.UserRoles",
+      "parent": "System.User",
+      "child": "System.UserRole",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.User_Language",
+      "parent": "System.User",
+      "child": "System.Language",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.User_TimeZone",
+      "parent": "System.User",
+      "child": "System.TimeZone",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_Actor",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_SubWorkflow",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowRecord",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_TaskAssignedUsers",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_TaskTargetedGroups",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowGroup",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_TaskTargetedUsers",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_UserTask",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowUserTask",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_WorkflowSubProcess",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowSubProcess",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_WorkflowSubProcessDefinition",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowSubProcessDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityRecord_WorkflowUserTaskDefinition",
+      "parent": "System.WorkflowActivityRecord",
+      "child": "System.WorkflowUserTaskDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityUserTaskOutcome_User",
+      "parent": "System.WorkflowActivityUserTaskOutcome",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivityUserTaskOutcome_WorkflowActivity",
+      "parent": "System.WorkflowActivityUserTaskOutcome",
+      "child": "System.WorkflowActivity",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_Actor",
+      "parent": "System.WorkflowActivity",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_PreviousActivity",
+      "parent": "System.WorkflowActivity",
+      "child": "System.WorkflowActivity",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_SubWorkflow",
+      "parent": "System.WorkflowActivity",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_Workflow",
+      "parent": "System.WorkflowActivity",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_WorkflowSubProcess",
+      "parent": "System.WorkflowActivity",
+      "child": "System.WorkflowSubProcess",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_WorkflowUserTask",
+      "parent": "System.WorkflowActivity",
+      "child": "System.WorkflowUserTask",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowActivity_WorkflowVersion",
+      "parent": "System.WorkflowActivity",
+      "child": "System.WorkflowVersion",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowCurrentActivity_ActivityDetails",
+      "parent": "System.WorkflowCurrentActivity",
+      "child": "System.WorkflowActivityDetails",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowCurrentActivity_ApplicableTargets",
+      "parent": "System.WorkflowCurrentActivity",
+      "child": "System.WorkflowActivityDetails",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowCurrentActivity_JumpToTarget",
+      "parent": "System.WorkflowCurrentActivity",
+      "child": "System.WorkflowActivityDetails",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowCurrentActivity_WorkflowSubProcess",
+      "parent": "System.WorkflowCurrentActivity",
+      "child": "System.WorkflowSubProcess",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowDefinition_CurrentWorkflowVersion",
+      "parent": "System.WorkflowDefinition",
+      "child": "System.WorkflowVersion",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTaskOutcome_User",
+      "parent": "System.WorkflowEndedUserTaskOutcome",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTaskOutcome_WorkflowEndedUserTask",
+      "parent": "System.WorkflowEndedUserTaskOutcome",
+      "child": "System.WorkflowEndedUserTask",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_Assignees",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_TargetGroups",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.WorkflowGroup",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_TargetUsers",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_Workflow",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_WorkflowSubProcess",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.WorkflowSubProcess",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEndedUserTask_WorkflowUserTaskDefinition",
+      "parent": "System.WorkflowEndedUserTask",
+      "child": "System.WorkflowUserTaskDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowEvent_Initiator",
+      "parent": "System.WorkflowEvent",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowGroup_User",
+      "parent": "System.WorkflowGroup",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowJumpToDetails_CurrentActivities",
+      "parent": "System.WorkflowJumpToDetails",
+      "child": "System.WorkflowCurrentActivity",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowJumpToDetails_Workflow",
+      "parent": "System.WorkflowJumpToDetails",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowRecord_Owner",
+      "parent": "System.WorkflowRecord",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowRecord_Workflow",
+      "parent": "System.WorkflowRecord",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowRecord_WorkflowDefinition",
+      "parent": "System.WorkflowRecord",
+      "child": "System.WorkflowDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowSubProcessDefinition_WorkflowDefinition",
+      "parent": "System.WorkflowSubProcessDefinition",
+      "child": "System.WorkflowDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowSubProcess_Workflow",
+      "parent": "System.WorkflowSubProcess",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowSubProcess_WorkflowSubProcessDefinition",
+      "parent": "System.WorkflowSubProcess",
+      "child": "System.WorkflowSubProcessDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTaskDefinition_WorkflowDefinition",
+      "parent": "System.WorkflowUserTaskDefinition",
+      "child": "System.WorkflowDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTaskDefinition_WorkflowSubProcessDefinition",
+      "parent": "System.WorkflowUserTaskDefinition",
+      "child": "System.WorkflowSubProcessDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTaskOutcome_User",
+      "parent": "System.WorkflowUserTaskOutcome",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTaskOutcome_WorkflowUserTask",
+      "parent": "System.WorkflowUserTaskOutcome",
+      "child": "System.WorkflowUserTask",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_Assignees",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_TargetGroups",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.WorkflowGroup",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_TargetUsers",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.User",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_Workflow",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_WorkflowSubProcess",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.WorkflowSubProcess",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowUserTask_WorkflowUserTaskDefinition",
+      "parent": "System.WorkflowUserTask",
+      "child": "System.WorkflowUserTaskDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowVersion_PreviousVersion",
+      "parent": "System.WorkflowVersion",
+      "child": "System.WorkflowVersion",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowVersion_WorkflowDefinition",
+      "parent": "System.WorkflowVersion",
+      "child": "System.WorkflowDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.WorkflowVersion_WorkflowUserTaskDefinition",
+      "parent": "System.WorkflowVersion",
+      "child": "System.WorkflowUserTaskDefinition",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.Workflow_CurrentActivity",
+      "parent": "System.Workflow",
+      "child": "System.WorkflowActivity",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.Workflow_ParentWorkflow",
+      "parent": "System.Workflow",
+      "child": "System.Workflow",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.Workflow_WorkflowDefinition",
+      "parent": "System.Workflow",
+      "child": "System.WorkflowDefinition",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.changedBy",
+      "parent": "System.FileDocument",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.changedBy",
+      "parent": "System.User",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.changedBy",
+      "parent": "Views.Audited",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.grantableRoles",
+      "parent": "System.UserRole",
+      "child": "System.UserRole",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.FileDocument",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.ProcessedQueueTask",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.QueuedTask",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.SynchronizationError",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.User",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "System.Workflow",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "System.owner",
+      "parent": "Views.Audited",
+      "child": "System.User",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "Views.Item_Base",
+      "parent": "Views.Item",
+      "child": "Views.Base",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "Views.Item_Thing",
+      "parent": "Views.Item",
+      "child": "Other.Thing",
+      "type": "REFERENCE",
+      "owner": "DEFAULT"
+    },
+    {
+      "name": "Views.Tag_Item",
+      "parent": "Views.Tag",
+      "child": "Views.Item",
+      "type": "REFERENCESET",
+      "owner": "DEFAULT"
+    }
+  ],
+  "microflows": [
+    {
+      "name": "System.ShowHomePage",
+      "parameters": [],
+      "return": {
+        "type": "Nothing",
+        "dsl": "Nothing",
+        "object": null,
+        "list": false,
+        "mendix_object": false
+      }
+    },
+    {
+      "name": "Views.Act",
+      "parameters": [
+        {
+          "name": "Amount",
+          "datatype": {
+            "type": "Decimal",
+            "dsl": "Decimal",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Choice",
+          "datatype": {
+            "type": "Enumeration",
+            "dsl": "#Views.Kind",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Flag",
+          "datatype": {
+            "type": "Boolean",
+            "dsl": "Boolean",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Item",
+          "datatype": {
+            "type": "Object",
+            "dsl": "Views.Item",
+            "object": "Views.Item",
+            "list": false,
+            "mendix_object": true
+          }
+        },
+        {
+          "name": "Items",
+          "datatype": {
+            "type": "Object",
+            "dsl": "[Views.Item]",
+            "object": "Views.Item",
+            "list": true,
+            "mendix_object": true
+          }
+        },
+        {
+          "name": "Number",
+          "datatype": {
+            "type": "Long",
+            "dsl": "Long",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "Text",
+          "datatype": {
+            "type": "String",
+            "dsl": "String",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        },
+        {
+          "name": "When",
+          "datatype": {
+            "type": "Datetime",
+            "dsl": "Datetime",
+            "object": null,
+            "list": false,
+            "mendix_object": false
+          }
+        }
+      ],
+      "return": {
+        "type": "Object",
+        "dsl": "[Views.Tag]",
+        "object": "Views.Tag",
+        "list": true,
+        "mendix_object": true
+      }
+    },
+    {
+      "name": "Views.Choose",
+      "parameters": [],
+      "return": {
+        "type": "Enumeration",
+        "dsl": "#Views.Kind",
+        "object": null,
+        "list": false,
+        "mendix_object": false
+      }
+    },
+    {
+      "name": "Views.RunAll",
+      "parameters": [],
+      "return": {
+        "type": "Boolean",
+        "dsl": "Boolean",
+        "object": null,
+        "list": false,
+        "mendix_object": false
+      }
+    }
+  ],
+  "languages": [
+    "en_US"
+  ]
+}
