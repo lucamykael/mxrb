@@ -45,7 +45,8 @@ module Mxrb
         transient_names = transient_entities || project.modules.flat_map do |mod|
           mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
         end
-        transient_defaults = transient_names.to_h { [_1, defaults.fetch(_1, {})] }
+        modeled = Native.attribute_defaults(project)
+        transient_defaults = transient_names.to_h { |name| [name, defaults.fetch(name) { modeled.fetch(name, {}) }] }
         @transient_entities = transient_defaults.keys.freeze
         @transient = Native::Store.new(defaults: transient_defaults)
         @hooks = Hash.new { |values, event| values[event] = [] }

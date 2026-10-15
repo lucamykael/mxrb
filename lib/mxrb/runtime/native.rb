@@ -28,6 +28,7 @@ require_relative 'java_action_context'
 
 module Mxrb
   module Runtime
+    # The pure-Ruby Runtime that interprets microflows straight from the model.
     module Native
       # Graph interpretation intentionally keeps semantic dispatch together.
       # rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/ClassLength, Metrics/CyclomaticComplexity
@@ -38,6 +39,25 @@ module Mxrb
       # Explicit opt-in for adapters that need the current application's store.
       StoreJavaAction = Data.define(:handler) do
         def bind(store) = ->(arguments) { handler.call(arguments, store:) }
+      end
+
+      # The value each attribute of each entity starts with, as the model declares it.
+      def self.attribute_defaults(project)
+        project.modules.flat_map do |mod|
+          mod.entities.map do |entity|
+            ["#{mod.name}.#{entity.name}", entity.attributes.to_h { [_1.name, attribute_default(_1)] }]
+          end
+        end.to_h
+      end
+
+      def self.attribute_default(attribute)
+        value = attribute.default_value.to_s
+        case attribute.type
+        when :boolean then value.casecmp?('true')
+        when :integer, :long, :autonumber then value.empty? ? nil : Integer(value)
+        when :decimal then value.empty? ? nil : DecimalValues.parse(value)
+        else value.empty? ? nil : value
+        end
       end
 
       # Explicit opt-in for adapters that act on the calling microflow's runtime:
@@ -286,6 +306,7 @@ module Mxrb
           end
           return value unless path
 
+          return nil if value.nil?
           raise NativeRuntimeError, "$#{name} is not an object" unless value.is_a?(ObjectValue)
 
           follow_path(value, path.split('/'))
@@ -623,13 +644,14 @@ module Mxrb
             operator == 'mod' ? first.remainder(second) : @expression.divide(first, second)
           end
 
-          # Mendix joins text with numbers as toString shows them, and nothing else.
+          # Mendix joins text with numbers as toString shows them and an empty value as
+          # no text (MxBuild already rejects the literal empty); nothing else joins.
           def concatenate(first, second)
-            unless [first, second].all? { _1.is_a?(String) || _1.is_a?(Numeric) }
+            unless [first, second].all? { _1.nil? || _1.is_a?(String) || _1.is_a?(Numeric) }
               raise ArgumentError, 'text can only be joined with text or numbers'
             end
 
-            [first, second].map { _1.is_a?(String) ? _1 : @expression.invoke('toString', [_1]) }.join
+            [first, second].map { _1.is_a?(String) || _1.nil? ? _1.to_s : @expression.invoke('toString', [_1]) }.join
           end
 
           def accept_word(word)
@@ -746,7 +768,7 @@ module Mxrb
                        service_dispatch: nil, constants: nil)
           @project = project
           @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
-          constants ||= Constants.new(project)
+          @constants = constants ||= Constants.new(project)
           @expression = Expression.new(decimal: @decimal, associations: lambda { |object, association|
             @store.retrieve_association(association, object)
           }, constants: ->(name) { constants.value(name) }, time_zone: lambda {
@@ -779,13 +801,7 @@ module Mxrb
           entity_names = project.modules.flat_map do |mod|
             mod.entities.map { [_1.id.to_s, "#{mod.name}.#{_1.name}"] }
           end.to_h
-          defaults = project.modules.flat_map do |mod|
-            mod.entities.map do |entity|
-              ["#{mod.name}.#{entity.name}", entity.attributes.to_h do |attribute|
-                [attribute.name, attribute_default(attribute)]
-              end]
-            end
-          end.to_h
+          defaults = Native.attribute_defaults(project)
           transient_entities = project.modules.flat_map do |mod|
             mod.entities.select { _1.persistable == false }.map { "#{mod.name}.#{_1.name}" }
           end
@@ -893,22 +909,12 @@ module Mxrb
           store.public_send(outcome, token)
         end
 
-        # $currentUser is the signed-in System.User (or a specialization such as an Account).
+        # $currentUser is the signed-in System.User (or a specialization such as an Account);
+        # $latestError is empty until an error handler catches one.
         def with_current_user(arguments)
           id = @security_context.respond_to?(:user) && @security_context.user
           user = store.find(SystemDomain::USER, id) if id.is_a?(String) && store.respond_to?(:schema)
-          arguments.merge('currentUser' => user)
-        end
-
-        def attribute_default(attribute)
-          value = attribute.default_value.to_s
-          case attribute.type
-          when :boolean then value.casecmp?('true')
-          when :integer, :long, :autonumber then value.empty? ? nil : Integer(value)
-          when :decimal then value.empty? ? nil : DecimalValues.parse(value)
-          when :string then value.empty? ? nil : value
-          else value.empty? ? nil : value
-          end
+          { 'latestError' => nil }.merge(arguments, 'currentUser' => user)
         end
 
         def register_model_lifecycle
@@ -1344,7 +1350,7 @@ module Mxrb
 
         def java_action_context
           JavaActionContext.new(interpreter: self, store: @store, log: @log, project: @project, flows: @flows.keys,
-                                security_context: @security_context, policy: @policy)
+                                security_context: @security_context, policy: @policy, constants: @constants)
         end
 
         # $latestError: a System.Error object whose members describe the caught error.
@@ -1768,8 +1774,8 @@ module Mxrb
         def render_template(template, variables)
           text = template&.dig('Text').to_s
           items(template&.dig('Parameters')).each_with_index do |parameter, index|
-            value = @expression.evaluate(parameter['Expression'], variables).to_s
-            text = text.gsub("{#{index + 1}}") { value }
+            value = @expression.evaluate(parameter['Expression'], variables)
+            text = text.gsub("{#{index + 1}}") { value.nil? ? 'null' : value.to_s }
           end
           text
         end

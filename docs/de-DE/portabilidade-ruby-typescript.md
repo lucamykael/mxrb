@@ -99,8 +99,11 @@ verlangt den ganzen Text und der Ersatztext ist wörtlich (`$1` ist keine Gruppe
 `pow` rechnet mit Doubles, `sqrt` mit 38 signifikanten Stellen, `max`/`min` behalten den
 Typ, `parseInteger` lehnt Leerzeichen und Brüche ab, und `formatDecimal` folgt Javas
 `DecimalFormat` und rundet die Hälfte auf (`'#,##0.00'`, `%`, `E0`, Präfixe). Text plus
-Zahl nutzt die Form von `toString` (`'x' + 1.0` ist `x1`); Text mit Boolean oder
-`empty` wird abgelehnt. Parameter von Meldungen und Logs bewahren `\` und `$`.
+Zahl nutzt die Form von `toString` (`'x' + 1.0` ist `x1`), ein leerer Wert wird als
+leerer Text verbunden; Text mit Boolean wird abgelehnt (das Literal `empty` lehnt
+MxBuild ab). `$latestError` existiert außerhalb einer Fehlerbehandlung leer, ein Member
+eines leeren Objekts ist leer, und ein leerer Log-Parameter erscheint als `null`
+(`spec/fixtures/native_empty_objects`). Parameter von Meldungen und Logs bewahren `\` und `$`.
 Pfade wie `$Order/M.Order_Customer/M.Customer/Name` folgen Referenzen von beiden Seiten
 und sind leer, sobald eine Referenz auf dem Weg leer ist; ein Reference Set lässt sich
 nicht durchlaufen. `''` ist nicht `empty`, und ein String-Attribut ohne Standardwert

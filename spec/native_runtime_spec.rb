@@ -850,7 +850,7 @@ RSpec.describe Mxrb::Runtime::Native do
       .to raise_error(ArgumentError, /unknown lifecycle event/)
 
     attribute = Struct.new(:type, :default_value).new(:enumeration, '')
-    expect(@interpreter.send(:attribute_default, attribute)).to be_nil
+    expect(Mxrb::Runtime::Native.attribute_default(attribute)).to be_nil
 
     no_hooks = described_class::Interpreter.allocate
     no_hooks.instance_variable_set(:@store, Object.new)

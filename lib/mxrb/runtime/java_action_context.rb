@@ -21,7 +21,7 @@ module Mxrb
       attr_reader :store, :security_context, :project
 
       def initialize(interpreter:, store:, log:, project:, flows:, security_context: nil, policy: nil, # rubocop:disable Metrics/ParameterLists
-                     environment: ENV)
+                     environment: ENV, constants: nil)
         @interpreter = interpreter
         @store = store
         @log = log
@@ -30,7 +30,11 @@ module Mxrb
         @security_context = security_context
         @policy = policy
         @environment = environment
+        @constants = constants || Constants.new(project, environment:)
       end
+
+      # The value of a constant (Core.getConfiguration().getConstantValue).
+      def constant(name) = @constants.value(name)
 
       def log(node, level, message)
         level = level.to_s

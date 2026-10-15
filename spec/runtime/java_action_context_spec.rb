@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'sqlite3'
 
 # Model shapes the context reads: native entities with a generalization, Ruby ones without.
-ContextModule = Struct.new(:name, :entities)
+ContextModule = Struct.new(:name, :entities, :constants)
 ContextEntity = Struct.new(:name, :attributes, :generalization_target)
 ContextAttribute = Struct.new(:name, :type, :raw_value_doc)
 PlainEntity = Struct.new(:name, :attributes)
@@ -125,6 +125,13 @@ RSpec.describe Mxrb::Runtime::JavaActionContext do
     expect { context.attributes('Mod.Missing') }.to raise_error(Mxrb::NativeRuntimeError, 'unknown entity Mod.Missing')
     expect { context.attributes('Mod.Upload') }
       .to raise_error(Mxrb::NativeRuntimeError, 'attributes of System.FileDocument specializations are not supported')
+  end
+
+  it 'reads constants through the interpreter resolver or the model' do
+    resolver = Struct.new(:table) { def value(name) = table.fetch(name) }.new({ 'Mod.Flag' => true })
+    with_resolver = described_class.new(interpreter:, store:, log: lines, project:, flows: [], constants: resolver)
+    expect(with_resolver.constant('Mod.Flag')).to be(true)
+    expect { context.constant('Mod.Flag') }.to raise_error(Mxrb::NativeRuntimeError, 'unknown constant @Mod.Flag')
   end
 
   it 'gives Java exceptions their class and an empty message for null' do

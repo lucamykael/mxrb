@@ -94,8 +94,11 @@ exige o texto inteiro e o texto de substituição é literal (`$1` não é grupo
 calcula em ponto flutuante duplo, `sqrt` com 38 dígitos significativos, `max`/`min`
 preservam o tipo, `parseInteger` rejeita espaços e frações, e `formatDecimal` segue o
 `DecimalFormat` Java arredondando meio para cima (`'#,##0.00'`, `%`, `E0`, prefixos).
-Texto mais número usa a forma de `toString` (`'x' + 1.0` = `x1`); texto com booleano
-ou `empty` é recusado. Parâmetros de mensagens e logs preservam `\` e `$`.
+Texto mais número usa a forma de `toString` (`'x' + 1.0` = `x1`) e um valor vazio
+entra como texto vazio; texto com booleano é recusado (o literal `empty`, o MxBuild
+recusa). `$latestError` existe vazio fora do tratador de erro, o membro de um objeto
+vazio é vazio, e um parâmetro vazio de log aparece como `null`
+(`spec/fixtures/native_empty_objects`). Parâmetros de mensagens e logs preservam `\` e `$`.
 Caminhos como `$Pedido/M.Pedido_Cliente/M.Cliente/Nome` seguem referências pelos dois
 lados e ficam vazios quando uma referência no caminho está vazia; atravessar um reference
 set falha. `''` não é `empty`, e um atributo String sem valor padrão começa `empty`

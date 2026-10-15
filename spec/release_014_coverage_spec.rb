@@ -431,8 +431,8 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       expect(expression.evaluate('-1 + 2', {})).to eq(1)
 
       attribute = Struct.new(:type, :default_value)
-      expect(interpreter.send(:attribute_default, attribute.new(:boolean, 'true'))).to be(true)
-      expect(interpreter.send(:attribute_default, attribute.new(:decimal, '1.5'))).to eq(1.5)
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:boolean, 'true'))).to be(true)
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:decimal, '1.5'))).to eq(1.5)
 
       origin = { '$Type' => 'Microflows$ActionActivity', '$ID' => 'origin' }
       target = { '$Type' => 'Microflows$BreakEvent', '$ID' => 'target' }
@@ -911,9 +911,9 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       project = Mxrb::Model::Project.open(path)
       interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
       attribute = Struct.new(:type, :default_value)
-      expect(interpreter.send(:attribute_default, attribute.new(:integer, ''))).to be_nil
-      expect(interpreter.send(:attribute_default, attribute.new(:decimal, ''))).to be_nil
-      expect(interpreter.send(:attribute_default, attribute.new(:unknown, 'x'))).to eq('x')
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:integer, ''))).to be_nil
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:decimal, ''))).to be_nil
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:unknown, 'x'))).to eq('x')
       expect(interpreter.send(
                :execute_collection, [{ '$Type' => 'Microflows$BreakEvent', '$ID' => 'break' }],
                {}, {}, label: 'nested'
@@ -1114,8 +1114,8 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
       project = Mxrb::Model::Project.open(path)
       interpreter = Mxrb::Runtime::Native::Interpreter.new(project)
       attribute = Struct.new(:type, :default_value)
-      expect(interpreter.send(:attribute_default, attribute.new(:integer, '1'))).to eq(1)
-      expect(interpreter.send(:attribute_default, attribute.new(:decimal, '1.0'))).to eq(1.0)
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:integer, '1'))).to eq(1)
+      expect(Mxrb::Runtime::Native.attribute_default(attribute.new(:decimal, '1.0'))).to eq(1.0)
       flow = Struct.new(:name, :objects, :flows).new('Nil', [], [])
       allow(interpreter).to receive(:execute_collection).and_return(nil)
       expect(interpreter.send(:execute, flow, {})).to be_nil
