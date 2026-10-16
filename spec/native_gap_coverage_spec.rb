@@ -14,9 +14,11 @@ RSpec.describe 'Native regression edge contracts' do
     flow = Mxrb::Dsl::MicroflowBuilder.new('Lists', runtime: nil, kind: :microflow, public: false)
     flow.list_operation :head, :Items, as: :First
     flow.list_operation :find, :Items, as: :Found, with: :Other, expression: '$currentObject/Active'
-    first, second = flow.to_h.fetch(:body)
+    flow.list_operation :filter, :Items, as: :Grouped, association: 'App.Item_Group', expression: '$group'
+    first, second, third = flow.to_h.fetch(:body)
     expect(first).to include(second: nil, expression: nil)
     expect(second).to include(second: 'Other', expression: '$currentObject/Active')
+    expect(third).to include(association: 'App.Item_Group', expression: '$group')
   end
 
   it 'writes association access, explicit storage, and both list-operation operands' do
@@ -41,6 +43,12 @@ RSpec.describe 'Native regression edge contracts' do
       second: nil, expression: nil
     )
     expect(minimal.fetch('NewOperation')).not_to have_key('SecondListOrObjectName')
+    by_attribute = writer.send(
+      :activity_action_doc,
+      type: :list_operation, operation: :find, variable: 'Items', output: 'Found', attribute: 'App.Item.Code',
+      expression: "'AB'"
+    )
+    expect(by_attribute.fetch('NewOperation')).to include('Attribute' => 'App.Item.Code', 'Association' => '')
 
     association = writer.send(
       :association_doc,

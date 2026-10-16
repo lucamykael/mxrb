@@ -250,6 +250,8 @@ module Mxrb
         return @transient.retrieve_association(association, start) if transient?(start.entity)
 
         if schema.assignable?(start.entity, definition.from_entity)
+          return in_memory_targets(definition, start) if in_memory_association?(start, definition.name)
+
           ids = database.execute(
             "SELECT target_id FROM #{quote(definition.table)} WHERE source_id = ? ORDER BY rowid", [start.id]
           ).map { _1['target_id'] }
@@ -258,7 +260,7 @@ module Mxrb
           ids = database.execute(
             "SELECT source_id FROM #{quote(definition.table)} WHERE target_id = ? ORDER BY rowid", [start.id]
           ).map { _1['source_id'] }
-          materialize_ids(definition.from_entity, ids)
+          materialize_ids(definition.from_entity, in_memory_sources(definition, start, ids))
         else
           []
         end
@@ -729,6 +731,33 @@ module Mxrb
             (@persisted[value.id] ||= {})[association.name] = value.members[association.name]
           end
         end
+      end
+
+      # A reference changed in memory and not committed yet is what a retrieve over
+      # the association finds, from either side, as in the Mendix Runtime.
+      def in_memory_association?(value, name)
+        return false unless value.members.key?(name)
+
+        persisted = @persisted[value.id]
+        !persisted&.key?(name) || comparable_member(value.members[name]) != comparable_member(persisted[name])
+      end
+
+      def in_memory_targets(definition, start)
+        targets = Array(start.members[definition.name]).compact
+        ids = targets.reject { _1.is_a?(Native::ObjectValue) }.map(&:to_s)
+        loaded = materialize_ids(definition.to_entity, ids).to_h { [_1.id, _1] }
+        targets.filter_map { _1.is_a?(Native::ObjectValue) ? _1 : loaded[_1.to_s] }
+      end
+
+      def in_memory_sources(definition, start, ids)
+        @identity.each_value do |value|
+          next unless schema.assignable?(value.entity, definition.from_entity)
+          next unless in_memory_association?(value, definition.name)
+
+          pointed = Array(value.members[definition.name]).any? { comparable_member(_1).to_s == start.id.to_s }
+          ids = pointed ? ids | [value.id] : ids - [value.id]
+        end
+        ids
       end
 
       def association_dirty?(value, name)

@@ -7297,6 +7297,9 @@ module Mxrb
           'ListName' => activity[:variable]
         }
         operation['SecondListOrObjectName'] = activity[:second] if activity[:second]
+        if %w[find filter].include?(activity[:operation].to_s)
+          operation.merge!('Association' => activity[:association].to_s, 'Attribute' => activity[:attribute].to_s)
+        end
         operation['Expression'] = activity[:expression] if activity[:expression]
         if activity[:sortings]
           operation['Sortings'] = {

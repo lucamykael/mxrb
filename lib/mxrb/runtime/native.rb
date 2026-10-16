@@ -22,6 +22,7 @@ require_relative 'languages'
 require_relative 'time_zones'
 require_relative 'lifecycle'
 require_relative 'constants'
+require_relative 'enumerations'
 require_relative 'sort_path'
 require_relative 'decimal_parsing'
 require_relative 'java_action_context'
@@ -282,10 +283,12 @@ module Mxrb
 
         # associations: ->(object, association) { related objects } reaches the
         # side of a reference that the object does not own; constants: ->(name) { value };
-        # calculated: ->(object, member) { value or STORED } computes calculated attributes.
+        # calculated: ->(object, member) { value or STORED } computes calculated attributes;
+        # enumerations, a Runtime::Enumerations, gives enumeration literals their key.
         def initialize(time_zone: 'UTC', decimal: DecimalContext.new, associations: nil, constants: nil,
-                       calculated: nil)
+                       calculated: nil, enumerations: nil)
           @token_cache = {}
+          @enumerations = enumerations
           @associations = associations
           @calculated = calculated
           @constants = constants
@@ -339,7 +342,10 @@ module Mxrb
             value = @calculated.call(object, name)
             return value unless value.equal?(STORED)
           end
-          return object.members[name] if object.members.key?(name) || !member.include?('.')
+          if object.members.key?(name) || !member.include?('.')
+            value = object.members[name]
+            return @enumerations ? @enumerations.attribute_value(object.entity, name, value) : value
+          end
 
           related(object, member)
         end
@@ -367,7 +373,7 @@ module Mxrb
             member = text.split('/').last.split('.').last
             return node.members[member] if node.members.key?(member)
           end
-          return text if text.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
+          return @enumerations&.literal(text) || text if text.match?(/\A[A-Za-z_]\w*\.[A-Za-z_]\w*\.[A-Za-z_]\w*\z/)
           return node_member(text, node) if node && bare_reference?(text)
 
           raise ArgumentError, text
@@ -403,11 +409,19 @@ module Mxrb
           when 'findlast' then string_find_last(*arguments)
           when *DATE_FORMATS then format_date(name.downcase, arguments)
           when *ExpressionFunctions::NAMES then ExpressionFunctions.invoke(name.downcase, arguments, @decimal)
+          when 'getcaption', 'getkey' then enumeration_text(name.downcase, arguments)
           when 'contains' then arguments.fetch(0).to_s.include?(arguments.fetch(1).to_s)
           when 'startswith' then arguments.fetch(0).to_s.start_with?(arguments.fetch(1).to_s)
           when 'endswith' then arguments.fetch(0).to_s.end_with?(arguments.fetch(1).to_s)
           else raise ArgumentError, name
           end
+        end
+
+        def enumeration_text(function, arguments)
+          raise ArgumentError, "#{function} takes one enumeration value" unless arguments.length == 1
+          raise ArgumentError, function unless @enumerations
+
+          @enumerations.text(function, arguments.first)
         end
 
         # [%BeginOfCurrentDay%] and the other boundary tokens, in the session time zone.
@@ -649,6 +663,8 @@ module Mxrb
 
             first = evaluate(left)
             second = evaluate(right)
+            # A list without objects is empty, as the Runtime compares it.
+            first, second = [first, second].map { _1 == [] ? nil : _1 } if %w[= !=].include?(operator)
             return COMPARISONS.fetch(operator).call(first, second) if COMPARISONS.key?(operator)
             return concatenate(first, second) if operator == '+' && (first.is_a?(String) || second.is_a?(String))
             return first + second if operator == '+'
@@ -787,12 +803,13 @@ module Mxrb
           @java_sidecar = java_sidecar
           @decimal = DecimalContext.new(**DecimalContext.settings(project).transform_keys(&:to_sym))
           @constants = constants ||= Constants.new(project)
+          enumerations = Enumerations.new(project)
           @expression = Expression.new(decimal: @decimal, associations: lambda { |object, association|
             @store.retrieve_association(association, object)
           }, constants: ->(name) { constants.value(name) }, time_zone: lambda {
             attributes = @security_context.respond_to?(:attributes) ? @security_context.attributes : {}
             attributes.fetch('time_zone', 'UTC')
-          }, calculated: ->(object, member) { calculated_value(object, member) })
+          }, calculated: ->(object, member) { calculated_value(object, member) }, enumerations:)
           @log = []
           @effects = []
           @call_depth = 0
@@ -1434,9 +1451,29 @@ module Mxrb
                    else
                      variables[operation['SecondListOrObjectName'].to_s]
                    end
-          result = list_operation(operation['$Type'], list, second, operation['Expression'], variables)
+          result = if %w[Attribute Association].any? { !operation[_1].to_s.empty? }
+                     member_list_operation(operation, list, variables)
+                   else
+                     list_operation(operation['$Type'], list, second, operation['Expression'], variables)
+                   end
           variables[action['ResultVariableName'].to_s] = result
         end
+
+        # Find and Filter by attribute or association: the objects whose member equals
+        # the value of the expression.
+        def member_list_operation(operation, list, variables)
+          expected = @expression.evaluate(operation['Expression'], variables)
+          attribute = operation['Attribute'].to_s
+          matches = if attribute.empty?
+                      association = operation['Association'].to_s
+                      ->(object) { object_id_of(@expression.reference(object, association)) == object_id_of(expected) }
+                    else
+                      ->(object) { @expression.member_value(object, attribute) == expected }
+                    end
+          operation['$Type'] == 'Microflows$Find' ? list.find(&matches) : list.select(&matches)
+        end
+
+        def object_id_of(value) = value.is_a?(ObjectValue) ? value.id.to_s : value&.to_s
 
         CUSTOM_ERROR_HANDLING = %w[Custom CustomWithoutRollBack].freeze
 

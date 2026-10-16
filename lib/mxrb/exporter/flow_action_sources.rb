@@ -167,6 +167,9 @@ module Mxrb
           second = operation['SecondListOrObjectName'].to_s
           expression = operation['Expression']
           args << "with: :#{second}" unless second.empty?
+          %w[Attribute Association].each do |member|
+            args << "#{member.downcase}: #{ruby(operation[member])}" unless operation[member].to_s.empty?
+          end
           args << "expression: #{ruby(expression)}" unless expression.nil?
           sortings = bson_items(operation.dig('Sortings', 'Sortings'))
           unless sortings.empty?
