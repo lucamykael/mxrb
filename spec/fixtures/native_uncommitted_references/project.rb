@@ -2,9 +2,9 @@
 
 # What a retrieve over an association gives on Mendix 11.12.1 after a reference
 # changed in memory and was not committed: from the owner, through a
-# non-persistent helper that refers to the owner, from the other side, and for a
-# reference set. Views.RunAll runs after startup and logs one "ORACLE <case>=<value>"
-# line each.
+# non-persistent helper that refers to the owner, from the new and the former
+# other side, from a new owner, and for a reference set. Views.RunAll runs after
+# startup and logs one "ORACLE <case>=<value>" line each.
 
 require 'mxrb'
 
@@ -48,7 +48,8 @@ Mxrb.define(output_path) do
         set_association 'Views.Holder_Tags', to: '$fresh'
       end
       retrieve_association :owner, association: 'Views.Holder_Target', as: :direct
-      log_message 'ORACLE owner_side=[{1}]', node: oracle, parameters: ["if $direct = empty then 'none' else $direct/Name"]
+      log_message 'ORACLE owner_side=[{1}]', node: oracle,
+                                             parameters: ["if $direct = empty then 'none' else $direct/Name"]
       create_object 'Views.Helper', as: :helper do
         set_association 'Views.Helper_Holder', to: '$owner'
       end
@@ -59,6 +60,15 @@ Mxrb.define(output_path) do
       retrieve_association :fresh, association: 'Views.Holder_Target', as: :owners
       aggregate :owners, function: :count, as: :ownerCount
       log_message 'ORACLE other_side=[{1}]', node: oracle, parameters: ['toString($ownerCount)']
+      retrieve_association :old, association: 'Views.Holder_Target', as: :formerHolders
+      aggregate :formerHolders, function: :count, as: :formerCount
+      log_message 'ORACLE old_side=[{1}]', node: oracle, parameters: ['toString($formerCount)']
+      create_object 'Views.Holder', as: :newHolder do
+        set_association 'Views.Holder_Target', to: '$old'
+      end
+      retrieve_association :newHolder, association: 'Views.Holder_Target', as: :newTarget
+      log_message 'ORACLE new_owner=[{1}]', node: oracle,
+                                            parameters: ["if $newTarget = empty then 'none' else $newTarget/Name"]
       retrieve_association :owner, association: 'Views.Holder_Tags', as: :tags
       aggregate :tags, function: :count, as: :tagCount
       log_message 'ORACLE reference_set=[{1}]', node: oracle, parameters: ['toString($tagCount)']

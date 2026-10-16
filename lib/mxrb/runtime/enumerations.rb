@@ -87,15 +87,13 @@ module Mxrb
       end
 
       def captions(text)
-        items(text.is_a?(Hash) ? text['Items'] : nil).to_h { [_1['LanguageCode'].to_s, _1['Text'].to_s] }
+        items(text['Items']).to_h { [_1['LanguageCode'].to_s, _1['Text'].to_s] }
       end
 
       def system_values(enumeration)
         SystemMetamodel.enumerations(@project.mendix_version).fetch(enumeration, []).to_h do |value|
           [value.fetch('id'), { 'en_US' => value.fetch('caption').to_s }]
         end
-      rescue StandardError
-        {}
       end
 
       def attribute_enumeration(entity, member)
@@ -118,7 +116,7 @@ module Mxrb
 
       # A reference by name inside the entity's module may leave the module out.
       def qualified_enumeration(entity, attribute)
-        enumeration = attribute.respond_to?(:enumeration) ? attribute.enumeration.to_s : ''
+        enumeration = attribute.enumeration.to_s
         return if enumeration.empty?
 
         enumeration.include?('.') ? enumeration : "#{entity.split('.').first}.#{enumeration}"
@@ -130,8 +128,6 @@ module Mxrb
       end
 
       def items(value)
-        return [] if value.nil?
-
         IO::BsonCodec.parse_array(value).fetch(:items).select { _1.is_a?(Hash) }
       end
     end

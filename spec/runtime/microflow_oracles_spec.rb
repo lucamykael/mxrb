@@ -5,6 +5,7 @@ require 'tmpdir'
 
 # Microflows whose "ORACLE <case>=<value>" log lines were recorded on the native
 # Mendix 11.12.1 Runtime by script/oql_native_oracle.
+# rubocop:disable Metrics/BlockLength
 RSpec.describe 'microflows recorded on the native Runtime' do
   {
     'getCaption and getKey' => 'native_enum_captions',
@@ -32,4 +33,16 @@ RSpec.describe 'microflows recorded on the native Runtime' do
       end
     end
   end
+
+  it 'keeps the member of Find and Filter in the exported Ruby' do
+    Dir.mktmpdir do |work|
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with('MXRB_OUTPUT_PATH').and_return(File.join(work, 'Oracle.mpr'))
+      load 'spec/fixtures/native_list_member_operations/project.rb'
+      Mxrb::Exporter.new(File.join(work, 'Oracle.mpr'), File.join(work, 'ruby'), mode: :ruby).export!(parallel: false)
+      source = File.read(Dir.glob(File.join(work, 'ruby', 'app', 'services', '**', 'run_all.rb')).first)
+      expect(source).to include('attribute: "Views.Item.Code"', 'association: "Views.Item_Group"')
+    end
+  end
 end
+# rubocop:enable Metrics/BlockLength
