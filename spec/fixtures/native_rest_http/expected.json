@@ -13,6 +13,17 @@
       "body": "id=42;q=hi;uri={root}/rest/probe/v1/probe/echo/42?q=hi;version=HTTP/1.1;probe=X-Probe:one;content="
     },
     {
+      "name": "missing_query",
+      "status": 201,
+      "reason": "Created",
+      "headers": {
+        "x-echo": [
+          "yes"
+        ]
+      },
+      "body": "id=7;q=;uri={root}/rest/probe/v1/probe/echo/7;version=HTTP/1.1;probe=none;content="
+    },
+    {
       "name": "redirect",
       "status": 302,
       "reason": "Found",

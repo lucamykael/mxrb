@@ -163,7 +163,9 @@ module Mxrb
           end
           parameters.to_h do |parameter|
             found, value = request_value(supplied, parameter.fetch('name'))
-            if !found && parameter['required']
+            # The Runtime hands a query or header parameter left out of the request
+            # as empty, whatever IsRequired says; only a missing body object fails.
+            if !found && parameter['required'] && parameter['entity']
               raise NativeRuntimeError, "missing REST argument #{parameter.fetch('name')}"
             end
 

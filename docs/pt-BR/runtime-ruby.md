@@ -102,6 +102,14 @@ falhar (por exemplo, por uma Java action sem adapter), a aplicação não sobe.
 `MXRB_AFTER_STARTUP=skip` sobe sem ele durante uma migração. O microflow de
 before-shutdown roda ao fechar a aplicação, e suas falhas só são registradas.
 
+Os microflows seguem o que o Runtime faz com os mesmos dados, conferido no Runtime
+11.12.1 (`spec/fixtures/native_*`): um atributo de enumeração guarda a chave do
+valor, e `getCaption`/`getKey` funcionam no backend; uma lista sem objetos é igual
+a `empty`; Find e Filter por atributo ou associação comparam o membro com o valor
+da expressão; o retrieve por associação enxerga, dos dois lados, a referência
+alterada em memória e ainda sem commit; e um parâmetro de query ou de cabeçalho
+ausente numa operação de published REST chega vazio ao microflow.
+
 ```text
 config/environments/
 ├── development.env

@@ -8,7 +8,7 @@ module Mxrb
     # No MPR is opened or generated. Writer is used only as an in-memory flow
     # graph builder, keeping the existing pure-Ruby interpreter's semantics.
     class RuntimeProject
-      Attribute = Data.define(:name, :type, :default_value, :calculated, :pass_entity)
+      Attribute = Data.define(:name, :type, :default_value, :calculated, :pass_entity, :enumeration)
       Association = Data.define(:name, :association_type, :from_entity_id, :to_entity_id)
       Document = Data.define(:name, :allowed_module_roles)
       ModuleView = Data.define(:name, :entities, :associations, :microflows, :nanoflows, :pages, :scheduled_events)
@@ -31,7 +31,7 @@ module Mxrb
         def attributes
           implementation.runtime_attributes.map do |entry|
             Attribute.new(entry.fetch(:mendix_name), entry.fetch(:type), entry[:default], entry[:calculated],
-                          entry[:calculated] ? entry.fetch(:pass_entity, true) : nil)
+                          entry[:calculated] ? entry.fetch(:pass_entity, true) : nil, entry[:enumeration])
           end
         end
       end
@@ -63,6 +63,8 @@ module Mxrb
       end
 
       def language_settings = @manifest.data.fetch('languages', {})
+      # { key => { language => caption } } of a declared enumeration.
+      def enumeration_values(name) = Registry.fetch(:enumeration, name)&.values&.to_h { _1.values_at(:name, :captions) }
       def oql_datasets = Registry.all(:dataset).values.map(&:definition)
 
       def close; end
