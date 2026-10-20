@@ -112,6 +112,42 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
     expect(reverse['Type']).to eq('[App.Parent]')
   end
 
+  it 'retrieves over an association from a specialization of either side' do # rubocop:disable Metrics/BlockLength
+    fields = { 'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type] }
+    generalizations = { 'App.SpecialChild' => 'App.Child', 'App.SpecialParent' => 'App.Parent' }
+    schema = Struct.new(:fields, :generalizations) do
+      def fields_for(source) = fields.fetch(source['$Type'])
+      def counterpart(_source) = nil
+
+      def named(name)
+        { 'MaybeGeneralization' => { 'Generalization' => generalizations[name] } } if generalizations.key?(name)
+      end
+    end.new(fields, generalizations)
+    entity_a = { '$ID' => '11111111-1111-4111-8111-111111111111', 'Name' => 'Parent' }
+    entity_b = { '$ID' => '22222222-2222-4222-8222-222222222222', 'Name' => 'Child' }
+    association = {
+      'Name' => 'Parent_Child', 'ParentPointer' => entity_a['$ID'],
+      'ChildPointer' => entity_b['$ID'], 'Type' => 'Reference'
+    }
+    unit = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'domain', container_id: 'domain', containment: 'DomainModel', module_name: 'App',
+      document: { 'Entities' => [3, entity_a, entity_b], 'Associations' => [3, association] }
+    )
+    source = Struct.new(:unit) { def units_of(_type) = [unit] }.new(unit)
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema, source:)
+    compiler.prepare(
+      '$Type' => 'Microflows$Microflow', 'Objects' => %w[SpecialChild SpecialParent].map do |name|
+        { '$Type' => 'Microflows$MicroflowParameter', 'Name' => name, 'VariableType' => { 'Entity' => "App.#{name}" } }
+      end
+    )
+    retrieve = lambda do |start|
+      compiler.compile('$Type' => 'Microflows$AssociationRetrieveSource', 'AssociationId' => 'App.Parent_Child',
+                       'StartVariableName' => start)['Type']
+    end
+    expect(retrieve.call('SpecialChild')).to eq('[App.Parent]')
+    expect(retrieve.call('SpecialParent')).to eq('App.Child')
+  end
+
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do
     fields = {
       'Microflows$AggregateAction' => %w[

@@ -10,7 +10,8 @@ module Mxrb
         SecurityMaterializer, ConstantsMaterializer, DomainModelMaterializer,
         ArtifactMaterializer, TranslationMaterializer, SystemTextMaterializer,
         SystemQueueMaterializer, ClientModelMaterializer,
-        CodeActionMaterializer, SettingsMaterializer, MicroflowMaterializer, ProjectMaterializer
+        CodeActionMaterializer, SettingsMaterializer, MicroflowMaterializer, PublishedRestMaterializer,
+        ProjectMaterializer
       ].freeze
 
       def initialize(mpr_path, deployment: nil, mendix_home: nil)
