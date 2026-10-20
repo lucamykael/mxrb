@@ -148,6 +148,84 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
     expect(retrieve.call('SpecialParent')).to eq('App.Child')
   end
 
+  it 'types flow variables and generates automatic activity captions' do # rubocop:disable Metrics/BlockLength
+    fields = { 'Microflows$ActionActivity' => %w[$ID $Type Action Caption],
+               'Microflows$DeleteAction' => %w[$ID $Type DeleteVariableName] }
+    schema = Struct.new(:fields) do
+      def fields_for(source) = fields.fetch(source['$Type'])
+      def counterpart(_source) = nil
+      def named(_name) = nil
+    end.new(fields)
+    entity_a = { '$ID' => '11111111-1111-4111-8111-111111111111', 'Name' => 'Order' }
+    entity_b = { '$ID' => '22222222-2222-4222-8222-222222222222', 'Name' => 'Line' }
+    association = { 'Name' => 'Line_Order', 'ParentPointer' => entity_b['$ID'], 'ChildPointer' => entity_a['$ID'],
+                    'Type' => 'Reference' }
+    domain = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'domain', container_id: 'domain', containment: 'DomainModel', module_name: 'App',
+      document: { 'Entities' => [3, entity_a, entity_b], 'Associations' => [3, association] }
+    )
+    flow = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'flow', container_id: 'flow', containment: 'Documents', module_name: 'App',
+      document: { 'Name' => 'Load',
+                  'MicroflowReturnType' => { '$Type' => 'DataTypes$ListType', 'Entity' => 'App.Line' } }
+    )
+    source = Struct.new(:domain, :flow) do
+      def units_of(type) = { 'DomainModels$DomainModel' => [domain], 'Microflows$Microflow' => [flow] }.fetch(type, [])
+    end.new(domain, flow)
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema, source:)
+    database = lambda { |single|
+      { '$Type' => 'Microflows$DatabaseRetrieveSource', 'Entity' => 'App.Line',
+        'Range' => { '$Type' => 'Microflows$ConstantRange', 'SingleObject' => single } }
+    }
+    action = ->(type, **fields) { fields.transform_keys(&:to_s).merge('$Type' => "Microflows$#{type}") }
+    parameter = lambda do |name, type, entity = nil|
+      action.call('MicroflowParameter', Name: name,
+                                        VariableType: { '$Type' => "DataTypes$#{type}", 'Entity' => entity }.compact)
+    end
+    association = lambda do |name, id|
+      action.call('RetrieveAction', ResultVariableName: name, RetrieveSource: {
+                    '$Type' => 'Microflows$AssociationRetrieveSource', 'StartVariableName' => 'Order',
+                    'AssociationId' => id
+                  })
+    end
+    operation = lambda do |name, kind|
+      action.call('ListOperationsAction', ResultVariableName: name,
+                                          NewOperation: { '$Type' => "Microflows$#{kind}", 'ListName' => 'Many' })
+    end
+    compiler.prepare('$Type' => 'Microflows$Microflow', 'Objects' => [
+                       parameter.call('Order', 'ObjectType', 'App.Order'),
+                       parameter.call('Given', 'ListType', 'App.Line'), parameter.call('Count', 'IntegerType'),
+                       action.call('CreateChangeAction', VariableName: 'Created', Entity: 'App.Order'),
+                       action.call('CreateListAction', VariableName: 'Fresh', Entity: 'App.Line'),
+                       action.call('RetrieveAction', ResultVariableName: 'One', RetrieveSource: database.call(true)),
+                       action.call('RetrieveAction', ResultVariableName: 'Many', RetrieveSource: database.call(false)),
+                       association.call('Lines', 'App.Line_Order'), association.call('Missing', 'App.Unknown'),
+                       action.call('RetrieveAction', ResultVariableName: 'Orphan', RetrieveSource: {
+                                     '$Type' => 'Microflows$AssociationRetrieveSource', 'StartVariableName' => 'Nobody',
+                                     'AssociationId' => 'App.Line_Order'
+                                   }),
+                       action.call('MicroflowCallAction', ResultVariableName: 'Loaded',
+                                                          MicroflowCall: { 'Microflow' => 'App.Load' }),
+                       action.call('LoopedActivity',
+                                   LoopSource: { 'ListVariableName' => 'Many', 'VariableName' => 'Each' }),
+                       action.call('LoopedActivity', IteratedListVariableName: 'Given', LoopVariableName: 'Legacy'),
+                       operation.call('First', 'Head'), operation.call('Rest', 'Tail'),
+                       operation.call('Has', 'Contains')
+                     ])
+    expect(compiler.instance_variable_get(:@variable_types)).to eq(
+      'Order' => 'App.Order', 'Given' => '[App.Line]', 'Created' => 'App.Order', 'Fresh' => '[App.Line]',
+      'One' => 'App.Line', 'Many' => '[App.Line]', 'Lines' => '[App.Line]', 'Loaded' => '[App.Line]',
+      'Each' => 'App.Line', 'Legacy' => 'App.Line', 'First' => 'App.Line', 'Rest' => '[App.Line]'
+    )
+    activity = lambda do |delete, auto: true|
+      compiler.compile('$Type' => 'Microflows$ActionActivity', 'Caption' => 'Activity', 'AutoGenerateCaption' => auto,
+                       'Action' => action.call('DeleteAction', DeleteVariableName: delete))['Caption']
+    end
+    expect([activity.call('Many'), activity.call('One'), activity.call('Nope'), activity.call('One', auto: false)])
+      .to eq(["Delete objects in 'Many'", "Delete 'One'", 'Activity', 'Activity'])
+    expect(compiler.send(:generated_caption, association.call('Unknown', 'App.Unknown'))).to be_nil
+  end
+
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do
     fields = {
       'Microflows$AggregateAction' => %w[

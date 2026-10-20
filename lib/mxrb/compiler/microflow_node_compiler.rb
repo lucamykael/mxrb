@@ -40,17 +40,17 @@ module Mxrb
         @database_connector = DatabaseConnectorActionCompiler.new(source) if source.respond_to?(:units)
         @associations = association_index(source)
         @page_locations = page_location_index(source)
+        @captions = ActivityCaption.new(source)
+        @flow_returns = flow_return_index(source)
         @variable_types = {}
       end
 
+      # The entity of each object variable of a flow, "[entity]" for a list.
       def prepare(flow)
         @variable_types = {}
-        visit(flow) do |node|
-          next unless node['$Type'] == 'Microflows$MicroflowParameter'
-
-          entity = node.dig('VariableType', 'Entity').to_s
-          @variable_types[node['Name'].to_s] = entity unless entity.empty?
-        end
+        nodes = []
+        visit(flow) { nodes << _1 }
+        2.times { nodes.each { infer_variable(_1) } }
       end
 
       def compile(value)
@@ -112,6 +112,11 @@ module Mxrb
         end
         if field == 'ValueExpression' && source['$Type'] == 'Microflows$MicroflowParameterValue'
           return "'#{source.fetch('Microflow')}'"
+        end
+
+        if field == 'Caption' && source['$Type'] == 'Microflows$ActionActivity' && source['AutoGenerateCaption'] == true
+          generated = generated_caption(source['Action'] || {})
+          return generated if generated
         end
 
         existing = @schema.counterpart(source)
@@ -232,6 +237,79 @@ module Mxrb
           parent: parent&.fetch('QualifiedName', nil), child: child&.fetch('QualifiedName', nil),
           reference_set: association['Type'] == 'ReferenceSet'
         }
+      end
+
+      def generated_caption(action)
+        retrieve = action['RetrieveSource']
+        type = association_retrieve_type(retrieve) if retrieve&.fetch('$Type',
+                                                                      nil) == 'Microflows$AssociationRetrieveSource'
+        @captions.caption(action, variables: @variable_types, retrieve_type: type)
+      rescue CompilationError
+        nil
+      end
+
+      LIST_ELEMENT_OPERATIONS = %w[Head Find FindByExpression FindByAttribute FindByAssociation].freeze
+      LIST_OPERATIONS = %w[Tail Filter FilterByExpression FilterByAttribute FilterByAssociation Sort Union Intersect
+                           Subtract].freeze
+      private_constant :LIST_ELEMENT_OPERATIONS, :LIST_OPERATIONS
+
+      def infer_variable(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+        name, type = case node['$Type']
+                     when 'Microflows$MicroflowParameter' then [node['Name'], object_type(node['VariableType'])]
+                     when 'Microflows$CreateChangeAction' then [node['VariableName'], node['Entity']]
+                     when 'Microflows$CreateListAction' then [node['VariableName'], "[#{node['Entity']}]"]
+                     when 'Microflows$RetrieveAction' then [node['ResultVariableName'], retrieved_type(node)]
+                     when 'Microflows$MicroflowCallAction'
+                       [node['ResultVariableName'], @flow_returns[node.dig('MicroflowCall', 'Microflow').to_s]]
+                     when 'Microflows$LoopedActivity' then loop_variable(node)
+                     when 'Microflows$ListOperationsAction' then list_operation_variable(node)
+                     end
+        @variable_types[name.to_s] = type.to_s unless name.to_s.empty? || type.to_s.empty? || type.to_s == '[]'
+      end
+
+      def object_type(type)
+        entity = type&.fetch('Entity', nil).to_s
+        return if entity.empty?
+
+        type['$Type'] == 'DataTypes$ListType' ? "[#{entity}]" : entity
+      end
+
+      def retrieved_type(action)
+        source = action['RetrieveSource'] || {}
+        if source['$Type'] == 'Microflows$DatabaseRetrieveSource'
+          range = source['Range'] || {}
+          single = range['$Type'] == 'Microflows$ConstantRange' && range['SingleObject'] == true
+          single ? source['Entity'] : "[#{source['Entity']}]"
+        elsif @variable_types.key?(source['StartVariableName'].to_s)
+          association_retrieve_type(source)
+        end
+      rescue CompilationError
+        nil
+      end
+
+      def loop_variable(node)
+        source = node['LoopSource'] || {}
+        list = source['ListVariableName'] || node['IteratedListVariableName']
+        element = @variable_types[list.to_s].to_s.delete_prefix('[').delete_suffix(']')
+        [source['VariableName'] || node['LoopVariableName'], element]
+      end
+
+      def list_operation_variable(node)
+        operation = node['NewOperation'] || {}
+        kind = operation['$Type'].to_s.delete_prefix('Microflows$')
+        list = @variable_types[operation['ListName'].to_s].to_s
+        type = if LIST_ELEMENT_OPERATIONS.include?(kind) then list.delete_prefix('[').delete_suffix(']')
+               elsif LIST_OPERATIONS.include?(kind) then list
+               end
+        [node['ResultVariableName'], type]
+      end
+
+      def flow_return_index(source)
+        return {} unless source.respond_to?(:units_of)
+
+        source.units_of('Microflows$Microflow').to_h do |unit|
+          ["#{unit.module_name}.#{unit.document['Name']}", object_type(unit.document['MicroflowReturnType'])]
+        end
       end
 
       # Where a page opens by default: in a popup when its layout is one, as MxBuild
