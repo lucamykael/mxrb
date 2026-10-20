@@ -1,5 +1,6 @@
 [
   { "name": "echo", "method": "GET", "path": "rest/probe/v1/probe/echo/42?q=hi", "headers": { "X-Probe": "one" } },
+  { "name": "missing_query", "method": "GET", "path": "rest/probe/v1/probe/echo/7" },
   { "name": "redirect", "method": "GET", "path": "rest/probe/v1/probe/redirect" },
   { "name": "both", "method": "GET", "path": "rest/probe/v1/probe/both" },
   { "name": "defaults", "method": "GET", "path": "rest/probe/v1/probe/defaults" },

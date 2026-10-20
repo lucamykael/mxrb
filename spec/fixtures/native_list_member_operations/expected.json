@@ -1,0 +1,40 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "8a937f5db1f0966b343b88cc1ab51bfeaadc2c387bf7f35914bc1d4f143bc9df",
+  "results": {
+    "find_text": [
+      "[second]"
+    ],
+    "find_text_case": [
+      "[none]"
+    ],
+    "find_empty": [
+      "[third]"
+    ],
+    "find_decimal": [
+      "[first]"
+    ],
+    "find_enum": [
+      "[second]"
+    ],
+    "find_association": [
+      "[second]"
+    ],
+    "filter_association_empty": [
+      "[1]"
+    ],
+    "filter_decimal": [
+      "[1]"
+    ],
+    "empty_list": [
+      "[true]"
+    ],
+    "empty_list_not": [
+      "[false]"
+    ],
+    "full_list": [
+      "[false]"
+    ]
+  }
+}

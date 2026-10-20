@@ -100,6 +100,14 @@ without a user, before scheduled events; when it does not return `true` or fails
 `MXRB_AFTER_STARTUP=skip` starts without it during a migration. The before-shutdown
 microflow runs when the application closes, and its failures are only reported.
 
+Microflows do what the Runtime does with the same data, as checked on the 11.12.1
+Runtime (`spec/fixtures/native_*`): an enumeration attribute holds the key of its
+value, and `getCaption`/`getKey` work in the backend; a list without objects equals
+`empty`; Find and Filter by attribute or association compare the member with the
+value of the expression; a retrieve over an association sees, from either side, a
+reference changed in memory and not committed yet; and a query or header parameter
+a published REST request leaves out reaches the microflow empty.
+
 Profiles live under `config/environments/` and commonly use `development.env`,
 `qa.env`, `staging.env`, and `production.env`. Precedence is process environment,
 profile file, `.env.<profile>`, then `.env`. Select one with `--environment qa`

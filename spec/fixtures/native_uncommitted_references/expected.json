@@ -1,0 +1,25 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "c7c400095eaacabd621f1162bc311ebb5f2af2ad93c9e8143e927e78585e3baa",
+  "results": {
+    "owner_side": [
+      "[fresh]"
+    ],
+    "through_helper": [
+      "[fresh]"
+    ],
+    "other_side": [
+      "[1]"
+    ],
+    "old_side": [
+      "[0]"
+    ],
+    "new_owner": [
+      "[old]"
+    ],
+    "reference_set": [
+      "[1]"
+    ]
+  }
+}

@@ -104,6 +104,15 @@ schlägt fehl (etwa an einer Java-Action ohne Adapter), startet die Anwendung ni
 Before-Shutdown-Microflow läuft beim Schließen der Anwendung; seine Fehler werden
 nur gemeldet.
 
+Microflows tun mit denselben Daten, was die Runtime tut, geprüft auf der Runtime
+11.12.1 (`spec/fixtures/native_*`): Ein Aufzählungsattribut speichert den Schlüssel
+seines Werts, und `getCaption`/`getKey` funktionieren im Backend; eine Liste ohne
+Objekte ist gleich `empty`; Find und Filter nach Attribut oder Assoziation vergleichen
+das Mitglied mit dem Wert des Ausdrucks; ein Retrieve über eine Assoziation sieht von
+beiden Seiten eine im Speicher geänderte, noch nicht committete Referenz; und ein
+Query- oder Header-Parameter, der in einer Anfrage an eine Published-REST-Operation
+fehlt, kommt leer im Microflow an.
+
 Profile liegen unter `config/environments/`, typischerweise als
 `development.env`, `qa.env`, `staging.env` und `production.env`. Die Priorität
 lautet Prozessumgebung, Profildatei, `.env.<Profil>`, dann `.env`. Die Auswahl

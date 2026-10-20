@@ -1,0 +1,37 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "07a37be265037f285c13f376943febe70bb643729c4379ab0adb7edd8a423ef0",
+  "results": {
+    "literal_caption": [
+      "[Form Post]"
+    ],
+    "literal_key": [
+      "[form_post]"
+    ],
+    "attribute_caption": [
+      "[Form Post]"
+    ],
+    "attribute_key": [
+      "[form_post]"
+    ],
+    "empty_caption": [
+      "[]"
+    ],
+    "empty_key": [
+      "[]"
+    ],
+    "compare_caption": [
+      "[true]"
+    ],
+    "compare_key": [
+      "[true]"
+    ],
+    "to_string": [
+      "[form_post]"
+    ],
+    "joined": [
+      "[Query/query]"
+    ]
+  }
+}

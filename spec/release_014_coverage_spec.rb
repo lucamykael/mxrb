@@ -674,9 +674,7 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
 
       application = server.application
       service = { 'parameters' => [{ 'name' => 'Required', 'required' => true }] }
-      expect do
-        application.send(:request_arguments, service, {}, {}, nil)
-      end.to raise_error(Mxrb::NativeRuntimeError, /missing REST argument/)
+      expect(application.send(:request_arguments, service, {}, {}, nil)).to eq('Required' => nil)
       expect do
         application.send(:deserialize, 'id' => 'missing', 'type' => 'Sales.Order')
       end.to raise_error(Mxrb::NativeRuntimeError, /not found/)
