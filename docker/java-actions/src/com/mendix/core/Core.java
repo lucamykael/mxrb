@@ -327,17 +327,27 @@ public final class Core {
 	}
 
 	/**
-	 * A session for a user, whose contexts run microflows as that user, as
-	 * CommunityCommons executes a microflow as another user.
+	 * A session the Ruby application opens for a user, whose contexts run
+	 * microflows as that user and whose id signs a browser in once a request
+	 * handler or REST operation sets it as the session cookie.
 	 */
+	@SuppressWarnings("unchecked")
 	public static com.mendix.systemwideinterfaces.core.ISession initializeSession(
 			com.mendix.systemwideinterfaces.core.IUser user, String currentSessionId) {
-		Map<String, Object> session = new java.util.LinkedHashMap<>();
-		session.put("id", java.util.UUID.randomUUID().toString());
-		session.put("user", user.getMendixObject());
-		session.put("name", user.getName());
-		session.put("anonymous", Boolean.FALSE);
-		return mxrb.sidecar.MxSession.of(Bridge.current(), session);
+		Bridge bridge = Bridge.current();
+		return mxrb.sidecar.MxSession.of(bridge,
+				(Map<String, Object>) bridge.call("user_session", "user", user.getMendixObject()));
+	}
+
+	/**
+	 * Sets the cookie of a session on a response, for the path, as Mendix 10.13
+	 * to 10.24 offer it to SSO modules; the cookie lasts for the browser session,
+	 * whatever the flag the public API leaves undocumented.
+	 */
+	public static void addSessionCookies(com.mendix.m2ee.api.IMxRuntimeResponse response,
+			com.mendix.systemwideinterfaces.core.ISession session, String path, boolean flag) {
+		response.addCookie(getConfiguration().getSessionIdCookieName(), session.getId().toString(),
+				path == null || path.isEmpty() ? "/" : path, "", -1, true);
 	}
 
 	/** The cluster node id cookie a request handler may set; the Ruby application has one node. */

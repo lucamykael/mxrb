@@ -172,7 +172,7 @@ module Mxrb
         CALLBACKS = %w[
           log get set member related instantiate commit delete rollback retrieve microflow
           constant end_transaction changed original session application_root_url runtime_version model_version
-          metamodel caption file store_file message oql request_handler guest_session guest_login_enabled
+          metamodel caption file store_file message oql request_handler guest_session user_session guest_login_enabled
           long_id object_for_long default_language project_security authenticate
         ].freeze
         LOG_LEVELS = {
@@ -281,6 +281,7 @@ module Mxrb
         # Core.initializeGuestSession: a guest's session, which the handler's cookie carries.
         def callback_guest_session(_params) = services.guest_session
         def callback_guest_login_enabled(_params) = services.guest_login_enabled?
+        def callback_user_session(params) = services.user_session(@context.store, object!(params['user']))
 
         # IMendixIdentifier.toLong and Core.createMendixIdentifier: a number kept for an object.
         def callback_long_id(params) = numbered_store.long_id(object!(params['object']))

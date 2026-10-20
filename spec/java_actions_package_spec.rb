@@ -30,7 +30,7 @@ RSpec.describe Mxrb::RubyApp::JavaActionsPackage do
 
     result = described_class.new(@source, application).write!
     package = File.join(application, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 27, proxies: 4, libraries: 2)
+    expect(result.to_h).to eq(directory: package, sources: 28, proxies: 4, libraries: 2)
     expect(File).not_to exist(File.join(package, 'stale'))
     expect(File.binread(File.join(package, 'userlib', 'vendor', 'lib.jar'))).to eq('jar')
     expect(File.binread(File.join(package, 'userlib', 'vendorlib', 'module.jar'))).to eq('vendor')

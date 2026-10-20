@@ -179,13 +179,13 @@ RSpec.describe 'Java action sidecar' do
     File.write(File.join(@target, 'docker-compose.yml'), "# kept\n")
     result = Mxrb::RubyApp::JavaActionsPackage.new(@source, @target).write!
     package = File.join(@target, 'java-actions')
-    expect(result.to_h).to eq(directory: package, sources: 27, proxies: 4, libraries: 0)
+    expect(result.to_h).to eq(directory: package, sources: 28, proxies: 4, libraries: 0)
     expect(File.read(File.join(@target, 'docker-compose.yml'))).to eq("# kept\n")
     expect(File.read(File.join(package, 'javasource', 'views', 'Words.java'))).to include('"ação"')
     expect(File).to exist(File.join(package, 'Dockerfile'))
 
     api, classes, report, output = build_sidecar(package)
-    expect(output).to include('compiled 30 sources, left out 1')
+    expect(output).to include('compiled 31 sources, left out 1')
     expect(File.read(report))
       .to match(/\Aviews\.actions\.Unsupported\tline \d+: cannot find symbol symbol: method notInTheRuntimeApi\(/)
     port = start_sidecar(api, classes, report, File.join(package, 'captions.tsv'))
@@ -254,6 +254,15 @@ RSpec.describe 'Java action sidecar' do
     expect([nonce.status, nonce.body]).to eq([200, 'abc one /rest/nonce/v1/nonce/read'])
     expect(nonce['Set-Cookie']).to eq(['nonce=next; Path=/; HttpOnly', 'seen=1; Path=/; SameSite=Lax; Max-Age=60'])
     expect(dispatch('GET', '/rest/nonce/v1/nonce/read').body).to eq('no cookies null /rest/nonce/v1/nonce/read')
+
+    signed_in = dispatch('GET', '/rest/nonce/v1/nonce/sign-in')
+    expect([signed_in.status, signed_in.body]).to eq([200, 'MxAdmin'])
+    session_cookie = Array(signed_in['Set-Cookie']).first
+    expect(session_cookie).to match(%r{\Amxrb_session=\h{8}-\h{4}-\h{4}-\h{4}-\h{12}; Path=/; SameSite=Lax; HttpOnly\z})
+    expect(session_cookie).not_to include('Max-Age')
+    session = JSON.parse(dispatch('GET', '/api/session', cookie: session_cookie.split(';').first).body)
+    admin = @application.send(:bridge).store.retrieve('System.User').find { _1.members['Name'] == 'MxAdmin' }
+    expect(session).to include('user' => admin.id, 'roles' => ['Administrator'])
   end
 end
 # rubocop:enable Metrics/BlockLength

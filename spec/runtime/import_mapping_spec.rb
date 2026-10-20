@@ -113,7 +113,7 @@ RSpec.describe Mxrb::Runtime::ImportMapping do
     expect(variables.fetch('order').members['Name']).to eq('remote')
     runtime.send(:action_rest_call, action.call({ 'Bind' => false }), variables)
     expect(runtime.store.retrieve('Views.Order').size).to eq(2)
-    expect(variables.keys).to eq(['order'])
+    expect(variables.keys).to contain_exactly('order', 'latestHttpResponse')
   end
 
   it 'walks root arrays, nulls, single wrapped values and links without an association' do

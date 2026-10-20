@@ -5,7 +5,8 @@ require 'bcrypt'
 module Mxrb
   module Runtime
     # The persisted part of the Runtime-owned System module that applications
-    # build on: users, user roles, languages and time zones, as declared by the
+    # build on: users, user roles, languages, time zones and the user report
+    # information user provisioning keeps, as declared by the
     # Mendix 11.12.1 System model (compiler/schemas/system-model-11.12.1.b64).
     module SystemDomain
       USER = 'System.User'
@@ -21,13 +22,15 @@ module Mxrb
                       ['Description', :string, '', false]],
         'System.Language' => [['Code', :string, '', false], ['Description', :string, '', false]],
         'System.TimeZone' => [['Code', :string, '', false], ['Description', :string, '', false],
-                              ['RawOffset', :integer, nil, false]]
+                              ['RawOffset', :integer, nil, false]],
+        'System.UserReportInfo' => [['UserType', :enum, nil, false], ['Hash', :string, nil, false]]
       }.freeze
       ASSOCIATIONS = [
         ['System.UserRoles', USER, USER_ROLE, :ReferenceSet],
         ['System.User_Language', USER, 'System.Language', :Reference],
         ['System.User_TimeZone', USER, 'System.TimeZone', :Reference],
-        ['System.grantableRoles', USER_ROLE, USER_ROLE, :ReferenceSet]
+        ['System.grantableRoles', USER_ROLE, USER_ROLE, :ReferenceSet],
+        ['System.UserReportInfo_User', 'System.UserReportInfo', USER, :Reference]
       ].freeze
       BCRYPT = %r{\A\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}\z}
 

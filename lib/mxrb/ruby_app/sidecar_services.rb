@@ -67,6 +67,13 @@ module Mxrb
 
       def guest_login_enabled? = security[:guest_access_enabled] == true
 
+      # Core.initializeSession: a session of a System.User under its user roles.
+      def user_session(store, user)
+        roles = store.retrieve_association('UserRoles', user).map { _1.members['Name'] }
+        { 'id' => @sessions.call.open(user, roles), 'user' => user, 'name' => user.members['Name'].to_s,
+          'anonymous' => false }
+      end
+
       # The administrator Configuration.getAdminUserName and getAdminUserRoleName report.
       def project_security
         { 'admin_user_name' => security[:admin_user_name].to_s, 'admin_user_role' => security[:admin_user_role].to_s }

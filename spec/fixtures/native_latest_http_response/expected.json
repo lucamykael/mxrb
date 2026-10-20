@@ -1,0 +1,40 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "bec752990220de8c98761ac685764486c2abfed277370f18aaa91c1ce39db0f5",
+  "results": {
+    "text": [
+      "[{\"name\":\"remote\"}]"
+    ],
+    "text_status": [
+      "[200]"
+    ],
+    "text_reason": [
+      "[OK]"
+    ],
+    "text_content": [
+      "[empty]"
+    ],
+    "header": [
+      "[yes]"
+    ],
+    "mapped": [
+      "[remote]"
+    ],
+    "mapped_status": [
+      "[200]"
+    ],
+    "mapped_reason": [
+      "[OK]"
+    ],
+    "mapped_content": [
+      "[empty]"
+    ],
+    "echo": [
+      "[a=x y&b=null&c=3]"
+    ],
+    "bad": [
+      "[400|{\"error\":\"nope\"}]"
+    ]
+  }
+}

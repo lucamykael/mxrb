@@ -82,8 +82,17 @@ Mxrb.define(output_path) do
       call_java 'Views.Nonce', as: :nonce
       return_value '$nonce'
     end
+    java_action :SignIn, parameters: [], return_type: { kind: :string }
+    microflow :SignInAdmin do
+      return_type :String
+      call_java 'Views.SignIn', as: :signedIn
+      return_value '$signedIn'
+    end
     published_rest_service :NonceApi, path: 'rest/nonce/v1', version: '1.0', requires_authentication: false do
-      resource(:nonce) { get :read, path: 'read', microflow: 'Views.ReadNonce' }
+      resource(:nonce) do
+        get :read, path: 'read', microflow: 'Views.ReadNonce'
+        get :sign_in, path: 'sign-in', microflow: 'Views.SignInAdmin'
+      end
     end
     microflow :Upper do
       parameter :Value, type: :String
@@ -391,6 +400,13 @@ actions = {
     response.addCookie(seen);
     return nonce + " " + request.get().getHeader("X-Probe") + " "
         + request.get().getHttpServletRequest().getRequestURI();
+  BODY
+  'SignIn' => ['String', nil, <<~BODY],
+    IContext c = getContext();
+    com.mendix.systemwideinterfaces.core.IUser admin = Core.getUser(c, "MxAdmin");
+    com.mendix.systemwideinterfaces.core.ISession session = Core.initializeSession(admin, null);
+    Core.addSessionCookies(c.getRuntimeResponse().get(), session, "/", false);
+    return admin.getName();
   BODY
   'Register' => ['Boolean', nil, <<~BODY],
     Core.addRequestHandler("/hello/", new views.Hello());
