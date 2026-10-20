@@ -41,7 +41,7 @@ Mxrb.define(output_path) do
     microflow :RunAll do
       return_type :Boolean
       { base: 'Views.Base', middle: 'Views.Middle', leaf: 'Views.Leaf', other: 'Views.Other' }.each do |name, entity|
-        create_object entity, as: name, set: { 'Views.Base.Name' => "'#{name}'" }
+        create_object entity, as: name, set: { Name: "'#{name}'" }
         call_microflow 'Views.Classify', as: :"#{name}Branch" do
           argument 'Views.Classify.Item', "$#{name}"
         end

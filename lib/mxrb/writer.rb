@@ -6170,7 +6170,44 @@ module Mxrb
       end
       return if value.include?('.')
 
-      "#{entity_name}.#{value}"
+      "#{declaring_entity(entity_name, value)}.#{value}"
+    end
+
+    # The entity that declares an attribute: the entity itself or the nearest
+    # generalization that does, among the declared entities and the System
+    # domain; the entity itself when none is known to.
+    def declaring_entity(entity_name, attribute)
+      current = entity_name
+      seen = []
+      while current && !seen.include?(current)
+        return current if declared_attributes(current).include?(attribute)
+
+        seen << current
+        current = declared_generalizations[current]
+      end
+      entity_name
+    end
+
+    def declared_attributes(entity_name)
+      return Runtime::SystemDomain::ATTRIBUTES.fetch(entity_name, []).map(&:first) if entity_name.start_with?('System.')
+
+      declared_entities.dig(entity_name, :attributes) || []
+    end
+
+    def declared_generalizations
+      @declared_generalizations ||= declared_entities.filter_map do |name, entity|
+        target = entity.dig(:generalization, :target).to_s
+        [name, target] unless target.empty?
+      end.to_h
+    end
+
+    def declared_entities
+      @declared_entities ||= Array(@definition[:modules]).flat_map do |mod|
+        Array(mod[:entities]).map do |entity|
+          ["#{mod.fetch(:name)}.#{entity.fetch(:name)}",
+           { attributes: Array(entity[:attributes]).map { _1.fetch(:name).to_s }, generalization: entity[:generalization] }]
+        end
+      end.to_h
     end
 
     def qualified_entity_name(entity, module_name = nil)

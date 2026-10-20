@@ -140,6 +140,23 @@ RSpec.describe Mxrb::Writer, 'modern member references' do
     end
   end
 
+  it 'qualifies an inherited attribute with the entity that declares it' do
+    entities = [
+      { name: 'Base', attributes: [{ name: 'Name', type: :string }] },
+      { name: 'Middle', attributes: [{ name: 'Code', type: :string }], generalization: { target: 'App.Base' } },
+      { name: 'Leaf', attributes: [], generalization: { target: 'App.Middle' } },
+      { name: 'Account', attributes: [], generalization: { target: 'System.User' } },
+      { name: 'Loop', attributes: [], generalization: { target: 'App.Loop' } }
+    ]
+    writer = described_class.new('edge.mpr', version: '11.12.1', modules: [{ name: 'App', entities: }])
+
+    expect(writer.send(:qualified_attribute_identifier, 'Name', 'App.Leaf')).to eq('App.Base.Name')
+    expect(writer.send(:qualified_attribute_identifier, 'Code', 'App.Leaf')).to eq('App.Middle.Code')
+    expect(writer.send(:qualified_attribute_identifier, 'Name', 'App.Account')).to eq('System.User.Name')
+    expect(writer.send(:qualified_attribute_identifier, 'Missing', 'App.Leaf')).to eq('App.Leaf.Missing')
+    expect(writer.send(:qualified_attribute_identifier, 'Missing', 'App.Loop')).to eq('App.Loop.Missing')
+  end
+
   it 'handles qualified, ambiguous, absent, and legacy member-reference edges' do
     writer = described_class.new('edge.mpr', version: '11.12.1', modules: [])
 
