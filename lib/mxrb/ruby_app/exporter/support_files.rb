@@ -258,6 +258,15 @@ module Mxrb
           end.to_h
         end
 
+        # The JSON import mappings the Ruby runtime applies, by qualified name.
+        def import_mapping_definitions(project)
+          project.modules.flat_map do |mod|
+            mod.infrastructure_documents.select { _1[:type] == 'ImportMappings$ImportMapping' }.map do |document|
+              ["#{mod.name}.#{document.fetch(:name)}", Runtime::ImportMapping.definition(document.fetch(:doc))]
+            end
+          end.sort.to_h
+        end
+
         def write_manifest(project, modules, runtime_mpr)
           native_coverage(project)
           payload = {
@@ -275,6 +284,7 @@ module Mxrb
             },
             'modules' => modules, 'coverage' => @coverage, 'runtime_model' => 'ruby',
             'java_action_parameters' => java_action_parameters(project),
+            'import_mappings' => import_mapping_definitions(project),
             'frontend' => {
               'framework' => 'react', 'language' => 'typescript', 'bundler' => 'vite',
               'source' => 'frontend/src', 'generated' => 'frontend/src/generated',

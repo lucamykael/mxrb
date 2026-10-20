@@ -1,0 +1,37 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "80061bd2648af925bd45f881a1a867fa9ecc0d278da72b71e94c90964f31d1bb",
+  "results": {
+    "root": [
+      "[order-1|12.5|3|true]"
+    ],
+    "placed": [
+      "[2024-05-01 10:15:30]"
+    ],
+    "note": [
+      "[empty]"
+    ],
+    "customer": [
+      "[C1|Ada|1]"
+    ],
+    "tags": [
+      "[2]"
+    ],
+    "lines": [
+      "[2]"
+    ],
+    "line_qty": [
+      "[3]"
+    ],
+    "items": [
+      "[1]"
+    ],
+    "committed": [
+      "[1]"
+    ],
+    "array_for_object": [
+      "[empty]"
+    ]
+  }
+}

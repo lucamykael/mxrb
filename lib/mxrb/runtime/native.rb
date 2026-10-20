@@ -23,6 +23,7 @@ require_relative 'time_zones'
 require_relative 'lifecycle'
 require_relative 'constants'
 require_relative 'enumerations'
+require_relative 'import_mapping'
 require_relative 'sort_path'
 require_relative 'decimal_parsing'
 require_relative 'java_action_context'
@@ -849,7 +850,8 @@ module Mxrb
             mod.associations.map do |association|
               ["#{mod.name}.#{association.name}", {
                 type: association.association_type,
-                from: entity_names[association.from_entity_id.to_s]
+                from: entity_names[association.from_entity_id.to_s],
+                owner: association.owner.to_s
               }]
             end
           end.to_h
@@ -1306,7 +1308,9 @@ module Mxrb
             end
           end
           definition = @associations[source['AssociationId'].to_s]
-          values = values.first if definition&.fetch(:type) == :Reference && definition[:from] == start.entity
+          # A reference gives one object from its owner, and from both sides when both own it.
+          owner = definition && (definition[:from] == start.entity || definition[:owner] == 'Both')
+          values = values.first if owner && definition.fetch(:type) == :Reference
           variables[action['ResultVariableName'].to_s] = values
         end
 
@@ -1614,11 +1618,58 @@ module Mxrb
           )
         end
 
+        # Import with mapping: a registered adapter, else the JSON import mapping
+        # applied to the text of the variable.
         def action_import_xml(action, variables)
-          invoke_adapter(
-            :import_xml, action['ImportMapping'], action, variables,
-            result_name: action['ResultVariableName']
-          )
+          handling = action['ResultHandling'] || {}
+          if @adapters[:import_xml]
+            return invoke_adapter(:import_xml, action['ImportMapping'], action, variables,
+                                  result_name: action['ResultVariableName'] || handling['ResultVariableName'])
+          end
+
+          source = variables.fetch(action['XmlDocumentVariableName'].to_s)
+          import_with_mapping(handling, source.to_s, variables)
+        end
+
+        # Applies the ImportMappingCall of a result handling to JSON text and binds
+        # the root object, or the list of roots, to its variable.
+        def import_with_mapping(handling, content, variables)
+          call = handling['ImportMappingCall'] || {}
+          name = call['ReturnValueMapping'].to_s
+          unless call['ContentType'].to_s.casecmp?('Json')
+            raise NativeRuntimeError, "import mapping #{name} reads #{call['ContentType']}; only JSON runs natively"
+          end
+
+          mapping = ImportMapping.new(import_mapping_definition(name), store:, associations: @associations,
+                                                                       converter: method(:convert_with_microflow))
+          roots = mapping.import(content)
+          commit_for_action(call, mapping.objects) unless mapping.objects.empty?
+          return roots unless handling['Bind'] == true
+
+          list = handling.dig('VariableType', '$Type') == 'DataTypes$ListType'
+          variables[handling['ResultVariableName'].to_s] = list ? roots : roots.first
+        rescue JSON::ParserError => e
+          raise NativeRuntimeError, "import mapping #{name} could not read the JSON: #{e.message}"
+        end
+
+        def import_mapping_definition(name)
+          (@import_mappings ||= {})[name] ||=
+            if @project.respond_to?(:import_mapping)
+              @project.import_mapping(name)
+            else
+              module_name, document = name.split('.', 2)
+              mod = @project.modules.find { _1.name == module_name }
+              found = mod&.infrastructure_documents&.find do
+                _1[:type] == 'ImportMappings$ImportMapping' && _1[:name].to_s == document
+              end
+              found && ImportMapping.definition(found.fetch(:doc))
+            end || raise(NativeRuntimeError, "import mapping #{name} not found")
+        end
+
+        # The value a converter microflow of an import mapping makes of a JSON value.
+        def convert_with_microflow(name, value)
+          flow = @flows.fetch(name) { raise NativeRuntimeError, "converter microflow #{name} not found" }
+          call(name, { Array(flow.parameters).first.to_h['Name'].to_s => value })
         end
 
         def action_generate_document(action, variables)
@@ -1790,7 +1841,11 @@ module Mxrb
           result
         end
 
+        # An import mapping makes its objects even when the result is not stored.
         def bind_rest_result(handling, body, variables, result_handling_type: 'Mapping')
+          mapped = result_handling_type.to_s == 'Mapping' &&
+                   !handling.dig('ImportMappingCall', 'ReturnValueMapping').to_s.empty?
+          return import_with_mapping(handling, body, variables) if mapped
           return unless handling['Bind'] == true
 
           result = case result_handling_type.to_s

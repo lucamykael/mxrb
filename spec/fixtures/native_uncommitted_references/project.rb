@@ -3,8 +3,9 @@
 # What a retrieve over an association gives on Mendix 11.12.1 after a reference
 # changed in memory and was not committed: from the owner, through a
 # non-persistent helper that refers to the owner, from the new and the former
-# other side, from a new owner, and for a reference set. Views.RunAll runs after
-# startup and logs one "ORACLE <case>=<value>" line each.
+# other side, from a new owner, for a reference set, and from the other side of
+# a one-to-one reference. Views.RunAll runs after startup and logs one
+# "ORACLE <case>=<value>" line each.
 
 require 'mxrb'
 
@@ -21,6 +22,7 @@ Mxrb.define(output_path) do
       association 'Views.Target', name: :Holder_Target, cardinality: :many_to_one
       association 'Views.Target', name: :Holder_Tags, cardinality: :many_to_many
     end
+    entity(:Twin) { association 'Views.Target', name: :Twin_Target, cardinality: :one_to_one }
     entity :Helper do
       non_persistent!
       association 'Views.Holder', name: :Helper_Holder, cardinality: :many_to_one
@@ -69,6 +71,12 @@ Mxrb.define(output_path) do
       retrieve_association :newHolder, association: 'Views.Holder_Target', as: :newTarget
       log_message 'ORACLE new_owner=[{1}]', node: oracle,
                                             parameters: ["if $newTarget = empty then 'none' else $newTarget/Name"]
+      create_object 'Views.Twin', as: :twin, commit: true do
+        set_association 'Views.Twin_Target', to: '$old'
+      end
+      retrieve_association :old, association: 'Views.Twin_Target', as: :twinOfOld
+      retrieve_association :twinOfOld, association: 'Views.Twin_Target', as: :twinTarget
+      log_message 'ORACLE one_to_one_reverse=[{1}]', node: oracle, parameters: ['$twinTarget/Name']
       retrieve_association :owner, association: 'Views.Holder_Tags', as: :tags
       aggregate :tags, function: :count, as: :tagCount
       log_message 'ORACLE reference_set=[{1}]', node: oracle, parameters: ['toString($tagCount)']
