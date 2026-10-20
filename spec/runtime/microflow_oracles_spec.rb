@@ -10,7 +10,8 @@ RSpec.describe 'microflows recorded on the native Runtime' do
   {
     'getCaption and getKey' => 'native_enum_captions',
     'Find and Filter by attribute or association' => 'native_list_member_operations',
-    'retrieves over references changed in memory' => 'native_uncommitted_references'
+    'retrieves over references changed in memory' => 'native_uncommitted_references',
+    'a JSON import mapping' => 'native_import_mapping'
   }.each do |subject, fixture|
     it "runs #{subject} as Mendix 11.12.1 does, in memory and on SQLite" do
       directory = File.join('spec/fixtures', fixture)
@@ -30,6 +31,28 @@ RSpec.describe 'microflows recorded on the native Runtime' do
         ensure
           sqlite&.close
         end
+      end
+    end
+  end
+
+  %w[native_import_mapping native_uncommitted_references].each do |fixture|
+    it "runs #{fixture} from the exported Ruby application as Mendix 11.12.1 does" do
+      expected = JSON.parse(File.read(File.join('spec/fixtures', fixture, 'expected.json'))).fetch('results')
+      Dir.mktmpdir do |work|
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with('MXRB_OUTPUT_PATH').and_return(File.join(work, 'Oracle.mpr'))
+        load File.join('spec/fixtures', fixture, 'project.rb')
+        target = File.join(work, 'ruby')
+        Mxrb::Exporter.new(File.join(work, 'Oracle.mpr'), target, mode: :ruby).export!(parallel: false)
+        application = Mxrb::RubyApp::Application.new(target)
+        bridge = application.send(:bridge)
+        bridge.scheduler.instance_variable_get(:@executor).call('Views.RunAll')
+        logged = bridge.interpreter.log.grep(/\AORACLE /)
+                       .to_h { |line| line.delete_prefix('ORACLE ').split('=', 2).then { [_1, [_2]] } }
+        expect(logged).to eq(expected)
+      ensure
+        application&.close
+        Mxrb::RubyApp::Registry.reset!
       end
     end
   end

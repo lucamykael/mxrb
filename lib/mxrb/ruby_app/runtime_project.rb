@@ -7,9 +7,9 @@ module Mxrb
     # Runtime model assembled from the application's loaded Ruby definitions.
     # No MPR is opened or generated. Writer is used only as an in-memory flow
     # graph builder, keeping the existing pure-Ruby interpreter's semantics.
-    class RuntimeProject
+    class RuntimeProject # rubocop:disable Metrics/ClassLength
       Attribute = Data.define(:name, :type, :default_value, :calculated, :pass_entity, :enumeration)
-      Association = Data.define(:name, :association_type, :from_entity_id, :to_entity_id)
+      Association = Data.define(:name, :association_type, :from_entity_id, :to_entity_id, :owner)
       Document = Data.define(:name, :allowed_module_roles)
       ModuleView = Data.define(:name, :entities, :associations, :microflows, :nanoflows, :pages, :scheduled_events)
 
@@ -63,6 +63,7 @@ module Mxrb
       end
 
       def language_settings = @manifest.data.fetch('languages', {})
+      def import_mapping(name) = @manifest.data.fetch('import_mappings', {})[name.to_s]
       # { key => { language => caption } } of a declared enumeration.
       def enumeration_values(name) = Registry.fetch(:enumeration, name)&.values&.to_h { _1.values_at(:name, :captions) }
       def oql_datasets = Registry.all(:dataset).values.map(&:definition)
@@ -142,7 +143,7 @@ module Mxrb
         records.flat_map do |record|
           record.associations.map do |entry|
             Association.new(entry.fetch(:name).split('.').last, entry.fetch(:type),
-                            record.mendix_id, entry.fetch(:target))
+                            record.mendix_id, entry.fetch(:target), entry.fetch(:owner, :Default))
           end
         end
       end
