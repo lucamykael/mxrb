@@ -1,7 +1,7 @@
 {
   "mendix_version": "11.12.1",
   "mxbuild": "BUILD SUCCEEDED",
-  "package_sha256": "4fc4561b59e9e8793ce52e323d02169c17118cb5d0456ac2355fd24f36de4061",
+  "package_sha256": "39ba95e020ad48004bedec0abcf24445fbb93dbf8764d92e9de5b3dcf060cdaa",
   "results": {
     "base": [
       "[base:base]"
