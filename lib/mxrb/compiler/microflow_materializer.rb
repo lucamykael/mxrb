@@ -7,6 +7,9 @@ module Mxrb
     # Materializes microflows, nanoflows, and rules using the version-matched Runtime schema.
     class MicroflowMaterializer
       TYPES = %w[Microflows$Microflow Microflows$Nanoflow Microflows$Rule].freeze
+      # The module roles the System module's own microflows allow, which MxBuild
+      # turns into the project's user roles.
+      SYSTEM_FLOW_ROLES = { 'System.ShowHomePage' => %w[System.Administrator System.User] }.freeze
 
       def initialize(mpr_path, deployment:)
         @mpr_path = File.expand_path(mpr_path)
@@ -29,7 +32,15 @@ module Mxrb
         compiler = MicroflowDocumentCompiler.new(
           source, RuntimeModelSchema.new(package, version: source.version)
         )
-        source.units.select { TYPES.include?(_1.document['$Type']) }.map { compiler.compile(_1) }
+        source.units.select { TYPES.include?(_1.document['$Type']) }.map { compiler.compile(_1) } +
+          system_documents(package, compiler)
+      end
+
+      def system_documents(package, compiler)
+        package.documents.filter_map do |document|
+          roles = SYSTEM_FLOW_ROLES[document['QualifiedName']]
+          document.merge('ModelerAllowedUserRoles' => compiler.user_roles_for(roles)) if roles
+        end
       end
 
       def write_model(path, package, documents)

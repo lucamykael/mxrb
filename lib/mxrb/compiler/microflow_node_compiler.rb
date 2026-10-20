@@ -22,6 +22,9 @@ module Mxrb
       }.freeze
       TYPE_DEFAULTS = {
         'Microflows$NoCase' => { 'StringRepresentation' => '' },
+        # A change item stores only the member it sets; MxBuild writes the other one empty.
+        'Microflows$ChangeActionItem' => { 'Attribute' => '', 'Association' => '' },
+        'Microflows$DeleteAction' => { 'ErrorHandlingType' => 'Rollback' },
         'Microflows$AggregateAction' => {
           'Expression' => '', 'UseExpression' => false,
           'ReduceInitialValueExpression' => ''
@@ -36,6 +39,7 @@ module Mxrb
         @schema = schema
         @database_connector = DatabaseConnectorActionCompiler.new(source) if source.respond_to?(:units)
         @associations = association_index(source)
+        @page_locations = page_location_index(source)
         @variable_types = {}
       end
 
@@ -157,7 +161,7 @@ module Mxrb
         case field
         when 'Argument' then source.dig('Value', 'Argument').to_s
         when 'QueueSettings', 'NewCaseValue' then nil
-        when 'Location' then 'Content'
+        when 'Location' then @page_locations.fetch(source['Form'].to_s, 'Content')
         when 'ParameterMappings' then []
         when 'StringRepresentation'
           return '(empty)' if source['$Type'] == 'Microflows$InheritanceCase' && source['Value'].to_s.empty?
@@ -228,6 +232,20 @@ module Mxrb
           parent: parent&.fetch('QualifiedName', nil), child: child&.fetch('QualifiedName', nil),
           reference_set: association['Type'] == 'ReferenceSet'
         }
+      end
+
+      # Where a page opens by default: in a popup when its layout is one, as MxBuild
+      # writes the location of a show page action that does not choose one.
+      def page_location_index(source)
+        return {} unless source.respond_to?(:units_of)
+
+        layouts = source.units_of('Forms$Layout').to_h do |unit|
+          ["#{unit.module_name}.#{unit.document['Name']}", unit.document.dig('Content', 'LayoutType').to_s]
+        end
+        source.units_of('Forms$Page').each_with_object({}) do |unit, result|
+          type = layouts[unit.document.dig('FormCall', 'Form').to_s]
+          result["#{unit.module_name}.#{unit.document['Name']}"] = type if %w[Popup ModalPopup].include?(type)
+        end
       end
 
       def association_index(source)

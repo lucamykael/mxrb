@@ -27,6 +27,9 @@ module Mxrb
         end
       end
 
+      # The user roles that hold one of the module roles.
+      def user_roles_for(module_roles) = module_roles.flat_map { @role_map.fetch(_1.to_s, []) }.uniq
+
       private
 
       def root_value(source, field, module_name) # rubocop:disable Metrics/CyclomaticComplexity
@@ -62,9 +65,7 @@ module Mxrb
         end
       end
 
-      def allowed_user_roles(flow)
-        array(flow['AllowedModuleRoles']).flat_map { @role_map.fetch(_1.to_s, []) }.uniq
-      end
+      def allowed_user_roles(flow) = user_roles_for(array(flow['AllowedModuleRoles']))
 
       def project_role_map(source)
         security = source.documents('Security$ProjectSecurity').first
