@@ -207,9 +207,11 @@ mappings são entregues como nomes qualificados. O retorno alimenta a variável
 de resultado apenas quando `UseReturnVariable` está ativo (ou no formato legado
 que declara somente `ResultVariableName`). Uma ação sem registro falha fechado
 com seu nome e a instrução de registro; sem o sidecar opcional descrito adiante,
-não há descoberta de classes, execução de JAR nem fallback para a JVM. REST, app services, SOAP, mappings e geração de
-documentos continuam usando os adapters Ruby por tipo. O frontend permanece
-JavaScript/React no navegador, servido pelo backend Ruby sem Runtime Java.
+não há descoberta de classes, execução de JAR nem fallback para a JVM. Chamadas
+REST, import mappings JSON e serviços REST publicados rodam no backend Ruby; app
+services, SOAP, export mappings, mappings XML e geração de documentos continuam
+usando os adapters Ruby por tipo. O frontend permanece JavaScript/React no
+navegador, servido pelo backend Ruby sem Runtime Java.
 
 ### Ações verificadas e contexto do microflow
 
@@ -305,10 +307,14 @@ A API cobre:
   cookie `mxrb_session`; `Core.initializeGuestSession` abre uma sessão de convidado
   quando a segurança do projeto aceita convidados, e o id dela é o valor do cookie;
 - `IMendixIdentifier.toLong` e `Core.createMendixIdentifier`, com o número guardado
-  no banco do app; `Core.getDefaultLanguage`, `Core.initializeSession` (os
-  microflows chamados com o contexto dela rodam como aquele usuário),
-  `Core.executeAsync` (o sidecar roda o microflow antes de responder) e
-  transações iniciadas pela ação, aninhadas na do microflow chamador.
+  no banco do app; `Core.getDefaultLanguage`, `Core.executeAsync` (o sidecar
+  roda o microflow antes de responder) e transações iniciadas pela ação,
+  aninhadas na do microflow chamador;
+- sessões de usuário: `Core.initializeSession` abre uma sessão do app Ruby para o
+  usuário, e os microflows chamados com o contexto dela rodam como ele;
+  `Core.addSessionCookies`, que o Mendix 10.13 a 10.24 oferece aos módulos de
+  SSO, grava o cookie dessa sessão na resposta e autentica o navegador, como faz
+  o módulo OIDC no callback do login.
 
 Os proxies gerados também têm `load(context, xpath)`, como os do Studio Pro. O
 `org.json` que a Mendix embute como `com.mendix.thirdparty.org.json` (`JSONObject`,

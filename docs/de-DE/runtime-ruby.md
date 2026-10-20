@@ -202,8 +202,10 @@ werden als qualifizierte Namen übergeben. Der Rückgabewert wird nur bei aktive
 `ResultVariableName` deklariert). Eine nicht registrierte Action schlägt mit
 ihrem Namen und einem Registrierungshinweis geschlossen fehl; ohne den unten
 beschriebenen optionalen Sidecar gibt es weder Klassenerkennung noch
-JAR-Ausführung oder JVM-Fallback. REST, App Services, SOAP,
-Mappings und Dokumenterzeugung verwenden weiterhin typbezogene Ruby-Adapter.
+JAR-Ausführung oder JVM-Fallback. REST-Aufrufe, JSON-Import-Mappings und
+veröffentlichte REST-Services laufen im Ruby-Backend; App Services, SOAP,
+Export-Mappings, XML-Mappings und Dokumenterzeugung verwenden weiterhin
+typbezogene Ruby-Adapter.
 Im Browser bleibt JavaScript/React; Backend und APIs laufen ohne Java Runtime.
 
 ### Verifizierte Actions und der Microflow-Kontext
@@ -306,10 +308,14 @@ Mendix-Jar. Die API umfasst:
   Sicherheit des Projekts Gäste zulässt, und ihre ID ist der Wert des Cookies;
 - `IMendixIdentifier.toLong` und `Core.createMendixIdentifier`, mit der in der
   Datenbank der Anwendung gespeicherten Nummer; `Core.getDefaultLanguage`,
-  `Core.initializeSession` (mit ihren Kontexten aufgerufene Microflows laufen als
-  dieser Benutzer), `Core.executeAsync` (der Sidecar führt den Microflow aus, bevor
-  er antwortet) und von der Action gestartete Transaktionen, verschachtelt in die
-  des aufrufenden Microflows.
+  `Core.executeAsync` (der Sidecar führt den Microflow aus, bevor er antwortet)
+  und von der Action gestartete Transaktionen, verschachtelt in die des
+  aufrufenden Microflows;
+- Benutzersitzungen: `Core.initializeSession` öffnet eine Sitzung der
+  Ruby-Anwendung für den Benutzer, und mit ihren Kontexten aufgerufene Microflows
+  laufen als dieser Benutzer; `Core.addSessionCookies`, das Mendix 10.13 bis 10.24
+  SSO-Modulen anbietet, setzt das Cookie dieser Sitzung in der Antwort und meldet
+  den Browser an, wie es das OIDC-Modul im Login-Callback tut.
 
 Generierte Proxies haben auch `load(context, xpath)`, wie die von Studio Pro. Das
 von Mendix als `com.mendix.thirdparty.org.json` gebündelte `org.json`

@@ -192,9 +192,9 @@ as qualified names. The return value is assigned only when `UseReturnVariable`
 is enabled (or for the legacy shape that only declares `ResultVariableName`).
 An unregistered action fails closed with its name and registration guidance;
 without the optional sidecar described below, there is no class discovery, JAR
-execution, or JVM fallback. REST, app services,
-SOAP, mappings, and document generation continue to use type-level Ruby
-adapters. The browser still runs JavaScript/React, while its backend and APIs run
+execution, or JVM fallback. REST calls, JSON import mappings, and published REST
+services run in the Ruby backend; app services, SOAP, export mappings, XML
+mappings, and document generation continue to use type-level Ruby adapters. The browser still runs JavaScript/React, while its backend and APIs run
 without the Java Runtime.
 
 ### Verified actions and the microflow context
@@ -294,9 +294,13 @@ jar. The API covers:
   cookie's value;
 - `IMendixIdentifier.toLong` and `Core.createMendixIdentifier`, with the number
   kept in the application's database; `Core.getDefaultLanguage`,
-  `Core.initializeSession` (microflows called with its contexts run as that user),
   `Core.executeAsync` (the sidecar runs the microflow before it answers) and
-  transactions the action starts, nested in the calling microflow's.
+  transactions the action starts, nested in the calling microflow's;
+- user sessions: `Core.initializeSession` opens a session of the Ruby
+  application for the user, and microflows called with its contexts run as that
+  user; `Core.addSessionCookies`, which Mendix 10.13 to 10.24 offer SSO modules,
+  sets that session's cookie on the response and signs the browser in, as the
+  OIDC module does in its login callback.
 
 Generated proxies also have `load(context, xpath)`, as Studio Pro's do. The
 `org.json` Mendix bundles as `com.mendix.thirdparty.org.json` (`JSONObject`,

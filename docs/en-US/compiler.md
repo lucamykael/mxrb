@@ -7,10 +7,19 @@ they are not build, database, or functional-test dependencies.
 ## Clean build
 
 `DeploymentMaterializer` creates a missing `deployment/` from the installed
-version templates and runs 12 stages: security, constants, domain model,
+version templates and runs 13 stages: security, constants, domain model,
 artifacts, translations, system texts, system queues, client model, actions,
-settings, microflows, and the project/module index. It also creates metadata,
-dependency files, and a Runtime-ordered BSON `model.mdp`.
+settings, microflows, published REST services, and the project/module index. It
+also creates metadata, dependency files, and a Runtime-ordered BSON `model.mdp`.
+
+Microflows get what MxBuild derives and the MPR does not store: the caption
+Studio Pro generates for activities with an automatic caption, where a page with
+a popup layout opens, and the user roles of the System module's microflows. On
+Sudoku 11.12.1, all 57 microflows and nanoflows come out identical to MxBuild
+11.12.1's `model.mdp`, field by field. Published REST services are written in
+the Runtime's form, with the `/rest/`, `/api-doc/`, and `/rest-doc/` handlers in
+`metadata.json`; on Mendix 10.24 they answer as a package of MxBuild 10.24's own
+deployment does.
 
 Bootstrap has audited seeds and catalogs for 6.10.8, 7.5.0, 7.17.0,
 9.6.1.29396, 10.24.0.73019, and 11.12.1. The 6.x, 7.x, 9.x, 10.x, and 11.x families select a
@@ -155,8 +164,11 @@ cleanly. The `ACT Create Animal` functional test then passed.
 
 ## Explicit boundaries
 
-- all 12 stages and clean web generation are validated on 6.10.8, 7.5.0,
-  7.17.0, 9.6.1.29396, 10.24.0.73019, and 11.12.1;
+- the 12 original stages and clean web generation are validated on 6.10.8,
+  7.5.0, 7.17.0, 9.6.1.29396, 10.24.0.73019, and 11.12.1; the published REST
+  stage on 10.24.0.73019;
+- the OpenAPI schemas of published REST services are left empty, so the
+  documentation handlers do not show them yet;
 - exact native boot is proven on 10.24.0.73019 and 11.12.1. The installed 6/7/9
   distributions contain the exact Runtime bundles but no compatible launcher; `db up` fails closed
   instead of substituting the Java-21 launcher from 11;
