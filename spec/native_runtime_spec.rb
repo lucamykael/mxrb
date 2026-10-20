@@ -474,8 +474,16 @@ RSpec.describe Mxrb::Runtime::Native do
   it 'handles lower-level graph cases, mutations, templates, and collection encodings' do
     animal = described_class::ObjectValue.new(entity: 'Clinic.Animal', id: '1', members: {})
     split = { '$Type' => 'Microflows$InheritanceSplit', 'SplitVariableName' => 'value' }
-    expect(@interpreter.send(:split_value, split, 'value' => animal)).to eq('Clinic.Animal')
-    expect(@interpreter.send(:split_value, split, 'value' => 'text')).to eq('String')
+    edge = ->(type) { { 'CaseValues' => [2, { '$Type' => 'Microflows$InheritanceCase', 'Value' => type }] } }
+    otherwise = { 'CaseValues' => [2, { '$Type' => 'Microflows$NoCase' }] }
+    edges = [edge.call('Clinic.Animal'), edge.call('String'), otherwise]
+    expect(@interpreter.send(:select_edge, split, edges, 'value' => animal)).to equal(edges[0])
+    expect(@interpreter.send(:select_edge, split, edges, 'value' => 'text')).to equal(edges[1])
+    expect(@interpreter.send(:select_edge, split, edges, 'value' => nil)).to equal(edges[2])
+    @interpreter.send(:action_cast, { 'VariableName' => 'cast' }, variables = {})
+    expect(variables).to eq('cast' => nil)
+    expect(@interpreter.send(:member_change, 'Remove', %w[a b], 'a')).to eq(['b'])
+    expect(@interpreter.send(:member_change, 'Add', 'a', [animal, 'a'])).to eq(['a', animal])
     expect(@interpreter.send(:flow_case, 'CaseValues' => [{ '$Type' => 'Microflows$NoCase' }])).to eq('')
 
     variables = {}

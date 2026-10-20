@@ -1216,15 +1216,57 @@ module Mxrb
         def select_edge(object, edges, variables)
           return edges.first unless %w[Microflows$ExclusiveSplit Microflows$InheritanceSplit].include?(object['$Type'])
 
+          return inheritance_edge(variables.fetch(object['SplitVariableName'].to_s), edges) if
+            object['$Type'] == 'Microflows$InheritanceSplit'
+
           value = split_value(object, variables)
           edges.find { flow_case(_1) == value.to_s } || edges.find { flow_case(_1).empty? }
         end
 
+        # A reference gives one object from its owner, a specialization of it
+        # included, and from both sides when both own it. From an empty object it
+        # gives empty, which list activities read as an empty list.
+        def single_reference?(definition, start)
+          return false unless definition&.fetch(:type) == :Reference
+          return true if definition[:owner] == 'Both' || start.nil?
+
+          start.respond_to?(:entity) && entity_lineage(start.entity).include?(definition[:from])
+        end
+
+        # An object type decision takes the branch of the object's type or of its
+        # nearest generalization that has one; the cast after it gives the object.
+        def inheritance_edge(value, edges)
+          @cast_source = value
+          lineage = value.respond_to?(:entity) ? entity_lineage(value.entity) : [value.class.name]
+          lineage.each do |type|
+            edge = edges.find { flow_case(_1) == type }
+            return edge if edge
+          end
+          edges.find { flow_case(_1).empty? }
+        end
+
+        # An entity followed by its generalizations, nearest first.
+        def entity_lineage(entity)
+          (@entity_lineage ||= {})[entity] ||= begin
+            chain = [entity]
+            while (parent = generalization_targets[chain.last]) && !chain.include?(parent)
+              chain << parent
+            end
+            chain
+          end
+        end
+
+        def generalization_targets
+          @generalization_targets ||= @project.modules.flat_map do |mod|
+            mod.entities.filter_map do |entity|
+              target = entity.generalization_target.to_s
+              ["#{mod.name}.#{entity.name}", target] unless target.empty?
+            end
+          end.to_h
+        end
+
         def split_value(object, variables)
-          if object['$Type'] == 'Microflows$InheritanceSplit'
-            value = variables.fetch(object['SplitVariableName'].to_s)
-            value.respond_to?(:entity) ? value.entity : value.class.name
-          elsif object.dig('SplitCondition', '$Type') == 'Microflows$RuleSplitCondition'
+          if object.dig('SplitCondition', '$Type') == 'Microflows$RuleSplitCondition'
             invoke_flow_call(object.dig('SplitCondition', 'RuleCall'), variables)
           else
             @expression.evaluate(object.dig('SplitCondition', 'Expression'), variables)
@@ -1308,9 +1350,7 @@ module Mxrb
             end
           end
           definition = @associations[source['AssociationId'].to_s]
-          # A reference gives one object from its owner, and from both sides when both own it.
-          owner = definition && (definition[:from] == start.entity || definition[:owner] == 'Both')
-          values = values.first if owner && definition.fetch(:type) == :Reference
+          values = values.first if single_reference?(definition, start)
           variables[action['ResultVariableName'].to_s] = values
         end
 
@@ -1421,7 +1461,9 @@ module Mxrb
           @log << render_template(action['MessageTemplate'], variables)
         end
 
-        def action_cast(_action, _variables); end
+        def action_cast(action, variables)
+          variables[action['VariableName'].to_s] = @cast_source
+        end
 
         def action_rollback(action, variables)
           value = variables.fetch(action['RollbackVariableName'].to_s)
@@ -1750,20 +1792,19 @@ module Mxrb
             )
             headers['Authorization'] = "Basic #{Base64.strict_encode64("#{username}:#{password}")}"
           end
-          request = action['RequestHandling'] || {}
-          body_value = variables[request['MappingVariableName'].to_s]
-          body = body_value.nil? ? nil : JSON.generate(runtime_json(body_value))
+          body = rest_request_body(action['RequestHandling'] || {}, variables)
           timeout = @expression.evaluate(action['TimeOutExpression'], variables) if action['UseRequestTimeOut'] == true
           transport = rest_transport_options(action, configuration, variables)
           arguments = [configuration['HttpMethod'].to_s, location, headers, body, timeout]
+          variables['latestHttpResponse'] = nil
           response = if transport.empty?
                        @http.call(*arguments)
                      else
                        @http.call(*arguments, transport)
                      end
-          unless response.code.to_i.between?(200, 299)
-            raise NativeRuntimeError, "REST call returned HTTP #{response.code}"
-          end
+          success = response.code.to_i.between?(200, 299)
+          variables['latestHttpResponse'] = latest_http_response(response, content: !success)
+          raise NativeRuntimeError, "REST call returned HTTP #{response.code}" unless success
 
           bind_rest_result(
             action['ResultHandling'] || {}, response.body.to_s, variables,
@@ -1771,6 +1812,32 @@ module Mxrb
           )
         rescue URI::InvalidURIError, JSON::ParserError => e
           raise NativeRuntimeError, "REST call failed: #{e.message}"
+        end
+
+        # The body of a REST request: its custom template, or the JSON of its variable.
+        def rest_request_body(request, variables)
+          if request['$Type'] == 'Microflows$CustomRequestHandling'
+            text = render_template(request['Template'], variables)
+            return text.empty? ? nil : text
+          end
+
+          value = variables[request['MappingVariableName'].to_s]
+          value.nil? ? nil : JSON.generate(runtime_json(value))
+        end
+
+        # $latestHttpResponse: the status, reason and headers of the last REST call,
+        # with its content only when the call failed, as the Runtime gives it.
+        def latest_http_response(response, content:)
+          message = store.create('System.HttpResponse')
+          message.members.merge!('StatusCode' => response.code.to_i,
+                                 'ReasonPhrase' => response.respond_to?(:message) ? response.message : nil,
+                                 'Content' => content ? response.body.to_s : nil)
+          if response.respond_to?(:each_capitalized)
+            response.each_capitalized do |key, value|
+              store.create('System.HttpHeader').members.merge!('Key' => key, 'Value' => value, 'HttpHeaders' => message)
+            end
+          end
+          message
         end
 
         def action_show_form(action, variables)
@@ -1991,10 +2058,25 @@ module Mxrb
             member = (item['Attribute'].to_s.empty? ? item['Association'] : item['Attribute']).to_s
             name = member.split(%r{[./]}).last
             authorize_entity!(object.entity, :write, member: name, record: object)
-            object.members[name] = @expression.evaluate(item['Value'], variables)
+            object.members[name] = member_change(item['Type'], object.members[name],
+                                                 @expression.evaluate(item['Value'], variables))
           end
           store.touch(object) if !items(values).empty? && store.respond_to?(:touch)
         end
+
+        # Add and Remove change a reference set as a set of objects; Set replaces it.
+        def member_change(type, current, value)
+          case type.to_s
+          when 'Add' then (references(current) + references(value)).uniq { reference_key(_1) }
+          when 'Remove'
+            removed = references(value).map { reference_key(_1) }
+            references(current).reject { removed.include?(reference_key(_1)) }
+          else value
+          end
+        end
+
+        def references(value) = value.is_a?(Array) ? value : [value].compact
+        def reference_key(value) = value.respond_to?(:id) ? value.id.to_s : value.to_s
 
         def enforce_entity_access?
           @apply_entity_access && @policy && @security_context &&

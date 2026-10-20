@@ -1,0 +1,34 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "8559b9e718c189d700917453b196314c19c4b251c5924cb95dbb5d213f02db8c",
+  "results": {
+    "added_one": [
+      "[1]"
+    ],
+    "added_again": [
+      "[1]"
+    ],
+    "added_second": [
+      "[2]"
+    ],
+    "removed_one": [
+      "[1]"
+    ],
+    "removed_missing": [
+      "[1]"
+    ],
+    "set_one": [
+      "[1]"
+    ],
+    "added_list": [
+      "[3]"
+    ],
+    "removed_list": [
+      "[1]"
+    ],
+    "committed": [
+      "[1]"
+    ]
+  }
+}

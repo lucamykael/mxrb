@@ -2,16 +2,23 @@
 
 require 'spec_helper'
 require 'tmpdir'
+require_relative '../fixtures/native_latest_http_response/stub'
 
 # Microflows whose "ORACLE <case>=<value>" log lines were recorded on the native
 # Mendix 11.12.1 Runtime by script/oql_native_oracle.
 # rubocop:disable Metrics/BlockLength
 RSpec.describe 'microflows recorded on the native Runtime' do
+  before(:all) { @stub = LatestHttpResponseStub.start }
+  after(:all) { @stub.close }
+
   {
     'getCaption and getKey' => 'native_enum_captions',
     'Find and Filter by attribute or association' => 'native_list_member_operations',
     'retrieves over references changed in memory' => 'native_uncommitted_references',
-    'a JSON import mapping' => 'native_import_mapping'
+    'a JSON import mapping' => 'native_import_mapping',
+    'changes that add to and remove from a reference set' => 'native_reference_set_changes',
+    '$latestHttpResponse after REST calls' => 'native_latest_http_response',
+    'object type decisions and casts' => 'native_inheritance_split'
   }.each do |subject, fixture|
     it "runs #{subject} as Mendix 11.12.1 does, in memory and on SQLite" do
       directory = File.join('spec/fixtures', fixture)
@@ -35,7 +42,8 @@ RSpec.describe 'microflows recorded on the native Runtime' do
     end
   end
 
-  %w[native_import_mapping native_uncommitted_references].each do |fixture|
+  %w[native_import_mapping native_uncommitted_references native_reference_set_changes
+     native_latest_http_response native_inheritance_split].each do |fixture|
     it "runs #{fixture} from the exported Ruby application as Mendix 11.12.1 does" do
       expected = JSON.parse(File.read(File.join('spec/fixtures', fixture, 'expected.json'))).fetch('results')
       Dir.mktmpdir do |work|

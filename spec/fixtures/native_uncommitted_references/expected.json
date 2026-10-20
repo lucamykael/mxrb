@@ -1,7 +1,7 @@
 {
   "mendix_version": "11.12.1",
   "mxbuild": "BUILD SUCCEEDED",
-  "package_sha256": "c70a4971e28f8c9562342a0e9c202d349d0f550c08e34c3584424e7b353bb4a5",
+  "package_sha256": "3fdef3a3eb6a4e01f1bfebb0ea66844f5cc33ca13ff2a98a31a251c1aeb63b89",
   "results": {
     "owner_side": [
       "[fresh]"
@@ -23,6 +23,18 @@
     ],
     "reference_set": [
       "[1]"
+    ],
+    "empty_owner": [
+      "[empty]"
+    ],
+    "empty_reference_set": [
+      "[0]"
+    ],
+    "empty_other_side": [
+      "[0]"
+    ],
+    "empty_other_side_loop": [
+      "[0]"
     ]
   }
 }

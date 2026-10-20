@@ -3,8 +3,8 @@
 # What a retrieve over an association gives on Mendix 11.12.1 after a reference
 # changed in memory and was not committed: from the owner, through a
 # non-persistent helper that refers to the owner, from the new and the former
-# other side, from a new owner, for a reference set, and from the other side of
-# a one-to-one reference. Views.RunAll runs after startup and logs one
+# other side, from a new owner, for a reference set, from the other side of a
+# one-to-one reference, and from an empty object. Views.RunAll runs after startup and logs one
 # "ORACLE <case>=<value>" line each.
 
 require 'mxrb'
@@ -80,6 +80,22 @@ Mxrb.define(output_path) do
       retrieve_association :owner, association: 'Views.Holder_Tags', as: :tags
       aggregate :tags, function: :count, as: :tagCount
       log_message 'ORACLE reference_set=[{1}]', node: oracle, parameters: ['toString($tagCount)']
+      retrieve_objects 'Views.Holder', as: :nobody, xpath: "[Name = 'nobody']", single: true
+      retrieve_association :nobody, association: 'Views.Holder_Target', as: :emptyTarget
+      log_message 'ORACLE empty_owner=[{1}]', node: oracle,
+                                              parameters: ["if $emptyTarget = empty then 'empty' else 'object'"]
+      retrieve_association :nobody, association: 'Views.Holder_Tags', as: :emptyTags
+      aggregate :emptyTags, function: :count, as: :emptyTagCount
+      log_message 'ORACLE empty_reference_set=[{1}]', node: oracle, parameters: ['toString($emptyTagCount)']
+      retrieve_objects 'Views.Target', as: :noTarget, xpath: "[Name = 'nobody']", single: true
+      retrieve_association :noTarget, association: 'Views.Holder_Target', as: :noHolders
+      aggregate :noHolders, function: :count, as: :noHolderCount
+      log_message 'ORACLE empty_other_side=[{1}]', node: oracle, parameters: ['toString($noHolderCount)']
+      create_variable :visited, type: :Integer, value: '0'
+      loop_over :noHolders, as: :noHolder do
+        change_variable :visited, to: '$visited + 1'
+      end
+      log_message 'ORACLE empty_other_side_loop=[{1}]', node: oracle, parameters: ['toString($visited)']
       return_value 'true'
     end
   end

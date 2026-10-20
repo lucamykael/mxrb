@@ -30,6 +30,9 @@ module Mxrb
         if external_backend?
           @backend_pid = spawn_backend
         else
+          # The address Java actions report as the application root, as a spawned backend gets it.
+          ENV['HOST'] = host
+          ENV['MXRB_SERVER_PORT'] = api_port.to_s
           @server = Server.new(root, host:, port: api_port, environment: @environment, reload: @reload)
           @backend = Thread.new { @server.start }
         end

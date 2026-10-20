@@ -1,0 +1,19 @@
+{
+  "mendix_version": "11.12.1",
+  "mxbuild": "BUILD SUCCEEDED",
+  "package_sha256": "4fc4561b59e9e8793ce52e323d02169c17118cb5d0456ac2355fd24f36de4061",
+  "results": {
+    "base": [
+      "[base:base]"
+    ],
+    "middle": [
+      "[middle:middle]"
+    ],
+    "leaf": [
+      "[middle:leaf]"
+    ],
+    "other": [
+      "[base:other]"
+    ]
+  }
+}

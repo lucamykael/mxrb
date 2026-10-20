@@ -69,6 +69,17 @@ module Mxrb
         token
       end
 
+      # A session of a persisted System.User a Java action signed in, as an SSO
+      # module does with Core.initializeSession; its token is its id, which the
+      # action sets as the session cookie.
+      def open(user, roles)
+        token = SecureRandom.uuid
+        identity = { 'user' => user.id, 'roles' => Array(roles).map(&:to_s),
+                     '_csrf' => SecureRandom.urlsafe_base64(32) }
+        @store.write_session(token:, identity:, expires_at: @clock.call + ttl)
+        token
+      end
+
       # The id of the session a token opens: the token itself when it is a UUID,
       # as a guest's is, otherwise a UUID derived from it.
       def self.session_id(token)
