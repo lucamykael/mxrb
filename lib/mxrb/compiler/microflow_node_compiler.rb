@@ -197,11 +197,25 @@ module Mxrb
         raise CompilationError, "unknown association #{source['AssociationId'].inspect}" unless association
 
         start = @variable_types[source['StartVariableName'].to_s]
-        target = start == association[:child] ? association[:parent] : association[:child]
+        from_child = start == association[:child] ||
+                     (!specializes?(start, association[:parent]) && specializes?(start, association[:child]))
+        target = from_child ? association[:parent] : association[:child]
         return if target.to_s.empty?
 
-        list = association[:reference_set] || start == association[:child]
+        list = association[:reference_set] || from_child
         list ? "[#{target}]" : target
+      end
+
+      # Whether an entity is another one or one of its specializations.
+      def specializes?(entity, ancestor)
+        seen = []
+        while entity && !seen.include?(entity)
+          return true if entity == ancestor
+
+          seen << entity
+          entity = @schema.respond_to?(:named) && @schema.named(entity)&.dig('MaybeGeneralization', 'Generalization')
+        end
+        false
       end
 
       def runtime_association(name)

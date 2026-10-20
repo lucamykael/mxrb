@@ -4,6 +4,9 @@ module Mxrb
   module Compiler
     # Derives initial Runtime metadata from an application MPR.
     class DeploymentMetadata
+      REST_HANDLERS = [['/api-doc/', true], ['/rest/', true], ['/rest-doc/', false]].freeze
+      private_constant :REST_HANDLERS
+
       def initialize(mpr_path, source)
         @mpr_path = mpr_path
         @source = source
@@ -54,8 +57,11 @@ module Mxrb
         }
       end
 
+      # The handlers MxBuild lists: published REST services add their own and
+      # their documentation, between /link/ and /p/.
       def request_handlers
-        [['/api/', true], ['/link/', true], ['/p/', false]].map do |name, enabled|
+        rest = @source.documents('Rest$PublishedRestService').empty? ? [] : REST_HANDLERS
+        [['/api/', true], ['/link/', true], *rest, ['/p/', false]].map do |name, enabled|
           { 'Name' => name, 'DefaultEnabled' => enabled, 'MatchExactly' => false }
         end
       end

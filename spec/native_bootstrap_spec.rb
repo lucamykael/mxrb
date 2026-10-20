@@ -171,6 +171,19 @@ RSpec.describe Mxrb::Compiler::DeploymentMetadata do
     metadata = described_class.new('/tmp/Empty.mpr', source)
     expect(metadata.document).to include('ProjectID' => '', 'Languages' => [], 'JavaVersion' => 21)
     expect(metadata.dependencies).to include('appName' => 'Empty')
+    expect(metadata.document.fetch('RequestHandlers').map { _1['Name'] }).to eq(%w[/api/ /link/ /p/])
+  end
+
+  it 'lists the REST handlers MxBuild adds for published REST services' do
+    source = instance_double(Mxrb::Compiler::SourceModel, version: '10.24.0', units: [])
+    allow(source).to receive(:documents) { |type = nil| type == 'Rest$PublishedRestService' ? [{}] : [] }
+    allow(Mxrb::Runtime::Toolchain).to receive(:new).and_return(
+      instance_double(Mxrb::Runtime::Toolchain, plan: instance_double(Mxrb::Runtime::Plan, java_version: '21'))
+    )
+    handlers = described_class.new('/tmp/Rest.mpr', source).document.fetch('RequestHandlers')
+    expect(handlers.map { _1.values_at('Name', 'DefaultEnabled') })
+      .to eq([['/api/', true], ['/link/', true], ['/api-doc/', true], ['/rest/', true], ['/rest-doc/', false],
+              ['/p/', false]])
   end
 end
 
