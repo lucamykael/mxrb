@@ -1330,5 +1330,21 @@
     "$ID",
     "$Type",
     "Segment"
+  ],
+  "Forms$PagePrimitiveParameterUrlSegment": [
+    "$ID",
+    "$Type",
+    "PageParameter"
+  ],
+  "Forms$ParameterAttributeUrlSegment": [
+    "$ID",
+    "$Type",
+    "PageParameter",
+    "Attribute"
+  ],
+  "Forms$ParameterIdUrlSegment": [
+    "$ID",
+    "$Type",
+    "PageParameter"
   ]
 }

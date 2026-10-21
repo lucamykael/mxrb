@@ -6,8 +6,9 @@ module Mxrb
     class SettingsDocumentCompiler
       include ModelValues
 
-      def initialize(schema)
+      def initialize(schema, version: nil)
         @schema = schema
+        @version = version
       end
 
       def compile(unit)
@@ -36,8 +37,19 @@ module Mxrb
       def compile_node(source)
         existing = @schema.counterpart(source)
         @schema.fields_for(source).to_h do |field|
-          value = source.key?(field) ? compile_value(source[field]) : existing&.fetch(field, nil)
+          value = source.key?(field) ? compile_value(source[field]) : derived(source, field, existing)
           [field, value]
+        end
+      end
+
+      # A language's description and writing direction come from MxBuild's table.
+      def derived(source, field, existing)
+        return existing&.fetch(field, nil) unless source['$Type'] == 'Texts$Language'
+
+        case field
+        when 'Description' then Languages.entry(source['Code'], @version).fetch('description')
+        when 'RightToLeft' then Languages.entry(source['Code'], @version).fetch('rtl')
+        else existing&.fetch(field, nil)
         end
       end
     end

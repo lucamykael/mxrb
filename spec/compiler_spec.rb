@@ -100,12 +100,29 @@ RSpec.describe Mxrb::Compiler do
   end
 
   it 'does not expose excluded pages to the web client' do
-    source = described_class::SourceModel.allocate
-    excluded = described_class::SourceModel::Unit.new(
-      'page', nil, nil, { '$Type' => 'Forms$Page', 'Excluded' => true }, 'App'
-    )
+    Dir.mktmpdir do |root|
+      path = File.join(root, 'Excluded.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module(:App) do
+          layout :Shell
+          page(:Home) { layout 'App.Shell' }
+        end
+      end
+      expect(described_class::SourceModel.read(path).units_of('Forms$Page').map { _1.document['Name'] }).to eq(['Home'])
 
-    expect(source.web_page?(excluded)).to be(false)
+      exclude_pages(path)
+      expect(described_class::SourceModel.read(path).units_of('Forms$Page')).to be_empty
+    end
+  end
+
+  def exclude_pages(path)
+    mpr = Mxrb::IO::MprFile.open(path)
+    mpr.all_units.each do |raw|
+      document = mpr.parse_contents(raw)
+      mpr.update_unit(raw.fetch('UnitID'), document.merge('Excluded' => true)) if document['$Type'] == 'Forms$Page'
+    end
+    mpr.close
   end
 
   it 'creates new Mendix 10 projects with the optimized client' do

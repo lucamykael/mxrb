@@ -32,8 +32,7 @@ module Mxrb
         compiler = MicroflowDocumentCompiler.new(
           source, RuntimeModelSchema.new(package, version: source.version)
         )
-        flows = source.units.select { TYPES.include?(_1.document['$Type']) && _1.document['Excluded'] != true }
-        flows.map { compiler.compile(_1) } +
+        source.units.select { TYPES.include?(_1.document['$Type']) }.map { compiler.compile(_1) } +
           system_documents(package, compiler)
       end
 

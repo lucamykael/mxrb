@@ -75,12 +75,6 @@ module Mxrb
           array(role['ModuleRoles']).each { |module_role| map[module_role.to_s] << role['Name'].to_s }
         end
       end
-
-      def derived_id(source, label)
-        seed = "#{IO::BsonCodec.extract_id(source['$ID'])}:#{label}"
-        hex = Digest::SHA256.hexdigest(seed)[0, 32]
-        "#{hex[0, 8]}-#{hex[8, 4]}-4#{hex[13, 3]}-8#{hex[17, 3]}-#{hex[20, 12]}"
-      end
     end
   end
 end

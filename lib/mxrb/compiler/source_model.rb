@@ -2,7 +2,8 @@
 
 module Mxrb
   module Compiler
-    # Read-only indexed view of MPR units used by native materializers.
+    # Read-only indexed view of MPR units used by native materializers. Excluded
+    # documents are left out, as MxBuild deploys none of them.
     class SourceModel
       Unit = Data.define(:id, :container_id, :containment, :document, :module_name)
       CLIENT_TYPE = /\A(?:Forms|JavaScriptActions|Menus|Navigation)\$|\AMicroflows\$Nanoflow\z/
@@ -33,8 +34,6 @@ module Mxrb
       end
 
       def web_page?(unit)
-        return false if unit.document['Excluded'] == true
-
         layout_name = unit.document.dig('FormCall', 'Form').to_s
         layout = units_of('Forms$Layout').find do |candidate|
           "#{candidate.module_name}.#{candidate.document['Name']}" == layout_name
@@ -42,10 +41,7 @@ module Mxrb
         layout.nil? || layout.document.dig('Content', '$Type') != 'Forms$NativeLayoutContent'
       end
 
-      def web_layout?(unit)
-        unit.document['Excluded'] != true &&
-          unit.document.dig('Content', '$Type') == 'Forms$WebLayoutContent'
-      end
+      def web_layout?(unit) = unit.document.dig('Content', '$Type') == 'Forms$WebLayoutContent'
 
       def optimized_web_client?
         settings = documents('Settings$ProjectSettings').first
@@ -77,10 +73,12 @@ module Mxrb
       def build_units(raw_units, documents)
         raw_index = raw_units.to_h { [_1['UnitID'], _1] }
         module_names = {}
-        raw_units.map do |raw|
+        raw_units.filter_map do |raw|
+          document = documents.fetch(raw['UnitID'])
+          next if document['Excluded'] == true
+
           Unit.new(
-            id: raw['UnitID'], container_id: raw['ContainerID'],
-            containment: raw['ContainmentName'], document: documents.fetch(raw['UnitID']),
+            id: raw['UnitID'], container_id: raw['ContainerID'], containment: raw['ContainmentName'], document:,
             module_name: resolve_module(raw, raw_index, documents, module_names)
           )
         end.freeze

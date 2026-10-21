@@ -17,7 +17,8 @@ module Mxrb
         source = SourceModel.read(@mpr_path)
         path = File.join(@deployment, 'model', 'model.mdp')
         package = ModelPackage.read(path)
-        pages = source.units_of('Forms$Page').map { PageDocumentCompiler.new(source).compile(_1) }
+        compiler = PageDocumentCompiler.new(source)
+        pages = source.units_of('Forms$Page').map { compiler.compile(_1) }
         navigation = compile_navigation(source, package)
         write(path, package, pages + navigation)
         ClientModelMaterialization.new(
@@ -28,9 +29,7 @@ module Mxrb
       private
 
       def compile_navigation(source, package)
-        compiler = NavigationDocumentCompiler.new(
-          RuntimeModelSchema.new(package, version: source.version)
-        )
+        compiler = NavigationDocumentCompiler.new(RuntimeModelSchema.new(package, version: source.version), source:)
         source.units_of('Navigation$NavigationDocument').map { compiler.compile(_1) }
       end
 

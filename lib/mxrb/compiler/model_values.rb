@@ -62,6 +62,32 @@ module Mxrb
         else value
         end
       end
+
+      # A stable ID for a document the Runtime model has and the MPR does not,
+      # derived from the ID of the source document it belongs to.
+      def derived_id(source, label)
+        seed = "#{IO::BsonCodec.extract_id(source['$ID'])}:#{label}"
+        hex = Digest::SHA256.hexdigest(seed)[0, 32]
+        "#{hex[0, 8]}-#{hex[8, 4]}-4#{hex[13, 3]}-8#{hex[17, 3]}-#{hex[20, 12]}"
+      end
+
+      # Where each page whose layout is a popup opens by default, as MxBuild
+      # writes the location of a page call that chooses none.
+      def page_locations(source)
+        return {} unless source.respond_to?(:units_of)
+
+        layouts = layout_types(source)
+        source.units_of('Forms$Page').each_with_object({}) do |unit, result|
+          type = layouts[unit.document.dig('FormCall', 'Form').to_s]
+          result["#{unit.module_name}.#{unit.document['Name']}"] = type if %w[Popup ModalPopup].include?(type)
+        end
+      end
+
+      def layout_types(source)
+        source.units_of('Forms$Layout').to_h do |unit|
+          ["#{unit.module_name}.#{unit.document['Name']}", unit.document.dig('Content', 'LayoutType').to_s]
+        end
+      end
     end
   end
 end

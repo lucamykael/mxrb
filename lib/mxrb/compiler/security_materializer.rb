@@ -50,7 +50,7 @@ module Mxrb
           'PasswordPolicySettings' => source['PasswordPolicySettings'],
           'SecurityLevel' => source['SecurityLevel'], 'AdminUserName' => source['AdminUserName'],
           'AdminUserRole' => source['AdminUserRole'],
-          'EnableDemoUsers' => source['EnableDemoUsers'] == true,
+          'EnableDemoUsers' => source['EnableDemoUsers'] == true && source['SecurityLevel'] != 'CheckNothing',
           'EnableGuestAccess' => source['EnableGuestAccess'] == true,
           'GuestUserRole' => source['GuestUserRole'].to_s, 'StrictMode' => source['StrictMode'] == true
         }
@@ -61,15 +61,23 @@ module Mxrb
       end
 
       def compile_role(role, names)
-        manageable = role['ManageAllRoles'] == true ? names : array(role['ManageableRoles']).map(&:to_s)
         {
           '$ID' => role['$ID'], '$Type' => role['$Type'], 'GUID' => role['GUID'],
           'Name' => role['Name'], 'Description' => role['Description'].to_s,
           'IsSystemAdministrator' => array(role['ModuleRoles']).include?('System.Administrator'),
-          'ManageableRoles' => manageable,
-          'ManageUsersWithoutRoles' => role['ManageUsersWithoutRoles'] == true,
+          'ManageableRoles' => manageable_roles(role, names),
+          'ManageUsersWithoutRoles' => manage_users_without_roles?(role),
           'CheckSecurity' => role['CheckSecurity'] != false
         }
+      end
+
+      def manageable_roles(role, names)
+        role['ManageAllRoles'] == true ? names : array(role['ManageableRoles']).map(&:to_s)
+      end
+
+      # A role that manages every role also manages the users that have none.
+      def manage_users_without_roles?(role)
+        role['ManageAllRoles'] == true || role['ManageUsersWithoutRoles'] == true
       end
 
       def role_metadata(roles, names)
@@ -80,8 +88,7 @@ module Mxrb
       end
 
       def metadata_role(role, names, ids)
-        manageable = role['ManageAllRoles'] == true ? names : array(role['ManageableRoles']).map(&:to_s)
-        resolved = manageable.filter_map { ids[_1] }
+        resolved = manageable_roles(role, names).filter_map { ids[_1] }
         { 'Name' => role['Name'].to_s }.tap do |value|
           value['ManageableRoles'] = resolved unless resolved.empty?
         end

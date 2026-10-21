@@ -59,6 +59,49 @@ RSpec.describe Mxrb::Compiler::SettingsMaterializer do
     expect(settings['Settings']).not_to include(Integer)
   end
 
+  it 'describes each language as the MxBuild of the version does' do
+    result = described_class.new(@mpr, deployment: @deployment).materialize
+    settings = Mxrb::Compiler::ModelPackage.read(result.model_path).documents.first
+    languages = settings['Settings'].find { _1['$Type'] == 'Settings$LanguageSettings' }
+
+    expect(languages['Languages'].first).to include(
+      'Code' => 'en_US', 'Description' => 'English, United States', 'RightToLeft' => false
+    )
+    expect(languages['Languages'].first.keys).to eq(
+      %w[$ID $Type Code Description RightToLeft CheckCompleteness CustomDateFormat CustomTimeFormat
+         CustomDateTimeFormat]
+    )
+
+    schema = Struct.new(:fields, :existing) do
+      def fields_for(_source) = fields
+      def counterpart(_source) = existing
+    end
+    fields = %w[$ID $Type Code Description RightToLeft CustomDateFormat]
+    language = { '$ID' => 'lang', '$Type' => 'Texts$Language', 'Code' => 'ar_SA' }
+    bare = Mxrb::Compiler::SettingsDocumentCompiler.new(schema.new(fields, nil), version: '11.12.1')
+    expect(bare.send(:compile_node, language)).to eq(
+      '$ID' => 'lang', '$Type' => 'Texts$Language', 'Code' => 'ar_SA', 'Description' => 'Arabic, Saudi Arabia',
+      'RightToLeft' => true, 'CustomDateFormat' => nil
+    )
+    seeded = Mxrb::Compiler::SettingsDocumentCompiler.new(schema.new(fields, { 'CustomDateFormat' => 'dd' }),
+                                                          version: '11.12.1')
+    expect(seeded.send(:compile_node, language)).to include('CustomDateFormat' => 'dd')
+    expect(seeded.send(:compile_node, '$ID' => 'part', '$Type' => 'Settings$ModelSettings'))
+      .to include('CustomDateFormat' => 'dd', 'Code' => nil)
+    expect { bare.send(:compile_node, language.merge('Code' => 'xx_XX')) }
+      .to raise_error(Mxrb::CompilationError, /language xx_XX is not one MxBuild 11.12.1 accepts/)
+  end
+
+  it 'knows the languages each MxBuild accepts and their writing direction' do
+    languages = Mxrb::Compiler::Languages
+    expect(languages.entry('ar_SA', '11.12.1')).to eq('description' => 'Arabic, Saudi Arabia', 'rtl' => true)
+    expect(languages.entry('pt_BR', '10.24.0.73019')).to eq('description' => 'Portuguese, Brazil', 'rtl' => false)
+    expect(languages.table('9.24.0')).to equal(languages.table('10.24.0.73019'))
+    expect(languages.table('11.12.1').keys - languages.table('10.24.0.73019').keys).to eq(%w[he_IL id_ID ka_GE])
+    expect { languages.entry('he_IL', '10.24.0.73019') }
+      .to raise_error(Mxrb::CompilationError, /language he_IL is not one MxBuild 10.24.0.73019 accepts/)
+  end
+
   it 'rejects non-settings roots and fills schema fields without counterparts' do
     schema = Struct.new(:fields) do
       def fields_for(_source) = fields

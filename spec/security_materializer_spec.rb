@@ -61,6 +61,22 @@ RSpec.describe Mxrb::Compiler::SecurityMaterializer do
       .to include('Name' => 'Demo', 'UserRoles' => %w[User Administrator])
   end
 
+  it 'derives the demo-user and role flags as MxBuild does' do
+    compiler = described_class.allocate
+    disabled = @source.merge('SecurityLevel' => 'CheckNothing', 'EnableDemoUsers' => true)
+    expect(compiler.send(:compiled_document, disabled, [])).to include('EnableDemoUsers' => false)
+    enabled = @source.merge('SecurityLevel' => 'CheckEverything', 'EnableDemoUsers' => true)
+    expect(compiler.send(:compiled_document, enabled, [])).to include('EnableDemoUsers' => true)
+
+    manager = { 'Name' => 'Administrator', 'ManageAllRoles' => true, 'ManageUsersWithoutRoles' => false,
+                'ModuleRoles' => [] }
+    expect(compiler.send(:compile_role, manager, %w[User Administrator]))
+      .to include('ManageUsersWithoutRoles' => true, 'ManageableRoles' => %w[User Administrator])
+    limited = manager.merge('ManageAllRoles' => false, 'ManageableRoles' => ['User'])
+    expect(compiler.send(:compile_role, limited, %w[User Administrator]))
+      .to include('ManageUsersWithoutRoles' => false, 'ManageableRoles' => ['User'])
+  end
+
   it 'rejects missing project security, model documents, and invalid admin roles' do
     allow(Mxrb::IO::MprFile).to receive(:open).and_call_original
     allow(Mxrb::IO::MprFile).to receive(:open).with('/missing/App.mpr', readonly: true)

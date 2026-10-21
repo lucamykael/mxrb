@@ -1275,5 +1275,50 @@
     "Bind",
     "ResultVariableName",
     "VariableDataType"
+  ],
+  "Forms$ParameterAttributeUrlSegment": [
+    "$ID",
+    "$Type",
+    "PageParameter",
+    "Attribute"
+  ],
+  "Forms$ParameterIdUrlSegment": [
+    "$ID",
+    "$Type",
+    "PageParameter"
+  ],
+  "Url$StaticUrlSegment": [
+    "$ID",
+    "$Type",
+    "Segment"
+  ],
+  "Navigation$NativeHomePage": [
+    "$ID",
+    "$Type",
+    "HomePagePage"
+  ],
+  "Navigation$NativeNavigationProfile": [
+    "$ID",
+    "$Type",
+    "OfflineEntityConfigsRuntime",
+    "NativeHomePage",
+    "RoleBasedNativeHomePages",
+    "Name",
+    "IsOffline",
+    "OtaEnabled",
+    "LoggingEnabled"
+  ],
+  "Navigation$OfflineEntityConfig": [
+    "$ID",
+    "$Type",
+    "Entity",
+    "SyncMode",
+    "Constraint"
+  ],
+  "Navigation$RoleBasedNativeHomePage": [
+    "$ID",
+    "$Type",
+    "HomePagePage",
+    "UserRole"
   ]
 }
