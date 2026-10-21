@@ -15,16 +15,17 @@ module Mxrb
         widget_types.select { (_1['WidgetPluginWidget'] == true) == plugin }.map { _1['WidgetId'].to_s }.uniq
       end
 
+      # The web documents in the order of the MPR units.
+      def documents
+        return [] unless @source.respond_to?(:units)
+
+        @documents ||= @source.units.select { web_document?(_1) }.map(&:document)
+      end
+
       private
 
       def widget_types
-        @widget_types ||= web_documents.flat_map { custom_widget_types(_1) }
-      end
-
-      def web_documents
-        return [] unless @source.respond_to?(:units)
-
-        @source.units.select { web_document?(_1) }.map(&:document)
+        @widget_types ||= documents.flat_map { custom_widget_types(_1) }
       end
 
       def web_document?(unit)

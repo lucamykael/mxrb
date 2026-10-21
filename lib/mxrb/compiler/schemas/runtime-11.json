@@ -1283,6 +1283,47 @@
     "$ID",
     "$Type"
   ],
+  "Forms$GridSelectAllButton": [
+    "$ID",
+    "$Type",
+    "SelectionType"
+  ],
+  "Forms$GridDeselectAllButton": [
+    "$ID",
+    "$Type"
+  ],
+  "Forms$DataGridExportToExcelButton": [
+    "$ID",
+    "$Type",
+    "MaxNumberOfRows",
+    "UseExcelDateType"
+  ],
+  "Forms$DataGridExportToCSVButton": [
+    "$ID",
+    "$Type",
+    "MaxNumberOfRows",
+    "DecimalSeparator",
+    "GroupSeparator",
+    "Delimiter",
+    "GenerateExcelHint",
+    "UseGridDateFormat"
+  ],
+  "Forms$MicroflowAction": [
+    "$ID",
+    "$Type",
+    "MicroflowSettings"
+  ],
+  "Forms$MicroflowSettings": [
+    "$ID",
+    "$Type",
+    "ProgressMessage",
+    "ConfirmationInfo",
+    "Microflow",
+    "ProgressBar",
+    "Asynchronous",
+    "FormValidations",
+    "ExpectListArgument"
+  ],
   "Microflows$Head": [
     "$ID",
     "$Type",

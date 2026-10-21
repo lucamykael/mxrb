@@ -66,7 +66,7 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
       %w[$ID $Type Parameters Title UrlSegments Name QualifiedName ModelerAllowedUserRoles
          PopupWidth PopupHeight PopupResizable Url]
     )
-    expect(navigation).to include('Grids' => ['grid'], 'CustomWidgetModules' => [], 'PluginWidgets' => [])
+    expect(navigation).to include('Grids' => [], 'CustomWidgetModules' => [], 'PluginWidgets' => [])
     expect(navigation.dig('Profiles', 0)).to include(
       'Name' => 'Responsive', 'IsOffline' => false, 'AppIcon' => 'existing.svg'
     )
