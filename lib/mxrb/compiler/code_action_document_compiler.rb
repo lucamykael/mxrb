@@ -8,6 +8,9 @@ module Mxrb
       include CodeActionTypeCompiler
 
       TYPES = %w[JavaActions$JavaAction JavaScriptActions$JavaScriptAction].freeze
+      # A microflow or entity type reaches a Java action as its qualified name.
+      NAMED_PARAMETER_TYPES = %w[CodeActions$MicroflowJavaActionParameterType
+                                 CodeActions$EntityTypeParameterType].freeze
 
       def compile(unit)
         source = unit.document
@@ -37,7 +40,7 @@ module Mxrb
       end
 
       def java_parameter_type(source)
-        return 'String' if source['$Type'] == 'JavaActions$MicroflowJavaActionParameterType'
+        return 'String' if NAMED_PARAMETER_TYPES.include?(source['$Type'].to_s.sub(/\AJavaActions\$/, 'CodeActions$'))
 
         code_action_type(source['Type'])
       end

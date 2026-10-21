@@ -124,7 +124,7 @@ RSpec.describe 'Compiler support branches' do
       :compile_entity_source,
       '$ID' => id(10), '$Type' => 'DomainModels$OqlViewEntitySource', 'SourceDocument' => 'App.Users'
     )
-    expect(result).to include('OqlRuntime' => 'SELECT Name FROM App.User', 'SourceType' => 'OQL')
+    expect(result).to include('OqlRuntime' => 'SELECT Name FROM App.User', 'SourceType' => 'oql')
     expect do
       compiler.send(:compile_entity_source, '$Type' => 'DomainModels$OqlViewEntitySource',
                                             'SourceDocument' => 'App.Missing')

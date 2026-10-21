@@ -14,7 +14,7 @@ module Mxrb
       def initialize(source, schema)
         @schema = schema
         @nodes = MicroflowNodeCompiler.new(schema, source:)
-        @role_map = project_role_map(source)
+        @roles = UserRoleResolver.new(source)
       end
 
       def compile(unit)
@@ -28,7 +28,7 @@ module Mxrb
       end
 
       # The user roles that hold one of the module roles.
-      def user_roles_for(module_roles) = module_roles.flat_map { @role_map.fetch(_1.to_s, []) }.uniq
+      def user_roles_for(module_roles) = @roles.resolve(module_roles)
 
       private
 
@@ -66,15 +66,6 @@ module Mxrb
       end
 
       def allowed_user_roles(flow) = user_roles_for(array(flow['AllowedModuleRoles']))
-
-      def project_role_map(source)
-        security = source.documents('Security$ProjectSecurity').first
-        return {} unless security
-
-        array(security['UserRoles']).each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |role, map|
-          array(role['ModuleRoles']).each { |module_role| map[module_role.to_s] << role['Name'].to_s }
-        end
-      end
     end
   end
 end

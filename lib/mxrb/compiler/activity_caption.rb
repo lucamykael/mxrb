@@ -16,6 +16,7 @@ module Mxrb
       def initialize(source)
         @code_actions = code_action_captions(source)
         @language = default_language(source)
+        @cast = cast_caption(source)
       end
 
       # variables: name => entity, "[entity]" for a list; retrieve_type: the
@@ -41,11 +42,12 @@ module Mxrb
         when 'NanoflowCallAction' then short(action.dig('NanoflowCall', 'Nanoflow'))
         when 'JavaActionCallAction' then code_action(action['JavaAction'])
         when 'JavaScriptActionCallAction' then code_action(action['JavaScriptAction'])
-        when 'CastAction' then 'Cast object'
+        when 'CastAction' then @cast
         when 'RestCallAction' then "Call REST (#{action.dig('HttpConfiguration', 'HttpMethod').to_s.upcase})"
         when 'SynchronizeAction' then ('Synchronize everything' if action['Type'] == 'All')
         when 'PushToClientAction' then "Synchronize '#{action['DataVariableName']}' to device"
         when 'ListOperationsAction' then list_operation(action)
+        when 'DownloadFileAction' then "Download file #{action['FileDocumentVariableName']}"
         when 'AggregateAction' then aggregate(action)
         when 'ImportXmlAction' then mapping_caption('Import from',
                                                     action.dig('ResultHandling', 'ImportMappingCall', 'ContentType'))
@@ -61,7 +63,10 @@ module Mxrb
       end
 
       def create_variable(action)
-        type = VARIABLE_TYPES[action.dig('VariableType', '$Type').to_s]
+        variable_type = action['VariableType'] || {}
+        return "Create Enumeration #{variable_type['Enumeration']} variable" if variable_type['Enumeration']
+
+        type = VARIABLE_TYPES[variable_type['$Type'].to_s]
         "Create #{type} variable" if type
       end
 
@@ -88,6 +93,7 @@ module Mxrb
 
       def association_retrieve(source, type)
         return if type.empty?
+        return 'Retrieve from association' if type == 'Unknown'
 
         "Retrieve #{'list of ' if type.start_with?('[')}#{short(type.delete_prefix('[').delete_suffix(']'))} " \
           "by $#{source['StartVariableName']}/#{short(source['AssociationId'])}"
@@ -96,6 +102,8 @@ module Mxrb
       def change_list(action)
         case action['Type']
         when 'Add' then "Add to list #{action['ChangeVariableName']}"
+        when 'Remove' then "Remove from list #{action['ChangeVariableName']}"
+        when 'Set' then "Set list #{action['ChangeVariableName']}"
         when 'Clear' then "Clear list #{action['ChangeVariableName']}"
         end
       end
@@ -113,9 +121,16 @@ module Mxrb
 
       def code_action(name) = @code_actions.fetch(name.to_s) { short(name) }
 
+      # The operation's name in words: "Find by expression".
       def list_operation(action)
         operation = action.dig('NewOperation', '$Type').to_s.delete_prefix('Microflows$')
-        operation if %w[Head Find].include?(operation)
+        operation.gsub(/(?<=[a-z])(?=[A-Z])/, ' ').capitalize unless operation.empty?
+      end
+
+      # Mendix 10 names a cast "Cast"; Mendix 11 "Cast object".
+      def cast_caption(source)
+        version = source.respond_to?(:version) ? source.version.to_s : ''
+        version.split('.').first.to_i.between?(1, 10) ? 'Cast' : 'Cast object'
       end
 
       def mapping_caption(verb, content_type)

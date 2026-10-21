@@ -103,6 +103,113 @@ RSpec.describe 'Runtime microflow compilers' do
       .to raise_error(Mxrb::CompilationError, /cannot derive Runtime retrieve type/)
   end
 
+  def model(units)
+    Struct.new(:units_by_type) do
+      def units_of(type) = units_by_type.fetch(type, [])
+      def documents(_type = nil) = []
+    end.new(units)
+  end
+
+  def unit(module_name, document)
+    Mxrb::Compiler::SourceModel::Unit.new(id: Mxrb::IO::BsonCodec.extract_id(document['$ID']), container_id: id(1),
+                                          containment: 'Documents', module_name:, document:)
+  end
+
+  it 'drops result variables the flow does not use and timeouts a REST call has off' do
+    fields = {
+      'Microflows$MicroflowCallAction' => %w[$ID $Type ResultVariableName],
+      'Microflows$JavaActionCallAction' => %w[$ID $Type ResultVariableName],
+      'Microflows$RestCallAction' => %w[$ID $Type RequestTimeOutExpression]
+    }
+    void = unit('App', node('Microflows$Microflow', 40, Name: 'Fire',
+                                                        MicroflowReturnType: node('DataTypes$VoidType', 41)))
+    text = unit('App', node('Microflows$Microflow', 42, Name: 'Say',
+                                                        MicroflowReturnType: node('DataTypes$StringType', 43)))
+    source = model('Microflows$Microflow' => [void, text])
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing: {}), source:)
+    call = node('Microflows$MicroflowCallAction', 44, ResultVariableName: 'Result', UseReturnVariable: true,
+                                                      MicroflowCall: { 'Microflow' => 'App.Say' })
+    expect(compiler.compile(call)).to include('ResultVariableName' => 'Result')
+    expect(compiler.compile(call.merge('UseReturnVariable' => false))).to include('ResultVariableName' => '')
+    expect(compiler.compile(call.merge('MicroflowCall' => { 'Microflow' => 'App.Fire' })))
+      .to include('ResultVariableName' => '')
+    java = node('Microflows$JavaActionCallAction', 45, ResultVariableName: 'Result', UseReturnVariable: false,
+                                                       JavaAction: 'App.Run')
+    expect(compiler.compile(java)).to include('ResultVariableName' => '')
+    expect(compiler.compile(java.merge('UseReturnVariable' => true))).to include('ResultVariableName' => 'Result')
+    rest = node('Microflows$RestCallAction', 46, TimeOutExpression: '30', UseRequestTimeOut: false)
+    expect(compiler.compile(rest)).to include('RequestTimeOutExpression' => '0')
+    expect(compiler.compile(rest.merge('UseRequestTimeOut' => true))).to include('RequestTimeOutExpression' => '30')
+  end
+
+  it 'retrieves single objects over one-to-one and cross-module associations' do
+    fields = { 'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type] }
+    account = node('DomainModels$Entity', 50, Name: 'Account')
+    region = node('DomainModels$CrossAssociation', 52, Name: 'Account_Region', ParentPointer: account['$ID'],
+                                                       Child: 'Geo.Region', Type: 'ReferenceSet', Owner: 'Both')
+    profile = node('DomainModels$CrossAssociation', 53, Name: 'Account_Profile', ParentPointer: account['$ID'],
+                                                        Child: 'Geo.Profile', Type: 'Reference', Owner: 'Both')
+    domain = unit('Admin', node('DomainModels$DomainModel', 51, Entities: [2, account], Associations: [2],
+                                                                CrossAssociations: [2, region, profile]))
+    source = model('DomainModels$DomainModel' => [domain])
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing: {}), source:)
+    compiler.prepare(node('Microflows$Microflow', 54, Objects: [
+                            node('Microflows$MicroflowParameter', 55, Name: 'Account',
+                                                                      VariableType: { 'Entity' => 'Admin.Account' }),
+                            node('Microflows$MicroflowParameter', 56, Name: 'Profile',
+                                                                      VariableType: { 'Entity' => 'Geo.Profile' })
+                          ]))
+    retrieve = node('Microflows$AssociationRetrieveSource', 57, AssociationId: 'Admin.Account_Region',
+                                                                StartVariableName: 'Account')
+    expect(compiler.compile(retrieve)['Type']).to eq('[Geo.Region]')
+    one = retrieve.merge('AssociationId' => 'Admin.Account_Profile')
+    expect(compiler.compile(one)['Type']).to eq('Geo.Profile')
+    expect(compiler.compile(one.merge('StartVariableName' => 'Profile'))['Type']).to eq('Admin.Account')
+  end
+
+  it 'types variables from REST results, code actions and nanoflow calls and settles chains' do
+    fields = { 'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type] }
+    order = node('DomainModels$Entity', 60, Name: 'Order')
+    line = node('DomainModels$Entity', 61, Name: 'Line')
+    association = node('DomainModels$Association', 62, Name: 'Line_Order', ParentPointer: line['$ID'],
+                                                       ChildPointer: order['$ID'], Type: 'Reference', Owner: 'Default')
+    domain = unit('App',
+                  node('DomainModels$DomainModel', 63, Entities: [2, order, line], Associations: [2, association]))
+    concrete = node('CodeActions$ConcreteEntityType', 65, Entity: 'App.Order')
+    java = unit('App', node('JavaActions$JavaAction', 64, Name: 'Load', JavaReturnType: concrete))
+    list = node('CodeActions$ListType', 67, Parameter: node('CodeActions$ConcreteEntityType', 83, Entity: 'App.Order'))
+    script = unit('App', node('JavaScriptActions$JavaScriptAction', 66, Name: 'Fetch', ActionReturnType: list))
+    object = node('DataTypes$ObjectType', 69, Entity: 'App.Order')
+    nano = unit('App', node('Microflows$Nanoflow', 68, Name: 'Pick', MicroflowReturnType: object))
+    source = model('DomainModels$DomainModel' => [domain], 'JavaActions$JavaAction' => [java],
+                   'JavaScriptActions$JavaScriptAction' => [script], 'Microflows$Nanoflow' => [nano])
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing: {}), source:)
+    retrieve = lambda { |id, from|
+      node('Microflows$RetrieveAction', id, ResultVariableName: "Lines#{id}", RetrieveSource: node(
+        'Microflows$AssociationRetrieveSource', id + 100, AssociationId: 'App.Line_Order', StartVariableName: from
+      ))
+    }
+    compiler.prepare(node('Microflows$Microflow', 70, Objects: [
+                            retrieve.call(71, 'Rest'), retrieve.call(72, 'Loaded'), retrieve.call(73, 'Picked'),
+                            retrieve.call(74, 'Fetched'), retrieve.call(75, 'Lines71'),
+                            node('Microflows$RestCallAction', 76, ResultHandling: node(
+                              'Microflows$ResultHandling', 77, ResultVariableName: 'Rest',
+                                                               VariableType: { 'Entity' => 'App.Order' }
+                            )),
+                            node('Microflows$JavaActionCallAction', 78, ResultVariableName: 'Loaded',
+                                                                        JavaAction: 'App.Load'),
+                            node('Microflows$JavaScriptActionCallAction', 79, ResultVariableName: 'Fetched',
+                                                                              JavaScriptAction: 'App.Fetch'),
+                            node('Microflows$NanoflowCallAction', 80, OutputVariableName: 'Picked',
+                                                                      NanoflowCall: { 'Nanoflow' => 'App.Pick' })
+                          ]))
+    types = compiler.instance_variable_get(:@variable_types)
+    expect(types).to include('Rest' => 'App.Order', 'Loaded' => 'App.Order', 'Picked' => 'App.Order',
+                             'Fetched' => '[App.Order]', 'Lines71' => '[App.Line]', 'Lines75' => 'Unknown')
+    expect(compiler.compile(retrieve.call(81, 'Fetched')['RetrieveSource'])['Type']).to eq('Unknown')
+    expect(compiler.compile(retrieve.call(82, 'Nobody')['RetrieveSource'])['Type']).to eq('App.Order')
+  end
+
   it 'replaces an unconfigured external write with a Runtime no-op action' do
     fields = {
       'Microflows$LogMessageAction' => %w[

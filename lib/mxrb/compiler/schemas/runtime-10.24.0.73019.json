@@ -179,6 +179,15 @@
     "QualifiedName",
     "UnqualifiedName"
   ],
+  "DomainModels$EntityEvent": [
+    "$ID",
+    "$Type",
+    "Moment",
+    "Type",
+    "Microflow",
+    "RaiseErrorOnFalse",
+    "SendInputParameter"
+  ],
   "DomainModels$EntityIndex": [
     "$ID",
     "$Type",
@@ -241,6 +250,11 @@
   "DomainModels$RequiredRuleInfo": [
     "$ID",
     "$Type"
+  ],
+  "DomainModels$RegExRuleInfo": [
+    "$ID",
+    "$Type",
+    "RegExIdentifier"
   ],
   "DomainModels$StoredValue": [
     "$ID",
@@ -671,6 +685,10 @@
     "$ID",
     "$Type",
     "ReturnValue"
+  ],
+  "Microflows$BreakEvent": [
+    "$ID",
+    "$Type"
   ],
   "Microflows$EnumerationCase": [
     "$ID",
@@ -1270,6 +1288,38 @@
     "Attribute",
     "Association"
   ],
+  "Microflows$Filter": [
+    "$ID",
+    "$Type",
+    "ListName",
+    "Expression",
+    "Attribute",
+    "Association"
+  ],
+  "Microflows$FilterByExpression": [
+    "$ID",
+    "$Type",
+    "ListName",
+    "Expression"
+  ],
+  "Microflows$Intersect": [
+    "$ID",
+    "$Type",
+    "ListName",
+    "SecondListOrObjectName"
+  ],
+  "Microflows$Union": [
+    "$ID",
+    "$Type",
+    "ListName",
+    "SecondListOrObjectName"
+  ],
+  "Microflows$Contains": [
+    "$ID",
+    "$Type",
+    "ListName",
+    "SecondListOrObjectName"
+  ],
   "Microflows$HttpConfiguration": [
     "$ID",
     "$Type",
@@ -1314,6 +1364,18 @@
     "MappingId",
     "MappingVariableName",
     "ContentTypeRuntime"
+  ],
+  "Microflows$FormDataRequestHandling": [
+    "$ID",
+    "$Type",
+    "Parts"
+  ],
+  "Microflows$FormDataPart": [
+    "$ID",
+    "$Type",
+    "HeaderEntries",
+    "Key",
+    "Value"
   ],
   "Microflows$RestCallAction": [
     "$ID",
@@ -1379,5 +1441,54 @@
     "$Type",
     "HomePagePage",
     "UserRole"
+  ],
+  "Rest$PublishedRestService": [
+    "$ID",
+    "$Type",
+    "CorsConfiguration",
+    "Resources",
+    "Parameters",
+    "Name",
+    "QualifiedName",
+    "Path",
+    "ServiceName",
+    "Version",
+    "AuthenticationTypesRuntime",
+    "AuthenticationMicroflow",
+    "AllowedUserRoles",
+    "OpenApi2Schema",
+    "OpenApi3Schema"
+  ],
+  "Rest$PublishedRestServiceResource": [
+    "$ID",
+    "$Type",
+    "Operations",
+    "PathRuntime"
+  ],
+  "Rest$PublishedRestServiceOperation": [
+    "$ID",
+    "$Type",
+    "Parameters",
+    "PathRuntime",
+    "HttpMethod",
+    "Microflow",
+    "ExportMapping",
+    "ImportMapping",
+    "ObjectHandlingBackup",
+    "Commit"
+  ],
+  "Rest$RestOperationParameter": [
+    "$ID",
+    "$Type",
+    "Name",
+    "MicroflowParameter",
+    "DataType",
+    "ParameterType"
+  ],
+  "ScheduledEvents$HourSchedule": [
+    "$ID",
+    "$Type",
+    "Multiplier",
+    "MinuteOffset"
   ]
 }

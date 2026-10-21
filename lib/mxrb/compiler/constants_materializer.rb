@@ -67,8 +67,14 @@ module Mxrb
         {
           '$ID' => source['$ID'], '$Type' => source['$Type'], 'Name' => source['Name'],
           'QualifiedName' => qualified_name, 'DataType' => data_type,
-          'ExposedToClient' => model.client_reference?(qualified_name)
+          'ExposedToClient' => exposed_to_client?(source, qualified_name, model)
         }
+      end
+
+      # Mendix 10 stores the flag on the constant; a constant the client
+      # references is exposed as well.
+      def exposed_to_client?(source, qualified_name, model)
+        source['ExposedToClient'] == true || model.client_reference?(qualified_name)
       end
 
       def metadata_document(source, qualified_name, data_type)

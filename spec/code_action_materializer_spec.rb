@@ -42,6 +42,13 @@ RSpec.describe Mxrb::Compiler::CodeActionMaterializer do
                                                                 '$Type' =>
                                                                   'JavaActions$MicroflowJavaActionParameterType'
                                                               }
+                                                            },
+                                                            {
+                                                              '$ID' => '22222222-2222-4222-8222-222222222223',
+                                                              '$Type' => 'JavaActions$JavaActionParameter',
+                                                              'Name' => 'Entity', 'ParameterType' => {
+                                                                '$Type' => 'CodeActions$EntityTypeParameterType'
+                                                              }
                                                             }
                                                           ]),
           'JavaReturnType' => { '$Type' => 'CodeActions$EnumerationType',
@@ -75,7 +82,7 @@ RSpec.describe Mxrb::Compiler::CodeActionMaterializer do
 
     expect(result).to have_attributes(java_actions: 1, javascript_actions: 1)
     expect(java).to include('QualifiedName' => 'App.Select', 'ReturnType' => '#App.State')
-    expect(java['Parameters'].map { _1['Type'] }).to eq(['[App.Item]', 'String'])
+    expect(java['Parameters'].map { _1['Type'] }).to eq(['[App.Item]', 'String', 'String'])
     expect(javascript).to include('QualifiedName' => 'App.Notify')
     expect(javascript['Parameters'].first.keys).to eq(%w[$ID $Type Name])
   end

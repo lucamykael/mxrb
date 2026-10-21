@@ -16,6 +16,7 @@ RSpec.describe Mxrb::Compiler::ConstantsMaterializer do
             documentation 'Maximum retries'
           end
           constant :ClientKey, type: :string, value: 'browser-key'
+          constant :Flagged, type: :string, value: 'flag', exposed_to_client: true
         end
       end
       add_client_reference
@@ -76,11 +77,13 @@ RSpec.describe Mxrb::Compiler::ConstantsMaterializer do
     expect(constants.fetch('RetryCount')).to include(
       'QualifiedName' => 'App.RetryCount', 'DataType' => 'Integer', 'ExposedToClient' => false
     )
+    expect(constants.fetch('Flagged')).to include('ExposedToClient' => true)
     metadata = JSON.parse(File.read(result.metadata_path))
     expect(metadata['Constants']).to eq(
       [
         { 'Name' => 'App.ClientKey', 'Type' => 'String', 'Description' => '',
           'DefaultValue' => 'browser-key' },
+        { 'Name' => 'App.Flagged', 'Type' => 'String', 'Description' => '', 'DefaultValue' => 'flag' },
         { 'Name' => 'App.RetryCount', 'Type' => 'Integer', 'Description' => 'Maximum retries',
           'DefaultValue' => '3' }
       ]
