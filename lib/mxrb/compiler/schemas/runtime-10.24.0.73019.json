@@ -331,6 +331,12 @@
     "FormSettings",
     "PagesForSpecializations"
   ],
+  "Forms$FormForSpecialization": [
+    "$ID",
+    "$Type",
+    "FormSettings",
+    "Entity"
+  ],
   "Forms$FormSettings": [
     "$ID",
     "$Type",
@@ -369,6 +375,31 @@
   "Forms$GridSearchButton": [
     "$ID",
     "$Type"
+  ],
+  "Forms$GridSelectAllButton": [
+    "$ID",
+    "$Type",
+    "SelectionType"
+  ],
+  "Forms$GridDeselectAllButton": [
+    "$ID",
+    "$Type"
+  ],
+  "Forms$DataGridExportToExcelButton": [
+    "$ID",
+    "$Type",
+    "MaxNumberOfRows",
+    "UseExcelDateType"
+  ],
+  "Forms$DataGridExportToCSVButton": [
+    "$ID",
+    "$Type",
+    "MaxNumberOfRows",
+    "DecimalSeparator",
+    "GroupSeparator",
+    "Delimiter",
+    "GenerateExcelHint",
+    "UseGridDateFormat"
   ],
   "Forms$Layout": [
     "$ID",
@@ -434,6 +465,21 @@
     "ShowEmptyRows",
     "TooltipForm",
     "SelectableXPathConstraint"
+  ],
+  "Forms$TemplateGrid": [
+    "$ID",
+    "$Type",
+    "ControlBar",
+    "Name",
+    "TabIndex",
+    "Entity",
+    "IsControlBarVisible",
+    "SelectionMode",
+    "SelectFirst",
+    "DefaultButtonTrigger",
+    "RefreshTime",
+    "NumberOfRows",
+    "NumberOfColumns"
   ],
   "Forms$Snippet": [
     "$ID",
@@ -869,6 +915,19 @@
     "$Type",
     "Page",
     "Microflow"
+  ],
+  "Navigation$RoleBasedHomePage": [
+    "$ID",
+    "$Type",
+    "Page",
+    "Microflow",
+    "UserRole"
+  ],
+  "Navigation$ProgressiveWebAppSettings": [
+    "$ID",
+    "$Type",
+    "Precaching",
+    "InstallPrompt"
   ],
   "Navigation$NavigationDocument": [
     "$ID",

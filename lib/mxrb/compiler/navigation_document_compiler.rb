@@ -7,7 +7,7 @@ module Mxrb
     # use and, for a native profile, the offline configuration of every entity
     # the app synchronizes.
     class NavigationDocumentCompiler
-      include ModelValues
+      include RuntimeNodes
 
       NATIVE_PROFILE = 'Navigation$NativeNavigationProfile'
       WEB_PROFILE = 'Navigation$NavigationProfile'
@@ -22,67 +22,29 @@ module Mxrb
         @source = source
         @page_locations = page_locations(source)
         @widgets = WebWidgetInventory.new(source)
+        @grids = NavigationGridCompiler.new(schema, source, @widgets)
         @synchronized = SynchronizedEntities.new(source)
       end
 
       def compile(unit)
         document = unit.document
         node(document, 'Profiles' => array(document['Profiles']).map { profile(_1) },
+                       'Grids' => @grids.compile,
                        'PluginWidgets' => @widgets.ids(plugin: true),
                        'CustomWidgetModules' => @widgets.ids(plugin: false))
       end
 
       private
 
-      # A document with the fields the Runtime schema lists: given, taken from
-      # the MPR, or derived as MxBuild does; the seed's counterpart fills a field
-      # an older MPR lacks.
-      def node(source, given = {})
-        existing = @schema.counterpart(source) || {}
-        @schema.fields_for(source).to_h do |field|
-          value = if given.key?(field) then given[field]
-                  elsif field == 'TitleOverride' && source['$Type'] == 'Forms$FormSettings' then title_override(source)
-                  elsif source.key?(field) then compile_value(source[field])
-                  else derived(source, field, existing)
-                  end
-          [field, value]
-        end
-      end
-
-      # Studio Pro keeps a title override whose template says nothing; MxBuild writes none.
-      def title_override(settings)
-        template = settings['TitleOverride']
-        return compile_value(template) if template.nil? || array(template['Parameters']).any?
-
-        array(template.dig('Text', 'Items')).any? { !_1['Text'].to_s.empty? } ? compile_value(template) : nil
-      end
-
-      def compile_value(value)
-        case value
-        when Hash then value['$Type'] ? node(value) : value.transform_values { compile_value(_1) }
-        when Array then array(value).map { compile_value(_1) }
-        else value
-        end
-      end
-
-      # What MxBuild writes for a field the MPR leaves out.
-      def derived(source, field, existing)
-        return existing[field] if existing.key?(field)
-
-        case [source['$Type'], field]
-        when ['Forms$FormSettings', 'Location'] then @page_locations.fetch(source['Form'].to_s, 'Content')
-        # The legacy data grids of the web documents are not collected yet.
-        when ['Navigation$NavigationDocument', 'Grids'] then []
-        when [WEB_PROFILE, 'AppTitle'] then { '$ID' => derived_id(source, 'app-title'), '$Type' => 'Texts$Text' }
-        when [WEB_PROFILE, 'LoginPageSettings'] then login_page_settings(source)
-        else profile_default(source, field)
-        end
-      end
-
-      def profile_default(source, field)
+      # What MxBuild writes for a field of a profile the MPR leaves out.
+      def derive(source, field)
         return PROFILE_DEFAULTS[field] if source['$Type'] == WEB_PROFILE && PROFILE_DEFAULTS.key?(field)
 
-        raise CompilationError, "cannot derive Runtime field #{source['$Type']}.#{field}"
+        case [source['$Type'], field]
+        when [WEB_PROFILE, 'AppTitle'] then { '$ID' => derived_id(source, 'app-title'), '$Type' => 'Texts$Text' }
+        when [WEB_PROFILE, 'LoginPageSettings'] then login_page_settings(source)
+        else super
+        end
       end
 
       def login_page_settings(profile)
