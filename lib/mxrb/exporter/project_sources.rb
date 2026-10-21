@@ -205,7 +205,7 @@ module Mxrb
           item_args << "translations: #{ruby(translations)}" unless translations.empty?
           "    bottom_bar_item #{item_args.join(', ')}"
         end
-        body = homes + items
+        body = homes + items + offline_entity_sources(profile)
         return ["  profile #{args.join(', ')}"] if body.empty?
 
         ["  profile #{args.join(', ')} do", *body, '  end']
@@ -229,7 +229,17 @@ module Mxrb
                      else
                        []
                      end
-        titles + homes + items + extensions
+        titles + homes + items + extensions + offline_entity_sources(profile)
+      end
+
+      def offline_entity_sources(profile)
+        profile.fetch(:offline_entities, []).map do |config|
+          mode = config.fetch(:sync_mode, 'None').to_s.gsub(/(?<=[a-z])(?=[A-Z])/, '_').downcase
+          args = [ruby(config.fetch(:entity)), "sync_mode: #{symbol(mode)}"]
+          args << "constraint: #{ruby(config[:constraint])}" unless config[:constraint].to_s.empty?
+          args << 'compatibility_mode: true' if config[:compatibility_mode] == true
+          "    offline_entity #{args.join(', ')}"
+        end
       end
 
       def design_system_source(design_system)

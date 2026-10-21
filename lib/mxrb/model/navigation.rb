@@ -46,8 +46,39 @@ module Mxrb
       end
     end
 
+    # The entities a profile synchronizes to the device, as Studio Pro stores
+    # them: the entity, its sync mode (None, NoneAndPreserveData or All), an
+    # optional XPath constraint and the compatibility flag.
+    module OfflineEntityConfigs
+      SYNC_MODES = %w[None NoneAndPreserveData All].freeze
+
+      # The stored sync mode for a DSL value such as :none_and_preserve_data.
+      def self.sync_mode(value)
+        mode = value.to_s.split('_').map(&:capitalize).join
+        return mode if SYNC_MODES.include?(mode)
+
+        raise ArgumentError, "unknown offline sync mode #{value.inspect}; use :none, :none_and_preserve_data or :all"
+      end
+
+      def offline_entities
+        IO::BsonCodec.parse_array(@raw_document['OfflineEntityConfigs']).fetch(:items).grep(Hash)
+                     .map { offline_entity(_1) }
+      end
+
+      private
+
+      def offline_entity(config)
+        entry = { entity: config['Entity'].to_s, sync_mode: config.fetch('SyncMode', 'None').to_s }
+        entry[:constraint] = config['Constraint'].to_s unless config['Constraint'].to_s.empty?
+        entry[:compatibility_mode] = true if config['CompatibilityMode'] == true
+        entry
+      end
+    end
+
     # Typed view of one navigation profile, including recursive menu items.
     class NavigationProfile
+      include OfflineEntityConfigs
+
       attr_reader :raw_document
 
       def initialize(raw_document)
@@ -107,7 +138,8 @@ module Mxrb
           offline: offline?,
           app_icon:,
           app_title:,
-          items: menu_items
+          items: menu_items,
+          offline_entities:
         )
       end
 
@@ -175,6 +207,8 @@ module Mxrb
     # Typed view of a native mobile profile: a native home page, role-based
     # home pages and bottom bar items instead of a web menu.
     class NativeNavigationProfile
+      include OfflineEntityConfigs
+
       TYPE = 'Navigation$NativeNavigationProfile'
       SETTINGS = {
         ota_enabled: 'OtaEnabled', logging_enabled: 'LoggingEnabled',
@@ -233,7 +267,7 @@ module Mxrb
         {
           name:, kind:, home_page:, home_nanoflow:, role_homes:,
           throw_partial_sync_error: @raw_document['ThrowPartialSyncError'],
-          bottom_bar: bottom_bar_items, settings:
+          bottom_bar: bottom_bar_items, settings:, offline_entities:
         }
       end
 

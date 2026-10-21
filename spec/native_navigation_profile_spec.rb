@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'tmpdir'
 
-# rubocop:disable Metrics/BlockLength, Metrics/MethodLength
+# rubocop:disable Metrics/BlockLength, Metrics/MethodLength, Metrics/AbcSize
 RSpec.describe 'native mobile navigation profiles' do
   def define_native_profile_project(path)
     Mxrb.define(path) do
@@ -12,18 +12,24 @@ RSpec.describe 'native mobile navigation profiles' do
         module_role :User
         page(:Home) { allowed_roles :User }
         page(:Tasks) { allowed_roles :User }
+        entity(:Task) { string :Title }
+        entity(:Note) { string :Body }
       end
       security do
         security_level :CheckEverything
         user_role :User, module_roles: ['App.User']
       end
       navigation do
-        profile :Responsive, home_page: 'App.Home'
+        profile :Responsive, home_page: 'App.Home' do
+          offline_entity 'App.Note', sync_mode: :none_and_preserve_data
+        end
         profile :NativePhone, kind: 'Native', home_page: 'App.Home',
                               settings: { ota_enabled: true, network_timeout_ms: 30_000 } do
           home_for :User, page: 'App.Tasks'
           bottom_bar_item 'Home', page: 'App.Home', icon: { collection: 'Atlas_Core.Atlas_Filled.home' }
           bottom_bar_item 'Tasks', page: 'App.Tasks', translations: { nl_NL: 'Taken' }
+          offline_entity 'App.Task', sync_mode: :all, constraint: '[Title != empty]', compatibility_mode: true
+          offline_entity 'App.Note'
         end
       end
     end
@@ -62,6 +68,17 @@ RSpec.describe 'native mobile navigation profiles' do
                                                    page: 'App.Tasks' }
                                                ])
       expect(profile.dig(:settings, :ota_enabled)).to be(true)
+      task = { entity: 'App.Task', sync_mode: 'All', constraint: '[Title != empty]', compatibility_mode: true }
+      expect(profile.fetch(:offline_entities)).to eq([task, { entity: 'App.Note', sync_mode: 'None' }])
+      configs = Mxrb::IO::BsonCodec.parse_array(document['OfflineEntityConfigs'])
+      expect(configs.fetch(:marker)).to eq(3)
+      expect(configs.fetch(:items).first).to include(
+        '$Type' => 'Navigation$OfflineEntityConfig', 'Entity' => 'App.Task', 'SyncMode' => 'All',
+        'Constraint' => '[Title != empty]', 'CompatibilityMode' => true
+      )
+      expect(configs.fetch(:items).first.keys).to eq(%w[$ID $Type CompatibilityMode Constraint Entity SyncMode])
+      web = Mxrb.open(path) { |project| project.navigation.profiles.fetch(0).to_h }
+      expect(web.fetch(:offline_entities)).to eq([{ entity: 'App.Note', sync_mode: 'NoneAndPreserveData' }])
     end
   end
 
@@ -75,7 +92,9 @@ RSpec.describe 'native mobile navigation profiles' do
       Mxrb::Exporter.new(path, exported).export!
       expect(File.read(File.join(exported, 'app', 'navigation', 'navigation.rb'))).to include(
         'profile :NativePhone, kind: "Native", home_page: "App.Home"', 'home_for "User", page: "App.Tasks"',
-        'bottom_bar_item "Tasks", page: "App.Tasks", translations: {nl_NL: "Taken"}'
+        'bottom_bar_item "Tasks", page: "App.Tasks", translations: {nl_NL: "Taken"}',
+        'offline_entity "App.Task", sync_mode: :all, constraint: "[Title != empty]", compatibility_mode: true',
+        'offline_entity "App.Note", sync_mode: :none', 'offline_entity "App.Note", sync_mode: :none_and_preserve_data'
       )
       begin
         ENV['MXRB_OUTPUT_PATH'] = rebuilt
@@ -186,12 +205,34 @@ RSpec.describe 'native mobile navigation profiles' do
     )
   end
 
+  it 'keeps the identity of an offline entity config across rewrites' do
+    writer = Mxrb::Writer.new('unused.mpr', version: '11.12.1', modules: [])
+    configs = [{ entity: 'App.Task', sync_mode: 'All' }, { entity: 'App.Note', sync_mode: 'None' }]
+    existing = writer.send(:modern_navigation_doc, {}, profiles: [
+                             { name: 'NativePhone', kind: 'Native', offline_entities: configs }
+                           ])
+    before = Mxrb::IO::BsonCodec.parse_array(existing['Profiles']).fetch(:items).first
+    updated = writer.send(:modern_navigation_doc, existing, profiles: [
+                            { name: 'NativePhone', offline_entities: configs.reverse }
+                          ])
+    after = Mxrb::IO::BsonCodec.parse_array(updated['Profiles']).fetch(:items).first
+    ids = ->(profile) { Mxrb::IO::BsonCodec.parse_array(profile['OfflineEntityConfigs']).fetch(:items).to_h { [_1['Entity'], _1['$ID']] } }
+    expect(ids.call(after)).to eq(ids.call(before))
+    expect(Mxrb::IO::BsonCodec.parse_array(after['OfflineEntityConfigs']).fetch(:items).map { _1['Entity'] })
+      .to eq(%w[App.Note App.Task])
+    kept = writer.send(:modern_navigation_doc, existing, profiles: [{ name: 'NativePhone', offline_entities: [] }])
+    expect(Mxrb::IO::BsonCodec.parse_array(kept['Profiles']).fetch(:items).first['OfflineEntityConfigs'])
+      .to eq(before['OfflineEntityConfigs'])
+  end
+
   it 'rejects unknown native navigation settings and accepts nanoflow role homes' do
     builder = Mxrb::Dsl::NavigationProfileBuilder.new(:NativePhone)
+    expect { builder.offline_entity('App.Task', sync_mode: :sometimes) }
+      .to raise_error(ArgumentError, /unknown offline sync mode :sometimes/)
     builder.home_for(:User, nanoflow: :App_Start)
     expect(builder.to_h.fetch(:role_home_details)).to eq([{ role: 'User', nanoflow: 'App_Start' }])
     expect { Mxrb::Dsl::NavigationProfileBuilder.new(:NativePhone, settings: { offline_sync: true }) }
       .to raise_error(ArgumentError, /unknown native navigation settings: offline_sync/)
   end
 end
-# rubocop:enable Metrics/BlockLength, Metrics/MethodLength
+# rubocop:enable Metrics/BlockLength, Metrics/MethodLength, Metrics/AbcSize

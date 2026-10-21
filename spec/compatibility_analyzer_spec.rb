@@ -47,6 +47,29 @@ RSpec.describe Mxrb::Compiler::CompatibilityAnalyzer do
     expect(report.to_h).to include(compatible: false, mendix_version: '11.12.1')
   end
 
+  it 'fails closed on native profiles, native pages and layouts and device synchronization' do
+    layout = unit('Forms$Layout', 'Phone', 'Content' => { '$Type' => 'Forms$NativeLayoutContent' })
+    page = unit('Forms$Page', 'Start', 'FormCall' => { 'Form' => 'Demo.Phone', 'Arguments' => [2] })
+    navigation = unit('Navigation$NavigationDocument', nil, 'Profiles' => [2,
+                                                                           { '$Type' => 'Navigation$NavigationProfile', 'Name' => 'Responsive' },
+                                                                           { '$Type' => 'Navigation$NativeNavigationProfile', 'Name' => 'NativePhone' }])
+    flow = unit('Microflows$Microflow', 'Sync', 'ObjectCollection' => { 'Objects' => [2, {
+                  '$Type' => 'Microflows$ActionActivity',
+                  'Action' => { '$Type' => 'Microflows$SynchronizeAction', 'Type' => 'All' }
+                }] })
+    model = source(version: '11.12.1', units: [layout, page, navigation, flow])
+    allow(model).to receive(:web_layout?).and_return(false)
+    allow(model).to receive(:web_page?).and_return(false)
+    report = described_class.new('/tmp/App.mpr', source: model).analyze
+
+    expect(report).not_to be_compatible
+    expect(report.errors.map { [_1.category, _1.type, _1.location] }).to contain_exactly(
+      [:native, 'Navigation$NativeNavigationProfile', 'Navigation.NativePhone'],
+      [:native, 'Forms$Layout', 'Demo.Phone'], [:native, 'Forms$Page', 'Demo.Start'],
+      [:native, 'Microflows$SynchronizeAction', 'Demo.Sync']
+    )
+  end
+
   it 'stops at an unsupported Mendix version instead of auditing it with the wrong renderer' do
     page = unit('Forms$Page', 'Home', 'Widgets' => [2, { '$Type' => 'Forms$UnknownWidget' }])
     report = described_class.new('/tmp/App.mpr', source: source(version: '8.18.0', units: [page])).analyze

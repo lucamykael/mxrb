@@ -41,6 +41,8 @@ module Mxrb
 
       private
 
+      NATIVE_ACTIONS = %w[Microflows$SynchronizeAction Microflows$PushToClientAction].freeze
+
       def analyze_features
         if @adapter.web_profiles.include?(:react)
           analyze_pages
@@ -49,6 +51,50 @@ module Mxrb
         else
           analyze_legacy_pages
         end
+        analyze_native
+      end
+
+      # The native app fails closed: a native profile, native pages and layouts
+      # and device synchronization are reported instead of silently left out of
+      # the web build.
+      def analyze_native
+        @source.units_of('Navigation$NavigationDocument').each do |unit|
+          array(unit.document['Profiles']).grep(Hash).each do |profile|
+            next unless profile['$Type'] == 'Navigation$NativeNavigationProfile'
+
+            add(:error, :native, profile['$Type'], "Navigation.#{profile['Name']}",
+                'a native navigation profile is not built by the native compiler')
+          end
+        end
+        native_layouts = @source.units_of('Forms$Layout').select do |unit|
+          unit.document.dig('Content', '$Type') == 'Forms$NativeLayoutContent'
+        end
+        native_layouts.each do |unit|
+          add(:error, :native, 'Forms$Layout', qualified_name(unit),
+              'a native layout is not compiled by the native compiler')
+        end
+        layout_names = native_layouts.map { qualified_name(_1) }
+        @source.units_of('Forms$Page').each do |unit|
+          next unless layout_names.include?(unit.document.dig('FormCall', 'Form').to_s)
+
+          add(:error, :native, 'Forms$Page', qualified_name(unit),
+              'a native page is not compiled by the native compiler')
+        end
+        %w[Microflows$Microflow Microflows$Nanoflow].flat_map { @source.units_of(_1) }.each do |unit|
+          native_actions(unit.document).each do |type|
+            add(:error, :native, type, qualified_name(unit), "#{type} is not executed by the web runtime")
+          end
+        end
+      end
+
+      def native_actions(value, found = [])
+        case value
+        when Hash
+          found << value['$Type'] if NATIVE_ACTIONS.include?(value['$Type'])
+          value.each_value { native_actions(_1, found) }
+        when Array then value.each { native_actions(_1, found) }
+        end
+        found
       end
 
       def analyze_version
