@@ -9,6 +9,8 @@ module Mxrb
 
       def initialize(source)
         @role_map = project_role_map(source)
+        @url_segments = UrlSegmentCompiler.new(source)
+        @typed_parameters = typed_parameters?(source)
       end
 
       def compile(unit)
@@ -24,16 +26,23 @@ module Mxrb
         {
           '$ID' => source['$ID'], '$Type' => source['$Type'],
           'Parameters' => array(source['Parameters']).map { parameter(_1) },
-          'Title' => text_reference(source['Title']), 'UrlSegments' => url_segments(source['Url'])
+          'Title' => text_reference(source['Title']), 'UrlSegments' => @url_segments.segments(source)
         }
       end
 
+      # Mendix 11 keeps the type and requirement of a page parameter in the
+      # Runtime model; older versions only its name.
+      def typed_parameters?(source)
+        version = source.respond_to?(:version) ? source.version.to_s : ''
+        version.empty? || version.split('.').first.to_i >= 11
+      end
+
       def parameter(source)
-        {
-          '$ID' => source['$ID'], '$Type' => source['$Type'], 'Name' => source['Name'],
-          'ParameterTypeRuntime' => data_type(source['ParameterType']),
-          'IsRequired' => source.fetch('IsRequired', false) == true
-        }
+        fields = { '$ID' => source['$ID'], '$Type' => source['$Type'], 'Name' => source['Name'] }
+        return fields unless @typed_parameters
+
+        fields.merge('ParameterTypeRuntime' => data_type(source['ParameterType']),
+                     'IsRequired' => source.fetch('IsRequired', false) == true)
       end
 
       def identity_fields(source, module_name)
@@ -54,10 +63,6 @@ module Mxrb
         return nil unless source
 
         source.slice('$ID', '$Type')
-      end
-
-      def url_segments(url)
-        url.to_s.split('/').filter_map { _1.start_with?('{') && _1.end_with?('}') ? _1[1..-2] : nil }
       end
 
       def allowed_user_roles(page)

@@ -7,7 +7,8 @@ module Mxrb
       include ModelValues
 
       NAME_ONLY_TYPES = %w[
-        CustomIcons$CustomIconCollection Forms$Layout Forms$Snippet Menus$MenuDocument
+        CustomIcons$CustomIconCollection Forms$BuildingBlock Forms$Layout Forms$PageTemplate Forms$Snippet
+        Menus$MenuDocument
       ].freeze
       TYPES = (NAME_ONLY_TYPES + %w[
         Enumerations$Enumeration Images$ImageCollection RegularExpressions$RegularExpression

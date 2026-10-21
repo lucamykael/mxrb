@@ -15,7 +15,8 @@ module Mxrb
         source = SourceModel.read(@mpr_path)
         path = File.join(@deployment, 'model', 'model.mdp')
         package = ModelPackage.read(path)
-        compiler = SettingsDocumentCompiler.new(RuntimeModelSchema.new(package, version: source.version))
+        compiler = SettingsDocumentCompiler.new(RuntimeModelSchema.new(package, version: source.version),
+                                                version: source.version)
         documents = source.units_of('Settings$ProjectSettings').map { compiler.compile(_1) }
         documents.reduce(package) { |result, document| result.upsert(document) }.write(path)
         SettingsMaterialization.new(model_path: path, documents: documents.length)

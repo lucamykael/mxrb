@@ -80,6 +80,18 @@ RSpec.describe Mxrb::Compiler::ArtifactMaterializer do
     )
   end
 
+  it 'writes building blocks and page templates as the name-only stubs MxBuild writes' do
+    compiler = Mxrb::Compiler::ArtifactDocumentCompiler.new
+    %w[Forms$BuildingBlock Forms$PageTemplate].each do |type|
+      unit = Mxrb::Compiler::SourceModel::Unit.new(
+        id: 'stub', container_id: 'module', containment: 'Documents', module_name: 'App',
+        document: { '$ID' => 'stub', '$Type' => type, 'Name' => 'Card', 'Widgets' => [2], 'LayoutCall' => nil }
+      )
+      expect(compiler.compile(unit))
+        .to eq('$ID' => 'stub', '$Type' => type, 'Name' => 'Card', 'QualifiedName' => 'App.Card')
+    end
+  end
+
   it 'rejects unsupported and module-less artifacts explicitly' do
     compiler = Mxrb::Compiler::ArtifactDocumentCompiler.new
     expect(compiler.send(:text_reference, nil)).to be_nil

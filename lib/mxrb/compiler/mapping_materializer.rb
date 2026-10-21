@@ -31,9 +31,7 @@ module Mxrb
 
       private
 
-      def mapping_units(source)
-        source.units.select { TYPES.include?(_1.document['$Type']) && _1.document['Excluded'] != true }
-      end
+      def mapping_units(source) = source.units.select { TYPES.include?(_1.document['$Type']) }
     end
 
     # A mapping document and its elements with the fields the Runtime schema

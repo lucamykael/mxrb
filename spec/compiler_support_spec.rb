@@ -210,6 +210,28 @@ RSpec.describe 'Compiler support branches' do
     end
   end
 
+  it 'drops excluded documents at the source and tells web layouts from native ones' do
+    Dir.mktmpdir do |root|
+      path = File.join(root, 'App.mpr')
+      Mxrb.define(path) do
+        mendix_version '11.12.1'
+        self.module(:App) do
+          layout :Shell
+          microflow(:Kept)
+          microflow(:Dropped) { excluded }
+          constant :Gone, type: :string, value: '', excluded: true
+        end
+      end
+      source = Mxrb::Compiler::SourceModel.read(path)
+      expect(source.units_of('Microflows$Microflow').map { _1.document['Name'] }).to eq(['Kept'])
+      expect(source.units_of('Constants$Constant')).to be_empty
+      layout = source.units_of('Forms$Layout').first
+      expect(source.web_layout?(layout)).to be(true)
+      native = layout.with(document: layout.document.merge('Content' => { '$Type' => 'Forms$NativeLayoutContent' }))
+      expect(source.web_layout?(native)).to be(false)
+    end
+  end
+
   it 'reads all source documents and closes safely when opening fails' do
     Dir.mktmpdir do |root|
       path = File.join(root, 'App.mpr')

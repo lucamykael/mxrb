@@ -40,7 +40,7 @@ module Mxrb
         @database_connector = DatabaseConnectorActionCompiler.new(source) if source.respond_to?(:units)
         @associations = association_index(source)
         @attribute_types = attribute_type_index(source)
-        @page_locations = page_location_index(source)
+        @page_locations = page_locations(source)
         @captions = ActivityCaption.new(source)
         @flow_returns = flow_return_index(source)
         @void_java_actions = void_java_actions(source)
@@ -340,20 +340,6 @@ module Mxrb
         end
       end
 
-      # Where a page opens by default: in a popup when its layout is one, as MxBuild
-      # writes the location of a show page action that does not choose one.
-      def page_location_index(source)
-        return {} unless source.respond_to?(:units_of)
-
-        layouts = source.units_of('Forms$Layout').to_h do |unit|
-          ["#{unit.module_name}.#{unit.document['Name']}", unit.document.dig('Content', 'LayoutType').to_s]
-        end
-        source.units_of('Forms$Page').each_with_object({}) do |unit, result|
-          type = layouts[unit.document.dig('FormCall', 'Form').to_s]
-          result["#{unit.module_name}.#{unit.document['Name']}"] = type if %w[Popup ModalPopup].include?(type)
-        end
-      end
-
       AGGREGATE_TYPES = {
         'DomainModels$IntegerAttributeType' => 'Integer', 'DomainModels$LongAttributeType' => 'Long',
         'DomainModels$AutoNumberAttributeType' => 'Long', 'DomainModels$DecimalAttributeType' => 'Decimal',
@@ -399,12 +385,6 @@ module Mxrb
           value.each_value { visit(_1, &block) }
         when Array then value.each { visit(_1, &block) }
         end
-      end
-
-      def derived_id(source, label)
-        seed = "#{IO::BsonCodec.extract_id(source['$ID'])}:#{label}"
-        hex = Digest::SHA256.hexdigest(seed)[0, 32]
-        "#{hex[0, 8]}-#{hex[8, 4]}-4#{hex[13, 3]}-8#{hex[17, 3]}-#{hex[20, 12]}"
       end
     end
     # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity
