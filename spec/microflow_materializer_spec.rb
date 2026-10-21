@@ -28,6 +28,11 @@ RSpec.describe Mxrb::Compiler::MicroflowMaterializer do
           return_type :Integer
           return_value '1'
         end
+        microflow(:Retired) do
+          excluded
+          return_type :Integer
+          return_value '2'
+        end
       end
     end
   end

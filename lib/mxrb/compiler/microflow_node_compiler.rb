@@ -42,6 +42,7 @@ module Mxrb
         @page_locations = page_location_index(source)
         @captions = ActivityCaption.new(source)
         @flow_returns = flow_return_index(source)
+        @void_java_actions = void_java_actions(source)
         @variable_types = {}
       end
 
@@ -112,6 +113,12 @@ module Mxrb
         end
         if field == 'ValueExpression' && source['$Type'] == 'Microflows$MicroflowParameterValue'
           return "'#{source.fetch('Microflow')}'"
+        end
+
+        # MxBuild keeps no result variable for a Java action that returns nothing.
+        if field == 'ResultVariableName' && source['$Type'] == 'Microflows$JavaActionCallAction' &&
+           @void_java_actions.include?(source['JavaAction'].to_s)
+          return ''
         end
 
         if field == 'Caption' && source['$Type'] == 'Microflows$ActionActivity' && source['AutoGenerateCaption'] == true
@@ -302,6 +309,15 @@ module Mxrb
                elsif LIST_OPERATIONS.include?(kind) then list
                end
         [node['ResultVariableName'], type]
+      end
+
+      def void_java_actions(source)
+        return [] unless source.respond_to?(:units_of)
+
+        source.units_of('JavaActions$JavaAction').filter_map do |unit|
+          void = unit.document.dig('JavaReturnType', '$Type') == 'CodeActions$VoidType'
+          "#{unit.module_name}.#{unit.document['Name']}" if void
+        end
       end
 
       def flow_return_index(source)

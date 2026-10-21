@@ -1211,5 +1211,124 @@
     "$Type",
     "ListVariableName",
     "VariableName"
+  ],
+  "Forms$DataGrid": [
+    "$ID",
+    "$Type",
+    "ControlBar",
+    "Columns",
+    "Name",
+    "TabIndex",
+    "Entity",
+    "IsControlBarVisible",
+    "SelectionMode",
+    "SelectFirst",
+    "DefaultButtonTrigger",
+    "RefreshTime",
+    "NumberOfRows",
+    "ShowEmptyRows",
+    "TooltipForm"
+  ],
+  "Forms$DataGridColumn": [
+    "$ID",
+    "$Type",
+    "Caption",
+    "FormattingInfo",
+    "AggregateCaption",
+    "AttributePath",
+    "ColumnKindString",
+    "ShowTooltip",
+    "AggregateFunction",
+    "Editable"
+  ],
+  "Forms$DeleteClientAction": [
+    "$ID",
+    "$Type",
+    "ClosePage"
+  ],
+  "Forms$FormAction": [
+    "$ID",
+    "$Type",
+    "FormSettings",
+    "PagesForSpecializations"
+  ],
+  "Forms$FormattingInfo": [
+    "$ID",
+    "$Type",
+    "DecimalPrecision",
+    "GroupDigits",
+    "EnumFormat",
+    "DateFormat",
+    "CustomDateFormat"
+  ],
+  "Forms$GridActionButton": [
+    "$ID",
+    "$Type",
+    "Action"
+  ],
+  "Forms$GridControlBar": [
+    "$ID",
+    "$Type",
+    "NewButtons",
+    "DefaultButtonPointer"
+  ],
+  "Forms$GridNewButton": [
+    "$ID",
+    "$Type",
+    "FormSettings",
+    "Entity",
+    "EditLocation"
+  ],
+  "Forms$GridSearchButton": [
+    "$ID",
+    "$Type"
+  ],
+  "Microflows$Head": [
+    "$ID",
+    "$Type",
+    "ListName"
+  ],
+  "Microflows$PushToClientAction": [
+    "$ID",
+    "$Type",
+    "ErrorHandlingType",
+    "DataVariableName"
+  ],
+  "Microflows$SynchronizeAction": [
+    "$ID",
+    "$Type",
+    "ErrorHandlingType"
+  ],
+  "Navigation$NativeHomePage": [
+    "$ID",
+    "$Type",
+    "HomePagePage"
+  ],
+  "Navigation$NativeNavigationProfile": [
+    "$ID",
+    "$Type",
+    "OfflineEntityConfigsRuntime",
+    "NativeHomePage",
+    "RoleBasedNativeHomePages",
+    "Name",
+    "IsOffline",
+    "ThrowPartialSyncError",
+    "OtaEnabled",
+    "LoggingEnabled",
+    "NetworkTimeoutMs",
+    "NativeNavigationEnabled"
+  ],
+  "Navigation$OfflineEntityConfig": [
+    "$ID",
+    "$Type",
+    "Entity",
+    "SyncMode",
+    "Constraint",
+    "CompatibilityMode"
+  ],
+  "Url$StaticUrlSegment": [
+    "$ID",
+    "$Type",
+    "Segment"
   ]
 }
