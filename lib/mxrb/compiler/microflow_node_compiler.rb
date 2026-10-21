@@ -39,6 +39,7 @@ module Mxrb
         @schema = schema
         @database_connector = DatabaseConnectorActionCompiler.new(source) if source.respond_to?(:units)
         @associations = association_index(source)
+        @attribute_types = attribute_type_index(source)
         @page_locations = page_location_index(source)
         @captions = ActivityCaption.new(source)
         @flow_returns = flow_return_index(source)
@@ -48,7 +49,7 @@ module Mxrb
 
       # The entity of each object variable of a flow, "[entity]" for a list.
       def prepare(flow)
-        @variable_types = {}
+        @variable_types = IMPLICIT_VARIABLES.dup
         nodes = []
         visit(flow) { nodes << _1 }
         2.times { nodes.each { infer_variable(_1) } }
@@ -143,6 +144,8 @@ module Mxrb
 
       def converted_field(source, source_field, runtime_field)
         value = source[source_field]
+        # A REST call without a timeout expression waits 0, as MxBuild writes it.
+        return '0' if runtime_field == 'RequestTimeOutExpression' && value.to_s.empty?
         return runtime_attribute_path(value) if runtime_field == 'AttributePath'
         return data_type(value) if %w[Type VariableDataType].include?(runtime_field) && data_type_document?(value)
 
@@ -190,6 +193,10 @@ module Mxrb
       def derived_runtime_type(source)
         if source['$Type'] == 'Microflows$AggregateAction'
           return 'Integer' if source['AggregateFunction'] == 'Count'
+          return 'Decimal' if source['AggregateFunction'] == 'Average'
+
+          type = @attribute_types[source['Attribute'].to_s]
+          return type if type
 
           raise CompilationError,
                 "cannot derive #{source['AggregateFunction']} aggregate type without an audited attribute type"
@@ -255,10 +262,15 @@ module Mxrb
         nil
       end
 
+      # The objects every flow can read, $latestHttpResponse after a REST call.
+      IMPLICIT_VARIABLES = {
+        'currentUser' => 'System.User', 'currentSession' => 'System.Session', 'latestError' => 'System.Error',
+        'latestHttpResponse' => 'System.HttpResponse', 'latestSoapFault' => 'System.SoapFault'
+      }.freeze
       LIST_ELEMENT_OPERATIONS = %w[Head Find FindByExpression FindByAttribute FindByAssociation].freeze
       LIST_OPERATIONS = %w[Tail Filter FilterByExpression FilterByAttribute FilterByAssociation Sort Union Intersect
                            Subtract].freeze
-      private_constant :LIST_ELEMENT_OPERATIONS, :LIST_OPERATIONS
+      private_constant :IMPLICIT_VARIABLES, :LIST_ELEMENT_OPERATIONS, :LIST_OPERATIONS
 
       def infer_variable(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
         name, type = case node['$Type']
@@ -339,6 +351,27 @@ module Mxrb
         source.units_of('Forms$Page').each_with_object({}) do |unit, result|
           type = layouts[unit.document.dig('FormCall', 'Form').to_s]
           result["#{unit.module_name}.#{unit.document['Name']}"] = type if %w[Popup ModalPopup].include?(type)
+        end
+      end
+
+      AGGREGATE_TYPES = {
+        'DomainModels$IntegerAttributeType' => 'Integer', 'DomainModels$LongAttributeType' => 'Long',
+        'DomainModels$AutoNumberAttributeType' => 'Long', 'DomainModels$DecimalAttributeType' => 'Decimal',
+        'DomainModels$DateTimeAttributeType' => 'DateTime'
+      }.freeze
+      private_constant :AGGREGATE_TYPES
+
+      # The type a sum, minimum or maximum of each numeric or date attribute has.
+      def attribute_type_index(source)
+        return {} unless source.respond_to?(:units_of)
+
+        source.units_of('DomainModels$DomainModel').each_with_object({}) do |unit, result|
+          array(unit.document['Entities']).each do |entity|
+            array(entity['Attributes']).each do |attribute|
+              type = AGGREGATE_TYPES[attribute.dig('NewType', '$Type').to_s]
+              result["#{unit.module_name}.#{entity['Name']}.#{attribute['Name']}"] = type if type
+            end
+          end
         end
       end
 

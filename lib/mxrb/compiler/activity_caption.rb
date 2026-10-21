@@ -47,6 +47,9 @@ module Mxrb
         when 'PushToClientAction' then "Synchronize '#{action['DataVariableName']}' to device"
         when 'ListOperationsAction' then list_operation(action)
         when 'AggregateAction' then aggregate(action)
+        when 'ImportXmlAction' then mapping_caption('Import from',
+                                                    action.dig('ResultHandling', 'ImportMappingCall', 'ContentType'))
+        when 'ExportXmlAction' then mapping_caption('Export to', action.dig('ResultHandling', 'ContentType'))
         end
       end
 
@@ -111,11 +114,21 @@ module Mxrb
       def code_action(name) = @code_actions.fetch(name.to_s) { short(name) }
 
       def list_operation(action)
-        action.dig('NewOperation', '$Type').to_s.delete_prefix('Microflows$').then { _1 == 'Head' ? 'Head' : nil }
+        operation = action.dig('NewOperation', '$Type').to_s.delete_prefix('Microflows$')
+        operation if %w[Head Find].include?(operation)
+      end
+
+      def mapping_caption(verb, content_type)
+        format = { 'Json' => 'JSON', 'Xml' => 'XML' }[content_type.to_s]
+        "#{verb} #{format}" if format
       end
 
       def aggregate(action)
-        "Count #{action['AggregateVariableName']}" if action['AggregateFunction'] == 'Count'
+        list = action['AggregateVariableName']
+        case action['AggregateFunction']
+        when 'Count' then "Count #{list}"
+        when 'Sum' then "Take sum of attribute '#{short(action['Attribute'])}' in #{list}"
+        end
       end
 
       def code_action_captions(source)

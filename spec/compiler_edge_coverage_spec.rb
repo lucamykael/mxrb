@@ -212,7 +212,9 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
                        operation.call('First', 'Head'), operation.call('Rest', 'Tail'),
                        operation.call('Has', 'Contains')
                      ])
-    expect(compiler.instance_variable_get(:@variable_types)).to eq(
+    types = compiler.instance_variable_get(:@variable_types)
+    expect(types.keys).not_to include('Count', 'Missing', 'Orphan', 'Has')
+    expect(types).to include(
       'Order' => 'App.Order', 'Given' => '[App.Line]', 'Created' => 'App.Order', 'Fresh' => '[App.Line]',
       'One' => 'App.Line', 'Many' => '[App.Line]', 'Lines' => '[App.Line]', 'Loaded' => '[App.Line]',
       'Each' => 'App.Line', 'Legacy' => 'App.Line', 'First' => 'App.Line', 'Rest' => '[App.Line]'
@@ -250,6 +252,41 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
        Navigation$OfflineEntityConfig].each do |type|
       expect(schema.fields_for('$Type' => type)).to include('$ID', '$Type')
     end
+  end
+
+  it 'types aggregates by their attribute, implicit variables, and REST calls without a timeout' do # rubocop:disable Metrics/BlockLength
+    fields = { 'Microflows$AggregateAction' => %w[$ID $Type AggregateFunction Attribute Type],
+               'Microflows$RestCallAction' => %w[$ID $Type RequestTimeOutExpression],
+               'Microflows$AssociationRetrieveSource' => %w[$ID $Type Type] }
+    schema = Struct.new(:fields) do
+      def fields_for(source) = fields.fetch(source['$Type'])
+      def counterpart(_source) = nil
+
+      def named(name)
+        { 'MaybeGeneralization' => { 'Generalization' => 'System.HttpMessage' } } if name == 'System.HttpResponse'
+      end
+    end.new(fields)
+    entity = { '$ID' => '11111111-1111-4111-8111-111111111111', 'Name' => 'Line',
+               'Attributes' => [3, { 'Name' => 'Qty', 'NewType' => { '$Type' => 'DomainModels$IntegerAttributeType' } },
+                                { 'Name' => 'Note', 'NewType' => { '$Type' => 'DomainModels$StringAttributeType' } }] }
+    domain = Mxrb::Compiler::SourceModel::Unit.new(
+      id: 'domain', container_id: 'domain', containment: 'DomainModel', module_name: 'App',
+      document: { 'Entities' => [3, entity], 'Associations' => [3] }
+    )
+    source = Struct.new(:domain) { def units_of(type) = type == 'DomainModels$DomainModel' ? [domain] : [] }.new(domain)
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema, source:)
+    aggregate = lambda do |function, attribute|
+      compiler.compile('$Type' => 'Microflows$AggregateAction', 'AggregateFunction' => function,
+                       'Attribute' => attribute)['Type']
+    end
+    expect([aggregate.call('Sum', 'App.Line.Qty'),
+            aggregate.call('Average', 'App.Line.Qty')]).to eq(%w[Integer Decimal])
+    expect { aggregate.call('Maximum', 'App.Line.Note') }.to raise_error(Mxrb::CompilationError, /Maximum aggregate/)
+    timeout = ->(value) { compiler.compile('$Type' => 'Microflows$RestCallAction', 'TimeOutExpression' => value) }
+    expect([timeout.call('')['RequestTimeOutExpression'], timeout.call('10')['RequestTimeOutExpression']])
+      .to eq(%w[0 10])
+    compiler.prepare('$Type' => 'Microflows$Microflow', 'Objects' => [])
+    expect(compiler.instance_variable_get(:@variable_types)).to include('latestHttpResponse' => 'System.HttpResponse')
   end
 
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do
