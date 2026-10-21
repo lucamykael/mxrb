@@ -8,7 +8,7 @@ module Mxrb
     class DeploymentMaterializer
       STAGES = [
         SecurityMaterializer, ConstantsMaterializer, DomainModelMaterializer,
-        ArtifactMaterializer, TranslationMaterializer, SystemTextMaterializer,
+        ArtifactMaterializer, MappingMaterializer, TranslationMaterializer, SystemTextMaterializer,
         SystemQueueMaterializer, ClientModelMaterializer,
         CodeActionMaterializer, SettingsMaterializer, MicroflowMaterializer, PublishedRestMaterializer,
         ProjectMaterializer

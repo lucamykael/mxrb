@@ -106,7 +106,14 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
     expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$Tail' })).to be_nil
     expect(caption('AggregateAction', AggregateFunction: 'Count', AggregateVariableName: 'Lines'))
       .to eq('Count Lines')
-    expect(caption('AggregateAction', AggregateFunction: 'Sum', AggregateVariableName: 'Lines')).to be_nil
+    expect(caption('AggregateAction', AggregateFunction: 'Sum', AggregateVariableName: 'Lines',
+                                      Attribute: 'App.Line.Qty')).to eq("Take sum of attribute 'Qty' in Lines")
+    expect(caption('AggregateAction', AggregateFunction: 'Average', AggregateVariableName: 'Lines')).to be_nil
+    json = { 'ImportMappingCall' => { 'ContentType' => 'Json' } }
+    expect(caption('ImportXmlAction', ResultHandling: json)).to eq('Import from JSON')
+    expect(caption('ExportXmlAction', ResultHandling: { 'ContentType' => 'Xml' })).to eq('Export to XML')
+    expect(caption('ExportXmlAction', ResultHandling: {})).to be_nil
+    expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$Find' })).to eq('Find')
     expect(caption('Unknown')).to be_nil
   end
 
