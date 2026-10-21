@@ -7,11 +7,20 @@ bleiben, sind aber keine Build-, Datenbank- oder Funktionstest-Abhängigkeiten.
 ## Build von null
 
 `DeploymentMaterializer` erzeugt ein fehlendes `deployment/` aus den Templates
-der installierten Version und durchläuft 12 Stufen: Sicherheit, Konstanten,
+der installierten Version und durchläuft 13 Stufen: Sicherheit, Konstanten,
 Domänenmodell, Artefakte, Übersetzungen, Systemtexte, Systemwarteschlangen,
-Clientmodell, Actions, Settings, Microflows und Projekt-/Modulindex. Metadaten,
-Abhängigkeiten und ein Runtime-kompatibel geordnetes BSON-`model.mdp` werden
-ebenfalls erzeugt.
+Clientmodell, Actions, Settings, Microflows, veröffentlichte REST-Services und
+Projekt-/Modulindex. Metadaten, Abhängigkeiten und ein Runtime-kompatibel
+geordnetes BSON-`model.mdp` werden ebenfalls erzeugt.
+
+Microflows erhalten, was MxBuild ableitet und das MPR nicht speichert: die
+Beschriftung, die Studio Pro für Aktivitäten mit automatischer Beschriftung
+erzeugt, wo sich eine Seite mit Popup-Layout öffnet, und die Benutzerrollen der
+Microflows des Moduls System. Im Sudoku 11.12.1 sind alle 57 Microflows und
+Nanoflows Feld für Feld identisch mit dem `model.mdp` von MxBuild 11.12.1.
+Veröffentlichte REST-Services werden in der Form der Runtime geschrieben, mit den
+Handlern `/rest/`, `/api-doc/` und `/rest-doc/` in `metadata.json`; unter
+Mendix 10.24 antworten sie wie ein Paket aus dem Deployment von MxBuild 10.24.
 
 Der Bootstrap besitzt auditierte Seeds und Kataloge für 6.10.8, 7.5.0,
 7.17.0, 9.6.1.29396, 10.24.0.73019 und 11.12.1. Die Familien 6.x, 7.x, 9.x, 10.x und 11.x wählen
@@ -147,8 +156,11 @@ Seitenbundles und fuhr sauber herunter. Danach bestand der Funktionstest
 
 ## Explizite Grenzen
 
-- alle 12 Stufen und saubere Web-Generierung sind für 6.10.8, 7.5.0, 7.17.0,
-  9.6.1.29396, 10.24.0.73019 und 11.12.1 validiert;
+- die 12 ursprünglichen Stufen und saubere Web-Generierung sind für 6.10.8,
+  7.5.0, 7.17.0, 9.6.1.29396, 10.24.0.73019 und 11.12.1 validiert, die Stufe
+  für veröffentlichte REST-Services für 10.24.0.73019;
+- die OpenAPI-Schemas veröffentlichter REST-Services bleiben leer, daher zeigen
+  die Dokumentations-Handler sie noch nicht;
 - ein exakter nativer Boot ist für 10.24.0.73019 und 11.12.1 belegt. Die installierten
   6/7/9-Distributionen enthalten exakte Runtime-Bundles, aber keinen
   kompatiblen Launcher; `db up` schlägt geschlossen fehl, statt den Java-21-Launcher

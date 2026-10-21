@@ -8,11 +8,20 @@ funcionais.
 ## Build do zero
 
 `DeploymentMaterializer` cria um `deployment/` inexistente a partir dos
-templates da versão instalada e executa 12 estágios: segurança, constantes,
+templates da versão instalada e executa 13 estágios: segurança, constantes,
 domain model, artefatos, traduções, textos de sistema, filas de sistema, modelo
-cliente, actions, settings, microflows e índice de projeto/módulos. Ele também
-gera `metadata.json`, dependências e o `model.mdp` em ordem BSON aceita pelo
-Runtime.
+cliente, actions, settings, microflows, serviços REST publicados e índice de
+projeto/módulos. Ele também gera `metadata.json`, dependências e o `model.mdp`
+em ordem BSON aceita pelo Runtime.
+
+Os microflows recebem o que o MxBuild deriva e o MPR não guarda: o caption que o
+Studio Pro gera para atividades com caption automático, o local em que uma
+página de layout popup abre e os papéis de usuário dos microflows do módulo
+System. No Sudoku 11.12.1, os 57 microflows e nanoflows saem idênticos aos do
+`model.mdp` do MxBuild 11.12.1, campo a campo. Os serviços REST publicados
+entram no formato do Runtime, com os handlers `/rest/`, `/api-doc/` e
+`/rest-doc/` no `metadata.json`; no Mendix 10.24 eles respondem como um pacote
+do próprio deploy do MxBuild 10.24.
 
 O bootstrap possui seeds e catálogos auditados para 6.10.8, 7.5.0, 7.17.0,
 9.6.1.29396, 10.24.0.73019 e 11.12.1. As famílias 6.x, 7.x, 9.x, 10.x e 11.x selecionam o seed
@@ -164,8 +173,11 @@ encerrou limpo. O teste funcional `ACT Create Animal` passou em seguida.
 
 ## Limites explícitos
 
-- os 12 estágios e a geração web limpa foram validados em 6.10.8, 7.5.0,
-  7.17.0, 9.6.1.29396, 10.24.0.73019 e 11.12.1;
+- os 12 estágios originais e a geração web limpa foram validados em 6.10.8,
+  7.5.0, 7.17.0, 9.6.1.29396, 10.24.0.73019 e 11.12.1; o de serviços REST
+  publicados, em 10.24.0.73019;
+- os schemas OpenAPI dos serviços REST publicados ficam vazios, então os
+  handlers de documentação ainda não os mostram;
 - o boot nativo exato foi provado em 10.24.0.73019 e 11.12.1. As distribuições
   6/7/9 instaladas têm os bundles exatos, mas não launcher compatível; `db up` falha fechado em vez de
   substituir pelo launcher Java 21 da versão 11;
