@@ -226,6 +226,32 @@ RSpec.describe 'Native compiler edge contracts' do # rubocop:disable Metrics/Blo
     expect(compiler.send(:generated_caption, association.call('Unknown', 'App.Unknown'))).to be_nil
   end
 
+  it 'keeps no result variable for a Java action that returns nothing' do
+    fields = { 'Microflows$JavaActionCallAction' => %w[$ID $Type JavaAction ResultVariableName] }
+    schema = Struct.new(:fields) do
+      def fields_for(source) = fields.fetch(source['$Type'])
+      def counterpart(_source) = nil
+    end.new(fields)
+    unit = Struct.new(:module_name, :document)
+    actions = [unit.new('Images', { 'Name' => 'Generate', 'JavaReturnType' => { '$Type' => 'CodeActions$VoidType' } }),
+               unit.new('Images', { 'Name' => 'Count', 'JavaReturnType' => { '$Type' => 'CodeActions$IntegerType' } })]
+    source = Struct.new(:actions) { def units_of(type) = type == 'JavaActions$JavaAction' ? actions : [] }.new(actions)
+    compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema, source:)
+    call = lambda do |name|
+      compiler.compile('$Type' => 'Microflows$JavaActionCallAction', 'JavaAction' => name,
+                       'ResultVariableName' => 'ReturnValueName')['ResultVariableName']
+    end
+    expect([call.call('Images.Generate'), call.call('Images.Count')]).to eq(['', 'ReturnValueName'])
+  end
+
+  it 'has the Runtime fields of native mobile documents for Mendix 11' do
+    schema = Mxrb::Compiler::RuntimeModelSchema.new(Mxrb::Compiler::ModelPackage.empty, version: '11.12.3')
+    %w[Navigation$NativeNavigationProfile Microflows$SynchronizeAction Microflows$PushToClientAction
+       Navigation$OfflineEntityConfig].each do |type|
+      expect(schema.fields_for('$Type' => type)).to include('$ID', '$Type')
+    end
+  end
+
   it 'derives audited aggregate result types and rejects ambiguous aggregates' do
     fields = {
       'Microflows$AggregateAction' => %w[
