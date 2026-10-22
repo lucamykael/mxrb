@@ -2,6 +2,8 @@ import { ListSourceNanoflows } from './listSource';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
+import { offlineStore } from './offlineStore';
+import { forgetRequestedProfile, requestedOfflineProfile, synchronizeAll } from './synchronize';
 import { registerExpressionSchema } from './schemaLookup';
 import { registerClientConstants } from './expression';
 import { registerObjectStorageSchema } from './objectStorage';
@@ -319,6 +321,17 @@ export function ApplicationRuntime({
         return;
       }
       if (!target) throw new Error('No accessible page is available for this session');
+      // An offline profile starts from a synchronized device copy; without the
+      // server it keeps working on what the device already has.
+      const offline = requestedOfflineProfile(value);
+      if (offline) {
+        try {
+          await synchronizeAll(offline.name ?? null);
+        } catch (failure) {
+          console.warn('[offline] synchronization failed; using the device data', failure);
+          setNotice(`Synchronization failed: ${apiFailure(failure).message}`);
+        }
+      }
       await openPage(target, null, !routeTarget);
     } catch (failure) {
       const normalized = apiFailure(failure);
@@ -364,6 +377,11 @@ export function ApplicationRuntime({
       const normalized = apiFailure(failure);
       if (normalized.status !== 401) setError(normalized);
     } finally {
+      // Signing out of an offline profile leaves no data on the device.
+      if (requestedOfflineProfile(schemaRef.current)) {
+        await offlineStore().reset();
+        forgetRequestedProfile();
+      }
       setCsrfToken(null);
       setSession(null);
       updatePopups([]);
@@ -546,6 +564,7 @@ export function ApplicationRuntime({
       if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
       const execution = await definition.execute(resolvedParameters, invoke, {
         pagePath: page?.name || '',
+        offline: requestedOfflineProfile(schemaRef.current) !== null,
         userRoles:
           workspace?.userRoles() ||
           (Array.isArray(session?.roles)

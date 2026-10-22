@@ -264,11 +264,20 @@ module Mxrb
               items?: NavigationItem[];
             }
 
+            export interface OfflineEntityConfig {
+              entity: string;
+              sync_mode: 'All' | 'None' | 'NoneAndPreserveData' | string;
+              constraint?: string;
+              compatibility_mode?: boolean;
+            }
+
             export interface NavigationProfile {
               name?: string;
               kind: string;
               home_page?: string;
               items?: NavigationItem[];
+              offline?: boolean;
+              offline_entities?: OfflineEntityConfig[];
             }
 
             export interface RuntimeModule {
@@ -396,6 +405,7 @@ module Mxrb
             export interface NanoflowEnvironment {
               pagePath?: string;
               userRoles?: string[];
+              offline?: boolean;
             }
 
             #{enumeration_types.join("\n")}

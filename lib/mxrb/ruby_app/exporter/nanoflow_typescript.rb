@@ -246,6 +246,9 @@ module Mxrb
           when 'Commit' then "await runtime.commit(#{JSON.generate(action['variable'])});\n"
           when 'Delete' then "await runtime.delete(#{JSON.generate(action['variable'])});\n"
           when 'Rollback' then "await runtime.rollback(#{JSON.generate(action['variable'])});\n"
+          when 'Synchronize'
+            "await runtime.synchronize(#{JSON.generate(action['mode'].to_s)}, " \
+              "#{JSON.generate(action.fetch('variables', []))});\n"
           when 'ListOperations' then "runtime.listOperation(#{JSON.generate(action.except('type'))});\n"
           when 'Aggregate' then "runtime.aggregate(#{JSON.generate(action.except('type'))});\n"
           when 'CreateVariable', 'ChangeVariable'
@@ -409,6 +412,9 @@ module Mxrb
           when 'Commit' then result['variable'] = action['CommitVariableName'].to_s
           when 'Delete' then result['variable'] = action['DeleteVariableName'].to_s
           when 'Rollback' then result['variable'] = action['RollbackVariableName'].to_s
+          when 'Synchronize'
+            result.merge!('mode' => action['Type'].to_s,
+                          'variables' => native_items(action['VariableNames']).map(&:to_s))
           when 'ListOperations' then result.merge!(nanoflow_list_operation(action))
           when 'Aggregate'
             result.merge!('list' => action['AggregateVariableName'].to_s,

@@ -899,6 +899,20 @@ de edição. Excluir usa o objeto de contexto; exclusão múltipla, seleção de
 pendentes. Popups são apresentados pela navegação de páginas, sem uma pilha
 visual de janelas modais.
 
+Perfis offline (nativos, ou web marcados como offline) trabalham sobre uma
+cópia local em IndexedDB das entidades configuradas no perfil. Abrir a
+aplicação com `?profile=Nome` escolhe o perfil: ao iniciar e após o login o
+cliente sincroniza (`POST /api/sync`), enviando os objetos criados, alterados e
+excluídos no dispositivo e baixando as entidades com modo `All` sob a restrição
+XPath do perfil; entidades `None` são limpas e `NoneAndPreserveData` ficam como
+estão. Os envios passam pela mesma transação e validação de `/api/records/commit`
+(um erro mantém todas as alterações pendentes no dispositivo); um objeto que o
+servidor já excluiu volta como conflito e sai da cópia local. Nanoflows desses
+perfis leem, confirmam, excluem e restauram objetos na cópia local; a atividade
+Synchronize sincroniza tudo ou apenas os objetos das variáveis indicadas, e sair
+da aplicação apaga a cópia local. `GET /api/sync?profile=Nome` descreve a
+configuração; recuperações offline com XPath ainda não são suportadas.
+
 LayoutGrid aplica pesos de 1–12, `grow` e `auto` por desktop, tablet (até 991 px)
 e celular (até 767 px), quebra de linha e alinhamentos de linha/coluna. Isso
 certifica o grid web declarado; não equivale a aplicativos móveis nativos nem
