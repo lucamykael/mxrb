@@ -111,6 +111,14 @@ module Mxrb
           return render_json(response, 200, { ok: true }.merge(invocation))
         end
 
+        if method == 'GET' && path == '/api/sync'
+          configuration = application.offline_configuration(profile: request.query['profile'], context:)
+          return render_json(response, 200, configuration)
+        end
+        if method == 'POST' && path == '/api/sync'
+          return render_json(response, 200, application.synchronize_offline(request_json(request), context:))
+        end
+
         if method == 'POST' && path == '/api/records/draft'
           return render_json(response, 200, application.draft_record(request_json(request)['type'], context:))
         end

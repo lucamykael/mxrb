@@ -555,6 +555,13 @@ RSpec.describe 'MXRB 0.1.4 release paths' do
     expect(exporter.send(:nanoflow_action, {
                            '$Type' => 'Microflows$LogMessageAction', 'MessageTemplate' => { 'Text' => 'hello' }
                          })).to include('message' => 'hello')
+    synchronize = exporter.send(:nanoflow_action, {
+                                  '$Type' => 'Microflows$SynchronizeAction', 'Type' => 'SpecificObjects',
+                                  'VariableNames' => [1, 'Order', 'Lines']
+                                })
+    expect(synchronize).to eq('type' => 'Synchronize', 'mode' => 'SpecificObjects', 'variables' => %w[Order Lines])
+    expect(exporter.send(:nanoflow_action_source, synchronize))
+      .to eq(%(await runtime.synchronize("SpecificObjects", ["Order","Lines"]);\n))
 
     object = exporter.send(:nanoflow_object, {
                              '$ID' => 'split', '$Type' => 'Microflows$ExclusiveSplit',

@@ -12,6 +12,8 @@ import type {
 import { evaluate, evaluateCondition } from './expression';
 import { arithmetic, numericCompare, numericText, isDecimal } from './decimal';
 import { api } from './api';
+import { offlineStore } from './offlineStore';
+import { synchronizeAll, synchronizeObjects } from './synchronize';
 import { compareSortValues, entityCollectionPath } from './value';
 
 type SortSpec = Array<{ attribute: string; direction: string }>;
@@ -123,8 +125,13 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
     console.info(`[nanoflow] ${text || this.metadata.name}`);
   }
 
-  // Database retrieves run on the server, which applies XPath, sorting and access rules.
+  // Database retrieves run on the server, which applies XPath, sorting and access
+  // rules; an offline profile reads the device copy of its synchronized entities.
   async retrieve(variable: string, spec: RetrieveSpec): Promise<void> {
+    if (this.environment.offline) {
+      this.set(variable, await this.#offlineRetrieve(spec));
+      return;
+    }
     if (spec.source === 'association') {
       this.set(variable, await this.#associated(spec));
       return;
@@ -143,6 +150,60 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
       `/api/entities/${encodeURIComponent(spec.entity ?? '')}?${query}`,
     );
     this.set(variable, spec.single ? (response.records[0] ?? null) : response.records);
+  }
+
+  async #offlineRetrieve(spec: RetrieveSpec): Promise<RuntimeValue> {
+    if (spec.xpath) throw new Error('Offline retrieves cannot filter by XPath yet');
+    const store = offlineStore();
+    let records: EntityRecord[];
+    if (spec.source === 'association') {
+      const start = this.variables[spec.start ?? ''];
+      if (!isRecord(start)) return spec.kind === 'Reference' ? null : [];
+      const forward = start.type === spec.from;
+      const member = (spec.association ?? '').split('.').pop() ?? '';
+      const referenced = (value: RuntimeValue | undefined): string[] =>
+        Array.isArray(value)
+          ? value.map(String)
+          : value == null
+            ? []
+            : [String(isRecord(value) ? value.id : value)];
+      records = forward
+        ? (
+            await Promise.all(
+              referenced(start.attributes[member]).map((id) => store.record(spec.to ?? '', id)),
+            )
+          ).filter(isRecord)
+        : (await store.records(spec.from ?? '')).filter((record) =>
+            referenced(record.attributes[member]).includes(start.id),
+          );
+      return forward && spec.kind === 'Reference' ? (records[0] ?? null) : records;
+    }
+    records = sortList(await store.records(spec.entity ?? ''), spec.sort ?? []);
+    if (spec.offset) records = records.slice(this.number(spec.offset));
+    const limit = spec.single ? 1 : spec.limit ? this.number(spec.limit) : 0;
+    if (limit > 0) records = records.slice(0, limit);
+    return spec.single ? (records[0] ?? null) : records;
+  }
+
+  // Synchronize everything, or the objects of the named variables, with the server.
+  async synchronize(mode: string, variables: string[] = []): Promise<void> {
+    if (mode === 'All') {
+      await synchronizeAll();
+      return;
+    }
+    const records = variables.flatMap((name) => {
+      const value = this.variables[name];
+      return (Array.isArray(value) ? value : [value]).filter(isRecord);
+    });
+    const result = await synchronizeObjects(records);
+    records.forEach((record) => {
+      const id = result.guid_map?.[record.id];
+      if (id) {
+        record.id = id;
+        delete record.new_record;
+        delete record.transient;
+      }
+    });
   }
 
   async #associated(spec: RetrieveSpec): Promise<RuntimeValue> {
@@ -172,6 +233,18 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
   async commit(variable: string): Promise<void> {
     const records = this.#records(variable);
     if (!records.length) return;
+    if (this.environment.offline) {
+      // Offline commits land on the device and wait for the next synchronization.
+      for (const record of records) {
+        const stored = await offlineStore().save(record);
+        this.#changes.delete(`${record.type}:${record.id}`);
+        record.attributes = { ...stored.attributes };
+        // An object created offline stays new until the server identifies it.
+        if (record.transient) record.new_record = true;
+        delete record.transient;
+      }
+      return;
+    }
     const response = await api<{ records: EntityRecord[] }>('/api/records/commit', {
       method: 'POST',
       body: JSON.stringify({
@@ -193,6 +266,10 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
   }
 
   async delete(variable: string): Promise<void> {
+    if (this.environment.offline) {
+      for (const record of this.#records(variable)) await offlineStore().remove(record);
+      return;
+    }
     const records = this.#records(variable).filter((record) => !record.transient);
     if (records.length)
       await api('/api/records/delete', {
@@ -204,9 +281,11 @@ export class NanoflowRuntime<P extends NanoflowParameters = NanoflowParameters> 
   // Restores the stored values of committed objects.
   async rollback(variable: string): Promise<void> {
     for (const record of this.#records(variable).filter((item) => !item.transient)) {
-      const stored = await api<EntityRecord>(
-        `/api/entities/${encodeURIComponent(record.type)}/${encodeURIComponent(record.id)}`,
-      );
+      const stored = this.environment.offline
+        ? ((await offlineStore().record(record.type, record.id)) ?? record)
+        : await api<EntityRecord>(
+            `/api/entities/${encodeURIComponent(record.type)}/${encodeURIComponent(record.id)}`,
+          );
       record.attributes = { ...stored.attributes };
       this.#changes.delete(`${record.type}:${record.id}`);
     }

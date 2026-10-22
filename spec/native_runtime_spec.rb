@@ -289,6 +289,8 @@ RSpec.describe Mxrb::Runtime::Native do
       .to raise_error(Mxrb::NativeRuntimeError, /exceeded 10000 steps/)
     expect { @interpreter.send(:execute_action, nil, {}) }
       .to raise_error(Mxrb::NativeRuntimeError, /has no action/)
+    expect { @interpreter.send(:execute_action, { '$Type' => 'Microflows$SynchronizeAction', 'Type' => 'All' }, {}) }
+      .to raise_error(Mxrb::NativeRuntimeError, /Synchronize \(All\) runs in the offline client/)
     expect do
       @interpreter.send(
         :action_retrieve,
