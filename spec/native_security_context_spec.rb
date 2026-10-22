@@ -227,7 +227,7 @@ RSpec.describe 'Native runtime entity security context' do
     expect(policy).to have_received(:authorize!).with('M.E', hash_including(action: :write)).once
   end
 
-  it 'materializes REST input as a detached authorized object and propagates service context' do
+  it 'materializes REST input as a staged authorized object and propagates service context' do
     application = Mxrb::RubyApp::Application.allocate
     store = double
     interpreter = double(store:)
@@ -237,10 +237,12 @@ RSpec.describe 'Native runtime entity security context' do
     context = Object.new
     parameter = { 'name' => 'Input', 'entity' => 'M.Input', 'required' => true }
 
-    expect(store).not_to receive(:create)
+    staged = Mxrb::Runtime::Native::ObjectValue.new(entity: 'M.Input', id: 'in-1', members: { 'Name' => '' })
+    expect(store).to receive(:create).with('M.Input').and_return(staged)
     object = application.send(
       :deserialize_rest_value, { 'Name' => 'Ada' }, parameter, context:
     )
+    expect(object).to equal(staged)
     expect(object).to have_attributes(entity: 'M.Input', members: { 'Name' => 'Ada' })
     expect(policy).to have_received(:authorize!).with(
       'M.Input', kind: :entity, action: :create, context:, member: nil, record: nil

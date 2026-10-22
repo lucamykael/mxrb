@@ -147,26 +147,8 @@ module Mxrb
               'build' => 'npm run typecheck && vite build', 'preview' => 'vite preview',
               'check' => 'npm run format:check && npm run lint && npm run test && npm run build'
             },
-            'dependencies' => {
-              'react' => '^19.2.8', 'react-dom' => '^19.2.8',
-              'react-router-dom' => '^7.18.2', 'date-fns' => '^4.1.0', 'decimal.js' => '^10.6.0',
-              'big.js' => '^6.2.2',
-              'plotly.js-dist-min' => '3.0.1',
-              'js-base64' => '3.7.7'
-            },
-            'devDependencies' => {
-              '@eslint/js' => '^10.0.1',
-              '@testing-library/jest-dom' => '^7.0.1',
-              '@testing-library/react' => '^16.3.2',
-              '@testing-library/user-event' => '^14.6.4',
-              '@types/big.js' => '^6.2.2', '@types/node' => '^26.2.0', '@types/react' => '^19.2.18',
-              '@types/react-dom' => '^19.2.4', '@vitejs/plugin-react' => '^6.0.5',
-              'eslint' => '^10.8.1', 'eslint-plugin-react-hooks' => '^7.1.1',
-              'globals' => '^17.11.0',
-              'jsdom' => '^30.0.1', 'prettier' => '^3.9.6',
-              'sass-embedded' => '^1.90.0', 'typescript' => '^6.0.3',
-              'typescript-eslint' => '^8.67.0', 'vite' => '^8.2.1', 'vitest' => '^4.1.11'
-            }
+            'dependencies' => FrontendPackage::DEPENDENCIES,
+            'devDependencies' => FrontendPackage::DEV_DEPENDENCIES
           ) << "\n"
         end
 

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useCaptionEnvironment } from '../captions';
-import { api } from '../api';
 import { registerMarketplaceWidget, type MarketplaceWidgetProps } from '../marketplace';
 import { memberName } from '../value';
 import type { EntityRecord } from '../../types';
 import { AmdLoader, type ModuleSources } from './amd';
 import { dojoModules, kernel } from './dojo';
-import { installMx, mxForm, mxuiModules, MxStore, type MxSave, type MxSession } from './mx';
+import { installMx, mxForm, mxuiModules, MxStore, type MxSave } from './mx';
+import { useLegacySession } from './session';
 
 // A property of a legacy widget, as its package declares it.
 export interface LegacyPropertyDefinition {
@@ -215,27 +215,4 @@ export function registerLegacyWidget(
   );
   const pkg = { sources, entry, definitions };
   return registerMarketplaceWidget(id, (props) => <LegacyWidgetHost props={props} pkg={pkg} />);
-}
-
-const loadSession = async (): Promise<MxSession> => {
-  try {
-    const session = await api<(MxSession & { user?: string }) | undefined>('/api/session');
-    return { ...session, username: session?.username ?? session?.user };
-  } catch {
-    return {};
-  }
-};
-let sessionRequest: Promise<MxSession> | null = null;
-
-// The signed-in user mx.session reports, read once per page load.
-function useLegacySession(): MxSession | null {
-  const [session, setSession] = useState<MxSession | null>(null);
-  useEffect(() => {
-    let active = true;
-    void (sessionRequest ??= loadSession()).then((value) => active && setSession(value));
-    return () => {
-      active = false;
-    };
-  }, []);
-  return session;
 }

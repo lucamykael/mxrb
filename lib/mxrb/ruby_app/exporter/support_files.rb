@@ -214,10 +214,24 @@ module Mxrb
           end
         end
 
+        # The npm files of a theme that was once an npm package of its own
+        # (package.json, a lockfile, node_modules) must not reach the frontend,
+        # where Vite and TypeScript would read them in place of the generated
+        # frontend/package.json.
+        NPM_PACKAGE_FILES = %w[
+          package.json package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml .npmrc
+        ].freeze
+
+        def npm_package_file?(path)
+          NPM_PACKAGE_FILES.include?(File.basename(path))
+        end
+
         def overlay_frontend_web_assets(source, destination, public: false)
           Find.find(source) do |path|
             relative_path = path.delete_prefix("#{source}/")
+            Find.prune if File.directory?(path) && File.basename(path) == 'node_modules'
             next if path == source || File.directory?(path)
+            next if npm_package_file?(path)
             next if %w[.js .jsx .scss].include?(File.extname(path).downcase)
             next if public && %w[.html .htm].include?(File.extname(path).downcase)
 
@@ -232,7 +246,9 @@ module Mxrb
           Find.find(source) do |path|
             relative_path = path.delete_prefix("#{source}/")
             Find.prune if File.directory?(path) && relative_path.split(File::SEPARATOR).include?('native')
+            Find.prune if File.directory?(path) && File.basename(path) == 'node_modules'
             next if path == source
+            next if File.file?(path) && npm_package_file?(path)
             next if File.file?(path) && %w[.js .jsx].include?(File.extname(path).downcase)
 
             target = File.join(destination, relative_path)

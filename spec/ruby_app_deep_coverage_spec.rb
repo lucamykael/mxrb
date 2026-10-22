@@ -651,6 +651,13 @@ RSpec.describe 'Ruby application internal contracts' do
       File.write(File.join(frontend, 'package.json'), '{}')
       expect { local.send(:spawn_frontend) }.to raise_error(ArgumentError, /dependencies missing/)
       FileUtils.mkdir_p(File.join(frontend, 'node_modules'))
+      expect { local.send(:spawn_frontend) }.to raise_error(ArgumentError, /older than the generated bridge/)
+      File.write(File.join(frontend, 'package.json'),
+                 JSON.generate('dependencies' => Mxrb::RubyApp::FrontendPackage::DEPENDENCIES,
+                               'devDependencies' => Mxrb::RubyApp::FrontendPackage::DEV_DEPENDENCIES))
+      Mxrb::RubyApp::FrontendPackage::DEPENDENCIES.each_key do |package|
+        FileUtils.mkdir_p(File.join(frontend, 'node_modules', package))
+      end
       allow(Process).to receive(:spawn).and_return(13)
       expect(local.send(:spawn_frontend)).to eq(13)
     end

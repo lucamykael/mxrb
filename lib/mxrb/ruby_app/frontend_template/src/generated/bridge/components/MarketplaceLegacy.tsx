@@ -3,6 +3,8 @@ import type { EntityRecord, WidgetEvent } from '../../types';
 import { useCaptionEnvironment } from '../captions';
 import type { MarketplaceWidgetProps } from '../marketplace';
 import { displayValue, expressionValue, memberName } from '../value';
+import { installMx, type MxSave } from '../legacy/mx';
+import { useLegacySession } from '../legacy/session';
 
 type Properties = Record<string, unknown>;
 
@@ -19,24 +21,43 @@ export function translatedText(value: unknown, locale: string): string {
 }
 
 // HTML snippet: renders HTML, or runs JavaScript with the element as `this` and the
-// context object as `contextObj`, as the snippet widget does; clicks may call a microflow.
+// context object as `contextObj`, an MxObject of the Mendix client API over the
+// page's record (get, set, getGuid, getEntity, ...) with window.mx installed, as
+// the snippet widget does; clicks may call a microflow.
 export function MarketplaceHtmlSnippet(props: MarketplaceWidgetProps) {
   const properties = (props.widget.options?.properties || {}) as Properties;
   const { locale } = useCaptionEnvironment(props.schema);
+  const session = useLegacySession();
   const element = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
+  const latest = useRef({ props, session });
+  latest.current = { props, session };
+  // Changes the snippet makes to the context object are saved through the page.
+  const save = useRef<MxSave>(async (_record, member, value) => {
+    const result = await latest.current.props.onChange(member, value);
+    return result && typeof result === 'object' && 'id' in result ? (result as EntityRecord) : null;
+  }).current;
   const contents = translatedText(properties.contents, locale);
   const javascript = String(properties.contenttype || 'html').startsWith('js');
   const contextKey = JSON.stringify(props.context);
   useEffect(() => {
     if (!javascript || !element.current) return;
     try {
-      new Function('contextObj', contents).call(element.current, JSON.parse(contextKey));
+      const { props: current, session: known } = latest.current;
+      const store = installMx({
+        schema: current.schema,
+        request: current.request,
+        session: known ?? {},
+        locale,
+      });
+      const record = JSON.parse(contextKey) as EntityRecord | null;
+      const contextObj = record ? store.remember(record, save) : null;
+      new Function('contextObj', contents).call(element.current, contextObj);
       setError('');
     } catch (failure) {
       setError(String(failure));
     }
-  }, [javascript, contents, contextKey]);
+  }, [javascript, contents, contextKey, locale, save]);
   const click = flowEvent('microflow', properties.onclickmf);
   return (
     <div
