@@ -17,13 +17,14 @@ import {
 } from './PageVariables';
 import { Popup } from './components/Popup';
 import { LayoutState } from './components/NativeScrollContainer';
-import { apiFailure, inlineStyle, isEntityRecord, recordValue } from './value';
+import { apiFailure, classes, inlineStyle, isEntityRecord, recordValue } from './value';
 import { servedWidget } from './contracts';
 import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
 import { LoginForm } from '../../components/auth/LoginForm';
 import { AppFeedback } from '../../components/feedback/AppFeedback';
 import { AppNavigation } from '../../components/navigation/AppNavigation';
+import { nativePage } from './components/NativeLayout';
 import { PageOutlet } from './components/PageOutlet';
 import { NavigationSelection } from './components/PageTitleContext';
 import { WidgetRenderer } from './components/WidgetRenderer';
@@ -552,7 +553,15 @@ export function ApplicationRuntime({
             ? session.roles.filter((role): role is string => typeof role === 'string')
             : []),
       });
+      // An object the nanoflow created exists only in its result (a data source's
+      // list, say): saving it would reload that very data source, again and again.
+      const given = new Set(
+        [activeContext, ...Object.values(resolvedParameters).flat()]
+          .filter(isEntityRecord)
+          .map((record) => `${record.type}:${record.id}`),
+      );
       for (const changed of execution.changes) {
+        if (changed.transient && !given.has(`${changed.type}:${changed.id}`)) continue;
         await saveRecord(changed, changed.attributes);
       }
       const message = execution.messages.at(-1);
@@ -890,12 +899,15 @@ export function ApplicationRuntime({
       </Popup>
     );
   }
+  // A page on a native layout shows in the phone shell, whose bottom bar
+  // replaces the web navigation.
+  const native = nativePage(page.widgets);
   return (
     <AppLayout
-      className={page.appearance_class}
+      className={classes(page.appearance_class, native && 'mxrb-phone-shell')}
       style={inlineStyle(page.appearance_style)}
       navigation={
-        JSON.stringify(page.widgets).includes('"navigation_profile"') ? undefined : (
+        native || JSON.stringify(page.widgets).includes('"navigation_profile"') ? undefined : (
           <AppNavigation
             items={profile?.items || []}
             authenticated={Boolean(session)}

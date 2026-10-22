@@ -15,6 +15,7 @@ import {
   ReferenceSetSelector,
 } from './PresentationWidgets';
 import { FileWidget } from './FileWidget';
+import { NativeLayout } from './NativeLayout';
 import { PageTitleContext } from './PageTitleContext';
 import {
   editable,
@@ -672,6 +673,8 @@ function WidgetContent({
       return <SidebarToggle {...sharedProps} />;
     case 'scroll_container':
       return <ScrollContainer {...sharedProps} />;
+    case 'native_layout':
+      return <NativeLayout {...sharedProps} />;
     case 'reference_set_selector':
       return <ReferenceSetSelector {...sharedProps} onChanged={onChanged} />;
     case 'navigation_list':

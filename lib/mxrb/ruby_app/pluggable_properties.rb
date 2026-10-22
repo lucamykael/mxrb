@@ -28,6 +28,8 @@ module Mxrb
 
       # Builds one schema-validated object inside an Object property.
       class ObjectValueBuilder
+        include PageDataSources
+
         def initialize(owner)
           @owner = owner
           @assignments = []

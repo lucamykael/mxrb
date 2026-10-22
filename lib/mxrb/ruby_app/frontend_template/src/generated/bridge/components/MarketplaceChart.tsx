@@ -107,7 +107,10 @@ async function chartSeries(
     });
   }
 
-  const grouped = object(properties.series ?? properties.lines).objects;
+  // Native charts name their series lists by chart: barSeries, columnSeries, lines.
+  const grouped = object(
+    properties.series ?? properties.lines ?? properties.barSeries ?? properties.columnSeries,
+  ).objects;
   const definitions = Array.isArray(grouped) ? grouped.map(object) : [properties];
   const batches = await Promise.all(
     definitions.map(async (definition) => {
@@ -122,7 +125,7 @@ async function chartSeries(
       const configured = object(
         dynamic
           ? definition.dynamicDataSource
-          : (definition.staticDataSource ?? definition.seriesDataSource),
+          : (definition.staticDataSource ?? definition.seriesDataSource ?? definition.dataSource),
       );
       const source =
         typeof configured.data_source === 'string'
@@ -151,8 +154,12 @@ async function chartSeries(
           })
         : [];
       const horizontal = kind.includes('barchart');
-      const xAttribute = dynamic ? definition.dynamicXAttribute : definition.staticXAttribute;
-      const yAttribute = dynamic ? definition.dynamicYAttribute : definition.staticYAttribute;
+      const xAttribute = dynamic
+        ? definition.dynamicXAttribute
+        : (definition.staticXAttribute ?? definition.XAttribute);
+      const yAttribute = dynamic
+        ? definition.dynamicYAttribute
+        : (definition.staticYAttribute ?? definition.YAttribute);
       const x = attribute(
         (horizontal ? yAttribute : xAttribute) ??
           definition.horizontalAxisAttribute ??
@@ -182,7 +189,9 @@ async function chartSeries(
         group.records.push(record);
         if (!group.name || group.name === '(empty)') {
           group.name = chartCaption(
-            dynamic ? definition.dynamicName : (definition.staticName ?? definition.seriesName),
+            dynamic
+              ? (definition.dynamicName ?? definition.dynamicSeriesName)
+              : (definition.staticName ?? definition.staticSeriesName ?? definition.seriesName),
             dynamic ? record : props.context,
             environment,
           );
@@ -283,7 +292,7 @@ function ChartPlot({
   const valueX = (value: number) => 120 + ((value - low) / span) * 460;
   const categoryY = (index: number, point?: Point) =>
     25 + (230 / count) * ((point ? labels.indexOf(point.label) : index) + 0.5);
-  const pie = kind.includes('piechart');
+  const pie = kind.includes('piechart') || kind.includes('doughnutchart');
   const heatmap = kind.includes('heatmap');
   let angle = -Math.PI / 2;
   const total = values.reduce((sum, value) => sum + Math.max(0, value), 0);

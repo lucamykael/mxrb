@@ -211,15 +211,68 @@ module Mxrb
         end
 
         def vite_config
-          <<~JS
+          <<~'JS'
             import { fileURLToPath } from 'node:url';
-            import { defineConfig } from 'vite';
+            import { defineConfig, type Plugin } from 'vite';
             import react from '@vitejs/plugin-react';
 
             const apiPort = process.env.MXRB_API_PORT || '9292';
 
+            // React Native packages, which JavaScript actions import for the branches
+            // that run only on a phone. In the browser every such import, default,
+            // named or namespace, resolves to the inert value of nativeUnavailable.ts,
+            // so the web branches of the actions run untouched.
+            const REACT_NATIVE =
+              /^(?:react-native(?:-[^/]+)?|@react-native-[^/]+\/[^/]+|@[^/]+\/react-native(?:-[^/]+)?)(?:\/.*)?$/;
+            const NATIVE_MODULE = fileURLToPath(
+              new URL('./src/generated/bridge/legacy/nativeUnavailable.ts', import.meta.url),
+            );
+            const IMPORT =
+              /^[ \t]*import\s+(?:(\w+)\s*,?\s*)?(?:\*\s+as\s+(\w+)|\{([^}]*)\})?\s*from\s*(['"])([^'"]+)\4\s*;?/gm;
+            function reactNativeUnavailable(): Plugin {
+              return {
+                name: 'mxrb-react-native-unavailable',
+                enforce: 'pre',
+                resolveId(source: string) {
+                  return REACT_NATIVE.test(source) ? NATIVE_MODULE : undefined;
+                },
+                transform(code: string, id: string) {
+                  if (!/\.[cm]?js$/.test(id) || !code.includes('react-native')) return undefined;
+                  let count = 0;
+                  const rewritten = code.replace(
+                    IMPORT,
+                    (
+                      statement: string,
+                      defaultName?: string,
+                      namespace?: string,
+                      names?: string,
+                      _quote?: string,
+                      source = '',
+                    ) => {
+                      if (!REACT_NATIVE.test(source)) return statement;
+                      count += 1;
+                      const alias = `__mxrbNative${count}`;
+                      const lines = [`import ${alias} from ${JSON.stringify(NATIVE_MODULE)};`];
+                      if (defaultName) lines.push(`const ${defaultName} = ${alias};`);
+                      if (namespace) lines.push(`const ${namespace} = ${alias};`);
+                      if (names && names.trim()) {
+                        const bindings = names
+                          .split(',')
+                          .map((name) => name.trim().replace(/^type\s+/, ''))
+                          .filter(Boolean)
+                          .map((name) => name.replace(/\s+as\s+/, ': '));
+                        lines.push(`const { ${bindings.join(', ')} } = ${alias};`);
+                      }
+                      return lines.join(' ');
+                    },
+                  );
+                  return count ? { code: rewritten, map: null } : undefined;
+                },
+              };
+            }
+
             export default defineConfig({
-              plugins: [react()],
+              plugins: [react(), reactNativeUnavailable()],
               resolve: {
                 alias: [
                   // The pluggable widget API module that project widget builds import.
@@ -234,13 +287,6 @@ module Mxrb
                     find: 'mx-global',
                     replacement: fileURLToPath(
                       new URL('./src/generated/bridge/legacy/mxGlobal.ts', import.meta.url),
-                    ),
-                  },
-                  // Their React Native branches never run in the browser.
-                  {
-                    find: new RegExp('^(?:react-native(?:-[^/]+)?|@react-native-[^/]+/[^/]+)(?:/.*)?$'),
-                    replacement: fileURLToPath(
-                      new URL('./src/generated/bridge/legacy/nativeUnavailable.ts', import.meta.url),
                     ),
                   },
                 ],
@@ -286,6 +332,9 @@ module Mxrb
           commons = KnownJavaScriptActions.matching(File.dirname(@mpr_path),
                                                     sources: KnownJavaScriptActions::COMMONS_SOURCES,
                                                     module_name: 'nanoflowcommons')
+          native = KnownJavaScriptActions.matching(File.dirname(@mpr_path),
+                                                   sources: KnownJavaScriptActions::NATIVE_SOURCES,
+                                                   module_name: 'nativemobileresources')
           imports = @nanoflow_entries.map do |entry|
             relative = entry.fetch('path').delete_prefix('frontend/src/')
             "import #{entry.fetch('import_name')} from './#{relative.delete_suffix('.ts')}';"
@@ -300,6 +349,7 @@ module Mxrb
             import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';#{project_actions[:import]}
             import { feedbackStorageActions } from './bridge/feedbackStorage';
             import { nanoflowCommonsActions } from './bridge/nanoflowCommons';
+            import { nativeMobileActions } from './bridge/nativeMobileActions';
             import type { RegisteredNanoflow } from './types';
 
             #{imports.join("\n")}
@@ -311,7 +361,8 @@ module Mxrb
             registerNanoflows(nanoflows);
             registerJavaScriptActions({#{project_actions[:registration]}
               ...feedbackStorageActions(#{JSON.generate(javascript_actions)}#{feedback_options}),
-              ...nanoflowCommonsActions(#{JSON.generate(commons)})
+              ...nanoflowCommonsActions(#{JSON.generate(commons)}),
+              ...nativeMobileActions(#{JSON.generate(native)})
             });
 
             export default nanoflows;

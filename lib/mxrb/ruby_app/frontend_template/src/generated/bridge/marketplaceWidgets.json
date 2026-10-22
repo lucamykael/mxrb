@@ -2,6 +2,33 @@
   "description": "Pluggable widget ids the generated frontend renders (matched against the lowercased id). Shared by marketplace.tsx and Mxrb::RubyApp::PortabilityReport; any other id renders as a visible unsupported placeholder.",
   "widgets": [
     {
+      "pattern": "^com\\.mendix\\.widget\\.native\\.(accordion|activityindicator|animation|appevents|backgroundgradient|backgroundimage|badge|bottomsheet|carousel|floatingactionbutton|gallery|gallerytextfilter|image|introscreen|listviewswipe|piedoughnutchart|popupmenu|qrcode|radiobuttons|repeater|signature|videoplayer|webview)\\.",
+      "support": "full",
+      "examples": [
+        "com.mendix.widget.native.bottomsheet.BottomSheet",
+        "com.mendix.widget.native.gallery.Gallery",
+        "com.mendix.widget.native.qrcode.QRCode"
+      ]
+    },
+    {
+      "pattern": "^com\\.mendix\\.widget\\.native\\.maps\\.",
+      "support": "approximate",
+      "note": "no map tiles; lists the markers with their place, action or OpenStreetMap link",
+      "examples": ["com.mendix.widget.native.maps.Maps"]
+    },
+    {
+      "pattern": "^com\\.mendix\\.widget\\.native\\.notifications\\.",
+      "support": "approximate",
+      "note": "receives only the notifications the application displays or schedules itself",
+      "examples": ["com.mendix.widget.native.notifications.Notifications"]
+    },
+    {
+      "pattern": "^com\\.mendix\\.widget\\.native\\.feedback\\.",
+      "support": "approximate",
+      "note": "feedback form kept in the browser; nothing is sent to Mendix Feedback",
+      "examples": ["com.mendix.widget.native.feedback.Feedback"]
+    },
+    {
       "pattern": "\\.image$",
       "support": "full",
       "examples": ["com.mendix.widget.web.image.Image"]

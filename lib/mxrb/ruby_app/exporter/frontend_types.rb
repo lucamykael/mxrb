@@ -264,11 +264,18 @@ module Mxrb
               items?: NavigationItem[];
             }
 
+            export interface NativeBottomBarItem {
+              caption?: Record<string, string>;
+              page?: string;
+              icon?: number | { collection: string };
+            }
+
             export interface NavigationProfile {
               name?: string;
               kind: string;
               home_page?: string;
               items?: NavigationItem[];
+              bottom_bar?: NativeBottomBarItem[];
             }
 
             export interface RuntimeModule {

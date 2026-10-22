@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type {
   ApiRequest,
   DataViewSource,
@@ -145,7 +145,10 @@ export function useListSource(
   revision = 0,
 ): ListSourceRecords {
   const scopes = useSourceScopes(pageContext);
-  const invokeNanoflow = useContext(ListSourceNanoflows);
+  // The page passes a new invoker on every render, and running a nanoflow
+  // renders the page again: the latest one runs, but only the key reloads.
+  const invokeNanoflow = useRef(useContext(ListSourceNanoflows));
+  invokeNanoflow.current = useContext(ListSourceNanoflows);
   const start = source ? sourceStart(source, context, scopes) : null;
   const mappings = source ? sourceMappings(source, context, scopes) : {};
   const key = JSON.stringify([source, start?.type, start?.id, mappings, revision]);
@@ -158,7 +161,7 @@ export function useListSource(
     if (!source || !request) return;
     let active = true;
     const [, , , values] = JSON.parse(key) as [unknown, unknown, unknown, RuntimeVariables];
-    loadListSource(source, start, values, request, invokeNanoflow)
+    loadListSource(source, start, values, request, invokeNanoflow.current)
       .then((records) => active && setState({ key, records, loading: false }))
       .catch(
         (failure: unknown) =>
@@ -168,7 +171,7 @@ export function useListSource(
       active = false;
     };
     // The key captures the source, its start object, arguments and revision.
-  }, [key, request, invokeNanoflow]);
+  }, [key, request]);
   if (!source) return { records: [], loading: false };
   return state.key === key ? state : { records: [], loading: true };
 }
