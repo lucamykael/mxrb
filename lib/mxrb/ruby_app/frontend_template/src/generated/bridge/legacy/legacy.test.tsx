@@ -6,7 +6,7 @@ import type { ApiRequest, ApplicationSchema, EntityRecord, RuntimeValue } from '
 import { AmdLoader } from './amd';
 import { array, declare, dojoModules, domAttr, domClass, domConstruct, lang } from './dojo';
 import { legacyParams, registerLegacyWidget } from './LegacyWidgetHost';
-import { createMx, mxuiModules, MxStore, type MxEnvironment } from './mx';
+import { createMx, mxuiModules, MxObject, MxStore, type MxEnvironment } from './mx';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -230,6 +230,26 @@ describe('mx and MxObject', () => {
     expect(object.getReference('App.Order_Owner')).toBe('t2');
     expect(object.get('App.Order_Tag')).toEqual(['t1']);
     expect(object.getAttributeType('App.Order_Owner')).toBe('ObjectReference');
+    expect(object.isA('App.Order') && object.isObjectReferenceSet('App.Order_Tag')).toBe(true);
+    const fetched = vi.fn();
+    object.fetch('Name', fetched);
+    object.fetch('App.Order_Owner/App.Tag/Label', fetched);
+    object.fetch('App.Order_Tag/App.Tag/Label', fetched);
+    object.fetch('App.Order_Owner', fetched);
+    object.fetch('App.Order_Tag', fetched);
+    const guids = (value: unknown) =>
+      Array.isArray(value)
+        ? value.map((item) => (item instanceof MxObject ? item.getGuid() : item))
+        : value instanceof MxObject
+          ? value.getGuid()
+          : value;
+    expect(fetched.mock.calls.map(([value]) => guids(value))).toEqual([
+      'First',
+      'Blue',
+      ['Red'],
+      't2',
+      ['t1'],
+    ]);
 
     const listener = vi.fn();
     store.subscribe({ guid: 'o1', attr: 'App.Order_Tag', callback: listener });
@@ -252,6 +272,8 @@ describe('mx and MxObject', () => {
     object.set('App.Order_Owner', 't3');
     object.set('Name', 'Renamed');
     await waitFor(() => expect(object.get('Name')).toBe('Renamed'));
+    expect(object.getOriginalValue('Name')).toBe('First');
+    expect(object.getOriginalValue('App.Order_Owner')).toBe('t2');
     expect(object.get('Total')).toEqual(new Big('3.25'));
     expect(object.getReference('App.Order_Owner')).toBe('t3');
     store.changed(order());
