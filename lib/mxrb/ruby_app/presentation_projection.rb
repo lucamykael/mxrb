@@ -21,12 +21,28 @@ module Mxrb
 
       def project(document)
         content = document['Content'] || document
+        return native_layout(content) if content['$Type'] == 'Forms$NativeLayoutContent'
+
         layout_call = content['LayoutCall'] || content['FormCall'] || {}
         name = layout_call['Layout'] || layout_call['Form']
         return widgets(content) if name.to_s.empty?
 
         [{ 'type' => 'layout', 'name' => name, 'options' => { 'layout' => name },
            'regions' => regions(layout_call) }]
+      end
+
+      # A native layout keeps its header placeholder, its sidebar and whether
+      # the profile's bottom bar shows, which the phone shell renders.
+      def native_layout(content)
+        header = content['RightHeaderPlaceholder']
+        regions = { 'content' => widgets(content) }
+        regions['header'] = widgets('Widgets' => [3, header]) if header.is_a?(Hash)
+        regions['sidebar'] = widgets('Widgets' => content['SidebarWidgets']) if content['Sidebar'] == true
+        options = {
+          'layout_type' => content.fetch('LayoutType', 'Default').to_s.downcase,
+          'show_bottom_bar' => content['ShowBottomBar'] == true, 'sidebar' => content['Sidebar'] == true
+        }
+        [{ 'type' => 'native_layout', 'name' => 'NativeLayout', 'options' => options, 'regions' => regions }]
       end
 
       def widgets(document)

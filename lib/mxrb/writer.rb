@@ -2561,6 +2561,11 @@ module Mxrb
         editable['OfflineEntityConfigs'] = IO::BsonCodec.build_array([], marker: 3)
         editable['ProgressiveWebAppSettings'] = nil
       end
+      # A Ruby source that declares no offline entity leaves the stored configs alone.
+      if profile.fetch(:offline_entities, []).any?
+        editable['OfflineEntityConfigs'] = offline_entity_configs_doc(profile[:offline_entities],
+                                                                      previous['OfflineEntityConfigs'])
+      end
       unless profile[:throw_partial_sync_error].nil?
         editable['ThrowPartialSyncError'] = profile[:throw_partial_sync_error]
       end
@@ -2573,9 +2578,9 @@ module Mxrb
         editable['NotFoundHomepage'] = nil
       end
       if !profile[:kind].to_s.empty?
-        editable['Kind'] = profile[:kind]
+        editable['Kind'] = offline_profile_kind(profile[:kind], profile[:offline])
       elsif profile[:offline]
-        editable['Kind'] = 'Offline'
+        editable['Kind'] = 'ResponsiveOffline'
       elsif previous.empty?
         editable['Kind'] = 'Responsive'
       end
@@ -2626,12 +2631,32 @@ module Mxrb
       unless profile[:throw_partial_sync_error].nil?
         editable['ThrowPartialSyncError'] = profile[:throw_partial_sync_error]
       end
+      # A Ruby source that declares no offline entity leaves the stored configs alone.
+      if profile.fetch(:offline_entities, []).any?
+        editable['OfflineEntityConfigs'] = offline_entity_configs_doc(profile[:offline_entities],
+                                                                      previous['OfflineEntityConfigs'])
+      end
       defaults = previous.empty? ? NATIVE_PROFILE_DEFAULTS.merge('OfflineEntityConfigs' => [3]) : {}
       # A setting left out of the Ruby source returns to its default, but only
       # where the document already has that field for its Mendix version.
       omitted = NATIVE_SETTING_DEFAULTS.select { |field, _| previous.key?(field) }
       { '$ID' => previous['$ID'] || SecureRandom.uuid, '$Type' => Model::NativeNavigationProfile::TYPE }
         .merge(defaults).merge(previous).merge(omitted).merge(settings).merge(editable)
+    end
+
+    # The offline entity configs of a profile; an entity keeps its identity
+    # across rewrites. Studio Pro stores the list with marker 3.
+    def offline_entity_configs_doc(configs, previous)
+      prior = array_items(previous).to_h { [_1['Entity'].to_s, _1] }
+      documents = configs.map do |config|
+        before = prior.fetch(config.fetch(:entity).to_s, {})
+        {
+          '$ID' => before['$ID'] || SecureRandom.uuid, '$Type' => 'Navigation$OfflineEntityConfig',
+          'CompatibilityMode' => config[:compatibility_mode] == true, 'Constraint' => config[:constraint].to_s,
+          'Entity' => config.fetch(:entity).to_s, 'SyncMode' => config.fetch(:sync_mode, 'None').to_s
+        }
+      end
+      IO::BsonCodec.build_array(documents, marker: previous.nil? ? 3 : navigation_array_marker(previous))
     end
 
     def native_home_doc(home, previous: nil, type: 'Navigation$NativeHomePage')
@@ -2663,6 +2688,17 @@ module Mxrb
         'Microflow' => microflow.to_s,
         'Page' => page.to_s
       }
+    end
+
+    # Studio Pro stores an offline web profile as the kind with an Offline
+    # suffix (ResponsiveOffline, TabletOffline, PhoneOffline); MxBuild reads
+    # any other value as Responsive.
+    def offline_profile_kind(kind, offline)
+      kind = kind.to_s
+      return 'ResponsiveOffline' if kind == 'Offline'
+      return kind if !offline || kind.end_with?('Offline') || kind == 'Native'
+
+      "#{kind}Offline"
     end
 
     def navigation_not_found_home_doc(page, microflow, previous: nil)

@@ -7,7 +7,7 @@ module Mxrb
       include ModelValues
 
       def initialize(source)
-        @role_map = project_role_map(source)
+        @roles = UserRoleResolver.new(source)
       end
 
       def access_rule(source)
@@ -15,7 +15,7 @@ module Mxrb
         {
           '$ID' => source['$ID'], '$Type' => source['$Type'],
           'MemberAccesses' => array(source['MemberAccesses']).map { member_access(_1) },
-          'AllowedUserRoles' => module_roles.flat_map { @role_map.fetch(_1, []) }.uniq,
+          'AllowedUserRoles' => @roles.resolve(module_roles),
           'AllowCreate' => source['AllowCreate'] == true, 'AllowDelete' => source['AllowDelete'] == true,
           'XPathConstraint' => source['XPathConstraint'].to_s
         }
@@ -25,7 +25,7 @@ module Mxrb
         name = source['Name'].to_s
         result = association_fields(source).merge(
           'QualifiedName' => "#{module_name}.#{name}",
-          'UnqualifiedName' => name, 'Navigability' => 'BothDirections'
+          'UnqualifiedName' => name, 'Navigability' => navigability(source)
         )
         child_key = source['$Type'] == 'DomainModels$CrossAssociation' ? 'Child' : 'ChildPointer'
         result.merge(child_key => source[child_key])
@@ -65,17 +65,14 @@ module Mxrb
         source&.slice('$ID', '$Type')
       end
 
-      def runtime_delete_behavior(value)
-        value == 'NoAction' ? 'DeleteMeAndReferences' : value
+      # A view entity association reads from parent to child only.
+      def navigability(source)
+        oql = source['Source'].is_a?(Hash) && source['Source']['$Type'] == 'DomainModels$OqlViewAssociationSource'
+        oql ? 'ParentToChild' : 'BothDirections'
       end
 
-      def project_role_map(source)
-        security = source.documents('Security$ProjectSecurity').first
-        return {} unless security
-
-        array(security['UserRoles']).each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |role, map|
-          array(role['ModuleRoles']).each { |module_role| map[module_role.to_s] << role['Name'].to_s }
-        end
+      def runtime_delete_behavior(value)
+        value == 'NoAction' ? 'DeleteMeAndReferences' : value
       end
     end
   end

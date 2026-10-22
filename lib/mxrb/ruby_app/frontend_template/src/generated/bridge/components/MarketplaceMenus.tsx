@@ -48,7 +48,8 @@ export function MarketplacePopupMenu(props: MarketplaceWidgetProps) {
   const environment = useCaptionEnvironment(props.schema);
   const regions = props.regions || [];
   const [open, setOpen] = useState(false);
-  const advanced = properties.advancedMode === true;
+  // The native popup menu calls advanced mode custom rendering.
+  const advanced = properties.advancedMode === true || properties.popupRenderMode === 'custom';
   const items = (advanced ? objects(properties.customItems) : objects(properties.basicItems))
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => visible(item, props));
@@ -77,7 +78,9 @@ export function MarketplacePopupMenu(props: MarketplaceWidgetProps) {
           }
         }}
       >
-        {regionAt(regions, ['menuTrigger']).map((region) => region.content)}
+        {[...regionAt(regions, ['menuTrigger']), ...regionAt(regions, ['menuTriggerer'])].map(
+          (region) => region.content,
+        )}
       </div>
       {open && (
         <ul

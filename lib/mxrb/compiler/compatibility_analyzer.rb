@@ -41,6 +41,8 @@ module Mxrb
 
       private
 
+      NATIVE_ACTIONS = %w[Microflows$SynchronizeAction Microflows$PushToClientAction].freeze
+
       def analyze_features
         if @adapter.web_profiles.include?(:react)
           analyze_pages
@@ -49,6 +51,57 @@ module Mxrb
         else
           analyze_legacy_pages
         end
+        analyze_native
+      end
+
+      # The native app fails closed: a native profile, native pages and layouts
+      # and device synchronization are reported instead of silently left out of
+      # the web build.
+      def analyze_native
+        @source.units_of('Navigation$NavigationDocument').each do |unit|
+          array(unit.document['Profiles']).grep(Hash).each do |profile|
+            next unless profile['$Type'] == 'Navigation$NativeNavigationProfile'
+
+            add(:error, :native, profile['$Type'], "Navigation.#{profile['Name']}",
+                'a native navigation profile is not built by the native compiler')
+          end
+        end
+        analyze_native_pages
+        %w[Microflows$Microflow Microflows$Nanoflow].flat_map { @source.units_of(_1) }.each do |unit|
+          native_actions(unit.document).each do |type|
+            add(:error, :native, type, qualified_name(unit), "#{type} is not executed by the web runtime")
+          end
+        end
+      end
+
+      # Atlas ships native layouts with every project; only the ones a page
+      # uses, and those pages, are left out of the web build.
+      def analyze_native_pages
+        layouts = @source.units_of('Forms$Layout')
+                         .select { _1.document.dig('Content', '$Type') == 'Forms$NativeLayoutContent' }
+                         .to_h { [qualified_name(_1), _1] }
+        used = []
+        @source.units_of('Forms$Page').each do |unit|
+          layout = unit.document.dig('FormCall', 'Form').to_s
+          next unless layouts.key?(layout)
+
+          used |= [layout]
+          add(:error, :native, 'Forms$Page', qualified_name(unit),
+              'a native page is not compiled by the native compiler')
+        end
+        used.each do |layout|
+          add(:error, :native, 'Forms$Layout', layout, 'a native layout is not compiled by the native compiler')
+        end
+      end
+
+      def native_actions(value, found = [])
+        case value
+        when Hash
+          found << value['$Type'] if NATIVE_ACTIONS.include?(value['$Type'])
+          value.each_value { native_actions(_1, found) }
+        when Array then value.each { native_actions(_1, found) }
+        end
+        found
       end
 
       def analyze_version

@@ -338,6 +338,7 @@ module Mxrb
           class style dynamic_class visible
         ],
         menu_bar: %w[menu navigation_profile tab_index class style dynamic_class visible],
+        native_layout: %w[layout_type show_bottom_bar sidebar class style dynamic_class visible],
         navigation_list: %w[tab_index class style dynamic_class visible],
         navigation_tree: %w[menu navigation_profile tab_index class style dynamic_class visible],
         number_input: %w[attribute caption class style dynamic_class visible],
@@ -373,7 +374,7 @@ module Mxrb
       # use the explicit ExtensionWidgetDefinition.
       TYPESCRIPT_WIDGET_TYPES = %w[
         button check_box container data_grid data_view date_picker drop_down file_manager gallery
-        image_uploader image_viewer layout layout_grid menu_bar native_widget navigation_list
+        image_uploader image_viewer layout layout_grid menu_bar native_layout native_widget navigation_list
         navigation_tree number_input page_title placeholder pluggable_widget radio_button_group
         reference_selector reference_set_selector scroll_container sidebar_toggle snippet
         static_image tab_control table text text_area text_box
@@ -395,7 +396,8 @@ module Mxrb
         'height_unit' => 'string', 'hide_scrollbars' => 'boolean', 'horizontal' => 'boolean',
         'horizontal_alignment' => 'string', 'icon' => 'string', 'image' => 'string',
         'items' => 'RuntimeValue[] | Record<string, RuntimeValue>', 'label_width' => 'number',
-        'layout' => 'string', 'layout_mode' => 'string', 'lines' => 'number', 'locale' => 'string',
+        'layout' => 'string', 'layout_mode' => 'string', 'layout_type' => 'string', 'lines' => 'number',
+        'locale' => 'string',
         'max_file_size' => 'number',
         'max_length' => 'number', 'menu' => 'string', 'mode' => 'string',
         'native_fragment' => '{ digest: string }', 'native_layout' => 'boolean', 'native_type' => 'string',
@@ -410,7 +412,8 @@ module Mxrb
         'render_type' => 'string', 'responsive' => 'boolean', 'rows' => 'RuntimeValue[]',
         'scroll_behavior' => 'string', 'select_first' => 'boolean', 'selectable_xpath' => 'string',
         'selection' => 'string', 'server_side' => 'boolean', 'show_as_thumbnail' => 'boolean',
-        'show_empty_rows' => 'boolean', 'show_file_in_browser' => 'boolean', 'show_footer' => 'boolean',
+        'show_bottom_bar' => 'boolean', 'show_empty_rows' => 'boolean', 'show_file_in_browser' => 'boolean',
+        'show_footer' => 'boolean', 'sidebar' => 'boolean',
         'snippet' => 'string', 'sort' => 'Array<{ attribute: string; direction?: string }>',
         'source' => 'DataViewSource', 'source_variable' => 'RuntimeValue', 'style' => 'string',
         'tab_index' => 'number', 'tablet' => 'number | string', 'tabs' => 'WidgetTab[]',

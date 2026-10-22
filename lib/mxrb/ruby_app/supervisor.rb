@@ -102,6 +102,8 @@ module Mxrb
           raise ArgumentError, "frontend dependencies missing; run `#{@npm} install --prefix frontend`"
         end
 
+        check_frontend_package(directory)
+
         frontend_environment = profile_environment.select { _1.start_with?('VITE_') }
         frontend_environment['MXRB_ENV'] = @environment.name
         frontend_environment['MXRB_API_PORT'] = api_port.to_s
@@ -109,6 +111,22 @@ module Mxrb
           frontend_environment, @npm, 'run', 'dev', '--',
           '--host', host, '--port', frontend_port.to_s, '--strictPort', chdir: directory
         )
+      end
+
+      # A package.json older than the generated bridge, as a restored one is,
+      # lacks packages the bridge imports; say so instead of letting Vite fail.
+      def check_frontend_package(directory)
+        undeclared = FrontendPackage.undeclared(directory)
+        unless undeclared.empty?
+          raise ArgumentError, 'frontend/package.json is older than the generated bridge and lacks ' \
+                               "#{undeclared.join(', ')}; re-export the application or add them and run " \
+                               "`#{@npm} install --prefix frontend`"
+        end
+        uninstalled = FrontendPackage.uninstalled(directory)
+        return if uninstalled.empty?
+
+        raise ArgumentError, "frontend dependencies missing (#{uninstalled.join(', ')}); " \
+                             "run `#{@npm} install --prefix frontend`"
       end
 
       def profile_environment

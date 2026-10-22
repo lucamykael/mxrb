@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MarketplaceWidget, type MarketplaceWidgetProps } from '../marketplace';
 import { translatedText } from './MarketplaceLegacy';
@@ -49,16 +49,39 @@ describe('legacy widgets with projected microflow, nanoflow and translatable pro
     );
   });
 
-  it('runs snippet JavaScript with the element and context object, and shows its error', () => {
+  it('runs snippet JavaScript with the element and the context MxObject, and shows its error', async () => {
+    const onChange = vi.fn().mockResolvedValue(null);
     const { container } = render(
       <MarketplaceWidget
-        {...widgetProps('HTMLSnippet.widget.HTMLSnippetContext', {
-          contenttype: 'js',
-          contents: { en_US: 'this.dataset.name = contextObj.attributes.Name;' },
-        })}
+        {...widgetProps(
+          'HTMLSnippet.widget.HTMLSnippetContext',
+          {
+            contenttype: 'js',
+            contents: {
+              en_US:
+                "this.dataset.name = contextObj.get('Name') + '/' + contextObj.getGuid() + '/' + " +
+                "contextObj.getEntity() + '/' + typeof mx.data.get; contextObj.set('Name', 'Eight');",
+            },
+          },
+          { onChange },
+        )}
       />,
     );
-    expect(container.querySelector('.mxrb-html-snippet')).toHaveAttribute('data-name', 'Seven');
+    expect(container.querySelector('.mxrb-html-snippet')).toHaveAttribute(
+      'data-name',
+      'Seven/7/App.Item/function',
+    );
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('Name', 'Eight'));
+    const { container: plain } = render(
+      <MarketplaceWidget
+        {...widgetProps(
+          'HTMLSnippet.widget.HTMLSnippet',
+          { contenttype: 'js', contents: 'this.dataset.context = String(contextObj);' },
+          { context: null },
+        )}
+      />,
+    );
+    expect(plain.querySelector('.mxrb-html-snippet')).toHaveAttribute('data-context', 'null');
     render(
       <MarketplaceWidget
         {...widgetProps('HTMLSnippet.widget.HTMLSnippet', {

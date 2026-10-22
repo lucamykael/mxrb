@@ -97,7 +97,9 @@ RSpec.describe Mxrb::RubyApp::ProjectJavaScriptActions do
       expect(File.exist?(File.join(vendor, 'app', 'actions', 'node_modules'))).to be(false)
       expect(File.exist?(File.join(vendor, 'links', 'actions', 'node_modules', 'url-parse', 'index.js'))).to be(true)
       expect(File.exist?(File.join(vendor, 'nanoflowcommons'))).to be(false)
-      expect(File.read(File.join(frontend, 'vite.config.ts'))).to include("find: 'mx-global'", 'nativeUnavailable.ts')
+      expect(File.read(File.join(frontend, 'vite.config.ts'))).to include(
+        "find: 'mx-global'", 'nativeUnavailable.ts', 'mxrb-react-native-unavailable'
+      )
     end
   end
 
@@ -109,6 +111,73 @@ RSpec.describe Mxrb::RubyApp::ProjectJavaScriptActions do
       Mxrb::Exporter.new(project, target, mode: :ruby).export!
       generated = File.read(File.join(target, 'frontend', 'src', 'generated', 'nanoflows.ts'))
       expect(generated).not_to include('projectJavaScriptActions')
+      expect(generated).to include('...nativeMobileActions([])')
+    end
+  end
+
+  it 'tells the actions written for React Native apart from those with web packages' do
+    Dir.mktmpdir do |root|
+      vibrate = action_source('Vibrate', imports: 'import { Vibration } from "react-native";')
+      write_action(root, 'app', 'Vibrate', vibrate)
+      write_action(root, 'app', 'Notify',
+                   action_source('Notify', imports: "import notifee from '@notifee/react-native';"))
+      write_action(root, 'app', 'Net',
+                   action_source('Net', imports: "import { fetch } from '@react-native-community/netinfo';"))
+      device = action_source('Device', imports: "import Info from 'react-native-device-info';")
+      write_action(root, 'app', 'Device', device)
+      write_action(root, 'app', 'Parse', action_source('Parse', imports: "import parse from 'url-parse';"))
+      both = action_source('Both', imports: "import Geolocation from '@react-native-community/geolocation';")
+      web_branch = 'if (navigator && navigator.product === "ReactNative") return true; return false;'
+      directory = write_action(root, 'app', 'Both', both.sub('return true;', web_branch))
+      names = %w[App.Vibrate App.Notify App.Net App.Device App.Parse App.Both App.Missing]
+      expect(described_class.react_native(root, names)).to eq(%w[App.Device App.Net App.Notify App.Vibrate])
+      expect(described_class.find(root, names)).to be_empty
+      FileUtils.mkdir_p(File.join(directory, 'node_modules', '@react-native-community', 'geolocation'))
+      expect(described_class.find(root, names).map(&:name)).to eq(['App.Both'])
+    end
+  end
+
+  it 'fails the export when a nanoflow calls a React Native action without a verified web adapter' do
+    Dir.mktmpdir do |root|
+      vibrate = action_source('Vibrate', imports: 'import { Vibration } from "react-native";')
+      write_action(root, 'app', 'Vibrate', vibrate)
+      project = File.join(root, 'App.mpr')
+      Mxrb.define(project) do
+        self.module :App do
+          javascript_action 'Vibrate', parameters: [], return_type: { kind: :boolean }, platform: :Web
+          nanoflow(:Run) { call_javascript 'App.Vibrate' }
+        end
+      end
+      expect { Mxrb::Exporter.new(project, File.join(root, 'ruby'), mode: :ruby).export! }.to raise_error(
+        Mxrb::SerializationError, 'JavaScript actions target React Native and have no web adapter: App.Vibrate'
+      )
+    end
+  end
+
+  it 'registers the verified Native Mobile Resources actions as browser adapters instead of copying them' do
+    Dir.mktmpdir do |root|
+      source = action_source('Vibrate', imports: 'import { Vibration } from "react-native";')
+      stub_const('Mxrb::RubyApp::KnownJavaScriptActions::NATIVE_SOURCES',
+                 'Vibrate' => Digest::SHA256.hexdigest(source))
+      stub_const('Mxrb::RubyApp::KnownJavaScriptActions::MODULES',
+                 'NativeMobileResources' => [Mxrb::RubyApp::KnownJavaScriptActions::NATIVE_SOURCES,
+                                             'nativemobileresources'])
+      write_action(root, 'nativemobileresources', 'Vibrate', source)
+      write_action(root, 'nativemobileresources', 'Other', action_source('Other'))
+      project = File.join(root, 'App.mpr')
+      Mxrb.define(project) do
+        self.module :App do
+          nanoflow(:Run) { call_javascript 'NativeMobileResources.Vibrate' }
+        end
+      end
+      target = File.join(root, 'ruby')
+      Mxrb::Exporter.new(project, target, mode: :ruby).export!
+      generated = File.read(File.join(target, 'frontend', 'src', 'generated', 'nanoflows.ts'))
+      expect(generated).to include("import { nativeMobileActions } from './bridge/nativeMobileActions';",
+                                   '...nativeMobileActions(["Vibrate"])')
+      expect(generated).not_to include('projectJavaScriptActions')
+      vendor = File.join(target, 'frontend', 'src', 'generated', 'bridge', 'vendor', 'javascriptsource')
+      expect(File.exist?(vendor)).to be(false)
     end
   end
 end

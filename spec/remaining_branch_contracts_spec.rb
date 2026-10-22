@@ -198,6 +198,9 @@ RSpec.describe 'remaining defensive branch contracts' do
     expect(value.assignments).to eq([%w[name One]])
     expect { object_builder.set(:name, 'Two') }
       .to raise_error(ArgumentError, /duplicate object property/)
+    sourced = Mxrb::RubyApp::PluggableProperties::ObjectValueBuilder.new(bridge)
+    expect(sourced.evaluate { set :series, nanoflow_source('App.Series') }.assignments)
+      .to eq([['series', { kind: :nanoflow, name: 'App.Series' }]])
 
     list = Mxrb::RubyApp::PluggableProperties::ObjectListBuilder.new(bridge)
     expect { list.object }.to raise_error(ArgumentError, /requires a block/)

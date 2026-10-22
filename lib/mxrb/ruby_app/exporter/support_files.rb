@@ -87,11 +87,19 @@ module Mxrb
         # The project's JavaScript actions the nanoflows call and no verified adapter
         # covers run their own source: their actions directory is copied, with its
         # node_modules only when an action imports a package the frontend lacks.
+        # An action written for React Native cannot run in the browser: without
+        # a verified adapter the export fails rather than ship a nanoflow that
+        # breaks at the call.
         def write_project_javascript_actions
           root = File.dirname(@mpr_path)
-          @project_javascript_actions = ProjectJavaScriptActions.find(
-            root, (@called_javascript_actions || []).to_a - adapted_javascript_actions(root)
-          )
+          called = (@called_javascript_actions || []).to_a - KnownJavaScriptActions.adapted(root)
+          unsupported = ProjectJavaScriptActions.react_native(root, called)
+          unless unsupported.empty?
+            raise SerializationError, 'JavaScript actions target React Native and have no web adapter: ' \
+                                      "#{unsupported.join(', ')}"
+          end
+
+          @project_javascript_actions = ProjectJavaScriptActions.find(root, called)
           vendor = File.join('frontend', 'src', 'generated', 'bridge', 'vendor', 'javascriptsource')
           @project_javascript_actions.group_by(&:directory).each do |directory, actions|
             target = File.join(vendor, File.basename(File.dirname(directory)), 'actions')
@@ -104,12 +112,6 @@ module Mxrb
               write(File.join(target, entry), File.binread(path))
             end
           end
-        end
-
-        def adapted_javascript_actions(root)
-          KnownJavaScriptActions.matching(root).map { "FeedbackModule.#{_1}" } +
-            KnownJavaScriptActions.matching(root, sources: KnownJavaScriptActions::COMMONS_SOURCES,
-                                                  module_name: 'nanoflowcommons').map { "NanoflowCommons.#{_1}" }
         end
 
         # Widgets of the rendered pages the bridge does not render itself run their
@@ -214,10 +216,24 @@ module Mxrb
           end
         end
 
+        # The npm files of a theme that was once an npm package of its own
+        # (package.json, a lockfile, node_modules) must not reach the frontend,
+        # where Vite and TypeScript would read them in place of the generated
+        # frontend/package.json.
+        NPM_PACKAGE_FILES = %w[
+          package.json package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml .npmrc
+        ].freeze
+
+        def npm_package_file?(path)
+          NPM_PACKAGE_FILES.include?(File.basename(path))
+        end
+
         def overlay_frontend_web_assets(source, destination, public: false)
           Find.find(source) do |path|
             relative_path = path.delete_prefix("#{source}/")
+            Find.prune if File.directory?(path) && File.basename(path) == 'node_modules'
             next if path == source || File.directory?(path)
+            next if npm_package_file?(path)
             next if %w[.js .jsx .scss].include?(File.extname(path).downcase)
             next if public && %w[.html .htm].include?(File.extname(path).downcase)
 
@@ -232,7 +248,9 @@ module Mxrb
           Find.find(source) do |path|
             relative_path = path.delete_prefix("#{source}/")
             Find.prune if File.directory?(path) && relative_path.split(File::SEPARATOR).include?('native')
+            Find.prune if File.directory?(path) && File.basename(path) == 'node_modules'
             next if path == source
+            next if File.file?(path) && npm_package_file?(path)
             next if File.file?(path) && %w[.js .jsx].include?(File.extname(path).downcase)
 
             target = File.join(destination, relative_path)

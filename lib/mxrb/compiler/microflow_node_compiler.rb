@@ -44,6 +44,8 @@ module Mxrb
         @captions = ActivityCaption.new(source)
         @flow_returns = flow_return_index(source)
         @void_java_actions = void_java_actions(source)
+        @void_microflows = void_microflows(source)
+        @code_action_returns = code_action_returns(source)
         @variable_types = {}
       end
 
@@ -52,7 +54,12 @@ module Mxrb
         @variable_types = IMPLICIT_VARIABLES.dup
         nodes = []
         visit(flow) { nodes << _1 }
-        2.times { nodes.each { infer_variable(_1) } }
+        # A variable may come from one typed by a later node; settle the chain.
+        6.times do
+          before = @variable_types.dup
+          nodes.each { infer_variable(_1) }
+          break if before == @variable_types
+        end
       end
 
       def compile(value)
@@ -115,12 +122,11 @@ module Mxrb
         if field == 'ValueExpression' && source['$Type'] == 'Microflows$MicroflowParameterValue'
           return "'#{source.fetch('Microflow')}'"
         end
-
-        # MxBuild keeps no result variable for a Java action that returns nothing.
-        if field == 'ResultVariableName' && source['$Type'] == 'Microflows$JavaActionCallAction' &&
-           @void_java_actions.include?(source['JavaAction'].to_s)
-          return ''
+        if field == 'ValueExpression' && source['$Type'] == 'Microflows$EntityTypeCodeActionParameterValue'
+          return "'#{source.fetch('Entity')}'"
         end
+
+        return '' if field == 'ResultVariableName' && unused_result?(source)
 
         if field == 'Caption' && source['$Type'] == 'Microflows$ActionActivity' && source['AutoGenerateCaption'] == true
           generated = generated_caption(source['Action'] || {})
@@ -142,10 +148,26 @@ module Mxrb
         default_or_existing(source, field)
       end
 
+      # MxBuild keeps no result variable for a call whose return value the flow
+      # does not use, nor for a Java action or microflow that returns nothing.
+      def unused_result?(source)
+        case source['$Type']
+        when 'Microflows$JavaActionCallAction'
+          source['UseReturnVariable'] == false || @void_java_actions.include?(source['JavaAction'].to_s)
+        when 'Microflows$MicroflowCallAction'
+          source['UseReturnVariable'] == false || void_microflow?(source.dig('MicroflowCall', 'Microflow'))
+        else false
+        end
+      end
+
+      def void_microflow?(name) = @void_microflows.include?(name.to_s)
+
       def converted_field(source, source_field, runtime_field)
         value = source[source_field]
-        # A REST call without a timeout expression waits 0, as MxBuild writes it.
-        return '0' if runtime_field == 'RequestTimeOutExpression' && value.to_s.empty?
+        # A REST call without a timeout, or with its timeout off, waits 0, as MxBuild writes it.
+        if runtime_field == 'RequestTimeOutExpression' && (value.to_s.empty? || source['UseRequestTimeOut'] == false)
+          return '0'
+        end
         return runtime_attribute_path(value) if runtime_field == 'AttributePath'
         return data_type(value) if %w[Type VariableDataType].include?(runtime_field) && data_type_document?(value)
 
@@ -220,12 +242,15 @@ module Mxrb
         raise CompilationError, "unknown association #{source['AssociationId'].inspect}" unless association
 
         start = @variable_types[source['StartVariableName'].to_s]
-        from_child = start == association[:child] ||
-                     (!specializes?(start, association[:parent]) && specializes?(start, association[:child]))
+        from_parent = start == association[:parent] || specializes?(start, association[:parent])
+        from_child = !from_parent && (start == association[:child] || specializes?(start, association[:child]))
+        # A retrieve from a variable of another type, or from a list, has no type MxBuild can name.
+        return 'Unknown' if start && !from_parent && !from_child
+
         target = from_child ? association[:parent] : association[:child]
         return if target.to_s.empty?
 
-        list = association[:reference_set] || from_child
+        list = association[:reference_set] || (from_child && !association[:one_to_one])
         list ? "[#{target}]" : target
       end
 
@@ -249,7 +274,7 @@ module Mxrb
         child = @schema.counterpart_id(association['ChildPointer'])
         {
           parent: parent&.fetch('QualifiedName', nil), child: child&.fetch('QualifiedName', nil),
-          reference_set: association['Type'] == 'ReferenceSet'
+          reference_set: association['Type'] == 'ReferenceSet', one_to_one: one_to_one?(association)
         }
       end
 
@@ -280,6 +305,14 @@ module Mxrb
                      when 'Microflows$RetrieveAction' then [node['ResultVariableName'], retrieved_type(node)]
                      when 'Microflows$MicroflowCallAction'
                        [node['ResultVariableName'], @flow_returns[node.dig('MicroflowCall', 'Microflow').to_s]]
+                     when 'Microflows$NanoflowCallAction'
+                       [node['OutputVariableName'], @flow_returns[node.dig('NanoflowCall', 'Nanoflow').to_s]]
+                     when 'Microflows$JavaActionCallAction'
+                       [node['ResultVariableName'], code_action_result(node['JavaAction'], node['ParameterMappings'])]
+                     when 'Microflows$JavaScriptActionCallAction'
+                       [node['ResultVariableName'], @code_action_returns[node['JavaScriptAction'].to_s]]
+                     when 'Microflows$ResultHandling'
+                       [node['ResultVariableName'] || node['VariableName'], object_type(node['VariableType'])]
                      when 'Microflows$LoopedActivity' then loop_variable(node)
                      when 'Microflows$ListOperationsAction' then list_operation_variable(node)
                      end
@@ -323,6 +356,15 @@ module Mxrb
         [node['ResultVariableName'], type]
       end
 
+      def void_microflows(source)
+        return [] unless source.respond_to?(:units_of)
+
+        source.units_of('Microflows$Microflow').filter_map do |unit|
+          void = unit.document.dig('MicroflowReturnType', '$Type') == 'DataTypes$VoidType'
+          "#{unit.module_name}.#{unit.document['Name']}" if void
+        end
+      end
+
       def void_java_actions(source)
         return [] unless source.respond_to?(:units_of)
 
@@ -335,9 +377,50 @@ module Mxrb
       def flow_return_index(source)
         return {} unless source.respond_to?(:units_of)
 
-        source.units_of('Microflows$Microflow').to_h do |unit|
+        %w[Microflows$Microflow Microflows$Nanoflow].flat_map { source.units_of(_1) }.to_h do |unit|
           ["#{unit.module_name}.#{unit.document['Name']}", object_type(unit.document['MicroflowReturnType'])]
         end
+      end
+
+      # The entity, or list of an entity, each Java or JavaScript action returns;
+      # a type parameter stands for the entity the call names for it.
+      def code_action_returns(source)
+        return {} unless source.respond_to?(:units_of)
+
+        %w[JavaActions$JavaAction JavaScriptActions$JavaScriptAction].flat_map { source.units_of(_1) }.to_h do |unit|
+          type = unit.document['JavaReturnType'] || unit.document['ActionReturnType'] || {}
+          ["#{unit.module_name}.#{unit.document['Name']}", code_action_object_type(type, unit)]
+        end
+      end
+
+      def code_action_object_type(type, unit)
+        case type['$Type'].to_s.sub(/\AJavaActions\$/, 'CodeActions$')
+        when 'CodeActions$ConcreteEntityType' then type['Entity'].to_s
+        when 'CodeActions$ListType' then list_of(code_action_object_type(type['Parameter'] || {}, unit))
+        when 'CodeActions$ParameterizedEntityType' then type_parameter_holder(type, unit)
+        end
+      end
+
+      def list_of(element) = element.is_a?(Hash) ? element.merge(list: true) : "[#{element}]"
+
+      # The qualified name of the parameter that names the entity of a type parameter.
+      def type_parameter_holder(type, unit)
+        pointer = IO::BsonCodec.extract_id(type['TypeParameterPointer'])
+        parameter = array(unit.document['Parameters']).find do |candidate|
+          IO::BsonCodec.extract_id(candidate.dig('ParameterType', 'TypeParameterPointer')) == pointer
+        end
+        { parameter: "#{unit.module_name}.#{unit.document['Name']}.#{parameter['Name']}" } if parameter
+      end
+
+      def code_action_result(action, mappings)
+        type = @code_action_returns[action.to_s]
+        return type unless type.is_a?(Hash)
+
+        mapping = array(mappings).find { _1['Parameter'] == type[:parameter] }
+        entity = mapping&.dig('Value', 'Entity').to_s
+        return if entity.empty?
+
+        type[:list] ? "[#{entity}]" : entity
       end
 
       AGGREGATE_TYPES = {
@@ -368,15 +451,26 @@ module Mxrb
           entities = array(unit.document['Entities']).to_h do |entity|
             [IO::BsonCodec.extract_id(entity['$ID']), "#{unit.module_name}.#{entity['Name']}"]
           end
-          array(unit.document['Associations']).each do |association|
+          associations = array(unit.document['Associations']) + array(unit.document['CrossAssociations'])
+          associations.each do |association|
             result["#{unit.module_name}.#{association['Name']}"] = {
               parent: entities[IO::BsonCodec.extract_id(association['ParentPointer'])],
-              child: entities[IO::BsonCodec.extract_id(association['ChildPointer'])],
-              reference_set: association['Type'] == 'ReferenceSet'
+              child: association_child(association, entities),
+              reference_set: association['Type'] == 'ReferenceSet', one_to_one: one_to_one?(association)
             }
           end
         end
       end
+
+      # A cross-module association names its child entity.
+      def association_child(association, entities)
+        return association['Child'].to_s if association.key?('Child')
+
+        entities[IO::BsonCodec.extract_id(association['ChildPointer'])]
+      end
+
+      # A reference both entities own links one object to one object.
+      def one_to_one?(association) = association['Type'] == 'Reference' && association['Owner'] == 'Both'
 
       def visit(value, &block)
         case value

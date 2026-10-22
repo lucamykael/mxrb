@@ -49,6 +49,7 @@ module Mxrb
         @home_nanoflow = optional_string(options, :home_nanoflow)
         @settings = native_settings(options.fetch(:settings, {}))
         @bottom_bar = []
+        @offline_entities = []
         @role_homes = options.fetch(:role_homes, {}).to_h.transform_keys(&:to_s)
                              .transform_values(&:to_s)
         @role_home_details = []
@@ -67,6 +68,15 @@ module Mxrb
         @role_home_details << {
           role: role.to_s, page: page&.to_s, microflow: microflow&.to_s, nanoflow: nanoflow&.to_s
         }.compact
+      end
+
+      # An entity the profile synchronizes to the device: sync_mode :none,
+      # :none_and_preserve_data or :all, with an optional XPath constraint.
+      def offline_entity(entity, sync_mode: :none, constraint: nil, compatibility_mode: nil)
+        entry = { entity: entity.to_s, sync_mode: Model::OfflineEntityConfigs.sync_mode(sync_mode) }
+        entry[:constraint] = constraint.to_s unless constraint.to_s.empty?
+        entry[:compatibility_mode] = true if compatibility_mode == true
+        @offline_entities << entry
       end
 
       # A native profile's bottom bar entry; a page may appear only once.
@@ -105,7 +115,8 @@ module Mxrb
           throw_partial_sync_error: @throw_partial_sync_error,
           sign_in_title: @sign_in_title, sign_in_location: @sign_in_location,
           not_found_page: @not_found_page, not_found_microflow: @not_found_microflow,
-          items: @items, home_nanoflow: @home_nanoflow, settings: @settings, bottom_bar: @bottom_bar
+          items: @items, home_nanoflow: @home_nanoflow, settings: @settings, bottom_bar: @bottom_bar,
+          offline_entities: @offline_entities
         }
       end
 

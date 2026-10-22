@@ -5,7 +5,7 @@ require 'digest'
 module Mxrb
   module RubyApp
     # Selects TypeScript adapters only for verified web action implementations.
-    module KnownJavaScriptActions
+    module KnownJavaScriptActions # rubocop:disable Metrics/ModuleLength
       METADATA_VARIANTS = {
         '9a6c9fd171c55282508a22638996ac9b6461093592b1815c470f76cd889e4654' => 'legacy',
         '70b119c394b738ac372d63bd8acee372a9892fc863ab47ee6791c7db869f0daa' => 'screen',
@@ -72,6 +72,77 @@ module Mxrb
         ].freeze
       }.freeze
 
+      # Native Mobile Resources actions, whose React Native implementation the
+      # generated frontend replaces with a browser adapter.
+      NATIVE_SOURCES = {
+        'BiometricAuthentication' =>
+          '21586c26c6168a990f091214d3337ced8a20262aeb91eec2721769627aa71dbf',
+        'CancelAllScheduledNotifications' =>
+          '859909eba24ced38efd9735f8e5a57f759ca8846555a39cd8bf02f8bb5fe6ab2',
+        'CancelScheduledNotification' =>
+          '34f100c7d9908621ac3587b1a1cfe3c3eaa4dad2adbf8c304bfd2f92c03061d7',
+        'ChangeStatusBar' =>
+          '5b5ea466b220d49d541600e9e35df811440ed475ade205a139d4821eeb529b41',
+        'CheckGenericPermission' =>
+          'b2c85b5ab202b0344b75795517d79fbc85244f2188ac5cf0b9cfc917df10ad5e',
+        'ClearAllDeliveredNotifications' =>
+          '51fb267032d3f29ac7cf1c9d523a1b060cbf8cfe44822af41d7f06e6bd1ee45b',
+        'DisplayNotification' =>
+          '2ca399395d5f1f0bf6f497d4d83510cba537a2a42c09ab85b46e2f5c944d7b77',
+        'DownloadFile' =>
+          'c70d5f4d461306b60cfe112c7956b16732c89f2b68c874ae135257c2b6b9b23b',
+        'GetClipboardContent' =>
+          '60bf28f58cc349a61484ac5460ee4b7a3be5fda85af5d9ca09d88fb2eef8b05a',
+        'GetDeviceInfo' =>
+          'aae537e7333159bd8605f23aef76dd1ee5d00267020fa5d950b7b2b6a4b9f129',
+        'GetPushNotificationToken' =>
+          'b21cdd7bd70e929cc8500564b1da20913598de0d787344c2d6386427002974bd',
+        'HasNotificationPermission' =>
+          '4d93050530cf290706ef1c7c21a88f290d5ece35911784f12569a6a24c6dd06d',
+        'HideKeyboard' =>
+          '29ef7062e7ccb001e3e79770c52568b7e328710ad9423e03f5e3b967dd8c5a1b',
+        'IsBiometricAuthenticationSupported' =>
+          '1b2b5560098f20ddb24e2f312c119f636accc3fa7c5082842948bdf05ce0d402',
+        'IsCellularConnection' =>
+          '1901f0f57c8cca420fdd31d3eaa67ea6105e81da54e376b5e64df278d7d205ee',
+        'IsConnected' =>
+          '5190f1b3d4d14dcb725534b94f125620636a169cf9c7cbcaa9c680934210c17e',
+        'IsWifiConnection' =>
+          '517d392900e2e3983f20ac342e997cac839967a0d767d6413cb2313aff552bc4',
+        'OpenInAppBrowser' =>
+          '4f711d4f9fc2b6d91298ecb532fd05b92bf6edf45bd91f1065a2a64fbc016467',
+        'ParseUrlToObject' =>
+          '4ee55af595b8576d006eff6a78d2393b16db5e9418544b9994a3a2fbc0df0514',
+        'PlaySound' =>
+          '9f06519208578a8009513b6b16cbcbd350f0205adc1c8c2007cf054acce7c8e4',
+        'RegisterDeepLink' =>
+          'ddd1f7bf5ea29866ca87563b7a4a29464c4f3ae5257435fc9a9df6ad50f4a2a3',
+        'RequestGenericPermission' =>
+          'cb8fca6509fd279abc924564ae4c2878f7ee805da3caaf5ad3787005e631f87f',
+        'RequestNotificationPermission' =>
+          '1cd2d7abd01ddab1492aede1b209b7771e10ab00ec71bc0f2b6a71f94c030c70',
+        'SaveToPictureLibrary' =>
+          '08130539173d978d0ddc5618236584c2388674513a74ee4d8adc3624f3966dfb',
+        'ScheduleNotification' =>
+          '99012b95f49fdf9ad22c53153f5cf868f69987eba193c71e42216ef733d5ad8a',
+        'SetBadgeNumber' =>
+          'b68e3b1d71c802cfdeb345b357833e79cfff63e2d3cf805855e7f0bec9b79b42',
+        'SetClipboardContent' =>
+          '94ee27778e18efa20b9c49cdbf9c6b28906bcde9af9a12414fb664571bd29cbf',
+        'TakePicture' =>
+          '0f523f9a00149021a26475a0f9aa167566bd3330105c31e0ba7a434d5ad73ca2',
+        'TakePictureAdvanced' =>
+          'b123a7d8568199442d8afbcadf8297a191cad5c60f1d44ade907fe2d1ab89854',
+        'Vibrate' =>
+          '7470650092e7eae855d84500fe087fe64bd47406455ef65e985ddddc0355adc9'
+      }.freeze
+
+      MODULES = {
+        'FeedbackModule' => [SOURCES, 'feedbackmodule'],
+        'NanoflowCommons' => [COMMONS_SOURCES, 'nanoflowcommons'],
+        'NativeMobileResources' => [NATIVE_SOURCES, 'nativemobileresources']
+      }.freeze
+
       module_function
 
       def matching(directory, sources: SOURCES, module_name: 'feedbackmodule')
@@ -81,6 +152,13 @@ module Mxrb
           next unless Array(digest).include?(Digest::SHA256.hexdigest(File.binread(path).gsub("\r\n", "\n")))
 
           name
+        end
+      end
+
+      # The verified actions of every adapted module, qualified as nanoflows call them.
+      def adapted(directory)
+        MODULES.flat_map do |namespace, (sources, module_name)|
+          matching(directory, sources:, module_name:).map { "#{namespace}.#{_1}" }
         end
       end
 

@@ -1,5 +1,60 @@
 # Portabilidade real entre Ruby, TypeScript e Mendix
 
+## Páginas, widgets e actions do mobile nativo
+
+Uma página em layout nativo (`Forms$NativeLayoutContent`) é exportada como o
+widget de apresentação `native_layout`, com `layout_type`, `show_bottom_bar` e
+`sidebar` e as regiões `content`, `header` (o placeholder do cabeçalho à
+direita) e `sidebar`; o conteúdo da página preenche o placeholder em tempo de
+requisição como em qualquer layout. O navegador renderiza essa página num shell
+de telefone (`.mxrb-phone-shell`): uma coluna na largura de um telefone com o
+título da página e os widgets do cabeçalho no topo, o conteúdo, a sidebar quando
+o layout tem uma e, quando o layout a mostra, a bottom bar do perfil de
+navegação nativo (`navigation.profiles[].bottom_bar`, legendas, ícones de glyph
+ou de coleção, página aberta marcada). A navegação web fica fora dessas páginas.
+
+Os pluggable widgets do Native Mobile Resources renderizam por adaptadores web
+guiados pelas próprias propriedades (`NativeWidgets.tsx`,
+`NativeDataWidgets.tsx`, `NativeSignature.tsx`): accordion, activity indicator,
+animation (keyframes CSS por família, com a ação pós-animação no tempo da
+animação), app events (load, unload, resume, online e offline com seus timeouts,
+timer único ou em intervalo), background gradient e image, badge, bottom sheet
+(modal com itens básicos ou conteúdo customizado a partir do atributo gatilho,
+ou expansível pelos conteúdos small, large e fullscreen), carousel, floating
+action button com botões secundários, gallery (conteúdo por objeto, colunas,
+paginação, pull down, placeholder vazio e o text filter da galeria com seus
+operadores), image (estática, dinâmica, URL ou ícone), intro screen (slides,
+indicadores, padrões de botões, atributo do slide ativo), list view swipe
+(arrasto do ponteiro ou setas revelam botões ou disparam a ação do swipe),
+gráficos pie/doughnut, bar, column e line pelo adaptador de gráficos, popup menu,
+QR code (codificador em `qrCode.ts`, modo byte, nível L, versões 1 a 10,
+verificado contra qrencode e zbar), radio buttons a partir da enumeração,
+repeater, signature (traços do ponteiro salvos como PNG no objeto de imagem),
+video player e web view (iframe, mensagens para a página). Três ficam
+aproximados e dizem isso no relatório de portabilidade: maps lista os marcadores
+estáticos e dinâmicos com lugar, ação ou link do OpenStreetMap; notifications
+recebe só as notificações que a própria aplicação exibe ou agenda; feedback
+mantém o formulário no navegador.
+
+As JavaScript actions do Native Mobile Resources, verificadas por digest do
+fonte como as do Nanoflow Commons, registram adaptadores de navegador
+(`nativeMobileActions.ts`) no lugar do fonte React Native: clipboard, vibração,
+conexão, informações do dispositivo, teclado, cor da status bar, badge do app,
+in-app browser, download de arquivo, biblioteca de fotos, som, biometria
+(confirmação do navegador; suporte via autenticador da plataforma), foto (input
+de arquivo, redimensionada pela qualidade, gravada pela API de arquivos),
+notificações (exibidas, agendadas e canceladas com a Notification API e
+entregues ao widget Notifications), permissões genéricas e de notificação, e
+parse de URL em objeto. Token de push e deep link sem handler chamável rejeitam
+com erro claro. Uma action cujo fonte importa pacote React Native e não tem
+adaptador verificado agora falha a exportação (`JavaScript actions target React
+Native and have no web adapter: …`) em vez de embarcar um nanoflow que quebra no
+navegador.
+
+Validado no projeto de testes do Native Mobile Resources: exportação, relatório
+de portabilidade, gate da aplicação Ruby, 440 testes de frontend e as páginas
+nativas no Chromium.
+
 ## Predicados OQL: `LIKE`, `IN`, `DISTINCT` e `HAVING`
 
 Views e consultas tabulares aceitam `LIKE`/`NOT LIKE` com `%` e `_`, e
@@ -899,6 +954,20 @@ de edição. Excluir usa o objeto de contexto; exclusão múltipla, seleção de
 pendentes. Popups são apresentados pela navegação de páginas, sem uma pilha
 visual de janelas modais.
 
+Perfis offline (nativos, ou web marcados como offline) trabalham sobre uma
+cópia local em IndexedDB das entidades configuradas no perfil. Abrir a
+aplicação com `?profile=Nome` escolhe o perfil: ao iniciar e após o login o
+cliente sincroniza (`POST /api/sync`), enviando os objetos criados, alterados e
+excluídos no dispositivo e baixando as entidades com modo `All` sob a restrição
+XPath do perfil; entidades `None` são limpas e `NoneAndPreserveData` ficam como
+estão. Os envios passam pela mesma transação e validação de `/api/records/commit`
+(um erro mantém todas as alterações pendentes no dispositivo); um objeto que o
+servidor já excluiu volta como conflito e sai da cópia local. Nanoflows desses
+perfis leem, confirmam, excluem e restauram objetos na cópia local; a atividade
+Synchronize sincroniza tudo ou apenas os objetos das variáveis indicadas, e sair
+da aplicação apaga a cópia local. `GET /api/sync?profile=Nome` descreve a
+configuração; recuperações offline com XPath ainda não são suportadas.
+
 LayoutGrid aplica pesos de 1–12, `grow` e `auto` por desktop, tablet (até 991 px)
 e celular (até 767 px), quebra de linha e alinhamentos de linha/coluna. Isso
 certifica o grid web declarado; não equivale a aplicativos móveis nativos nem
@@ -1118,8 +1187,8 @@ quando um adaptador verificado as cobre: os argumentos chegam como o client os
 entrega (`MxObject`, `Big`, `Date`), `mx-global` instala o mesmo `window.mx`, cujas
 chamadas de refresh, progresso, confirmação, mensagem e logout chegam à aplicação
 em execução, e as mudanças nos objetos voltam ao nanoflow. Actions que importam
-pacotes ausentes do próprio `node_modules` (as de React Native) seguem
-indisponíveis. Fora isso, em execução, um widget não suportado mostra um placeholder
+pacotes ausentes do próprio `node_modules` seguem indisponíveis; actions escritas
+para React Native precisam de adaptador verificado ou falham a exportação. Fora isso, em execução, um widget não suportado mostra um placeholder
 visível (`role="alert"`, `data-mxrb-unsupported`) em vez de ficar vazio. Propriedades de microflow e
 nanoflow são projetadas como nomes qualificados e strings traduzíveis como
 `translatable_text([["en_US", "…"], …])`, preservando todos os idiomas e os ids das

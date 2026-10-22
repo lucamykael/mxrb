@@ -1729,6 +1729,12 @@ module Mxrb
           }
         end
 
+        # Synchronization belongs to the client of an offline profile; a flow the
+        # server runs cannot synchronize a device.
+        def action_synchronize(action, _variables)
+          raise NativeRuntimeError, "Synchronize (#{action['Type']}) runs in the offline client, not on the server"
+        end
+
         def action_show_home_page(_action, _variables)
           @effects << { type: :show_home_page }
         end

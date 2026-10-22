@@ -188,6 +188,7 @@ export class MxObject {
   has = (attribute: string) =>
     memberName(attribute) in this.current.attributes || Boolean(this.definition(attribute));
   inheritsFrom = (entity: string) => this.current.type === entity;
+  isA = (entity: string) => this.inheritsFrom(entity);
   isEnum = (attribute: string) => this.getAttributeType(attribute) === 'Enum';
   isDate = (attribute: string) => this.getAttributeType(attribute) === 'DateTime';
   isBoolean = (attribute: string) => this.getAttributeType(attribute) === 'Boolean';
@@ -204,13 +205,23 @@ export class MxObject {
     this.isReference(attribute) && !this.isReferenceSet(attribute);
   isReferenceSet = (attribute: string) =>
     this.store.association(this.current.type, attribute)?.type === 'ReferenceSet';
+  isObjectReferenceSet = (attribute: string) => this.isReferenceSet(attribute);
   getReferenceAttributes = () => this.getAttributes().filter((name) => this.isReference(name));
 
   get(attribute: string): unknown {
-    const value = this.current.attributes[memberName(attribute)];
+    return this.read(this.current, attribute);
+  }
+
+  // The value the object had when the page handed it over, before set() changed it.
+  getOriginalValue(attribute: string): unknown {
+    return this.read(this.snapshot, attribute);
+  }
+
+  private read(record: EntityRecord, attribute: string): unknown {
+    const value = record.attributes[memberName(attribute)];
     if (this.isReference(attribute)) {
-      if (this.isReferenceSet(attribute)) return this.getReferences(attribute);
-      return this.getReference(attribute);
+      if (this.isReferenceSet(attribute)) return referenceGuids(value);
+      return referenceGuid(value);
     }
     if (value === null || value === undefined)
       return this.isNumeric(attribute) || this.isDate(attribute) ? '' : (value ?? '');
@@ -221,15 +232,33 @@ export class MxObject {
   }
 
   getReference(attribute: string): string {
-    const value = this.current.attributes[memberName(attribute)];
-    if (isRecord(value)) return value.id;
-    return typeof value === 'string' ? value : '';
+    return referenceGuid(this.current.attributes[memberName(attribute)]);
   }
 
   getReferences(attribute: string): string[] {
-    const value = this.current.attributes[memberName(attribute)];
-    if (!Array.isArray(value)) return [];
-    return value.map((item) => (isRecord(item) ? item.id : String(item)));
+    return referenceGuids(this.current.attributes[memberName(attribute)]);
+  }
+
+  // mxobj.fetch: an attribute, or a path over the loaded references
+  // (Module.Association/Module.Entity/Attribute) that ends on an attribute
+  // value or, without one, on the referenced object(s).
+  fetch(path: string, callback: Callback) {
+    const [head, ...rest] = String(path).split('/').filter(Boolean);
+    if (!head) return callback(this);
+    if (!this.isReference(head)) return callback(this.get(head));
+    const set = this.isReferenceSet(head);
+    const objects = (set ? this.getReferences(head) : [this.getReference(head)])
+      .map((guid) => this.store.record(guid))
+      .filter(isRecord)
+      .map((record) => new MxObject(record, this.store));
+    const tail = rest[0]?.includes('.') && !objects[0]?.has(rest[0]) ? rest.slice(1) : rest;
+    const results: unknown[] = [];
+    objects.forEach((object) =>
+      tail.length
+        ? object.fetch(tail.join('/'), (value) => results.push(value))
+        : results.push(object),
+    );
+    return callback(set ? results : (results[0] ?? null));
   }
 
   getEnumCaption(attribute: string, value = this.get(attribute)): string {
@@ -309,6 +338,14 @@ export class MxObject {
     };
   }
 }
+
+const referenceGuid = (value: unknown): string => {
+  if (isRecord(value)) return value.id;
+  return typeof value === 'string' ? value : '';
+};
+
+const referenceGuids = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((item) => (isRecord(item) ? item.id : String(item))) : [];
 
 const entityRecords = (value: unknown): EntityRecord[] =>
   (Array.isArray(value) ? value : value ? [value] : []).filter(isRecord);

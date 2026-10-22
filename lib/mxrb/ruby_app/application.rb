@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative 'application/offline_synchronization'
 require_relative 'application/record_access'
 require_relative 'application/request_handlers'
 require_relative 'application/service_invocation'
@@ -18,6 +19,7 @@ module Mxrb
     class Application
       THEME_PLATFORM = %w[frontend src generated platform].freeze
 
+      include OfflineSynchronization
       include RecordAccess
       include RequestHandlers
       include ServiceInvocation

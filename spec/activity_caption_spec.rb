@@ -51,6 +51,8 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
       expect(caption('CreateVariableAction',
                      VariableType: { '$Type' => type })).to eq(expected)
     end
+    enumeration = { '$Type' => 'DataTypes$EnumerationType', 'Enumeration' => 'App.State' }
+    expect(caption('CreateVariableAction', VariableType: enumeration)).to eq('Create Enumeration App.State variable')
     variables = { 'Order' => 'App.Order', 'Lines' => '[App.Line]' }
     expect(caption('DeleteAction', DeleteVariableName: 'Order', variables:)).to eq("Delete 'Order'")
     expect(caption('DeleteAction', DeleteVariableName: 'Lines', variables:)).to eq("Delete objects in 'Lines'")
@@ -67,6 +69,8 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
                     'AssociationId' => 'App.Line_Order' }
     expect(caption('RetrieveAction', RetrieveSource: association, retrieve_type: '[App.Line]'))
       .to eq('Retrieve list of Line by $Order/Line_Order')
+    expect(caption('RetrieveAction', RetrieveSource: association, retrieve_type: 'Unknown'))
+      .to eq('Retrieve from association')
     expect(caption('RetrieveAction', RetrieveSource: association, retrieve_type: 'App.Line'))
       .to eq('Retrieve Line by $Order/Line_Order')
     expect(caption('RetrieveAction', RetrieveSource: association)).to be_nil
@@ -77,7 +81,9 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
     expect(caption('CreateListAction', Entity: 'App.Line')).to eq('Create list of Line')
     expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Add')).to eq('Add to list Lines')
     expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Clear')).to eq('Clear list Lines')
-    expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Remove')).to be_nil
+    expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Remove')).to eq('Remove from list Lines')
+    expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Set')).to eq('Set list Lines')
+    expect(caption('ChangeListAction', ChangeVariableName: 'Lines', Type: 'Other')).to be_nil
     expect(caption('ShowFormAction', FormSettings: { 'Form' => 'App.Order_Edit' })).to eq("Show page 'Order_Edit'")
     expect(caption('CloseFormAction')).to eq('Close page')
     text = { 'Items' => [3, { 'LanguageCode' => 'en_US', 'Text' => 'Saved {1}' },
@@ -103,7 +109,11 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
     expect(caption('SynchronizeAction', Type: 'SpecificObjects')).to be_nil
     expect(caption('PushToClientAction', DataVariableName: 'Image')).to eq("Synchronize 'Image' to device")
     expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$Head' })).to eq('Head')
-    expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$Tail' })).to be_nil
+    expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$Tail' })).to eq('Tail')
+    expect(caption('ListOperationsAction', NewOperation: { '$Type' => 'Microflows$FindByExpression' }))
+      .to eq('Find by expression')
+    expect(caption('ListOperationsAction', NewOperation: {})).to be_nil
+    expect(caption('DownloadFileAction', FileDocumentVariableName: 'Report')).to eq('Download file Report')
     expect(caption('AggregateAction', AggregateFunction: 'Count', AggregateVariableName: 'Lines'))
       .to eq('Count Lines')
     expect(caption('AggregateAction', AggregateFunction: 'Sum', AggregateVariableName: 'Lines',
@@ -119,6 +129,9 @@ RSpec.describe Mxrb::Compiler::ActivityCaption do
 
   it 'reads no code actions or language from a source that offers none' do
     plain = described_class.new(Object.new)
+    expect(plain.caption({ '$Type' => 'Microflows$CastAction' })).to eq('Cast object')
+    ten = described_class.new(Struct.new(:version).new('10.24.18.103793'))
+    expect(ten.caption({ '$Type' => 'Microflows$CastAction' })).to eq('Cast')
     expect(plain.caption({ '$Type' => 'Microflows$JavaActionCallAction', 'JavaAction' => 'App.Run' })).to eq('Run')
     message = { '$Type' => 'Microflows$ShowMessageAction',
                 'Template' => { 'Text' => { 'Items' => [3, { 'LanguageCode' => 'de_DE', 'Text' => 'Hallo' },

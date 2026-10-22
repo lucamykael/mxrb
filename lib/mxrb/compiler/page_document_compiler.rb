@@ -8,7 +8,7 @@ module Mxrb
       include RuntimeDataTypes
 
       def initialize(source)
-        @role_map = project_role_map(source)
+        @roles = UserRoleResolver.new(source)
         @url_segments = UrlSegmentCompiler.new(source)
         @typed_parameters = typed_parameters?(source)
       end
@@ -65,18 +65,7 @@ module Mxrb
         source.slice('$ID', '$Type')
       end
 
-      def allowed_user_roles(page)
-        array(page['AllowedModuleRoles']).flat_map { @role_map.fetch(_1.to_s, []) }.uniq
-      end
-
-      def project_role_map(source)
-        security = source.documents('Security$ProjectSecurity').first
-        return {} unless security
-
-        array(security['UserRoles']).each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |role, map|
-          array(role['ModuleRoles']).each { |module_role| map[module_role.to_s] << role['Name'].to_s }
-        end
-      end
+      def allowed_user_roles(page) = @roles.resolve(array(page['AllowedModuleRoles']))
     end
   end
 end

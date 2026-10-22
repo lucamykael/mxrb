@@ -146,6 +146,12 @@ RSpec.describe Mxrb::Compiler::NavigationGridCompiler do
                                                                      columns: overview_columns)
   end
 
+  it 'lists no widgets of a source that has no units' do
+    inventory = Mxrb::Compiler::WebWidgetInventory.new(Object.new)
+    expect(inventory.native_ids).to eq([])
+    expect(inventory.ids(plugin: true)).to eq([])
+  end
+
   it 'compiles the data grids of the web documents with the entity, paths and column kinds MxBuild writes' do
     grids = compile([domain, *layouts, *pages], '11.12.1')
 

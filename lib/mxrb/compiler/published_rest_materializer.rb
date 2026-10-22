@@ -10,6 +10,8 @@ module Mxrb
     # hold an allowed module role and, unless security is off, the
     # authentication types.
     class PublishedRestMaterializer
+      include RuntimeDataTypes
+
       DATA_TYPES = {
         'DataTypes$StringType' => 'String', 'DataTypes$IntegerType' => 'Integer',
         'DataTypes$LongType' => 'Long', 'DataTypes$DecimalType' => 'Decimal',
@@ -25,7 +27,8 @@ module Mxrb
       def materialize
         source = SourceModel.read(@mpr_path)
         security = source.units_of('Security$ProjectSecurity').map(&:document).first || {}
-        services = source.units_of('Rest$PublishedRestService').map { compile_service(_1, security) }
+        returns = microflow_return_types(source)
+        services = source.units_of('Rest$PublishedRestService').map { compile_service(_1, security, returns) }
         model_path = File.join(@deployment, 'model', 'model.mdp')
         write_model(model_path, services)
         PublishedRestMaterialization.new(model_path:, services: services.map { _1.fetch('QualifiedName') }.freeze)
@@ -37,7 +40,7 @@ module Mxrb
         services.reduce(ModelPackage.read(path)) { |package, service| package.upsert(service) }.write(path)
       end
 
-      def compile_service(unit, security) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def compile_service(unit, security, returns = {}) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         document = unit.document
         raise CompilationError, "published REST service #{document['Name']} is outside a module" unless unit.module_name
 
@@ -52,7 +55,18 @@ module Mxrb
           'AuthenticationMicroflow' => document['AuthenticationMicroflow'].to_s,
           'AllowedUserRoles' => allowed_user_roles(document, security),
           'OpenApi2Schema' => '', 'OpenApi3Schema' => ''
-        }
+        }.then { open_api(_1, document, returns) }
+      end
+
+      def open_api(service, document, returns)
+        documents = PublishedRestOpenApi.new(service, document, return_types: returns)
+        service.merge('OpenApi2Schema' => documents.swagger, 'OpenApi3Schema' => documents.openapi)
+      end
+
+      def microflow_return_types(source)
+        source.units_of('Microflows$Microflow').to_h do |unit|
+          ["#{unit.module_name}.#{unit.document['Name']}", data_type(unit.document['MicroflowReturnType'])]
+        end
       end
 
       def compile_resource(resource, service_path)

@@ -67,7 +67,7 @@ module Mxrb
         when 'SupportedContentTypesRuntime' then content_types(source)
         when 'ParameterDataTypeRuntime' then parameter_type(source)
         when 'OccursMoreThanOnce' then source['MaxOccurs'].to_i == -1 || source['MaxOccurs'].to_i > 1
-        when 'ObjectHandlingBackupOverride' then false
+        when 'ObjectHandlingBackupOverride' then source['ObjectHandlingBackupAllowOverride'] == true
         when 'XmlType' then source['XmlPrimitiveType'].to_s
         else raise CompilationError, "cannot derive Runtime field #{source['$Type']}.#{field}"
         end

@@ -2,6 +2,8 @@ import { ListSourceNanoflows } from './listSource';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, setCsrfToken } from './api';
+import { offlineStore } from './offlineStore';
+import { forgetRequestedProfile, requestedOfflineProfile, synchronizeAll } from './synchronize';
 import { registerExpressionSchema } from './schemaLookup';
 import { registerClientConstants } from './expression';
 import { registerObjectStorageSchema } from './objectStorage';
@@ -17,13 +19,14 @@ import {
 } from './PageVariables';
 import { Popup } from './components/Popup';
 import { LayoutState } from './components/NativeScrollContainer';
-import { apiFailure, inlineStyle, isEntityRecord, recordValue } from './value';
+import { apiFailure, classes, inlineStyle, isEntityRecord, recordValue } from './value';
 import { servedWidget } from './contracts';
 import type { InvokeHandler, SaveRecord, SelectRecord, WidgetRuntimeProps } from './contracts';
 import nanoflows from '../nanoflows';
 import { LoginForm } from '../../components/auth/LoginForm';
 import { AppFeedback } from '../../components/feedback/AppFeedback';
 import { AppNavigation } from '../../components/navigation/AppNavigation';
+import { nativePage } from './components/NativeLayout';
 import { PageOutlet } from './components/PageOutlet';
 import { NavigationSelection } from './components/PageTitleContext';
 import { WidgetRenderer } from './components/WidgetRenderer';
@@ -319,6 +322,17 @@ export function ApplicationRuntime({
         return;
       }
       if (!target) throw new Error('No accessible page is available for this session');
+      // An offline profile starts from a synchronized device copy; without the
+      // server it keeps working on what the device already has.
+      const offline = requestedOfflineProfile(value);
+      if (offline) {
+        try {
+          await synchronizeAll(offline.name ?? null);
+        } catch (failure) {
+          console.warn('[offline] synchronization failed; using the device data', failure);
+          setNotice(`Synchronization failed: ${apiFailure(failure).message}`);
+        }
+      }
       await openPage(target, null, !routeTarget);
     } catch (failure) {
       const normalized = apiFailure(failure);
@@ -364,6 +378,11 @@ export function ApplicationRuntime({
       const normalized = apiFailure(failure);
       if (normalized.status !== 401) setError(normalized);
     } finally {
+      // Signing out of an offline profile leaves no data on the device.
+      if (requestedOfflineProfile(schemaRef.current)) {
+        await offlineStore().reset();
+        forgetRequestedProfile();
+      }
       setCsrfToken(null);
       setSession(null);
       updatePopups([]);
@@ -546,13 +565,22 @@ export function ApplicationRuntime({
       if (!definition) throw new Error(`Nanoflow frontend not found: ${name}`);
       const execution = await definition.execute(resolvedParameters, invoke, {
         pagePath: page?.name || '',
+        offline: requestedOfflineProfile(schemaRef.current) !== null,
         userRoles:
           workspace?.userRoles() ||
           (Array.isArray(session?.roles)
             ? session.roles.filter((role): role is string => typeof role === 'string')
             : []),
       });
+      // An object the nanoflow created exists only in its result (a data source's
+      // list, say): saving it would reload that very data source, again and again.
+      const given = new Set(
+        [activeContext, ...Object.values(resolvedParameters).flat()]
+          .filter(isEntityRecord)
+          .map((record) => `${record.type}:${record.id}`),
+      );
       for (const changed of execution.changes) {
+        if (changed.transient && !given.has(`${changed.type}:${changed.id}`)) continue;
         await saveRecord(changed, changed.attributes);
       }
       const message = execution.messages.at(-1);
@@ -890,12 +918,15 @@ export function ApplicationRuntime({
       </Popup>
     );
   }
+  // A page on a native layout shows in the phone shell, whose bottom bar
+  // replaces the web navigation.
+  const native = nativePage(page.widgets);
   return (
     <AppLayout
-      className={page.appearance_class}
+      className={classes(page.appearance_class, native && 'mxrb-phone-shell')}
       style={inlineStyle(page.appearance_style)}
       navigation={
-        JSON.stringify(page.widgets).includes('"navigation_profile"') ? undefined : (
+        native || JSON.stringify(page.widgets).includes('"navigation_profile"') ? undefined : (
           <AppNavigation
             items={profile?.items || []}
             authenticated={Boolean(session)}

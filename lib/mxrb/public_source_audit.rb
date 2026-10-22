@@ -61,9 +61,12 @@ module Mxrb
       end
     end
 
+    # Packages vendored under node_modules (the dependencies of the project's
+    # JavaScript actions) are third-party code, not the exported Ruby tree.
     def source_paths
       @source_paths ||= Dir.glob(File.join(root, '**', '*.rb'), File::FNM_DOTMATCH).sort.reject do |path|
-        !@include_internal && path.delete_prefix("#{root}/").start_with?('.mxrb/')
+        relative = path.delete_prefix("#{root}/")
+        (!@include_internal && relative.start_with?('.mxrb/')) || relative.include?('/node_modules/')
       end
     end
 

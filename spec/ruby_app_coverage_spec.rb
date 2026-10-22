@@ -244,7 +244,8 @@ RSpec.describe 'Ruby application defensive coverage' do
       create_record: {}, update_record: nil, delete_record: false, rest_routes: [],
       reload_if_changed!: false,
       reload_status: { enabled: false, state: 'ready', error: nil },
-      user_language: 'en_US', change_language: 'pt_BR', java_request_handler: nil
+      user_language: 'en_US', change_language: 'pt_BR', java_request_handler: nil,
+      offline_configuration: { profile: 'NativePhone', entities: [] }, synchronize_offline: { ok: true }
     )
     server = bare_server(application: app, sessions: sessions)
     dispatch = lambda do |path, method = 'GET', body = '', query = {}, headers = {}|
@@ -261,6 +262,12 @@ RSpec.describe 'Ruby application defensive coverage' do
     expect(dispatch.call('/api/navigation').status).to eq(200)
     expect(dispatch.call('/api/pages').status).to eq(200)
     expect(dispatch.call('/api/pages/Missing').status).to eq(404)
+    expect(JSON.parse(dispatch.call('/api/sync', 'GET', '', { 'profile' => 'NativePhone' }).body))
+      .to eq('profile' => 'NativePhone', 'entities' => [])
+    expect(app).to have_received(:offline_configuration).with(profile: 'NativePhone', context:)
+    sync = dispatch.call('/api/sync', 'POST', JSON.generate(changes: []))
+    expect(JSON.parse(sync.body)).to eq('ok' => true)
+    expect(app).to have_received(:synchronize_offline).with({ 'changes' => [] }, context:)
     allow(app).to receive(:page).and_return(name: 'M.Home')
     expect(dispatch.call('/api/pages/M.Home').status).to eq(200)
     expect(dispatch.call('/api/microflows/M.Run', 'POST', '{}').status).to eq(200)

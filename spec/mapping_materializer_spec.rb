@@ -43,6 +43,9 @@ RSpec.describe Mxrb::Compiler::MappingMaterializer do
       elements = nodes(mapping['Elements'])
       lines = elements.find { _1['JsonPath'] == '(Object)|lines|(Object)' }
       expect(lines).to include('OccursMoreThanOnce' => true, 'ObjectHandlingBackupOverride' => false)
+      compiler = Mxrb::Compiler::MappingDocumentCompiler.new(nil)
+      override = { 'ObjectHandlingBackupAllowOverride' => true }
+      expect(compiler.send(:derived, override, 'ObjectHandlingBackupOverride', 'Views')).to be(true)
       expect(elements.find { _1['JsonPath'] == '(Object)|total' }).to include('XmlType' => 'Decimal',
                                                                               'OccursMoreThanOnce' => false)
     end

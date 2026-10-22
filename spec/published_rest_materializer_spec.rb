@@ -58,8 +58,14 @@ RSpec.describe Mxrb::Compiler::PublishedRestMaterializer do
     expect(service).to include(
       'Name' => 'Api', 'QualifiedName' => 'App.Api', 'Path' => 'rest/app/v1', 'ServiceName' => 'Api',
       'Version' => '1.0', 'AuthenticationTypesRuntime' => %w[Basic Session], 'AuthenticationMicroflow' => '',
-      'AllowedUserRoles' => ['Reader'], 'Parameters' => [], 'OpenApi2Schema' => '', 'OpenApi3Schema' => ''
+      'AllowedUserRoles' => ['Reader'], 'Parameters' => []
     )
+    expect(service['OpenApi2Schema']).to start_with('{"swagger":"2.0","info":{"title":"Api","version":"1.0"}')
+    expect(JSON.parse(service['OpenApi2Schema']).dig('paths', '/items/echo/{id}', 'get', 'parameters'))
+      .to eq([{ 'name' => 'id', 'in' => 'path', 'required' => true, 'type' => 'string' },
+              { 'name' => 'count', 'in' => 'query', 'type' => 'integer' }])
+    expect(JSON.parse(service['OpenApi3Schema']))
+      .to include('openapi' => '3.0.4', 'security' => [{ 'basicAuth' => [] }])
     resource = service.fetch('Resources').first
     expect(resource['PathRuntime']).to eq('rest/app/v1/items')
     echo, list = resource.fetch('Operations')

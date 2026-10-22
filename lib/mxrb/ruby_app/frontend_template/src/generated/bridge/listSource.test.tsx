@@ -260,3 +260,40 @@ describe('widgets over a microflow, nanoflow or association source', () => {
     expect(marketplaceDataSource({})).toBeUndefined();
   });
 });
+
+describe('a nanoflow list source on a page that renders again', () => {
+  it('runs the nanoflow once although the page hands a new invoker on every render', async () => {
+    const calls: number[] = [];
+    const request = vi.fn() as unknown as ApiRequest;
+    const value = {
+      data_source: {
+        entity: '',
+        xpath: '',
+        sort: [],
+        source: { kind: 'nanoflow', name: 'App.NF' },
+      },
+    };
+    function Probe() {
+      const { records } = useMarketplaceRecords(value, { context: null, request, revision: 0 });
+      return <span data-testid="names">{records.map((r) => r.attributes.Name).join(',')}</span>;
+    }
+    // A new invoker on each render, as the application runtime passes it.
+    function Host({ round }: { round: number }) {
+      const invoke = async () => {
+        calls.push(round);
+        return [item(String(round), `Round ${round}`)];
+      };
+      return (
+        <ListSourceNanoflows.Provider value={invoke as never}>
+          <Probe />
+        </ListSourceNanoflows.Provider>
+      );
+    }
+    const view = render(<Host round={1} />);
+    await waitFor(() => expect(screen.getByTestId('names')).toHaveTextContent('Round 1'));
+    view.rerender(<Host round={2} />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toEqual([1]);
+    expect(screen.getByTestId('names')).toHaveTextContent('Round 1');
+  });
+});

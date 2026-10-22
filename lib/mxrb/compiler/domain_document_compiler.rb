@@ -54,7 +54,7 @@ module Mxrb
         source.slice('$ID', '$Type', 'SourceDocument').merge(
           'OqlRuntime' => document.document['Oql'].to_s,
           'SourceDocumentName' => qualified_name,
-          'SourceType' => 'OQL'
+          'SourceType' => 'oql'
         )
       end
 
@@ -92,7 +92,7 @@ module Mxrb
       end
 
       def inherited_flags(qualified_name)
-        return system_flags if qualified_name.to_s.start_with?('System.')
+        return system_entity_flags(qualified_name) if qualified_name.to_s.start_with?('System.')
 
         parent = @entities[qualified_name.to_s]
         return system_flags unless parent
@@ -100,6 +100,27 @@ module Mxrb
         generalization = parent['MaybeGeneralization'] || {}
         generalization_flags(generalization, generalization['$Type'])
       end
+
+      # The flags of a System entity, from the Runtime's own System module of the
+      # version: System.Paging is not persistable, System.User keeps its dates.
+      def system_entity_flags(qualified_name)
+        entity = system_entities[qualified_name.to_s]
+        return system_flags unless entity
+
+        generalization = entity['MaybeGeneralization'] || {}
+        generalization_flags(generalization, generalization['$Type'])
+      end
+
+      def system_entities
+        @system_entities ||= begin
+          document = version && SystemModelSeed.for(version).domain_document
+          document ? array(document['Entities']).to_h { [_1['QualifiedName'].to_s, _1] } : {}
+        rescue CompilationError
+          {}
+        end
+      end
+
+      def version = @source.respond_to?(:version) ? @source.version : nil
 
       def system_flags
         {
@@ -144,8 +165,11 @@ module Mxrb
         }
       end
 
+      # Mendix 11 indexes may hold associations; MxBuild 10 writes no pointer.
       def compile_indexed_attribute(source)
         result = plain_document(source)
+        return result if version.to_s.split('.').first.to_i.between?(1, 10)
+
         result['AssociationPointer'] ||= BSON::Binary.new(
           IO::BsonCodec.uuid_to_blob('00000000-0000-0000-0000-000000000000'), :generic
         )
