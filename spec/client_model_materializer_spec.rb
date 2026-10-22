@@ -350,6 +350,7 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
     expect(native['OfflineEntityConfigsRuntime'][1]).to include('$ID' => 'cfg', 'SyncMode' => 'All')
 
     ten = compile.call('10.24.0.73019')
+    expect(ten['PluginWidgets']).to eq(%w[web.Grid web.Menu web.Card native.Tile])
     native10 = ten['Profiles'].last
     expect(native10.keys).to eq(
       %w[$ID $Type OfflineEntityConfigsRuntime NativeHomePage RoleBasedNativeHomePages Name IsOffline OtaEnabled

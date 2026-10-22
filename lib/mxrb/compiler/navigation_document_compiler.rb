@@ -30,11 +30,18 @@ module Mxrb
         document = unit.document
         node(document, 'Profiles' => array(document['Profiles']).map { profile(_1) },
                        'Grids' => @grids.compile,
-                       'PluginWidgets' => @widgets.ids(plugin: true),
+                       'PluginWidgets' => plugin_widgets,
                        'CustomWidgetModules' => @widgets.ids(plugin: false))
       end
 
       private
+
+      # MxBuild 10 lists the pluggable widgets of native snippets after the web
+      # ones; MxBuild 11 leaves them out.
+      def plugin_widgets
+        web = @widgets.ids(plugin: true)
+        @source.respond_to?(:version) && major_version < 11 ? (web + @widgets.native_ids).uniq : web
+      end
 
       # What MxBuild writes for a field of a profile the MPR leaves out.
       def derive(source, field)

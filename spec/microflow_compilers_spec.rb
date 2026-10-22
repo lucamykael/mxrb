@@ -177,18 +177,32 @@ RSpec.describe 'Runtime microflow compilers' do
                   node('DomainModels$DomainModel', 63, Entities: [2, order, line], Associations: [2, association]))
     concrete = node('CodeActions$ConcreteEntityType', 65, Entity: 'App.Order')
     java = unit('App', node('JavaActions$JavaAction', 64, Name: 'Load', JavaReturnType: concrete))
+    pointer = id(90)
+    generic_return = node('CodeActions$ParameterizedEntityType', 92, TypeParameterPointer: pointer)
+    holder_type = node('CodeActions$EntityTypeParameterType', 94, TypeParameterPointer: pointer)
+    holder = node('JavaActions$JavaActionParameter', 93, Name: 'returnEntity', ParameterType: holder_type)
+    generic = unit('App', node('JavaActions$JavaAction', 91, Name: 'Export', JavaReturnType: generic_return,
+                                                             Parameters: [2, holder]))
+    generic_list = node('CodeActions$ListType', 100, Parameter: generic_return)
+    generic_all = unit('App', node('JavaActions$JavaAction', 101, Name: 'ExportAll', JavaReturnType: generic_list,
+                                                                  Parameters: [2, holder]))
+    loose_return = node('CodeActions$ParameterizedEntityType', 96, TypeParameterPointer: id(97))
+    loose = unit('App',
+                 node('JavaActions$JavaAction', 95, Name: 'Loose', JavaReturnType: loose_return, Parameters: [2]))
     list = node('CodeActions$ListType', 67, Parameter: node('CodeActions$ConcreteEntityType', 83, Entity: 'App.Order'))
     script = unit('App', node('JavaScriptActions$JavaScriptAction', 66, Name: 'Fetch', ActionReturnType: list))
     object = node('DataTypes$ObjectType', 69, Entity: 'App.Order')
     nano = unit('App', node('Microflows$Nanoflow', 68, Name: 'Pick', MicroflowReturnType: object))
-    source = model('DomainModels$DomainModel' => [domain], 'JavaActions$JavaAction' => [java],
-                   'JavaScriptActions$JavaScriptAction' => [script], 'Microflows$Nanoflow' => [nano])
+    source = model('DomainModels$DomainModel' => [domain], 'JavaScriptActions$JavaScriptAction' => [script],
+                   'JavaActions$JavaAction' => [java, generic, generic_all, loose], 'Microflows$Nanoflow' => [nano])
     compiler = Mxrb::Compiler::MicroflowNodeCompiler.new(schema(fields:, existing: {}), source:)
     retrieve = lambda { |id, from|
       node('Microflows$RetrieveAction', id, ResultVariableName: "Lines#{id}", RetrieveSource: node(
         'Microflows$AssociationRetrieveSource', id + 100, AssociationId: 'App.Line_Order', StartVariableName: from
       ))
     }
+    export_mapping = { 'Parameter' => 'App.Export.returnEntity', 'Value' => { 'Entity' => 'App.Order' } }
+    export_all_mapping = { 'Parameter' => 'App.ExportAll.returnEntity', 'Value' => { 'Entity' => 'App.Order' } }
     compiler.prepare(node('Microflows$Microflow', 70, Objects: [
                             retrieve.call(71, 'Rest'), retrieve.call(72, 'Loaded'), retrieve.call(73, 'Picked'),
                             retrieve.call(74, 'Fetched'), retrieve.call(75, 'Lines71'),
@@ -198,6 +212,15 @@ RSpec.describe 'Runtime microflow compilers' do
                             )),
                             node('Microflows$JavaActionCallAction', 78, ResultVariableName: 'Loaded',
                                                                         JavaAction: 'App.Load'),
+                            node('Microflows$JavaActionCallAction', 98, ResultVariableName: 'Exported',
+                                                                        JavaAction: 'App.Export',
+                                                                        ParameterMappings: [2, export_mapping]),
+                            node('Microflows$JavaActionCallAction', 102, ResultVariableName: 'ExportedAll',
+                                                                         JavaAction: 'App.ExportAll',
+                                                                         ParameterMappings: [2, export_all_mapping]),
+                            node('Microflows$JavaActionCallAction', 99, ResultVariableName: 'Lost',
+                                                                        JavaAction: 'App.Loose',
+                                                                        ParameterMappings: [2]),
                             node('Microflows$JavaScriptActionCallAction', 79, ResultVariableName: 'Fetched',
                                                                               JavaScriptAction: 'App.Fetch'),
                             node('Microflows$NanoflowCallAction', 80, OutputVariableName: 'Picked',
@@ -205,7 +228,9 @@ RSpec.describe 'Runtime microflow compilers' do
                           ]))
     types = compiler.instance_variable_get(:@variable_types)
     expect(types).to include('Rest' => 'App.Order', 'Loaded' => 'App.Order', 'Picked' => 'App.Order',
-                             'Fetched' => '[App.Order]', 'Lines71' => '[App.Line]', 'Lines75' => 'Unknown')
+                             'Fetched' => '[App.Order]', 'Lines71' => '[App.Line]', 'Lines75' => 'Unknown',
+                             'Exported' => 'App.Order', 'ExportedAll' => '[App.Order]')
+    expect(types).not_to have_key('Lost')
     expect(compiler.compile(retrieve.call(81, 'Fetched')['RetrieveSource'])['Type']).to eq('Unknown')
     expect(compiler.compile(retrieve.call(82, 'Nobody')['RetrieveSource'])['Type']).to eq('App.Order')
   end
