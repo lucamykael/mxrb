@@ -2578,9 +2578,9 @@ module Mxrb
         editable['NotFoundHomepage'] = nil
       end
       if !profile[:kind].to_s.empty?
-        editable['Kind'] = profile[:kind]
+        editable['Kind'] = offline_profile_kind(profile[:kind], profile[:offline])
       elsif profile[:offline]
-        editable['Kind'] = 'Offline'
+        editable['Kind'] = 'ResponsiveOffline'
       elsif previous.empty?
         editable['Kind'] = 'Responsive'
       end
@@ -2688,6 +2688,17 @@ module Mxrb
         'Microflow' => microflow.to_s,
         'Page' => page.to_s
       }
+    end
+
+    # Studio Pro stores an offline web profile as the kind with an Offline
+    # suffix (ResponsiveOffline, TabletOffline, PhoneOffline); MxBuild reads
+    # any other value as Responsive.
+    def offline_profile_kind(kind, offline)
+      kind = kind.to_s
+      return 'ResponsiveOffline' if kind == 'Offline'
+      return kind if !offline || kind.end_with?('Offline') || kind == 'Native'
+
+      "#{kind}Offline"
     end
 
     def navigation_not_found_home_doc(page, microflow, previous: nil)

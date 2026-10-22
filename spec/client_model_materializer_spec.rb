@@ -145,42 +145,43 @@ RSpec.describe Mxrb::Compiler::ClientModelMaterializer do
       end
 
       def fields_for(document)
-        case document['$Type']
-        when 'Navigation$NavigationDocument'
-          return %w[$ID $Type Profiles Grids CustomWidgetModules
-                    PluginWidgets]
-        when 'Texts$Text'
-          return %w[$ID $Type]
-        when 'Microflows$TextTemplate'
-          return %w[$ID $Type Parameters Text]
-        when 'Microflows$TemplateParameter'
-          return %w[$ID $Type Expression]
-        when 'Navigation$HomePage'
-          return %w[$ID $Type Page Microflow]
-        when 'Forms$FormSettings'
-          return %w[$ID $Type TitleOverride ParameterMappings Form Location]
-        end
+        {
+          'Navigation$NavigationDocument' => %w[$ID $Type Profiles Grids CustomWidgetModules PluginWidgets],
+          'Texts$Text' => %w[$ID $Type],
+          'Microflows$TextTemplate' => %w[$ID $Type Parameters Text],
+          'Microflows$TemplateParameter' => %w[$ID $Type Expression],
+          'Navigation$HomePage' => %w[$ID $Type Page Microflow],
+          'Navigation$OfflineEntityConfig' => %w[$ID $Type Entity SyncMode Constraint CompatibilityMode],
+          'Forms$FormSettings' => %w[$ID $Type TitleOverride ParameterMappings Form Location]
+        }.fetch(document['$Type'], profile_fields)
+      end
 
+      def profile_fields
         %w[$ID $Type HomePage HomeItems AppTitle LoginPageSettings ProgressiveWebAppSettings
            OfflineEntityConfigsRuntime NotFoundHomepage Name IsOffline ThrowPartialSyncError Kind AppIcon]
       end
     end
     existing = { '$ID' => unit.document['$ID'], '$Type' => unit.document['$Type'] }
-    compiler = Mxrb::Compiler::NavigationDocumentCompiler.new(schema.new(existing))
+    compiler = Mxrb::Compiler::NavigationDocumentCompiler.new(schema.new(existing), source:)
     expect(compiler.send(:compile_value, 'Plain' => [2, 1])).to eq('Plain' => [1])
     document = unit.document.merge('Profiles' => [{
                                      '$ID' => '33333333-3333-4333-8333-333333333333',
                                      '$Type' => 'Navigation$NavigationProfile', 'Name' => 'Offline',
-                                     'Kind' => 'Offline', 'OfflineEntityConfigs' => [], 'HomePage' => nil,
+                                     'Kind' => 'TabletOffline', 'OfflineEntityConfigs' => [], 'HomePage' => nil,
                                      'HomeItems' => [], 'AppTitle' => nil, 'LoginPageSettings' => nil,
                                      'ProgressiveWebAppSettings' => nil, 'NotFoundHomepage' => nil,
                                      'ThrowPartialSyncError' => false, 'AppIcon' => 'offline.svg'
                                    }])
     navigation = compiler.compile(unit.with(document:))
     expect(navigation.dig('Profiles', 0)).to include(
-      'IsOffline' => true, 'HomePage' => nil, 'LoginPageSettings' => nil,
-      'OfflineEntityConfigsRuntime' => [], 'AppIcon' => 'offline.svg'
+      'IsOffline' => true, 'Kind' => 'TabletOffline', 'HomePage' => nil, 'LoginPageSettings' => nil,
+      'AppIcon' => 'offline.svg'
     )
+    expect(navigation.dig('Profiles', 0, 'OfflineEntityConfigsRuntime').map { _1['SyncMode'] }.uniq).to eq(['Online'])
+    legacy_profiles = [document['Profiles'].first.merge('Kind' => 'Offline')]
+    legacy = compiler.compile(unit.with(document: document.merge('Profiles' => legacy_profiles)))
+    expect(legacy.dig('Profiles', 0)).to include('IsOffline' => false, 'Kind' => 'Responsive',
+                                                 'OfflineEntityConfigsRuntime' => [])
 
     profile = Mxrb::IO::BsonCodec.parse_array(unit.document['Profiles'])[:items].first
     translation = { '$ID' => '77777777-7777-4777-8777-777777777777', '$Type' => 'Texts$Translation',

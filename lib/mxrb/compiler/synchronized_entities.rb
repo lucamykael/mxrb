@@ -27,6 +27,17 @@ module Mxrb
         end
       end
 
+      # The generalizations of a project entity, nearest first.
+      def generalizations(entity)
+        chain = []
+        kind = entity_kinds[entity]
+        while kind.is_a?(String) && !chain.include?(kind)
+          chain << kind
+          kind = entity_kinds[kind]
+        end
+        chain
+      end
+
       private
 
       def system_entities
@@ -46,6 +57,10 @@ module Mxrb
 
       # Each project entity: whether it is persistable, or the generalization that decides.
       def entity_kinds
+        @entity_kinds ||= read_entity_kinds
+      end
+
+      def read_entity_kinds
         @source.units_of('DomainModels$DomainModel').each_with_object({}) do |unit, kinds|
           array(unit.document['Entities']).each do |entity|
             generalization = entity['MaybeGeneralization'] || {}

@@ -54,6 +54,11 @@ module Mxrb
         def caption_format(**options) = @owner.caption_format(**options)
         def caption_variable(**options) = @owner.caption_variable(**options)
         def objects(&block) = @owner.objects(&block)
+
+        # microflow_source, nanoflow_source, association and page_variable are
+        # plain DSL sources, so an object evaluated by instance_eval resolves
+        # them the same way the owning catalog does.
+        include PageDataSources
       end
 
       # Builds the ordered objects assigned to an Object property.

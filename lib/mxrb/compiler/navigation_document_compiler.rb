@@ -10,6 +10,7 @@ module Mxrb
       include RuntimeNodes
 
       NATIVE_PROFILE = 'Navigation$NativeNavigationProfile'
+      WEB_PROFILE_KINDS = %w[Responsive ResponsiveOffline Tablet TabletOffline Phone PhoneOffline].freeze
       WEB_PROFILE = 'Navigation$NavigationProfile'
       # What MxBuild writes for the fields of a web profile the MPR leaves out.
       PROFILE_DEFAULTS = {
@@ -59,11 +60,17 @@ module Mxrb
              'ParameterMappings' => [], 'Form' => '')
       end
 
-      # A native profile is offline; a web one only when its kind says so.
+      # A native profile is offline; a web one only when its kind says so
+      # (ResponsiveOffline, TabletOffline, PhoneOffline). MxBuild reads a kind
+      # it does not know, such as the bare 'Offline' older projects wrote, as
+      # the Responsive default.
       def profile(source)
         native = source['$Type'] == NATIVE_PROFILE
-        node(source, 'OfflineEntityConfigsRuntime' => native ? offline_configs(source) : [],
-                     'IsOffline' => native || source['Kind'] == 'Offline')
+        kind = WEB_PROFILE_KINDS.include?(source['Kind']) ? source['Kind'] : 'Responsive'
+        offline = native || kind.end_with?('Offline')
+        values = { 'OfflineEntityConfigsRuntime' => offline ? offline_configs(source) : [], 'IsOffline' => offline }
+        values['Kind'] = kind unless native
+        node(source, **values)
       end
 
       # Mendix 11 synchronizes every persistable entity, online unless the
@@ -74,13 +81,17 @@ module Mxrb
 
         known = configured.to_h { [_1['Entity'], _1] }
         (@synchronized.names | known.keys).sort_by(&:downcase).map do |entity|
-          known.fetch(entity) { online_config(profile, entity) }
+          known.fetch(entity) { default_config(profile, entity, known) }
         end
       end
 
-      def online_config(profile, entity)
+      # An entity the profile does not configure is online, unless it
+      # specializes a configured entity: Mendix 11 then keeps it out of the
+      # synchronization and preserves its data.
+      def default_config(profile, entity, known)
+        mode = @synchronized.generalizations(entity).any? { known.key?(_1) } ? 'NoneAndPreserveData' : 'Online'
         node('$ID' => derived_id(profile, "offline:#{entity}"), '$Type' => 'Navigation$OfflineEntityConfig',
-             'Entity' => entity, 'SyncMode' => 'Online', 'Constraint' => '', 'CompatibilityMode' => false)
+             'Entity' => entity, 'SyncMode' => mode, 'Constraint' => '', 'CompatibilityMode' => false)
       end
 
       def major_version = Integer(@source.version.to_s.split('.').first)
