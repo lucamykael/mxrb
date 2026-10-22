@@ -225,6 +225,18 @@ RSpec.describe Mxrb::RubyApp::PluggableProperties do
     expect(bridge.to_projection.dig('objects', :objects, 0, 'label')).to eq('Revenue')
   end
 
+  it 'lets a nested object carry a data source through the semantic source helpers' do
+    bridge = described_class.build(widget_id, catalog:) do
+      values = objects do
+        object { set :source, data_source(xpath: '', source: nanoflow_source('App.List')) }
+      end
+      set :objects, values
+    end
+    expect(bridge.to_projection.dig('objects', :objects, 0, 'source', :data_source, :source))
+      .to eq('kind' => 'nanoflow', 'name' => 'App.List')
+    expect(bridge.source_expression(:objects)).to include('nanoflow_source("App.List")')
+  end
+
   it 'builds nested object lists without exposing property Hashes in Ruby source' do
     bridge = described_class.build(widget_id, catalog:) do
       values = objects do

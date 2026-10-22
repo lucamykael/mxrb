@@ -23,6 +23,7 @@ import { MarketplaceTreeNode } from './components/MarketplaceTreeNode';
 import { MarketplaceAutocomplete, MarketplaceTagSelector } from './components/MarketplaceSelection';
 import { MarketplaceGridTextFilter } from './components/MarketplaceGridFilter';
 import { MarketplaceBadgeButton, MarketplacePopupMenu } from './components/MarketplaceMenus';
+import { nativeWidgetAdapter } from './components/NativeWidgets';
 import type { ComponentType, ReactNode } from 'react';
 import type {
   ApiRequest,
@@ -212,6 +213,9 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
   );
   const content = renderRegions(regions, children);
 
+  // A widget of Native Mobile Resources renders through its own adapter.
+  const Native = nativeWidgetAdapter(id);
+  if (Native) return <Native {...props} />;
   if (id.endsWith('.image')) return <MarketplaceImage {...props} />;
   if (id.includes('customchart'))
     return <MarketplacePlotly {...props}>{content}</MarketplacePlotly>;
@@ -219,7 +223,7 @@ function BuiltinMarketplaceWidget(props: MarketplaceWidgetProps) {
     return <MarketplaceControl {...props} />;
 
   if (
-    /(area|bar|bubble|column|custom|heatmap|line|pie|time)chart/.test(id) ||
+    /(area|bar|bubble|column|custom|heatmap|line|pie|time|doughnut)chart/.test(id) ||
     id.includes('timeseries') ||
     id.includes('heatmap')
   )

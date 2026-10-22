@@ -271,6 +271,12 @@ module Mxrb
               compatibility_mode?: boolean;
             }
 
+            export interface NativeBottomBarItem {
+              caption?: Record<string, string>;
+              page?: string;
+              icon?: number | { collection: string };
+            }
+
             export interface NavigationProfile {
               name?: string;
               kind: string;
@@ -278,6 +284,7 @@ module Mxrb
               items?: NavigationItem[];
               offline?: boolean;
               offline_entities?: OfflineEntityConfig[];
+              bottom_bar?: NativeBottomBarItem[];
             }
 
             export interface RuntimeModule {

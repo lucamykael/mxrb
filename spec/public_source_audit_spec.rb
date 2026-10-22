@@ -101,6 +101,19 @@ RSpec.describe Mxrb::PublicSourceAudit do
     end
   end
 
+  it 'leaves the packages vendored for JavaScript actions out of the audit' do
+    Dir.mktmpdir('mxrb-public-source-vendor-') do |root|
+      vendored = File.join(root, 'frontend', 'src', 'generated', 'bridge', 'vendor', 'javascriptsource', 'app',
+                           'actions', 'node_modules', 'react-native-permissions', 'scripts')
+      FileUtils.mkdir_p(vendored)
+      File.write(File.join(vendored, 'setup.rb'), "PERMISSIONS = { 'Camera' => ['AVFoundation'] }\n")
+      FileUtils.mkdir_p(File.join(root, 'app'))
+      File.write(File.join(root, 'app', 'own.rb'), "SETTINGS = { 'a' => 1 }\n")
+
+      expect(described_class.new(root).violations.map(&:path).uniq).to eq(['app/own.rb'])
+    end
+  end
+
   it 'ignores malformed association keys without lexical tokens' do
     audit = described_class.allocate
     syntax = [:assoc_new, [:container, 'scalar'], nil]

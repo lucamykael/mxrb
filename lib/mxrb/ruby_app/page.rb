@@ -25,7 +25,7 @@ module Mxrb
           navigation_list navigation_tree number_input page_title
           pluggable_widget radio_button_group reference_selector reference_set_selector
           scroll_container sidebar_toggle snippet static_image tab_control table text text_area
-          text_box layout placeholder
+          text_box layout placeholder native_layout
         ].freeze
 
         attr_reader :widgets

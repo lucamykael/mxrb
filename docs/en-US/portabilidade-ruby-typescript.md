@@ -1,5 +1,59 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Native mobile pages, widgets and actions
+
+A page on a native layout (`Forms$NativeLayoutContent`) exports as a
+`native_layout` presentation widget with its `layout_type`, `show_bottom_bar`
+and `sidebar` and the regions `content`, `header` (the right header placeholder)
+and `sidebar`; the page content fills its placeholder at request time like any
+layout. The browser renders such a page in a phone shell (`.mxrb-phone-shell`):
+a phone-wide column with the page title and the header widgets on top, the
+content, the sidebar when the layout has one and, when the layout shows it, the
+bottom bar of the native navigation profile (`navigation.profiles[].bottom_bar`,
+captions, glyph or collection icons, the open page marked). The web navigation
+stays off these pages.
+
+The pluggable widgets of Native Mobile Resources render through web adapters
+driven by their own properties (`NativeWidgets.tsx`, `NativeDataWidgets.tsx`,
+`NativeSignature.tsx`): accordion, activity indicator, animation (CSS keyframes
+by family, with the after-animation action on the animation's timing), app
+events (load, unload, resume, online and offline with their timeouts, once or
+interval timer), background gradient and image, badge, bottom sheet (modal with
+basic items or custom content from the trigger attribute, or expanding through
+its small, large and fullscreen contents), carousel, floating action button with
+secondary buttons, gallery (content per object, columns, pagination, pull down,
+empty placeholder and the gallery text filter with its operators), image (static,
+dynamic, URL or icon), intro screen (slides, indicators, button patterns, active
+slide attribute), list view swipe (pointer drag or arrow keys reveal buttons or
+run the swipe action), pie and doughnut, bar, column and line charts through the
+chart adapter, popup menu, QR code (an encoder in `qrCode.ts`, byte mode, level
+L, versions 1 to 10, verified against qrencode and zbar), radio buttons from the
+enumeration, repeater, signature pad (pointer strokes saved as PNG into the
+image object), video player and web view (iframe, messages to the page). Three
+stay approximate and say so in the portability report: maps list their static
+and dynamic markers with their place, action or OpenStreetMap link; the
+notifications widget receives only the notifications the application itself
+displays or schedules; the feedback widget keeps its form in the browser.
+
+The JavaScript actions of Native Mobile Resources, verified by source digest
+like the Nanoflow Commons ones, register browser adapters
+(`nativeMobileActions.ts`) instead of their React Native source: clipboard,
+vibration, connection, device info, keyboard, status bar colour, app badge,
+in-app browser, file download, picture library, sound, biometrics (a browser
+confirmation; support through the platform authenticator), picture taking (file
+input, scaled by quality, stored through the file API), notifications
+(displayed, scheduled and cancelled with the Notification API and delivered to
+the Notifications widget), generic and notification permissions, and URL
+parsing into an object. Push tokens and deep links without a callable handler
+reject with a clear error. An action whose source imports a React Native
+package and has no verified adapter now fails the export
+(`JavaScript actions target React Native and have no web adapter: …`) instead
+of shipping a nanoflow that breaks in the browser.
+
+Validated on the Native Mobile Resources test project: export, portability
+report, the Ruby application gate, 440 frontend tests and the native pages in
+Chromium.
+
 ## OQL predicates: `LIKE`, `IN`, `DISTINCT` and `HAVING`
 
 Views and tabular queries accept `LIKE`/`NOT LIKE` with `%` and `_`, and
@@ -925,7 +979,8 @@ covers them: arguments arrive as the client passes them (`MxObject`, `Big`,
 `Date`), `mx-global` installs the same `window.mx`, whose refresh, progress,
 confirmation, message and sign-out calls reach the running application, and
 changes to objects return to the nanoflow. Actions that import packages missing
-from their own `node_modules` (React Native ones) stay unavailable. Otherwise, at runtime an unsupported widget shows a
+from their own `node_modules` stay unavailable; actions written for React Native
+need a verified adapter or fail the export. Otherwise, at runtime an unsupported widget shows a
 visible placeholder (`role="alert"`, `data-mxrb-unsupported`) instead of rendering
 empty.
 Microflow and nanoflow properties are projected as qualified names and
