@@ -45,6 +45,15 @@ RSpec.describe 'native mobile navigation profiles' do
     mpr&.close
   end
 
+  it 'stores an offline web profile as the kind with the Offline suffix' do
+    writer = Mxrb::Writer.allocate
+    expect(writer.send(:offline_profile_kind, 'Offline', true)).to eq('ResponsiveOffline')
+    expect(writer.send(:offline_profile_kind, 'Tablet', true)).to eq('TabletOffline')
+    expect(writer.send(:offline_profile_kind, 'PhoneOffline', true)).to eq('PhoneOffline')
+    expect(writer.send(:offline_profile_kind, 'Native', true)).to eq('Native')
+    expect(writer.send(:offline_profile_kind, 'Tablet', false)).to eq('Tablet')
+  end
+
   it 'writes a native profile with its home pages, bottom bar and settings' do
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'app.mpr')

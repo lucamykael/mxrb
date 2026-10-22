@@ -70,6 +70,15 @@ RSpec.describe Mxrb::Compiler::CompatibilityAnalyzer do
     )
   end
 
+  it 'leaves out native layouts no page uses, such as the ones Atlas ships' do
+    layout = unit('Forms$Layout', 'Phone', 'Content' => { '$Type' => 'Forms$NativeLayoutContent' })
+    model = source(version: '11.12.1', units: [layout])
+    allow(model).to receive(:web_layout?).and_return(false)
+    report = described_class.new('/tmp/App.mpr', source: model).analyze
+
+    expect(report.errors.select { _1.category == :native }).to be_empty
+  end
+
   it 'stops at an unsupported Mendix version instead of auditing it with the wrong renderer' do
     page = unit('Forms$Page', 'Home', 'Widgets' => [2, { '$Type' => 'Forms$UnknownWidget' }])
     report = described_class.new('/tmp/App.mpr', source: source(version: '8.18.0', units: [page])).analyze

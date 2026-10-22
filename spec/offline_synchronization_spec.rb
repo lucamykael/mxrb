@@ -52,6 +52,9 @@ RSpec.describe Mxrb::RubyApp::Application::OfflineSynchronization do
       { 'name' => 'Field', 'kind' => 'Phone', 'offline' => true, 'offline_entities' => [
         { 'entity' => 'Probe.Item', 'sync_mode' => 'None' }
       ] },
+      { 'name' => 'Desk', 'kind' => 'ResponsiveOffline', 'offline' => true, 'offline_entities' => [
+        { 'entity' => 'Probe.Row', 'sync_mode' => 'All', 'constraint' => '' }
+      ] },
       { 'name' => 'Bare', 'kind' => 'Native' }
     ]
   end
@@ -110,6 +113,9 @@ RSpec.describe Mxrb::RubyApp::Application::OfflineSynchronization do
     expect(names).not_to include('south')
     expect(app.record('Probe.Row', fresh_id)[:attributes]).to include('Name' => 'Fresh', 'Rank' => 9)
     expect(app.record('Probe.Row', south[:id])).to be_nil
+
+    everything = app.synchronize_offline({ 'profile' => 'Desk', 'changes' => [] })[:entities].first
+    expect(everything[:records].map { _1[:attributes]['Name'] }).to include('Fresh', 'Renamed')
 
     subset = app.synchronize_offline({ 'profile' => 'NativePhone', 'changes' => [], 'entities' => ['Probe.Item'] })
     expect(subset[:entities].map { _1[:entity] }).to eq(['Probe.Item'])

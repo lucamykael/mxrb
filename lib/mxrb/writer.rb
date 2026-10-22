@@ -2562,7 +2562,7 @@ module Mxrb
         editable['ProgressiveWebAppSettings'] = nil
       end
       # A Ruby source that declares no offline entity leaves the stored configs alone.
-      if profile[:offline_entities]&.any?
+      if profile.fetch(:offline_entities, []).any?
         editable['OfflineEntityConfigs'] = offline_entity_configs_doc(profile[:offline_entities],
                                                                       previous['OfflineEntityConfigs'])
       end
@@ -2632,7 +2632,7 @@ module Mxrb
         editable['ThrowPartialSyncError'] = profile[:throw_partial_sync_error]
       end
       # A Ruby source that declares no offline entity leaves the stored configs alone.
-      if profile[:offline_entities]&.any?
+      if profile.fetch(:offline_entities, []).any?
         editable['OfflineEntityConfigs'] = offline_entity_configs_doc(profile[:offline_entities],
                                                                       previous['OfflineEntityConfigs'])
       end

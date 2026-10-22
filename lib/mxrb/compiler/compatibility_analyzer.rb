@@ -66,24 +66,31 @@ module Mxrb
                 'a native navigation profile is not built by the native compiler')
           end
         end
-        native_layouts = @source.units_of('Forms$Layout').select do |unit|
-          unit.document.dig('Content', '$Type') == 'Forms$NativeLayoutContent'
-        end
-        native_layouts.each do |unit|
-          add(:error, :native, 'Forms$Layout', qualified_name(unit),
-              'a native layout is not compiled by the native compiler')
-        end
-        layout_names = native_layouts.map { qualified_name(_1) }
-        @source.units_of('Forms$Page').each do |unit|
-          next unless layout_names.include?(unit.document.dig('FormCall', 'Form').to_s)
-
-          add(:error, :native, 'Forms$Page', qualified_name(unit),
-              'a native page is not compiled by the native compiler')
-        end
+        analyze_native_pages
         %w[Microflows$Microflow Microflows$Nanoflow].flat_map { @source.units_of(_1) }.each do |unit|
           native_actions(unit.document).each do |type|
             add(:error, :native, type, qualified_name(unit), "#{type} is not executed by the web runtime")
           end
+        end
+      end
+
+      # Atlas ships native layouts with every project; only the ones a page
+      # uses, and those pages, are left out of the web build.
+      def analyze_native_pages
+        layouts = @source.units_of('Forms$Layout')
+                         .select { _1.document.dig('Content', '$Type') == 'Forms$NativeLayoutContent' }
+                         .to_h { [qualified_name(_1), _1] }
+        used = []
+        @source.units_of('Forms$Page').each do |unit|
+          layout = unit.document.dig('FormCall', 'Form').to_s
+          next unless layouts.key?(layout)
+
+          used |= [layout]
+          add(:error, :native, 'Forms$Page', qualified_name(unit),
+              'a native page is not compiled by the native compiler')
+        end
+        used.each do |layout|
+          add(:error, :native, 'Forms$Layout', layout, 'a native layout is not compiled by the native compiler')
         end
       end
 

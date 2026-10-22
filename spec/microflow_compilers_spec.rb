@@ -119,7 +119,9 @@ RSpec.describe 'Runtime microflow compilers' do
     fields = {
       'Microflows$MicroflowCallAction' => %w[$ID $Type ResultVariableName],
       'Microflows$JavaActionCallAction' => %w[$ID $Type ResultVariableName],
-      'Microflows$RestCallAction' => %w[$ID $Type RequestTimeOutExpression]
+      'Microflows$RestCallAction' => %w[$ID $Type RequestTimeOutExpression],
+      'Microflows$CreateVariableAction' => %w[$ID $Type ResultVariableName],
+      'Microflows$EntityTypeCodeActionParameterValue' => %w[$ID $Type Entity ValueExpression]
     }
     void = unit('App', node('Microflows$Microflow', 40, Name: 'Fire',
                                                         MicroflowReturnType: node('DataTypes$VoidType', 41)))
@@ -137,6 +139,10 @@ RSpec.describe 'Runtime microflow compilers' do
                                                        JavaAction: 'App.Run')
     expect(compiler.compile(java)).to include('ResultVariableName' => '')
     expect(compiler.compile(java.merge('UseReturnVariable' => true))).to include('ResultVariableName' => 'Result')
+    variable = node('Microflows$CreateVariableAction', 47, VariableName: 'Total')
+    expect(compiler.compile(variable)).to include('ResultVariableName' => '')
+    entity_value = node('Microflows$EntityTypeCodeActionParameterValue', 48, Entity: 'App.Order')
+    expect(compiler.compile(entity_value)).to include('ValueExpression' => "'App.Order'")
     rest = node('Microflows$RestCallAction', 46, TimeOutExpression: '30', UseRequestTimeOut: false)
     expect(compiler.compile(rest)).to include('RequestTimeOutExpression' => '0')
     expect(compiler.compile(rest.merge('UseRequestTimeOut' => true))).to include('RequestTimeOutExpression' => '30')
@@ -218,6 +224,14 @@ RSpec.describe 'Runtime microflow compilers' do
                             node('Microflows$JavaActionCallAction', 102, ResultVariableName: 'ExportedAll',
                                                                          JavaAction: 'App.ExportAll',
                                                                          ParameterMappings: [2, export_all_mapping]),
+                            node('Microflows$JavaActionCallAction', 103, ResultVariableName: 'Unmapped',
+                                                                         JavaAction: 'App.Export',
+                                                                         ParameterMappings: [2]),
+                            node('Microflows$JavaActionCallAction', 104, ResultVariableName: 'Blank',
+                                                                         JavaAction: 'App.Export',
+                                                                         ParameterMappings: [2, export_mapping.merge(
+                                                                           'Value' => { 'Entity' => '' }
+                                                                         )]),
                             node('Microflows$JavaActionCallAction', 99, ResultVariableName: 'Lost',
                                                                         JavaAction: 'App.Loose',
                                                                         ParameterMappings: [2]),
@@ -230,7 +244,7 @@ RSpec.describe 'Runtime microflow compilers' do
     expect(types).to include('Rest' => 'App.Order', 'Loaded' => 'App.Order', 'Picked' => 'App.Order',
                              'Fetched' => '[App.Order]', 'Lines71' => '[App.Line]', 'Lines75' => 'Unknown',
                              'Exported' => 'App.Order', 'ExportedAll' => '[App.Order]')
-    expect(types).not_to have_key('Lost')
+    expect(types).not_to include('Lost', 'Unmapped', 'Blank')
     expect(compiler.compile(retrieve.call(81, 'Fetched')['RetrieveSource'])['Type']).to eq('Unknown')
     expect(compiler.compile(retrieve.call(82, 'Nobody')['RetrieveSource'])['Type']).to eq('App.Order')
   end
