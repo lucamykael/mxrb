@@ -246,7 +246,8 @@ module Mxrb
           return deserialize(value) unless entity && value.is_a?(Hash) && !(value['id'] && value['type'])
 
           authorize_entity!(entity, :create, context)
-          object = Runtime::Native::ObjectValue.new(entity:, id: SecureRandom.uuid, members: {})
+          # The Runtime instantiates the entity, so the microflow or a Java action can commit it.
+          object = bridge.interpreter.store.create(entity)
           value.each do |member, member_value|
             authorize_entity!(entity, :write, context, member:, record: object)
             object.members[member.to_s] = deserialize(member_value, context:)
