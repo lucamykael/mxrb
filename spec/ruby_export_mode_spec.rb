@@ -517,7 +517,9 @@ RSpec.describe 'Ruby application export mode' do
       expect(help_stdout).to include('--api-port for --server-port', '--no-progress option is optional')
 
       frontend = File.join(root, 'frontend')
-      FileUtils.mkdir_p(File.join(frontend, 'node_modules'))
+      Mxrb::RubyApp::FrontendPackage::DEPENDENCIES.each_key do |package|
+        FileUtils.mkdir_p(File.join(frontend, 'node_modules', package))
+      end
       supervisor = Mxrb::RubyApp::Supervisor.new(
         root, api_port: 9393, frontend_port: 5393
       )
