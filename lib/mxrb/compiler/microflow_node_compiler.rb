@@ -308,7 +308,7 @@ module Mxrb
                      when 'Microflows$NanoflowCallAction'
                        [node['OutputVariableName'], @flow_returns[node.dig('NanoflowCall', 'Nanoflow').to_s]]
                      when 'Microflows$JavaActionCallAction'
-                       [node['ResultVariableName'], @code_action_returns[node['JavaAction'].to_s]]
+                       [node['ResultVariableName'], code_action_result(node['JavaAction'], node['ParameterMappings'])]
                      when 'Microflows$JavaScriptActionCallAction'
                        [node['ResultVariableName'], @code_action_returns[node['JavaScriptAction'].to_s]]
                      when 'Microflows$ResultHandling'
@@ -382,21 +382,45 @@ module Mxrb
         end
       end
 
-      # The entity, or list of an entity, each Java or JavaScript action returns.
+      # The entity, or list of an entity, each Java or JavaScript action returns;
+      # a type parameter stands for the entity the call names for it.
       def code_action_returns(source)
         return {} unless source.respond_to?(:units_of)
 
         %w[JavaActions$JavaAction JavaScriptActions$JavaScriptAction].flat_map { source.units_of(_1) }.to_h do |unit|
           type = unit.document['JavaReturnType'] || unit.document['ActionReturnType'] || {}
-          ["#{unit.module_name}.#{unit.document['Name']}", code_action_object_type(type)]
+          ["#{unit.module_name}.#{unit.document['Name']}", code_action_object_type(type, unit)]
         end
       end
 
-      def code_action_object_type(type)
+      def code_action_object_type(type, unit)
         case type['$Type'].to_s.sub(/\AJavaActions\$/, 'CodeActions$')
         when 'CodeActions$ConcreteEntityType' then type['Entity'].to_s
-        when 'CodeActions$ListType' then "[#{code_action_object_type(type['Parameter'] || {})}]"
+        when 'CodeActions$ListType' then list_of(code_action_object_type(type['Parameter'] || {}, unit))
+        when 'CodeActions$ParameterizedEntityType' then type_parameter_holder(type, unit)
         end
+      end
+
+      def list_of(element) = element.is_a?(Hash) ? element.merge(list: true) : "[#{element}]"
+
+      # The qualified name of the parameter that names the entity of a type parameter.
+      def type_parameter_holder(type, unit)
+        pointer = IO::BsonCodec.extract_id(type['TypeParameterPointer'])
+        parameter = array(unit.document['Parameters']).find do |candidate|
+          IO::BsonCodec.extract_id(candidate.dig('ParameterType', 'TypeParameterPointer')) == pointer
+        end
+        { parameter: "#{unit.module_name}.#{unit.document['Name']}.#{parameter['Name']}" } if parameter
+      end
+
+      def code_action_result(action, mappings)
+        type = @code_action_returns[action.to_s]
+        return type unless type.is_a?(Hash)
+
+        mapping = array(mappings).find { _1['Parameter'] == type[:parameter] }
+        entity = mapping&.dig('Value', 'Entity').to_s
+        return if entity.empty?
+
+        type[:list] ? "[#{entity}]" : entity
       end
 
       AGGREGATE_TYPES = {
