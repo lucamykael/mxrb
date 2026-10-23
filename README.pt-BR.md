@@ -23,6 +23,9 @@ projetos Mendix (`.mpr`) sem MDL ou `mxcli`.
 - análise de planos PostgreSQL/SQL Server e workload cumulativo PostgreSQL;
 - testes funcionais de microflows localmente ou em Docker.
 - busca e instalação de módulos Ruby reutilizáveis com SHA-256 travado.
+- backend de IDE por JSON-RPC (`mxrb studio serve`): tarefas, arquivos do projeto
+  Ruby, edição tipada com desfazer, sincronização Ruby/Mendix com resolução de
+  conflitos e escritas coordenadas no MPR ([protocolo](docs/pt-BR/studio-backend.md)).
 
 A matriz preserva estruturalmente projetos Mendix 5.21–11.12. A validação
 nativa exata do Mendix 5 ainda depende de Windows/Studio Pro e é uma limitação

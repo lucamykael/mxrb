@@ -9,6 +9,7 @@
 - [Semantisches Refactoring](semantic-refactoring.md)
 - [Navigation und Design System](design-system.md)
 - [OQL, SQL-Ansicht und lokale Datenbank](oql-sql.md)
+- [Protokoll des Studio-Backends](studio-backend.md)
 - [Konventionen](conventions.md)
 - [Ruby-First-Roadmap](ruby-first-roadmap.md)
 - [Validierungsmatrix](validation-matrix.md)

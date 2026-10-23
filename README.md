@@ -37,6 +37,9 @@ remain optional external gates for compatibility and functional execution.
   with precise unsupported widget, action, layout and nanoflow findings;
 - clone, inspect and synchronize official Team Server Git repositories while
   keeping PAT values in user-managed files.
+- serve an IDE backend over JSON-RPC (`mxrb studio serve`): command tasks, Ruby
+  project files, typed model edits with undo, Ruby/Mendix synchronization with
+  conflict resolution and coordinated MPR writes ([protocol](docs/en-US/studio-backend.md)).
 
 The public validation matrix currently covers structural v1/v2 round trips
 from Mendix 5.21 through 11.12 and official MxBuild checks where the native
