@@ -1,0 +1,21 @@
+{
+  "name": "mxrb-studio-panels-narrow",
+  "authentication": false,
+  "viewport": { "width": 280, "height": 720 },
+  "pages": [{
+    "name": "studio-tasks-narrow",
+    "path": "/studio.html",
+    "steps": [
+      { "wait_for_selector": "[data-path='hello.rb']" },
+      { "measure_click": { "selector": "[data-path='hello.rb']", "max_ms": 1000, "min_requests": 1 } },
+      { "wait_for_text": "hello from Ruby" },
+      { "click_selector": "nav button:nth-child(2)" },
+      { "wait_for_selector": ".task-catalog details button" },
+      { "click_text": "page templates" },
+      { "click_selector": "button[type='submit']" },
+      { "wait_for_text": "Completed" },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [ ".studio-panels", ".task-catalog", ".task-detail" ]
+  }]
+}

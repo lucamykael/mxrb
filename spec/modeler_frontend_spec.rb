@@ -6,7 +6,7 @@ RSpec.describe 'compiled modeler frontend' do
   let(:root) { Mxrb::WebUi.root }
 
   it 'ships local production entrypoints and every referenced asset' do
-    %w[domain modeler uml].each do |entry|
+    %w[domain modeler uml studio].each do |entry|
       html = Mxrb::WebUi.page(entry)
       references = html.scan(%r{(?:src|href)="\./assets/([^"]+)"}).flatten
 
@@ -21,7 +21,8 @@ RSpec.describe 'compiled modeler frontend' do
     gem_files = Gem::Specification.load(File.expand_path('../mxrb.gemspec', __dir__)).files
 
     expect(gem_files).to include(
-      'lib/mxrb/web_ui/domain.html', 'lib/mxrb/web_ui/modeler.html', 'lib/mxrb/web_ui/uml.html'
+      'lib/mxrb/web_ui/domain.html', 'lib/mxrb/web_ui/modeler.html', 'lib/mxrb/web_ui/uml.html',
+      'lib/mxrb/web_ui/studio.html'
     )
     expect(gem_files).to include(a_string_starting_with('lib/mxrb/web_ui/assets/'))
     expect(Mxrb::WebUi.page('uml')).not_to include('cdn.jsdelivr.net', 'unpkg.com')

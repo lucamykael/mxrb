@@ -1,5 +1,21 @@
 # Protocolo do backend do Studio
 
+Os painéis iniciais Ruby App Explorer e MXRB Tasks estão em
+`frontend/modeler/src/studio`, com entrada `studio.html`. Compile usando
+`npm run build:studio` em `frontend/modeler`; Node é dependência somente de build.
+Os outros bundles do modeler são preservados por uma configuração Vite separada.
+
+O transporte é `chrome.webview`: o host desktop mantém o processo Ruby e fornece
+`host/context`/`host/contextChanged` com `root`, `source_model`, `ruby_root` opcional
+e variáveis CSS de tema `--studio-*`. Essas mensagens pertencem ao host, não ao
+serviço Ruby. O Explorer oferece descoberta/conversão de vínculo, leitura de pastas
+sob demanda, linhas virtualizadas e prévia explicitamente somente leitura. Tarefas
+usam o catálogo e os argumentos reais, saída e cancelamento. Registro no dock,
+criação/renomeação/worktrees na interface, tarefas salvas, editor Ruby nativo e
+resolução de conflitos continuam pendentes. Os cenários
+`spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
+com arquivos sintéticos e não certificam paridade completa da IDE.
+
 **Português** · [English](../en-US/studio-backend.md) · [Deutsch](../de-DE/studio-backend.md)
 
 `mxrb studio serve` executa o MXRB como backend de uma IDE: um processo de

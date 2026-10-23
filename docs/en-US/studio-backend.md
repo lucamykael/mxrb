@@ -163,4 +163,27 @@ generating the whole project from Ruby), Mendix to Ruby 5 s, `sync/status`
 `action` name (`catalog`, `file_read`, `model_apply`, ...) and reaches the same
 methods, for clients that start one process per request.
 
+## Studio Pro panels
+
+The additional `frontend/modeler/studio.html` entry provides the Ruby App Explorer
+and MXRB Tasks in React. Build it with `npm run build:studio` from
+`frontend/modeler`; the compiled entry and local assets ship in the gem. Node is
+only a build dependency. This separate build preserves the existing modeler bundles.
+
+Panels speak the protocol above through `chrome.webview.postMessage` and its
+`message` event. The desktop host owns the Ruby process, negotiates protocol 2 and
+maps page request IDs to its shared connection. It additionally handles
+`host/context` and `host/contextChanged`: project `root`, `source_model`, optional
+`ruby_root` and `theme` CSS variables named `--studio-*`. These two messages belong
+to the desktop adapter, not `Mxrb::Studio::Service`. Panels cannot shut down the
+shared process.
+
+The initial Explorer supports project link lookup/conversion, lazy folder reads,
+virtualized rows and an explicitly read-only file preview. Tasks use the real
+catalog's argument schemas, stream output and support cancellation. File creation,
+renaming/worktree controls, saved task configurations, the native Ruby editor,
+conflict resolution and full dock integration remain separate work. Browser
+scenarios under `spec/fixtures/frontend_browser/studio_panels*_flow.json` exercise
+the initial panels with synthetic files; they do not establish full IDE parity.
+
 [Back to the documentation index](README.md)
