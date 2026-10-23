@@ -34,20 +34,40 @@ module Mxrb
 
       # ── Fingerprints ─────────────────────────────────────────────────────
 
-      # Stable digest of a document's meaning: keys are sorted and the IDs the
-      # document defines are replaced by their depth-first position, so two
-      # generations of the same Ruby that differ only in fresh IDs or property
-      # order have the same fingerprint. External references are kept.
+      # Element lists whose order carries no meaning (the canvas position does).
+      UNORDERED = %w[Entities Associations CrossAssociations Annotations].freeze
+
+      # Stable digest of a document's meaning: keys are sorted, unordered
+      # lists are compared as sets, and the IDs the document defines are
+      # replaced by their structural position, so two generations of the same
+      # Ruby that differ only in fresh IDs, property order or the order of the
+      # entities have the same fingerprint. External references are kept.
       def fingerprint(document)
         tokens = {}
-        each_element(document) { |element| tokens[id_of(element)] ||= tokens.size }
+        assign_tokens(document, '', tokens)
         Digest::SHA256.hexdigest(JSON.generate(canonical(document, tokens)))
       end
 
-      def canonical(value, tokens = {}) # rubocop:disable Metrics/CyclomaticComplexity
+      def assign_tokens(value, path, tokens, unordered: false)
         case value
-        when Hash then value.keys.sort.map { [_1, canonical(value[_1], tokens)] }
-        when Array then [:list, value.map { canonical(_1, tokens) }]
+        when Hash
+          tokens[id_of(value)] ||= path if element?(value)
+          value.each { |key, child| assign_tokens(child, "#{path}/#{key}", tokens, unordered: UNORDERED.include?(key)) }
+        when Array
+          value.each_with_index do |item, position|
+            label = unordered && element?(item) && item['Name'].is_a?(String) ? item['Name'] : position
+            assign_tokens(item, "#{path}[#{label}]", tokens)
+          end
+        end
+      end
+
+      def canonical(value, tokens = {}, key = nil) # rubocop:disable Metrics/CyclomaticComplexity
+        case value
+        when Hash then value.keys.sort.map { [_1, canonical(value[_1], tokens, _1)] }
+        when Array
+          items = value.map { canonical(_1, tokens) }
+          items = items.sort_by { JSON.generate(_1) } if UNORDERED.include?(key)
+          [:list, items]
         when BSON::Binary then reference(value, tokens) || [:binary, value.type.to_s, value.data.unpack1('H*')]
         when String then reference(value, tokens) || value
         when Float then value.finite? ? value : value.to_s
@@ -235,7 +255,9 @@ module Mxrb
                           after: position.zero? ? nil : new_ids[position - 1], marker: marker(after) }
         end
         common = new_ids & old_ids
-        operations << { op: 'order', parent:, key:, order: common } unless (old_ids & new_ids) == common
+        return if UNORDERED.include?(key) || (old_ids & new_ids) == common
+
+        operations << { op: 'order', parent:, key:, order: common }
       end
 
       def marker(list) = list.first.is_a?(Integer) ? list.first : nil

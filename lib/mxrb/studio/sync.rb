@@ -60,11 +60,18 @@ module Mxrb
       def linked? = File.file?(link_path)
 
       # Records the current model and Ruby project as the synchronized base.
-      # The Ruby must generate; the Ruby files themselves are never modified.
+      # The Ruby must generate; only the MXRB-owned `.mxrb/` metadata of the
+      # Ruby project is refreshed from the model.
       def link!
         with_progress('Linking Ruby project') do
-          base = build_base(nil)
-          write_link(base)
+          Dir.mktmpdir('mxrb-link-') do |scratch|
+            export = File.join(scratch, 'export')
+            generated = File.join(scratch, 'generated')
+            export(model_path, export)
+            refresh_managed(export)
+            generate(generated)
+            write_link(build_base(base_ruby: export, generated: File.join(generated, File.basename(model_path))))
+          end
           clear_conflicts
           status
         end
@@ -103,15 +110,15 @@ module Mxrb
         with_progress('Synchronizing Ruby and Mendix') do |progress|
           link = read_link
           revision = model_revision
-          syntax = ruby_changes(link).flat_map { _1[:diagnostics] }
+          ruby = ruby_changes(link)
+          syntax = ruby.flat_map { _1[:diagnostics] }
           raise RubySourceError.new(syntax.first[:message], locations: syntax) if syntax.any?
 
-          progress.update(detail: 'generating the model from Ruby')
           Dir.mktmpdir('mxrb-sync-') do |scratch|
-            generated = generate(File.join(scratch, 'generated'))
-            plan = plan(link, generated)
-            progress.update(detail: 'merging Mendix changes into Ruby')
-            text = merge_text(link, plan, scratch)
+            progress.update(detail: 'reading the Ruby and Mendix changes')
+            inputs = prepare(link, scratch, ruby: ruby.any?, mendix: mendix_changes(link).any?)
+            plan = plan(link, inputs)
+            text = merge_text(inputs, plan)
             conflicts = plan[:conflicts] + text[:conflicts]
             unresolved = conflicts.reject { resolutions.key?(_1[:id]) }
             result = { dry_run:, ruby_units: plan[:ruby_units], mendix_units: plan[:mendix_units],
@@ -123,11 +130,14 @@ module Mxrb
 
             progress.update(detail: 'writing the model and Ruby files')
             entry = write(plan, text, resolutions, revision)
-            progress.update(detail: 'recording the synchronized base')
-            base = build_base(text[:files].any? || plan[:ruby_units].any? ? nil : link)
+            base = build_base(
+              base_ruby: plan[:ruby_units].empty? ? inputs[:theirs] : nil,
+              generated: text[:files].empty? ? inputs[:generated] || link['generated_model'] : nil,
+              previous: link
+            )
             write_link(base)
             clear_conflicts
-            result.merge(applied: true, state: 'synced', history: entry, diverged: base['diverged'])
+            result.merge(applied: true, state: 'synced', history: entry)
           end
         end
       end
@@ -140,25 +150,67 @@ module Mxrb
       def conflicts_path = File.join(state_directory, 'conflicts.json')
       def read_link = JSON.parse(File.read(link_path))
 
-      def build_base(previous) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      # The base is a copy of the model and of the Ruby files. The Ruby export
+      # of the model and the model generated from the Ruby are kept when they
+      # are already known and otherwise produced when a later run needs them.
+      def build_base(base_ruby:, generated:, previous: nil) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         FileUtils.mkdir_p(state_directory, mode: 0o700)
         directory = Dir.mktmpdir('base-', state_directory)
         model = Snapshot.new(model_path, destination_root: File.join(directory, 'model'), assets: false).create
         ruby = File.join(directory, 'ruby')
-        export(model.fetch(:model), ruby)
-        refresh_managed(ruby)
-        generated = if previous && File.file?(previous.fetch('generated_model'))
-                      copy_model(previous.fetch('generated_model'), File.join(directory, 'generated'))
-                    else
-                      generate(File.join(directory, 'generated'))
-                    end
+        copy_tree(ruby_root, ruby)
+        export = File.join(directory, 'export')
+        copy_tree(base_ruby, export) if base_ruby
+        generated_copy = (copy_model(generated, File.join(directory, 'generated')) if generated)
         { 'version' => VERSION, 'model' => model_path, 'ruby_root' => ruby_root, 'directory' => directory,
-          'base_model' => model.fetch(:model), 'base_ruby' => ruby, 'generated_model' => generated,
-          'ruby_files' => digests(ruby_root), 'diverged' => diverged(model.fetch(:model), generated, previous),
-          'synced_at' => Time.now.utc.iso8601 }
+          'base_model' => model.fetch(:model), 'base_files' => ruby, 'base_ruby' => (export if base_ruby),
+          'generated_model' => generated_copy, 'ruby_files' => digests(ruby_root),
+          'diverged' => generated_copy ? diverged(model.fetch(:model), generated_copy) : previous&.dig('diverged'),
+          'synced_at' => Time.now.utc.iso8601 }.compact
       rescue StandardError
         FileUtils.rm_rf(directory) if directory
         raise
+      end
+
+      # Produces what the plan and merge need: the generation of the base and
+      # of the current Ruby when Ruby changed, the export of the base and of
+      # the current model when the model changed, all in parallel.
+      def prepare(link, scratch, ruby:, mendix:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        inputs = { generated_base: link['generated_model'], base_ruby: link['base_ruby'] }
+        jobs = []
+        if ruby
+          inputs[:generated] = File.join(scratch, 'generated', File.basename(model_path))
+          jobs << -> { generate(File.dirname(inputs[:generated])) }
+          unless inputs[:generated_base]
+            inputs[:generated_base] = File.join(scratch, 'generated-base', File.basename(model_path))
+            jobs << -> { generate(File.dirname(inputs[:generated_base]), root: link.fetch('base_files')) }
+          end
+        end
+        if mendix
+          inputs[:theirs] = File.join(scratch, 'export')
+          jobs << -> { export(model_path, inputs[:theirs]) }
+          unless inputs[:base_ruby]
+            inputs[:base_ruby] = File.join(scratch, 'export-base')
+            jobs << -> { export(link.fetch('base_model'), inputs[:base_ruby]) }
+          end
+        end
+        parallel(*jobs)
+        inputs
+      end
+
+      def parallel(*jobs)
+        threads = jobs.map { |job| Thread.new { Thread.current.report_on_exception = false; job.call } } # rubocop:disable Style/Semicolon
+        threads.map(&:value)
+      ensure
+        threads&.each { _1.join if _1.alive? }
+      end
+
+      def write_link(base)
+        previous = read_link if linked?
+        temporary = "#{link_path}.#{SecureRandom.hex(6)}.tmp"
+        File.write(temporary, JSON.generate(base))
+        File.rename(temporary, link_path)
+        FileUtils.rm_rf(previous['directory']) if previous
       end
 
       # `.mxrb/` holds MXRB-owned metadata (the native baseline and assets
@@ -175,14 +227,15 @@ module Mxrb
           FileUtils.mkdir_p(File.dirname(target))
           FileUtils.cp(source, target)
         end
+        true
       end
 
-      def write_link(base)
-        previous = read_link if linked?
-        temporary = "#{link_path}.#{SecureRandom.hex(6)}.tmp"
-        File.write(temporary, JSON.generate(base))
-        File.rename(temporary, link_path)
-        FileUtils.rm_rf(previous['directory']) if previous && previous['directory'] != base['directory']
+      def copy_tree(source, destination)
+        each_file(source).each do |path|
+          FileUtils.mkdir_p(File.dirname(File.join(destination, path)))
+          FileUtils.cp(File.join(source, path), File.join(destination, path))
+        end
+        FileUtils.mkdir_p(destination)
       end
 
       def copy_model(source, destination)
@@ -192,9 +245,7 @@ module Mxrb
       # Units where the model generated from the synchronized Ruby means
       # something different from the model itself: the Ruby projection does
       # not (yet) capture them, so they are reported rather than hidden.
-      def diverged(model, generated, previous)
-        return previous.fetch('diverged', []) if previous
-
+      def diverged(model, generated)
         left = fingerprints(model)
         right = fingerprints(generated)
         (left.keys & right.keys).reject { left[_1] == right[_1] }.sort
@@ -202,11 +253,11 @@ module Mxrb
 
       # ── Ruby side ───────────────────────────────────────────────────────
 
-      def generate(directory)
+      def generate(directory, root: ruby_root)
         FileUtils.mkdir_p(directory)
         target = File.join(directory, File.basename(model_path))
-        entry = entrypoint
-        Isolated.run(@context, roots: [ruby_root]) do
+        entry = File.join(root, 'project.rb')
+        Isolated.run(@context, roots: [root]) do
           ENV['MXRB_OUTPUT_PATH'] = target
           Kernel.load(entry)
           raise RubySourceError, 'project.rb did not generate a model' unless File.file?(target)
@@ -315,15 +366,15 @@ module Mxrb
 
       # ── Plan ────────────────────────────────────────────────────────────
 
-      def plan(link, generated) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def plan(link, inputs) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         base = units_of(link.fetch('base_model'))
         working = units_of(model_path)
-        before = units_of(link.fetch('generated_model'))
-        after = units_of(generated)
         mendix = changed_units(base, working).to_h { [_1[0], _1[1]] }
+        before = inputs[:generated] ? units_of(inputs.fetch(:generated_base)) : {}
+        after = inputs[:generated] ? units_of(inputs[:generated]) : {}
         ruby = changed_units(before, after)
         plan = { units: [], conflicts: [], mendix_units: mendix.keys,
-                 ruby_units: ruby.map(&:first), working:, generated: after }
+                 ruby_units: ruby.map(&:first) }
         ruby.each do |id, kind, _document|
           case kind
           when 'added' then plan[:units] << { unit_id: id, action: 'insert', state: after.fetch(id) }
@@ -402,11 +453,11 @@ module Mxrb
 
       # ── Text merge ──────────────────────────────────────────────────────
 
-      def merge_text(link, plan, scratch) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def merge_text(inputs, plan) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         return { files: [], conflicts: [] } if plan[:mendix_units].empty?
 
-        theirs = export(model_path, File.join(scratch, 'export'))
-        base = link.fetch('base_ruby')
+        theirs = inputs.fetch(:theirs)
+        base = inputs.fetch(:base_ruby)
         paths = (each_file(base).to_a | each_file(theirs).to_a | each_file(ruby_root).to_a).sort
         files = []
         conflicts = []
@@ -426,9 +477,11 @@ module Mxrb
         original = read_optional(base)
         incoming = read_optional(theirs)
         return if incoming == original || mine == incoming
-        return { path:, action: incoming.nil? ? 'delete' : 'write', text: incoming, conflicts: 0 } if mine == original
+        if mine == original || path.match?(MANAGED)
+          return { path:, action: incoming.nil? ? 'delete' : 'write', text: incoming, conflicts: 0 }
+        end
 
-        if path.match?(MANAGED) || [mine, original, incoming].any? { _1.nil? || !text?(_1) }
+        if [mine, original, incoming].any? { _1.nil? || !text?(_1) }
           return { path:, action: 'write', text: incoming, ours: mine, conflicts: 1, binary: true }
         end
 
