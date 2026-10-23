@@ -71,32 +71,41 @@ module Mxrb
         @module_roles << { name: name.to_s, id: id.to_s, description: description.to_s }
       end
 
-      def microflow(name, kind: :use_case, public: false, unit_id: nil, &block)
+      def microflow(name, kind: :use_case, public: false, unit_id: nil, plan: nil, &block)
         fb = FlowBuilder.new(
           name, runtime: :server, kind: kind, public: public, unit_id:,
                 metadata: flow_metadata_for(name, 'Microflows$Microflow')
         )
-        fb.instance_eval(&block) if block
+        compose_flow(fb, plan, block)
         @microflows << fb.to_h
       end
 
-      def nanoflow(name, public: false, unit_id: nil, &block)
+      def nanoflow(name, public: false, unit_id: nil, plan: nil, &block)
         fb = FlowBuilder.new(
           name, runtime: :client, kind: :client_action, public: public, unit_id:,
                 metadata: flow_metadata_for(name, 'Microflows$Nanoflow')
         )
-        fb.instance_eval(&block) if block
+        compose_flow(fb, plan, block)
         @nanoflows << fb.to_h
       end
 
-      def rule(name, unit_id: nil, export_level: 'Hidden', &block)
+      def rule(name, unit_id: nil, export_level: 'Hidden', plan: nil, &block)
         fb = FlowBuilder.new(
           name, runtime: :server, kind: :rule, public: false, unit_id:,
                 metadata: flow_metadata_for(name, 'Microflows$Rule')
         )
-        fb.instance_eval(&block) if block
+        compose_flow(fb, plan, block)
         @rules << fb.to_h.merge(export_level: export_level.to_s)
       end
+
+      def compose_flow(builder, plan, block)
+        raise ArgumentError, 'use a flow plan or a definition block, not both' if plan && block
+
+        return unless plan || block
+
+        plan ? FlowProgram.apply(plan, builder) : builder.instance_eval(&block)
+      end
+      private :compose_flow
 
       def query(name, public: false, unit_id: nil, &block)
         microflow(name, kind: :query, public: public, unit_id:, &block)

@@ -10,6 +10,7 @@
 - [Navigation and design system](design-system.md)
 - [OQL, SQL views, and the local database](oql-sql.md)
 - [Studio backend protocol](studio-backend.md)
+- [Method-oriented flow sources](method-oriented-flows.md)
 - [Conventions](conventions.md)
 - [Ruby-first roadmap](ruby-first-roadmap.md)
 - [Validation matrix](validation-matrix.md)

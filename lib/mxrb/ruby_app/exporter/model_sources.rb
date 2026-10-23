@@ -340,14 +340,16 @@ module Mxrb
         end
 
         def service_source(namespace, class_name, qualified, _id, native_source: nil,
-                           native_kind: :microflow, export_level: 'Hidden')
+                           native_kind: :microflow, export_level: 'Hidden', activity_captions: {})
           rule_options = native_kind == :rule ? ", export_level: #{export_level.inspect}" : ''
           native = if native_source
-                     "\n    flow :#{native_kind}#{rule_options} do\n" \
-                       "#{indent(native_source, 6)}\n    end\n"
+                     emitter = Mxrb::Exporter::MethodFlowSource.new(native_source, captions: activity_captions)
+                     methods = emitter.source(indent: 4)
+                     "\n#{methods}\n\n    flow :#{native_kind}#{rule_options}, main: :main_line\n"
                    else
                      ''
                    end
+          fallback = native_source ? '' : "\n    def call(**arguments)\n      execute_flow(arguments)\n    end\n"
           <<~RUBY
             # frozen_string_literal: true
 
@@ -356,9 +358,7 @@ module Mxrb
                 mendix_name #{qualified.inspect}
             #{native}
 
-                def call(**arguments)
-                  execute_flow(arguments)
-                end
+            #{fallback}
               end
             end
           RUBY
