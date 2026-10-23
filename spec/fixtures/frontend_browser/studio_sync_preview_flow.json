@@ -1,0 +1,134 @@
+{
+  "name": "studio-sync-preview-and-native-explorer",
+  "authentication": false,
+  "viewport": {
+    "width": 960,
+    "height": 720
+  },
+  "pages": [
+    {
+      "name": "sync-preview",
+      "path": "/studio.html?fixture=sync",
+      "steps": [
+        {
+          "wait_for_selector": "[data-path='flow.rb']"
+        },
+        {
+          "click_selector": "[data-path='flow.rb']"
+        },
+        {
+          "wait_for_selector": "[data-path='flow.rb'][aria-selected='true']"
+        },
+        {
+          "wait_for_text": "Editor opens: 0"
+        },
+        {
+          "wait_for_absence": ".file-preview"
+        },
+        {
+          "click_selector": "#enter-file"
+        },
+        {
+          "wait_for_text": "Editor opens: 1"
+        },
+        {
+          "click_selector": "#double-file"
+        },
+        {
+          "wait_for_text": "Editor opens: 2"
+        },
+        {
+          "click_selector": "nav button:nth-child(2)"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "wait_for_text": "1 changed document in the generated model."
+        },
+        {
+          "click_selector": ".sync-unit > summary"
+        },
+        {
+          "click_selector": ".sync-unit details > summary"
+        },
+        {
+          "wait_for_text": "new caption"
+        },
+        {
+          "wait_for_text": "No changes are applied."
+        },
+        {
+          "click_selector": "#mode-stale"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "wait_for_text": "Files changed during preview."
+        },
+        {
+          "wait_for_absence": ".sync-unit"
+        },
+        {
+          "click_selector": "#mode-unavailable"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "wait_for_text": "Preview is unavailable."
+        },
+        {
+          "click_selector": "#mode-error"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "wait_for_text": "Compilation failed"
+        },
+        {
+          "click_selector": "#mode-pending"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "click_text": "Stop preview"
+        },
+        {
+          "wait_for_text": "Preview stopped."
+        },
+        {
+          "click_selector": "#late-reply"
+        },
+        {
+          "wait_for_absence": ".sync-unit"
+        },
+        {
+          "click_text": "Preview Ruby changes"
+        },
+        {
+          "click_selector": "#change-project"
+        },
+        {
+          "wait_for_text": "Preview request cancelled"
+        },
+        {
+          "click_selector": "#late-reply"
+        },
+        {
+          "wait_for_absence": ".sync-unit"
+        },
+        {
+          "wait_for_absence": "[role='alert']"
+        }
+      ],
+      "selectors": [
+        ".tasks-panel",
+        ".sync-preview"
+      ]
+    }
+  ]
+}

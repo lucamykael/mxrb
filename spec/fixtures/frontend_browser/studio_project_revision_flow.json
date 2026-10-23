@@ -10,7 +10,7 @@
       { "click_selector": "#advance-project-revision" },
       { "wait_for_selector": "[data-path='first.rb']" },
       { "click_selector": "[data-path='first.rb']" },
-      { "wait_for_text": "# preview first.rb" },
+      { "wait_for_selector": "[data-path='first.rb'][aria-selected='true']" },
       { "click_selector": "nav button:nth-child(2)" },
       { "click_text": "Revision task" },
       { "click_selector": "button[type='submit']" },
@@ -29,8 +29,8 @@
       { "wait_for_absence": "[data-path='first.rb']" },
       { "wait_for_absence": ".file-preview" },
       { "click_selector": "[data-path='second.rb']" },
-      { "wait_for_text": "# preview second.rb" }
+      { "wait_for_selector": "[data-path='second.rb'][aria-selected='true']" }
     ],
-    "selectors": [".explorer-panel", ".file-tree", ".file-preview"]
+    "selectors": [".explorer-panel", ".file-tree"]
   }]
 }

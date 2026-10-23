@@ -1,20 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioRpc } from './rpc';
-import type { Entry, FileContent, ProjectStatus, StudioContext } from './types';
+import type { Entry, ProjectStatus, StudioContext } from './types';
 
 export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioContext }) {
   const [root, setRoot] = useState(context.ruby_root);
   const [state, setState] = useState(context.ruby_root ? 'ready' : 'loading');
   const [entries, setEntries] = useState<Record<string, Entry[]>>({});
   const [expanded, setExpanded] = useState(new Set(['.']));
-  const [selected, setSelected] = useState<FileContent>();
+  const [selected, setSelected] = useState<string>();
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
   const [scroll, setScroll] = useState(0);
   const [opening, setOpening] = useState('');
   const epoch = useRef(0);
   const operations = useRef(new AbortController());
-  const selection = useRef(0);
+  const openingRequest = useRef(false);
   const tree = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,6 +23,8 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     operations.current = controller;
     setRoot(undefined);
     setSelected(undefined); setEntries({}); setExpanded(new Set(['.'])); setError(''); setOpening('');
+    setScroll(0); openingRequest.current = false;
+    tree.current?.scrollTo({ top: 0 });
     if (context.ruby_root) { setRoot(context.ruby_root); setState('ready'); }
     else if (context.source_model) {
       setState('loading');
@@ -30,14 +32,14 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
         .then(status => { if (current === epoch.current) { setRoot(status.root ?? undefined); setState(status.state); } })
         .catch(reason => { if (!controller.signal.aborted) { setError(String(reason)); setState('error'); } });
     } else { setRoot(undefined); setState('no-project'); }
-    return () => { ++epoch.current; ++selection.current; controller.abort(); };
+    return () => { ++epoch.current; controller.abort(); };
   }, [rpc, context.source_model, context.ruby_root, context.project_revision]);
 
   useEffect(() => {
     if (!root) return;
     const controller = new AbortController();
     rpc.call<Entry[]>('files/list', { root }, { signal: controller.signal })
-      .then(items => setEntries({ '.': items }))
+      .then(items => { if (!controller.signal.aborted) setEntries({ '.': items }); })
       .catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => controller.abort();
   }, [rpc, root, context.source_model, context.project_revision]);
@@ -56,6 +58,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
 
   async function activate(entry: Entry) {
     const current = epoch.current;
+    setSelected(entry.path);
     if (entry.directory) {
       setExpanded(previous => { const next = new Set(previous); if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path); return next; });
       if (!entries[entry.path]) {
@@ -64,25 +67,23 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
           if (current === epoch.current) setEntries(previous => ({ ...previous, [entry.path]: items }));
         } catch (reason) { if (current === epoch.current) setError(String(reason)); }
       }
-    } else {
-      const token = ++selection.current;
-      try {
-        const content = await rpc.call<FileContent>('files/read', { root, path: entry.path }, { signal: operations.current.signal });
-        if (current === epoch.current && token === selection.current) { setSelected(content); setError(''); }
-      } catch (reason) { if (current === epoch.current && token === selection.current) setError(String(reason)); }
     }
   }
 
   async function openEditor(path: string) {
-    if (!context.capabilities?.native_ruby_editor || !context.source_model || opening) return;
+    if (openingRequest.current) return;
+    if (!context.capabilities?.native_ruby_editor || !context.source_model) {
+      setError('Open this file in Studio Pro with the Ruby editor enabled.'); return;
+    }
     const current = epoch.current;
+    openingRequest.current = true;
     setOpening(path); setError('');
     try {
-      await rpc.call('host/openFile', { source_model: context.source_model, path }, { signal: operations.current.signal });
+      await rpc.call('host/openFile', { source_model: context.source_model, root, path }, { signal: operations.current.signal });
     } catch (reason) {
       if (current === epoch.current && !operations.current.signal.aborted) setError(String(reason));
     } finally {
-      if (current === epoch.current) setOpening('');
+      if (current === epoch.current) { openingRequest.current = false; setOpening(''); }
     }
   }
 
@@ -110,15 +111,19 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
         <div style={{ height: flat.length * 24, position: 'relative' }}>
           {visible.map(({ entry, depth }, offset) => <button key={entry.path} role="treeitem"
             aria-level={depth + 1} aria-expanded={entry.directory ? expanded.has(entry.path) : undefined}
-            aria-selected={selected?.path === entry.path} data-path={entry.path}
+            aria-selected={selected === entry.path} data-path={entry.path}
             className="tree-row" style={{ top: (start + offset) * 24, paddingLeft: 6 + depth * 16 }}
             title={entry.path} onClick={() => void activate(entry)}
             onDoubleClick={() => { if (!entry.directory) void openEditor(entry.path); }}
             onKeyDown={event => {
+              if (event.key === 'Enter' && !entry.directory) {
+                event.preventDefault(); setSelected(entry.path); void openEditor(entry.path); return;
+              }
               const index = start + offset;
               const next = event.key === 'ArrowDown' ? index + 1 : event.key === 'ArrowUp' ? index - 1 : -1;
               if (next >= 0 && next < flat.length) {
                 event.preventDefault(); tree.current?.scrollTo({ top: Math.max(0, (next - 3) * 24) });
+                setSelected(flat[next].entry.path);
                 requestAnimationFrame(() => tree.current?.querySelector<HTMLButtonElement>(`[data-path="${CSS.escape(flat[next].entry.path)}"]`)?.focus());
               }
               if ((event.key === 'ArrowRight' && entry.directory && !expanded.has(entry.path)) ||
@@ -130,11 +135,6 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
       </div>
       {flat.length === 0 && <p className="hint">No files in this Ruby project.</p>}
     </>}
-    {selected && <section className="file-preview" aria-label="Ruby preview">
-      <div className="tool-heading" title={selected.path}>{selected.path} <span>Ruby · read-only preview</span></div>
-      {context.capabilities?.native_ruby_editor && <button className="open-editor" disabled={!!opening}
-        onClick={() => void openEditor(selected.path)}>{opening ? 'Opening editor…' : 'Open in editor'}</button>}
-      <pre tabIndex={0}>{selected.text}</pre>
-    </section>}
+    {opening && <p role="status">Opening {opening}…</p>}
   </section>;
 }

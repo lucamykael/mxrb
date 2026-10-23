@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { StudioRpc } from './rpc';
 import type { Command, StudioContext } from './types';
 import { taskWorkspace } from './taskWorkspace';
+import { SyncPreview } from './SyncPreview';
 
 export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext }) {
   const [catalog, setCatalog] = useState<Command[]>([]);
@@ -78,6 +79,7 @@ export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext
         {catalog.length > 0 && groups.size === 0 && <p>No matching tasks.</p>}
       </aside>
       <div className="task-detail">
+        <SyncPreview rpc={rpc} context={context} />
         {command ? <form onSubmit={event => { event.preventDefault(); void run(); }}>
           <h2>{command.name}</h2><p>{command.summary}</p>
           {command.fields.map(field => <label key={field.key} className="command-field">

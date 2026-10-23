@@ -8,8 +8,8 @@
     "steps": [
       { "wait_for_selector": "[data-path='hello.rb']" },
       { "click_selector": "[data-path='hello.rb']" },
-      { "wait_for_text": "hello from Ruby" },
-      { "wait_for_text": "Ruby · read-only preview" },
+      { "wait_for_selector": "[data-path='hello.rb'][aria-selected='true']" },
+      { "wait_for_absence": ".file-preview" },
       { "click_selector": "nav button:nth-child(2)" },
       { "wait_for_selector": ".task-catalog details button" },
       { "click_text": "page templates" },
@@ -17,9 +17,9 @@
       { "wait_for_text": "Completed" },
       { "wait_for_selector": ".task-output" },
       { "click_selector": "nav button:first-child" },
-      { "wait_for_text": "hello from Ruby" },
+      { "wait_for_selector": "[data-path='hello.rb'][aria-selected='true']" },
       { "wait_for_absence": "[role='alert']" }
     ],
-    "selectors": [ ".studio-panels", ".file-tree", ".file-preview" ]
+    "selectors": [ ".studio-panels", ".file-tree" ]
   }]
 }

@@ -25,7 +25,7 @@
           const name = request.params.root === '/ruby/first' ? 'first.rb' : 'second.rb';
           return reply(request, [{ name, path: name, directory: false, size: 30 }]);
         }
-        case 'files/read': return reply(request, { path: request.params.path, text: `# preview ${request.params.path}`, revision: 'one' });
+        case 'files/read': throw new Error('Selecting a file must not read a preview');
         case 'tasks/run':
           if (revision === 1) {
             staleTask = request;
