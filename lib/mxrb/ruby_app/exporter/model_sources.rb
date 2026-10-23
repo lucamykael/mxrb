@@ -344,7 +344,7 @@ module Mxrb
           rule_options = native_kind == :rule ? ", export_level: #{export_level.inspect}" : ''
           native = if native_source
                      emitter = Mxrb::Exporter::MethodFlowSource.new(native_source, captions: activity_captions)
-                     methods = emitter.source(indent: 4)
+                     methods = service_method_source(emitter.source(indent: 4))
                      "\n#{methods}\n\n    flow :#{native_kind}#{rule_options}, main: :main_line\n"
                    else
                      ''
@@ -362,6 +362,14 @@ module Mxrb
               end
             end
           RUBY
+        end
+
+        def service_method_source(source)
+          entry = "    def call(**arguments)\n      execute_flow(arguments)\n    end"
+          marker = "\n    private\n"
+          return source.sub(marker, "\n\n#{entry}\n#{marker}") if source.include?(marker)
+
+          "#{source}\n\n#{entry}"
         end
       end
       # rubocop:enable Metrics

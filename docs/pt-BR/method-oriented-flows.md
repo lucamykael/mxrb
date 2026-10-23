@@ -33,7 +33,7 @@ class ProcessOrder < Mxrb::RubyApp::Service
 
   def main_line
     initialize_total
-    decide '$Approved', branches: { true => :approve_order, false => :reject_order }
+    decide '$Approved', if_true: :approve_order, if_false: :reject_order
     commit_order
     return_value '$Result'
   end
@@ -81,7 +81,7 @@ builder. Ramos vazios e saídas curtas podem usar lambdas, sem métodos artifici
 ```ruby
 def main_line
   initialize_total
-  decide '$Skip', branches: { true => -> { return_value '-1' }, false => -> {} }
+  decide '$Skip', if_true: -> { return_value '-1' }, if_false: -> {}
   loop_over :Orders, as: :Order, &step(:process_order)
   call_microflow 'Sales.Summarize', as: :Summary, pass: { 'Sales.Summarize.Total' => '$Total' }
   rescue_all rollback: true, &step(:handle_failure)
@@ -90,7 +90,7 @@ end
 
 def process_order
   validate_order
-  decide '$Ignore', branches: { true => -> { continue_loop }, false => :add_order }
+  decide '$Ignore', if_true: -> { continue_loop }, if_false: :add_order
 end
 
 def handle_failure
@@ -103,6 +103,10 @@ e blocos pequenos. `decide` também aceita `Proc` nas suas ramificações. Um
 `break_loop` continua permitido somente dentro de um loop, inclusive quando está
 em um método separado. Decisões por regra e por herança preservam seus argumentos,
 tipos e ramo padrão em métodos auxiliares próprios.
+
+Para vários valores, use `decide '$State', cases: [['ready', :process], ['new', :prepare]]`.
+`branches:` também aceita um mapa explícito para autoria manual; a exportação usa
+`if_true:`/`if_false:` e `cases:` para manter a fonte pública sem hashes de estrutura.
 
 Os métodos **compõem a definição tipada** quando o projeto Ruby é carregado.
 `'$Approved'` continua sendo uma expressão Mendix; não é uma condição `if` de Ruby.

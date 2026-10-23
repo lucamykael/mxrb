@@ -1522,10 +1522,10 @@ RSpec.describe Mxrb do
       src = File.read(File.join(exported, 'modules', 'Sales', 'application', 'use_cases', 'check_order.rb'))
 
       expect(src).to include('retrieve_objects')
-      expect(src).to include('decision "$Order/Total > 100"')
-      expect(src).to include('on(true)')
+      expect(src).to include('decide "$Order/Total > 100"')
+      expect(src).to include('if_true:')
       expect(src).to include('call_microflow')
-      expect(src).to include('on(false)')
+      expect(src).to include('if_false:')
       expect(src).to include('commit :Order')
     end
 
@@ -1578,7 +1578,7 @@ RSpec.describe Mxrb do
       src = File.read(File.join(exported, 'modules', 'Sales', 'application', 'use_cases', 'safe_create.rb'))
 
       expect(src).to include('commit :Order')
-      expect(src).to include('rescue_all do')
+      expect(src).to include('rescue_all(&step(:handle_error))')
       expect(src).to include('call_microflow')
     end
 

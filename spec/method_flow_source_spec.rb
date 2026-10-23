@@ -37,7 +37,7 @@ RSpec.describe 'method-oriented flow sources' do
     generated = builder
     plan.build(generated)
     expect(generated.to_h).to eq(original.to_h)
-    expect(methods).to include('def main_line', 'decide', 'branches: { true => :change_variable_result')
+    expect(methods).to include('def main_line', 'decide', 'if_true: :change_variable_result')
     expect(methods).not_to include(' do')
     main_line = methods.split("\nprivate").first
     expect(main_line).not_to include('parameter')
@@ -138,6 +138,27 @@ RSpec.describe 'method-oriented flow sources' do
     expect(compose(source, captions:).last).to eq(methods)
   end
 
+  it 'uses typed case options without leaking hash literals into generated public source' do
+    source = <<~RUBY
+      decision '$State' do
+        on 'ready' do
+          call_microflow 'App.Process'
+        end
+        on 'new' do
+          return_value '-1'
+        end
+      end
+    RUBY
+    plan, methods = compose(source)
+    generated = builder
+    plan.build(generated)
+    original = builder
+    original.instance_eval(source)
+    expect(generated.to_h).to eq(original.to_h)
+    expect(methods).to include('cases: [[', '-> { return_value')
+    expect(methods).not_to include('=>', 'branches: {')
+  end
+
   it 'keeps legacy flow blocks and the public service call API working' do
     legacy = Class.new(Mxrb::RubyApp::Service)
     legacy.mendix_name 'Compatibility.Flow'
@@ -195,6 +216,7 @@ RSpec.describe 'method-oriented flow sources' do
         expect(sources).to include('def main_line', 'decide')
         expect(sources).to include('def initialize_total')
         if mode == :ruby
+          expect(Mxrb::PublicSourceAudit.new(exported)).to be_clean
           application = Mxrb::RubyApp::Application.new(exported)
           expect(application.call_service('App.Calculate', { 'Flag' => true, 'Early' => false })).to eq(110)
           application.close

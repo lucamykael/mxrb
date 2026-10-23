@@ -34,12 +34,11 @@ module Mxrb
           proc { |builder| program.__send__(:within, builder) { program.instance_exec(&callable) } }
         end
 
-        def decide(condition, branches:)
-          raise ArgumentError, 'decision branches must be a mapping' unless branches.is_a?(Hash)
-
+        def decide(condition, branches: nil, cases: nil, if_true: nil, if_false: nil)
+          bodies = decision_branches(branches, cases, if_true, if_false)
           program = self
           @flow_builder.decision(condition) do
-            branches.each { |value, body| on(value, &program.step(body)) }
+            bodies.each { |value, body| on(value, &program.step(body)) }
           end
         end
 
@@ -59,6 +58,22 @@ module Mxrb
           return name if name.is_a?(Proc) || name.is_a?(Method)
 
           method(name)
+        end
+
+        def decision_branches(branches, cases, if_true, if_false)
+          if [!branches.nil?, !cases.nil?, !if_true.nil? || !if_false.nil?].count(true) > 1
+            raise ArgumentError, 'use one decision branch notation'
+          end
+          return branch_mapping(branches) unless branches.nil?
+          return Array(cases).to_h unless cases.nil?
+
+          { true => if_true, false => if_false }.compact
+        end
+
+        def branch_mapping(branches)
+          raise ArgumentError, 'decision branches must be a mapping' unless branches.is_a?(Hash)
+
+          branches
         end
 
         def install_delegates

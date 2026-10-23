@@ -84,13 +84,24 @@ module Mxrb
       def decision(node)
         branches = Array(node.block.body&.body).map { decision_branch(_1) }
         condition = node.arguments.arguments.first.slice
-        "decide #{condition}, branches: { #{branches.join(', ')} }"
+        "decide #{condition}, #{decision_options(branches)}"
       end
 
       def decision_branch(branch)
         value = branch.arguments.arguments.first.slice
         nodes = Array(branch.block.body&.body)
-        "#{value} => #{branch_reference("when_#{slug(value)}", nodes)}"
+        [value, branch_reference("when_#{slug(value)}", nodes)]
+      end
+
+      def decision_options(branches)
+        return 'cases: []' if branches.empty?
+
+        if branches.all? { |value, _body| %w[true false].include?(value) }
+          branches.map { |value, body| "if_#{value}: #{body}" }.join(', ')
+        else
+          entries = branches.map { |value, body| "[#{value}, #{body}]" }
+          "cases: [#{entries.join(', ')}]"
+        end
       end
 
       def branch_reference(label, nodes)

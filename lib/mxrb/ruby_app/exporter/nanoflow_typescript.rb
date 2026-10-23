@@ -28,7 +28,7 @@ module Mxrb
               service_source(
                 namespace, flow_ruby_constant(flow, duplicate_name:), qualified, flow.id,
                 native_source:, native_kind: :nanoflow,
-                activity_captions: native_flow_captions(flow)
+                activity_captions: native_source ? native_flow_captions(flow) : {}
               )
             )
           end
