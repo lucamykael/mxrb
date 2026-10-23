@@ -151,7 +151,8 @@ RSpec.describe 'Studio native document Ruby source resolution' do
         expect(lookup(unit)).to include(state: 'ready', path:)
       end
       mod = project.modules.find { _1.name == 'Shop' }
-      expect(lookup(project.mpr.unit(mod.id))).to include(state: 'ready', path: 'modules/Shop/module.rb')
+      expect(lookup(project.mpr.unit(mod.id), qualified_name: 'Shop'))
+        .to include(state: 'ready', path: 'modules/Shop/module.rb', qualified_name: 'Shop')
     end
     expect(lookup(document('Security$ModuleSecurity')))
       .to include(state: 'ready', path: 'modules/Shop/security/security.rb')

@@ -119,9 +119,15 @@ module Mxrb
         mod = module_name(mpr, unit)
         name = document['Name'].to_s
         { unit_id: unit.fetch('UnitID'), type: document['$Type'], name:, module: mod,
-          qualified_name: mod && !name.empty? ? "#{mod}.#{name}" : name }
+          qualified_name: qualified_document_name(document['$Type'], mod, name) }
       ensure
         mpr&.close
+      end
+
+      def qualified_document_name(type, mod, name)
+        return name if %w[Projects$Module Projects$ModuleImpl].include?(type)
+
+        mod && !name.empty? ? "#{mod}.#{name}" : name
       end
 
       def module_name(mpr, unit)
