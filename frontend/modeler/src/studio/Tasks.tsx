@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioRpc } from './rpc';
 import type { Command, StudioContext } from './types';
+import { taskWorkspace } from './taskWorkspace';
 
 export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext }) {
   const [catalog, setCatalog] = useState<Command[]>([]);
@@ -41,13 +42,13 @@ export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext
     if (!command || !directory || active.current) return;
     const task = { id: crypto.randomUUID(), cancel: new AbortController() };
     active.current = task;
-    setRunning(true); setOutput(''); setError(''); setStatus('Running');
-    const substitutions: Record<string, string> = { '{root}': directory };
-    if (context.source_model) substitutions['{mpr}'] = context.source_model;
-    if (context.ruby_root) substitutions['{ruby}'] = context.ruby_root;
+    setRunning(true); setOutput(''); setError(''); setStatus('Preparing');
     try {
+      const workspace = await taskWorkspace(rpc, context, task.cancel.signal, command.context === 'ruby');
+      if (!alive.current || active.current !== task) return;
+      setStatus('Running');
       const result = await rpc.call<{ success: boolean; exit_code: number | null; cancelled: boolean }>('tasks/run', {
-        command_id: command.name, values, directory, task_id: task.id, substitutions
+        command_id: command.name, values, ...workspace, task_id: task.id
       }, { signal: task.cancel.signal });
       if (alive.current && active.current === task) setStatus(result.cancelled ? 'Stopped' : result.success ? 'Completed' : `Failed (exit ${result.exit_code ?? 'signal'})`);
     } catch (reason) {

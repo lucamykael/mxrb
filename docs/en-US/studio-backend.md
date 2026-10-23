@@ -178,6 +178,20 @@ maps page request IDs to its shared connection. It additionally handles
 to the desktop adapter, not `Mxrb::Studio::Service`. Panels cannot shut down the
 shared process.
 
+Before each task, the panel resolves `project/status` if the host did not supply
+`ruby_root`. A conversion or link made in another dock therefore supplies the
+working directory and `{ruby}` substitution immediately. `{root}` follows that
+working directory; `{mpr}` continues to identify the native model. Without a
+linked representation, native/global commands can use the source directory, but
+Ruby-context commands ask for conversion or linking first. Project changes and
+Stop cancel pending resolution as well as task execution.
+
+Run `npm run test:studio` in `frontend/modeler` for the workspace/cancellation
+regressions. `studio_tasks_linked_flow.json` adds a Tasks-only browser scenario:
+its host supplies `panel: "tasks"`, `root` and `source_model` (no `ruby_root`) for
+a synthetic model whose linked Ruby project contains module `Shop`. It runs the
+real `project inspect` command and checks the converted project output.
+
 The initial Explorer supports project link lookup/conversion, lazy folder reads,
 virtualized rows and an explicitly read-only file preview. Tasks use the real
 catalog's argument schemas, stream output and support cancellation. File creation,

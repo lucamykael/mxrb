@@ -62,6 +62,17 @@ Kindprozess aus und sendet die Benachrichtigungen `tasks/started` und
 `tasks/output`. Das Abbrechen der Anfrage stoppt den Task (`cancelled: true`
 im Ergebnis).
 
+Das Tasks-Panel fragt vor jedem Start `project/status` ab, wenn der Host kein
+`ruby_root` liefert. Eine Konvertierung oder Verknüpfung in einem anderen Dock
+bestimmt damit das Arbeitsverzeichnis und `{ruby}`; `{root}` folgt diesem
+Verzeichnis, `{mpr}` bezeichnet weiterhin das native Modell. Ohne Verknüpfung
+können native/globale Befehle das Quellverzeichnis nutzen; Ruby-Befehle verlangen
+zuerst eine Konvertierung oder Verknüpfung. Projektwechsel und Stop brechen auch
+die laufende Abfrage ab. `npm run test:studio` in `frontend/modeler` prüft diese
+Auflösung. Das Browserszenario `studio_tasks_linked_flow.json` führt
+`project inspect` mit einem synthetischen verknüpften Projekt mit Modul `Shop`
+aus; der Host liefert dabei den nativen Kontext ohne `ruby_root`.
+
 `ruby/syntax` parst mit Prism und liefert Diagnosen mit Zeile und Spalte;
 `ruby/declarations` listet die Mendix-Artefakte, die eine Datei deklariert
 (`entity`, `page`, `microflow`, ...), mit ihren qualifizierten Namen. Keine der

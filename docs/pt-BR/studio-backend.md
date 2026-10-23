@@ -16,6 +16,16 @@ resolução de conflitos continuam pendentes. Os cenários
 `spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
 com arquivos sintéticos e não certificam paridade completa da IDE.
 
+Antes de cada tarefa, o painel consulta `project/status` quando o host não fornece
+`ruby_root`. Assim, uma conversão ou vínculo feito em outro dock define a pasta de
+execução e a substituição `{ruby}` imediatamente. `{root}` acompanha essa pasta;
+`{mpr}` continua apontando para o modelo nativo. Sem vínculo, comandos nativos ou
+globais podem usar a pasta de origem; comandos do contexto Ruby pedem conversão ou
+vínculo primeiro. Trocar de projeto ou pressionar Stop cancela também a consulta
+pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
+cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
+sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
+
 **Português** · [English](../en-US/studio-backend.md) · [Deutsch](../de-DE/studio-backend.md)
 
 `mxrb studio serve` executa o MXRB como backend de uma IDE: um processo de
