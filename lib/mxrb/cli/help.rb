@@ -134,7 +134,7 @@ module Mxrb
         'project' => %w[inspect],
         'scaffold' => %w[list destroy],
         'team-server' => %w[login projects info branches commits clone status fetch pull push],
-        'widgets' => %w[sync]
+        'widgets' => %w[new build sync]
       }.freeze
 
       OPTIONS = {
@@ -327,6 +327,11 @@ module Mxrb
         'team-server fetch' => ['team-server fetch DIR', 'Fetch repository changes', 'mxrb team-server fetch ./shop'],
         'team-server pull' => ['team-server pull DIR', 'Pull repository changes', 'mxrb team-server pull ./shop'],
         'team-server push' => ['team-server push DIR', 'Push repository changes', 'mxrb team-server push ./shop'],
+        'widgets new' => ['widgets new NAME [DIR]', 'Create a React and TypeScript widget project',
+                          'mxrb widgets new OrderSummary ./widgets-src'],
+        'widgets build' => ['widgets build DIR [--project MENDIX_PROJECT_DIR]',
+                            'Build and optionally install widget packages',
+                            'mxrb widgets build ./widgets-src --project ./shop'],
         'widgets sync' => ['widgets sync DEFINITION.rb FILE.mpr', 'Synchronize pluggable widget schemas',
                            'mxrb widgets sync project.rb Shop.mpr']
       }.to_h { |path, values| [path, Command.new(path, *values)] }.freeze
@@ -394,6 +399,7 @@ module Mxrb
         parts = Array(path).map(&:to_s)
         parts[0] = 'diagram-er' if parts.first == 'domain-model'
         name = parts.first
+        return Mxrb::Scaffold::Help.text(name) if name == 'query' && parts[1] == 'new'
         return Mxrb::Scaffold::Help.text(name) if scaffold_command?(name)
 
         item = COMMANDS[name]

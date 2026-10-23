@@ -117,10 +117,11 @@ module Mxrb
       # Uses PostgreSQL's machine-readable planner output. ANALYZE is opt-in
       # because it executes the SELECT, although the analyst role remains in a
       # read-only transaction and cannot mutate application data.
-      def explain(sql, analyze: false)
+      def explain(sql, analyze: false, params: {})
         statement = read_only_statement(sql)
+        statement, variables = bind_parameters(statement, params)
         configure_reader!
-        payload = JSON.parse(run_explain(statement, analyze).strip)
+        payload = JSON.parse(run_explain(statement, analyze, variables).strip)
         Oql::PlanAnalyzer.new(indexes: index_catalog).analyze(payload, analyzed: analyze)
       rescue JSON::ParserError => e
         raise ToolchainError, "PostgreSQL returned invalid EXPLAIN JSON: #{e.message}"
@@ -234,10 +235,10 @@ module Mxrb
         configure_monitoring!
       end
 
-      def run_explain(statement, analyze)
+      def run_explain(statement, analyze, variables)
         run!(
           'docker', 'exec', database_container,
-          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1',
+          'psql', '--no-psqlrc', '--set', 'ON_ERROR_STOP=1', *variables,
           '--username', READER, '--dbname', DATABASE, '--tuples-only', '--no-align', '--quiet',
           '--command', explain_sql(statement, analyze)
         )

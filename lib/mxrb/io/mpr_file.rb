@@ -265,9 +265,18 @@ module Mxrb
         raise ReadOnlyError, 'Opened in read-only mode' if @readonly
 
         contents_doc = compatible_document(contents_doc)
-        blob       = BsonCodec.uuid_to_blob(uuid)
         bson_bytes = serialize_contents(contents_doc)
-        hash       = BsonCodec.contents_hash(bson_bytes)
+        update_unit_bytes(uuid, bson_bytes)
+      end
+
+      # Persist a validated native BSON payload without reserializing other
+      # fields, numeric widths, UUID representations, or property order.
+      def update_unit_bytes(uuid, bson_bytes)
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
+        BsonCodec.parse(bson_bytes)
+        blob = BsonCodec.uuid_to_blob(uuid)
+        hash = BsonCodec.contents_hash(bson_bytes)
         current = unit(uuid)
         if current && current['ContentsHash'] == hash
           write_stats[:skipped] += 1
