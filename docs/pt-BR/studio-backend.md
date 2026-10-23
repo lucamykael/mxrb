@@ -26,6 +26,15 @@ pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
 cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
 sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
 
+O host pode publicar `project_revision` numérico em `host/contextChanged` quando
+uma conversão ou mudança de vínculo mantém o mesmo `source_model`. O Explorer
+consulta novamente `project/status`, descarta seleção/listagem anteriores e
+Tasks cancela a operação pendente. O host nativo usa essa revisão para invalidar
+o contexto, sem manter `ruby_root` como cache permanente do vínculo.
+O cenário `studio_project_revision_flow.json` verifica essa transição e o
+cancelamento de respostas antigas com o host sintético iniciado por
+`node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`.
+
 **Português** · [English](../en-US/studio-backend.md) · [Deutsch](../de-DE/studio-backend.md)
 
 `mxrb studio serve` executa o MXRB como backend de uma IDE: um processo de

@@ -31,7 +31,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
         .catch(reason => { if (!controller.signal.aborted) { setError(String(reason)); setState('error'); } });
     } else { setRoot(undefined); setState('no-project'); }
     return () => { ++epoch.current; ++selection.current; controller.abort(); };
-  }, [rpc, context.source_model, context.ruby_root]);
+  }, [rpc, context.source_model, context.ruby_root, context.project_revision]);
 
   useEffect(() => {
     if (!root) return;
@@ -40,7 +40,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
       .then(items => setEntries({ '.': items }))
       .catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => controller.abort();
-  }, [rpc, root, context.source_model]);
+  }, [rpc, root, context.source_model, context.project_revision]);
 
   async function convert() {
     const current = epoch.current;

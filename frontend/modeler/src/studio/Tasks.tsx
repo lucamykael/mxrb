@@ -31,7 +31,7 @@ export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext
   useEffect(() => {
     active.current?.cancel.abort(); active.current = null;
     setRunning(false); setOutput(''); setStatus(''); setError('');
-  }, [context.root, context.source_model, context.ruby_root]);
+  }, [context.root, context.source_model, context.ruby_root, context.project_revision]);
 
   function select(item: Command) {
     if (running) return;

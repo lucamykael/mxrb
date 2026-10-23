@@ -1,0 +1,36 @@
+{
+  "name": "studio-project-revision-refresh",
+  "authentication": false,
+  "viewport": { "width": 960, "height": 720 },
+  "pages": [{
+    "name": "project-revision",
+    "path": "/studio.html",
+    "steps": [
+      { "wait_for_text": "This project has no linked Ruby representation." },
+      { "click_selector": "#advance-project-revision" },
+      { "wait_for_selector": "[data-path='first.rb']" },
+      { "click_selector": "[data-path='first.rb']" },
+      { "wait_for_text": "# preview first.rb" },
+      { "click_selector": "nav button:nth-child(2)" },
+      { "click_text": "Revision task" },
+      { "click_selector": "button[type='submit']" },
+      { "wait_for_text": "Task from first workspace" },
+      { "click_selector": "#advance-project-revision" },
+      { "wait_for_text": "Cancelled tasks: 1" },
+      { "wait_for_selector": "button[type='submit']:not([disabled])" },
+      { "click_selector": "button[type='submit']" },
+      { "wait_for_text": "Task workspace /ruby/second; Ruby /ruby/second" },
+      { "wait_for_text": "Completed" },
+      { "click_selector": "#finish-stale-task" },
+      { "wait_for_text": "Completed" },
+      { "wait_for_absence": "[role='alert']" },
+      { "click_selector": "nav button:first-child" },
+      { "wait_for_selector": "[data-path='second.rb']" },
+      { "wait_for_absence": "[data-path='first.rb']" },
+      { "wait_for_absence": ".file-preview" },
+      { "click_selector": "[data-path='second.rb']" },
+      { "wait_for_text": "# preview second.rb" }
+    ],
+    "selectors": [".explorer-panel", ".file-tree", ".file-preview"]
+  }]
+}

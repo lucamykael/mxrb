@@ -1,6 +1,7 @@
 export type StudioContext = {
   panel?: 'explorer' | 'tasks';
   root?: string; source_model?: string; ruby_root?: string;
+  project_revision?: number;
   theme?: Record<string, string>;
   capabilities?: { native_ruby_editor?: boolean };
 };
