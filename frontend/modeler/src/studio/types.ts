@@ -1,4 +1,5 @@
 export type StudioContext = {
+  panel?: 'explorer' | 'tasks';
   root?: string; source_model?: string; ruby_root?: string;
   theme?: Record<string, string>;
 };

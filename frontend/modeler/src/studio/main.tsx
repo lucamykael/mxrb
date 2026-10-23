@@ -33,12 +33,12 @@ function App() {
   if (error) return <div role="alert" className="error">{error}</div>;
   if (!context) return <p role="status">Connecting to MXRB…</p>;
   return <main className="studio-panels">
-    <nav aria-label="MXRB panels">
+    {!context.panel && <nav aria-label="MXRB panels">
       <button aria-pressed={panel === 'explorer'} onClick={() => setPanel('explorer')}>Ruby App Explorer</button>
       <button aria-pressed={panel === 'tasks'} onClick={() => setPanel('tasks')}>MXRB Tasks</button>
-    </nav>
-    <div hidden={panel !== 'explorer'}><Explorer rpc={rpc} context={context} /></div>
-    <div hidden={panel !== 'tasks'}><Tasks rpc={rpc} context={context} /></div>
+    </nav>}
+    {(!context.panel || context.panel === 'explorer') && <div hidden={(context.panel ?? panel) !== 'explorer'}><Explorer rpc={rpc} context={context} /></div>}
+    {(!context.panel || context.panel === 'tasks') && <div hidden={(context.panel ?? panel) !== 'tasks'}><Tasks rpc={rpc} context={context} /></div>}
   </main>;
 }
 
