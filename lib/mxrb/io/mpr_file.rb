@@ -235,9 +235,18 @@ module Mxrb
         unless contents_doc.key?('$ID') || contents_doc.key?("\$ID")
           contents_doc = { '$ID' => uuid }.merge(contents_doc)
         end
-        unit_blob    = BsonCodec.uuid_to_blob(uuid)
+        insert_unit_bytes(unit_uuid: uuid, container_uuid:, containment_name:,
+                          bson_bytes: serialize_contents(contents_doc))
+      end
+
+      # Insert a unit from native BSON bytes without reserializing them, for
+      # example to restore a removed unit exactly. Returns the UUID.
+      def insert_unit_bytes(unit_uuid:, container_uuid:, containment_name:, bson_bytes:)
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
+        BsonCodec.parse(bson_bytes)
+        unit_blob    = BsonCodec.uuid_to_blob(unit_uuid)
         parent_blob  = BsonCodec.uuid_to_blob(container_uuid)
-        bson_bytes   = serialize_contents(contents_doc)
         hash         = BsonCodec.contents_hash(bson_bytes)
         stored_bytes = @format_version == :v2 ? nil : bson_bytes
         columns = %w[UnitID ContainerID ContainmentName TreeConflict ContentsHash]
@@ -255,9 +264,9 @@ module Mxrb
           "INSERT INTO Unit (#{columns.join(', ')}) VALUES (#{placeholders})",
           values
         )
-        write_v2_unit(uuid, bson_bytes) if @format_version == :v2
+        write_v2_unit(unit_uuid, bson_bytes) if @format_version == :v2
         write_stats[:inserted] += 1
-        uuid
+        unit_uuid
       end
 
       # Update an existing unit's contents. Recalculates ContentsHash automatically.

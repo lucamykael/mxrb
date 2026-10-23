@@ -18,7 +18,8 @@ module Mxrb
       ASSETS = %w[theme themesource widgets userlib javasource resources javascriptsource .mxrb].freeze
       attr_reader :source_model, :destination_root
 
-      def initialize(source_model, destination_root:)
+      def initialize(source_model, destination_root:, assets: true)
+        @assets = assets
         @source_model = File.realpath(source_model)
         raise ArgumentError, 'source model must be a file' unless File.file?(@source_model)
 
@@ -35,7 +36,7 @@ module Mxrb
         before = fingerprint(source_model)
         backup_database(destination)
         copy_storage(model_directory, before.fetch(:format))
-        ASSETS.each { copy_entry(File.join(source_directory, _1), File.join(model_directory, _1)) }
+        (@assets ? ASSETS : []).each { copy_entry(File.join(source_directory, _1), File.join(model_directory, _1)) }
         after = fingerprint(source_model)
         copied = fingerprint(destination)
         unless before == after && before == copied

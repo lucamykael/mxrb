@@ -297,17 +297,7 @@ module Mxrb
           safe: !plan.respond_to?(:safe?) || plan.safe?, changes: plan.changes, incoming: }
       end
 
-      def with_lock
-        state = ENV.fetch('XDG_STATE_HOME', File.join(Dir.home, '.local', 'state'))
-        directory = File.join(state, 'mxrb', 'studio', 'locks')
-        FileUtils.mkdir_p(directory)
-        File.open(File.join(directory, Digest::SHA256.hexdigest(model_path)), File::RDWR | File::CREAT, 0o600) do |lock|
-          lock.flock(File::LOCK_EX)
-          yield
-        ensure
-          lock.flock(File::LOCK_UN)
-        end
-      end
+      def with_lock(&) = WriteLock.synchronize(model_path, &)
     end
   end
 end

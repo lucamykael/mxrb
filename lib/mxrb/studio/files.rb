@@ -5,6 +5,7 @@ require 'rbconfig'
 require 'fileutils'
 require 'open3'
 require 'securerandom'
+require_relative 'write_lock'
 
 module Mxrb
   module Studio
@@ -207,17 +208,7 @@ module Mxrb
         raise Conflict, 'destination already exists'
       end
 
-      def with_lock
-        state = ENV.fetch('XDG_STATE_HOME', File.join(Dir.home, '.local', 'state'))
-        locks = File.join(state, 'mxrb', 'studio', 'locks')
-        FileUtils.mkdir_p(locks)
-        File.open(File.join(locks, Digest::SHA256.hexdigest(root)), File::RDWR | File::CREAT, 0o600) do |lock|
-          lock.flock(File::LOCK_EX)
-          yield
-        ensure
-          lock.flock(File::LOCK_UN)
-        end
-      end
+      def with_lock(&) = WriteLock.synchronize(root, &)
     end
   end
 end
