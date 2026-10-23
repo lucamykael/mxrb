@@ -21,7 +21,9 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     Mxrb.define(path) do
       mendix_version '11.12.1'
       self.module(:Shop) do
+        module_role :Reader
         entity(:Product) { string :Name }
+        entity(:Filter) { non_persistent! }
         microflow(:ACT_DealGame) { log_message 'shop' }
         nanoflow(:ACT_DealGame) { log_message 'nano' }
         page(:Home) { text 'Home' }
@@ -61,8 +63,7 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     expect(service.methods_list).to include('documents/ruby')
     expect(lookup).to include(state: 'missing_project', root: nil, path: nil,
                               qualified_name: 'Shop.ACT_DealGame', type: 'Microflows$Microflow')
-    expect(lookup(document('DomainModels$DomainModel')))
-      .to include(state: 'unavailable', reason: 'unsupported_type')
+    expect(lookup(document('DomainModels$DomainModel'))).to include(state: 'missing_project')
     expect(Dir.glob(File.join(state, 'ruby-conversions', '*'))).to be_empty
   end
 
@@ -100,6 +101,60 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     found = lookup(document('Forms$Page'))
     expect(found).to include(state: 'ready', qualified_name: 'Shop.Home')
     expect(File.read(File.join(root, found.fetch(:path)))).to include('page :Home')
+  end
+
+  it 'offers the actual domain index, entities and DTOs as files of one native domain model' do
+    root
+    found = lookup(document('DomainModels$DomainModel'))
+    expect(found).to include(state: 'choose', root:, path: nil)
+    expect(found.fetch(:files)).to contain_exactly(
+      include(path: 'modules/Shop/domain/model.rb', line: 1, label: 'Shop — Domain model'),
+      include(path: 'modules/Shop/domain/entities/product.rb', label: 'Shop.Product'),
+      include(path: 'modules/Shop/domain/dtos/filter_dto.rb', label: 'Shop.Filter')
+    )
+  end
+
+  it 'finds moved domain members and refuses ambiguous entity declarations' do
+    original = File.join(root, 'modules/Shop/domain/entities/product.rb')
+    moved = File.join(root, 'modules/Shop/custom_product.rb')
+    FileUtils.mv(original, moved)
+    expect(lookup(document('DomainModels$DomainModel')).fetch(:files))
+      .to include(include(path: 'modules/Shop/custom_product.rb', label: 'Shop.Product'))
+    FileUtils.cp(moved, original)
+    expect(lookup(document('DomainModels$DomainModel'))).to include(state: 'unavailable', reason: 'ambiguous_source')
+  end
+
+  it 'opens a verified empty domain index and rejects an unrelated or invalid replacement' do
+    path = File.join(root, 'modules/Other/domain/model.rb')
+    expect(lookup(document('DomainModels$DomainModel', 'Other')))
+      .to include(state: 'ready', path: 'modules/Other/domain/model.rb')
+    ['puts "unrelated"', 'def broken'].each do |source|
+      File.write(path, source)
+      expect(lookup(document('DomainModels$DomainModel', 'Other')))
+        .to include(state: 'unavailable', reason: 'source_not_found')
+    end
+  end
+
+  it 'resolves every global Ruby projection and the module and project declarations' do
+    root
+    expected = {
+      'Security$ProjectSecurity' => 'app/security/security.rb',
+      'Navigation$NavigationDocument' => 'app/navigation/navigation.rb',
+      'Settings$ProjectSettings' => 'app/settings/settings.rb',
+      'Texts$SystemTextCollection' => 'app/texts/system_texts.rb',
+      'Projects$Project' => 'project.rb'
+    }
+    Mxrb.open(model) do |project|
+      expected.each do |type, path|
+        unit = project.all_units.find { project.parse_bson(_1)['$Type'] == type }
+        expect(unit).not_to be_nil, "missing native fixture for #{type}"
+        expect(lookup(unit)).to include(state: 'ready', path:)
+      end
+      mod = project.modules.find { _1.name == 'Shop' }
+      expect(lookup(project.mpr.unit(mod.id))).to include(state: 'ready', path: 'modules/Shop/module.rb')
+    end
+    expect(lookup(document('Security$ModuleSecurity')))
+      .to include(state: 'ready', path: 'modules/Shop/security/security.rb')
   end
 
   it 'does not silently choose one of duplicate declarations' do
@@ -161,6 +216,54 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     expect(lookup(type: 'Forms$Page')).to include(state: 'unavailable', reason: 'document_changed')
     expect(lookup(qualified_name: 'Other.ACT_DealGame')).to include(state: 'unavailable', reason: 'document_changed')
     expect { lookup({ 'UnitID' => '../escape' }) }.to raise_error(ArgumentError, 'unit_id must be a UUID')
+  end
+
+  it 'resolves all exporter document families and universal native unit declarations' do
+    mpr = Mxrb::IO::MprFile.open(model)
+    mod = Mxrb.open(model) { _1.modules.find { |entry| entry.name == 'Shop' } }
+    types = Mxrb::Model::Module::EDITABLE_DOCUMENT_TYPES + ['Future$ExtensionDocument']
+    units = types.to_h do |type|
+      contents_doc = { '$Type' => type, 'Name' => type.split('$').last }
+      contents_doc['Marker'] = 'native fallback projection' unless type.start_with?('Forms$')
+      contents_doc['FontData'] = BSON::Binary.new('') if type == 'CustomIcons$CustomIconCollection'
+      id = mpr.insert_unit(container_uuid: mod.id, containment_name: 'Documents',
+                           contents_doc:)
+      [type, { 'UnitID' => id }]
+    end
+    mpr.close
+    root
+    units.each do |type, unit|
+      found = lookup(unit)
+      expect(found).to include(state: 'ready', type:), "#{type}: #{found}"
+      expect(File).to exist(File.join(root, found.fetch(:path)))
+    end
+    expect(lookup(units.fetch('Future$ExtensionDocument'))).to include(path: '.mxrb/native_units.rb')
+  ensure
+    mpr&.close
+  end
+
+  it 'requires exact identity for a generic native document regardless of its BSON type' do
+    root
+    unit = document('Microflows$Microflow')
+    File.write(source_path, "native_document :ACT_DealGame, type: 'Microflows$Microflow', " \
+                            "unit_id: #{unit.fetch('UnitID').inspect}, deep_structure: {}\n")
+    expect(lookup(unit)).to include(state: 'ready')
+    File.write(source_path, File.read(source_path).sub('Microflows$Microflow', 'Microflows$Nanoflow'))
+    expect(lookup(unit)).to include(state: 'unavailable', reason: 'source_not_found')
+  end
+
+  it 'does not present baseline metadata as a Ruby file, or reconvert an existing project' do
+    mpr = Mxrb::IO::MprFile.open(model)
+    id = mpr.insert_unit(container_uuid: document.fetch('ContainerID'), containment_name: 'Folders',
+                         contents_doc: { '$Type' => 'Projects$Folder', 'Name' => 'Folder' })
+    mpr.close
+    unit = { 'UnitID' => id }
+    expect(lookup(unit)).to include(state: 'unavailable', reason: 'unsupported_type')
+    root
+    expect(lookup(unit)).to include(state: 'unavailable', reason: 'source_not_found')
+    expect(Dir.children(File.join(state, 'ruby-conversions')).size).to eq(1)
+  ensure
+    mpr&.close
   end
 
   it 'observes cancellation before reading a native model' do

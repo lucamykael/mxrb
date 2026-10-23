@@ -4,12 +4,14 @@ require 'prism'
 require_relative 'files'
 require_relative 'ruby_project'
 require_relative 'request_context'
+require_relative 'ruby_document_aggregates'
 
 module Mxrb
   module Studio
     # Resolves the saved native document's identity to a parsed Ruby declaration.
     # Filenames are not identities: users may move or rename their Ruby files.
     class RubyDocument # rubocop:disable Metrics/ClassLength
+      include RubyDocumentAggregates
       DECLARATIONS = {
         'Microflows$Microflow' => 'microflow', 'Microflows$Nanoflow' => 'nanoflow',
         'Microflows$Rule' => 'rule', 'Forms$Page' => 'page', 'Pages$Page' => 'page',
@@ -30,9 +32,19 @@ module Mxrb
         'WebServices$PublishedService' => 'published_web_service',
         'WebServices$ImportedServiceImpl' => 'imported_web_service',
         'DomainModels$ViewEntitySourceDocument' => 'oql_source_document',
-        'DatabaseConnector$DatabaseConnection' => 'database_connection'
+        'DatabaseConnector$DatabaseConnection' => 'database_connection',
+        'MessageDefinitions$MessageDefinitionCollection' => 'message_definition_collection'
       }.freeze
-      SUPPORTED_TYPES = (DECLARATIONS.keys + Model::Module::EDITABLE_DOCUMENT_TYPES).freeze
+      GLOBAL_DECLARATIONS = {
+        'Settings$ProjectSettings' => %w[project_settings project_settings_document],
+        'Texts$SystemTextCollection' => %w[system_text_collection],
+        'Security$ProjectSecurity' => %w[security],
+        'Navigation$NavigationDocument' => %w[navigation]
+      }.freeze
+      # These units have baseline JSON, but the exporter emits no Ruby declaration.
+      BASELINE_ONLY_TYPES = %w[
+        Projects$Folder Projects$ModuleGuidMapping Projects$ModuleSettings Projects$ProjectConversion
+      ].freeze
       MAXIMUM_FILES = 10_000
 
       def initialize(project, context: RequestContext.new)
@@ -48,21 +60,30 @@ module Mxrb
         unless expected_identity?(qualified_name, type)
           return unavailable('document_changed', 'The saved document identity differs from the open document.')
         end
-        unless supported?
-          return unavailable('unsupported_type', 'This document does not have a supported Ruby source view.')
-        end
 
         representation = @project.status
-        return result(state: 'missing_project') unless representation[:state] == 'ready'
+        return missing_representation unless representation[:state] == 'ready'
 
         @files = Files.new(representation.fetch(:root))
+        @source_paths = source_paths
+        aggregate = aggregate_candidates
+        return aggregate_result(aggregate) if aggregate
+
         resolve_candidates
       end
 
       private
 
+      def missing_representation
+        if BASELINE_ONLY_TYPES.include?(@document[:type])
+          return unavailable('unsupported_type', 'MXRB preserves this unit as metadata without a Ruby declaration.')
+        end
+
+        result(state: 'missing_project')
+      end
+
       def resolve_candidates
-        matches = source_paths.flat_map { candidates(_1) }
+        matches = @source_paths.flat_map { candidates(_1) }
         if matches.empty?
           return unavailable('source_not_found', 'No matching Ruby declaration was found in the linked project.')
         end
@@ -81,8 +102,6 @@ module Mxrb
         (!qualified_name || qualified_name == @document[:qualified_name]) && (!type || type == @document[:type])
       end
 
-      def supported? = SUPPORTED_TYPES.include?(@document[:type]) && @document[:module]
-
       def result(state:, **details)
         { state:, source_model: @project.source_model, root: @files&.root, path: nil, line: nil,
           **(@document || {}).except(:module), **details }
@@ -90,12 +109,13 @@ module Mxrb
 
       def unavailable(reason, message) = result(state: 'unavailable', reason:, message:)
 
-      def native_document(unit_id)
+      def native_document(unit_id) # rubocop:disable Metrics/MethodLength
         mpr = IO::MprFile.open(@project.source_model, readonly: true, apply_studio_compatibility: false)
         unit = mpr.unit(unit_id)
         return unless unit
 
         document = mpr.parse_contents(unit)
+        @native_contents = document
         mod = module_name(mpr, unit)
         name = document['Name'].to_s
         { unit_id: unit.fetch('UnitID'), type: document['$Type'], name:, module: mod,
@@ -117,12 +137,14 @@ module Mxrb
       end
 
       def source_paths # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-        directories = ["modules/#{@document.fetch(:module)}"]
-        found = []
+        directories = [@document[:module] ? "modules/#{@document[:module]}" : 'app']
+        found = directory_entries('.mxrb').filter_map do |entry|
+          entry[:path] if entry[:name] == 'native_units.rb' && !entry[:directory]
+        end
         visited = 0
         until directories.empty?
           @context.check!
-          @files.list(directories.shift).each do |entry|
+          directory_entries(directories.shift).each do |entry|
             next if entry[:name].start_with?('.')
 
             visited += 1
@@ -136,18 +158,19 @@ module Mxrb
           end
         end
         found
+      end
+
+      def directory_entries(path)
+        @files.list(path)
       rescue Errno::ENOENT, Errno::ENOTDIR
         []
       end
 
       def candidates(path)
         @context.check!
-        parsed = Prism.parse(@files.read(path).fetch(:text))
-        return [] if parsed.failure?
-
         # Only file-level declarations belong to the module loader. Calls in
         # method bodies, classes and unrelated blocks are not document claims.
-        Array(parsed.value.statements&.body).filter_map do |node|
+        source_nodes(path).filter_map do |node|
           next unless matching_declaration?(node)
 
           { path:, line: node.location.start_line }
@@ -156,19 +179,35 @@ module Mxrb
         []
       end
 
-      def matching_declaration?(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      def matching_declaration?(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/MethodLength
         return false unless node.is_a?(Prism::CallNode) && node.receiver.nil?
-        return false unless literal(node.arguments&.arguments&.first) == @document[:name]
+        if node.name == :native_unit
+          return literal(node.arguments&.arguments&.first)&.downcase == @document[:unit_id].downcase
+        end
 
         options = keyword_options(node)
         identifier = literal(options['unit_id'])
         return false if options.key?('unit_id') && identifier&.downcase != @document[:unit_id].downcase
         if node.name == :native_document
-          return identifier&.downcase == @document[:unit_id].downcase && literal(options['type']) == @document[:type]
+          return identifier&.downcase == @document[:unit_id].downcase && literal(options['type']) == @document[:type] &&
+                 (@document[:name].empty? || literal_argument(node) == @document[:name])
         end
+        return true if GLOBAL_DECLARATIONS.fetch(@document[:type], []).include?(node.name.to_s)
+        return false unless literal(node.arguments&.arguments&.first) == @document[:name]
         return false unless node.name.to_s == DECLARATIONS[@document[:type]]
 
         !@document[:type].start_with?('Microflows$') || identifier || flow_metadata_matches?
+      end
+
+      def source_nodes(path)
+        @context.check!
+        @parsed_sources ||= {}
+        @parsed_sources[path] ||= begin
+          parsed = Prism.parse(@files.read(path).fetch(:text))
+          parsed.failure? ? [] : Array(parsed.value.statements&.body)
+        end
+      rescue Errno::ENOENT, Errno::ENOTDIR
+        []
       end
 
       def keyword_options(node)

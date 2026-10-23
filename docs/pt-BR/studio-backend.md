@@ -116,9 +116,25 @@ salvar/criar seu snapshot, chamar `project/convert` e repetir a consulta antes
 de abrir o editor central. `state: "unavailable"` inclui `reason` e `message`
 para documento desconhecido, tipo não suportado, identidade divergente,
 declaração ausente ou ambígua. A operação não reconverte nem sobrescreve um
-projeto Ruby existente. Esta busca cobre documentos nomeados na árvore DSL
-`modules/<módulo>`; agregados como DomainModel não têm um único arquivo editável
-e retornam indisponível.
+projeto Ruby existente.
+
+A busca cobre todas as famílias de documentos emitidas pelo exportador: flows,
+pages, layouts/snippets/templates, menus, enumerações/constantes, integrações,
+mappings, actions, workflows, jobs, assets e os documentos globais de settings,
+textos, segurança e navegação. Declarações genéricas `native_document` e
+`native_unit` usam o UUID exato, incluindo extensões preservadas pelo MXRB.
+Project e Module apontam para suas declarações no projeto vinculado.
+
+Agregados como DomainModel retornam `state: "choose"`, `root` e
+`files: [{path, line, label}]` quando existem vários arquivos correspondentes.
+O host apresenta essa lista antes de abrir o editor. O domínio inclui seu
+índice verificado pelo loader e declarações de entidades, DTOs e views OQL;
+associações ficam no arquivo da entidade de origem. Cada `label` de entidade
+usa o nome qualificado, como `Sudoku.Cell`. Um único arquivo retorna `ready`.
+Duplicações conflitantes da mesma declaração continuam `ambiguous_source`,
+sem selecionar um arquivo arbitrário. Unidades de infraestrutura preservadas
+somente no baseline JSON (Folder, ModuleGuidMapping, ModuleSettings e
+ProjectConversion) não inventam uma representação Ruby.
 
 `files/write` e `documents/patch` recebem a revisão que o cliente leu por
 último e falham com conflito quando o arquivo ou a unit mudou nesse meio

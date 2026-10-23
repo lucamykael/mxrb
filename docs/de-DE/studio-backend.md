@@ -90,8 +90,17 @@ Ohne verknüpftes Ruby-Projekt lautet der Status für unterstützte Dokumente
 Snapshot konvertieren, danach erneut nachschlagen und den zentralen Editor öffnen.
 Fehlende, nicht unterstützte oder mehrdeutige Quellen liefern `unavailable` mit
 `reason` und `message`. Bestehende Ruby-Projekte werden dabei nicht neu erzeugt.
-Unterstützt werden benannte Dokumente im DSL-Baum `modules/<Modul>`; Aggregate
-wie DomainModel wählen keine beliebige untergeordnete Datei aus.
+Unterstützt werden alle Dokumentfamilien des Exporters, auch globale Settings,
+Systemtexte, Sicherheit und Navigation sowie Project und Module. Generische
+`native_document`- und `native_unit`-Deklarationen werden über die genaue UUID
+zugeordnet. Für Aggregate wie DomainModel mit mehreren Quelldateien liefert
+die Suche `state: "choose"`, `root` und `files: [{path, line, label}]`. Der Host
+lässt den Benutzer die Datei auswählen. Der Domänenindex wird über den Loader
+geprüft; weitere Einträge zeigen Entity-, DTO- und OQL-View-Deklarationen mit
+qualifiziertem Namen, beispielsweise `Sudoku.Cell`. Eine Datei liefert `ready`;
+widersprüchliche Duplikate bleiben `unavailable/ambiguous_source`. Nur als
+Baseline-JSON gespeicherte Infrastruktureinheiten (Folder, ModuleGuidMapping,
+ModuleSettings, ProjectConversion) erfinden keine Ruby-Quelldatei.
 
 `files/write` und `documents/patch` erhalten die zuletzt gelesene Revision und
 schlagen mit einem Konflikt fehl, wenn sich Datei oder Unit inzwischen
