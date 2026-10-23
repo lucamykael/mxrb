@@ -44,7 +44,7 @@ module Mxrb
         'team-server status' => 'source_directory', 'team-server fetch' => 'source_directory',
         'team-server pull' => 'source_directory', 'team-server push' => 'source_directory',
         'widgets new' => 'name output_directory?', 'widgets build' => 'directory',
-        'widgets sync' => 'definition model', 'page templates' => ''
+        'widgets sync' => 'definition model', 'page templates' => '', 'studio serve' => ''
       }.freeze
 
       DEFAULTS = {
@@ -79,7 +79,7 @@ module Mxrb
         'marketplace verify' => '--mpr FILE.mpr', 'marketplace dependencies' => '--mpr FILE.mpr --apply --apply-resolved',
         'marketplace update' => '--mpr FILE.mpr --apply', 'marketplace remove' => '--mpr FILE.mpr --apply',
         'team-server login' => '--pat-file FILE', 'team-server projects' => '--pat-file FILE',
-        'widgets build' => '--project DIR', 'page templates' => '--json'
+        'widgets build' => '--project DIR', 'page templates' => '--json', 'studio serve' => '--state-root DIR'
       }.freeze
 
       def entries
@@ -236,7 +236,7 @@ module Mxrb
         return 'write' if scaffold || ['functional-instrument', 'scaffold destroy', 'db destroy', 'diagram-er destroy', 'marketplace import', 'marketplace pull'].include?(path)
         return 'publish' if path == 'team-server push'
         return 'authentication' if path.end_with?(' login') || ['db credentials', 'db url'].include?(path)
-        return 'service' if ['run', 'serve', 'uml', 'diagram-er', 'db up', 'db sync', 'db down', 'db shell', 'diagram-er up', 'diagram-er down'].include?(path)
+        return 'service' if ['run', 'serve', 'studio serve', 'uml', 'diagram-er', 'db up', 'db sync', 'db down', 'db shell', 'diagram-er up', 'diagram-er down'].include?(path)
         return 'install' if ['update', 'team-server clone', 'team-server fetch', 'team-server pull', 'module add', 'widgets build'].include?(path)
         return 'preview_or_write' if ['move', 'rename', 'remove', 'design migrate', 'frontend migrate', 'upgrade', 'marketplace update', 'marketplace remove', 'marketplace dependencies'].include?(path)
         return 'write' if ['init', 'export', 'convert', 'generate', 'pack', 'portable', 'java-actions', 'widgets new', 'widgets sync', 'module new', 'design init', 'cache warm', 'cache clear'].include?(path)

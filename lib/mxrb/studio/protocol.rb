@@ -78,8 +78,8 @@ module Mxrb
 
       def error_object(error, roots: [])
         code = code_for(error)
-        data = { kind: KINDS.fetch(code), type: error.class.name }
-        data.merge!(error.data) if error.is_a?(Failure)
+        data = { kind: KINDS.fetch(code) }
+        error.is_a?(Failure) ? data.merge!(error.data) : data[:type] = error.class.name
         locations = locations_for(error, roots)
         data[:locations] = locations unless locations.empty?
         { code:, message: error.message, data: }
