@@ -4,6 +4,7 @@ require 'digest'
 require 'json'
 require_relative '../io/bson_codec'
 
+# rubocop:disable Metrics
 module Mxrb
   module Studio
     # Element-level view of native Mendix documents. Every Hash with a `$ID`
@@ -13,7 +14,7 @@ module Mxrb
     # one, express the differences as element operations, detect when two
     # sets of operations touch the same element and apply operations to a
     # document while leaving everything else untouched.
-    module Structure # rubocop:disable Metrics/ModuleLength
+    module Structure
       UUID = IO::BsonCodec::UUID_PATTERN
 
       module_function
@@ -61,7 +62,7 @@ module Mxrb
         end
       end
 
-      def canonical(value, tokens = {}, key = nil) # rubocop:disable Metrics/CyclomaticComplexity
+      def canonical(value, tokens = {}, key = nil)
         case value
         when Hash then value.keys.sort.map { [_1, canonical(value[_1], tokens, _1)] }
         when Array
@@ -82,15 +83,6 @@ module Mxrb
       end
 
       def equal?(left, right) = canonical(left) == canonical(right)
-
-      def each_element(value, &block)
-        case value
-        when Hash
-          yield value if element?(value)
-          value.each_value { each_element(_1, &block) }
-        when Array then value.each { each_element(_1, &block) }
-        end
-      end
 
       # ── Index ────────────────────────────────────────────────────────────
 
@@ -166,7 +158,9 @@ module Mxrb
       end
 
       def pair_named(pending, free, mapping)
-        named = ->(list) { list.select { _1['Name'].is_a?(String) && !_1['Name'].empty? }.group_by { [_1['$Type'], _1['Name']] } }
+        named = lambda do |list|
+          list.select { _1['Name'].is_a?(String) && !_1['Name'].empty? }.group_by { [_1['$Type'], _1['Name']] }
+        end
         candidates = named.call(free)
         wanted = named.call(pending)
         pending.reject do |item|
@@ -198,7 +192,9 @@ module Mxrb
       def same_shape(value, target)
         return copy(target) if target.instance_of?(value.class)
 
-        value.is_a?(String) ? identity(target) : BSON::Binary.new(IO::BsonCodec.uuid_to_blob(identity(target)), value.type)
+        return identity(target) if value.is_a?(String)
+
+        BSON::Binary.new(IO::BsonCodec.uuid_to_blob(identity(target)), value.type)
       end
 
       def copy(value)
@@ -243,7 +239,7 @@ module Mxrb
         end
       end
 
-      def list_operations(parent, key, before, after, operations) # rubocop:disable Metrics/AbcSize
+      def list_operations(parent, key, before, after, operations)
         old_ids = before.select { element?(_1) }.map { id_of(_1) }
         new_items = after.select { element?(_1) }
         new_ids = new_items.map { id_of(_1) }
@@ -299,12 +295,17 @@ module Mxrb
 
       # ── Application ─────────────────────────────────────────────────────
 
+      # Removals first, then the orders of the remaining elements, then the
+      # insertions (whose anchors are in the final order), then properties.
       def apply(document, operations)
         result = copy(document)
-        structural, properties = operations.partition { %w[remove insert].include?(_1[:op]) }
-        structural.sort_by { _1[:op] == 'remove' ? 0 : 1 }.each { apply_structural(result, _1) }
+        grouped = operations.group_by { _1[:op] }
+        Array(grouped['remove']).each { apply_structural(result, _1) }
         nodes = index(result)
-        properties.each { apply_property(nodes, _1) }
+        Array(grouped['order']).each { apply_property(nodes, _1) }
+        Array(grouped['insert']).each { apply_structural(result, _1) }
+        nodes = index(result)
+        Array(grouped['set']).each { apply_property(nodes, _1) }
         result
       end
 
@@ -324,8 +325,9 @@ module Mxrb
       def insert_position(list, after)
         position = list.index { element?(_1) && id_of(_1) == after } if after
         return position + 1 if position
+        return list.length if after
 
-        after ? list.length : (marker(list) ? 1 : 0)
+        marker(list) ? 1 : 0
       end
 
       def apply_property(nodes, operation)
@@ -335,7 +337,8 @@ module Mxrb
 
           operation[:present] ? element[operation[:key]] = copy(operation[:value]) : element.delete(operation[:key])
         else
-          list = nodes[operation[:parent]]&.element&.[](operation[:key])
+          parent = nodes[operation[:parent]]
+          list = parent.element[operation[:key]] if parent
           reorder(list, operation[:order]) if list.is_a?(Array)
         end
       end
@@ -375,3 +378,4 @@ module Mxrb
     end
   end
 end
+# rubocop:enable Metrics

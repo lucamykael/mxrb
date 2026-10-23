@@ -62,7 +62,7 @@ module Mxrb
 
       module_function
 
-      def code_for(error)
+      def code_for(error) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
         case error
         when Failure then error.code
         when Cancelled then REQUEST_CANCELLED
@@ -107,7 +107,7 @@ module Mxrb
       def backtrace_locations(error)
         Array(error.backtrace_locations).filter_map do |location|
           path = location.absolute_path || location.path
-          { file: path, line: location.lineno } if path&.end_with?('.rb')
+          { file: path, line: location.lineno } if path.end_with?('.rb')
         end
       end
     end

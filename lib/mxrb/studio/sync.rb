@@ -3,7 +3,6 @@
 require 'digest'
 require 'fileutils'
 require 'json'
-require 'open3'
 require 'securerandom'
 require 'time'
 require 'tmpdir'
@@ -15,6 +14,7 @@ require_relative 'isolated'
 require_relative 'request_context'
 require_relative 'snapshot'
 require_relative 'structure'
+require_relative 'text_merge'
 require_relative 'write_lock'
 
 module Mxrb
@@ -44,6 +44,17 @@ module Mxrb
       SKIPPED_DIRECTORIES = (Files::HIDDEN_DIRECTORIES + %w[build deployment tmp]).freeze
       MANAGED = %r{\A\.mxrb/}
       RESOLUTIONS = %w[ruby mendix].freeze
+      DOCUMENT_TYPES = {
+        'microflow' => 'Microflows$Microflow', 'nanoflow' => 'Microflows$Nanoflow', 'rule' => 'Microflows$Rule',
+        'page' => 'Forms$Page', 'snippet' => 'Forms$Snippet', 'layout' => 'Forms$Layout',
+        'building_block' => 'Forms$BuildingBlock', 'page_template' => 'Forms$PageTemplate',
+        'enumeration' => 'Enumerations$Enumeration', 'constant' => 'Constants$Constant',
+        'java_action' => 'JavaActions$JavaAction', 'javascript_action' => 'JavaScriptActions$JavaScriptAction',
+        'workflow' => 'Workflows$Workflow', 'scheduled_event' => 'ScheduledEvents$ScheduledEvent',
+        'regular_expression' => 'RegularExpressions$RegularExpression',
+        'image_collection' => 'Images$ImageCollection', 'json_structure' => 'JsonStructures$JsonStructure',
+        'import_mapping' => 'ImportMappings$ImportMapping', 'export_mapping' => 'ExportMappings$ExportMapping'
+      }.freeze
 
       attr_reader :model_path, :ruby_root, :state_directory
 
@@ -130,8 +141,13 @@ module Mxrb
 
             progress.update(detail: 'writing the model and Ruby files')
             entry = write(plan, text, resolutions, revision)
+            base_ruby = inputs[:theirs]
+            if plan[:ruby_units].any?
+              base_ruby = export(model_path, File.join(scratch, 'export-after'))
+              refresh_managed(base_ruby)
+            end
             base = build_base(
-              base_ruby: plan[:ruby_units].empty? ? inputs[:theirs] : nil,
+              base_ruby:,
               generated: text[:files].empty? ? inputs[:generated] || link['generated_model'] : nil,
               previous: link
             )
@@ -257,20 +273,30 @@ module Mxrb
         FileUtils.mkdir_p(directory)
         target = File.join(directory, File.basename(model_path))
         entry = File.join(root, 'project.rb')
-        Isolated.run(@context, roots: [root]) do
-          ENV['MXRB_OUTPUT_PATH'] = target
-          Kernel.load(entry)
-          raise RubySourceError, 'project.rb did not generate a model' unless File.file?(target)
-
-          target
-        end
+        Isolated.run(@context, roots: [root]) { evaluate_project(entry, target, root) }
       end
 
       def export(model, destination)
-        Isolated.run(@context) do
-          Exporter.new(model, destination, mode: :mendix).export!(parallel: false)
-          destination
-        end
+        Isolated.run(@context) { export_model(model, destination) }
+      end
+
+      # Runs in the isolated worker: evaluates project.rb into `target`. Any
+      # failure of the Ruby project is a Ruby source error with locations.
+      def evaluate_project(entry, target, root)
+        ENV['MXRB_OUTPUT_PATH'] = target
+        Kernel.load(entry)
+        raise RubySourceError, 'project.rb did not generate a model' unless File.file?(target)
+
+        target
+      rescue RubySourceError
+        raise
+      rescue StandardError, ScriptError => e
+        raise RubySourceError.new("#{e.class}: #{e.message}", locations: Protocol.locations_for(e, [root]))
+      end
+
+      def export_model(model, destination)
+        Exporter.new(model, destination, mode: :mendix).export!(parallel: false)
+        destination
       end
 
       def ruby_changes(link) # rubocop:disable Metrics/AbcSize
@@ -373,6 +399,8 @@ module Mxrb
         before = inputs[:generated] ? units_of(inputs.fetch(:generated_base)) : {}
         after = inputs[:generated] ? units_of(inputs[:generated]) : {}
         ruby = changed_units(before, after)
+        removed = inputs[:generated] ? removed_documents(link, base) - ruby.map(&:first) : []
+        ruby += removed.map { [_1, 'removed', nil] }
         plan = { units: [], conflicts: [], mendix_units: mendix.keys,
                  ruby_units: ruby.map(&:first) }
         ruby.each do |id, kind, _document|
@@ -383,6 +411,43 @@ module Mxrb
           end
         end
         plan
+      end
+
+      # Documents whose Ruby declaration was deleted. The native baseline
+      # would restore them on generation, so their removal is explicit.
+      def removed_documents(link, base) # rubocop:disable Metrics/AbcSize
+        declared = lambda do |root, paths|
+          paths.flat_map do |path|
+            file = File.join(root, path)
+            next [] unless path.end_with?('.rb') && File.file?(file)
+
+            Artifacts.declarations(File.read(file, encoding: Encoding::UTF_8), path:)
+                     .filter_map { [DOCUMENT_TYPES[_1[:kind]], _1[:qualified_name]] if DOCUMENT_TYPES.key?(_1[:kind]) }
+          end
+        end
+        changed = ruby_changes(link).map { _1[:path] }
+        gone = declared.call(link.fetch('base_files'), changed) - declared.call(ruby_root, changed)
+        return [] if gone.empty?
+
+        documents = document_index(base)
+        gone.filter_map { documents[_1] }
+      end
+
+      # [document type, Module.Name] => unit id
+      def document_index(units)
+        documents = units.transform_values { IO::BsonCodec.parse(_1[:bytes]) }
+        modules = documents.select { _2['$Type'] == 'Projects$ModuleImpl' }.transform_values { _1['Name'] }
+        documents.each_with_object({}) do |(id, document), index|
+          container = units.dig(id, :container)
+          seen = [id]
+          until modules.key?(container) || seen.include?(container) || !units.key?(container)
+            seen << container
+            container = units.dig(container, :container)
+          end
+          next unless modules.key?(container) && document['Name'].is_a?(String)
+
+          index[[document['$Type'], "#{modules[container]}.#{document['Name']}"]] = id
+        end
       end
 
       def plan_removal(plan, id, base, working, mendix)
@@ -485,23 +550,13 @@ module Mxrb
           return { path:, action: 'write', text: incoming, ours: mine, conflicts: 1, binary: true }
         end
 
-        merged, conflicts = three_way(ours, base, theirs)
+        merged, conflicts = TextMerge.merge(original, mine, incoming)
         { path:, action: 'write', text: merged, ours: mine, base: original, theirs: incoming, conflicts: }
       end
 
       def read_optional(path) = File.file?(path) ? File.binread(path) : nil
 
       def text?(bytes) = !bytes.include?("\0") && bytes.dup.force_encoding(Encoding::UTF_8).valid_encoding?
-
-      def three_way(ours, base, theirs, favor: nil)
-        arguments = ['git', 'merge-file', '-p', '-L', 'ruby', '-L', 'base', '-L', 'mendix']
-        arguments << "--#{favor}" if favor
-        output, errors, status = Open3.capture3(*arguments, ours, base, theirs)
-        raise ToolchainError, "git merge-file failed: #{errors.strip}" if status.exitstatus.negative? ||
-                                                                         status.exitstatus > 127
-
-        [output.b, status.exitstatus]
-      end
 
       def file_conflict(merged)
         { id: "file:#{merged[:path]}", kind: 'file', path: merged[:path], hunks: merged[:conflicts],
@@ -587,16 +642,10 @@ module Mxrb
       end
 
       def resolved_text(file, resolution)
-        return file[:text] if file[:conflicts].zero? || resolution == 'mendix' && file[:binary]
-        return file[:ours] if resolution == 'ruby' && file[:binary]
+        return file[:text] if file[:conflicts].zero? || (resolution == 'mendix' && file[:binary])
+        return file[:ours] if file[:binary]
 
-        Dir.mktmpdir('mxrb-merge-') do |directory|
-          ours, base, theirs = %w[ours base theirs].map { File.join(directory, _1) }
-          File.binwrite(ours, file[:ours])
-          File.binwrite(base, file[:base])
-          File.binwrite(theirs, file[:theirs])
-          three_way(ours, base, theirs, favor: resolution == 'ruby' ? 'ours' : 'theirs').first
-        end
+        TextMerge.merge(file[:base], file[:ours], file[:theirs], favor: resolution == 'ruby' ? :ours : :theirs).first
       end
 
       # ── Conflicts ───────────────────────────────────────────────────────

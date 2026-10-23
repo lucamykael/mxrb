@@ -9,6 +9,7 @@ require_relative '../io/mpr_file'
 require_relative 'files'
 require_relative 'write_lock'
 
+# rubocop:disable Metrics
 module Mxrb
   module Studio
     # Undo/redo journal for writes MXRB makes to a model. Each entry stores the
@@ -16,7 +17,7 @@ module Mxrb
     # undoing restores IDs, references and layout byte for byte. An entry is
     # only undone (or redone) while the affected units still hold the state the
     # entry left them in; a later edit by anyone else makes it a conflict.
-    class History # rubocop:disable Metrics/ClassLength
+    class History
       LIMIT = 100
       attr_reader :model_path, :directory
 
@@ -56,7 +57,7 @@ module Mxrb
         mpr&.close
       end
 
-      def store(label, before, after) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def store(label, before, after)
         changes = (before.keys | after.keys).sort.filter_map do |unit_id|
           old = before[unit_id]
           new = after[unit_id]
@@ -101,7 +102,7 @@ module Mxrb
           sha256: Digest::SHA256.hexdigest(state[:bytes]) }
       end
 
-      def move(from:, to:, restore:, expect:) # rubocop:disable Metrics/AbcSize
+      def move(from:, to:, restore:, expect:)
         WriteLock.synchronize(model_path) do
           state = read_state
           id = state.fetch(from).last
@@ -116,12 +117,14 @@ module Mxrb
         end
       end
 
-      def apply(id, manifest, restore:, expect:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def apply(id, manifest, restore:, expect:)
         current = unit_states
         manifest.fetch('changes').each do |change|
           expected = change[expect]
           actual = current[change['unit_id']]
-          matches = expected.nil? ? actual.nil? : actual && Digest::SHA256.hexdigest(actual[:bytes]) == expected['sha256']
+          matches = if expected.nil? then actual.nil?
+                    else actual && Digest::SHA256.hexdigest(actual[:bytes]) == expected['sha256']
+                    end
           next if matches
 
           raise Conflict, "#{change['unit_id']} changed after this edit; undo would overwrite newer work"
@@ -175,3 +178,4 @@ module Mxrb
     end
   end
 end
+# rubocop:enable Metrics

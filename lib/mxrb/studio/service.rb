@@ -111,7 +111,7 @@ module Mxrb
                               extra: Shellwords.split(params.fetch('extra', '')))
       end
 
-      def tasks_prepare(params, _context)
+      def tasks_prepare(params, _context) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         raw = if params.key?('command_id')
                 catalog_arguments(params, nil)
               elsif params.key?('arguments')
@@ -145,7 +145,7 @@ module Mxrb
         readers.each(&:join)
         status = waiter.value
         { task:, arguments: argv, directory:, exit_code: status.exitstatus, signal: status.termsig,
-          cancelled: record[:cancelled], success: status.success?,
+          cancelled: record[:cancelled], success: status.success? == true,
           duration_ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round }
       ensure
         context.remove_cancel_hook(hook) if hook

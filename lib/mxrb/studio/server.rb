@@ -61,7 +61,7 @@ module Mxrb
         end
       end
 
-      def request(message) # rubocop:disable Metrics/MethodLength
+      def request(message) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
         id = message['id']
         case message['method']
         when 'initialize' then reply(id, initialize_session(message['params'] || {}))
@@ -79,7 +79,7 @@ module Mxrb
         reply_error(id, e.code, e.message, e.data)
       end
 
-      def initialize_session(params)
+      def initialize_session(params) # rubocop:disable Metrics/MethodLength
         versions = Array(params.fetch('protocol_versions', [params.fetch('protocol_version', Protocol::VERSION)]))
         unless versions.include?(Protocol::VERSION)
           raise Protocol::Failure.new(Protocol::UNSUPPORTED_PROTOCOL,
@@ -96,7 +96,7 @@ module Mxrb
                           locks: true, framing: 'ndjson' } }
       end
 
-      def spawn(id, method, params) # rubocop:disable Metrics/MethodLength
+      def spawn(id, method, params) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         context = RequestContext.new(id:, notifier: ->(name, payload) { send_message(method: name, params: payload) })
         @pending[id] = context
         thread = Thread.new do

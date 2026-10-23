@@ -41,14 +41,13 @@ module Mxrb
       end
 
       def visit(node, &block)
-        return unless node
-
         yield node if node.is_a?(Prism::CallNode) && node.receiver.nil? && KINDS.include?(node.name.to_s)
         node.compact_child_nodes.each { visit(_1, &block) }
       end
 
       def declaration(node, path)
-        argument = node.arguments&.arguments&.first
+        arguments = node.arguments
+        argument = arguments.arguments.first if arguments
         name = case argument
                when Prism::SymbolNode then argument.unescaped
                when Prism::StringNode then argument.unescaped

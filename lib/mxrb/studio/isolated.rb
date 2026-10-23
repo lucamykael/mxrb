@@ -36,9 +36,9 @@ module Mxrb
 
       module_function
 
-      def run(context, roots: [], &)
+      def run(context, roots: [], &) # rubocop:disable Metrics/MethodLength
         reader, writer = ::IO.pipe
-        pid = fork { begin; serve_child(reader, writer, roots, &); ensure; exit!(0); end } # rubocop:disable Style/Semicolon
+        pid = fork { begin; serve_child(reader, writer, roots, &); ensure; exit!(0); end }
         writer.close
         hook = context.on_cancel { terminate(pid) }
         begin
@@ -53,7 +53,7 @@ module Mxrb
       end
 
       # Child side of #run, kept free of process control so it can be tested.
-      def serve_child(reader, writer, roots)
+      def serve_child(reader, writer, roots) # rubocop:disable Metrics/MethodLength
         reader.close
         Thread.current[Mxrb::Progress::THREAD_KEY] = ChildProgress.new(writer)
         frame = begin

@@ -1417,8 +1417,9 @@ when 'studio'
   action = ARGV.shift
   abort 'Usage: mxrb studio serve [--state-root DIR]' unless action == 'serve'
   index = ARGV.index('--state-root')
+  abort 'Usage: mxrb studio serve [--state-root DIR]' if index && ARGV[index + 1].nil?
   state_root = ARGV.slice!(index, 2).last if index
-  abort 'Usage: mxrb studio serve [--state-root DIR]' unless ARGV.empty? && (index.nil? || state_root)
+  abort 'Usage: mxrb studio serve [--state-root DIR]' unless ARGV.empty?
   Mxrb::Progress.configure(enabled: false)
   service = Mxrb::Studio::Service.new(**{ state_root: }.compact)
   Mxrb::Studio::Server.new(input: $stdin, output: $stdout, service:).run

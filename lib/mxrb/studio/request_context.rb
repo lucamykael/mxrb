@@ -23,7 +23,7 @@ module Mxrb
       def cancel!
         hooks = @mutex.synchronize do
           @cancelled = true
-          @hooks.values
+          @hooks.values.tap { @hooks.clear }
         end
         hooks.each(&:call)
       end
@@ -54,7 +54,7 @@ module Mxrb
         @notifier&.call(method, params)
       end
 
-      def with_progress(label, total: nil)
+      def with_progress(label, total: nil) # rubocop:disable Metrics/MethodLength
         previous = Thread.current[Mxrb::Progress::THREAD_KEY]
         task = ProgressTask.new(self, label, total:).start
         Thread.current[Mxrb::Progress::THREAD_KEY] = task

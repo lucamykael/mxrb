@@ -58,7 +58,7 @@ module Mxrb
         wait_for(file, timeout)
         file
       rescue Busy
-        file&.close
+        file.close
         raise
       end
 
