@@ -70,10 +70,8 @@ module Mxrb
       def canonical_parent(path)
         return File.realpath(path) if File.exist?(path)
 
-        parent = File.dirname(path)
-        raise ArgumentError, 'invalid snapshot destination' if parent == path
-
-        File.join(canonical_parent(parent), File.basename(path))
+        # Recursion ends at the root directory, which always exists.
+        File.join(canonical_parent(File.dirname(path)), File.basename(path))
       end
 
       def fingerprint(path)

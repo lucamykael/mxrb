@@ -88,10 +88,7 @@ module Mxrb
         when Array then value.map { json_value(_1) }
         when String, Integer, TrueClass, FalseClass, NilClass then value
         when Float then value.finite? ? value : { '$numberDouble' => value.to_s }
-        else
-          return json_value(value.as_extended_json) if value.respond_to?(:as_extended_json)
-
-          raise ArgumentError, "unsupported BSON projection: #{value.class}"
+        else json_value(value.as_extended_json) # every other parsed BSON value
         end
       end
 

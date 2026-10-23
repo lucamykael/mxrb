@@ -136,8 +136,6 @@ module Mxrb
         remaining = [syntax]
         until remaining.empty?
           node = remaining.pop
-          next unless node.is_a?(Array)
-
           arguments = declaration_arguments(node)
           declarations << literal_identity(arguments) if arguments
           remaining.concat(node.select { _1.is_a?(Array) })
@@ -152,8 +150,7 @@ module Mxrb
           call = node[1]
           return unless call[0] == :fcall && call.dig(1, 1) == 'mendix_project_id'
 
-          arguments = node[2]
-          arguments[0] == :arg_paren ? arguments[1] : arguments
+          node.dig(2, 1) # Ripper wraps call arguments in :arg_paren
         end
       end
 

@@ -178,5 +178,55 @@ RSpec.describe Mxrb::Studio::RubyProject do
     expect(backend.call(common.merge('action' => 'ruby_project_attach', 'root' => converted[:root])))
       .to eq(converted)
   end
+  it 'rejects a directory or a non-MPR file as source model' do
+    expect { described_class.new(@directory, state_root: @state_root) }.to raise_error(ArgumentError, /must be a file/)
+    text = File.join(@directory, 'notes.mpr')
+    File.write(text, 'not sqlite')
+    expect { described_class.new(text, state_root: @state_root).send(:project_id, text) }.to raise_error(StandardError)
+  end
+
+  it 'falls back to discovery when the bound root disappears or the binding is unreadable' do
+    path = model_at
+    root = write_ruby(File.join(@directory, 'bound'), identity(path))
+    editor = described_class.new(path, state_root: @state_root)
+    editor.attach(root:)
+    FileUtils.rm_rf(root)
+    expect(editor.status[:state]).to eq('missing')
+    binding = Dir.glob(File.join(@state_root, 'ruby-projects', '*.json')).first
+    File.write(binding, '[]')
+    expect(editor.status[:state]).to eq('missing')
+    File.write(binding, '{')
+    expect(editor.status[:state]).to eq('missing')
+  end
+
+  it 'refuses empty, file, escaping, oversized and forwarded-argument entrypoints' do
+    path = model_at
+    editor = described_class.new(path, state_root: @state_root)
+    expect { editor.attach(root: '') }.to raise_error(ArgumentError, /directory path/)
+    file = File.join(@directory, 'file-root')
+    File.write(file, '')
+    expect { editor.attach(root: file) }.to raise_error(ArgumentError, /must be a directory/)
+    escaping = File.join(@directory, 'escaping')
+    FileUtils.mkdir_p(escaping)
+    outside = write_ruby(File.join(@directory, 'outside'), identity(path))
+    File.symlink(File.join(outside, 'project.rb'), File.join(escaping, 'project.rb'))
+    expect { editor.attach(root: escaping) }.to raise_error(ArgumentError, /inside the selected project/)
+    large = File.join(@directory, 'large')
+    FileUtils.mkdir_p(large)
+    File.write(File.join(large, 'project.rb'), "# #{'x' * described_class::MAXIMUM_SOURCE_BYTES}\n")
+    expect { editor.attach(root: large) }.to raise_error(ArgumentError, /exceeds 4 MiB/)
+    forwarded = File.join(@directory, 'forwarded')
+    FileUtils.mkdir_p(forwarded)
+    File.write(File.join(forwarded, 'project.rb'), "def declare(...) = mendix_project_id(...)\n")
+    expect { editor.attach(root: forwarded) }.to raise_error(ArgumentError, /one literal/)
+  end
+
+  it 'removes its temporary binding when publishing the link fails' do
+    path = model_at
+    root = write_ruby(File.join(@directory, 'link-fails'), identity(path))
+    allow(File).to receive(:rename).and_raise(Errno::EACCES)
+    expect { described_class.new(path, state_root: @state_root).attach(root:) }.to raise_error(Errno::EACCES)
+    expect(Dir.glob(File.join(@state_root, 'ruby-projects', '*.tmp'), File::FNM_DOTMATCH)).to be_empty
+  end
 end
 # rubocop:enable Metrics

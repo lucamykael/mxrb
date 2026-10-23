@@ -165,5 +165,26 @@ RSpec.describe Mxrb::Studio::DataExplorer do
     expect(response.dig('plan', 'findings').first)
       .to include('node_type' => 'Seq Scan', 'rule' => 'sequential_scan', 'severity' => 'warning')
   end
+  it 'includes the physical catalog on request and reports defensive failures as structured errors' do
+    allow(workspace).to receive(:query_rows).and_return([{ 'tables_json' => '{}' }])
+    explorer = described_class.new('/not-opened.mpr', workspace:)
+    allow(explorer).to receive(:logical).and_return({})
+    expect(explorer.to_h(include_physical: true)[:physical]).to include(status: 'unavailable')
+    allow(Mxrb::Oql::Server).to receive(:new).and_raise(Mxrb::ToolchainError, 'no server')
+    expect(explorer.query('sql' => 'SELECT 1')).to eq(ok: false, error: { code: 'query_failed', message: 'no server' })
+    allow(Mxrb::Model::Project).to receive(:open).and_raise(Mxrb::NotMprError, 'not a model')
+    expect { explorer.send(:entity_details) }.to raise_error(Mxrb::NotMprError)
+    cyclic = { 'A.X' => { generalization: 'A.Y' }, 'A.Y' => { generalization: 'A.X' } }
+    expect(explorer.send(:inherited_persistence, 'A.X', cyclic, [])).to be_nil
+  end
+
+  it 'validates explain requests before reaching the database' do
+    explorer = described_class.new('/not-opened.mpr', workspace:)
+    expect(explorer.explain('sql' => 'SELECT 1', 'oql' => 'SELECT 1'))
+      .to include(ok: false, error: include(message: /exactly one/))
+    expect(explorer.explain('sql' => 'SELECT 1', 'params' => []))
+      .to include(ok: false, error: include(message: /JSON object/))
+    expect(explorer.explain('oql' => 'DELETE FROM Sales.Customer')).to include(ok: false)
+  end
 end
 # rubocop:enable Metrics/BlockLength

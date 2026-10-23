@@ -229,5 +229,99 @@ RSpec.describe Mxrb::Studio::ModelOperations do
     expect(described_class.new(path, workspace_root: @directory).capabilities[:unsupported])
       .to include(:add_association, :change_generalization)
   end
+  it 'rejects invalid roots, models and working copies that moved or broke after opening' do
+    path = create_model(:v1)
+    expect { described_class.new(path, workspace_root: path) }.to raise_error(ArgumentError, /root must be a directory/)
+    folder = File.join(@directory, 'folder.mpr')
+    Dir.mkdir(folder)
+    expect { described_class.new(folder, workspace_root: @directory) }.to raise_error(ArgumentError, /must be a file/)
+    editor = described_class.new(path, workspace_root: @directory)
+    moved = File.join(@directory, 'moved.mpr')
+    File.rename(path, moved)
+    File.symlink(moved, path)
+    expect { editor.revision }.to raise_error(ArgumentError, /changed outside its root/)
+    File.unlink(path)
+    File.write(path, 'not sqlite')
+    expect { editor.revision }.to raise_error(StandardError)
+  end
+
+  it 'refuses a fingerprint over native storage with a missing unit file' do
+    path = create_model(:v2)
+    editor = described_class.new(path, workspace_root: @directory)
+    mpr = Mxrb::IO::MprFile.open(path, readonly: true, apply_studio_compatibility: false)
+    unit = mpr.all_units.find { mpr.parse_contents(_1)['$Type'] == 'DomainModels$DomainModel' }
+    file = mpr.content_path(unit)
+    mpr.close
+    File.unlink(file)
+    allow_any_instance_of(Mxrb::IO::MprFile).to receive(:content_bytes).and_return(nil)
+    expect { editor.revision }.to raise_error(Mxrb::IncompletePackageError, /no content bytes/)
+  end
+
+  it 'validates operation shapes, targets, members and attribute options' do
+    path = create_model(:v1)
+    editor = described_class.new(path, workspace_root: @directory)
+    revision = editor.revision
+    invalid = {
+      'operation must be an object' => [],
+      'invalid qualified target name' => { 'operation' => 'add_attribute', 'target' => 'Shop', 'name' => 'X' },
+      'attributes must be an array' => { 'operation' => 'add_entity', 'target' => 'Shop', 'name' => 'New',
+                                         'attributes' => {} },
+      'attribute must be an object' => { 'operation' => 'add_entity', 'target' => 'Shop', 'name' => 'New',
+                                         'attributes' => [1] },
+      'duplicate new attribute names' => { 'operation' => 'add_entity', 'target' => 'Shop', 'name' => 'New',
+                                           'attributes' => [{ 'name' => 'A' }, { 'name' => 'a' }] },
+      'localize_date applies only to datetime' => { 'operation' => 'add_attribute', 'target' => 'Shop.Product',
+                                                    'name' => 'When', 'localize_date' => true },
+      'documentation must be UTF-8 text' => { 'operation' => 'add_attribute', 'target' => 'Shop.Product',
+                                              'name' => 'Doc', 'documentation' => 1 },
+      'unknown module' => { 'operation' => 'add_entity', 'target' => 'Nope', 'name' => 'New' },
+      'entity already exists' => { 'operation' => 'add_entity', 'target' => 'Shop', 'name' => 'product' },
+      'unknown entity' => { 'operation' => 'add_attribute', 'target' => 'Shop.Nope', 'name' => 'X' },
+      'unknown attribute' => { 'operation' => 'change_attribute', 'target' => 'Shop.Product/Nope', 'required' => true },
+      'length applies only to string' => { 'operation' => 'change_attribute', 'target' => 'Shop.Other/Count',
+                                           'length' => 5 },
+      'localize_date applies only to datetime attributes' => {
+        'operation' => 'change_attribute', 'target' => 'Shop.Other/Count', 'localize_date' => true
+      }
+    }
+    invalid.each do |message, operation|
+      expect { editor.preview(operation, revision:) }.to raise_error(ArgumentError, /#{message}/)
+    end
+    nullable = { 'operation' => 'add_attribute', 'target' => 'Shop.Product', 'name' => 'Code', 'default' => nil }
+    expect(editor.preview(nullable, revision:)).to include(safe: true)
+    retyped = editor.apply({ 'operation' => 'change_attribute', 'target' => 'Shop.Other/Count', 'type' => 'string' },
+                           revision:)
+    expect(retyped).to include(applied: true)
+  end
+
+  it 'protects OQL view entities and entities whose attributes are referenced' do
+    path = File.join(@directory, 'views.mpr')
+    Mxrb.define(path) do
+      mendix_version '10.18.0'
+      self.module(:Shop) do
+        entity(:Product) { string :Name }
+        entity(:Names) { oql_view query: 'SELECT Name FROM Shop.Product' }
+        microflow :UseName do
+          retrieve_objects 'Shop.Product', as: :items
+          change_object(:items) { set 'Shop.Product/Name', to: "'hello'" }
+        end
+      end
+    end
+    editor = described_class.new(path, workspace_root: @directory)
+    revision = editor.revision
+    expect { editor.preview({ 'operation' => 'add_attribute', 'target' => 'Shop.Names', 'name' => 'X' }, revision:) }
+      .to raise_error(ArgumentError, /OQL view/)
+    expect { editor.preview({ 'operation' => 'remove_entity', 'target' => 'Shop.Product' }, revision:) }
+      .to raise_error(ArgumentError, /incoming references/)
+  end
+
+  it 'refuses an apply whose plan became unsafe after its preview' do
+    path = create_model(:v1, references: true)
+    editor = described_class.new(path, workspace_root: @directory)
+    revision = editor.revision
+    allow(editor).to receive(:preview).and_return({ safe: true })
+    expect { editor.apply({ 'operation' => 'remove_attribute', 'target' => 'Shop.Product/Name' }, revision:) }
+      .to raise_error(ArgumentError, /incoming references/)
+  end
 end
 # rubocop:enable Metrics

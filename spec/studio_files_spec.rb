@@ -238,4 +238,37 @@ RSpec.describe Mxrb::Studio::Files do # rubocop:disable Metrics/BlockLength
     FileUtils.remove_entry(other)
     expect(files.worktrees.map { _1[:path] }).to include(@root, other)
   end
+
+  it 'requires Linux x86_64 or aarch64 for atomic renames' do
+    rename = described_class.const_get(:NativeRename)
+    stub_const('RUBY_PLATFORM', 'arm64-darwin23')
+    expect { rename.call }.to raise_error(NotImplementedError, /require Linux/)
+    stub_const('RUBY_PLATFORM', 'riscv64-linux')
+    stub_const('RbConfig::CONFIG', RbConfig::CONFIG.merge('host_cpu' => 'riscv64'))
+    expect { rename.call }.to raise_error(NotImplementedError, /x86_64 or aarch64/)
+  end
+
+  it 'rejects a file as workspace root, a file as directory and absolute paths' do
+    write_fixture('plain.rb')
+    expect { described_class.new(File.join(@root, 'plain.rb')) }.to raise_error(ArgumentError, /must be a directory/)
+    expect { files.list('plain.rb') }.to raise_error(ArgumentError, /not a directory/)
+    expect { files.list('/etc') }.to raise_error(ArgumentError, /relative/)
+  end
+
+  it 'skips entries removed while they are listed' do
+    write_fixture('kept.rb')
+    write_fixture('gone.rb')
+    allow(File).to receive(:lstat).and_call_original
+    allow(File).to receive(:lstat).with(end_with('/gone.rb')).and_raise(Errno::ENOENT)
+    expect(files.list.map { _1[:name] }).to eq(['kept.rb'])
+  end
+
+  it 'reports no worktrees outside git, without git, and ignores blocks without a worktree' do
+    expect(files.worktrees).to eq([])
+    status = instance_double(Process::Status, success?: true)
+    allow(Open3).to receive(:capture3).and_return(["bare\0\0worktree #{@root}\0HEAD abc\0detached\0\0", '', status])
+    expect(files.worktrees).to eq([{ path: @root, branch: nil, head: 'abc', detached: true, current: true }])
+    allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT)
+    expect(files.worktrees).to eq([])
+  end
 end

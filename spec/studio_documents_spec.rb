@@ -197,5 +197,69 @@ RSpec.describe Mxrb::Studio::Documents do
     expect { documents.read('invalid') }.to raise_error(ArgumentError, /UUID/)
     expect { documents.read(SecureRandom.uuid) }.to raise_error(ArgumentError, /unknown unit/)
   end
+  it 'rejects a directory or a non-MPR file as model' do
+    expect { described_class.new(@directory) }.to raise_error(ArgumentError, /must be a file/)
+    text = File.join(@directory, 'notes.mpr')
+    File.write(text, 'not sqlite')
+    expect { described_class.new(text).list }.to raise_error(StandardError)
+  end
+
+  it 'leaves the unit untouched when a patch writes the current values' do
+    path = make_project(:v1)
+    documents = described_class.new(path)
+    revision = documents.read(@unit_id)[:revision]
+    expect_any_instance_of(Mxrb::IO::MprFile).not_to receive(:update_unit_bytes)
+    expect(documents.patch(@unit_id, revision:, changes: { '/Name' => 'Original' })[:revision]).to eq(revision)
+  end
+
+  it 'validates the shape of change lists and projects non-finite numbers' do
+    documents = described_class.new(make_project(:v1))
+    revision = documents.read(@unit_id)[:revision]
+    expect { documents.patch(@unit_id, revision:, changes: 'Name') }.to raise_error(ArgumentError, /property map/)
+    expect { documents.patch(@unit_id, revision:, changes: [1]) }.to raise_error(ArgumentError, %r{path/value})
+    expect { documents.patch(@unit_id, revision:, changes: {}) }.to raise_error(ArgumentError, /at least one/)
+    expect { documents.patch(@unit_id, revision:, changes: [{ path: '/Name' }]) }
+      .to raise_error(ArgumentError, /path and value/)
+    expect(documents.send(:json_value, Float::NAN)).to eq('$numberDouble' => 'NaN')
+    identifier = SecureRandom.uuid
+    expect(documents.send(:editable?, document_root: { 'Note' => identifier }, path: ['Note'], value: identifier))
+      .to be(false)
+  end
+
+  describe 'native BSON patches' do
+    let(:patch) { described_class.const_get(:NativePatch) }
+    let(:bytes) do
+      BSON::Document.new(
+        'Pattern' => BSON::Regexp::Raw.new('a+', 'i'), 'Script' => BSON::Code.new('x()'),
+        'Scoped' => BSON::CodeWithScope.new('y()', { 'k' => 1 }),
+        'Pointer' => BSON::DbPointer.new('ns', BSON::ObjectId.new), 'Nothing' => nil, 'Ratio' => 1.5,
+        'Yes' => false, 'Name' => 'Old'
+      ).to_bson.to_s
+    end
+
+    def parsed(data) = BSON::Document.from_bson(BSON::ByteBuffer.new(data))
+
+    it 'skips every variable-width field type and rewrites scalars' do
+      expect(parsed(patch.new(bytes).replace(['Name'], 'New'))['Name']).to eq('New')
+      expect(parsed(patch.new(bytes).replace(['Ratio'], 2.5))['Ratio']).to eq(2.5)
+      expect(parsed(patch.new(bytes).replace(['Yes'], true))['Yes']).to be(true)
+      expect(parsed(patch.new(bytes).replace(['Nothing'], nil))['Nothing']).to be_nil
+      symbol = "#{[0].pack('l<')}\x0ESym\0#{[3].pack('l<')}ab\0\x10N\0#{[1].pack('l<')}\0".b
+      symbol[0, 4] = [symbol.bytesize].pack('l<')
+      expect(patch.new(symbol).replace(['N'], 2)).to end_with("N\0#{[2].pack('l<')}\0".b)
+    end
+
+    it 'rejects paths through scalars, absent fields, unsupported tags and broken regexes' do
+      expect { patch.new(bytes).replace(%w[Name x], 'v') }.to raise_error(ArgumentError, /crosses a BSON scalar/)
+      expect { patch.new(bytes).replace(['Nope'], 'v') }.to raise_error(ArgumentError, /absent/)
+      expect { patch.new(bytes).replace(['Pattern'], 'v') }.to raise_error(ArgumentError, /not editable/)
+      expect { patch.new("#{[9].pack('l<')}\x99k\0\0\0".b).replace(['k'], 1) }
+        .to raise_error(ArgumentError, /unsupported BSON field tag/)
+      expect { patch.new("#{[9].pack('l<')}\x0Bk\0abx".b).replace(['k'], 1) }
+        .to raise_error(ArgumentError, /invalid BSON regex/)
+      expect { patch.new("#{[10].pack('l<')}\x0Bk\0ab\0x".b).replace(['k'], 1) }
+        .to raise_error(ArgumentError, /invalid BSON regex/)
+    end
+  end
 end
 # rubocop:enable Metrics

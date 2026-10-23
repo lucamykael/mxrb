@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Metrics
+
 module Mxrb
   module Studio
     # Line-based three-way merge. Unlike diff3 and `git merge-file`, a change
@@ -110,7 +112,7 @@ module Mxrb
 
       # Matching line pairs of a shortest edit script (Myers), or none when
       # the files differ in more than MAXIMUM_EDITS lines.
-      def matches(before, after) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      def matches(before, after)
         prefix = 0
         prefix += 1 while prefix < before.size && prefix < after.size && before[prefix] == after[prefix]
         suffix = 0
@@ -125,7 +127,7 @@ module Mxrb
           (0...suffix).map { [before.size - suffix + _1, after.size - suffix + _1] }
       end
 
-      def myers(left, right) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      def myers(left, right)
         n = left.size
         m = right.size
         return [] if n.zero? || m.zero?
@@ -136,7 +138,8 @@ module Mxrb
         found = (0..maximum).find do |d|
           trace << frontier.dup
           (-d..d).step(2).any? do |k|
-            x = k == -d || (k != d && frontier.fetch(k - 1, -1) < frontier.fetch(k + 1, -1)) ? frontier.fetch(k + 1, 0) : frontier.fetch(k - 1, 0) + 1
+            down = k == -d || (k != d && frontier.fetch(k - 1, -1) < frontier.fetch(k + 1, -1))
+            x = down ? frontier.fetch(k + 1, 0) : frontier.fetch(k - 1, 0) + 1
             y = x - k
             while x < n && y < m && left[x] == right[y]
               x += 1
@@ -151,7 +154,7 @@ module Mxrb
         backtrack(trace, left, right, found)
       end
 
-      def backtrack(trace, left, right, depth) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def backtrack(trace, left, right, depth)
         x = left.size
         y = right.size
         pairs = []
@@ -179,3 +182,4 @@ module Mxrb
     end
   end
 end
+# rubocop:enable Metrics

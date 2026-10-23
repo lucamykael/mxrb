@@ -183,5 +183,53 @@ RSpec.describe Mxrb::Studio::Snapshot do
       .to raise_error(ArgumentError, /inside source assets/)
     expect(File).not_to exist(unsafe)
   end
+  it 'copies only the model and its native storage when assets are excluded' do
+    path = model(:v2)
+    Dir.mkdir(File.join(@source, 'theme'))
+    File.write(File.join(@source, 'theme', 'main.scss'), 'body {}')
+    File.mkfifo(File.join(@source, 'theme', 'pipe'))
+    with_assets = File.dirname(create(path)[:model])
+    expect(File.read(File.join(with_assets, 'theme', 'main.scss'))).to eq('body {}')
+    expect(File).not_to exist(File.join(with_assets, 'theme', 'pipe'))
+    result = described_class.new(path, destination_root: File.join(@directory, 'bare'), assets: false).create
+    copied = File.dirname(result[:model])
+    expect(File).not_to exist(File.join(copied, 'theme'))
+    expect(units(result[:model])).to eq(units(path))
+  end
+
+  it 'rejects a directory or a non-MPR source and reports a busy database' do
+    expect { described_class.new(@source, destination_root: @destination) }
+      .to raise_error(ArgumentError, /must be a file/)
+    text = File.join(@source, 'notes.mpr')
+    File.write(text, 'not sqlite')
+    expect { create(text) }.to raise_error(StandardError)
+    path = model
+    allow_any_instance_of(SQLite3::Backup).to receive(:step).and_return(SQLite3::Constants::ErrorCode::BUSY)
+    expect { create(path) }.to raise_error(Mxrb::Studio::Conflict, /busy/)
+  end
+
+  it 'closes what it opened when a backup database cannot be opened' do
+    path = model
+    allow(SQLite3::Database).to receive(:new).and_call_original
+    allow(SQLite3::Database).to receive(:new).with(end_with('Aplicação.mpr'), flags: anything)
+                                             .and_raise(SQLite3::CantOpenException, 'source')
+    expect { create(path) }.to raise_error(SQLite3::CantOpenException, 'source')
+    allow(SQLite3::Database).to receive(:new).with(end_with('Aplicação.mpr'), flags: anything).and_call_original
+    allow(SQLite3::Database).to receive(:new).with(include('.building-'))
+                                             .and_raise(SQLite3::CantOpenException, 'target')
+    expect { create(path) }.to raise_error(SQLite3::CantOpenException, 'target')
+  end
+  it 'skips an asset that became a symlink after it was checked' do
+    path = model
+    Dir.mkdir(File.join(@source, 'theme'))
+    outside = File.join(@directory, 'outside.txt')
+    File.write(outside, 'external')
+    linked = File.join(@source, 'theme', 'late.txt')
+    File.symlink(outside, linked)
+    allow(File).to receive(:symlink?).and_call_original
+    allow(File).to receive(:symlink?).with(end_with('/late.txt')).and_return(false)
+    copied = File.dirname(create(path)[:model])
+    expect(File).not_to exist(File.join(copied, 'theme', 'late.txt'))
+  end
 end
 # rubocop:enable Metrics
