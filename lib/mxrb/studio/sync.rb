@@ -17,6 +17,7 @@ require_relative 'structure'
 require_relative 'text_merge'
 require_relative 'write_lock'
 
+# rubocop:disable Metrics
 module Mxrb
   module Studio
     # Keeps a native Mendix model and its Ruby project in step, artifact by
@@ -39,7 +40,7 @@ module Mxrb
     #
     # Ruby that does not parse or evaluate leaves the model untouched and
     # reports the error with its file and line.
-    class Sync # rubocop:disable Metrics/ClassLength
+    class Sync
       VERSION = 1
       SKIPPED_DIRECTORIES = (Files::HIDDEN_DIRECTORIES + %w[build deployment tmp]).freeze
       MANAGED = %r{\A\.mxrb/}
@@ -95,7 +96,7 @@ module Mxrb
 
       # Cheap view of pending work: changed Ruby files (with parse
       # diagnostics), changed Mendix units and the last unresolved conflicts.
-      def status # rubocop:disable Metrics/AbcSize
+      def status
         return { linked: false, state: 'unlinked', model: model_path, ruby_root: } unless linked?
 
         link = read_link
@@ -114,7 +115,7 @@ module Mxrb
 
       # Synchronizes both directions. `resolutions` maps conflict ids to
       # `ruby` or `mendix`; `dry_run` reports without writing anything.
-      def run(resolutions: {}, dry_run: false) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def run(resolutions: {}, dry_run: false)
         raise ArgumentError, 'Ruby project is not linked; convert or link it first' unless linked?
 
         resolutions = normalize_resolutions(resolutions)
@@ -169,9 +170,16 @@ module Mxrb
       # The base is a copy of the model and of the Ruby files. The Ruby export
       # of the model and the model generated from the Ruby are kept when they
       # are already known and otherwise produced when a later run needs them.
-      def build_base(base_ruby:, generated:, previous: nil) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def build_base(base_ruby:, generated:, previous: {})
         FileUtils.mkdir_p(state_directory, mode: 0o700)
         directory = Dir.mktmpdir('base-', state_directory)
+        base_record(directory, base_ruby, generated, previous)
+      rescue StandardError
+        FileUtils.rm_rf(directory)
+        raise
+      end
+
+      def base_record(directory, base_ruby, generated, previous)
         model = Snapshot.new(model_path, destination_root: File.join(directory, 'model'), assets: false).create
         ruby = File.join(directory, 'ruby')
         copy_tree(ruby_root, ruby)
@@ -181,17 +189,14 @@ module Mxrb
         { 'version' => VERSION, 'model' => model_path, 'ruby_root' => ruby_root, 'directory' => directory,
           'base_model' => model.fetch(:model), 'base_files' => ruby, 'base_ruby' => (export if base_ruby),
           'generated_model' => generated_copy, 'ruby_files' => digests(ruby_root),
-          'diverged' => generated_copy ? diverged(model.fetch(:model), generated_copy) : previous&.dig('diverged'),
+          'diverged' => generated_copy ? diverged(model.fetch(:model), generated_copy) : previous.fetch('diverged', []),
           'synced_at' => Time.now.utc.iso8601 }.compact
-      rescue StandardError
-        FileUtils.rm_rf(directory) if directory
-        raise
       end
 
       # Produces what the plan and merge need: the generation of the base and
       # of the current Ruby when Ruby changed, the export of the base and of
       # the current model when the model changed, all in parallel.
-      def prepare(link, scratch, ruby:, mendix:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def prepare(link, scratch, ruby:, mendix:)
         inputs = { generated_base: link['generated_model'], base_ruby: link['base_ruby'] }
         jobs = []
         if ruby
@@ -215,10 +220,18 @@ module Mxrb
       end
 
       def parallel(*jobs)
-        threads = jobs.map { |job| Thread.new { Thread.current.report_on_exception = false; job.call } } # rubocop:disable Style/Semicolon
-        threads.map(&:value)
-      ensure
-        threads&.each { _1.join if _1.alive? }
+        threads = jobs.map do |job|
+          Thread.new do
+            job.call
+          rescue StandardError, ScriptError => e
+            e
+          end
+        end
+        results = threads.map(&:value)
+        error = results.find { _1.is_a?(Exception) }
+        raise error if error
+
+        results
       end
 
       def write_link(base)
@@ -283,6 +296,7 @@ module Mxrb
       # Runs in the isolated worker: evaluates project.rb into `target`. Any
       # failure of the Ruby project is a Ruby source error with locations.
       def evaluate_project(entry, target, root)
+        previous = ENV.fetch('MXRB_OUTPUT_PATH', nil)
         ENV['MXRB_OUTPUT_PATH'] = target
         Kernel.load(entry)
         raise RubySourceError, 'project.rb did not generate a model' unless File.file?(target)
@@ -292,6 +306,8 @@ module Mxrb
         raise
       rescue StandardError, ScriptError => e
         raise RubySourceError.new("#{e.class}: #{e.message}", locations: Protocol.locations_for(e, [root]))
+      ensure
+        ENV['MXRB_OUTPUT_PATH'] = previous
       end
 
       def export_model(model, destination)
@@ -299,7 +315,7 @@ module Mxrb
         destination
       end
 
-      def ruby_changes(link) # rubocop:disable Metrics/AbcSize
+      def ruby_changes(link)
         base = link.fetch('ruby_files')
         current = digests(ruby_root)
         (base.keys | current.keys).sort.filter_map do |path|
@@ -351,12 +367,14 @@ module Mxrb
 
       def units_of(path)
         mpr = IO::MprFile.open(path, readonly: true, apply_studio_compatibility: false)
-        mpr.all_units.to_h do |unit|
-          [unit.fetch('UnitID'), { container: unit.fetch('ContainerID'), containment: unit.fetch('ContainmentName'),
-                                   bytes: mpr.content_bytes(unit).to_s.b }]
+        begin
+          mpr.all_units.to_h do |unit|
+            [unit.fetch('UnitID'), { container: unit.fetch('ContainerID'), containment: unit.fetch('ContainmentName'),
+                                     bytes: mpr.content_bytes(unit).to_s.b }]
+          end
+        ensure
+          mpr.close
         end
-      ensure
-        mpr&.close
       end
 
       def fingerprints(path)
@@ -365,7 +383,7 @@ module Mxrb
 
       def mendix_changes(link)
         changed_units(units_of(link.fetch('base_model')), units_of(model_path)).map do |id, kind, document|
-          { unit_id: id, action: kind, type: document&.dig('$Type'), name: document&.dig('Name') }
+          { unit_id: id, action: kind, type: document['$Type'], name: document['Name'] }
         end
       end
 
@@ -392,7 +410,7 @@ module Mxrb
 
       # ── Plan ────────────────────────────────────────────────────────────
 
-      def plan(link, inputs) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def plan(link, inputs)
         base = units_of(link.fetch('base_model'))
         working = units_of(model_path)
         mendix = changed_units(base, working).to_h { [_1[0], _1[1]] }
@@ -415,7 +433,7 @@ module Mxrb
 
       # Documents whose Ruby declaration was deleted. The native baseline
       # would restore them on generation, so their removal is explicit.
-      def removed_documents(link, base) # rubocop:disable Metrics/AbcSize
+      def removed_documents(link, base)
         declared = lambda do |root, paths|
           paths.flat_map do |path|
             file = File.join(root, path)
@@ -450,7 +468,7 @@ module Mxrb
         end
       end
 
-      def plan_removal(plan, id, base, working, mendix)
+      def plan_removal(plan, id, _base, working, mendix)
         return unless working.key?(id)
 
         if mendix.key?(id)
@@ -462,7 +480,7 @@ module Mxrb
         end
       end
 
-      def plan_change(plan, id, base:, working:, before:, after:, mendix:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+      def plan_change(plan, id, base:, working:, before:, after:, mendix:)
         unless working.key?(id)
           change = { unit_id: id, action: 'insert', state: after.fetch(id) }
           if base.key?(id)
@@ -497,15 +515,14 @@ module Mxrb
           resolutions: RESOLUTIONS }
       end
 
-      def element_conflict(id, operation, clash, base, working, generated) # rubocop:disable Metrics/ParameterLists
-        target = operation[:element] if operation[:op] == 'set'
-        target ||= operation[:op] == 'remove' ? operation[:element] : operation[:parent]
-        key = operation[:key] || operation[:op]
-        { id: "element:#{id}:#{target}:#{key}:#{operation[:op]}", kind: 'element', unit_id: id,
+      def element_conflict(id, operation, clash, base, working, generated)
+        target = %w[set remove].include?(operation[:op]) ? operation[:element] : operation[:parent]
+        shown = operation[:key] unless operation[:op] == 'remove'
+        { id: "element:#{id}:#{target}:#{operation[:key]}:#{operation[:op]}", kind: 'element', unit_id: id,
           type: base['$Type'], name: base['Name'], key: operation[:key], ruby_operation: operation[:op],
           mendix_operation: clash[:op], element: Structure.describe(Structure.index(base), target),
-          base: value_at(base, target, operation[:key]), mendix: value_at(working, target, operation[:key]),
-          ruby: value_at(generated, target, operation[:key]), resolutions: RESOLUTIONS }
+          base: value_at(base, target, shown), mendix: value_at(working, target, shown),
+          ruby: value_at(generated, target, shown), resolutions: RESOLUTIONS }
       end
 
       def value_at(document, element_id, key)
@@ -518,7 +535,7 @@ module Mxrb
 
       # ── Text merge ──────────────────────────────────────────────────────
 
-      def merge_text(inputs, plan) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def merge_text(inputs, plan)
         return { files: [], conflicts: [] } if plan[:mendix_units].empty?
 
         theirs = inputs.fetch(:theirs)
@@ -537,7 +554,7 @@ module Mxrb
       end
 
       # nil when the Ruby file stays as it is; otherwise the new content.
-      def merge_file(path, ours, base, theirs) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+      def merge_file(path, ours, base, theirs)
         mine = read_optional(ours)
         original = read_optional(base)
         incoming = read_optional(theirs)
@@ -564,14 +581,21 @@ module Mxrb
           resolutions: RESOLUTIONS }
       end
 
-      def text_value(bytes) = text?(bytes) ? bytes.dup.force_encoding(Encoding::UTF_8) : { binary: bytes.bytesize }
+      def text_value(bytes)
+        return if bytes.nil?
+
+        text?(bytes) ? bytes.dup.force_encoding(Encoding::UTF_8) : { binary: bytes.bytesize }
+      end
 
       # ── Writing ─────────────────────────────────────────────────────────
 
-      def write(plan, text, resolutions, revision) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def write(plan, text, resolutions, revision)
         entry = nil
         WriteLock.synchronize(model_path) do
-          raise Conflict, 'the model changed during synchronization; synchronize again' unless model_revision == revision
+          unless model_revision == revision
+            raise Conflict,
+                  'the model changed during synchronization; synchronize again'
+          end
 
           changes = plan[:units].select { applicable?(_1, resolutions) }
           if changes.any?
@@ -589,8 +613,16 @@ module Mxrb
         change[:action] != 'update' || change[:operations].any? { resolutions[_1[:conflict]] != 'mendix' }
       end
 
-      def write_units(changes, resolutions) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def write_units(changes, resolutions)
         mpr = IO::MprFile.open(model_path, readonly: false, apply_studio_compatibility: false)
+        begin
+          write_changes(mpr, changes, resolutions)
+        ensure
+          mpr.close
+        end
+      end
+
+      def write_changes(mpr, changes, resolutions)
         mpr.transaction do
           changes.sort_by { _1[:action] == 'insert' ? [0, depth(changes, _1)] : [1, 0] }.each do |change|
             case change[:action]
@@ -605,8 +637,6 @@ module Mxrb
             end
           end
         end
-      ensure
-        mpr&.close
       end
 
       # Inserted units are written parents first.
@@ -621,7 +651,7 @@ module Mxrb
         level
       end
 
-      def write_files(files, resolutions) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def write_files(files, resolutions)
         return if files.empty?
 
         backup = File.join(state_directory, 'backups', Time.now.utc.strftime('%Y%m%dT%H%M%S%6N'))
@@ -676,3 +706,4 @@ module Mxrb
     end
   end
 end
+# rubocop:enable Metrics

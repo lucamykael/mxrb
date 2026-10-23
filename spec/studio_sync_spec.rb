@@ -3,6 +3,7 @@
 require 'spec_helper'
 require 'mxrb/studio/sync'
 require 'mxrb/studio/model_operations'
+require 'mxrb/studio/documents'
 require 'tmpdir'
 
 # rubocop:disable Metrics
@@ -101,7 +102,9 @@ RSpec.describe Mxrb::Studio::Sync do
       @format = format
       sync.link!
       before = native_bytes(model)
-      edit(product_file) { _1.sub("integer :Stock\n", "integer :Stock\n  # kept\n  boolean :Active, default: \"true\"\n") }
+      edit(product_file) do
+        _1.sub("integer :Stock\n", "integer :Stock\n  # kept\n  boolean :Active, default: \"true\"\n")
+      end
       status = sync.status
       expect(status[:state]).to eq('pending')
       expect(status[:ruby_changes]).to contain_exactly(
@@ -195,7 +198,7 @@ RSpec.describe Mxrb::Studio::Sync do
     status = sync.status
     expect(status[:state]).to eq('conversion_error')
     expect(status[:ruby_changes].first[:diagnostics].first).to include(
-      file: "modules/Shop/domain/entities/product.rb", severity: "error", line: 6
+      file: 'modules/Shop/domain/entities/product.rb', severity: 'error', line: 6
     )
     expect { sync.run }.to raise_error(Mxrb::Studio::RubySourceError) { expect(_1.locations).not_to be_empty }
 
@@ -233,9 +236,197 @@ RSpec.describe Mxrb::Studio::Sync do
     expect(Mxrb.open(model) { |project| project.microflows.map(&:name) }).not_to include('Recalculate')
 
     File.write(flow, "microflow :Recalculate do\n  return_value 'empty'\nend\n")
-    edit(application) { "#{_1}evaluate File.join(__dir__, #{flow.delete_prefix("#{File.dirname(application)}/").inspect})\n" }
+    edit(application) do
+      "#{_1}evaluate File.join(__dir__, #{flow.delete_prefix("#{File.dirname(application)}/").inspect})\n"
+    end
     expect(sync.run).to include(applied: true)
     expect(Mxrb.open(model) { |project| project.microflows.map(&:name) }).to include('Recalculate')
+  end
+
+  def unit_id_of(type, name = nil)
+    mpr = Mxrb::IO::MprFile.open(model, readonly: true, apply_studio_compatibility: false)
+    mpr.all_units.find do |unit|
+      document = mpr.parse_contents(unit)
+      document['$Type'] == type && (name.nil? || document['Name'] == name)
+    end.fetch('UnitID')
+  ensure
+    mpr&.close
+  end
+
+  def write_model
+    mpr = Mxrb::IO::MprFile.open(model, readonly: false, apply_studio_compatibility: false)
+    yield mpr
+  ensure
+    mpr&.close
+  end
+
+  def patch_document(type, name, changes)
+    documents = Mxrb::Studio::Documents.new(model)
+    id = unit_id_of(type, name)
+    documents.patch(id, revision: documents.read(id).fetch(:revision), changes:)
+  end
+
+  def flow_file = Dir.glob(ruby_file('modules/Shop/application/**/recalculate.rb')).first
+
+  it 'regenerates a missing generated base lazily and ignores pure reserialization' do
+    sync.link!
+    mendix_operation('operation' => 'add_attribute', 'target' => 'Shop.Order', 'name' => 'Note', 'type' => 'string')
+    sync.run
+    expect(JSON.parse(File.read(File.join(sync.state_directory, 'link.json')))).not_to have_key('generated_model')
+    edit(product_file) { _1.sub("integer :Stock\n", "integer :Stock\n  boolean :Active\n") }
+    expect(sync.run).to include(applied: true, conflicts: [])
+    expect(attributes('Product').keys).to eq(%w[Name Stock Active])
+
+    id = unit_id_of('DomainModels$DomainModel')
+    write_model do |mpr|
+      document = mpr.parse_contents(mpr.unit(id))
+      reordered = document.slice('$ID', '$Type').merge(document.except('$ID', '$Type').to_a.reverse.to_h)
+      mpr.update_unit_bytes(id, Mxrb::IO::BsonCodec.serialize(reordered))
+    end
+    expect(sync.status).to include(state: 'synced', mendix_changes: [])
+  end
+
+  it 'reports a removal conflict when Ruby deletes a document that Mendix changed' do
+    sync.link!
+    patch_document('Microflows$Microflow', 'Recalculate', { '/Documentation' => 'changed in Studio Pro' })
+    application = ruby_file('modules/Shop/application/application.rb')
+    edit(application) { _1.lines.reject { |line| line.include?('recalculate.rb') }.join }
+    FileUtils.rm_f(flow_file)
+    result = sync.run
+    unit = result[:conflicts].find { _1[:kind] == 'unit' }
+    expect(unit).to include(type: 'Microflows$Microflow', name: 'Recalculate',
+                            reason: 'removed in Ruby, changed in Mendix')
+    resolved = sync.run(resolutions: result[:conflicts].to_h { [_1[:id], 'mendix'] })
+    expect(resolved).to include(applied: true)
+    expect(Mxrb.open(model) { |project| project.microflows.map(&:name) }).to include('Recalculate')
+  end
+
+  it 'reports a conflict when Ruby changes a document that Mendix removed, and restores it for Ruby' do
+    sync.link!
+    id = unit_id_of('Microflows$Microflow', 'Recalculate')
+    write_model { _1.delete_unit(id) }
+    edit(flow_file) { _1.sub('return_value "empty"', 'return_value "true"') }
+    result = sync.run
+    unit = result[:conflicts].find { _1[:kind] == 'unit' }
+    expect(unit).to include(unit_id: id, reason: 'changed in Ruby, removed in Mendix')
+    choices = result[:conflicts].to_h { [_1[:id], 'ruby'] }
+    expect(sync.run(resolutions: choices)).to include(applied: true)
+    expect(Mxrb.open(model) { |project| project.microflows.map(&:name) }).to include('Recalculate')
+  end
+
+  it 'deletes Ruby files of documents Mendix removed and keeps or drops edited ones as resolved' do
+    sync.link!
+    id = unit_id_of('Microflows$Microflow', 'Recalculate')
+    write_model { _1.delete_unit(id) }
+    path = flow_file
+    expect(sync.run).to include(applied: true)
+    expect(File).not_to exist(path)
+    expect(File.read(ruby_file('modules/Shop/application/application.rb'))).not_to include('recalculate.rb')
+  end
+
+  it 'treats a file both sides changed without a common text as a whole-file conflict' do
+    sync.link!
+    id = unit_id_of('Microflows$Microflow', 'Recalculate')
+    path = flow_file
+    edit(path) { "#{_1}# kept by the Ruby side\n" }
+    write_model { _1.delete_unit(id) }
+    result = sync.run
+    file = result[:conflicts].find { _1[:kind] == 'file' && _1[:path].end_with?('recalculate.rb') }
+    expect(file).to include(ruby: include('kept by the Ruby side'), mendix: nil)
+    choices = result[:conflicts].to_h { [_1[:id], 'ruby'] }
+    expect(sync.run(dry_run: true, resolutions: choices)).to include(applied: false, conflicts: result[:conflicts])
+    expect(sync.run(resolutions: choices)).to include(applied: true)
+    expect(File.read(path)).to include('kept by the Ruby side')
+  end
+
+  it 'drops an edited Ruby file when the Mendix deletion wins' do
+    sync.link!
+    id = unit_id_of('Microflows$Microflow', 'Recalculate')
+    path = flow_file
+    edit(path) { "#{_1}# local note\n" }
+    write_model { _1.delete_unit(id) }
+    conflicts = sync.run[:conflicts]
+    expect(sync.run(resolutions: conflicts.to_h { [_1[:id], 'mendix'] })).to include(applied: true)
+    expect(File).not_to exist(path)
+  end
+
+  it 'reports element conflicts for removals and for insertions into removed elements' do
+    sync.link!
+    edit(product_file) { _1.sub("  integer :Stock\n", '') }
+    mendix_operation('operation' => 'change_attribute', 'target' => 'Shop.Product/Stock', 'default' => '5')
+    edit(order_file) { _1.sub("decimal :Total\n", "decimal :Total\n  string :Code\n") }
+    mendix_operation('operation' => 'remove_entity', 'target' => 'Shop.Order')
+    result = sync.run
+    elements = result[:conflicts].select { _1[:kind] == 'element' }
+    removal = elements.find { _1[:ruby_operation] == 'remove' }
+    expect(removal[:base]).to include(present: true, value: include('Name' => 'Stock'))
+    insertion = elements.find { _1[:ruby_operation] == 'insert' }
+    expect(insertion[:mendix]).to eq(present: false)
+    expect(sync.run(resolutions: result[:conflicts].to_h { [_1[:id], 'mendix'] })).to include(applied: true)
+    expect(attributes('Product').keys).to include('Stock')
+  end
+
+  it 'evaluates and exports in the isolated worker functions directly' do
+    sync.link!
+    target = File.join(@directory, 'direct', 'Shop.mpr')
+    FileUtils.mkdir_p(File.dirname(target))
+    expect(sync.send(:evaluate_project, File.join(ruby, 'project.rb'), target, ruby)).to eq(target)
+    empty = File.join(@directory, 'empty.rb')
+    File.write(empty, "# nothing\n")
+    expect { sync.send(:evaluate_project, empty, "#{target}.none", @directory) }
+      .to raise_error(Mxrb::Studio::RubySourceError, /did not generate/)
+    broken = File.join(@directory, 'broken.rb')
+    File.write(broken, "raise NameError, 'missing helper'\n")
+    expect { sync.send(:evaluate_project, broken, target, @directory) }.to raise_error(Mxrb::Studio::RubySourceError) do
+      expect(_1.message).to eq('NameError: missing helper')
+      expect(_1.locations).to include(include(file: broken, line: 1))
+    end
+    destination = File.join(@directory, 'direct-export')
+    expect(sync.send(:export_model, model, destination)).to eq(destination)
+    expect(File).to exist(File.join(destination, 'project.rb'))
+  end
+
+  it 'skips links, version control, temporary and build directories and special files' do
+    sync.link!
+    File.symlink(product_file, ruby_file('linked.rb'))
+    FileUtils.mkdir_p(ruby_file('.git'))
+    File.write(ruby_file('.git/HEAD'), 'ref')
+    File.write(ruby_file('.mxrb-temporary'), 'x')
+    FileUtils.mkdir_p(ruby_file('node_modules/pkg'))
+    File.write(ruby_file('node_modules/pkg/index.rb'), 'x')
+    File.mkfifo(ruby_file('pipe'))
+    expect(sync.status).to include(state: 'synced', ruby_changes: [])
+  end
+
+  it 'cleans up a partial base and propagates failures of parallel jobs' do
+    sync.link!
+    allow(sync).to receive(:copy_tree).and_raise(Errno::ENOSPC)
+    before = Dir.children(sync.state_directory)
+    expect { sync.send(:build_base, base_ruby: nil, generated: nil) }.to raise_error(Errno::ENOSPC)
+    expect(Dir.children(sync.state_directory)).to match_array(before)
+    expect { sync.send(:parallel, -> { 1 }, -> { raise ArgumentError, 'job failed' }) }
+      .to raise_error(ArgumentError, 'job failed')
+    expect(sync.send(:parallel, -> { 1 }, -> { 2 })).to eq([1, 2])
+  end
+
+  it 'reports binary file conflicts by size' do
+    files = %w[ours base theirs].to_h { [_1, File.join(@directory, _1)] }
+    File.binwrite(files['ours'], "ours\0")
+    File.binwrite(files['base'], 'base')
+    File.binwrite(files['theirs'], "the\0irs")
+    merged = sync.send(:merge_file, 'theme/logo.bin', *files.values)
+    expect(sync.send(:file_conflict, merged)).to include(ruby: { binary: 5 }, mendix: { binary: 7 }, hunks: 1)
+  end
+
+  it 'orders inserted units below inserted containers and inserts generated-only units' do
+    changes = [{ unit_id: 'c', action: 'insert', state: { container: 'b' } },
+               { unit_id: 'b', action: 'insert', state: { container: 'a' } },
+               { unit_id: 'a', action: 'insert', state: { container: 'root' } }]
+    expect(changes.map { sync.send(:depth, changes, _1) }).to eq([2, 1, 0])
+    plan = { units: [], conflicts: [] }
+    state = { container: 'x', containment: 'Documents', bytes: ''.b }
+    sync.send(:plan_change, plan, 'u', base: {}, working: {}, before: {}, after: { 'u' => state }, mendix: {})
+    expect(plan).to eq(units: [{ unit_id: 'u', action: 'insert', state: }], conflicts: [])
   end
 end
 # rubocop:enable Metrics
