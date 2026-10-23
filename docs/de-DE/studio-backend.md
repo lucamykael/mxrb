@@ -50,7 +50,7 @@ unterstützte Version erhält den Fehler `-32015` mit `data.supported`.
 | Dateien | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/worktrees` |
 | Ruby | `ruby/syntax`, `ruby/declarations` |
 | Projekt | `snapshot/create`, `project/status`, `project/convert`, `project/attach` |
-| Dokumente | `documents/list`, `documents/read`, `documents/patch` |
+| Dokumente | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modell | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Daten | `data/logical`, `data/physical`, `data/query`, `data/explain` |
 | Synchronisierung | `sync/link`, `sync/unlink`, `sync/status`, `sync/run` |
@@ -77,6 +77,21 @@ aus; der Host liefert dabei den nativen Kontext ohne `ruby_root`.
 `ruby/declarations` listet die Mendix-Artefakte, die eine Datei deklariert
 (`entity`, `page`, `microflow`, ...), mit ihren qualifizierten Namen. Keine der
 beiden Methoden wertet Ruby aus.
+
+`documents/ruby` erhält `source_model` und `unit_id` (UUID der nativen Unit),
+optional auch `qualified_name` und den BSON-`type` als Identitätsprüfung. Bei
+eindeutiger Zuordnung liefert es `state: "ready"`, die verknüpfte `root`, den
+relativen `path` und die Deklarationszeile `line`. Die Suche prüft native Identität,
+Prism-Deklarationen und Flow-Metadaten, ohne Ruby auszuführen oder Dateinamen zu
+erraten. Eine vom Aufrufer übergebene andere Root wird nicht verwendet.
+
+Ohne verknüpftes Ruby-Projekt lautet der Status für unterstützte Dokumente
+`missing_project`. Der Host kann nach Zustimmung das Modell speichern und einen
+Snapshot konvertieren, danach erneut nachschlagen und den zentralen Editor öffnen.
+Fehlende, nicht unterstützte oder mehrdeutige Quellen liefern `unavailable` mit
+`reason` und `message`. Bestehende Ruby-Projekte werden dabei nicht neu erzeugt.
+Unterstützt werden benannte Dokumente im DSL-Baum `modules/<Modul>`; Aggregate
+wie DomainModel wählen keine beliebige untergeordnete Datei aus.
 
 `files/write` und `documents/patch` erhalten die zuletzt gelesene Revision und
 schlagen mit einem Konflikt fehl, wenn sich Datei oder Unit inzwischen

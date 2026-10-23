@@ -28,6 +28,7 @@ module Mxrb
         'snapshot/create' => :snapshot_create,
         'project/status' => :project_status, 'project/convert' => :project_convert, 'project/attach' => :project_attach,
         'documents/list' => :documents_list, 'documents/read' => :documents_read, 'documents/patch' => :documents_patch,
+        'documents/ruby' => :documents_ruby,
         'model/capabilities' => :model_capabilities, 'model/revision' => :model_revision,
         'model/preview' => :model_preview, 'model/apply' => :model_apply, 'model/history' => :model_history,
         'model/undo' => :model_undo, 'model/redo' => :model_redo,
@@ -217,6 +218,12 @@ module Mxrb
       def documents_list(params, _context) = documents(params).list
       def documents_read(params, _context) = documents(params).read(params.fetch('unit_id'))
 
+      def documents_ruby(params, context)
+        project = ruby_project(params)
+        RubyDocument.new(project, context:).resolve(unit_id: params.fetch('unit_id'),
+                                                    qualified_name: params['qualified_name'], type: params['type'])
+      end
+
       def documents_patch(params, _context)
         journaled(params, 'Edit document properties') do
           documents(params).patch(params.fetch('unit_id'), revision: params.fetch('revision'),
@@ -332,6 +339,7 @@ module Mxrb
         require_relative '../../mxrb'
         require_relative 'snapshot'
         require_relative 'ruby_project'
+        require_relative 'ruby_document'
         require_relative 'documents'
         require_relative 'model_operations'
         require_relative 'history'

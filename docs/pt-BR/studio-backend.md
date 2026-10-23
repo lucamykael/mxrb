@@ -76,7 +76,7 @@ compatível recebe o erro `-32015` com `data.supported`.
 | Arquivos | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/worktrees` |
 | Ruby | `ruby/syntax`, `ruby/declarations` |
 | Projeto | `snapshot/create`, `project/status`, `project/convert`, `project/attach` |
-| Documentos | `documents/list`, `documents/read`, `documents/patch` |
+| Documentos | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modelo | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Dados | `data/logical`, `data/physical`, `data/query`, `data/explain` |
 | Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run` |
@@ -91,6 +91,25 @@ requisição interrompe a tarefa (`cancelled: true` no resultado).
 `ruby/declarations` lista os artefatos Mendix que um arquivo declara
 (`entity`, `page`, `microflow`, ...) com os nomes qualificados. Nenhum dos dois
 avalia Ruby.
+
+`documents/ruby` recebe `source_model` e `unit_id` (UUID da unidade nativa), além
+de `qualified_name` e `type` BSON opcionais para confirmar a identidade. Retorna
+`state: "ready"`, `root`, `path` relativo e `line` quando encontra uma declaração
+Ruby inequívoca do documento. O vínculo do projeto é resolvido pelo backend;
+o cliente não escolhe outra raiz para essa operação. A busca usa o tipo, módulo
+e nome da unidade nativa, declarações Prism e metadados de identidade dos flows,
+sem executar Ruby nem depender do nome do arquivo. Arquivos movidos dentro do
+módulo continuam localizáveis; symlinks e fontes fora da raiz não são seguidos.
+
+Sem um projeto Ruby vinculado, um documento suportado retorna
+`state: "missing_project"`: o host pode perguntar se o usuário quer converter,
+salvar/criar seu snapshot, chamar `project/convert` e repetir a consulta antes
+de abrir o editor central. `state: "unavailable"` inclui `reason` e `message`
+para documento desconhecido, tipo não suportado, identidade divergente,
+declaração ausente ou ambígua. A operação não reconverte nem sobrescreve um
+projeto Ruby existente. Esta busca cobre documentos nomeados na árvore DSL
+`modules/<módulo>`; agregados como DomainModel não têm um único arquivo editável
+e retornam indisponível.
 
 `files/write` e `documents/patch` recebem a revisão que o cliente leu por
 último e falham com conflito quando o arquivo ou a unit mudou nesse meio
