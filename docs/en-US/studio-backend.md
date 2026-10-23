@@ -49,7 +49,7 @@ receives error `-32015` with `data.supported`.
 | Documents | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Model | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Data | `data/logical`, `data/physical`, `data/query`, `data/explain` |
-| Sync | `sync/link`, `sync/unlink`, `sync/status`, `sync/run` |
+| Sync | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` returns every public CLI command and scaffold with a typed
@@ -135,6 +135,40 @@ hold the state it left; otherwise the request fails with a conflict and
 nothing is written. The journal keeps the last 100 entries.
 
 ## Ruby and Mendix synchronization
+
+`sync/preview` accepts `source_model` and optional
+`expected_revisions: {"model": "<sha256>", "ruby": "<sha256>"}`. It resolves
+the linked Ruby root, snapshots the saved native model, and compiles a private
+copy of the Ruby tree. It never calls `sync/link`, updates original `.mxrb/`
+metadata, replaces the Ruby binding, or writes the saved model. Temporary files
+are removed on completion, errors and cancellation.
+
+The response always includes `applied: false`,
+`comparison: "saved_model_to_generated_ruby"`, and
+`conflicts: {assessed: false, reason: "no_sync_baseline"}`. A completed preview
+returns `state: "ready"`, `root`, `revisions`, `current_revisions`, `units` and
+`validation: {errors, warnings}`. Each unit has its identity, type, name,
+`action` (added/removed/modified), and element/property `changes` with before
+and after values. Presence flags distinguish missing properties from null;
+binary values use byte length and SHA-256. Changed inputs return `stale`;
+an absent valid Ruby representation returns `missing_project`.
+Relinking during generation also returns `stale`, with
+`reason: "linked_project_changed"` and `current_root`; the new binding is preserved.
+
+This compares saved inputs and the actual compilation result, not a three-way
+merge or an apply plan. Compilation can normalize defaults without Ruby edits.
+Name/position reconciliation does not guarantee preserved identity for future
+application, and removed Ruby declarations can survive through native baseline
+metadata. These limits are explicit in `limitations`.
+
+Linux Bubblewrap isolation is mandatory: runtime, gems and MXRB libraries are
+read-only; only a private worker directory is writable. The native comparison
+snapshot stays outside that directory. The worker has separate process/network
+namespaces, a temporary HOME and a reduced environment, without personal
+credential folders. Failure to start isolation returns
+`unavailable/isolation_unavailable` with no unrestricted fallback. Source
+symlinks are rejected. Initial limits: 25,000 files/512 MiB of sources,
+120 seconds of generation, 128 KiB of output. Ruby errors include file/line.
 
 `sync/link` records the synchronized base of a model and its Ruby project: a
 copy of the model, a copy of the Ruby files, the Ruby export of the model and

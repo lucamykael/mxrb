@@ -36,7 +36,7 @@ module Mxrb
         'data/logical' => :data_logical, 'data/physical' => :data_physical,
         'data/query' => :data_query, 'data/explain' => :data_explain,
         'sync/link' => :sync_link, 'sync/unlink' => :sync_unlink, 'sync/status' => :sync_status,
-        'sync/run' => :sync_run,
+        'sync/run' => :sync_run, 'sync/preview' => :sync_preview,
         'locks/acquire' => :locks_acquire, 'locks/release' => :locks_release, 'locks/status' => :locks_status
       }.freeze
 
@@ -274,6 +274,12 @@ module Mxrb
       def sync_run(params, context)
         sync(params, context).run(resolutions: params.fetch('resolutions', {}),
                                   dry_run: params.fetch('dry_run', false))
+      end
+
+      def sync_preview(params, context)
+        project = ruby_project(params)
+        require_relative 'sync_preview'
+        SyncPreview.new(project, context:).run(expected_revisions: params['expected_revisions'])
       end
 
       # ── Locks ────────────────────────────────────────────────────────────

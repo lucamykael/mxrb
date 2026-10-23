@@ -88,7 +88,7 @@ compatível recebe o erro `-32015` com `data.supported`.
 | Documentos | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modelo | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Dados | `data/logical`, `data/physical`, `data/query`, `data/explain` |
-| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run` |
+| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` devolve todos os comandos públicos da CLI e os scaffolds com um
@@ -186,6 +186,46 @@ units ainda têm o estado que ela deixou; caso contrário a requisição falha c
 conflito e nada é gravado. O histórico guarda as últimas 100 entradas.
 
 ## Sincronização Ruby e Mendix
+
+`sync/preview` recebe `source_model` e, opcionalmente,
+`expected_revisions: {"model": "<sha256>", "ruby": "<sha256>"}`. Resolve a
+representação Ruby pelo vínculo do projeto; não aceita outra raiz fornecida
+pelo cliente. Cria um snapshot nativo e uma cópia temporária dos arquivos
+Ruby, compila apenas essa cópia e devolve a comparação
+`comparison: "saved_model_to_generated_ruby"`, sempre com `applied: false`.
+Não chama `sync/link`, não atualiza `.mxrb/` original e não substitui o vínculo
+Ruby. Os temporários são removidos ao terminar, falhar ou cancelar.
+
+A resposta inclui `root`, `revisions`, `current_revisions`, `units` e
+`validation: {errors, warnings}`. Cada unit indica `unit_id`, `type`, `name`,
+`action` (`added`, `removed`, `modified`) e alterações por elemento em
+`changes`: operação, elemento, propriedade e valores antes/depois. As flags
+`before_present`/`after_present` distinguem ausência de uma propriedade de um
+valor nulo. Payloads binários aparecem pelo tamanho e SHA-256.
+`state: "ready"` significa que a comparação terminou; não afirma que o
+resultado pode ser aplicado. `stale` indica revisão divergente antes ou depois
+da execução; `missing_project` indica ausência de representação Ruby válida.
+Uma troca de vínculo durante a compilação também retorna `stale`, com
+`reason: "linked_project_changed"` e `current_root`, preservando o novo vínculo.
+
+Essa prévia não carrega uma base histórica de sincronização:
+`conflicts: {assessed: false, reason: "no_sync_baseline"}`. Ela inclui apenas
+arquivos salvos e o resultado efetivo da compilação. Defaults normalizados
+pelo compilador podem aparecer mesmo sem edições Ruby. A reconciliação de IDs
+por nome/posição serve para apresentar diferenças, não garante um futuro
+apply. Remover uma declaração Ruby pode manter o documento preservado pelo
+baseline nativo. Esses limites também estão em `limitations`; não existe
+operação de aplicação associada a essa resposta.
+
+A execução exige Linux com Bubblewrap funcional: sistema/runtime, gems e
+biblioteca MXRB são somente leitura; apenas a cópia privada fica gravável.
+O worker usa namespaces próprios de processos e rede, HOME temporário e
+ambiente reduzido, sem montar as pastas pessoais de credenciais. O snapshot
+usado como comparação permanece fora do workspace gravável do worker.
+Se o isolamento não iniciar, retorna `unavailable/isolation_unavailable`, sem
+executar uma alternativa irrestrita. Symlinks de fontes são recusados. Os
+limites iniciais são 25 mil arquivos/512 MiB de fontes, 120 segundos de
+compilação e 128 KiB de stdout/stderr; erros Ruby trazem arquivo e linha.
 
 `sync/link` registra a base sincronizada de um modelo e do seu projeto Ruby:
 uma cópia do modelo, uma cópia dos arquivos Ruby, a exportação Ruby do modelo

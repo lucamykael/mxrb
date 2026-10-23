@@ -53,7 +53,7 @@ unterstützte Version erhält den Fehler `-32015` mit `data.supported`.
 | Dokumente | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modell | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Daten | `data/logical`, `data/physical`, `data/query`, `data/explain` |
-| Synchronisierung | `sync/link`, `sync/unlink`, `sync/status`, `sync/run` |
+| Synchronisierung | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
 | Sperren | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` liefert jeden öffentlichen CLI-Befehl und jedes Scaffold mit
@@ -155,6 +155,37 @@ Konflikt fehl und nichts wird geschrieben. Das Journal behält die letzten 100
 Einträge.
 
 ## Ruby- und Mendix-Synchronisierung
+
+`sync/preview` erhält `source_model` und optional
+`expected_revisions: {"model": "<sha256>", "ruby": "<sha256>"}`. Die Operation
+verwendet das verknüpfte Ruby-Projekt, erstellt private Kopien und kompiliert
+nur diese. Gespeichertes Modell, ursprüngliche `.mxrb/`-Metadaten und die
+Ruby-Verknüpfung bleiben unverändert; `sync/link` wird nicht aufgerufen.
+Temporäre Dateien werden auch bei Fehlern und Abbruch entfernt.
+
+Die Antwort enthält immer `applied: false`,
+`comparison: "saved_model_to_generated_ruby"` und
+`conflicts: {assessed: false, reason: "no_sync_baseline"}`. `ready` bedeutet
+eine abgeschlossene Vorschau mit `root`, `revisions`, `current_revisions`,
+`units` (Identität, Typ, Name, Aktion und Änderungen pro Element) sowie
+`validation: {errors, warnings}`. Abweichende Revisionen ergeben `stale`,
+eine fehlende gültige Ruby-Repräsentation `missing_project`.
+Eine zwischenzeitliche Neuverknüpfung ergibt ebenfalls `stale` mit
+`reason: "linked_project_changed"` und `current_root`; die neue Verknüpfung bleibt erhalten.
+
+Die Vorschau ist kein Merge oder Apply-Plan. Sie berücksichtigt gespeicherte
+Dateien; der Compiler kann Standardfelder auch ohne Ruby-Änderung normalisieren.
+Zuordnung über Namen/Position garantiert keine Identität bei späterem Apply.
+Gelöschte Ruby-Deklarationen können über native Baseline-Metadaten erhalten
+bleiben. Diese Grenzen stehen auch in `limitations`.
+
+Linux-Bubblewrap mit eigenen Prozess- und Netzwerk-Namespaces ist erforderlich.
+Runtime, Gems und MXRB sind schreibgeschützt; nur das private Worker-Verzeichnis
+ist beschreibbar. HOME ist temporär, die Umgebung reduziert, persönliche
+Zugangsdatenordner werden nicht eingebunden. Ohne funktionierende Isolation
+lautet die Antwort `unavailable/isolation_unavailable`; es gibt keinen
+unbeschränkten Ersatz. Quell-Symlinks werden abgelehnt. Anfangsgrenzen:
+25.000 Dateien/512 MiB Quellen, 120 Sekunden Laufzeit und 128 KiB Ausgabe.
 
 `sync/link` hält die synchronisierte Basis eines Modells und seines
 Ruby-Projekts fest: eine Kopie des Modells, eine Kopie der Ruby-Dateien, den

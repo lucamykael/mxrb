@@ -24,8 +24,8 @@ module Mxrb
         @state_root = File.expand_path(state_root)
       end
 
-      def status
-        with_lock { current_status }
+      def status(persist_discovery: true)
+        with_lock { current_status(persist_discovery:) }
       end
 
       def attach(root:)
@@ -56,7 +56,7 @@ module Mxrb
       def bindings_root = File.join(state_root, 'ruby-projects')
       def binding_path = File.join(bindings_root, "#{source_key}.json")
 
-      def current_status # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      def current_status(persist_discovery: true) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
         binding = read_binding
         if binding && binding['source_model'] == source_model && binding['project_id'] == project_id(source_model)
           candidate = valid_root(binding['root'])
@@ -66,7 +66,7 @@ module Mxrb
           candidate = valid_root(root)
           next unless candidate
 
-          persist(candidate, discovered: true)
+          persist(candidate, discovered: true) if persist_discovery
           return representation(candidate, discovered: true)
         end
         { source_model:, root: nil, entrypoint: nil, state: 'missing', discovered: false }
