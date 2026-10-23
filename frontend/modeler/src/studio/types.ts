@@ -2,6 +2,7 @@ export type StudioContext = {
   panel?: 'explorer' | 'tasks';
   root?: string; source_model?: string; ruby_root?: string;
   theme?: Record<string, string>;
+  capabilities?: { native_ruby_editor?: boolean };
 };
 export type Entry = { name: string; path: string; directory: boolean; size: number };
 export type FileContent = { path: string; text: string; revision: string };

@@ -11,6 +11,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('');
   const [scroll, setScroll] = useState(0);
+  const [opening, setOpening] = useState('');
   const epoch = useRef(0);
   const operations = useRef(new AbortController());
   const selection = useRef(0);
@@ -21,7 +22,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     const controller = new AbortController();
     operations.current = controller;
     setRoot(undefined);
-    setSelected(undefined); setEntries({}); setExpanded(new Set(['.'])); setError('');
+    setSelected(undefined); setEntries({}); setExpanded(new Set(['.'])); setError(''); setOpening('');
     if (context.ruby_root) { setRoot(context.ruby_root); setState('ready'); }
     else if (context.source_model) {
       setState('loading');
@@ -72,6 +73,19 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     }
   }
 
+  async function openEditor(path: string) {
+    if (!context.capabilities?.native_ruby_editor || !context.source_model || opening) return;
+    const current = epoch.current;
+    setOpening(path); setError('');
+    try {
+      await rpc.call('host/openFile', { source_model: context.source_model, path }, { signal: operations.current.signal });
+    } catch (reason) {
+      if (current === epoch.current && !operations.current.signal.aborted) setError(String(reason));
+    } finally {
+      if (current === epoch.current) setOpening('');
+    }
+  }
+
   const flat: { entry: Entry; depth: number }[] = [];
   function visit(path: string, depth: number) {
     for (const entry of entries[path] ?? []) {
@@ -99,6 +113,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
             aria-selected={selected?.path === entry.path} data-path={entry.path}
             className="tree-row" style={{ top: (start + offset) * 24, paddingLeft: 6 + depth * 16 }}
             title={entry.path} onClick={() => void activate(entry)}
+            onDoubleClick={() => { if (!entry.directory) void openEditor(entry.path); }}
             onKeyDown={event => {
               const index = start + offset;
               const next = event.key === 'ArrowDown' ? index + 1 : event.key === 'ArrowUp' ? index - 1 : -1;
@@ -117,6 +132,8 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     </>}
     {selected && <section className="file-preview" aria-label="Ruby preview">
       <div className="tool-heading" title={selected.path}>{selected.path} <span>Ruby · read-only preview</span></div>
+      {context.capabilities?.native_ruby_editor && <button className="open-editor" disabled={!!opening}
+        onClick={() => void openEditor(selected.path)}>{opening ? 'Opening editor…' : 'Open in editor'}</button>}
       <pre tabIndex={0}>{selected.text}</pre>
     </section>}
   </section>;
