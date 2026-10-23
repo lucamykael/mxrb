@@ -231,7 +231,8 @@ module Mxrb
              .downcase
       end
 
-      def microflow_source(flow, metadata = nil, internal_metadata: false, declaration: :microflow)
+      def microflow_source(flow, metadata = nil, internal_metadata: false, declaration: :microflow,
+                           methods: true)
         parameters = flow.parameters.filter_map do |param|
           next unless param.is_a?(Hash)
 
@@ -280,6 +281,14 @@ module Mxrb
         elsif metadata&.fetch(:public, false)
           arguments << 'public: true'
         end
+        if methods && editable_flow_body?(objects, flows)
+          program = MethodFlowSource.new(body.join("\n"), captions: flow_activity_captions(flow)).source(indent: 2)
+          return [
+            '# frozen_string_literal: true', '',
+            "#{declaration} #{arguments.join(', ')}, plan: Class.new(Mxrb::Dsl::FlowProgram) {",
+            program, '}', ''
+          ].join("\n")
+        end
         [
           '# frozen_string_literal: true', '',
           "#{declaration} #{arguments.join(', ')} do",
@@ -325,9 +334,24 @@ module Mxrb
         "#{helper}(#{ruby(target)})"
       end
 
-      def nanoflow_source(flow, metadata = nil, internal_metadata: false)
-        microflow_source(flow, metadata, internal_metadata:)
+      def nanoflow_source(flow, metadata = nil, internal_metadata: false, methods: true)
+        microflow_source(flow, metadata, internal_metadata:, methods:)
           .sub(/(^\s*)microflow /, '\1nanoflow ')
+      end
+
+      def flow_activity_captions(flow)
+        return {} unless flow.is_a?(Model::Microflow)
+
+        nested_flow_objects(Array(flow.objects)).each_with_object({}) do |object, result|
+          next unless object['$Type'] == 'Microflows$ActionActivity'
+          next if object['Caption'].to_s.empty?
+
+          source = action_dsl_line(object, 0)
+          next unless source
+
+          key = MethodFlowSource.normalize(source)
+          (result[key] ||= []) << object['Caption'].to_s
+        end
       end
 
       def flow_body_fingerprint(lines, flow)

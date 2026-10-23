@@ -19,7 +19,9 @@ module Mxrb
 
         # Declares how this Ruby service materializes as a Mendix flow. The
         # typed block is ordinary editable Ruby and supports both runtimes.
-        def flow(kind = :microflow, public: false, export_level: 'Hidden', &block)
+        def flow(kind = :microflow, public: false, export_level: 'Hidden', main: nil, &block)
+          raise ArgumentError, 'use a main method or a definition block, not both' if main && block
+
           qualified = require_qualified_mendix_name!
           runtime, flow_kind = case kind.to_sym
                                when :microflow, :rule then %i[server use_case]
@@ -36,7 +38,11 @@ module Mxrb
             qualified.split('.', 2).last,
             runtime:, kind: flow_kind, public:, unit_id:, metadata: FlowMetadata.for(unit_id, native_type)
           )
-          builder.instance_eval(&block) if block
+          if main
+            Dsl::FlowProgram.apply(self, builder, entry: main)
+          elsif block
+            builder.instance_eval(&block)
+          end
           FlowMetadata.validate!(unit_id, native_type, builder)
           @native_kind = kind.to_sym
           @native_definition = builder.to_h

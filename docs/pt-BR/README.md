@@ -10,6 +10,7 @@
 - [Navegação e design system](design-system.md)
 - [OQL, visão SQL e banco local](oql-sql.md)
 - [Protocolo do backend do Studio](studio-backend.md)
+- [Microflows organizados por métodos](method-oriented-flows.md)
 - [Convenções](conventions.md)
 - [Roadmap Ruby-first](ruby-first-roadmap.md)
 - [Matriz de validação](validation-matrix.md)
