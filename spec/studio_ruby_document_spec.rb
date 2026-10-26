@@ -267,6 +267,72 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     mpr&.close
   end
 
+  it 'opens an empty module security source only when the loader evaluates it' do
+    security = File.join(root, 'modules/Other/security/security.rb')
+    mod = Mxrb.open(model) { _1.modules.find { |entry| entry.name == 'Other' } }
+    mpr = Mxrb::IO::MprFile.open(model)
+    unit = { 'UnitID' => mpr.insert_unit(container_uuid: mod.id, containment_name: 'ModuleSecurity',
+                                         contents_doc: { '$Type' => 'Security$ModuleSecurity', 'ModuleRoles' => [3] }) }
+    mpr.close
+    expect(lookup(unit)).to include(state: 'ready', path: 'modules/Other/security/security.rb', line: 1)
+    File.write(security, "puts 'not a declaration'\n")
+    expect(lookup(unit)).to include(state: 'unavailable', reason: 'source_not_found')
+  ensure
+    mpr&.close
+  end
+
+  it 'accepts only literal loader paths below the module directory' do
+    loader = File.join(root, 'modules/Other/module.rb')
+    expect(lookup(document('DomainModels$DomainModel', 'Other'))).to include(state: 'ready')
+    [
+      "self.module :Other do\n  evaluate 'domain/model.rb'\n  evaluate File.join('domain', 'model.rb')\n" \
+      "  evaluate File.join(__dir__)\n  evaluate File.join(__dir__, '..', 'model.rb')\n  evaluate File.join()\n" \
+      "  log_message 'x'\nend\n",
+      "self.module :Other\n"
+    ].each do |source|
+      File.write(loader, source)
+      expect(lookup(document('DomainModels$DomainModel', 'Other')))
+        .to include(state: 'unavailable', reason: 'source_not_found')
+    end
+  end
+
+  it 'refuses duplicate module declarations and ignores unrelated project definitions' do
+    FileUtils.cp(File.join(root, 'modules/Shop/module.rb'), File.join(root, 'modules/Shop/module_copy.rb'))
+    Mxrb.open(model) do |project|
+      mod = project.modules.find { _1.name == 'Shop' }
+      expect(lookup(project.mpr.unit(mod.id))).to include(state: 'unavailable', reason: 'ambiguous_source')
+      File.open(File.join(root, 'project.rb'), 'a') { _1.puts "Mxrb.define('Other.mpr') do\n  mendix_version '11.12.1'\nend" }
+      unit = project.all_units.find { project.parse_bson(_1)['$Type'] == 'Projects$Project' }
+      expect(lookup(unit)).to include(state: 'ready', path: 'project.rb')
+    end
+  end
+
+  it 'skips argument-less, splatted and non-Ruby entries while scanning declarations' do
+    File.write(File.join(root, 'modules/Shop/README.md'), "microflow :ACT_DealGame\n")
+    File.write(File.join(root, 'modules/Shop/extra.rb'),
+               "native_unit\nnative_unit unit_reference\nmicroflow :Other, **options\n")
+    expect(lookup).to include(state: 'ready', path: 'modules/Shop/application/use_cases/act_deal_game.rb')
+  end
+
+  it 'treats a missing module folder or a file removed during lookup as no declaration' do
+    FileUtils.rm_rf(File.join(root, 'modules/Other'))
+    expect(lookup(document('Microflows$Microflow', 'Other')))
+      .to include(state: 'unavailable', reason: 'source_not_found')
+    allow_any_instance_of(Mxrb::Studio::Files).to receive(:read).and_wrap_original do |original, path|
+      raise Errno::ENOENT, path if path == 'modules/Shop/domain/model.rb'
+
+      original.call(path)
+    end
+    found = lookup(document('DomainModels$DomainModel'))
+    expect(found.fetch(:files).map { _1.fetch(:path) }).not_to include('modules/Shop/domain/model.rb')
+  end
+
+  it 'bounds the number of entries scanned for a declaration' do
+    root
+    stub_const('Mxrb::Studio::RubyDocument::MAXIMUM_FILES', 1)
+    expect { lookup }.to raise_error(ArgumentError, 'Ruby document lookup exceeds 10000 entries')
+  end
+
   it 'observes cancellation before reading a native model' do
     context = Mxrb::Studio::RequestContext.new
     context.cancel!
