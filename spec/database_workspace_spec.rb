@@ -641,6 +641,32 @@ RSpec.describe Mxrb::Runtime::DatabaseWorkspace do
     end
   end
 
+  it 'binds explain parameter values as psql variables without inserting them into SQL' do
+    Dir.mktmpdir do |dir|
+      path = make_project(dir)
+      commands = []
+      subject = workspace(path, File.join(dir, 'state')) do |*command|
+        commands << command
+        output = if command.last.start_with?('EXPLAIN')
+                   JSON.generate([{ 'Plan' => {
+                                   'Node Type' => 'Result', 'Total Cost' => 1
+                                 } }])
+                 else
+                   ''
+                 end
+        [output, '', status(true)]
+      end
+      value = "ação' OR 1=1 --"
+      subject.explain('SELECT :Name, :Missing', params: { 'Name' => value, 'Missing' => nil })
+      command = commands.find { _1.last.start_with?('EXPLAIN') }
+      expect(command).to include('mxrb_reader', '--set', "mxrb_Name=#{value}")
+      expect(command.last).to end_with("SELECT :'mxrb_Name', NULL")
+      expect(command.last).not_to include(value)
+      expect { subject.explain('SELECT :Name', params: { 'Other' => 'value' }) }
+        .to raise_error(ArgumentError, /missing query parameter/)
+    end
+  end
+
   it 'reports cumulative query, table, and index workload statistics' do
     Dir.mktmpdir do |dir|
       path = make_project(dir)

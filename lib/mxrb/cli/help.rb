@@ -104,6 +104,8 @@ module Mxrb
         ['query', 'query "SELECT ..." --from sql|oql [options]',
          'Convert safe read-only queries between SQL and OQL',
          'mxrb query "SELECT p.name FROM shop$product p" --from sql --to oql'],
+        ['studio', 'studio serve [--state-root DIR]', 'Serve the Studio IDE backend as JSON-RPC over stdio',
+         'mxrb studio serve'],
         ['team-server', 'team-server <ACTION> [options]', 'Work with Mendix Team Server repositories',
          'mxrb team-server status ./app'],
         ['test', 'test FILE.mpr TEST.rb [options]', 'Run isolated functional Runtime tests',
@@ -133,8 +135,9 @@ module Mxrb
         'module' => %w[new search add],
         'project' => %w[inspect],
         'scaffold' => %w[list destroy],
+        'studio' => %w[serve],
         'team-server' => %w[login projects info branches commits clone status fetch pull push],
-        'widgets' => %w[sync]
+        'widgets' => %w[new build sync]
       }.freeze
 
       OPTIONS = {
@@ -324,9 +327,17 @@ module Mxrb
                                 'mxrb team-server clone APP_ID ./shop'],
         'team-server status' => ['team-server status DIR', 'Show local Team Server repository status',
                                  'mxrb team-server status ./shop'],
+        'studio serve' => ['studio serve [--state-root DIR]',
+                           'Serve the Studio IDE backend: JSON-RPC 2.0, one message per line on stdin/stdout',
+                           'mxrb studio serve'],
         'team-server fetch' => ['team-server fetch DIR', 'Fetch repository changes', 'mxrb team-server fetch ./shop'],
         'team-server pull' => ['team-server pull DIR', 'Pull repository changes', 'mxrb team-server pull ./shop'],
         'team-server push' => ['team-server push DIR', 'Push repository changes', 'mxrb team-server push ./shop'],
+        'widgets new' => ['widgets new NAME [DIR]', 'Create a React and TypeScript widget project',
+                          'mxrb widgets new OrderSummary ./widgets-src'],
+        'widgets build' => ['widgets build DIR [--project MENDIX_PROJECT_DIR]',
+                            'Build and optionally install widget packages',
+                            'mxrb widgets build ./widgets-src --project ./shop'],
         'widgets sync' => ['widgets sync DEFINITION.rb FILE.mpr', 'Synchronize pluggable widget schemas',
                            'mxrb widgets sync project.rb Shop.mpr']
       }.to_h { |path, values| [path, Command.new(path, *values)] }.freeze
@@ -394,6 +405,7 @@ module Mxrb
         parts = Array(path).map(&:to_s)
         parts[0] = 'diagram-er' if parts.first == 'domain-model'
         name = parts.first
+        return Mxrb::Scaffold::Help.text(name) if name == 'query' && parts[1] == 'new'
         return Mxrb::Scaffold::Help.text(name) if scaffold_command?(name)
 
         item = COMMANDS[name]

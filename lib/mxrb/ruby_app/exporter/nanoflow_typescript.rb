@@ -27,7 +27,8 @@ module Mxrb
               ruby_path,
               service_source(
                 namespace, flow_ruby_constant(flow, duplicate_name:), qualified, flow.id,
-                native_source:, native_kind: :nanoflow
+                native_source:, native_kind: :nanoflow,
+                activity_captions: native_flow_captions(flow)
               )
             )
           end
@@ -55,7 +56,7 @@ module Mxrb
           converter = Mxrb::Exporter.allocate
           converter.instance_variable_set(:@mpr_path, @mpr_path)
           method = kind.to_sym == :nanoflow ? :nanoflow_source : :microflow_source
-          source = converter.send(method, flow, nil, internal_metadata: true)
+          source = converter.send(method, flow, nil, internal_metadata: true, methods: false)
           return unless source.include?('body_fingerprint')
 
           declaration = source.lines.index { _1.match?(/^\s*(?:microflow|nanoflow)\s/) }
@@ -77,6 +78,10 @@ module Mxrb
           [*settings, body].join("\n")
         rescue StandardError, SyntaxError
           nil
+        end
+
+        def native_flow_captions(flow)
+          Mxrb::Exporter.allocate.send(:flow_activity_captions, flow)
         end
 
         def nanoflow_typescript(flow, qualified)

@@ -14,19 +14,20 @@ RSpec.describe 'typed flow call arguments' do
 
       Mxrb::Exporter.new(source, exported).export!
       ruby = exported_flow_source(exported, 'Caller')
+      compact = ruby.lines.map(&:strip).join("\n")
 
-      expect(ruby).to include(
+      expect(compact).to include(
         "call_microflow \"Calls.Target\", as: :Result do\n" \
-        "    argument \"Calls.Target.Value\", \"$Input\"\n" \
-        '  end',
+        "argument \"Calls.Target.Value\", \"$Input\"\n" \
+        'end',
         "call_java \"Calls.Normalize\", as: :Normalized do\n" \
-        "    argument \"Text\", \"$Input\"\n" \
-        "    entity_argument \"Entity\", \"Calls.Item\"\n" \
-        "    microflow_argument \"Callback\", \"Calls.Target\"\n" \
-        '  end',
+        "argument \"Text\", \"$Input\"\n" \
+        "entity_argument \"Entity\", \"Calls.Item\"\n" \
+        "microflow_argument \"Callback\", \"Calls.Target\"\n" \
+        'end',
         "call_nanoflow \"Calls.ClientTarget\" do\n" \
-        "    argument \"Value\", \"$Input\"\n" \
-        '  end'
+        "argument \"Value\", \"$Input\"\n" \
+        'end'
       )
       expect(ruby).not_to include('pass:', '=>', 'unit_id:')
 

@@ -5,6 +5,10 @@ require_relative '../lib/mxrb'
 require 'shellwords'
 require 'io/console'
 
+def read_cli_secret
+  $stdin.tty? ? $stdin.noecho(&:gets) : $stdin.gets
+end
+
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
 def render_plan_report(report, json:)
   payload = {
@@ -1077,6 +1081,10 @@ when 'oql'
   end
 
 when 'query'
+  if ARGV.first == 'new'
+    Mxrb::Scaffold::CLI.new(command, ARGV).run
+    exit
+  end
   usage = 'Usage: mxrb query "SELECT ..." --from sql|oql ' \
           '[--to oql|sql] [--dialect ansi|postgresql|sql_server] ' \
           '[--project FILE.mpr] [--input FILE] [--json]'
@@ -1404,6 +1412,17 @@ when 'db'
   rescue Mxrb::ToolchainError, Mxrb::CompilationError, ArgumentError => e
     abort "[mxrb] #{e.message}"
   end
+
+when 'studio'
+  action = ARGV.shift
+  abort 'Usage: mxrb studio serve [--state-root DIR]' unless action == 'serve'
+  index = ARGV.index('--state-root')
+  abort 'Usage: mxrb studio serve [--state-root DIR]' if index && ARGV[index + 1].nil?
+  state_root = ARGV.slice!(index, 2).last if index
+  abort 'Usage: mxrb studio serve [--state-root DIR]' unless ARGV.empty?
+  Mxrb::Progress.configure(enabled: false)
+  service = Mxrb::Studio::Service.new(**{ state_root: }.compact)
+  Mxrb::Studio::Server.new(input: $stdin, output: $stdout, service:).run
 
 when 'serve'
   path = ARGV.shift or abort 'Usage: mxrb serve <file.mpr> [--port PORT] [--db-port PORT] [--no-up]'
@@ -1764,7 +1783,8 @@ when 'marketplace'
         puts '[mxrb] Format: JSON field "mendix_pat"; file mode: 0600.'
         puts '[mxrb] Recommended alternative: marketplace login --pat-file PATH'
         print 'Mendix PAT: '
-        token = ENV['MXRB_MENDIX_PAT'] || $stdin.noecho(&:gets)
+        $stdout.flush
+        token = ENV['MXRB_MENDIX_PAT'] || read_cli_secret
         puts
         Mxrb::OfficialMarketplace::ContentApi.new(pat: token).search(limit: 1) unless no_verify
         path = credentials.save_pat(token)

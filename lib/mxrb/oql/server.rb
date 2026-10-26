@@ -85,7 +85,7 @@ module Mxrb
         params = payload.fetch('params', {})
         raise ArgumentError, 'params must be a JSON object' unless params.is_a?(Hash)
 
-        return [sql, [], {}] unless sql.to_s.empty?
+        return [sql, [], params] unless sql.to_s.empty?
 
         translate_oql(oql, params)
       end

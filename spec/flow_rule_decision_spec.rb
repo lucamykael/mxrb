@@ -92,7 +92,7 @@ RSpec.describe 'typed rule decisions' do # rubocop:disable Metrics/BlockLength
       Mxrb::Exporter.new(source, root, mode: :ruby).export!
       file = Dir.glob(File.join(root, 'app', 'services', '**', '*.rb')).find { File.read(_1).include?('rule_decision') }
       text = File.read(file)
-      expect(text).to include('rule_decision "App.Rule" do', 'argument "App.Rule.Value", "$Input"')
+      expect(text).to include('rule_decision "App.Rule", &step(', 'argument "App.Rule.Value", "$Input"')
       expect(text).not_to include('pass:', 'decision ({')
       application = Mxrb::RubyApp::Application.new(root)
       allow(Mxrb::IO::MprFile).to receive(:open).and_raise('MPR is unavailable')

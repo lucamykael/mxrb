@@ -67,6 +67,14 @@ RSpec.describe Mxrb::Oql::Server do
     )
   end
 
+  it 'passes SQL bind parameters to the database without changing query text or values' do
+    sql = 'SELECT name FROM products WHERE name = :Name AND active = :Active'
+    params = { 'Name' => "ação' OR 1=1 --", 'Active' => true }
+
+    expect(server.execute('sql' => sql, 'params' => params)).to include(ok: true, row_count: 1)
+    expect(workspace).to have_received(:query_rows).with(sql, params:)
+  end
+
   it 'enforces loopback binding' do
     expect do
       described_class.new('/tmp/App.mpr', host: '0.0.0.0', workspace:)

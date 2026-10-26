@@ -56,6 +56,19 @@ jobs:
           sudo apt-get "${apt_options[@]}" install -y imagemagick
           convert -version
 
+      - name: Enable the isolated Ruby preview sandbox
+        timeout-minutes: 5
+        run: |
+          if ! command -v bwrap >/dev/null; then
+            apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
+            sudo apt-get "${apt_options[@]}" update
+            sudo apt-get "${apt_options[@]}" install -y bubblewrap
+          fi
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          /usr/bin/bwrap --unshare-all --die-with-parent --ro-bind / / /usr/bin/true
+
       - name: Check out pinned imported-module fixture
         run: |
           git clone --quiet https://github.com/ako/ConnectorKitDemo.git /tmp/ConnectorKitDemo

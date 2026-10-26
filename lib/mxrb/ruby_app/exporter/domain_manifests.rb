@@ -164,6 +164,7 @@ module Mxrb
             service_source(
               namespace, class_name, qualified, flow.id,
               native_source:, native_kind: kind,
+              activity_captions: native_source ? native_flow_captions(flow) : {},
               export_level: kind == :rule ? flow.export_level : 'Hidden'
             )
           )

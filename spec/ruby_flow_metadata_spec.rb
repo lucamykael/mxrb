@@ -104,7 +104,7 @@ RSpec.describe Mxrb::RubyApp::FlowMetadata do # rubocop:disable Metrics/BlockLen
       declaration = manifest_entries.find { (_1['ruby_path'] || _1['path']) == relative }
       expect(declaration).not_to be_nil
       entry = metadata_by_id.fetch(declaration.fetch('id'))
-      text = text.sub(/(flow :\w+ do\n)/, "\\1    body_fingerprint #{entry.fetch('body_fingerprint').inspect}\n")
+      text = text.sub(/(def flow_contract\n)/, "\\1      body_fingerprint #{entry.fetch('body_fingerprint').inspect}\n")
       File.write(path, text)
     end
     File.delete(metadata_path(root))

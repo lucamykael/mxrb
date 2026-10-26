@@ -1,0 +1,20 @@
+{
+  "name": "mxrb-studio-tasks-linked-project",
+  "authentication": false,
+  "viewport": { "width": 960, "height": 720 },
+  "pages": [{
+    "name": "tasks-linked-project",
+    "path": "/studio.html",
+    "steps": [
+      { "wait_for_selector": ".task-catalog details button" },
+      { "wait_for_absence": "nav[aria-label='MXRB panels']" },
+      { "click_text": "project inspect" },
+      { "click_selector": "button[type='submit']" },
+      { "wait_for_text": "Completed" },
+      { "wait_for_text": "project_file: true" },
+      { "wait_for_text": "Shop" },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [ ".tasks-panel", ".task-output" ]
+  }]
+}
