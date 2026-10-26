@@ -24,13 +24,15 @@ module Mxrb
 
       def read_units(path)
         mpr = IO::MprFile.open(path, readonly: true, apply_studio_compatibility: false)
-        mpr.all_units.to_h do |unit|
-          @context.check!
-          [unit.fetch('UnitID'), { container: unit.fetch('ContainerID'), containment: unit.fetch('ContainmentName'),
-                                   document: mpr.parse_contents(unit) }]
+        begin
+          mpr.all_units.to_h do |unit|
+            @context.check!
+            [unit.fetch('UnitID'), { container: unit.fetch('ContainerID'),
+                                     containment: unit.fetch('ContainmentName'), document: mpr.parse_contents(unit) }]
+          end
+        ensure
+          mpr.close
         end
-      ensure
-        mpr&.close
       end
 
       def describe_unit(id, before, after)
@@ -79,13 +81,14 @@ module Mxrb
           after_present: operation[:present] }.compact
       end
 
+      # Set and order operations always name an element present on both sides.
       def property_present?(operation, node)
-        node&.element&.key?(operation[:key]) if operation[:op] == 'set'
+        node.element.key?(operation[:key]) if operation[:op] == 'set'
       end
 
       def change_value(operation, node)
         value = node&.element
-        value = value&.fetch(operation[:key], nil) if %w[set order].include?(operation[:op])
+        value = value.fetch(operation[:key], nil) if %w[set order].include?(operation[:op])
         present(value)
       end
 

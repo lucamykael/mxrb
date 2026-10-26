@@ -29,7 +29,7 @@ module Mxrb
         parsed = Prism.parse(source)
         raise SerializationError, 'cannot structure an invalid Ruby flow definition' unless parsed.success?
 
-        @statements = parsed.value.statements&.body || []
+        @statements = parsed.value.statements.body
         @captions = captions.transform_values(&:dup)
         @methods = []
         @used_names = []

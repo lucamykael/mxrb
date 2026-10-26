@@ -74,7 +74,7 @@ module Mxrb
         return false unless bare_call?(node, declaration) && literal_argument(node) == name
 
         options = keyword_options(node)
-        !options.key?('id') || literal(options['id'])&.downcase == id&.downcase
+        !options.key?('id') || same_id?(literal(options['id']), id)
       end
 
       def module_candidates
@@ -89,7 +89,7 @@ module Mxrb
       def module_declaration?(node)
         node.is_a?(Prism::CallNode) && node.name == :module &&
           (node.receiver.nil? || node.receiver.is_a?(Prism::SelfNode)) &&
-          literal(node.arguments&.arguments&.first) == @document[:module]
+          literal_argument(node) == @document[:module]
       end
 
       def loaded_source(*segments)
@@ -108,10 +108,10 @@ module Mxrb
       def evaluation_path(node, loader) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         return unless bare_call?(node, :evaluate)
 
-        join = node.arguments&.arguments&.first
+        join = arguments_of(node).first
         return unless namespace_call?(join, :File, :join)
 
-        arguments = join.arguments&.arguments || []
+        arguments = arguments_of(join)
         return unless bare_call?(arguments.first, :__dir__)
 
         parts = arguments.drop(1).map { literal(_1) }
@@ -140,13 +140,16 @@ module Mxrb
         block.body.body
       end
 
-      def literal_argument(node) = literal(node.arguments&.arguments&.first)
+      def arguments_of(node) = node.arguments ? node.arguments.arguments : []
+
+      def literal_argument(node) = literal(arguments_of(node).first)
+
+      # Unit identifiers are compared case-insensitively; an absent identity matches only another absent one.
+      def same_id?(left, right) = left.to_s.casecmp?(right.to_s)
 
       def empty_source?(path)
-        parsed = Prism.parse(@files.read(path).fetch(:text))
-        parsed.success? && Array(parsed.value.statements&.body).empty?
-      rescue Errno::ENOENT, Errno::ENOTDIR
-        false
+        parsed = parsed_source(path)
+        parsed&.success? && parsed.value.statements.body.empty?
       end
 
       def project_candidates
@@ -154,7 +157,7 @@ module Mxrb
           next unless namespace_call?(node, :Mxrb, :define)
 
           identity = block_statements(node).find do |child|
-            bare_call?(child, :mendix_project_id) && literal_argument(child)&.downcase == @document[:unit_id].downcase
+            bare_call?(child, :mendix_project_id) && same_id?(literal_argument(child), @document[:unit_id])
           end
           { path: 'project.rb', line: identity.location.start_line, label: 'Project' } if identity
         end

@@ -81,9 +81,7 @@ module Mxrb
           # declaration. Definition-local delegates keep those two uses separate.
           methods = FlowBodyDsl.public_instance_methods + FlowBuilder.public_instance_methods(false) +
                     %i[on on_type otherwise argument]
-          methods.uniq.each do |name|
-            next if %i[step decide].include?(name)
-
+          (methods.uniq - %i[step decide]).each do |name|
             define_singleton_method(name) do |*arguments, **options, &block|
               @flow_builder.public_send(name, *arguments, **options, &block)
             end

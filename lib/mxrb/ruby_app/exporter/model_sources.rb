@@ -366,10 +366,8 @@ module Mxrb
 
         def service_method_source(source)
           entry = "    def call(**arguments)\n      execute_flow(arguments)\n    end"
-          marker = "\n    private\n"
-          return source.sub(marker, "\n\n#{entry}\n#{marker}") if source.include?(marker)
-
-          "#{source}\n\n#{entry}"
+          main_line, marker, helpers = source.partition("\n    private\n")
+          "#{main_line}\n\n#{entry}\n#{marker}#{helpers}"
         end
       end
       # rubocop:enable Metrics

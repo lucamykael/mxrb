@@ -111,17 +111,19 @@ module Mxrb
 
       def native_document(unit_id) # rubocop:disable Metrics/MethodLength
         mpr = IO::MprFile.open(@project.source_model, readonly: true, apply_studio_compatibility: false)
-        unit = mpr.unit(unit_id)
-        return unless unit
+        begin
+          unit = mpr.unit(unit_id)
+          return unless unit
 
-        document = mpr.parse_contents(unit)
-        @native_contents = document
-        mod = module_name(mpr, unit)
-        name = document['Name'].to_s
-        { unit_id: unit.fetch('UnitID'), type: document['$Type'], name:, module: mod,
-          qualified_name: qualified_document_name(document['$Type'], mod, name) }
-      ensure
-        mpr&.close
+          document = mpr.parse_contents(unit)
+          @native_contents = document
+          mod = module_name(mpr, unit)
+          name = document['Name'].to_s
+          { unit_id: unit.fetch('UnitID'), type: document['$Type'], name:, module: mod,
+            qualified_name: qualified_document_name(document['$Type'], mod, name) }
+        ensure
+          mpr.close
+        end
       end
 
       def qualified_document_name(type, mod, name)
@@ -181,25 +183,21 @@ module Mxrb
 
           { path:, line: node.location.start_line }
         end
-      rescue Errno::ENOENT, Errno::ENOTDIR
-        []
       end
 
       def matching_declaration?(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/MethodLength
         return false unless node.is_a?(Prism::CallNode) && node.receiver.nil?
-        if node.name == :native_unit
-          return literal(node.arguments&.arguments&.first)&.downcase == @document[:unit_id].downcase
-        end
+        return same_id?(literal_argument(node), @document[:unit_id]) if node.name == :native_unit
 
         options = keyword_options(node)
         identifier = literal(options['unit_id'])
-        return false if options.key?('unit_id') && identifier&.downcase != @document[:unit_id].downcase
+        return false if options.key?('unit_id') && !same_id?(identifier, @document[:unit_id])
         if node.name == :native_document
-          return identifier&.downcase == @document[:unit_id].downcase && literal(options['type']) == @document[:type] &&
+          return same_id?(identifier, @document[:unit_id]) && literal(options['type']) == @document[:type] &&
                  (@document[:name].empty? || literal_argument(node) == @document[:name])
         end
         return true if GLOBAL_DECLARATIONS.fetch(@document[:type], []).include?(node.name.to_s)
-        return false unless literal(node.arguments&.arguments&.first) == @document[:name]
+        return false unless literal_argument(node) == @document[:name]
         return false unless node.name.to_s == DECLARATIONS[@document[:type]]
 
         !@document[:type].start_with?('Microflows$') || identifier || flow_metadata_matches?
@@ -207,18 +205,24 @@ module Mxrb
 
       def source_nodes(path)
         @context.check!
+        parsed = parsed_source(path)
+        parsed&.success? ? parsed.value.statements.body : []
+      end
+
+      # A file removed after the directory listing is simply not a declaration.
+      def parsed_source(path)
         @parsed_sources ||= {}
-        @parsed_sources[path] ||= begin
-          parsed = Prism.parse(@files.read(path).fetch(:text))
-          parsed.failure? ? [] : Array(parsed.value.statements&.body)
+        return @parsed_sources[path] if @parsed_sources.key?(path)
+
+        @parsed_sources[path] = begin
+          Prism.parse(@files.read(path).fetch(:text))
+        rescue Errno::ENOENT, Errno::ENOTDIR
+          nil
         end
-      rescue Errno::ENOENT, Errno::ENOTDIR
-        []
       end
 
       def keyword_options(node)
-        arguments = node.arguments&.arguments || []
-        arguments.grep(Prism::KeywordHashNode).flat_map(&:elements).filter_map do |entry|
+        arguments_of(node).grep(Prism::KeywordHashNode).flat_map(&:elements).filter_map do |entry|
           [literal(entry.key), entry.value] if entry.is_a?(Prism::AssocNode)
         end.to_h
       end

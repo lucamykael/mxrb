@@ -65,10 +65,7 @@ module Mxrb
       end
 
       def system_links
-        %w[bin sbin lib lib64].flat_map do |name|
-          path = "/#{name}"
-          next [] unless File.exist?(path)
-
+        %w[/bin /sbin /lib /lib64].select { File.exist?(_1) }.flat_map do |path|
           File.symlink?(path) ? ['--symlink', File.readlink(path), path] : ['--ro-bind', path, path]
         end
       end

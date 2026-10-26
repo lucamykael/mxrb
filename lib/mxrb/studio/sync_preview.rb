@@ -43,8 +43,11 @@ module Mxrb
 
       private
 
-      def preview(progress) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
-        workspace = Dir.mktmpdir('mxrb-sync-preview-')
+      def preview(progress)
+        Dir.mktmpdir('mxrb-sync-preview-') { |workspace| preview_in(workspace, progress) }
+      end
+
+      def preview_in(workspace, progress) # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
         worker = File.join(workspace, 'worker')
         progress.update(detail: 'Creating private model and Ruby snapshots')
         native = Snapshot.new(@project.source_model, destination_root: File.join(workspace, 'native'),
@@ -61,8 +64,6 @@ module Mxrb
                             .create.fetch(:model)
         progress.update(detail: 'Comparing native documents')
         comparison_result(native.fetch(:model), generated)
-      ensure
-        FileUtils.remove_entry_secure(workspace) if workspace && File.directory?(workspace)
       end
 
       def comparison_result(native, generated)
