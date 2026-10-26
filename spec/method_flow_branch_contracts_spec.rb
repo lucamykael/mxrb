@@ -84,6 +84,14 @@ RSpec.describe 'method-oriented flow branch contracts' do
     end
   end
 
+  it 'names only activities whose action has a typed declaration' do
+    activity = { '$Type' => 'Microflows$ActionActivity', 'Caption' => 'Future step',
+                 'Action' => { '$Type' => 'Microflows$FutureAction' } }
+    flow = Mxrb::Model::Microflow.allocate
+    allow(flow).to receive(:objects).and_return([activity])
+    expect(Mxrb::Exporter.allocate.send(:flow_activity_captions, flow)).to eq({})
+  end
+
   it 'refuses a flow declared with both a plan and a definition block' do
     Dir.mktmpdir('mxrb-flow-plan-') do |directory|
       plan = Class.new(Mxrb::Dsl::FlowProgram) { def main_line = nil }

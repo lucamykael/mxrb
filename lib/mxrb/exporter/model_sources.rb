@@ -340,6 +340,8 @@ module Mxrb
       end
 
       def flow_activity_captions(flow)
+        return {} unless flow.is_a?(Model::Microflow)
+
         nested_flow_objects(Array(flow.objects)).each_with_object({}) do |object, result|
           next unless object['$Type'] == 'Microflows$ActionActivity'
           next if object['Caption'].to_s.empty?
