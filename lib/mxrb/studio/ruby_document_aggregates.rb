@@ -105,7 +105,7 @@ module Mxrb
         expected if block_statements(declarations.first).any? { evaluation_path(_1, loader) == expected }
       end
 
-      def evaluation_path(node, loader) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      def evaluation_path(node, loader) # rubocop:disable Metrics/AbcSize
         return unless bare_call?(node, :evaluate)
 
         join = arguments_of(node).first

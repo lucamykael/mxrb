@@ -46,7 +46,8 @@ RSpec.describe 'method-oriented flow branch contracts' do
       end
     RUBY
     methods = methods_for(source)
-    expect(methods).to include("decide '$Item = empty', cases: []", 'def while_loop_body', 'def on_type_app_special_item')
+    expect(methods).to include("decide '$Item = empty', cases: []", 'def while_loop_body',
+                               'def on_type_app_special_item')
     same_model(source)
   end
 

@@ -316,7 +316,9 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     Mxrb.open(model) do |project|
       mod = project.modules.find { _1.name == 'Shop' }
       expect(lookup(project.mpr.unit(mod.id))).to include(state: 'unavailable', reason: 'ambiguous_source')
-      File.open(File.join(root, 'project.rb'), 'a') { _1.puts "Mxrb.define('Other.mpr') do\n  mendix_version '11.12.1'\nend" }
+      File.open(File.join(root, 'project.rb'), 'a') do
+        _1.puts "Mxrb.define('Other.mpr') do\n  mendix_version '11.12.1'\nend"
+      end
       unit = project.all_units.find { project.parse_bson(_1)['$Type'] == 'Projects$Project' }
       expect(lookup(unit)).to include(state: 'ready', path: 'project.rb')
     end

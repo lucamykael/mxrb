@@ -42,8 +42,9 @@ RSpec.describe 'Studio preview branch contracts' do
     end
 
     it 'requires the generated model even when the worker reports success' do
-      expect { run_worker(RbConfig.ruby, '-e', 'File.write(ARGV[0], %({"ok":true}))', File.join(workspace, 'result.json')) }
-        .to raise_error(Mxrb::Studio::RubySourceError, 'generated model must be a regular file')
+      expect do
+        run_worker(RbConfig.ruby, '-e', 'File.write(ARGV[0], %({"ok":true}))', File.join(workspace, 'result.json'))
+      end.to raise_error(Mxrb::Studio::RubySourceError, 'generated model must be a regular file')
     end
 
     it 'stops a worker that exceeds the output limit' do
@@ -167,7 +168,8 @@ RSpec.describe 'Studio preview branch contracts' do
         include(type: 'Projects$Folder', name: 'Archive', action: 'added', changes: []),
         include(name: 'Removed', action: 'removed', changes: []),
         include(name: 'Moved', action: 'modified', changes: [include(op: 'move')]),
-        include(type: 'DomainModels$DomainModel', changes: [include(op: 'remove', key: 'Attributes', before: include('Name' => 'Count'))])
+        include(type: 'DomainModels$DomainModel',
+                changes: [include(op: 'remove', key: 'Attributes', before: include('Name' => 'Count'))])
       )
     end
 
