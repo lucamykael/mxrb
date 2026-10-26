@@ -73,6 +73,18 @@ Auflösung. Das Browserszenario `studio_tasks_linked_flow.json` führt
 `project inspect` mit einem synthetischen verknüpften Projekt mit Modul `Shop`
 aus; der Host liefert dabei den nativen Kontext ohne `ruby_root`.
 
+Der Host kann in `host/contextChanged` eine numerische `project_revision`
+veröffentlichen, wenn eine Konvertierung oder Verknüpfungsänderung dasselbe
+`source_model` behält. Der Explorer fragt dann `project/status` erneut ab und
+verwirft Auswahl und Auflistung; Tasks bricht die laufende Operation ab. Der
+native Host invalidiert damit den Kontext, statt `ruby_root` dauerhaft als
+Verknüpfung zwischenzuspeichern. Das Szenario `studio_project_revision_flow.json`
+prüft diesen Übergang und das Verwerfen später Antworten mit dem synthetischen
+Host aus `node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`.
+Derselbe Server bedient `/studio.html?fixture=sync` für die Szenarien
+`studio_sync_preview*_flow.json`. Die synthetischen Hosts sind TypeScript-Quellen
+in `spec/fixtures/frontend_browser`, die ohne Typen ausgeliefert werden.
+
 `ruby/syntax` parst mit Prism und liefert Diagnosen mit Zeile und Spalte;
 `ruby/declarations` listet die Mendix-Artefakte, die eine Datei deklariert
 (`entity`, `page`, `microflow`, ...), mit ihren qualifizierten Namen. Keine der

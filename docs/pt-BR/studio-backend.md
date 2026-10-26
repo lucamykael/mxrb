@@ -1,40 +1,5 @@
 # Protocolo do backend do Studio
 
-Os painéis iniciais Ruby App Explorer e MXRB Tasks estão em
-`frontend/modeler/src/studio`, com entrada `studio.html`. Compile usando
-`npm run build:studio` em `frontend/modeler`; Node é dependência somente de build.
-Os outros bundles do modeler são preservados por uma configuração Vite separada.
-
-O transporte é `chrome.webview`: o host desktop mantém o processo Ruby e fornece
-`host/context`/`host/contextChanged` com `root`, `source_model`, `ruby_root` opcional
-e variáveis CSS de tema `--studio-*`. Essas mensagens pertencem ao host, não ao
-serviço Ruby. O Explorer oferece descoberta/conversão de vínculo, leitura de pastas
-sob demanda, linhas virtualizadas e prévia explicitamente somente leitura. Tarefas
-usam o catálogo e os argumentos reais, saída e cancelamento. Registro no dock,
-criação/renomeação/worktrees na interface, tarefas salvas, editor Ruby nativo e
-resolução de conflitos continuam pendentes. Os cenários
-`spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
-com arquivos sintéticos e não certificam paridade completa da IDE.
-
-Antes de cada tarefa, o painel consulta `project/status` quando o host não fornece
-`ruby_root`. Assim, uma conversão ou vínculo feito em outro dock define a pasta de
-execução e a substituição `{ruby}` imediatamente. `{root}` acompanha essa pasta;
-`{mpr}` continua apontando para o modelo nativo. Sem vínculo, comandos nativos ou
-globais podem usar a pasta de origem; comandos do contexto Ruby pedem conversão ou
-vínculo primeiro. Trocar de projeto ou pressionar Stop cancela também a consulta
-pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
-cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
-sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
-
-O host pode publicar `project_revision` numérico em `host/contextChanged` quando
-uma conversão ou mudança de vínculo mantém o mesmo `source_model`. O Explorer
-consulta novamente `project/status`, descarta seleção/listagem anteriores e
-Tasks cancela a operação pendente. O host nativo usa essa revisão para invalidar
-o contexto, sem manter `ruby_root` como cache permanente do vínculo.
-O cenário `studio_project_revision_flow.json` verifica essa transição e o
-cancelamento de respostas antigas com o host sintético iniciado por
-`node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`.
-
 **Português** · [English](../en-US/studio-backend.md) · [Deutsch](../de-DE/studio-backend.md)
 
 `mxrb studio serve` executa o MXRB como backend de uma IDE: um processo de
@@ -279,5 +244,45 @@ geração do projeto inteiro a partir do Ruby), Mendix para Ruby 5 s,
 `Mxrb::Studio::Backend#call` aceita um objeto de requisição com um nome de
 `action` da versão 1 (`catalog`, `file_read`, `model_apply`, ...) e chega aos
 mesmos métodos, para clientes que iniciam um processo por requisição.
+
+## Painéis do Studio Pro
+
+Os painéis iniciais Ruby App Explorer e MXRB Tasks estão em
+`frontend/modeler/src/studio`, com entrada `studio.html`. Compile usando
+`npm run build:studio` em `frontend/modeler`; Node é dependência somente de build.
+Os outros bundles do modeler são preservados por uma configuração Vite separada.
+
+O transporte é `chrome.webview`: o host desktop mantém o processo Ruby e fornece
+`host/context`/`host/contextChanged` com `root`, `source_model`, `ruby_root` opcional
+e variáveis CSS de tema `--studio-*`. Essas mensagens pertencem ao host, não ao
+serviço Ruby. O Explorer oferece descoberta/conversão de vínculo, leitura de pastas
+sob demanda, linhas virtualizadas e prévia explicitamente somente leitura. Tarefas
+usam o catálogo e os argumentos reais, saída e cancelamento. Registro no dock,
+criação/renomeação/worktrees na interface, tarefas salvas, editor Ruby nativo e
+resolução de conflitos continuam pendentes. Os cenários
+`spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
+com arquivos sintéticos e não certificam paridade completa da IDE.
+
+Antes de cada tarefa, o painel consulta `project/status` quando o host não fornece
+`ruby_root`. Assim, uma conversão ou vínculo feito em outro dock define a pasta de
+execução e a substituição `{ruby}` imediatamente. `{root}` acompanha essa pasta;
+`{mpr}` continua apontando para o modelo nativo. Sem vínculo, comandos nativos ou
+globais podem usar a pasta de origem; comandos do contexto Ruby pedem conversão ou
+vínculo primeiro. Trocar de projeto ou pressionar Stop cancela também a consulta
+pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
+cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
+sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
+
+O host pode publicar `project_revision` numérico em `host/contextChanged` quando
+uma conversão ou mudança de vínculo mantém o mesmo `source_model`. O Explorer
+consulta novamente `project/status`, descarta seleção/listagem anteriores e
+Tasks cancela a operação pendente. O host nativo usa essa revisão para invalidar
+o contexto, sem manter `ruby_root` como cache permanente do vínculo.
+O cenário `studio_project_revision_flow.json` verifica essa transição e o
+cancelamento de respostas antigas com o host sintético servido por
+`node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`. O mesmo
+servidor atende `/studio.html?fixture=sync` para os cenários
+`studio_sync_preview*_flow.json`. Os hosts sintéticos são fontes TypeScript em
+`spec/fixtures/frontend_browser`, sem tipos na hora de servir.
 
 [Voltar ao índice da documentação](README.md)

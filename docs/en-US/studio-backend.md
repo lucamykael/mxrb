@@ -258,4 +258,16 @@ conflict resolution and full dock integration remain separate work. Browser
 scenarios under `spec/fixtures/frontend_browser/studio_panels*_flow.json` exercise
 the initial panels with synthetic files; they do not establish full IDE parity.
 
+The host can publish a numeric `project_revision` in `host/contextChanged` when a
+conversion or link change keeps the same `source_model`. The Explorer then queries
+`project/status` again and drops the previous selection and listing, and Tasks
+cancels the pending operation. The native host uses this revision to invalidate
+the context instead of caching `ruby_root` as a permanent link.
+`studio_project_revision_flow.json` checks that transition and the cancellation of
+late responses against the synthetic host served by
+`node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`. The same server
+answers `/studio.html?fixture=sync` for the `studio_sync_preview*_flow.json`
+scenarios. The synthetic hosts are TypeScript sources in
+`spec/fixtures/frontend_browser`, served with their types stripped.
+
 [Back to the documentation index](README.md)

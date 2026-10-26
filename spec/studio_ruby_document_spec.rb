@@ -296,6 +296,21 @@ RSpec.describe 'Studio native document Ruby source resolution' do
     end
   end
 
+  it 'requires the module loader, one module declaration and the evaluated domain index' do
+    loader = File.join(root, 'modules/Other/module.rb')
+    original = File.read(loader)
+    [
+      -> { File.unlink(loader) },
+      -> { File.write(loader, "puts 'no module declaration'\n") },
+      -> { File.unlink(File.join(root, 'modules/Other/domain/model.rb')) }
+    ].each do |change|
+      File.write(loader, original)
+      change.call
+      expect(lookup(document('DomainModels$DomainModel', 'Other')))
+        .to include(state: 'unavailable', reason: 'source_not_found')
+    end
+  end
+
   it 'refuses duplicate module declarations and ignores unrelated project definitions' do
     FileUtils.cp(File.join(root, 'modules/Shop/module.rb'), File.join(root, 'modules/Shop/module_copy.rb'))
     Mxrb.open(model) do |project|
