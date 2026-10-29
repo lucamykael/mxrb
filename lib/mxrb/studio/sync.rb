@@ -293,7 +293,10 @@ module Mxrb
           jobs << -> { inputs[:generated] = generation_of(link, root, scratch) }
           unless inputs[:generated_base]
             inputs[:generated_base] = File.join(scratch, 'generated-base', File.basename(model_path))
-            jobs << -> { generate(File.dirname(inputs[:generated_base]), root: link.fetch('base_files')) }
+            jobs << lambda do
+              generate(File.dirname(inputs[:generated_base]), root: link.fetch('base_files'),
+                                                              reuse: earlier_generation(link))
+            end
           end
         end
         if mendix
@@ -317,7 +320,7 @@ module Mxrb
         return cached if cached
 
         target = File.join(scratch, 'generated', File.basename(model_path))
-        generate(File.dirname(target), root:)
+        generate(File.dirname(target), root:, reuse: earlier_generation(link))
         keep_generation(key, target)
         target
       end
@@ -428,26 +431,45 @@ module Mxrb
       # Generates the model of the Ruby project at `root` into `directory`.
       # Error locations name the files of the linked Ruby project, whichever
       # copy was evaluated.
-      def generate(directory, root: ruby_root)
+      # `reuse`, an earlier generation of this project, seeds the output: the
+      # writer keeps its documents whose definitions did not change.
+      def generate(directory, root: ruby_root, reuse: nil)
         FileUtils.mkdir_p(directory)
         target = File.join(directory, File.basename(model_path))
-        isolation == :sandbox ? generate_sandboxed(target, root) : generate_in_process(target, root)
+        isolation == :sandbox ? generate_sandboxed(target, root, reuse) : generate_in_process(target, root, reuse)
       rescue RubySourceError, Protocol::Failure => e
         raise relocate(e, root)
       end
 
-      def generate_in_process(target, root)
+      def generate_in_process(target, root, reuse = nil)
         entry = File.join(root, 'project.rb')
-        Isolated.run(@context, roots: [root]) { evaluate_project(entry, target, root) }
+        Isolated.run(@context, roots: [root]) { evaluate_project(entry, target, root, reuse) }
+      end
+
+      # A copy of a generated model (and its unit contents) at `target`.
+      def seed(model, target)
+        FileUtils.cp(model, target)
+        contents = File.join(File.dirname(model), 'mprcontents')
+        FileUtils.cp_r(contents, File.dirname(target)) if File.directory?(contents)
+      end
+
+      # The latest generation of this project that synchronization made, if any.
+      def earlier_generation(link)
+        [link['generated_model'], generation_entry&.fetch('model', nil)].compact.find { File.file?(_1) }
       end
 
       # The Ruby runs in a mount/PID/network namespace that sees only a copy
       # of the project; without it the run fails instead of evaluating the
       # code unconfined.
-      def generate_sandboxed(target, root)
+      def generate_sandboxed(target, root, reuse = nil)
         workspace = Dir.mktmpdir('mxrb-sync-sandbox-')
         copy_tree(root, File.join(workspace, 'ruby'))
-        generated = PreviewSandbox.new(context: @context, model_name: File.basename(model_path)).generate(workspace)
+        if reuse
+          FileUtils.mkdir_p(File.join(workspace, 'seed'))
+          seed(reuse, File.join(workspace, 'seed', File.basename(model_path)))
+        end
+        generated = PreviewSandbox.new(context: @context, model_name: File.basename(model_path), reuse: !reuse.nil?)
+                                  .generate(workspace)
         FileUtils.cp(generated, target)
         # MPR v2 keeps unit contents in the sibling mprcontents directory.
         contents = File.join(File.dirname(generated), 'mprcontents')
@@ -495,9 +517,11 @@ module Mxrb
 
       # Runs in the isolated worker: evaluates project.rb into `target`. Any
       # failure of the Ruby project is a Ruby source error with locations.
-      def evaluate_project(entry, target, root)
+      def evaluate_project(entry, target, root, reuse = nil)
         previous = ENV.fetch('MXRB_OUTPUT_PATH', nil)
+        previous_reuse = ENV.fetch(Writer::REUSE_OUTPUT, nil)
         ENV['MXRB_OUTPUT_PATH'] = target
+        ENV[Writer::REUSE_OUTPUT] = reuse.to_s
         Kernel.load(entry)
         raise RubySourceError, 'project.rb did not generate a model' unless File.file?(target)
 
@@ -508,6 +532,7 @@ module Mxrb
         raise RubySourceError.new("#{e.class}: #{e.message}", locations: Protocol.locations_for(e, [root]))
       ensure
         ENV['MXRB_OUTPUT_PATH'] = previous
+        ENV[Writer::REUSE_OUTPUT] = previous_reuse
       end
 
       def export_model(model, destination)

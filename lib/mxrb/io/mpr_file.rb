@@ -633,6 +633,27 @@ module Mxrb
         )
       end
 
+      # Digests of the definitions a generation wrote (see Writer's reuse),
+      # kept beside the units they describe.
+      def generation_digests
+        return nil unless tables.include?('_MxrbGeneration')
+
+        json = @db.get_first_value('SELECT Digests FROM _MxrbGeneration WHERE ID = 1')
+        json && JSON.parse(json)
+      end
+
+      def write_generation_digests(digests)
+        raise ReadOnlyError, 'Opened in read-only mode' if @readonly
+
+        @db.execute(<<~SQL)
+          CREATE TABLE IF NOT EXISTS _MxrbGeneration (
+            ID INTEGER PRIMARY KEY CHECK (ID = 1),
+            Digests TEXT NOT NULL
+          )
+        SQL
+        @db.execute('INSERT OR REPLACE INTO _MxrbGeneration (ID, Digests) VALUES (1, ?)', [JSON.generate(digests)])
+      end
+
       # Ruby/React sources are stored outside the Mendix Unit tree. Mendix can
       # keep editing the native model while MXRB can later restore the exact
       # conventional application sources on a Ruby-mode export.

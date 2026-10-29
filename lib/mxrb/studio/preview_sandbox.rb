@@ -3,6 +3,7 @@
 require 'json'
 require 'open3'
 require 'rbconfig'
+require_relative '../writer'
 
 module Mxrb
   module Studio
@@ -14,9 +15,12 @@ module Mxrb
       TIMEOUT = 120
       MAXIMUM_OUTPUT = 128 * 1024
 
-      def initialize(context:, model_name:)
+      # `reuse`: the workspace's seed/ holds an earlier generation of the
+      # project, whose unchanged documents the new one keeps.
+      def initialize(context:, model_name:, reuse: false)
         @context = context
         @model_name = model_name
+        @reuse = reuse
       end
 
       def generate(workspace) # rubocop:disable Metrics/AbcSize
@@ -81,7 +85,8 @@ module Mxrb
         { 'HOME' => '/work/home', 'TMPDIR' => '/work/tmp', 'XDG_CACHE_HOME' => '/work/home/.cache',
           'XDG_STATE_HOME' => '/work/home/.state', 'LANG' => 'C.UTF-8', 'LC_ALL' => 'C.UTF-8', 'TZ' => 'UTC',
           'PATH' => "#{File.dirname(RbConfig.ruby)}:/usr/bin", 'GEM_PATH' => Gem.path.join(File::PATH_SEPARATOR),
-          'GEM_HOME' => Gem.dir, 'MXRB_OUTPUT_PATH' => File.join('/work/generated', @model_name), 'NO_COLOR' => '1' }
+          'GEM_HOME' => Gem.dir, 'MXRB_OUTPUT_PATH' => File.join('/work/generated', @model_name), 'NO_COLOR' => '1',
+          Writer::REUSE_OUTPUT => @reuse ? File.join('/work/seed', @model_name) : '' }
       end
 
       def execute(arguments) # rubocop:disable Metrics/MethodLength

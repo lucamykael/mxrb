@@ -51,10 +51,16 @@ module Mxrb
       before_commit after_commit before_delete after_delete
     ].freeze
 
-    def initialize(path, definition)
+    # Set by synchronization to an earlier generation of the same project: a
+    # new output starts as a copy of it (see #reusable).
+    REUSE_OUTPUT = 'MXRB_REUSE_OUTPUT'
+
+    def initialize(path, definition, reuse = ENV.fetch(REUSE_OUTPUT, nil))
       @path = File.expand_path(path)
       @definition = definition
       @progress = Progress::NullTask.instance
+      @reuse = reuse.to_s.empty? ? nil : reuse
+      @reusable = {}
     end
 
     def write!
@@ -66,10 +72,21 @@ module Mxrb
               @definition.fetch(:modules).size + Array(asset_manifest&.fetch('files', [])).size
       Progress.with("Generating #{File.basename(@path)}", total:) do |progress|
         @progress = progress
+        seed_output! if @reuse && !File.exist?(@path)
         create_project! unless File.exist?(@path)
         progress.advance(detail: 'project container')
         mpr = IO::MprFile.open(@path, apply_studio_compatibility: false)
         mpr.ensure_v2_contract!
+        @digests = generation_digests(native_units)
+        @reusable = reusable(mpr, @digests)
+        if @reuse && @reusable.empty?
+          # Another context: nothing of the earlier generation is kept.
+          mpr.close
+          discard_output!
+          create_project!
+          mpr = IO::MprFile.open(@path, apply_studio_compatibility: false)
+          mpr.ensure_v2_contract!
+        end
         mpr.transaction do
           # Existing projects must use the target schema while their units are
           # rewritten. Updating metadata after the write leaves unchanged
@@ -80,6 +97,7 @@ module Mxrb
           write_native_compatibility(mpr, native_units)
           mpr.write_architecture_definition(@definition)
           mpr.write_ruby_app_sources(ruby_app_source_files) if @definition[:ruby_app_sources_path]
+          mpr.write_generation_digests(@digests)
         end
         progress.advance(detail: 'model transaction')
         materialize_project_assets(asset_manifest)
@@ -90,6 +108,110 @@ module Mxrb
     ensure
       @progress = Progress::NullTask.instance
       mpr&.close
+    end
+
+    # Native documents and pages are most of a generation's time. When the
+    # output already holds a generation of this project in the same context
+    # (version, project-level definition, native baseline, module order),
+    # those whose definition did not change are already written as this
+    # generation would write them, and are kept. Everything else is written.
+    def reusable(mpr, digests)
+      return {} unless @reuse
+
+      previous = mpr.generation_digests
+      return {} unless digests['context'] && previous && previous['context'] == digests['context']
+
+      previous.fetch('modules')
+    end
+
+    # The context holds what every module's output depends on, including the
+    # native baseline outside modules; each module adds its own baseline, so
+    # an applied edit (which refreshes the baseline of its module) leaves the
+    # other modules reusable.
+    def seed_output!
+      FileUtils.mkdir_p(File.dirname(@path))
+      FileUtils.cp(@reuse, @path)
+      contents = File.join(File.dirname(@reuse), 'mprcontents')
+      FileUtils.cp_r(contents, File.dirname(@path)) if File.directory?(contents)
+    end
+
+    def discard_output!
+      FileUtils.rm_f(@path)
+      FileUtils.rm_rf(File.join(File.dirname(@path), 'mprcontents'))
+    end
+
+    # A module whose native steps run again starts empty, as in a new
+    # output, so documents its Ruby no longer declares do not survive.
+    def reset_module(mpr, module_id)
+      mpr.children_of(module_id).each do |child|
+        reset_module(mpr, child.fetch('UnitID'))
+        mpr.delete_unit(child.fetch('UnitID'))
+      end
+    end
+
+    def generation_digests(native_units)
+      by_module = native_units.group_by { _1['module'] }
+      context = [@definition.except(:modules), by_module.fetch(nil, []),
+                 @definition.fetch(:modules).map { _1.fetch(:name).to_s }]
+      modules = @definition.fetch(:modules).to_h do |mod|
+        name = mod.fetch(:name).to_s
+        [name, { 'native' => definition_digest([native_inputs(mod), by_module.fetch(name, [])]),
+                 'pages' => mod.fetch(:pages).to_h { [_1.fetch(:name).to_s, definition_digest(_1)] } }]
+      end
+      { 'context' => definition_digest(context), 'modules' => modules }
+    end
+
+    # What the native steps of a module write, and which of their units the
+    # Ruby documents then replace: adding or removing a Ruby document leaves
+    # the native baseline (or not) under it.
+    def native_inputs(mod)
+      declared = %i[pages microflows nanoflows rules menus enumerations constants scheduled_events entities]
+                 .to_h { |kind| [kind, Array(mod[kind]).map { _1.fetch(:name).to_s }] }
+      mod.slice(:native_documents, :managed_native_document_types, :menus).merge(declared:)
+    end
+
+    # nil when the value holds an object without a canonical form or JSON
+    # (NaN): that part is then always written.
+    def definition_digest(value)
+      Digest::SHA256.hexdigest(JSON.generate(canonical(value)))
+    rescue Uncanonical, JSON::GeneratorError
+      nil
+    end
+
+    class Uncanonical < StandardError; end
+
+    # Plain data for digests. Typed forms, pluggable widget and settings
+    # objects have no JSON form (theirs would be their inspect string, an
+    # address that changes per run), so they digest as their stable content.
+    def canonical(value)
+      case value
+      when Hash then value.to_h { [canonical(_1), canonical(_2)] }
+      when Array then value.map { canonical(_1) }
+      when String then value.valid_encoding? ? value : { 'bytes' => Digest::SHA256.hexdigest(value) }
+      when Symbol, Numeric, true, false, nil then value
+      when Forms::Node
+        { 'forms' => value.schema_type.name,
+          'assignments' => value.assignments.map { [_1.property.name, canonical(_1.value)] } }
+      when Pluggable::Node
+        { 'widget' => value.widget_type.id, 'object' => canonical(value.object),
+          'outer' => canonical(value.instance_variable_get(:@outer)) }
+      when Pluggable::ObjectNode
+        { 'assignments' => value.assignments.map do
+          [_1.property.key, canonical(_1.value), canonical(_1.source_variable)]
+        end }
+      when BSON::Binary then { 'binary' => Digest::SHA256.hexdigest(value.data), 'type' => value.type }
+      when Settings::Node then { 'node' => value.storage_type, 'fields' => canonical(value.fields) }
+      when Settings::BinaryAsset
+        { 'binary' => Digest::SHA256.hexdigest(value.bytes), 'subtype' => value.subtype, 'path' => value.path }
+      when Data then { 'data' => value.class.name, 'members' => canonical(value.to_h) }
+      else raise Uncanonical, value.class.name
+      end
+    end
+
+    def reused?(mod, *part)
+      key = [mod.fetch(:name).to_s, *part]
+      previous = @reusable.dig(*key)
+      !previous.nil? && previous == @digests.fetch('modules').dig(*key)
     end
 
     # Incrementally applies Ruby-first pages and flows to an existing module.
@@ -1974,8 +2096,11 @@ module Mxrb
         )
 
         mpr.update_unit(module_id, module_doc) if raw_module
-        apply_native_module_units(mpr, module_id, mod.fetch(:name), native_units)
-        write_native_documents(mpr, module_id, mod)
+        reset_module(mpr, module_id) if @reuse && raw_module && !reused?(mod, 'native')
+        unless reused?(mod, 'native')
+          apply_native_module_units(mpr, module_id, mod.fetch(:name), native_units)
+          write_native_documents(mpr, module_id, mod)
+        end
         write_module_security(mpr, module_id, mod) if mod.key?(:module_roles)
         write_domain_model(mpr, module_id, mod)
         synchronize_ruby_oql_documents!(
@@ -2977,6 +3102,9 @@ module Mxrb
       validate_flow_identities!(mod.fetch(:rules, []), 'Microflows$Rule')
 
       mod.fetch(:pages).each do |page|
+        # A page is written over its native baseline, so it is kept only with it.
+        next if reused?(mod, 'native') && reused?(mod, 'pages', page.fetch(:name).to_s)
+
         candidates = existing[page.fetch(:name)]
         baseline = page_baseline(mpr, candidates, page)
         upsert_document(
