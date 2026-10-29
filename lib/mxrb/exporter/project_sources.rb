@@ -12,29 +12,29 @@ module Mxrb
         end.join("\n")
 
         source = <<~RUBY
-            # frozen_string_literal: true
+          # frozen_string_literal: true
 
-            require "mxrb" unless defined?(Mxrb::Dsl)
+          require "mxrb" unless defined?(Mxrb::Dsl)
 
-            output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
+          output = ENV.fetch("MXRB_OUTPUT_PATH", File.join(__dir__, #{ruby(File.basename(@mpr_path))}))
 
-            Mxrb.define(output) do
-              mendix_version #{ruby(project.mendix_version || '10.18.0')}
-              mendix_project_id #{ruby(project.mpr.root_unit.fetch('UnitID'))}
-              native_units File.join(__dir__, ".mxrb", "native_units.json")
-              semantic_metadata File.join(__dir__, ".mxrb", "semantic_metadata.json")
-              native_fragments File.join(__dir__, ".mxrb", "native_fragments")
-              project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
-          #{'    ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
-              evaluate File.join(__dir__, ".mxrb", "widget_types.rb")
-              evaluate File.join(__dir__, ".mxrb", "native_units.rb")
-              evaluate File.join(__dir__, "app", "security", "security.rb")
-              evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
-              evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
-              evaluate File.join(__dir__, "app", "settings", "settings.rb")
-              evaluate File.join(__dir__, "app", "texts", "system_texts.rb")
+          Mxrb.define(output) do
+            mendix_version #{ruby(project.mendix_version || '10.18.0')}
+            mendix_project_id #{ruby(project.mpr.root_unit.fetch('UnitID'))}
+            native_units File.join(__dir__, ".mxrb", "native_units.json")
+            semantic_metadata File.join(__dir__, ".mxrb", "semantic_metadata.json")
+            native_fragments File.join(__dir__, ".mxrb", "native_fragments")
+            project_assets File.join(__dir__, ".mxrb", "assets.json"), root: __dir__
+          #{'  ruby_app_sources File.join(__dir__, ".mxrb", "ruby_sources.json")' if ruby_sources}
+            evaluate File.join(__dir__, ".mxrb", "widget_types.rb")
+            evaluate File.join(__dir__, ".mxrb", "native_units.rb")
+            evaluate File.join(__dir__, "app", "security", "security.rb")
+            evaluate File.join(__dir__, "app", "navigation", "navigation.rb")
+            evaluate File.join(__dir__, "app", "design_system", "design_system.rb")
+            evaluate File.join(__dir__, "app", "settings", "settings.rb")
+            evaluate File.join(__dir__, "app", "texts", "system_texts.rb")
           #{module_loads}
-            end
+          end
         RUBY
         write(File.join(@output_dir, 'project.rb'), source)
       end
@@ -116,13 +116,13 @@ module Mxrb
           options << "  password_policy(#{arguments.join(', ')})"
         end
         <<~RUBY
-            # frozen_string_literal: true
+          # frozen_string_literal: true
 
-            security do
-              security_level #{ruby(level)}
+          security do
+            security_level #{ruby(level)}
           #{roles.join("\n")}
           #{options.join("\n")}
-            end
+          end
         RUBY
       end
 
