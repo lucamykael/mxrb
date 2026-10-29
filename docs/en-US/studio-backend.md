@@ -298,7 +298,7 @@ maps page request IDs to its shared connection. It additionally handles
 to the desktop adapter, not `Mxrb::Studio::Service`. Panels cannot shut down the
 shared process. When the context advertises `capabilities.native_dialogs`, panels
 ask the host for Rename/Warning dialogs with `host/dialog`
-(`{kind: "prompt"|"confirm", title, message, label, value, buttons}` →
+(`{kind: "input"|"confirm", title, message, label, value, buttons}` →
 `{button, value}`); otherwise they show an equivalent in-page dialog.
 
 Before each task, the panel resolves `project/status` if the host did not supply

@@ -107,7 +107,7 @@ export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext
     try {
       let name = selection?.saved?.name;
       if (asNew || !selection?.saved) {
-        const answer = await dialogs.show({ kind: 'prompt', title: 'Save task', label: 'Name', value: suggestName(command, values) });
+        const answer = await dialogs.show({ kind: 'input', title: 'Save task', label: 'Name', value: suggestName(command, values) });
         if (answer.button === null || !answer.value?.trim()) return;
         name = answer.value.trim();
       }
@@ -121,7 +121,7 @@ export function Tasks({ rpc, context }: { rpc: StudioRpc; context: StudioContext
 
   async function renameSaved(task: SavedTask) {
     const item = catalog.find(entry => entry.name === task.command_id);
-    const answer = await dialogs.show({ kind: 'prompt', title: 'Rename', label: 'Name', value: task.name });
+    const answer = await dialogs.show({ kind: 'input', title: 'Rename', label: 'Name', value: task.name });
     if (!item || answer.button === null || !answer.value?.trim() || answer.value.trim() === task.name) return;
     try {
       const stored = await rpc.call<SavedTask>('tasks/saveConfiguration', { project, configuration: { ...task, name: answer.value.trim() } });

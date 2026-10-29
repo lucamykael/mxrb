@@ -39,7 +39,7 @@ export function Worktrees({ rpc, context, root, onSwitched, signal }: {
   }
 
   const add = () => run('Creating worktree…', async () => {
-    const answer = await dialogs.show({ kind: 'prompt', title: 'New worktree', label: 'Branch',
+    const answer = await dialogs.show({ kind: 'input', title: 'New worktree', label: 'Branch',
       message: 'Creates a Git worktree next to this Ruby project. An existing branch is checked out; a new name creates the branch from the current commit.',
       value: '' });
     if (answer.button === null || !answer.value) return;

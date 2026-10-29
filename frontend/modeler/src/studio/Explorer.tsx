@@ -119,7 +119,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
 
   const create = (directory: boolean, at?: Entry) => operate(async () => {
     const folder = targetFolder(at ?? entryAt(selected));
-    const answer = await dialogs.show({ kind: 'prompt', title: directory ? 'Add folder' : 'Add file',
+    const answer = await dialogs.show({ kind: 'input', title: directory ? 'Add folder' : 'Add file',
       label: 'Name', value: directory ? 'new_folder' : 'new_file.rb' });
     if (answer.button === null || answer.value === undefined) return;
     const problem = validateName(answer.value);
@@ -133,7 +133,7 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
   });
 
   const rename = (entry: Entry) => operate(async () => {
-    const answer = await dialogs.show({ kind: 'prompt', title: 'Rename', label: 'Name', value: entry.name });
+    const answer = await dialogs.show({ kind: 'input', title: 'Rename', label: 'Name', value: entry.name });
     if (answer.button === null || answer.value === undefined || answer.value.trim() === entry.name) return;
     const problem = validateName(answer.value);
     if (problem) throw new Error(problem);

@@ -89,7 +89,7 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
 }
 
 export type DialogRequest = {
-  kind: 'prompt' | 'confirm'; title: string; message?: string; label?: string; value?: string;
+  kind: 'input' | 'confirm'; title: string; message?: string; label?: string; value?: string;
   buttons?: string[]; warning?: boolean;
 };
 export type DialogResult = { button: string | null; value?: string };
@@ -101,7 +101,7 @@ export type DialogResult = { button: string | null; value?: string };
 export function useDialogs(rpc: StudioRpc, context: StudioContext) {
   const [pending, setPending] = useState<{ request: DialogRequest; resolve(result: DialogResult): void }>();
   async function show(request: DialogRequest): Promise<DialogResult> {
-    const buttons = request.buttons ?? (request.kind === 'prompt' ? ['OK', 'Cancel'] : ['OK', 'Cancel']);
+    const buttons = request.buttons ?? (request.kind === 'input' ? ['OK', 'Cancel'] : ['OK', 'Cancel']);
     if (context.capabilities?.native_dialogs) {
       return rpc.call<DialogResult>('host/dialog', { ...request, buttons });
     }
@@ -134,15 +134,15 @@ function PageDialog({ request, onClose }: { request: DialogRequest; onClose(resu
         {request.kind === 'confirm' && <p className="mx-dialog-message">
           {request.warning && <span className="mx-warning-sign" aria-hidden="true">⚠</span>}
           <span>{request.message}</span></p>}
-        {request.kind === 'prompt' && <>
+        {request.kind === 'input' && <>
           {request.message && <p>{request.message}</p>}
           <label className="mx-dialog-field"><span>{request.label ?? 'Name'}</span>
             <input ref={input} value={value} onChange={event => setValue(event.target.value)} /></label>
         </>}
         <div className="mx-dialog-buttons">
           {buttons.map((button, index) => <button key={button} type={index === 0 ? 'submit' : 'button'}
-            className={index === 0 && request.kind === 'prompt' ? 'mx-primary' : undefined}
-            disabled={index === 0 && request.kind === 'prompt' && !value.trim()}
+            className={index === 0 && request.kind === 'input' ? 'mx-primary' : undefined}
+            disabled={index === 0 && request.kind === 'input' && !value.trim()}
             autoFocus={request.kind === 'confirm' && index === buttons.length - 1}
             onClick={index === 0 ? undefined : () => onClose({ button: button === 'Cancel' ? null : button, value })}>{button}</button>)}
         </div>
