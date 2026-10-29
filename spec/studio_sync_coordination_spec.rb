@@ -165,7 +165,8 @@ RSpec.describe 'Studio synchronization coordination' do
   describe 'artifact states without conflicts' do
     it 'reports an unlinked model, a pending Ruby file and files that declare no artifact' do
       path = 'modules/Shop/domain/entities/order.rb'
-      expect(sync.document_state(path:)).to eq(linked: false, state: 'unlinked')
+      expect(sync.document_state(path:)).to eq(linked: false, state: 'unlinked', unit_ids: [domain_model_id])
+      expect(sync.document_state(unit_id: 'ABC')).to eq(linked: false, state: 'unlinked', unit_ids: ['abc'])
       sync.link!
       edit(order_file) { "#{_1}# touched\n" }
       expect(sync.document_state(path:)).to include(state: 'pending', ruby: { path:, action: 'modified' })
@@ -390,6 +391,24 @@ RSpec.describe 'Studio synchronization coordination' do
       converted = call('project/convert', { 'source_model' => model, 'link' => true })
       expect(converted).to include(state: 'ready')
       expect(converted[:sync]).to include(linked: true, state: 'synced')
+    end
+
+    it 'links from the converted model, keeping what both sides changed since the conversion' do
+      params = { 'model' => model, 'ruby_root' => ruby }
+      Mxrb::Studio::Snapshot.new(model, destination_root: File.join(@directory, 'snapshot')).create
+      edit(order_file) { _1.sub('decimal :Total', "decimal :Total\n  string :Note") }
+      add_attribute('Product', 'Weight')
+      linked = call('sync/link', params.merge('from_conversion' => true))
+      expect(linked).to include(linked: true, state: 'pending')
+      expect(linked[:ruby_changes].map { _1[:path] }).to include('modules/Shop/domain/entities/order.rb')
+      expect(linked[:mendix_changes]).not_to be_empty
+    end
+
+    it 'finds the model of an earlier conversion among the workspace snapshots, else refuses to link' do
+      params = { 'model' => model, 'ruby_root' => ruby, 'from_conversion' => true }
+      expect { call('sync/link', params) }.to raise_error(ArgumentError, /converted from is no longer available/)
+      Mxrb::Studio::Snapshot.new(model, destination_root: File.join(state_root, 'snapshots')).create
+      expect(call('sync/link', params)).to include(linked: true, state: 'synced')
     end
 
     it 'keeps a conversion whose link fails and still lets cancellation through' do
